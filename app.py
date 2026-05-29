@@ -1012,7 +1012,25 @@ elif selected_tab == "Options Implied Probability":
         fig6.add_trace(go.Scatter(x=future_dates, y=median_path, name="Median", line=dict(color="#333333", width=2, dash="dash")))
         fig6.add_trace(go.Scatter(x=future_dates, y=lower_bound, name="Lower Bound", line=dict(color="#8c2e36", width=1.5)))
         
-        fig6.update_layout(title=f"Volatility Cone for {ticker_sym.upper()}", height=700, hovermode="x unified", xaxis=dict(range=[last_date, expiry_date]), plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
+        # --- NEW: Dynamic Centering Logic ---
+        # Get the range of the cone at expiry
+        cone_min = lower_bound[-1]
+        cone_max = upper_bound[-1]
+        
+        # Calculate a centered range with a 10% buffer
+        buffer = (cone_max - cone_min) * 0.1
+        y_range = [cone_min - buffer, cone_max + buffer]
+
+        fig6.update_layout(
+            title=f"Volatility Cone for {ticker_sym.upper()}",
+            height=700, 
+            hovermode="x unified",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
+            xaxis=dict(range=[last_date, expiry_date]),
+            yaxis=dict(range=y_range), # This locks the centering
+            plot_bgcolor="rgba(0,0,0,0)", 
+            paper_bgcolor="rgba(0,0,0,0)"
+        )
         st.plotly_chart(fig6, use_container_width=True)
 # ── TAB 8: FED RATE PROJECTIONS ──────────────────────────────────────
 elif selected_tab == "Fed Rate Projections":
