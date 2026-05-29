@@ -1086,7 +1086,7 @@ elif selected_tab == "Fed Rate Projections":
         title="Market Implied Fed Funds Rate Path",
         plot_bgcolor="rgba(240, 242, 246, 0.5)",
         paper_bgcolor="rgba(0,0,0,0)",
-        yaxis=dict(title="Implied Rate", ticksuffix="%", range=[3.0, 4.5]),
+        yaxis=dict(title="Implied Rate", ticksuffix="%", range=[2.0, 6]),
         xaxis=dict(title="FOMC Meeting Date"),
         hovermode="x unified"
     )
