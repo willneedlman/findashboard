@@ -1000,6 +1000,11 @@ elif selected_tab == "Options Implied Probability":
         m3.metric(f"Prob. Above ${target_px:.2f}", f"{prob_above*100:.1f}%")
         m4.metric("Risk Free Rate", f"{r*100:.2f}%")
         
+        # Add the disclaimer below the metrics
+        st.caption(" **Methodology Note:** This model uses Black-Scholes risk-neutral pricing. Long-dated probabilities are highly sensitive to volatility inputs and reflect the market's current cost of hedging, not necessarily a real-world price forecast.")
+        
+        st.divider()
+        
         st.divider()
 
         # Build Plotly Figure
@@ -1037,12 +1042,6 @@ elif selected_tab == "Fed Rate Projections":
     st.header("Fed Rate Expectations (Live)")
     
     # 1. Next Meeting Probability Data
-    # Current market consensus: 82% hold, 12% hike, 6% cut
-    meeting_probs = {
-        "+50 bps": 0.02, "+25 bps": 0.10, "Hold": 0.82, "-25 bps": 0.06
-    }
-    
-    # 2. Display Probability Table
     st.markdown("##### Next FOMC Meeting Probability Breakdown")
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Hike +50bps", "2%")
@@ -1052,14 +1051,26 @@ elif selected_tab == "Fed Rate Projections":
     
     st.divider()
 
-    # 3. Path Data
+    # 2. Base Path Data
     data = {
         'June 2026': 3.65, 'July 2026': 3.68, 'Sept 2026': 3.72, 
         'Nov 2026': 3.75, 'Dec 2026': 3.82, 'Jan 2027': 3.85
     }
-    
     meetings = list(data.keys())
-    rates = list(data.values())
+    base_rates = list(data.values())
+
+    # 3. Sensitivity Logic (placed below the chart)
+    twist_factor = st.slider(
+        "Sensitivity Analysis (bps shift)", 
+        min_value=-25, 
+        max_value=25, 
+        value=0, 
+        step=5
+    )
+    
+    # Weights: More sensitive at the front end (June/July) than the back end (Jan)
+    weights = [1.0, 0.9, 0.7, 0.5, 0.3, 0.1]
+    rates = [r + (twist_factor / 100 * w) for r, w in zip(base_rates, weights)]
 
     # 4. Chart
     fig = go.Figure()
@@ -1075,16 +1086,16 @@ elif selected_tab == "Fed Rate Projections":
         title="Market Implied Fed Funds Rate Path",
         plot_bgcolor="rgba(240, 242, 246, 0.5)",
         paper_bgcolor="rgba(0,0,0,0)",
-        yaxis=dict(title="Implied Rate", ticksuffix="%", range=[3.5, 4.0]),
+        yaxis=dict(title="Implied Rate", ticksuffix="%", range=[3.0, 4.5]),
         xaxis=dict(title="FOMC Meeting Date"),
         hovermode="x unified"
     )
-
-    # Metric Summary
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Next Meeting Implied", f"{rates[0]:.2f}%", "+2bps")
-    m2.metric("Year-End 2026", f"{rates[4]:.2f}%", "Target")
-    m3.metric("Total Projected Move", f"{(rates[-1] - rates[0])*100:.0f} bps")
     st.plotly_chart(fig, use_container_width=True)
-    st.caption("Data source: Implied probability derived from 30-Day Fed Funds Futures.")
+
+    # 5. Metric Summary
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Next Meeting Implied", f"{rates[0]:.2f}%", f"{twist_factor * weights[0]:.1f} bps")
+    m2.metric("Year-End 2026", f"{rates[4]:.2f}%")
+    m3.metric("Total Projected Move", f"{(rates[-1] - rates[0])*100:.0f} bps")
     
+    st.caption("Data source: Implied probability derived from 30-Day Fed Funds Futures.")

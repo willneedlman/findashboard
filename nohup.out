@@ -2752,3 +2752,1248 @@ For `use_container_width=True`, use `width='stretch'`. For `use_container_width=
 `use_container_width` will be removed after 2025-12-31.
 
 For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:21:27.439 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:21:49.286 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:23:04.065 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:23:13.881 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:23:19.278 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:23:23.251 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:25:05.482 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:25:14.557 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:25:50.037 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:951 in <module>                         [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m 948 [0m[2m│   │   [0mticker_sym = col1.text_input([33m"[0m[33mTarget Ticker[0m[33m"[0m, value=[33m"[0m[33mSPY[0m[33m"[0m)            [31m [0m
+[31m [0m   [2m 949 [0m[2m│   │   [0m                                                                      [31m [0m
+[31m [0m   [2m 950 [0m[2m│   │   [0m[2m# Fetch basic info for dropdown[0m                                       [31m [0m
+[31m [0m [31m❱ [0m 951 [2m│   │   [0mtkr_obj = [1;4mget_cached_ticker(ticker_sym)[0m                               [31m [0m
+[31m [0m   [2m 952 [0m[2m│   │   [0mexpirations = tkr_obj.options                                         [31m [0m
+[31m [0m   [2m 953 [0m[2m│   │   [0mquick_hist = get_cached_history(ticker_sym)                           [31m [0m
+[31m [0m   [2m 954 [0m[2m│   │   [0mdefault_target = [96mfloat[0m([96mround[0m(quick_hist[[33m'[0m[33mClose[0m[33m'[0m].iloc[-[94m1[0m] / [94m5.0[0m) * [94m5.[0m [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/caching/[0m[1mcache_utils.py[0m:280 in __call__                                         [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/caching/[0m[1mcache_utils.py[0m:325 in _get_or_create_cached_value                      [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/caching/[0m[1mcache_utils.py[0m:384 in _handle_cache_miss                               [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:25 in get_cached_ticker                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m  22 [0m[1;95m@st[0m.cache_resource(ttl=[94m3600[0m)                                                  [31m [0m
+[31m [0m   [2m  23 [0m[94mdef[0m[90m [0m[92mget_cached_ticker[0m(ticker):                                                [31m [0m
+[31m [0m   [2m  24 [0m[2m│   [0m[2m# This now works because cache_resource doesn't try to pickle the object[0m  [31m [0m
+[31m [0m [31m❱ [0m  25 [2m│   [0m[94mreturn[0m [1;4myf.Ticker(ticker.upper())[0m                                          [31m [0m
+[31m [0m   [2m  26 [0m                                                                              [31m [0m
+[31m [0m   [2m  27 [0m[1;95m@st[0m.cache_data(ttl=[94m3600[0m)                                                      [31m [0m
+[31m [0m   [2m  28 [0m[94mdef[0m[90m [0m[92mget_cached_history[0m(ticker):                                               [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/yfinance/[0m[1mtic[0m [31m [0m
+[31m [0m [1mker.py[0m:35 in __init__                                                                [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m 32 [0m                                                                               [31m [0m
+[31m [0m   [2m 33 [0m[94mclass[0m[90m [0m[4;92mTicker[0m(TickerBase):                                                      [31m [0m
+[31m [0m   [2m 34 [0m[2m│   [0m[94mdef[0m[90m [0m[92m__init__[0m([96mself[0m, ticker, session=[94mNone[0m):                                  [31m [0m
+[31m [0m [31m❱ [0m 35 [2m│   │   [0m[1;4;96msuper[0m[1;4m(Ticker, [0m[1;4;96mself[0m[1;4m).[0m[1;4;92m__init__[0m[1;4m(ticker, session=session)[0m                  [31m [0m
+[31m [0m   [2m 36 [0m[2m│   │   [0m[96mself[0m._expirations = {}                                                 [31m [0m
+[31m [0m   [2m 37 [0m[2m│   │   [0m[96mself[0m._underlying  = {}                                                 [31m [0m
+[31m [0m   [2m 38 [0m                                                                               [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/yfinance/[0m[1mbas[0m [31m [0m
+[31m [0m [1me.py[0m:98 in __init__                                                                  [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m 95 [0m[2m│   │   [0m                                                                       [31m [0m
+[31m [0m   [2m 96 [0m[2m│   │   [0m[2m# raise an error if user tries to give empty ticker[0m                    [31m [0m
+[31m [0m   [2m 97 [0m[2m│   │   [0m[94mif[0m [96mself[0m.ticker == [33m"[0m[33m"[0m:                                                  [31m [0m
+[31m [0m [31m❱ [0m 98 [2m│   │   │   [0m[1;4;94mraise[0m[1;4m [0m[1;4;96mValueError[0m[1;4m([0m[1;4;33m"[0m[1;4;33mEmpty ticker name[0m[1;4;33m"[0m[1;4m)[0m                              [31m [0m
+[31m [0m   [2m 99 [0m[2m│   │   [0m                                                                       [31m [0m
+[31m [0m   [2m100 [0m[2m│   │   [0m[96mself[0m._data: YfData = YfData(session=session)                           [31m [0m
+[31m [0m   [2m101 [0m                                                                               [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mValueError: [0mEmpty ticker name
+2026-05-29 15:26:22.968 127.0.0.1:59458 - "GET / HTTP/1.1" 304
+2026-05-29 15:26:22.973 connection closed
+2026-05-29 15:26:23.081 127.0.0.1:59458 - "GET /_stcore/health HTTP/1.1" 200
+2026-05-29 15:26:23.082 127.0.0.1:59459 - "GET /_stcore/host-config HTTP/1.1" 200
+2026-05-29 15:26:23.283 127.0.0.1:59462 - "WebSocket /_stcore/stream" [accepted]
+2026-05-29 15:26:23.285 connection open
+2026-05-29 15:26:26.103 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:26:32.358 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:27:28.074 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:30:04.473 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:30:04.545 127.0.0.1:59510 - "GET /static/js/Slider.Bl-zBDII.js HTTP/1.1" 200
+2026-05-29 15:30:04.546 127.0.0.1:59511 - "GET /static/js/withCalculatedWidth.BU_k3Mtx.js HTTP/1.1" 200
+2026-05-29 15:30:08.779 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:30:10.560 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:30:11.276 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:30:11.629 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:30:11.941 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:30:14.528 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:30:16.411 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:30:16.988 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:30:17.810 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:30:19.479 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:31:16.091 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:31:20.661 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:31:21.477 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:31:24.262 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:31:26.078 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:31:28.363 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:31:30.797 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:31:49.375 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:32:46.499 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1111 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1108 [0m[2m│   [0m[2m# Weights for meetings: [June, July, Sept, Nov, Dec, Jan][0m                 [31m [0m
+[31m [0m   [2m1109 [0m[2m│   [0m[2m# We apply the twist_factor more heavily to near-term meetings[0m            [31m [0m
+[31m [0m   [2m1110 [0m[2m│   [0mweights = [[94m1.0[0m, [94m0.9[0m, [94m0.7[0m, [94m0.5[0m, [94m0.3[0m, [94m0.1[0m]                                  [31m [0m
+[31m [0m [31m❱ [0m1111 [2m│   [0mrates = [r + (twist_factor / [94m100[0m * w) [94mfor[0m r, w [95min[0m [96mzip[0m([1;4mbase_rates[0m, weights [31m [0m
+[31m [0m   [2m1112 [0m                                                                              [31m [0m
+[31m [0m   [2m1113 [0m                                                                              [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'base_rates'[0m is not defined
+2026-05-29 15:32:48.926 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1111 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1108 [0m[2m│   [0m[2m# Weights for meetings: [June, July, Sept, Nov, Dec, Jan][0m                 [31m [0m
+[31m [0m   [2m1109 [0m[2m│   [0m[2m# We apply the twist_factor more heavily to near-term meetings[0m            [31m [0m
+[31m [0m   [2m1110 [0m[2m│   [0mweights = [[94m1.0[0m, [94m0.9[0m, [94m0.7[0m, [94m0.5[0m, [94m0.3[0m, [94m0.1[0m]                                  [31m [0m
+[31m [0m [31m❱ [0m1111 [2m│   [0mrates = [r + (twist_factor / [94m100[0m * w) [94mfor[0m r, w [95min[0m [96mzip[0m([1;4mbase_rates[0m, weights [31m [0m
+[31m [0m   [2m1112 [0m                                                                              [31m [0m
+[31m [0m   [2m1113 [0m                                                                              [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'base_rates'[0m is not defined
+2026-05-29 15:32:49.800 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1111 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1108 [0m[2m│   [0m[2m# Weights for meetings: [June, July, Sept, Nov, Dec, Jan][0m                 [31m [0m
+[31m [0m   [2m1109 [0m[2m│   [0m[2m# We apply the twist_factor more heavily to near-term meetings[0m            [31m [0m
+[31m [0m   [2m1110 [0m[2m│   [0mweights = [[94m1.0[0m, [94m0.9[0m, [94m0.7[0m, [94m0.5[0m, [94m0.3[0m, [94m0.1[0m]                                  [31m [0m
+[31m [0m [31m❱ [0m1111 [2m│   [0mrates = [r + (twist_factor / [94m100[0m * w) [94mfor[0m r, w [95min[0m [96mzip[0m([1;4mbase_rates[0m, weights [31m [0m
+[31m [0m   [2m1112 [0m                                                                              [31m [0m
+[31m [0m   [2m1113 [0m                                                                              [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'base_rates'[0m is not defined
+2026-05-29 15:32:50.328 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1111 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1108 [0m[2m│   [0m[2m# Weights for meetings: [June, July, Sept, Nov, Dec, Jan][0m                 [31m [0m
+[31m [0m   [2m1109 [0m[2m│   [0m[2m# We apply the twist_factor more heavily to near-term meetings[0m            [31m [0m
+[31m [0m   [2m1110 [0m[2m│   [0mweights = [[94m1.0[0m, [94m0.9[0m, [94m0.7[0m, [94m0.5[0m, [94m0.3[0m, [94m0.1[0m]                                  [31m [0m
+[31m [0m [31m❱ [0m1111 [2m│   [0mrates = [r + (twist_factor / [94m100[0m * w) [94mfor[0m r, w [95min[0m [96mzip[0m([1;4mbase_rates[0m, weights [31m [0m
+[31m [0m   [2m1112 [0m                                                                              [31m [0m
+[31m [0m   [2m1113 [0m                                                                              [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'base_rates'[0m is not defined
+2026-05-29 15:34:05.687 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:34:07.871 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:34:09.071 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:34:11.446 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:34:13.395 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:34:15.854 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:34:18.444 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:34:23.342 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:34:41.091 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:34:41.485 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:34:42.038 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:34:42.564 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:34:43.120 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:34:43.649 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:34:46.323 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:34:48.441 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:34:49.809 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:34:51.308 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1056 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1053 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1054 [0m[2m│   [0m[2m# Apply a non-linear shift (Short end is more sensitive than long end)[0m    [31m [0m
+[31m [0m   [2m1055 [0m[2m│   [0mweights = [[94m1.0[0m, [94m0.9[0m, [94m0.7[0m, [94m0.5[0m, [94m0.3[0m, [94m0.1[0m]                                  [31m [0m
+[31m [0m [31m❱ [0m1056 [2m│   [0mrates = [1;4m[r + (twist_factor / [0m[1;4;94m100[0m[1;4m * w) [0m[1;4;94mfor[0m[1;4m r, w [0m[1;4;95min[0m[1;4m [0m[1;4;96mzip[0m[1;4m(base_rates, weights[0m [31m [0m
+[31m [0m   [2m1057 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1058 [0m[2m│   [0m[2m# 3. Chart[0m                                                                [31m [0m
+[31m [0m   [2m1059 [0m[2m│   [0mfig = go.Figure()                                                         [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'twist_factor'[0m is not defined
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1054 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1051 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1052 [0m[2m│   [0m[2m# Apply a non-linear shift (Short end is more sensitive than long end)[0m    [31m [0m
+[31m [0m   [2m1053 [0m[2m│   [0mweights = [[94m1.0[0m, [94m0.9[0m, [94m0.7[0m, [94m0.5[0m, [94m0.3[0m, [94m0.1[0m]                                  [31m [0m
+[31m [0m [31m❱ [0m1054 [2m│   [0mrates = [1;4m[r + (twist_factor / [0m[1;4;94m100[0m[1;4m * w) [0m[1;4;94mfor[0m[1;4m r, w [0m[1;4;95min[0m[1;4m [0m[1;4;96mzip[0m[1;4m(base_rates, weights[0m [31m [0m
+[31m [0m   [2m1055 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1056 [0m[2m│   [0m[2m# 3. Chart[0m                                                                [31m [0m
+[31m [0m   [2m1057 [0m[2m│   [0mfig = go.Figure()                                                         [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'twist_factor'[0m is not defined
+2026-05-29 15:35:24.264 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1054 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1051 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1052 [0m[2m│   [0m[2m# 2. Scenario Analysis: Curve Twist[0m                                       [31m [0m
+[31m [0m   [2m1053 [0m[2m│   [0mst.markdown([33m"[0m[33m##### Scenario Analysis: Curve Twist[0m[33m"[0m)                       [31m [0m
+[31m [0m [31m❱ [0m1054 [2m│   [0mtwist_factor = [1;4mst.slider([0m                                                 [31m [0m
+[31m [0m   [2m1055 [0m[2m│   │   [0m                                                                      [31m [0m
+[31m [0m   [2m1056 [0m[2m│   │   [0m[1;4mmin_value=-[0m[1;4;94m100[0m[1;4m, [0m                                                      [31m [0m
+[31m [0m   [2m1057 [0m[2m│   │   [0m[1;4mmax_value=[0m[1;4;94m100[0m[1;4m, [0m                                                       [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/[0m[1mmetrics_util.py[0m:698 in wrapped_func                                            [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mTypeError: [0m[1;35mSliderMixin.slider[0m[1m([0m[1m)[0m missing [1;36m1[0m required positional argument: [32m'label'[0m
+2026-05-29 15:35:34.911 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:35:45.910 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:35:52.651 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:35:56.135 `label` got an empty value. This is discouraged for accessibility reasons and may be disallowed in the future by raising an exception. Please provide a non-empty label and hide it with label_visibility if needed.
+Stack (most recent call last):
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/threading.py", line 1014, in _bootstrap
+    self._bootstrap_inner()
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/threading.py", line 1043, in _bootstrap_inner
+    self.run()
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/threading.py", line 994, in run
+    self._target(*self._args, **self._kwargs)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 379, in _run_script_thread
+    self._run_script(request.rerun_data)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 705, in _run_script
+    ) = exec_func_with_error_handling(code_to_exec, ctx)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/exec_code.py", line 129, in exec_func_with_error_handling
+    result = func()
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 689, in code_to_exec
+    exec(code, module.__dict__)  # noqa: S102
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1054, in <module>
+    twist_factor = st.slider(
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/metrics_util.py", line 698, in wrapped_func
+    result = non_optional_func(*args, **kwargs)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/elements/widgets/slider.py", line 721, in slider
+    return self._slider(
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/elements/widgets/slider.py", line 768, in _slider
+    maybe_raise_label_warnings(label, label_visibility)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/elements/lib/policies.py", line 187, in maybe_raise_label_warnings
+    _LOGGER.warning(
+2026-05-29 15:35:56.136 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1054 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1051 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1052 [0m[2m│   [0m[2m# 2. Scenario Analysis: Curve Twist[0m                                       [31m [0m
+[31m [0m   [2m1053 [0m[2m│   [0mst.markdown([33m"[0m[33m##### Scenario Analysis: Curve Twist[0m[33m"[0m)                       [31m [0m
+[31m [0m [31m❱ [0m1054 [2m│   [0mtwist_factor = [1;4mst.slider( [0m                                                [31m [0m
+[31m [0m   [2m1055 [0m[2m│   │   [0m[1;4mmin_value=-[0m[1;4;94m100[0m[1;4m, [0m                                                      [31m [0m
+[31m [0m   [2m1056 [0m[2m│   │   [0m[1;4mmax_value=[0m[1;4;94m100[0m[1;4m, [0m                                                       [31m [0m
+[31m [0m   [2m1057 [0m[2m│   │   [0m[1;4mvalue=[0m[1;4;94m0[0m[1;4m, [0m                                                             [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/[0m[1mmetrics_util.py[0m:698 in wrapped_func                                            [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mTypeError: [0m[1;35mSliderMixin.slider[0m[1m([0m[1m)[0m missing [1;36m1[0m required positional argument: [32m'label'[0m
+2026-05-29 15:36:03.009 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1055
+    "" 
+    ^^^
+SyntaxError: invalid syntax. Perhaps you forgot a comma?
+2026-05-29 15:36:03.011 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 15:36:06.485 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1055
+    " " 
+    ^^^^
+SyntaxError: invalid syntax. Perhaps you forgot a comma?
+2026-05-29 15:36:06.487 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 15:36:12.029 `label` got an empty value. This is discouraged for accessibility reasons and may be disallowed in the future by raising an exception. Please provide a non-empty label and hide it with label_visibility if needed.
+Stack (most recent call last):
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/threading.py", line 1014, in _bootstrap
+    self._bootstrap_inner()
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/threading.py", line 1043, in _bootstrap_inner
+    self.run()
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/threading.py", line 994, in run
+    self._target(*self._args, **self._kwargs)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 379, in _run_script_thread
+    self._run_script(request.rerun_data)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 705, in _run_script
+    ) = exec_func_with_error_handling(code_to_exec, ctx)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/exec_code.py", line 129, in exec_func_with_error_handling
+    result = func()
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 689, in code_to_exec
+    exec(code, module.__dict__)  # noqa: S102
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1054, in <module>
+    twist_factor = st.slider(
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/metrics_util.py", line 698, in wrapped_func
+    result = non_optional_func(*args, **kwargs)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/elements/widgets/slider.py", line 721, in slider
+    return self._slider(
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/elements/widgets/slider.py", line 768, in _slider
+    maybe_raise_label_warnings(label, label_visibility)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/elements/lib/policies.py", line 187, in maybe_raise_label_warnings
+    _LOGGER.warning(
+2026-05-29 15:36:12.031 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1056 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1053 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1054 [0m[2m│   [0m[2m# Apply a non-linear shift (Short end is more sensitive than long end)[0m    [31m [0m
+[31m [0m   [2m1055 [0m[2m│   [0mweights = [[94m1.0[0m, [94m0.9[0m, [94m0.7[0m, [94m0.5[0m, [94m0.3[0m, [94m0.1[0m]                                  [31m [0m
+[31m [0m [31m❱ [0m1056 [2m│   [0mrates = [1;4m[r + (twist_factor / [0m[1;4;94m100[0m[1;4m * w) [0m[1;4;94mfor[0m[1;4m r, w [0m[1;4;95min[0m[1;4m [0m[1;4;96mzip[0m[1;4m(base_rates, weights[0m [31m [0m
+[31m [0m   [2m1057 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1058 [0m[2m│   [0m[2m# 3. Chart[0m                                                                [31m [0m
+[31m [0m   [2m1059 [0m[2m│   [0mfig = go.Figure()                                                         [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'twist_factor'[0m is not defined
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1056 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1053 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1054 [0m[2m│   [0m[2m# Apply a non-linear shift (Short end is more sensitive than long end)[0m    [31m [0m
+[31m [0m   [2m1055 [0m[2m│   [0mweights = [[94m1.0[0m, [94m0.9[0m, [94m0.7[0m, [94m0.5[0m, [94m0.3[0m, [94m0.1[0m]                                  [31m [0m
+[31m [0m [31m❱ [0m1056 [2m│   [0mrates = [1;4m[r + (twist_factor / [0m[1;4;94m100[0m[1;4m * w) [0m[1;4;94mfor[0m[1;4m r, w [0m[1;4;95min[0m[1;4m [0m[1;4;96mzip[0m[1;4m(base_rates, weights[0m [31m [0m
+[31m [0m   [2m1057 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1058 [0m[2m│   [0m[2m# 3. Chart[0m                                                                [31m [0m
+[31m [0m   [2m1059 [0m[2m│   [0mfig = go.Figure()                                                         [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'twist_factor'[0m is not defined
+2026-05-29 15:36:37.334 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1085
+    "", 
+IndentationError: unexpected indent
+2026-05-29 15:36:37.335 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 15:36:39.589 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1056
+    weights = [1.0, 0.9, 0.7, 0.5, 0.3, 0.1]
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+SyntaxError: invalid syntax. Perhaps you forgot a comma?
+2026-05-29 15:36:39.591 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 15:36:42.044 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1054
+    weights = [1.0, 0.9, 0.7, 0.5, 0.3, 0.1]
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+SyntaxError: invalid syntax. Perhaps you forgot a comma?
+2026-05-29 15:36:42.046 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 15:36:46.733 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1055
+    rates = [r + (twist_factor / 100 * w) for r, w in zip(base_rates, weights)]
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+SyntaxError: invalid syntax. Perhaps you forgot a comma?
+2026-05-29 15:36:46.735 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 15:36:48.399 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1054
+    weights = [1.0, 0.9, 0.7, 0.5, 0.3, 0.1]
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+SyntaxError: invalid syntax. Perhaps you forgot a comma?
+2026-05-29 15:36:48.400 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 15:36:59.420 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1084
+    "", 
+IndentationError: unexpected indent
+2026-05-29 15:36:59.422 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 15:37:11.459 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1056
+    weights = [1.0, 0.9, 0.7, 0.5, 0.3, 0.1]
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+SyntaxError: invalid syntax. Perhaps you forgot a comma?
+2026-05-29 15:37:11.461 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 15:37:52.481 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:37:55.729 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:37:57.159 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:37:58.106 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:38:09.502 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1054 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1051 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1052 [0m[2m│   [0m[2m# 5. Metric Summary[0m                                                       [31m [0m
+[31m [0m   [2m1053 [0m[2m│   [0mm1, m2, m3 = st.columns([94m3[0m)                                                [31m [0m
+[31m [0m [31m❱ [0m1054 [2m│   [0mm1.metric([33m"[0m[33mNext Meeting Implied[0m[33m"[0m, [33mf[0m[33m"[0m[33m{[0m[1;4mrates[0m[[94m0[0m][33m:[0m[33m.2f[0m[33m}[0m[33m%[0m[33m"[0m, [33mf[0m[33m"[0m[33m{[0mtwist_factor[90m [0m*[90m [0mw [31m [0m
+[31m [0m   [2m1055 [0m[2m│   [0mm2.metric([33m"[0m[33mYear-End 2026[0m[33m"[0m, [33mf[0m[33m"[0m[33m{[0mrates[[94m4[0m][33m:[0m[33m.2f[0m[33m}[0m[33m%[0m[33m"[0m)                            [31m [0m
+[31m [0m   [2m1056 [0m[2m│   [0mm3.metric([33m"[0m[33mTotal Projected Move[0m[33m"[0m, [33mf[0m[33m"[0m[33m{[0m(rates[-[94m1[0m][90m [0m-[90m [0mrates[[94m0[0m])*[94m100[0m[33m:[0m[33m.0f[0m[33m}[0m[33m bps[0m[33m"[0m [31m [0m
+[31m [0m   [2m1057 [0m                                                                              [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'rates'[0m is not defined
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1054 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1051 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1052 [0m[2m│   [0m[2m# 5. Metric Summary[0m                                                       [31m [0m
+[31m [0m   [2m1053 [0m[2m│   [0mm1, m2, m3 = st.columns([94m3[0m)                                                [31m [0m
+[31m [0m [31m❱ [0m1054 [2m│   [0mm1.metric([33m"[0m[33mNext Meeting Implied[0m[33m"[0m, [33mf[0m[33m"[0m[33m{[0m[1;4mrates[0m[[94m0[0m][33m:[0m[33m.2f[0m[33m}[0m[33m%[0m[33m"[0m, [33mf[0m[33m"[0m[33m{[0mtwist_factor[90m [0m*[90m [0mw [31m [0m
+[31m [0m   [2m1055 [0m[2m│   [0mm2.metric([33m"[0m[33mYear-End 2026[0m[33m"[0m, [33mf[0m[33m"[0m[33m{[0mrates[[94m4[0m][33m:[0m[33m.2f[0m[33m}[0m[33m%[0m[33m"[0m)                            [31m [0m
+[31m [0m   [2m1056 [0m[2m│   [0mm3.metric([33m"[0m[33mTotal Projected Move[0m[33m"[0m, [33mf[0m[33m"[0m[33m{[0m(rates[-[94m1[0m][90m [0m-[90m [0mrates[[94m0[0m])*[94m100[0m[33m:[0m[33m.0f[0m[33m}[0m[33m bps[0m[33m"[0m [31m [0m
+[31m [0m   [2m1057 [0m                                                                              [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'rates'[0m is not defined
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1046 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1043 [0m[2m│    [0m                                                                         [31m [0m
+[31m [0m   [2m1044 [0m[2m│    [0m[2m# Weights: More sensitive at the front end (June/July) than the back end[0m [31m [0m
+[31m [0m   [2m1045 [0m[2m│   [0mweights = [[94m1.0[0m, [94m0.9[0m, [94m0.7[0m, [94m0.5[0m, [94m0.3[0m, [94m0.1[0m]                                  [31m [0m
+[31m [0m [31m❱ [0m1046 [2m│   [0mrates = [r + (twist_factor / [94m100[0m * w) [94mfor[0m r, w [95min[0m [96mzip[0m([1;4mbase_rates[0m, weights [31m [0m
+[31m [0m   [2m1047 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1048 [0m[2m│   [0m[2m# 1. Next Meeting Probability Data[0m                                        [31m [0m
+[31m [0m   [2m1049 [0m[2m│   [0mst.markdown([33m"[0m[33m##### Next FOMC Meeting Probability Breakdown[0m[33m"[0m)              [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'base_rates'[0m is not defined
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1046 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1043 [0m[2m│    [0m                                                                         [31m [0m
+[31m [0m   [2m1044 [0m[2m│    [0m[2m# Weights: More sensitive at the front end (June/July) than the back end[0m [31m [0m
+[31m [0m   [2m1045 [0m[2m│   [0mweights = [[94m1.0[0m, [94m0.9[0m, [94m0.7[0m, [94m0.5[0m, [94m0.3[0m, [94m0.1[0m]                                  [31m [0m
+[31m [0m [31m❱ [0m1046 [2m│   [0mrates = [r + (twist_factor / [94m100[0m * w) [94mfor[0m r, w [95min[0m [96mzip[0m([1;4mbase_rates[0m, weights [31m [0m
+[31m [0m   [2m1047 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1048 [0m[2m│   [0m[2m# 1. Next Meeting Probability Data[0m                                        [31m [0m
+[31m [0m   [2m1049 [0m[2m│   [0mst.markdown([33m"[0m[33m##### Next FOMC Meeting Probability Breakdown[0m[33m"[0m)              [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'base_rates'[0m is not defined
+2026-05-29 15:38:45.338 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1047
+    meetings = list(data.keys())
+IndentationError: unexpected indent
+2026-05-29 15:38:45.340 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1046 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1043 [0m[2m│    [0m                                                                         [31m [0m
+[31m [0m   [2m1044 [0m[2m│    [0m[2m# Weights: More sensitive at the front end (June/July) than the back end[0m [31m [0m
+[31m [0m   [2m1045 [0m[2m│   [0mweights = [[94m1.0[0m, [94m0.9[0m, [94m0.7[0m, [94m0.5[0m, [94m0.3[0m, [94m0.1[0m]                                  [31m [0m
+[31m [0m [31m❱ [0m1046 [2m│   [0mrates = [r + (twist_factor / [94m100[0m * w) [94mfor[0m r, w [95min[0m [96mzip[0m([1;4mbase_rates[0m, weights [31m [0m
+[31m [0m   [2m1047 [0m[2m│   [0mmeetings = [96mlist[0m(data.keys())                                              [31m [0m
+[31m [0m   [2m1048 [0m[2m│   [0mbase_rates = [96mlist[0m(data.values())                                          [31m [0m
+[31m [0m   [2m1049 [0m                                                                              [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'base_rates'[0m is not defined
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1046 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1043 [0m[2m│    [0m                                                                         [31m [0m
+[31m [0m   [2m1044 [0m[2m│    [0m[2m# Weights: More sensitive at the front end (June/July) than the back end[0m [31m [0m
+[31m [0m   [2m1045 [0m[2m│   [0mweights = [[94m1.0[0m, [94m0.9[0m, [94m0.7[0m, [94m0.5[0m, [94m0.3[0m, [94m0.1[0m]                                  [31m [0m
+[31m [0m [31m❱ [0m1046 [2m│   [0mrates = [r + (twist_factor / [94m100[0m * w) [94mfor[0m r, w [95min[0m [96mzip[0m([1;4mbase_rates[0m, weights [31m [0m
+[31m [0m   [2m1047 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1048 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1049 [0m[2m│   [0m[2m# 1. Next Meeting Probability Data[0m                                        [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'base_rates'[0m is not defined
+2026-05-29 15:39:01.683 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1045
+    base_rates = list(data.values())
+IndentationError: unexpected indent
+2026-05-29 15:39:01.684 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1044 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1041 [0m[94melif[0m selected_tab == [33m"[0m[33mFed Rate Projections[0m[33m"[0m:                                  [31m [0m
+[31m [0m   [2m1042 [0m[2m│   [0mst.header([33m"[0m[33mFed Rate Expectations (Live)[0m[33m"[0m)                                 [31m [0m
+[31m [0m   [2m1043 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m [31m❱ [0m1044 [2m│   [0mmeetings = [96mlist[0m([1;4mdata[0m.keys())                                              [31m [0m
+[31m [0m   [2m1045 [0m[2m│   [0mbase_rates = [96mlist[0m(data.values())                                          [31m [0m
+[31m [0m   [2m1046 [0m[2m│    [0m                                                                         [31m [0m
+[31m [0m   [2m1047 [0m[2m│    [0m[2m# Weights: More sensitive at the front end (June/July) than the back end[0m [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'data'[0m is not defined
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1044 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1041 [0m[94melif[0m selected_tab == [33m"[0m[33mFed Rate Projections[0m[33m"[0m:                                  [31m [0m
+[31m [0m   [2m1042 [0m[2m│   [0mst.header([33m"[0m[33mFed Rate Expectations (Live)[0m[33m"[0m)                                 [31m [0m
+[31m [0m   [2m1043 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m [31m❱ [0m1044 [2m│   [0mmeetings = [96mlist[0m([1;4mdata[0m.keys())                                              [31m [0m
+[31m [0m   [2m1045 [0m[2m│   [0mbase_rates = [96mlist[0m(data.values())                                          [31m [0m
+[31m [0m   [2m1046 [0m[2m│    [0m                                                                         [31m [0m
+[31m [0m   [2m1047 [0m[2m│    [0m[2m# Weights: More sensitive at the front end (June/July) than the back end[0m [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'data'[0m is not defined
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1055 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1052 [0m[2m│    [0m                                                                         [31m [0m
+[31m [0m   [2m1053 [0m[2m│    [0m[2m# Weights: More sensitive at the front end (June/July) than the back end[0m [31m [0m
+[31m [0m   [2m1054 [0m[2m│   [0mweights = [[94m1.0[0m, [94m0.9[0m, [94m0.7[0m, [94m0.5[0m, [94m0.3[0m, [94m0.1[0m]                                  [31m [0m
+[31m [0m [31m❱ [0m1055 [2m│   [0mrates = [1;4m[r + (twist_factor / [0m[1;4;94m100[0m[1;4m * w) [0m[1;4;94mfor[0m[1;4m r, w [0m[1;4;95min[0m[1;4m [0m[1;4;96mzip[0m[1;4m(base_rates, weights[0m [31m [0m
+[31m [0m   [2m1056 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1057 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1058 [0m[2m│   [0m[2m# 1. Next Meeting Probability Data[0m                                        [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'twist_factor'[0m is not defined
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1055 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1052 [0m[2m│    [0m                                                                         [31m [0m
+[31m [0m   [2m1053 [0m[2m│    [0m[2m# Weights: More sensitive at the front end (June/July) than the back end[0m [31m [0m
+[31m [0m   [2m1054 [0m[2m│   [0mweights = [[94m1.0[0m, [94m0.9[0m, [94m0.7[0m, [94m0.5[0m, [94m0.3[0m, [94m0.1[0m]                                  [31m [0m
+[31m [0m [31m❱ [0m1055 [2m│   [0mrates = [1;4m[r + (twist_factor / [0m[1;4;94m100[0m[1;4m * w) [0m[1;4;94mfor[0m[1;4m r, w [0m[1;4;95min[0m[1;4m [0m[1;4;96mzip[0m[1;4m(base_rates, weights[0m [31m [0m
+[31m [0m   [2m1056 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1057 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1058 [0m[2m│   [0m[2m# 1. Next Meeting Probability Data[0m                                        [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'twist_factor'[0m is not defined
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1055 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1052 [0m[2m│    [0m                                                                         [31m [0m
+[31m [0m   [2m1053 [0m[2m│    [0m[2m# Weights: More sensitive at the front end (June/July) than the back end[0m [31m [0m
+[31m [0m   [2m1054 [0m[2m│   [0mweights = [[94m1.0[0m, [94m0.9[0m, [94m0.7[0m, [94m0.5[0m, [94m0.3[0m, [94m0.1[0m]                                  [31m [0m
+[31m [0m [31m❱ [0m1055 [2m│   [0mrates = [1;4m[r + (twist_factor / [0m[1;4;94m100[0m[1;4m * w) [0m[1;4;94mfor[0m[1;4m r, w [0m[1;4;95min[0m[1;4m [0m[1;4;96mzip[0m[1;4m(base_rates, weights[0m [31m [0m
+[31m [0m   [2m1056 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1057 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1058 [0m[2m│   [0m[2m# 1. Next Meeting Probability Data[0m                                        [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'twist_factor'[0m is not defined
+2026-05-29 15:39:34.418 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:39:39.860 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1054
+    twist_factor = st.slider(
+                            ^
+SyntaxError: '(' was never closed
+2026-05-29 15:39:39.861 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 15:39:43.805 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1084 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1081 [0m[2m│   [0mst.divider()                                                              [31m [0m
+[31m [0m   [2m1082 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1083 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m [31m❱ [0m1084 [2m│   [0m[1;4mfig[0m.update_layout(                                                        [31m [0m
+[31m [0m   [2m1085 [0m[2m│   │   [0mtitle=[33m"[0m[33mMarket Implied Fed Funds Rate Path[0m[33m"[0m,                           [31m [0m
+[31m [0m   [2m1086 [0m[2m│   │   [0mplot_bgcolor=[33m"[0m[33mrgba(240, 242, 246, 0.5)[0m[33m"[0m,                              [31m [0m
+[31m [0m   [2m1087 [0m[2m│   │   [0mpaper_bgcolor=[33m"[0m[33mrgba(0,0,0,0)[0m[33m"[0m,                                        [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'fig'[0m is not defined
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1047 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1044 [0m[2m│   [0m[2m# 4. Chart[0m                                                                [31m [0m
+[31m [0m   [2m1045 [0m[2m│   [0mfig = go.Figure()                                                         [31m [0m
+[31m [0m   [2m1046 [0m[2m│   [0mfig.add_trace(go.Scatter(                                                 [31m [0m
+[31m [0m [31m❱ [0m1047 [2m│   │   [0mx=[1;4mmeetings[0m, y=rates,                                                  [31m [0m
+[31m [0m   [2m1048 [0m[2m│   │   [0mmode=[33m'[0m[33mlines+markers[0m[33m'[0m,                                                 [31m [0m
+[31m [0m   [2m1049 [0m[2m│   │   [0mline=[96mdict[0m(color=[33m'[0m[33m#1f5673[0m[33m'[0m, width=[94m4[0m),                                  [31m [0m
+[31m [0m   [2m1050 [0m[2m│   │   [0mmarker=[96mdict[0m(size=[94m12[0m, color=[33m'[0m[33m#1f5673[0m[33m'[0m, line=[96mdict[0m(width=[94m2[0m, color=[33m'[0m[33mwhite[0m [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'meetings'[0m is not defined
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1084 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1081 [0m[2m│   [0mst.divider()                                                              [31m [0m
+[31m [0m   [2m1082 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1083 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m [31m❱ [0m1084 [2m│   [0m[1;4mfig[0m.update_layout(                                                        [31m [0m
+[31m [0m   [2m1085 [0m[2m│   │   [0mtitle=[33m"[0m[33mMarket Implied Fed Funds Rate Path[0m[33m"[0m,                           [31m [0m
+[31m [0m   [2m1086 [0m[2m│   │   [0mplot_bgcolor=[33m"[0m[33mrgba(240, 242, 246, 0.5)[0m[33m"[0m,                              [31m [0m
+[31m [0m   [2m1087 [0m[2m│   │   [0mpaper_bgcolor=[33m"[0m[33mrgba(0,0,0,0)[0m[33m"[0m,                                        [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'fig'[0m is not defined
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1086 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1083 [0m[2m│   [0mst.divider()                                                              [31m [0m
+[31m [0m   [2m1084 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1085 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m [31m❱ [0m1086 [2m│   [0m[1;4mfig[0m.update_layout(                                                        [31m [0m
+[31m [0m   [2m1087 [0m[2m│   │   [0mtitle=[33m"[0m[33mMarket Implied Fed Funds Rate Path[0m[33m"[0m,                           [31m [0m
+[31m [0m   [2m1088 [0m[2m│   │   [0mplot_bgcolor=[33m"[0m[33mrgba(240, 242, 246, 0.5)[0m[33m"[0m,                              [31m [0m
+[31m [0m   [2m1089 [0m[2m│   │   [0mpaper_bgcolor=[33m"[0m[33mrgba(0,0,0,0)[0m[33m"[0m,                                        [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'fig'[0m is not defined
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1084 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1081 [0m[2m│   [0mst.divider()                                                              [31m [0m
+[31m [0m   [2m1082 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1083 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m [31m❱ [0m1084 [2m│   [0m[1;4mfig[0m.update_layout(                                                        [31m [0m
+[31m [0m   [2m1085 [0m[2m│   │   [0mtitle=[33m"[0m[33mMarket Implied Fed Funds Rate Path[0m[33m"[0m,                           [31m [0m
+[31m [0m   [2m1086 [0m[2m│   │   [0mplot_bgcolor=[33m"[0m[33mrgba(240, 242, 246, 0.5)[0m[33m"[0m,                              [31m [0m
+[31m [0m   [2m1087 [0m[2m│   │   [0mpaper_bgcolor=[33m"[0m[33mrgba(0,0,0,0)[0m[33m"[0m,                                        [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'fig'[0m is not defined
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1056 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1053 [0m[2m│   [0m[2m# 4. Chart[0m                                                                [31m [0m
+[31m [0m   [2m1054 [0m[2m│   [0mfig = go.Figure()                                                         [31m [0m
+[31m [0m   [2m1055 [0m[2m│   [0mfig.add_trace(go.Scatter(                                                 [31m [0m
+[31m [0m [31m❱ [0m1056 [2m│   │   [0mx=meetings, y=[1;4mrates[0m,                                                  [31m [0m
+[31m [0m   [2m1057 [0m[2m│   │   [0mmode=[33m'[0m[33mlines+markers[0m[33m'[0m,                                                 [31m [0m
+[31m [0m   [2m1058 [0m[2m│   │   [0mline=[96mdict[0m(color=[33m'[0m[33m#1f5673[0m[33m'[0m, width=[94m4[0m),                                  [31m [0m
+[31m [0m   [2m1059 [0m[2m│   │   [0mmarker=[96mdict[0m(size=[94m12[0m, color=[33m'[0m[33m#1f5673[0m[33m'[0m, line=[96mdict[0m(width=[94m2[0m, color=[33m'[0m[33mwhite[0m [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'rates'[0m is not defined
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1056 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1053 [0m[2m│   [0m[2m# 4. Chart[0m                                                                [31m [0m
+[31m [0m   [2m1054 [0m[2m│   [0mfig = go.Figure()                                                         [31m [0m
+[31m [0m   [2m1055 [0m[2m│   [0mfig.add_trace(go.Scatter(                                                 [31m [0m
+[31m [0m [31m❱ [0m1056 [2m│   │   [0mx=meetings, y=[1;4mrates[0m,                                                  [31m [0m
+[31m [0m   [2m1057 [0m[2m│   │   [0mmode=[33m'[0m[33mlines+markers[0m[33m'[0m,                                                 [31m [0m
+[31m [0m   [2m1058 [0m[2m│   │   [0mline=[96mdict[0m(color=[33m'[0m[33m#1f5673[0m[33m'[0m, width=[94m4[0m),                                  [31m [0m
+[31m [0m   [2m1059 [0m[2m│   │   [0mmarker=[96mdict[0m(size=[94m12[0m, color=[33m'[0m[33m#1f5673[0m[33m'[0m, line=[96mdict[0m(width=[94m2[0m, color=[33m'[0m[33mwhite[0m [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'rates'[0m is not defined
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1055 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1052 [0m[2m│    [0m                                                                         [31m [0m
+[31m [0m   [2m1053 [0m[2m│    [0m[2m# Weights: More sensitive at the front end (June/July) than the back end[0m [31m [0m
+[31m [0m   [2m1054 [0m[2m│   [0mweights = [[94m1.0[0m, [94m0.9[0m, [94m0.7[0m, [94m0.5[0m, [94m0.3[0m, [94m0.1[0m]                                  [31m [0m
+[31m [0m [31m❱ [0m1055 [2m│   [0mrates = [1;4m[r + (twist_factor / [0m[1;4;94m100[0m[1;4m * w) [0m[1;4;94mfor[0m[1;4m r, w [0m[1;4;95min[0m[1;4m [0m[1;4;96mzip[0m[1;4m(base_rates, weights[0m [31m [0m
+[31m [0m   [2m1056 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1057 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1058 [0m[2m│   [0m[2m# 4. Chart[0m                                                                [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'twist_factor'[0m is not defined
+2026-05-29 15:40:42.427 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1047
+    meetings = list(data.keys())
+IndentationError: unexpected indent
+2026-05-29 15:40:42.429 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1054 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1051 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1052 [0m[2m│   [0m[2m# 5. Metric Summary[0m                                                       [31m [0m
+[31m [0m   [2m1053 [0m[2m│   [0mm1, m2, m3 = st.columns([94m3[0m)                                                [31m [0m
+[31m [0m [31m❱ [0m1054 [2m│   [0mm1.metric([33m"[0m[33mNext Meeting Implied[0m[33m"[0m, [33mf[0m[33m"[0m[33m{[0m[1;4mrates[0m[[94m0[0m][33m:[0m[33m.2f[0m[33m}[0m[33m%[0m[33m"[0m, [33mf[0m[33m"[0m[33m{[0mtwist_factor[90m [0m*[90m [0mw [31m [0m
+[31m [0m   [2m1055 [0m[2m│   [0mm2.metric([33m"[0m[33mYear-End 2026[0m[33m"[0m, [33mf[0m[33m"[0m[33m{[0mrates[[94m4[0m][33m:[0m[33m.2f[0m[33m}[0m[33m%[0m[33m"[0m)                            [31m [0m
+[31m [0m   [2m1056 [0m[2m│   [0mm3.metric([33m"[0m[33mTotal Projected Move[0m[33m"[0m, [33mf[0m[33m"[0m[33m{[0m(rates[-[94m1[0m][90m [0m-[90m [0mrates[[94m0[0m])*[94m100[0m[33m:[0m[33m.0f[0m[33m}[0m[33m bps[0m[33m"[0m [31m [0m
+[31m [0m   [2m1057 [0m                                                                              [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'rates'[0m is not defined
+2026-05-29 15:40:47.384 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:40:49.020 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:43:12.914 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:43:51.940 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:44:06.384 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:45:06.190 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:45:13.669 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1056
+    weights = [1.0, 0.9, 0.7, 0.5, 0.3, 0.1]
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+SyntaxError: invalid syntax. Perhaps you forgot a comma?
+2026-05-29 15:45:13.670 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 15:45:20.637 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
