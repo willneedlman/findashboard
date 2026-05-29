@@ -1,4 +1,13 @@
 import ssl
+import os
+import pathlib
+from pathlib import Path
+import appdirs as ad
+
+CACHE_DIR = ".cache"
+ad.user_cache_dir = lambda *args: CACHE_DIR
+Path(CACHE_DIR).mkdir(exist_ok=True)
+
 import streamlit as st
 import yfinance as yf
 import numpy as np
@@ -911,30 +920,28 @@ elif selected_tab == "Portfolio Backtester":
 elif selected_tab == "Options Implied Probability":
     st.header("Options Implied Probability")
     
+    # Define cached fetchers
+    @st.cache_data(ttl=3600)
+    def fetch_ticker_data(ticker):
+        return yf.Ticker(ticker.upper())
+
+    @st.cache_data(ttl=3600)
+    def fetch_hist(ticker):
+        return yf.Ticker(ticker.upper()).history(period="max")
+
     with st.container(border=True):
-        st.markdown("##### Distribution Parameters")
-        col1, col2, col3 = st.columns([1, 1, 1])
-        
+        # ... (your existing inputs) ...
         ticker_sym = col1.text_input("Target Ticker", value="SPY")
-        
-        # Load Data
-        try:
-            tkr = yf.Ticker(ticker_sym.upper())
-            expirations = tkr.options
-            quick_hist = tkr.history(period="1d")
-            default_target = float(round(quick_hist['Close'].iloc[-1] / 5.0) * 5.0) if not quick_hist.empty else 600.0
-        except:
-            expirations = []
-            default_target = 600.0
+        # ... 
 
-        target_expiry = col2.selectbox("Target Expiry", options=expirations if expirations else ["No options found"])
-        target_px = col3.number_input("Custom Target Price ($)", value=default_target, step=5.0)
-        run_prob = st.button("Generate Probability Cone")
-
-    if run_prob and expirations and target_expiry != "No options found":
+    if run_prob:
         with st.spinner("Calculating..."):
-            hist = tkr.history(period="max")
+            tkr = fetch_ticker_data(ticker_sym)
+            hist = fetch_hist(ticker_sym)
             S0 = hist['Close'].iloc[-1]
+            
+            # Use cached fetchers for IRX and Option Chain too
+            irx = yf.Ticker("^IRX").history(period="5d")
             
             # --- FIX: Robust Timezone Stripping ---
             last_date = hist.index[-1].tz_localize(None)
