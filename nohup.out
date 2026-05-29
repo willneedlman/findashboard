@@ -6160,3 +6160,19 @@ For `use_container_width=True`, use `width='stretch'`. For `use_container_width=
 `use_container_width` will be removed after 2025-12-31.
 
 For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:40:46.716 connection closed
+2026-05-29 17:43:23.528 127.0.0.1:61863 - "GET / HTTP/1.1" 304
+2026-05-29 17:43:23.636 127.0.0.1:61863 - "GET /_stcore/health HTTP/1.1" 200
+2026-05-29 17:43:23.637 127.0.0.1:61864 - "GET /_stcore/host-config HTTP/1.1" 200
+2026-05-29 17:43:23.855 127.0.0.1:61866 - "WebSocket /_stcore/stream" [accepted]
+2026-05-29 17:43:23.857 connection open
+2026-05-29 17:43:25.493 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:43:25.506 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.

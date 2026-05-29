@@ -1207,7 +1207,15 @@ elif selected_tab == "Fed Rate Projections":
 
                 fig2.update_yaxes(range=[y_min - padding, y_max + padding], tickformat=".2f", ticksuffix="%")
                 fig2.update_xaxes(tickvals=mats, ticktext=yc_labels)
-                fig2.update_layout(height=450, hovermode="x unified", template="plotly_dark", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+                fig2.update_layout(
+                    height=450, 
+                    hovermode="x unified", 
+                    template="plotly_dark", 
+                    plot_bgcolor="rgba(0,0,0,0)", 
+                    paper_bgcolor="rgba(0,0,0,0)", 
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                    margin=dict(b=50, t=50, l=40, r=40) # <-- Add this line
+                )
                 st.plotly_chart(fig2, use_container_width=True)
             else:
                 st.error("FRED Macro Database is currently unavailable.")
