@@ -4017,3 +4017,2146 @@ For `use_container_width=True`, use `width='stretch'`. For `use_container_width=
 `use_container_width` will be removed after 2025-12-31.
 
 For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[*********************100%***********************]  1 of 1 completed
+[*********************100%***********************]  1 of 1 completed
+2026-05-29 15:59:45.013 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:05:12.987 127.0.0.1:60026 - "GET / HTTP/1.1" 304
+2026-05-29 16:05:12.998 connection closed
+2026-05-29 16:05:13.094 127.0.0.1:60026 - "GET /_stcore/health HTTP/1.1" 200
+2026-05-29 16:05:13.094 127.0.0.1:60028 - "GET /_stcore/host-config HTTP/1.1" 200
+2026-05-29 16:05:13.329 127.0.0.1:60030 - "WebSocket /_stcore/stream" [accepted]
+2026-05-29 16:05:13.330 connection open
+[*********************100%***********************]  1 of 1 completed
+[*********************100%***********************]  1 of 1 completed
+2026-05-29 16:05:23.254 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[*********************100%***********************]  1 of 1 completed
+[*********************100%***********************]  1 of 1 completed
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:855 in <module>                         [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m 852 [0m[2m│   │   [0m[94mwith[0m st.container(border=[94mTrue[0m):                                       [31m [0m
+[31m [0m   [2m 853 [0m[2m│   │   │   [0mst.markdown([33m"[0m[33m##### Per-Share Underlying Allocation & Valuation Br[0m [31m [0m
+[31m [0m   [2m 854 [0m[2m│   │   │   [0m                                                                  [31m [0m
+[31m [0m [31m❱ [0m 855 [2m│   │   │   [0m[1;4mmx1, mx2[0m = st.columns([94m1[0m)                                          [31m [0m
+[31m [0m   [2m 856 [0m[2m│   │   │   [0mmx1.metric([33m"[0m[33mUnderlying Asset Amount / Share[0m[33m"[0m, [33mf[0m[33m"[0m[33m{[0mcurrent_ratio[33m:[0m[33m.7[0m [31m [0m
+[31m [0m   [2m 857 [0m[2m│   │   │   [0mmx2.metric([33m"[0m[33mUnderlying Asset Market Value / Share[0m[33m"[0m, [33mf[0m[33m"[0m[33m$[0m[33m{[0mcurrent_n [31m [0m
+[31m [0m   [2m 858 [0m                                                                              [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mValueError: [0mnot enough values to unpack [1m([0mexpected [1;36m2[0m, got [1;36m1[0m[1m)[0m
+[*********************100%***********************]  1 of 1 completed
+[*********************100%***********************]  1 of 1 completed
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:855 in <module>                         [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m 852 [0m[2m│   │   [0m[94mwith[0m st.container(border=[94mTrue[0m):                                       [31m [0m
+[31m [0m   [2m 853 [0m[2m│   │   │   [0mst.markdown([33m"[0m[33m##### Per-Share Underlying Allocation & Valuation Br[0m [31m [0m
+[31m [0m   [2m 854 [0m[2m│   │   │   [0mst.divider()                                                      [31m [0m
+[31m [0m [31m❱ [0m 855 [2m│   │   │   [0m[1;4mmx1, mx2[0m = st.columns([94m1[0m)                                          [31m [0m
+[31m [0m   [2m 856 [0m[2m│   │   │   [0mmx1.metric([33m"[0m[33mUnderlying Asset Amount / Share[0m[33m"[0m, [33mf[0m[33m"[0m[33m{[0mcurrent_ratio[33m:[0m[33m.7[0m [31m [0m
+[31m [0m   [2m 857 [0m[2m│   │   │   [0mmx2.metric([33m"[0m[33mUnderlying Asset Market Value / Share[0m[33m"[0m, [33mf[0m[33m"[0m[33m$[0m[33m{[0mcurrent_n [31m [0m
+[31m [0m   [2m 858 [0m                                                                              [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mValueError: [0mnot enough values to unpack [1m([0mexpected [1;36m2[0m, got [1;36m1[0m[1m)[0m
+[*********************100%***********************]  1 of 1 completed
+[*********************100%***********************]  1 of 1 completed
+2026-05-29 16:07:17.071 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[*********************100%***********************]  1 of 1 completed
+[*********************100%***********************]  1 of 1 completed
+2026-05-29 16:07:17.186 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[*********************100%***********************]  1 of 1 completed
+[*********************100%***********************]  1 of 1 completed
+2026-05-29 16:07:25.976 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[*********************100%***********************]  1 of 1 completed
+[*********************100%***********************]  1 of 1 completed
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:845 in <module>                         [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m 842 [0m[2m│   │   │   [0mst.markdown([33mf[0m[33m"[0m[33m### Current Implied Premium: **[0m[33m{[0mcurrent_premium*[94m100[0m [31m [0m
+[31m [0m   [2m 843 [0m[2m│   │   │   [0mst.caption([33mf[0m[33m"[0m[33mCalculated using dynamically fetched shares outstand[0m [31m [0m
+[31m [0m   [2m 844 [0m[2m│   │   │   [0mst.divider()                                                      [31m [0m
+[31m [0m [31m❱ [0m 845 [2m│   │   │   [0m[1;4mm1, m2, m3, m4[0m = st.columns([94m3[0m)                                    [31m [0m
+[31m [0m   [2m 846 [0m[2m│   │   │   [0mm1.metric([33mf[0m[33m"[0m[33m{[0mtarget_ticker[33m}[0m[33m Price[0m[33m"[0m, [33mf[0m[33m"[0m[33m$[0m[33m{[0mcurrent_target[33m:[0m[33m.2f[0m[33m}[0m[33m"[0m)     [31m [0m
+[31m [0m   [2m 847 [0m[2m│   │   │   [0mm2.metric([33m"[0m[33mAsset Value / Share[0m[33m"[0m, [33mf[0m[33m"[0m[33m$[0m[33m{[0mcurrent_nav[33m:[0m[33m.2f[0m[33m}[0m[33m"[0m)           [31m [0m
+[31m [0m   [2m 848 [0m[2m│   │   │   [0mm3.metric([33m"[0m[33mCore Business Implied Value[0m[33m"[0m, [33mf[0m[33m"[0m[33m$[0m[33m{[0m(current_target[90m [0m-[90m [0mcu [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mValueError: [0mnot enough values to unpack [1m([0mexpected [1;36m4[0m, got [1;36m3[0m[1m)[0m
+[*********************100%***********************]  1 of 1 completed
+[*********************100%***********************]  1 of 1 completed
+2026-05-29 16:09:32.153 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[*********************100%***********************]  1 of 1 completed
+[*********************100%***********************]  1 of 1 completed
+2026-05-29 16:12:13.540 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:14:56.570 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1054
+    if selected_tab == "Overview":
+    ^^
+IndentationError: expected an indented block after 'elif' statement on line 1052
+2026-05-29 16:14:56.571 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+[*********************100%***********************]  1 of 1 completed
+[*********************100%***********************]  1 of 1 completed
+2026-05-29 16:15:00.634 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:15:25.731 127.0.0.1:60188 - "GET / HTTP/1.1" 304
+2026-05-29 16:15:25.742 connection closed
+2026-05-29 16:15:25.849 127.0.0.1:60188 - "GET /_stcore/health HTTP/1.1" 200
+2026-05-29 16:15:25.851 127.0.0.1:60189 - "GET /_stcore/host-config HTTP/1.1" 200
+2026-05-29 16:15:26.039 127.0.0.1:60191 - "WebSocket /_stcore/stream" [accepted]
+2026-05-29 16:15:26.041 connection open
+2026-05-29 16:18:22.562 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:18:22.626 127.0.0.1:60275 - "GET /static/js/Multiselect.BO1DJqJ_.js HTTP/1.1" 200
+2026-05-29 16:18:24.551 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:18:27.810 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:18:39.241 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:18:39.522 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:18:39.664 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:18:39.815 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:18:39.963 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:18:41.298 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:18:43.581 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:18:57.582 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:18:59.395 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"No fundamentals data found for symbol: XLF"}}}
+2026-05-29 16:20:11.991 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:20:40.668 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:21:13.875 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:21:40.548 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:21:43.621 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:22:52.744 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:22:55.229 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:24:31.968 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:25:14.040 127.0.0.1:60356 - "GET / HTTP/1.1" 304
+2026-05-29 16:25:14.049 connection closed
+2026-05-29 16:25:14.154 127.0.0.1:60356 - "GET /_stcore/health HTTP/1.1" 200
+2026-05-29 16:25:14.155 127.0.0.1:60357 - "GET /_stcore/host-config HTTP/1.1" 200
+2026-05-29 16:25:14.351 127.0.0.1:60360 - "WebSocket /_stcore/stream" [accepted]
+2026-05-29 16:25:14.352 connection open
+2026-05-29 16:25:30.774 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1235 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1232 [0m[2m│   [0m[94mwith[0m right_notes_panel:                                                   [31m [0m
+[31m [0m   [2m1233 [0m[2m│   │   [0m[94mwith[0m st.container(border=[94mTrue[0m):                                       [31m [0m
+[31m [0m   [2m1234 [0m[2m│   │   │   [0mst.markdown([33m"[0m[33m#### **Terminal Intelligence Brief**[0m[33m"[0m)               [31m [0m
+[31m [0m [31m❱ [0m1235 [2m│   │   │   [0mst.caption([33mf[0m[33m"[0m[33mLive Desk Feed — [0m[33m{[0mda[1;4mtetime.d[0mate.today().strftime([33m'[0m[33m%[0m[33mb[0m [31m [0m
+[31m [0m   [2m1236 [0m[2m│   │   │   [0mst.divider()                                                      [31m [0m
+[31m [0m   [2m1237 [0m[2m│   │   │   [0m                                                                  [31m [0m
+[31m [0m   [2m1238 [0m[2m│   │   │   [0m[94mif[0m active_tickers:                                                [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'datetime'[0m is not defined
+2026-05-29 16:26:01.429 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1235 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1232 [0m[2m│   [0m[94mwith[0m right_notes_panel:                                                   [31m [0m
+[31m [0m   [2m1233 [0m[2m│   │   [0m[94mwith[0m st.container(border=[94mTrue[0m):                                       [31m [0m
+[31m [0m   [2m1234 [0m[2m│   │   │   [0mst.markdown([33m"[0m[33m#### **Terminal Intelligence Brief**[0m[33m"[0m)               [31m [0m
+[31m [0m [31m❱ [0m1235 [2m│   │   │   [0mst.caption([33mf[0m[33m"[0m[33mLive Desk Feed — [0m[33m{[0mda[1;4mtetime.d[0mate.today().strftime([33m'[0m[33m%[0m[33mb[0m [31m [0m
+[31m [0m   [2m1236 [0m[2m│   │   │   [0mst.divider()                                                      [31m [0m
+[31m [0m   [2m1237 [0m[2m│   │   │   [0m                                                                  [31m [0m
+[31m [0m   [2m1238 [0m[2m│   │   │   [0m[94mif[0m active_tickers:                                                [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'datetime'[0m is not defined
+2026-05-29 16:26:34.260 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:26:42.933 127.0.0.1:60381 - "GET / HTTP/1.1" 304
+2026-05-29 16:26:43.076 127.0.0.1:60381 - "GET /_stcore/health HTTP/1.1" 200
+2026-05-29 16:26:43.077 127.0.0.1:60383 - "GET /_stcore/host-config HTTP/1.1" 200
+2026-05-29 16:26:43.369 127.0.0.1:60385 - "WebSocket /_stcore/stream" [accepted]
+2026-05-29 16:26:43.370 connection open
+2026-05-29 16:26:45.022 connection closed
+2026-05-29 16:28:04.234 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1233
+    with right_notes_panel:
+                           ^
+IndentationError: unindent does not match any outer indentation level
+2026-05-29 16:28:04.236 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 16:28:11.647 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:29:13.294 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:29:16.533 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:29:31.909 127.0.0.1:60421 - "GET / HTTP/1.1" 304
+2026-05-29 16:29:31.913 connection closed
+2026-05-29 16:29:32.018 127.0.0.1:60421 - "GET /_stcore/health HTTP/1.1" 200
+2026-05-29 16:29:32.018 127.0.0.1:60422 - "GET /_stcore/host-config HTTP/1.1" 200
+2026-05-29 16:29:32.210 127.0.0.1:60424 - "WebSocket /_stcore/stream" [accepted]
+2026-05-29 16:29:32.212 connection open
+2026-05-29 16:29:41.468 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:30:24.074 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:31:21.317 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"No fundamentals data found for symbol: WEED"}}}
+2026-05-29 16:33:23.977 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:34:02.845 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:35:56.572 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"No fundamentals data found for symbol: XLF"}}}
+2026-05-29 16:41:23.853 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:41:29.769 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:41:31.486 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:41:31.885 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:41:31.891 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:41:32.195 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:41:33.912 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:45:11.848 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:46:14.122 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:46:14.581 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:46:15.108 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:46:17.125 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:46:19.727 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:46:26.464 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:46:47.771 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:46:56.142 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:46:56.908 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:46:56.922 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:46:57.873 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:48:38.935 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:48:40.004 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:48:41.531 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:48:42.101 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:48:44.243 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:48:45.847 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:48:47.688 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:48:49.147 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:48:55.134 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1073 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1070 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1071 [0m[2m│   [0m[2m# 5. Metric Summary[0m                                                       [31m [0m
+[31m [0m   [2m1072 [0m[2m│   [0mm1, m2, m3 = st.columns([94m3[0m)                                                [31m [0m
+[31m [0m [31m❱ [0m1073 [2m│   [0mm1.metric([33m"[0m[33mNext Meeting Implied[0m[33m"[0m, [33mf[0m[33m"[0m[33m{[0m[1;4mrates[0m[[94m0[0m][33m:[0m[33m.2f[0m[33m}[0m[33m%[0m[33m"[0m, [33mf[0m[33m"[0m[33m{[0mtwist_factor[90m [0m*[90m [0mw [31m [0m
+[31m [0m   [2m1074 [0m[2m│   [0mm2.metric([33m"[0m[33mYear-End 2026[0m[33m"[0m, [33mf[0m[33m"[0m[33m{[0mrates[[94m4[0m][33m:[0m[33m.2f[0m[33m}[0m[33m%[0m[33m"[0m)                            [31m [0m
+[31m [0m   [2m1075 [0m[2m│   [0mm3.metric([33m"[0m[33mTotal Projected Move[0m[33m"[0m, [33mf[0m[33m"[0m[33m{[0m(rates[-[94m1[0m][90m [0m-[90m [0mrates[[94m0[0m])*[94m100[0m[33m:[0m[33m.0f[0m[33m}[0m[33m bps[0m[33m"[0m [31m [0m
+[31m [0m   [2m1076 [0m                                                                              [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'rates'[0m is not defined
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1073 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1070 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1071 [0m[2m│   [0m[2m# 5. Metric Summary[0m                                                       [31m [0m
+[31m [0m   [2m1072 [0m[2m│   [0mm1, m2, m3 = st.columns([94m3[0m)                                                [31m [0m
+[31m [0m [31m❱ [0m1073 [2m│   [0mm1.metric([33m"[0m[33mNext Meeting Implied[0m[33m"[0m, [33mf[0m[33m"[0m[33m{[0m[1;4mrates[0m[[94m0[0m][33m:[0m[33m.2f[0m[33m}[0m[33m%[0m[33m"[0m, [33mf[0m[33m"[0m[33m{[0mtwist_factor[90m [0m*[90m [0mw [31m [0m
+[31m [0m   [2m1074 [0m[2m│   [0mm2.metric([33m"[0m[33mYear-End 2026[0m[33m"[0m, [33mf[0m[33m"[0m[33m{[0mrates[[94m4[0m][33m:[0m[33m.2f[0m[33m}[0m[33m%[0m[33m"[0m)                            [31m [0m
+[31m [0m   [2m1075 [0m[2m│   [0mm3.metric([33m"[0m[33mTotal Projected Move[0m[33m"[0m, [33mf[0m[33m"[0m[33m{[0m(rates[-[94m1[0m][90m [0m-[90m [0mrates[[94m0[0m])*[94m100[0m[33m:[0m[33m.0f[0m[33m}[0m[33m bps[0m[33m"[0m [31m [0m
+[31m [0m   [2m1076 [0m                                                                              [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'rates'[0m is not defined
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1065 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1062 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1063 [0m[2m│   [0m[2m# Weights: More sensitive at the front end (June/July) than the back end [0m [31m [0m
+[31m [0m   [2m1064 [0m[2m│   [0mweights = [[94m1.0[0m, [94m0.9[0m, [94m0.7[0m, [94m0.5[0m, [94m0.3[0m, [94m0.1[0m]                                  [31m [0m
+[31m [0m [31m❱ [0m1065 [2m│   [0mrates = [r + (twist_factor / [94m100[0m * w) [94mfor[0m r, w [95min[0m [96mzip[0m([1;4mbase_rates[0m, weights [31m [0m
+[31m [0m   [2m1066 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1067 [0m[2m│   [0m[2m# 1. Next Meeting Probability Data[0m                                        [31m [0m
+[31m [0m   [2m1068 [0m[2m│   [0mst.markdown([33m"[0m[33m##### Next FOMC Meeting Probability Breakdown[0m[33m"[0m)              [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'base_rates'[0m is not defined
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1065 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1062 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1063 [0m[2m│   [0m[2m# Weights: More sensitive at the front end (June/July) than the back end [0m [31m [0m
+[31m [0m   [2m1064 [0m[2m│   [0mweights = [[94m1.0[0m, [94m0.9[0m, [94m0.7[0m, [94m0.5[0m, [94m0.3[0m, [94m0.1[0m]                                  [31m [0m
+[31m [0m [31m❱ [0m1065 [2m│   [0mrates = [r + (twist_factor / [94m100[0m * w) [94mfor[0m r, w [95min[0m [96mzip[0m([1;4mbase_rates[0m, weights [31m [0m
+[31m [0m   [2m1066 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1067 [0m[2m│   [0m[2m# 2. Base Path Data[0m                                                       [31m [0m
+[31m [0m   [2m1068 [0m[2m│   [0mdata = {                                                                  [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'base_rates'[0m is not defined
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1073 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1070 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1071 [0m[2m│   [0m[2m# Weights: More sensitive at the front end (June/July) than the back end [0m [31m [0m
+[31m [0m   [2m1072 [0m[2m│   [0mweights = [[94m1.0[0m, [94m0.9[0m, [94m0.7[0m, [94m0.5[0m, [94m0.3[0m, [94m0.1[0m]                                  [31m [0m
+[31m [0m [31m❱ [0m1073 [2m│   [0mrates = [1;4m[r + (twist_factor / [0m[1;4;94m100[0m[1;4m * w) [0m[1;4;94mfor[0m[1;4m r, w [0m[1;4;95min[0m[1;4m [0m[1;4;96mzip[0m[1;4m(base_rates, weights[0m [31m [0m
+[31m [0m   [2m1074 [0m                                                                              [31m [0m
+[31m [0m   [2m1075 [0m                                                                              [31m [0m
+[31m [0m   [2m1076 [0m                                                                              [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'twist_factor'[0m is not defined
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1073 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1070 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1071 [0m[2m│   [0m[2m# Weights: More sensitive at the front end (June/July) than the back end [0m [31m [0m
+[31m [0m   [2m1072 [0m[2m│   [0mweights = [[94m1.0[0m, [94m0.9[0m, [94m0.7[0m, [94m0.5[0m, [94m0.3[0m, [94m0.1[0m]                                  [31m [0m
+[31m [0m [31m❱ [0m1073 [2m│   [0mrates = [1;4m[r + (twist_factor / [0m[1;4;94m100[0m[1;4m * w) [0m[1;4;94mfor[0m[1;4m r, w [0m[1;4;95min[0m[1;4m [0m[1;4;96mzip[0m[1;4m(base_rates, weights[0m [31m [0m
+[31m [0m   [2m1074 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1075 [0m[2m│   [0m[2m# 3. Sensitivity Logic (placed below the chart)[0m                           [31m [0m
+[31m [0m   [2m1076 [0m[2m│   [0mtwist_factor = st.slider(                                                 [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'twist_factor'[0m is not defined
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1092 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1089 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1090 [0m[2m│   [0m[2m# 5. Metric Summary[0m                                                       [31m [0m
+[31m [0m   [2m1091 [0m[2m│   [0mm1, m2, m3 = st.columns([94m3[0m)                                                [31m [0m
+[31m [0m [31m❱ [0m1092 [2m│   [0mm1.metric([33m"[0m[33mNext Meeting Implied[0m[33m"[0m, [33mf[0m[33m"[0m[33m{[0m[1;4mrates[0m[[94m0[0m][33m:[0m[33m.2f[0m[33m}[0m[33m%[0m[33m"[0m, [33mf[0m[33m"[0m[33m{[0mtwist_factor[90m [0m*[90m [0mw [31m [0m
+[31m [0m   [2m1093 [0m[2m│   [0mm2.metric([33m"[0m[33mYear-End 2026[0m[33m"[0m, [33mf[0m[33m"[0m[33m{[0mrates[[94m4[0m][33m:[0m[33m.2f[0m[33m}[0m[33m%[0m[33m"[0m)                            [31m [0m
+[31m [0m   [2m1094 [0m[2m│   [0mm3.metric([33m"[0m[33mTotal Projected Move[0m[33m"[0m, [33mf[0m[33m"[0m[33m{[0m(rates[-[94m1[0m][90m [0m-[90m [0mrates[[94m0[0m])*[94m100[0m[33m:[0m[33m.0f[0m[33m}[0m[33m bps[0m[33m"[0m [31m [0m
+[31m [0m   [2m1095 [0m                                                                              [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'rates'[0m is not defined
+2026-05-29 16:51:35.744 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1094 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1091 [0m[2m│   [0mcol3.metric([33m"[0m[33mHold[0m[33m"[0m, [33m"[0m[33m82[0m[33m%[0m[33m"[0m, delta_color=[33m"[0m[33moff[0m[33m"[0m)                             [31m [0m
+[31m [0m   [2m1092 [0m[2m│   [0mcol4.metric([33m"[0m[33mCut -25bps[0m[33m"[0m, [33m"[0m[33m6[0m[33m%[0m[33m"[0m)                                           [31m [0m
+[31m [0m   [2m1093 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m [31m❱ [0m1094 [2m│   [0m[1;4mst.divided[0m()                                                              [31m [0m
+[31m [0m   [2m1095 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1096 [0m[2m│   [0m[2m# 5. Metric Summary[0m                                                       [31m [0m
+[31m [0m   [2m1097 [0m[2m│   [0mm1, m2, m3 = st.columns([94m3[0m)                                                [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mAttributeError: [0mmodule [32m'streamlit'[0m has no attribute [32m'divided'[0m
+2026-05-29 16:51:55.547 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:52:46.787 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:53:12.463 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:53:14.042 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:53:15.527 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:53:30.629 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:55:04.674 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:55:06.368 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:55:06.374 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:55:07.667 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:55:09.074 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:55:09.449 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1229 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1226 [0m[2m│   │   │   │   [0mst.dataframe(                                                 [31m [0m
+[31m [0m   [2m1227 [0m[2m│   │   │   │   │   [0mdf_earnings,                                              [31m [0m
+[31m [0m   [2m1228 [0m[2m│   │   │   │   │   [0mcolumn_config={                                           [31m [0m
+[31m [0m [31m❱ [0m1229 [2m│   │   │   │   │   │   [0m[33m"[0m[33mValuation Metric[0m[33m"[0m: [1;4mst.column_co9nfig[0m.NumberColumn([33m"[0m[33mF[0m [31m [0m
+[31m [0m   [2m1230 [0m[2m│   │   │   │   │   │   [0m[33m"[0m[33mConsensus Indicator[0m[33m"[0m: st.column_config.NumberColumn( [31m [0m
+[31m [0m   [2m1231 [0m[2m│   │   │   │   │   │   [0m[33m"[0m[33mAnalyst Consensus[0m[33m"[0m: st.column_config.SelectboxColumn [31m [0m
+[31m [0m   [2m1232 [0m[2m│   │   │   │   │   [0m},                                                        [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mAttributeError: [0mmodule [32m'streamlit'[0m has no attribute [32m'column_co9nfig'[0m
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1229 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1226 [0m[2m│   │   │   │   [0mst.dataframe(                                                 [31m [0m
+[31m [0m   [2m1227 [0m[2m│   │   │   │   │   [0mdf_earnings,                                              [31m [0m
+[31m [0m   [2m1228 [0m[2m│   │   │   │   │   [0mcolumn_config={                                           [31m [0m
+[31m [0m [31m❱ [0m1229 [2m│   │   │   │   │   │   [0m[33m"[0m[33mValuation Metric[0m[33m"[0m: [1;4mst.column_nfig[0m.NumberColumn([33m"[0m[33mForw[0m [31m [0m
+[31m [0m   [2m1230 [0m[2m│   │   │   │   │   │   [0m[33m"[0m[33mConsensus Indicator[0m[33m"[0m: st.column_config.NumberColumn( [31m [0m
+[31m [0m   [2m1231 [0m[2m│   │   │   │   │   │   [0m[33m"[0m[33mAnalyst Consensus[0m[33m"[0m: st.column_config.SelectboxColumn [31m [0m
+[31m [0m   [2m1232 [0m[2m│   │   │   │   │   [0m},                                                        [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mAttributeError: [0mmodule [32m'streamlit'[0m has no attribute [32m'column_nfig'[0m
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1229 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1226 [0m[2m│   │   │   │   [0mst.dataframe(                                                 [31m [0m
+[31m [0m   [2m1227 [0m[2m│   │   │   │   │   [0mdf_earnings,                                              [31m [0m
+[31m [0m   [2m1228 [0m[2m│   │   │   │   │   [0mcolumn_config={                                           [31m [0m
+[31m [0m [31m❱ [0m1229 [2m│   │   │   │   │   │   [0m[33m"[0m[33mValuation Metric[0m[33m"[0m: [1;4mst.column_co9nfig[0m.NumberColumn([33m"[0m[33mF[0m [31m [0m
+[31m [0m   [2m1230 [0m[2m│   │   │   │   │   │   [0m[33m"[0m[33mConsensus Indicator[0m[33m"[0m: st.column_config.NumberColumn( [31m [0m
+[31m [0m   [2m1231 [0m[2m│   │   │   │   │   │   [0m[33m"[0m[33mAnalyst Consensus[0m[33m"[0m: st.column_config.SelectboxColumn [31m [0m
+[31m [0m   [2m1232 [0m[2m│   │   │   │   │   [0m},                                                        [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mAttributeError: [0mmodule [32m'streamlit'[0m has no attribute [32m'column_co9nfig'[0m
+2026-05-29 16:55:32.138 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:55:49.496 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:55:51.145 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:55:52.572 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:55:55.434 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:55:56.873 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:55:59.539 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:56:03.621 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:56:07.297 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:56:10.753 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:56:23.239 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:56:29.168 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:56:31.224 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:57:17.754 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:57:25.281 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:57:27.884 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:57:41.007 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:57:41.016 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:57:50.557 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:57:50.569 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:57:51.323 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:57:51.336 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:57:58.841 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:57:58.853 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:58:00.843 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:58:00.856 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:58:03.345 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:58:03.361 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:58:06.892 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:58:06.907 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:59:38.418 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:59:38.496 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:59:56.421 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:59:56.436 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:59:58.826 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:59:58.840 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:59:59.855 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 16:59:59.869 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:00:00.491 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:00:00.506 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:00:06.921 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:00:06.935 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:00:10.825 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:00:10.848 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:00:14.677 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:00:14.690 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:00:16.626 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:00:16.637 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:00:19.291 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:00:19.306 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:00:43.345 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:00:43.353 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:00:46.001 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:00:46.009 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:00:47.428 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:00:47.436 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:02.963 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:02.972 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:05.411 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:05.418 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:08.793 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:08.807 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:11.833 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:11.854 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:12.608 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:12.622 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:13.264 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:13.278 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:15.866 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:15.878 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:18.806 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:18.819 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:23.279 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:23.292 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:25.121 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:25.133 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:25.701 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:25.709 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:26.273 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:26.286 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:26.676 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:26.689 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:27.238 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:27.253 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:27.728 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:27.741 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:28.082 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:28.095 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:28.479 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:28.488 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:29.544 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:29.557 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:30.517 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:30.532 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:31.021 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:31.034 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:32.038 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:32.053 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:34.725 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:34.733 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:56.693 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:56.706 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:59.293 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:01:59.308 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:02:06.714 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:02:06.730 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:03:10.918 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:03:10.956 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:03:16.432 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:03:16.442 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:03:18.681 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:03:18.691 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:03:29.074 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:03:29.082 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:03:30.731 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:03:30.740 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:03:32.560 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:03:32.568 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:03:37.790 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1158
+    yc_weights = [, 0.85, 0.40, 0.1, -0.2, -0.325] 
+                  ^
+SyntaxError: invalid syntax
+2026-05-29 17:03:37.791 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 17:03:39.430 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1158
+    yc_weights = ., 0.85, 0.40, 0.1, -0.2, -0.325] 
+                                                 ^
+SyntaxError: unmatched ']'
+2026-05-29 17:03:39.431 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 17:03:44.939 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1158
+    yc_weights = [.95], 0.85, 0.40, 0.1, -0.2, -0.325] 
+                                                     ^
+SyntaxError: unmatched ']'
+2026-05-29 17:03:44.939 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 17:03:46.659 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:03:46.667 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:03:50.160 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:03:50.174 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:03:52.375 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:03:52.397 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:03:54.992 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:03:55.005 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:04:07.199 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:04:07.210 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:04:07.770 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:04:07.780 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:04:10.216 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:04:10.229 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:04:11.561 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:04:11.574 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:04:13.079 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:04:13.092 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:04:14.372 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:04:14.384 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:04:14.860 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:04:14.873 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:04:15.361 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:04:15.374 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:04:17.713 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:04:17.725 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:04:37.609 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:05:32.218 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:05:36.289 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:05:37.493 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:05:45.720 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:05:49.947 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:06:04.022 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:07:20.680 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:07:30.021 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:07:33.386 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:08:35.212 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:08:36.412 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:08:40.287 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:12:38.244 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:14:24.862 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:17:10.634 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:17:12.467 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:17:18.874 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:17:22.670 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:17:29.770 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:17:29.777 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:17:31.614 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:17:32.739 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:17:32.753 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:17:53.787 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1093
+    st.write("Simulate basis point shifts across the front end
+             ^
+SyntaxError: unterminated string literal (detected at line 1093)
+2026-05-29 17:17:53.788 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 17:17:59.108 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1093
+    st.write("Simulate basis point shifts across the front end.)
+             ^
+SyntaxError: unterminated string literal (detected at line 1093)
+2026-05-29 17:17:59.108 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 17:18:04.506 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:18:04.516 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:18:09.864 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:18:09.878 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:18:25.061 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[*********************100%***********************]  1 of 1 completed
+[*********************100%***********************]  1 of 1 completed
+2026-05-29 17:18:36.955 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:18:39.297 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:18:39.305 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:18:43.130 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:18:54.461 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:18:59.134 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:20:44.313 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:20:44.328 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:21:00.597 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:21:00.611 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:22:45.310 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:22:45.348 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:22:51.998 127.0.0.1:61587 - "GET / HTTP/1.1" 304
+2026-05-29 17:22:52.010 connection closed
+2026-05-29 17:22:52.114 127.0.0.1:61587 - "GET /_stcore/health HTTP/1.1" 200
+2026-05-29 17:22:52.114 127.0.0.1:61588 - "GET /_stcore/host-config HTTP/1.1" 200
+2026-05-29 17:22:52.312 127.0.0.1:61591 - "WebSocket /_stcore/stream" [accepted]
+2026-05-29 17:22:52.313 connection open
+2026-05-29 17:22:54.585 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:22:54.600 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:23:09.891 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1289
+    df_earnings,    dd
+                    ^^
+SyntaxError: invalid syntax. Perhaps you forgot a comma?
+2026-05-29 17:23:09.896 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 17:23:14.365 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:23:14.373 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:23:39.800 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1151
+    yc_labels = [.      "1Y", "2Y", "5Y", "10Y", "20Y", "30Y"]
+                 ^
+SyntaxError: invalid syntax
+2026-05-29 17:23:39.801 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 17:23:45.183 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:23:45.192 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:23:49.592 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1289
+    df_earnings,    dd
+                    ^^
+SyntaxError: invalid syntax. Perhaps you forgot a comma?
+2026-05-29 17:23:49.593 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 17:23:51.103 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:23:51.112 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:30:31.389 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:30:31.418 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:30:45.668 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:30:45.678 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:31:25.999 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:31:26.011 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:32:17.135 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:32:17.140 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:32:17.204 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:32:17.208 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:32:26.071 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:32:26.618 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:32:26.626 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:32:44.907 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:32:45.959 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:33:12.585 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:33:12.594 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:33:15.043 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:33:15.059 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:33:47.177 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:33:47.185 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:34:01.675 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:34:01.678 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:34:05.860 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:34:07.591 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:34:07.600 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:34:14.852 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:34:14.860 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:34:25.239 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:34:43.236 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:34:43.262 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:36:03.796 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:36:03.812 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:36:14.412 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:36:14.421 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:36:17.261 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:36:17.271 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:36:21.547 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:36:21.556 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:36:24.227 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:36:24.234 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:36:27.892 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:36:27.900 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:36:27.955 127.0.0.1:61753 - "GET / HTTP/1.1" 304
+2026-05-29 17:36:27.964 connection closed
+2026-05-29 17:36:28.069 127.0.0.1:61753 - "GET /_stcore/health HTTP/1.1" 200
+2026-05-29 17:36:28.070 127.0.0.1:61754 - "GET /_stcore/host-config HTTP/1.1" 200
+2026-05-29 17:36:28.271 127.0.0.1:61756 - "WebSocket /_stcore/stream" [accepted]
+2026-05-29 17:36:28.273 connection open
+2026-05-29 17:36:31.421 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:36:31.435 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:36:45.052 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:36:45.061 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:40:03.680 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:40:03.700 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:40:16.862 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 17:40:16.886 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
