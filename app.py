@@ -1062,8 +1062,8 @@ elif selected_tab == "Fed Rate Projections":
     # 3. Sensitivity Logic (placed below the chart)
     twist_factor = st.slider(
         "Sensitivity Analysis (bps shift)", 
-        min_value=-25, 
-        max_value=25, 
+        min_value=-100, 
+        max_value=100, 
         value=0, 
         step=5
     )
