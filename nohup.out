@@ -1,0 +1,2497 @@
+2026-05-25 22:03:53.040 Uvicorn server started on 0.0.0.0:8501
+
+  You can now view your Streamlit app in your browser.
+
+  Local URL: http://localhost:8501
+  Network URL: http://10.0.0.251:8501
+
+  For better performance, install the Watchdog module:
+
+  $ xcode-select --install
+  $ pip install watchdog
+            
+2026-05-25 22:03:54.787 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:04:26.341 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[*********************100%***********************]  1 of 1 completed
+2026-05-25 22:04:29.025 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:04:29.071 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:04:45.984 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[*********************100%***********************]  1 of 1 completed
+2026-05-25 22:04:47.432 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:04:47.483 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:09:24.758 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[*********************100%***********************]  1 of 1 completed
+2026-05-25 22:09:25.344 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:09:25.395 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[*********************100%***********************]  1 of 1 completed
+2026-05-25 22:09:36.492 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:09:36.543 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:09:39.580 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+$NEGG: possibly delisted; no price data found  (1d 2026-01-01 -> 2024-12-31) (Yahoo error = "Invalid input - start date cannot be after end date. startDate = 1767243600, endDate = 1735621200")
+[*********************100%***********************]  1 of 1 completed
+
+1 Failed download:
+['NEGG']: possibly delisted; no price data found  (1d 2026-01-01 -> 2024-12-31) (Yahoo error = "Invalid input - start date cannot be after end date. startDate = 1767243600, endDate = 1735621200")
+2026-05-25 22:09:41.327 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:09:41.384 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+$NEGG: possibly delisted; no price data found  (1d 2026-01-01 -> 2024-12-31) (Yahoo error = "Invalid input - start date cannot be after end date. startDate = 1767243600, endDate = 1735621200")
+[*********************100%***********************]  1 of 1 completed
+
+1 Failed download:
+['NEGG']: possibly delisted; no price data found  (1d 2026-01-01 -> 2024-12-31) (Yahoo error = "Invalid input - start date cannot be after end date. startDate = 1767243600, endDate = 1735621200")
+2026-05-25 22:09:44.015 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:09:44.071 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:09:52.606 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:09:53.180 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:09:55.033 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[*********************100%***********************]  1 of 1 completed
+2026-05-25 22:09:56.070 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:09:56.124 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:13:49.197 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:16:05.054 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:17:18.655 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[*********************100%***********************]  1 of 1 completed
+2026-05-25 22:17:24.065 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:17:25.669 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:18:45.237 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:18:48.203 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:20:08.119 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[*********************100%***********************]  1 of 1 completed
+2026-05-25 22:20:10.080 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[*********************100%***********************]  1 of 1 completed
+2026-05-25 22:20:21.378 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[*********************100%***********************]  1 of 1 completed
+2026-05-25 22:20:22.022 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[*********************100%***********************]  1 of 1 completed
+2026-05-25 22:20:27.643 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:22:34.106 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 82
+    st.header("Market Data & Drawdown Analysis
+              ^
+SyntaxError: unterminated string literal (detected at line 82)
+2026-05-25 22:22:34.113 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-25 22:22:39.588 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 82
+    st.header("Market Data & Drawdown Analysis
+              ^
+SyntaxError: unterminated string literal (detected at line 82)
+2026-05-25 22:22:39.590 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-25 22:22:58.484 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 82
+    st.header("Market Data & Drawdown Analysis)
+              ^
+SyntaxError: unterminated string literal (detected at line 82)
+2026-05-25 22:22:58.488 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-25 22:23:22.836 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:23:25.359 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[*********************100%***********************]  1 of 1 completed
+2026-05-25 22:23:28.253 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:23:29.124 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:25:37.524 127.0.0.1:53879 - "GET /static/media/SourceSerifVariable-Roman.ttf.mdpVL9bi.woff2 HTTP/1.1" 200
+2026-05-25 22:25:38.746 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:25:39.706 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:26:52.468 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:26:58.109 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:26:58.551 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:26:59.660 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:26:59.765 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:27:34.744 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:28:07.348 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:28:08.822 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:28:09.579 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:28:29.321 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[*********************100%***********************]  1 of 1 completed
+2026-05-25 22:29:09.304 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:29:11.578 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:29:15.998 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:32:32.165 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:33:04.767 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[*********************100%***********************]  1 of 1 completed
+[*********************100%***********************]  1 of 1 completed
+2026-05-25 22:33:33.871 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: VOOO"}}}
+$VOOO: possibly delisted; no timezone found
+[*********************100%***********************]  1 of 1 completed
+
+1 Failed download:
+['VOOO']: possibly delisted; no timezone found
+[*********************100%***********************]  1 of 1 completed
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:287 in <module>                         [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/pandas/core/[0m [31m [0m
+[31m [0m [1mindexing.py[0m:1207 in __getitem__                                                      [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1204 [0m[2m│   │   │   [0m                                                                  [31m [0m
+[31m [0m   [2m1205 [0m[2m│   │   │   [0mmaybe_callable = com.apply_if_callable(key, [96mself[0m.obj)             [31m [0m
+[31m [0m   [2m1206 [0m[2m│   │   │   [0mmaybe_callable = [96mself[0m._raise_callable_usage(key, maybe_callable)  [31m [0m
+[31m [0m [31m❱ [0m1207 [2m│   │   │   [0m[94mreturn[0m [1;4;96mself[0m[1;4m._getitem_axis(maybe_callable, axis=axis)[0m              [31m [0m
+[31m [0m   [2m1208 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1209 [0m[2m│   [0m[94mdef[0m[90m [0m[92m_is_scalar_access[0m([96mself[0m, key: [96mtuple[0m):                                  [31m [0m
+[31m [0m   [2m1210 [0m[2m│   │   [0m[94mraise[0m [96mNotImplementedError[0m                                             [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/pandas/core/[0m [31m [0m
+[31m [0m [1mindexing.py[0m:1773 in _getitem_axis                                                    [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1770 [0m[2m│   │   │   │   [0m[94mraise[0m [96mTypeError[0m([33m"[0m[33mCannot index by location index with a non-in[0m [31m [0m
+[31m [0m   [2m1771 [0m[2m│   │   │   [0m                                                                  [31m [0m
+[31m [0m   [2m1772 [0m[2m│   │   │   [0m[2m# validate the location[0m                                           [31m [0m
+[31m [0m [31m❱ [0m1773 [2m│   │   │   [0m[1;4;96mself[0m[1;4m._validate_integer(key, axis)[0m                                 [31m [0m
+[31m [0m   [2m1774 [0m[2m│   │   │   [0m                                                                  [31m [0m
+[31m [0m   [2m1775 [0m[2m│   │   │   [0m[94mreturn[0m [96mself[0m.obj._ixs(key, axis=axis)                              [31m [0m
+[31m [0m   [2m1776 [0m                                                                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/pandas/core/[0m [31m [0m
+[31m [0m [1mindexing.py[0m:1706 in _validate_integer                                                [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1703 [0m[2;33m│   │   [0m[33m"""[0m                                                                   [31m [0m
+[31m [0m   [2m1704 [0m[2m│   │   [0mlen_axis = [96mlen[0m([96mself[0m.obj._get_axis(axis))                              [31m [0m
+[31m [0m   [2m1705 [0m[2m│   │   [0m[94mif[0m key >= len_axis [95mor[0m key < -len_axis:                                [31m [0m
+[31m [0m [31m❱ [0m1706 [2m│   │   │   [0m[1;4;94mraise[0m[1;4m [0m[1;4;96mIndexError[0m[1;4m([0m[1;4;33m"[0m[1;4;33msingle positional indexer is out-of-bounds[0m[1;4;33m"[0m[1;4m)[0m    [31m [0m
+[31m [0m   [2m1707 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m1708 [0m[2m│   [0m[2m# -------------------------------------------------------------------[0m     [31m [0m
+[31m [0m   [2m1709 [0m                                                                              [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mIndexError: [0msingle positional indexer is out-of-bounds
+[*********************100%***********************]  1 of 1 completed
+[*********************100%***********************]  1 of 1 completed
+2026-05-25 22:34:13.792 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[*********************100%***********************]  1 of 1 completed
+[*********************100%***********************]  1 of 1 completed
+2026-05-25 22:34:21.553 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[*********************100%***********************]  1 of 1 completed
+[*********************100%***********************]  1 of 1 completed
+2026-05-25 22:36:23.971 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[*********************100%***********************]  1 of 1 completed
+[*********************100%***********************]  1 of 1 completed
+2026-05-25 22:36:42.308 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[*********************100%***********************]  1 of 1 completed
+[*********************100%***********************]  1 of 1 completed
+2026-05-25 22:37:24.926 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:40:02.958 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/yfinance/[0m[1mmul[0m [31m [0m
+[31m [0m [1mti.py[0m:210 in _download_impl                                                          [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m207 [0m[2m│   │   │   │   [0mdf.index = df.index.tz_localize([94mNone[0m)                          [31m [0m
+[31m [0m   [2m208 [0m[2m│   [0mctx.dfs = reindex_dfs(ctx.dfs, ignore_tz)                                  [31m [0m
+[31m [0m   [2m209 [0m[2m│   [0m[94mtry[0m:                                                                       [31m [0m
+[31m [0m [31m❱ [0m210 [2m│   │   [0mdata = _pd.concat(ctx.dfs.values(), axis=[94m1[0m, sort=[94mTrue[0m,                 [31m [0m
+[31m [0m   [2m211 [0m[2m│   │   │   │   │   │     [0mkeys=ctx.dfs.keys(), names=[[33m'[0m[33mTicker[0m[33m'[0m, [33m'[0m[33mPrice[0m[33m'[0m])      [31m [0m
+[31m [0m   [2m212 [0m[2m│   [0m[94mexcept[0m [96mException[0m:                                                          [31m [0m
+[31m [0m   [2m213 [0m[2m│   │   [0mdata = [1;4m_pd.concat(ctx.dfs.values(), axis=[0m[1;4;94m1[0m[1;4m, sort=[0m[1;4;94mTrue[0m[1;4m,[0m                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/pandas/core/[0m [31m [0m
+[31m [0m [2mreshape/[0m[1mconcat.py[0m:407 in concat                                                      [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m404 [0m[2m│   │   │   [0m[33m"[0m[33mOnly can inner (intersect) or outer (union) join the other axis[0m[33m"[0m  [31m [0m
+[31m [0m   [2m405 [0m[2m│   │   [0m)                                                                      [31m [0m
+[31m [0m   [2m406 [0m[2m│   [0m                                                                           [31m [0m
+[31m [0m [31m❱ [0m407 [2m│   [0mobjs, keys, ndims = [1;4m_clean_keys_and_objs(objs, keys)[0m                       [31m [0m
+[31m [0m   [2m408 [0m[2m│   [0m                                                                           [31m [0m
+[31m [0m   [2m409 [0m[2m│   [0m[94mif[0m sort [95mis[0m lib.no_default:                                                 [31m [0m
+[31m [0m   [2m410 [0m[2m│   │   [0m[94mif[0m axis == [94m0[0m:                                                          [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/pandas/core/[0m [31m [0m
+[31m [0m [2mreshape/[0m[1mconcat.py[0m:808 in _clean_keys_and_objs                                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m805 [0m[2m│   │   [0mobjs = [96mlist[0m(objs)                                                      [31m [0m
+[31m [0m   [2m806 [0m[2m│   [0m                                                                           [31m [0m
+[31m [0m   [2m807 [0m[2m│   [0m[94mif[0m [96mlen[0m(objs) == [94m0[0m:                                                         [31m [0m
+[31m [0m [31m❱ [0m808 [2m│   │   [0m[1;4;94mraise[0m[1;4m [0m[1;4;96mValueError[0m[1;4m([0m[1;4;33m"[0m[1;4;33mNo objects to concatenate[0m[1;4;33m"[0m[1;4m)[0m                          [31m [0m
+[31m [0m   [2m809 [0m[2m│   [0m                                                                           [31m [0m
+[31m [0m   [2m810 [0m[2m│   [0m[94mif[0m keys [95mis[0m [95mnot[0m [94mNone[0m:                                                       [31m [0m
+[31m [0m   [2m811 [0m[2m│   │   [0m[94mif[0m [95mnot[0m [96misinstance[0m(keys, Index):                                        [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mValueError: [0mNo objects to concatenate
+
+[3mDuring handling of the above exception, another exception occurred:[0m
+
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:374 in <module>                         [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/yfinance/[0m[1muti[0m [31m [0m
+[31m [0m [1mls.py[0m:123 in wrapper                                                                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m 120 [0m[2m│   │   [0mlogger.debug([33mf[0m[33m'[0m[33mEntering [0m[33m{[0mfunc.[91m__name__[0m[33m}[0m[33m()[0m[33m'[0m)                           [31m [0m
+[31m [0m   [2m 121 [0m[2m│   │   [0m                                                                      [31m [0m
+[31m [0m   [2m 122 [0m[2m│   │   [0m[94mwith[0m IndentationContext():                                            [31m [0m
+[31m [0m [31m❱ [0m 123 [2m│   │   │   [0mresult = [1;4mfunc(*args, **kwargs)[0m                                    [31m [0m
+[31m [0m   [2m 124 [0m[2m│   │   [0m                                                                      [31m [0m
+[31m [0m   [2m 125 [0m[2m│   │   [0mlogger.debug([33mf[0m[33m'[0m[33mExiting [0m[33m{[0mfunc.[91m__name__[0m[33m}[0m[33m()[0m[33m'[0m)                            [31m [0m
+[31m [0m   [2m 126 [0m[2m│   │   [0m[94mreturn[0m result                                                         [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/yfinance/[0m[1mmul[0m [31m [0m
+[31m [0m [1mti.py[0m:110 in download                                                                [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m107 [0m[2;33m│   │   [0m[33mmulti_level_index: bool[0m                                                [31m [0m
+[31m [0m   [2m108 [0m[2;33m│   │   │   [0m[33mOptional. Always return a MultiIndex DataFrame? Default is True[0m    [31m [0m
+[31m [0m   [2m109 [0m[2;33m│   [0m[33m"""[0m                                                                        [31m [0m
+[31m [0m [31m❱ [0m110 [2m│   [0m[94mreturn[0m [1;4m_download_impl([0m                                                     [31m [0m
+[31m [0m   [2m111 [0m[2m│   │   [0m[1;4m_DownloadCtx(),[0m                                                        [31m [0m
+[31m [0m   [2m112 [0m[2m│   │   [0m[1;4mtickers, start=start, end=end, actions=actions, threads=threads,[0m       [31m [0m
+[31m [0m   [2m113 [0m[2m│   │   [0m[1;4mignore_tz=ignore_tz, group_by=group_by, auto_adjust=auto_adjust,[0m       [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/yfinance/[0m[1mmul[0m [31m [0m
+[31m [0m [1mti.py[0m:213 in _download_impl                                                          [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m210 [0m[2m│   │   [0mdata = _pd.concat(ctx.dfs.values(), axis=[94m1[0m, sort=[94mTrue[0m,                 [31m [0m
+[31m [0m   [2m211 [0m[2m│   │   │   │   │   │     [0mkeys=ctx.dfs.keys(), names=[[33m'[0m[33mTicker[0m[33m'[0m, [33m'[0m[33mPrice[0m[33m'[0m])      [31m [0m
+[31m [0m   [2m212 [0m[2m│   [0m[94mexcept[0m [96mException[0m:                                                          [31m [0m
+[31m [0m [31m❱ [0m213 [2m│   │   [0mdata = [1;4m_pd.concat(ctx.dfs.values(), axis=[0m[1;4;94m1[0m[1;4m, sort=[0m[1;4;94mTrue[0m[1;4m,[0m                 [31m [0m
+[31m [0m   [2m214 [0m[2m│   │   │   │   │   │     [0m[1;4mkeys=ctx.dfs.keys(), names=[[0m[1;4;33m'[0m[1;4;33mTicker[0m[1;4;33m'[0m[1;4m, [0m[1;4;33m'[0m[1;4;33mPrice[0m[1;4;33m'[0m[1;4m])[0m      [31m [0m
+[31m [0m   [2m215 [0m[2m│   [0mdata.rename(columns=ctx.isins, inplace=[94mTrue[0m)                               [31m [0m
+[31m [0m   [2m216 [0m                                                                               [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/pandas/core/[0m [31m [0m
+[31m [0m [2mreshape/[0m[1mconcat.py[0m:407 in concat                                                      [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m404 [0m[2m│   │   │   [0m[33m"[0m[33mOnly can inner (intersect) or outer (union) join the other axis[0m[33m"[0m  [31m [0m
+[31m [0m   [2m405 [0m[2m│   │   [0m)                                                                      [31m [0m
+[31m [0m   [2m406 [0m[2m│   [0m                                                                           [31m [0m
+[31m [0m [31m❱ [0m407 [2m│   [0mobjs, keys, ndims = [1;4m_clean_keys_and_objs(objs, keys)[0m                       [31m [0m
+[31m [0m   [2m408 [0m[2m│   [0m                                                                           [31m [0m
+[31m [0m   [2m409 [0m[2m│   [0m[94mif[0m sort [95mis[0m lib.no_default:                                                 [31m [0m
+[31m [0m   [2m410 [0m[2m│   │   [0m[94mif[0m axis == [94m0[0m:                                                          [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/pandas/core/[0m [31m [0m
+[31m [0m [2mreshape/[0m[1mconcat.py[0m:808 in _clean_keys_and_objs                                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m805 [0m[2m│   │   [0mobjs = [96mlist[0m(objs)                                                      [31m [0m
+[31m [0m   [2m806 [0m[2m│   [0m                                                                           [31m [0m
+[31m [0m   [2m807 [0m[2m│   [0m[94mif[0m [96mlen[0m(objs) == [94m0[0m:                                                         [31m [0m
+[31m [0m [31m❱ [0m808 [2m│   │   [0m[1;4;94mraise[0m[1;4m [0m[1;4;96mValueError[0m[1;4m([0m[1;4;33m"[0m[1;4;33mNo objects to concatenate[0m[1;4;33m"[0m[1;4m)[0m                          [31m [0m
+[31m [0m   [2m809 [0m[2m│   [0m                                                                           [31m [0m
+[31m [0m   [2m810 [0m[2m│   [0m[94mif[0m keys [95mis[0m [95mnot[0m [94mNone[0m:                                                       [31m [0m
+[31m [0m   [2m811 [0m[2m│   │   [0m[94mif[0m [95mnot[0m [96misinstance[0m(keys, Index):                                        [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mValueError: [0mNo objects to concatenate
+2026-05-25 22:41:46.389 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:42:27.404 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:45:27.398 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:45:27.565 127.0.0.1:54297 - "GET /static/js/DataFrame.vZHa9Vfe.js HTTP/1.1" 200
+2026-05-25 22:45:27.567 127.0.0.1:54300 - "GET /static/js/DataFrame.B82b-MoD.js HTTP/1.1" 200
+2026-05-25 22:45:27.568 127.0.0.1:54306 - "GET /static/js/createDownloadLinkElement.CYbmhmT2.js HTTP/1.1" 200
+2026-05-25 22:45:27.568 127.0.0.1:54307 - "GET /static/js/formatMoment.XDSMSnYc.js HTTP/1.1" 200
+2026-05-25 22:45:27.568 127.0.0.1:54303 - "GET /static/js/pandasStylerUtils.C9v_N371.js HTTP/1.1" 200
+2026-05-25 22:45:27.568 127.0.0.1:54304 - "GET /static/js/_baseIndexOf.DmzSbCrC.js HTTP/1.1" 200
+2026-05-25 22:45:27.603 127.0.0.1:54307 - "GET /static/js/reactJsonViewCompat.D5MCl5lB.js HTTP/1.1" 200
+2026-05-25 22:45:27.603 127.0.0.1:54297 - "GET /static/css/DataFrame.DUkanX9_.css HTTP/1.1" 200
+2026-05-25 22:45:27.604 127.0.0.1:54306 - "GET /static/js/FileDownload.esm.DtTwk9jA.js HTTP/1.1" 200
+2026-05-25 22:45:27.604 127.0.0.1:54304 - "GET /static/js/toConsumableArray.D1B4X9Vw.js HTTP/1.1" 200
+2026-05-25 22:45:27.612 127.0.0.1:54306 - "GET /static/js/dist.7iFLgslc.js HTTP/1.1" 200
+2026-05-25 22:45:27.613 127.0.0.1:54304 - "GET /static/js/checkbox.D-sGpr_4.js HTTP/1.1" 200
+2026-05-25 22:45:27.613 127.0.0.1:54297 - "GET /static/js/click-outside-container.1ZmrafUO.js HTTP/1.1" 200
+2026-05-25 22:45:27.616 127.0.0.1:54307 - "GET /static/js/dist.B1bOMQPF.js HTTP/1.1" 200
+2026-05-25 22:45:27.616 127.0.0.1:54300 - "GET /static/js/_arrayIncludesWith.C7He3_lH.js HTTP/1.1" 200
+2026-05-25 22:45:31.257 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:45:37.536 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:45:39.197 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:54:32.015 127.0.0.1:54594 - "GET /static/js/data-grid-overlay-editor.UozjNJa5.js HTTP/1.1" 200
+2026-05-25 22:54:32.021 127.0.0.1:54594 - "GET /static/js/number-overlay-editor.LD4DdyBe.js HTTP/1.1" 200
+2026-05-25 22:54:33.371 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:54:34.041 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:54:34.196 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:54:42.394 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:54:42.430 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:54:44.234 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:54:44.365 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:54:48.517 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:54:48.566 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:54:52.629 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:54:52.747 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:54:55.534 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:54:58.190 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:55:00.082 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:55:01.000 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:55:01.058 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:55:04.464 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:55:04.581 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:59:08.916 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:59:27.643 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:59:41.091 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:59:46.192 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:59:46.867 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:59:48.945 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:59:49.543 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:59:49.939 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:59:50.259 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:59:52.737 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:59:54.066 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:59:56.728 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:59:58.661 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 22:59:59.518 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 23:04:04.297 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 23:04:05.613 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-25 23:04:30.433 connection closed
+2026-05-26 01:25:48.479 127.0.0.1:56286 - "WebSocket /_stcore/stream" [accepted]
+2026-05-26 01:25:48.484 connection open
+2026-05-26 01:25:52.312 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-26 01:25:57.286 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-26 01:42:44.740 connection closed
+2026-05-26 01:42:44.741 127.0.0.1:56340 - "GET /_stcore/health HTTP/1.1" 200
+2026-05-26 01:42:44.742 127.0.0.1:56341 - "GET /_stcore/host-config HTTP/1.1" 200
+2026-05-26 01:42:44.789 127.0.0.1:56343 - "WebSocket /_stcore/stream" [accepted]
+2026-05-26 01:42:44.790 connection open
+2026-05-26 07:29:58.132 connection closed
+2026-05-26 07:29:58.135 127.0.0.1:62415 - "GET /_stcore/health HTTP/1.1" 200
+2026-05-26 07:29:58.139 127.0.0.1:62416 - "GET /_stcore/host-config HTTP/1.1" 200
+2026-05-26 07:29:58.178 127.0.0.1:62422 - "WebSocket /_stcore/stream" [accepted]
+2026-05-26 07:29:58.182 connection open
+2026-05-26 11:00:15.337 connection closed
+2026-05-26 11:00:15.339 127.0.0.1:63300 - "GET /_stcore/health HTTP/1.1" 200
+2026-05-26 11:00:15.339 127.0.0.1:63301 - "GET /_stcore/host-config HTTP/1.1" 200
+2026-05-26 11:00:15.383 127.0.0.1:63303 - "WebSocket /_stcore/stream" [accepted]
+2026-05-26 11:00:15.384 connection open
+2026-05-26 15:59:12.008 connection closed
+2026-05-26 15:59:12.013 127.0.0.1:50520 - "GET /_stcore/health HTTP/1.1" 200
+2026-05-26 15:59:12.014 127.0.0.1:50521 - "GET /_stcore/host-config HTTP/1.1" 200
+2026-05-26 15:59:12.435 127.0.0.1:50526 - "WebSocket /_stcore/stream" [accepted]
+2026-05-26 15:59:12.438 connection open
+[*********************100%***********************]  1 of 1 completed
+2026-05-26 20:49:38.148 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-26 20:49:38.211 127.0.0.1:54418 - "GET /static/js/PlotlyChart.B6LaAfIh.js HTTP/1.1" 200
+[*********************100%***********************]  1 of 1 completed
+2026-05-26 20:50:05.326 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+$SPX: possibly delisted; no price data found  (1d 2025-01-01 -> 2026-05-25)
+[*********************100%***********************]  1 of 1 completed
+
+1 Failed download:
+['SPX']: possibly delisted; no price data found  (1d 2025-01-01 -> 2026-05-25)
+2026-05-26 20:50:25.172 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-26 20:50:27.898 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-26 20:54:02.679 connection closed
+2026-05-26 20:54:02.685 127.0.0.1:54464 - "GET /_stcore/health HTTP/1.1" 200
+2026-05-26 20:54:02.686 127.0.0.1:54465 - "GET /_stcore/host-config HTTP/1.1" 200
+2026-05-26 20:54:02.719 127.0.0.1:54467 - "WebSocket /_stcore/stream" [accepted]
+2026-05-26 20:54:02.724 connection open
+2026-05-26 22:42:51.074 connection closed
+2026-05-26 22:42:51.082 127.0.0.1:55753 - "GET /_stcore/health HTTP/1.1" 200
+2026-05-26 22:42:51.084 127.0.0.1:55754 - "GET /_stcore/host-config HTTP/1.1" 200
+2026-05-26 22:42:51.267 127.0.0.1:55762 - "WebSocket /_stcore/stream" [accepted]
+2026-05-26 22:42:51.270 connection open
+2026-05-26 22:52:13.263 connection closed
+2026-05-26 22:52:13.270 127.0.0.1:55822 - "GET /_stcore/health HTTP/1.1" 200
+2026-05-26 22:52:13.272 127.0.0.1:55823 - "GET /_stcore/host-config HTTP/1.1" 200
+2026-05-26 22:52:13.451 127.0.0.1:55829 - "WebSocket /_stcore/stream" [accepted]
+2026-05-26 22:52:13.464 connection open
+2026-05-26 23:27:29.695 connection closed
+2026-05-26 23:27:29.753 127.0.0.1:57354 - "GET /_stcore/health HTTP/1.1" 200
+2026-05-26 23:27:29.764 127.0.0.1:57355 - "GET /_stcore/host-config HTTP/1.1" 200
+2026-05-26 23:27:30.236 127.0.0.1:57364 - "WebSocket /_stcore/stream" [accepted]
+2026-05-26 23:27:30.239 connection open
+2026-05-26 23:59:40.657 connection closed
+2026-05-26 23:59:40.689 127.0.0.1:59220 - "GET /_stcore/health HTTP/1.1" 200
+2026-05-26 23:59:40.689 127.0.0.1:59221 - "GET /_stcore/host-config HTTP/1.1" 200
+2026-05-26 23:59:41.309 127.0.0.1:59228 - "WebSocket /_stcore/stream" [accepted]
+2026-05-26 23:59:41.313 connection open
+2026-05-27 10:24:28.007 127.0.0.1:56972 - "GET / HTTP/1.1" 304
+2026-05-27 10:24:28.015 connection closed
+2026-05-27 10:24:28.126 127.0.0.1:56972 - "GET /_stcore/health HTTP/1.1" 200
+2026-05-27 10:24:28.127 127.0.0.1:56974 - "GET /_stcore/host-config HTTP/1.1" 200
+2026-05-27 10:24:28.360 127.0.0.1:56976 - "WebSocket /_stcore/stream" [accepted]
+2026-05-27 10:24:28.363 connection open
+2026-05-27 10:42:19.067 connection closed
+2026-05-27 10:42:19.083 127.0.0.1:60995 - "GET /_stcore/health HTTP/1.1" 200
+2026-05-27 10:42:19.084 127.0.0.1:60996 - "GET /_stcore/host-config HTTP/1.1" 200
+2026-05-27 10:42:19.112 127.0.0.1:61000 - "WebSocket /_stcore/stream" [accepted]
+2026-05-27 10:42:19.116 connection open
+2026-05-27 16:23:06.512 connection closed
+2026-05-27 16:23:06.514 127.0.0.1:64426 - "GET /_stcore/health HTTP/1.1" 200
+2026-05-27 16:23:06.518 127.0.0.1:64428 - "GET /_stcore/host-config HTTP/1.1" 200
+2026-05-27 16:23:06.544 127.0.0.1:64430 - "WebSocket /_stcore/stream" [accepted]
+2026-05-27 16:23:06.547 connection open
+[*********************100%***********************]  1 of 1 completed
+[*********************100%***********************]  1 of 1 completed
+2026-05-28 14:18:27.255 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-28 14:18:27.332 127.0.0.1:56589 - "GET /static/js/embed.Bqebd2RE.js HTTP/1.1" 200
+2026-05-28 14:18:27.346 127.0.0.1:56589 - "GET /static/js/PlotlyChart.B6LaAfIh.js HTTP/1.1" 200
+[*********************100%***********************]  1 of 1 completed
+[*********************100%***********************]  1 of 1 completed
+2026-05-28 14:18:45.905 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[*********************100%***********************]  1 of 1 completed
+[*********************100%***********************]  1 of 1 completed
+2026-05-28 14:19:14.770 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-28 14:23:33.990 connection closed
+2026-05-28 14:23:33.993 127.0.0.1:56889 - "GET /_stcore/health HTTP/1.1" 200
+2026-05-28 14:23:33.994 127.0.0.1:56890 - "GET /_stcore/host-config HTTP/1.1" 200
+2026-05-28 14:23:34.032 127.0.0.1:56892 - "WebSocket /_stcore/stream" [accepted]
+2026-05-28 14:23:34.036 connection open
+2026-05-28 15:44:39.814 connection closed
+2026-05-28 15:44:39.814 127.0.0.1:60930 - "GET /_stcore/health HTTP/1.1" 200
+2026-05-28 15:44:39.815 127.0.0.1:60931 - "GET /_stcore/host-config HTTP/1.1" 200
+2026-05-28 15:44:39.897 127.0.0.1:60935 - "WebSocket /_stcore/stream" [accepted]
+2026-05-28 15:44:39.899 connection open
+2026-05-29 10:11:21.115 connection closed
+2026-05-29 10:11:21.126 127.0.0.1:54149 - "GET /_stcore/health HTTP/1.1" 200
+2026-05-29 10:11:21.128 127.0.0.1:54150 - "GET /_stcore/host-config HTTP/1.1" 200
+2026-05-29 10:11:21.232 127.0.0.1:54155 - "WebSocket /_stcore/stream" [accepted]
+2026-05-29 10:11:21.234 connection open
+2026-05-29 11:41:09.869 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 11:45:02.643 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 11:45:12.309 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 11:45:23.246 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 11:47:59.593 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 11:48:06.230 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 11:48:55.822 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 11:49:41.396 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 11:51:41.227 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 608
+    hovermode="
+              ^
+SyntaxError: unterminated string literal (detected at line 608)
+2026-05-29 11:51:41.228 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 11:52:15.106 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 11:55:56.322 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 11:56:28.959 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 11:56:29.048 127.0.0.1:56371 - "GET /static/js/DataFrame.B82b-MoD.js HTTP/1.1" 200
+2026-05-29 11:56:29.049 127.0.0.1:56373 - "GET /static/js/pandasStylerUtils.C9v_N371.js HTTP/1.1" 200
+2026-05-29 11:56:49.402 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 11:57:21.648 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 11:57:49.637 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 12:02:26.953 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 12:04:16.824 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 12:05:11.861 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 12:14:13.409 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 12:16:22.786 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 12:16:32.216 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 12:16:38.976 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 12:21:27.796 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 12:21:33.843 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 12:22:33.993 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 12:22:36.474 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 12:22:46.147 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 12:23:05.502 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 12:25:00.415 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 12:26:47.337 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[*********************100%***********************]  1 of 1 completed
+2026-05-29 12:31:30.146 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 12:31:33.286 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 12:31:37.445 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 12:31:47.254 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 12:31:49.498 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 12:35:35.663 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[*********************100%***********************]  1 of 1 completed
+2026-05-29 12:38:54.056 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 12:44:04.006 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1
+    cat << 'ENDOFFILE' > /mnt/user-data/outputs/app.py
+                         ^
+SyntaxError: invalid syntax
+2026-05-29 12:44:04.010 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 12:44:11.366 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1
+    cat << 'ENDOFFILE' > /mnt/user-data/outputs/app.py
+                         ^
+SyntaxError: invalid syntax
+2026-05-29 12:44:11.369 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 12:44:45.017 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 12:47:37.809 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 12:51:51.529 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 12:52:49.217 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+$SPY: possibly delisted; no price data found  (1d 2025-01-01 -> 2024-12-31) (Yahoo error = "Invalid input - start date cannot be after end date. startDate = 1735707600, endDate = 1735621200")
+[*********************100%***********************]  1 of 1 completed
+
+1 Failed download:
+['SPY']: possibly delisted; no price data found  (1d 2025-01-01 -> 2024-12-31) (Yahoo error = "Invalid input - start date cannot be after end date. startDate = 1735707600, endDate = 1735621200")
+2026-05-29 12:53:43.995 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+$SPY: possibly delisted; no price data found  (1d 2025-01-01 -> 2024-12-31) (Yahoo error = "Invalid input - start date cannot be after end date. startDate = 1735707600, endDate = 1735621200")
+[*********************100%***********************]  1 of 1 completed
+
+1 Failed download:
+['SPY']: possibly delisted; no price data found  (1d 2025-01-01 -> 2024-12-31) (Yahoo error = "Invalid input - start date cannot be after end date. startDate = 1735707600, endDate = 1735621200")
+2026-05-29 12:53:44.417 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[*********************100%***********************]  1 of 1 completed
+2026-05-29 12:53:54.783 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 12:53:59.412 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 12:54:02.248 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 12:54:13.452 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 12:54:37.170 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 12:55:15.462 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+$NV: possibly delisted; no price data found  (period=1d)
+2026-05-29 12:59:58.013 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:00:05.956 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:01:52.532 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:02:45.146 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:02:51.386 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:02:55.305 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:03:06.232 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:03:12.168 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:10:06.766 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1
+    ```python
+    ^
+SyntaxError: invalid syntax
+2026-05-29 13:10:06.771 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 13:10:12.170 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1
+    ```python
+    ^
+SyntaxError: invalid syntax
+2026-05-29 13:10:12.176 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 13:10:36.895 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1
+    ```python
+    ^
+SyntaxError: invalid syntax
+2026-05-29 13:10:36.896 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 13:10:58.982 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:11:05.319 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:11:06.079 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[*********************100%***********************]  1 of 1 completed
+2026-05-29 13:11:29.536 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:11:30.697 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:11:35.560 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:13:38.509 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:14:16.528 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:14:18.387 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:14:19.407 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:14:54.117 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:14:58.390 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:277 in <module>                         [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m274 [0m[2m│   │   [0mcolX, colY = st.columns([[94m5[0m, [94m1[0m])                                        [31m [0m
+[31m [0m   [2m275 [0m[2m│   │   [0mrun_proxy = colY.button([33m"[0m[33mRun Valuation[0m[33m"[0m, use_container_width=[94mTrue[0m)     [31m [0m
+[31m [0m   [2m276 [0m[2m│   [0m                                                                           [31m [0m
+[31m [0m [31m❱ [0m277 [2m│   [0m[94mif[0m r[1;4mun_proxy:[0m                                                              [31m [0m
+[31m [0m   [2m278 [0m[2m│   │   [0m[94mwith[0m st.spinner([33mf[0m[33m"[0m[33mPulling live share count and market data for [0m[33m{[0mtarget [31m [0m
+[31m [0m   [2m279 [0m[2m│   │   │   [0m[2m# Dynamically fetch shares outstanding[0m                             [31m [0m
+[31m [0m   [2m280 [0m[2m│   │   │   [0mtarget_obj = yf.Ticker(target_ticker)                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mmath_engine.py[0m:35 in duration_convexity        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m32 [0m[2m│   [0mperiods   = [96mint[0m(maturity * frequency)                                       [31m [0m
+[31m [0m   [2m33 [0m[2m│   [0mcoupon    = (coupon_rate/[94m100[0m / frequency) * face                            [31m [0m
+[31m [0m   [2m34 [0m[2m│   [0mrate      = ytm/[94m100[0m / frequency                                             [31m [0m
+[31m [0m [31m❱ [0m35 [2m│   [0mprice     = [1;4mbond_price(face, coupon_rate, maturity, ytm, frequency)[0m         [31m [0m
+[31m [0m   [2m36 [0m[2m│   [0mtimes     = [t/frequency [94mfor[0m t [95min[0m [96mrange[0m([94m1[0m, periods+[94m1[0m)]                      [31m [0m
+[31m [0m   [2m37 [0m[2m│   [0mcfs       = [coupon]*periods                                                [31m [0m
+[31m [0m   [2m38 [0m[2m│   [0mcfs[-[94m1[0m]  += face                                                            [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mmath_engine.py[0m:27 in bond_price                [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m24 [0m[2m│   [0mperiods    = [96mint[0m(maturity * frequency)                                      [31m [0m
+[31m [0m   [2m25 [0m[2m│   [0mcoupon     = (coupon_rate/[94m100[0m / frequency) * face                           [31m [0m
+[31m [0m   [2m26 [0m[2m│   [0mrate       = ytm/[94m100[0m / frequency                                            [31m [0m
+[31m [0m [31m❱ [0m27 [2m│   [0mpv_coupons = [1;4mcoupon * ([0m[1;4;94m1[0m[1;4m - ([0m[1;4;94m1[0m[1;4m+rate)**(-periods)) / rate[0m                     [31m [0m
+[31m [0m   [2m28 [0m[2m│   [0mpv_face    = face / ([94m1[0m+rate)**periods                                       [31m [0m
+[31m [0m   [2m29 [0m[2m│   [0m[94mreturn[0m pv_coupons + pv_face                                                 [31m [0m
+[31m [0m   [2m30 [0m                                                                                [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mZeroDivisionError: [0mfloat division by zero
+2026-05-29 13:15:28.173 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:15:33.144 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:15:46.393 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:15:49.642 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:16:33.354 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:16:33.399 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:17:59.653 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:18:17.361 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:20:12.391 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:20:14.524 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:20:25.956 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:22:26.993 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:22:26.999 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:22:43.813 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:22:43.822 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:22:48.157 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:22:48.167 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:22:54.201 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:22:54.211 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:23:06.121 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:23:06.130 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:23:22.855 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:23:22.864 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:23:26.832 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:23:26.842 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:23:29.668 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:23:29.678 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:23:41.778 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:23:46.266 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:26:34.575 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:31:22.704 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:36:32.620 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:37:09.095 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:37:11.625 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:37:11.634 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:37:15.628 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:41:37.100 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:43:28.041 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:44:05.351 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:45:54.212 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 13:47:48.702 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1042 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/plotly/graph[0m [31m [0m
+[31m [0m [2m_objs/[0m[1m_figure.py[0m:525 in add_hline                                                    [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m  522 [0m[2;33m│   │   │   [0m[33mAny named function parameters that can be passed to 'add_shape',[0m [31m [0m
+[31m [0m   [2m  523 [0m[2;33m│   │   │   [0m[33mexcept for x0, x1, y0, y1 or type.[0m                               [31m [0m
+[31m [0m   [2m  524 [0m[2;33m│   │   [0m[33m"""[0m                                                                  [31m [0m
+[31m [0m [31m❱ [0m  525 [2m│   │   [0m[94mreturn[0m [1;4;96msuper[0m[1;4m().add_hline([0m                                            [31m [0m
+[31m [0m   [2m  526 [0m[2m│   │   │   [0m[1;4my, row, col, exclude_empty_subplots, annotation, **kwargs[0m        [31m [0m
+[31m [0m   [2m  527 [0m[2m│   │   [0m[1;4m)[0m                                                                    [31m [0m
+[31m [0m   [2m  528 [0m                                                                             [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/plotly/[0m[1mbased[0m [31m [0m
+[31m [0m [1matatypes.py[0m:4174 in add_hline                                                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m4171 [0m[2m│   │   [0mannotation=[94mNone[0m,                                                      [31m [0m
+[31m [0m   [2m4172 [0m[2m│   │   [0m**kwargs,                                                             [31m [0m
+[31m [0m   [2m4173 [0m[2m│   [0m):                                                                        [31m [0m
+[31m [0m [31m❱ [0m4174 [2m│   │   [0m[1;4;96mself[0m[1;4m._process_multiple_axis_spanning_shapes([0m                          [31m [0m
+[31m [0m   [2m4175 [0m[2m│   │   │   [0m[1;4;96mdict[0m[1;4m([0m                                                             [31m [0m
+[31m [0m   [2m4176 [0m[2m│   │   │   │   [0m[1;4;96mtype[0m[1;4m=[0m[1;4;33m"[0m[1;4;33mline[0m[1;4;33m"[0m[1;4m,[0m                                                  [31m [0m
+[31m [0m   [2m4177 [0m[2m│   │   │   │   [0m[1;4mx0=[0m[1;4;94m0[0m[1;4m,[0m                                                         [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/plotly/[0m[1mbased[0m [31m [0m
+[31m [0m [1matatypes.py[0m:4131 in _process_multiple_axis_spanning_shapes                           [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m4128 [0m[2m│   │   │   │   [0m[96mfilter[0m(                                                       [31m [0m
+[31m [0m   [2m4129 [0m[2m│   │   │   │   │   [0m[94mlambda[0m x: x [95mis[0m [95mnot[0m [94mNone[0m,                                  [31m [0m
+[31m [0m   [2m4130 [0m[2m│   │   │   │   │   [0m[1;4m[[0m                                                         [31m [0m
+[31m [0m [31m❱ [0m4131 [2m│   │   │   │   │   │   [0m[1;4;96mself[0m[1;4m._make_axis_spanning_layout_object([0m               [31m [0m
+[31m [0m   [2m4132 [0m[2m│   │   │   │   │   │   │   [0m[1;4mdirection,[0m                                        [31m [0m
+[31m [0m   [2m4133 [0m[2m│   │   │   │   │   │   │   [0m[1;4;96mself[0m[1;4m.layout[layout_obj][n],[0m                       [31m [0m
+[31m [0m   [2m4134 [0m[2m│   │   │   │   │   │   [0m[1;4m)[0m                                                     [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/plotly/[0m[1mbased[0m [31m [0m
+[31m [0m [1matatypes.py[0m:4052 in _make_axis_spanning_layout_object                                [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m4049 [0m[2m│   │   │   [0m)                                                                 [31m [0m
+[31m [0m   [2m4050 [0m[2m│   │   [0m[2m# set the ref to "<axis_id> domain" so that its size is based on the[0m  [31m [0m
+[31m [0m   [2m4051 [0m[2m│   │   [0m[2m# axis's size[0m                                                         [31m [0m
+[31m [0m [31m❱ [0m4052 [2m│   │   [0m[1;4mshape[ref][0m += [33m"[0m[33m domain[0m[33m"[0m                                               [31m [0m
+[31m [0m   [2m4053 [0m[2m│   │   [0m[94mreturn[0m shape                                                          [31m [0m
+[31m [0m   [2m4054 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m4055 [0m[2m│   [0m[94mdef[0m[90m [0m[92m_process_multiple_axis_spanning_shapes[0m(                               [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/plotly/[0m[1mbased[0m [31m [0m
+[31m [0m [1matatypes.py[0m:4932 in __setitem__                                                      [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m4929 [0m[2m│   │   │   │   [0m                                                              [31m [0m
+[31m [0m   [2m4930 [0m[2m│   │   │   │   [0m[2m# ### Handle simple property ###[0m                              [31m [0m
+[31m [0m   [2m4931 [0m[2m│   │   │   │   [0m[94melse[0m:                                                         [31m [0m
+[31m [0m [31m❱ [0m4932 [2m│   │   │   │   │   [0m[1;4;96mself[0m[1;4m._set_prop(prop, value)[0m                               [31m [0m
+[31m [0m   [2m4933 [0m[2m│   │   │   [0m[94melse[0m:                                                             [31m [0m
+[31m [0m   [2m4934 [0m[2m│   │   │   │   [0m[2m# Make sure properties dict is initialized[0m                    [31m [0m
+[31m [0m   [2m4935 [0m[2m│   │   │   │   [0m[96mself[0m._init_props()                                            [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/plotly/[0m[1mbased[0m [31m [0m
+[31m [0m [1matatypes.py[0m:5276 in _set_prop                                                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m5273 [0m[2m│   │   │   [0m[94mif[0m [96mself[0m._skip_invalid:                                            [31m [0m
+[31m [0m   [2m5274 [0m[2m│   │   │   │   [0m[94mreturn[0m                                                        [31m [0m
+[31m [0m   [2m5275 [0m[2m│   │   │   [0m[94melse[0m:                                                             [31m [0m
+[31m [0m [31m❱ [0m5276 [2m│   │   │   │   [0m[1;4;94mraise[0m[1;4m err[0m                                                     [31m [0m
+[31m [0m   [2m5277 [0m[2m│   │   [0m                                                                      [31m [0m
+[31m [0m   [2m5278 [0m[2m│   │   [0m[2m# val is None[0m                                                         [31m [0m
+[31m [0m   [2m5279 [0m[2m│   │   [0m[2m# -----------[0m                                                         [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/plotly/[0m[1mbased[0m [31m [0m
+[31m [0m [1matatypes.py[0m:5271 in _set_prop                                                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m5268 [0m[2m│   │   [0mvalidator = [96mself[0m._get_validator(prop)                                 [31m [0m
+[31m [0m   [2m5269 [0m[2m│   │   [0m                                                                      [31m [0m
+[31m [0m   [2m5270 [0m[2m│   │   [0m[94mtry[0m:                                                                  [31m [0m
+[31m [0m [31m❱ [0m5271 [2m│   │   │   [0mval = validator.validate_coerce(val)                              [31m [0m
+[31m [0m   [2m5272 [0m[2m│   │   [0m[94mexcept[0m [96mValueError[0m [94mas[0m err:                                             [31m [0m
+[31m [0m   [2m5273 [0m[2m│   │   │   [0m[94mif[0m [96mself[0m._skip_invalid:                                            [31m [0m
+[31m [0m   [2m5274 [0m[2m│   │   │   │   [0m[94mreturn[0m                                                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/_plotly_util[0m [31m [0m
+[31m [0m [2ms/[0m[1mbasevalidators.py[0m:625 in validate_coerce                                           [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m 622 [0m[2m│   │   [0m[94melse[0m:                                                                 [31m [0m
+[31m [0m   [2m 623 [0m[2m│   │   │   [0mv = [96mself[0m.perform_replacemenet(v)                                  [31m [0m
+[31m [0m   [2m 624 [0m[2m│   │   │   [0m[94mif[0m [95mnot[0m [96mself[0m.in_values(v):                                         [31m [0m
+[31m [0m [31m❱ [0m 625 [2m│   │   │   │   [0m[1;4;96mself[0m[1;4m.raise_invalid_val(v)[0m                                     [31m [0m
+[31m [0m   [2m 626 [0m[2m│   │   [0m[94mreturn[0m v                                                              [31m [0m
+[31m [0m   [2m 627 [0m                                                                              [31m [0m
+[31m [0m   [2m 628 [0m                                                                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/_plotly_util[0m [31m [0m
+[31m [0m [2ms/[0m[1mbasevalidators.py[0m:312 in raise_invalid_val                                         [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m 309 [0m[2m│   │   │   [0m[94mfor[0m i [95min[0m inds:                                                    [31m [0m
+[31m [0m   [2m 310 [0m[2m│   │   │   │   [0mname += [33m"[0m[33m[[0m[33m"[0m + [96mstr[0m(i) + [33m"[0m[33m][0m[33m"[0m                                    [31m [0m
+[31m [0m   [2m 311 [0m[2m│   │   [0m                                                                      [31m [0m
+[31m [0m [31m❱ [0m 312 [2m│   │   [0m[1;4;94mraise[0m[1;4m [0m[1;4;96mValueError[0m[1;4m([0m                                                     [31m [0m
+[31m [0m   [2m 313 [0m[2;90m│   │   │   [0m[1;4;33m"""[0m                                                               [31m [0m
+[31m [0m   [2m 314 [0m[2;33m│   [0m[1;4;33mInvalid value of type {typ} received for the '{name}' property of {pname}[0m [31m [0m
+[31m [0m   [2m 315 [0m[2;33m│   │   [0m[1;4;33mReceived value: {v}[0m                                                   [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mValueError: [0m
+    Invalid value of type [32m'builtins.str'[0m received for the [32m'xref'[0m property of 
+layout.annotation
+        Received value: [32m'paper domain'[0m
+
+    The [32m'xref'[0m property is an enumeration that may be specified as:
+      - One of the following enumeration values:
+            [1m[[0m[32m'paper'[0m[1m][0m
+      - A string that matches one of the following regular expressions:
+            [1m[[0m[32m'^x[0m[32m([0m[32m[[0m[32m2-9[0m[32m][0m[32m|[0m[32m[[0m[32m1-9[0m[32m][0m[32m[[0m[32m0-9[0m[32m][0m[32m+[0m[32m)[0m[32m?[0m[32m([0m[32m domain[0m[32m)[0m[32m?$'[0m[1m][0m
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:934 in <module>                         [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m 931 [0m[2m│   │   [0mtarget_px = col3.number_input([33m"[0m[33mCustom Target Price ($)[0m[33m"[0m, value=defaul [31m [0m
+[31m [0m   [2m 932 [0m[2m│   │   [0m                                                                      [31m [0m
+[31m [0m   [2m 933 [0m[2m│   │   [0mrun_prob = st.button([33m"[0m[33mGenerate Probability Cone[0m[33m"[0m, use_container_width [31m [0m
+[31m [0m [31m❱ [0m 934 [2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m 935 [0m[2m│   [0m[94mif[0m run_prob:                                                              [31m [0m
+[31m [0m   [2m 936 [0m[2m│   │   [0m[94mif[0m [95mnot[0m expirations [95mor[0m target_expiry == [33m"[0m[33mNo options found[0m[33m"[0m:            [31m [0m
+[31m [0m   [2m 937 [0m[2m│   │   │   [0mst.error([33mf[0m[33m"[0m[33mCannot generate cone: No options data available for [0m[33m{[0mt [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m in pandas._libs.tslibs.timestamps._Timestamp.__sub__:629                             [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mTypeError: [0mCannot subtract tz-naive and tz-aware datetime-like objects.
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:975 in <module>                         [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m972 [0m[2m│   │   │   [0mfig6.update_layout(                                                [31m [0m
+[31m [0m   [2m973 [0m[2m│   │   │   │   [0mtitle=[33mf[0m[33m"[0m[33mVolatility Cone for [0m[33m{[0mticker_sym.upper()[33m}[0m[33m"[0m,             [31m [0m
+[31m [0m   [2m974 [0m[2m│   │   │   │   [0mheight=[94m700[0m,                                                    [31m [0m
+[31m [0m [31m❱ [0m975 [2m│   │   │   [0m[1;2;4m│   [0m[1;4mhovermode=[0m[1;4;33m"[0m[1;4;33mx unified[0m[1;4;33m"[0m[1;4m,[0m                                         [31m [0m
+[31m [0m   [2m976 [0m[2m│   │   │   │   [0m[1;4mlegend=[0m[1;4;96mdict[0m[1;4m(orientation=[0m[1;4;33m"[0m[1;4;33mv[0m[1;4;33m"[0m[1;4m, yanchor=[0m[1;4;33m"[0m[1;4;33mtop[0m[1;4;33m"[0m[1;4m, y=[0m[1;4;94m0.95[0m[1;4m, xanchor=[0m[1;4;33m"[0m[1;4;33mr[0m [31m [0m
+[31m [0m   [2m977 [0m[2m│   │   │   │   [0mxaxis=[96mdict[0m([96mrange[0m=[last_date, expiry_date])                     [31m [0m
+[31m [0m   [2m978 [0m[2m│   │   │   [0m)                                                                  [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/plotly/graph[0m [31m [0m
+[31m [0m [2m_objs/[0m[1m_figure.py[0m:525 in add_hline                                                    [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m  522 [0m[2;33m│   │   │   [0m[33mAny named function parameters that can be passed to 'add_shape',[0m [31m [0m
+[31m [0m   [2m  523 [0m[2;33m│   │   │   [0m[33mexcept for x0, x1, y0, y1 or type.[0m                               [31m [0m
+[31m [0m   [2m  524 [0m[2;33m│   │   [0m[33m"""[0m                                                                  [31m [0m
+[31m [0m [31m❱ [0m  525 [2m│   │   [0m[94mreturn[0m [1;4;96msuper[0m[1;4m().add_hline([0m                                            [31m [0m
+[31m [0m   [2m  526 [0m[2m│   │   │   [0m[1;4my, row, col, exclude_empty_subplots, annotation, **kwargs[0m        [31m [0m
+[31m [0m   [2m  527 [0m[2m│   │   [0m[1;4m)[0m                                                                    [31m [0m
+[31m [0m   [2m  528 [0m                                                                             [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/plotly/[0m[1mbased[0m [31m [0m
+[31m [0m [1matatypes.py[0m:4174 in add_hline                                                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m4171 [0m[2m│   │   [0mannotation=[94mNone[0m,                                                      [31m [0m
+[31m [0m   [2m4172 [0m[2m│   │   [0m**kwargs,                                                             [31m [0m
+[31m [0m   [2m4173 [0m[2m│   [0m):                                                                        [31m [0m
+[31m [0m [31m❱ [0m4174 [2m│   │   [0m[1;4;96mself[0m[1;4m._process_multiple_axis_spanning_shapes([0m                          [31m [0m
+[31m [0m   [2m4175 [0m[2m│   │   │   [0m[1;4;96mdict[0m[1;4m([0m                                                             [31m [0m
+[31m [0m   [2m4176 [0m[2m│   │   │   │   [0m[1;4;96mtype[0m[1;4m=[0m[1;4;33m"[0m[1;4;33mline[0m[1;4;33m"[0m[1;4m,[0m                                                  [31m [0m
+[31m [0m   [2m4177 [0m[2m│   │   │   │   [0m[1;4mx0=[0m[1;4;94m0[0m[1;4m,[0m                                                         [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/plotly/[0m[1mbased[0m [31m [0m
+[31m [0m [1matatypes.py[0m:4131 in _process_multiple_axis_spanning_shapes                           [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m4128 [0m[2m│   │   │   │   [0m[96mfilter[0m(                                                       [31m [0m
+[31m [0m   [2m4129 [0m[2m│   │   │   │   │   [0m[94mlambda[0m x: x [95mis[0m [95mnot[0m [94mNone[0m,                                  [31m [0m
+[31m [0m   [2m4130 [0m[2m│   │   │   │   │   [0m[1;4m[[0m                                                         [31m [0m
+[31m [0m [31m❱ [0m4131 [2m│   │   │   │   │   │   [0m[1;4;96mself[0m[1;4m._make_axis_spanning_layout_object([0m               [31m [0m
+[31m [0m   [2m4132 [0m[2m│   │   │   │   │   │   │   [0m[1;4mdirection,[0m                                        [31m [0m
+[31m [0m   [2m4133 [0m[2m│   │   │   │   │   │   │   [0m[1;4;96mself[0m[1;4m.layout[layout_obj][n],[0m                       [31m [0m
+[31m [0m   [2m4134 [0m[2m│   │   │   │   │   │   [0m[1;4m)[0m                                                     [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/plotly/[0m[1mbased[0m [31m [0m
+[31m [0m [1matatypes.py[0m:4052 in _make_axis_spanning_layout_object                                [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m4049 [0m[2m│   │   │   [0m)                                                                 [31m [0m
+[31m [0m   [2m4050 [0m[2m│   │   [0m[2m# set the ref to "<axis_id> domain" so that its size is based on the[0m  [31m [0m
+[31m [0m   [2m4051 [0m[2m│   │   [0m[2m# axis's size[0m                                                         [31m [0m
+[31m [0m [31m❱ [0m4052 [2m│   │   [0m[1;4mshape[ref][0m += [33m"[0m[33m domain[0m[33m"[0m                                               [31m [0m
+[31m [0m   [2m4053 [0m[2m│   │   [0m[94mreturn[0m shape                                                          [31m [0m
+[31m [0m   [2m4054 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m4055 [0m[2m│   [0m[94mdef[0m[90m [0m[92m_process_multiple_axis_spanning_shapes[0m(                               [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/plotly/[0m[1mbased[0m [31m [0m
+[31m [0m [1matatypes.py[0m:4932 in __setitem__                                                      [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m4929 [0m[2m│   │   │   │   [0m                                                              [31m [0m
+[31m [0m   [2m4930 [0m[2m│   │   │   │   [0m[2m# ### Handle simple property ###[0m                              [31m [0m
+[31m [0m   [2m4931 [0m[2m│   │   │   │   [0m[94melse[0m:                                                         [31m [0m
+[31m [0m [31m❱ [0m4932 [2m│   │   │   │   │   [0m[1;4;96mself[0m[1;4m._set_prop(prop, value)[0m                               [31m [0m
+[31m [0m   [2m4933 [0m[2m│   │   │   [0m[94melse[0m:                                                             [31m [0m
+[31m [0m   [2m4934 [0m[2m│   │   │   │   [0m[2m# Make sure properties dict is initialized[0m                    [31m [0m
+[31m [0m   [2m4935 [0m[2m│   │   │   │   [0m[96mself[0m._init_props()                                            [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/plotly/[0m[1mbased[0m [31m [0m
+[31m [0m [1matatypes.py[0m:5276 in _set_prop                                                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m5273 [0m[2m│   │   │   [0m[94mif[0m [96mself[0m._skip_invalid:                                            [31m [0m
+[31m [0m   [2m5274 [0m[2m│   │   │   │   [0m[94mreturn[0m                                                        [31m [0m
+[31m [0m   [2m5275 [0m[2m│   │   │   [0m[94melse[0m:                                                             [31m [0m
+[31m [0m [31m❱ [0m5276 [2m│   │   │   │   [0m[1;4;94mraise[0m[1;4m err[0m                                                     [31m [0m
+[31m [0m   [2m5277 [0m[2m│   │   [0m                                                                      [31m [0m
+[31m [0m   [2m5278 [0m[2m│   │   [0m[2m# val is None[0m                                                         [31m [0m
+[31m [0m   [2m5279 [0m[2m│   │   [0m[2m# -----------[0m                                                         [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/plotly/[0m[1mbased[0m [31m [0m
+[31m [0m [1matatypes.py[0m:5271 in _set_prop                                                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m5268 [0m[2m│   │   [0mvalidator = [96mself[0m._get_validator(prop)                                 [31m [0m
+[31m [0m   [2m5269 [0m[2m│   │   [0m                                                                      [31m [0m
+[31m [0m   [2m5270 [0m[2m│   │   [0m[94mtry[0m:                                                                  [31m [0m
+[31m [0m [31m❱ [0m5271 [2m│   │   │   [0mval = validator.validate_coerce(val)                              [31m [0m
+[31m [0m   [2m5272 [0m[2m│   │   [0m[94mexcept[0m [96mValueError[0m [94mas[0m err:                                             [31m [0m
+[31m [0m   [2m5273 [0m[2m│   │   │   [0m[94mif[0m [96mself[0m._skip_invalid:                                            [31m [0m
+[31m [0m   [2m5274 [0m[2m│   │   │   │   [0m[94mreturn[0m                                                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/_plotly_util[0m [31m [0m
+[31m [0m [2ms/[0m[1mbasevalidators.py[0m:625 in validate_coerce                                           [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m 622 [0m[2m│   │   [0m[94melse[0m:                                                                 [31m [0m
+[31m [0m   [2m 623 [0m[2m│   │   │   [0mv = [96mself[0m.perform_replacemenet(v)                                  [31m [0m
+[31m [0m   [2m 624 [0m[2m│   │   │   [0m[94mif[0m [95mnot[0m [96mself[0m.in_values(v):                                         [31m [0m
+[31m [0m [31m❱ [0m 625 [2m│   │   │   │   [0m[1;4;96mself[0m[1;4m.raise_invalid_val(v)[0m                                     [31m [0m
+[31m [0m   [2m 626 [0m[2m│   │   [0m[94mreturn[0m v                                                              [31m [0m
+[31m [0m   [2m 627 [0m                                                                              [31m [0m
+[31m [0m   [2m 628 [0m                                                                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/_plotly_util[0m [31m [0m
+[31m [0m [2ms/[0m[1mbasevalidators.py[0m:312 in raise_invalid_val                                         [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m 309 [0m[2m│   │   │   [0m[94mfor[0m i [95min[0m inds:                                                    [31m [0m
+[31m [0m   [2m 310 [0m[2m│   │   │   │   [0mname += [33m"[0m[33m[[0m[33m"[0m + [96mstr[0m(i) + [33m"[0m[33m][0m[33m"[0m                                    [31m [0m
+[31m [0m   [2m 311 [0m[2m│   │   [0m                                                                      [31m [0m
+[31m [0m [31m❱ [0m 312 [2m│   │   [0m[1;4;94mraise[0m[1;4m [0m[1;4;96mValueError[0m[1;4m([0m                                                     [31m [0m
+[31m [0m   [2m 313 [0m[2;90m│   │   │   [0m[1;4;33m"""[0m                                                               [31m [0m
+[31m [0m   [2m 314 [0m[2;33m│   [0m[1;4;33mInvalid value of type {typ} received for the '{name}' property of {pname}[0m [31m [0m
+[31m [0m   [2m 315 [0m[2;33m│   │   [0m[1;4;33mReceived value: {v}[0m                                                   [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mValueError: [0m
+    Invalid value of type [32m'builtins.str'[0m received for the [32m'xref'[0m property of 
+layout.annotation
+        Received value: [32m'paper domain'[0m
+
+    The [32m'xref'[0m property is an enumeration that may be specified as:
+      - One of the following enumeration values:
+            [1m[[0m[32m'paper'[0m[1m][0m
+      - A string that matches one of the following regular expressions:
+            [1m[[0m[32m'^x[0m[32m([0m[32m[[0m[32m2-9[0m[32m][0m[32m|[0m[32m[[0m[32m1-9[0m[32m][0m[32m[[0m[32m0-9[0m[32m][0m[32m+[0m[32m)[0m[32m?[0m[32m([0m[32m domain[0m[32m)[0m[32m?$'[0m[1m][0m
+2026-05-29 13:57:40.395 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 14:01:59.108 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 14:04:13.366 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 14:05:19.728 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 14:06:32.283 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 14:07:31.646 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 14:08:05.606 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 14:09:25.246 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 14:11:05.357 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 14:11:26.551 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 14:12:37.478 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 14:13:41.874 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 14:15:13.488 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 14:16:13.865 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 14:17:00.768 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 14:18:10.004 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/pandas/core/[0m [31m [0m
+[31m [0m [2marrays/[0m[1mdatetimes.py[0m:2870 in _infer_tz_from_endpoints                                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m2867 [0m[2;33m│   [0m[33mTypeError : if start and end timezones do not agree[0m                       [31m [0m
+[31m [0m   [2m2868 [0m[2;33m│   [0m[33m"""[0m                                                                       [31m [0m
+[31m [0m   [2m2869 [0m[2m│   [0m[94mtry[0m:                                                                      [31m [0m
+[31m [0m [31m❱ [0m2870 [2m│   │   [0minferred_tz = timezones.infer_tzinfo(start, end)                      [31m [0m
+[31m [0m   [2m2871 [0m[2m│   [0m[94mexcept[0m [96mAssertionError[0m [94mas[0m err:                                             [31m [0m
+[31m [0m   [2m2872 [0m[2m│   │   [0m[2m# infer_tzinfo raises AssertionError if passed mismatched timezones[0m   [31m [0m
+[31m [0m   [2m2873 [0m[2m│   │   [0m[1;4;94mraise[0m[1;4m [0m[1;4;96mTypeError[0m[1;4m([0m                                                      [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m in pandas._libs.tslibs.timezones.infer_tzinfo:465                                    [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mAssertionError: [0mInputs must both have the same timezone, America/New_York != [3;35mNone[0m
+
+[3mThe above exception was the direct cause of the following exception:[0m
+
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:936 in <module>                         [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m933 [0m[2m│   │   │   [0m[2m# Fix Timezone Mismatch[0m                                            [31m [0m
+[31m [0m   [2m934 [0m[2m│   │   │   [0mexpiry_date = pd.to_datetime(target_expiry)                        [31m [0m
+[31m [0m   [2m935 [0m[2m│   │   │   [0m[94mif[0m expiry_date.tz [95mis[0m [95mnot[0m [94mNone[0m: expiry_date = expiry_date.tz_locali [31m [0m
+[31m [0m [31m❱ [0m936 [2m│   │   │   [0m[94mif[0m last_date.tz[1;4m [0m[1;4;95mis[0m[1;4m [0m[1;4;95mnot[0m[1;4m [0m[1;4;94mNone[0m[1;4m: last_date = last_date.tz_localize([0m[1;4;94mNon[0m [31m [0m
+[31m [0m   [2m937 [0m[2m│   │   │   [0m                                                                   [31m [0m
+[31m [0m   [2m938 [0m[2m│   │   │   [0mT = [96mmax[0m((expiry_date - last_date).days / [94m365.25[0m, [94m0.001[0m)            [31m [0m
+[31m [0m   [2m939 [0m                                                                               [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/pandas/core/[0m [31m [0m
+[31m [0m [2mindexes/[0m[1mdatetimes.py[0m:1491 in date_range                                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1488 [0m[2m│   │   │   │   [0m[94melif[0m [96mgetattr[0m(freq, [33m"[0m[33mmilliseconds[0m[33m"[0m, [94m0[0m) != [94m0[0m [95mand[0m unit [95mnot[0m [95min[0m [[33m"[0m [31m [0m
+[31m [0m   [2m1489 [0m[2m│   │   │   │   │   [0munit = [33m"[0m[33mms[0m[33m"[0m                                               [31m [0m
+[31m [0m   [2m1490 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m [31m❱ [0m1491 [2m│   [0mdtarr = [1;4mDatetimeArray._generate_range([0m                                    [31m [0m
+[31m [0m   [2m1492 [0m[2m│   │   [0m[1;4mstart=start,[0m                                                          [31m [0m
+[31m [0m   [2m1493 [0m[2m│   │   [0m[1;4mend=end,[0m                                                              [31m [0m
+[31m [0m   [2m1494 [0m[2m│   │   [0m[1;4mperiods=periods,[0m                                                      [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/pandas/core/[0m [31m [0m
+[31m [0m [2marrays/[0m[1mdatetimes.py[0m:461 in _generate_range                                           [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m 458 [0m[2m│   │   [0m                                                                      [31m [0m
+[31m [0m   [2m 459 [0m[2m│   │   [0mleft_inclusive, right_inclusive = validate_inclusive(inclusive)       [31m [0m
+[31m [0m   [2m 460 [0m[2m│   │   [0mstart, end = _maybe_normalize_endpoints(start, end, normalize)        [31m [0m
+[31m [0m [31m❱ [0m 461 [2m│   │   [0mtz = [1;4m_infer_tz_from_endpoints(start, end, tz)[0m                         [31m [0m
+[31m [0m   [2m 462 [0m[2m│   │   [0m                                                                      [31m [0m
+[31m [0m   [2m 463 [0m[2m│   │   [0m[94mif[0m tz [95mis[0m [95mnot[0m [94mNone[0m:                                                    [31m [0m
+[31m [0m   [2m 464 [0m[2m│   │   │   [0m[2m# Localize the start and end arguments[0m                            [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/pandas/core/[0m [31m [0m
+[31m [0m [2marrays/[0m[1mdatetimes.py[0m:2873 in _infer_tz_from_endpoints                                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m2870 [0m[2m│   │   [0minferred_tz = timezones.infer_tzinfo(start, end)                      [31m [0m
+[31m [0m   [2m2871 [0m[2m│   [0m[94mexcept[0m [96mAssertionError[0m [94mas[0m err:                                             [31m [0m
+[31m [0m   [2m2872 [0m[2m│   │   [0m[2m# infer_tzinfo raises AssertionError if passed mismatched timezones[0m   [31m [0m
+[31m [0m [31m❱ [0m2873 [2m│   │   [0m[1;4;94mraise[0m[1;4m [0m[1;4;96mTypeError[0m[1;4m([0m                                                      [31m [0m
+[31m [0m   [2m2874 [0m[2m│   │   │   [0m[1;4;33m"[0m[1;4;33mStart and end cannot both be tz-aware with different timezones[0m[1;4;33m"[0m  [31m [0m
+[31m [0m   [2m2875 [0m[2m│   │   [0m[1;4m) [0m[1;4;94mfrom[0m[1;4;90m [0m[1;4;96merr[0m                                                            [31m [0m
+[31m [0m   [2m2876 [0m                                                                              [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mTypeError: [0mStart and end cannot both be tz-aware with different timezones
+2026-05-29 14:21:15.339 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 14:22:15.113 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 14:25:10.637 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 967
+    fig6 = go.Figure()
+IndentationError: unexpected indent
+2026-05-29 14:25:10.640 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 14:26:00.702 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 14:28:31.789 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:129 in <module>                         [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m126 [0m[2m│   │   [0m[94mwith[0m st.container(border=[94mTrue[0m):                                        [31m [0m
+[31m [0m   [2m127 [0m[2m│   │   │   [0mst.subheader([33m"[0m[33mOptions Pricer[0m[33m"[0m)                                     [31m [0m
+[31m [0m   [2m128 [0m[2m│   │   │   [0mst.write([33m"[0m[33mStandard Black-Scholes options pricing model and dynamic[0m [31m [0m
+[31m [0m [31m❱ [0m129 [2m│   │   │   [0m[1;4mst.button([0m[1;4;33m"[0m[1;4;33mLaunch Pricer[0m[1;4;33m"[0m[1;4m, on_click=route_to, args=([0m[1;4;33m"[0m[1;4;33mOptions Price[0m [31m [0m
+[31m [0m   [2m130 [0m[2m│   [0m                                                                           [31m [0m
+[31m [0m   [2m131 [0m[2m│   [0m[94mwith[0m row1_col3:                                                            [31m [0m
+[31m [0m   [2m132 [0m[2m│   │   [0m[94mwith[0m st.container(border=[94mTrue[0m):                                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/[0m[1mmetrics_util.py[0m:698 in wrapped_func                                            [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/el[0m [31m [0m
+[31m [0m [2mements/widgets/[0m[1mbutton.py[0m:379 in button                                               [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/el[0m [31m [0m
+[31m [0m [2mements/widgets/[0m[1mbutton.py[0m:1642 in _button                                             [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/el[0m [31m [0m
+[31m [0m [2mements/lib/[0m[1mutils.py[0m:264 in compute_and_register_element_id                           [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/el[0m [31m [0m
+[31m [0m [2mements/lib/[0m[1mutils.py[0m:149 in _register_element_id                                      [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mStreamlitDuplicateElementId: [0mThere are multiple `button` elements with the same 
+auto-generated ID. When this element is created, it is assigned an internal ID based on 
+the element type and provided parameters. Multiple elements with the same type and 
+parameters will cause this error.
+
+To fix this error, please pass a unique `key` argument to the `button` element.
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:135 in <module>                         [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m 132 [0m[2m│   │   [0m[94mwith[0m st.container(border=[94mTrue[0m):                                       [31m [0m
+[31m [0m   [2m 133 [0m[2m│   │   │   [0mst.subheader([33m"[0m[33mFixed Income[0m[33m"[0m)                                      [31m [0m
+[31m [0m   [2m 134 [0m[2m│   │   │   [0mst.write([33m"[0m[33mBond valuation, yield-to-maturity tracking, and macroec[0m [31m [0m
+[31m [0m [31m❱ [0m 135 [2m│   │   │   [0m[1;4mst.button([0m[1;4;33m"[0m[1;4;33mLaunch[0m[1;4;33m"[0m[1;4m, on_click=route_to, args=([0m[1;4;33m"[0m[1;4;33mFixed Income[0m[1;4;33m"[0m[1;4m,), us[0m [31m [0m
+[31m [0m   [2m 136 [0m[2m│   [0m                                                                          [31m [0m
+[31m [0m   [2m 137 [0m[2m│   [0m[94mwith[0m row2_col1:                                                           [31m [0m
+[31m [0m   [2m 138 [0m[2m│   │   [0m[94mwith[0m st.container(border=[94mTrue[0m):                                       [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/[0m[1mmetrics_util.py[0m:698 in wrapped_func                                            [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/el[0m [31m [0m
+[31m [0m [2mements/widgets/[0m[1mbutton.py[0m:379 in button                                               [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/el[0m [31m [0m
+[31m [0m [2mements/widgets/[0m[1mbutton.py[0m:1642 in _button                                             [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/el[0m [31m [0m
+[31m [0m [2mements/lib/[0m[1mutils.py[0m:264 in compute_and_register_element_id                           [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/el[0m [31m [0m
+[31m [0m [2mements/lib/[0m[1mutils.py[0m:149 in _register_element_id                                      [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mStreamlitDuplicateElementId: [0mThere are multiple `button` elements with the same 
+auto-generated ID. When this element is created, it is assigned an internal ID based on 
+the element type and provided parameters. Multiple elements with the same type and 
+parameters will cause this error.
+
+To fix this error, please pass a unique `key` argument to the `button` element.
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:156 in <module>                         [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m 153 [0m[2m│   │   │   [0mst.button([33m"[0m[33mLaunch[0m[33m"[0m, on_click=route_to, args=([33m"[0m[33mOptions Implied Pro[0m [31m [0m
+[31m [0m   [2m 154 [0m                                                                              [31m [0m
+[31m [0m   [2m 155 [0m                                                                              [31m [0m
+[31m [0m [31m❱ [0m 156 [2m# ── TAB [0m[1;2;4m1: MARKET[0m[2m DATA ─────────────────────────────────────────────────────[0m [31m [0m
+[31m [0m   [2m 157 [0m[94melif[0m selected_tab == [33m"[0m[33mMarket Data[0m[33m"[0m:                                           [31m [0m
+[31m [0m   [2m 158 [0m[2m│   [0mst.header([33m"[0m[33mMarket Data & Drawdown Analysis[0m[33m"[0m)                              [31m [0m
+[31m [0m   [2m 159 [0m                                                                              [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'row3_col1'[0m is not defined
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:161 in <module>                         [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m 158 [0m[2m│   │   │   [0mst.subheader([33m"[0m[33mFed Rates Projections[0m[33m"[0m)                             [31m [0m
+[31m [0m   [2m 159 [0m[2m│   │   │   [0mst.write([33m"[0m[33mTools that analyze implied Fed rate moves and outcomes[0m[33m"[0m [31m [0m
+[31m [0m   [2m 160 [0m[2m│   │   │   [0mst.button([33m"[0m[33mLaunch Tool[0m[33m"[0m, on_click=route_to, args=([33m"[0m[33mFed Rates Proh[0m [31m [0m
+[31m [0m [31m❱ [0m 161                                                                               [31m [0m
+[31m [0m   [2m 162 [0m                                                                              [31m [0m
+[31m [0m   [2m 163 [0m[2m# ── TAB 1: MARKET DATA ─────────────────────────────────────────────────────[0m [31m [0m
+[31m [0m   [2m 164 [0m[94melif[0m selected_tab == [33m"[0m[33mMarket Data[0m[33m"[0m:                                           [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/[0m[1mmetrics_util.py[0m:698 in wrapped_func                                            [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/el[0m [31m [0m
+[31m [0m [2mements/widgets/[0m[1mbutton.py[0m:379 in button                                               [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/el[0m [31m [0m
+[31m [0m [2mements/widgets/[0m[1mbutton.py[0m:1642 in _button                                             [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/el[0m [31m [0m
+[31m [0m [2mements/lib/[0m[1mutils.py[0m:264 in compute_and_register_element_id                           [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/el[0m [31m [0m
+[31m [0m [2mements/lib/[0m[1mutils.py[0m:149 in _register_element_id                                      [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mStreamlitDuplicateElementId: [0mThere are multiple `button` elements with the same 
+auto-generated ID. When this element is created, it is assigned an internal ID based on 
+the element type and provided parameters. Multiple elements with the same type and 
+parameters will cause this error.
+
+To fix this error, please pass a unique `key` argument to the `button` element.
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1058 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1055 [0m[2m│   [0m[2m# Use Plotly's 'modern' dark theme to match your other financial charts[0m   [31m [0m
+[31m [0m   [2m1056 [0m[2m│   [0mfig = go.Figure()                                                         [31m [0m
+[31m [0m   [2m1057 [0m[2m│   [0mfig.add_trace(go.Scatter(                                                 [31m [0m
+[31m [0m [31m❱ [0m1058 [2m│   │   [0mx=[1;4mmeetings[0m, y=rates,                                                  [31m [0m
+[31m [0m   [2m1059 [0m[2m│   │   [0mmode=[33m'[0m[33mlines+markers[0m[33m'[0m,                                                 [31m [0m
+[31m [0m   [2m1060 [0m[2m│   │   [0mline=[96mdict[0m(color=[33m'[0m[33m#1f5673[0m[33m'[0m, width=[94m4[0m),                                  [31m [0m
+[31m [0m   [2m1061 [0m[2m│   │   [0mmarker=[96mdict[0m(size=[94m10[0m, color=[33m'[0m[33m#1f5673[0m[33m'[0m),                                [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'meetings'[0m is not defined
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1058 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1055 [0m[2m│   [0m[2m# Use Plotly's 'modern' dark theme to match your other financial charts[0m   [31m [0m
+[31m [0m   [2m1056 [0m[2m│   [0mfig = go.Figure()                                                         [31m [0m
+[31m [0m   [2m1057 [0m[2m│   [0mfig.add_trace(go.Scatter(                                                 [31m [0m
+[31m [0m [31m❱ [0m1058 [2m│   │   [0mx=[1;4mmeetings[0m, y=rates,                                                  [31m [0m
+[31m [0m   [2m1059 [0m[2m│   │   [0mmode=[33m'[0m[33mlines+markers[0m[33m'[0m,                                                 [31m [0m
+[31m [0m   [2m1060 [0m[2m│   │   [0mline=[96mdict[0m(color=[33m'[0m[33m#1f5673[0m[33m'[0m, width=[94m4[0m),                                  [31m [0m
+[31m [0m   [2m1061 [0m[2m│   │   [0mmarker=[96mdict[0m(size=[94m10[0m, color=[33m'[0m[33m#1f5673[0m[33m'[0m),                                [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'meetings'[0m is not defined
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1058 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1055 [0m[2m│   [0m[2m# Use Plotly's 'modern' dark theme to match your other financial charts[0m   [31m [0m
+[31m [0m   [2m1056 [0m[2m│   [0mfig = go.Figure()                                                         [31m [0m
+[31m [0m   [2m1057 [0m[2m│   [0mfig.add_trace(go.Scatter(                                                 [31m [0m
+[31m [0m [31m❱ [0m1058 [2m│   │   [0mx=[1;4mmeetings[0m, y=rates,                                                  [31m [0m
+[31m [0m   [2m1059 [0m[2m│   │   [0mmode=[33m'[0m[33mlines+markers[0m[33m'[0m,                                                 [31m [0m
+[31m [0m   [2m1060 [0m[2m│   │   [0mline=[96mdict[0m(color=[33m'[0m[33m#1f5673[0m[33m'[0m, width=[94m4[0m),                                  [31m [0m
+[31m [0m   [2m1061 [0m[2m│   │   [0mmarker=[96mdict[0m(size=[94m10[0m, color=[33m'[0m[33m#1f5673[0m[33m'[0m),                                [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'meetings'[0m is not defined
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1058 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1055 [0m[2m│   [0m[2m# Use Plotly's 'modern' dark theme to match your other financial charts[0m   [31m [0m
+[31m [0m   [2m1056 [0m[2m│   [0mfig = go.Figure()                                                         [31m [0m
+[31m [0m   [2m1057 [0m[2m│   [0mfig.add_trace(go.Scatter(                                                 [31m [0m
+[31m [0m [31m❱ [0m1058 [2m│   │   [0mx=[1;4mmeetings[0m, y=rates,                                                  [31m [0m
+[31m [0m   [2m1059 [0m[2m│   │   [0mmode=[33m'[0m[33mlines+markers[0m[33m'[0m,                                                 [31m [0m
+[31m [0m   [2m1060 [0m[2m│   │   [0mline=[96mdict[0m(color=[33m'[0m[33m#1f5673[0m[33m'[0m, width=[94m4[0m),                                  [31m [0m
+[31m [0m   [2m1061 [0m[2m│   │   [0mmarker=[96mdict[0m(size=[94m10[0m, color=[33m'[0m[33m#1f5673[0m[33m'[0m),                                [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mNameError: [0mname [32m'meetings'[0m is not defined
+2026-05-29 14:37:59.673 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1076
+    )
+    ^
+SyntaxError: unmatched ')'
+2026-05-29 14:37:59.675 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 14:38:01.915 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1076
+    )
+    ^
+SyntaxError: unmatched ')'
+2026-05-29 14:38:01.918 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 14:38:06.081 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 14:39:39.685 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1073
+    elif selected_tab == "Fed Rate Projections":
+    ^^^^
+SyntaxError: invalid syntax
+2026-05-29 14:39:39.688 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 14:39:41.520 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1073
+    elif selected_tab == "Fed Rate Projections":
+    ^^^^
+SyntaxError: invalid syntax
+2026-05-29 14:39:41.521 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 14:39:44.176 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1073
+    elif selected_tab == "Fed Rate Projections":
+    ^^^^
+SyntaxError: invalid syntax
+2026-05-29 14:39:44.178 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 14:39:46.022 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1073
+    elif selected_tab == "Fed Rate Projections":
+IndentationError: unexpected indent
+2026-05-29 14:39:46.024 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 14:39:47.861 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1073
+    elif selected_tab == "Fed Rate Projections":
+    ^^^^
+SyntaxError: invalid syntax
+2026-05-29 14:39:47.862 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 14:39:49.691 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1073
+    elif selected_tab == "Fed Rate Projections":
+    ^^^^
+SyntaxError: invalid syntax
+2026-05-29 14:39:49.692 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 14:39:51.548 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1073
+    elif selected_tab == "Fed Rate Projections":
+IndentationError: unexpected indent
+2026-05-29 14:39:51.550 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 14:40:22.629 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 14:40:44.884 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 14:40:55.502 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 14:41:00.408 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 14:41:50.158 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 14:42:11.988 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 14:44:14.275 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 14:45:23.221 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 14:45:56.284 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 14:46:03.825 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 14:46:06.272 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:1090 in <module>                        [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m1087 [0m[2m│   │   [0mmargin=[96mdict[0m(t=[94m50[0m, b=[94m20[0m, l=[94m20[0m, r=[94m20[0m),                                  [31m [0m
+[31m [0m   [2m1088 [0m[2m│   │   [0myaxis=[96mdict[0m(title=[33m"[0m[33mImplied Rate[0m[33m"[0m, ticksuffix=[33m"[0m[33m%[0m[33m"[0m),                     [31m [0m
+[31m [0m   [2m1089 [0m[2m│   │   [0mxaxis=[96mdict[0m(title=[33m"[0m[33mFOMC Meeting Date[0m[33m"[0m),                                [31m [0m
+[31m [0m [31m❱ [0m1090 [2m│   │   [0mhovermode[1;4m=[0m[1;4;33m"[0m[1;4;33mx unified[0m[1;4;33m"[0m                                                 [31m [0m
+[31m [0m   [2m1091 [0m[2m│   [0m)                                                                         [31m [0m
+[31m [0m   [2m1092 [0m[2m│   [0mst.plotly_chart(fig, use_container_width=[94mTrue[0m)                            [31m [0m
+[31m [0m   [2m1093 [0m                                                                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/[0m[1mmetrics_util.py[0m:698 in wrapped_func                                            [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/el[0m [31m [0m
+[31m [0m [2mements/[0m[1mlayouts.py[0m:581 in columns                                                     [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mTypeError: [0mobject of type [32m'float'[0m has no [1;35mlen[0m[1m([0m[1m)[0m
+2026-05-29 14:46:18.698 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.

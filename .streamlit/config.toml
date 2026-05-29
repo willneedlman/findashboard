@@ -1,0 +1,15 @@
+[theme]
+# The primary accent color for interactive elements (buttons, sliders, etc.)
+primaryColor = "#1f5673" 
+
+# The main background color of the main body
+backgroundColor = "#f4f4f9" 
+
+# The background color for the sidebar and secondary containers
+secondaryBackgroundColor = "#ffffff" 
+
+# The main text color
+textColor = "#1e1e1e" 
+
+# The default font family (our custom CSS will still enforce Lora, but this sets the baseline)
+font = "serif"
