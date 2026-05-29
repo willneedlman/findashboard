@@ -17,6 +17,28 @@ from plotly.subplots import make_subplots
 from math_engine import bs_price, bs_greeks, duration_convexity
 from scipy.stats import norm, lognorm
 
+# ── DEFINE CACHED DATA FETCHERS (Use cache_resource for Ticker objects) ──
+
+@st.cache_resource(ttl=3600)
+def get_cached_ticker(ticker):
+    # This now works because cache_resource doesn't try to pickle the object
+    return yf.Ticker(ticker.upper())
+
+@st.cache_data(ttl=3600)
+def get_cached_history(ticker):
+    # This remains cache_data because it returns a DataFrame, which is serializable
+    return yf.Ticker(ticker.upper()).history(period="max")
+
+@st.cache_data(ttl=3600)
+def get_cached_irx():
+    irx = yf.Ticker("^IRX").history(period="5d")
+    return (irx['Close'].iloc[-1] / 100) if not irx.empty else 0.05
+
+@st.cache_resource(ttl=3600)
+def get_cached_option_chain(ticker, expiry):
+    # Option chains contain multiple DataFrames; cache_resource handles this better
+    return yf.Ticker(ticker.upper()).option_chain(expiry)
+
 ssl._create_default_https_context = ssl._create_unverified_context
 
 # ── PAGE CONFIGURATION ──────────────────────────────────────────────────────
@@ -920,78 +942,57 @@ elif selected_tab == "Portfolio Backtester":
 elif selected_tab == "Options Implied Probability":
     st.header("Options Implied Probability")
     
-    # Define cached fetchers
-    @st.cache_data(ttl=3600)
-    def fetch_ticker_data(ticker):
-        return yf.Ticker(ticker.upper())
-
-    @st.cache_data(ttl=3600)
-    def fetch_hist(ticker):
-        return yf.Ticker(ticker.upper()).history(period="max")
-
     with st.container(border=True):
-        # ... (your existing inputs) ...
+        st.markdown("##### Distribution Parameters")
+        col1, col2, col3 = st.columns([1, 1, 1])
         ticker_sym = col1.text_input("Target Ticker", value="SPY")
-        # ... 
+        
+        # Fetch basic info for dropdown
+        tkr_obj = get_cached_ticker(ticker_sym)
+        expirations = tkr_obj.options
+        quick_hist = get_cached_history(ticker_sym)
+        default_target = float(round(quick_hist['Close'].iloc[-1] / 5.0) * 5.0)
+        
+        target_expiry = col2.selectbox("Target Expiry", options=expirations if expirations else ["No options found"])
+        target_px = col3.number_input("Custom Target Price ($)", value=default_target, step=5.0)
+        run_prob = st.button("Generate Probability Cone")
 
-    if run_prob:
-        with st.spinner("Calculating..."):
-            tkr = fetch_ticker_data(ticker_sym)
-            hist = fetch_hist(ticker_sym)
+    if run_prob and expirations and target_expiry != "No options found":
+        with st.spinner("Calculating dynamic parameters..."):
+            hist = get_cached_history(ticker_sym)
+            if hist.empty: # <--- ADD THIS
+                st.error("Could not retrieve historical data. Please check ticker.")
+                st.stop()
             S0 = hist['Close'].iloc[-1]
+            r = get_cached_irx()
             
-            # Use cached fetchers for IRX and Option Chain too
-            irx = yf.Ticker("^IRX").history(period="5d")
-            
-            # --- FIX: Robust Timezone Stripping ---
-            last_date = hist.index[-1].tz_localize(None)
-            expiry_date = pd.to_datetime(target_expiry).tz_localize(None)
-            
-            T = max((expiry_date - last_date).days / 365.25, 0.001)
-            future_dates = pd.date_range(start=last_date, end=expiry_date, periods=100)
-            t_steps = np.linspace(0, T, 100)
-            
-            # Paths
-            with st.spinner("Calculating..."):
-                hist = tkr.history(period="max")
-            S0 = hist['Close'].iloc[-1]
-            
-            # 1. DYNAMIC RISK-FREE RATE (From FRED / ^IRX)
-            irx = yf.Ticker("^IRX").history(period="5d")
-            r = (irx['Close'].iloc[-1] / 100) if not irx.empty else 0.05
-            
-            # 2. DYNAMIC ATM VOLATILITY
+            # Dynamic Volatility
             try:
-                chain = tkr.option_chain(target_expiry)
-                # Find the strike closest to the current spot
+                chain = get_cached_option_chain(ticker_sym, target_expiry)
                 atm_call = chain.calls.iloc[abs(chain.calls['strike'] - S0).idxmin()]
                 sigma = atm_call['impliedVolatility']
                 if pd.isna(sigma) or sigma == 0: raise ValueError
             except:
-                # Fallback to 30-day historical volatility
                 sigma = hist['Close'].pct_change().rolling(30).std().iloc[-1] * np.sqrt(252)
 
-            # --- Fix Timezone Mismatch ---
+            # Paths calculation
             last_date = hist.index[-1].tz_localize(None)
             expiry_date = pd.to_datetime(target_expiry).tz_localize(None)
-            
             T = max((expiry_date - last_date).days / 365.25, 0.001)
             future_dates = pd.date_range(start=last_date, end=expiry_date, periods=100)
             t_steps = np.linspace(0, T, 100)
             
-            # Paths using dynamic r and sigma
             median_path = S0 * np.exp((r - 0.5 * sigma**2) * t_steps)
             upper_bound = S0 * np.exp((r - 0.5 * sigma**2) * t_steps + 1.28 * sigma * np.sqrt(t_steps))
             lower_bound = S0 * np.exp((r - 0.5 * sigma**2) * t_steps - 1.28 * sigma * np.sqrt(t_steps))
             mean_path = S0 * np.exp(r * t_steps)
 
-            # 1. Calculate the Prob. Above Target using your existing variables
-        # Note: We use the drift mu = (r - 0.5 * sigma**2) * T
-        mu_log_return = (r - 0.5 * sigma**2) * T
-        std_dev = sigma * np.sqrt(T)
-        prob_above = 1 - norm.cdf(np.log(target_px / S0), loc=mu_log_return, scale=std_dev)
+            # Probability Calculation
+            mu_log_return = (r - 0.5 * sigma**2) * T
+            std_dev = sigma * np.sqrt(T)
+            prob_above = 1 - norm.cdf(np.log(target_px / S0), loc=mu_log_return, scale=std_dev)
 
-        # 2. Add the Metrics Panel
+        # Metrics Panel
         st.markdown(f"##### Target Expiry: {target_expiry}")
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Current Spot", f"${S0:.2f}")
@@ -1001,50 +1002,18 @@ elif selected_tab == "Options Implied Probability":
         
         st.divider()
 
-        
-         # Build Figure
+        # Build Plotly Figure
         fig6 = go.Figure()
         fig6.add_trace(go.Scatter(x=hist.index, y=hist['Close'], name="Historical", line=dict(color="#1f5673", width=2)))
-
-            # SHADING: Using full X-range for polygons
-            # Green (Upper Bound down to Spot)
-        fig6.add_trace(go.Scatter(
-                x=list(future_dates) + list(future_dates)[::-1],
-                y=list(upper_bound) + [S0]*100,
-                fill='toself', fillcolor="rgba(47, 107, 75, 0.15)",
-                line=dict(width=0), showlegend=False, hoverinfo='skip'
-            ))
-            # Red (Lower Bound up to Spot)
-        fig6.add_trace(go.Scatter(
-                x=list(future_dates) + list(future_dates)[::-1],
-                y=list(lower_bound) + [S0]*100,
-                fill='toself', fillcolor="rgba(140, 46, 54, 0.15)",
-                line=dict(width=0), showlegend=False, hoverinfo='skip'
-            ))
-
-            # Lines
+        fig6.add_trace(go.Scatter(x=list(future_dates) + list(future_dates)[::-1], y=list(upper_bound) + [S0]*100, fill='toself', fillcolor="rgba(47, 107, 75, 0.15)", line=dict(width=0), showlegend=False))
+        fig6.add_trace(go.Scatter(x=list(future_dates) + list(future_dates)[::-1], y=list(lower_bound) + [S0]*100, fill='toself', fillcolor="rgba(140, 46, 54, 0.15)", line=dict(width=0), showlegend=False))
         fig6.add_trace(go.Scatter(x=future_dates, y=upper_bound, name="Upper Bound", line=dict(color="#2f6b4b", width=1.5)))
         fig6.add_trace(go.Scatter(x=future_dates, y=mean_path, name="Mean", line=dict(color="#1f5673", width=2, dash="dot")))
         fig6.add_trace(go.Scatter(x=future_dates, y=median_path, name="Median", line=dict(color="#333333", width=2, dash="dash")))
         fig6.add_trace(go.Scatter(x=future_dates, y=lower_bound, name="Lower Bound", line=dict(color="#8c2e36", width=1.5)))
-
-            # Spot and Target Shapes
-        fig6.add_shape(type="line", x0=future_dates[0], y0=S0, x1=future_dates[-1], y1=S0, line=dict(color="gray", width=1.5))
-            
-            
-            # Annotations
-        fig6.add_annotation(x=future_dates[-1], y=S0, text="Spot", showarrow=False, xshift=20, font=dict(color="gray"))
-        fig6.add_annotation(x=future_dates[-1], y=target_px, text=f"Target: ${target_px:.2f}", showarrow=False, xshift=40, font=dict(color="#8c2e36"))
-
-        fig6.update_layout(
-                title=f"Volatility Cone for {ticker_sym.upper()}",
-                height=700, hovermode="x unified",
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
-                xaxis=dict(range=[last_date, expiry_date]),
-                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)"
-            )
+        
+        fig6.update_layout(title=f"Volatility Cone for {ticker_sym.upper()}", height=700, hovermode="x unified", xaxis=dict(range=[last_date, expiry_date]), plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(fig6, use_container_width=True)
-
 # ── TAB 8: FED RATE PROJECTIONS ──────────────────────────────────────
 elif selected_tab == "Fed Rate Projections":
     st.header("Fed Rate Expectations (Live)")

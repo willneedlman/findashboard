@@ -2538,3 +2538,187 @@ For `use_container_width=True`, use `width='stretch'`. For `use_container_width=
 `use_container_width` will be removed after 2025-12-31.
 
 For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:08:07.420 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:08:11.293 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:08:14.154 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:08:17.631 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:09:54.640 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:10:22.622 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:10:31.934 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1008
+    st.plotly_chart(fig6, use_container_width=True)f
+                                                   ^
+SyntaxError: invalid syntax
+2026-05-29 15:10:31.935 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 15:10:38.564 127.0.0.1:59252 - "GET / HTTP/1.1" 304
+2026-05-29 15:10:38.570 connection closed
+2026-05-29 15:10:38.588 127.0.0.1:59252 - "GET /static/js/protobuf.DyZGXwGk.js HTTP/1.1" 200
+2026-05-29 15:10:38.590 127.0.0.1:59253 - "GET /static/js/src.D9MArGZj.js HTTP/1.1" 200
+2026-05-29 15:10:38.675 127.0.0.1:59253 - "GET /_stcore/health HTTP/1.1" 200
+2026-05-29 15:10:38.675 127.0.0.1:59252 - "GET /_stcore/host-config HTTP/1.1" 200
+2026-05-29 15:10:38.901 127.0.0.1:59255 - "WebSocket /_stcore/stream" [accepted]
+2026-05-29 15:10:38.904 connection open
+2026-05-29 15:10:38.986 Script compilation error
+Traceback (most recent call last):
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 591, in _run_script
+    code = self._script_cache.get_bytecode(script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/script_cache.py", line 72, in get_bytecode
+    filebody = magic.add_magic(filebody, script_path)
+  File "/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/runtime/scriptrunner/magic.py", line 45, in add_magic
+    tree = ast.parse(code, script_path, "exec")
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+                   _feature_version=feature_version, optimize=optimize)
+  File "/Users/willneedlman/finance_dashboard/app.py", line 1008
+    st.plotly_chart(fig6, use_container_width=True)f
+                                                   ^
+SyntaxError: invalid syntax
+2026-05-29 15:10:38.988 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-05-29 15:10:39.002 127.0.0.1:59252 - "GET /static/media/SourceSerifVariable-Roman.ttf.mdpVL9bi.woff2 HTTP/1.1" 200
+2026-05-29 15:10:50.355 127.0.0.1:59260 - "GET /static/media/MaterialSymbols-Rounded.VqUtTjSV.woff2 HTTP/1.1" 200
+[*********************100%***********************]  1 of 1 completed
+[*********************100%***********************]  1 of 1 completed
+2026-05-29 15:10:58.760 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:10:58.832 127.0.0.1:59269 - "GET /static/js/embed.Bqebd2RE.js HTTP/1.1" 200
+2026-05-29 15:10:58.839 127.0.0.1:59269 - "GET /static/js/PlotlyChart.B6LaAfIh.js HTTP/1.1" 200
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/caching/[0m[1mcache_data_api.py[0m:766 in write_result                                  [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mTypeError: [0mcannot pickle [32m'_thread.RLock'[0m object
+
+[3mThe above exception was the direct cause of the following exception:[0m
+
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/caching/[0m[1mcache_utils.py[0m:390 in _handle_cache_miss                               [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/[0m[1mmetrics_util.py[0m:698 in wrapped_func                                            [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/caching/[0m[1mcache_data_api.py[0m:768 in write_result                                  [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mCacheError: [0mFailed to pickle 8bfbb5c5dbd867a33cb09678b9b2e626
+
+[3mThe above exception was the direct cause of the following exception:[0m
+
+[31m──[0m[31m────────────────────────[0m[31m [0m[1;31mTraceback [0m[1;2;31m(most recent call last)[0m[31m [0m[31m─────────────────────────[0m[31m──[0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mexec_code.py[0m:129 in exec_func_with_error_handling                 [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/scriptrunner/[0m[1mscript_runner.py[0m:689 in code_to_exec                              [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/[0m[1mapp.py[0m:946 in <module>                         [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m   [2m 943 [0m[2m│   │   [0mticker_sym = col1.text_input([33m"[0m[33mTarget Ticker[0m[33m"[0m, value=[33m"[0m[33mSPY[0m[33m"[0m)            [31m [0m
+[31m [0m   [2m 944 [0m[2m│   │   [0m                                                                      [31m [0m
+[31m [0m   [2m 945 [0m[2m│   │   [0m[2m# Fetch basic info for dropdown[0m                                       [31m [0m
+[31m [0m [31m❱ [0m 946 [2m│   │   [0mtkr_obj = [1;4mget_cached_ticker(ticker_sym)[0m                               [31m [0m
+[31m [0m   [2m 947 [0m[2m│   │   [0mexpirations = tkr_obj.options                                         [31m [0m
+[31m [0m   [2m 948 [0m[2m│   │   [0mquick_hist = get_cached_history(ticker_sym)                           [31m [0m
+[31m [0m   [2m 949 [0m[2m│   │   [0mdefault_target = [96mfloat[0m([96mround[0m(quick_hist[[33m'[0m[33mClose[0m[33m'[0m].iloc[-[94m1[0m] / [94m5.0[0m) * [94m5.[0m [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/caching/[0m[1mcache_utils.py[0m:280 in __call__                                         [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/caching/[0m[1mcache_utils.py[0m:325 in _get_or_create_cached_value                      [31m [0m
+[31m [0m                                                                                      [31m [0m
+[31m [0m [2m/Users/willneedlman/finance_dashboard/venv/lib/python3.13/site-packages/streamlit/ru[0m [31m [0m
+[31m [0m [2mntime/caching/[0m[1mcache_utils.py[0m:409 in _handle_cache_miss                               [31m [0m
+[31m────────────────────────────────────────────────────────────────────────────────────────[0m
+[1;91mUnserializableReturnValueError: [0m
+            Cannot serialize the return value [1m([0mof type `yfinance.ticker.Ticker`[1m)[0m
+            in `[1;35mget_cached_ticker[0m[1m([0m[1m)[0m`. `st.cache_data` uses
+            [1m[[0mpickle[1m][0m[1m([0m[4;94mhttps://docs.python.org/3/library/pickle.html[0m[4;94m)[0m to serialize the
+            function's return value and safely store it in the cache
+            without mutating the original object. Please convert the return value to a
+            pickle-serializable type. If you want to cache unserializable objects such
+            as database connections or Tensorflow sessions, use `st.cache_resource`
+            instead [1m([0msee [1m[[0mour 
+docs[1m][0m[1m([0m[4;94mhttps://docs.streamlit.io/develop/concepts/architecture/caching[0m[4;94m)[0m for differences[1m)[0m.
+2026-05-29 15:11:55.144 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:12:04.078 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:12:42.910 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:12:55.035 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:13:03.191 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:13:07.605 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:13:29.337 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:13:38.534 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-05-29 15:13:42.483 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
