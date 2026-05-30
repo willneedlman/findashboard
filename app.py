@@ -23,7 +23,10 @@ from math_engine import bs_price, bs_greeks, duration_convexity
 from scipy.stats import norm, lognorm
 
 # ── API KEYS ─────────────────────────────────────────────────────────────────
-TWELVE_API_KEY = st.secrets["TWELVE_API_KEY"]
+try:
+    TWELVE_API_KEY = st.secrets["TWELVE_API_KEY"]
+except (KeyError, FileNotFoundError):
+    TWELVE_API_KEY = os.environ.get("TWELVE_API_KEY", "")
 
 # ── DATA FETCHERS ─────────────────────────────────────────────────────────────
 
@@ -733,7 +736,7 @@ def render_home():
     r1c1, r1c2, r1c3 = st.columns(3)
     r2c1, r2c2, r2c3 = st.columns(3)
     r3c1, r3c2, r3c3 = st.columns(3)
-    r4c1, r4c2, _    = st.columns(3)
+    r4c1, r4c2, r4c3 = st.columns(3)
 
     with r1c1:
         with st.container(border=True):
@@ -790,6 +793,11 @@ def render_home():
             st.subheader("Correlation Matrix")
             st.write("Rolling correlation heatmap across any custom basket of tickers.")
             if st.button("Launch Correlation", use_container_width=True): st.switch_page(p_corr)
+    with r4c3:
+        with st.container(border=True):
+            st.subheader("Monte Carlo Simulator")
+            st.write("GBM price path simulation with configurable drift, volatility, VaR and CVaR risk metrics.")
+            if st.button("Launch Simulator", use_container_width=True): st.switch_page(p_monte)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TAB 1 — MARKET DATA
