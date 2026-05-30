@@ -1107,7 +1107,7 @@ elif selected_tab == "Fed Rate Projections":
     with container_slider:
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown("##### Global Rate Sensitivity Engine")
-        st.write("Simulate basis point shifts across the front end. Watch the curve model institutional **Bull Steepeners** (cuts) and **Bear Flatteners** (hikes).")
+        st.write("Simulate basis point shifts across the front end.")
         twist_factor = st.slider("Front-End Shift Matrix (bps)", min_value=-150, max_value=150, value=0, step=10)
         st.markdown("<br>", unsafe_allow_html=True)
 
