@@ -95,6 +95,33 @@ def get_twelve_shares_outstanding(ticker, apikey=TWELVE_API_KEY):
         return 345930000.0
 
 @st.cache_data(ttl=1800)
+def get_yf_market_data(ticker):
+    try:
+        tkr = yf.Ticker(ticker.strip().upper())
+        df = tkr.history(period="5y")
+        if not df.empty:
+            df.index = df.index.tz_localize(None)
+            df = df.rename(columns={"Close": "close"})
+            return df[["close"]].dropna()
+    except Exception as e:
+        logging.warning(f"get_yf_market_data({ticker}): {e}")
+    return pd.DataFrame()
+
+@st.cache_data(ttl=3600)
+def get_yf_implied_vol(ticker):
+    try:
+        tkr = yf.Ticker(ticker.strip().upper())
+        df = tkr.history(period="3mo")
+        if not df.empty:
+            closes = df["Close"].dropna()
+            returns = np.log(closes / closes.shift(1)).dropna()
+            sigma = returns.std() * np.sqrt(252)
+            return sigma if (sigma > 0 and not pd.isna(sigma)) else 0.20
+    except Exception:
+        pass
+    return 0.20
+
+@st.cache_data(ttl=1800)
 def get_yf_backtest_series(ticker, start_date, end_date):
     try:
         tkr = yf.Ticker(ticker.strip().upper())
@@ -135,19 +162,27 @@ def get_twelve_implied_vol(ticker, apikey=TWELVE_API_KEY):
 
 @st.cache_data(ttl=1800)
 def get_twelve_batch_yield_curve(apikey=TWELVE_API_KEY):
-    url = f"https://api.twelvedata.com/time_series?symbol=US1Y,US2Y,US5Y,US10Y,US20Y,US30Y&interval=1day&outputsize=2&apikey={apikey}"
     market_backstop = {"1Y": 3.78, "2Y": 4.03, "5Y": 4.16, "10Y": 4.46, "20Y": 4.72, "30Y": 4.98}
+    # yfinance treasury tickers (% values — divide by 100)
+    yf_map = {"1Y": "^IRX", "2Y": "^FVX", "5Y": "^FVX", "10Y": "^TNX", "20Y": "^TYX", "30Y": "^TYX"}
+    # More precise mapping using CBOE tickers
+    yf_precise = [("1Y","^IRX"), ("2Y","^FVX"), ("5Y","^FVX"), ("10Y","^TNX"), ("30Y","^TYX")]
     try:
-        response = requests.get(url, timeout=4).json()
         curve_row = {}
-        for label, symbol in [("1Y","US1Y"), ("2Y","US2Y"), ("5Y","US5Y"), ("10Y","US10Y"), ("20Y","US20Y"), ("30Y","US30Y")]:
-            if symbol in response and "values" in response[symbol]:
-                latest_yield = float(response[symbol]["values"][0]["close"])
-                curve_row[label] = latest_yield if latest_yield < 20.0 else latest_yield / 100.0
-        if len(curve_row) == 6:
-            return pd.DataFrame([curve_row])
+        for label, sym in [("1Y","^IRX"), ("5Y","^FVX"), ("10Y","^TNX"), ("30Y","^TYX")]:
+            hist = yf.Ticker(sym).history(period="5d")
+            if not hist.empty:
+                val = float(hist["Close"].dropna().iloc[-1])
+                curve_row[label] = val if val < 20.0 else val / 100.0
+        # Interpolate missing tenors
+        if "1Y" in curve_row and "5Y" in curve_row:
+            curve_row["2Y"] = curve_row["1Y"] * 0.6 + curve_row["5Y"] * 0.4
+        if "10Y" in curve_row and "30Y" in curve_row:
+            curve_row["20Y"] = curve_row["10Y"] * 0.5 + curve_row["30Y"] * 0.5
+        if len(curve_row) >= 5:
+            return pd.DataFrame([{k: curve_row.get(k, market_backstop[k]) for k in market_backstop}])
     except Exception as e:
-        logging.warning(f"get_twelve_batch_yield_curve: {e}")
+        logging.warning(f"get_twelve_batch_yield_curve (yf): {e}")
     return pd.DataFrame([market_backstop])
 
 @st.cache_data(show_spinner=False)
@@ -285,16 +320,7 @@ def get_price_series(ticker, start_date=None, end_date=None, source="auto"):
     start = start_date or (pd.Timestamp.now() - pd.Timedelta(days=365))
     end = end_date or pd.Timestamp.now()
 
-    if source in ("twelve", "auto"):
-        try:
-            twelve_rate_guard()
-            series = get_twelve_time_series(sym, start, end)
-            if not series.empty:
-                return series, "Twelve Data"
-        except Exception:
-            pass
-
-    # yfinance fallback
+    # yfinance only — Twelve Data removed (DNS unreachable)
     try:
         series = get_yf_backtest_series(sym, start, end)
         if not series.empty:
@@ -318,6 +344,69 @@ def get_options_chain(ticker):
         return chain.calls, chain.puts, nearest
     except Exception:
         return None, None, None
+
+# ── DEALER GEX (yfinance) ────────────────────────────────────────────────────
+@st.cache_data(ttl=900)
+def get_gex_data(ticker):
+    """
+    Returns (spot, df_gex) where df_gex has columns:
+      strike, expiry, call_oi, put_oi, call_gamma, put_gamma,
+      call_gex, put_gex, net_gex  (all in $ per 1% move, millions)
+    Gamma is approximated via Black-Scholes on the OI-weighted chain.
+    """
+    from scipy.stats import norm as _norm
+    sym = ticker.strip().upper()
+    tkr = yf.Ticker(sym)
+    try:
+        hist = tkr.history(period="5d")
+        spot = float(hist["Close"].dropna().iloc[-1]) if not hist.empty else None
+    except Exception:
+        spot = None
+    if spot is None or spot <= 0:
+        return None, pd.DataFrame()
+
+    r      = 0.045
+    rows   = []
+    today  = pd.Timestamp.today().normalize()
+
+    for exp in (tkr.options or []):
+        exp_dt = pd.to_datetime(exp)
+        T      = max((exp_dt - today).days / 365.25, 1 / 365.25)
+        try:
+            chain = tkr.option_chain(exp)
+        except Exception:
+            continue
+        for side, df_side, sign in [("call", chain.calls, 1), ("put", chain.puts, -1)]:
+            df_side = df_side[["strike", "openInterest", "impliedVolatility"]].dropna()
+            df_side = df_side[(df_side["impliedVolatility"] > 0.01) &
+                              (df_side["impliedVolatility"] < 5.0) &
+                              (df_side["openInterest"] > 0)]
+            for _, row in df_side.iterrows():
+                K, oi, iv = float(row["strike"]), float(row["openInterest"]), float(row["impliedVolatility"])
+                if K <= 0 or iv <= 0:
+                    continue
+                try:
+                    d1    = (np.log(spot / K) + (r + 0.5 * iv**2) * T) / (iv * np.sqrt(T))
+                    gamma = _norm.pdf(d1) / (spot * iv * np.sqrt(T))
+                    # GEX in $ millions: OI × 100 shares × gamma × spot² × 0.01 (1% move)
+                    gex_m = sign * oi * 100 * gamma * spot * spot * 0.01 / 1e6
+                    rows.append({"strike": K, "expiry": exp, "side": side, "gex_m": gex_m})
+                except Exception:
+                    continue
+
+    if not rows:
+        return spot, pd.DataFrame()
+
+    df = pd.DataFrame(rows)
+    pivot = (df.groupby(["strike", "side"])["gex_m"].sum()
+               .unstack(fill_value=0)
+               .rename(columns={"call": "call_gex", "put": "put_gex"}))
+    for col in ["call_gex", "put_gex"]:
+        if col not in pivot.columns:
+            pivot[col] = 0.0
+    pivot["net_gex"] = pivot["call_gex"] + pivot["put_gex"]
+    pivot = pivot.reset_index().sort_values("strike")
+    return spot, pivot
 
 # ── SHORT INTEREST & INSIDER FLOW (yfinance) ─────────────────────────────────
 @st.cache_data(ttl=86400)
@@ -364,6 +453,7 @@ def go_chain():   st.session_state.main_nav = "Options Chain Scanner"
 def go_corr():     st.session_state.main_nav = "Correlation Matrix"
 def go_strategy(): st.session_state.main_nav = "Strategy Builder"
 def go_monte():    st.session_state.main_nav = "Monte Carlo Simulator"
+def go_gex():      st.session_state.main_nav = "Dealer GEX"
 
 p_home    = st.Page(go_home,    title="Finance Dashboard")
 p_market  = st.Page(go_market,  title="Market Data")
@@ -379,6 +469,7 @@ p_chain    = st.Page(go_chain,    title="Options Chain Scanner")
 p_corr     = st.Page(go_corr,    title="Correlation Matrix")
 p_strategy = st.Page(go_strategy, title="Strategy Builder")
 p_monte    = st.Page(go_monte,    title="Monte Carlo Simulator")
+p_gex      = st.Page(go_gex,      title="Dealer GEX")
 
 # ── CSS INJECTION ─────────────────────────────────────────────────────────────
 st.markdown("""
@@ -699,6 +790,28 @@ button[aria-label="expand sidebar navigation"] {
 
 /* ── SUCCESS / WARNING / ERROR text ── */
 [data-testid="stAlert"] p { font-size: 0.82rem !important; }
+
+/* ── PLOTLY CHART BORDER ── */
+[data-testid="stPlotlyChart"] {
+    border: 1px solid rgba(255, 255, 255, 0.10) !important;
+    border-radius: 8px !important;
+    padding: 12px 16px !important;
+    background-color: #0f1d31 !important;
+}
+
+/* ── IMPROVED TEXT READABILITY ── */
+p, li, td, th { line-height: 1.65 !important; font-size: 0.92rem !important; }
+[data-testid="stMarkdownContainer"] p { line-height: 1.65 !important; font-size: 0.92rem !important; }
+[data-testid="stCaptionContainer"] p { font-size: 0.80rem !important; line-height: 1.55 !important; color: #7a92a8 !important; }
+[data-testid="stWidgetLabel"] p { font-size: 0.75rem !important; letter-spacing: 0.09em !important; }
+[data-testid="stMetricLabel"] p { font-size: 0.70rem !important; letter-spacing: 0.13em !important; }
+[data-testid="stMetricValue"] { font-size: 1.6rem !important; }
+h1 { font-size: 1.9rem !important; }
+h2 { font-size: 1.3rem !important; }
+h3 { font-size: 1.1rem !important; }
+[data-testid="stSidebarNavLink"] p { font-size: 0.92rem !important; }
+[data-testid="stAlert"] p { font-size: 0.86rem !important; line-height: 1.5 !important; }
+[data-testid="stVerticalBlockBorderWrapper"] > div { padding: 18px 20px !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -707,7 +820,7 @@ pages = {
     "": [p_home],
     "Data & Dashboards":    [p_market, p_earn, p_corr],
     "Valuation & Analysis": [p_dcf, p_chain],
-    "Derivatives & Rates":  [p_options, p_strategy, p_prob, p_fed, p_bond],
+    "Derivatives & Rates":  [p_options, p_strategy, p_prob, p_gex, p_fed, p_bond],
     "Portfolio Tools":      [p_nav, p_port, p_monte],
 }
 
@@ -815,8 +928,8 @@ def render_market():
         load_data = colB.button("Load Data", use_container_width=True)
 
     if load_data:
-        with st.spinner(f"Querying Twelve Data for {final_ticker}..."):
-            raw_df = get_twelve_market_data(final_ticker)
+        with st.spinner(f"Fetching data for {final_ticker}..."):
+            raw_df = get_yf_market_data(final_ticker)
 
         if not raw_df.empty:
             mask = (raw_df.index >= pd.to_datetime(start)) & (raw_df.index <= pd.to_datetime(end))
@@ -1123,12 +1236,13 @@ def render_nav():
 
     if run_proxy:
         with st.spinner(f"Processing structural balance sheet matrices for {target_ticker.upper()}..."):
-            shares_out    = get_twelve_shares_outstanding(target_ticker, TWELVE_API_KEY)
-            target_series = get_twelve_time_series(target_ticker, start_nav, end_nav, TWELVE_API_KEY)
-            asset_series  = get_twelve_time_series(asset_ticker,  start_nav, end_nav, TWELVE_API_KEY)
+            tkr_obj    = yf.Ticker(target_ticker.strip().upper())
+            shares_out = tkr_obj.info.get("sharesOutstanding", None) or tkr_obj.info.get("impliedSharesOutstanding", 345_930_000)
+            target_series = get_yf_backtest_series(target_ticker, start_nav, end_nav)
+            asset_series  = get_yf_backtest_series(asset_ticker,  start_nav, end_nav)
 
         if target_series.empty or asset_series.empty:
-            st.error("Data synchronization failed. Verify tickers and API key.")
+            st.error("Data synchronization failed. Verify tickers are valid.")
         else:
             df = pd.concat([target_series, asset_series], axis=1, join='inner')
             df.columns = ["Target", "Asset"]
@@ -1338,7 +1452,7 @@ def render_prob():
         final_prob_ticker = col1.text_input("Target Ticker", value="SPY", key="prob_ticker_sel").strip().upper()
 
         with st.spinner("Fetching spot price..."):
-            hist_prices = get_twelve_market_data(final_prob_ticker)
+            hist_prices = get_yf_market_data(final_prob_ticker)
 
         if not hist_prices.empty:
             current_spot  = float(hist_prices["close"].iloc[-1])
@@ -1347,20 +1461,24 @@ def render_prob():
             current_spot  = 400.0
             default_target = 400.0
 
-        target_expiry = col2.date_input("Target Expiry Date", value=pd.Timestamp.now() + pd.Timedelta(days=30))
+        target_expiry = col2.date_input(
+            "Target Expiry Date",
+            value=pd.Timestamp.now() + pd.Timedelta(days=30),
+            min_value=datetime.date.today() + datetime.timedelta(days=1),
+            max_value=datetime.date.today() + datetime.timedelta(days=1825))
         target_px     = col3.number_input("Custom Target Price ($)", value=default_target, step=5.0)
         run_prob      = st.button("Generate Probability Cone", use_container_width=True)
 
     if run_prob:
         with st.spinner("Executing Black-Scholes risk-neutral matrix models..."):
-            hist  = get_twelve_market_data(final_prob_ticker)
+            hist  = get_yf_market_data(final_prob_ticker)
             if hist.empty:
                 st.error("Could not retrieve data for the targeted symbol.")
                 st.stop()
 
             S0    = float(hist['close'].iloc[-1])
             r     = get_live_risk_free_rate()
-            sigma = get_twelve_implied_vol(final_prob_ticker, TWELVE_API_KEY)
+            sigma = get_yf_implied_vol(final_prob_ticker)
 
             last_date    = hist.index[-1].tz_localize(None) if hist.index[-1].tzinfo else hist.index[-1]
             expiry_date  = pd.to_datetime(target_expiry)
@@ -1370,7 +1488,7 @@ def render_prob():
 
             median_path  = S0 * np.exp((r - 0.5*sigma**2) * t_steps)
             upper_bound  = S0 * np.exp((r - 0.5*sigma**2) * t_steps + 1.04*sigma*np.sqrt(t_steps))
-            lower_bound  = S0 * np.exp((r - 0.5*sigma**2) * t_steps - 1.04*sigma*np.sqrt(t_steps))
+            lower_bound  = np.maximum(S0 * np.exp((r - 0.5*sigma**2) * t_steps - 1.04*sigma*np.sqrt(t_steps)), 0)
             mean_path    = S0 * np.exp(r * t_steps)
 
             mu_log       = (r - 0.5*sigma**2) * T
@@ -1386,25 +1504,467 @@ def render_prob():
         st.caption("**Methodology Note:** Black-Scholes risk-neutral pricing. Reflects market hedging cost, not a directional forecast.")
         st.divider()
 
-        fig6 = go.Figure()
-        fig6.add_trace(go.Scatter(x=list(future_dates)+list(future_dates)[::-1], y=list(upper_bound)+[S0]*100,
-            fill='toself', fillcolor="rgba(47,107,75,0.15)", line=dict(width=0), showlegend=False))
-        fig6.add_trace(go.Scatter(x=list(future_dates)+list(future_dates)[::-1], y=list(lower_bound)+[S0]*100,
-            fill='toself', fillcolor="rgba(140,46,54,0.15)", line=dict(width=0), showlegend=False))
-        fig6.add_trace(go.Scatter(x=future_dates, y=upper_bound, name="Upper Bound", line=dict(color="#2f6b4b", width=1.5)))
-        fig6.add_trace(go.Scatter(x=future_dates, y=mean_path,   name="Mean",        line=dict(color="#1f5673", width=2, dash="dot")))
-        fig6.add_trace(go.Scatter(x=future_dates, y=median_path, name="Median",      line=dict(color="#333333", width=2, dash="dash")))
-        fig6.add_trace(go.Scatter(x=future_dates, y=lower_bound, name="Lower Bound", line=dict(color="#8c2e36", width=1.5)))
-        fig6.add_hline(y=target_px, line_dash="dot", line_color="#d97736", annotation_text=f"Target ${target_px:.0f}")
+        # ── Volatility Cone ───────────────────────────────────────────────────
+        try:
+            _t_safe     = np.maximum(t_steps, 1e-10)
+            _prob_tgt_t = np.where(
+                t_steps > 0,
+                1 - norm.cdf((np.log(target_px / S0) - (r - 0.5*sigma**2)*t_steps) / (sigma*np.sqrt(_t_safe))),
+                1.0 if target_px <= S0 else 0.0)
 
-        cone_min, cone_max = lower_bound[-1], upper_bound[-1]
-        buffer = (cone_max - cone_min) * 0.10
-        fig6.update_layout(title=f"Volatility Cone — {final_prob_ticker}", height=700, hovermode="x unified",
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
-            xaxis=dict(showgrid=True, gridcolor="rgba(128,128,128,0.1)"),
-            yaxis=dict(range=[cone_min-buffer, cone_max+buffer], showgrid=True, gridcolor="rgba(128,128,128,0.1)"),
-            plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(fig6, use_container_width=True)
+            fig6 = go.Figure()
+            fig6.add_trace(go.Scatter(x=list(future_dates)+list(future_dates)[::-1], y=list(upper_bound)+[S0]*100,
+                fill='toself', fillcolor="rgba(47,107,75,0.15)", line=dict(width=0), showlegend=False, hoverinfo="skip"))
+            fig6.add_trace(go.Scatter(x=list(future_dates)+list(future_dates)[::-1], y=list(lower_bound)+[S0]*100,
+                fill='toself', fillcolor="rgba(140,46,54,0.15)", line=dict(width=0), showlegend=False, hoverinfo="skip"))
+            fig6.add_trace(go.Scatter(
+                x=future_dates, y=upper_bound, name="Upper Bound (~85th pct)",
+                line=dict(color="#2f6b4b", width=1.5),
+                customdata=_prob_tgt_t,
+                hovertemplate=(
+                    f"<b>Upper Bound</b>  $%{{y:,.2f}}<span style='color:#5e768f'>  ·  ~85th pct</span><br>"
+                    f"<span style='color:#a0b0c0'>P(Above ${target_px:.0f})</span>  <b>%{{customdata:.1%}}</b>"
+                    "<extra></extra>")))
+            fig6.add_trace(go.Scatter(
+                x=future_dates, y=mean_path, name="Mean",
+                line=dict(color="#1f5673", width=2, dash="dot"),
+                hovertemplate="<b>Mean Path</b>  $%{y:,.2f}<span style='color:#5e768f'>  ·  Expected path</span><extra></extra>"))
+            fig6.add_trace(go.Scatter(
+                x=future_dates, y=median_path, name="Median",
+                line=dict(color="#9aa8b8", width=2, dash="dash"),
+                hovertemplate="<b>Median</b>  $%{y:,.2f}<span style='color:#5e768f'>  ·  50th pct</span><extra></extra>"))
+            fig6.add_trace(go.Scatter(
+                x=future_dates, y=lower_bound, name="Lower Bound (~15th pct)",
+                line=dict(color="#8c2e36", width=1.5),
+                hovertemplate="<b>Lower Bound</b>  $%{y:,.2f}<span style='color:#5e768f'>  ·  ~15th pct</span><extra></extra>"))
+            fig6.add_hline(y=target_px, line_dash="dot", line_color="#d97736",
+                annotation_text=f"Target ${target_px:.0f}")
+            cone_min, cone_max = max(0, float(lower_bound[-1])), float(upper_bound[-1])
+            buffer = (cone_max - cone_min) * 0.10
+            fig6.update_layout(
+                title=f"Volatility Cone — {final_prob_ticker}", height=700, hovermode="x unified",
+                hoverlabel=dict(bgcolor="#0f1d31", bordercolor="rgba(201,168,76,0.5)",
+                    font=dict(family="Lora, serif", size=13, color="#dce3ed"), align="left", namelength=0),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
+                xaxis=dict(showgrid=True, gridcolor="rgba(128,128,128,0.1)"),
+                yaxis=dict(range=[max(0, cone_min-buffer), cone_max+buffer], showgrid=True, gridcolor="rgba(128,128,128,0.1)"),
+                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig6, use_container_width=True)
+        except Exception as _cone_err:
+            st.warning(f"⚠️ Volatility Cone unavailable: {_cone_err}")
+
+        # ── Shared options chain fetch (used by both charts below) ────────────
+        st.markdown("<br>", unsafe_allow_html=True)
+        _tkr = _expirations = _nearest = _calls = _puts = None
+        with st.spinner(f"Fetching options chain for {final_prob_ticker}..."):
+            try:
+                _tkr         = yf.Ticker(final_prob_ticker)
+                _expirations = _tkr.options or []
+                if _expirations:
+                    _expiry_ts = pd.to_datetime(target_expiry)
+                    _nearest   = min(_expirations, key=lambda d: abs((pd.to_datetime(d) - _expiry_ts).days))
+                    _chain     = _tkr.option_chain(_nearest)
+                    _calls     = (_chain.calls[["strike", "impliedVolatility"]]
+                                  .dropna().sort_values("strike").reset_index(drop=True))
+                    _puts      = _chain.puts[["strike", "impliedVolatility"]].dropna()
+
+                    def _bs_call_delta(K, iv):
+                        if iv <= 0 or T <= 0 or K <= 0:
+                            return np.nan
+                        d1 = (np.log(S0 / K) + (r + 0.5 * iv**2) * T) / (iv * np.sqrt(T))
+                        return norm.cdf(d1)
+
+                    _calls["delta"] = _calls.apply(
+                        lambda row: _bs_call_delta(row["strike"], row["impliedVolatility"]), axis=1)
+                    _calls = _calls.dropna(subset=["delta"])
+                    _calls = _calls[(_calls["impliedVolatility"] > 0.02) & (_calls["impliedVolatility"] < 3.0)]
+                    _calls = _calls[(_calls["delta"] >= 0.01) & (_calls["delta"] <= 0.99)]
+            except Exception as _fetch_err:
+                st.warning(f"⚠️ Options chain unavailable for {final_prob_ticker}: {_fetch_err}")
+
+        # ── Market-Implied Probability Distribution ───────────────────────────
+        st.markdown("### Market-Implied Probability Distribution")
+        st.caption("Derived from live options chain. Call delta ≈ risk-neutral P(S_T > K). Density bars show where the market concentrates probability mass.")
+
+        if _calls is None or len(_calls) < 4:
+            st.info("⚠️ Density chart unavailable — no options data or insufficient strikes for the selected expiry.")
+        else:
+            try:
+                _strikes = _calls["strike"].values
+                _n_str   = len(_strikes)
+
+                # Adaptive smoothing: wider window for densely-spaced strikes (e.g. SPY $1 apart)
+                _delta_win = max(5, _n_str // 15)
+                _deltas = (pd.Series(_calls["delta"].values)
+                           .rolling(_delta_win, center=True, min_periods=1).mean()
+                           .values.clip(0, 1))
+                # Enforce monotone decreasing (call delta must decrease as strike increases)
+                _deltas = np.minimum.accumulate(_deltas)
+
+                _dens_raw  = np.abs(np.diff(_deltas))
+                _dens_mid  = (_strikes[:-1] + _strikes[1:]) / 2
+                _density   = _dens_raw / _dens_raw.sum() if _dens_raw.sum() > 0 else _dens_raw
+                _modal_str = _dens_mid[int(np.argmax(_density))]
+
+                _d_rev = _deltas[::-1]
+                _k_rev = _strikes[::-1]
+                _p10   = float(np.interp(0.10, _d_rev, _k_rev))
+                _p50   = float(np.interp(0.50, _d_rev, _k_rev))
+                _p90   = float(np.interp(0.90, _d_rev, _k_rev))
+
+                _avg_call_iv = float(_calls["impliedVolatility"].mean())
+                _avg_put_iv  = float(_puts["impliedVolatility"].mean()) if _puts is not None and not _puts.empty else _avg_call_iv
+                _iv_skew     = _avg_put_iv - _avg_call_iv
+
+                _mc1, _mc2, _mc3, _mc4, _mc5 = st.columns(5)
+                _mc1.metric("Modal Strike",  f"${_modal_str:,.0f}", help="Strike bucket with highest probability mass")
+                _mc2.metric("P10 Strike",    f"${_p10:,.0f}",       help="Market implies 10% chance of finishing above")
+                _mc3.metric("P50 Strike",    f"${_p50:,.0f}",       help="Market implies 50% chance of finishing above")
+                _mc4.metric("P90 Strike",    f"${_p90:,.0f}",       help="Market implies 90% chance of finishing above")
+                _mc5.metric("IV Skew (P−C)", f"{_iv_skew*100:+.1f}%", help="Avg put IV minus avg call IV — positive = put skew")
+                st.caption(f"Expiry matched to: **{_nearest}** | {len(_calls)} call strikes loaded")
+
+                # Step 1: compute density over the FULL strike range (no clipping yet)
+                _pdf_raw    = -np.diff(_deltas) / np.diff(_strikes)
+                _pdf_str_f  = (_strikes[:-1] + _strikes[1:]) / 2
+                _pdf_win    = max(7, _n_str // 12)
+                _pdf_s_f    = np.clip(
+                    pd.Series(_pdf_raw).rolling(_pdf_win, center=True, min_periods=1).mean().values,
+                    0, None)
+                _dx_f       = np.diff(_pdf_str_f).mean() if len(_pdf_str_f) > 1 else 1
+                _pdf_n_f    = _pdf_s_f / ((_pdf_s_f * _dx_f).sum() or 1)
+
+                # Step 2: find y-range from where density ≥ 1% of peak value
+                # This guarantees the curve tapers naturally inside the chart.
+                _pk = _pdf_n_f.max()
+                if _pk > 0:
+                    _sig  = _pdf_n_f >= _pk * 0.01
+                    _lo_i = int(np.argmax(_sig))
+                    _hi_i = int(len(_sig) - 1 - np.argmax(_sig[::-1]))
+                    _lo_s = float(_pdf_str_f[_lo_i])
+                    _hi_s = float(_pdf_str_f[_hi_i])
+                else:
+                    _lo_s, _hi_s = float(_pdf_str_f[0]), float(_pdf_str_f[-1])
+                _rng   = max(_hi_s - _lo_s, 1.0)
+                _y_min = max(1.0, _lo_s - _rng * 0.15)
+                _y_max = _hi_s + _rng * 0.15
+
+                # Step 3: clip display data to y-range
+                _vis         = (_pdf_str_f >= _y_min) & (_pdf_str_f <= _y_max)
+                _pdf_strikes = _pdf_str_f[_vis]
+                _pdf_norm    = _pdf_n_f[_vis]
+
+                # BS lognormal over the visible y range
+                _k_range    = np.linspace(_y_min, _y_max, 400)
+                _mu_ln      = (r - 0.5 * sigma**2) * T
+                _std_ln     = sigma * np.sqrt(T)
+                _ln_pdf     = ((1 / (_k_range * _std_ln * np.sqrt(2 * np.pi)))
+                               * np.exp(-0.5 * ((np.log(np.maximum(_k_range, 1e-9) / S0) - _mu_ln) / _std_ln) ** 2))
+                _prob_above_mid = np.interp(_pdf_strikes, _strikes, _deltas)
+
+                # P10 label = strike where 10% chance of finishing above (high strike)
+                # P90 label = strike where 90% chance of finishing above (low strike)
+                # Band spans low→high, so mask needs _p90 (low) to _p10 (high)
+                _band_lo   = min(_p10, _p90)
+                _band_hi   = max(_p10, _p90)
+                _band_mask = (_pdf_strikes >= _band_lo) & (_pdf_strikes <= _band_hi)
+                _band_ys   = _pdf_strikes[_band_mask]
+                _band_xs   = _pdf_norm[_band_mask]
+
+                _fig_dist = go.Figure()
+                # Full curve fill — explicit closed polygon (bottom→top along curve, top→bottom along x=0)
+                _fig_dist.add_trace(go.Scatter(
+                    x=np.concatenate([_pdf_norm, np.zeros(len(_pdf_norm))]),
+                    y=np.concatenate([_pdf_strikes, _pdf_strikes[::-1]]),
+                    fill="toself", fillcolor="rgba(31,86,115,0.20)",
+                    line=dict(width=0), showlegend=False, hoverinfo="skip"))
+                # P10–P90 band overlay (darker shade), same closed-polygon approach
+                if len(_band_ys) > 1:
+                    _fig_dist.add_trace(go.Scatter(
+                        x=np.concatenate([_band_xs, np.zeros(len(_band_xs))]),
+                        y=np.concatenate([_band_ys, _band_ys[::-1]]),
+                        fill="toself", fillcolor="rgba(31,86,115,0.28)",
+                        line=dict(width=0), showlegend=False, hoverinfo="skip"))
+                _fig_dist.add_trace(go.Scatter(
+                    x=_ln_pdf, y=_k_range,
+                    name="BS Lognormal (model)",
+                    line=dict(color="#8c2e36", width=2, dash="dash"),
+                    hoverinfo="skip"))
+                _fig_dist.add_trace(go.Scatter(
+                    x=_pdf_norm, y=_pdf_strikes,
+                    fill=None,
+                    name="Market-Implied Density",
+                    line=dict(color="#4a9abe", width=2.5),
+                    customdata=_prob_above_mid,
+                    hovertemplate=(
+                        "<b>  Strike   $%{y:,.0f}  </b><br>"
+                        "<span style='color:#a0b0c0'>P(Finish Above)  </span>  <b>%{customdata:.1%}</b><br>"
+                        "<span style='color:#a0b0c0'>Market Density   </span>  %{x:.4%}"
+                        "<extra></extra>")))
+                if _y_min <= S0 <= _y_max:
+                    _fig_dist.add_hline(y=S0, line_dash="dash", line_color="rgba(128,128,128,0.5)")
+                    _fig_dist.add_annotation(y=S0, x=0.98, xref="paper",
+                        text="Spot", showarrow=False,
+                        font=dict(color="rgba(190,190,190,0.9)", size=11),
+                        yanchor="bottom", xanchor="right",
+                        bgcolor="rgba(10,22,40,0.75)", borderpad=3)
+                if _y_min <= target_px <= _y_max:
+                    _fig_dist.add_hline(y=target_px, line_dash="dot", line_color="#d97736")
+                    _fig_dist.add_annotation(y=target_px, x=0.98, xref="paper",
+                        text=f"Target ${target_px:.0f}", showarrow=False,
+                        font=dict(color="#d97736", size=11),
+                        yanchor="bottom", xanchor="right",
+                        bgcolor="rgba(10,22,40,0.75)", borderpad=3)
+
+                # Right-axis percentage ticks — only those within visible range
+                _prob_ticks   = [0.90, 0.80, 0.70, 0.60, 0.50, 0.40, 0.30, 0.20, 0.10]
+                _strike_ticks = np.interp(_prob_ticks, _deltas[::-1], _strikes[::-1])
+                _vis_pairs    = [(p, float(sv)) for p, sv in zip(_prob_ticks, _strike_ticks)
+                                 if _y_min <= float(sv) <= _y_max]
+                _tv = [sv for _, sv in _vis_pairs]
+                _tt = [f"{int(p*100)}%" for p, _ in _vis_pairs]
+
+                # Activate yaxis2 with real boundary coordinates
+                _fig_dist.add_trace(go.Scatter(
+                    x=[0, 0], y=[_y_min, _y_max], yaxis="y2",
+                    mode="markers", marker=dict(size=0.001, opacity=0),
+                    showlegend=False, hoverinfo="skip"))
+
+                _fig_dist.update_layout(
+                    title=f"Market-Implied Probability Density — {final_prob_ticker} (Expiry: {_nearest})",
+                    height=700, hovermode="y unified",
+                    hoverlabel=dict(bgcolor="#0f1d31", bordercolor="rgba(201,168,76,0.5)",
+                        font=dict(family="Lora, serif", size=13, color="#dce3ed"),
+                        align="left", namelength=0),
+                    font=dict(family="Lora, serif"),
+                    xaxis=dict(title="Probability Density",
+                               showgrid=True, gridcolor="rgba(128,128,128,0.1)"),
+                    yaxis=dict(title="Strike Price ($)", tickprefix="$", tickformat=",.0f",
+                               range=[_y_min, _y_max], autorange=False,
+                               showgrid=True, gridcolor="rgba(128,128,128,0.1)"),
+                    yaxis2=dict(overlaying="y", side="right",
+                        range=[_y_min, _y_max], autorange=False,
+                        tickvals=_tv, ticktext=_tt,
+                        showgrid=False, title="",
+                        tickfont=dict(color="#5e768f", size=11, family="Lora, serif")),
+                    margin=dict(r=60, t=60, b=50, l=70),
+                    plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+                st.plotly_chart(_fig_dist, use_container_width=True)
+            except Exception as _dist_err:
+                st.warning(f"⚠️ Density chart unavailable: {_dist_err}")
+
+        # ── Market-Implied Forward Price Curve ────────────────────────────────
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("### Market-Implied Forward Price Curve")
+        st.caption("P10 / P50 / P90 strikes from live options chains across all available expiries — the market's implied price trajectory.")
+
+        if _tkr is None or not _expirations:
+            st.info("⚠️ Forward curve unavailable — no options data for this ticker.")
+        else:
+            try:
+                with st.spinner("Building forward curve across expiries..."):
+                    _today_date = pd.Timestamp(datetime.date.today())
+                    _fwd_dates  = [_today_date]
+                    _fwd_p10    = [S0]
+                    _fwd_p50    = [S0]
+                    _fwd_p90    = [S0]
+                    _today_ts   = _today_date
+                    _target_dt  = pd.to_datetime(target_expiry)
+
+                    # Use ALL available expiries (not limited to target_expiry) so
+                    # the forward curve shows the full market-implied trajectory.
+                    # Sample intelligently: near-term every expiry, then monthly,
+                    # then quarterly. Cap at 30 chains total.
+                    _now_clean   = _today_date
+                    _sampled, _last_included = [], None
+                    for _e in _expirations:
+                        _e_dt = pd.to_datetime(_e)
+                        _days_out = (_e_dt - _now_clean).days
+                        if _days_out <= 0:        # skip today/past expiries
+                            continue
+                        if _last_included is None:
+                            _sampled.append(_e)
+                        elif _days_out <= 90:          # near-term: every expiry
+                            _sampled.append(_e)
+                        elif _days_out <= 365:         # mid-term: ~monthly gap
+                            if (_e_dt - pd.to_datetime(_last_included)).days >= 25:
+                                _sampled.append(_e)
+                        else:                          # long-term: ~quarterly gap
+                            if (_e_dt - pd.to_datetime(_last_included)).days >= 80:
+                                _sampled.append(_e)
+                        if _sampled and _sampled[-1] == _e:
+                            _last_included = _e
+                        if len(_sampled) >= 30:
+                            break
+                    _exp_filtered = _sampled
+
+                    for _exp in _exp_filtered:
+                        try:
+                            _exp_dt = pd.to_datetime(_exp)
+                            if (_exp_dt - _now_clean).days <= 0:
+                                continue
+                            _T_exp  = max((_exp_dt - _now_clean).days / 365.25, 0.001)
+                            _ec     = (_tkr.option_chain(_exp).calls[["strike", "impliedVolatility"]]
+                                       .dropna().sort_values("strike").reset_index(drop=True))
+                            _ec     = _ec[(_ec["impliedVolatility"] > 0.02) & (_ec["impliedVolatility"] < 3.0)]
+
+                            def _fwd_delta(K, iv):
+                                if iv <= 0 or K <= 0:
+                                    return np.nan
+                                d1 = (np.log(S0 / K) + (r + 0.5*iv**2)*_T_exp) / (iv*np.sqrt(_T_exp))
+                                return norm.cdf(d1)
+
+                            _ec["delta"] = _ec.apply(
+                                lambda row: _fwd_delta(row["strike"], row["impliedVolatility"]), axis=1)
+                            _ec = _ec.dropna(subset=["delta"])
+                            _ec = _ec[(_ec["delta"] >= 0.01) & (_ec["delta"] <= 0.99)]
+
+                            if len(_ec) < 4:
+                                continue
+
+                            _dr = _ec["delta"].values[::-1]
+                            _kr = _ec["strike"].values[::-1]
+                            _fwd_dates.append(_exp_dt)
+                            _fwd_p10.append(float(np.interp(0.10, _dr, _kr)))
+                            _fwd_p50.append(float(np.interp(0.50, _dr, _kr)))
+                            _fwd_p90.append(float(np.interp(0.90, _dr, _kr)))
+                        except Exception:
+                            continue
+
+                # Extend to target_expiry with BS model if beyond last options expiry
+                _last_chain_dt = _fwd_dates[-1]
+                _T_tgt = max((_target_dt - _now_clean).days / 365.25, 0.001)
+                if _target_dt > _last_chain_dt:
+                    _fwd_dates.append(_target_dt)
+                    _fwd_p10.append(float(S0 * np.exp((r - 0.5*sigma**2)*_T_tgt + norm.ppf(0.90)*sigma*np.sqrt(_T_tgt))))
+                    _fwd_p50.append(float(S0 * np.exp((r - 0.5*sigma**2)*_T_tgt)))
+                    _fwd_p90.append(max(0.0, float(S0 * np.exp((r - 0.5*sigma**2)*_T_tgt + norm.ppf(0.10)*sigma*np.sqrt(_T_tgt)))))
+
+                if len(_fwd_dates) >= 3:
+                    # Use ordinal integers for all date arithmetic — zero pandas involvement
+                    _t0_ord   = datetime.date.fromtimestamp(
+                        pd.Timestamp(_fwd_dates[0]).timestamp()).toordinal()
+                    _tgt_ord  = datetime.date.fromtimestamp(
+                        pd.Timestamp(_target_dt).timestamp()).toordinal()
+                    _fwd_ords = np.array([
+                        datetime.date.fromtimestamp(
+                            pd.Timestamp(d).timestamp()).toordinal() - _t0_ord
+                        for d in _fwd_dates], dtype=float)
+                    _n_days   = max(int(_tgt_ord - _t0_ord) + 1, 2)
+                    _dense_nums = np.arange(_n_days, dtype=float)
+                    _dense_strs = [
+                        datetime.date.fromordinal(_t0_ord + i).isoformat()
+                        for i in range(_n_days)]
+                    _p10_arr  = np.array(_fwd_p10, dtype=float)
+                    _p50_arr  = np.array(_fwd_p50, dtype=float)
+                    _p90_arr  = np.array(_fwd_p90, dtype=float)
+                    _dense_p10 = np.interp(_dense_nums, _fwd_ords, _p10_arr)
+                    _dense_p50 = np.interp(_dense_nums, _fwd_ords, _p50_arr)
+                    _dense_p90 = np.maximum(np.interp(_dense_nums, _fwd_ords, _p90_arr), 0.0)
+
+                    _x_fill = _dense_strs + list(reversed(_dense_strs))
+                    _y_fill = [float(v) for v in _dense_p10] + [float(v) for v in reversed(_dense_p90)]
+                    _x_lines = list(_dense_strs)
+                    _y10 = [float(v) for v in _dense_p10]
+                    _y50 = [float(v) for v in _dense_p50]
+                    _y90 = [float(v) for v in _dense_p90]
+
+                    _fig_fwd = go.Figure()
+                    _fig_fwd.add_trace(go.Scatter(
+                        x=_x_fill, y=_y_fill,
+                        fill="toself", fillcolor="rgba(47,107,75,0.13)",
+                        line=dict(width=0), showlegend=False, hoverinfo="skip"))
+                    _fig_fwd.add_trace(go.Scatter(
+                        x=_x_lines, y=_y10, name="P10 — Upper Band",
+                        line=dict(color="#2f6b4b", width=1.5),
+                        hovertemplate=(
+                            "<b>%{x|%b %d, %Y}</b><br>"
+                            "<b>Upper Band (P10)</b>  $%{y:,.2f}<br>"
+                            "<span style='color:#a0b0c0'>10% chance of finishing above</span>"
+                            "<extra></extra>")))
+                    _fig_fwd.add_trace(go.Scatter(
+                        x=_x_lines, y=_y50, name="P(50)",
+                        line=dict(color="#1f5673", width=2.5),
+                        hovertemplate=(
+                            "<b>%{x|%b %d, %Y}</b><br>"
+                            "<b>P(50)</b>  $%{y:,.2f}<br>"
+                            "<span style='color:#a0b0c0'>50% chance of finishing above</span>"
+                            "<extra></extra>")))
+                    _fig_fwd.add_trace(go.Scatter(
+                        x=_x_lines, y=_y90, name="P90 — Lower Band",
+                        line=dict(color="#8c2e36", width=1.5),
+                        hovertemplate=(
+                            "<b>%{x|%b %d, %Y}</b><br>"
+                            "<b>Lower Band (P90)</b>  $%{y:,.2f}<br>"
+                            "<span style='color:#a0b0c0'>90% chance of finishing above</span>"
+                            "<extra></extra>")))
+                    _fig_fwd.add_hline(y=float(target_px), line_dash="dot",
+                        line_color="#d97736", annotation_text=f"Target ${target_px:.0f}")
+                    # Mark the user's selected target expiry date
+                    _tgt_str_ann = pd.Timestamp(_target_dt).date().isoformat()
+                    if _tgt_str_ann in _dense_strs:
+                        _fig_fwd.add_vline(x=_tgt_str_ann, line_dash="dash",
+                            line_color="rgba(201,168,76,0.5)",
+                            annotation_text=f"Expiry {_tgt_str_ann}",
+                            annotation_position="top right")
+                    _last_ord = datetime.date.fromtimestamp(
+                        pd.Timestamp(_last_chain_dt).timestamp()).toordinal()
+                    if _tgt_ord > _last_ord:
+                        _vline_x = datetime.date.fromordinal(_last_ord).isoformat()
+                        # Full-height vertical line using a shape (spans entire y range)
+                        _fig_fwd.add_shape(
+                            type="line",
+                            x0=_vline_x, x1=_vline_x,
+                            y0=0, y1=1, yref="paper",
+                            line=dict(dash="dot", color="rgba(201,168,76,0.4)", width=1))
+                        _fig_fwd.add_annotation(
+                            x=_vline_x, y=0.98, yref="paper",
+                            text="← Options  |  BS model →",
+                            showarrow=False, xanchor="left",
+                            font=dict(color="rgba(201,168,76,0.6)", size=10),
+                            bgcolor="rgba(10,22,40,0.6)", borderpad=2)
+                    _fwd_all  = _y10 + _y90
+                    _fwd_buf  = (max(_fwd_all) - min(_fwd_all)) * 0.10
+                    _fwd_ymin = max(0.0, min(_fwd_all) - _fwd_buf)
+                    _fwd_ymax = max(_fwd_all) + _fwd_buf
+
+                    # Right-side percentage axis: ticks at P10/P50/P90 final values
+                    _pct_tickvals = [float(_y90[-1]), float(_y50[-1]), float(_y10[-1])]
+                    _pct_ticktext = ["90%", "50%", "10%"]
+                    _fig_fwd.add_trace(go.Scatter(
+                        x=[_x_lines[0], _x_lines[0]],
+                        y=[_fwd_ymin, _fwd_ymax],
+                        yaxis="y2", mode="markers",
+                        marker=dict(size=0.001, opacity=0, color="rgba(0,0,0,0)"),
+                        showlegend=False, hoverinfo="skip"))
+
+                    _fig_fwd.update_layout(
+                        title=f"Market-Implied Forward Price Curve — {final_prob_ticker}",
+                        height=600, hovermode="x unified",
+                        hoverlabel=dict(bgcolor="#0f1d31", bordercolor="rgba(201,168,76,0.5)",
+                            font=dict(family="Lora, serif", size=13, color="#dce3ed"),
+                            align="left", namelength=0),
+                        font=dict(family="Lora, serif"),
+                        xaxis=dict(showgrid=True, gridcolor="rgba(128,128,128,0.1)"),
+                        yaxis=dict(title="Implied Price ($)", tickprefix="$", tickformat=",.0f",
+                            range=[_fwd_ymin, _fwd_ymax],
+                            showgrid=True, gridcolor="rgba(128,128,128,0.1)"),
+                        yaxis2=dict(
+                            overlaying="y", side="right",
+                            range=[_fwd_ymin, _fwd_ymax],
+                            tickvals=_pct_tickvals,
+                            ticktext=_pct_ticktext,
+                            showgrid=False, zeroline=False, title="",
+                            tickfont=dict(color="#5e768f", size=11, family="Lora, serif")),
+                        margin=dict(r=65, t=60, b=50, l=70),
+                        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
+                    st.plotly_chart(_fig_fwd, use_container_width=True)
+                else:
+                    st.info("⚠️ Not enough expiry dates with valid options data to build a forward curve.")
+            except Exception as _fwd_err:
+                st.warning(f"⚠️ Forward curve unavailable: {_fwd_err}")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TAB 7 — FED RATE PROJECTIONS
@@ -1545,7 +2105,7 @@ def render_earnings():
                             "Implied Move": 0.0, "Valuation Metric": None, "Consensus Indicator": None,
                             "Analyst Consensus": "Hold", "Is Confirmed": False})
 
-            df_earnings = pd.DataFrame(parsed_rows)
+            df_earnings = pd.DataFrame(parsed_rows).drop(columns=["Company"])
             if fiscal_filter == "Confirmed Future Releases":
                 df_earnings = df_earnings[df_earnings["Is Confirmed"]]
             if sort_by == "Options Implied Move":
@@ -1755,7 +2315,7 @@ def render_dcf():
             market_price = st.session_state["dcf_market_price"]
         else:
             with st.spinner(f"Fetching {final_dcf} market data..."):
-                mkt_hist = get_twelve_market_data(final_dcf)
+                mkt_hist = get_yf_market_data(final_dcf)
                 market_price = float(mkt_hist["close"].iloc[-1]) if not mkt_hist.empty else None
 
         # Build year-by-year FCF projections
@@ -1898,7 +2458,7 @@ def render_chain():
     if run_chain:
         with st.spinner(f"Fetching live options chain for {final_chain}..."):
             calls, puts, expiry = get_options_chain(final_chain)
-            spot_hist = get_twelve_market_data(final_chain)
+            spot_hist = get_yf_market_data(final_chain)
             spot_px   = float(spot_hist["close"].iloc[-1]) if not spot_hist.empty else None
 
         if calls is None or puts is None:
@@ -2111,10 +2671,10 @@ def render_strategy_builder():
         # Modify session state BEFORE the number_input widgets are instantiated
         if fetch_btn:
             with st.spinner(f"Fetching {ticker}..."):
-                hist = get_twelve_market_data(ticker.strip().upper())
+                hist = get_yf_market_data(ticker.strip().upper())
                 if not hist.empty:
                     st.session_state["strat_spot"] = round(float(hist["close"].iloc[-1]), 2)
-                fetched_iv = get_twelve_implied_vol(ticker.strip().upper(), TWELVE_API_KEY)
+                fetched_iv = get_yf_implied_vol(ticker.strip().upper())
                 st.session_state["strat_iv"] = round(fetched_iv * 100, 1)
 
         # Row 2 — number inputs (rendered after any session state updates above)
@@ -2319,7 +2879,7 @@ def render_monte_carlo():
         # Update session state BEFORE number_inputs are instantiated
         if fetch_btn:
             with st.spinner(f"Fetching {ticker.strip().upper()}..."):
-                hist = get_twelve_market_data(ticker.strip().upper())
+                hist = get_yf_market_data(ticker.strip().upper())
             if not hist.empty:
                 st.session_state["mc_spot"] = round(float(hist["close"].iloc[-1]), 2)
                 log_rets = np.log(hist["close"] / hist["close"].shift(1)).dropna()
@@ -2448,6 +3008,172 @@ def render_monte_carlo():
         m7.metric("Best Path",          f"${best:,.2f}")
         m8.metric("Worst Path",         f"${worst:,.2f}")
 
+def render_gex():
+    st.header("Dealer GEX & Options Positioning")
+    st.caption("Gamma Exposure (GEX) aggregated across all expiries. Positive net GEX = dealers long gamma (pin / mean-reversion). Negative = dealers short gamma (trend amplification).")
+
+    with st.container(border=True):
+        st.markdown("##### Parameters")
+        col1, col2 = st.columns([2, 1])
+        gex_ticker  = col1.text_input("Ticker", value="SPY", key="gex_ticker").strip().upper()
+        spot_range  = col2.number_input("Strike range around spot (% each side)", value=15, min_value=5, max_value=50, step=5)
+        run_gex     = st.button("Load GEX Profile", use_container_width=True)
+
+    if run_gex:
+        with st.spinner(f"Fetching all expiry chains for {gex_ticker} — this may take 20-40 seconds..."):
+            spot, df_gex = get_gex_data(gex_ticker)
+
+        if spot is None or df_gex.empty:
+            st.error("Could not retrieve options data. Verify the ticker supports listed options.")
+            st.stop()
+
+        # Filter strikes to ±range% of spot
+        lo = spot * (1 - spot_range / 100)
+        hi = spot * (1 + spot_range / 100)
+        df_plot = df_gex[(df_gex["strike"] >= lo) & (df_gex["strike"] <= hi)].copy()
+
+        total_net   = float(df_gex["net_gex"].sum())
+        total_call  = float(df_gex["call_gex"].sum())
+        total_put   = float(df_gex["put_gex"].sum())
+
+        # Gamma flip: first strike crossing from positive to negative net GEX
+        cumulative  = df_gex.sort_values("strike")["net_gex"].cumsum().values
+        strikes_all = df_gex.sort_values("strike")["strike"].values
+        flip_level  = None
+        for i in range(len(cumulative) - 1):
+            if cumulative[i] * cumulative[i + 1] < 0:
+                flip_level = float(strikes_all[i])
+                break
+
+        # Determine tick decimal places from actual strike spacing
+        _strike_gaps = df_plot["strike"].sort_values().diff().dropna().abs()
+        _min_gap = float(_strike_gaps.min()) if not _strike_gaps.empty else 1.0
+        _tick_dec = 0 if _min_gap >= 1.0 else (1 if _min_gap >= 0.1 else 2)
+        _strike_fmt = f",.{_tick_dec}f"
+        _hover_fmt  = f"$%{{x:,.{_tick_dec}f}}"
+
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Spot Price",       f"${spot:,.2f}")
+        m2.metric("Net GEX",          f"${total_net:+,.1f}M",
+                  help="Positive = dealers long gamma. Negative = dealers short gamma.")
+        m3.metric("Call GEX",         f"${total_call:+,.1f}M")
+        m4.metric("Gamma Flip",
+                  f"${flip_level:,.0f}" if flip_level else "N/A",
+                  help="Strike where cumulative net GEX crosses zero — key support/resistance level.")
+        st.divider()
+
+        # ── Chart 1: Net GEX by strike ──────────────────────────────────────
+        st.markdown("### Net Dealer GEX by Strike")
+        st.caption("Bars show net gamma exposure at each strike. Green = positive (dealers long). Red = negative (dealers short). Tall bars = key price magnets or repulsion zones.")
+
+        colors = ["#2e7d4f" if v >= 0 else "#8c2e36" for v in df_plot["net_gex"]]
+        fig_net = go.Figure()
+        fig_net.add_trace(go.Bar(
+            x=df_plot["strike"], y=df_plot["net_gex"],
+            marker_color=colors,
+            name="Net GEX",
+            hovertemplate=f"<b>Strike {_hover_fmt}</b><br>Net GEX: $%{{y:+,.2f}}M<extra></extra>"))
+        fig_net.add_vline(x=spot, line_dash="dash", line_color="rgba(201,168,76,0.8)",
+                          annotation_text=f"Spot ${spot:,.{_tick_dec}f}",
+                          annotation_font_color="#c9a84c")
+        if flip_level:
+            fig_net.add_vline(x=flip_level, line_dash="dot", line_color="rgba(200,100,50,0.7)",
+                              annotation_text=f"Flip ${flip_level:,.{_tick_dec}f}",
+                              annotation_font_color="#d97736",
+                              annotation_position="top left")
+        fig_net.update_layout(
+            height=420, bargap=0.1,
+            xaxis=dict(title="Strike ($)", tickprefix="$", tickformat=_strike_fmt,
+                       showgrid=True, gridcolor="rgba(128,128,128,0.1)"),
+            yaxis=dict(title="Net GEX ($M)", tickprefix="$", tickformat=",.1f",
+                       showgrid=True, gridcolor="rgba(128,128,128,0.1)"),
+            font=dict(family="Lora, serif"),
+            plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+            margin=dict(t=30, b=50, l=70, r=30),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+        st.plotly_chart(fig_net, use_container_width=True)
+
+        # ── Chart 2: Call vs Put GEX stacked ────────────────────────────────
+        st.markdown("### Call vs Put GEX by Strike")
+        st.caption("Call GEX (green) and put GEX (red) side-by-side. Large put GEX at a strike = strong support / dealers will buy dips there. Large call GEX = resistance / dealers sell rallies.")
+
+        fig_cp = go.Figure()
+        fig_cp.add_trace(go.Bar(
+            x=df_plot["strike"], y=df_plot["call_gex"],
+            name="Call GEX", marker_color="rgba(46,125,79,0.75)",
+            hovertemplate=f"<b>Strike {_hover_fmt}</b><br>Call GEX: $%{{y:+,.2f}}M<extra></extra>"))
+        fig_cp.add_trace(go.Bar(
+            x=df_plot["strike"], y=df_plot["put_gex"],
+            name="Put GEX", marker_color="rgba(140,46,54,0.75)",
+            hovertemplate=f"<b>Strike {_hover_fmt}</b><br>Put GEX: $%{{y:+,.2f}}M<extra></extra>"))
+        fig_cp.add_vline(x=spot, line_dash="dash", line_color="rgba(201,168,76,0.8)")
+        if flip_level:
+            fig_cp.add_vline(x=flip_level, line_dash="dot", line_color="rgba(200,100,50,0.7)")
+        fig_cp.update_layout(
+            barmode="relative", height=400, bargap=0.1,
+            xaxis=dict(title="Strike ($)", tickprefix="$", tickformat=_strike_fmt,
+                       showgrid=True, gridcolor="rgba(128,128,128,0.1)"),
+            yaxis=dict(title="GEX ($M)", tickprefix="$", tickformat=",.1f",
+                       showgrid=True, gridcolor="rgba(128,128,128,0.1)"),
+            font=dict(family="Lora, serif"),
+            plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+            margin=dict(t=30, b=50, l=70, r=30),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+        st.plotly_chart(fig_cp, use_container_width=True)
+
+        # ── Chart 3: Open Interest walls ─────────────────────────────────────
+        st.markdown("### Open Interest Walls")
+        st.caption("Raw OI aggregated across all expiries. High OI strikes act as gravitational price levels — markets tend to pin near large OI clusters heading into expiry.")
+
+        try:
+            tkr_obj = yf.Ticker(gex_ticker)
+            oi_rows = []
+            for exp in (tkr_obj.options or []):
+                try:
+                    ch = tkr_obj.option_chain(exp)
+                    for side, df_s in [("call", ch.calls), ("put", ch.puts)]:
+                        df_s = df_s[["strike", "openInterest"]].dropna()
+                        df_s = df_s[df_s["openInterest"] > 0]
+                        df_s["side"] = side
+                        oi_rows.append(df_s)
+                except Exception:
+                    continue
+            if oi_rows:
+                df_oi = pd.concat(oi_rows)
+                df_oi_piv = (df_oi.groupby(["strike", "side"])["openInterest"].sum()
+                             .unstack(fill_value=0))
+                for c in ["call", "put"]:
+                    if c not in df_oi_piv.columns:
+                        df_oi_piv[c] = 0
+                df_oi_piv = df_oi_piv.reset_index()
+                df_oi_piv = df_oi_piv[(df_oi_piv["strike"] >= lo) & (df_oi_piv["strike"] <= hi)]
+
+                fig_oi = go.Figure()
+                fig_oi.add_trace(go.Bar(
+                    x=df_oi_piv["strike"], y=df_oi_piv["call"] / 1e3,
+                    name="Call OI", marker_color="rgba(46,125,79,0.65)",
+                    hovertemplate=f"<b>Strike {_hover_fmt}</b><br>Call OI: %{{y:,.0f}}K<extra></extra>"))
+                fig_oi.add_trace(go.Bar(
+                    x=df_oi_piv["strike"], y=-df_oi_piv["put"] / 1e3,
+                    name="Put OI", marker_color="rgba(140,46,54,0.65)",
+                    hovertemplate=f"<b>Strike {_hover_fmt}</b><br>Put OI: %{{y:,.0f}}K<extra></extra>"))
+                fig_oi.add_vline(x=spot, line_dash="dash", line_color="rgba(201,168,76,0.8)",
+                                 annotation_text=f"Spot ${spot:,.{_tick_dec}f}",
+                                 annotation_font_color="#c9a84c")
+                fig_oi.update_layout(
+                    barmode="overlay", height=400, bargap=0.05,
+                    xaxis=dict(title="Strike ($)", tickprefix="$", tickformat=_strike_fmt,
+                               showgrid=True, gridcolor="rgba(128,128,128,0.1)"),
+                    yaxis=dict(title="Open Interest (000s)",
+                               showgrid=True, gridcolor="rgba(128,128,128,0.1)"),
+                    font=dict(family="Lora, serif"),
+                    plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                    margin=dict(t=30, b=50, l=70, r=30),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+                st.plotly_chart(fig_oi, use_container_width=True)
+        except Exception as _oi_err:
+            st.caption(f"OI wall chart unavailable: {_oi_err}")
+
 tab_map = {
     "Finance Dashboard":         render_home,
     "Market Data":               render_market,
@@ -2463,6 +3189,7 @@ tab_map = {
     "Correlation Matrix":        render_correlation,
     "Strategy Builder":          render_strategy_builder,
     "Monte Carlo Simulator":     render_monte_carlo,
+    "Dealer GEX":                render_gex,
 }
 
 if selected_tab in tab_map:
