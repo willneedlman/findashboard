@@ -100,7 +100,8 @@ def get_yf_market_data(ticker):
         tkr = yf.Ticker(ticker.strip().upper())
         df = tkr.history(period="5y")
         if not df.empty:
-            df.index = df.index.tz_localize(None)
+            if df.index.tz is not None:
+                df.index = df.index.tz_convert(None)
             df = df.rename(columns={"Close": "close"})
             return df[["close"]].dropna()
     except Exception as e:
@@ -128,11 +129,140 @@ def get_yf_backtest_series(ticker, start_date, end_date):
         adjusted_end = pd.to_datetime(end_date) + pd.Timedelta(days=1)
         df = tkr.history(start=start_date, end=adjusted_end)
         if not df.empty:
-            df.index = df.index.tz_localize(None)
+            if df.index.tz is not None:
+                df.index = df.index.tz_convert(None)
             return df['Close']
     except Exception as e:
         logging.warning(f"get_yf_backtest_series({ticker}): {e}")
     return pd.Series(dtype=float)
+
+STRATEGIES = [
+    "None (Base GBM / Buy & Hold)",
+    "SMA Trend Following (50/200)",
+    "RSI Mean Reversion (14)",
+    "6-Month Price Momentum",
+    "Value — Trailing P/E",
+    "Earnings Growth Momentum",
+]
+
+@st.cache_data(ttl=1800)
+def compute_strategy_data(ticker, strategy, start_date=None, end_date=None, params=None):
+    """
+    Returns (drift_adj_pct, signal_series, label, detail).
+    params — dict of user-adjustable parameters for the selected strategy.
+    """
+    p         = params or {}
+    empty_sig = pd.Series(dtype=float)
+    if strategy == "None (Base GBM / Buy & Hold)":
+        return 0.0, empty_sig, "No signal", "Buy & hold — no strategy filter applied."
+    try:
+        tkr   = yf.Ticker(ticker.strip().upper())
+        hist  = tkr.history(period="5y") if start_date is None else \
+                tkr.history(start=str(start_date), end=str(end_date or datetime.date.today()))
+        close = hist["Close"].dropna()
+        if close.index.tz is not None:
+            close.index = close.index.tz_convert(None)
+        if len(close) < 20:
+            return 0.0, empty_sig, "Insufficient data", "Need at least 20 days of price history."
+
+        if strategy == "SMA Trend Following (50/200)":
+            fast = int(p.get("sma_fast", 50))
+            slow = int(p.get("sma_slow", 200))
+            bull_adj = float(p.get("bull_drift_adj", 6.0))
+            bear_adj = float(p.get("bear_drift_adj", -6.0))
+            sma_f = close.rolling(fast,  min_periods=max(10, fast//3)).mean()
+            sma_s = close.rolling(slow,  min_periods=max(20, slow//4)).mean()
+            sig   = ((close > sma_f) & (sma_f > sma_s)).astype(float).fillna(0.0)
+            cur, cur_f, cur_s = float(close.iloc[-1]), float(sma_f.iloc[-1]), float(sma_s.iloc[-1])
+            if cur > cur_f and cur_f > cur_s:
+                adj, label = bull_adj, "Uptrend"
+            elif cur > cur_s:
+                adj, label = bull_adj * 0.4, "Weak Uptrend"
+            elif cur < cur_f and cur_f < cur_s:
+                adj, label = bear_adj, "Downtrend"
+            else:
+                adj, label = bear_adj * 0.4, "Weak Downtrend"
+            detail = (f"Price ${cur:.2f} | SMA{fast} ${cur_f:.2f} | SMA{slow} ${cur_s:.2f} — "
+                      f"{label} (drift adj {adj:+.1f}%)")
+            return adj, sig, label, detail
+
+        elif strategy == "RSI Mean Reversion (14)":
+            period      = int(p.get("rsi_period", 14))
+            ob_thresh   = float(p.get("overbought", 70))
+            os_thresh   = float(p.get("oversold",   30))
+            ob_adj      = float(p.get("ob_drift_adj", -7.0))
+            os_adj      = float(p.get("os_drift_adj",  7.0))
+            delta = close.diff()
+            gain  = delta.clip(lower=0).rolling(period, min_periods=period//2).mean()
+            loss  = (-delta.clip(upper=0)).rolling(period, min_periods=period//2).mean()
+            rsi   = 100 - 100 / (1 + gain / loss.replace(0, 1e-9))
+            sig   = (rsi < ob_thresh).astype(float).fillna(1.0)
+            cur_rsi = float(rsi.iloc[-1]) if not pd.isna(rsi.iloc[-1]) else 50.0
+            ob_severe = ob_thresh + (100 - ob_thresh) * 0.33
+            os_severe = os_thresh - os_thresh * 0.33
+            if cur_rsi >= ob_severe:   adj, label = ob_adj,        "Severely Overbought"
+            elif cur_rsi >= ob_thresh: adj, label = ob_adj * 0.43, "Overbought"
+            elif cur_rsi <= os_severe: adj, label = os_adj,        "Severely Oversold"
+            elif cur_rsi <= os_thresh: adj, label = os_adj * 0.43, "Oversold"
+            else:                      adj, label = 0.0,            "Neutral"
+            detail = f"RSI({period}) = {cur_rsi:.1f} — {label} (drift adj {adj:+.1f}%)"
+            return adj, sig, label, detail
+
+        elif strategy == "6-Month Price Momentum":
+            lookback  = int(p.get("lookback_days", 126))
+            adj_scale = float(p.get("adj_scale", 0.25))
+            adj_cap   = float(p.get("adj_cap", 8.0))
+            threshold = float(p.get("threshold_pct", 0.0)) / 100
+            mom_raw   = close / close.shift(lookback) - 1
+            sig       = (mom_raw > threshold).astype(float).fillna(0.0)
+            mom       = float(mom_raw.iloc[-1]) * 100 if not pd.isna(mom_raw.iloc[-1]) else 0.0
+            adj       = float(np.clip(mom * adj_scale, -adj_cap, adj_cap))
+            label     = "Positive Momentum" if mom > threshold * 100 else "Negative Momentum"
+            detail    = (f"{lookback}-day return {mom:+.1f}% | threshold {threshold*100:+.1f}% "
+                         f"— {label} (drift adj {adj:+.1f}%)")
+            return adj, sig, label, detail
+
+        elif strategy == "Value — Trailing P/E":
+            pe_in_thresh  = float(p.get("pe_in_threshold",  35.0))
+            pe_deep_val   = float(p.get("pe_deep_value",    12.0))
+            pe_fair       = float(p.get("pe_fair_value",    20.0))
+            pe_expensive  = float(p.get("pe_expensive",     50.0))
+            bull_adj      = float(p.get("bull_drift_adj",    6.0))
+            bear_adj      = float(p.get("bear_drift_adj",   -6.0))
+            info = tkr.info
+            pe   = info.get("trailingPE") or info.get("forwardPE")
+            if pe is None or pe <= 0:
+                return 0.0, empty_sig, "P/E Unavailable", "No P/E data for this ticker."
+            if   pe < pe_deep_val:  adj, label = bull_adj,        "Deep Value"
+            elif pe < pe_fair:      adj, label = bull_adj * 0.5,  "Fairly Valued"
+            elif pe < pe_in_thresh: adj, label = 0.0,             "Neutral"
+            elif pe < pe_expensive: adj, label = bear_adj * 0.5,  "Expensive"
+            else:                   adj, label = bear_adj,        "Very Expensive"
+            sig_val = 1.0 if pe < pe_in_thresh else 0.0
+            sig     = pd.Series(sig_val, index=close.index)
+            detail  = (f"Trailing P/E = {pe:.1f} | in-market threshold P/E < {pe_in_thresh:.0f} "
+                       f"— {label} (drift adj {adj:+.1f}%)")
+            return adj, sig, label, detail
+
+        elif strategy == "Earnings Growth Momentum":
+            exit_threshold = float(p.get("exit_threshold_pct", -5.0)) / 100
+            adj_scale      = float(p.get("adj_scale", 60.0))
+            adj_cap        = float(p.get("adj_cap", 10.0))
+            info = tkr.info
+            eg   = info.get("earningsQuarterlyGrowth")
+            if eg is None:
+                return 0.0, empty_sig, "EPS Data Unavailable", "No quarterly earnings growth data."
+            adj     = float(np.clip(eg * adj_scale, -adj_cap, adj_cap))
+            sig_val = 1.0 if eg > exit_threshold else 0.0
+            sig     = pd.Series(sig_val, index=close.index)
+            label   = f"EPS Growth {eg*100:+.1f}%"
+            detail  = (f"Quarterly EPS growth {eg*100:+.1f}% | exit when below {exit_threshold*100:.1f}% "
+                       f"— {label} (drift adj {adj:+.1f}%)")
+            return adj, sig, label, detail
+
+    except Exception as e:
+        return 0.0, empty_sig, "Signal Error", str(e)
+    return 0.0, empty_sig, "No Signal", ""
 
 @st.cache_data(ttl=86400)
 def get_live_risk_free_rate():
@@ -260,7 +390,7 @@ def get_dcf_fundamentals(ticker):
             "market_price": mkt_px,
         }
     except Exception as e:
-        st.toast(f"Failed to fetch fundamentals: {e}", icon="⚠️")
+        st.toast(f"Failed to fetch fundamentals: {e}", icon="")
         return None
 
 # ── MSTR BITCOIN HOLDINGS SCRAPER (strategy.com) ─────────────────────────────
@@ -306,7 +436,7 @@ def twelve_rate_guard():
     if len(_twelve_call_timestamps) >= TWELVE_RATE_LIMIT:
         wait = 60 - (now - _twelve_call_timestamps[0])
         if wait > 0:
-            st.toast(f"⏳ Twelve Data rate limit — waiting {wait:.0f}s...", icon="⚠️")
+            st.toast(f" Twelve Data rate limit — waiting {wait:.0f}s...", icon="")
             time.sleep(wait)
     _twelve_call_timestamps.append(time.time())
 
@@ -455,7 +585,7 @@ def go_strategy(): st.session_state.main_nav = "Strategy Builder"
 def go_monte():    st.session_state.main_nav = "Monte Carlo Simulator"
 def go_gex():      st.session_state.main_nav = "Dealer GEX"
 
-p_home    = st.Page(go_home,    title="Finance Dashboard")
+p_home    = st.Page(go_home,    title="Home")
 p_market  = st.Page(go_market,  title="Market Data")
 p_options = st.Page(go_options, title="Options Pricer")
 p_bond    = st.Page(go_bond,    title="Bond Analytics")
@@ -474,7 +604,7 @@ p_gex      = st.Page(go_gex,      title="Dealer GEX")
 # ── CSS INJECTION ─────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Cinzel:wght@600;700&display=swap');
 
 /* ── BACKGROUNDS ── */
 html, body { background-color: #0a1628 !important; }
@@ -483,7 +613,9 @@ html, body { background-color: #0a1628 !important; }
 .main, .block-container { background-color: #0a1628 !important; }
 [data-testid="stHeader"] {
     background-color: #0a1628 !important;
-    border-bottom: 1px solid rgba(201,168,76,0.18) !important;
+    border-bottom: none !important;
+    border-top: none !important;
+    box-shadow: none !important;
 }
 
 /* ── SIDEBAR ── */
@@ -512,6 +644,7 @@ html, body { background-color: #0a1628 !important; }
 }
 [data-testid="stSidebarNavSeparator"] { border-color: rgba(255,255,255,0.06) !important; }
 [data-testid="stSidebarNavItems"] { padding-top: 8px !important; }
+
 
 /* nav section group labels */
 [data-testid="stSidebarNavItems"] [data-testid="stText"] p,
@@ -723,17 +856,17 @@ button[aria-label="Open sidebar"],
 button[aria-label="collapse sidebar navigation"],
 button[aria-label="expand sidebar navigation"] {
     background-color: #0f1d31 !important;
-    border: 1px solid rgba(201,168,76,0.3) !important;
-    color: #c9a84c !important;
+    border: 1.5px solid rgba(255,255,255,0.55) !important;
+    color: #ffffff !important;
     border-radius: 4px !important;
 }
 [data-testid="stSidebarCollapseButton"] button svg path,
 [data-testid="stSidebarCollapsedControl"] button svg path,
 [data-testid="stSidebarCollapseButton"] svg,
 [data-testid="stSidebarCollapsedControl"] svg {
-    fill: #c9a84c !important;
-    stroke: #c9a84c !important;
-    color: #c9a84c !important;
+    fill: rgba(255,255,255,0.80) !important;
+    stroke: rgba(255,255,255,0.80) !important;
+    color: rgba(255,255,255,0.80) !important;
 }
 
 /* ── BUTTON HOVER — explicit gold text, no white bleed ── */
@@ -825,6 +958,27 @@ pages = {
 }
 
 pg = st.navigation(pages)
+
+# ── SIDEBAR LOGO ──────────────────────────────────────────────────────────────
+import base64 as _b64
+_logo_svg = """\
+<svg xmlns="http://www.w3.org/2000/svg" width="220" height="52" viewBox="0 0 220 52">
+  <text x="3" y="28" font-family="Georgia,'Times New Roman',serif"
+        font-size="20" font-weight="700" fill="#c9a84c" letter-spacing="3.5">FINANCE</text>
+  <line x1="3" y1="33" x2="62" y2="33" stroke="#c9a84c" stroke-width="0.7" opacity="0.55"/>
+  <text x="4" y="46" font-family="Georgia,'Times New Roman',serif"
+        font-size="9.5" fill="#8a9ab0" letter-spacing="7">DASHBOARD</text>
+</svg>"""
+_icon_svg = """\
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+  <text x="20" y="30" font-family="Georgia,'Times New Roman',serif"
+        font-size="26" font-weight="700" fill="#c9a84c" text-anchor="middle">F</text>
+</svg>"""
+st.logo(
+    "data:image/svg+xml;base64," + _b64.b64encode(_logo_svg.encode()).decode(),
+    icon_image="data:image/svg+xml;base64," + _b64.b64encode(_icon_svg.encode()).decode(),
+)
+
 pg.run()
 
 
@@ -842,75 +996,104 @@ def safe_tab(fn):
 # TAB 0 — HOME
 # ══════════════════════════════════════════════════════════════════════════════
 def render_home():
-    st.title("Financial Research Terminal")
-    st.markdown("Select a module below to launch the respective financial model.")
-    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("""
+    <div style='padding: 2rem 0 1.2rem 0;'>
+      <div style='font-family:"Cinzel",Georgia,serif;font-size:2.1rem;font-weight:700;
+                  letter-spacing:0.08em;color:#c9a84c;line-height:1.1;'>
+        FINANCIAL RESEARCH TERMINAL
+      </div>
+      <div style='margin-top:0.5rem;font-size:0.95rem;color:#5e768f;letter-spacing:0.04em;'>
+        Select a module to launch the respective model.
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    r1c1, r1c2, r1c3 = st.columns(3)
-    r2c1, r2c2, r2c3 = st.columns(3)
-    r3c1, r3c2, r3c3 = st.columns(3)
-    r4c1, r4c2, r4c3 = st.columns(3)
+    # ── section helper ─────────────────────────────────────────────────────────
+    def _section(label):
+        st.markdown(
+            f"<div style='margin:2rem 0 0.6rem 0;font-size:0.65rem;font-weight:700;"
+            f"letter-spacing:0.18em;text-transform:uppercase;color:#3d526b;"
+            f"border-bottom:1px solid rgba(255,255,255,0.05);padding-bottom:6px;'>"
+            f"{label}</div>",
+            unsafe_allow_html=True,
+        )
 
-    with r1c1:
-        with st.container(border=True):
-            st.subheader("Market Data")
-            st.write("Historical price action, rolling volatility metrics, and deep drawdown structural analysis.")
-            if st.button("Launch Market Data", use_container_width=True): st.switch_page(p_market)
-    with r1c2:
-        with st.container(border=True):
-            st.subheader("Options Pricer")
-            st.write("Standard Black-Scholes options pricing model and dynamic theoretical Greek calculator.")
-            if st.button("Launch Pricer", use_container_width=True): st.switch_page(p_options)
-    with r1c3:
-        with st.container(border=True):
-            st.subheader("Bond Analytics")
-            st.write("Bond valuation, yield-to-maturity tracking, and cash flow schedules.")
-            if st.button("Launch Bond Tool", use_container_width=True): st.switch_page(p_bond)
-    with r2c1:
-        with st.container(border=True):
-            st.subheader("NAV Proxy Tracker")
-            st.write("Sum-of-the-parts tracking engine with live MSTR Bitcoin holdings from strategy.com.")
-            if st.button("Launch NAV Tracker", use_container_width=True): st.switch_page(p_nav)
-    with r2c2:
-        with st.container(border=True):
-            st.subheader("Portfolio Backtester")
-            st.write("Backtest custom-weighted equity baskets against sector benchmarks for institutional risk metrics.")
-            if st.button("Launch Allocator", use_container_width=True): st.switch_page(p_port)
-    with r2c3:
-        with st.container(border=True):
-            st.subheader("Options Implied Probability")
-            st.write("Forward-looking volatility cones generating true risk-neutral probability distributions from chains.")
-            if st.button("Launch Tool", use_container_width=True): st.switch_page(p_prob)
-    with r3c1:
-        with st.container(border=True):
-            st.subheader("Macro Rate Engine")
-            st.write("Tools that analyze implied Fed rate moves and outcomes.")
-            if st.button("Launch Projector", use_container_width=True): st.switch_page(p_fed)
-    with r3c2:
-        with st.container(border=True):
-            st.subheader("Corporate Hub")
-            st.write("Dynamic calendar aggregating news, earnings, short interest, and insider flow.")
-            if st.button("Launch Calendar", use_container_width=True): st.switch_page(p_earn)
-    with r3c3:
-        with st.container(border=True):
-            st.subheader("DCF Valuation Engine")
-            st.write("Discounted cash flow model with revenue growth, WACC, and terminal value vs market price.")
-            if st.button("Launch DCF", use_container_width=True): st.switch_page(p_dcf)
-    with r4c1:
-        with st.container(border=True):
-            st.subheader("Options Chain Scanner")
-            st.write("Live options chains with IV rank, open interest skew, and put/call ratio by strike.")
-            if st.button("Launch Chain Scanner", use_container_width=True): st.switch_page(p_chain)
-    with r4c2:
-        with st.container(border=True):
-            st.subheader("Correlation Matrix")
-            st.write("Rolling correlation heatmap across any custom basket of tickers.")
-            if st.button("Launch Correlation", use_container_width=True): st.switch_page(p_corr)
-    with r4c3:
-        with st.container(border=True):
-            st.subheader("Monte Carlo Simulator")
-            st.write("GBM price path simulation with configurable drift, volatility, VaR and CVaR risk metrics.")
-            if st.button("Launch Simulator", use_container_width=True): st.switch_page(p_monte)
+    # ── card helper ────────────────────────────────────────────────────────────
+    def _card(col, accent, title, body, btn_label, page):
+        with col:
+            st.markdown(
+                f"""<div style='border:1px solid rgba(255,255,255,0.07);
+                    border-top:2px solid {accent};
+                    border-radius:6px;background:#0d1a2d;
+                    padding:18px 18px 10px 18px;min-height:130px;'>
+                  <div style='font-family:Lora,serif;font-size:1.0rem;font-weight:700;
+                              color:#dce3ed;margin-bottom:8px;'>{title}</div>
+                  <div style='font-size:0.82rem;color:#5e768f;line-height:1.55;'>{body}</div>
+                </div>""",
+                unsafe_allow_html=True,
+            )
+            if st.button(btn_label, use_container_width=True, key=f"home_{title}"):
+                st.switch_page(page)
+
+    # ── Markets & Data ─────────────────────────────────────────────────────────
+    _section("Markets & Data")
+    c1, c2, c3 = st.columns(3)
+    _card(c1, "#1f5673", "Market Data",
+          "Historical price action, rolling volatility, and peak drawdown structural analysis.",
+          "Open", p_market)
+    _card(c2, "#1f5673", "Corporate Hub",
+          "Dynamic calendar aggregating earnings, news, short interest, and insider flow.",
+          "Open", p_earn)
+    _card(c3, "#1f5673", "Correlation Matrix",
+          "Rolling correlation heatmap across any custom basket of tickers.",
+          "Open", p_corr)
+
+    # ── Derivatives & Rates ────────────────────────────────────────────────────
+    _section("Derivatives & Rates")
+    c1, c2, c3 = st.columns(3)
+    _card(c1, "#7b5ea7", "Options Pricer",
+          "Black-Scholes pricing with dynamic Greek calculator and payoff diagrams.",
+          "Open", p_options)
+    _card(c2, "#7b5ea7", "Options Chain Scanner",
+          "Live chains with IV rank, open interest skew, and put/call ratio by strike.",
+          "Open", p_chain)
+    _card(c3, "#7b5ea7", "Options Implied Probability",
+          "Risk-neutral probability distributions derived from live options chains.",
+          "Open", p_prob)
+
+    c1, c2, c3 = st.columns(3)
+    _card(c1, "#7b5ea7", "Strategy Builder",
+          "Build and visualise multi-leg options strategies with live P&L profiles.",
+          "Open", p_strategy)
+    _card(c2, "#7b5ea7", "Dealer GEX",
+          "Gamma exposure aggregated across all expiries — identifies pin and trend-amplification zones.",
+          "Open", p_gex)
+    _card(c3, "#7b5ea7", "Bond Analytics",
+          "Bond valuation, yield-to-maturity tracking, duration sensitivity, and cash flow schedules.",
+          "Open", p_bond)
+
+    c1, c2, _ = st.columns(3)
+    _card(c1, "#7b5ea7", "Macro Rate Engine",
+          "Implied Fed rate path projections and scenario analysis across FOMC meetings.",
+          "Open", p_fed)
+
+    # ── Portfolio & Valuation ──────────────────────────────────────────────────
+    _section("Portfolio & Valuation")
+    c1, c2, c3 = st.columns(3)
+    _card(c1, "#2f6b4b", "Portfolio Backtester",
+          "Backtest custom-weighted equity baskets against benchmarks with institutional risk metrics.",
+          "Open", p_port)
+    _card(c2, "#2f6b4b", "Monte Carlo Simulator",
+          "GBM path simulation with strategy overlays, VaR, CVaR, and benchmark comparison.",
+          "Open", p_monte)
+    _card(c3, "#2f6b4b", "DCF Valuation Engine",
+          "Discounted cash flow model with revenue growth, WACC, and terminal value vs market price.",
+          "Open", p_dcf)
+
+    c1, c2, _ = st.columns(3)
+    _card(c1, "#2f6b4b", "NAV Proxy Tracker",
+          "Sum-of-the-parts NAV engine with live MSTR Bitcoin holdings from strategy.com.",
+          "Open", p_nav)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TAB 1 — MARKET DATA
@@ -959,7 +1142,7 @@ def render_market():
                 st.markdown("<br>", unsafe_allow_html=True)
                 _, exp_col2 = st.columns([4, 1])
                 with exp_col2:
-                    st.download_button("📥 Export to CSV", data=convert_df_to_csv(df_filtered),
+                    st.download_button(" Export to CSV", data=convert_df_to_csv(df_filtered),
                         file_name=f"{final_ticker}_historical_pricing.csv", mime="text/csv", use_container_width=True)
 
                 fig = make_subplots(rows=3, cols=1, shared_xaxes=True,
@@ -1217,7 +1400,7 @@ def render_nav():
                 holdings_count   = mstr_data["btc_holdings"]
                 avg_cost_basis   = mstr_data["avg_cost_basis"]
                 data_source_label = mstr_data["source"]
-                st.success(f"✅ BTC Holdings: **{holdings_count:,.0f} BTC** | Avg Cost: **${avg_cost_basis:,.0f}** | Source: *{data_source_label}*")
+                st.success(f" BTC Holdings: **{holdings_count:,.0f} BTC** | Avg Cost: **${avg_cost_basis:,.0f}** | Source: *{data_source_label}*")
             else:
                 holdings_count    = st.number_input("Manual BTC Holdings Override", value=553555.0, step=1000.0)
                 avg_cost_basis    = st.number_input("Avg Cost Basis ($/BTC)", value=68459.0, step=100.0)
@@ -1310,45 +1493,80 @@ def render_portfolio():
     st.header("Custom Portfolio vs. Benchmark Backtester")
 
     with st.container(border=True):
-        st.markdown("##### Allocation & Settings")
-        col1, col2 = st.columns([3, 2])
+        st.markdown("##### Portfolio Allocation")
 
-        with col1:
-            st.write("Edit your basket (Add/Remove rows as needed):")
-            default_portfolio = pd.DataFrame({"Ticker": ["MSFT","AAPL","GOOGL","AMZN"], "Weight (%)": [40.0,30.0,20.0,10.0]})
-            edited_df = st.data_editor(default_portfolio, num_rows="dynamic", use_container_width=True, hide_index=True)
+        # Number of assets
+        n_bt = st.slider("Number of assets", 1, 10,
+                         value=st.session_state.get("bt_n_assets", 4), key="bt_n_assets")
 
-        with col2:
-            final_bench  = st.text_input("Benchmark Ticker", value="SPY", key="bench_sel").strip().upper()
-            start_date   = st.date_input("Start Date", value=pd.to_datetime("2020-01-01"), key="backtester_start")
-            end_date     = st.date_input("End Date",   value=pd.to_datetime("today"),      key="backtester_end")
-            st.markdown("<br>", unsafe_allow_html=True)
-            run_backtest = st.button("Run Portfolio Engine", use_container_width=True)
+        bt_defaults = [
+            ("MSFT", 40.0), ("AAPL", 30.0), ("GOOGL", 20.0), ("AMZN", 10.0),
+            ("NVDA", 0.0), ("META", 0.0), ("TSLA", 0.0), ("BRK-B", 0.0),
+            ("JPM", 0.0), ("V", 0.0),
+        ]
+
+        # Header
+        bh1, bh2 = st.columns([3, 1])
+        bh1.markdown("<small style='color:#5e768f'>TICKER</small>", unsafe_allow_html=True)
+        bh2.markdown("<small style='color:#5e768f'>WEIGHT %</small>", unsafe_allow_html=True)
+
+        bt_tickers_input = []
+        bt_weights_input = []
+        for i in range(n_bt):
+            def_tk, def_wt = bt_defaults[i] if i < len(bt_defaults) else ("", 0.0)
+            b1, b2 = st.columns([3, 1])
+            tk = b1.text_input("", value=st.session_state.get(f"bt_tk_{i}", def_tk),
+                               key=f"bt_tk_{i}", label_visibility="collapsed",
+                               placeholder=f"Ticker {i+1}")
+            wt = b2.number_input("", value=st.session_state.get(f"bt_wt_{i}", def_wt),
+                                 min_value=0.0, max_value=100.0, step=1.0,
+                                 key=f"bt_wt_{i}", label_visibility="collapsed")
+            bt_tickers_input.append(tk.strip().upper())
+            bt_weights_input.append(wt)
+
+        st.markdown("---")
+        bc1, bc2, bc3 = st.columns(3)
+        final_bench = bc1.text_input("Benchmark Ticker", value="SPY", key="bench_sel").strip().upper()
+        start_date  = bc2.date_input("Start Date", value=pd.to_datetime("2020-01-01"), key="backtester_start")
+        end_date    = bc3.date_input("End Date",   value=pd.to_datetime("today"),      key="backtester_end")
+
+        st.markdown("---")
+        bt_strategy, bt_params = _strategy_selector("bt")
+        st.markdown("")
+        run_backtest = st.button("Run Portfolio Engine", use_container_width=True)
 
     if run_backtest:
         with st.spinner("Synchronizing market data arrays..."):
-            clean_df     = edited_df.replace(["None","none","","NaN","nan"], np.nan).dropna(subset=["Ticker","Weight (%)"])
-            port_tickers = clean_df["Ticker"].astype(str).str.strip().str.upper().tolist()
-            raw_weights  = clean_df["Weight (%)"].astype(float).values
-
-            if not port_tickers:
-                st.error("Portfolio cannot be empty.")
+            valid_pairs  = [(t, w) for t, w in zip(bt_tickers_input, bt_weights_input)
+                            if t and w > 0]
+            if not valid_pairs:
+                st.error("Add at least one asset with a non-zero weight.")
                 st.stop()
+            port_tickers = [p[0] for p in valid_pairs]
+            raw_weights  = np.array([p[1] for p in valid_pairs])
 
             weights = raw_weights / raw_weights.sum()
-            if raw_weights.sum() != 100.0 and raw_weights.sum() > 0:
-                st.info(f"Weights summed to {raw_weights.sum()}%. Rebalanced to 100% proportionally.")
+            if abs(raw_weights.sum() - 100.0) > 0.01:
+                st.info(f"Weights summed to {raw_weights.sum():.1f}%. Rebalanced to 100% proportionally.")
 
-            unique_tickers = list(set(port_tickers + [final_bench]))
-            series_dict = {}
-            for t in unique_tickers:
-                s = get_yf_backtest_series(t, start_date, end_date)
-                if not s.empty:
-                    series_dict[t] = s
+            unique_tickers = list(dict.fromkeys(port_tickers + [final_bench]))
+            try:
+                raw_dl = yf.download(unique_tickers, start=str(start_date),
+                                     end=str(end_date), auto_adjust=True, progress=False)["Close"]
+                if isinstance(raw_dl, pd.Series):
+                    raw_dl = raw_dl.to_frame(unique_tickers[0])
+                raw_dl.index = raw_dl.index.tz_convert(None) if raw_dl.index.tz is not None else raw_dl.index
+                series_dict = {t: raw_dl[t].dropna() for t in unique_tickers if t in raw_dl.columns}
+            except Exception:
+                series_dict = {}
+                for t in unique_tickers:
+                    s = get_yf_backtest_series(t, start_date, end_date)
+                    if not s.empty:
+                        series_dict[t] = s
 
             missing = set(unique_tickers) - set(series_dict.keys())
             if missing:
-                st.warning(f"⚠️ Could not pull data for: {', '.join(missing)}")
+                st.warning(f" Could not pull data for: {', '.join(missing)}")
 
             valid_port = [t for t in port_tickers if t in series_dict]
             if not valid_port or final_bench not in series_dict:
@@ -1370,6 +1588,22 @@ def render_portfolio():
 
             cum_port  = (1 + port_returns).cumprod() * 100
             cum_bench = (1 + bench_returns).cumprod() * 100
+
+            # ── Strategy overlay ─────────────────────────────────────────────
+            bt_strat = bt_strategy  # already read from widget above
+            strat_returns = None
+            strat_label   = ""
+            strat_detail  = ""
+            if bt_strat != STRATEGIES[0] and valid_port:
+                primary_tk = valid_port[0]
+                with st.spinner(f"Computing {bt_strat} signal for {primary_tk}..."):
+                    _, sig_series, strat_label, strat_detail = compute_strategy_data(
+                        primary_tk, bt_strat, start_date, end_date, params=bt_params)
+                rf_daily = get_live_risk_free_rate() / 252
+                if not sig_series.empty:
+                    sig_aligned = sig_series.reindex(port_returns.index, method="ffill").fillna(1.0)
+                    strat_returns = sig_aligned * port_returns + (1 - sig_aligned) * rf_daily
+                    cum_strat = (1 + strat_returns).cumprod() * 100
 
             days   = (cum_port.index[-1] - cum_port.index[0]).days
             years  = max(days / 365.25, 1.0)
@@ -1396,6 +1630,15 @@ def render_portfolio():
             beta           = cov_with_bench[0,1] / cov_with_bench[1,1] if cov_with_bench[1,1] != 0 else 1.0
             rolling_beta   = port_returns.rolling(60).cov(bench_returns) / bench_returns.rolling(60).var()
 
+        # Strategy signal banner
+        if strat_returns is not None and strat_label:
+            st.markdown(
+                f"<div style='padding:10px 14px;border-left:3px solid #2f6b4b;"
+                f"background:rgba(255,255,255,0.04);border-radius:4px;margin-bottom:10px'>"
+                f"<b style='color:#4caf7d'>{bt_strat} — {strat_label}</b><br>"
+                f"<span style='color:#8a9ab0;font-size:0.87rem'>{strat_detail}</span></div>",
+                unsafe_allow_html=True)
+
         with st.container(border=True):
             st.markdown(f"### Portfolio vs. {final_bench}")
             st.divider()
@@ -1404,6 +1647,26 @@ def render_portfolio():
             m2.metric("Benchmark CAGR",   f"{bench_cagr*100:.2f}%")
             m3.metric("Portfolio Sharpe", f"{port_sharpe:.2f}", f"{(port_sharpe-bench_sharpe):+.2f}")
             m4.metric("Ann. Volatility",  f"{port_vol*100:.2f}%")
+
+        if strat_returns is not None:
+            strat_cagr   = (cum_strat.iloc[-1]/100)**(1/years) - 1
+            strat_vol    = strat_returns.std() * np.sqrt(252)
+            strat_sharpe = (strat_cagr - get_live_risk_free_rate()) / strat_vol if strat_vol else 0
+            strat_w      = (1 + strat_returns).cumprod()
+            strat_dd     = ((strat_w - strat_w.cummax()) / strat_w.cummax()).min()
+            with st.container(border=True):
+                st.markdown(f"##### Strategy: {bt_strat}")
+                st.divider()
+                s1, s2, s3, s4 = st.columns(4)
+                s1.metric("Strategy CAGR",   f"{strat_cagr*100:.2f}%",
+                           f"{(strat_cagr-port_cagr)*100:+.2f}% vs portfolio",
+                           help="CAGR of the strategy-filtered portfolio (invested when signal is bullish, cash otherwise)")
+                s2.metric("Strategy Sharpe", f"{strat_sharpe:.2f}",
+                           f"{strat_sharpe-port_sharpe:+.2f} vs portfolio")
+                s3.metric("Strategy Vol",    f"{strat_vol*100:.2f}%",
+                           help="Lower than buy-and-hold if strategy avoids bearish periods")
+                s4.metric("Strategy Max DD",  f"{strat_dd*100:.2f}%",
+                           help="Worst peak-to-trough drawdown under the strategy filter")
 
         with st.container(border=True):
             st.markdown("##### Extended Risk Metrics")
@@ -1422,18 +1685,35 @@ def render_portfolio():
         })
         _, exp_col2 = st.columns([4, 1])
         with exp_col2:
-            st.download_button("📥 Export CSV", data=convert_df_to_csv(export_df),
+            st.download_button(" Export CSV", data=convert_df_to_csv(export_df),
                 file_name="portfolio_backtest_vectors.csv", mime="text/csv", use_container_width=True)
 
-        fig1 = make_subplots(rows=3, cols=1, shared_xaxes=True,
-            subplot_titles=("Cumulative Return", "Daily Portfolio Returns", "Rolling 60D Beta vs Benchmark"),
-            vertical_spacing=0.08, row_heights=[0.5, 0.25, 0.25])
+        n_rows = 4 if strat_returns is not None else 3
+        subplot_titles = ["Cumulative Return", "Daily Portfolio Returns", "Rolling 60D Beta vs Benchmark"]
+        row_heights    = [0.45, 0.2, 0.2]
+        if strat_returns is not None:
+            subplot_titles.append("Strategy In-Market Signal (1=Invested, 0=Cash)")
+            row_heights.append(0.15)
+
+        fig1 = make_subplots(rows=n_rows, cols=1, shared_xaxes=True,
+            subplot_titles=subplot_titles,
+            vertical_spacing=0.06, row_heights=row_heights)
         fig1.add_trace(go.Scatter(x=cum_port.index, y=cum_port, name="Portfolio", line=dict(color="#1f5673", width=2.5)), row=1, col=1)
         fig1.add_trace(go.Scatter(x=cum_bench.index, y=cum_bench, name=f"{final_bench}", line=dict(color="#d97736", width=2, dash="dot")), row=1, col=1)
+        if strat_returns is not None:
+            fig1.add_trace(go.Scatter(x=cum_strat.index, y=cum_strat,
+                name=f"Strategy ({bt_strat[:20]})",
+                line=dict(color="#4caf7d", width=2, dash="dashdot")), row=1, col=1)
         fig1.add_trace(go.Bar(x=port_returns.index, y=port_returns*100, name="Daily Return %", marker=dict(color="#6c757d")), row=2, col=1)
         fig1.add_trace(go.Scatter(x=rolling_beta.index, y=rolling_beta, name="Rolling Beta", line=dict(color="#2f6b4b", width=1.5)), row=3, col=1)
         fig1.add_hline(y=1.0, line_dash="dash", line_color="rgba(128,128,128,0.4)", row=3, col=1)
-        fig1.update_layout(height=800, hovermode="x unified", font=dict(family="Lora, serif"),
+        if strat_returns is not None:
+            sig_plot = sig_aligned.reindex(port_returns.index, method="ffill").fillna(1.0)
+            fig1.add_trace(go.Scatter(x=sig_plot.index, y=sig_plot,
+                fill="tozeroy", fillcolor="rgba(76,175,125,0.18)",
+                line=dict(color="rgba(76,175,125,0.6)", width=1),
+                name="In-Market Signal", showlegend=False), row=4, col=1)
+        fig1.update_layout(height=950 if strat_returns is not None else 800, hovermode="x unified", font=dict(family="Lora, serif"),
             plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
         fig1.update_yaxes(showgrid=True, gridcolor="rgba(128,128,128,0.1)")
@@ -1480,7 +1760,7 @@ def render_prob():
             r     = get_live_risk_free_rate()
             sigma = get_yf_implied_vol(final_prob_ticker)
 
-            last_date    = hist.index[-1].tz_localize(None) if hist.index[-1].tzinfo else hist.index[-1]
+            last_date    = hist.index[-1].tz_convert(None) if hist.index[-1].tzinfo else hist.index[-1]
             expiry_date  = pd.to_datetime(target_expiry)
             T            = max((expiry_date - last_date).days / 365.25, 0.001)
             future_dates = pd.date_range(start=last_date, end=expiry_date, periods=100)
@@ -1551,7 +1831,7 @@ def render_prob():
                 plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig6, use_container_width=True)
         except Exception as _cone_err:
-            st.warning(f"⚠️ Volatility Cone unavailable: {_cone_err}")
+            st.warning(f" Volatility Cone unavailable: {_cone_err}")
 
         # ── Shared options chain fetch (used by both charts below) ────────────
         st.markdown("<br>", unsafe_allow_html=True)
@@ -1580,14 +1860,14 @@ def render_prob():
                     _calls = _calls[(_calls["impliedVolatility"] > 0.02) & (_calls["impliedVolatility"] < 3.0)]
                     _calls = _calls[(_calls["delta"] >= 0.01) & (_calls["delta"] <= 0.99)]
             except Exception as _fetch_err:
-                st.warning(f"⚠️ Options chain unavailable for {final_prob_ticker}: {_fetch_err}")
+                st.warning(f" Options chain unavailable for {final_prob_ticker}: {_fetch_err}")
 
         # ── Market-Implied Probability Distribution ───────────────────────────
         st.markdown("### Market-Implied Probability Distribution")
         st.caption("Derived from live options chain. Call delta ≈ risk-neutral P(S_T > K). Density bars show where the market concentrates probability mass.")
 
         if _calls is None or len(_calls) < 4:
-            st.info("⚠️ Density chart unavailable — no options data or insufficient strikes for the selected expiry.")
+            st.info(" Density chart unavailable — no options data or insufficient strikes for the selected expiry.")
         else:
             try:
                 _strikes = _calls["strike"].values
@@ -1752,7 +2032,7 @@ def render_prob():
                     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
                 st.plotly_chart(_fig_dist, use_container_width=True)
             except Exception as _dist_err:
-                st.warning(f"⚠️ Density chart unavailable: {_dist_err}")
+                st.warning(f" Density chart unavailable: {_dist_err}")
 
         # ── Market-Implied Forward Price Curve ────────────────────────────────
         st.markdown("<br>", unsafe_allow_html=True)
@@ -1760,7 +2040,7 @@ def render_prob():
         st.caption("P10 / P50 / P90 strikes from live options chains across all available expiries — the market's implied price trajectory.")
 
         if _tkr is None or not _expirations:
-            st.info("⚠️ Forward curve unavailable — no options data for this ticker.")
+            st.info(" Forward curve unavailable — no options data for this ticker.")
         else:
             try:
                 with st.spinner("Building forward curve across expiries..."):
@@ -1962,9 +2242,9 @@ def render_prob():
                         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
                     st.plotly_chart(_fig_fwd, use_container_width=True)
                 else:
-                    st.info("⚠️ Not enough expiry dates with valid options data to build a forward curve.")
+                    st.info(" Not enough expiry dates with valid options data to build a forward curve.")
             except Exception as _fwd_err:
-                st.warning(f"⚠️ Forward curve unavailable: {_fwd_err}")
+                st.warning(f" Forward curve unavailable: {_fwd_err}")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TAB 7 — FED RATE PROJECTIONS
@@ -2438,7 +2718,7 @@ def render_dcf():
         # CSV export
         _, ex2 = st.columns([4,1])
         with ex2:
-            st.download_button("📥 Export FCF Schedule", data=convert_df_to_csv(fcf_df),
+            st.download_button(" Export FCF Schedule", data=convert_df_to_csv(fcf_df),
                 file_name=f"{final_dcf}_dcf_schedule.csv", mime="text/csv", use_container_width=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2570,7 +2850,7 @@ def render_correlation():
                 if not s.empty:
                     series_dict[t] = s
                 else:
-                    st.warning(f"⚠️ Could not fetch data for {t} — skipping.")
+                    st.warning(f" Could not fetch data for {t} — skipping.")
 
         if len(series_dict) < 2:
             st.error("Need at least 2 valid tickers to compute correlations.")
@@ -2624,7 +2904,7 @@ def render_correlation():
         # Export
         _, ex2 = st.columns([4,1])
         with ex2:
-            st.download_button("📥 Export Correlation Matrix", data=convert_df_to_csv(corr_full),
+            st.download_button(" Export Correlation Matrix", data=convert_df_to_csv(corr_full),
                 file_name="correlation_matrix.csv", mime="text/csv", use_container_width=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2658,7 +2938,7 @@ def render_strategy_builder():
                 )
                 st.session_state[f"sl_{i}_premium"] = round(float(p), 2)
             except Exception as e:
-                st.toast(f"Leg {i+1} pricing failed: {e}", icon="⚠️")
+                st.toast(f"Leg {i+1} pricing failed: {e}", icon="")
 
     # ── Underlying & pricing params ───────────────────────────────────────────
     with st.container(border=True):
@@ -2751,7 +3031,7 @@ def render_strategy_builder():
             lc[3].number_input("", min_value=1, max_value=730, step=1,            key=f"sl_{i}_dte",     label_visibility="collapsed")
             lc[4].number_input("", min_value=1, max_value=100, step=1,            key=f"sl_{i}_qty",     label_visibility="collapsed")
             lc[5].number_input("", min_value=0.0, step=0.01, format="%.2f",       key=f"sl_{i}_premium", label_visibility="collapsed")
-            if lc[6].button("✕", key=f"sl_{i}_rm"):
+            if lc[6].button("x", key=f"sl_{i}_rm"):
                 remove_idx = i
 
         if remove_idx is not None:
@@ -2862,151 +3142,733 @@ def render_strategy_builder():
 # ══════════════════════════════════════════════════════════════════════════════
 # TAB 13 — MONTE CARLO PRICE PATH SIMULATOR
 # ══════════════════════════════════════════════════════════════════════════════
-def render_monte_carlo():
-    st.header("Monte Carlo Price Path Simulator")
-    st.caption("Geometric Brownian Motion — log-normally distributed daily returns, annualised drift and volatility.")
-
-    st.session_state.setdefault("mc_spot",  100.0)
-    st.session_state.setdefault("mc_vol",    25.0)
-    st.session_state.setdefault("mc_drift",   8.0)
-
-    with st.container(border=True):
-        st.markdown("##### Parameters")
-        r1, r2 = st.columns([3, 1])
-        ticker    = r1.text_input("Ticker", value="SPY", key="mc_ticker")
-        fetch_btn = r2.button("Fetch Price & Vol", use_container_width=True)
-
-        # Update session state BEFORE number_inputs are instantiated
-        if fetch_btn:
-            with st.spinner(f"Fetching {ticker.strip().upper()}..."):
-                hist = get_yf_market_data(ticker.strip().upper())
-            if not hist.empty:
-                st.session_state["mc_spot"] = round(float(hist["close"].iloc[-1]), 2)
-                log_rets = np.log(hist["close"] / hist["close"].shift(1)).dropna()
-                if len(log_rets) > 10:
-                    st.session_state["mc_vol"] = round(float(log_rets.std() * np.sqrt(252) * 100), 1)
-            else:
-                st.toast(f"Could not fetch data for {ticker.strip().upper()}", icon="⚠️")
-
-        c1, c2, c3 = st.columns(3)
-        spot  = c1.number_input("Spot Price ($)",        min_value=0.01, step=1.0,   key="mc_spot")
-        vol   = c2.number_input("Annual Volatility (%)", min_value=0.1,  step=0.5,   key="mc_vol")
-        drift = c3.number_input("Annual Drift (%)",      min_value=-50.0, max_value=100.0, step=0.5, key="mc_drift")
-
-        c4, c5 = st.columns(2)
-        horizon = c4.slider("Time Horizon (trading days)", min_value=5, max_value=504, value=252, step=5)
-        n_sims  = c5.slider("Simulations",                 min_value=200, max_value=5000, value=1000, step=100)
-
-        _, run_col = st.columns([4, 1])
-        run_btn = run_col.button("Run Simulation", use_container_width=True)
-
-    if not run_btn and "mc_paths" not in st.session_state:
-        st.caption("Configure parameters and click Run Simulation.")
+def _mc_comparison(paths_strat, paths_nostrat, paths_bench, S0, strat_label, bench_tk):
+    """Overlay median paths and show a side-by-side metrics table for strategy vs base vs benchmark."""
+    if paths_nostrat is None and paths_bench is None:
         return
 
-    # ── GBM simulation ────────────────────────────────────────────────────────
-    if run_btn:
-        mu    = drift / 100
-        sigma = vol   / 100
-        dt    = 1 / 252
-        Z          = np.random.normal(0, 1, (horizon, n_sims))
-        log_steps  = (mu - 0.5 * sigma**2) * dt + sigma * np.sqrt(dt) * Z
-        paths      = np.vstack([np.full(n_sims, spot),
-                                 spot * np.exp(np.cumsum(log_steps, axis=0))])
-        st.session_state.update({"mc_paths": paths, "mc_horizon": horizon,
-                                  "mc_spot_used": spot, "mc_n": n_sims})
+    st.markdown("##### Comparison — Strategy vs No Strategy vs Benchmark")
+    t_axis = np.arange(paths_strat.shape[0])
 
-    paths   = st.session_state["mc_paths"]
-    horizon = st.session_state["mc_horizon"]
-    S0      = st.session_state["mc_spot_used"]
-    t_axis  = np.arange(paths.shape[0])
+    fig_c = go.Figure()
+    # No-strategy baseline
+    if paths_nostrat is not None:
+        med_base = np.median(paths_nostrat, axis=1)
+        p5_base  = np.percentile(paths_nostrat, 5, axis=1)
+        p95_base = np.percentile(paths_nostrat, 95, axis=1)
+        fig_c.add_trace(go.Scatter(
+            x=np.concatenate([t_axis, t_axis[::-1]]),
+            y=np.concatenate([p95_base, p5_base[::-1]]),
+            fill="toself", fillcolor="rgba(108,117,125,0.10)",
+            line=dict(color="rgba(0,0,0,0)"), showlegend=False, hoverinfo="skip"))
+        fig_c.add_trace(go.Scatter(x=t_axis, y=med_base, mode="lines",
+            name="No Strategy (Median)", line=dict(color="#6c757d", width=2, dash="dot")))
+    # Benchmark
+    if paths_bench is not None:
+        med_bench = np.median(paths_bench, axis=1)
+        fig_c.add_trace(go.Scatter(x=t_axis, y=med_bench, mode="lines",
+            name=f"{bench_tk} (Median)", line=dict(color="#d97736", width=2, dash="dash")))
+    # Strategy (on top)
+    med_strat = np.median(paths_strat, axis=1)
+    p5_strat  = np.percentile(paths_strat, 5, axis=1)
+    p95_strat = np.percentile(paths_strat, 95, axis=1)
+    fig_c.add_trace(go.Scatter(
+        x=np.concatenate([t_axis, t_axis[::-1]]),
+        y=np.concatenate([p95_strat, p5_strat[::-1]]),
+        fill="toself", fillcolor="rgba(31,86,115,0.12)",
+        line=dict(color="rgba(0,0,0,0)"), showlegend=False, hoverinfo="skip"))
+    fig_c.add_trace(go.Scatter(x=t_axis, y=med_strat, mode="lines",
+        name=f"{strat_label or 'Strategy'} (Median)",
+        line=dict(color="#1f5673", width=2.5)))
+    fig_c.add_hline(y=S0, line_dash="dash", line_color="rgba(255,255,255,0.2)", annotation_text="Entry")
+    fig_c.update_layout(
+        title="Median Path Comparison (shaded = P5–P95 band)",
+        height=380, hovermode="x unified", font=dict(family="Lora, serif"),
+        xaxis_title="Trading Days",
+        yaxis_title="Price ($)" if S0 != 100.0 else "Normalised Value ($)",
+        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(showgrid=True, gridcolor="rgba(128,128,128,0.1)"),
+        yaxis=dict(showgrid=True, gridcolor="rgba(128,128,128,0.1)", tickprefix="$", tickformat=",.2f"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+    st.plotly_chart(fig_c, use_container_width=True)
+
+    # Side-by-side metrics table
+    def _stats(paths, s0):
+        t = paths[-1, :]
+        med = float(np.median(t))
+        prob = float(np.mean(t > s0) * 100)
+        p5v  = float(np.percentile(t, 5))
+        p95v = float(np.percentile(t, 95))
+        cagr = float(np.log(med / s0) / (paths.shape[0] / 252)) * 100
+        return med, prob, p5v, p95v, cagr
+
+    cols = []
+    labels = []
+    if strat_label and strat_label != "No Signal":
+        cols.append(paths_strat);   labels.append(strat_label or "Strategy")
+    if paths_nostrat is not None:
+        cols.append(paths_nostrat); labels.append("No Strategy")
+    if paths_bench is not None:
+        cols.append(paths_bench);   labels.append(bench_tk)
+
+    if len(cols) > 1:
+        with st.container(border=True):
+            st.markdown("##### Key Metrics Comparison")
+            header = st.columns(len(cols) + 1)
+            header[0].markdown("**Metric**")
+            for i, lbl in enumerate(labels):
+                header[i+1].markdown(f"**{lbl}**")
+
+            rows = [
+                ("Median Final",  lambda p: f"${_stats(p, S0)[0]:,.2f}"),
+                ("Prob of Profit", lambda p: f"{_stats(p, S0)[1]:.1f}%"),
+                ("P5 (tail loss)", lambda p: f"${_stats(p, S0)[2]:,.2f}"),
+                ("P95 (upside)",  lambda p: f"${_stats(p, S0)[3]:,.2f}"),
+                ("Implied CAGR",  lambda p: f"{_stats(p, S0)[4]:+.1f}%"),
+            ]
+            for metric_name, fn in rows:
+                row = st.columns(len(cols) + 1)
+                row[0].markdown(metric_name)
+                vals = [_stats(p, S0) for p in cols]
+                med_vals = [v[0] for v in vals]  # use median final for colouring
+                best_idx = int(np.argmax(med_vals))
+                for i, p in enumerate(cols):
+                    cell_val = fn(p)
+                    if i == best_idx:
+                        row[i+1].markdown(f"**{cell_val}** ")
+                    else:
+                        row[i+1].markdown(cell_val)
+
+
+def _mc_risk_metrics(terminal, S0):
+    median_px   = float(np.median(terminal))
+    mean_px     = float(np.mean(terminal))
+    prob_profit = float(np.mean(terminal > S0) * 100)
+    pct5  = float(np.percentile(terminal, 5))
+    pct1  = float(np.percentile(terminal, 1))
+    var_95  = S0 - pct5
+    var_99  = S0 - pct1
+    cvar_95 = S0 - float(np.mean(terminal[terminal <= pct5]))
+    best  = float(np.max(terminal))
+    worst = float(np.min(terminal))
+    with st.container(border=True):
+        st.markdown("##### Results")
+        st.divider()
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Median Final Price", f"${median_px:,.2f}", delta=f"{(median_px/S0-1)*100:+.1f}%",
+                  help="Middle outcome — half of paths end above, half below. More robust than mean.")
+        m2.metric("Prob of Profit", f"{prob_profit:.1f}%",
+                  help="% of paths finishing above the starting price.")
+        m3.metric("VaR 95%", f"${var_95:,.2f}",
+                  help="Max dollar loss in 95% of paths. Worst 5% exceed this.")
+        m4.metric("CVaR 95%", f"${cvar_95:,.2f}",
+                  help="Average loss across the worst 5% of paths — the tail beyond VaR.")
+        m5, m6, m7, m8 = st.columns(4)
+        m5.metric("Mean Final Price", f"${mean_px:,.2f}",
+                  help="Simple average — can be skewed by extreme winning paths.")
+        m6.metric("VaR 99%", f"${var_99:,.2f}",
+                  help="Max dollar loss in 99% of paths — rarer, more severe tail.")
+        m7.metric("Best Path",  f"${best:,.2f}",
+                  help="Single highest terminal price across all simulations.")
+        m8.metric("Worst Path", f"${worst:,.2f}",
+                  help="Single lowest terminal price — maximum drawdown exposure.")
+
+def _mc_draw_paths(paths, S0, label="Price ($)"):
+    t_axis   = np.arange(paths.shape[0])
     terminal = paths[-1, :]
-
-    # ── Charts ────────────────────────────────────────────────────────────────
     col_paths, col_dist = st.columns([3, 2])
-
     with col_paths:
         fig_p = go.Figure()
         n_show   = min(300, paths.shape[1])
         idx_show = np.random.choice(paths.shape[1], n_show, replace=False)
         for i in idx_show:
-            fig_p.add_trace(go.Scatter(
-                x=t_axis, y=paths[:, i], mode="lines",
+            fig_p.add_trace(go.Scatter(x=t_axis, y=paths[:, i], mode="lines",
                 line=dict(color="rgba(31,86,115,0.10)", width=1),
                 showlegend=False, hoverinfo="skip"))
-        bands = [(5,"#8c2e36","P5",True), (25,"rgba(201,168,76,0.55)","P25",False),
-                 (50,"#c9a84c","Median",False), (75,"rgba(201,168,76,0.55)","P75",False),
-                 (95,"#2f6b4b","P95",True)]
-        for pct, color, name, show in bands:
-            fig_p.add_trace(go.Scatter(
-                x=t_axis, y=np.percentile(paths, pct, axis=1),
+        for pct, color, name, show in [(5,"#8c2e36","P5",True),(25,"rgba(201,168,76,0.55)","P25",False),
+                                        (50,"#c9a84c","Median",False),(75,"rgba(201,168,76,0.55)","P75",False),
+                                        (95,"#2f6b4b","P95",True)]:
+            fig_p.add_trace(go.Scatter(x=t_axis, y=np.percentile(paths, pct, axis=1),
                 mode="lines", name=name, showlegend=show,
-                line=dict(color=color, width=2.5 if pct == 50 else 1.5,
+                line=dict(color=color, width=2.5 if pct==50 else 1.5,
                           dash="solid" if pct in (5,50,95) else "dot")))
-        fig_p.add_hline(y=S0, line_dash="dash", line_color="rgba(255,255,255,0.2)",
-                        annotation_text="Entry")
-        fig_p.update_layout(
-            title="Simulated Price Paths", height=430, hovermode="x unified",
-            font=dict(family="Lora, serif"),
-            xaxis_title=f"Trading Days", yaxis_title="Price ($)",
+        fig_p.add_hline(y=S0, line_dash="dash", line_color="rgba(255,255,255,0.2)", annotation_text="Entry")
+        fig_p.update_layout(title="Simulated Paths", height=430, hovermode="x unified",
+            font=dict(family="Lora, serif"), xaxis_title="Trading Days", yaxis_title=label,
             plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
             xaxis=dict(showgrid=True, gridcolor="rgba(128,128,128,0.1)"),
-            yaxis=dict(showgrid=True, gridcolor="rgba(128,128,128,0.1)",
-                       tickprefix="$", tickformat=",.2f"),
+            yaxis=dict(showgrid=True, gridcolor="rgba(128,128,128,0.1)", tickprefix="$", tickformat=",.2f"),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
         st.plotly_chart(fig_p, use_container_width=True)
-
     with col_dist:
         fig_h = go.Figure()
-        fig_h.add_trace(go.Histogram(
-            x=terminal, nbinsx=60,
-            marker_color="#1f5673", opacity=0.85))
-        for pct, color, label in [(5,"#8c2e36","P5"),(50,"#c9a84c","Median"),(95,"#2f6b4b","P95")]:
-            v = np.percentile(terminal, pct)
-            fig_h.add_vline(x=v, line_color=color, line_dash="dot",
-                            annotation_text=f"{label} ${v:,.0f}",
-                            annotation_position="top")
-        fig_h.add_vline(x=S0, line_color="rgba(255,255,255,0.25)", line_dash="dash",
-                        annotation_text="Entry", annotation_position="top right")
-        fig_h.update_layout(
-            title="Terminal Price Distribution", height=430,
-            font=dict(family="Lora, serif"),
-            xaxis_title="Price at End of Horizon ($)", yaxis_title="Frequency",
+        fig_h.add_trace(go.Histogram(x=terminal, nbinsx=60, marker_color="#1f5673", opacity=0.85))
+        # Stagger annotation heights so labels don't overlap when lines are close together
+        vlines = []
+        for pct, color, lbl in [(5,"#8c2e36","P5"),(50,"#c9a84c","Median"),(95,"#2f6b4b","P95")]:
+            vlines.append((float(np.percentile(terminal, pct)), color, lbl))
+        vlines.append((float(S0), "rgba(255,255,255,0.4)", "Entry"))
+        vlines.sort(key=lambda x: x[0])
+        y_levels = [0.97, 0.88, 0.79, 0.70]
+        for (v, color, lbl), y_paper in zip(vlines, y_levels):
+            fig_h.add_vline(x=v, line_color=color,
+                            line_dash="dash" if lbl == "Entry" else "dot")
+            fig_h.add_annotation(x=v, y=y_paper, yref="paper",
+                                 text=f"{lbl}<br>${v:,.0f}" if lbl != "Entry" else "Entry",
+                                 showarrow=False, xanchor="left", xshift=4,
+                                 font=dict(color=color, size=11),
+                                 bgcolor="rgba(15,22,36,0.7)", borderpad=2)
+        fig_h.update_layout(title="Terminal Distribution", height=430, font=dict(family="Lora, serif"),
+            xaxis_title="Final Value ($)", yaxis_title="Frequency",
             plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-            xaxis=dict(showgrid=True, gridcolor="rgba(128,128,128,0.1)",
-                       tickprefix="$", tickformat=",.0f"),
-            yaxis=dict(showgrid=True, gridcolor="rgba(128,128,128,0.1)"),
-            showlegend=False)
+            xaxis=dict(showgrid=True, gridcolor="rgba(128,128,128,0.1)", tickprefix="$", tickformat=",.0f"),
+            yaxis=dict(showgrid=True, gridcolor="rgba(128,128,128,0.1)"), showlegend=False)
         st.plotly_chart(fig_h, use_container_width=True)
+    return terminal
 
-    # ── Risk metrics ──────────────────────────────────────────────────────────
-    median_px   = float(np.median(terminal))
-    mean_px     = float(np.mean(terminal))
-    prob_profit = float(np.mean(terminal > S0) * 100)
-    pct5        = float(np.percentile(terminal, 5))
-    pct1        = float(np.percentile(terminal, 1))
-    var_95      = S0 - pct5
-    var_99      = S0 - pct1
-    cvar_95     = S0 - float(np.mean(terminal[terminal <= pct5]))
-    best        = float(np.max(terminal))
-    worst       = float(np.min(terminal))
+def _strategy_selector(key_prefix):
+    """
+    Renders strategy picker, plain description, and adjustable parameters.
+    Returns (strategy_string, params_dict).
+    """
+    st.markdown("##### Strategy Overlay")
 
-    with st.container(border=True):
-        st.markdown("##### Results")
-        st.divider()
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Median Final Price", f"${median_px:,.2f}",
-                  delta=f"{(median_px/S0 - 1)*100:+.1f}%")
-        m2.metric("Prob of Profit",     f"{prob_profit:.1f}%")
-        m3.metric("VaR 95%",            f"${var_95:,.2f}",
-                  help="Dollar loss not exceeded in 95% of paths")
-        m4.metric("CVaR 95%",           f"${cvar_95:,.2f}",
-                  help="Average loss across the worst 5% of paths")
-        m5, m6, m7, m8 = st.columns(4)
-        m5.metric("Mean Final Price",   f"${mean_px:,.2f}")
-        m6.metric("VaR 99%",            f"${var_99:,.2f}")
-        m7.metric("Best Path",          f"${best:,.2f}")
-        m8.metric("Worst Path",         f"${worst:,.2f}")
+    DESCRIPTIONS = {
+        "SMA Trend Following (50/200)":
+            "Stays invested when the stock is trending up — price above its short-term average, "
+            "which is itself above the long-term average. Steps to cash when the trend breaks down.",
+        "RSI Mean Reversion (14)":
+            "Steps out when a stock has risen too fast and looks overextended. "
+            "Re-enters once momentum cools off. Works best in range-bound markets.",
+        "6-Month Price Momentum":
+            "Stays with stocks that have been going up over the past several months. "
+            "Exits when the trend turns negative. Simple — what's been working keeps working.",
+        "Value — Trailing P/E":
+            "Favours stocks trading at lower valuations relative to earnings. "
+            "Reduces or exits exposure when a stock looks expensive by P/E.",
+        "Earnings Growth Momentum":
+            "Tracks whether a company's profits are growing or shrinking quarter over quarter. "
+            "Exits positions when earnings start declining meaningfully.",
+    }
+
+    strat = st.selectbox("Strategy", STRATEGIES, key=f"{key_prefix}_strategy")
+    params = {}
+
+    if strat != STRATEGIES[0]:
+        st.caption(DESCRIPTIONS.get(strat, ""))
+        with st.expander("Parameters & how it works", expanded=False):
+            p1, p2, p3 = st.columns(3)
+
+            if strat == "SMA Trend Following (50/200)":
+                params["sma_fast"]       = p1.number_input("Fast SMA (days)", 5, 100, 50, 5,
+                                                            key=f"{key_prefix}_sma_fast",
+                                                            help="Shorter moving average — reacts quickly to recent price changes. "
+                                                                 "Common values: 20, 50. Lower = more responsive but more noise.")
+                params["sma_slow"]       = p2.number_input("Slow SMA (days)", 50, 400, 200, 10,
+                                                            key=f"{key_prefix}_sma_slow",
+                                                            help="Longer moving average — reflects the broader trend. "
+                                                                 "Common values: 100, 200. Must be greater than Fast SMA.")
+                params["bull_drift_adj"] = p3.number_input("Bullish drift adj (%)", 0.0, 15.0, 6.0, 0.5,
+                                                            key=f"{key_prefix}_bull_adj",
+                                                            help="Extra annualised drift added to the GBM when in an uptrend (fast > slow). "
+                                                                 "E.g. +6% shifts simulated paths upward to reflect positive momentum.")
+                _, p4, _ = st.columns(3)
+                params["bear_drift_adj"] = p4.number_input("Bearish drift adj (%)", -15.0, 0.0, -6.0, 0.5,
+                                                            key=f"{key_prefix}_bear_adj",
+                                                            help="Drift penalty applied when in a downtrend (fast < slow). "
+                                                                 "Should be negative. E.g. −6% pulls simulated paths downward.")
+                _f = int(params["sma_fast"]); _s = int(params["sma_slow"])
+                _ba = params["bull_drift_adj"]; _da = params["bear_drift_adj"]
+                st.info(
+                    f"**What it trades:**\n\n"
+                    f" **Buy / stay invested** — when the {_f}-day SMA crosses above the {_s}-day SMA "
+                    f"('Golden Cross'). Drift is boosted by +{_ba:.1f}% per year in the simulation. "
+                    f"A weak uptrend (price above {_s}-day but {_f}-day not yet above) applies a reduced +{_ba*0.4:.1f}% boost.\n\n"
+                    f" **Sell / go to cash** — when the {_f}-day SMA crosses below the {_s}-day SMA "
+                    f"('Death Cross'). Drift is penalised by {_da:.1f}% per year. "
+                    f"A weak downtrend applies a reduced {_da*0.4:.1f}% penalty."
+                )
+
+            elif strat == "RSI Mean Reversion (14)":
+                params["rsi_period"]   = p1.number_input("RSI period (days)", 5, 30, 14, 1,
+                                                          key=f"{key_prefix}_rsi_period",
+                                                          help="Number of days used to compute RSI. "
+                                                               "14 is the standard Wilder setting. Lower values are more sensitive; higher values smoother.")
+                params["overbought"]   = p2.number_input("Overbought level", 55.0, 90.0, 70.0, 1.0,
+                                                          key=f"{key_prefix}_ob",
+                                                          help="RSI level above which the stock is considered overbought. "
+                                                               "Signal steps toward cash when RSI exceeds this. Classic value: 70.")
+                params["oversold"]     = p3.number_input("Oversold level", 10.0, 45.0, 30.0, 1.0,
+                                                          key=f"{key_prefix}_os",
+                                                          help="RSI level below which the stock is considered oversold. "
+                                                               "Signal re-enters when RSI drops below this. Classic value: 30.")
+                p4, p5, _ = st.columns(3)
+                params["ob_drift_adj"] = p4.number_input("Overbought drift adj (%)", -15.0, 0.0, -7.0, 0.5,
+                                                          key=f"{key_prefix}_ob_adj",
+                                                          help="Drift penalty applied when RSI is overbought. Should be negative — "
+                                                               "pulls simulated paths lower to reflect likely mean reversion.")
+                params["os_drift_adj"] = p5.number_input("Oversold drift adj (%)", 0.0, 15.0, 7.0, 0.5,
+                                                          key=f"{key_prefix}_os_adj",
+                                                          help="Drift boost applied when RSI is oversold. Should be positive — "
+                                                               "shifts simulated paths higher to reflect likely bounce.")
+                _rp = int(params["rsi_period"]); _ob = params["overbought"]; _os = params["oversold"]
+                _oba = params["ob_drift_adj"]; _osa = params["os_drift_adj"]
+                _ob_sev = _ob + (100 - _ob) * 0.33; _os_sev = _os - _os * 0.33
+                st.info(
+                    f"**What it trades (based on {_rp}-day RSI):**\n\n"
+                    f" **Stay invested / re-enter** — RSI is between {_os:.0f} and {_ob:.0f} (neutral zone). "
+                    f"No drift adjustment is applied.\n\n"
+                    f" **Oversold bounce** — RSI drops below {_os:.0f}: apply +{_osa:.1f}% drift boost. "
+                    f"RSI below {_os_sev:.0f} (severely oversold): full +{_osa:.1f}% boost.\n\n"
+                    f" **Sell / reduce exposure** — RSI rises above {_ob:.0f} (overbought): apply {_oba:.1f}% drift penalty. "
+                    f"RSI above {_ob_sev:.0f} (severely overbought): full {_oba:.1f}% penalty. "
+                    f"Works best in range-bound markets, not strong trending ones."
+                )
+
+            elif strat == "6-Month Price Momentum":
+                params["lookback_days"]   = p1.number_input("Lookback (days)", 21, 252, 126, 5,
+                                                             key=f"{key_prefix}_lookback",
+                                                             help="How far back to measure price return. "
+                                                                  "126 ≈ 6 months, 252 ≈ 1 year. Shorter windows are noisier; longer capture bigger trends.")
+                params["threshold_pct"]   = p2.number_input("Entry threshold (%)", -20.0, 20.0, 0.0, 0.5,
+                                                             key=f"{key_prefix}_thresh",
+                                                             help="Minimum return over the lookback period required to stay invested. "
+                                                                  "0% = stay in as long as positive. Raise to require stronger momentum before entering.")
+                params["adj_scale"]       = p3.number_input("Drift sensitivity", 0.05, 0.5, 0.25, 0.05,
+                                                             key=f"{key_prefix}_adj_scale",
+                                                             help="Scales how strongly momentum translates into a drift adjustment. "
+                                                                  "E.g. 0.25 means a +20% 6-month return adds +5% annualised drift (20 × 0.25).")
+                _, p4, _ = st.columns(3)
+                params["adj_cap"]         = p4.number_input("Max drift adj (%)", 1.0, 20.0, 8.0, 0.5,
+                                                             key=f"{key_prefix}_adj_cap",
+                                                             help="Maximum absolute drift adjustment allowed in either direction. "
+                                                                  "Prevents extreme momentum from dominating the simulation.")
+                _lb = int(params["lookback_days"]); _thr = params["threshold_pct"]
+                _sc = params["adj_scale"]; _cap = params["adj_cap"]
+                _ex_ret = 20.0; _ex_adj = min(_ex_ret * _sc, _cap)
+                st.info(
+                    f"**What it trades (measuring return over the past {_lb} days):**\n\n"
+                    f" **Buy / stay invested** — {_lb}-day return is above {_thr:+.1f}%. "
+                    f"Drift is boosted proportionally: e.g. a +{_ex_ret:.0f}% return → +{_ex_adj:.1f}% drift boost (capped at +{_cap:.1f}%).\n\n"
+                    f" **Sell / go to cash** — {_lb}-day return falls below {_thr:+.1f}%. "
+                    f"Drift penalty mirrors the return scaled by {_sc} (capped at −{_cap:.1f}%). "
+                    f"Signal resets each day, so the position switches back as soon as momentum recovers."
+                )
+
+            elif strat == "Value — Trailing P/E":
+                params["pe_deep_value"]   = p1.number_input("Deep value P/E below", 1.0, 25.0, 12.0, 1.0,
+                                                             key=f"{key_prefix}_pe_dv",
+                                                             help="P/E below this level is considered deep value — maximum bullish drift is applied. "
+                                                                  "Historically, stocks with P/E < 10–15 have been considered cheap.")
+                params["pe_fair_value"]   = p2.number_input("Fair value P/E below", 5.0, 50.0, 20.0, 1.0,
+                                                             key=f"{key_prefix}_pe_fv",
+                                                             help="P/E below this is considered fairly valued — half the bullish drift boost is applied. "
+                                                                  "S&P 500 long-run average P/E is around 15–20.")
+                params["pe_in_threshold"] = p3.number_input("Exit above this P/E", 10.0, 100.0, 35.0, 1.0,
+                                                             key=f"{key_prefix}_pe_in",
+                                                             help="Step to cash and apply a bearish drift penalty when trailing P/E exceeds this level. "
+                                                                  "Above this the stock is considered expensive.")
+                p4, p5, _ = st.columns(3)
+                params["pe_expensive"]    = p4.number_input("Very expensive P/E above", 20.0, 200.0, 50.0, 5.0,
+                                                             key=f"{key_prefix}_pe_exp",
+                                                             help="P/E above this level is considered severely overvalued — maximum bearish drift penalty is applied.")
+                params["bull_drift_adj"]  = p5.number_input("Max bullish drift adj (%)", 0.0, 15.0, 6.0, 0.5,
+                                                             key=f"{key_prefix}_pe_bull",
+                                                             help="Drift boost added to GBM when the stock is in deep-value territory (P/E < deep value threshold).")
+                _, p6, _ = st.columns(3)
+                params["bear_drift_adj"]  = p6.number_input("Max bearish drift adj (%)", -15.0, 0.0, -6.0, 0.5,
+                                                             key=f"{key_prefix}_pe_bear",
+                                                             help="Drift penalty applied when the stock is expensive (P/E > exit threshold). Should be negative.")
+                _dv = params["pe_deep_value"]; _fv = params["pe_fair_value"]
+                _in = params["pe_in_threshold"]; _exp = params["pe_expensive"]
+                _bull = params["bull_drift_adj"]; _bear = params["bear_drift_adj"]
+                st.info(
+                    f"**What it trades (using trailing P/E ratio):**\n\n"
+                    f" **Deep value — max buy** — P/E < {_dv:.0f}: stay fully invested, drift +{_bull:.1f}% per year.\n\n"
+                    f" **Fair value — hold** — P/E {_dv:.0f}–{_fv:.0f}: stay invested, drift +{_bull*0.5:.1f}% (half boost).\n\n"
+                    f" **Neutral** — P/E {_fv:.0f}–{_in:.0f}: stay invested, no drift adjustment.\n\n"
+                    f" **Expensive — reduce** — P/E {_in:.0f}–{_exp:.0f}: go to cash, drift {_bear*0.5:.1f}% per year.\n\n"
+                    f" **Very expensive — sell** — P/E > {_exp:.0f}: go to cash, drift {_bear:.1f}% (full penalty). "
+                    f"Note: P/E is a snapshot — this strategy updates whenever the app reruns, not daily."
+                )
+
+            elif strat == "Earnings Growth Momentum":
+                params["exit_threshold_pct"] = p1.number_input("Exit when EPS growth below (%)", -30.0, 0.0, -5.0, 0.5,
+                                                                key=f"{key_prefix}_eps_thresh",
+                                                                help="Step to cash when quarterly EPS growth (YoY) falls below this level. "
+                                                                     "E.g. −5% means exit if earnings have declined more than 5% vs a year ago.")
+                params["adj_scale"]          = p2.number_input("Drift sensitivity", 10.0, 120.0, 60.0, 5.0,
+                                                                key=f"{key_prefix}_eps_scale",
+                                                                help="Multiplier applied to the EPS growth rate to produce a drift adjustment. "
+                                                                     "E.g. scale=60 with +10% EPS growth → +6% drift boost (0.10 × 60).")
+                params["adj_cap"]            = p3.number_input("Max drift adj (%)", 1.0, 20.0, 10.0, 0.5,
+                                                                key=f"{key_prefix}_eps_cap",
+                                                                help="Maximum absolute drift adjustment in either direction. "
+                                                                     "Prevents extreme EPS swings from producing unrealistic simulation paths.")
+                _thr = params["exit_threshold_pct"]; _sc = params["adj_scale"]; _cap = params["adj_cap"]
+                _ex_eg = 10.0; _ex_adj = min(_ex_eg / 100 * _sc, _cap)
+                st.info(
+                    f"**What it trades (using quarterly EPS growth vs prior year):**\n\n"
+                    f" **Buy / stay invested** — EPS growth is above {_thr:.1f}%. "
+                    f"Drift is boosted proportionally: e.g. +{_ex_eg:.0f}% EPS growth → +{_ex_adj:.1f}% drift boost (capped at +{_cap:.1f}%).\n\n"
+                    f" **Sell / go to cash** — EPS growth falls below {_thr:.1f}% "
+                    f"(earnings down more than {abs(_thr):.1f}% vs a year ago). "
+                    f"Drift penalty applied symmetrically (capped at −{_cap:.1f}%). "
+                    f"Signal is updated from live Yahoo Finance data each session — it reflects the most recent reported quarter."
+                )
+
+    return strat, params
+
+def render_monte_carlo():
+    st.header("Monte Carlo Price Path Simulator")
+    st.caption("GBM simulation — single asset or correlated portfolio, with optional technical/fundamental strategy overlay.")
+
+    mode = st.radio("Mode", ["Single Asset", "Portfolio"], horizontal=True, key="mc_mode")
+    st.markdown("---")
+
+    if mode == "Single Asset":
+        st.session_state.setdefault("mc_spot",  100.0)
+        st.session_state.setdefault("mc_vol",    25.0)
+        st.session_state.setdefault("mc_drift",   8.0)
+
+        r1, r2 = st.columns([3, 1])
+        mc_ticker = r1.text_input("Ticker", value="SPY", key="mc_ticker")
+        if r2.button("Fetch Price & Vol", use_container_width=True, key="mc_fetch_sa"):
+            with st.spinner("Fetching..."):
+                h = get_yf_market_data(mc_ticker.strip().upper())
+            if not h.empty:
+                st.session_state["mc_spot"] = round(float(h["close"].iloc[-1]), 2)
+                lr = np.log(h["close"] / h["close"].shift(1)).dropna()
+                if len(lr) > 10:
+                    st.session_state["mc_vol"] = round(float(lr.std() * np.sqrt(252) * 100), 1)
+            else:
+                st.toast(f"Could not fetch {mc_ticker.strip().upper()}", icon="")
+
+        c1, c2, c3 = st.columns(3)
+        spot  = c1.number_input("Spot Price ($)",        min_value=0.01, step=1.0,   key="mc_spot")
+        vol   = c2.number_input("Annual Volatility (%)", min_value=0.1,  step=0.5,   key="mc_vol",
+                                help="Annualised standard deviation of daily log-returns. "
+                                     "Controls the width of the path fan — higher vol = wider spread of outcomes. "
+                                     "Click Fetch to pull the historical figure from Yahoo Finance.")
+        drift = c3.number_input("Annual Drift (%)",      min_value=-50.0, max_value=100.0, step=0.5, key="mc_drift",
+                                help="Expected annualised return — the centre of the distribution. "
+                                     "This is your assumption about where the stock is headed on average, "
+                                     "before randomness is applied. "
+                                     "A strategy overlay below will shift this up or down based on a live signal.")
+        st.caption(
+            f"Drift sets the median path: at {st.session_state.get('mc_drift', 8.0):.1f}% drift over 252 days "
+            f"the median simulated price is roughly ${st.session_state.get('mc_spot', 100.0) * (1 + st.session_state.get('mc_drift', 8.0)/100):.2f}. "
+            "Volatility then spreads paths around that centre — it does not change the median."
+        )
+
+    else:  # Portfolio
+        n_assets = st.slider("Number of assets", 2, 8,
+                             value=st.session_state.get("mc_n_assets", 4), key="mc_n_assets")
+
+        wt_mode = st.radio("Position sizing", ["Weight %", "Dollar value ($)"],
+                           horizontal=True, key="mc_wt_mode",
+                           help="Switch between entering portfolio weights (%) or the actual dollar value of each position. "
+                                "Dollar values are converted to weights automatically.")
+
+        mc_tickers  = []
+        mc_weights  = []
+        mc_drifts   = []
+        mc_vols_inp = []
+
+        defaults = [
+            ("SPY",     40.0, 8.0,  15.0, 40_000.0),
+            ("QQQ",     30.0, 10.0, 18.0, 30_000.0),
+            ("GLD",     15.0, 4.0,  12.0, 15_000.0),
+            ("TLT",     15.0, 3.0,  10.0, 15_000.0),
+            ("BTC-USD",  0.0, 20.0, 60.0,      0.0),
+            ("AAPL",     0.0, 9.0,  22.0,      0.0),
+            ("AMZN",     0.0, 11.0, 25.0,      0.0),
+            ("IWM",      0.0, 7.0,  18.0,      0.0),
+        ]
+
+        use_dollars = (wt_mode == "Dollar value ($)")
+        h2_label = "VALUE ($)" if use_dollars else "WEIGHT %"
+
+        # Header row
+        h1, h2, h3, h4, h5 = st.columns([2, 1, 1, 1, 0.6])
+        h1.markdown(f"<small style='color:#5e768f'>TICKER</small>", unsafe_allow_html=True)
+        h2.markdown(f"<small style='color:#5e768f'>{h2_label}</small>", unsafe_allow_html=True)
+        h3.markdown("<small style='color:#5e768f'>DRIFT % /yr</small>", unsafe_allow_html=True)
+        h4.markdown("<small style='color:#5e768f'>VOL % /yr</small>", unsafe_allow_html=True)
+        h5.markdown("<small style='color:#5e768f'>FETCH</small>", unsafe_allow_html=True)
+
+        for i in range(n_assets):
+            def_tk, def_wt, def_dr, def_vl, def_val = defaults[i] if i < len(defaults) else ("", 0.0, 8.0, 20.0, 0.0)
+            a1, a2, a3, a4, a5 = st.columns([2, 1, 1, 1, 0.6])
+            tk = a1.text_input("", value=st.session_state.get(f"mc_tk_{i}", def_tk),
+                               key=f"mc_tk_{i}", label_visibility="collapsed",
+                               placeholder=f"Ticker {i+1}")
+            if use_dollars:
+                raw = a2.number_input("", value=st.session_state.get(f"mc_val_{i}", def_val),
+                                      min_value=0.0, step=1000.0, format="%.0f",
+                                      key=f"mc_val_{i}", label_visibility="collapsed")
+                mc_weights.append(raw)
+            else:
+                wt = a2.number_input("", value=st.session_state.get(f"mc_wt_{i}", def_wt),
+                                     min_value=0.0, max_value=100.0, step=1.0,
+                                     key=f"mc_wt_{i}", label_visibility="collapsed")
+                mc_weights.append(wt)
+            dr = a3.number_input("", value=st.session_state.get(f"mc_dr_{i}", def_dr),
+                                 min_value=-50.0, max_value=100.0, step=0.5,
+                                 key=f"mc_dr_{i}", label_visibility="collapsed")
+            vl = a4.number_input("", value=st.session_state.get(f"mc_vl_{i}", def_vl),
+                                 min_value=0.1, max_value=200.0, step=0.5,
+                                 key=f"mc_vl_{i}", label_visibility="collapsed")
+            if a5.button("↻", key=f"mc_fetch_{i}", help=f"Fetch live vol for {tk}"):
+                if tk.strip():
+                    with st.spinner(f"Fetching {tk.strip().upper()}..."):
+                        h = get_yf_market_data(tk.strip().upper())
+                    if not h.empty:
+                        lr = np.log(h["close"] / h["close"].shift(1)).dropna()
+                        st.session_state[f"mc_vl_{i}"] = round(float(lr.std()*np.sqrt(252)*100), 1)
+                        st.rerun()
+            mc_tickers.append(tk.strip().upper())
+            mc_drifts.append(dr)
+            mc_vols_inp.append(vl)
+
+        # Show computed weights when in dollar mode
+        if use_dollars:
+            total_val = sum(mc_weights)
+            if total_val > 0:
+                parts = []
+                for i, (tk, val) in enumerate(zip(mc_tickers, mc_weights)):
+                    if tk and val > 0:
+                        parts.append(f"{tk} {val/total_val*100:.1f}%")
+                st.caption(f"Total: ${total_val:,.0f}  —  {',  '.join(parts) if parts else 'no positions entered'}")
+            else:
+                st.caption("Enter dollar values above to see computed weights.")
+        else:
+            total_wt = sum(mc_weights)
+            st.caption(f"Total weight entered: {total_wt:.1f}% — normalised to 100% automatically.")
+
+    st.markdown("---")
+    c4, c5 = st.columns(2)
+    horizon = c4.slider("Time Horizon (trading days)", 5, 504,
+                         st.session_state.get("mc_horizon_val", 252), 5, key="mc_horizon_val")
+    n_sims  = c5.slider("Simulations", 200, 5000,
+                         st.session_state.get("mc_nsims_val", 1000), 100, key="mc_nsims_val")
+
+    st.markdown("---")
+    c4, c5 = st.columns(2)
+    horizon = c4.slider("Time Horizon (trading days)", 5, 504,
+                         st.session_state.get("mc_horizon_val", 252), 5, key="mc_horizon_val")
+    n_sims  = c5.slider("Simulations", 200, 5000,
+                         st.session_state.get("mc_nsims_val", 1000), 100, key="mc_nsims_val")
+
+    st.markdown("---")
+    mc_strat, mc_params = _strategy_selector("mc")
+
+    st.markdown("---")
+    bench_col, _ = st.columns([1, 2])
+    bench_col.text_input("Benchmark Ticker", value="SPY", key="mc_bench_ticker",
+                         help="Ticker used as the benchmark comparison line in results (e.g. SPY, QQQ, AGG). "
+                              "Its historical drift and volatility are estimated from 5 years of data.")
+    run_btn = st.button("Run Simulation", use_container_width=True, key="mc_run")
+
+    active_strat    = mc_strat
+    active_params   = mc_params
+    active_horizon  = horizon
+    active_nsims    = n_sims
+    active_bench_tk = st.session_state.get("mc_bench_ticker", "SPY").strip().upper() or "SPY"
+
+    if not run_btn and "mc_paths" not in st.session_state:
+        st.caption("Configure parameters above and click **Run Simulation**.")
+        return
+
+    # ── Simulation ────────────────────────────────────────────────────────────
+    if run_btn:
+        dt   = 1 / 252
+        mode = st.session_state.get("mc_mode", "Single Asset")
+
+        if mode == "Single Asset":
+            mc_ticker_run = st.session_state.get("mc_ticker", "SPY")
+            spot_run  = st.session_state.get("mc_spot",  100.0)
+            vol_run   = st.session_state.get("mc_vol",    25.0)
+            drift_run = st.session_state.get("mc_drift",   8.0)
+
+            adj, _, sig_label, sig_detail = compute_strategy_data(
+                mc_ticker_run.strip().upper(), active_strat, params=active_params)
+            sigma = vol_run / 100
+
+            # Strategy-adjusted paths
+            mu    = (drift_run + adj) / 100
+            Z         = np.random.normal(0, 1, (active_horizon, active_nsims))
+            log_steps = (mu - 0.5*sigma**2)*dt + sigma*np.sqrt(dt)*Z
+            paths     = np.vstack([np.full(active_nsims, spot_run),
+                                   spot_run * np.exp(np.cumsum(log_steps, axis=0))])
+
+            # Base paths — same params, no strategy drift adjustment
+            mu_base       = drift_run / 100
+            Z_base        = np.random.normal(0, 1, (active_horizon, active_nsims))
+            log_steps_base = (mu_base - 0.5*sigma**2)*dt + sigma*np.sqrt(dt)*Z_base
+            paths_nostrat  = np.vstack([np.full(active_nsims, spot_run),
+                                        spot_run * np.exp(np.cumsum(log_steps_base, axis=0))])
+
+            # Benchmark paths — fetched from historical data, normalised to same spot
+            with st.spinner(f"Fetching {active_bench_tk} for benchmark..."):
+                bench_h = get_yf_market_data(active_bench_tk)
+            if not bench_h.empty and len(bench_h) > 50:
+                _blr      = np.log(bench_h["close"] / bench_h["close"].shift(1)).dropna()
+                bench_vol_r = float(_blr.std() * np.sqrt(252))
+                bench_dr    = float(np.log(bench_h["close"].iloc[-1] / bench_h["close"].iloc[0])
+                                    / (len(bench_h) / 252))
+            else:
+                bench_vol_r, bench_dr = 0.15, 0.08
+            Z_bench        = np.random.normal(0, 1, (active_horizon, active_nsims))
+            log_steps_bench = (bench_dr - 0.5*bench_vol_r**2)*dt + bench_vol_r*np.sqrt(dt)*Z_bench
+            paths_bench    = np.vstack([np.full(active_nsims, spot_run),
+                                        spot_run * np.exp(np.cumsum(log_steps_bench, axis=0))])
+
+            st.session_state.update({
+                "mc_paths": paths, "mc_paths_nostrat": paths_nostrat, "mc_paths_bench": paths_bench,
+                "mc_spot_used": spot_run, "mc_bench_tk_saved": active_bench_tk,
+                "mc_mode_saved": "single", "mc_sig_label": sig_label,
+                "mc_sig_detail": sig_detail, "mc_adj": adj,
+                "mc_strategy_saved": active_strat,
+            })
+
+        else:  # Portfolio
+            n_a = st.session_state.get("mc_n_assets", 4)
+            tickers  = [st.session_state.get(f"mc_tk_{i}", "").strip().upper() for i in range(n_a)]
+            weights  = np.array([float(st.session_state.get(f"mc_wt_{i}", 0.0)) for i in range(n_a)])
+            drifts_r = np.array([float(st.session_state.get(f"mc_dr_{i}", 8.0)) for i in range(n_a)])
+            vols_r   = np.array([float(st.session_state.get(f"mc_vl_{i}", 20.0)) for i in range(n_a)])
+
+            valid = [i for i, t in enumerate(tickers) if t and weights[i] > 0]
+            if not valid:
+                st.error("Add at least one asset with a non-zero weight.")
+                st.stop()
+
+            tickers  = [tickers[i]  for i in valid]
+            weights  = weights[valid];  weights  = weights / weights.sum()
+            drifts_r = drifts_r[valid] / 100
+            vols_r   = vols_r[valid]   / 100
+            n        = len(tickers)
+
+            adj, _, sig_label, sig_detail = compute_strategy_data(tickers[0], active_strat, params=active_params)
+            drifts_r_base = drifts_r.copy()          # original, no strategy adj
+            drifts_r      = drifts_r + adj / 100     # strategy-adjusted
+
+            # Batch-fetch 2-year history for correlation — one yf.download call
+            with st.spinner("Fetching correlation data..."):
+                try:
+                    raw = yf.download(tickers,
+                                      start=str(datetime.date.today() - datetime.timedelta(days=730)),
+                                      end=str(datetime.date.today()),
+                                      auto_adjust=True, progress=False)["Close"]
+                    if isinstance(raw, pd.Series):
+                        raw = raw.to_frame(tickers[0])
+                    log_rets = np.log(raw / raw.shift(1)).dropna()
+                    avail    = [t for t in tickers if t in log_rets.columns]
+                    corr     = log_rets[avail].corr().reindex(index=tickers, columns=tickers).fillna(0).values
+                except Exception:
+                    corr = np.eye(n)
+
+            corr = (corr + corr.T) / 2
+            np.fill_diagonal(corr, 1.0)
+            try:
+                L = np.linalg.cholesky(corr)
+            except np.linalg.LinAlgError:
+                L = np.eye(n)
+
+            # Strategy-adjusted portfolio paths
+            Z_raw   = np.random.normal(0, 1, (n, active_horizon, active_nsims))
+            corr_Z  = np.einsum("ij,jks->iks", L, Z_raw)
+            log_ret = ((drifts_r - 0.5*vols_r**2)[:, None, None]*dt
+                       + vols_r[:, None, None]*np.sqrt(dt)*corr_Z)
+            cum_ret    = np.concatenate([np.zeros((n, 1, active_nsims)),
+                                         np.cumsum(log_ret, axis=1)], axis=1)
+            asset_paths = np.exp(cum_ret)
+            paths       = np.einsum("i,ijk->jk", weights, asset_paths) * 100.0
+
+            # Base portfolio paths (no strategy drift adjustment)
+            Z_raw_b  = np.random.normal(0, 1, (n, active_horizon, active_nsims))
+            corr_Z_b = np.einsum("ij,jks->iks", L, Z_raw_b)
+            log_ret_b = ((drifts_r_base - 0.5*vols_r**2)[:, None, None]*dt
+                         + vols_r[:, None, None]*np.sqrt(dt)*corr_Z_b)
+            cum_ret_b   = np.concatenate([np.zeros((n, 1, active_nsims)),
+                                          np.cumsum(log_ret_b, axis=1)], axis=1)
+            paths_nostrat = np.einsum("i,ijk->jk", weights, np.exp(cum_ret_b)) * 100.0
+
+            # Benchmark paths
+            with st.spinner(f"Fetching {active_bench_tk} for benchmark..."):
+                bench_h = get_yf_market_data(active_bench_tk)
+            if not bench_h.empty and len(bench_h) > 50:
+                _blr        = np.log(bench_h["close"] / bench_h["close"].shift(1)).dropna()
+                bench_vol_r = float(_blr.std() * np.sqrt(252))
+                bench_dr    = float(np.log(bench_h["close"].iloc[-1] / bench_h["close"].iloc[0])
+                                    / (len(bench_h) / 252))
+            else:
+                bench_vol_r, bench_dr = 0.15, 0.08
+            Z_bench         = np.random.normal(0, 1, (active_horizon, active_nsims))
+            log_steps_bench = (bench_dr - 0.5*bench_vol_r**2)*dt + bench_vol_r*np.sqrt(dt)*Z_bench
+            paths_bench     = np.vstack([np.full(active_nsims, 100.0),
+                                         100.0 * np.exp(np.cumsum(log_steps_bench, axis=0))])
+
+            st.session_state.update({
+                "mc_paths": paths, "mc_paths_nostrat": paths_nostrat, "mc_paths_bench": paths_bench,
+                "mc_spot_used": 100.0, "mc_bench_tk_saved": active_bench_tk,
+                "mc_mode_saved": "portfolio", "mc_port_tickers": tickers,
+                "mc_port_weights": weights.tolist(), "mc_asset_paths": asset_paths,
+                "mc_sig_label": sig_label, "mc_sig_detail": sig_detail,
+                "mc_adj": adj, "mc_strategy_saved": active_strat,
+            })
+
+    # ── Results ───────────────────────────────────────────────────────────────
+    paths      = st.session_state["mc_paths"]
+    S0         = st.session_state["mc_spot_used"]
+    mode_sv    = st.session_state.get("mc_mode_saved", "single")
+    sig_label  = st.session_state.get("mc_sig_label", "")
+    sig_detail = st.session_state.get("mc_sig_detail", "")
+    adj        = st.session_state.get("mc_adj", 0.0)
+    strat_sv   = st.session_state.get("mc_strategy_saved", STRATEGIES[0])
+
+    if strat_sv != STRATEGIES[0] and sig_label:
+        color = "#2e7d4f" if adj >= 0 else "#8c2e36"
+        st.markdown(
+            f"<div style='padding:10px 14px;border-left:3px solid {color};"
+            f"background:rgba(255,255,255,0.04);border-radius:4px;margin-bottom:10px'>"
+            f"<b style='color:{color}'>{strat_sv} — {sig_label}</b>&nbsp;&nbsp;"
+            f"<b style='color:{color}'>Drift adj: {adj:+.1f}%</b><br>"
+            f"<span style='color:#8a9ab0;font-size:0.87rem'>{sig_detail}</span></div>",
+            unsafe_allow_html=True)
+
+    if mode_sv == "portfolio" and "mc_asset_paths" in st.session_state:
+        tks = st.session_state["mc_port_tickers"]
+        wts = st.session_state["mc_port_weights"]
+        ap  = st.session_state["mc_asset_paths"]
+        with st.expander("Individual Asset Median Paths", expanded=False):
+            fig_a = go.Figure()
+            for i, (tk, w) in enumerate(zip(tks, wts)):
+                med = np.median(ap[i], axis=1) * 100
+                fig_a.add_trace(go.Scatter(x=np.arange(len(med)), y=med, mode="lines",
+                    name=f"{tk} ({w*100:.0f}%)",
+                    line=dict(color=["#1f5673","#c9a84c","#2f6b4b","#8c2e36",
+                                     "#7b5ea7","#d97736","#3d8eb9","#b5432a"][i % 8], width=2)))
+            fig_a.update_layout(title="Median Path per Asset (normalised $100)",
+                height=300, font=dict(family="Lora, serif"), xaxis_title="Trading Days",
+                yaxis_title="Normalised Value ($)",
+                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(showgrid=True, gridcolor="rgba(128,128,128,0.1)"),
+                yaxis=dict(showgrid=True, gridcolor="rgba(128,128,128,0.1)", tickprefix="$"),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+            st.plotly_chart(fig_a, use_container_width=True)
+
+    terminal = _mc_draw_paths(paths, S0,
+        label="Portfolio Value ($)" if mode_sv == "portfolio" else "Price ($)")
+    _mc_risk_metrics(terminal, S0)
+
+    paths_nostrat = st.session_state.get("mc_paths_nostrat")
+    paths_bench   = st.session_state.get("mc_paths_bench")
+    bench_tk_sv   = st.session_state.get("mc_bench_tk_saved", "SPY")
+    _mc_comparison(paths, paths_nostrat, paths_bench, S0,
+                   strat_sv if strat_sv != STRATEGIES[0] else "No Strategy",
+                   bench_tk_sv)
 
 def render_gex():
     st.header("Dealer GEX & Options Positioning")
