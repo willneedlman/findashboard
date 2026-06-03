@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import type { Layout } from 'react-grid-layout'
 
 // ── Widget types ─────────────────────────────────────────────────────────────
@@ -21,7 +21,6 @@ export interface WidgetConfig {
   id: string
   type: WidgetType
   title?: string
-  // type-specific config
   ticker?: string
   tickers?: string[]
   period?: '1mo' | '3mo' | '6mo' | '1y'
@@ -68,18 +67,18 @@ export const WIDGET_LABELS: Record<WidgetType, string> = {
 }
 
 export const WIDGET_DESCRIPTIONS: Record<WidgetType, string> = {
-  'price-card':          'Full TradingView candlestick chart with toolbar, drawing tools & indicators. Shows live price, day change, annualised volatility and max drawdown in the header.',
-  'mini-chart':          'Compact price area chart over a configurable lookback period (1 mo – 1 yr) with tooltip and right-side price axis.',
-  'news-feed':           'Multi-ticker news wire. Each ticker gets its own collapsible section — open/close individually or all at once.',
-  'watchlist':           'Live price table for a custom list of tickers — shows price, day change % and volume at a glance.',
-  'macro-strip':         'Configurable macro dashboard: pick any combination of Fed Funds, Treasury yields (1Y–30Y), 2/10 and 5/30 curve spreads.',
-  'earnings-calendar':   'Upcoming earnings dates with implied move %, analyst consensus rating, and horizon badge for each ticker.',
-  'options-snapshot':    'IV rank, IV percentile and put/call ratio for a single ticker — key inputs for options strategy selection.',
-  'portfolio-summary':   'Backtest summary for a custom basket: enter tickers + weights to see cumulative return, Sharpe, and max drawdown.',
-  'options-pricer':      'Live Black-Scholes pricer: calculates theoretical price, delta, gamma, theta, vega and rho in real time.',
-  'delta-target':        'Reverse Black-Scholes solver — enter a target delta to find the corresponding strike price.',
-  'tradingview-chart':   'Full-screen TradingView advanced chart: candlesticks, 100+ built-in indicators, drawing tools, multi-timeframe (1 m – 1 W), symbol search.',
-  'correlation-matrix':  'Rolling return correlation heatmap for a custom basket — instantly spots diversification gaps and cluster risk across up to 12 tickers.',
+  'price-card':          'Full TradingView candlestick chart with toolbar, drawing tools & indicators.',
+  'mini-chart':          'Compact price area chart over a configurable lookback period.',
+  'news-feed':           'Multi-ticker news wire with collapsible sections per ticker.',
+  'watchlist':           'Live price table — price, day change, market cap, P/E, implied move, rating.',
+  'macro-strip':         'Configurable macro dashboard: Fed Funds, Treasury yields, curve spreads.',
+  'earnings-calendar':   'Upcoming earnings dates with implied move % and analyst consensus.',
+  'options-snapshot':    'ATM IV, implied move, D50 call/put, P/C ratio, vol cone, probability dist.',
+  'portfolio-summary':   'Backtest summary: CAGR, alpha, Sharpe, Sortino, max drawdown, rolling beta.',
+  'options-pricer':      'Live Black-Scholes pricer: price, delta, gamma, theta, vega.',
+  'delta-target':        'Reverse Black-Scholes: find the strike price for a target delta.',
+  'tradingview-chart':   'Full-screen TradingView chart: candlesticks, indicators, drawing tools.',
+  'correlation-matrix':  'Return correlation heatmap for a custom ticker basket.',
 }
 
 export const WIDGET_ICONS: Record<WidgetType, string> = {
@@ -97,40 +96,52 @@ export const WIDGET_ICONS: Record<WidgetType, string> = {
   'correlation-matrix':  'ρ',
 }
 
-// ── Default widgets ───────────────────────────────────────────────────────────
+// ── Default layout — all widgets ──────────────────────────────────────────────
 //
-// Layout (12-col grid, rowHeight=60, margin=10):
+// 12-col grid, rowHeight=60, margin=10:
 //
-//  y=0  [============ MACRO STRIP (12×2) ============]
-//  y=2  [ TV CHART — NVDA (8×9)  ] [ WATCHLIST (4×5) ]
-//  y=7  [                        ] [ NEWS — NVDA (4×4)]
-//  y=11 [ SPY (3×6) ][ NVDA (3×6) ][ BTC (3×6) ][ EARNINGS (3×6) ]
+//  y=0   [══════════════ MACRO STRIP (12×2) ══════════════]
+//  y=2   [ TV CHART — NVDA (8×9)  ] [ WATCHLIST (4×5)    ]
+//  y=7   [                        ] [ NEWS FEED (4×4)     ]
+//  y=11  [ OPTIONS SNAPSHOT (4×6) ] [ PORTFOLIO (4×6)    ] [ CORR MATRIX (4×6) ]
+//  y=17  [ PRICE SPY (3×6) ][ PRICE NVDA (3×6) ][ PRICE BTC (3×6) ][ EARNINGS (3×6) ]
+//  y=23  [ MINI CHART (4×5) ] [ OPTIONS PRICER (4×5) ] [ DELTA TARGET (4×5) ]
 
-const DEFAULT_WIDGETS: WidgetConfig[] = [
-  { id: 'w1', type: 'macro-strip' },
-  { id: 'w2', type: 'tradingview-chart', ticker: 'NVDA' },
-  { id: 'w3', type: 'watchlist',   tickers: ['NVDA','AAPL','MSFT','AMZN','META','GOOGL','TSLA'] },
-  { id: 'w4', type: 'news-feed',   tickers: ['NVDA', 'SPY', 'AAPL'] },
-  { id: 'w5', type: 'price-card',  ticker: 'SPY' },
-  { id: 'w6', type: 'price-card',  ticker: 'NVDA' },
-  { id: 'w7', type: 'price-card',  ticker: 'BTC-USD' },
-  { id: 'w8', type: 'earnings-calendar', tickers: ['NVDA','AAPL','MSFT','AMZN','META','GOOGL'] },
+export const DEFAULT_WIDGETS: WidgetConfig[] = [
+  { id: 'w1',  type: 'macro-strip' },
+  { id: 'w2',  type: 'tradingview-chart',  ticker: 'NVDA' },
+  { id: 'w3',  type: 'watchlist',          tickers: ['NVDA','AAPL','MSFT','AMZN','META','GOOGL','TSLA'] },
+  { id: 'w4',  type: 'news-feed',          tickers: ['NVDA','SPY','AAPL'] },
+  { id: 'w5',  type: 'options-snapshot',   ticker: 'NVDA' },
+  { id: 'w6',  type: 'portfolio-summary',  tickers: ['SPY','QQQ','TLT','GLD'], weights: [0.4,0.3,0.2,0.1] },
+  { id: 'w7',  type: 'correlation-matrix', tickers: ['SPY','QQQ','TLT','GLD','BTC-USD'] },
+  { id: 'w8',  type: 'price-card',         ticker: 'SPY' },
+  { id: 'w9',  type: 'price-card',         ticker: 'NVDA' },
+  { id: 'w10', type: 'price-card',         ticker: 'BTC-USD' },
+  { id: 'w11', type: 'earnings-calendar',  tickers: ['NVDA','AAPL','MSFT','AMZN','META','GOOGL'] },
+  { id: 'w12', type: 'mini-chart',         ticker: 'SPY', period: '1y' },
+  { id: 'w13', type: 'options-pricer',     ticker: 'SPY' },
+  { id: 'w14', type: 'delta-target',       ticker: 'SPY' },
 ]
 
-const DEFAULT_LAYOUTS: Layout[] = [
-  { i: 'w1', x: 0, y: 0,  w: 12, h: 2 },
-  { i: 'w2', x: 0, y: 2,  w: 8,  h: 9, minH: 6, minW: 3 },
-  { i: 'w3', x: 8, y: 2,  w: 4,  h: 5 },
-  { i: 'w4', x: 8, y: 7,  w: 4,  h: 4 },
-  { i: 'w5', x: 0, y: 11, w: 3,  h: 6, minH: 6, minW: 3 },
-  { i: 'w6', x: 3, y: 11, w: 3,  h: 6, minH: 6, minW: 3 },
-  { i: 'w7', x: 6, y: 11, w: 3,  h: 6, minH: 6, minW: 3 },
-  { i: 'w8', x: 9, y: 11, w: 3,  h: 6 },
+export const DEFAULT_LAYOUTS: Layout[] = [
+  { i: 'w1',  x: 0, y: 0,  w: 12, h: 2 },
+  { i: 'w2',  x: 0, y: 2,  w: 8,  h: 9,  minH: 6, minW: 3 },
+  { i: 'w3',  x: 8, y: 2,  w: 4,  h: 5 },
+  { i: 'w4',  x: 8, y: 7,  w: 4,  h: 4 },
+  { i: 'w5',  x: 0, y: 11, w: 4,  h: 6 },
+  { i: 'w6',  x: 4, y: 11, w: 4,  h: 6 },
+  { i: 'w7',  x: 8, y: 11, w: 4,  h: 6 },
+  { i: 'w8',  x: 0, y: 17, w: 3,  h: 6,  minH: 6, minW: 3 },
+  { i: 'w9',  x: 3, y: 17, w: 3,  h: 6,  minH: 6, minW: 3 },
+  { i: 'w10', x: 6, y: 17, w: 3,  h: 6,  minH: 6, minW: 3 },
+  { i: 'w11', x: 9, y: 17, w: 3,  h: 6 },
+  { i: 'w12', x: 0, y: 23, w: 4,  h: 5 },
+  { i: 'w13', x: 4, y: 23, w: 4,  h: 5 },
+  { i: 'w14', x: 8, y: 23, w: 4,  h: 5 },
 ]
 
-// ── Size constraints ─────────────────────────────────────────────────────────
-// TradingView embed needs ≥400px. rowHeight=60, margin=10 → height = 70h-10.
-// minH=6 → 410px. minW=3 → prevents the toolbar from collapsing to unusable.
+// ── Size constraints ──────────────────────────────────────────────────────────
 
 const TV_TYPES: WidgetType[] = ['tradingview-chart', 'price-card']
 const TV_MIN_H = 6
@@ -140,49 +151,49 @@ function applyConstraints(widgets: WidgetConfig[], layouts: Layout[]): Layout[] 
   return layouts.map(item => {
     const widget = widgets.find(w => w.id === item.i)
     if (!widget || !TV_TYPES.includes(widget.type)) return item
-    return {
-      ...item,
-      minH: TV_MIN_H,
-      minW: TV_MIN_W,
-      h: Math.max(item.h, TV_MIN_H),
-      w: Math.max(item.w, TV_MIN_W),
-    }
+    return { ...item, minH: TV_MIN_H, minW: TV_MIN_W, h: Math.max(item.h, TV_MIN_H), w: Math.max(item.w, TV_MIN_W) }
   })
 }
 
-// ── Storage ───────────────────────────────────────────────────────────────────
+// ── Storage — per-user when a userId is provided ──────────────────────────────
 
-const STORAGE_KEY = 'finance-terminal-dashboard-v2'
+const BASE_KEY = 'finance-terminal-dashboard-v2'
 
-function load(): StoredDashboard {
+function storageKey(userId?: string | null) {
+  return userId ? `${BASE_KEY}-user-${userId}` : BASE_KEY
+}
+
+function load(userId?: string | null): StoredDashboard {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(storageKey(userId))
     if (raw) {
       const parsed = JSON.parse(raw) as StoredDashboard
       if (parsed.version === 1 && parsed.widgets && parsed.layouts) {
-        return {
-          ...parsed,
-          layouts: applyConstraints(parsed.widgets, parsed.layouts),
-        }
+        return { ...parsed, layouts: applyConstraints(parsed.widgets, parsed.layouts) }
       }
     }
   } catch { /* ignore */ }
   return { version: 1, widgets: DEFAULT_WIDGETS, layouts: DEFAULT_LAYOUTS }
 }
 
-function save(d: StoredDashboard) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(d)) } catch { /* ignore */ }
+function save(d: StoredDashboard, userId?: string | null) {
+  try { localStorage.setItem(storageKey(userId), JSON.stringify(d)) } catch { /* ignore */ }
 }
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
-export function useDashboard() {
-  const [state, setState] = useState<StoredDashboard>(load)
+export function useDashboard(userId?: string | null) {
+  const [state, setState] = useState<StoredDashboard>(() => load(userId))
+
+  // When user changes (login / logout), reload that user's dashboard
+  useEffect(() => {
+    setState(load(userId))
+  }, [userId])
 
   const persist = useCallback((next: StoredDashboard) => {
     setState(next)
-    save(next)
-  }, [])
+    save(next, userId)
+  }, [userId])
 
   const addWidget = useCallback((type: WidgetType, config: Partial<WidgetConfig> = {}) => {
     const id = `w${Date.now()}`
@@ -190,27 +201,15 @@ export function useDashboard() {
     const newWidget: WidgetConfig = { id, type, ...config }
     const newLayout: Layout = { i: id, x: 0, y: Infinity, w: def.w, h: def.h }
     const nextWidgets = [...state.widgets, newWidget]
-    persist({
-      version: 1,
-      widgets: nextWidgets,
-      layouts: applyConstraints(nextWidgets, [...state.layouts, newLayout]),
-    })
+    persist({ version: 1, widgets: nextWidgets, layouts: applyConstraints(nextWidgets, [...state.layouts, newLayout]) })
   }, [state, persist])
 
   const removeWidget = useCallback((id: string) => {
-    persist({
-      version: 1,
-      widgets: state.widgets.filter(w => w.id !== id),
-      layouts: state.layouts.filter(l => l.i !== id),
-    })
+    persist({ version: 1, widgets: state.widgets.filter(w => w.id !== id), layouts: state.layouts.filter(l => l.i !== id) })
   }, [state, persist])
 
   const updateWidget = useCallback((id: string, patch: Partial<WidgetConfig>) => {
-    persist({
-      version: 1,
-      widgets: state.widgets.map(w => w.id === id ? { ...w, ...patch } : w),
-      layouts: state.layouts,
-    })
+    persist({ version: 1, widgets: state.widgets.map(w => w.id === id ? { ...w, ...patch } : w), layouts: state.layouts })
   }, [state, persist])
 
   const updateLayouts = useCallback((layouts: readonly Layout[]) => {

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useTheme, DEFAULT_THEME, MONO_FONTS, SANS_FONTS, applyTheme, type Theme } from '../contexts/ThemeContext'
 import PageWrapper from '../components/PageWrapper'
+import axios from 'axios'
 
 // ── Palette of preset color schemes ──────────────────────────────────────────
 const PRESETS: { name: string; theme: Partial<Theme> }[] = [
@@ -85,6 +86,81 @@ function FontSelector({ label, value, options, onChange, onUpload }: {
       <span style={{ fontFamily: `'${value}', monospace`, fontSize: 12, color: 'var(--theme-primary)', letterSpacing: '0.04em' }}>
         0123  AAPL  $4.82T  Δ−0.25
       </span>
+    </div>
+  )
+}
+
+// ── Admin stats panel ─────────────────────────────────────────────────────────
+interface UserStats {
+  total_users: number; new_last_7d: number; new_last_30d: number
+  users: { username: string; display_name: string; created_at: string; last_login_at: string | null; login_count: number }[]
+}
+
+function AdminPanel() {
+  const [secret, setSecret] = useState('')
+  const [data,   setData]   = useState<UserStats | null>(null)
+  const [err,    setErr]    = useState('')
+  const [loading,setLoading]= useState(false)
+
+  const fetch = async () => {
+    setErr(''); setLoading(true)
+    try {
+      const res = await axios.get('/api/users/stats', { headers: { 'x-admin-secret': secret } })
+      setData(res.data)
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setErr(msg ?? 'Failed to fetch — check your admin secret')
+    } finally { setLoading(false) }
+  }
+
+  const inp: React.CSSProperties = { background: '#0a1220', border: '1px solid #2e394d', color: '#d7e3fc', fontFamily: 'var(--theme-mono)', fontSize: 11, padding: '4px 8px', outline: 'none', flex: 1 }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <input type="password" value={secret} onChange={e => setSecret(e.target.value)} onKeyDown={e => e.key === 'Enter' && fetch()} placeholder="ADMIN_SECRET env var" style={inp} autoComplete="off" />
+        <button onClick={fetch} disabled={loading || !secret} style={{ background: 'var(--theme-primary)', border: 'none', color: '#0a1220', fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '4px 14px', cursor: secret && !loading ? 'pointer' : 'default', opacity: secret && !loading ? 1 : 0.5 }}>
+          {loading ? '…' : 'Fetch'}
+        </button>
+      </div>
+      {err && <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, color: '#ef4444' }}>{err}</span>}
+      {data && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {/* Summary row */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
+            {[
+              { label: 'Total Users',   value: data.total_users },
+              { label: 'Last 7 Days',   value: data.new_last_7d },
+              { label: 'Last 30 Days',  value: data.new_last_30d },
+            ].map(s => (
+              <div key={s.label} style={{ background: '#0a1220', border: '1px solid #2e394d', padding: '8px 10px' }}>
+                <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, color: 'var(--theme-secondary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>{s.label}</div>
+                <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 22, fontWeight: 700, color: 'var(--theme-primary)' }}>{s.value}</div>
+              </div>
+            ))}
+          </div>
+          {/* User table */}
+          <div style={{ border: '1px solid #2e394d', overflow: 'hidden', maxHeight: 320, overflowY: 'auto' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 100px 80px 60px', background: '#080f1d', padding: '5px 10px', position: 'sticky', top: 0, borderBottom: '1px solid #2e394d' }}>
+              {['Display Name','Username','Joined','Last Login','Logins'].map(h => (
+                <span key={h} style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, color: '#3a4d62', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{h}</span>
+              ))}
+            </div>
+            {data.users.map((u, i) => (
+              <div key={u.username} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 100px 80px 60px', padding: '6px 10px', background: i % 2 === 0 ? '#0d1826' : 'transparent', borderBottom: i < data.users.length - 1 ? '1px solid #1a2535' : 'none', alignItems: 'center' }}>
+                <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: '#d7e3fc', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.display_name}</span>
+                <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary)' }}>@{u.username}</span>
+                <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: '#3a4d62' }}>{new Date(u.created_at).toLocaleDateString()}</span>
+                <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: '#3a4d62' }}>{u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : '—'}</span>
+                <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-secondary)', textAlign: 'right' }}>{u.login_count}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, color: '#3a4d62' }}>
+            Showing up to 200 most recent registrations · data from server SQLite
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -307,17 +383,19 @@ export default function Settings() {
             </Section>
 
             {user && (
-              <Section title="Account">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <Section title={`Account · ${allUsers.length} profile${allUsers.length !== 1 ? 's' : ''}`}>
+                {/* Current user */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
                   <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 12, color: '#d7e3fc' }}>
                     {user.displayName}
                     <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary)', marginLeft: 8 }}>@{user.username}</span>
+                    <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, color: 'var(--theme-primary)', marginLeft: 8, border: `1px solid ${draft.primaryColor}40`, padding: '1px 5px' }}>current</span>
                   </div>
                   <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: '#3a4d62' }}>
-                    Created {new Date(user.createdAt).toLocaleDateString()} · {allUsers.length} profile{allUsers.length !== 1 ? 's' : ''} stored locally
+                    Created {new Date(user.createdAt).toLocaleDateString()}
                   </div>
                   {!confirmDel ? (
-                    <button onClick={() => setConfirmDel(true)} style={{ alignSelf: 'flex-start', background: 'transparent', border: '1px solid #3a1010', color: '#8c2e2e', fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '4px 12px', cursor: 'pointer', marginTop: 4 }}>
+                    <button onClick={() => setConfirmDel(true)} style={{ alignSelf: 'flex-start', background: 'transparent', border: '1px solid #3a1010', color: '#8c2e2e', fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '4px 12px', cursor: 'pointer' }}>
                       Delete Profile
                     </button>
                   ) : (
@@ -328,9 +406,57 @@ export default function Settings() {
                     </div>
                   )}
                 </div>
+
+                {/* All profiles table */}
+                {allUsers.length > 1 && (
+                  <div>
+                    <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>
+                      All profiles on this device
+                    </div>
+                    <div style={{ border: '1px solid #2e394d', overflow: 'hidden' }}>
+                      {/* Header */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 90px 60px', background: '#080f1d', padding: '5px 10px', borderBottom: '1px solid #2e394d' }}>
+                        {['Display Name', 'Username', 'Created', ''].map(h => (
+                          <span key={h} style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, color: '#3a4d62', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{h}</span>
+                        ))}
+                      </div>
+                      {allUsers.map((u, i) => (
+                        <div key={u.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 90px 60px', padding: '6px 10px', background: i % 2 === 0 ? '#0d1826' : 'transparent', borderBottom: i < allUsers.length - 1 ? '1px solid #1a2535' : 'none', alignItems: 'center' }}>
+                          <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: u.id === user.id ? 'var(--theme-primary)' : '#d7e3fc' }}>
+                            {u.displayName}
+                          </span>
+                          <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary)' }}>@{u.username}</span>
+                          <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: '#3a4d62' }}>
+                            {new Date(u.createdAt).toLocaleDateString()}
+                          </span>
+                          {u.id !== user.id ? (
+                            <button onClick={() => deleteUser(u.id)} style={{ background: 'transparent', border: '1px solid #3a1010', color: '#8c2e2e', fontFamily: 'var(--theme-sans)', fontSize: 8, padding: '2px 6px', cursor: 'pointer' }}>
+                              Delete
+                            </button>
+                          ) : (
+                            <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, color: '#3a4d62' }}>you</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, color: '#3a4d62', marginTop: 6 }}>
+                      {allUsers.length} profile{allUsers.length !== 1 ? 's' : ''} stored in this browser's localStorage
+                    </div>
+                  </div>
+                )}
               </Section>
             )}
           </div>
+        </div>
+
+        {/* ── Admin stats — full width ─────────────────────────────────── */}
+        <div style={{ marginTop: 40, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 32 }}>
+          <Section title="Site-Wide User Stats (Admin)">
+            <p style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, color: 'var(--theme-secondary)', marginBottom: 12 }}>
+              Enter your <code style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-primary)' }}>ADMIN_SECRET</code> Fly env var to view registrations from all devices.
+            </p>
+            <AdminPanel />
+          </Section>
         </div>
       </div>
     </PageWrapper>

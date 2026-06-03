@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import RGL, { type Layout, type Layouts } from 'react-grid-layout'
+import { useTheme } from '../contexts/ThemeContext'
 import 'react-grid-layout/css/styles.css'
 
 // react-grid-layout v1 is CJS; Vite 8/Rolldown pre-bundles it to a single
@@ -23,7 +24,8 @@ const COLS        = { lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }
 
 export default function CustomDashboard() {
   const isMobile = useIsMobile()
-  const { widgets, layouts, addWidget, removeWidget, updateWidget, updateLayouts, resetDashboard } = useDashboard()
+  const { user } = useTheme()
+  const { widgets, layouts, addWidget, removeWidget, updateWidget, updateLayouts, resetDashboard } = useDashboard(user?.id)
   const [editMode, setEditMode] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)

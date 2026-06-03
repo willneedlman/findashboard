@@ -162,6 +162,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // Apply CSS whenever theme changes
   useEffect(() => { applyTheme(theme) }, [theme])
 
+  // Sync existing logged-in user to backend on mount (handles accounts created before server tracking)
+  useEffect(() => {
+    if (!user) return
+    fetch('/api/users/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: user.id, username: user.username, display_name: user.displayName, pin: user.pin, created_at: user.createdAt }),
+    }).catch(() => {})
+  }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const persistUsers = useCallback((next: User[]) => {
     setUsersState(next)
     saveUsers(next)
@@ -172,13 +182,22 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     persistUsers(users.map(u => u.id === userId ? { ...u, theme: { ...u.theme, ...patch } } : u))
   }, [userId, users, persistUsers])
 
+  const syncLogin = useCallback((username: string, pin: string) => {
+    fetch('/api/users/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, pin }),
+    }).catch(() => { /* best-effort */ })
+  }, [])
+
   const login = useCallback((username: string, pin: string): boolean => {
     const u = users.find(u => u.username.toLowerCase() === username.toLowerCase() && u.pin === pin)
     if (!u) return false
     setUserId(u.id)
     saveSession(u.id)
+    syncLogin(username, pin)
     return true
-  }, [users])
+  }, [users, syncLogin])
 
   const logout = useCallback(() => {
     setUserId(null)
@@ -196,6 +215,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     persistUsers(next)
     setUserId(u.id)
     saveSession(u.id)
+    // Sync to backend — best-effort, never blocks the local flow
+    fetch('/api/users/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: u.id, username, display_name: displayName, pin, created_at: u.createdAt }),
+    }).catch(() => { /* offline / server error — local auth still works */ })
     return true
   }, [users, persistUsers])
 

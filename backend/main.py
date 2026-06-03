@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from routers import market, options, bond, portfolio, nav, corporate, rates, correlation, dcf, probability, strategy
+from routers import market, options, bond, portfolio, nav, corporate, rates, correlation, dcf, probability, strategy, users
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
@@ -55,6 +55,7 @@ app.include_router(correlation.router, prefix="/api/correlation", tags=["correla
 app.include_router(dcf.router,         prefix="/api/dcf",         tags=["dcf"])
 app.include_router(probability.router, prefix="/api/prob",        tags=["probability"])
 app.include_router(strategy.router,   prefix="/api/strategy",    tags=["strategy"])
+app.include_router(users.router,      prefix="/api/users",       tags=["users"])
 
 @app.get("/api/health")
 def health():
