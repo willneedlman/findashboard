@@ -1,0 +1,231 @@
+import { useState } from 'react'
+import { useMutation } from '@tanstack/react-query'
+import { LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
+import PageWrapper from '../components/PageWrapper'
+import MetricCard from '../components/MetricCard'
+import SidebarLayout from '../components/SidebarLayout'
+import { fetchNAVProxy } from '../hooks/useApi'
+import EmptyState from '../components/EmptyState'
+const INPUT: React.CSSProperties = {
+  background: '#0a1628', border: '1px solid #4d4637', color: '#d7e3fc',
+  fontFamily: 'JetBrains Mono, monospace', fontSize: 12, padding: '5px 8px',
+  width: '100%', outline: 'none', boxSizing: 'border-box',
+}
+const LABEL: React.CSSProperties = {
+  fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
+  textTransform: 'uppercase', color: '#99907e', marginBottom: 4, display: 'block',
+}
+const TOOLTIP_STYLE = { background: '#142032', border: '1px solid #4d4637', borderRadius: 0 }
+const TICK = { fontSize: 9, fill: '#99907e', fontFamily: 'JetBrains Mono, monospace' }
+
+function ChartPanel({ label, height, children }: { label: string; height: number; children: React.ReactNode }) {
+  return (
+    <div style={{ background: '#101c2e', border: '1px solid #2e394d', position: 'relative' }}>
+      <div style={{
+        position: 'absolute', top: 0, left: 0, zIndex: 10,
+        background: 'rgba(46,57,77,0.8)', padding: '3px 8px',
+        borderRight: '1px solid #2e394d', borderBottom: '1px solid #2e394d',
+        fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#d7e3fc',
+      }}>
+        {label}
+      </div>
+      <div style={{ paddingTop: 28, paddingLeft: 8, paddingRight: 8, paddingBottom: 8, height }}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+export default function NAVTracker() {
+  const [p, setP] = useState({
+    target: 'MSTR', asset: 'BTC-USD',
+    start: '2023-01-01',
+    gross_debt_m: 4200, gross_cash_m: 150,
+    use_live: true,
+  })
+  const [holdings, setHoldings] = useState(843706)
+  const [avgCost, setAvgCost] = useState(75699)
+
+  const { mutate, data, isPending } = useMutation({
+    mutationFn: () => fetchNAVProxy({
+      ...p,
+      holdings: p.use_live ? null : holdings,
+      avg_cost: p.use_live ? null : avgCost,
+    }),
+  })
+
+  const focus = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = '#c9a84c')
+  const blur  = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = '#4d4637')
+
+  return (
+    <PageWrapper>
+      <SidebarLayout sidebarWidth={200} sidebarTitle="NAV Controls" sidebar={<>
+
+        {/* Left sidebar */}
+
+          <div style={{ padding: '8px 10px', borderBottom: '1px solid #2e394d', background: '#142032' }}>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#ffffff' }}>
+              SOTP Parameters
+            </div>
+          </div>
+
+          <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
+            <div>
+              <label style={LABEL}>Target Ticker</label>
+              <input style={INPUT} value={p.target}
+                onChange={e => setP(x => ({ ...x, target: e.target.value.toUpperCase() }))}
+                onFocus={focus} onBlur={blur} />
+            </div>
+            <div>
+              <label style={LABEL}>Asset / Proxy Ticker</label>
+              <input style={INPUT} value={p.asset}
+                onChange={e => setP(x => ({ ...x, asset: e.target.value.toUpperCase() }))}
+                onFocus={focus} onBlur={blur} />
+            </div>
+            <div>
+              <label style={LABEL}>Analysis Start</label>
+              <input type="date" style={INPUT} value={p.start}
+                onChange={e => setP(x => ({ ...x, start: e.target.value }))}
+                onFocus={focus} onBlur={blur} />
+            </div>
+            <div>
+              <label style={LABEL}>Gross Debt ($M)</label>
+              <input type="number" style={INPUT} value={p.gross_debt_m} step={100}
+                onChange={e => setP(x => ({ ...x, gross_debt_m: +e.target.value }))}
+                onFocus={focus} onBlur={blur} />
+            </div>
+            <div>
+              <label style={LABEL}>Cash Reserves ($M)</label>
+              <input type="number" style={INPUT} value={p.gross_cash_m} step={10}
+                onChange={e => setP(x => ({ ...x, gross_cash_m: +e.target.value }))}
+                onFocus={focus} onBlur={blur} />
+            </div>
+
+            {/* Holdings section */}
+            <div style={{ borderTop: '1px solid #2e394d', paddingTop: 10 }}>
+              <label style={LABEL}>Asset Holdings</label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', marginBottom: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={p.use_live}
+                  onChange={e => setP(x => ({ ...x, use_live: e.target.checked }))}
+                  style={{ accentColor: '#c9a84c', cursor: 'pointer' }}
+                />
+                <span style={{ fontSize: 10, color: '#99907e', lineHeight: '14px' }}>Auto-fetch SEC EDGAR 8-K</span>
+              </label>
+
+              {!p.use_live && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div>
+                    <label style={LABEL}>Holdings Count</label>
+                    <input type="number" style={INPUT} value={holdings} step={1000}
+                      onChange={e => setHoldings(+e.target.value)}
+                      onFocus={focus} onBlur={blur} />
+                  </div>
+                  <div>
+                    <label style={LABEL}>Avg Cost ($ / unit)</label>
+                    <input type="number" style={INPUT} value={avgCost} step={100}
+                      onChange={e => setAvgCost(+e.target.value)}
+                      onFocus={focus} onBlur={blur} />
+                  </div>
+                </div>
+              )}
+
+              {p.use_live && (
+                <div style={{ fontSize: 10, color: '#4d4637', lineHeight: '14px' }}>
+                  Pulled from most recent 8-K filing. Disable to enter manually.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div style={{ padding: 10, borderTop: '1px solid #2e394d' }}>
+            <button onClick={() => mutate()} disabled={isPending} style={{
+              width: '100%', background: '#1f2a3d', border: '1px solid #c9a84c', color: '#c9a84c',
+              fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
+              textTransform: 'uppercase', padding: '8px 0', cursor: isPending ? 'default' : 'pointer',
+              opacity: isPending ? 0.6 : 1,
+            }}>
+              {isPending ? 'Loading…' : '⬢ Execute SOTP Matrix'}
+            </button>
+          </div>
+
+      {/* Right panel */}
+      </>}>
+
+          {!data && !isPending && (
+            <EmptyState title="NAV Proxy Tracker" hint="Configure BTC holdings and press Calculate NAV." />
+          )}
+
+          {data && (
+            <>
+              <div className="metric-grid">
+                <MetricCard label={`${p.target} Price`} value={`$${data.current.target_price.toLocaleString()}`}
+                  help={`Live market price of ${p.target}. Compared against SOTP NAV floor to determine premium or discount.`} />
+                <MetricCard label="Gross Asset / Share" value={`$${data.current.gav_per_share.toLocaleString()}`}
+                  help="Gross Asset Value per share — total asset holdings at spot, divided by shares outstanding. Does not subtract debt." />
+                <MetricCard label="True Net NAV / Share" value={`$${data.current.nav_per_share.toLocaleString()}`}
+                  help="Net Asset Value per share — holdings at spot minus gross debt and adjusted for cash, divided by shares outstanding." />
+                <MetricCard label="Implied Premium"
+                  value={`${data.current.premium > 0 ? '+' : ''}${data.current.premium}%`}
+                  deltaPositive={data.current.premium > 0}
+                  help={`How much ${p.target} market price exceeds (or trails) the True Net NAV per share.`} />
+                <MetricCard label={`${p.asset} Spot`} value={`$${data.current.asset_spot.toLocaleString()}`}
+                  help={`Current spot price of ${p.asset}. Drives real-time GAV and NAV calculations.`} />
+                <div style={{ background: '#101c2e', border: '1px solid #2e394d', borderTop: '3px solid #c9a84c', padding: '10px 12px' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#99907e', marginBottom: 6 }}>
+                    Total Holdings
+                  </div>
+                  <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 20, fontWeight: 700, color: '#d7e3fc' }}>
+                    {Number(data.holdings).toLocaleString()}
+                  </div>
+                  <div style={{ fontSize: 10, color: '#4d4637', marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    title={data.source}>
+                    {data.source}
+                  </div>
+                </div>
+                {data.unrealized_pnl !== 0 && (
+                  <MetricCard label="Unrealized P&L"
+                    value={`$${data.unrealized_pnl}B`}
+                    deltaPositive={data.unrealized_pnl > 0}
+                    help="Unrealized gain or loss — (current spot − avg cost) × holdings." />
+                )}
+              </div>
+
+              <ChartPanel label={`${p.target} Price vs SOTP Net NAV Floor`} height={288}>
+                <ResponsiveContainer width="100%" height={260}>
+                  <LineChart data={data.series}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.07)" />
+                    <XAxis dataKey="date" tick={TICK} tickFormatter={d => d.slice(0, 7)} interval="preserveStartEnd" />
+                    <YAxis tick={TICK} tickFormatter={v => `$${v.toFixed(0)}`} orientation="right" />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} />
+                    <Legend wrapperStyle={{ fontSize: 10 }} />
+                    <Line type="monotone" dataKey="target" stroke="#1f5673" strokeWidth={2.5} dot={false} name={p.target} />
+                    <Line type="monotone" dataKey="nav" stroke="#d97736" strokeWidth={2} strokeDasharray="5 3" dot={false} name="Leverage-Adjusted NAV Floor" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </ChartPanel>
+
+              <ChartPanel label="Historical Premium / Discount %" height={188}>
+                <ResponsiveContainer width="100%" height={160}>
+                  <AreaChart data={data.series}>
+                    <defs>
+                      <linearGradient id="premGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#2f6b4b" stopOpacity={0.4} />
+                        <stop offset="100%" stopColor="#2f6b4b" stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.07)" />
+                    <XAxis dataKey="date" tick={TICK} tickFormatter={d => d.slice(0, 7)} interval="preserveStartEnd" />
+                    <YAxis tick={TICK} tickFormatter={v => `${v}%`} orientation="right" />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} />
+                    <Area type="monotone" dataKey="premium" stroke="#2f6b4b" fill="url(#premGrad)" strokeWidth={1.5} name="Premium %" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </ChartPanel>
+            </>
+          )}
+      </SidebarLayout>
+    </PageWrapper>
+  )
+}

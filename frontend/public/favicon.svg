@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Dark navy background -->
+  <rect width="32" height="32" rx="5" fill="#0a1628"/>
+  <!-- Gold upward trend line — bold enough to read at 16px -->
+  <polyline
+    points="3,24 9,18 16,20 23,12 29,7"
+    stroke="#c9a84c" stroke-width="3"
+    fill="none" stroke-linecap="round" stroke-linejoin="round"
+  />
+  <!-- Small arrowhead at tip -->
+  <polyline
+    points="24,6 29,7 28,12"
+    stroke="#c9a84c" stroke-width="2.5"
+    fill="none" stroke-linecap="round" stroke-linejoin="round"
+  />
+</svg>

@@ -1,0 +1,54 @@
+import axios from 'axios'
+
+const api = axios.create({ baseURL: '/api', timeout: 25_000 })
+
+export const fetchMarketHistory = (ticker: string, start?: string, end?: string) =>
+  api.get('/market/history', { params: { ticker, start, end } }).then(r => r.data)
+
+export const priceOption = (body: object) =>
+  api.post('/options/price', body).then(r => r.data)
+
+export const optionSurface = (body: object) =>
+  api.post('/options/surface', body).then(r => r.data)
+
+export const optionPayoff = (body: object) =>
+  api.post('/options/payoff', body).then(r => r.data)
+
+export const fetchOptionsChain = (ticker: string) =>
+  api.get('/options/chain', { params: { ticker } }).then(r => r.data)
+
+export const fetchGEX = (ticker: string) =>
+  api.get('/options/gex', { params: { ticker } }).then(r => r.data)
+
+export const strategyPayoff = (body: object) =>
+  api.post('/options/strategy', body).then(r => r.data)
+
+export const fetchBondAnalytics = (body: object) =>
+  api.post('/bond/analytics', body).then(r => r.data)
+
+export const runBacktest = (body: object) =>
+  api.post('/portfolio/backtest', body).then(r => r.data)
+
+export const runMonteCarlo = (body: object) =>
+  api.post('/portfolio/montecarlo', body).then(r => r.data)
+
+export const fetchNAVProxy = (body: object) =>
+  api.post('/nav/proxy', body).then(r => r.data)
+
+export const fetchCorporateHub = (ticker: string) =>
+  api.get('/corporate/hub', { params: { ticker } }).then(r => r.data)
+
+export const fetchYieldCurve = () =>
+  api.get('/rates/yield-curve').then(r => r.data)
+
+export const fetchFedProjections = () =>
+  api.get('/rates/fed-projections').then(r => r.data)
+
+export const fetchCorrelation = (body: object) =>
+  api.post('/correlation/matrix', body).then(r => r.data)
+
+export const fetchDCFFundamentals = (ticker: string) =>
+  api.get('/dcf/fundamentals', { params: { ticker } }).then(r => r.data)
+
+export const runDCF = (body: object) =>
+  api.post('/dcf/value', body).then(r => r.data)

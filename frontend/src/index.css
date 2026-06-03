@@ -1,0 +1,207 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body, #root {
+    @apply bg-navy-900 text-slate-bright font-serif;
+    height: 100%;
+  }
+
+  /* Hide number input spinners globally */
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type=number] { -moz-appearance: textfield; }
+
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { @apply bg-navy-900; }
+  ::-webkit-scrollbar-thumb { background: rgba(201,168,76,0.3); border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(201,168,76,0.55); }
+}
+
+@layer components {
+  .card {
+    @apply bg-navy-700 border border-white/7 rounded-lg;
+    border-top: 2px solid rgba(201,168,76,0.35);
+  }
+
+  .card-blue { border-top-color: #1f5673 !important; }
+  .card-purple { border-top-color: #7b5ea7 !important; }
+  .card-green { border-top-color: #2f6b4b !important; }
+
+  .metric-card {
+    @apply bg-navy-700 border border-white/7 rounded-md px-4 py-3;
+    border-top: 2px solid rgba(201,168,76,0.45);
+  }
+
+  .label-sm {
+    @apply text-slate-terminal text-xs font-bold tracking-widest uppercase;
+  }
+
+  .section-header {
+    @apply text-[10px] font-bold tracking-[0.18em] uppercase text-[#3d526b] border-b border-white/5 pb-1.5 mb-4 mt-6;
+  }
+
+  .btn-gold {
+    @apply border border-gold/40 text-gold text-xs tracking-widest font-medium px-4 py-2 rounded
+           transition-all duration-200 hover:bg-gold/10 hover:border-gold active:bg-gold/20;
+  }
+
+  .input-field {
+    @apply bg-navy-900 border border-white/9 text-slate-bright rounded px-3 py-2 text-sm w-full
+           focus:outline-none focus:border-gold/45 focus:ring-1 focus:ring-gold/10 font-serif;
+  }
+
+  .tab-active {
+    @apply text-gold border-b-2 border-gold font-semibold;
+  }
+  .tab-inactive {
+    @apply text-slate-terminal border-b-2 border-transparent hover:text-slate-bright transition-colors;
+  }
+
+  .page-title {
+    @apply text-2xl font-bold text-slate-bright border-b border-gold/20 pb-4 mb-8 tracking-wide;
+  }
+}
+
+@layer utilities {
+  .border-white\/7 { border-color: rgba(255,255,255,0.07); }
+  .border-white\/9 { border-color: rgba(255,255,255,0.09); }
+  .text-positive { color: #22C55E; }
+  .text-negative { color: #EF4444; }
+}
+
+/* Scanline overlay — subtle terminal texture */
+#root::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.05) 2px,
+    rgba(0, 0, 0, 0.05) 4px
+  );
+}
+
+/* IBM Plex Sans for section/page labels */
+.font-label { font-family: 'IBM Plex Sans', sans-serif; }
+.section-label {
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #5e768f;
+}
+
+/* ── Bento grid ─────────────────────────────────────────────────────────── */
+.bento-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-auto-rows: 120px;
+  gap: 10px;
+}
+.bento-hero { grid-area: span 2 / span 2; }
+.bento-wide { grid-area: span 1 / span 2; }
+.bento-tall { grid-area: span 2 / span 1; }
+
+@media (max-width: 767px) {
+  .bento-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    grid-auto-rows: auto !important;
+    gap: 8px !important;
+  }
+  /* On mobile, collapse all spans to single cell */
+  .bento-hero, .bento-wide, .bento-tall { grid-area: auto !important; }
+}
+
+/* ── Responsive utilities ────────────────────────────────────────────────── */
+/* Metric grids: 4-col desktop → 2-col mobile */
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+/* 2-col variant */
+.metric-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+/* Chart pair: 2-col desktop → 1-col mobile */
+.chart-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+/* Scrollable table wrapper */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 767px) {
+  .metric-grid   { grid-template-columns: repeat(2, 1fr) !important; }
+  .metric-grid-2 { grid-template-columns: repeat(2, 1fr) !important; }
+  .chart-pair    { grid-template-columns: 1fr !important; }
+  /* Tighten page padding on mobile — Layout already handles this */
+  .recharts-wrapper { font-size: 9px; }
+}
+
+/* ── Dashboard grid resize handles ──────────────────────────────────────── */
+/* Hidden by default; only interactive + visible while editing */
+.react-resizable-handle {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  z-index: 12;
+  opacity: 0;
+  pointer-events: none;
+}
+.rgl-edit-mode .react-resizable-handle {
+  opacity: 1;
+  pointer-events: auto;
+}
+/* Corner indicator: two perpendicular gold lines */
+.react-resizable-handle::after {
+  content: '';
+  position: absolute;
+  border-color: rgba(201,168,76,0.85);
+  border-style: solid;
+  border-width: 0;
+}
+/* SE */
+.react-resizable-handle-se { bottom: 0; right: 0; cursor: se-resize; }
+.react-resizable-handle-se::after { bottom: 4px; right: 4px; width: 9px; height: 9px; border-bottom-width: 2px; border-right-width: 2px; }
+/* SW */
+.react-resizable-handle-sw { bottom: 0; left: 0; cursor: sw-resize; }
+.react-resizable-handle-sw::after { bottom: 4px; left: 4px; width: 9px; height: 9px; border-bottom-width: 2px; border-left-width: 2px; }
+/* While dragging a widget, show the grab cursor everywhere */
+.react-grid-item.react-draggable-dragging { cursor: grabbing !important; }
+
+/* Dragging / resizing state */
+.react-grid-item.react-draggable-dragging {
+  opacity: 0.85;
+  z-index: 100;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+}
+.react-grid-item.resizing { opacity: 0.85; z-index: 100; }
+.react-grid-item.react-grid-placeholder {
+  background: rgba(201,168,76,0.08) !important;
+  border: 1px dashed rgba(201,168,76,0.35) !important;
+  opacity: 1 !important;
+}
+
+/* Recharts overrides */
+.recharts-text { font-family: 'Lora', serif !important; fill: #5e768f !important; }
+.recharts-cartesian-grid line { stroke: rgba(128,128,128,0.12) !important; }
+.recharts-tooltip-wrapper { font-family: 'Lora', serif !important; }
+.recharts-default-tooltip {
+  background-color: #0f1d31 !important;
+  border: 1px solid rgba(201,168,76,0.3) !important;
+  border-radius: 6px !important;
+}
