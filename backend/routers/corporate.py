@@ -269,6 +269,7 @@ _SECTOR_PEERS: dict[str, list[str]] = {
     "Healthcare":             ["JNJ", "UNH", "PFE", "ABBV", "MRK", "LLY", "BMY", "AMGN"],
     "Consumer Cyclical":      ["AMZN", "TSLA", "HD", "NKE", "MCD", "SBUX", "TGT", "LOW"],
     "Consumer Defensive":     ["WMT", "COST", "PG", "KO", "PEP", "KR", "MDLZ", "CL"],
+    "Consumer Staples":       ["WMT", "COST", "PG", "KO", "PEP", "KR", "MDLZ", "CL"],
     "Energy":                 ["XOM", "CVX", "COP", "SLB", "MPC", "VLO", "PSX", "OXY"],
     "Communication Services": ["GOOGL", "META", "NFLX", "DIS", "CMCSA", "T", "VZ", "ATVI"],
     "Industrials":            ["CAT", "DE", "RTX", "HON", "GE", "BA", "UPS", "LMT"],

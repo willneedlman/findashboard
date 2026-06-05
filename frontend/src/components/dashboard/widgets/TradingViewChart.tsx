@@ -15,40 +15,54 @@ function TVWidget({ symbol }: { symbol: string }) {
     const el = ref.current
     if (!el) return
 
-    // Resolve CSS variables to actual hex so TradingView can use them
-    const style  = getComputedStyle(document.documentElement)
-    const bgColor = style.getPropertyValue('--theme-bg').trim() || '#101c2e'
+    // Always rebuild the inner DOM so cleanup never leaves a broken state
+    el.innerHTML = ''
+
+    const widgetDiv = document.createElement('div')
+    widgetDiv.className = 'tradingview-widget-container__widget'
+    widgetDiv.style.height = '100%'
+    widgetDiv.style.width  = '100%'
+    el.appendChild(widgetDiv)
+
+    const bgColor = getComputedStyle(document.documentElement)
+      .getPropertyValue('--theme-bg').trim() || '#101c2e'
 
     const script = document.createElement('script')
     script.src   = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js'
     script.type  = 'text/javascript'
     script.async = true
     script.textContent = JSON.stringify({
-      autosize:           true,
+      autosize:            true,
       symbol,
-      interval:           'D',
-      timezone:           'Etc/UTC',
-      theme:              'dark',
-      style:              '1',
-      locale:             'en',
-      backgroundColor:    bgColor,
-      gridColor:          'rgba(46,57,77,0.35)',
-      hide_top_toolbar:   true,
-      hide_legend:        false,
+      interval:            'D',
+      timezone:            'Etc/UTC',
+      theme:               'dark',
+      style:               '1',
+      locale:              'en',
+      backgroundColor:     bgColor,
+      gridColor:           'rgba(46,57,77,0.35)',
+      hide_top_toolbar:    true,
+      hide_legend:         false,
       allow_symbol_change: true,
-      save_image:         false,
-      calendar:           false,
-      support_host:       'https://www.tradingview.com',
+      save_image:          false,
+      calendar:            false,
+      support_host:        'https://www.tradingview.com',
     })
+
+    script.onerror = () => {
+      setFailed(true)
+      if (el) el.innerHTML = ''
+    }
+
     el.appendChild(script)
 
-    // If the TV iframe hasn't appeared after 8 seconds, remove and show fallback
+    // Fallback: if no iframe appears after 12 seconds the embed was blocked
     const timer = setTimeout(() => {
       if (el && !el.querySelector('iframe')) {
         setFailed(true)
         el.innerHTML = ''
       }
-    }, 8000)
+    }, 12000)
 
     return () => {
       clearTimeout(timer)
@@ -76,9 +90,11 @@ function TVWidget({ symbol }: { symbol: string }) {
   }
 
   return (
-    <div ref={ref} className="tradingview-widget-container" style={{ flex: 1, minHeight: 0 }}>
-      <div className="tradingview-widget-container__widget" style={{ height: '100%', width: '100%' }} />
-    </div>
+    <div
+      ref={ref}
+      className="tradingview-widget-container"
+      style={{ flex: 1, minHeight: 0, position: 'relative' }}
+    />
   )
 }
 

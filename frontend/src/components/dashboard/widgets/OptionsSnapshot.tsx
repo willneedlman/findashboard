@@ -9,8 +9,8 @@ import type { WidgetConfig } from '../../../hooks/useDashboard'
 import { useOptimalGrid } from '../../../hooks/useOptimalGrid'
 
 const T = {
-  bg: '#101c2e', border: '#2e394d', headerBg: '#0d1826', tileBg: '#0d1826',
-  gold: '#c9a84c', text: '#d7e3fc', muted: '#5e768f', dim: '#3a4d62',
+  bg: 'var(--theme-bg, #101c2e)', border: 'rgba(255,255,255,0.08)', headerBg: 'var(--theme-surface, #0d1826)', tileBg: 'var(--theme-surface, #0d1826)',
+  gold: 'var(--theme-primary, #c9a84c)', text: '#d7e3fc', muted: 'var(--theme-secondary, #5e768f)', dim: '#3a4d62',
   mono: 'JetBrains Mono, monospace', label: 'IBM Plex Sans, sans-serif',
   pos: '#22C55E', neg: '#EF4444', warn: '#f59e0b',
 }
@@ -27,7 +27,7 @@ interface SnapshotData {
 }
 
 const shimmer: React.CSSProperties = {
-  background: 'linear-gradient(90deg,#101c2e 25%,#1a2d45 50%,#101c2e 75%)',
+  background: 'linear-gradient(90deg, var(--theme-surface, #0d0d0d) 25%, rgba(255,255,255,0.05) 50%, var(--theme-surface, #0d0d0d) 75%)',
   backgroundSize: '200% 100%', animation: 'shimmer 2s infinite', borderRadius: 3,
 }
 
@@ -164,7 +164,7 @@ function VolCone({ spot, atmIv, hv30, expiry }: {
         <div style={{ color: T.gold, fontWeight: 700, marginBottom: 5 }}>{label} · {d.T_days}d</div>
         <div style={{ color: 'rgba(201,168,76,0.6)', marginBottom: 2 }}>±2σ IV  {priceFormatter(d.iv2dn)} – {priceFormatter(d.iv2up)}</div>
         <div style={{ color: T.gold, marginBottom: 2 }}>±1σ IV  {priceFormatter(d.iv1dn)} – {priceFormatter(d.iv1up)}</div>
-        {d.hv1up != null && <div style={{ color: '#60a5fa' }}>±1σ HV  {priceFormatter(d.hv1dn)} – {priceFormatter(d.hv1up)}</div>}
+        {d.hv1up != null && <div style={{ color: 'var(--theme-tertiary, #60a5fa)' }}>±1σ HV  {priceFormatter(d.hv1dn)} – {priceFormatter(d.hv1up)}</div>}
         <div style={{ color: T.text, marginTop: 3 }}>expected  {priceFormatter(d.expected)}</div>
       </div>
     )
@@ -175,7 +175,7 @@ function VolCone({ spot, atmIv, hv30, expiry }: {
       <div style={{ fontFamily: T.label, fontSize: 9, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4, display: 'flex', gap: 12 }}>
         <span>Price Projection Cone</span>
         <span style={{ color: T.gold }}>IV {atmIv.toFixed(1)}%</span>
-        {hv30 && <span style={{ color: '#60a5fa' }}>HIST VOL {hv30.toFixed(1)}%</span>}
+        {hv30 && <span style={{ color: 'var(--theme-tertiary, #60a5fa)' }}>HIST VOL {hv30.toFixed(1)}%</span>}
       </div>
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={data} margin={{ top: 6, right: 12, left: 0, bottom: 0 }}>
@@ -187,11 +187,11 @@ function VolCone({ spot, atmIv, hv30, expiry }: {
           <Tooltip content={<CustomTooltip />} />
 
           {/* ±2σ IV outer cone — fills from baseline to iv2up then cut by iv2dn */}
-          <Area type="monotone" dataKey="iv2up" stroke="rgba(201,168,76,0.25)" strokeWidth={1} fill="rgba(201,168,76,0.07)" dot={false} legendType="none" />
+          <Area type="monotone" dataKey="iv2up" stroke="rgba(201,168,76,0.25)" strokeWidth={1} fill="color-mix(in srgb, var(--theme-primary, #c9a84c) 7%, transparent)" dot={false} legendType="none" />
           <Area type="monotone" dataKey="iv2dn" stroke="rgba(201,168,76,0.25)" strokeWidth={1} fill={T.bg} dot={false} legendType="none" />
 
           {/* ±1σ IV inner cone */}
-          <Area type="monotone" dataKey="iv1up" stroke="rgba(201,168,76,0.5)" strokeWidth={1.5} fill="rgba(201,168,76,0.18)" dot={false} legendType="none" />
+          <Area type="monotone" dataKey="iv1up" stroke="rgba(201,168,76,0.5)" strokeWidth={1.5} fill="color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)" dot={false} legendType="none" />
           <Area type="monotone" dataKey="iv1dn" stroke="rgba(201,168,76,0.5)" strokeWidth={1.5} fill={T.bg} dot={false} legendType="none" />
 
           {/* ±1σ HV comparison cone (blue) */}
@@ -209,7 +209,7 @@ function VolCone({ spot, atmIv, hv30, expiry }: {
 
           {/* Expiry marker */}
           {expiryLabel && (
-            <ReferenceLine x={expiryLabel} stroke="rgba(201,168,76,0.4)" strokeWidth={1}
+            <ReferenceLine x={expiryLabel} stroke="color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)" strokeWidth={1}
               label={{ value: 'exp', position: 'insideTopRight', fontSize: 8, fill: T.dim, fontFamily: T.label }} />
           )}
         </ComposedChart>
@@ -268,7 +268,7 @@ function ImpliedProb({ spot, atmIv, expiry }: { spot: number; atmIv: number; exp
 function CheckboxPanel({ visible, onToggle }: { visible: Set<ItemId>; onToggle: (id: ItemId) => void }) {
   const [open, setOpen] = useState(true)
   return (
-    <div style={{ borderTop: `1px solid ${T.border}`, background: '#080f1d', flexShrink: 0 }}>
+    <div style={{ borderTop: `1px solid ${T.border}`, background: 'var(--theme-bg, #080f1d)', flexShrink: 0 }}>
       <div
         onClick={() => setOpen(o => !o)}
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', cursor: 'pointer', userSelect: 'none' }}
@@ -285,7 +285,7 @@ function CheckboxPanel({ visible, onToggle }: { visible: Set<ItemId>; onToggle: 
                 <div style={{
                   width: 11, height: 11, flexShrink: 0,
                   border: `1px solid ${on ? T.gold : T.dim}`,
-                  background: on ? 'rgba(201,168,76,0.18)' : 'transparent',
+                  background: on ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)' : 'transparent',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   transition: 'all 0.1s',
                 }}>
@@ -328,7 +328,7 @@ export default function OptionsSnapshot({ config }: { config: WidgetConfig }) {
     queryKey: ['options-snapshot-v3', ticker],
     queryFn: () => axios.get(`/api/options/snapshot?ticker=${ticker}`).then(r => r.data),
     enabled: !!ticker,
-    staleTime: 120_000,
+    staleTime: 900_000,
   })
 
   const base: React.CSSProperties = {
@@ -402,7 +402,7 @@ export default function OptionsSnapshot({ config }: { config: WidgetConfig }) {
 
       {/* Data tiles */}
       {visibleTileCount > 0 && (
-        <div ref={gridRef} style={{ gridTemplateColumns: `repeat(${cols}, 1fr)`, gridAutoRows: '1fr', display: 'grid', gap: 6, padding: 8, flex: '0 1 auto', minHeight: 0, overflowY: 'auto' }}>
+        <div ref={gridRef} style={{ gridTemplateColumns: `repeat(${cols}, 1fr)`, gridAutoRows: 'minmax(60px, auto)', display: 'grid', gap: 6, padding: 8, flex: '0 1 auto', minHeight: 0, overflowY: 'auto' }}>
           {show('atm_iv') && (
             <Tile label="ATM IV" value={fmt(data.atm_iv, '', '%')} sub="implied vol at-the-money"
               valueColor={data.atm_iv != null ? data.atm_iv > 60 ? T.neg : data.atm_iv > 35 ? T.warn : T.pos : undefined} />
@@ -418,7 +418,7 @@ export default function OptionsSnapshot({ config }: { config: WidgetConfig }) {
             <Tile label="D50 Put" value={fmt(data.d50_put, '$', '', 2)} sub={`ATM put · strike ≈ $${data.spot.toFixed(0)}`} />
           )}
           {show('hv_30') && (
-            <Tile label="30D Historical Vol" value={fmt(data.hv_30, '', '%')} sub="realised vol (30 day)" />
+            <Tile label="30D Historical Vol" value={fmt(data.hv_30, '', '%')} sub="realized vol (30 day)" />
           )}
           {show('iv_vs_hv') && (
             data.iv_vs_hv != null

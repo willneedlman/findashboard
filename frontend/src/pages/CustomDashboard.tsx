@@ -19,7 +19,7 @@ import useIsMobile from '../hooks/useIsMobile'
 
 const ResponsiveGridLayout = WidthProvider(Responsive)
 
-const BREAKPOINTS = { lg: 1200, md: 960, sm: 720, xs: 480, xxs: 0 }
+const BREAKPOINTS = { lg: 1080, md: 900, sm: 720, xs: 480, xxs: 0 }
 const COLS        = { lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }
 
 export default function CustomDashboard() {
@@ -46,10 +46,10 @@ export default function CustomDashboard() {
       {/* ── Top bar ── */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
         <div>
-          <h1 style={{ fontFamily: 'Cinzel, Georgia, serif', fontSize: 18, fontWeight: 700, letterSpacing: '0.06em', color: '#c9a84c', marginBottom: 2 }}>
+          <h1 style={{ fontFamily: 'Cinzel, Georgia, serif', fontSize: 18, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--theme-primary, #c9a84c)', marginBottom: 2 }}>
             My Dashboard
           </h1>
-          <p style={{ fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 11, color: '#5e768f' }}>
+          <p style={{ fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 11, color: 'var(--theme-secondary, #5e768f)' }}>
             {editMode ? 'Drag to rearrange · resize from corners · click + to add widgets' : `${widgets.length} widget${widgets.length !== 1 ? 's' : ''} · click the lock to customise`}
           </p>
         </div>
@@ -59,13 +59,13 @@ export default function CustomDashboard() {
             <>
               <button
                 onClick={() => setPaletteOpen(true)}
-                style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#1f2a3d', border: '1px solid #c9a84c', color: '#c9a84c', padding: '6px 12px', cursor: 'pointer', fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--theme-surface, #1f2a3d)', border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)', padding: '6px 12px', cursor: 'pointer', fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}
               >
                 <Plus size={12} /> Add Widget
               </button>
               <button
                 onClick={handleReset}
-                style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: `1px solid ${confirmReset ? '#EF4444' : '#2e394d'}`, color: confirmReset ? '#EF4444' : '#5e768f', padding: '6px 12px', cursor: 'pointer', fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: `1px solid ${confirmReset ? '#EF4444' : 'rgba(255,255,255,0.08)'}`, color: confirmReset ? '#EF4444' : 'var(--theme-secondary, #5e768f)', padding: '6px 12px', cursor: 'pointer', fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}
               >
                 <RotateCcw size={12} /> {confirmReset ? 'Confirm Reset' : 'Reset'}
               </button>
@@ -73,7 +73,7 @@ export default function CustomDashboard() {
           )}
           <button
             onClick={() => { setEditMode(e => !e); setPaletteOpen(false) }}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, background: editMode ? 'rgba(201,168,76,0.12)' : '#1f2a3d', border: `1px solid ${editMode ? '#c9a84c' : '#2e394d'}`, color: editMode ? '#c9a84c' : '#5e768f', padding: '6px 12px', cursor: 'pointer', fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', transition: 'all 0.15s' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: editMode ? 'rgba(201,168,76,0.12)' : 'var(--theme-surface, #1f2a3d)', border: `1px solid ${editMode ? 'var(--theme-primary, #c9a84c)' : 'rgba(255,255,255,0.08)'}`, color: editMode ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #5e768f)', padding: '6px 12px', cursor: 'pointer', fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', transition: 'all 0.15s' }}
           >
             {editMode ? <><Unlock size={12} /> Done</> : <><Lock size={12} /> Edit</>}
           </button>

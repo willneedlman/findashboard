@@ -1,1 +1,0 @@
-import{c as e,t}from"./proxy-D0VDe-h4.js";var n=e(),r={initial:{opacity:0,y:14},animate:{opacity:1,y:0,transition:{duration:.3,ease:`easeOut`}},exit:{opacity:0,y:-8,transition:{duration:.18}}};function i({children:e}){return(0,n.jsx)(t.div,{variants:r,initial:`initial`,animate:`animate`,exit:`exit`,children:e})}export{i as t};

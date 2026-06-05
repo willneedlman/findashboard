@@ -1,1 +1,0 @@
-import{c as e}from"./proxy-D0VDe-h4.js";e();var t={background:`#0d1b30`,border:`1px solid rgba(201,168,76,0.35)`,borderRadius:0,fontFamily:`JetBrains Mono, monospace`,fontSize:11,padding:`8px 10px`,boxShadow:`0 4px 20px rgba(0,0,0,0.5)`},n={stroke:`rgba(201,168,76,0.25)`,strokeWidth:1,strokeDasharray:`4 3`};export{t as n,n as t};

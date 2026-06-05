@@ -85,8 +85,8 @@ export default function SidebarLayout({
         </div>
       </div>
 
-      {/* Main content */}
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12, padding: 16, background: 'var(--theme-surface, #0d1826)' }}>
+      {/* Main content — use page bg so panels inside have positive contrast */}
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12, padding: 16, background: 'var(--theme-bg, #101c2e)' }}>
         {children}
       </div>
     </div>

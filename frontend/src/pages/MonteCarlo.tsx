@@ -1,14 +1,15 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Legend } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import MetricCard from '../components/MetricCard'
 import StrategySelector, { STRATEGIES, type StrategyParams } from '../components/StrategySelector'
-import { TOOLTIP_STYLE, CROSSHAIR_CURSOR } from '../components/ChartTooltip'
+import { TOOLTIP_STYLE, CROSSHAIR_CURSOR, BAR_CURSOR } from '../components/ChartTooltip'
 import SidebarLayout from '../components/SidebarLayout'
 import axios from 'axios'
 import EmptyState from '../components/EmptyState'
 import PortfolioIO, { type PortfolioAsset } from '../components/PortfolioIO'
+import { usePortfolio, type PortfolioHolding } from '../contexts/PortfolioContext'
 // ── GBM math ────────────────────────────────────────────────────────────────
 
 function runGBM(S0: number, mu: number, sigma: number, T: number, nSims: number) {
@@ -68,23 +69,23 @@ const makeLeg = (ticker: string, weight: number): Leg => ({
 // ── Styles ───────────────────────────────────────────────────────────────────
 
 const INPUT: React.CSSProperties = {
-  background: '#0a1628', border: '1px solid #4d4637', color: '#d7e3fc',
+  background: 'var(--theme-bg, #0a1628)', border: '1px solid rgba(255,255,255,0.10)', color: '#d7e3fc',
   fontFamily: 'JetBrains Mono, monospace', fontSize: 12, padding: '5px 8px',
   width: '100%', outline: 'none', boxSizing: 'border-box',
 }
 const LABEL: React.CSSProperties = {
   fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
-  textTransform: 'uppercase', color: '#99907e', marginBottom: 4, display: 'block',
+  textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', marginBottom: 4, display: 'block',
 }
-const TICK = { fontSize: 9, fill: '#99907e', fontFamily: 'JetBrains Mono, monospace' }
+const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'JetBrains Mono, monospace' }
 
 function ChartPanel({ label, height, children }: { label: string; height: number; children: React.ReactNode }) {
   return (
-    <div style={{ background: '#101c2e', border: '1px solid #2e394d', position: 'relative' }}>
+    <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)', position: 'relative' }}>
       <div style={{
         position: 'absolute', top: 0, left: 0, zIndex: 10,
         background: 'rgba(46,57,77,0.8)', padding: '3px 8px',
-        borderRight: '1px solid #2e394d', borderBottom: '1px solid #2e394d',
+        borderRight: '1px solid rgba(255,255,255,0.08)', borderBottom: '1px solid rgba(255,255,255,0.08)',
         fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#d7e3fc',
       }}>
         {label}
@@ -99,13 +100,22 @@ function ChartPanel({ label, height, children }: { label: string; height: number
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function MonteCarlo() {
-  const [legs, setLegs] = useState<Leg[]>([
-    makeLeg('SPY', 100),
-  ])
+  const { holdings, setHoldings } = usePortfolio()
+  const [legs, setLegs] = useState<Leg[]>(() => {
+    if (holdings && holdings.length > 0) {
+      return holdings.map(h => ({
+        ...makeLeg(h.ticker, h.weight),
+        strategy: h.strategy ?? STRATEGIES[0],
+        stratParams: ((h as unknown as Record<string, unknown>).stratParams ?? {}) as StrategyParams,
+      }))
+    }
+    return [makeLeg('SPY', 100)]
+  })
   const [horizon, setHorizon] = useState(252)
   const [nSims, setNSims] = useState(500)
   const [benchmark, setBenchmark] = useState('SPY')
   const [fetching, setFetching] = useState(false)
+
 
   const updateLeg = (i: number, patch: Partial<Leg>) =>
     setLegs(prev => prev.map((l, idx) => idx === i ? { ...l, ...patch } : l))
@@ -216,8 +226,8 @@ export default function MonteCarlo() {
     },
   })
 
-  const focus = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = '#c9a84c')
-  const blur  = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = '#4d4637')
+  const focus = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')
+  const blur  = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = 'rgba(255,255,255,0.10)')
   const totalWeight = legs.reduce((s, l) => s + l.weight, 0)
 
   return (
@@ -226,7 +236,7 @@ export default function MonteCarlo() {
 
         {/* ── Left sidebar ─────────────────────────────────────────────── */}
 
-          <div style={{ padding: '8px 10px', borderBottom: '1px solid #2e394d', background: '#142032' }}>
+          <div style={{ padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'var(--theme-surface, #142032)' }}>
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#ffffff' }}>
               Simulation Parameters
             </div>
@@ -248,8 +258,8 @@ export default function MonteCarlo() {
 
               {/* Column headers */}
               <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
-                <span style={{ flex: 7, fontSize: 9, color: '#4d4637', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Ticker</span>
-                <span style={{ flex: 4, fontSize: 9, color: '#4d4637', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Wt %</span>
+                <span style={{ flex: 7, fontSize: 9, color: 'rgba(255,255,255,0.22)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Ticker</span>
+                <span style={{ flex: 4, fontSize: 9, color: 'rgba(255,255,255,0.22)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Wt %</span>
                 <span style={{ width: 16 }} />
               </div>
 
@@ -271,7 +281,7 @@ export default function MonteCarlo() {
                       onFocus={focus} onBlur={blur}
                     />
                     <button
-                      style={{ width: 16, background: 'none', border: 'none', color: '#4d4637', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0, flexShrink: 0 }}
+                      style={{ width: 16, background: 'none', border: 'none', color: 'rgba(255,255,255,0.22)', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0, flexShrink: 0 }}
                       onMouseEnter={e => ((e.target as HTMLElement).style.color = '#8c2e36')}
                       onMouseLeave={e => ((e.target as HTMLElement).style.color = '#4d4637')}
                       onClick={() => setLegs(p => p.filter((_, j) => j !== i))}
@@ -280,7 +290,7 @@ export default function MonteCarlo() {
 
                   {/* Fetched stats pill */}
                   {leg.fetched && (
-                    <div style={{ fontSize: 9, color: '#4d4637', letterSpacing: '0.08em', marginBottom: 4, paddingLeft: 2 }}>
+                    <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.22)', letterSpacing: '0.08em', marginBottom: 4, paddingLeft: 2 }}>
                       ${leg.spot.toLocaleString()} · σ {leg.vol}% · μ {leg.drift}%/yr
                     </div>
                   )}
@@ -298,7 +308,7 @@ export default function MonteCarlo() {
 
                   {/* Leg divider */}
                   {i < legs.length - 1 && (
-                    <div style={{ borderBottom: '1px solid #1e2d3d', marginTop: 8 }} />
+                    <div style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', marginTop: 8 }} />
                   )}
                 </div>
               ))}
@@ -306,15 +316,15 @@ export default function MonteCarlo() {
               {/* Add leg + Fetch All */}
               <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
                 <button
-                  style={{ fontSize: 10, color: '#4d4637', background: 'none', border: 'none', cursor: 'pointer', padding: 0, letterSpacing: '0.1em' }}
-                  onMouseEnter={e => ((e.target as HTMLElement).style.color = '#c9a84c')}
+                  style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, letterSpacing: '0.1em' }}
+                  onMouseEnter={e => ((e.target as HTMLElement).style.color = 'var(--theme-primary, #c9a84c)')}
                   onMouseLeave={e => ((e.target as HTMLElement).style.color = '#4d4637')}
                   onClick={() => setLegs(p => [...p, makeLeg('', Math.max(0, 100 - totalWeight))])}
                 >+ Add Leg</button>
-                <span style={{ color: '#2e394d', fontSize: 10 }}>·</span>
+                <span style={{ color: 'rgba(255,255,255,0.08)', fontSize: 10 }}>·</span>
                 <button
-                  style={{ fontSize: 10, color: '#4d4637', background: 'none', border: 'none', cursor: 'pointer', padding: 0, letterSpacing: '0.1em' }}
-                  onMouseEnter={e => ((e.target as HTMLElement).style.color = '#c9a84c')}
+                  style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, letterSpacing: '0.1em' }}
+                  onMouseEnter={e => ((e.target as HTMLElement).style.color = 'var(--theme-primary, #c9a84c)')}
                   onMouseLeave={e => ((e.target as HTMLElement).style.color = '#4d4637')}
                   disabled={fetching}
                   onClick={fetchAll}
@@ -323,7 +333,7 @@ export default function MonteCarlo() {
             </div>
 
             {/* Shared simulation params */}
-            <div style={{ borderTop: '1px solid #2e394d', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div>
                 <label style={LABEL}>Horizon (trading days)</label>
                 <input type="number" style={INPUT} value={horizon} step={21} min={5} max={504}
@@ -343,21 +353,23 @@ export default function MonteCarlo() {
             </div>
           </div>
 
-          <div style={{ padding: 10, borderTop: '1px solid #2e394d', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ padding: 10, borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', gap: 8 }}>
             <PortfolioIO
               mode="portfolio"
               assets={legs.map(l => ({ ticker: l.ticker, weight: l.weight, strategy: l.strategy, stratParams: l.stratParams as Record<string, unknown> }))}
-              onImportAssets={(imported: PortfolioAsset[]) =>
-                setLegs(imported.map(a => ({
+              onImportAssets={(imported: PortfolioAsset[]) => {
+                const newLegs = imported.map(a => ({
                   ...makeLeg(a.ticker, a.weight),
                   strategy: a.strategy ?? STRATEGIES[0],
                   stratParams: (a.stratParams ?? {}) as StrategyParams,
-                })))
-              }
+                }))
+                setHoldings(newLegs.map(l => ({ ticker: l.ticker, weight: l.weight, strategy: l.strategy })))
+                setLegs(newLegs)
+              }}
               name="montecarlo"
             />
             <button onClick={() => mutate()} disabled={isPending || legs.length === 0} style={{
-              width: '100%', background: '#1f2a3d', border: '1px solid #c9a84c', color: '#c9a84c',
+              width: '100%', background: 'var(--theme-surface, #1f2a3d)', border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)',
               fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
               textTransform: 'uppercase', padding: '8px 0', cursor: (isPending || legs.length === 0) ? 'default' : 'pointer',
               opacity: (isPending || legs.length === 0) ? 0.6 : 1,
@@ -380,30 +392,30 @@ export default function MonteCarlo() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {data.legs.filter((l: any) => l.strategy !== STRATEGIES[0] && l.stratLabel).map((l: any, i: number) => (
                     <div key={i} style={{
-                      background: '#101c2e', border: '1px solid #2e394d',
+                      background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)',
                       borderLeft: `4px solid ${l.stratAdj >= 0 ? '#2f6b4b' : '#8c2e36'}`,
                       padding: '8px 14px',
                     }}>
                       <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700, color: l.stratAdj >= 0 ? '#4caf7d' : '#e05c6e', marginBottom: 3 }}>
                         {l.ticker} · {l.strategy} — {l.stratLabel}
-                        <span style={{ marginLeft: 10, fontSize: 10, color: '#99907e', fontWeight: 400 }}>
+                        <span style={{ marginLeft: 10, fontSize: 10, color: 'var(--theme-secondary, #99907e)', fontWeight: 400 }}>
                           Drift adj: {l.stratAdj > 0 ? '+' : ''}{l.stratAdj}% · Eff. drift: {+(l.drift + l.stratAdj).toFixed(1)}%/yr
                         </span>
                       </div>
-                      <div style={{ fontSize: 10, color: '#99907e' }}>{l.stratDetail}</div>
+                      <div style={{ fontSize: 10, color: 'var(--theme-secondary, #99907e)' }}>{l.stratDetail}</div>
                     </div>
                   ))}
                 </div>
               )}
 
               {/* Portfolio composition */}
-              <div style={{ background: '#101c2e', border: '1px solid #2e394d', padding: '8px 12px', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+              <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)', padding: '8px 12px', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                 {data.legs.map((l: any, i: number) => (
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700, color: '#d7e3fc' }}>{l.ticker}</span>
-                    <span style={{ fontSize: 10, color: '#c9a84c' }}>{l.weight}%</span>
+                    <span style={{ fontSize: 10, color: 'var(--theme-primary, #c9a84c)' }}>{l.weight}%</span>
                     {l.fetched && (
-                      <span style={{ fontSize: 9, color: '#4d4637', letterSpacing: '0.06em' }}>
+                      <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.22)', letterSpacing: '0.06em' }}>
                         ${l.spot.toLocaleString()} · σ {l.vol}%
                       </span>
                     )}
@@ -458,11 +470,11 @@ export default function MonteCarlo() {
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.07)" />
                     <XAxis dataKey="price" tick={TICK} interval="preserveStartEnd" tickFormatter={v => `$${v}`} />
                     <YAxis tick={TICK} orientation="right" />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} cursor={CROSSHAIR_CURSOR} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} cursor={BAR_CURSOR} />
                     <ReferenceLine x={String(Math.round(data.S0))} stroke="#c9a84c" strokeDasharray="4 4"
-                      label={{ value: 'Entry', fill: '#c9a84c', fontSize: 9 }} />
+                      label={{ value: 'Entry', fill: 'var(--theme-primary, #c9a84c)', fontSize: 9 }} />
                     <ReferenceLine x={String(Math.round(data.median))} stroke="#1f5673" strokeDasharray="4 4"
-                      label={{ value: 'Median', fill: '#1f5673', fontSize: 9 }} />
+                      label={{ value: 'Median', fill: 'var(--theme-tertiary, #1f5673)', fontSize: 9 }} />
                     <Bar dataKey="count" fill="#7b5ea7" opacity={0.8} name="Frequency" />
                   </BarChart>
                 </ResponsiveContainer>
