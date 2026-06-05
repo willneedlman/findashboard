@@ -44,7 +44,15 @@ def get_fundamentals(ticker: str):
         op_margin  = (info.get("operatingMargins") or 0.15) * 100
         shares     = (info.get("sharesOutstanding") or 0) / 1e6
         total_debt = (info.get("totalDebt") or 0) / 1e6
-        total_cash = (info.get("totalCash") or 0) / 1e6
+        # yfinance uses different field names across versions/tickers; try all
+        total_cash_raw = (
+            info.get("totalCash")
+            or info.get("cashAndCashEquivalents")
+            or info.get("cash")
+            or info.get("cashAndShortTermInvestments")
+            or 0
+        )
+        total_cash = total_cash_raw / 1e6
         net_debt   = total_debt - total_cash
         rev_growth = (info.get("revenueGrowth") or 0.10) * 100
         beta       = float(info.get("beta") or 1.0)
