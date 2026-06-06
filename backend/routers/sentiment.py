@@ -21,7 +21,8 @@ try:
 except ImportError:
     _GROQ = False
 
-_cache: TTLCache = TTLCache(maxsize=4, ttl=900)   # 15 min
+_cache:   TTLCache  = TTLCache(maxsize=4, ttl=900)   # 15 min
+_history: list[dict] = []   # in-memory ring, max 96 points (~24h at 15-min intervals)
 _lock  = threading.Lock()
 
 # ── Data sources (all verified working without auth) ──────────────────────────
@@ -148,6 +149,16 @@ def sentiment_snapshot(refresh: bool = False):
         if not refresh and "snapshot" in _cache:
             return _cache["snapshot"]
     data = _build_sentiment()
+    point = {"composite_score": data["composite_score"], "label": data["label"], "fetched_at": data["fetched_at"]}
     with _lock:
         _cache["snapshot"] = data
+        _history.append(point)
+        if len(_history) > 96:
+            _history.pop(0)
     return data
+
+
+@router.get("/history")
+def sentiment_history():
+    with _lock:
+        return list(_history)
