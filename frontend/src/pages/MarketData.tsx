@@ -1,22 +1,24 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
+import PageHeader from '../components/PageHeader'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
 import TVChart from '../components/charts/TVChart'
 import { fetchMarketHistory } from '../hooks/useApi'
-import { TOOLTIP_STYLE, CROSSHAIR_CURSOR } from '../components/ChartTooltip'
+import { TOOLTIP_STYLE, CROSSHAIR_CURSOR, BAR_CURSOR } from '../components/ChartTooltip'
 import EmptyState from '../components/EmptyState'
+import useIsMobile from '../hooks/useIsMobile'
 
 // Stitch "Aurelian Terminal" metric card — label-caps header, large tabular value
 function TerminalMetric({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
     <div style={{
-      background: '#142032', border: '1px solid rgba(255,255,255,0.07)',
-      borderTop: '3px solid #c9a84c', padding: 12,
+      background: 'var(--theme-surface, #142032)', border: '1px solid rgba(255,255,255,0.07)',
+      borderTop: '3px solid var(--theme-primary, #c9a84c)', padding: 12,
     }}>
-      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#99907e', marginBottom: 8 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', marginBottom: 8 }}>
         {label}
       </div>
       <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 24, fontWeight: 700, color: color ?? '#d7e3fc' }}>
@@ -26,29 +28,21 @@ function TerminalMetric({ label, value, color }: { label: string; value: string;
   )
 }
 
-// Stitch chart panel — overlay label in top-left corner
 function ChartPanel({ label, height, children }: { label: string; height: number; children: React.ReactNode }) {
   return (
-    <div style={{ background: '#101c2e', border: '1px solid #2e394d', position: 'relative', marginBottom: 12 }}>
-      <div style={{
-        position: 'absolute', top: 0, left: 0, zIndex: 10,
-        background: 'rgba(46,57,77,0.7)', padding: '3px 8px',
-        borderRight: '1px solid #2e394d', borderBottom: '1px solid #2e394d',
-        fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
-        textTransform: 'uppercase', color: '#d7e3fc',
-      }}>
-        {label}
-      </div>
-      <div style={{ paddingTop: 28, paddingLeft: 8, paddingRight: 8, paddingBottom: 8, height }}>
+    <div className="ft-chart-panel" style={{ marginBottom: 12 }}>
+      <div className="ft-chart-label">{label}</div>
+      <div style={{ padding: '8px 8px 8px', height }}>
         {children}
       </div>
     </div>
   )
 }
 
-const TICK_STYLE = { fontSize: 10, fill: '#99907e', fontFamily: 'JetBrains Mono, monospace' }
+const TICK_STYLE = { fontSize: 10, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'JetBrains Mono, monospace' }
 
 export default function MarketData() {
+  const isMobile = useIsMobile()
   const [searchParams, setSearchParams] = useSearchParams()
   const [ticker, setTickerState] = useState(searchParams.get('ticker') || 'SPY')
   const [start, setStartState]   = useState(searchParams.get('start')  || '2020-01-01')
@@ -66,7 +60,7 @@ export default function MarketData() {
   const returnColor = m ? (m.total_return >= 0 ? '#22C55E' : '#EF4444') : '#d7e3fc'
 
   const inputStyle = {
-    background: '#142032', border: '1px solid #4d4637', color: '#d7e3fc',
+    background: 'var(--theme-surface, #142032)', border: '1px solid rgba(255,255,255,0.10)', color: '#d7e3fc',
     fontFamily: 'JetBrains Mono, monospace', fontSize: 12, padding: '5px 8px',
     width: '100%', outline: 'none',
   }
@@ -75,41 +69,41 @@ export default function MarketData() {
     <PageWrapper>
       <SidebarLayout sidebarWidth={180} sidebarTitle="Market Controls" sidebar={<>
           <div>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', color: '#99907e', textTransform: 'uppercase', marginBottom: 5 }}>Ticker</div>
+            <span className="ft-sidebar-label">Ticker</span>
             <input
               value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())}
               style={{ ...inputStyle, textTransform: 'uppercase', fontSize: 14, fontWeight: 700 }}
-              onFocus={e => (e.target.style.borderColor = '#c9a84c')}
-              onBlur={e => (e.target.style.borderColor = '#4d4637')}
+              onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')}
+              onBlur={e => (e.target.style.borderColor = 'rgba(255,255,255,0.10)')}
             />
           </div>
 
-          <div style={{ height: 1, background: '#2e394d' }} />
+          <div style={{ height: 1, background: 'rgba(255,255,255,0.08)' }} />
 
           <div>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', color: '#99907e', textTransform: 'uppercase', marginBottom: 5 }}>Start Date</div>
+            <span className="ft-sidebar-label">Start Date</span>
             <input type="date" value={start} onChange={e => setStart(e.target.value)}
               style={inputStyle}
-              onFocus={e => (e.target.style.borderColor = '#c9a84c')}
-              onBlur={e => (e.target.style.borderColor = '#4d4637')}
+              onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')}
+              onBlur={e => (e.target.style.borderColor = 'rgba(255,255,255,0.10)')}
             />
           </div>
 
           <div>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', color: '#99907e', textTransform: 'uppercase', marginBottom: 5 }}>End Date</div>
+            <span className="ft-sidebar-label">End Date</span>
             <input type="date" value={end} onChange={e => setEnd(e.target.value)}
               style={inputStyle}
-              onFocus={e => (e.target.style.borderColor = '#c9a84c')}
-              onBlur={e => (e.target.style.borderColor = '#4d4637')}
+              onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')}
+              onBlur={e => (e.target.style.borderColor = 'rgba(255,255,255,0.10)')}
             />
           </div>
 
-          <div style={{ height: 1, background: '#2e394d' }} />
+          <div style={{ height: 1, background: 'rgba(255,255,255,0.08)' }} />
 
           <button
             onClick={() => mutate()} disabled={isPending}
             style={{
-              background: '#1f2a3d', border: '1px solid #c9a84c', color: '#c9a84c',
+              background: 'var(--theme-surface, #1f2a3d)', border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)',
               fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
               textTransform: 'uppercase', padding: '7px 0', cursor: isPending ? 'default' : 'pointer',
               opacity: isPending ? 0.6 : 1, width: '100%',
@@ -124,11 +118,21 @@ export default function MarketData() {
         {/* Right: metrics + charts */}
           {data && (
             <>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                <TerminalMetric label="Total Return"    value={`${m!.total_return > 0 ? '+' : ''}${m!.total_return}%`} color={returnColor} />
-                <TerminalMetric label="Max Drawdown"    value={`${m!.max_drawdown}%`} color="#EF4444" />
-                <TerminalMetric label="Ann. Volatility" value={`${m!.ann_volatility}%`} />
-                <TerminalMetric label="Current Price"   value={`$${m!.current_price.toLocaleString()}`} color="#c9a84c" />
+              {/* Summary stats — single panel with dividers */}
+              <div className="ft-panel" style={{ marginBottom: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)' }}>
+                  {[
+                    { label: 'Total Return',    value: `${m!.total_return > 0 ? '+' : ''}${m!.total_return}%`, color: returnColor },
+                    { label: 'Max Drawdown',    value: `${m!.max_drawdown}%`,  color: '#EF4444' },
+                    { label: 'Ann. Volatility', value: `${m!.ann_volatility}%` },
+                    { label: 'Current Price',   value: `$${m!.current_price.toLocaleString()}`, color: 'var(--theme-primary, #c9a84c)' },
+                  ].map((stat, i) => (
+                    <div key={stat.label} style={{ padding: '12px 14px', borderRight: isMobile ? (i % 2 === 0 ? '1px solid rgba(255,255,255,0.06)' : 'none') : (i < 3 ? '1px solid rgba(255,255,255,0.06)' : 'none'), borderBottom: isMobile && i < 2 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
+                      <div style={{ fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', marginBottom: 6 }}>{stat.label}</div>
+                      <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: isMobile ? 16 : 20, fontWeight: 700, color: stat.color ?? '#d7e3fc', lineHeight: 1.1 }}>{stat.value}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <ChartPanel label="Price (EOD Close)" height={268}>

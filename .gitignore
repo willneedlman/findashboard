@@ -7,3 +7,5 @@ nohup.out
 frontend/node_modules/
 *.pyc
 .DS_Store
+backend/users.db
+.aider*

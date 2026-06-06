@@ -38,7 +38,7 @@ interface PortfolioIOProps {
 // ── Styles ───────────────────────────────────────────────────────────────────
 
 const S = {
-  border: '#2e394d', gold: '#c9a84c', muted: '#5e768f', text: '#d7e3fc',
+  border: 'rgba(255,255,255,0.08)', gold: 'var(--theme-primary, #c9a84c)', muted: 'var(--theme-secondary, #5e768f)', text: '#d7e3fc',
   mono: 'JetBrains Mono, monospace', label: 'IBM Plex Sans, sans-serif',
 }
 
@@ -75,9 +75,9 @@ function parseFile(text: string, filename: string): { assets?: PortfolioAsset[];
       if (Array.isArray(obj)) {
         // bare array of assets or tickers
         if (typeof obj[0] === 'string') return { tickers: obj.map((t: string) => t.trim().toUpperCase()).filter(Boolean) }
-        return { assets: obj.map(normaliseAsset) }
+        return { assets: obj.map(normalizeAsset) }
       }
-      if (obj.assets)  return { assets: (obj.assets as PortfolioAsset[]).map(normaliseAsset) }
+      if (obj.assets)  return { assets: (obj.assets as PortfolioAsset[]).map(normalizeAsset) }
       if (obj.tickers) return { tickers: (obj.tickers as string[]).map((t: string) => t.trim().toUpperCase()).filter(Boolean) }
     } catch { /* fall through */ }
     return null
@@ -103,7 +103,7 @@ function parseFile(text: string, filename: string): { assets?: PortfolioAsset[];
   return null
 }
 
-function normaliseAsset(a: Partial<PortfolioAsset>): PortfolioAsset {
+function normalizeAsset(a: Partial<PortfolioAsset>): PortfolioAsset {
   return {
     ticker:     String(a.ticker ?? '').toUpperCase().trim(),
     weight:     Number(a.weight ?? 0),
@@ -187,7 +187,7 @@ export default function PortfolioIO({ mode, assets, onImportAssets, tickers, onI
       </div>
 
       {/* Format hint */}
-      <span style={{ fontFamily: S.label, fontSize: 8, color: '#3a4d62', lineHeight: 1.4 }}>
+      <span style={{ fontFamily: S.label, fontSize: 8, color: 'rgba(255,255,255,0.22)', lineHeight: 1.4 }}>
         {mode === 'portfolio'
           ? 'JSON · CSV (ticker,weight,strategy) · or bare ticker list'
           : 'JSON · CSV (one ticker per line)'}

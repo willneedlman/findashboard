@@ -1,10 +1,10 @@
 import { Link } from 'react-router-dom'
 
 const S = {
-  border: 'rgba(46,57,77,0.8)',
-  muted:  '#3a4d62',
-  text:   '#5e768f',
-  gold:   '#c9a84c',
+  border: 'rgba(255,255,255,0.07)',
+  muted:  'rgba(255,255,255,0.22)',
+  text:   'var(--theme-secondary, #5e768f)',
+  gold:   'var(--theme-primary, #c9a84c)',
   mono:   'JetBrains Mono, monospace',
   label:  'IBM Plex Sans, sans-serif',
 }
@@ -25,8 +25,9 @@ export default function Footer() {
     }}>
       {/* Disclaimer banner */}
       <div style={{
-        background: 'rgba(6,14,28,0.6)',
-        border: `1px solid ${S.border}`,
+        background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 4%, var(--theme-surface, #0d1826))',
+        border: `1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 20%, transparent)`,
+        borderLeft: `3px solid var(--theme-primary, #c9a84c)`,
         borderRadius: 3,
         padding: '10px 16px',
         marginBottom: 18,

@@ -8,14 +8,14 @@ import {
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 
 const T = {
-  bg: '#101c2e', border: '#2e394d', headerBg: '#0d1826',
-  gold: '#c9a84c', text: '#d7e3fc', muted: '#5e768f', dim: '#3a4d62',
+  bg: 'var(--theme-bg, #101c2e)', border: 'rgba(255,255,255,0.08)', headerBg: 'var(--theme-surface, #0d1826)',
+  gold: 'var(--theme-primary, #c9a84c)', text: '#d7e3fc', muted: 'var(--theme-secondary, #5e768f)', dim: '#3a4d62',
   mono: 'JetBrains Mono, monospace', label: 'IBM Plex Sans, sans-serif',
   pos: '#22C55E', neg: '#EF4444', warn: '#f59e0b', blue: '#60a5fa',
 }
 
 const shimmer: React.CSSProperties = {
-  background: 'linear-gradient(90deg,#101c2e 25%,#1a2d45 50%,#101c2e 75%)',
+  background: 'linear-gradient(90deg, var(--theme-surface, #0d0d0d) 25%, rgba(255,255,255,0.05) 50%, var(--theme-surface, #0d0d0d) 75%)',
   backgroundSize: '200% 100%', animation: 'shimmer 2s infinite', borderRadius: 3,
 }
 
@@ -142,14 +142,14 @@ export default function PortfolioSummary({ config }: { config: WidgetConfig }) {
               fontFamily: T.mono, fontSize: 9, padding: '2px 6px', cursor: 'pointer', border: 'none',
               background: i === periodIdx ? 'rgba(201,168,76,0.2)' : 'transparent',
               color: i === periodIdx ? T.gold : T.muted,
-              outline: i === periodIdx ? `1px solid rgba(201,168,76,0.4)` : '1px solid transparent',
+              outline: i === periodIdx ? `1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)` : '1px solid transparent',
             }}>{p.label}</button>
           ))}
         </div>
       </div>
 
       {/* Allocation bar */}
-      <div style={{ borderBottom: `1px solid ${T.border}`, background: '#080f1d', flexShrink: 0 }}>
+      <div style={{ borderBottom: `1px solid ${T.border}`, background: 'var(--theme-bg, #080f1d)', flexShrink: 0 }}>
         <div onClick={() => setLegendOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '3px 8px', cursor: 'pointer', userSelect: 'none' }}>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             {tickers.map((tk, i) => (

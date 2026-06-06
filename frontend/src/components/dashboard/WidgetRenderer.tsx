@@ -11,6 +11,9 @@ import OptionsPricerWidget from './widgets/OptionsPricerWidget'
 import DeltaPriceTarget from './widgets/DeltaPriceTarget'
 import TradingViewChart from './widgets/TradingViewChart'
 import CorrelationMatrixWidget from './widgets/CorrelationMatrix'
+import MacroCalendar from './widgets/MacroCalendar'
+import GlobalMacro from './widgets/GlobalMacro'
+import CreditSpreadsWidget from './widgets/CreditSpreadsWidget'
 
 export default function WidgetRenderer({ config }: { config: WidgetConfig }) {
   switch (config.type) {
@@ -26,6 +29,9 @@ export default function WidgetRenderer({ config }: { config: WidgetConfig }) {
     case 'delta-target':      return <DeltaPriceTarget config={config} />
     case 'tradingview-chart':  return <TradingViewChart config={config} />
     case 'correlation-matrix': return <CorrelationMatrixWidget config={config} />
+    case 'macro-calendar':     return <MacroCalendar config={config} />
+    case 'global-macro':       return <GlobalMacro config={config} />
+    case 'credit-spreads':     return <CreditSpreadsWidget config={config} />
     default:                   return null
   }
 }

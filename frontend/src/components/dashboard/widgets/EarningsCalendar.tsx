@@ -4,12 +4,12 @@ import type { WidgetConfig } from '../../../hooks/useDashboard'
 import TickerLogo from '../../TickerLogo'
 
 const T = {
-  bg: '#101c2e',
-  border: '#2e394d',
-  headerBg: '#142032',
-  gold: '#c9a84c',
+  bg: 'var(--theme-bg, #101c2e)',
+  border: 'rgba(255,255,255,0.08)',
+  headerBg: 'var(--theme-surface, #142032)',
+  gold: 'var(--theme-primary, #c9a84c)',
   text: '#d7e3fc',
-  muted: '#5e768f',
+  muted: 'var(--theme-secondary, #5e768f)',
   mono: 'JetBrains Mono, monospace',
   label: 'IBM Plex Sans, sans-serif',
   pos: '#22C55E',
@@ -62,8 +62,8 @@ export default function EarningsCalendar({ config }: { config: WidgetConfig }) {
   if (tickers.length === 0) {
     return (
       <div style={containerStyle}>
-        <div style={{ background: T.headerBg, padding: '7px 14px', borderBottom: `1px solid ${T.border}` }}>
-          <span style={{ color: T.muted, fontSize: 10, fontFamily: T.label, textTransform: 'uppercase', letterSpacing: 1 }}>
+        <div style={{ background: T.headerBg, padding: '6px 14px', borderBottom: `1px solid ${T.border}` }}>
+          <span style={{ color: T.gold, fontSize: 9, fontFamily: T.label, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em' }}>
             EARNINGS CALENDAR
           </span>
         </div>
@@ -93,8 +93,8 @@ export default function EarningsCalendar({ config }: { config: WidgetConfig }) {
 
   return (
     <div style={containerStyle}>
-      <div style={{ background: T.headerBg, padding: '7px 14px', borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
-        <span style={{ color: T.muted, fontSize: 10, fontFamily: T.label, textTransform: 'uppercase', letterSpacing: 1 }}>
+      <div style={{ background: T.headerBg, padding: '6px 14px', borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
+        <span style={{ color: T.gold, fontSize: 9, fontFamily: T.label, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em' }}>
           EARNINGS CALENDAR
         </span>
       </div>
@@ -113,7 +113,7 @@ export default function EarningsCalendar({ config }: { config: WidgetConfig }) {
                 }}
               >
                 <TickerLogo ticker={ticker} size={20} />
-                <span style={{ color: T.gold, fontWeight: 700, fontSize: 11 }}>{ticker}</span>
+                <span style={{ color: T.gold, fontWeight: 700, fontSize: 9, fontFamily: T.label, letterSpacing: '0.12em', textTransform: 'uppercase' }}>{ticker}</span>
                 <span style={{ color: T.muted, fontSize: 9, fontFamily: T.label }}>Loading…</span>
               </div>
             )
@@ -136,7 +136,7 @@ export default function EarningsCalendar({ config }: { config: WidgetConfig }) {
 
               {/* Ticker + date stacked, fixed min-width so it doesn't squeeze */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 0, minWidth: 52, flexShrink: 0 }}>
-                <span style={{ color: T.gold, fontWeight: 700, fontSize: 11, letterSpacing: '0.04em' }}>{ticker}</span>
+                <span style={{ color: T.gold, fontWeight: 700, fontSize: 9, fontFamily: T.label, letterSpacing: '0.12em', textTransform: 'uppercase' }}>{ticker}</span>
                 {data?.date && (
                   <span style={{ color: T.muted, fontSize: 9, fontFamily: T.mono }}>{data.date}</span>
                 )}
@@ -145,7 +145,7 @@ export default function EarningsCalendar({ config }: { config: WidgetConfig }) {
               {/* Quarter badge */}
               {data?.horizon && (
                 <span style={{
-                  color: '#60a5fa', background: 'rgba(96,165,250,0.1)',
+                  color: 'var(--theme-tertiary, #60a5fa)', background: 'rgba(96,165,250,0.1)',
                   border: '1px solid rgba(96,165,250,0.25)', borderRadius: 2,
                   padding: '0 5px', fontSize: 9, fontFamily: T.label, whiteSpace: 'nowrap', flexShrink: 0,
                 }}>

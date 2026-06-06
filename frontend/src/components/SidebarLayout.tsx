@@ -80,7 +80,7 @@ export default function SidebarLayout({
             {sidebarTitle}
           </span>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflowY: 'auto' }}>
           {sidebar}
         </div>
       </div>

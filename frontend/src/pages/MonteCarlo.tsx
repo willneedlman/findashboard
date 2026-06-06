@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query'
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Legend } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import MetricCard from '../components/MetricCard'
+import { useChartColors } from '../hooks/useChartColors'
 import StrategySelector, { STRATEGIES, type StrategyParams } from '../components/StrategySelector'
 import { TOOLTIP_STYLE, CROSSHAIR_CURSOR, BAR_CURSOR } from '../components/ChartTooltip'
 import SidebarLayout from '../components/SidebarLayout'
@@ -100,6 +101,7 @@ function ChartPanel({ label, height, children }: { label: string; height: number
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function MonteCarlo() {
+  const cc = useChartColors()
   const { holdings, setHoldings } = usePortfolio()
   const [legs, setLegs] = useState<Leg[]>(() => {
     if (holdings && holdings.length > 0) {
@@ -114,6 +116,7 @@ export default function MonteCarlo() {
   const [horizon, setHorizon] = useState(252)
   const [nSims, setNSims] = useState(500)
   const [benchmark, setBenchmark] = useState('SPY')
+  const [targetPrice, setTargetPrice] = useState(0)
   const [fetching, setFetching] = useState(false)
 
 
@@ -128,11 +131,14 @@ export default function MonteCarlo() {
           const { data } = await axios.get(`/api/market/history?ticker=${leg.ticker}&start=2022-01-01`)
           if (data?.metrics) {
             const years = Math.max(new Date().getFullYear() - 2022, 1)
+            // CAGR = (1 + totalReturn/100)^(1/years) - 1; cap at ±150%/yr for sane simulation
+            const cagr = (Math.pow(1 + data.metrics.total_return / 100, 1 / years) - 1) * 100
+            const drift = Math.max(-150, Math.min(150, +cagr.toFixed(1)))
             return {
               ...leg,
               spot: +data.metrics.current_price.toFixed(2),
               vol:  +data.metrics.ann_volatility.toFixed(1),
-              drift: +(data.metrics.total_return / years).toFixed(1),
+              drift,
               fetched: true,
             }
           }
@@ -171,7 +177,11 @@ export default function MonteCarlo() {
 
       const benchVol   = benchResult?.metrics?.ann_volatility ?? 15
       const benchDrift = benchResult?.metrics
-        ? benchResult.metrics.total_return / Math.max(new Date().getFullYear() - 2020, 1)
+        ? (() => {
+            const years = Math.max(new Date().getFullYear() - 2020, 1)
+            const cagr  = (Math.pow(1 + benchResult.metrics.total_return / 100, 1 / years) - 1) * 100
+            return Math.max(-150, Math.min(150, cagr))
+          })()
         : 8
 
       // Per-leg GBMs (normalized to start at 1.0)
@@ -219,8 +229,13 @@ export default function MonteCarlo() {
       const effDrift = legs.reduce((s, l, i) =>
         s + (l.weight / totalWeight) * (l.drift + legAdjs[i].stratAdj), 0)
 
+      const probTarget = targetPrice > 0
+        ? terminal.filter(v => v >= targetPrice).length / terminal.length * 100
+        : null
+
       return {
         bands, histogram, S0, median, p5, p95, probProfit, varAmt, cvarAmt, effDrift,
+        probTarget, targetPrice,
         benchmark, legs: legs.map((l, i) => ({ ...l, ...legAdjs[i] })),
       }
     },
@@ -350,6 +365,13 @@ export default function MonteCarlo() {
                   onChange={e => setBenchmark(e.target.value.toUpperCase())}
                   onFocus={focus} onBlur={blur} />
               </div>
+              <div>
+                <label style={LABEL}>Target Endpoint ($)</label>
+                <input type="number" style={INPUT} value={targetPrice || ''} step={5} min={0}
+                  placeholder="e.g. 120 = +20%"
+                  onChange={e => setTargetPrice(e.target.value === '' ? 0 : +e.target.value)}
+                  onFocus={focus} onBlur={blur} />
+              </div>
             </div>
           </div>
 
@@ -437,6 +459,13 @@ export default function MonteCarlo() {
                 <MetricCard label="Prob of Profit" value={`${data.probProfit.toFixed(1)}%`}
                   deltaPositive={data.probProfit > 50} />
                 <MetricCard label="VaR 95%" value={`$${data.varAmt.toFixed(2)}`} deltaPositive={false} />
+                {data.probTarget !== null && (
+                  <MetricCard
+                    label={`Prob ≥ $${data.targetPrice}`}
+                    value={`${data.probTarget.toFixed(1)}%`}
+                    deltaPositive={data.probTarget > 50}
+                  />
+                )}
               </div>
 
               <div className="metric-grid">
@@ -454,12 +483,16 @@ export default function MonteCarlo() {
                     <YAxis tick={TICK} tickFormatter={v => `$${v.toFixed(0)}`} domain={['auto', 'auto']} orientation="right" />
                     <Tooltip contentStyle={TOOLTIP_STYLE} cursor={CROSSHAIR_CURSOR} formatter={(v: number) => [`$${v.toFixed(2)}`]} />
                     <Legend wrapperStyle={{ fontSize: 10 }} />
-                    <Area type="monotone" dataKey="p95" stroke="#2f6b4b" strokeWidth={1.5} fill="transparent" name="P95" />
+                    <Area type="monotone" dataKey="p95" stroke={cc.gain} strokeWidth={1.5} fill="transparent" name="P95" />
                     <Area type="monotone" dataKey="p75" stroke="rgba(47,107,75,0.4)" strokeWidth={1} fill="rgba(31,86,115,0.1)" name="P75" />
-                    <Area type="monotone" dataKey="p50" stroke="#1f5673" strokeWidth={2.5} fill="transparent" strokeDasharray="4 2" name="Median" />
-                    <Area type="monotone" dataKey="bench_p50" stroke="#d97736" strokeWidth={1.5} fill="transparent" strokeDasharray="3 5" name={data.benchmark} />
+                    <Area type="monotone" dataKey="p50" stroke={cc.c2} strokeWidth={2.5} fill="transparent" strokeDasharray="4 2" name="Median" />
+                    <Area type="monotone" dataKey="bench_p50" stroke={cc.primary} strokeWidth={1.5} fill="transparent" strokeDasharray="3 5" name={data.benchmark} />
                     <Area type="monotone" dataKey="p25" stroke="rgba(140,46,54,0.4)" strokeWidth={1} fill="transparent" name="P25" />
-                    <Area type="monotone" dataKey="p5" stroke="#8c2e36" strokeWidth={1.5} fill="transparent" name="P5" />
+                    <Area type="monotone" dataKey="p5" stroke={cc.loss} strokeWidth={1.5} fill="transparent" name="P5" />
+                    {data.targetPrice > 0 && (
+                      <ReferenceLine y={data.targetPrice} stroke="var(--theme-primary, #c9a84c)" strokeDasharray="5 3"
+                        label={{ value: `Target $${data.targetPrice}`, fill: 'var(--theme-primary, #c9a84c)', fontSize: 9, position: 'insideTopLeft' }} />
+                    )}
                   </AreaChart>
                 </ResponsiveContainer>
               </ChartPanel>
@@ -475,7 +508,11 @@ export default function MonteCarlo() {
                       label={{ value: 'Entry', fill: 'var(--theme-primary, #c9a84c)', fontSize: 9 }} />
                     <ReferenceLine x={String(Math.round(data.median))} stroke="#1f5673" strokeDasharray="4 4"
                       label={{ value: 'Median', fill: 'var(--theme-tertiary, #1f5673)', fontSize: 9 }} />
-                    <Bar dataKey="count" fill="#7b5ea7" opacity={0.8} name="Frequency" />
+                    {data.targetPrice > 0 && (
+                      <ReferenceLine x={String(Math.round(data.targetPrice))} stroke="var(--theme-primary, #c9a84c)" strokeDasharray="4 4"
+                        label={{ value: 'Target', fill: 'var(--theme-primary, #c9a84c)', fontSize: 9 }} />
+                    )}
+                    <Bar dataKey="count" fill={cc.c2Muted} opacity={0.8} name="Frequency" />
                   </BarChart>
                 </ResponsiveContainer>
               </ChartPanel>

@@ -2,10 +2,10 @@ import { Link } from 'react-router-dom'
 import PageWrapper from '../../components/PageWrapper'
 
 const S = {
-  bg:     '#101c2e',
-  border: '#2e394d',
-  header: '#142032',
-  gold:   '#c9a84c',
+  bg:     'var(--theme-bg, #101c2e)',
+  border: 'rgba(255,255,255,0.08)',
+  header: 'var(--theme-surface, #142032)',
+  gold:   'var(--theme-primary, #c9a84c)',
   text:   '#d7e3fc',
   muted:  '#5e768f',
   dim:    '#3a4d62',

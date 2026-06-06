@@ -2,12 +2,19 @@ import { useState } from 'react'
 import axios from 'axios'
 import { useQuery } from '@tanstack/react-query'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
+import { useTheme } from '../../../contexts/ThemeContext'
 
 const T = {
-  bg: '#101c2e', border: '#2e394d', headerBg: '#0d1826',
-  gold: '#c9a84c', text: '#d7e3fc', muted: '#5e768f', dim: '#3a4d62',
-  mono: 'JetBrains Mono, monospace', label: 'IBM Plex Sans, sans-serif',
+  bg: 'var(--theme-bg, #101c2e)', border: 'rgba(255,255,255,0.08)', headerBg: 'var(--theme-surface, #0d1826)',
+  gold: 'var(--theme-primary, #c9a84c)', text: '#d7e3fc', muted: 'var(--theme-secondary, #5e768f)', dim: '#3a4d62',
+  mono: 'JetBrains Mono, monospace',
   pos: '#22C55E', neg: '#EF4444',
+}
+
+function hexToRgb(hex: string): [number, number, number] {
+  const h = hex.replace('#', '')
+  const n = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h, 16)
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
 }
 
 const PERIODS = [
@@ -20,20 +27,26 @@ const PERIODS = [
 interface MatrixCell { row: string; col: string; value: number }
 interface MatrixResult { tickers: string[]; matrix: MatrixCell[] }
 
-function cellBg(v: number): string {
-  if (v >= 0.999) return 'rgba(201,168,76,0.85)'
-  if (v > 0) return `rgba(31,86,115,${Math.min(v * 0.9, 0.85).toFixed(2)})`
-  return `rgba(180,50,60,${Math.min(Math.abs(v) * 0.9, 0.85).toFixed(2)})`
-}
-
-function cellTextColor(v: number): string {
-  if (v >= 0.999) return '#0a1628'
-  return Math.abs(v) > 0.4 ? T.text : T.muted
-}
-
 export default function CorrelationMatrix({ config }: { config: WidgetConfig }) {
+  const { theme } = useTheme()
   const tickers = config.tickers?.length ? config.tickers : ['SPY', 'QQQ', 'TLT', 'GLD', 'BTC-USD']
   const [periodIdx, setPeriodIdx] = useState(2)  // default 1Y
+
+  // Theme-aware cell coloring
+  const [pr, pg, pb] = hexToRgb(theme.primaryColor)    // diagonal
+  const [tr, tg, tb] = hexToRgb(theme.tertiaryColor)   // positive correlation
+  const NEG: [number,number,number] = [140, 46, 54]     // semantic red — fixed
+
+  const cellBg = (v: number): string => {
+    if (v >= 0.999) return `rgba(${pr},${pg},${pb},0.85)`
+    if (v > 0) return `rgba(${tr},${tg},${tb},${Math.min(v * 0.9, 0.85).toFixed(2)})`
+    return `rgba(${NEG[0]},${NEG[1]},${NEG[2]},${Math.min(Math.abs(v) * 0.9, 0.85).toFixed(2)})`
+  }
+
+  const cellTextColor = (v: number): string => {
+    if (v >= 0.999) return 'var(--theme-bg, #0a1628)'
+    return Math.abs(v) > 0.4 ? T.text : T.muted
+  }
 
   const today = new Date().toISOString().split('T')[0]
   const startDate = (() => {
@@ -60,7 +73,7 @@ export default function CorrelationMatrix({ config }: { config: WidgetConfig }) 
   const tks = data?.tickers ?? tickers
 
   const shimmer: React.CSSProperties = {
-    background: 'linear-gradient(90deg,#101c2e 25%,#1a2d45 50%,#101c2e 75%)',
+    background: 'linear-gradient(90deg, var(--theme-surface, #0d0d0d) 25%, rgba(255,255,255,0.05) 50%, var(--theme-surface, #0d0d0d) 75%)',
     backgroundSize: '200% 100%', animation: 'shimmer 2s infinite', borderRadius: 2,
   }
 
@@ -71,14 +84,14 @@ export default function CorrelationMatrix({ config }: { config: WidgetConfig }) 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', background: T.headerBg, borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
         <span style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: T.gold, letterSpacing: '0.08em' }}>CORRELATION</span>
-        <span style={{ fontFamily: T.label, fontSize: 9, color: T.muted }}>return correlation · {tks.length} tickers</span>
+        <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted }}>return correlation · {tks.length} tickers</span>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 2, paddingRight: 26 }}>
           {PERIODS.map((p, i) => (
             <button key={p.label} onClick={() => setPeriodIdx(i)} style={{
               fontFamily: T.mono, fontSize: 9, padding: '2px 6px', cursor: 'pointer', border: 'none',
               background: i === periodIdx ? 'rgba(201,168,76,0.2)' : 'transparent',
               color: i === periodIdx ? T.gold : T.muted,
-              outline: i === periodIdx ? `1px solid rgba(201,168,76,0.4)` : '1px solid transparent',
+              outline: i === periodIdx ? `1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)` : '1px solid transparent',
             }}>{p.label}</button>
           ))}
         </div>
@@ -88,11 +101,11 @@ export default function CorrelationMatrix({ config }: { config: WidgetConfig }) 
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '6px 8px', gap: 6 }}>
         {tickers.length < 2 ? (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ color: T.muted, fontFamily: T.label, fontSize: 11 }}>Add at least 2 tickers in settings.</span>
+            <span style={{ color: T.muted, fontFamily: T.mono, fontSize: 11 }}>Add at least 2 tickers in settings.</span>
           </div>
         ) : isError ? (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ color: T.neg, fontFamily: T.label, fontSize: 11 }}>Data unavailable.</span>
+            <span style={{ color: T.neg, fontFamily: T.mono, fontSize: 11 }}>Data unavailable.</span>
           </div>
         ) : isLoading ? (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -116,7 +129,7 @@ export default function CorrelationMatrix({ config }: { config: WidgetConfig }) 
               <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
                 <div style={{ width: 40, flexShrink: 0 }} />
                 {tks.map(tk => (
-                  <div key={tk} style={{ flex: 1, textAlign: 'center', fontFamily: T.label, fontSize: 8, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.04em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div key={tk} style={{ flex: 1, textAlign: 'center', fontFamily: T.mono, fontSize: 8, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.04em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {tk.replace('-USD', '')}
                   </div>
                 ))}
@@ -127,7 +140,7 @@ export default function CorrelationMatrix({ config }: { config: WidgetConfig }) 
                 {tks.map(row => (
                   <div key={row} style={{ display: 'flex', gap: 2, flex: 1, minHeight: 0 }}>
                     {/* Row label */}
-                    <div style={{ width: 40, flexShrink: 0, fontFamily: T.label, fontSize: 8, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                    <div style={{ width: 40, flexShrink: 0, fontFamily: T.mono, fontSize: 8, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                       {row.replace('-USD', '')}
                     </div>
                     {/* Cells */}
@@ -169,7 +182,7 @@ export default function CorrelationMatrix({ config }: { config: WidgetConfig }) 
                   return <div key={i} style={{ flex: 1, background: cellBg(v) }} />
                 })}
               </div>
-              <span style={{ fontFamily: T.label, fontSize: 8, color: T.dim, whiteSpace: 'nowrap', letterSpacing: '0.05em' }}>
+              <span style={{ fontFamily: T.mono, fontSize: 8, color: T.dim, whiteSpace: 'nowrap', letterSpacing: '0.05em' }}>
                 −1 &nbsp;·&nbsp; 0 &nbsp;·&nbsp; +1
               </span>
             </div>

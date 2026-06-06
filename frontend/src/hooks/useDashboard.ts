@@ -16,6 +16,9 @@ export type WidgetType =
   | 'delta-target'
   | 'tradingview-chart'
   | 'correlation-matrix'
+  | 'macro-calendar'
+  | 'global-macro'
+  | 'credit-spreads'
 
 export interface WidgetConfig {
   id: string
@@ -26,6 +29,8 @@ export interface WidgetConfig {
   period?: '1mo' | '3mo' | '6mo' | '1y'
   color?: string
   weights?: number[]
+  categories?: string[]  // global-macro: selected category keys
+  lookback?: number      // credit-spreads: days of history
 }
 
 export interface StoredDashboard {
@@ -49,6 +54,9 @@ export const WIDGET_DEFAULT_SIZE: Record<WidgetType, { w: number; h: number }> =
   'delta-target':        { w: 4, h: 5 },
   'tradingview-chart':   { w: 8, h: 8 },
   'correlation-matrix':  { w: 5, h: 6 },
+  'macro-calendar':      { w: 5, h: 9 },
+  'global-macro':        { w: 3, h: 9 },
+  'credit-spreads':      { w: 4, h: 7 },
 }
 
 export const WIDGET_LABELS: Record<WidgetType, string> = {
@@ -64,6 +72,9 @@ export const WIDGET_LABELS: Record<WidgetType, string> = {
   'delta-target':        'Delta Price Target',
   'tradingview-chart':   'TradingView Chart',
   'correlation-matrix':  'Correlation Matrix',
+  'macro-calendar':      'Macro Calendar',
+  'global-macro':        'Global Macro',
+  'credit-spreads':      'Credit Spreads',
 }
 
 export const WIDGET_DESCRIPTIONS: Record<WidgetType, string> = {
@@ -79,6 +90,9 @@ export const WIDGET_DESCRIPTIONS: Record<WidgetType, string> = {
   'delta-target':        'Reverse Black-Scholes: find the strike price for a target delta.',
   'tradingview-chart':   'Full-screen TradingView chart: candlesticks, indicators, drawing tools.',
   'correlation-matrix':  'Return correlation heatmap for a custom ticker basket.',
+  'macro-calendar':      'Upcoming macro events: FOMC, CPI, NFP, GDP, PPI, Retail Sales — next 90 days.',
+  'global-macro':        'Live FX, commodities, bond yields, equity indices and VIX — refreshed every 5 minutes.',
+  'credit-spreads':      'BofA ICE IG & HY OAS spreads vs VIX — 90-day sparkline with 1Y change.',
 }
 
 export const WIDGET_ICONS: Record<WidgetType, string> = {
@@ -94,51 +108,63 @@ export const WIDGET_ICONS: Record<WidgetType, string> = {
   'delta-target':        'D',
   'tradingview-chart':   'TV',
   'correlation-matrix':  'ρ',
+  'macro-calendar':      'CAL',
+  'global-macro':        'FX',
+  'credit-spreads':      'CR',
 }
 
-// ── Default layout — all widgets ──────────────────────────────────────────────
+// ── Default layout — all 15 widget types ─────────────────────────────────────
 //
-// 12-col grid, rowHeight=60, margin=10:
+// 12-col grid, rowHeight=60px:
 //
-//  y=0   [══════════════ MACRO STRIP (12×2) ══════════════]
-//  y=2   [ TV CHART — NVDA (8×9)  ] [ WATCHLIST (4×5)    ]
-//  y=7   [                        ] [ NEWS FEED (4×4)     ]
-//  y=11  [ OPTIONS SNAPSHOT (4×6) ] [ PORTFOLIO (4×6)    ] [ CORR MATRIX (4×6) ]
-//  y=17  [ PRICE SPY (3×6) ][ PRICE NVDA (3×6) ][ PRICE BTC (3×6) ][ EARNINGS (3×6) ]
-//  y=23  [ MINI CHART (4×5) ] [ OPTIONS PRICER (4×5) ] [ DELTA TARGET (4×5) ]
+//  y=0   [══════════════ MACRO STRIP (12×2) ══════════════════════════════]
+//  y=2   [ TV CHART NVDA (8×9)         ] [ WATCHLIST (4×5)              ]
+//  y=7   [                             ] [ NEWS FEED (4×4)               ]
+//  y=11  [ GLOBAL MACRO (4×7) ] [ CREDIT SPREADS (4×7) ] [ OPT SNAP (4×7)]
+//  y=18  [ PORTFOLIO SUMMARY (6×4)     ] [ EARNINGS CAL (6×4)           ]
+//  y=22  [ CORR MATRIX (4×6) ] [ MACRO CAL (4×6)  ] [ MINI CHART SPY (4×6)]
+//  y=28  [ OPT PRICER (4×5)  ] [ DELTA TARGET (4×5)] [ PRICE CARD NVDA (4×7)]
 
 export const DEFAULT_WIDGETS: WidgetConfig[] = [
   { id: 'w1',  type: 'macro-strip' },
   { id: 'w2',  type: 'tradingview-chart',  ticker: 'NVDA' },
-  { id: 'w3',  type: 'watchlist',          tickers: ['NVDA','AAPL','MSFT','AMZN','META','GOOGL','TSLA'] },
+  { id: 'w3',  type: 'watchlist',          tickers: ['SPY','NVDA','AAPL','MSFT','AMZN','META','TSLA','GOOGL'] },
   { id: 'w4',  type: 'news-feed',          tickers: ['NVDA','SPY','AAPL'] },
-  { id: 'w5',  type: 'options-snapshot',   ticker: 'NVDA' },
-  { id: 'w6',  type: 'portfolio-summary',  tickers: ['SPY','QQQ','TLT','GLD'], weights: [0.4,0.3,0.2,0.1] },
-  { id: 'w7',  type: 'correlation-matrix', tickers: ['SPY','QQQ','TLT','GLD','BTC-USD'] },
-  { id: 'w8',  type: 'price-card',         ticker: 'SPY' },
-  { id: 'w9',  type: 'price-card',         ticker: 'NVDA' },
-  { id: 'w10', type: 'price-card',         ticker: 'BTC-USD' },
-  { id: 'w11', type: 'earnings-calendar',  tickers: ['NVDA','AAPL','MSFT','AMZN','META','GOOGL'] },
-  { id: 'w12', type: 'mini-chart',         ticker: 'SPY', period: '1y' },
+  { id: 'w5',  type: 'global-macro' },
+  { id: 'w6',  type: 'credit-spreads' },
+  { id: 'w7',  type: 'options-snapshot',   ticker: 'SPY' },
+  { id: 'w8',  type: 'portfolio-summary',  tickers: ['SPY','QQQ','TLT','GLD'], weights: [0.4, 0.3, 0.2, 0.1] },
+  { id: 'w9',  type: 'earnings-calendar',  tickers: ['NVDA','AAPL','MSFT','AMZN','META','GOOGL'] },
+  { id: 'w10', type: 'correlation-matrix', tickers: ['SPY','QQQ','TLT','GLD','BTC-USD'] },
+  { id: 'w11', type: 'macro-calendar' },
+  { id: 'w12', type: 'mini-chart',         ticker: 'SPY',     period: '1y' },
   { id: 'w13', type: 'options-pricer',     ticker: 'SPY' },
   { id: 'w14', type: 'delta-target',       ticker: 'SPY' },
+  { id: 'w15', type: 'price-card',         ticker: 'NVDA' },
 ]
 
 export const DEFAULT_LAYOUTS: Layout[] = [
-  { i: 'w1',  x: 0, y: 0,  w: 12, h: 2 },
-  { i: 'w2',  x: 0, y: 2,  w: 8,  h: 9,  minH: 6, minW: 3 },
-  { i: 'w3',  x: 8, y: 2,  w: 4,  h: 5 },
-  { i: 'w4',  x: 8, y: 7,  w: 4,  h: 4 },
-  { i: 'w5',  x: 0, y: 11, w: 4,  h: 6 },
-  { i: 'w6',  x: 4, y: 11, w: 4,  h: 6 },
-  { i: 'w7',  x: 8, y: 11, w: 4,  h: 6 },
-  { i: 'w8',  x: 0, y: 17, w: 3,  h: 6,  minH: 6, minW: 3 },
-  { i: 'w9',  x: 3, y: 17, w: 3,  h: 6,  minH: 6, minW: 3 },
-  { i: 'w10', x: 6, y: 17, w: 3,  h: 6,  minH: 6, minW: 3 },
-  { i: 'w11', x: 9, y: 17, w: 3,  h: 6 },
-  { i: 'w12', x: 0, y: 23, w: 4,  h: 5 },
-  { i: 'w13', x: 4, y: 23, w: 4,  h: 5 },
-  { i: 'w14', x: 8, y: 23, w: 4,  h: 5 },
+  // Full-width macro strip
+  { i: 'w1',  x: 0,  y: 0,  w: 12, h: 2 },
+  // Main chart + market feeds
+  { i: 'w2',  x: 0,  y: 2,  w: 8,  h: 9,  minH: 6, minW: 3 },
+  { i: 'w3',  x: 8,  y: 2,  w: 4,  h: 5 },
+  { i: 'w4',  x: 8,  y: 7,  w: 4,  h: 4 },
+  // Market intelligence row
+  { i: 'w5',  x: 0,  y: 11, w: 4,  h: 7 },
+  { i: 'w6',  x: 4,  y: 11, w: 4,  h: 7 },
+  { i: 'w7',  x: 8,  y: 11, w: 4,  h: 7 },
+  // Portfolio & earnings
+  { i: 'w8',  x: 0,  y: 18, w: 6,  h: 4 },
+  { i: 'w9',  x: 6,  y: 18, w: 6,  h: 4 },
+  // Deep analytics
+  { i: 'w10', x: 0,  y: 22, w: 4,  h: 6 },
+  { i: 'w11', x: 4,  y: 22, w: 4,  h: 6 },
+  { i: 'w12', x: 8,  y: 22, w: 4,  h: 6,  minH: 4 },
+  // Options tools + price card
+  { i: 'w13', x: 0,  y: 28, w: 4,  h: 5 },
+  { i: 'w14', x: 4,  y: 28, w: 4,  h: 5 },
+  { i: 'w15', x: 8,  y: 28, w: 4,  h: 7,  minH: 6, minW: 3 },
 ]
 
 // ── Size constraints ──────────────────────────────────────────────────────────

@@ -186,3 +186,194 @@ def monte_carlo(req: MonteCarloRequest):
         "sample_paths": [[round(v, 2) for v in row] for row in sample],
         "histogram": sorted([round(float(v), 2) for v in final]),
     }
+
+
+# ── Portfolio Stress Tester ────────────────────────────────────────────────────
+
+SCENARIOS = {
+    "gfc": {
+        "label": "2008 Financial Crisis",
+        "start": "2008-09-15",
+        "end":   "2009-03-09",
+        "desc":  "Lehman collapse to market bottom",
+    },
+    "covid": {
+        "label": "COVID Crash",
+        "start": "2020-02-19",
+        "end":   "2020-03-23",
+        "desc":  "33-day fastest bear market in history",
+    },
+    "rate_hike_2022": {
+        "label": "2022 Rate Hike Bear",
+        "start": "2022-01-03",
+        "end":   "2022-10-13",
+        "desc":  "Fed hiking cycle crushes growth stocks",
+    },
+    "dotcom": {
+        "label": "Dot-com Bust",
+        "start": "2000-03-10",
+        "end":   "2002-10-09",
+        "desc":  "Nasdaq peak to trough, -78%",
+    },
+    "q4_2018": {
+        "label": "2018 Q4 Selloff",
+        "start": "2018-09-20",
+        "end":   "2018-12-24",
+        "desc":  "Fed tightening + trade war fears",
+    },
+    "debt_ceiling_2011": {
+        "label": "2011 Debt Ceiling Crisis",
+        "start": "2011-07-22",
+        "end":   "2011-10-03",
+        "desc":  "US credit downgrade shock",
+    },
+    "black_monday": {
+        "label": "1987 Black Monday",
+        "start": "1987-10-14",
+        "end":   "1987-10-20",
+        "desc":  "Single-week 30% crash",
+    },
+    "svb_2023": {
+        "label": "SVB Banking Crisis",
+        "start": "2023-03-08",
+        "end":   "2023-03-24",
+        "desc":  "Silicon Valley Bank collapse contagion",
+    },
+}
+
+
+class Holding(BaseModel):
+    ticker: str
+    weight: float = Field(gt=0, le=1)
+
+class StressRequest(BaseModel):
+    holdings: list[Holding] = Field(min_length=1, max_length=20)
+    scenarios: list[str] = Field(default_factory=lambda: list(SCENARIOS.keys()))
+    custom_start: str | None = None
+    custom_end:   str | None = None
+
+    @model_validator(mode="after")
+    def check_weights(self):
+        total = sum(h.weight for h in self.holdings)
+        if not (0.99 <= total <= 1.01):
+            raise ValueError(f"Weights must sum to 1.0 (got {total:.3f})")
+        return self
+
+
+def _period_return(prices: pd.Series, start: str, end: str) -> float | None:
+    try:
+        sub = prices.loc[start:end].dropna()
+        if len(sub) < 2:
+            return None
+        return float((sub.iloc[-1] / sub.iloc[0]) - 1) * 100
+    except Exception:
+        return None
+
+
+@router.post("/stress-test")
+def stress_test(req: StressRequest):
+    tickers = [h.ticker.upper() for h in req.holdings]
+    weights = {h.ticker.upper(): h.weight for h in req.holdings}
+
+    # Fetch price history — need data back to 1987 for Black Monday
+    try:
+        from datetime import date as _date
+        raw = get_download(tuple(tickers + ["SPY"]), start="1986-01-01", end=_date.today().isoformat())
+        if isinstance(raw.columns, pd.MultiIndex):
+            prices = raw["Close"]
+        else:
+            prices = raw[["Close"]] if "Close" in raw.columns else raw
+        prices = prices.ffill()
+    except Exception as e:
+        raise HTTPException(500, f"Price fetch failed: {e}")
+
+    # Ensure SPY is present
+    if "SPY" not in prices.columns:
+        raise HTTPException(500, "Could not fetch SPY benchmark data")
+
+    # Build scenario list
+    scenario_keys = [s for s in req.scenarios if s in SCENARIOS]
+    results = []
+
+    for key in scenario_keys:
+        sc = SCENARIOS[key]
+        start, end = sc["start"], sc["end"]
+
+        holding_results = []
+        portfolio_return = 0.0
+        all_valid = True
+
+        for ticker in tickers:
+            if ticker not in prices.columns:
+                holding_results.append({"ticker": ticker, "return": None, "contribution": None})
+                all_valid = False
+                continue
+            ret = _period_return(prices[ticker], start, end)
+            weight = weights[ticker]
+            contribution = (ret * weight) if ret is not None else None
+            if ret is not None:
+                portfolio_return += contribution
+            else:
+                all_valid = False
+            holding_results.append({
+                "ticker":       ticker,
+                "weight":       round(weight * 100, 1),
+                "return":       round(ret, 2) if ret is not None else None,
+                "contribution": round(contribution, 2) if contribution is not None else None,
+            })
+
+        spy_ret = _period_return(prices["SPY"], start, end)
+
+        results.append({
+            "key":              key,
+            "label":            sc["label"],
+            "period":           f"{sc['start']} → {sc['end']}",
+            "desc":             sc["desc"],
+            "portfolio_return": round(portfolio_return, 2) if all_valid else None,
+            "spy_return":       round(spy_ret, 2) if spy_ret is not None else None,
+            "alpha":            round(portfolio_return - spy_ret, 2) if (all_valid and spy_ret is not None) else None,
+            "holdings":         holding_results,
+            "partial":          not all_valid,
+        })
+
+    # Custom scenario
+    if req.custom_start and req.custom_end:
+        start, end = req.custom_start, req.custom_end
+        holding_results = []
+        portfolio_return = 0.0
+        all_valid = True
+        for ticker in tickers:
+            if ticker not in prices.columns:
+                holding_results.append({"ticker": ticker, "return": None, "contribution": None})
+                all_valid = False
+                continue
+            ret = _period_return(prices[ticker], start, end)
+            weight = weights[ticker]
+            contribution = (ret * weight) if ret is not None else None
+            if ret is not None:
+                portfolio_return += contribution
+            else:
+                all_valid = False
+            holding_results.append({
+                "ticker":       ticker,
+                "weight":       round(weight * 100, 1),
+                "return":       round(ret, 2) if ret is not None else None,
+                "contribution": round(contribution, 2) if contribution is not None else None,
+            })
+        spy_ret = _period_return(prices["SPY"], start, end)
+        results.append({
+            "key":              "custom",
+            "label":            "Custom Period",
+            "period":           f"{start} → {end}",
+            "desc":             "User-defined stress period",
+            "portfolio_return": round(portfolio_return, 2) if all_valid else None,
+            "spy_return":       round(spy_ret, 2) if spy_ret is not None else None,
+            "alpha":            round(portfolio_return - spy_ret, 2) if (all_valid and spy_ret is not None) else None,
+            "holdings":         holding_results,
+            "partial":          not all_valid,
+        })
+
+    return {
+        "holdings": [{"ticker": t, "weight": round(weights[t] * 100, 1)} for t in tickers],
+        "results":  results,
+    }

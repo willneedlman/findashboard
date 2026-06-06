@@ -85,13 +85,13 @@ function Rule({ tag, children }: { tag: string; children: React.ReactNode }) {
 // ── Compact (sidebar) sub-components ────────────────────────────────────────
 
 const C_INPUT: React.CSSProperties = {
-  background: '#0a1628', border: '1px solid #4d4637', color: '#d7e3fc',
+  background: 'var(--theme-bg, #0a1628)', border: '1px solid rgba(255,255,255,0.10)', color: '#d7e3fc',
   fontFamily: 'JetBrains Mono, monospace', fontSize: 11, padding: '4px 6px',
   width: '100%', outline: 'none', boxSizing: 'border-box',
 }
 const C_LABEL: React.CSSProperties = {
   fontSize: 9, fontWeight: 700, letterSpacing: '0.12em',
-  textTransform: 'uppercase', color: '#99907e', marginBottom: 3, display: 'block',
+  textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', marginBottom: 3, display: 'block',
 }
 
 function CNum({ label, value, step, min, max, help, onChange }: {
@@ -99,17 +99,17 @@ function CNum({ label, value, step, min, max, help, onChange }: {
   onChange: (v: number) => void
 }) {
   const [showTip, setShowTip] = useState(false)
-  const focus = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = '#c9a84c')
-  const blur  = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = '#4d4637')
+  const focus = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')
+  const blur  = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = 'rgba(255,255,255,0.10)')
   return (
     <div style={{ position: 'relative' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
-        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#99907e' }}>
+        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)' }}>
           {label}
         </span>
         {help && (
           <span
-            style={{ fontSize: 10, color: '#4d4637', cursor: 'help', lineHeight: 1, flexShrink: 0 }}
+            style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', cursor: 'help', lineHeight: 1, flexShrink: 0 }}
             onMouseEnter={() => setShowTip(true)}
             onMouseLeave={() => setShowTip(false)}
           >ⓘ</span>
@@ -118,7 +118,7 @@ function CNum({ label, value, step, min, max, help, onChange }: {
       {showTip && help && (
         <div style={{
           position: 'absolute', bottom: '100%', left: 0, marginBottom: 4, zIndex: 50,
-          background: '#0a1628', border: '1px solid #4d4637', padding: '6px 8px',
+          background: 'var(--theme-bg, #0a1628)', border: '1px solid rgba(255,255,255,0.10)', padding: '6px 8px',
           width: 190, fontSize: 10, color: '#d7e3fc', lineHeight: '14px', pointerEvents: 'none',
         }}>
           {help}
@@ -132,14 +132,14 @@ function CNum({ label, value, step, min, max, help, onChange }: {
 
 function CRule({ tag, children }: { tag: string; children: React.ReactNode }) {
   const color: Record<string, string> = {
-    BUY: '#4caf7d', HOLD: '#c9a84c', SELL: '#e05c6e', NOTE: '#4d4637', WEAK: '#d97736',
+    BUY: '#4caf7d', HOLD: 'var(--theme-primary, #c9a84c)', SELL: '#e05c6e', NOTE: 'rgba(255,255,255,0.18)', WEAK: '#d97736',
   }
   return (
     <div style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
       <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: color[tag] ?? '#4d4637', flexShrink: 0 }}>
         [{tag}]
       </span>
-      <span style={{ fontSize: 10, color: '#99907e', lineHeight: '13px' }}>{children}</span>
+      <span style={{ fontSize: 10, color: 'var(--theme-secondary, #99907e)', lineHeight: '13px' }}>{children}</span>
     </div>
   )
 }
@@ -187,13 +187,13 @@ export default function StrategySelector({ value, params, onChange, compact }: P
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
               {value}
             </span>
-            <ChevronDown size={11} style={{ flexShrink: 0, color: '#99907e' }} />
+            <ChevronDown size={11} style={{ flexShrink: 0, color: 'var(--theme-secondary, #99907e)' }} />
           </button>
 
           {dropdownOpen && (
             <div style={{
               position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
-              background: '#0a1628', border: '1px solid #4d4637', marginTop: 1,
+              background: 'var(--theme-bg, #0a1628)', border: '1px solid rgba(255,255,255,0.10)', marginTop: 1,
               boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
             }}>
               {STRATEGIES.map(s => (
@@ -202,17 +202,17 @@ export default function StrategySelector({ value, params, onChange, compact }: P
                   onClick={() => { setStrategy(s); setDropdownOpen(false) }}
                   style={{
                     display: 'block', width: '100%', textAlign: 'left',
-                    background: s === value ? '#142032' : 'none',
-                    border: 'none', borderBottom: '1px solid #1e2d3d',
+                    background: s === value ? 'var(--theme-surface, #142032)' : 'none',
+                    border: 'none', borderBottom: '1px solid rgba(255,255,255,0.06)',
                     padding: '7px 9px', cursor: 'pointer',
                   }}
                   onMouseEnter={e => { if (s !== value) (e.currentTarget as HTMLElement).style.background = '#0f1e30' }}
                   onMouseLeave={e => { if (s !== value) (e.currentTarget as HTMLElement).style.background = 'none' }}
                 >
-                  <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: s === value ? '#c9a84c' : '#d7e3fc', marginBottom: 2 }}>
+                  <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: s === value ? 'var(--theme-primary, #c9a84c)' : '#d7e3fc', marginBottom: 2 }}>
                     {s}
                   </div>
-                  <div style={{ fontSize: 9, color: '#4d4637', lineHeight: '12px', letterSpacing: '0.03em' }}>
+                  <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.22)', lineHeight: '12px', letterSpacing: '0.03em' }}>
                     {STRATEGY_DESC[s]}
                   </div>
                 </button>
@@ -221,7 +221,7 @@ export default function StrategySelector({ value, params, onChange, compact }: P
           )}
         </div>
 
-        <div style={{ fontSize: 10, color: '#4d4637', marginTop: 5, lineHeight: '13px' }}>
+        <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', marginTop: 5, lineHeight: '13px' }}>
           {STRATEGY_DESC[value]}
         </div>
 
@@ -231,7 +231,7 @@ export default function StrategySelector({ value, params, onChange, compact }: P
               onClick={() => setOpen(o => !o)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 4, marginTop: 6,
-                fontSize: 10, color: '#c9a84c', background: 'none', border: 'none',
+                fontSize: 10, color: 'var(--theme-primary, #c9a84c)', background: 'none', border: 'none',
                 cursor: 'pointer', padding: 0, letterSpacing: '0.08em',
               }}
             >
@@ -240,7 +240,7 @@ export default function StrategySelector({ value, params, onChange, compact }: P
             </button>
 
             {open && (
-              <div style={{ marginTop: 8, borderTop: '1px solid #2e394d', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ marginTop: 8, borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
 
                 {value === "SMA Trend Following (50/200)" && (<>
                   <CNum label="Fast SMA (days)" value={p.sma_fast!} step={5} min={5} max={100} onChange={v => setParam('sma_fast', v)}
@@ -251,7 +251,7 @@ export default function StrategySelector({ value, params, onChange, compact }: P
                     help="Extra annualised drift added when the Golden Cross is active (fast SMA above slow SMA)." />
                   <CNum label="Bear drift adj (%)" value={p.bear_drift_adj!} step={0.5} max={0} min={-15} onChange={v => setParam('bear_drift_adj', v)}
                     help="Drift penalty during a Death Cross (fast SMA below slow SMA). Keep this negative." />
-                  <div style={{ borderTop: '1px solid #1e2d3d', paddingTop: 6 }}>
+                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 6 }}>
                     <CRule tag="BUY">Price above both SMAs — drift +{p.bull_drift_adj}%/yr.</CRule>
                     <CRule tag="SELL">Death Cross — drift {p.bear_drift_adj}%/yr.</CRule>
                     <CRule tag="NOTE">Weak signals get a partial adjustment.</CRule>
@@ -269,7 +269,7 @@ export default function StrategySelector({ value, params, onChange, compact }: P
                     help="Drift penalty when RSI is overbought. Keep negative — a high RSI suggests mean reversion risk." />
                   <CNum label="Oversold drift adj (%)" value={p.os_drift_adj!} step={0.5} min={0} max={15} onChange={v => setParam('os_drift_adj', v)}
                     help="Drift boost when RSI is oversold. Keep positive — a low RSI suggests a likely recovery." />
-                  <div style={{ borderTop: '1px solid #1e2d3d', paddingTop: 6 }}>
+                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 6 }}>
                     <CRule tag="BUY">RSI &lt; {p.oversold} → +{p.os_drift_adj}% drift.</CRule>
                     <CRule tag="SELL">RSI &gt; {p.overbought} → {p.ob_drift_adj}% drift.</CRule>
                     <CRule tag="HOLD">RSI {p.oversold}–{p.overbought} — no adjustment.</CRule>
@@ -285,7 +285,7 @@ export default function StrategySelector({ value, params, onChange, compact }: P
                     help="Scales how strongly momentum converts into a drift adjustment. 0.25 means a 20% return → +5% drift." />
                   <CNum label="Max drift adj (%)" value={p.adj_cap!} step={0.5} min={1} max={20} onChange={v => setParam('adj_cap', v)}
                     help="Hard cap on the drift adjustment in either direction. Prevents extreme momentum from dominating." />
-                  <div style={{ borderTop: '1px solid #1e2d3d', paddingTop: 6 }}>
+                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 6 }}>
                     <CRule tag="BUY">{p.lookback_days}d return &gt; {p.threshold_pct}% → up to +{p.adj_cap}%.</CRule>
                     <CRule tag="SELL">Return &lt; {p.threshold_pct}% → up to -{p.adj_cap}%.</CRule>
                   </div>
@@ -304,7 +304,7 @@ export default function StrategySelector({ value, params, onChange, compact }: P
                     help="Drift boost added when P/E is in deep-value or fair-value territory. Keep positive." />
                   <CNum label="Bear drift adj (%)" value={p.bear_drift_adj!} step={0.5} max={0} min={-15} onChange={v => setParam('bear_drift_adj', v)}
                     help="Drift penalty when P/E is expensive. Keep this negative to reflect overvaluation risk." />
-                  <div style={{ borderTop: '1px solid #1e2d3d', paddingTop: 6 }}>
+                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 6 }}>
                     <CRule tag="BUY">P/E &lt; {p.pe_deep_value} → +{p.bull_drift_adj}%/yr.</CRule>
                     <CRule tag="HOLD">P/E {p.pe_deep_value}–{p.pe_in_threshold} → partial or none.</CRule>
                     <CRule tag="SELL">P/E &gt; {p.pe_expensive} → {p.bear_drift_adj}%/yr.</CRule>
@@ -318,7 +318,7 @@ export default function StrategySelector({ value, params, onChange, compact }: P
                     help="Multiplies EPS growth rate into a drift adjustment. E.g. sensitivity 60 × 10% EPS growth = +6% drift boost." />
                   <CNum label="Max drift adj (%)" value={p.adj_cap!} step={0.5} min={1} max={20} onChange={v => setParam('adj_cap', v)}
                     help="Hard cap on the drift adjustment in either direction. Prevents extreme EPS swings from dominating." />
-                  <div style={{ borderTop: '1px solid #1e2d3d', paddingTop: 6 }}>
+                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 6 }}>
                     <CRule tag="BUY">EPS growth &gt; {p.exit_threshold_pct}% → up to +{p.adj_cap}%.</CRule>
                     <CRule tag="SELL">EPS growth &lt; {p.exit_threshold_pct}% → up to -{p.adj_cap}%.</CRule>
                     <CRule tag="NOTE">Uses live Yahoo Finance data.</CRule>

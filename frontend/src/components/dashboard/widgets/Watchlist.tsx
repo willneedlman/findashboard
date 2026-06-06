@@ -4,14 +4,14 @@ import { useQueries } from '@tanstack/react-query'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 
 const T = {
-  bg: '#101c2e', border: '#2e394d', headerBg: '#0d1826',
-  gold: '#c9a84c', text: '#d7e3fc', muted: '#5e768f', dim: '#3a4d62',
+  bg: 'var(--theme-bg, #101c2e)', border: 'rgba(255,255,255,0.08)', headerBg: 'var(--theme-surface, #0d1826)',
+  gold: 'var(--theme-primary, #c9a84c)', text: '#d7e3fc', muted: 'var(--theme-secondary, #5e768f)', dim: '#3a4d62',
   mono: 'JetBrains Mono, monospace', label: 'IBM Plex Sans, sans-serif',
   pos: '#22C55E', neg: '#EF4444', warn: '#f59e0b',
 }
 
 const shimmer: React.CSSProperties = {
-  background: 'linear-gradient(90deg,#101c2e 25%,#1a2d45 50%,#101c2e 75%)',
+  background: 'linear-gradient(90deg, var(--theme-surface, #0d0d0d) 25%, rgba(255,255,255,0.05) 50%, var(--theme-surface, #0d0d0d) 75%)',
   backgroundSize: '200% 100%', animation: 'shimmer 2s infinite', borderRadius: 3, height: 12,
 }
 
@@ -69,11 +69,11 @@ function consensusColor(c: string | null): string {
 
 // ── Column selector panel ─────────────────────────────────────────────────────
 function ColPanel({ visible, onToggle }: { visible: Set<ColId>; onToggle: (id: ColId) => void }) {
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(false)
   return (
-    <div style={{ borderTop: `1px solid ${T.border}`, background: '#080f1d', flexShrink: 0 }}>
+    <div style={{ borderTop: `1px solid ${T.border}`, background: 'var(--theme-bg, #080f1d)', flexShrink: 0 }}>
       <div onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', cursor: 'pointer', userSelect: 'none' }}>
-        <span style={{ fontFamily: T.label, fontSize: 9, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Columns</span>
+        <span style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.12em' }}>Columns</span>
         <span style={{ color: T.dim, fontSize: 9, fontFamily: T.mono, display: 'inline-block', transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }}>▾</span>
       </div>
       {open && (
@@ -82,7 +82,7 @@ function ColPanel({ visible, onToggle }: { visible: Set<ColId>; onToggle: (id: C
             const on = visible.has(id)
             return (
               <label key={id} onClick={() => onToggle(id)} style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', userSelect: 'none' }}>
-                <div style={{ width: 11, height: 11, flexShrink: 0, border: `1px solid ${on ? T.gold : T.dim}`, background: on ? 'rgba(201,168,76,0.18)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.1s' }}>
+                <div style={{ width: 11, height: 11, flexShrink: 0, border: `1px solid ${on ? T.gold : T.dim}`, background: on ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.1s' }}>
                   {on && <div style={{ width: 5, height: 5, background: T.gold }} />}
                 </div>
                 <span style={{ fontFamily: T.label, fontSize: 9, color: on ? T.text : T.dim, whiteSpace: 'nowrap' }}>{label}</span>
@@ -117,7 +117,7 @@ export default function Watchlist({ config }: { config: WidgetConfig }) {
     queries: tickers.map(t => ({
       queryKey: ['watchlist-item-v2', t],
       queryFn: () => axios.get(`/api/corporate/hub?ticker=${t}`).then(r => r.data as HubData),
-      staleTime: 60_000,
+      staleTime: 600_000,
     })),
   })
 
@@ -138,14 +138,19 @@ export default function Watchlist({ config }: { config: WidgetConfig }) {
     <div style={{ background: T.bg, fontFamily: T.mono, width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <style>{`@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
 
+      {/* Widget title */}
+      <div style={{ background: T.headerBg, padding: '6px 14px', borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
+        <span style={{ color: T.gold, fontSize: 9, fontFamily: T.label, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em' }}>Watchlist</span>
+      </div>
+
       {/* Scrollable table area */}
       <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
         <div style={{ minWidth: minTableW }}>
-          {/* Header */}
-          <div style={{ background: T.headerBg, padding: '7px 14px', borderBottom: `1px solid ${T.border}`, display: 'flex', position: 'sticky', top: 0, zIndex: 1 }}>
-            <span style={{ width: TICKER_W, flexShrink: 0, color: T.muted, fontSize: 10, fontFamily: T.label, textTransform: 'uppercase', letterSpacing: 1 }}>Ticker</span>
+          {/* Column headers */}
+          <div style={{ background: T.headerBg, padding: '5px 14px', borderBottom: `1px solid ${T.border}`, display: 'flex', position: 'sticky', top: 0, zIndex: 1 }}>
+            <span style={{ width: TICKER_W, flexShrink: 0, color: T.muted, fontSize: 9, fontFamily: T.label, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em' }}>Ticker</span>
             {activeCols.map(col => (
-              <span key={col.id} style={{ width: col.width, flexShrink: 0, color: T.muted, fontSize: 10, fontFamily: T.label, textTransform: 'uppercase', letterSpacing: 1, textAlign: 'right' }}>
+              <span key={col.id} style={{ width: col.width, flexShrink: 0, color: T.muted, fontSize: 9, fontFamily: T.label, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', textAlign: 'right' }}>
                 {col.label}
               </span>
             ))}
@@ -155,12 +160,12 @@ export default function Watchlist({ config }: { config: WidgetConfig }) {
           {tickers.map((ticker, i) => {
             const result = results[i]
             const data = result.data as HubData | undefined
-            const rowBg = i % 2 === 0 ? '#0d1b30' : T.bg
+            const rowBg = i % 2 === 0 ? 'var(--theme-surface, #0d1b30)' : T.bg
 
             if (result.isLoading || !data) {
               return (
                 <div key={ticker} style={{ background: rowBg, padding: '9px 14px', display: 'flex', alignItems: 'center', gap: 8, borderBottom: `1px solid ${T.border}` }}>
-                  <span style={{ width: TICKER_W, flexShrink: 0, color: T.gold, fontWeight: 700, fontSize: 12 }}>{ticker}</span>
+                  <span style={{ width: TICKER_W, flexShrink: 0, color: T.gold, fontWeight: 700, fontSize: 9, fontFamily: T.label, letterSpacing: '0.12em', textTransform: 'uppercase' }}>{ticker}</span>
                   <div style={{ flex: 1, display: 'flex', gap: 8 }}>
                     {activeCols.map(c => <div key={c.id} style={{ ...shimmer, width: c.width - 8 }} />)}
                   </div>
@@ -170,11 +175,11 @@ export default function Watchlist({ config }: { config: WidgetConfig }) {
 
             return (
               <div key={ticker} style={{ background: rowBg, padding: '9px 14px', display: 'flex', alignItems: 'center', borderBottom: `1px solid ${T.border}` }}>
-                <span style={{ width: TICKER_W, flexShrink: 0, color: T.gold, fontWeight: 700, fontSize: 12, letterSpacing: 0.5 }}>{ticker}</span>
+                <span style={{ width: TICKER_W, flexShrink: 0, color: T.gold, fontWeight: 700, fontSize: 9, fontFamily: T.label, letterSpacing: '0.12em', textTransform: 'uppercase' }}>{ticker}</span>
                 {activeCols.map(col => {
                   const { text, color } = cellValue(col, data)
                   return (
-                    <span key={col.id} style={{ width: col.width, flexShrink: 0, color: color ?? T.text, fontSize: 12, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span key={col.id} style={{ width: col.width, flexShrink: 0, color: color ?? T.text, fontSize: 10, fontFamily: T.mono, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {text}
                     </span>
                   )

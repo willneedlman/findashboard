@@ -54,7 +54,7 @@ export default function CustomDashboard() {
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        {!isMobile && <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {editMode && (
             <>
               <button
@@ -77,19 +77,19 @@ export default function CustomDashboard() {
           >
             {editMode ? <><Unlock size={12} /> Done</> : <><Lock size={12} /> Edit</>}
           </button>
-        </div>
+        </div>}
       </div>
 
-      {/* ── Mobile: stacked widget list ── */}
+      {/* ── Mobile: not available ── */}
       {isMobile ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {widgets.map(w => (
-            <div key={w.id} style={{ minHeight: 200 }}>
-              <WidgetFrame config={w} editMode={false} onRemove={() => removeWidget(w.id)} onUpdate={patch => updateWidget(w.id, patch)}>
-                <WidgetRenderer config={w} />
-              </WidgetFrame>
-            </div>
-          ))}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 24px', gap: 12, textAlign: 'center' }}>
+          <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 32, color: 'rgba(255,255,255,0.08)' }}>⊞</div>
+          <div style={{ fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 13, fontWeight: 600, color: 'var(--theme-primary, #c9a84c)', letterSpacing: '0.06em' }}>
+            Desktop Only
+          </div>
+          <div style={{ fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 11, color: 'var(--theme-secondary, #5e768f)', maxWidth: 260, lineHeight: 1.6 }}>
+            The custom dashboard requires a larger screen. Open it on a desktop or tablet for the full drag-and-resize experience.
+          </div>
         </div>
       ) : (
         /* ── Desktop: react-grid-layout ── */

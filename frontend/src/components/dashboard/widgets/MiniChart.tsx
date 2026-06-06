@@ -12,12 +12,12 @@ import {
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 
 const T = {
-  bg: '#101c2e',
-  border: '#2e394d',
-  headerBg: '#142032',
-  gold: '#c9a84c',
+  bg: 'var(--theme-bg, #101c2e)',
+  border: 'rgba(255,255,255,0.08)',
+  headerBg: 'var(--theme-surface, #142032)',
+  gold: 'var(--theme-primary, #c9a84c)',
   text: '#d7e3fc',
-  muted: '#5e768f',
+  muted: 'var(--theme-secondary, #5e768f)',
   mono: 'JetBrains Mono, monospace',
   label: 'IBM Plex Sans, sans-serif',
   pos: '#22C55E',
@@ -33,7 +33,7 @@ interface ChartData {
 }
 
 const shimmerStyle: React.CSSProperties = {
-  background: 'linear-gradient(90deg, #101c2e 25%, #1a2d45 50%, #101c2e 75%)',
+  background: 'linear-gradient(90deg, var(--theme-surface, #0d0d0d) 25%, rgba(255,255,255,0.05) 50%, var(--theme-surface, #0d0d0d) 75%)',
   backgroundSize: '200% 100%',
   animation: 'shimmer 2s infinite',
   borderRadius: 4,
@@ -72,7 +72,7 @@ export default function MiniChart({ config }: { config: WidgetConfig }) {
   const period = config.period ?? '3mo'
   const days = PERIOD_DAYS[period] ?? 90
   const periodStart = new Date(Date.now() - days * 86400000).toISOString().split('T')[0]
-  const strokeColor = config.color ?? '#1f5673'
+  const strokeColor = config.color ?? 'var(--theme-tertiary, #1f5673)'
   const gradId = `mini-grad-${ticker}-${period}`
 
   const { data, isLoading, isError } = useQuery<ChartData>({
@@ -82,7 +82,7 @@ export default function MiniChart({ config }: { config: WidgetConfig }) {
       return res.data
     },
     enabled: !!ticker,
-    staleTime: 120_000,
+    staleTime: 900_000,
   })
 
   const containerStyle: React.CSSProperties = {

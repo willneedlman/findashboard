@@ -1,11 +1,13 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import axios from 'axios'
 import { useQuery } from '@tanstack/react-query'
+import { createChart, ColorType, CrosshairMode } from 'lightweight-charts'
+import type { IChartApi, ISeriesApi } from 'lightweight-charts'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 
 const T = {
-  bg: '#101c2e', border: '#2e394d', headerBg: '#0d1826',
-  gold: '#c9a84c', text: '#d7e3fc', muted: '#5e768f',
+  bg: 'var(--theme-bg, #101c2e)', border: 'rgba(255,255,255,0.08)', headerBg: 'var(--theme-surface, #0d1826)',
+  gold: 'var(--theme-primary, #c9a84c)', text: '#d7e3fc', muted: 'var(--theme-secondary, #5e768f)',
   mono: 'JetBrains Mono, monospace', label: 'IBM Plex Sans, sans-serif',
   pos: '#22C55E', neg: '#EF4444',
 }
@@ -20,52 +22,135 @@ interface PriceData {
 }
 
 const shimmer: React.CSSProperties = {
-  background: 'linear-gradient(90deg, #101c2e 25%, #1a2d45 50%, #101c2e 75%)',
+  background: 'linear-gradient(90deg, var(--theme-surface, #0d0d0d) 25%, rgba(255,255,255,0.05) 50%, var(--theme-surface, #0d0d0d) 75%)',
   backgroundSize: '200% 100%',
   animation: 'shimmer 2s infinite',
   borderRadius: 3,
 }
 
-function toTVSymbol(ticker: string): string {
-  if (ticker.includes(':')) return ticker
-  if (ticker.endsWith('-USD')) return `CRYPTO:${ticker.replace('-USD', 'USD')}`
-  return ticker
-}
+const PERIODS = [
+  { label: '1M', value: '1mo' },
+  { label: '3M', value: '3mo' },
+  { label: '6M', value: '6mo' },
+  { label: '1Y', value: '1y' },
+  { label: '2Y', value: '2y' },
+  { label: '5Y', value: '5y' },
+]
 
-function TVEmbed({ symbol }: { symbol: string }) {
-  const ref = useRef<HTMLDivElement>(null)
+type Candle = { time: string; open: number; high: number; low: number; close: number; volume: number }
+
+function CandleChart({ ticker }: { ticker: string }) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const chartRef     = useRef<IChartApi | null>(null)
+  const candleRef    = useRef<ISeriesApi<'Candlestick'> | null>(null)
+  const volumeRef    = useRef<ISeriesApi<'Histogram'> | null>(null)
+  const [period, setPeriod]   = useState('1y')
+  const [loading, setLoading] = useState(true)
+  const [error, setError]     = useState<string | null>(null)
 
   useEffect(() => {
-    const el = ref.current
+    const el = containerRef.current
     if (!el) return
-    const script = document.createElement('script')
-    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js'
-    script.type = 'text/javascript'
-    script.async = true
-    script.innerHTML = JSON.stringify({
-      autosize: true,
-      symbol,
-      interval: 'D',
-      timezone: 'Etc/UTC',
-      theme: 'dark',
-      style: '1',
-      locale: 'en',
-      backgroundColor: '#0d1826',
-      gridColor: 'rgba(46,57,77,0.4)',
-      hide_top_toolbar: false,
-      hide_legend: true,
-      allow_symbol_change: false,
-      save_image: false,
-      calendar: false,
-      support_host: 'https://www.tradingview.com',
+    const cs      = getComputedStyle(document.documentElement)
+    const bg      = cs.getPropertyValue('--theme-bg').trim()       || '#101c2e'
+    const surface = cs.getPropertyValue('--theme-surface').trim()  || '#0d1826'
+    const gold    = cs.getPropertyValue('--theme-primary').trim()  || '#c9a84c'
+    const text    = cs.getPropertyValue('--theme-secondary').trim()|| '#5e768f'
+
+    const chart = createChart(el, {
+      layout: {
+        background: { type: ColorType.Solid, color: bg },
+        textColor: text,
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: 10,
+      },
+      grid: {
+        vertLines: { color: 'rgba(255,255,255,0.03)' },
+        horzLines: { color: 'rgba(255,255,255,0.03)' },
+      },
+      crosshair: {
+        mode: CrosshairMode.Normal,
+        vertLine: { color: `${gold}66`, labelBackgroundColor: surface },
+        horzLine: { color: `${gold}66`, labelBackgroundColor: surface },
+      },
+      rightPriceScale: { borderColor: 'rgba(255,255,255,0.06)', textColor: text },
+      timeScale:       { borderColor: 'rgba(255,255,255,0.06)', timeVisible: false },
+      handleScroll: { mouseWheel: true, pressedMouseMove: true },
+      handleScale:  { mouseWheel: true, pinch: true },
+      width:  el.clientWidth,
+      height: el.clientHeight,
     })
-    el.appendChild(script)
-    return () => { if (el) el.innerHTML = '' }
-  }, [])  // runs once on mount; key prop on caller forces remount on symbol change
+    const candle = chart.addCandlestickSeries({
+      upColor: '#22c55e', downColor: '#ef4444',
+      borderUpColor: '#22c55e', borderDownColor: '#ef4444',
+      wickUpColor: '#22c55e', wickDownColor: '#ef4444',
+      priceLineColor: gold,
+      priceLineWidth: 1,
+    })
+    const volume = chart.addHistogramSeries({
+      color: `${gold}26`,
+      priceFormat: { type: 'volume' },
+      priceScaleId: 'vol',
+    })
+    chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } })
+    chartRef.current  = chart
+    candleRef.current = candle
+    volumeRef.current = volume
+    const ro = new ResizeObserver(() => { if (el) chart.resize(el.clientWidth, el.clientHeight) })
+    ro.observe(el)
+    return () => { ro.disconnect(); chart.remove(); chartRef.current = null; candleRef.current = null; volumeRef.current = null }
+  }, [])
+
+  const fetchData = useCallback(async (sym: string, p: string) => {
+    setLoading(true); setError(null)
+    try {
+      const res = await fetch(`/api/market/ohlcv?ticker=${encodeURIComponent(sym)}&period=${p}`)
+      if (!res.ok) throw new Error(`${res.status}`)
+      const json = await res.json()
+      const candles: Candle[] = json.candles
+      if (!candles?.length) throw new Error('no data')
+      candleRef.current?.setData(candles.map(c => ({ time: c.time as `${number}-${number}-${number}`, open: c.open, high: c.high, low: c.low, close: c.close })))
+      volumeRef.current?.setData(candles.map(c => ({ time: c.time as `${number}-${number}-${number}`, value: c.volume, color: c.close >= c.open ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)' })))
+      chartRef.current?.timeScale().fitContent()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (candleRef.current) fetchData(ticker, period)
+  }, [ticker, period, fetchData])
 
   return (
-    <div ref={ref} className="tradingview-widget-container" style={{ flex: 1, minHeight: 0 }}>
-      <div className="tradingview-widget-container__widget" style={{ height: '100%', width: '100%' }} />
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', gap: 2, padding: '3px 8px', background: 'rgba(0,0,0,0.15)', flexShrink: 0 }}>
+        {PERIODS.map(p => (
+          <button key={p.value} onClick={() => setPeriod(p.value)} style={{
+            fontFamily: 'JetBrains Mono, monospace', fontSize: 9, fontWeight: 700,
+            padding: '2px 6px',
+            border: period === p.value ? '1px solid rgba(201,168,76,0.55)' : '1px solid rgba(255,255,255,0.07)',
+            background: period === p.value ? 'rgba(201,168,76,0.12)' : 'transparent',
+            color: period === p.value ? 'var(--theme-primary, #c9a84c)' : 'rgba(255,255,255,0.3)',
+            cursor: 'pointer', letterSpacing: '0.08em',
+          }}>{p.label}</button>
+        ))}
+      </div>
+      <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+        <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+        {loading && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(16,28,46,0.65)' }}>
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#5e768f', letterSpacing: '0.12em' }}>LOADING…</span>
+          </div>
+        )}
+        {error && !loading && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <div style={{ fontSize: 11, color: '#5e768f' }}>Chart unavailable</div>
+            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: 'rgba(255,255,255,0.18)' }}>{error}</div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -81,7 +166,7 @@ export default function PriceCard({ config }: { config: WidgetConfig }) {
       return res.data
     },
     enabled: !!ticker,
-    staleTime: 60_000,
+    staleTime: 600_000,
   })
 
   const base: React.CSSProperties = {
@@ -153,7 +238,7 @@ export default function PriceCard({ config }: { config: WidgetConfig }) {
         </span>
       </div>
 
-      <TVEmbed key={toTVSymbol(ticker)} symbol={toTVSymbol(ticker)} />
+      <CandleChart ticker={ticker} />
     </div>
   )
 }

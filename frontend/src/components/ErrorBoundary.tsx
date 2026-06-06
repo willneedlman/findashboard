@@ -19,12 +19,12 @@ export default class ErrorBoundary extends Component<Props, State> {
       return (
         <div style={{
           minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: '#0a1628', flexDirection: 'column', gap: 16, padding: 32,
+          background: 'var(--theme-bg, #0a1628)', flexDirection: 'column', gap: 16, padding: 32,
         }}>
-          <div style={{ fontFamily: 'Cinzel, Georgia, serif', color: '#c9a84c', fontSize: 18, fontWeight: 700, letterSpacing: '0.08em' }}>
+          <div style={{ fontFamily: 'Cinzel, Georgia, serif', color: 'var(--theme-primary, #c9a84c)', fontSize: 18, fontWeight: 700, letterSpacing: '0.08em' }}>
             FINANCE TERMINAL
           </div>
-          <div style={{ background: '#101c2e', border: '1px solid #8c2e36', padding: '16px 20px', maxWidth: 560, width: '100%' }}>
+          <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid #8c2e36', padding: '16px 20px', maxWidth: 560, width: '100%' }}>
             <div style={{ fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#EF4444', marginBottom: 8 }}>
               Application Error
             </div>
@@ -34,7 +34,7 @@ export default class ErrorBoundary extends Component<Props, State> {
           </div>
           <button
             onClick={() => { this.setState({ error: null }); window.location.href = '/' }}
-            style={{ background: '#1f2a3d', border: '1px solid #c9a84c', color: '#c9a84c', padding: '8px 20px', cursor: 'pointer', fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}
+            style={{ background: 'var(--theme-surface, #1f2a3d)', border: '1px solid #c9a84c', color: 'var(--theme-primary, #c9a84c)', padding: '8px 20px', cursor: 'pointer', fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}
           >
             Return to Home
           </button>

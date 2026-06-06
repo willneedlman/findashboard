@@ -15,6 +15,9 @@ import concurrent.futures
 import requests
 from cachetools import TTLCache
 from dotenv import load_dotenv
+import logging
+
+_log = logging.getLogger(__name__)
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
@@ -23,12 +26,12 @@ _BASE    = "https://financialmodelingprep.com/stable"
 _TIMEOUT = 8
 
 _lock            = threading.Lock()
-_profile_cache:   TTLCache = TTLCache(maxsize=300, ttl=86400)  # 24 hr — company profile rarely changes
-_income_cache:    TTLCache = TTLCache(maxsize=300, ttl=86400)  # 24 hr — quarterly statements
-_balance_cache:   TTLCache = TTLCache(maxsize=300, ttl=86400)  # 24 hr — quarterly statements
-_cashflow_cache:  TTLCache = TTLCache(maxsize=300, ttl=86400)  # 24 hr — quarterly statements
-_quote_cache:     TTLCache = TTLCache(maxsize=300, ttl=120)    # 2 min  — price-sensitive
-_estimates_cache: TTLCache = TTLCache(maxsize=300, ttl=3600)   # 1 hr   — analyst estimates
+_profile_cache:   TTLCache = TTLCache(maxsize=300, ttl=86400)  # 24 hr
+_income_cache:    TTLCache = TTLCache(maxsize=300, ttl=86400)  # 24 hr
+_balance_cache:   TTLCache = TTLCache(maxsize=300, ttl=86400)  # 24 hr
+_cashflow_cache:  TTLCache = TTLCache(maxsize=300, ttl=86400)  # 24 hr
+_quote_cache:     TTLCache = TTLCache(maxsize=300, ttl=1800)   # 30 min — biggest FMP saver
+_estimates_cache: TTLCache = TTLCache(maxsize=300, ttl=86400)  # 24 hr
 
 
 def available() -> bool:
@@ -105,27 +108,46 @@ def get_analyst_estimates(ticker: str, limit: int = 3) -> list:
     return _cached(_estimates_cache, key, fetch)
 
 
-_ratings_cache: TTLCache = TTLCache(maxsize=300, ttl=3600)   # 1 hr — analyst ratings
+_ratings_cache: TTLCache = TTLCache(maxsize=300, ttl=86400)  # 24 hr — analyst ratings change at most daily
 
 
 def get_analyst_ratings(ticker: str) -> dict:
-    """Latest analyst consensus: rating, ratingScore, ratingRecommendation."""
+    """Latest analyst consensus. Falls back to Finnhub on FMP 429."""
     sym = ticker.strip().upper()
     def fetch():
-        d = _get("/analyst-stock-ratings", {"symbol": sym, "limit": 1})
-        return d[0] if isinstance(d, list) and d else {}
+        try:
+            d = _get("/analyst-stock-ratings", {"symbol": sym, "limit": 1})
+            return d[0] if isinstance(d, list) and d else {}
+        except requests.HTTPError as e:
+            if e.response is not None and e.response.status_code == 429:
+                _log.warning("FMP /analyst-stock-ratings 429 for %s — trying Finnhub", sym)
+                try:
+                    import finnhub as fh
+                    if fh.available():
+                        return fh.get_analyst_ratings(sym)
+                except Exception:
+                    pass
+            return {}
     return _cached(_ratings_cache, sym, fetch)
 
 
 def get_quote(ticker: str) -> dict:
-    """
-    Real-time quote: price, changePercentage, marketCap, volume.
-    Cached for 2 min (price-sensitive).
-    """
+    """Real-time quote. Falls back to Finnhub on FMP 429."""
     sym = ticker.strip().upper()
     def fetch():
-        d = _get("/quote", {"symbol": sym})
-        return d[0] if isinstance(d, list) and d else {}
+        try:
+            d = _get("/quote", {"symbol": sym})
+            return d[0] if isinstance(d, list) and d else {}
+        except requests.HTTPError as e:
+            if e.response is not None and e.response.status_code == 429:
+                _log.warning("FMP /quote 429 for %s — trying Finnhub", sym)
+                try:
+                    import finnhub as fh
+                    if fh.available():
+                        return fh.get_quote(sym)
+                except Exception:
+                    pass
+            return {}
     return _cached(_quote_cache, sym, fetch)
 
 
@@ -200,6 +222,16 @@ def get_dcf_fundamentals(ticker: str) -> dict:
     da_abs = (cashflow.get("depreciationAndAmortization") or 0) / 1e6
     da_pct = round((da_abs / revenue * 100) if revenue else 4.0, 1)
 
+    # Working capital change % of revenue
+    # FMP: positive = cash inflow from WC reduction, negative = cash used to build WC.
+    # In DCF modelling, a cash use (negative value) is a drag on FCF, so we flip the sign.
+    wc_raw = (cashflow.get("changeInWorkingCapital") or 0) / 1e6
+    if revenue:
+        wc_pct_raw = -wc_raw / revenue * 100   # positive = WC drag, negative = WC release
+        wc_pct = round(max(-2.0, min(5.0, wc_pct_raw)), 2)
+    else:
+        wc_pct = 0.5
+
     # Effective tax rate
     pretax   = income.get("incomeBeforeTax") or 0
     tax_exp  = income.get("incomeTaxExpense") or 0
@@ -239,6 +271,7 @@ def get_dcf_fundamentals(ticker: str) -> dict:
         "rev_growth":    rev_growth,
         "capex_pct":     max(0.0, capex_pct),
         "da_pct":        max(0.0, da_pct),
+        "wc_pct":        wc_pct,
         "tax_rate":      tax_rate,
         "beta":          round(max(0.1, beta), 2),
         "market_price":  market_price,

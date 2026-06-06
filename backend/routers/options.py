@@ -11,13 +11,24 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from math_engine import bs_price, bs_greeks
 import fmp
+import tradier as _tradier
 from validation import validate_ticker
 from cachetools import TTLCache
 import threading
 
+try:
+    from disk_cache import disk_get, disk_set
+    _DISK = True
+except ImportError:
+    def disk_get(_k): return None   # type: ignore
+    def disk_set(_k, _v, ttl=0): pass  # type: ignore
+    _DISK = False
+
+_SNAP_DISK_TTL = 600   # 10 min — same as in-memory TTL
+
 router = APIRouter()
 
-_snap_cache: TTLCache = TTLCache(maxsize=100, ttl=120)
+_snap_cache: TTLCache = TTLCache(maxsize=100, ttl=600)   # 10 min
 _snap_lock = threading.Lock()
 
 
@@ -27,6 +38,13 @@ def options_snapshot(ticker: str):
     with _snap_lock:
         if sym in _snap_cache:
             return _snap_cache[sym]
+
+    # Check disk cache before hitting any external API
+    disk_val = disk_get(f"snap:{sym}")
+    if disk_val:
+        with _snap_lock:
+            _snap_cache[sym] = disk_val
+        return disk_val
 
     tkr = yf.Ticker(sym)
 
@@ -165,7 +183,7 @@ def options_snapshot(ticker: str):
     be_upper = round(spot + straddle_px, 2) if straddle_px else None
     be_lower = round(spot - straddle_px, 2) if straddle_px else None
 
-    # Volatility cone: percentile bands of rolling realised vol at each lookback
+    # Volatility cone: percentile bands of rolling realized vol at each lookback
     vol_cone: dict = {}
     windows = [10, 21, 63, 126, 252]
     for w in windows:
@@ -259,6 +277,7 @@ def options_snapshot(ticker: str):
     }
     with _snap_lock:
         _snap_cache[sym] = result
+    disk_set(f"snap:{sym}", result, ttl=_SNAP_DISK_TTL)
     return result
 
 
@@ -283,10 +302,7 @@ def price_option(req: PriceRequest):
     d1 = (np.log(req.S / req.K) + (r_d + 0.5 * sig_d**2) * T_y) / (sig_d * np.sqrt(T_y))
     d2 = d1 - sig_d * np.sqrt(T_y)
     vanna = -norm.pdf(d1) * (d2 / sig_d)
-    if req.option_type == "call":
-        charm = -norm.pdf(d1) * ((r_d / (sig_d * np.sqrt(T_y))) - (d2 / (2 * T_y)))
-    else:
-        charm = -norm.pdf(d1) * ((r_d / (sig_d * np.sqrt(T_y))) - (d2 / (2 * T_y))) + r_d * np.exp(-r_d * T_y)
+    charm = -norm.pdf(d1) * ((r_d / (sig_d * np.sqrt(T_y))) - (d2 / (2 * T_y)))
 
     return {
         "price": round(float(price), 4),
@@ -323,65 +339,194 @@ def payoff(req: PriceRequest):
 
 
 @router.get("/chain")
-def options_chain(ticker: str):
+def options_chain(ticker: str, expiry: str | None = None):
+    import datetime as _dt
     try:
-        tkr = yf.Ticker(ticker.strip().upper())
-        expirations = tkr.options
+        sym = ticker.strip().upper()
+
+        # ── Tradier: get expirations + spot ───────────────────────────────────
+        try:
+            expirations = _tradier.get_expirations(sym)
+            quote = _tradier.get_quote(sym)
+            spot = float(quote.get("last") or quote.get("close") or 0) or None
+        except Exception as e:
+            logger.warning("Tradier chain fallback to yfinance: %s", e)
+            expirations = []
+            spot = None
+
+        # Fall back to yfinance for expirations/spot if Tradier fails
         if not expirations:
-            return {"calls": [], "puts": [], "expiry": None, "expirations": []}
-        nearest = expirations[0]
-        chain = tkr.option_chain(nearest)
-        calls = chain.calls[["strike", "lastPrice", "bid", "ask", "volume", "openInterest", "impliedVolatility"]].fillna(0)
-        puts = chain.puts[["strike", "lastPrice", "bid", "ask", "volume", "openInterest", "impliedVolatility"]].fillna(0)
+            tkr = yf.Ticker(sym)
+            expirations = list(tkr.options or [])
+            if not spot:
+                try:
+                    hist = tkr.history(period="2d")
+                    spot = float(hist["Close"].dropna().iloc[-1]) if not hist.empty else None
+                except Exception:
+                    pass
+
+        if not expirations:
+            return {"calls": [], "puts": [], "expiry": None, "expirations": [], "spot": None}
+
+        today = _dt.date.today()
+        future_exps = [e for e in expirations if _dt.date.fromisoformat(e) > today]
+        valid_exps  = future_exps if future_exps else list(expirations)
+        target = expiry if (expiry and expiry in valid_exps) else valid_exps[0]
+
+        # ── Fetch chain from Tradier, fall back to yfinance ──────────────────
+        try:
+            chain = _tradier.get_options_chain(sym, target)
+            calls, puts = chain["calls"], chain["puts"]
+        except Exception as e:
+            logger.warning("Tradier chain fetch failed, falling back to yfinance: %s", e)
+            calls, puts = [], []
+
+        if not calls and not puts:
+            try:
+                yf_chain = yf.Ticker(sym).option_chain(target)
+                def _yf_rows(df):
+                    out = []
+                    for _, r in df.fillna(0).iterrows():
+                        out.append({
+                            "strike":            float(r.get("strike", 0)),
+                            "lastPrice":         float(r.get("lastPrice", 0)),
+                            "bid":               float(r.get("bid", 0)),
+                            "ask":               float(r.get("ask", 0)),
+                            "volume":            int(r.get("volume", 0)),
+                            "openInterest":      int(r.get("openInterest", 0)),
+                            "impliedVolatility": float(r.get("impliedVolatility", 0)),
+                            "delta": 0, "gamma": 0,
+                        })
+                    return out
+                calls = _yf_rows(yf_chain.calls)
+                puts  = _yf_rows(yf_chain.puts)
+            except Exception as e2:
+                logger.warning("yfinance chain fallback failed: %s", e2)
+
+        exp_dt = _dt.date.fromisoformat(target)
+        dte    = max((exp_dt - today).days, 1)
+
+        # Tradier returns IV as a decimal (smv_vol); convert to pct and compute missing greeks
+        r_pct = 5.0
+        def _enrich(rows: list[dict], flag: str) -> list[dict]:
+            for row in rows:
+                iv_dec = float(row.get("impliedVolatility") or 0)
+                iv_pct = iv_dec * 100 if iv_dec < 1.0 else iv_dec  # already pct if >= 1.0
+                if iv_pct < 0.5:
+                    iv_pct = 25.0
+                row["impliedVolatility"] = round(iv_pct / 100, 4)  # keep as decimal for UI compat
+                if not row.get("gamma") and spot and spot > 0:
+                    try:
+                        g = bs_greeks(spot, float(row["strike"]), float(dte), r_pct, iv_pct, flag)
+                        row.setdefault("delta", round(g["delta"], 4))
+                        row.setdefault("gamma", round(g["gamma"], 4))
+                        row["theta"] = round(g["theta"], 4)
+                        row["vega"]  = round(g["vega"],  4)
+                    except Exception:
+                        pass
+            return rows
+
         return {
-            "expiry": nearest,
-            "expirations": list(expirations[:8]),
-            "calls": calls.to_dict(orient="records"),
-            "puts": puts.to_dict(orient="records"),
+            "expiry":      target,
+            "expirations": valid_exps[:12],
+            "spot":        round(spot, 2) if spot else None,
+            "dte":         dte,
+            "calls":       _enrich(calls, "call"),
+            "puts":        _enrich(puts,  "put"),
         }
-    except Exception as e:
-        logger.exception("internal error"); raise HTTPException(500, "Internal server error")
+    except Exception:
+        logger.exception("chain error"); raise HTTPException(500, "Internal server error")
+
 
 
 @router.get("/gex")
-def dealer_gex(ticker: str):
+def dealer_gex(ticker: str, expiry: str | None = None):
+    import datetime as _dt
     sym = ticker.strip().upper()
-    tkr = yf.Ticker(sym)
+
+    # ── Spot price ────────────────────────────────────────────────────────────
+    spot = None
     try:
-        hist = tkr.history(period="5d")
-        spot = float(hist["Close"].dropna().iloc[-1]) if not hist.empty else None
+        quote = _tradier.get_quote(sym)
+        spot = float(quote.get("last") or quote.get("close") or 0) or None
     except Exception:
-        spot = None
+        pass
+    if not spot:
+        try:
+            hist = yf.Ticker(sym).history(period="5d")
+            spot = float(hist["Close"].dropna().iloc[-1]) if not hist.empty else None
+        except Exception:
+            pass
     if not spot:
         raise HTTPException(404, "Could not fetch spot price")
 
+    # ── Expirations ───────────────────────────────────────────────────────────
+    try:
+        all_expirations = _tradier.get_expirations(sym)
+    except Exception:
+        all_expirations = list(yf.Ticker(sym).options or [])
+
+    today = _dt.date.today()
+    future_exps = [e for e in all_expirations if _dt.date.fromisoformat(e) > today]
+    exps_to_process = ([expiry] if (expiry and expiry in all_expirations)
+                       else future_exps[:18])  # aggregate up to 18 expirations for full strike coverage
+
     r = 0.045
     rows = []
-    today = pd.Timestamp.today().normalize()
-    for exp in (tkr.options or []):
-        exp_dt = pd.to_datetime(exp)
-        T = max((exp_dt - today).days / 365.25, 1 / 365.25)
+
+    for exp in exps_to_process:
+        exp_dt   = _dt.date.fromisoformat(exp)
+        days_out = max((exp_dt - today).days, 1)
+        T        = days_out / 365.25
+
+        # ── Fetch chain via Tradier (real OI + gamma), fall back to yfinance ──
+        chain = None
         try:
-            chain = tkr.option_chain(exp)
-        except Exception:
-            continue
-        for side, df_side, sign in [("call", chain.calls, 1), ("put", chain.puts, -1)]:
-            df_side = df_side[["strike", "openInterest", "impliedVolatility"]].dropna()
-            df_side = df_side[(df_side["impliedVolatility"] > 0.01) & (df_side["openInterest"] > 0)]
-            for _, row in df_side.iterrows():
-                K, oi, iv = float(row["strike"]), float(row["openInterest"]), float(row["impliedVolatility"])
-                if K <= 0 or iv <= 0:
-                    continue
-                try:
-                    d1 = (np.log(spot / K) + (r + 0.5 * iv**2) * T) / (iv * np.sqrt(T))
-                    gamma = norm.pdf(d1) / (spot * iv * np.sqrt(T))
-                    gex_m = sign * oi * 100 * gamma * spot * spot * 0.01 / 1e6
-                    rows.append({"strike": K, "side": side, "gex_m": gex_m})
-                except Exception:
+            chain = _tradier.get_options_chain(sym, exp, greeks=True)
+        except Exception as e:
+            logger.warning("Tradier GEX chain %s %s: %s", sym, exp, e)
+
+        if not chain or (not chain.get("calls") and not chain.get("puts")):
+            try:
+                yf_chain = yf.Ticker(sym).option_chain(exp)
+                def _yf_gex_rows(df):
+                    out = []
+                    for _, r in df.fillna(0).iterrows():
+                        out.append({
+                            "strike":            float(r.get("strike", 0)),
+                            "openInterest":      int(r.get("openInterest", 0)),
+                            "impliedVolatility": float(r.get("impliedVolatility", 0)),
+                            "gamma": 0,
+                        })
+                    return out
+                chain = {"calls": _yf_gex_rows(yf_chain.calls), "puts": _yf_gex_rows(yf_chain.puts)}
+            except Exception as e2:
+                logger.warning("yfinance GEX fallback %s %s: %s", sym, exp, e2)
+                continue
+
+        for side, options, sign in [("call", chain["calls"], 1), ("put", chain["puts"], -1)]:
+            for o in options:
+                K   = float(o.get("strike") or 0)
+                oi  = float(o.get("openInterest") or 0)
+                if K <= 0 or oi <= 0:
                     continue
 
+                # Use Tradier's gamma directly if available; otherwise compute from IV
+                gamma = float(o.get("gamma") or 0)
+                if not gamma:
+                    iv_dec = float(o.get("impliedVolatility") or 0)
+                    iv = iv_dec if iv_dec >= 0.05 else 0.20
+                    try:
+                        d1 = (np.log(spot / K) + (r + 0.5 * iv**2) * T) / (iv * np.sqrt(T))
+                        gamma = float(norm.pdf(d1) / (spot * iv * np.sqrt(T)))
+                    except Exception:
+                        continue
+
+                gex_m = sign * oi * 100 * gamma * spot * spot * 0.01 / 1e6
+                rows.append({"strike": K, "side": side, "gex_m": gex_m})
+
     if not rows:
-        return {"spot": spot, "data": []}
+        return {"spot": spot, "data": [], "expirations": all_expirations, "expiry": expiry}
 
     df = pd.DataFrame(rows)
     pivot = (df.groupby(["strike", "side"])["gex_m"].sum()
@@ -391,7 +536,12 @@ def dealer_gex(ticker: str):
             pivot[col] = 0.0
     pivot["net_gex"] = pivot["call_gex"] + pivot["put_gex"]
     pivot = pivot.reset_index().sort_values("strike")
-    return {"spot": spot, "data": pivot.round(4).to_dict(orient="records")}
+    return {
+        "spot": spot,
+        "data": pivot.round(4).to_dict(orient="records"),
+        "expirations": all_expirations,
+        "expiry": expiry,
+    }
 
 
 class StrategyLeg(BaseModel):
@@ -423,3 +573,79 @@ def strategy_payoff(req: StrategyRequest):
         "payoff": list(total_payoff.round(4)),
         "breakeven": float(req.S),
     }
+
+
+class GreeksPosition(BaseModel):
+    ticker:        str
+    strike:        float
+    expiry:        str
+    qty:           float
+    option_type:   str = "call"
+    position_type: str = "long"
+
+
+class GreeksAggregateRequest(BaseModel):
+    positions: list[GreeksPosition]
+
+
+@router.post("/aggregate-greeks")
+def aggregate_greeks(req: GreeksAggregateRequest):
+    import datetime as _dt
+
+    def days_to_expiry(expiry: str) -> float:
+        try:
+            exp = _dt.datetime.strptime(expiry, "%Y-%m-%d").date()
+            dte = (exp - _dt.date.today()).days
+            return max(float(dte), 0.5)
+        except Exception:
+            return 30.0
+
+    def get_spot(sym: str) -> float:
+        try:
+            tkr = yf.Ticker(sym)
+            hist = tkr.history(period="2d")
+            if not hist.empty:
+                return float(hist["Close"].iloc[-1])
+        except Exception:
+            pass
+        return 100.0
+
+    r_rate  = 5.0
+    sigma   = 25.0
+
+    rows = []
+    net: dict[str, float] = {"delta": 0.0, "gamma": 0.0, "theta": 0.0, "vega": 0.0}
+
+    spots: dict[str, float] = {}
+    for pos in req.positions:
+        sym = pos.ticker.strip().upper()
+        if sym not in spots:
+            spots[sym] = get_spot(sym)
+
+    for pos in req.positions:
+        sym  = pos.ticker.strip().upper()
+        spot = spots[sym]
+        dte  = days_to_expiry(pos.expiry)
+        sign = 1.0 if pos.position_type == "long" else -1.0
+        g    = bs_greeks(spot, pos.strike, dte, r_rate, sigma, pos.option_type)
+        scaled = {k: round(v * pos.qty * sign, 4) for k, v in g.items()}
+        for k in net:
+            net[k] += scaled.get(k, 0.0)
+        rows.append({
+            "ticker":        sym,
+            "strike":        pos.strike,
+            "expiry":        pos.expiry,
+            "qty":           pos.qty,
+            "option_type":   pos.option_type,
+            "position_type": pos.position_type,
+            "spot":          round(spot, 2),
+            "dte":           round(dte, 0),
+            **{k: round(v, 4) for k, v in g.items()},
+            "scaled_delta":  scaled.get("delta", 0.0),
+            "scaled_gamma":  scaled.get("gamma", 0.0),
+            "scaled_theta":  scaled.get("theta", 0.0),
+            "scaled_vega":   scaled.get("vega",  0.0),
+        })
+
+    net = {k: round(v, 4) for k, v in net.items()}
+    return {"positions": rows, "net": net}

@@ -65,6 +65,7 @@ def get_fundamentals(ticker: str):
             "rev_growth":   round(rev_growth, 1),
             "capex_pct":    5.0,
             "da_pct":       4.0,
+            "wc_pct":       0.5,
             "tax_rate":     21.0,
             "beta":         round(max(0.1, beta), 2),
             "market_price": price,

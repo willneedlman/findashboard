@@ -4055,4 +4055,4 @@ tab_map = {
 }
 
 if selected_tab in tab_map:
-    safe_tab(tab_map[selected_tab])
+    safe_tab(tab_map[selected_tab])1

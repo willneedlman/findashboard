@@ -5,8 +5,8 @@ import { ChevronDown, ChevronRight } from 'lucide-react'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 
 const T = {
-  bg: '#101c2e', border: '#2e394d', headerBg: '#142032', sectionBg: '#0d1826',
-  gold: '#c9a84c', text: '#d7e3fc', muted: '#5e768f', dim: '#3a4d62',
+  bg: 'var(--theme-bg, #101c2e)', border: 'rgba(255,255,255,0.08)', headerBg: 'var(--theme-surface, #142032)', sectionBg: 'var(--theme-surface, #0d1826)',
+  gold: 'var(--theme-primary, #c9a84c)', text: '#d7e3fc', muted: 'var(--theme-secondary, #5e768f)', dim: '#3a4d62',
   mono: 'JetBrains Mono, monospace', label: 'IBM Plex Sans, sans-serif',
   pos: '#22C55E', neg: '#EF4444',
 }
@@ -29,7 +29,7 @@ function safeUrl(url: string): string {
 }
 
 const shimmer: React.CSSProperties = {
-  background: 'linear-gradient(90deg, #101c2e 25%, #1a2d45 50%, #101c2e 75%)',
+  background: 'linear-gradient(90deg, var(--theme-surface, #0d0d0d) 25%, rgba(255,255,255,0.05) 50%, var(--theme-surface, #0d0d0d) 75%)',
   backgroundSize: '200% 100%',
   animation: 'shimmer 2s infinite',
   borderRadius: 3,
@@ -74,7 +74,7 @@ function TickerSection({
           ? <ChevronDown  size={12} style={{ color: T.gold, flexShrink: 0 }} />
           : <ChevronRight size={12} style={{ color: T.dim,  flexShrink: 0 }} />
         }
-        <span style={{ fontFamily: T.mono, fontSize: 12, fontWeight: 700, color: T.gold, letterSpacing: '0.08em', flexShrink: 0 }}>
+        <span style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, color: T.gold, letterSpacing: '0.12em', textTransform: 'uppercase', flexShrink: 0 }}>
           {ticker}
         </span>
         {isLoading && (
@@ -84,7 +84,7 @@ function TickerSection({
         )}
         {!isLoading && data && (
           <>
-            <span style={{ fontFamily: T.mono, fontSize: 11, color: pctColor, flexShrink: 0 }}>
+            <span style={{ fontFamily: T.mono, fontSize: 9, color: pctColor, flexShrink: 0 }}>
               {pctSign}{pct.toFixed(2)}%
             </span>
             <span style={{ fontFamily: T.label, fontSize: 9, color: T.muted, marginLeft: 'auto', flexShrink: 0 }}>
@@ -170,7 +170,7 @@ export default function NewsFeed({ config }: { config: WidgetConfig }) {
       queryKey: ['news', t],
       queryFn: () => axios.get(`/api/corporate/hub?ticker=${t}`).then(r => r.data as HubData),
       enabled: true,
-      staleTime: 120_000,
+      staleTime: 900_000,
     })),
   })
 
@@ -183,8 +183,8 @@ export default function NewsFeed({ config }: { config: WidgetConfig }) {
   if (tickers.length === 0) {
     return (
       <div style={containerStyle}>
-        <div style={{ padding: '8px 12px', background: T.headerBg, borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
-          <span style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, color: T.muted, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+        <div style={{ padding: '6px 12px', background: T.headerBg, borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
+          <span style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, color: T.gold, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
             NEWS WIRE
           </span>
         </div>
@@ -205,7 +205,7 @@ export default function NewsFeed({ config }: { config: WidgetConfig }) {
         padding: '6px 12px', background: T.headerBg, borderBottom: `1px solid ${T.border}`,
         flexShrink: 0,
       }}>
-        <span style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, color: T.muted, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+        <span style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, color: T.gold, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
           NEWS WIRE
         </span>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>

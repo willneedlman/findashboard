@@ -8,11 +8,11 @@ export default function EmptyState({ title, hint }: EmptyStateProps) {
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
       padding: '48px 24px', gap: 14, textAlign: 'center',
-      background: '#101c2e', border: '1px solid #2e394d',
+      background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)',
       minHeight: 220,
     }}>
       <div style={{
-        width: 2, height: 32, background: 'rgba(201,168,76,0.35)',
+        width: 2, height: 32, background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)',
       }} />
       <div>
         <div style={{
@@ -21,7 +21,7 @@ export default function EmptyState({ title, hint }: EmptyStateProps) {
         }}>
           {title}
         </div>
-        <div style={{ fontSize: 11, color: '#4d4637', letterSpacing: '0.04em', lineHeight: '16px' }}>
+        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.22)', letterSpacing: '0.04em', lineHeight: '16px' }}>
           {hint}
         </div>
       </div>

@@ -12,6 +12,7 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 
 echo "→ Starting FastAPI backend on :8000"
 cd "$ROOT/backend"
+source "$ROOT/venv/bin/activate"
 uvicorn main:app --reload --port 8000 &
 BACKEND_PID=$!
 

@@ -18,7 +18,6 @@ export interface User {
   id:          string
   username:    string
   displayName: string
-  pin:         string   // 4-digit PIN — local only, no server
   theme:       Theme
   createdAt:   string
 }
@@ -28,9 +27,9 @@ interface ThemeCtx {
   user:        User | null
   allUsers:    User[]
   setTheme:    (t: Partial<Theme>) => void
-  login:       (username: string, pin: string) => boolean
+  login:       (username: string, pin: string) => Promise<boolean>
   logout:      () => void
-  register:    (username: string, displayName: string, pin: string) => boolean
+  register:    (username: string, displayName: string, pin: string) => Promise<boolean>
   deleteUser:  (id: string) => void
 }
 
@@ -115,8 +114,8 @@ export function applyTheme(t: Theme) {
     .ft-logo { color: ${t.primaryColor} !important; }
     .ft-logo-sub { color: ${t.secondaryColor} !important; }
 
-    /* ── Global font override on body text ───────────────────────────── */
-    body { background: ${t.bgColor}; }
+    /* ── Global background ───────────────────────────────────────────── */
+    html, body, #root { background: ${t.bgColor} !important; }
   `
 
   // Also push as real CSS custom props onto :root so var() works everywhere
@@ -148,8 +147,8 @@ function saveSession(id: string | null) {
 
 const Ctx = createContext<ThemeCtx>({
   theme: DEFAULT_THEME, user: null, allUsers: [],
-  setTheme: () => {}, login: () => false, logout: () => {},
-  register: () => false, deleteUser: () => {},
+  setTheme: () => {}, login: async () => false, logout: () => {},
+  register: async () => false, deleteUser: () => {},
 })
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
@@ -162,15 +161,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // Apply CSS whenever theme changes
   useEffect(() => { applyTheme(theme) }, [theme])
 
-  // Sync existing logged-in user to backend on mount (handles accounts created before server tracking)
-  useEffect(() => {
-    if (!user) return
-    fetch('/api/users/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: user.id, username: user.username, display_name: user.displayName, pin: user.pin, created_at: user.createdAt }),
-    }).catch(() => {})
-  }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  // No on-mount sync needed — auth is now server-side
 
   const persistUsers = useCallback((next: User[]) => {
     setUsersState(next)
@@ -182,22 +173,34 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     persistUsers(users.map(u => u.id === userId ? { ...u, theme: { ...u.theme, ...patch } } : u))
   }, [userId, users, persistUsers])
 
-  const syncLogin = useCallback((username: string, pin: string) => {
-    fetch('/api/users/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, pin }),
-    }).catch(() => { /* best-effort */ })
-  }, [])
-
-  const login = useCallback((username: string, pin: string): boolean => {
-    const u = users.find(u => u.username.toLowerCase() === username.toLowerCase() && u.pin === pin)
-    if (!u) return false
-    setUserId(u.id)
-    saveSession(u.id)
-    syncLogin(username, pin)
-    return true
-  }, [users, syncLogin])
+  const login = useCallback(async (username: string, pin: string): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/users/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, pin }),
+      })
+      if (!res.ok) return false
+      const data: { id: string; username: string; display_name: string; created_at: string } = await res.json()
+      const existing = users.find(u => u.id === data.id)
+      const u: User = {
+        id:          data.id,
+        username:    data.username,
+        displayName: data.display_name,
+        createdAt:   data.created_at,
+        theme:       existing?.theme ?? { ...DEFAULT_THEME },
+      }
+      const next = existing
+        ? users.map(u => u.id === data.id ? { ...u, username: u.username, displayName: u.displayName } : u)
+        : [...users, u]
+      persistUsers(next)
+      setUserId(u.id)
+      saveSession(u.id)
+      return true
+    } catch {
+      return false
+    }
+  }, [users, persistUsers])
 
   const logout = useCallback(() => {
     setUserId(null)
@@ -205,23 +208,24 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     applyTheme(DEFAULT_THEME)
   }, [])
 
-  const register = useCallback((username: string, displayName: string, pin: string): boolean => {
-    if (users.some(u => u.username.toLowerCase() === username.toLowerCase())) return false
-    const u: User = {
-      id: crypto.randomUUID(), username, displayName, pin,
-      theme: { ...DEFAULT_THEME }, createdAt: new Date().toISOString(),
+  const register = useCallback(async (username: string, displayName: string, pin: string): Promise<boolean> => {
+    const id = crypto.randomUUID()
+    const createdAt = new Date().toISOString()
+    try {
+      const res = await fetch('/api/users/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, username, display_name: displayName || username, pin, created_at: createdAt }),
+      })
+      if (!res.ok) return false
+      const u: User = { id, username, displayName: displayName || username, theme: { ...DEFAULT_THEME }, createdAt }
+      persistUsers([...users, u])
+      setUserId(id)
+      saveSession(id)
+      return true
+    } catch {
+      return false
     }
-    const next = [...users, u]
-    persistUsers(next)
-    setUserId(u.id)
-    saveSession(u.id)
-    // Sync to backend — best-effort, never blocks the local flow
-    fetch('/api/users/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: u.id, username, display_name: displayName, pin, created_at: u.createdAt }),
-    }).catch(() => { /* offline / server error — local auth still works */ })
-    return true
   }, [users, persistUsers])
 
   const deleteUser = useCallback((id: string) => {

@@ -3,31 +3,44 @@ import { useQuery } from '@tanstack/react-query'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 
 const T = {
-  bg: '#101c2e', border: '#2e394d', headerBg: '#142032',
-  gold: '#c9a84c', muted: '#5e768f',
+  bg: 'var(--theme-bg, #101c2e)', border: 'rgba(255,255,255,0.08)', headerBg: 'var(--theme-surface, #142032)',
+  gold: 'var(--theme-primary, #c9a84c)', muted: 'var(--theme-secondary, #5e768f)',
   mono: 'JetBrains Mono, monospace', label: 'IBM Plex Sans, sans-serif',
   pos: '#22C55E', neg: '#EF4444',
 }
 
 const shimmerStyle: React.CSSProperties = {
-  background: 'linear-gradient(90deg,#101c2e 25%,#1a2d45 50%,#101c2e 75%)',
+  background: 'linear-gradient(90deg, var(--theme-surface, #0d0d0d) 25%, rgba(255,255,255,0.05) 50%, var(--theme-surface, #0d0d0d) 75%)',
   backgroundSize: '200% 100%', animation: 'shimmer 2s infinite', borderRadius: 3,
 }
 
+function splitUnit(value: string): [string, string] {
+  if (value === '—') return ['—', '']
+  const bps = value.match(/^([+\-]?\d+)\s*(bps)$/)
+  if (bps) return [bps[1], ' bps']
+  const pct = value.match(/^([+\-]?[\d.]+)(%)$/)
+  if (pct) return [pct[1], '%']
+  return [value, '']
+}
+
 function Tile({ label, value, valueColor = T.gold }: { label: string; value: string; valueColor?: string }) {
+  const [num, unit] = splitUnit(value)
   return (
-    <div style={{ background: T.headerBg, border: `1px solid ${T.border}`, padding: '6px 10px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 3, minWidth: 0, minHeight: 0 }}>
-      <span style={{ fontFamily: T.label, fontSize: 9, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
-      <span style={{ fontFamily: T.mono, fontSize: 14, fontWeight: 700, color: valueColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</span>
+    <div style={{ background: T.headerBg, borderRight: `1px solid ${T.border}`, padding: '0 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 4, minWidth: 0, height: '100%' }}>
+      <span style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.12em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
+      <span style={{ fontFamily: T.mono, fontWeight: 700, color: valueColor, whiteSpace: 'nowrap', lineHeight: 1.1 }}>
+        <span style={{ fontSize: 32 }}>{num}</span>
+        {unit && <span style={{ fontSize: 16, opacity: 0.75 }}>{unit}</span>}
+      </span>
     </div>
   )
 }
 
 function ShimmerTile() {
   return (
-    <div style={{ background: T.headerBg, border: `1px solid ${T.border}`, padding: '6px 10px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 5, minHeight: 0 }}>
-      <div style={{ ...shimmerStyle, width: '65%', height: 8 }} />
-      <div style={{ ...shimmerStyle, width: '45%', height: 14 }} />
+    <div style={{ background: T.headerBg, borderRight: `1px solid ${T.border}`, padding: '0 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 5, height: '100%' }}>
+      <div style={{ ...shimmerStyle, width: '65%', height: 9 }} />
+      <div style={{ ...shimmerStyle, width: '45%', height: 22 }} />
     </div>
   )
 }
@@ -63,15 +76,14 @@ export default function MacroStrip({ config }: { config: WidgetConfig }) {
   const gridStyle: React.CSSProperties = {
     display: 'grid',
     gridTemplateColumns: `repeat(${selectedKeys.length}, 1fr)`,
-    gridAutoRows: '1fr',
-    gap: 5,
     width: '100%',
     height: '100%',
   }
 
   const container: React.CSSProperties = {
-    background: T.bg, padding: '7px 8px', width: '100%', height: '100%',
+    background: T.bg, width: '100%', height: '100%',
     boxSizing: 'border-box', overflow: 'hidden',
+    borderTop: `1px solid ${T.border}`,
   }
 
   const fmt = (v: number | undefined) => v != null ? `${v.toFixed(2)}%` : '—'

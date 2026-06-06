@@ -16,10 +16,35 @@ interface WidgetFrameProps {
   children: React.ReactNode
 }
 
-const TICKER_WIDGETS: WidgetType[]     = ['price-card', 'mini-chart', 'options-snapshot', 'options-pricer', 'delta-target', 'tradingview-chart']
-const TICKERS_WIDGETS: WidgetType[]    = ['watchlist', 'earnings-calendar', 'news-feed', 'correlation-matrix']
-const PORTFOLIO_WIDGETS: WidgetType[]  = ['portfolio-summary']
-const YIELD_WIDGETS: WidgetType[]      = ['macro-strip']
+const TICKER_WIDGETS: WidgetType[]        = ['price-card', 'mini-chart', 'options-snapshot', 'options-pricer', 'delta-target', 'tradingview-chart']
+const TICKERS_WIDGETS: WidgetType[]       = ['watchlist', 'earnings-calendar', 'news-feed', 'correlation-matrix']
+const PORTFOLIO_WIDGETS: WidgetType[]     = ['portfolio-summary']
+const YIELD_WIDGETS: WidgetType[]         = ['macro-strip']
+const GLOBAL_MACRO_WIDGETS: WidgetType[]  = ['global-macro']
+const CREDIT_SPREADS_WIDGETS: WidgetType[] = ['credit-spreads']
+
+const MACRO_CAT_OPTIONS: { key: string; label: string; color: string }[] = [
+  { key: 'equity',    label: 'Equity', color: '#22c55e' },
+  { key: 'fx',        label: 'FX',     color: '#60a5fa' },
+  { key: 'bond',      label: 'Rates',  color: '#a78bfa' },
+  { key: 'commodity', label: 'Cmdty',  color: '#f97316' },
+  { key: 'vol',       label: 'Vol',    color: '#ef4444' },
+]
+const DEFAULT_MACRO_CATS = ['equity', 'fx', 'bond', 'commodity', 'vol']
+
+const SPREAD_SERIES_OPTIONS: { key: string; label: string; color: string }[] = [
+  { key: 'ig',  label: 'IG OAS', color: '#60a5fa' },
+  { key: 'hy',  label: 'HY OAS', color: '#ef4444' },
+  { key: 'vix', label: 'VIX',    color: 'var(--theme-primary, #c9a84c)' },
+]
+const DEFAULT_SPREAD_SERIES = ['ig', 'hy', 'vix']
+
+const LOOKBACK_OPTIONS = [
+  { val: 30,  label: '30D'  },
+  { val: 90,  label: '90D'  },
+  { val: 180, label: '180D' },
+  { val: 365, label: '1Y'   },
+]
 
 const YIELD_OPTIONS: { key: string; label: string }[] = [
   { key: 'FED',         label: 'Fed Funds' },
@@ -36,9 +61,9 @@ const YIELD_OPTIONS: { key: string; label: string }[] = [
 const DEFAULT_YIELDS = ['FED', '1Y', '2Y', '5Y', '10Y', 'SPREAD']
 
 const S = {
-  bg:     '#0d1b30',
-  border: '#2e394d',
-  gold:   '#c9a84c',
+  bg:     'var(--theme-surface, #0d1b30)',
+  border: 'rgba(255,255,255,0.08)',
+  gold:   'var(--theme-primary, #c9a84c)',
   muted:  '#5e768f',
   text:   '#d7e3fc',
   mono:   'JetBrains Mono, monospace',
@@ -79,7 +104,7 @@ function YieldCheckboxes({
                 style={{
                   width: 12, height: 12, flexShrink: 0,
                   border: `1px solid ${checked ? S.gold : S.border}`,
-                  background: checked ? 'rgba(201,168,76,0.18)' : 'transparent',
+                  background: checked ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)' : 'transparent',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   transition: 'all 0.1s',
                 }}
@@ -106,13 +131,90 @@ function YieldCheckboxes({
         onClick={onSave}
         style={{
           alignSelf: 'flex-end', background: S.gold, border: 'none',
-          color: '#0a1628', fontSize: 9, fontWeight: 700,
+          color: 'var(--theme-bg, #0a1628)', fontSize: 9, fontWeight: 700,
           padding: '3px 12px', cursor: 'pointer',
           letterSpacing: '0.1em', fontFamily: S.label,
         }}
       >
         APPLY
       </button>
+    </div>
+  )
+}
+
+function ColorCheckboxes({
+  options,
+  selected,
+  onChange,
+}: {
+  options: { key: string; label: string; color: string }[]
+  selected: string[]
+  onChange: (next: string[]) => void
+}) {
+  const toggle = (key: string) =>
+    onChange(selected.includes(key) ? selected.filter(k => k !== key) : [...selected, key])
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px 12px' }}>
+      {options.map(({ key, label, color }) => {
+        const checked = selected.includes(key)
+        return (
+          <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', userSelect: 'none' }}>
+            <div onClick={() => toggle(key)} style={{
+              width: 12, height: 12, flexShrink: 0,
+              border: `1px solid ${checked ? color : S.border}`,
+              background: checked ? `color-mix(in srgb, ${color} 22%, transparent)` : 'transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.1s',
+            }}>
+              {checked && <div style={{ width: 6, height: 6, background: color }} />}
+            </div>
+            <span onClick={() => toggle(key)} style={{ fontFamily: S.mono, fontSize: 10, color: checked ? color : S.muted, transition: 'color 0.1s' }}>
+              {label}
+            </span>
+          </label>
+        )
+      })}
+    </div>
+  )
+}
+
+function MacroCatSettings({
+  selected,
+  onChange,
+  onSave,
+}: { selected: string[]; onChange: (v: string[]) => void; onSave: () => void }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <span style={{ fontFamily: S.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: S.muted }}>Categories to display</span>
+      <ColorCheckboxes options={MACRO_CAT_OPTIONS} selected={selected} onChange={onChange} />
+      <button onClick={onSave} style={{ alignSelf: 'flex-end', background: S.gold, border: 'none', color: 'var(--theme-bg, #0a1628)', fontSize: 9, fontWeight: 700, padding: '3px 12px', cursor: 'pointer', letterSpacing: '0.1em', fontFamily: S.label }}>APPLY</button>
+    </div>
+  )
+}
+
+function CreditSpreadsSettings({
+  series,
+  onSeriesChange,
+  lookback,
+  onLookbackChange,
+  onSave,
+}: { series: string[]; onSeriesChange: (v: string[]) => void; lookback: number; onLookbackChange: (v: number) => void; onSave: () => void }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <span style={{ fontFamily: S.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: S.muted }}>Series</span>
+      <ColorCheckboxes options={SPREAD_SERIES_OPTIONS} selected={series} onChange={onSeriesChange} />
+      <span style={{ fontFamily: S.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: S.muted, marginTop: 2 }}>Chart lookback</span>
+      <div style={{ display: 'flex', gap: 4 }}>
+        {LOOKBACK_OPTIONS.map(({ val, label }) => (
+          <button key={val} onClick={() => onLookbackChange(val)} style={{
+            fontFamily: S.mono, fontSize: 9, fontWeight: 700, padding: '2px 8px',
+            border: lookback === val ? `1px solid ${S.gold}` : `1px solid ${S.border}`,
+            background: lookback === val ? `color-mix(in srgb, var(--theme-primary, #c9a84c) 15%, transparent)` : 'transparent',
+            color: lookback === val ? S.gold : S.muted,
+            cursor: 'pointer', letterSpacing: '0.08em', transition: 'all 0.1s',
+          }}>{label}</button>
+        ))}
+      </div>
+      <button onClick={onSave} style={{ alignSelf: 'flex-end', background: S.gold, border: 'none', color: 'var(--theme-bg, #0a1628)', fontSize: 9, fontWeight: 700, padding: '3px 12px', cursor: 'pointer', letterSpacing: '0.1em', fontFamily: S.label }}>APPLY</button>
     </div>
   )
 }
@@ -125,6 +227,9 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
   const [yieldSel, setYieldSel] = useState<string[]>(
     config.tickers && config.tickers.length > 0 ? config.tickers : DEFAULT_YIELDS
   )
+  const [macroCatSel, setMacroCatSel]       = useState<string[]>(config.categories ?? DEFAULT_MACRO_CATS)
+  const [spreadSerSel, setSpreadSerSel]     = useState<string[]>(config.categories ?? DEFAULT_SPREAD_SERIES)
+  const [spreadLookback, setSpreadLookback] = useState<number>(config.lookback ?? 90)
   const [portTickers, setPortTickers] = useState<string[]>(config.tickers ?? [])
   const [portWeights, setPortWeights] = useState<Record<string, string>>(
     config.tickers && config.weights && config.weights.length === config.tickers.length
@@ -163,6 +268,12 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
       const sum = rawW.reduce((a, b) => a + b, 0)
       patch.weights = sum > 0 ? rawW.map(w => w / sum) : portTickers.map(() => 1 / portTickers.length)
     }
+    if (GLOBAL_MACRO_WIDGETS.includes(config.type))
+      patch.categories = macroCatSel
+    if (CREDIT_SPREADS_WIDGETS.includes(config.type)) {
+      patch.categories = spreadSerSel
+      patch.lookback   = spreadLookback
+    }
     onUpdate(patch)
     setConfigOpen(false)
   }
@@ -171,7 +282,9 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
     TICKER_WIDGETS.includes(config.type) ||
     TICKERS_WIDGETS.includes(config.type) ||
     PORTFOLIO_WIDGETS.includes(config.type) ||
-    YIELD_WIDGETS.includes(config.type)
+    YIELD_WIDGETS.includes(config.type) ||
+    GLOBAL_MACRO_WIDGETS.includes(config.type) ||
+    CREDIT_SPREADS_WIDGETS.includes(config.type)
 
   return (
     <div
@@ -179,7 +292,7 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
       onMouseLeave={() => { setHovered(false) }}
       style={{
         position: 'relative', height: '100%', display: 'flex', flexDirection: 'column',
-        background: '#101c2e',
+        background: 'var(--theme-bg, #101c2e)',
         border: editMode ? '1px solid rgba(201,168,76,0.55)' : '1px solid #2e394d',
         boxShadow: editMode ? '0 0 0 1px rgba(201,168,76,0.08) inset' : 'none',
         transition: 'border-color 0.15s', overflow: 'hidden',
@@ -217,7 +330,7 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
           onClick={() => setConfigOpen(o => !o)}
           style={{
             position: 'absolute', top: 6, right: 6, zIndex: 10,
-            background: configOpen ? 'rgba(201,168,76,0.18)' : 'rgba(13,24,38,0.85)',
+            background: configOpen ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)' : 'rgba(13,24,38,0.85)',
             border: `1px solid ${configOpen ? 'rgba(201,168,76,0.5)' : 'rgba(46,57,77,0.8)'}`,
             borderRadius: 3, padding: '3px 4px',
             cursor: 'pointer', display: 'flex', alignItems: 'center',
@@ -226,13 +339,13 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
             pointerEvents: hovered || configOpen ? 'auto' : 'none',
           }}
         >
-          <Settings size={11} style={{ color: configOpen ? '#c9a84c' : '#5e768f' }} />
+          <Settings size={11} style={{ color: configOpen ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #5e768f)' }} />
         </button>
       )}
 
       {/* Config panel */}
       {configOpen && (
-        <div className="widget-no-drag" style={{ background: '#0d1b30', borderBottom: '1px solid #2e394d', padding: 10, flexShrink: 0 }}>
+        <div className="widget-no-drag" style={{ background: 'var(--theme-surface, #0d1b30)', borderBottom: '1px solid rgba(255,255,255,0.08)', padding: 10, flexShrink: 0 }}>
 
           {TICKER_WIDGETS.includes(config.type) && (
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -241,9 +354,9 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
                 value={tickerInput}
                 onChange={e => setTickerInput(e.target.value.toUpperCase())}
                 onKeyDown={e => e.key === 'Enter' && saveConfig()}
-                style={{ flex: 1, background: '#101c2e', border: '1px solid #4d4637', color: S.text, fontFamily: S.mono, fontSize: 12, padding: '3px 6px', outline: 'none' }}
+                style={{ flex: 1, background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.10)', color: S.text, fontFamily: S.mono, fontSize: 12, padding: '3px 6px', outline: 'none' }}
               />
-              <button onClick={saveConfig} style={{ background: S.gold, border: 'none', color: '#0a1628', fontSize: 9, fontWeight: 700, padding: '3px 8px', cursor: 'pointer', letterSpacing: '0.1em', fontFamily: S.label }}>SAVE</button>
+              <button onClick={saveConfig} style={{ background: S.gold, border: 'none', color: 'var(--theme-bg, #0a1628)', fontSize: 9, fontWeight: 700, padding: '3px 8px', cursor: 'pointer', letterSpacing: '0.1em', fontFamily: S.label }}>SAVE</button>
             </div>
           )}
 
@@ -251,7 +364,7 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
               <span style={{ fontSize: 9, color: S.muted, fontFamily: S.label, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Tickers</span>
               <TickerTagInput tickers={tagTickers} onChange={setTagTickers} />
-              <button onClick={saveConfig} style={{ alignSelf: 'flex-end', background: S.gold, border: 'none', color: '#0a1628', fontSize: 9, fontWeight: 700, padding: '3px 10px', cursor: 'pointer', letterSpacing: '0.1em', fontFamily: S.label }}>APPLY</button>
+              <button onClick={saveConfig} style={{ alignSelf: 'flex-end', background: S.gold, border: 'none', color: 'var(--theme-bg, #0a1628)', fontSize: 9, fontWeight: 700, padding: '3px 10px', cursor: 'pointer', letterSpacing: '0.1em', fontFamily: S.label }}>APPLY</button>
             </div>
           )}
 
@@ -271,7 +384,7 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
                         step={0.1}
                         value={portWeights[t] ?? ''}
                         onChange={e => setPortWeights(prev => ({ ...prev, [t]: e.target.value }))}
-                        style={{ width: 60, background: '#101c2e', border: '1px solid #4d4637', color: S.text, fontFamily: S.mono, fontSize: 11, padding: '2px 5px', outline: 'none', textAlign: 'right' }}
+                        style={{ width: 60, background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.10)', color: S.text, fontFamily: S.mono, fontSize: 11, padding: '2px 5px', outline: 'none', textAlign: 'right' }}
                       />
                       <span style={{ fontFamily: S.label, fontSize: 9, color: S.muted }}>%</span>
                     </div>
@@ -280,15 +393,25 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
               )}
               <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                 <button onClick={equalizeWeights} style={{ background: 'transparent', border: `1px solid ${S.border}`, color: S.muted, fontSize: 9, fontWeight: 700, padding: '2px 8px', cursor: 'pointer', fontFamily: S.label, letterSpacing: '0.08em' }}>EQUAL</button>
-                <button onClick={saveConfig} style={{ background: S.gold, border: 'none', color: '#0a1628', fontSize: 9, fontWeight: 700, padding: '3px 10px', cursor: 'pointer', letterSpacing: '0.1em', fontFamily: S.label }}>APPLY</button>
+                <button onClick={saveConfig} style={{ background: S.gold, border: 'none', color: 'var(--theme-bg, #0a1628)', fontSize: 9, fontWeight: 700, padding: '3px 10px', cursor: 'pointer', letterSpacing: '0.1em', fontFamily: S.label }}>APPLY</button>
               </div>
             </div>
           )}
 
           {YIELD_WIDGETS.includes(config.type) && (
-            <YieldCheckboxes
-              selected={yieldSel}
-              onChange={setYieldSel}
+            <YieldCheckboxes selected={yieldSel} onChange={setYieldSel} onSave={saveConfig} />
+          )}
+
+          {GLOBAL_MACRO_WIDGETS.includes(config.type) && (
+            <MacroCatSettings selected={macroCatSel} onChange={setMacroCatSel} onSave={saveConfig} />
+          )}
+
+          {CREDIT_SPREADS_WIDGETS.includes(config.type) && (
+            <CreditSpreadsSettings
+              series={spreadSerSel}
+              onSeriesChange={setSpreadSerSel}
+              lookback={spreadLookback}
+              onLookbackChange={setSpreadLookback}
               onSave={saveConfig}
             />
           )}

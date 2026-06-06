@@ -5,47 +5,54 @@ import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
 import { fetchGEX, fetchOptionsChain } from '../hooks/useApi'
 import EmptyState from '../components/EmptyState'
-const INPUT: React.CSSProperties = { background: '#0a1628', border: '1px solid #4d4637', color: '#d7e3fc', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, padding: '5px 8px', width: '100%', outline: 'none' }
-const LABEL: React.CSSProperties = { fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#99907e', marginBottom: 4, display: 'block' }
-const TOOLTIP_STYLE = { background: '#142032', border: '1px solid #4d4637', borderRadius: 0 }
-const TICK = { fontSize: 9, fill: '#99907e', fontFamily: 'JetBrains Mono, monospace' }
+import { useChartColors } from '../hooks/useChartColors'
+const INPUT: React.CSSProperties = { background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: '#d7e3fc', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, padding: '5px 8px', width: '100%', outline: 'none' }
+const LABEL: React.CSSProperties = { fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', marginBottom: 4, display: 'block' }
+const TOOLTIP_STYLE = { background: 'var(--theme-surface, #142032)', border: '1px solid color-mix(in srgb, var(--theme-primary) 35%, transparent)', borderRadius: 0 }
+const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'JetBrains Mono, monospace' }
 
 function MetricCard({ label, value, sub, help }: { label: string; value: string; sub?: string; help?: string }) {
   const [show, setShow] = useState(false)
   return (
-    <div style={{ background: '#142032', border: '1px solid rgba(255,255,255,0.07)', borderTop: '3px solid #c9a84c', padding: 10, position: 'relative' }}>
+    <div style={{ background: 'var(--theme-surface, #142032)', border: '1px solid rgba(255,255,255,0.07)', borderTop: '3px solid var(--theme-primary, #c9a84c)', padding: 10, position: 'relative' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
-        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#99907e' }}>{label}</span>
-        {help && <span style={{ fontSize: 10, color: '#4d4637', cursor: 'help' }}
+        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)' }}>{label}</span>
+        {help && <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', cursor: 'help' }}
           onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>ⓘ</span>}
         {show && help && (
-          <div style={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: 6, background: '#0a1628', border: '1px solid #4d4637', padding: '6px 8px', width: 180, fontSize: 11, color: '#d7e3fc', lineHeight: '15px', zIndex: 50, pointerEvents: 'none' }}>{help}</div>
+          <div style={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: 6, background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', padding: '6px 8px', width: 180, fontSize: 11, color: '#d7e3fc', lineHeight: '15px', zIndex: 50, pointerEvents: 'none' }}>{help}</div>
         )}
       </div>
       <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 18, fontWeight: 700, color: '#d7e3fc' }}>{value}</div>
-      {sub && <div style={{ fontSize: 10, color: '#4d4637', marginTop: 2 }}>{sub}</div>}
+      {sub && <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', marginTop: 2 }}>{sub}</div>}
     </div>
   )
 }
 
 function ChartPanel({ label, note, height, children }: { label: string; note?: string; height: number; children: React.ReactNode }) {
   return (
-    <div style={{ background: '#101c2e', border: '1px solid #2e394d', position: 'relative' }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 10, background: 'rgba(46,57,77,0.8)', padding: '3px 8px', borderRight: '1px solid #2e394d', borderBottom: '1px solid #2e394d', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#d7e3fc' }}>{label}</div>
-      {note && <div style={{ position: 'absolute', top: 0, right: 0, padding: '3px 8px', fontSize: 10, color: '#4d4637', zIndex: 10 }}>{note}</div>}
+    <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)', position: 'relative' }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 10, background: 'rgba(46,57,77,0.8)', padding: '3px 8px', borderRight: '1px solid rgba(255,255,255,0.08)', borderBottom: '1px solid rgba(255,255,255,0.08)', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#d7e3fc' }}>{label}</div>
+      {note && <div style={{ position: 'absolute', top: 0, right: 0, padding: '3px 8px', fontSize: 10, color: 'rgba(255,255,255,0.22)', zIndex: 10, background: 'rgba(46,57,77,0.8)', borderLeft: '1px solid rgba(255,255,255,0.08)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>{note}</div>}
       <div style={{ paddingTop: 28, paddingLeft: 8, paddingRight: 8, paddingBottom: 8, height }}>{children}</div>
     </div>
   )
 }
 
+const SELECT: React.CSSProperties = { background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: '#d7e3fc', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, padding: '5px 8px', width: '100%', outline: 'none' }
+
 export default function DealerGEX() {
-  const [ticker, setTicker]           = useState('SPY')
-  const [rangePercent, setRangePercent] = useState(15)
+  const cc = useChartColors()
+  const [ticker, setTicker] = useState('SPY')
+  const [nStrikes, setNStrikes] = useState(20)
+  const [expiry, setExpiry] = useState<string>('')
 
   const { mutate, data, isPending } = useMutation({
     mutationFn: async () => {
-      const [gex, chain] = await Promise.all([fetchGEX(ticker), fetchOptionsChain(ticker)])
-      // Build OI map keyed by strike
+      const [gex, chain] = await Promise.all([
+        fetchGEX(ticker, expiry || undefined),
+        fetchOptionsChain(ticker, expiry || undefined),
+      ])
       const oiMap: Record<number, { callOI: number; putOI: number }> = {}
       ;(chain.calls ?? []).forEach((c: any) => {
         oiMap[c.strike] = oiMap[c.strike] ?? { callOI: 0, putOI: 0 }
@@ -60,47 +67,92 @@ export default function DealerGEX() {
   })
 
   const spot: number | null = data?.spot ?? null
-  const filtered = spot && data?.data
-    ? data.data.filter((d: any) => d.strike >= spot * (1 - rangePercent / 100) && d.strike <= spot * (1 + rangePercent / 100))
-    : (data?.data ?? [])
+
+  const STEP = spot ? (spot >= 500 ? 5 : spot >= 100 ? 2.5 : 1) : 5
+
+  // Use raw API data — no zero-padding. Filter to nStrikes range around spot.
+  const filtered = (() => {
+    if (!data?.data || !(data.data as any[]).length) return []
+    const raw = (data.data as any[]).sort((a, b) => a.strike - b.strike)
+    if (!spot) return raw
+
+    const lo = spot - nStrikes * STEP
+    const hi = spot + nStrikes * STEP
+    const inRange = raw.filter(d => d.strike >= lo && d.strike <= hi)
+
+    // Clip at 99th percentile to prevent one spike from flattening everything else
+    const absVals = inRange.map(d => Math.abs(d.net_gex)).filter(v => v > 0).sort((a, b) => a - b)
+    const p99 = absVals[Math.floor(absVals.length * 0.99)] ?? Infinity
+    const MIN_GEX = (absVals[absVals.length - 1] ?? 0) * 0.005  // drop bars < 0.5% of max
+
+    return inRange
+      .filter(d => Math.abs(d.net_gex) >= MIN_GEX)
+      .map(d => ({
+        strike:   d.strike,
+        net_gex:  Math.sign(d.net_gex) * Math.min(Math.abs(d.net_gex), p99),
+        call_gex: Math.min(Math.abs(d.call_gex), p99) * Math.sign(d.call_gex ?? 1),
+        put_gex:  d.put_gex,
+      }))
+  })()
 
   const totalNet  = data?.data?.reduce((s: number, d: any) => s + d.net_gex, 0) ?? 0
   const totalCall = data?.data?.reduce((s: number, d: any) => s + d.call_gex, 0) ?? 0
+  const totalPut  = data?.data?.reduce((s: number, d: any) => s + d.put_gex, 0) ?? 0
 
   let flipLevel: number | null = null
-  if (data?.data) {
+  if (data?.data && spot) {
     const sorted = [...data.data].sort((a, b) => a.strike - b.strike)
-    let cum = 0
+    // Find the per-strike sign change in net_gex closest to spot.
+    // This finds the structural flip even when cumulative GEX stays one-sided.
+    let bestDist = Infinity
     for (let i = 0; i < sorted.length - 1; i++) {
-      const prev = cum; cum += sorted[i].net_gex
-      if (prev * cum < 0) { flipLevel = sorted[i].strike; break }
+      if (sorted[i].net_gex * sorted[i + 1].net_gex < 0) {
+        const candidate = Math.abs(sorted[i].strike - spot) <= Math.abs(sorted[i + 1].strike - spot)
+          ? sorted[i].strike : sorted[i + 1].strike
+        const dist = Math.abs(candidate - spot)
+        if (dist < bestDist) { bestDist = dist; flipLevel = candidate }
+      }
     }
   }
 
   return (
     <PageWrapper>
       <SidebarLayout sidebarWidth={190} sidebarTitle="GEX Controls" sidebar={<>
-          <div style={{ padding: '8px 10px', borderBottom: '1px solid #2e394d', background: '#142032' }}>
+          <div style={{ padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'var(--theme-surface, #142032)' }}>
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#ffffff' }}>GEX Parameters</div>
           </div>
           <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
             <div>
               <label style={LABEL}>Ticker</label>
               <input value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())} style={INPUT}
-                onFocus={e => (e.target.style.borderColor = '#c9a84c')} onBlur={e => (e.target.style.borderColor = '#4d4637')} />
+                onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')} onBlur={e => (e.target.style.borderColor = 'rgba(255,255,255,0.10)')} />
             </div>
             <div>
-              <label style={LABEL}>Strike Range (% each side)</label>
-              <input type="number" value={rangePercent} step={5} min={5} max={50} onChange={e => setRangePercent(+e.target.value)} style={INPUT}
-                onFocus={e => (e.target.style.borderColor = '#c9a84c')} onBlur={e => (e.target.style.borderColor = '#4d4637')} />
+              <label style={LABEL}>Strikes Each Side</label>
+              <input type="number" value={nStrikes} step={5} min={5} max={100} onChange={e => setNStrikes(+e.target.value)} style={INPUT}
+                onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')} onBlur={e => (e.target.style.borderColor = 'rgba(255,255,255,0.10)')} />
             </div>
-            <div style={{ fontSize: 10, color: '#4d4637', lineHeight: '14px' }}>
-              Aggregates all expiry chains. May take 20–40s on first load.
+            <div>
+              <label style={LABEL}>Expiry</label>
+              {data?.expirations?.length ? (
+                <select value={expiry} onChange={e => setExpiry(e.target.value)} style={SELECT}>
+                  <option value="">All chains</option>
+                  {(data.expirations as string[]).map((e: string) => (
+                    <option key={e} value={e}>{e}</option>
+                  ))}
+                </select>
+              ) : (
+                <input value={expiry} onChange={e => setExpiry(e.target.value)} placeholder="e.g. 2026-06-20" style={INPUT}
+                  onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')} onBlur={e => (e.target.style.borderColor = 'rgba(255,255,255,0.10)')} />
+              )}
+            </div>
+            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', lineHeight: '14px' }}>
+              {expiry ? `Showing ${expiry} only.` : 'Aggregates all expiry chains. May take 20–40s on first load.'}
             </div>
           </div>
-          <div style={{ padding: 10, borderTop: '1px solid #2e394d' }}>
+          <div style={{ padding: 10, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
             <button onClick={() => mutate()} disabled={isPending} style={{
-              width: '100%', background: '#1f2a3d', border: '1px solid #c9a84c', color: '#c9a84c',
+              width: '100%', background: 'var(--theme-surface, #1f2a3d)', border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)',
               fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
               textTransform: 'uppercase', padding: '8px 0', cursor: isPending ? 'default' : 'pointer', opacity: isPending ? 0.6 : 1,
             }}>
@@ -111,11 +163,12 @@ export default function DealerGEX() {
           {data && (
             <>
               <div className="metric-grid">
-                <MetricCard label="Spot Price" value={`$${spot?.toLocaleString()}`} />
+                <MetricCard label="Spot Price" value={`$${spot?.toFixed(2)}`} />
                 <MetricCard label="Net GEX" value={`${totalNet > 0 ? '+' : ''}$${totalNet.toFixed(1)}M`}
                   sub={totalNet > 0 ? 'Dealers long γ' : 'Dealers short γ'}
                   help="Positive = dealers long gamma (stabilising). Negative = dealers short (trend amplification)." />
                 <MetricCard label="Call GEX" value={`+$${totalCall.toFixed(1)}M`} />
+                <MetricCard label="Put GEX" value={`$${totalPut.toFixed(1)}M`} />
                 <MetricCard label="Gamma Flip" value={flipLevel ? `~$${flipLevel.toLocaleString()}` : 'N/A'}
                   help="Cumulative net GEX zero crossing — key support/resistance level." />
               </div>
@@ -123,18 +176,26 @@ export default function DealerGEX() {
               <ChartPanel label="Net Dealer GEX by Strike ($M per 1% move)" height={368}
                 note="Green = long γ (pin) · Red = short γ (amplify)">
                 <ResponsiveContainer width="100%" height={340}>
-                  <BarChart data={filtered}>
+                  <BarChart data={filtered} barCategoryGap="20%" barSize={18}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.07)" />
-                    <XAxis dataKey="strike" tick={TICK} tickFormatter={v => `$${v}`} />
-                    <YAxis tick={TICK} tickFormatter={v => `${v.toFixed(1)}M`} orientation="right" />
-                    <Tooltip formatter={(v: number) => [`$${v.toFixed(2)}M`, 'Net GEX']} contentStyle={TOOLTIP_STYLE} />
+                    <XAxis dataKey="strike" tick={TICK} tickFormatter={v => `$${v}`} interval="preserveStartEnd" />
+                    <YAxis tick={TICK} tickFormatter={v => {
+                      const a = Math.abs(v)
+                      return a >= 1000 ? `${(v/1000).toFixed(1)}B` : `${v.toFixed(0)}M`
+                    }} orientation="right" />
+                    <Tooltip formatter={(v: number) => [`$${v.toFixed(1)}M`, 'Net GEX']} contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
                     {spot && <ReferenceLine x={spot} stroke="rgba(201,168,76,0.7)" strokeDasharray="4 4"
-                      label={{ value: `Spot $${spot}`, fill: '#c9a84c', fontSize: 9 }} />}
+                      label={{ value: `Spot $${spot.toFixed(0)}`, fill: 'var(--theme-primary, #c9a84c)', fontSize: 9, position: 'insideTopLeft' }} />}
                     {flipLevel && <ReferenceLine x={flipLevel} stroke="rgba(217,119,54,0.7)" strokeDasharray="3 5"
-                      label={{ value: `Flip $${flipLevel}`, fill: '#d97736', fontSize: 9 }} />}
-                    <Bar dataKey="net_gex" name="Net GEX">
+                      label={({ viewBox }: any) => (
+                        <g>
+                          <rect x={viewBox.x + 3} y={viewBox.y + 2} width={62} height={14} fill="rgba(30,20,10,0.82)" rx={2} />
+                          <text x={viewBox.x + 6} y={viewBox.y + 12} fill="#d97736" fontSize={9} fontFamily="JetBrains Mono, monospace">{`Flip $${flipLevel}`}</text>
+                        </g>
+                      )} />}
+                    <Bar dataKey="net_gex" name="Net GEX" radius={[2,2,0,0]}>
                       {filtered.map((d: any, i: number) => (
-                        <Cell key={i} fill={d.net_gex >= 0 ? '#2e7d4f' : '#8c2e36'} fillOpacity={0.85} />
+                        <Cell key={i} fill={d.net_gex >= 0 ? cc.gain : cc.loss} fillOpacity={0.88} />
                       ))}
                     </Bar>
                   </BarChart>
@@ -144,15 +205,18 @@ export default function DealerGEX() {
               <ChartPanel label="Call vs Put GEX by Strike" height={308}
                 note="Large put GEX = support · Large call GEX = resistance">
                 <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={filtered}>
+                  <BarChart data={filtered} barCategoryGap="20%" barSize={18}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.07)" />
-                    <XAxis dataKey="strike" tick={TICK} tickFormatter={v => `$${v}`} />
-                    <YAxis tick={TICK} tickFormatter={v => `${v.toFixed(1)}M`} orientation="right" />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} />
+                    <XAxis dataKey="strike" tick={TICK} tickFormatter={v => `$${v}`} interval="preserveStartEnd" />
+                    <YAxis tick={TICK} tickFormatter={v => {
+                      const a = Math.abs(v)
+                      return a >= 1000 ? `${(v/1000).toFixed(1)}B` : `${v.toFixed(0)}M`
+                    }} orientation="right" />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
                     <Legend wrapperStyle={{ fontSize: 10 }} />
                     {spot && <ReferenceLine x={spot} stroke="rgba(201,168,76,0.5)" strokeDasharray="4 4" />}
-                    <Bar dataKey="call_gex" name="Call GEX" fill="rgba(46,125,79,0.75)" stackId="s" />
-                    <Bar dataKey="put_gex"  name="Put GEX"  fill="rgba(140,46,54,0.75)"  stackId="s" />
+                    <Bar dataKey="call_gex" name="Call GEX" fill={cc.gainMuted} stackId="s" radius={[2,2,0,0]} />
+                    <Bar dataKey="put_gex"  name="Put GEX"  fill={cc.lossMuted}  stackId="s" />
                   </BarChart>
                 </ResponsiveContainer>
               </ChartPanel>
@@ -162,10 +226,21 @@ export default function DealerGEX() {
                 {(() => {
                   const oiMap = data?.oiMap ?? {}
                   // Build from oiMap, filtered to spot range
-                  const raw = Object.entries(oiMap)
-                    .map(([k, v]: [string, any]) => ({ strike: +k, callOI: v.callOI, putOI: -v.putOI }))
-                    .filter(d => !spot || (d.strike >= spot * (1 - rangePercent / 100) && d.strike <= spot * (1 + rangePercent / 100)))
-                    .sort((a, b) => a.strike - b.strike)
+                  const center = spot ? Math.round(spot / STEP) * STEP : 0
+                  const raw = spot
+                    ? Array.from({ length: 2 * nStrikes + 1 }, (_, i) => {
+                        const s = center + (i - nStrikes) * STEP
+                        const callOI = Object.entries(oiMap)
+                          .filter(([k]) => Math.round(+k / STEP) * STEP === s)
+                          .reduce((sum, [, v]: [string, any]) => sum + (v.callOI ?? 0), 0)
+                        const putOI = Object.entries(oiMap)
+                          .filter(([k]) => Math.round(+k / STEP) * STEP === s)
+                          .reduce((sum, [, v]: [string, any]) => sum + (v.putOI ?? 0), 0)
+                        return { strike: s, callOI, putOI: -putOI }
+                      })
+                    : Object.entries(oiMap)
+                        .map(([k, v]: [string, any]) => ({ strike: +k, callOI: v.callOI, putOI: -v.putOI }))
+                        .sort((a, b) => a.strike - b.strike)
 
                   // Clip at 90th percentile to prevent ATM spike flattening the chart
                   const absVals = raw.flatMap(d => [d.callOI, Math.abs(d.putOI)]).filter(v => v > 0).sort((a, b) => a - b)
@@ -178,17 +253,17 @@ export default function DealerGEX() {
 
                   return (
                     <ResponsiveContainer width="100%" height={260}>
-                      <BarChart data={clipped}>
+                      <BarChart data={clipped} barCategoryGap="20%" barSize={18}>
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.07)" />
-                        <XAxis dataKey="strike" tick={TICK} tickFormatter={v => `$${v}`} />
+                        <XAxis dataKey="strike" tick={TICK} tickFormatter={v => `$${v}`} interval="preserveStartEnd" />
                         <YAxis tick={TICK} orientation="right"
                           tickFormatter={v => Math.abs(v) >= 1000 ? `${(Math.abs(v)/1000).toFixed(0)}k` : Math.abs(v).toFixed(0)} />
-                        <Tooltip formatter={(v: number) => [Math.abs(v).toLocaleString(), '']} contentStyle={TOOLTIP_STYLE} />
+                        <Tooltip formatter={(v: number) => [Math.abs(v).toLocaleString(), '']} contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
                         <Legend wrapperStyle={{ fontSize: 10 }} />
                         {spot && <ReferenceLine x={spot} stroke="rgba(201,168,76,0.7)" strokeDasharray="4 4"
-                          label={{ value: 'Spot', fill: '#c9a84c', fontSize: 9 }} />}
-                        <Bar dataKey="callOI" name="Call OI" fill="rgba(46,125,79,0.75)" />
-                        <Bar dataKey="putOI"  name="Put OI"  fill="rgba(140,46,54,0.75)" />
+                          label={{ value: 'Spot', fill: 'var(--theme-primary, #c9a84c)', fontSize: 9 }} />}
+                        <Bar dataKey="callOI" name="Call OI" fill={cc.gainMuted} />
+                        <Bar dataKey="putOI"  name="Put OI"  fill={cc.lossMuted} />
                       </BarChart>
                     </ResponsiveContainer>
                   )

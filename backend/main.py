@@ -3,6 +3,10 @@ import logging
 import pathlib
 from pathlib import Path
 import appdirs as ad
+from dotenv import load_dotenv
+
+# Load .env from project root (one level above backend/)
+load_dotenv(Path(__file__).parent.parent / ".env")
 
 CACHE_DIR = ".cache"
 ad.user_cache_dir = lambda *args: CACHE_DIR
@@ -14,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from routers import market, options, bond, portfolio, nav, corporate, rates, correlation, dcf, probability, strategy, users
+from routers import market, options, bond, portfolio, nav, corporate, rates, correlation, dcf, probability, strategy, users, screener, filings, lob, trading, algo, ai, sentiment
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
@@ -23,8 +27,8 @@ app = FastAPI(title="Finance Terminal API", version="2.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://localhost:3000"],
-    allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type", "Accept"],
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["Content-Type", "Accept", "X-Admin-Secret"],
     allow_credentials=False,
 )
 
@@ -56,6 +60,13 @@ app.include_router(dcf.router,         prefix="/api/dcf",         tags=["dcf"])
 app.include_router(probability.router, prefix="/api/prob",        tags=["probability"])
 app.include_router(strategy.router,   prefix="/api/strategy",    tags=["strategy"])
 app.include_router(users.router,      prefix="/api/users",       tags=["users"])
+app.include_router(screener.router,   prefix="/api/screener",    tags=["screener"])
+app.include_router(filings.router,    prefix="/api/filings",     tags=["filings"])
+app.include_router(lob.router,        prefix="/api/admin/lob",   tags=["lob"])
+app.include_router(trading.router,    prefix="/api/trading",     tags=["trading"])
+app.include_router(algo.router,       prefix="/api/algo",        tags=["algo"])
+app.include_router(ai.router,         prefix="/api/ai",          tags=["ai"])
+app.include_router(sentiment.router,  prefix="/api/sentiment",   tags=["sentiment"])
 
 @app.get("/api/health")
 def health():

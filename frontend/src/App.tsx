@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import Layout from './components/Layout'
 import { ThemeProvider } from './contexts/ThemeContext'
+import { PortfolioProvider } from './contexts/PortfolioContext'
 
 // Lazy-load all pages — crash in one route can't bring down the whole app
 const Home               = lazy(() => import('./pages/Home'))
@@ -26,6 +27,21 @@ const TermsOfUse         = lazy(() => import('./pages/legal/TermsOfUse'))
 const RiskDisclosure     = lazy(() => import('./pages/legal/RiskDisclosure'))
 const DataSources        = lazy(() => import('./pages/legal/DataSources'))
 const SettingsPage       = lazy(() => import('./pages/Settings'))
+const StockScreener      = lazy(() => import('./pages/StockScreener'))
+const EarningsSummarizer = lazy(() => import('./pages/EarningsSummarizer'))
+const PortfolioManager   = lazy(() => import('./pages/PortfolioManager'))
+const AdminTester        = lazy(() => import('./pages/AdminTester'))
+const StressTester       = lazy(() => import('./pages/StressTester'))
+const SectorRotation     = lazy(() => import('./pages/SectorRotation'))
+const CreditSpreads      = lazy(() => import('./pages/CreditSpreads'))
+const RelativeValuation  = lazy(() => import('./pages/RelativeValuation'))
+const GreeksAggregator   = lazy(() => import('./pages/GreeksAggregator'))
+const SupplyChain        = lazy(() => import('./pages/SupplyChain'))
+const GammaScalping      = lazy(() => import('./pages/GammaScalping'))
+const TradeJournal       = lazy(() => import('./pages/TradeJournal'))
+const PaperTrading       = lazy(() => import('./pages/PaperTrading'))
+const AlgoRunner         = lazy(() => import('./pages/AlgoRunner'))
+const SentimentTracker   = lazy(() => import('./pages/SentimentTracker'))
 
 function PageLoader() {
   return (
@@ -41,6 +57,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <ThemeProvider>
+      <PortfolioProvider>
       <Layout>
         <AnimatePresence mode="wait">
           <Suspense fallback={<PageLoader />}>
@@ -51,6 +68,7 @@ export default function App() {
               <Route path="/bond"       element={<BondAnalytics />} />
               <Route path="/nav"        element={<NAVTracker />} />
               <Route path="/portfolio"  element={<PortfolioBacktester />} />
+              <Route path="/portfolio-manager" element={<PortfolioManager />} />
               <Route path="/montecarlo" element={<MonteCarlo />} />
               <Route path="/probability" element={<ImpliedProbability />} />
               <Route path="/fed"        element={<FedRates />} />
@@ -66,10 +84,25 @@ export default function App() {
               <Route path="/risk-disclosure" element={<RiskDisclosure />} />
               <Route path="/data-sources"    element={<DataSources />} />
               <Route path="/settings"        element={<SettingsPage />} />
+              <Route path="/screener"        element={<StockScreener />} />
+              <Route path="/earnings"        element={<EarningsSummarizer />} />
+              <Route path="/admin"           element={<AdminTester />} />
+              <Route path="/stress-test"     element={<StressTester />} />
+              <Route path="/sector-rotation" element={<SectorRotation />} />
+              <Route path="/credit-spreads"      element={<CreditSpreads />} />
+              <Route path="/relative-valuation"  element={<RelativeValuation />} />
+              <Route path="/greeks-aggregator"   element={<GreeksAggregator />} />
+              <Route path="/supply-chain"        element={<SupplyChain />} />
+              <Route path="/gamma-scalping"      element={<GammaScalping />} />
+              <Route path="/trade-journal"       element={<TradeJournal />} />
+              <Route path="/paper-trading"       element={<PaperTrading />} />
+              <Route path="/algo-runner"         element={<AlgoRunner />} />
+              <Route path="/sentiment"           element={<SentimentTracker />} />
             </Routes>
           </Suspense>
         </AnimatePresence>
       </Layout>
+      </PortfolioProvider>
       </ThemeProvider>
     </BrowserRouter>
   )

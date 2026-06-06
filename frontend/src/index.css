@@ -181,7 +181,7 @@
   .metric-card {
     background: var(--theme-surface, #0d1826);
     border: 1px solid rgba(255,255,255,0.07);
-    border-left: 2px solid rgba(201,168,76,0.28);
+    border-left: 2px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 28%, transparent);
     @apply px-4 py-3;
     box-shadow: 0 1px 3px rgba(0,0,0,0.3);
   }
@@ -219,17 +219,18 @@
 
   /* ── Labels & typography ──────────────────────────────────────────────── */
   .label-sm {
-    @apply text-slate-terminal text-xs font-bold tracking-widest uppercase;
-    font-family: 'IBM Plex Sans', sans-serif;
+    @apply text-xs font-bold tracking-widest uppercase;
+    color: var(--theme-secondary, #5e768f);
+    font-family: 'JetBrains Mono', monospace;
   }
 
   .section-header {
-    font-family: 'IBM Plex Sans', sans-serif;
+    font-family: 'JetBrains Mono', monospace;
     font-size: 9px;
     font-weight: 700;
     letter-spacing: 0.18em;
     text-transform: uppercase;
-    color: rgba(94,118,143,0.7);
+    color: color-mix(in srgb, var(--theme-secondary, #5e768f) 70%, transparent);
     border-bottom: 1px solid rgba(255,255,255,0.05);
     padding-bottom: 6px;
     margin-bottom: 14px;
@@ -237,12 +238,12 @@
   }
 
   .section-label {
-    font-family: 'IBM Plex Sans', sans-serif;
+    font-family: 'JetBrains Mono', monospace;
     font-size: 10px;
     font-weight: 600;
     letter-spacing: 0.16em;
     text-transform: uppercase;
-    color: #5e768f;
+    color: var(--theme-secondary, #5e768f);
   }
 
   /* ── Buttons ──────────────────────────────────────────────────────────── */
@@ -252,8 +253,9 @@
     font-family: 'IBM Plex Sans', sans-serif;
   }
 
-  .tab-active   { @apply text-gold border-b-2 border-gold font-semibold; }
-  .tab-inactive { @apply text-slate-terminal border-b-2 border-transparent hover:text-slate-bright transition-colors; }
+  .tab-active   { border-bottom: 2px solid var(--theme-primary, #c9a84c); color: var(--theme-primary, #c9a84c); font-weight: 600; }
+  .tab-inactive { color: var(--theme-secondary, #5e768f); border-bottom: 2px solid transparent; transition: color 0.15s; }
+  .tab-inactive:hover { color: #d7e3fc; }
 
   .input-field {
     @apply bg-navy-900 border border-white/9 text-slate-bright px-3 py-2 text-sm w-full

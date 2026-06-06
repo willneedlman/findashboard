@@ -14,11 +14,11 @@ export const optionSurface = (body: object) =>
 export const optionPayoff = (body: object) =>
   api.post('/options/payoff', body).then(r => r.data)
 
-export const fetchOptionsChain = (ticker: string) =>
-  api.get('/options/chain', { params: { ticker } }).then(r => r.data)
+export const fetchOptionsChain = (ticker: string, expiry?: string) =>
+  api.get('/options/chain', { params: { ticker, ...(expiry ? { expiry } : {}) } }).then(r => r.data)
 
-export const fetchGEX = (ticker: string) =>
-  api.get('/options/gex', { params: { ticker } }).then(r => r.data)
+export const fetchGEX = (ticker: string, expiry?: string) =>
+  api.get('/options/gex', { params: { ticker, ...(expiry ? { expiry } : {}) } }).then(r => r.data)
 
 export const strategyPayoff = (body: object) =>
   api.post('/options/strategy', body).then(r => r.data)

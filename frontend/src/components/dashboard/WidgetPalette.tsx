@@ -9,6 +9,9 @@ const ALL_TYPES: WidgetType[] = [
   'options-snapshot', 'options-pricer', 'delta-target',
   'portfolio-summary', 'correlation-matrix',
   'macro-strip',
+  'macro-calendar',
+  'global-macro',
+  'credit-spreads',
 ]
 
 interface WidgetPaletteProps {
@@ -35,21 +38,21 @@ export default function WidgetPalette({ open, onClose, onAdd }: WidgetPalettePro
             transition={{ duration: 0.25, ease: 'easeInOut' }}
             style={{
               position: 'fixed', top: 0, right: 0, bottom: 0, width: 300,
-              zIndex: 49, background: '#060e1c', borderLeft: '1px solid rgba(201,168,76,0.2)',
+              zIndex: 49, background: 'var(--theme-bg, #060e1c)', borderLeft: '1px solid rgba(201,168,76,0.2)',
               display: 'flex', flexDirection: 'column', overflowY: 'auto',
             }}
           >
             {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid #2e394d', flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
               <div>
-                <div style={{ fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#c9a84c' }}>
+                <div style={{ fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)' }}>
                   Add Widget
                 </div>
-                <div style={{ fontSize: 10, color: '#5e768f', marginTop: 2 }}>
+                <div style={{ fontSize: 10, color: 'var(--theme-secondary, #5e768f)', marginTop: 2 }}>
                   Click to add to dashboard
                 </div>
               </div>
-              <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5e768f' }}>
+              <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-secondary, #5e768f)' }}>
                 <X size={16} />
               </button>
             </div>
@@ -62,18 +65,18 @@ export default function WidgetPalette({ open, onClose, onAdd }: WidgetPalettePro
                   onClick={() => { onAdd(type); onClose() }}
                   style={{
                     display: 'flex', alignItems: 'flex-start', gap: 12, width: '100%',
-                    background: '#101c2e', border: '1px solid #2e394d', padding: '10px 12px',
+                    background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)', padding: '10px 12px',
                     cursor: 'pointer', textAlign: 'left', transition: 'border-color 0.15s',
                   }}
-                  onMouseEnter={e => ((e.currentTarget as HTMLElement).style.borderColor = 'rgba(201,168,76,0.4)')}
-                  onMouseLeave={e => ((e.currentTarget as HTMLElement).style.borderColor = '#2e394d')}
+                  onMouseEnter={e => ((e.currentTarget as HTMLElement).style.borderColor = 'color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)')}
+                  onMouseLeave={e => ((e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)')}
                 >
                   <span style={{ fontSize: 20, flexShrink: 0, lineHeight: 1 }}>{WIDGET_ICONS[type]}</span>
                   <div>
                     <div style={{ fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 12, fontWeight: 600, color: '#d7e3fc', marginBottom: 3 }}>
                       {WIDGET_LABELS[type]}
                     </div>
-                    <div style={{ fontSize: 10, color: '#5e768f', lineHeight: '14px' }}>
+                    <div style={{ fontSize: 10, color: 'var(--theme-secondary, #5e768f)', lineHeight: '14px' }}>
                       {WIDGET_DESCRIPTIONS[type]}
                     </div>
                   </div>

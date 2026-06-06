@@ -21,10 +21,13 @@ export default function TVChart({
   useEffect(() => {
     if (!containerRef.current || !data.length) return
 
+    const textColor = getComputedStyle(document.documentElement)
+      .getPropertyValue('--theme-secondary').trim() || '#5e768f'
+
     const chart = createChart(containerRef.current, {
       layout: {
         background: { type: ColorType.Solid, color: 'transparent' },
-        textColor: '#5e768f',
+        textColor,
         fontFamily: 'Lora, serif',
       },
       grid: {
@@ -34,7 +37,7 @@ export default function TVChart({
       crosshair: { mode: 1 },
       rightPriceScale: {
         borderColor: 'rgba(255,255,255,0.06)',
-        textColor: '#5e768f',
+        textColor,
       },
       timeScale: {
         borderColor: 'rgba(255,255,255,0.06)',

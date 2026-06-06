@@ -5,19 +5,19 @@ import type { WidgetConfig } from '../../../hooks/useDashboard'
 import useContainerSize from '../../../hooks/useContainerSize'
 
 const T = {
-  bg: '#101c2e', border: '#2e394d', headerBg: '#142032',
-  gold: '#c9a84c', text: '#d7e3fc', muted: '#5e768f',
+  bg: 'var(--theme-bg, #101c2e)', border: 'rgba(255,255,255,0.08)', headerBg: 'var(--theme-surface, #142032)',
+  gold: 'var(--theme-primary, #c9a84c)', text: '#d7e3fc', muted: 'var(--theme-secondary, #5e768f)',
   mono: 'JetBrains Mono, monospace', label: 'IBM Plex Sans, sans-serif',
   pos: '#22C55E', neg: '#EF4444',
 }
 
 const shimmerStyle: React.CSSProperties = {
-  background: 'linear-gradient(90deg, #101c2e 25%, #1a2d45 50%, #101c2e 75%)',
+  background: 'linear-gradient(90deg, var(--theme-surface, #0d0d0d) 25%, rgba(255,255,255,0.05) 50%, var(--theme-surface, #0d0d0d) 75%)',
   backgroundSize: '200% 100%', animation: 'shimmer 2s infinite', borderRadius: 4,
 }
 
 const inputStyle: React.CSSProperties = {
-  background: '#0a1628', border: '1px solid #4d4637', color: T.text,
+  background: 'var(--theme-bg, #0a1628)', border: '1px solid rgba(255,255,255,0.10)', color: T.text,
   fontFamily: T.mono, fontSize: 11, padding: '4px 6px',
   width: '100%', outline: 'none', boxSizing: 'border-box',
 }
@@ -41,7 +41,7 @@ function bsPrice(S: number, K: number, Ty: number, r: number, sigma: number, isC
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-      <span style={{ color: T.muted, fontSize: 9, fontFamily: T.label, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{label}</span>
+      <span style={{ color: T.muted, fontSize: 9, fontFamily: T.mono, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{label}</span>
       {children}
     </div>
   )
@@ -50,7 +50,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function Greek({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
-      <span style={{ color: T.muted, fontSize: 9, fontFamily: T.label, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{label}</span>
+      <span style={{ color: T.muted, fontSize: 9, fontFamily: T.mono, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{label}</span>
       <span style={{ color: color ?? T.text, fontSize: 16, fontWeight: 700, fontFamily: T.mono }}>{value}</span>
     </div>
   )
@@ -72,7 +72,7 @@ export default function OptionsPricerWidget({ config }: { config: WidgetConfig }
   const { data, isLoading } = useQuery<Record<string, unknown>>({
     queryKey: ['options-pricer-spot', ticker],
     queryFn: () => axios.get('/api/corporate/hub?ticker=' + ticker).then(r => r.data),
-    enabled: !!ticker, staleTime: 60_000,
+    enabled: !!ticker, staleTime: 600_000,
   })
 
   const spot = (data?.spot ?? 0) as number
@@ -89,8 +89,8 @@ export default function OptionsPricerWidget({ config }: { config: WidgetConfig }
 
   const toggleBtn = (type: 'call' | 'put'): React.CSSProperties => ({
     padding: '4px 10px', fontSize: 11, fontFamily: T.mono, cursor: 'pointer',
-    border: `1px solid ${T.border}`, background: optionType === type ? T.gold : '#0a1628',
-    color: optionType === type ? '#101c2e' : T.muted, fontWeight: optionType === type ? 700 : 400,
+    border: `1px solid ${T.border}`, background: optionType === type ? T.gold : 'var(--theme-bg, #0a1628)',
+    color: optionType === type ? 'var(--theme-bg, #101c2e)' : T.muted, fontWeight: optionType === type ? 700 : 400,
     borderRadius: type === 'call' ? '3px 0 0 3px' : '0 3px 3px 0',
   })
 
@@ -107,7 +107,7 @@ export default function OptionsPricerWidget({ config }: { config: WidgetConfig }
         />
         <button
           onClick={() => setTicker(tickerInput.trim())}
-          style={{ background: 'rgba(201,168,76,0.15)', border: `1px solid ${T.border}`, color: T.gold, fontFamily: T.mono, fontSize: 10, padding: '4px 8px', cursor: 'pointer' }}
+          style={{ background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 15%, transparent)', border: `1px solid ${T.border}`, color: T.gold, fontFamily: T.mono, fontSize: 10, padding: '4px 8px', cursor: 'pointer' }}
         >→</button>
       </div>
 
@@ -145,7 +145,7 @@ export default function OptionsPricerWidget({ config }: { config: WidgetConfig }
         disabled={isLoading || spot === 0}
         style={{
           background: isLoading || spot === 0 ? 'rgba(201,168,76,0.3)' : T.gold,
-          border: 'none', color: '#0a1628', fontFamily: T.mono, fontSize: 10,
+          border: 'none', color: 'var(--theme-bg, #0a1628)', fontFamily: T.mono, fontSize: 10,
           fontWeight: 700, letterSpacing: '0.12em', padding: '6px 0',
           cursor: isLoading || spot === 0 ? 'not-allowed' : 'pointer',
           width: '100%', textTransform: 'uppercase' as const,
@@ -159,7 +159,7 @@ export default function OptionsPricerWidget({ config }: { config: WidgetConfig }
   const results = (
     <div style={{ padding: wide ? '10px 12px' : '8px 10px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 10 }}>
       {!committed.ran ? (
-        <span style={{ color: T.muted, fontSize: 11, fontFamily: T.label }}>Set inputs and press Calculate</span>
+        <span style={{ color: T.muted, fontSize: 11, fontFamily: T.mono }}>Set inputs and press Calculate</span>
       ) : isLoading ? (
         <>
           <div style={{ display: 'flex', gap: 10 }}>
@@ -182,7 +182,7 @@ export default function OptionsPricerWidget({ config }: { config: WidgetConfig }
           </div>
         </>
       ) : (
-        <span style={{ color: T.muted, fontSize: 11, fontFamily: T.label }}>Enter valid inputs</span>
+        <span style={{ color: T.muted, fontSize: 11, fontFamily: T.mono }}>Enter valid inputs</span>
       )}
     </div>
   )
@@ -193,8 +193,8 @@ export default function OptionsPricerWidget({ config }: { config: WidgetConfig }
 
       {/* Header */}
       <div style={{ background: T.headerBg, borderBottom: `1px solid ${T.border}`, padding: '6px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-        <span style={{ color: T.gold, fontWeight: 700, fontSize: 11, letterSpacing: '0.08em' }}>{ticker} OPTIONS PRICER</span>
-        <span style={{ color: T.muted, fontSize: 10, fontFamily: T.label }}>{spot > 0 ? `$${spot.toFixed(2)}` : isLoading ? 'Loading…' : '—'}</span>
+        <span style={{ color: T.gold, fontWeight: 700, fontSize: 9, fontFamily: T.mono, letterSpacing: '0.12em', textTransform: 'uppercase' }}>{ticker} OPTIONS PRICER</span>
+        <span style={{ color: T.muted, fontSize: 9, fontFamily: T.mono }}>{spot > 0 ? `$${spot.toFixed(2)}` : isLoading ? 'Loading…' : '—'}</span>
       </div>
 
       {/* Body — horizontal when wide, vertical when narrow */}

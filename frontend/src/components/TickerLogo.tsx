@@ -26,7 +26,7 @@ export default function TickerLogo({ ticker, size = 28 }: TickerLogoProps) {
           height: size,
           borderRadius: '50%',
           objectFit: 'contain',
-          background: '#1a2a3d',
+          background: 'var(--theme-surface, #1a2a3d)',
           flexShrink: 0,
           display: 'block',
         }}
