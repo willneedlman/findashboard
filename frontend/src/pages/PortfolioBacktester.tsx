@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import {
-  AreaChart, Area, BarChart, Bar, LineChart, Line,
+  AreaChart, Area, BarChart, Bar, LineChart, Line, ComposedChart,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
   ReferenceLine, Legend,
 } from 'recharts'
@@ -24,13 +24,13 @@ const TAB_BAR: React.CSSProperties = {
   display: 'flex',
   alignItems: 'stretch',
   background: 'var(--theme-surface, #0d1826)',
-  borderBottom: '1px solid rgba(255,255,255,0.06)',
+  borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.06))',
   marginBottom: 0,
   flexShrink: 0,
 }
 
 const TAB_BASE: React.CSSProperties = {
-  fontFamily: 'JetBrains Mono, monospace',
+  fontFamily: 'var(--theme-mono)',
   fontSize: 10,
   fontWeight: 700,
   letterSpacing: '0.12em',
@@ -66,8 +66,8 @@ const PORT_DEFAULTS: Asset[] = [
 ]
 
 const PORT_INPUT: React.CSSProperties = {
-  background: 'var(--theme-bg, #0a1628)', border: '1px solid rgba(255,255,255,0.10)', color: '#d7e3fc',
-  fontFamily: 'JetBrains Mono, monospace', fontSize: 12, padding: '5px 8px',
+  background: 'var(--theme-bg, #0a1628)', border: '1px solid var(--theme-border, rgba(255,255,255,0.10))', color: 'var(--theme-text, #d7e3fc)',
+  fontFamily: 'var(--theme-mono)', fontSize: 12, padding: '5px 8px',
   width: '100%', outline: 'none', boxSizing: 'border-box',
 }
 
@@ -76,36 +76,45 @@ const PORT_LABEL: React.CSSProperties = {
   textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', marginBottom: 4, display: 'block',
 }
 
-const PORT_TICK = { fontSize: 9, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'JetBrains Mono, monospace' }
+const PORT_TICK = { fontSize: 9, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'var(--theme-mono)' }
 
 // ── Strategy tab types & constants ───────────────────────────────────────────
 
 const ALGO_STRATEGIES = [
-  { value: 'rsi_mean_reversion', label: 'RSI Mean Reversion' },
-  { value: 'ma_crossover',       label: 'MA Crossover' },
-  { value: 'bollinger_breakout', label: 'Bollinger Breakout' },
-  { value: 'momentum',           label: 'Momentum' },
+  { value: 'rsi_mean_reversion',  label: 'RSI Mean Reversion' },
+  { value: 'ma_crossover',        label: 'MA Crossover' },
+  { value: 'bollinger_breakout',  label: 'Bollinger Breakout' },
+  { value: 'momentum',            label: 'Momentum' },
+  { value: 'macd_crossover',      label: 'MACD Crossover' },
+  { value: 'value_pe',            label: 'Value — P/E' },
+  { value: 'earnings_momentum',   label: 'Earnings Growth' },
 ]
 
 const ALGO_DEFAULT_PARAMS: Record<string, Record<string, number>> = {
-  rsi_mean_reversion: { period: 14, oversold: 30, overbought: 70 },
-  ma_crossover:       { fast: 20, slow: 50 },
-  bollinger_breakout: { period: 20, std_dev: 2.0 },
-  momentum:           { lookback: 20 },
+  rsi_mean_reversion:  { period: 14, oversold: 30, overbought: 70 },
+  ma_crossover:        { fast: 20, slow: 50 },
+  bollinger_breakout:  { period: 20, std_dev: 2.0 },
+  momentum:            { lookback: 20 },
+  macd_crossover:      { fast: 12, slow: 26, signal: 9 },
+  value_pe:            { pe_in_threshold: 35 },
+  earnings_momentum:   { exit_threshold_pct: -5 },
 }
 
 const ALGO_PARAM_LABELS: Record<string, Record<string, string>> = {
-  rsi_mean_reversion: { period: 'Period', oversold: 'Oversold', overbought: 'Overbought' },
-  ma_crossover:       { fast: 'Fast MA', slow: 'Slow MA' },
-  bollinger_breakout: { period: 'Period', std_dev: 'Std Dev' },
-  momentum:           { lookback: 'Lookback Days' },
+  rsi_mean_reversion:  { period: 'Period', oversold: 'Oversold', overbought: 'Overbought' },
+  ma_crossover:        { fast: 'Fast MA', slow: 'Slow MA' },
+  bollinger_breakout:  { period: 'Period', std_dev: 'Std Dev' },
+  momentum:            { lookback: 'Lookback Days' },
+  macd_crossover:      { fast: 'Fast EMA', slow: 'Slow EMA', signal: 'Signal EMA' },
+  value_pe:            { pe_in_threshold: 'P/E Exit Threshold' },
+  earnings_momentum:   { exit_threshold_pct: 'EPS Exit %' },
 }
 
 const ALGO_INPUT: React.CSSProperties = {
   background: 'transparent',
-  border: '1px solid rgba(255,255,255,0.10)',
-  color: '#d7e3fc',
-  fontFamily: 'JetBrains Mono, monospace',
+  border: '1px solid var(--theme-border, rgba(255,255,255,0.10))',
+  color: 'var(--theme-text, #d7e3fc)',
+  fontFamily: 'var(--theme-mono)',
   fontSize: 12,
   padding: '5px 8px',
   width: '100%',
@@ -123,10 +132,10 @@ const ALGO_LABEL: React.CSSProperties = {
   display: 'block',
 }
 
-const ALGO_TICK = { fontSize: 9, fill: 'var(--theme-secondary, #5e768f)', fontFamily: 'JetBrains Mono, monospace' }
+const ALGO_TICK = { fontSize: 9, fill: 'var(--theme-secondary, #5e768f)', fontFamily: 'var(--theme-mono)' }
 
 const ALGO_SECTION_DIVIDER: React.CSSProperties = {
-  borderTop: '1px solid rgba(255,255,255,0.06)',
+  borderTop: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))',
   marginTop: 14,
   paddingTop: 14,
 }
@@ -140,6 +149,9 @@ type BacktestResult = {
     sharpe: number
     num_trades: number
     win_rate: number
+    initial_capital: number
+    final_capital: number
+    total_pnl: number
   }
   trades: { date: string; action: string; price: number }[]
 }
@@ -154,12 +166,12 @@ type SignalResult = {
 
 function PortChartPanel({ label, height, children }: { label: string; height: number; children: React.ReactNode }) {
   return (
-    <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)', position: 'relative' }}>
+    <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', position: 'relative' }}>
       <div style={{
         position: 'absolute', top: 0, left: 0, zIndex: 10,
         background: 'rgba(46,57,77,0.8)', padding: '3px 8px',
-        borderRight: '1px solid rgba(255,255,255,0.08)', borderBottom: '1px solid rgba(255,255,255,0.08)',
-        fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#d7e3fc',
+        borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
+        fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)',
       }}>
         {label}
       </div>
@@ -172,12 +184,14 @@ function PortChartPanel({ label, height, children }: { label: string; height: nu
 
 function AlgoChartPanel({ label, height, children }: { label: string; height: number; children: React.ReactNode }) {
   return (
-    <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)', position: 'relative' }}>
+    <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', position: 'relative' }}>
       <div style={{
         position: 'absolute', top: 0, left: 0, zIndex: 10,
-        background: 'rgba(46,57,77,0.85)', padding: '3px 10px',
-        borderRight: '1px solid rgba(255,255,255,0.06)', borderBottom: '1px solid rgba(255,255,255,0.06)',
-        fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: '#d7e3fc',
+        background: 'var(--theme-surface, rgba(46,57,77,0.85))', padding: '3px 10px',
+        borderRight: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))',
+        borderBottom: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))',
+        fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase',
+        color: 'var(--theme-text, #d7e3fc)',
       }}>
         {label}
       </div>
@@ -201,7 +215,8 @@ function PortfolioTab() {
   const [assets, setAssets] = useState<Asset[]>(initialAssets)
   const [benchmark, setBenchmark] = useState('SPY')
   const [start, setStart] = useState('2020-01-01')
-  const [end, setEnd] = useState('2024-12-31')
+  const [end, setEnd] = useState(() => new Date().toISOString().split('T')[0])
+  const [portSignalData, setPortSignalData] = useState<{ ticker: string; data: SignalChartPoint[]; trades: { date: string; action: string; price: number }[] }[]>([])
 
   const { mutate, data, isPending } = useMutation({
     mutationFn: async () => {
@@ -271,9 +286,24 @@ function PortfolioTab() {
 
         const finalStrat = stratCumulative[stratCumulative.length - 1]?.strategy ?? 100
         const years = Math.max((new Date(end).getTime() - new Date(start).getTime()) / (365.25 * 86400000), 1)
+        const signalTrades: { ticker: string; trades: { date: string; action: string; price: number }[] }[] = []
+        assets.forEach((a, i) => {
+          const sig: { date: string; value: number }[] = legSigs[i]?.signal ?? []
+          if (!sig.length || a.strategy === STRATEGIES[0]) return
+          const trades: { date: string; action: string; price: number }[] = []
+          for (let j = 1; j < sig.length; j++) {
+            if (sig[j - 1].value < 0.5 && sig[j].value >= 0.5)
+              trades.push({ date: sig[j].date, action: 'BUY', price: 0 })
+            else if (sig[j - 1].value >= 0.5 && sig[j].value < 0.5)
+              trades.push({ date: sig[j].date, action: 'SELL', price: 0 })
+          }
+          if (trades.length > 0) signalTrades.push({ ticker: a.ticker, trades })
+        })
+
         strategyResult = {
           cumulative: stratCumulative,
           cagr: +(((finalStrat / 100) ** (1 / years) - 1) * 100).toFixed(2),
+          signalTrades,
           legs: assets.map((a, i) => ({
             ticker: a.ticker,
             strategy: a.strategy,
@@ -288,11 +318,39 @@ function PortfolioTab() {
     },
   })
 
+  useEffect(() => {
+    const legs = data?.strategyResult?.signalTrades as { ticker: string; trades: { date: string; action: string; price: number }[] }[] | undefined
+    if (!legs?.length) { setPortSignalData([]); return }
+    Promise.all(
+      legs.map(leg =>
+        axios.get(`/api/market/history?ticker=${encodeURIComponent(leg.ticker)}&start=${start}`)
+          .then(r => {
+            const prices: { date: string; value: number }[] = r.data.price ?? []
+            const priceByDate: Record<string, number> = {}
+            prices.forEach(p => { priceByDate[p.date] = p.value })
+            const tradeMap: Record<string, { buy?: number; sell?: number }> = {}
+            leg.trades.forEach(tr => {
+              if (!tradeMap[tr.date]) tradeMap[tr.date] = {}
+              const px = priceByDate[tr.date] ?? 0
+              if (tr.action === 'BUY') tradeMap[tr.date].buy = px
+              else tradeMap[tr.date].sell = px
+            })
+            return {
+              ticker: leg.ticker,
+              data: prices.map(p => ({ date: p.date, price: p.value, ...tradeMap[p.date] })),
+              trades: leg.trades.map(tr => ({ ...tr, price: priceByDate[tr.date] ?? 0 })),
+            }
+          })
+          .catch(() => null)
+      )
+    ).then(res => setPortSignalData(res.filter(Boolean) as typeof portSignalData))
+  }, [data]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const updateAsset = (i: number, patch: Partial<Asset>) =>
     setAssets(prev => prev.map((a, idx) => idx === i ? { ...a, ...patch } : a))
 
   const focus = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')
-  const blur  = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = 'rgba(255,255,255,0.10)')
+  const blur  = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = 'var(--theme-border, rgba(255,255,255,0.10))')
 
   return (
     <SidebarLayout sidebarWidth={240} sidebarTitle="Portfolio Controls" sidebar={<>
@@ -300,8 +358,8 @@ function PortfolioTab() {
           <div>
             <label style={PORT_LABEL}>Allocation</label>
             <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
-              <span style={{ flex: 7, fontSize: 9, color: 'rgba(255,255,255,0.22)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Ticker</span>
-              <span style={{ flex: 4, fontSize: 9, color: 'rgba(255,255,255,0.22)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Wt %</span>
+              <span style={{ flex: 7, fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Ticker</span>
+              <span style={{ flex: 4, fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Wt %</span>
               <span style={{ width: 16 }} />
             </div>
 
@@ -315,7 +373,7 @@ function PortfolioTab() {
                     onChange={e => updateAsset(i, { weight: +e.target.value })}
                     onFocus={focus} onBlur={blur} />
                   <button
-                    style={{ width: 16, background: 'none', border: 'none', color: 'rgba(255,255,255,0.22)', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0, flexShrink: 0 }}
+                    style={{ width: 16, background: 'none', border: 'none', color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0, flexShrink: 0 }}
                     onMouseEnter={e => ((e.target as HTMLElement).style.color = '#8c2e36')}
                     onMouseLeave={e => ((e.target as HTMLElement).style.color = '#4d4637')}
                     onClick={() => setAssets(p => p.filter((_, j) => j !== i))}>×</button>
@@ -332,19 +390,19 @@ function PortfolioTab() {
                 </div>
 
                 {i < assets.length - 1 && (
-                  <div style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', marginTop: 10 }} />
+                  <div style={{ borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.06))', marginTop: 10 }} />
                 )}
               </div>
             ))}
 
             <button
-              style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, letterSpacing: '0.1em', marginTop: 2 }}
+              style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', background: 'none', border: 'none', cursor: 'pointer', padding: 0, letterSpacing: '0.1em', marginTop: 2 }}
               onMouseEnter={e => ((e.target as HTMLElement).style.color = 'var(--theme-primary, #c9a84c)')}
               onMouseLeave={e => ((e.target as HTMLElement).style.color = '#4d4637')}
               onClick={() => setAssets(p => [...p, makeAsset('', 0)])}>+ Add Asset</button>
           </div>
 
-          <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div>
               <label style={PORT_LABEL}>Benchmark</label>
               <input style={PORT_INPUT} value={benchmark} onChange={e => setBenchmark(e.target.value.toUpperCase())} onFocus={focus} onBlur={blur} />
@@ -360,7 +418,7 @@ function PortfolioTab() {
           </div>
         </div>
 
-        <div style={{ padding: 10, borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ padding: 10, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <PortfolioIO
             mode="portfolio"
             assets={assets.map(a => ({ ticker: a.ticker, weight: a.weight, strategy: a.strategy, stratParams: a.stratParams as Record<string, unknown> }))}
@@ -395,11 +453,11 @@ function PortfolioTab() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {data.strategyResult.legs.map((l: any, i: number) => (
                   <div key={i} style={{
-                    background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)',
+                    background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
                     borderLeft: `4px solid ${l.drift_adj >= 0 ? '#2f6b4b' : '#8c2e36'}`,
                     padding: '8px 14px',
                   }}>
-                    <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700, color: l.drift_adj >= 0 ? '#4caf7d' : '#e05c6e', marginBottom: 3 }}>
+                    <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 700, color: l.drift_adj >= 0 ? '#4caf7d' : '#e05c6e', marginBottom: 3 }}>
                       {l.ticker} · {l.strategy} — {l.label}
                       <span style={{ marginLeft: 10, fontSize: 10, color: 'var(--theme-secondary, #99907e)', fontWeight: 400 }}>
                         Drift adj: {l.drift_adj > 0 ? '+' : ''}{l.drift_adj}%
@@ -412,7 +470,6 @@ function PortfolioTab() {
             )}
 
             <div style={{
-              position: 'sticky', top: 0, zIndex: 20,
               background: 'var(--theme-bg, #0a1628)', padding: '8px 0 4px',
               borderBottom: '1px solid rgba(46,57,77,0.8)',
               display: 'flex', flexDirection: 'column', gap: 6,
@@ -499,9 +556,128 @@ function PortfolioTab() {
                 </ResponsiveContainer>
               </PortChartPanel>
             </div>
+
+            {portSignalData.map(leg => (
+              <BacktestSignalChart
+                key={leg.ticker}
+                data={leg.data}
+                ticker={leg.ticker}
+                trades={leg.trades}
+              />
+            ))}
           </>
         )}
     </SidebarLayout>
+  )
+}
+
+// ── Backtest signal chart ────────────────────────────────────────────────────
+
+interface SignalChartPoint {
+  date: string
+  price: number
+  buy?: number
+  sell?: number
+}
+
+function BacktestSignalChart({ data, ticker, trades }: {
+  data: SignalChartPoint[]
+  ticker: string
+  trades: { date: string; action: string; price: number }[]
+}) {
+  const cc = useChartColors()
+  const buyCount = trades.filter(t => t.action === 'BUY').length
+  const sellCount = trades.filter(t => t.action === 'SELL').length
+
+  type DotProps = { cx?: number; cy?: number; value?: number }
+
+  const BuyDot = (props: DotProps) => {
+    const { cx = 0, cy = 0, value } = props
+    if (value == null) return null
+    return <polygon points={`${cx},${cy - 7} ${cx - 5},${cy + 1} ${cx + 5},${cy + 1}`} fill="#22c55e" stroke="none" />
+  }
+
+  const SellDot = (props: DotProps) => {
+    const { cx = 0, cy = 0, value } = props
+    if (value == null) return null
+    return <polygon points={`${cx},${cy + 7} ${cx - 5},${cy - 1} ${cx + 5},${cy - 1}`} fill="#ef4444" stroke="none" />
+  }
+
+  return (
+    <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 12,
+        background: 'rgba(46,57,77,0.85)', padding: '4px 10px',
+        borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.06))',
+        fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase',
+      }}>
+        <span style={{ color: 'var(--theme-text, #d7e3fc)' }}>▶ REPLAY · {ticker}</span>
+        <span style={{ color: '#22c55e' }}>▲ {buyCount} BUY</span>
+        <span style={{ color: '#ef4444' }}>▼ {sellCount} SELL</span>
+      </div>
+      <div style={{ padding: '4px 8px 8px 8px', height: 260 }}>
+        {data.length === 0 ? (
+          <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 11, color: 'var(--theme-text-muted, rgba(215,227,252,0.35))', fontFamily: 'var(--theme-mono)' }}>
+            Fetching price history…
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={cc.gridLine} />
+              <XAxis
+                dataKey="date"
+                tick={ALGO_TICK}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={d => d.slice(0, 7)}
+                interval="preserveStartEnd"
+              />
+              <YAxis
+                tick={ALGO_TICK}
+                tickLine={false}
+                axisLine={false}
+                width={52}
+                tickFormatter={v => `$${(v as number).toFixed(0)}`}
+                domain={['auto', 'auto']}
+              />
+              <Tooltip
+                content={<ChartTooltip formatter={(v, _n) => `$${(v as number).toFixed(2)}`} />}
+                contentStyle={TOOLTIP_STYLE}
+                cursor={CROSSHAIR_CURSOR}
+              />
+              <Line
+                type="monotone"
+                dataKey="price"
+                name="Price"
+                stroke={cc.primary}
+                strokeWidth={1.5}
+                dot={false}
+                activeDot={{ r: 3, fill: cc.primary }}
+              />
+              <Line
+                type="monotone"
+                dataKey="buy"
+                name="BUY"
+                stroke="transparent"
+                dot={<BuyDot />}
+                activeDot={false}
+                isAnimationActive={false}
+              />
+              <Line
+                type="monotone"
+                dataKey="sell"
+                name="SELL"
+                stroke="transparent"
+                dot={<SellDot />}
+                activeDot={false}
+                isAnimationActive={false}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -514,8 +690,15 @@ function StrategyTab() {
   const [strategy, setStrategy] = useState('rsi_mean_reversion')
   const [params, setParams] = useState<Record<string, number>>(ALGO_DEFAULT_PARAMS.rsi_mean_reversion)
   const [startDate, setStartDate] = useState('2022-01-01')
+  const [stopLoss, setStopLoss] = useState('')
+  const [takeProfit, setTakeProfit] = useState('')
+  const [trailingStop, setTrailingStop] = useState('')
+  const [maxHoldBars, setMaxHoldBars] = useState('')
+  const [positionSize, setPositionSize] = useState('100')
+  const [initialCapital, setInitialCapital] = useState('10000')
 
   const [result, setResult] = useState<BacktestResult | null>(null)
+  const [priceChartData, setPriceChartData] = useState<SignalChartPoint[]>([])
   const [liveSignal, setLiveSignal] = useState<SignalResult | null>(null)
   const [aiCommentary, setAiCommentary] = useState<any>(null)
   const [aiCommentaryPending, setAiCommentaryPending] = useState(false)
@@ -531,7 +714,21 @@ function StrategyTab() {
       axios.post('/api/algo/backtest', body).then(r => r.data as BacktestResult),
     onSuccess: data => {
       setResult(data)
+      setPriceChartData([])
       signalMutation.mutate({ ticker: ticker.trim().toUpperCase(), strategy, params })
+      const t = ticker.trim().toUpperCase()
+      axios.get(`/api/market/history?ticker=${encodeURIComponent(t)}&start=${startDate}`)
+        .then(r => {
+          const prices: { date: string; value: number }[] = r.data.price ?? []
+          const tradeMap: Record<string, { buy?: number; sell?: number }> = {}
+          data.trades.forEach(tr => {
+            if (!tradeMap[tr.date]) tradeMap[tr.date] = {}
+            if (tr.action === 'BUY') tradeMap[tr.date].buy = tr.price
+            else if (tr.action === 'SELL') tradeMap[tr.date].sell = tr.price
+          })
+          setPriceChartData(prices.map(p => ({ date: p.date, price: p.value, ...tradeMap[p.date] })))
+        })
+        .catch(() => {})
     },
   })
 
@@ -541,15 +738,28 @@ function StrategyTab() {
   }
 
   function handleParamChange(key: string, val: string) {
-    setParams(prev => ({ ...prev, [key]: parseFloat(val) || 0 }))
+    const n = parseFloat(val)
+    setParams(prev => ({ ...prev, [key]: val === '' ? 0 : isNaN(n) ? prev[key] ?? 0 : n }))
   }
 
   function runBacktest() {
+    const sl = parseFloat(stopLoss)
+    const tp = parseFloat(takeProfit)
+    const ts = parseFloat(trailingStop)
+    const mh = parseInt(maxHoldBars)
+    const ps = parseFloat(positionSize)
+    const ic = parseFloat(initialCapital)
     backtestMutation.mutate({
       ticker: ticker.trim().toUpperCase(),
       strategy,
       params,
       start: startDate,
+      stop_loss:      isNaN(sl) || sl <= 0 ? undefined : sl,
+      take_profit:    isNaN(tp) || tp <= 0 ? undefined : tp,
+      trailing_stop:  isNaN(ts) || ts <= 0 ? undefined : ts,
+      max_hold_bars:  isNaN(mh) || mh <= 0 ? undefined : mh,
+      position_size:  isNaN(ps) ? 100 : Math.min(100, Math.max(5, ps)),
+      initial_capital: isNaN(ic) || ic <= 0 ? 10000 : ic,
     })
   }
 
@@ -592,7 +802,7 @@ function StrategyTab() {
       <div>
         <span style={ALGO_LABEL}>
           Strategy
-          <HelpTip text="RSI Mean Reversion: buys oversold, sells overbought. MA Crossover: long when fast MA > slow MA. Bollinger Breakout: enters on band breaks. Momentum: long when N-day return is positive." position="right" width={240} />
+          <HelpTip text="RSI Mean Reversion: buys oversold, sells overbought. MA Crossover: long when fast MA > slow MA. Bollinger Breakout: enters on band breaks. Momentum: long when N-day return is positive." position="bottom" width={230} />
         </span>
         <select
           style={{ ...ALGO_INPUT, cursor: 'pointer' }}
@@ -626,6 +836,116 @@ function StrategyTab() {
       )}
 
       <div style={ALGO_SECTION_DIVIDER}>
+        <span style={{ ...ALGO_LABEL, color: 'var(--theme-primary, #c9a84c)', marginBottom: 8 }}>
+          Risk Management
+          <HelpTip text="Stop-loss and take-profit exit the position when price moves the specified % from entry. Position size controls how much of the portfolio is deployed per trade — remainder stays in cash." position="bottom" width={230} />
+        </span>
+        {/* Preset risk profiles */}
+        <div style={{ display: 'flex', gap: 4, marginBottom: 10, flexWrap: 'wrap' }}>
+          {([
+            { label: 'Conservative', sl: '5', tp: '10', trail: '4', pos: '25' },
+            { label: 'Moderate',     sl: '8', tp: '20', trail: '6', pos: '50' },
+            { label: 'Aggressive',   sl: '15', tp: '40', trail: '10', pos: '100' },
+            { label: 'Scalp',        sl: '2', tp: '4',  trail: '1.5', pos: '75' },
+          ] as const).map(p => (
+            <button
+              key={p.label}
+              type="button"
+              onClick={() => { setStopLoss(p.sl); setTakeProfit(p.tp); setTrailingStop(p.trail); setPositionSize(p.pos) }}
+              style={{
+                background: 'rgba(201,168,76,0.08)',
+                border: '1px solid rgba(201,168,76,0.3)',
+                color: 'rgba(201,168,76,0.85)',
+                fontFamily: 'var(--theme-mono)',
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: '0.08em',
+                padding: '3px 7px',
+                cursor: 'pointer',
+                borderRadius: 2,
+                transition: 'background 0.15s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(201,168,76,0.18)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'rgba(201,168,76,0.08)')}
+            >
+              {p.label.toUpperCase()}
+            </button>
+          ))}
+        </div>
+        <div style={{ marginBottom: 8 }}>
+          <span style={ALGO_LABEL}>Stop-Loss %</span>
+          <input
+            type="number"
+            style={ALGO_INPUT}
+            value={stopLoss}
+            onChange={e => setStopLoss(e.target.value)}
+            placeholder="e.g. 5  (off if blank)"
+            min={0.1}
+            step={0.5}
+          />
+        </div>
+        <div style={{ marginBottom: 8 }}>
+          <span style={ALGO_LABEL}>Take-Profit %</span>
+          <input
+            type="number"
+            style={ALGO_INPUT}
+            value={takeProfit}
+            onChange={e => setTakeProfit(e.target.value)}
+            placeholder="e.g. 15  (off if blank)"
+            min={0.1}
+            step={0.5}
+          />
+        </div>
+        <div style={{ marginBottom: 8 }}>
+          <span style={ALGO_LABEL}>Trailing Stop %</span>
+          <input
+            type="number"
+            style={ALGO_INPUT}
+            value={trailingStop}
+            onChange={e => setTrailingStop(e.target.value)}
+            placeholder="e.g. 8  (off if blank)"
+            min={0.1}
+            step={0.5}
+          />
+        </div>
+        <div style={{ marginBottom: 8 }}>
+          <span style={ALGO_LABEL}>Max Hold (days)</span>
+          <input
+            type="number"
+            style={ALGO_INPUT}
+            value={maxHoldBars}
+            onChange={e => setMaxHoldBars(e.target.value)}
+            placeholder="e.g. 20  (off if blank)"
+            min={1}
+            step={1}
+          />
+        </div>
+        <div style={{ marginBottom: 8 }}>
+          <span style={ALGO_LABEL}>Position Size %</span>
+          <input
+            type="number"
+            style={ALGO_INPUT}
+            value={positionSize}
+            onChange={e => setPositionSize(e.target.value)}
+            min={5}
+            max={100}
+            step={5}
+          />
+        </div>
+        <div>
+          <span style={ALGO_LABEL}>Initial Capital ($)</span>
+          <input
+            type="number"
+            style={ALGO_INPUT}
+            value={initialCapital}
+            onChange={e => setInitialCapital(e.target.value)}
+            min={100}
+            step={1000}
+          />
+        </div>
+      </div>
+
+      <div style={ALGO_SECTION_DIVIDER}>
         <span style={ALGO_LABEL}>Start Date</span>
         <input
           type="date"
@@ -645,7 +965,7 @@ function StrategyTab() {
             : 'color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)',
           border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)',
           color: backtestMutation.isPending ? 'rgba(201,168,76,0.45)' : 'var(--theme-primary, #c9a84c)',
-          fontFamily: 'JetBrains Mono, monospace',
+          fontFamily: 'var(--theme-mono)',
           fontSize: 11,
           fontWeight: 700,
           letterSpacing: '0.12em',
@@ -675,7 +995,7 @@ function StrategyTab() {
               border: `1px solid ${signalColor}`,
               background: `color-mix(in srgb, ${signalColor} 12%, transparent)`,
               color: signalColor,
-              fontFamily: 'JetBrains Mono, monospace',
+              fontFamily: 'var(--theme-mono)',
               fontSize: 14,
               fontWeight: 700,
               letterSpacing: '0.18em',
@@ -687,7 +1007,7 @@ function StrategyTab() {
             </div>
           </div>
         ) : (
-          <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', letterSpacing: '0.06em' }}>
+          <div style={{ fontSize: 9, color: 'var(--theme-text-dim, rgba(255,255,255,0.2))', letterSpacing: '0.06em' }}>
             Run backtest to compute
           </div>
         )}
@@ -708,7 +1028,7 @@ function StrategyTab() {
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           minHeight: 300, color: 'var(--theme-secondary, #5e768f)',
-          fontFamily: 'JetBrains Mono, monospace', fontSize: 11, letterSpacing: '0.12em',
+          fontFamily: 'var(--theme-mono)', fontSize: 11, letterSpacing: '0.12em',
         }}>
           Computing strategy signals…
         </div>
@@ -749,8 +1069,16 @@ function StrategyTab() {
               value={`${result.metrics.win_rate.toFixed(1)}%`}
               deltaPositive={result.metrics.win_rate >= 50}
             />
-            <div />
-            <div />
+            <MetricCard
+              label="Final Capital"
+              value={`$${result.metrics.final_capital >= 1000 ? (result.metrics.final_capital / 1000).toFixed(1) + 'K' : result.metrics.final_capital.toFixed(0)}`}
+              deltaPositive={result.metrics.total_pnl >= 0}
+            />
+            <MetricCard
+              label="P&L ($)"
+              value={`${result.metrics.total_pnl >= 0 ? '+' : ''}$${Math.abs(result.metrics.total_pnl) >= 1000 ? (result.metrics.total_pnl / 1000).toFixed(1) + 'K' : result.metrics.total_pnl.toFixed(0)}`}
+              deltaPositive={result.metrics.total_pnl >= 0}
+            />
           </div>
 
           {/* AI Backtest Commentary */}
@@ -779,20 +1107,20 @@ function StrategyTab() {
                 style={{
                   background: 'color-mix(in srgb, #c9a84c 10%, transparent)',
                   border: '1px solid rgba(201,168,76,0.4)', color: '#c9a84c',
-                  fontFamily: 'JetBrains Mono, monospace', fontSize: 9,
+                  fontFamily: 'var(--theme-mono)', fontSize: 9,
                   padding: '2px 6px', cursor: aiCommentaryPending ? 'default' : 'pointer',
                   opacity: aiCommentaryPending ? 0.5 : 1,
                 }}
               >{aiCommentaryPending ? '…' : '⬢ Analyze'}</button>
             </div>
             {!aiCommentary && !aiCommentaryPending && (
-              <div style={{ padding: '8px 10px', fontSize: 10, color: 'var(--theme-secondary, #5e768f)', fontFamily: 'IBM Plex Sans, sans-serif' }}>
+              <div style={{ padding: '8px 10px', fontSize: 10, color: 'var(--theme-secondary, #5e768f)', fontFamily: 'var(--theme-sans)' }}>
                 Click Analyze for AI commentary on these backtest results.
               </div>
             )}
             {aiCommentary && (
               <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ fontSize: 11, color: '#d7e3fc', lineHeight: '16px', fontFamily: 'IBM Plex Sans, sans-serif' }}>{aiCommentary.verdict}</div>
+                <div style={{ fontSize: 11, color: 'var(--theme-text, #d7e3fc)', lineHeight: '16px', fontFamily: 'var(--theme-sans)' }}>{aiCommentary.verdict}</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   {[
                     { label: 'Strengths', items: aiCommentary.strengths, color: '#22c55e' },
@@ -801,7 +1129,7 @@ function StrategyTab() {
                     <div key={label}>
                       <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', color, textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
                       {(items ?? []).map((s: string, i: number) => (
-                        <div key={i} style={{ fontSize: 10, color: 'rgba(215,227,252,0.8)', lineHeight: '14px', paddingLeft: 8, borderLeft: `2px solid ${color}44`, marginBottom: 3, fontFamily: 'IBM Plex Sans, sans-serif' }}>{s}</div>
+                        <div key={i} style={{ fontSize: 10, color: 'rgba(215,227,252,0.8)', lineHeight: '14px', paddingLeft: 8, borderLeft: `2px solid ${color}44`, marginBottom: 3, fontFamily: 'var(--theme-sans)' }}>{s}</div>
                       ))}
                     </div>
                   ))}
@@ -810,7 +1138,7 @@ function StrategyTab() {
                   <div>
                     <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', color: '#c9a84c', textTransform: 'uppercase', marginBottom: 4 }}>Suggestions</div>
                     {aiCommentary.suggestions.map((s: string, i: number) => (
-                      <div key={i} style={{ fontSize: 10, color: 'rgba(215,227,252,0.7)', lineHeight: '14px', paddingLeft: 8, borderLeft: '2px solid rgba(201,168,76,0.3)', marginBottom: 3, fontFamily: 'IBM Plex Sans, sans-serif' }}>{s}</div>
+                      <div key={i} style={{ fontSize: 10, color: 'rgba(215,227,252,0.7)', lineHeight: '14px', paddingLeft: 8, borderLeft: '2px solid rgba(201,168,76,0.3)', marginBottom: 3, fontFamily: 'var(--theme-sans)' }}>{s}</div>
                     ))}
                   </div>
                 )}
@@ -818,7 +1146,7 @@ function StrategyTab() {
             )}
           </div>
 
-          <AlgoChartPanel label="Equity Curve — Strategy vs Buy &amp; Hold (starts $100)" height={350}>
+          <AlgoChartPanel label={`Equity Curve — Strategy vs Buy & Hold (starts $${Number(initialCapital || 10000).toLocaleString()})`} height={350}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={result.equity_curve} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <defs>
@@ -849,9 +1177,9 @@ function StrategyTab() {
                   cursor={CROSSHAIR_CURSOR}
                 />
                 <Legend
-                  wrapperStyle={{ fontSize: 9, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.08em', paddingTop: 6 }}
+                  wrapperStyle={{ fontSize: 9, fontFamily: 'var(--theme-mono)', letterSpacing: '0.08em', paddingTop: 6 }}
                 />
-                <ReferenceLine y={100} stroke="rgba(255,255,255,0.12)" strokeDasharray="4 2" />
+                <ReferenceLine y={100} stroke="var(--theme-text-subtle, rgba(255,255,255,0.12))" strokeDasharray="4 2" />
                 <Area
                   type="monotone"
                   dataKey="strategy"
@@ -876,76 +1204,15 @@ function StrategyTab() {
             </ResponsiveContainer>
           </AlgoChartPanel>
 
-          <AlgoChartPanel label="Trade Signals on Price" height={260}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart
-                data={result.equity_curve}
-                margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke={cc.gridLine} />
-                <XAxis
-                  dataKey="date"
-                  tick={ALGO_TICK}
-                  tickLine={false}
-                  axisLine={false}
-                  tickFormatter={d => d.slice(0, 7)}
-                  interval="preserveStartEnd"
-                />
-                <YAxis tick={ALGO_TICK} tickLine={false} axisLine={false} width={48} tickFormatter={v => `$${v}`} />
-                <Tooltip
-                  content={<ChartTooltip formatter={(v, _n) => `$${(v as number).toFixed(2)}`} />}
-                  contentStyle={TOOLTIP_STYLE}
-                  cursor={CROSSHAIR_CURSOR}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="strategy"
-                  name="Strategy ($)"
-                  stroke={cc.muted}
-                  strokeWidth={1.5}
-                  dot={false}
-                />
-                {result.trades
-                  .filter(t => t.action === 'BUY')
-                  .map(t => (
-                    <ReferenceLine
-                      key={`buy-${t.date}`}
-                      x={t.date}
-                      stroke={cc.gain}
-                      strokeWidth={1}
-                      strokeDasharray="2 3"
-                      label={{
-                        value: '▲',
-                        position: 'insideTopLeft',
-                        fill: cc.gain,
-                        fontSize: 8,
-                      }}
-                    />
-                  ))}
-                {result.trades
-                  .filter(t => t.action === 'SELL')
-                  .map(t => (
-                    <ReferenceLine
-                      key={`sell-${t.date}`}
-                      x={t.date}
-                      stroke={cc.loss}
-                      strokeWidth={1}
-                      strokeDasharray="2 3"
-                      label={{
-                        value: '▼',
-                        position: 'insideTopRight',
-                        fill: cc.loss,
-                        fontSize: 8,
-                      }}
-                    />
-                  ))}
-              </LineChart>
-            </ResponsiveContainer>
-          </AlgoChartPanel>
+          <BacktestSignalChart
+            data={priceChartData}
+            ticker={ticker.trim().toUpperCase()}
+            trades={result.trades}
+          />
 
           <AlgoChartPanel label="Monthly Strategy Returns" height={200}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthlyReturns} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <BarChart data={monthlyReturns} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={cc.gridLine} />
                 <XAxis
                   dataKey="month"
@@ -953,6 +1220,7 @@ function StrategyTab() {
                   tickLine={false}
                   axisLine={false}
                   interval="preserveStartEnd"
+                  padding={{ left: 0, right: 0 }}
                 />
                 <YAxis
                   tick={ALGO_TICK}
@@ -960,13 +1228,17 @@ function StrategyTab() {
                   axisLine={false}
                   tickFormatter={v => `${v}%`}
                   width={40}
+                  domain={[
+                    (dataMin: number) => Math.floor(dataMin * 1.15),
+                    (dataMax: number) => Math.ceil(dataMax * 1.15),
+                  ]}
                 />
                 <Tooltip
                   content={<ChartTooltip formatter={(v, _n) => `${(v as number).toFixed(2)}%`} />}
                   contentStyle={TOOLTIP_STYLE}
                   cursor={BAR_CURSOR}
                 />
-                <ReferenceLine y={0} stroke="rgba(255,255,255,0.15)" />
+                <ReferenceLine y={0} stroke="var(--theme-secondary, var(--theme-text-faint, rgba(255,255,255,0.15)))" strokeOpacity={0.4} />
                 <Bar
                   dataKey="return"
                   name="Monthly Return"
@@ -985,12 +1257,12 @@ function StrategyTab() {
             </ResponsiveContainer>
           </AlgoChartPanel>
 
-          <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
             <div style={{
               padding: '6px 12px',
-              borderBottom: '1px solid rgba(255,255,255,0.06)',
+              borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.06))',
               fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase',
-              color: '#d7e3fc', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              color: 'var(--theme-text, #d7e3fc)', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             }}>
               <span>Trade Log</span>
               <span style={{ color: 'var(--theme-secondary, #5e768f)', fontWeight: 400 }}>
@@ -998,9 +1270,9 @@ function StrategyTab() {
               </span>
             </div>
             <div style={{ maxHeight: 200, overflowY: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--theme-mono)', fontSize: 11 }}>
                 <thead>
-                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                  <tr style={{ borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.06))' }}>
                     {['Date', 'Action', 'Price'].map(col => (
                       <th key={col} style={{
                         padding: '5px 12px', textAlign: 'left',
@@ -1018,8 +1290,8 @@ function StrategyTab() {
                     <tr
                       key={i}
                       style={{
-                        borderBottom: '1px solid rgba(255,255,255,0.04)',
-                        background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)',
+                        borderBottom: '1px solid var(--theme-hover, rgba(255,255,255,0.04))',
+                        background: i % 2 === 0 ? 'transparent' : 'var(--theme-hover, rgba(255,255,255,0.01))',
                       }}
                     >
                       <td style={{ padding: '5px 12px', color: 'var(--theme-secondary, #5e768f)' }}>
@@ -1035,14 +1307,14 @@ function StrategyTab() {
                           {trade.action}
                         </span>
                       </td>
-                      <td style={{ padding: '5px 12px', color: '#d7e3fc' }}>
+                      <td style={{ padding: '5px 12px', color: 'var(--theme-text, #d7e3fc)' }}>
                         ${trade.price.toFixed(2)}
                       </td>
                     </tr>
                   ))}
                   {result.trades.length === 0 && (
                     <tr>
-                      <td colSpan={3} style={{ padding: '16px 12px', color: 'rgba(255,255,255,0.2)', textAlign: 'center', fontSize: 10 }}>
+                      <td colSpan={3} style={{ padding: '16px 12px', color: 'var(--theme-text-dim, rgba(255,255,255,0.2))', textAlign: 'center', fontSize: 10 }}>
                         No trades generated
                       </td>
                     </tr>
@@ -1072,7 +1344,7 @@ export default function PortfolioBacktester({ initialTab = 'portfolio' }: Backte
       <div style={{ marginBottom: 0 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 12 }}>
           <h1 style={{
-            fontFamily: 'JetBrains Mono, monospace',
+            fontFamily: 'var(--theme-mono)',
             fontSize: 14, fontWeight: 700, letterSpacing: '0.18em',
             textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)', margin: 0,
           }}>
@@ -1080,7 +1352,7 @@ export default function PortfolioBacktester({ initialTab = 'portfolio' }: Backte
           </h1>
           <span style={{
             fontSize: 9, color: 'var(--theme-secondary, #5e768f)',
-            fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.12em',
+            fontFamily: 'var(--theme-mono)', letterSpacing: '0.12em',
           }}>
             Portfolio simulation &amp; strategy analysis
           </span>

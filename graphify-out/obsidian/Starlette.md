@@ -1,17 +1,17 @@
 ---
 source_file: "requirements.txt"
-type: "document"
-community: "Backend Dependencies & Config"
+type: "code"
+community: "Backend"
 location: "line 55"
 tags:
-  - graphify/document
-  - graphify/INFERRED
-  - community/Backend_Dependencies__Config
+  - graphify/code
+  - graphify/EXTRACTED
+  - community/Backend
 ---
 
 # Starlette
 
 ## Connections
-- [[FastAPI]] - `conceptually_related_to` [INFERRED]
+- [[backend_requirements_api_fastapi]] - `conceptually_related_to` [INFERRED]
 
-#graphify/document #graphify/INFERRED #community/Backend_Dependencies__Config
+#graphify/code #graphify/EXTRACTED #community/Backend

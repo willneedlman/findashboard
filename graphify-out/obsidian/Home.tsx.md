@@ -1,20 +1,20 @@
 ---
 source_file: "frontend/src/pages/Home.tsx"
 type: "code"
-community: "App Layout & Navigation"
-location: "L1"
+community: "Frontend"
+location: "None"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/App_Layout__Navigation
+  - community/Frontend
 ---
 
 # Home.tsx
 
 ## Connections
-- [[App.tsx]] - `imports_from` [EXTRACTED]
-- [[Home()]] - `contains` [EXTRACTED]
-- [[PageWrapper.tsx]] - `imports_from` [EXTRACTED]
-- [[SECTIONS]] - `contains` [EXTRACTED]
+- [[frontend_src_pages_home_tsx_home]] - `defines` [EXTRACTED]
+- [[components_pagewrapper]] - `imports` [EXTRACTED]
+- [[hooks_useismobile]] - `imports` [EXTRACTED]
+- [[contexts_portfoliocontext]] - `imports` [EXTRACTED]
 
-#graphify/code #graphify/EXTRACTED #community/App_Layout__Navigation
+#graphify/code #graphify/EXTRACTED #community/Frontend

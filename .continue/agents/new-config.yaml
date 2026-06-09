@@ -1,0 +1,10 @@
+name: Gemini Flash Config
+version: 1.0.0
+schema: v1
+
+models:
+  - name: Gemini Flash Lite
+    provider: openrouter
+    model: google/gemini-2.5-flash-lite
+    apiBase: https://openrouter.ai/api/v1
+    apiKey: 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

@@ -1,17 +1,14 @@
 ---
 source_file: "requirements.txt"
-type: "document"
-community: "Backend Dependencies & Config"
+type: "code"
+community: "Group 7"
 location: "line 1"
 tags:
-  - graphify/document
-  - graphify/INFERRED
-  - community/Backend_Dependencies__Config
+  - graphify/code
+  - graphify/EXTRACTED
+  - community/Group_7
 ---
 
 # Altair
 
-## Connections
-- [[Streamlit]] - `references` [INFERRED]
-
-#graphify/document #graphify/INFERRED #community/Backend_Dependencies__Config
+#graphify/code #graphify/EXTRACTED #community/Group_7

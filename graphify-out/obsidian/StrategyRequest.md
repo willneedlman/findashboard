@@ -1,19 +1,14 @@
 ---
-source_file: "backend/routers/options.py"
+source_file: "backend/routers/strategy.py"
 type: "code"
-community: "Options & Portfolio Routers"
-location: "L154"
+community: "Backend"
+location: "188"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/Options__Portfolio_Routers
+  - community/Backend
 ---
 
 # StrategyRequest
 
-## Connections
-- [[BaseModel]] - `inherits` [EXTRACTED]
-- [[options.py]] - `contains` [EXTRACTED]
-- [[strategyPayoff()]] - `references` [EXTRACTED]
-
-#graphify/code #graphify/EXTRACTED #community/Options__Portfolio_Routers
+#graphify/code #graphify/EXTRACTED #community/Backend

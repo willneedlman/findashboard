@@ -5,6 +5,7 @@ primary_region = "iad"
 
 [env]
   PORT = "8080"
+  SENTIMENT_HISTORY_PATH = "/data/sentiment_history.json"
 
 [http_service]
   internal_port = 8080
@@ -22,3 +23,7 @@ primary_region = "iad"
   memory = "512mb"
   cpu_kind = "shared"
   cpus = 1
+
+[[mounts]]
+  source      = "ft_data"
+  destination = "/data"

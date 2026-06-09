@@ -1,15 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Home, LayoutGrid, Briefcase,
-  TrendingUp, LineChart, Landmark, Bitcoin,
-  BarChart2, Dices, GitBranch, Activity, Building2, Calculator,
+  TrendingUp, LineChart, Bitcoin,
+  BarChart2, Dices, GitBranch, Building2, Calculator,
   Network, Shuffle, Zap, ChevronLeft, ChevronRight, X, Menu, Settings,
-  Filter, FileText, ShieldAlert, FlaskConical, PieChart, Scale, Globe,
-  BookOpen, Terminal, Waves, Brain, Sigma,
+  Filter, FileText, ShieldAlert, PieChart,
+  BookOpen, Terminal, Brain, Bell, Star,
 } from 'lucide-react'
 import Footer from './Footer'
+import AlertToastQueue from './AlertToastQueue'
+import { useAlertSocket, type AlertPayload } from '../hooks/useAlertSocket'
 import clsx from 'clsx'
 import useIsMobile from '../hooks/useIsMobile'
 import { useTheme } from '../contexts/ThemeContext'
@@ -24,26 +26,20 @@ const NAV_SECTIONS = [
     items: [
       { to: '/market',         icon: TrendingUp,    label: 'Market Data' },
       { to: '/sector-rotation',icon: PieChart,       label: 'Sector Rotation' },
-      { to: '/credit-spreads', icon: Activity,       label: 'Credit Spreads'  },
-      { to: '/corporate',          icon: Building2,   label: 'Corporate Hub' },
-      { to: '/relative-valuation', icon: Scale,       label: 'Peer Valuation' },
-      { to: '/supply-chain',       icon: Globe,       label: 'Company Profile' },
-      { to: '/correlation',        icon: Network,     label: 'Correlation Matrix' },
-      { to: '/screener',           icon: Filter,      label: 'Stock Screener' },
-      { to: '/earnings',           icon: FileText,    label: 'Earnings AI' },
+      { to: '/research-hub',   icon: Building2,      label: 'Research Hub' },
+      { to: '/correlation',    icon: Network,        label: 'Correlation Matrix' },
+      { to: '/screener',       icon: Filter,         label: 'Stock Screener' },
+      { to: '/earnings',       icon: FileText,       label: 'Earnings AI' },
+      { to: '/sentiment',      icon: Brain,          label: 'Sentiment Tracker' },
     ],
   },
   {
     label: 'Derivatives & Rates',
     items: [
-      { to: '/options',     icon: LineChart,   label: 'Options Pricer' },
-      { to: '/chain',       icon: BarChart2,   label: 'Chain Scanner' },
-      { to: '/probability', icon: Activity,    label: 'Implied Probability' },
-      { to: '/strategy',    icon: Shuffle,     label: 'Strategy Builder' },
-      { to: '/greeks-aggregator', icon: Sigma,   label: 'Greeks Aggregator' },
-      { to: '/gex',            icon: Zap,       label: 'Dealer GEX' },
-      { to: '/bond',           icon: Landmark,  label: 'Bond Analytics' },
-      { to: '/fed',            icon: GitBranch, label: 'Macro Rate Engine' },
+      { to: '/options-hub',  icon: LineChart,   label: 'Options Hub' },
+      { to: '/strategy',     icon: Shuffle,     label: 'Strategy Builder' },
+      { to: '/gex',          icon: Zap,         label: 'Dealer GEX' },
+      { to: '/macro-hub',    icon: GitBranch,   label: 'Macro Hub' },
     ],
   },
   {
@@ -58,10 +54,9 @@ const NAV_SECTIONS = [
   {
     label: 'Trading & Simulation',
     items: [
-      { to: '/gamma-scalping', icon: Waves,     label: 'Gamma Scalping Sim' },
-      { to: '/trade-journal',  icon: BookOpen,  label: 'Trade Journal' },
       { to: '/paper-trading',  icon: Terminal,  label: 'Paper Trading' },
-      { to: '/sentiment',      icon: Brain,     label: 'Sentiment Tracker' },
+      { to: '/trade-journal',  icon: BookOpen,  label: 'Trade Journal' },
+      { to: '/alerts',         icon: Bell,      label: 'Price Alerts' },
     ],
   },
 ]
@@ -75,6 +70,32 @@ export default function Layout({ children }: LayoutProps) {
   const [collapsed, setCollapsed] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const isAdmin = !!user && ADMIN_USERS.includes(user.username?.toLowerCase())
+
+  const [favorites, setFavorites] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('ft_nav_favorites') ?? '[]') } catch { return [] }
+  })
+  const toggleFav = (path: string) => {
+    setFavorites(prev => {
+      const next = prev.includes(path) ? prev.filter(p => p !== path) : [...prev, path]
+      localStorage.setItem('ft_nav_favorites', JSON.stringify(next))
+      return next
+    })
+  }
+  const allNavItems = NAV_SECTIONS.flatMap(s => s.items)
+  const favItems = favorites.map(p => allNavItems.find(i => i.to === p)).filter((x): x is typeof allNavItems[number] => x != null)
+
+  const [pendingAlerts, setPendingAlerts] = useState<AlertPayload[]>([])
+  const onAlert = useCallback((a: AlertPayload) => {
+    setPendingAlerts([a])
+    // Browser notification when tab is hidden
+    if (document.hidden && Notification.permission === 'granted') {
+      new Notification(`Alert: ${a.ticker}`, {
+        body: `${a.condition.replace(/_/g, ' ')} ${a.threshold}${a.current_price > 0 ? ` → $${a.current_price.toFixed(2)}` : ''}`,
+        icon: '/favicon.svg',
+      })
+    }
+  }, [])
+  useAlertSocket(user?.id ?? null, onAlert)
 
   // Close drawer on route change
   useEffect(() => { setDrawerOpen(false) }, [location.pathname])
@@ -96,12 +117,12 @@ export default function Layout({ children }: LayoutProps) {
         }}>
           <Link to="/" style={{ textDecoration: 'none' }}>
             <div style={{ fontFamily: 'Cinzel, Georgia, serif', color: 'var(--theme-primary, #c9a84c)', fontSize: 15, fontWeight: 700, letterSpacing: '0.08em' }}>
-              FINANCE <span style={{ color: 'var(--theme-secondary, #5e768f)', fontSize: 10, letterSpacing: '0.2em', fontFamily: 'IBM Plex Sans, sans-serif', fontWeight: 600 }}>TERMINAL</span>
+              FINANCE <span style={{ color: 'var(--theme-secondary, #5e768f)', fontSize: 10, letterSpacing: '0.2em', fontFamily: 'var(--theme-sans)', fontWeight: 600 }}>TERMINAL</span>
             </div>
           </Link>
           <button
             onClick={() => setDrawerOpen(true)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-primary, #c9a84c)', padding: 4 }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-primary, #c9a84c)', padding: 0, minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           >
             <Menu size={22} />
           </button>
@@ -157,7 +178,7 @@ export default function Layout({ children }: LayoutProps) {
                 <div style={{ fontFamily: 'Cinzel, Georgia, serif', color: 'var(--theme-primary, #c9a84c)', fontSize: 14, fontWeight: 700, letterSpacing: '0.08em' }}>
                   MODULES
                 </div>
-                <button onClick={() => setDrawerOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-secondary, #99907e)' }}>
+                <button onClick={() => setDrawerOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-secondary, #99907e)', minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <X size={18} />
                 </button>
               </div>
@@ -169,7 +190,7 @@ export default function Layout({ children }: LayoutProps) {
                 background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 5%, var(--theme-surface, #0d1826))',
                 border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)',
               }}>
-                <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)', marginBottom: 2, paddingLeft: 14 }}>
+                <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)', marginBottom: 2, paddingLeft: 14, fontFamily: 'var(--theme-sans)' }}>
                   Workspaces
                 </p>
                 <MobileNavLink to="/" icon={Home} label="Home" active={location.pathname === '/'} isBaseline />
@@ -180,28 +201,14 @@ export default function Layout({ children }: LayoutProps) {
                 {isAdmin && (
                   <>
                     <Link
-                      to="/stress-test"
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 10,
-                        padding: '9px 10px', marginBottom: 2, textDecoration: 'none',
-                        background: location.pathname === '/stress-test' ? 'rgba(239,68,68,0.1)' : 'transparent',
-                        borderLeft: location.pathname === '/stress-test' ? '2px solid #ef4444' : '2px solid transparent',
-                        color: location.pathname === '/stress-test' ? '#ef4444' : 'rgba(239,68,68,0.55)',
-                        fontSize: 13, fontFamily: 'Lora, Georgia, serif', transition: 'all 0.15s',
-                      }}
-                    >
-                      <FlaskConical size={15} style={{ flexShrink: 0 }} />
-                      <span>Stress Tester</span>
-                    </Link>
-                    <Link
                       to="/admin"
                       style={{
                         display: 'flex', alignItems: 'center', gap: 10,
-                        padding: '9px 10px', marginBottom: 2, textDecoration: 'none',
+                        padding: '11px 10px', minHeight: 44, marginBottom: 2, textDecoration: 'none',
                         background: location.pathname === '/admin' ? 'rgba(239,68,68,0.1)' : 'transparent',
                         borderLeft: location.pathname === '/admin' ? '2px solid #ef4444' : '2px solid transparent',
                         color: location.pathname === '/admin' ? '#ef4444' : 'rgba(239,68,68,0.55)',
-                        fontSize: 13, fontFamily: 'Lora, Georgia, serif', transition: 'all 0.15s',
+                        fontSize: 13, fontFamily: 'var(--theme-sans)', transition: 'all 0.15s',
                       }}
                     >
                       <ShieldAlert size={15} style={{ flexShrink: 0 }} />
@@ -214,9 +221,20 @@ export default function Layout({ children }: LayoutProps) {
 
               {/* Sections */}
               <nav style={{ flex: 1, padding: '4px 12px 24px' }}>
+                {favItems.length > 0 && (
+                  <div>
+                    <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 55%, transparent)', marginTop: 18, marginBottom: 4, paddingLeft: 8, display: 'flex', alignItems: 'center', gap: 5, fontFamily: 'var(--theme-sans)' }}>
+                      <Star size={9} fill="currentColor" />
+                      Favorites
+                    </p>
+                    {favItems.map(item => (
+                      <MobileNavLink key={item.to} to={item.to} icon={item.icon} label={item.label} active={location.pathname === item.to} isFav onFavToggle={toggleFav} />
+                    ))}
+                  </div>
+                )}
                 {NAV_SECTIONS.map(section => (
                   <div key={section.label}>
-                    <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.20)', marginTop: 18, marginBottom: 4, paddingLeft: 8 }}>
+                    <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.20)', marginTop: 18, marginBottom: 4, paddingLeft: 8, fontFamily: 'var(--theme-sans)' }}>
                       {section.label}
                     </p>
                     {section.items.map(item => (
@@ -226,6 +244,8 @@ export default function Layout({ children }: LayoutProps) {
                         icon={item.icon}
                         label={item.label}
                         active={location.pathname === item.to}
+                        isFav={favorites.includes(item.to)}
+                        onFavToggle={toggleFav}
                       />
                     ))}
                   </div>
@@ -241,6 +261,7 @@ export default function Layout({ children }: LayoutProps) {
   // ── Desktop layout ──
   return (
     <div className="flex h-screen overflow-hidden" id="ft-root">
+      <AlertToastQueue alerts={pendingAlerts} />
       <motion.aside
         animate={{ width: collapsed ? 56 : 220 }}
         transition={{ duration: 0.25, ease: 'easeInOut' }}
@@ -261,7 +282,7 @@ export default function Layout({ children }: LayoutProps) {
               <div className="font-display text-lg font-bold" style={{ color: 'var(--theme-primary, #c9a84c)' }}>F</div>
             </Link>
           )}
-          <button onClick={() => setCollapsed(c => !c)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-secondary, #5e768f)', padding: 4, borderRadius: 4, transition: 'color 0.15s' }} onMouseEnter={e => (e.currentTarget.style.color = 'var(--theme-primary, #c9a84c)')} onMouseLeave={e => (e.currentTarget.style.color = 'var(--theme-secondary, #5e768f)')}>
+          <button onClick={() => setCollapsed(c => !c)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-secondary, #5e768f)', padding: 0, minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, transition: 'color 0.15s' }} onMouseEnter={e => (e.currentTarget.style.color = 'var(--theme-primary, #c9a84c)')} onMouseLeave={e => (e.currentTarget.style.color = 'var(--theme-secondary, #5e768f)')}>
 
             {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
           </button>
@@ -274,7 +295,7 @@ export default function Layout({ children }: LayoutProps) {
           border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)',
         }}>
           {!collapsed && (
-            <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)', marginBottom: 6, paddingLeft: 10 }}>
+            <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)', marginBottom: 6, paddingLeft: 10, fontFamily: 'var(--theme-sans)' }}>
               Workspaces
             </p>
           )}
@@ -284,16 +305,30 @@ export default function Layout({ children }: LayoutProps) {
         </div>
 
         <nav className="flex-1 overflow-y-auto px-2 pb-4 mt-1">
+          {favItems.length > 0 && (
+            <div>
+              {!collapsed && (
+                <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 55%, transparent)', marginTop: 16, marginBottom: 6, paddingLeft: 8, display: 'flex', alignItems: 'center', gap: 5, fontFamily: 'var(--theme-sans)' }}>
+                  <Star size={9} fill="currentColor" />
+                  Favorites
+                </p>
+              )}
+              {collapsed && <div className="border-t border-white/5 my-2" />}
+              {favItems.map(item => (
+                <NavLink key={item.to} to={item.to} icon={item.icon} label={item.label} collapsed={collapsed} active={location.pathname === item.to} isFav onFavToggle={toggleFav} />
+              ))}
+            </div>
+          )}
           {NAV_SECTIONS.map(section => (
             <div key={section.label}>
               {!collapsed && (
-                <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.22)', marginTop: 20, marginBottom: 6, paddingLeft: 8 }}>
+                <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--theme-text-faint, var(--theme-text-faint, rgba(255,255,255,0.22)))', marginTop: 20, marginBottom: 6, paddingLeft: 8, fontFamily: 'var(--theme-sans)' }}>
                   {section.label}
                 </p>
               )}
               {collapsed && <div className="border-t border-white/5 my-2" />}
               {section.items.map(item => (
-                <NavLink key={item.to} to={item.to} icon={item.icon} label={item.label} collapsed={collapsed} active={location.pathname === item.to} />
+                <NavLink key={item.to} to={item.to} icon={item.icon} label={item.label} collapsed={collapsed} active={location.pathname === item.to} isFav={favorites.includes(item.to)} onFavToggle={toggleFav} />
               ))}
             </div>
           ))}
@@ -301,28 +336,6 @@ export default function Layout({ children }: LayoutProps) {
 
         {/* Settings / user strip at bottom */}
         <div className="px-2 pb-3 pt-2 border-t border-white/5 flex-shrink-0">
-          {isAdmin && (
-            <Link
-              to="/stress-test"
-              title={collapsed ? 'Stress Tester' : undefined}
-              className="ft-nav-link flex items-center gap-2.5 py-1.5 transition-all duration-150 my-0.5"
-              style={{
-                color: location.pathname === '/stress-test' ? '#ef4444' : 'rgba(239,68,68,0.55)',
-                background: location.pathname === '/stress-test' ? 'rgba(239,68,68,0.1)' : 'transparent',
-                borderLeft: location.pathname === '/stress-test' ? '2px solid #ef4444' : '2px solid transparent',
-                paddingLeft: collapsed ? undefined : location.pathname === '/stress-test' ? 10 : 12,
-                justifyContent: collapsed ? 'center' : undefined,
-                fontSize: '0.82rem', textDecoration: 'none',
-              }}
-            >
-              <FlaskConical size={14} style={{ flexShrink: 0 }} />
-              {!collapsed && (
-                <span style={{ fontFamily: 'Lora, Georgia, serif', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  Stress Tester
-                </span>
-              )}
-            </Link>
-          )}
           {isAdmin && (
             <Link
               to="/admin"
@@ -340,7 +353,7 @@ export default function Layout({ children }: LayoutProps) {
             >
               <ShieldAlert size={14} style={{ flexShrink: 0 }} />
               {!collapsed && (
-                <span style={{ fontFamily: 'Lora, Georgia, serif', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span style={{ fontFamily: 'var(--theme-sans)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   Admin Tester
                 </span>
               )}
@@ -362,7 +375,7 @@ export default function Layout({ children }: LayoutProps) {
           >
             <Settings size={14} style={{ flexShrink: 0 }} />
             {!collapsed && (
-              <span style={{ fontFamily: 'Lora, Georgia, serif', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span style={{ fontFamily: 'var(--theme-sans)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {user ? user.displayName : 'Settings'}
               </span>
             )}
@@ -406,7 +419,7 @@ function WorkspaceNavLink({ to, icon: Icon, label, collapsed, active }: { to: st
         borderLeft: active ? '2px solid var(--theme-primary, #c9a84c)' : '2px solid transparent',
         paddingLeft: active && !collapsed ? 8 : undefined,
         fontSize: '0.82rem',
-        fontFamily: 'Lora, Georgia, serif',
+        fontFamily: 'var(--theme-sans)',
         fontWeight: active ? 600 : undefined,
         transition: 'color 0.15s, background 0.15s',
       }}
@@ -418,62 +431,100 @@ function WorkspaceNavLink({ to, icon: Icon, label, collapsed, active }: { to: st
 }
 
 // ── Desktop nav link ──
-interface NavLinkProps { to: string; icon: React.ElementType; label: string; collapsed: boolean; active: boolean; isBaseline?: boolean }
+interface NavLinkProps { to: string; icon: React.ElementType; label: string; collapsed: boolean; active: boolean; isBaseline?: boolean; isFav?: boolean; onFavToggle?: (path: string) => void }
 
-function NavLink({ to, icon: Icon, label, collapsed, active, isBaseline }: NavLinkProps) {
+function NavLink({ to, icon: Icon, label, collapsed, active, isBaseline, isFav, onFavToggle }: NavLinkProps) {
+  const [hovered, setHovered] = useState(false)
   return (
-    <Link
-      to={to}
-      title={collapsed ? label : undefined}
-      className={clsx(
-        'flex items-center gap-2.5 py-1.5 text-[0.82rem] transition-all duration-150 my-0.5',
-        collapsed ? 'justify-center px-2' : 'pl-3 pr-2',
-      )}
-      style={{
-        color: active
-          ? (isBaseline ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-primary, #c9a84c)')
-          : 'var(--theme-secondary, #5e768f)',
-        background: active
-          ? (isBaseline ? 'color-mix(in srgb, var(--theme-bg, #0a1628) 80%, var(--theme-primary, #c9a84c) 5%)' : 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)')
-          : 'transparent',
-        borderLeft: active
-          ? (isBaseline ? '2px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 15%, transparent)' : '2px solid var(--theme-primary, #c9a84c)')
-          : '2px solid transparent',
-        paddingLeft: active && !collapsed ? 10 : undefined,
-        fontWeight: active ? 600 : undefined,
-        textDecoration: 'none',
-      }}
+    <div
+      style={{ position: 'relative', display: 'flex', alignItems: 'center' }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
-      <Icon size={14} style={{ flexShrink: 0 }} />
-      {!collapsed && <span style={{ fontFamily: 'Lora, Georgia, serif', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>}
-    </Link>
+      <Link
+        to={to}
+        title={collapsed ? label : undefined}
+        className={clsx(
+          'flex items-center gap-2.5 py-1.5 text-[0.82rem] transition-all duration-150 my-0.5',
+          collapsed ? 'justify-center px-2' : 'pl-3 pr-2',
+        )}
+        style={{
+          flex: 1, minWidth: 0,
+          color: active
+            ? (isBaseline ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-primary, #c9a84c)')
+            : 'var(--theme-secondary, #5e768f)',
+          background: active
+            ? (isBaseline ? 'color-mix(in srgb, var(--theme-bg, #0a1628) 80%, var(--theme-primary, #c9a84c) 5%)' : 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)')
+            : 'transparent',
+          borderLeft: active
+            ? (isBaseline ? '2px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 15%, transparent)' : '2px solid var(--theme-primary, #c9a84c)')
+            : '2px solid transparent',
+          paddingLeft: active && !collapsed ? 10 : undefined,
+          fontWeight: active ? 600 : undefined,
+          textDecoration: 'none',
+        }}
+      >
+        <Icon size={14} style={{ flexShrink: 0 }} />
+        {!collapsed && <span style={{ fontFamily: 'var(--theme-sans)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{label}</span>}
+      </Link>
+      {!collapsed && onFavToggle && (hovered || isFav) && (
+        <button
+          onClick={e => { e.preventDefault(); onFavToggle(to) }}
+          title={isFav ? 'Remove from favorites' : 'Add to favorites'}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer', padding: '0 6px',
+            color: isFav ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-text-faint, var(--theme-text-faint, rgba(255,255,255,0.22)))',
+            flexShrink: 0, display: 'flex', alignItems: 'center',
+            transition: 'color 0.15s',
+          }}
+          onMouseEnter={e => { if (!isFav) (e.currentTarget as HTMLElement).style.color = 'rgba(201,168,76,0.6)' }}
+          onMouseLeave={e => { if (!isFav) (e.currentTarget as HTMLElement).style.color = 'var(--theme-text-faint, var(--theme-text-faint, rgba(255,255,255,0.22)))' }}
+        >
+          <Star size={10} fill={isFav ? 'currentColor' : 'none'} />
+        </button>
+      )}
+    </div>
   )
 }
 
 // ── Mobile nav link ──
-function MobileNavLink({ to, icon: Icon, label, active, isBaseline }: { to: string; icon: React.ElementType; label: string; active: boolean; isBaseline?: boolean }) {
+function MobileNavLink({ to, icon: Icon, label, active, isBaseline, isFav, onFavToggle }: { to: string; icon: React.ElementType; label: string; active: boolean; isBaseline?: boolean; isFav?: boolean; onFavToggle?: (path: string) => void }) {
   return (
-    <Link
-      to={to}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 10,
-        padding: '9px 10px', marginBottom: 2, textDecoration: 'none',
-        background: active
-          ? (isBaseline ? 'color-mix(in srgb, var(--theme-bg, #0a1628) 80%, var(--theme-primary, #c9a84c) 5%)' : 'rgba(201,168,76,0.08)')
-          : 'transparent',
-        borderLeft: active
-          ? (isBaseline ? '2px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 15%, transparent)' : '2px solid #c9a84c')
-          : '2px solid transparent',
-        color: active
-          ? (isBaseline ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-primary, #c9a84c)')
-          : 'var(--theme-secondary, #5e768f)',
-        fontSize: 13, fontFamily: 'Lora, Georgia, serif',
-        transition: 'all 0.15s',
-      }}
-    >
-      <Icon size={15} style={{ flexShrink: 0 }} />
-      <span>{label}</span>
-    </Link>
+    <div style={{ display: 'flex', alignItems: 'center' }}>
+      <Link
+        to={to}
+        style={{
+          flex: 1, display: 'flex', alignItems: 'center', gap: 10,
+          padding: '11px 10px', minHeight: 44, marginBottom: 2, textDecoration: 'none',
+          background: active
+            ? (isBaseline ? 'color-mix(in srgb, var(--theme-bg, #0a1628) 80%, var(--theme-primary, #c9a84c) 5%)' : 'rgba(201,168,76,0.08)')
+            : 'transparent',
+          borderLeft: active
+            ? (isBaseline ? '2px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 15%, transparent)' : '2px solid #c9a84c')
+            : '2px solid transparent',
+          color: active
+            ? (isBaseline ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-primary, #c9a84c)')
+            : 'var(--theme-secondary, #5e768f)',
+          fontSize: 13, fontFamily: 'var(--theme-sans)',
+          transition: 'all 0.15s',
+        }}
+      >
+        <Icon size={15} style={{ flexShrink: 0 }} />
+        <span style={{ flex: 1 }}>{label}</span>
+      </Link>
+      {onFavToggle && (
+        <button
+          onClick={() => onFavToggle(to)}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            padding: '11px 10px', color: isFav ? 'var(--theme-primary, #c9a84c)' : 'rgba(255,255,255,0.2)',
+            flexShrink: 0, display: 'flex', alignItems: 'center',
+          }}
+        >
+          <Star size={12} fill={isFav ? 'currentColor' : 'none'} />
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -500,7 +551,7 @@ function DashboardNavLink({ to, collapsed, active, isBaseline }: { to: string; c
           ? (isBaseline ? BASELINE_ACCENT_COLOR : 'var(--theme-primary, #c9a84c)')
           : 'color-mix(in srgb, var(--theme-primary, #c9a84c) 60%, transparent)',
         fontSize: '0.82rem',
-        fontFamily: 'Lora, Georgia, serif',
+        fontFamily: 'var(--theme-sans)',
         transition: 'all 0.15s',
       }}
     >

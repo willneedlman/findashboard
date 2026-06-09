@@ -6,6 +6,8 @@ export const STRATEGIES = [
   "SMA Trend Following (50/200)",
   "RSI Mean Reversion (14)",
   "6-Month Price Momentum",
+  "Bollinger Breakout (20,2)",
+  "MACD Crossover (12,26,9)",
   "Value — Trailing P/E",
   "Earnings Growth Momentum",
 ]
@@ -16,6 +18,8 @@ export interface StrategyParams {
   lookback_days?: number; threshold_pct?: number; adj_scale?: number; adj_cap?: number
   pe_deep_value?: number; pe_fair_value?: number; pe_in_threshold?: number; pe_expensive?: number
   exit_threshold_pct?: number
+  bb_period?: number; bb_std?: number
+  macd_fast?: number; macd_slow?: number; macd_signal?: number
 }
 
 const STRATEGY_DESC: Record<string, string> = {
@@ -23,6 +27,8 @@ const STRATEGY_DESC: Record<string, string> = {
   "SMA Trend Following (50/200)":  "Buy on Golden Cross (50d > 200d), exit on Death Cross. Boosts drift in uptrend, penalises in downtrend.",
   "RSI Mean Reversion (14)":       "Mean reversion — boost drift when RSI is oversold (<30), penalise when overbought (>70).",
   "6-Month Price Momentum":        "Momentum — adjust drift proportionally to 6-month price return. Ride winners, step out of losers.",
+  "Bollinger Breakout (20,2)":     "Enter long on upper-band breakout (price > BB+2σ). Exit when price falls below lower band. Drift boost while in trade.",
+  "MACD Crossover (12,26,9)":      "MACD crossover — buy when MACD line crosses above signal line, sell on cross below. Trend + momentum.",
   "Value — Trailing P/E":          "Value — full drift when P/E is cheap, step to cash and penalise when P/E is expensive.",
   "Earnings Growth Momentum":      "Earnings — stay invested when EPS grows YoY, exit and penalise when earnings decline.",
 }
@@ -31,6 +37,8 @@ const DEFAULT_PARAMS: Record<string, StrategyParams> = {
   "SMA Trend Following (50/200)": { sma_fast: 50, sma_slow: 200, bull_drift_adj: 6, bear_drift_adj: -6 },
   "RSI Mean Reversion (14)":       { rsi_period: 14, overbought: 70, oversold: 30, ob_drift_adj: -7, os_drift_adj: 7 },
   "6-Month Price Momentum":         { lookback_days: 126, threshold_pct: 0, adj_scale: 0.25, adj_cap: 8 },
+  "Bollinger Breakout (20,2)":      { bb_period: 20, bb_std: 2.0, bull_drift_adj: 5, bear_drift_adj: -3 },
+  "MACD Crossover (12,26,9)":       { macd_fast: 12, macd_slow: 26, macd_signal: 9, bull_drift_adj: 5, bear_drift_adj: -4 },
   "Value — Trailing P/E":           { pe_deep_value: 12, pe_fair_value: 20, pe_in_threshold: 35, pe_expensive: 50, bull_drift_adj: 6, bear_drift_adj: -6 },
   "Earnings Growth Momentum":       { exit_threshold_pct: -5, adj_scale: 60, adj_cap: 10 },
 }
@@ -85,8 +93,8 @@ function Rule({ tag, children }: { tag: string; children: React.ReactNode }) {
 // ── Compact (sidebar) sub-components ────────────────────────────────────────
 
 const C_INPUT: React.CSSProperties = {
-  background: 'var(--theme-bg, #0a1628)', border: '1px solid rgba(255,255,255,0.10)', color: '#d7e3fc',
-  fontFamily: 'JetBrains Mono, monospace', fontSize: 11, padding: '4px 6px',
+  background: 'var(--theme-bg, #0a1628)', border: '1px solid var(--theme-border, rgba(255,255,255,0.10))', color: 'var(--theme-text, #d7e3fc)',
+  fontFamily: 'var(--theme-mono)', fontSize: 11, padding: '4px 6px',
   width: '100%', outline: 'none', boxSizing: 'border-box',
 }
 const C_LABEL: React.CSSProperties = {
@@ -100,7 +108,7 @@ function CNum({ label, value, step, min, max, help, onChange }: {
 }) {
   const [showTip, setShowTip] = useState(false)
   const focus = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')
-  const blur  = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = 'rgba(255,255,255,0.10)')
+  const blur  = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = 'var(--theme-border, rgba(255,255,255,0.10))')
   return (
     <div style={{ position: 'relative' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
@@ -109,7 +117,7 @@ function CNum({ label, value, step, min, max, help, onChange }: {
         </span>
         {help && (
           <span
-            style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', cursor: 'help', lineHeight: 1, flexShrink: 0 }}
+            style={{ fontSize: 10, color: 'var(--theme-text-faint, var(--theme-text-faint, rgba(255,255,255,0.22)))', cursor: 'help', lineHeight: 1, flexShrink: 0 }}
             onMouseEnter={() => setShowTip(true)}
             onMouseLeave={() => setShowTip(false)}
           >ⓘ</span>
@@ -118,8 +126,8 @@ function CNum({ label, value, step, min, max, help, onChange }: {
       {showTip && help && (
         <div style={{
           position: 'absolute', bottom: '100%', left: 0, marginBottom: 4, zIndex: 50,
-          background: 'var(--theme-bg, #0a1628)', border: '1px solid rgba(255,255,255,0.10)', padding: '6px 8px',
-          width: 190, fontSize: 10, color: '#d7e3fc', lineHeight: '14px', pointerEvents: 'none',
+          background: 'var(--theme-bg, #0a1628)', border: '1px solid var(--theme-border, rgba(255,255,255,0.10))', padding: '6px 8px',
+          width: 190, fontSize: 10, color: 'var(--theme-text, #d7e3fc)', lineHeight: '14px', pointerEvents: 'none',
         }}>
           {help}
         </div>
@@ -132,7 +140,7 @@ function CNum({ label, value, step, min, max, help, onChange }: {
 
 function CRule({ tag, children }: { tag: string; children: React.ReactNode }) {
   const color: Record<string, string> = {
-    BUY: '#4caf7d', HOLD: 'var(--theme-primary, #c9a84c)', SELL: '#e05c6e', NOTE: 'rgba(255,255,255,0.18)', WEAK: '#d97736',
+    BUY: '#4caf7d', HOLD: 'var(--theme-primary, #c9a84c)', SELL: '#e05c6e', NOTE: 'var(--theme-text-faint, rgba(255,255,255,0.18))', WEAK: '#d97736',
   }
   return (
     <div style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
@@ -193,7 +201,7 @@ export default function StrategySelector({ value, params, onChange, compact }: P
           {dropdownOpen && (
             <div style={{
               position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
-              background: 'var(--theme-bg, #0a1628)', border: '1px solid rgba(255,255,255,0.10)', marginTop: 1,
+              background: 'var(--theme-bg, #0a1628)', border: '1px solid var(--theme-border, rgba(255,255,255,0.10))', marginTop: 1,
               boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
             }}>
               {STRATEGIES.map(s => (
@@ -203,16 +211,16 @@ export default function StrategySelector({ value, params, onChange, compact }: P
                   style={{
                     display: 'block', width: '100%', textAlign: 'left',
                     background: s === value ? 'var(--theme-surface, #142032)' : 'none',
-                    border: 'none', borderBottom: '1px solid rgba(255,255,255,0.06)',
+                    border: 'none', borderBottom: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))',
                     padding: '7px 9px', cursor: 'pointer',
                   }}
                   onMouseEnter={e => { if (s !== value) (e.currentTarget as HTMLElement).style.background = '#0f1e30' }}
                   onMouseLeave={e => { if (s !== value) (e.currentTarget as HTMLElement).style.background = 'none' }}
                 >
-                  <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: s === value ? 'var(--theme-primary, #c9a84c)' : '#d7e3fc', marginBottom: 2 }}>
+                  <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: s === value ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-text, #d7e3fc)', marginBottom: 2 }}>
                     {s}
                   </div>
-                  <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.22)', lineHeight: '12px', letterSpacing: '0.03em' }}>
+                  <div style={{ fontSize: 9, color: 'var(--theme-text-faint, var(--theme-text-faint, rgba(255,255,255,0.22)))', lineHeight: '12px', letterSpacing: '0.03em' }}>
                     {STRATEGY_DESC[s]}
                   </div>
                 </button>
@@ -221,7 +229,7 @@ export default function StrategySelector({ value, params, onChange, compact }: P
           )}
         </div>
 
-        <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', marginTop: 5, lineHeight: '13px' }}>
+        <div style={{ fontSize: 10, color: 'var(--theme-text-faint, var(--theme-text-faint, rgba(255,255,255,0.22)))', marginTop: 5, lineHeight: '13px' }}>
           {STRATEGY_DESC[value]}
         </div>
 
@@ -240,7 +248,7 @@ export default function StrategySelector({ value, params, onChange, compact }: P
             </button>
 
             {open && (
-              <div style={{ marginTop: 8, borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ marginTop: 8, borderTop: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.08)))', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
 
                 {value === "SMA Trend Following (50/200)" && (<>
                   <CNum label="Fast SMA (days)" value={p.sma_fast!} step={5} min={5} max={100} onChange={v => setParam('sma_fast', v)}
@@ -251,7 +259,7 @@ export default function StrategySelector({ value, params, onChange, compact }: P
                     help="Extra annualised drift added when the Golden Cross is active (fast SMA above slow SMA)." />
                   <CNum label="Bear drift adj (%)" value={p.bear_drift_adj!} step={0.5} max={0} min={-15} onChange={v => setParam('bear_drift_adj', v)}
                     help="Drift penalty during a Death Cross (fast SMA below slow SMA). Keep this negative." />
-                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 6 }}>
+                  <div style={{ borderTop: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))', paddingTop: 6 }}>
                     <CRule tag="BUY">Price above both SMAs — drift +{p.bull_drift_adj}%/yr.</CRule>
                     <CRule tag="SELL">Death Cross — drift {p.bear_drift_adj}%/yr.</CRule>
                     <CRule tag="NOTE">Weak signals get a partial adjustment.</CRule>
@@ -269,7 +277,7 @@ export default function StrategySelector({ value, params, onChange, compact }: P
                     help="Drift penalty when RSI is overbought. Keep negative — a high RSI suggests mean reversion risk." />
                   <CNum label="Oversold drift adj (%)" value={p.os_drift_adj!} step={0.5} min={0} max={15} onChange={v => setParam('os_drift_adj', v)}
                     help="Drift boost when RSI is oversold. Keep positive — a low RSI suggests a likely recovery." />
-                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 6 }}>
+                  <div style={{ borderTop: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))', paddingTop: 6 }}>
                     <CRule tag="BUY">RSI &lt; {p.oversold} → +{p.os_drift_adj}% drift.</CRule>
                     <CRule tag="SELL">RSI &gt; {p.overbought} → {p.ob_drift_adj}% drift.</CRule>
                     <CRule tag="HOLD">RSI {p.oversold}–{p.overbought} — no adjustment.</CRule>
@@ -285,9 +293,41 @@ export default function StrategySelector({ value, params, onChange, compact }: P
                     help="Scales how strongly momentum converts into a drift adjustment. 0.25 means a 20% return → +5% drift." />
                   <CNum label="Max drift adj (%)" value={p.adj_cap!} step={0.5} min={1} max={20} onChange={v => setParam('adj_cap', v)}
                     help="Hard cap on the drift adjustment in either direction. Prevents extreme momentum from dominating." />
-                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 6 }}>
+                  <div style={{ borderTop: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))', paddingTop: 6 }}>
                     <CRule tag="BUY">{p.lookback_days}d return &gt; {p.threshold_pct}% → up to +{p.adj_cap}%.</CRule>
                     <CRule tag="SELL">Return &lt; {p.threshold_pct}% → up to -{p.adj_cap}%.</CRule>
+                  </div>
+                </>)}
+
+                {value === "Bollinger Breakout (20,2)" && (<>
+                  <CNum label="BB Period (days)" value={p.bb_period!} step={1} min={5} max={50} onChange={v => setParam('bb_period', v)}
+                    help="Lookback for BB midline (SMA) and standard deviation. 20 is standard." />
+                  <CNum label="Std Dev multiplier" value={p.bb_std!} step={0.1} min={1} max={4} onChange={v => setParam('bb_std', v)}
+                    help="Width of the bands. 2.0 means ±2 standard deviations. Higher = fewer but stronger signals." />
+                  <CNum label="Bull drift adj (%)" value={p.bull_drift_adj!} step={0.5} min={0} max={15} onChange={v => setParam('bull_drift_adj', v)}
+                    help="Drift boost while in an active breakout trade." />
+                  <CNum label="Bear drift adj (%)" value={p.bear_drift_adj!} step={0.5} max={0} min={-10} onChange={v => setParam('bear_drift_adj', v)}
+                    help="Drift penalty when not in a breakout (in cash)." />
+                  <div style={{ borderTop: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))', paddingTop: 6 }}>
+                    <CRule tag="BUY">Price closes above upper band → enter long, drift +{p.bull_drift_adj}%.</CRule>
+                    <CRule tag="SELL">Price falls below lower band → exit to cash, drift {p.bear_drift_adj}%.</CRule>
+                  </div>
+                </>)}
+
+                {value === "MACD Crossover (12,26,9)" && (<>
+                  <CNum label="Fast EMA (days)" value={p.macd_fast!} step={1} min={3} max={30} onChange={v => setParam('macd_fast', v)}
+                    help="Short exponential moving average period. Default 12." />
+                  <CNum label="Slow EMA (days)" value={p.macd_slow!} step={1} min={10} max={60} onChange={v => setParam('macd_slow', v)}
+                    help="Long exponential moving average period. Default 26." />
+                  <CNum label="Signal EMA (days)" value={p.macd_signal!} step={1} min={3} max={20} onChange={v => setParam('macd_signal', v)}
+                    help="EMA of the MACD line — acts as the trigger line. Default 9." />
+                  <CNum label="Bull drift adj (%)" value={p.bull_drift_adj!} step={0.5} min={0} max={15} onChange={v => setParam('bull_drift_adj', v)}
+                    help="Drift boost when MACD line is above the signal line." />
+                  <CNum label="Bear drift adj (%)" value={p.bear_drift_adj!} step={0.5} max={0} min={-15} onChange={v => setParam('bear_drift_adj', v)}
+                    help="Drift penalty when MACD line is below the signal line." />
+                  <div style={{ borderTop: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))', paddingTop: 6 }}>
+                    <CRule tag="BUY">MACD above signal → bullish crossover, drift +{p.bull_drift_adj}%.</CRule>
+                    <CRule tag="SELL">MACD below signal → bearish crossover, drift {p.bear_drift_adj}%.</CRule>
                   </div>
                 </>)}
 
@@ -304,7 +344,7 @@ export default function StrategySelector({ value, params, onChange, compact }: P
                     help="Drift boost added when P/E is in deep-value or fair-value territory. Keep positive." />
                   <CNum label="Bear drift adj (%)" value={p.bear_drift_adj!} step={0.5} max={0} min={-15} onChange={v => setParam('bear_drift_adj', v)}
                     help="Drift penalty when P/E is expensive. Keep this negative to reflect overvaluation risk." />
-                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 6 }}>
+                  <div style={{ borderTop: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))', paddingTop: 6 }}>
                     <CRule tag="BUY">P/E &lt; {p.pe_deep_value} → +{p.bull_drift_adj}%/yr.</CRule>
                     <CRule tag="HOLD">P/E {p.pe_deep_value}–{p.pe_in_threshold} → partial or none.</CRule>
                     <CRule tag="SELL">P/E &gt; {p.pe_expensive} → {p.bear_drift_adj}%/yr.</CRule>
@@ -318,7 +358,7 @@ export default function StrategySelector({ value, params, onChange, compact }: P
                     help="Multiplies EPS growth rate into a drift adjustment. E.g. sensitivity 60 × 10% EPS growth = +6% drift boost." />
                   <CNum label="Max drift adj (%)" value={p.adj_cap!} step={0.5} min={1} max={20} onChange={v => setParam('adj_cap', v)}
                     help="Hard cap on the drift adjustment in either direction. Prevents extreme EPS swings from dominating." />
-                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 6 }}>
+                  <div style={{ borderTop: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))', paddingTop: 6 }}>
                     <CRule tag="BUY">EPS growth &gt; {p.exit_threshold_pct}% → up to +{p.adj_cap}%.</CRule>
                     <CRule tag="SELL">EPS growth &lt; {p.exit_threshold_pct}% → up to -{p.adj_cap}%.</CRule>
                     <CRule tag="NOTE">Uses live Yahoo Finance data.</CRule>
@@ -422,6 +462,53 @@ export default function StrategySelector({ value, params, onChange, compact }: P
                   <Rule tag="BUY">{p.lookback_days}-day return above {p.threshold_pct}%. Drift boosted proportionally, capped at +{p.adj_cap}%/yr.</Rule>
                   <Rule tag="SELL">{p.lookback_days}-day return below {p.threshold_pct}%. Drift penalised symmetrically, capped at -{p.adj_cap}%/yr.</Rule>
                   <Rule tag="NOTE">Signal resets daily — switches back as soon as momentum recovers above the threshold.</Rule>
+                </InfoBox>
+              </>)}
+
+              {value === "Bollinger Breakout (20,2)" && (<>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <Num label="BB Period (days)" value={p.bb_period!} step={1} min={5} max={50}
+                    help="Lookback for SMA midline and std dev. 20 is standard."
+                    onChange={v => setParam('bb_period', v)} />
+                  <Num label="Std Dev multiplier" value={p.bb_std!} step={0.1} min={1} max={4}
+                    help="Band width. 2.0 = ±2σ. Higher = fewer, stronger signals."
+                    onChange={v => setParam('bb_std', v)} />
+                  <Num label="Bull drift adj (%)" value={p.bull_drift_adj!} step={0.5} min={0} max={15}
+                    help="Drift boost while in an active breakout trade."
+                    onChange={v => setParam('bull_drift_adj', v)} />
+                  <Num label="Bear drift adj (%)" value={p.bear_drift_adj!} step={0.5} max={0} min={-10}
+                    help="Drift penalty while in cash (no breakout)."
+                    onChange={v => setParam('bear_drift_adj', v)} />
+                </div>
+                <InfoBox>
+                  <Rule tag="BUY">Price closes above upper band ({p.bb_period}-day SMA +{p.bb_std}σ) → enter long. Drift +{p.bull_drift_adj}%/yr.</Rule>
+                  <Rule tag="SELL">Price falls below lower band → exit to cash. Drift {p.bear_drift_adj}%/yr.</Rule>
+                  <Rule tag="NOTE">Trade persists until lower-band breach — no stop-loss unless you add one via risk controls.</Rule>
+                </InfoBox>
+              </>)}
+
+              {value === "MACD Crossover (12,26,9)" && (<>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <Num label="Fast EMA (days)" value={p.macd_fast!} step={1} min={3} max={30}
+                    help="Short EMA period. Standard: 12."
+                    onChange={v => setParam('macd_fast', v)} />
+                  <Num label="Slow EMA (days)" value={p.macd_slow!} step={1} min={10} max={60}
+                    help="Long EMA period. Standard: 26. Must be greater than Fast."
+                    onChange={v => setParam('macd_slow', v)} />
+                  <Num label="Signal EMA (days)" value={p.macd_signal!} step={1} min={3} max={20}
+                    help="EMA of the MACD line used as the trigger. Standard: 9."
+                    onChange={v => setParam('macd_signal', v)} />
+                  <Num label="Bull drift adj (%)" value={p.bull_drift_adj!} step={0.5} min={0} max={15}
+                    help="Drift boost when MACD is above the signal line."
+                    onChange={v => setParam('bull_drift_adj', v)} />
+                  <Num label="Bear drift adj (%)" value={p.bear_drift_adj!} step={0.5} max={0} min={-15}
+                    help="Drift penalty when MACD is below the signal line."
+                    onChange={v => setParam('bear_drift_adj', v)} />
+                </div>
+                <InfoBox>
+                  <Rule tag="BUY">MACD(EMA{p.macd_fast}–EMA{p.macd_slow}) crosses above Signal(EMA{p.macd_signal}). Drift +{p.bull_drift_adj}%/yr.</Rule>
+                  <Rule tag="SELL">MACD crosses below Signal line. Drift {p.bear_drift_adj}%/yr.</Rule>
+                  <Rule tag="NOTE">Histogram = MACD − Signal. Positive histogram = bullish; negative = bearish.</Rule>
                 </InfoBox>
               </>)}
 

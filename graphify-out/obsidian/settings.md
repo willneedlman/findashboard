@@ -1,17 +1,14 @@
 ---
-source_file: ".devcontainer/devcontainer.json"
+source_file: "frontend/src/pages/Settings.tsx"
 type: "code"
-community: "Dev Container Setup"
-location: "L13"
+community: "Frontend"
+location: "None"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/Dev_Container_Setup
+  - community/Frontend
 ---
 
-# settings
+# Settings
 
-## Connections
-- [[vscode]] - `contains` [EXTRACTED]
-
-#graphify/code #graphify/EXTRACTED #community/Dev_Container_Setup
+#graphify/code #graphify/EXTRACTED #community/Frontend

@@ -1,19 +1,21 @@
 ---
 source_file: "backend/routers/nav.py"
 type: "code"
-community: "Options & Portfolio Routers"
+community: "Backend"
 location: "L1"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/Options__Portfolio_Routers
+  - community/Backend
 ---
 
 # nav.py
 
 ## Connections
-- [[NavRequest]] - `contains` [EXTRACTED]
-- [[_get_mstr_btc()]] - `contains` [EXTRACTED]
-- [[nav_proxy()]] - `contains` [EXTRACTED]
+- [[fastapi]] - `imports` [EXTRACTED]
+- [[pydantic]] - `imports` [EXTRACTED]
+- [[backend_routers_nav_py_get_mstr_btc]] - `contains` [EXTRACTED]
+- [[backend_routers_nav_py_navrequest]] - `contains` [EXTRACTED]
+- [[backend_routers_nav_py_nav_proxy]] - `contains` [EXTRACTED]
 
-#graphify/code #graphify/EXTRACTED #community/Options__Portfolio_Routers
+#graphify/code #graphify/EXTRACTED #community/Backend

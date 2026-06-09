@@ -15,31 +15,69 @@ export default function MetricCard({ label, value, delta, deltaPositive, classNa
 
   return (
     <div className={clsx('metric-card relative', className)}>
-      <div className="flex items-center gap-1 mb-1">
-        <p className="label-sm">{label}</p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+        <p style={{
+          fontSize: 9,
+          fontWeight: 700,
+          letterSpacing: '0.14em',
+          textTransform: 'uppercase',
+          color: 'var(--theme-text-muted, #8099b0)',
+          fontFamily: 'var(--theme-mono, JetBrains Mono, monospace)',
+          margin: 0,
+        }}>{label}</p>
         {help && (
-          <div className="relative"
+          <div style={{ position: 'relative' }}
             onMouseEnter={() => setVisible(true)}
             onMouseLeave={() => setVisible(false)}>
-            <span className="text-slate-terminal hover:text-gold cursor-help text-[10px] leading-none select-none"
-              style={{ lineHeight: 1 }}>
-              ⓘ
-            </span>
+            <span style={{
+              color: 'var(--theme-secondary, #5e768f)',
+              cursor: 'help',
+              fontSize: 10,
+              lineHeight: 1,
+              userSelect: 'none',
+            }}>ⓘ</span>
             {visible && (
-              <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 rounded
-                bg-navy-800 border border-white/10 shadow-xl p-2.5 text-xs text-slate-bright leading-snug pointer-events-none"
-                style={{ background: 'var(--theme-bg, #0f1d31)' }}>
+              <div style={{
+                position: 'absolute',
+                zIndex: 50,
+                bottom: '100%',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                marginBottom: 8,
+                width: 224,
+                borderRadius: 2,
+                background: 'var(--theme-bg, #0f1d31)',
+                border: '1px solid rgba(255,255,255,0.10)',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+                padding: '8px 10px',
+                fontSize: 11,
+                color: 'var(--theme-text, #d7e3fc)',
+                lineHeight: 1.5,
+                pointerEvents: 'none',
+              }}>
                 {help}
-                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent"
-                  style={{ borderTopColor: 'var(--theme-bg, #0f1d31)' }} />
               </div>
             )}
           </div>
         )}
       </div>
-      <p className="text-slate-bright text-xl font-semibold tabular-nums">{value}</p>
+      <p style={{
+        color: 'var(--theme-text, #d7e3fc)',
+        fontSize: 20,
+        fontWeight: 600,
+        fontFamily: 'var(--theme-mono, JetBrains Mono, monospace)',
+        fontVariantNumeric: 'tabular-nums',
+        margin: 0,
+        lineHeight: 1.2,
+      }}>{value}</p>
       {delta !== undefined && (
-        <p className={clsx('text-xs mt-0.5 tabular-nums', deltaPositive ? 'text-positive' : 'text-negative')}>
+        <p style={{
+          fontSize: 11,
+          marginTop: 2,
+          fontVariantNumeric: 'tabular-nums',
+          color: deltaPositive ? '#22C55E' : '#EF4444',
+          margin: '2px 0 0 0',
+        }}>
           {delta}
         </p>
       )}

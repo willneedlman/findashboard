@@ -1,19 +1,14 @@
 ---
 source_file: "backend/routers/nav.py"
 type: "code"
-community: "Options & Portfolio Routers"
-location: "L78"
+community: "Backend"
+location: "81"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/Options__Portfolio_Routers
+  - community/Backend
 ---
 
 # NavRequest
 
-## Connections
-- [[BaseModel]] - `inherits` [EXTRACTED]
-- [[nav.py]] - `contains` [EXTRACTED]
-- [[nav_proxy()]] - `references` [EXTRACTED]
-
-#graphify/code #graphify/EXTRACTED #community/Options__Portfolio_Routers
+#graphify/code #graphify/EXTRACTED #community/Backend

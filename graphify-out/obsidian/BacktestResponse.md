@@ -1,17 +1,14 @@
 ---
 source_file: "frontend/src/types/index.ts"
 type: "code"
-community: "TypeScript Type Definitions"
+community: "Frontend"
 location: "L44"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/TypeScript_Type_Definitions
+  - community/Frontend
 ---
 
 # BacktestResponse
 
-## Connections
-- [[index.ts]] - `contains` [EXTRACTED]
-
-#graphify/code #graphify/EXTRACTED #community/TypeScript_Type_Definitions
+#graphify/code #graphify/EXTRACTED #community/Frontend

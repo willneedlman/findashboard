@@ -7,9 +7,9 @@ import { useAnalysis } from '../context/AnalysisContext'
 
 const C = {
   bg: 'var(--theme-bg, #101c2e)', border: 'rgba(255,255,255,0.08)', header: 'var(--theme-surface, #0d1826)', surface: 'var(--theme-bg, #0a1220)',
-  gold: 'var(--theme-primary, #c9a84c)', text: '#d7e3fc', muted: 'var(--theme-secondary, #5e768f)', dim: '#3a4d62',
+  gold: 'var(--theme-primary, #c9a84c)', text: 'var(--theme-text, #d7e3fc)', muted: 'var(--theme-secondary, #5e768f)', dim: '#3a4d62',
   pos: '#22C55E', neg: '#EF4444', warn: '#f59e0b', blue: '#60a5fa',
-  mono: 'JetBrains Mono, monospace', sans: 'IBM Plex Sans, sans-serif',
+  mono: 'var(--theme-mono)', sans: 'var(--theme-sans)',
 }
 
 const LABEL: React.CSSProperties = { fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', marginBottom: 4, display: 'block' }

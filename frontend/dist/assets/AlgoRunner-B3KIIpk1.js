@@ -1,0 +1,1 @@
+import{t as e}from"./jsx-runtime-BH3idZxw.js";import t from"./PortfolioBacktester-Cfi4OiKH.js";var n=e();function r(){return(0,n.jsx)(t,{initialTab:`strategy`})}export{r as default};

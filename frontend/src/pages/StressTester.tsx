@@ -8,12 +8,12 @@ import ExportPdfButton from '../components/ExportPdfButton'
 const T = {
   bg:      'var(--theme-bg, #101c2e)',
   surface: 'var(--theme-surface, #0d1826)',
-  border:  'rgba(255,255,255,0.08)',
+  border:  'var(--theme-border, rgba(255,255,255,0.08))',
   gold:    'var(--theme-primary, #c9a84c)',
   muted:   'var(--theme-secondary, #5e768f)',
-  text:    '#d7e3fc',
-  mono:    'JetBrains Mono, monospace',
-  label:   'IBM Plex Sans, sans-serif',
+  text:    'var(--theme-text, #d7e3fc)',
+  mono:    'var(--theme-mono)',
+  label:   'var(--theme-sans)',
   pos:     '#22c55e',
   neg:     '#ef4444',
   warn:    '#f59e0b',
@@ -296,7 +296,7 @@ export default function StressTester() {
               disabled={loading || !weightOk || holdings.filter(h => h.ticker).length === 0}
               style={{
                 width: '100%', padding: '9px 0',
-                background: loading || !weightOk ? 'rgba(255,255,255,0.05)' : T.gold,
+                background: loading || !weightOk ? 'var(--theme-border-faint, rgba(255,255,255,0.05))' : T.gold,
                 border: 'none', color: loading || !weightOk ? T.muted : '#0a1220',
                 fontFamily: T.label, fontSize: 10, fontWeight: 700,
                 letterSpacing: '0.12em', textTransform: 'uppercase',
@@ -337,10 +337,10 @@ export default function StressTester() {
                       <YAxis tickFormatter={v => `${v}%`} tick={{ fontFamily: T.mono, fontSize: 8, fill: T.muted }} tickLine={false} axisLine={false} />
                       <ReferenceLine y={0} stroke={T.border} />
                       <Tooltip
-                        cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+                        cursor={{ fill: 'var(--theme-hover, rgba(255,255,255,0.04))' }}
                         formatter={(v: number, name: string) => [`${v?.toFixed(2)}%`, name === 'portfolio' ? 'Portfolio' : 'SPY']}
-                        contentStyle={{ background: 'var(--theme-surface, #0d1b30)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', fontFamily: 'JetBrains Mono, monospace', fontSize: 10, padding: '8px 10px', boxShadow: '0 4px 20px rgba(0,0,0,0.5)' }}
-                        labelStyle={{ color: 'var(--theme-primary, #c9a84c)', fontFamily: 'IBM Plex Sans, sans-serif', fontWeight: 700, marginBottom: 4 }}
+                        contentStyle={{ background: 'var(--theme-surface, #0d1b30)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', fontFamily: 'var(--theme-mono)', fontSize: 10, padding: '8px 10px', boxShadow: '0 4px 20px rgba(0,0,0,0.5)' }}
+                        labelStyle={{ color: 'var(--theme-primary, #c9a84c)', fontFamily: 'var(--theme-sans)', fontWeight: 700, marginBottom: 4 }}
                       />
                       <Bar dataKey="portfolio" name="portfolio" radius={[2, 2, 0, 0]}>
                         {chartData.map((d, i) => (

@@ -3,14 +3,14 @@ import PageWrapper from '../../components/PageWrapper'
 
 const S = {
   bg:     'var(--theme-bg, #101c2e)',
-  border: 'rgba(255,255,255,0.08)',
+  border: 'var(--theme-border, rgba(255,255,255,0.08))',
   header: 'var(--theme-surface, #142032)',
   gold:   'var(--theme-primary, #c9a84c)',
-  text:   '#d7e3fc',
+  text:   'var(--theme-text, #d7e3fc)',
   muted:  '#5e768f',
   dim:    '#3a4d62',
-  mono:   'JetBrains Mono, monospace',
-  label:  'IBM Plex Sans, sans-serif',
+  mono:   'var(--theme-mono)',
+  label:  'var(--theme-sans)',
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

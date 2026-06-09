@@ -27,12 +27,12 @@ export default function SidebarLayout({
             style={{
               width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer',
-              borderBottom: open ? '1px solid rgba(255,255,255,0.06)' : 'none',
+              borderBottom: open ? '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))' : 'none',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <SlidersHorizontal size={12} style={{ color: 'var(--theme-primary, #c9a84c)' }} />
-              <span style={{ fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)' }}>
+              <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)' }}>
                 {sidebarTitle}
               </span>
             </div>
@@ -50,13 +50,13 @@ export default function SidebarLayout({
 
   // Desktop: sidebar flush against content, separated by a single border
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 0, border: '1px solid rgba(255,255,255,0.06)', boxShadow: '0 1px 4px rgba(0,0,0,0.35)' }}>
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 0, border: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))', boxShadow: '0 1px 4px rgba(0,0,0,0.35)' }}>
       {/* Sidebar */}
       <div style={{
         width: sidebarWidth,
         flexShrink: 0,
         background: 'color-mix(in srgb, var(--theme-surface, #0d1826) 100%, black 8%)',
-        borderRight: '1px solid rgba(255,255,255,0.06)',
+        borderRight: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))',
         display: 'flex',
         flexDirection: 'column',
         alignSelf: 'stretch',
@@ -65,7 +65,7 @@ export default function SidebarLayout({
         <div style={{
           padding: '9px 14px',
           background: 'rgba(0,0,0,0.2)',
-          borderBottom: '1px solid rgba(255,255,255,0.06)',
+          borderBottom: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))',
           display: 'flex',
           alignItems: 'center',
           gap: 7,
@@ -73,7 +73,7 @@ export default function SidebarLayout({
         }}>
           <SlidersHorizontal size={10} style={{ color: 'var(--theme-primary, #c9a84c)', flexShrink: 0 }} />
           <span style={{
-            fontFamily: 'IBM Plex Sans, sans-serif',
+            fontFamily: 'var(--theme-sans)',
             fontSize: 9, fontWeight: 700, letterSpacing: '0.16em',
             textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)',
           }}>

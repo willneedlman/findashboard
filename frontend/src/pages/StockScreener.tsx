@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
@@ -6,10 +6,10 @@ import SidebarLayout from '../components/SidebarLayout'
 import EmptyState from '../components/EmptyState'
 
 const C = {
-  bg: 'var(--theme-bg, #101c2e)', border: 'rgba(255,255,255,0.08)', header: 'var(--theme-surface, #0d1826)',
-  gold: 'var(--theme-primary, #c9a84c)', text: '#d7e3fc', muted: 'var(--theme-secondary, #5e768f)', dim: '#3a4d62',
+  bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))', header: 'var(--theme-surface, #0d1826)',
+  gold: 'var(--theme-primary, #c9a84c)', text: 'var(--theme-text, #d7e3fc)', muted: 'var(--theme-secondary, #5e768f)', dim: 'var(--theme-text-dim, rgba(215,227,252,0.45))',
   pos: '#22C55E', neg: '#EF4444', warn: '#f59e0b',
-  mono: 'JetBrains Mono, monospace', sans: 'IBM Plex Sans, sans-serif',
+  mono: 'var(--theme-mono)', sans: 'var(--theme-sans)',
 }
 
 const OPERATORS = [
@@ -99,6 +99,8 @@ export default function StockScreener() {
     new Set(['ticker','companyName','price','change1d','marketCap','peRatio','operatingMargin','revenueGrowth','sector'])
   )
   const [colPanelOpen, setColPanelOpen] = useState(false)
+  const [localSort, setLocalSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: 'marketCap', dir: 'desc' })
+  const [textFilter, setTextFilter] = useState('')
   const nextId = () => Date.now()
 
   const { data: meta } = useQuery({
@@ -130,10 +132,46 @@ export default function StockScreener() {
   const removeFilter = (id: number) => setFilters(p => p.filter(f => f.id !== id))
   const patchFilter = (id: number, patch: Partial<FilterRow>) => setFilters(p => p.map(f => f.id === id ? { ...f, ...patch } : f))
 
+  useEffect(() => {
+    if (data) {
+      setLocalSort({ key: sortBy, dir: sortDir })
+      setTextFilter('')
+    }
+  }, [data]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleSort = (col: string) => {
-    if (sortBy === col) setSortDir(d => d === 'desc' ? 'asc' : 'desc')
-    else { setSortBy(col); setSortDir('desc') }
+    setLocalSort(prev => ({ key: col, dir: prev.key === col && prev.dir === 'desc' ? 'asc' : 'desc' }))
   }
+
+  const STRING_KEYS = useMemo(() => new Set(['ticker', 'companyName', 'sector', 'exchange']), [])
+
+  const displayRows = useMemo(() => {
+    if (!data?.results) return []
+    let rows = [...data.results] as ScreenResult[]
+    if (textFilter.trim()) {
+      const q = textFilter.trim().toLowerCase()
+      rows = rows.filter(r =>
+        r.ticker.toLowerCase().includes(q) ||
+        (r.companyName ?? '').toLowerCase().includes(q) ||
+        (r.sector ?? '').toLowerCase().includes(q)
+      )
+    }
+    rows.sort((a, b) => {
+      const av = a[localSort.key as keyof ScreenResult]
+      const bv = b[localSort.key as keyof ScreenResult]
+      let cmp: number
+      if (STRING_KEYS.has(localSort.key)) {
+        cmp = String(av ?? '').localeCompare(String(bv ?? ''))
+      } else {
+        if (av == null && bv == null) cmp = 0
+        else if (av == null) cmp = 1
+        else if (bv == null) cmp = -1
+        else cmp = (Number(av) - Number(bv))
+      }
+      return localSort.dir === 'desc' ? -cmp : cmp
+    })
+    return rows
+  }, [data, localSort, textFilter, STRING_KEYS])
 
   const activeCols = TABLE_COLS.filter(c => visibleCols.has(c.key as string))
 
@@ -144,7 +182,7 @@ export default function StockScreener() {
     <PageWrapper>
       <SidebarLayout sidebarWidth={260} sidebarTitle="Screen Controls" sidebar={<>
         <div style={{ padding: '8px 10px', borderBottom: `1px solid ${C.border}`, background: C.header }}>
-          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#fff' }}>Stock Screener</span>
+          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>Stock Screener</span>
         </div>
 
         <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 10, flex: 1, overflowY: 'auto' }}>
@@ -206,7 +244,7 @@ export default function StockScreener() {
           <div style={{ display: 'flex', gap: 6 }}>
             <div style={{ flex: 1 }}>
               <label style={LABEL}>Sort by</label>
-              <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={SELECT} onFocus={focus} onBlur={blur}>
+              <select value={sortBy} onChange={e => { setSortBy(e.target.value); setLocalSort(prev => ({ ...prev, key: e.target.value })) }} style={SELECT} onFocus={focus} onBlur={blur}>
                 {TABLE_COLS.filter(c => !['ticker','companyName','sector'].includes(c.key as string)).map(c => (
                   <option key={c.key as string} value={c.key as string}>{c.label}</option>
                 ))}
@@ -214,7 +252,7 @@ export default function StockScreener() {
             </div>
             <div>
               <label style={LABEL}>Dir</label>
-              <select value={sortDir} onChange={e => setSortDir(e.target.value as 'asc' | 'desc')} style={{ ...SELECT, width: 60 }}>
+              <select value={sortDir} onChange={e => { setSortDir(e.target.value as 'asc' | 'desc'); setLocalSort(prev => ({ ...prev, dir: e.target.value as 'asc' | 'desc' })) }} style={{ ...SELECT, width: 60 }}>
                 <option value="desc">↓ High</option>
                 <option value="asc">↑ Low</option>
               </select>
@@ -248,10 +286,19 @@ export default function StockScreener() {
         {data && (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
             {/* Header row */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', borderBottom: `1px solid ${C.border}`, background: C.header, flexShrink: 0 }}>
-              <span style={{ fontFamily: C.mono, fontSize: 11, color: C.gold, fontWeight: 700 }}>
-                {data.total} result{data.total !== 1 ? 's' : ''}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', borderBottom: `1px solid ${C.border}`, background: C.header, flexShrink: 0, gap: 10 }}>
+              <span style={{ fontFamily: C.mono, fontSize: 11, color: C.gold, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                {displayRows.length !== data.total
+                  ? `${displayRows.length} / ${data.total}`
+                  : `${data.total} result${data.total !== 1 ? 's' : ''}`}
               </span>
+              <input
+                value={textFilter}
+                onChange={e => setTextFilter(e.target.value)}
+                placeholder="Filter by ticker / name / sector…"
+                style={{ ...INPUT, flex: 1, maxWidth: 260, padding: '3px 7px', fontSize: 10 }}
+                onFocus={focus} onBlur={blur}
+              />
 
               {/* Column selector */}
               <div style={{ position: 'relative' }}>
@@ -284,17 +331,17 @@ export default function StockScreener() {
                   <tr style={{ background: 'var(--theme-bg, #080f1d)', position: 'sticky', top: 0, zIndex: 1 }}>
                     {activeCols.map(col => (
                       <th key={col.key as string} onClick={() => handleSort(col.key as string)}
-                        style={{ padding: '7px 10px', textAlign: col.key === 'ticker' || col.key === 'companyName' || col.key === 'sector' ? 'left' : 'right', fontFamily: C.sans, fontSize: 9, color: sortBy === col.key ? C.gold : C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', cursor: 'pointer', whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border}`, userSelect: 'none' }}>
-                        {col.label}{sortBy === col.key ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''}
+                        style={{ padding: '7px 10px', textAlign: col.key === 'ticker' || col.key === 'companyName' || col.key === 'sector' ? 'left' : 'right', fontFamily: C.sans, fontSize: 9, color: localSort.key === col.key ? C.gold : C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', cursor: 'pointer', whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border}`, userSelect: 'none' }}>
+                        {col.label}{localSort.key === col.key ? (localSort.dir === 'desc' ? ' ↓' : ' ↑') : ''}
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {data.results.map((row: ScreenResult, i: number) => (
-                    <tr key={row.ticker} style={{ background: i % 2 === 0 ? 'var(--theme-surface, #0d1826)' : 'transparent', borderBottom: `1px solid #1a2535` }}
+                  {displayRows.map((row: ScreenResult, i: number) => (
+                    <tr key={row.ticker} style={{ background: i % 2 === 0 ? 'var(--theme-surface, #0d1826)' : 'var(--theme-bg, #101c2e)', borderBottom: `1px solid var(--theme-border-faint, rgba(255,255,255,0.05))` }}
                       onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = 'rgba(201,168,76,0.05)')}
-                      onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = i % 2 === 0 ? 'var(--theme-surface, #0d1826)' : 'transparent')}>
+                      onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = i % 2 === 0 ? 'var(--theme-surface, #0d1826)' : 'var(--theme-bg, #101c2e)')}>
                       {activeCols.map(col => {
                         const raw = row[col.key]
                         const display = col.fmt(raw)

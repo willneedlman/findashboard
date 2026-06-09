@@ -1,22 +1,26 @@
 ---
 source_file: "backend/routers/strategy.py"
 type: "code"
-community: "Trading Strategy Router"
+community: "Backend"
 location: "L1"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/Trading_Strategy_Router
+  - community/Backend
 ---
 
 # strategy.py
 
 ## Connections
-- [[Strategy signal computation for backtester and Monte Carlo overlays. Each strate]] - `rationale_for` [EXTRACTED]
-- [[StrategyRequest_1]] - `contains` [EXTRACTED]
-- [[_fetch_close()]] - `contains` [EXTRACTED]
-- [[compute_signal()]] - `contains` [EXTRACTED]
-- [[get_strategy_signal()]] - `contains` [EXTRACTED]
-- [[list_strategies()]] - `contains` [EXTRACTED]
+- [[fastapi]] - `imports` [EXTRACTED]
+- [[pydantic]] - `imports` [EXTRACTED]
+- [[validation]] - `imports` [EXTRACTED]
+- [[backend_routers_strategy_py_fetch_close]] - `contains` [EXTRACTED]
+- [[backend_routers_strategy_py_compute_signal]] - `contains` [EXTRACTED]
+- [[backend_routers_strategy_py_strategyrequest]] - `contains` [EXTRACTED]
+- [[backend_routers_strategy_py_get_strategy_signal]] - `contains` [EXTRACTED]
+- [[backend_routers_strategy_py_list_strategies]] - `contains` [EXTRACTED]
+- [[backend_routers_strategy_py_valid_strategy]] - `contains` [EXTRACTED]
+- [[backend_routers_strategy_py_validate]] - `contains` [EXTRACTED]
 
-#graphify/code #graphify/EXTRACTED #community/Trading_Strategy_Router
+#graphify/code #graphify/EXTRACTED #community/Backend

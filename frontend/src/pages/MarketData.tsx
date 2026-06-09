@@ -15,13 +15,13 @@ import useIsMobile from '../hooks/useIsMobile'
 function TerminalMetric({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
     <div style={{
-      background: 'var(--theme-surface, #142032)', border: '1px solid rgba(255,255,255,0.07)',
+      background: 'var(--theme-surface, #142032)', border: '1px solid var(--theme-border, rgba(255,255,255,0.07))',
       borderTop: '3px solid var(--theme-primary, #c9a84c)', padding: 12,
     }}>
       <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', marginBottom: 8 }}>
         {label}
       </div>
-      <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 24, fontWeight: 700, color: color ?? '#d7e3fc' }}>
+      <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 24, fontWeight: 700, color: color ?? 'var(--theme-text, #d7e3fc)' }}>
         {value}
       </div>
     </div>
@@ -39,14 +39,14 @@ function ChartPanel({ label, height, children }: { label: string; height: number
   )
 }
 
-const TICK_STYLE = { fontSize: 10, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'JetBrains Mono, monospace' }
+const TICK_STYLE = { fontSize: 10, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'var(--theme-mono)' }
 
 export default function MarketData() {
   const isMobile = useIsMobile()
   const [searchParams, setSearchParams] = useSearchParams()
   const [ticker, setTickerState] = useState(searchParams.get('ticker') || 'SPY')
   const [start, setStartState]   = useState(searchParams.get('start')  || '2020-01-01')
-  const [end, setEndState]       = useState(searchParams.get('end')    || '2024-12-31')
+  const [end, setEndState]       = useState(searchParams.get('end')    || new Date().toISOString().split('T')[0])
 
   const setTicker = (v: string) => { setTickerState(v); setSearchParams(p => { p.set('ticker', v); return p }) }
   const setStart  = (v: string) => { setStartState(v);  setSearchParams(p => { p.set('start', v);  return p }) }
@@ -57,11 +57,11 @@ export default function MarketData() {
   })
 
   const m = data?.metrics
-  const returnColor = m ? (m.total_return >= 0 ? '#22C55E' : '#EF4444') : '#d7e3fc'
+  const returnColor = m ? (m.total_return >= 0 ? '#22C55E' : '#EF4444') : 'var(--theme-text, #d7e3fc)'
 
   const inputStyle = {
-    background: 'var(--theme-surface, #142032)', border: '1px solid rgba(255,255,255,0.10)', color: '#d7e3fc',
-    fontFamily: 'JetBrains Mono, monospace', fontSize: 12, padding: '5px 8px',
+    background: 'var(--theme-surface, #142032)', border: '1px solid var(--theme-border, rgba(255,255,255,0.10))', color: 'var(--theme-text, #d7e3fc)',
+    fontFamily: 'var(--theme-mono)', fontSize: 12, padding: '5px 8px',
     width: '100%', outline: 'none',
   }
 
@@ -74,18 +74,18 @@ export default function MarketData() {
               value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())}
               style={{ ...inputStyle, textTransform: 'uppercase', fontSize: 14, fontWeight: 700 }}
               onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')}
-              onBlur={e => (e.target.style.borderColor = 'rgba(255,255,255,0.10)')}
+              onBlur={e => (e.target.style.borderColor = 'var(--theme-border, rgba(255,255,255,0.10))')}
             />
           </div>
 
-          <div style={{ height: 1, background: 'rgba(255,255,255,0.08)' }} />
+          <div style={{ height: 1, background: 'var(--theme-hover, rgba(255,255,255,0.08))' }} />
 
           <div>
             <span className="ft-sidebar-label">Start Date</span>
             <input type="date" value={start} onChange={e => setStart(e.target.value)}
               style={inputStyle}
               onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')}
-              onBlur={e => (e.target.style.borderColor = 'rgba(255,255,255,0.10)')}
+              onBlur={e => (e.target.style.borderColor = 'var(--theme-border, rgba(255,255,255,0.10))')}
             />
           </div>
 
@@ -94,11 +94,11 @@ export default function MarketData() {
             <input type="date" value={end} onChange={e => setEnd(e.target.value)}
               style={inputStyle}
               onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')}
-              onBlur={e => (e.target.style.borderColor = 'rgba(255,255,255,0.10)')}
+              onBlur={e => (e.target.style.borderColor = 'var(--theme-border, rgba(255,255,255,0.10))')}
             />
           </div>
 
-          <div style={{ height: 1, background: 'rgba(255,255,255,0.08)' }} />
+          <div style={{ height: 1, background: 'var(--theme-hover, rgba(255,255,255,0.08))' }} />
 
           <button
             onClick={() => mutate()} disabled={isPending}
@@ -127,9 +127,9 @@ export default function MarketData() {
                     { label: 'Ann. Volatility', value: `${m!.ann_volatility}%` },
                     { label: 'Current Price',   value: `$${m!.current_price.toLocaleString()}`, color: 'var(--theme-primary, #c9a84c)' },
                   ].map((stat, i) => (
-                    <div key={stat.label} style={{ padding: '12px 14px', borderRight: isMobile ? (i % 2 === 0 ? '1px solid rgba(255,255,255,0.06)' : 'none') : (i < 3 ? '1px solid rgba(255,255,255,0.06)' : 'none'), borderBottom: isMobile && i < 2 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
-                      <div style={{ fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', marginBottom: 6 }}>{stat.label}</div>
-                      <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: isMobile ? 16 : 20, fontWeight: 700, color: stat.color ?? '#d7e3fc', lineHeight: 1.1 }}>{stat.value}</div>
+                    <div key={stat.label} style={{ padding: '12px 14px', borderRight: isMobile ? (i % 2 === 0 ? '1px solid var(--theme-border, rgba(255,255,255,0.06))' : 'none') : (i < 3 ? '1px solid var(--theme-border, rgba(255,255,255,0.06))' : 'none'), borderBottom: isMobile && i < 2 ? '1px solid var(--theme-border, rgba(255,255,255,0.06))' : 'none' }}>
+                      <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', marginBottom: 6 }}>{stat.label}</div>
+                      <div style={{ fontFamily: 'var(--theme-mono)', fontSize: isMobile ? 16 : 20, fontWeight: 700, color: stat.color ?? 'var(--theme-text, #d7e3fc)', lineHeight: 1.1 }}>{stat.value}</div>
                     </div>
                   ))}
                 </div>

@@ -7,8 +7,8 @@ import SidebarLayout from '../components/SidebarLayout'
 import { fetchNAVProxy } from '../hooks/useApi'
 import EmptyState from '../components/EmptyState'
 const INPUT: React.CSSProperties = {
-  background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: '#d7e3fc',
-  fontFamily: 'JetBrains Mono, monospace', fontSize: 12, padding: '5px 8px',
+  background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: 'var(--theme-text, #d7e3fc)',
+  fontFamily: 'var(--theme-mono)', fontSize: 12, padding: '5px 8px',
   width: '100%', outline: 'none', boxSizing: 'border-box',
 }
 const LABEL: React.CSSProperties = {
@@ -16,16 +16,16 @@ const LABEL: React.CSSProperties = {
   textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', marginBottom: 4, display: 'block',
 }
 const TOOLTIP_STYLE = { background: 'var(--theme-surface, #142032)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', borderRadius: 0 }
-const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'JetBrains Mono, monospace' }
+const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'var(--theme-mono)' }
 
 function ChartPanel({ label, height, children }: { label: string; height: number; children: React.ReactNode }) {
   return (
-    <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)', position: 'relative' }}>
+    <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', position: 'relative' }}>
       <div style={{
         position: 'absolute', top: 0, left: 0, zIndex: 10,
         background: 'rgba(46,57,77,0.8)', padding: '3px 8px',
-        borderRight: '1px solid rgba(255,255,255,0.08)', borderBottom: '1px solid rgba(255,255,255,0.08)',
-        fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#d7e3fc',
+        borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
+        fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)',
       }}>
         {label}
       </div>
@@ -55,7 +55,7 @@ export default function NAVTracker() {
   })
 
   const focus = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')
-  const blur  = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = 'rgba(255,255,255,0.10)')
+  const blur  = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = 'var(--theme-border, rgba(255,255,255,0.10))')
 
   return (
     <PageWrapper>
@@ -63,7 +63,7 @@ export default function NAVTracker() {
 
         {/* Left sidebar */}
 
-          <div style={{ padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'var(--theme-surface, #142032)' }}>
+          <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)' }}>
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#ffffff' }}>
               SOTP Parameters
             </div>
@@ -102,7 +102,7 @@ export default function NAVTracker() {
             </div>
 
             {/* Holdings section */}
-            <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 10 }}>
+            <div style={{ borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingTop: 10 }}>
               <label style={LABEL}>Asset Holdings</label>
               <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', marginBottom: 8 }}>
                 <input
@@ -132,14 +132,14 @@ export default function NAVTracker() {
               )}
 
               {p.use_live && (
-                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', lineHeight: '14px' }}>
+                <div style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', lineHeight: '14px' }}>
                   Pulled from most recent 8-K filing. Disable to enter manually.
                 </div>
               )}
             </div>
           </div>
 
-          <div style={{ padding: 10, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+          <div style={{ padding: 10, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
             <button onClick={() => mutate()} disabled={isPending} style={{
               width: '100%', background: 'var(--theme-surface, #1f2a3d)', border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)',
               fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
@@ -172,11 +172,11 @@ export default function NAVTracker() {
                   help={`How much ${p.target} market price exceeds (or trails) the True Net NAV per share.`} />
                 <MetricCard label={`${p.asset} Spot`} value={`$${data.current.asset_spot.toLocaleString()}`}
                   help={`Current spot price of ${p.asset}. Drives real-time GAV and NAV calculations.`} />
-                <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)', borderTop: '3px solid var(--theme-primary, #c9a84c)', padding: '10px 12px' }}>
+                <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderTop: '3px solid var(--theme-primary, #c9a84c)', padding: '10px 12px' }}>
                   <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', marginBottom: 6 }}>
                     Total Holdings
                   </div>
-                  <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 20, fontWeight: 700, color: '#d7e3fc' }}>
+                  <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 20, fontWeight: 700, color: 'var(--theme-text, #d7e3fc)' }}>
                     {Number(data.holdings).toLocaleString()}
                   </div>
                   {(() => {
@@ -194,7 +194,7 @@ export default function NAVTracker() {
                         }}>
                           {isEdgar ? '● EDGAR live' : isFallback ? '▲ Stored fallback' : '● Manual'}
                         </span>
-                        <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.28)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                        <span style={{ fontSize: 9, color: 'var(--theme-text-dim, rgba(255,255,255,0.28))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                           title={data.source}>{data.source}</span>
                       </div>
                     )

@@ -1,0 +1,14 @@
+---
+source_file: "frontend/src/hooks/useDashboard.ts"
+type: "code"
+community: "Frontend"
+location: "72"
+tags:
+  - graphify/code
+  - graphify/EXTRACTED
+  - community/Frontend
+---
+
+# WIDGET_LABELS
+
+#graphify/code #graphify/EXTRACTED #community/Frontend

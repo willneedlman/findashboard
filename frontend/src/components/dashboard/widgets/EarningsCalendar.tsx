@@ -5,13 +5,13 @@ import TickerLogo from '../../TickerLogo'
 
 const T = {
   bg: 'var(--theme-bg, #101c2e)',
-  border: 'rgba(255,255,255,0.08)',
+  border: 'var(--theme-border, rgba(255,255,255,0.08))',
   headerBg: 'var(--theme-surface, #142032)',
   gold: 'var(--theme-primary, #c9a84c)',
-  text: '#d7e3fc',
+  text: 'var(--theme-text, #d7e3fc)',
   muted: 'var(--theme-secondary, #5e768f)',
-  mono: 'JetBrains Mono, monospace',
-  label: 'IBM Plex Sans, sans-serif',
+  mono: 'var(--theme-mono)',
+  label: 'var(--theme-sans)',
   pos: '#22C55E',
   neg: '#EF4444',
 }
@@ -62,11 +62,6 @@ export default function EarningsCalendar({ config }: { config: WidgetConfig }) {
   if (tickers.length === 0) {
     return (
       <div style={containerStyle}>
-        <div style={{ background: T.headerBg, padding: '6px 14px', borderBottom: `1px solid ${T.border}` }}>
-          <span style={{ color: T.gold, fontSize: 9, fontFamily: T.label, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em' }}>
-            EARNINGS CALENDAR
-          </span>
-        </div>
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <span style={{ color: T.muted, fontSize: 12, fontFamily: T.label }}>Configure tickers in edit mode.</span>
         </div>
@@ -93,11 +88,6 @@ export default function EarningsCalendar({ config }: { config: WidgetConfig }) {
 
   return (
     <div style={containerStyle}>
-      <div style={{ background: T.headerBg, padding: '6px 14px', borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
-        <span style={{ color: T.gold, fontSize: 9, fontFamily: T.label, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em' }}>
-          EARNINGS CALENDAR
-        </span>
-      </div>
       <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
         {sorted.map(({ ticker, isLoading, data }, i) => {
           if (isLoading) {

@@ -1,19 +1,14 @@
 ---
 source_file: "backend/routers/portfolio.py"
 type: "code"
-community: "Options & Portfolio Routers"
-location: "L100"
+community: "Backend"
+location: "126"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/Options__Portfolio_Routers
+  - community/Backend
 ---
 
 # MonteCarloRequest
 
-## Connections
-- [[BaseModel]] - `inherits` [EXTRACTED]
-- [[monte_carlo()]] - `references` [EXTRACTED]
-- [[portfolio.py]] - `contains` [EXTRACTED]
-
-#graphify/code #graphify/EXTRACTED #community/Options__Portfolio_Routers
+#graphify/code #graphify/EXTRACTED #community/Backend

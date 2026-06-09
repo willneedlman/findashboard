@@ -1,19 +1,14 @@
 ---
 source_file: "backend/routers/bond.py"
 type: "code"
-community: "Options & Portfolio Routers"
-location: "L24"
+community: "Backend"
+location: "24"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/Options__Portfolio_Routers
+  - community/Backend
 ---
 
 # BondRequest
 
-## Connections
-- [[BaseModel]] - `inherits` [EXTRACTED]
-- [[BondAnalytics.tsx]] - `references` [EXTRACTED]
-- [[bond.py]] - `contains` [EXTRACTED]
-
-#graphify/code #graphify/EXTRACTED #community/Options__Portfolio_Routers
+#graphify/code #graphify/EXTRACTED #community/Backend

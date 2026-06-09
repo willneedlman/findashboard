@@ -1,17 +1,14 @@
 ---
 source_file: "requirements.txt"
-type: "document"
-community: "Backend Dependencies & Config"
+type: "code"
+community: "Group 31"
 location: "line 30"
 tags:
-  - graphify/document
-  - graphify/INFERRED
-  - community/Backend_Dependencies__Config
+  - graphify/code
+  - graphify/EXTRACTED
+  - community/Group_31
 ---
 
 # pandas (main)
 
-## Connections
-- [[pandas]] - `semantically_similar_to` [INFERRED]
-
-#graphify/document #graphify/INFERRED #community/Backend_Dependencies__Config
+#graphify/code #graphify/EXTRACTED #community/Group_31

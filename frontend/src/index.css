@@ -327,22 +327,51 @@
   opacity: 1 !important;
 }
 
+/* ── Monospace font stack — switchable via data-font attribute ───────────── */
+/*
+ * Three high-quality monospace fonts loaded via Google Fonts:
+ *   --font-mono-jetbrains  JetBrains Mono  (default — established project font)
+ *   --font-mono-fira       Fira Code       (ligature-rich, excellent readability)
+ *   --font-mono-inconsolata Inconsolata    (clean, compact, neutral aesthetic)
+ *   --font-mono-ibmplex    IBM Plex Mono   (professional, open-source IBM face)
+ *
+ * Usage: set data-font="fira" | "inconsolata" | "ibmplex" on <html>
+ * Default (no attribute) → JetBrains Mono.
+ */
+:root {
+  --font-mono-jetbrains:  'JetBrains Mono', monospace;
+  --font-mono-fira:       'Fira Code', monospace;
+  --font-mono-inconsolata: 'Inconsolata', monospace;
+  --font-mono-ibmplex:    'IBM Plex Mono', monospace;
+  --font-mono:            var(--font-mono-jetbrains);
+}
+html[data-font="fira"]        { --font-mono: var(--font-mono-fira); }
+html[data-font="inconsolata"] { --font-mono: var(--font-mono-inconsolata); }
+html[data-font="ibmplex"]     { --font-mono: var(--font-mono-ibmplex); }
+
 /* ── Recharts — consistent font + grid ──────────────────────────────────── */
 .recharts-text,
 .recharts-cartesian-axis-tick-value,
 .recharts-label {
-  font-family: 'JetBrains Mono', monospace !important;
+  font-family: var(--theme-mono, var(--font-mono)) !important;
   fill: var(--theme-secondary, #5e768f) !important;
   font-size: 9px !important;
 }
 .recharts-cartesian-grid line { stroke: rgba(255,255,255,0.05) !important; }
 .recharts-cartesian-grid-horizontal line,
 .recharts-cartesian-grid-vertical line { stroke: rgba(255,255,255,0.05) !important; }
-.recharts-tooltip-wrapper { font-family: 'JetBrains Mono', monospace !important; }
+.recharts-tooltip-wrapper { font-family: var(--theme-mono, var(--font-mono)) !important; }
 .recharts-default-tooltip {
   background-color: var(--theme-surface, #0d1826) !important;
   border: 1px solid rgba(201,168,76,0.25) !important;
   border-radius: 0 !important;
-  font-family: 'JetBrains Mono', monospace !important;
+  font-family: var(--theme-mono, var(--font-mono)) !important;
   font-size: 10px !important;
+}
+
+/* ── iOS Safari zoom prevention — inputs must be ≥16px on mobile ─────────── */
+@media (max-width: 768px) {
+  input, textarea, select, .ft-input {
+    font-size: 16px !important;
+  }
 }

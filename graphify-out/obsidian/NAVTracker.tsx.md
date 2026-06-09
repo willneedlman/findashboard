@@ -1,27 +1,22 @@
 ---
 source_file: "frontend/src/pages/NAVTracker.tsx"
 type: "code"
-community: "DCF Valuation & MetricCard"
-location: "L1"
+community: "Frontend"
+location: "None"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/DCF_Valuation__MetricCard
+  - community/Frontend
 ---
 
 # NAVTracker.tsx
 
 ## Connections
-- [[App.tsx]] - `imports_from` [EXTRACTED]
-- [[ChartPanel()_8]] - `contains` [EXTRACTED]
-- [[INPUT_10]] - `contains` [EXTRACTED]
-- [[LABEL_9]] - `contains` [EXTRACTED]
-- [[MetricCard.tsx]] - `imports_from` [EXTRACTED]
-- [[NAVTracker()]] - `contains` [EXTRACTED]
-- [[PageWrapper.tsx]] - `imports_from` [EXTRACTED]
-- [[TICK_9]] - `contains` [EXTRACTED]
-- [[TOOLTIP_STYLE_10]] - `contains` [EXTRACTED]
-- [[fetchNAVProxy()]] - `imports` [EXTRACTED]
-- [[useApi.ts]] - `imports_from` [EXTRACTED]
+- [[frontend_src_pages_navtracker_tsx_navtracker]] - `defines` [EXTRACTED]
+- [[components_pagewrapper]] - `imports` [EXTRACTED]
+- [[components_metriccard]] - `imports` [EXTRACTED]
+- [[components_sidebarlayout]] - `imports` [EXTRACTED]
+- [[hooks_useapi]] - `imports` [EXTRACTED]
+- [[components_emptystate]] - `imports` [EXTRACTED]
 
-#graphify/code #graphify/EXTRACTED #community/DCF_Valuation__MetricCard
+#graphify/code #graphify/EXTRACTED #community/Frontend

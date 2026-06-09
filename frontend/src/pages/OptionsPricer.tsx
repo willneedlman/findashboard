@@ -20,8 +20,8 @@ const GREEK_COLOR: Record<string, string> = {
 }
 
 const INPUT: React.CSSProperties = {
-  background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: '#d7e3fc',
-  fontFamily: 'JetBrains Mono, monospace', fontSize: 12, padding: '5px 8px',
+  background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: 'var(--theme-text, #d7e3fc)',
+  fontFamily: 'var(--theme-mono)', fontSize: 12, padding: '5px 8px',
   width: '100%', outline: 'none',
 }
 const LABEL: React.CSSProperties = {
@@ -29,27 +29,27 @@ const LABEL: React.CSSProperties = {
   textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', marginBottom: 4, display: 'block',
 }
 const TOOLTIP_STYLE = { background: 'var(--theme-surface, #142032)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', borderRadius: 0 }
-const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'JetBrains Mono, monospace' }
+const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'var(--theme-mono)' }
 
 function GreekCard({ label, value, help }: { label: string; value: number; help?: string }) {
   const [show, setShow] = useState(false)
   return (
-    <div style={{ background: 'var(--theme-surface, #142032)', border: '1px solid rgba(255,255,255,0.07)', borderTop: '3px solid var(--theme-primary, #c9a84c)', padding: 10, position: 'relative' }}>
+    <div style={{ background: 'var(--theme-surface, #142032)', border: '1px solid var(--theme-border, rgba(255,255,255,0.07))', borderTop: '3px solid var(--theme-primary, #c9a84c)', padding: 10, position: 'relative' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
         <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)' }}>{label}</span>
         {help && (
-          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', cursor: 'help' }}
+          <span style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', cursor: 'help' }}
             onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>ⓘ</span>
         )}
         {show && help && (
           <div style={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: 6,
             background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', padding: '6px 8px', width: 180, fontSize: 11,
-            color: '#d7e3fc', lineHeight: '15px', zIndex: 50, pointerEvents: 'none' }}>
+            color: 'var(--theme-text, #d7e3fc)', lineHeight: '15px', zIndex: 50, pointerEvents: 'none' }}>
             {help}
           </div>
         )}
       </div>
-      <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 18, fontWeight: 700, color: '#d7e3fc' }}>
+      <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 18, fontWeight: 700, color: 'var(--theme-text, #d7e3fc)' }}>
         {value}
       </div>
     </div>
@@ -58,11 +58,11 @@ function GreekCard({ label, value, help }: { label: string; value: number; help?
 
 function ChartPanel({ label, height, children }: { label: string; height: number; children: React.ReactNode }) {
   return (
-    <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)', position: 'relative' }}>
+    <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', position: 'relative' }}>
       <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 10,
         background: 'rgba(46,57,77,0.8)', padding: '3px 8px',
-        borderRight: '1px solid rgba(255,255,255,0.08)', borderBottom: '1px solid rgba(255,255,255,0.08)',
-        fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#d7e3fc' }}>
+        borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
+        fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>
         {label}
       </div>
       <div style={{ paddingTop: 28, paddingLeft: 8, paddingRight: 8, paddingBottom: 8, height }}>
@@ -72,7 +72,7 @@ function ChartPanel({ label, height, children }: { label: string; height: number
   )
 }
 
-export default function OptionsPricer() {
+export function OptionsPricerContent() {
   const isMobile = useIsMobile()
   const [params, setParams] = useState({ S: 100, K: 100, T: 30, sigma: 20, r: 5, option_type: 'call' })
   const [view, setView] = useState<'2d' | 'payoff'>('2d')
@@ -90,9 +90,8 @@ export default function OptionsPricer() {
   const isCall = params.option_type === 'call'
 
   return (
-    <PageWrapper>
       <SidebarLayout sidebarWidth={190} sidebarTitle="Pricer Inputs" sidebar={<>
-          <div style={{ padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'var(--theme-surface, #142032)' }}>
+          <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)' }}>
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#ffffff' }}>
               Pricing Parameters
             </div>
@@ -110,7 +109,7 @@ export default function OptionsPricer() {
                 <input type="number" value={(params as any)[f.key]} step={f.step}
                   onChange={set(f.key as any)} style={INPUT}
                   onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')}
-                  onBlur={e => (e.target.style.borderColor = 'rgba(255,255,255,0.10)')}
+                  onBlur={e => (e.target.style.borderColor = 'var(--theme-border, rgba(255,255,255,0.10))')}
                 />
               </div>
             ))}
@@ -122,9 +121,9 @@ export default function OptionsPricer() {
               </select>
             </div>
           </div>
-          <div style={{ padding: 10, borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ padding: 10, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', display: 'flex', flexDirection: 'column', gap: 6 }}>
             <button onClick={recalc} disabled={pricePending} style={{
-              width: '100%', background: pricePending ? 'rgba(255,255,255,0.04)' : 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)',
+              width: '100%', background: pricePending ? 'var(--theme-hover, rgba(255,255,255,0.04))' : 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)',
               border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)',
               fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
               textTransform: 'uppercase', padding: '8px 0', cursor: pricePending ? 'default' : 'pointer',
@@ -132,23 +131,23 @@ export default function OptionsPricer() {
             }}>
               {pricePending ? '⟳ Calculating…' : '⬢ Calculate'}
             </button>
-            {priceError && <div style={{ fontSize: 9, color: '#ef4444', textAlign: 'center', fontFamily: 'IBM Plex Sans, sans-serif' }}>Server unavailable — is the backend running?</div>}
+            {priceError && <div style={{ fontSize: 9, color: '#ef4444', textAlign: 'center', fontFamily: 'var(--theme-sans)' }}>Server unavailable — is the backend running?</div>}
           </div>
         </>}>
 
           {/* Premium + Greeks */}
           {priceData && (
-            <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
               {/* Premium header */}
-              <div style={{ padding: '12px 14px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)' }}>
                   Option Premium
                 </span>
-                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 28, fontWeight: 700, color: 'var(--theme-primary, #c9a84c)' }}>
+                <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 28, fontWeight: 700, color: 'var(--theme-primary, #c9a84c)' }}>
                   ${priceData.price}
                 </span>
                 {!isMobile && (
-                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', letterSpacing: '0.08em' }}>
+                  <span style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', letterSpacing: '0.08em' }}>
                     {params.option_type.toUpperCase()} · S={params.S} · K={params.K} · T={params.T}d · σ={params.sigma}% · r={params.r}%
                   </span>
                 )}
@@ -166,12 +165,12 @@ export default function OptionsPricer() {
           )}
 
           {/* Tab bar */}
-          <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+          <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
             {(['2d', 'payoff'] as const).map(t => (
               <button key={t} onClick={() => setView(t)} style={{
                 padding: '7px 16px', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
                 textTransform: 'uppercase', background: 'none', border: 'none', cursor: 'pointer',
-                color: view === t ? 'var(--theme-primary, #c9a84c)' : 'rgba(255,255,255,0.18)',
+                color: view === t ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-text-faint, rgba(255,255,255,0.18))',
                 borderBottom: view === t ? '2px solid #c9a84c' : '2px solid transparent',
                 marginBottom: -1,
               }}>
@@ -189,7 +188,7 @@ export default function OptionsPricer() {
                   <XAxis dataKey="spot" tick={TICK} interval="preserveStartEnd" />
                   <YAxis tick={TICK} tickFormatter={v => `$${v.toFixed(2)}`} orientation="right" />
                   <Tooltip formatter={(v: number) => [`$${v.toFixed(4)}`, 'P&L']} contentStyle={TOOLTIP_STYLE} />
-                  <ReferenceLine y={0} stroke="rgba(255,255,255,0.15)" strokeDasharray="4 4" />
+                  <ReferenceLine y={0} stroke="var(--theme-text-faint, rgba(255,255,255,0.15))" strokeDasharray="4 4" />
                   <ReferenceLine x={String(params.K.toFixed(1))} stroke="#d97736" strokeDasharray="4 4"
                     label={{ value: 'Strike', fill: '#d97736', fontSize: 9 }} />
                   <Line type="monotone" dataKey="pnl" stroke="#2f6b4b" strokeWidth={2} dot={false} />
@@ -219,6 +218,9 @@ export default function OptionsPricer() {
           )}
 
         </SidebarLayout>
-    </PageWrapper>
   )
+}
+
+export default function OptionsPricer() {
+  return <PageWrapper><OptionsPricerContent /></PageWrapper>
 }

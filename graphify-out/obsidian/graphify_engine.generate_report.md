@@ -1,0 +1,14 @@
+---
+source_file: "graphify_engine.py"
+type: "code"
+community: "Group 6"
+location: "334"
+tags:
+  - graphify/code
+  - graphify/EXTRACTED
+  - community/Group_6
+---
+
+# graphify_engine.generate_report
+
+#graphify/code #graphify/EXTRACTED #community/Group_6

@@ -1,6 +1,9 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, lazy, Suspense } from 'react'
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
+
+const RegressionAnalysis = lazy(() => import('./RegressionAnalysis'))
+const StressTester       = lazy(() => import('./StressTester'))
 
 const SAMPLE_CSV = `timestamp,side,price,size,order_id
 2024-01-02 09:30:00.000,A,150.30,200,ORD001
@@ -116,7 +119,7 @@ const inp: React.CSSProperties = {
 }
 
 const btn = (active = true): React.CSSProperties => ({
-  background: active ? RED : 'rgba(255,255,255,0.04)',
+  background: active ? RED : 'var(--theme-hover, rgba(255,255,255,0.04))',
   border: `1px solid ${active ? RED : RED_BORDER}`,
   color: active ? '#fff' : '#6b7280',
   fontFamily: 'var(--theme-mono)', fontSize: 10, fontWeight: 700,
@@ -145,7 +148,7 @@ interface UserStats {
   users: { id: string; username: string; display_name: string; created_at: string; last_login_at: string | null; login_count: number }[]
 }
 
-type Tab = 'health' | 'users' | 'cache' | 'endpoints' | 'lob'
+type Tab = 'health' | 'users' | 'cache' | 'endpoints' | 'lob' | 'regression' | 'stress'
 
 interface LOBSnapshot {
   msg: number
@@ -313,7 +316,7 @@ export default function AdminTester() {
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 0, borderBottom: `1px solid ${RED_BORDER}`, marginBottom: 20 }}>
-          {(['health', 'users', 'cache', 'endpoints', 'lob'] as Tab[]).map(t => (
+          {(['health', 'users', 'cache', 'endpoints', 'lob', 'regression', 'stress'] as Tab[]).map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
               background: 'none', border: 'none', borderBottom: tab === t ? `2px solid ${RED}` : '2px solid transparent',
               color: tab === t ? RED : '#6b7280', fontFamily: 'var(--theme-mono)', fontSize: 10,
@@ -631,6 +634,16 @@ export default function AdminTester() {
               </>
             )}
           </div>
+        )}
+        {tab === 'regression' && (
+          <Suspense fallback={<div style={{ color: '#6b7280', padding: 32 }}>Loading…</div>}>
+            <RegressionAnalysis />
+          </Suspense>
+        )}
+        {tab === 'stress' && (
+          <Suspense fallback={<div style={{ color: '#6b7280', padding: 32 }}>Loading…</div>}>
+            <StressTester />
+          </Suspense>
         )}
       </div>
     </PageWrapper>

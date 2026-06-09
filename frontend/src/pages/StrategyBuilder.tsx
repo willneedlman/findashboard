@@ -64,7 +64,27 @@ const PRESET_DESC: Record<string, string> = {
 }
 
 const LEG_COLORS = ['#1f5673', '#7b5ea7', '#d97736', '#2f6b4b', '#8c2e36']
-const INPUT:  React.CSSProperties = { background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: '#d7e3fc', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, padding: '4px 7px', outline: 'none' }
+
+const LS_KEY = 'ft_pending_option_strategy'
+
+function toOCC(ticker: string, expiry: string, type: 'call' | 'put', strike: number): string {
+  const d = new Date(expiry + 'T12:00:00')
+  const yy = String(d.getFullYear()).slice(2).padStart(2, '0')
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  const cp = type === 'call' ? 'C' : 'P'
+  const stk = String(Math.round(strike * 1000)).padStart(8, '0')
+  return `${ticker.toUpperCase()}${yy}${mm}${dd}${cp}${stk}`
+}
+
+export interface PendingOptionStrategy {
+  name: string
+  underlying: string
+  orderType: 'debit' | 'credit' | 'market'
+  legs: { occ: string; side: 'buy_to_open' | 'sell_to_open'; qty: string; hint: string }[]
+  savedAt: number
+}
+const INPUT:  React.CSSProperties = { background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-mono)', fontSize: 12, padding: '4px 7px', outline: 'none' }
 const SELECT: React.CSSProperties = { ...INPUT, cursor: 'pointer' }
 
 interface LegChain {
@@ -81,7 +101,7 @@ function fmtExpiry(exp: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 const TOOLTIP_STYLE = { background: 'var(--theme-surface, #142032)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', borderRadius: 0 }
-const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'JetBrains Mono, monospace' }
+const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'var(--theme-mono)' }
 
 // Pure intrinsic payoff at expiry — no Black-Scholes needed
 function intrinsic(S: number, leg: Leg): number {
@@ -99,6 +119,7 @@ export default function StrategyBuilder() {
   const [greekError, setGreekError]   = useState<string | null>(null)
   const [aiNarrative, setAiNarrative] = useState<any>(null)
   const [aiNarrativePending, setAiNarrativePending] = useState(false)
+  const [sentToPaperTrader, setSentToPaperTrader] = useState(false)
   const [legChains, setLegChains]     = useState<Record<number, LegChain>>({})
 
   const uniqueTickers    = useMemo(() => [...new Set(legs.map(l => l.ticker))], [legs])
@@ -265,6 +286,32 @@ export default function StrategyBuilder() {
     return Math.max(d, 0)
   }
 
+  const sendToPaperTrader = () => {
+    const allBuy = legs.every(l => l.action === 'buy')
+    const allSell = legs.every(l => l.action === 'sell')
+    const orderType: PendingOptionStrategy['orderType'] =
+      legs.length === 1 ? 'market' :
+      allBuy ? 'debit' :
+      allSell ? 'credit' :
+      legs.filter(l => l.action === 'sell').length > legs.filter(l => l.action === 'buy').length ? 'credit' : 'debit'
+
+    const pending: PendingOptionStrategy = {
+      name: preset,
+      underlying: primaryTicker,
+      orderType,
+      legs: legs.map(l => ({
+        occ:  toOCC(l.ticker, l.expiry, l.option_type, l.K),
+        side: l.action === 'buy' ? 'buy_to_open' : 'sell_to_open',
+        qty:  String(l.quantity),
+        hint: `${l.action.toUpperCase()} ${l.option_type.toUpperCase()} K=${l.K} exp=${l.expiry}`,
+      })),
+      savedAt: Date.now(),
+    }
+    localStorage.setItem(LS_KEY, JSON.stringify(pending))
+    setSentToPaperTrader(true)
+    setTimeout(() => setSentToPaperTrader(false), 3000)
+  }
+
   const calculateGreeks = async () => {
     const valid = legs.filter(l => l.ticker && l.K && l.expiry)
     if (!valid.length) { setGreekError('Each leg needs a ticker, strike, and expiry.'); return }
@@ -304,7 +351,7 @@ export default function StrategyBuilder() {
   return (
     <PageWrapper>
       <SidebarLayout sidebarWidth={210} sidebarTitle="Strategy Builder" sidebar={<>
-          <div style={{ padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'var(--theme-surface, #142032)' }}>
+          <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)' }}>
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#ffffff' }}>Strategy Builder</div>
           </div>
           <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 10, flex: 1, overflowY: 'auto' }}>
@@ -317,16 +364,38 @@ export default function StrategyBuilder() {
                   <button key={name} onClick={() => { setPreset(name); setLegs(scalePreset(PRESETS[name], getSpot(primaryTicker))); setSpotOverrides({}); setLegChains({}) }} style={{
                     padding: '6px 8px', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
                     background: preset === name ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 12%, transparent)' : 'transparent',
-                    border: `1px solid ${preset === name ? 'var(--theme-primary, #c9a84c)' : 'rgba(255,255,255,0.08)'}`,
+                    border: `1px solid ${preset === name ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.08))'}`,
                     color: preset === name ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #5e768f)', cursor: 'pointer', textAlign: 'left',
                   }}>
                     <div>{name}</div>
-                    <div style={{ fontSize: 9, fontWeight: 400, letterSpacing: '0.03em', textTransform: 'none', color: preset === name ? 'var(--theme-secondary, #99907e)' : 'rgba(255,255,255,0.10)', marginTop: 2, lineHeight: '12px' }}>
+                    <div style={{ fontSize: 9, fontWeight: 400, letterSpacing: '0.03em', textTransform: 'none', color: preset === name ? 'var(--theme-secondary, #99907e)' : 'var(--theme-border, rgba(255,255,255,0.10))', marginTop: 2, lineHeight: '12px' }}>
                       {PRESET_DESC[name]}
                     </div>
                   </button>
                 ))}
               </div>
+
+              {/* Send to Paper Trader */}
+              <button
+                onClick={sendToPaperTrader}
+                style={{
+                  marginTop: 8, width: '100%', padding: '7px 8px',
+                  fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
+                  cursor: 'pointer', border: '1px solid',
+                  borderColor: sentToPaperTrader ? '#22c55e' : 'rgba(201,168,76,0.5)',
+                  background: sentToPaperTrader ? 'rgba(34,197,94,0.12)' : 'rgba(201,168,76,0.07)',
+                  color: sentToPaperTrader ? '#22c55e' : 'var(--theme-primary, #c9a84c)',
+                  transition: 'all 0.2s',
+                }}
+              >
+                {sentToPaperTrader ? '✓ Sent — approve in Paper Trader' : '→ Send to Paper Trader'}
+              </button>
+              {sentToPaperTrader && (
+                <a href="/paper-trading" style={{ display: 'block', marginTop: 4, fontSize: 9, color: '#22c55e',
+                  fontFamily: 'var(--theme-mono)', textAlign: 'center', textDecoration: 'underline' }}>
+                  Go to Paper Trader ↗
+                </a>
+              )}
             </div>
 
             {/* Legs */}
@@ -350,15 +419,15 @@ export default function StrategyBuilder() {
                             style={{
                               fontSize: 8, fontWeight: 700, padding: '1px 6px', cursor: 'pointer',
                               letterSpacing: '0.06em', textTransform: 'uppercase',
-                              background: activeChainLeg === i ? 'rgba(201,168,76,0.18)' : 'rgba(255,255,255,0.04)',
-                              border: `1px solid ${activeChainLeg === i ? 'rgba(201,168,76,0.45)' : 'rgba(255,255,255,0.12)'}`,
+                              background: activeChainLeg === i ? 'rgba(201,168,76,0.18)' : 'var(--theme-hover, rgba(255,255,255,0.04))',
+                              border: `1px solid ${activeChainLeg === i ? 'rgba(201,168,76,0.45)' : 'var(--theme-text-subtle, rgba(255,255,255,0.12))'}`,
                               color: activeChainLeg === i ? '#c9a84c' : '#5e768f',
                             }}
                           >
                             {activeChainLeg === i ? '× Chain' : 'Chain'}
                           </button>
                         )}
-                        <button onClick={() => removeLeg(i)} style={{ fontSize: 12, color: 'rgba(255,255,255,0.22)', background: 'none', border: 'none', cursor: 'pointer' }}>×</button>
+                        <button onClick={() => removeLeg(i)} style={{ fontSize: 12, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', background: 'none', border: 'none', cursor: 'pointer' }}>×</button>
                       </div>
                     </div>
 
@@ -368,7 +437,7 @@ export default function StrategyBuilder() {
                         onChange={e => updateLeg(i, 'ticker', e.target.value.toUpperCase())}
                         style={{ ...INPUT, flex: 1, minWidth: 0, fontSize: 12, fontWeight: 700, textTransform: 'uppercase' }}
                         onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')}
-                        onBlur={e => (e.target.style.borderColor = 'rgba(255,255,255,0.10)')}
+                        onBlur={e => (e.target.style.borderColor = 'var(--theme-border, rgba(255,255,255,0.10))')}
                         onKeyDown={e => e.key === 'Enter' && fetchSpotForLeg(i)}
                       />
                       <button onClick={() => fetchSpotForLeg(i)}
@@ -409,7 +478,7 @@ export default function StrategyBuilder() {
                         { label: 'Qty', key: 'quantity', step: 1,    val: leg.quantity },
                       ].map(f => (
                         <div key={f.key}>
-                          <div style={{ fontSize: 8, color: 'rgba(255,255,255,0.22)', marginBottom: 2 }}>{f.label}</div>
+                          <div style={{ fontSize: 8, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', marginBottom: 2 }}>{f.label}</div>
                           <input type="number" value={f.val} step={f.step}
                             min={f.key === 'quantity' ? 1 : undefined}
                             onChange={e => updateLeg(i, f.key as keyof Leg, f.key === 'quantity' ? Math.max(1, +e.target.value) : +e.target.value)}
@@ -419,7 +488,7 @@ export default function StrategyBuilder() {
                     </div>
                     {/* Expiry */}
                     <div>
-                      <div style={{ fontSize: 8, color: 'rgba(255,255,255,0.22)', marginBottom: 2 }}>EXPIRY</div>
+                      <div style={{ fontSize: 8, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', marginBottom: 2 }}>EXPIRY</div>
                       <input type="date" value={leg.expiry ?? ''}
                         onChange={e => updateLeg(i, 'expiry', e.target.value)}
                         style={{ ...INPUT, width: '100%', fontSize: 11 }} />
@@ -455,22 +524,22 @@ export default function StrategyBuilder() {
             const callMap = Object.fromEntries(activeChain.calls.map((c: any) => [c.strike, c]))
             const putMap  = Object.fromEntries(activeChain.puts.map((p: any)  => [p.strike, p]))
 
-            const TH: React.CSSProperties = { fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', padding: '5px 8px', whiteSpace: 'nowrap' }
-            const TD_base: React.CSSProperties = { fontFamily: 'JetBrains Mono, monospace', fontSize: 11, padding: '5px 8px', whiteSpace: 'nowrap' }
+            const TH: React.CSSProperties = { fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-text-dim, rgba(255,255,255,0.35))', padding: '5px 8px', whiteSpace: 'nowrap' }
+            const TD_base: React.CSSProperties = { fontFamily: 'var(--theme-mono)', fontSize: 11, padding: '5px 8px', whiteSpace: 'nowrap' }
 
             return (
-              <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)', marginBottom: 8 }}>
+              <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', marginBottom: 8 }}>
                 {/* Header */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 12px', background: 'var(--theme-surface, #142032)', borderBottom: '1px solid rgba(255,255,255,0.08)', flexWrap: 'wrap', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 12px', background: 'var(--theme-surface, #142032)', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', flexWrap: 'wrap', gap: 8 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     {/* Leg tabs */}
-                    <span style={{ fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)' }}>Chain</span>
+                    <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)' }}>Chain</span>
                     {legs.map((l, idx) => legChains[idx]?.expiries?.length > 0 && (
                       <button key={idx} onClick={() => { setActiveChainLeg(idx); setDateInput(legChains[idx].selectedExpiry) }}
                         style={{
                           fontSize: 9, fontWeight: 700, padding: '3px 10px', cursor: 'pointer', letterSpacing: '0.06em',
                           background: activeChainLeg === idx ? `${LEG_COLORS[idx % LEG_COLORS.length]}30` : 'transparent',
-                          border: `1px solid ${activeChainLeg === idx ? LEG_COLORS[idx % LEG_COLORS.length] : 'rgba(255,255,255,0.1)'}`,
+                          border: `1px solid ${activeChainLeg === idx ? LEG_COLORS[idx % LEG_COLORS.length] : 'var(--theme-border, rgba(255,255,255,0.1))'}`,
                           color: activeChainLeg === idx ? LEG_COLORS[idx % LEG_COLORS.length] : '#5e768f',
                         }}>
                         {l.ticker || `Leg ${idx+1}`}
@@ -481,15 +550,15 @@ export default function StrategyBuilder() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                     {/* Date input with snap */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 9, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Expiry</span>
+                      <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-text-dim, rgba(255,255,255,0.35))', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Expiry</span>
                       <input type="date" value={dateInput}
                         onChange={e => setDateInput(e.target.value)}
                         onBlur={e => snapToExpiry(e.target.value, activeChainLeg)}
                         onKeyDown={e => e.key === 'Enter' && snapToExpiry(dateInput, activeChainLeg)}
-                        style={{ background: 'var(--theme-bg, #0a1628)', border: '1px solid rgba(255,255,255,0.12)', color: '#d7e3fc', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, padding: '3px 6px', outline: 'none' }}
+                        style={{ background: 'var(--theme-bg, #0a1628)', border: '1px solid var(--theme-text-subtle, rgba(255,255,255,0.12))', color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-mono)', fontSize: 11, padding: '3px 6px', outline: 'none' }}
                       />
                       {exp && dteN !== null && (
-                        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#c9a84c' }}>
+                        <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: '#c9a84c' }}>
                           {fmtExpiry(exp)} · <span style={{ color: dteN <= 7 ? '#ef4444' : dteN <= 30 ? '#f97316' : '#22c55e' }}>{dteN}d</span>
                         </span>
                       )}
@@ -502,7 +571,7 @@ export default function StrategyBuilder() {
                           style={{
                             fontSize: 8, padding: '2px 7px', cursor: 'pointer',
                             background: exp === e ? 'rgba(201,168,76,0.15)' : 'transparent',
-                            border: `1px solid ${exp === e ? 'rgba(201,168,76,0.4)' : 'rgba(255,255,255,0.08)'}`,
+                            border: `1px solid ${exp === e ? 'rgba(201,168,76,0.4)' : 'var(--theme-border, rgba(255,255,255,0.08))'}`,
                             color: exp === e ? '#c9a84c' : '#5e768f',
                           }}>
                           {fmtExpiry(e)}
@@ -512,18 +581,18 @@ export default function StrategyBuilder() {
 
                     {/* Strikes count */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <span style={{ fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 9, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Strikes</span>
+                      <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-text-dim, rgba(255,255,255,0.35))', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Strikes</span>
                       {[5, 10, 15, 20].map(n => (
                         <button key={n} onClick={() => setStrikeCount(n)} style={{
                           fontSize: 9, padding: '2px 7px', cursor: 'pointer',
                           background: strikeCount === n ? 'rgba(201,168,76,0.15)' : 'transparent',
-                          border: `1px solid ${strikeCount === n ? 'rgba(201,168,76,0.4)' : 'rgba(255,255,255,0.08)'}`,
+                          border: `1px solid ${strikeCount === n ? 'rgba(201,168,76,0.4)' : 'var(--theme-border, rgba(255,255,255,0.08))'}`,
                           color: strikeCount === n ? '#c9a84c' : '#5e768f',
                         }}>{n}</button>
                       ))}
                     </div>
 
-                    <button onClick={() => setActiveChainLeg(null)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.25)', fontSize: 14, cursor: 'pointer', lineHeight: 1 }}>×</button>
+                    <button onClick={() => setActiveChainLeg(null)} style={{ background: 'none', border: 'none', color: 'var(--theme-text-faint, rgba(255,255,255,0.25))', fontSize: 14, cursor: 'pointer', lineHeight: 1 }}>×</button>
                   </div>
                 </div>
 
@@ -535,7 +604,7 @@ export default function StrategyBuilder() {
                       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <tbody>
                           {Array.from({ length: strikeCount }).map((_, idx) => (
-                            <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                            <tr key={idx} style={{ borderBottom: '1px solid var(--theme-hover, rgba(255,255,255,0.04))' }}>
                               {Array.from({ length: 11 }).map((__, col) => (
                                 <td key={col} style={{ padding: '8px 8px' }}>
                                   <div style={{
@@ -559,7 +628,7 @@ export default function StrategyBuilder() {
                     <div style={{ overflowX: 'auto' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <thead>
-                          <tr style={{ background: 'rgba(0,0,0,0.25)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                          <tr style={{ background: 'rgba(0,0,0,0.25)', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.06))' }}>
                             {/* Calls side */}
                             <th style={{ ...TH, textAlign: 'right', color: '#4ade8088' }}>Δ</th>
                             <th style={{ ...TH, textAlign: 'right' }}>OI</th>
@@ -591,8 +660,8 @@ export default function StrategyBuilder() {
 
                             return (
                               <tr key={K}
-                                style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: rowBg }}
-                                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
+                                style={{ borderBottom: '1px solid var(--theme-hover, rgba(255,255,255,0.04))', background: rowBg }}
+                                onMouseEnter={e => (e.currentTarget.style.background = 'var(--theme-hover, rgba(255,255,255,0.03))')}
                                 onMouseLeave={e => (e.currentTarget.style.background = rowBg)}>
 
                                 {/* Call cells */}
@@ -605,7 +674,7 @@ export default function StrategyBuilder() {
                                 <td onClick={callClick} style={{ ...TD_base, textAlign: 'right', cursor: 'pointer', color: '#8a9bb0', background: callSel ? 'rgba(201,168,76,0.12)' : undefined }}>
                                   {c?.volume ? (c.volume >= 1000 ? `${(c.volume/1000).toFixed(1)}k` : c.volume) : '—'}
                                 </td>
-                                <td onClick={callClick} style={{ ...TD_base, textAlign: 'right', cursor: 'pointer', color: '#d7e3fc', background: callSel ? 'rgba(201,168,76,0.12)' : undefined }}>
+                                <td onClick={callClick} style={{ ...TD_base, textAlign: 'right', cursor: 'pointer', color: 'var(--theme-text, #d7e3fc)', background: callSel ? 'rgba(201,168,76,0.12)' : undefined }}>
                                   {c?.bid > 0 ? c.bid.toFixed(2) : '—'}
                                 </td>
                                 <td onClick={callClick} style={{ ...TD_base, textAlign: 'right', cursor: 'pointer', color: '#4ade80', fontWeight: callSel ? 700 : 400, background: callSel ? 'rgba(201,168,76,0.18)' : undefined }}>
@@ -614,7 +683,7 @@ export default function StrategyBuilder() {
 
                                 {/* Strike */}
                                 <td style={{ ...TD_base, textAlign: 'center', background: 'rgba(201,168,76,0.05)', fontWeight: 700,
-                                  color: isATM ? '#c9a84c' : spot && K < spot ? '#d7e3fc' : '#6b7f97' }}>
+                                  color: isATM ? '#c9a84c' : spot && K < spot ? 'var(--theme-text, #d7e3fc)' : '#6b7f97' }}>
                                   {K}
                                   {isATM && <span style={{ fontSize: 8, color: '#c9a84c', marginLeft: 4, letterSpacing: '0.08em' }}>ATM</span>}
                                 </td>
@@ -623,7 +692,7 @@ export default function StrategyBuilder() {
                                 <td onClick={putClick} style={{ ...TD_base, textAlign: 'left', cursor: 'pointer', color: '#ef4444', fontWeight: putSel ? 700 : 400, background: putSel ? 'rgba(140,46,54,0.35)' : undefined }}>
                                   {p?.bid > 0 ? p.bid.toFixed(2) : '—'}
                                 </td>
-                                <td onClick={putClick} style={{ ...TD_base, textAlign: 'left', cursor: 'pointer', color: '#d7e3fc', background: putSel ? 'rgba(140,46,54,0.35)' : undefined }}>
+                                <td onClick={putClick} style={{ ...TD_base, textAlign: 'left', cursor: 'pointer', color: 'var(--theme-text, #d7e3fc)', background: putSel ? 'rgba(140,46,54,0.35)' : undefined }}>
                                   {p?.ask > 0 ? p.ask.toFixed(2) : '—'}
                                 </td>
                                 <td onClick={putClick} style={{ ...TD_base, textAlign: 'left', cursor: 'pointer', color: '#8a9bb0', background: putSel ? 'rgba(140,46,54,0.35)' : undefined }}>
@@ -641,7 +710,7 @@ export default function StrategyBuilder() {
                         </tbody>
                       </table>
                       {spot && (
-                        <div style={{ padding: '4px 12px', borderTop: '1px solid rgba(255,255,255,0.04)', fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: 'rgba(255,255,255,0.22)' }}>
+                        <div style={{ padding: '4px 12px', borderTop: '1px solid var(--theme-hover, rgba(255,255,255,0.04))', fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))' }}>
                           {leg?.ticker} spot ${spot.toFixed(2)} · Click call or put row to select · highlighted = active leg selection
                         </div>
                       )}
@@ -653,11 +722,11 @@ export default function StrategyBuilder() {
           })()}
 
           {/* Expiry Payoff Diagram */}
-          <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)', position: 'relative' }}>
-            <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 10, background: 'rgba(46,57,77,0.8)', padding: '3px 8px', borderRight: '1px solid rgba(255,255,255,0.08)', borderBottom: '1px solid rgba(255,255,255,0.08)', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#d7e3fc' }}>
+          <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', position: 'relative' }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 10, background: 'rgba(46,57,77,0.8)', padding: '3px 8px', borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>
               {primaryTicker} P&L at Expiry
             </div>
-            <div style={{ position: 'absolute', top: 0, right: 0, padding: '3px 8px', fontSize: 10, color: 'rgba(255,255,255,0.22)', zIndex: 10 }}>
+            <div style={{ position: 'absolute', top: 0, right: 0, padding: '3px 8px', fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', zIndex: 10 }}>
               per contract (×100 shares) · intrinsic only
             </div>
 
@@ -677,7 +746,7 @@ export default function StrategyBuilder() {
                   <Area type="monotone" dataKey="loss"   fill="rgba(140,46,54,0.25)"  stroke="none" />
 
                   {/* Breakeven line */}
-                  <ReferenceLine y={0} stroke="rgba(255,255,255,0.2)" strokeWidth={1} strokeDasharray="4 4" />
+                  <ReferenceLine y={0} stroke="var(--theme-text-faint, rgba(255,255,255,0.2))" strokeWidth={1} strokeDasharray="4 4" />
 
                   {/* Strike reference lines */}
                   {[...new Set(primaryLegs.map(l => l.K))].map(K => (
@@ -690,7 +759,7 @@ export default function StrategyBuilder() {
 
                   {/* Breakeven markers */}
                   {chartData.breakevens.map((be, i) => (
-                    <ReferenceLine key={i} x={be} stroke="rgba(255,255,255,0.25)" strokeDasharray="2 4"
+                    <ReferenceLine key={i} x={be} stroke="var(--theme-text-faint, rgba(255,255,255,0.25))" strokeDasharray="2 4"
                       label={{ value: `BE $${be}`, fill: 'var(--theme-secondary, #99907e)', fontSize: 8, position: 'insideTopLeft' }} />
                   ))}
 
@@ -707,7 +776,7 @@ export default function StrategyBuilder() {
             </div>
 
             {/* Spot price slider */}
-            <div style={{ padding: '8px 14px 12px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ padding: '8px 14px 12px', borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', whiteSpace: 'nowrap', width: 68 }}>
                   {primaryTicker} Spot
@@ -722,19 +791,19 @@ export default function StrategyBuilder() {
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     {[-20, -10, 0, +10, +20].map(p => (
                       <button key={p} onClick={() => setPrimary(+(chartData.atm * (1 + p / 100)).toFixed(2))}
-                        style={{ fontSize: 9, fontFamily: 'JetBrains Mono, monospace',
+                        style={{ fontSize: 9, fontFamily: 'var(--theme-mono)',
                           color: p === 0 ? 'var(--theme-primary, #c9a84c)' : p < 0 ? '#EF4444' : '#22C55E',
-                          background: 'none', border: '1px solid rgba(255,255,255,0.08)', padding: '2px 5px', cursor: 'pointer' }}>
+                          background: 'none', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '2px 5px', cursor: 'pointer' }}>
                         {p === 0 ? 'ATM' : `${p > 0 ? '+' : ''}${p}%`}
                       </button>
                     ))}
                   </div>
                 </div>
                 <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                  <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 700, color: 'var(--theme-primary, #c9a84c)' }}>
+                  <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 14, fontWeight: 700, color: 'var(--theme-primary, #c9a84c)' }}>
                     ${chartData.spot.toFixed(2)}
                   </div>
-                  <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: chartData.pct >= 0 ? '#22C55E' : '#EF4444' }}>
+                  <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: chartData.pct >= 0 ? '#22C55E' : '#EF4444' }}>
                     {chartData.pct >= 0 ? '+' : ''}{chartData.pct.toFixed(1)}% vs ATM
                   </div>
                 </div>
@@ -744,8 +813,8 @@ export default function StrategyBuilder() {
 
           {/* Secondary ticker sliders */}
           {secondaryTickers.length > 0 && (
-            <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)' }}>
-              <div style={{ padding: '6px 10px', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'var(--theme-surface, #142032)' }}>
+            <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+              <div style={{ padding: '6px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)' }}>
                 <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#ffffff' }}>
                   Secondary Ticker Prices at Expiry
                 </span>
@@ -759,7 +828,7 @@ export default function StrategyBuilder() {
                     <div key={tk}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                         <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--theme-primary, #c9a84c)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>{tk}</span>
-                        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: pct >= 0 ? '#22C55E' : '#EF4444' }}>
+                        <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: pct >= 0 ? '#22C55E' : '#EF4444' }}>
                           ${spot.toFixed(2)} ({pct >= 0 ? '+' : ''}{pct.toFixed(1)}%)
                         </span>
                       </div>
@@ -776,32 +845,32 @@ export default function StrategyBuilder() {
           {/* Leg summary + breakeven */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
             {legs.map((leg, i) => (
-              <span key={i} style={{ fontSize: 10, padding: '3px 8px', fontFamily: 'JetBrains Mono, monospace',
+              <span key={i} style={{ fontSize: 10, padding: '3px 8px', fontFamily: 'var(--theme-mono)',
                 border: `1px solid ${LEG_COLORS[i % LEG_COLORS.length]}`,
                 color: LEG_COLORS[i % LEG_COLORS.length] }}>
                 {leg.action === 'buy' ? '▲' : '▼'} {leg.ticker} {leg.option_type.toUpperCase()} K={leg.K} @ ${leg.premium} ×{leg.quantity}
               </span>
             ))}
             {chartData.breakevens.length > 0 && (
-              <span style={{ fontSize: 10, padding: '3px 8px', fontFamily: 'JetBrains Mono, monospace', color: 'var(--theme-secondary, #99907e)', border: '1px solid rgba(255,255,255,0.08)' }}>
+              <span style={{ fontSize: 10, padding: '3px 8px', fontFamily: 'var(--theme-mono)', color: 'var(--theme-secondary, #99907e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
                 BE: {chartData.breakevens.map(b => `$${b}`).join(' / ')}
               </span>
             )}
           </div>
 
           {/* ── Greeks Panel ─────────────────────────────────────────────── */}
-          <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: 'var(--theme-surface, #142032)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+          <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: 'var(--theme-surface, #142032)', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
               <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#ffffff' }}>Portfolio Greeks</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {greekError && <span style={{ fontSize: 9, color: '#ef4444', fontFamily: 'JetBrains Mono, monospace' }}>{greekError}</span>}
+                {greekError && <span style={{ fontSize: 9, color: '#ef4444', fontFamily: 'var(--theme-mono)' }}>{greekError}</span>}
                 <button
                   onClick={calculateGreeks}
                   disabled={greekLoading}
                   style={{
                     background: greekLoading ? 'transparent' : 'color-mix(in srgb, var(--theme-primary, #c9a84c) 15%, transparent)',
                     border: '1px solid rgba(201,168,76,0.4)', color: greekLoading ? 'rgba(255,255,255,0.3)' : 'var(--theme-primary, #c9a84c)',
-                    fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
+                    fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
                     padding: '3px 12px', cursor: greekLoading ? 'default' : 'pointer',
                   }}
                 >
@@ -813,13 +882,13 @@ export default function StrategyBuilder() {
             {greekResult && (
               <>
                 {/* Net greeks row */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
                   {(['delta','gamma','theta','vega'] as const).map((g, i) => {
                     const v = greekResult.net[g]
                     return (
                       <div key={g} style={{ padding: '10px 12px', borderRight: i < 3 ? '1px solid rgba(255,255,255,0.08)' : 'none' }}>
-                        <div style={{ fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', marginBottom: 4 }}>Net {g}</div>
-                        <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 18, fontWeight: 700, color: GREEK_COLORS[g], lineHeight: 1 }}>
+                        <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', marginBottom: 4 }}>Net {g}</div>
+                        <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 18, fontWeight: 700, color: GREEK_COLORS[g], lineHeight: 1 }}>
                           {v >= 0 ? '+' : ''}{v.toFixed(4)}
                         </div>
                       </div>
@@ -829,25 +898,25 @@ export default function StrategyBuilder() {
 
                 {/* Per-leg table */}
                 <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'JetBrains Mono, monospace', fontSize: 10 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--theme-mono)', fontSize: 10 }}>
                     <thead>
-                      <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'rgba(0,0,0,0.2)' }}>
+                      <tr style={{ borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'rgba(0,0,0,0.2)' }}>
                         {['Ticker','K','Expiry','DTE','Spot','Type','Pos','Qty','Δ','Γ','Θ','ν','Net Δ','Net Γ','Net Θ','Net ν'].map((h, i) => (
-                          <th key={h} style={{ fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', textAlign: i === 0 ? 'left' : 'right', padding: '5px 8px', whiteSpace: 'nowrap' }}>{h}</th>
+                          <th key={h} style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', textAlign: i === 0 ? 'left' : 'right', padding: '5px 8px', whiteSpace: 'nowrap' }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {greekResult.positions.map((pos, i) => (
-                        <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.012)' }}>
+                        <tr key={i} style={{ borderBottom: '1px solid var(--theme-hover, rgba(255,255,255,0.04))', background: i % 2 === 0 ? 'transparent' : 'var(--theme-hover, rgba(255,255,255,0.01))' }}>
                           <td style={{ padding: '5px 8px', color: 'var(--theme-primary, #c9a84c)', textAlign: 'left' }}>{pos.ticker}</td>
-                          <td style={{ padding: '5px 8px', textAlign: 'right', color: '#d7e3fc' }}>{pos.strike}</td>
-                          <td style={{ padding: '5px 8px', textAlign: 'right', color: '#d7e3fc' }}>{pos.expiry}</td>
+                          <td style={{ padding: '5px 8px', textAlign: 'right', color: 'var(--theme-text, #d7e3fc)' }}>{pos.strike}</td>
+                          <td style={{ padding: '5px 8px', textAlign: 'right', color: 'var(--theme-text, #d7e3fc)' }}>{pos.expiry}</td>
                           <td style={{ padding: '5px 8px', textAlign: 'right', color: 'var(--theme-secondary, #5e768f)' }}>{pos.dte}d</td>
-                          <td style={{ padding: '5px 8px', textAlign: 'right', color: '#d7e3fc' }}>{pos.spot.toFixed(2)}</td>
+                          <td style={{ padding: '5px 8px', textAlign: 'right', color: 'var(--theme-text, #d7e3fc)' }}>{pos.spot.toFixed(2)}</td>
                           <td style={{ padding: '5px 8px', textAlign: 'right', color: 'var(--theme-secondary, #5e768f)' }}>{pos.option_type}</td>
                           <td style={{ padding: '5px 8px', textAlign: 'right', color: pos.position_type === 'long' ? '#22c55e' : '#ef4444' }}>{pos.position_type}</td>
-                          <td style={{ padding: '5px 8px', textAlign: 'right', color: '#d7e3fc' }}>{pos.qty}</td>
+                          <td style={{ padding: '5px 8px', textAlign: 'right', color: 'var(--theme-text, #d7e3fc)' }}>{pos.qty}</td>
                           {(['delta','gamma','theta','vega'] as const).map(g => (
                             <td key={g} style={{ padding: '5px 8px', textAlign: 'right', color: GREEK_COLORS[g] }}>{pos[g].toFixed(4)}</td>
                           ))}
@@ -864,7 +933,7 @@ export default function StrategyBuilder() {
             )}
 
             {!greekResult && !greekLoading && (
-              <div style={{ padding: '16px 14px', fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 10, color: 'var(--theme-secondary, #5e768f)' }}>
+              <div style={{ padding: '16px 14px', fontFamily: 'var(--theme-sans)', fontSize: 10, color: 'var(--theme-secondary, #5e768f)' }}>
                 Add expiry dates to legs, then click Compute Greeks to see Δ Γ Θ ν for each position.
               </div>
             )}
@@ -897,23 +966,23 @@ export default function StrategyBuilder() {
                 style={{
                   background: 'color-mix(in srgb, #c9a84c 10%, transparent)',
                   border: '1px solid rgba(201,168,76,0.4)', color: '#c9a84c',
-                  fontFamily: 'JetBrains Mono, monospace', fontSize: 9,
+                  fontFamily: 'var(--theme-mono)', fontSize: 9,
                   padding: '2px 6px', cursor: (aiNarrativePending || !greekResult) ? 'default' : 'pointer',
                   opacity: (aiNarrativePending || !greekResult) ? 0.5 : 1,
                 }}
               >{aiNarrativePending ? '…' : '⬢ Analyze'}</button>
             </div>
             {!aiNarrative && !aiNarrativePending && (
-              <div style={{ padding: '10px 12px', fontSize: 10, color: 'var(--theme-secondary, #5e768f)', fontFamily: 'IBM Plex Sans, sans-serif' }}>
+              <div style={{ padding: '10px 12px', fontSize: 10, color: 'var(--theme-secondary, #5e768f)', fontFamily: 'var(--theme-sans)' }}>
                 Compute Greeks first, then click Analyze for AI risk commentary.
               </div>
             )}
             {aiNarrative && (
               <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#c9a84c', fontFamily: 'JetBrains Mono, monospace' }}>{aiNarrative.strategy_name}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#c9a84c', fontFamily: 'var(--theme-mono)' }}>{aiNarrative.strategy_name}</span>
                 </div>
-                <div style={{ fontSize: 11, color: '#d7e3fc', lineHeight: '16px', fontFamily: 'IBM Plex Sans, sans-serif' }}>{aiNarrative.summary}</div>
+                <div style={{ fontSize: 11, color: 'var(--theme-text, #d7e3fc)', lineHeight: '16px', fontFamily: 'var(--theme-sans)' }}>{aiNarrative.summary}</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   {[
                     { label: 'Max Loss', text: aiNarrative.max_loss_scenario, color: '#ef4444' },
@@ -921,12 +990,12 @@ export default function StrategyBuilder() {
                   ].map(({ label, text, color }) => (
                     <div key={label} style={{ padding: '6px 8px', border: `1px solid ${color}22`, background: `${color}08` }}>
                       <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', color, textTransform: 'uppercase', marginBottom: 3 }}>{label}</div>
-                      <div style={{ fontSize: 10, color: '#d7e3fc', lineHeight: '14px', fontFamily: 'IBM Plex Sans, sans-serif' }}>{text}</div>
+                      <div style={{ fontSize: 10, color: 'var(--theme-text, #d7e3fc)', lineHeight: '14px', fontFamily: 'var(--theme-sans)' }}>{text}</div>
                     </div>
                   ))}
                 </div>
                 {aiNarrative.ideal_conditions && (
-                  <div style={{ fontSize: 10, color: 'rgba(215,227,252,0.7)', lineHeight: '14px', fontFamily: 'IBM Plex Sans, sans-serif' }}>
+                  <div style={{ fontSize: 10, color: 'rgba(215,227,252,0.7)', lineHeight: '14px', fontFamily: 'var(--theme-sans)' }}>
                     <span style={{ color: '#c9a84c', fontWeight: 700 }}>Ideal: </span>{aiNarrative.ideal_conditions}
                   </div>
                 )}
@@ -934,7 +1003,7 @@ export default function StrategyBuilder() {
                   <div>
                     <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', color: '#ef4444', textTransform: 'uppercase', marginBottom: 4 }}>Key Risks</div>
                     {aiNarrative.key_risks.map((r: string, i: number) => (
-                      <div key={i} style={{ fontSize: 10, color: 'rgba(215,227,252,0.7)', lineHeight: '14px', paddingLeft: 8, borderLeft: '2px solid rgba(239,68,68,0.3)', marginBottom: 3, fontFamily: 'IBM Plex Sans, sans-serif' }}>{r}</div>
+                      <div key={i} style={{ fontSize: 10, color: 'rgba(215,227,252,0.7)', lineHeight: '14px', paddingLeft: 8, borderLeft: '2px solid rgba(239,68,68,0.3)', marginBottom: 3, fontFamily: 'var(--theme-sans)' }}>{r}</div>
                     ))}
                   </div>
                 )}

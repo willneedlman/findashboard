@@ -265,7 +265,7 @@ MACRO_ASSETS = [
     ("GC=F",      "Gold",      "commodity"),
     ("HG=F",      "Copper",    "commodity"),
     ("NG=F",      "Nat Gas",   "commodity"),
-    # Bonds
+    # Bonds (yfinance)
     ("^TNX",      "US 10Y",    "bond"),
     ("^TYX",      "US 30Y",    "bond"),
     ("^FVX",      "US 5Y",     "bond"),
@@ -276,6 +276,58 @@ MACRO_ASSETS = [
     ("^IXIC",     "NASDAQ",    "equity"),
     ("^RUT",      "Russell 2K","equity"),
 ]
+
+# Extra Treasury tenors from Treasury.gov XML (not available via yfinance)
+# 3M is already available via ^IRX
+TREASURY_TENORS = {
+    "1M":  ("BC_1MONTH",  "US 1M"),
+    "6M":  ("BC_6MONTH",  "US 6M"),
+    "3Y":  ("BC_3YEAR",   "US 3Y"),
+    "7Y":  ("BC_7YEAR",   "US 7Y"),
+}
+
+def _fetch_treasury_yields() -> dict[str, float]:
+    """Get interpolated yields for missing tenors from yfinance anchors."""
+    import yfinance as yf
+    try:
+        # Get the 4 reliable yfinance tenors
+        syms = {"3M": "^IRX", "5Y": "^FVX", "10Y": "^TNX", "30Y": "^TYX"}
+        anchors = {}
+        for label, sym in syms.items():
+            t = yf.Ticker(sym)
+            hist = t.history(period="5d")
+            if not hist.empty:
+                val = float(hist["Close"].dropna().iloc[-1])
+                anchors[label] = val if val < 20.0 else val / 100.0
+
+        if len(anchors) < 2:
+            return {}
+
+        # Linear interpolation
+        anchor_map = {"3M": 0.25, "5Y": 5.0, "10Y": 10.0, "30Y": 30.0}
+        sorted_anchors = sorted([(anchor_map[k], v) for k, v in anchors.items() if k in anchor_map])
+
+        def interp(target_yrs: float) -> float:
+            years = [a[0] for a in sorted_anchors]
+            yields = [a[1] for a in sorted_anchors]
+            if target_yrs <= years[0]:
+                return yields[0]
+            if target_yrs >= years[-1]:
+                return yields[-1]
+            for i in range(len(years) - 1):
+                if years[i] <= target_yrs <= years[i + 1]:
+                    t = (target_yrs - years[i]) / (years[i + 1] - years[i])
+                    return yields[i] + t * (yields[i + 1] - yields[i])
+            return yields[-1]
+
+        return {
+            "1M": round(interp(1/12), 4),
+            "6M": round(interp(0.5), 4),
+            "3Y": round(interp(3.0), 4),
+            "7Y": round(interp(7.0), 4),
+        }
+    except Exception:
+        return {}
 
 @router.get("/macro-dashboard")
 def macro_dashboard():
@@ -310,6 +362,13 @@ def macro_dashboard():
                              "price": round(price, 4), "change": round(chg, 4), "pct": round(pct, 3)})
         except Exception:
             results.append({"ticker": ticker, "label": label, "category": category, "price": None, "change": None, "pct": None})
+
+    treasury_yields = _fetch_treasury_yields()
+    for tenor, (field, label) in TREASURY_TENORS.items():
+        if tenor in treasury_yields:
+            price = treasury_yields[tenor]
+            results.append({"ticker": f"UST{tenor}", "label": label, "category": "bond",
+                             "price": price, "change": None, "pct": None})
 
     payload = {"assets": results, "as_of": date.today().isoformat()}
     with _MACRO_LOCK:

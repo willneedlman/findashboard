@@ -7,17 +7,17 @@ import { TOOLTIP_STYLE, CROSSHAIR_CURSOR, BAR_CURSOR } from '../components/Chart
 
 const FED_WEIGHTS = [1.0, 0.9, 0.7, 0.5, 0.3, 0.1]
 const YC_WEIGHTS  = [1.0, 0.98, 0.85, 0.40, 0.1, -0.19, -0.325]
-const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #5e768f)', fontFamily: 'JetBrains Mono, monospace' }
+const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #5e768f)', fontFamily: 'var(--theme-mono)' }
 
 const T = {
   bg:      'var(--theme-bg, #060e1c)',
   surface: 'var(--theme-surface, #0d1826)',
-  border:  'rgba(255,255,255,0.06)',
+  border:  'var(--theme-border, rgba(255,255,255,0.06))',
   gold:    'var(--theme-primary, #c9a84c)',
   muted:   'var(--theme-secondary, #5e768f)',
-  text:    '#d7e3fc',
-  mono:    'JetBrains Mono, monospace',
-  label:   'IBM Plex Sans, sans-serif',
+  text:    'var(--theme-text, #d7e3fc)',
+  mono:    'var(--theme-mono)',
+  label:   'var(--theme-sans)',
   pos:     '#22c55e',
   neg:     '#ef4444',
 }
@@ -105,7 +105,7 @@ function YieldTable({ curve, adjusted, twist }: { curve: Record<string, number>;
   )
 }
 
-export default function FedRates() {
+export function FedRatesContent() {
   const [twist, setTwist] = useState(0)
 
   const { data: curveData } = useQuery({ queryKey: ['yield-curve'],    queryFn: fetchYieldCurve })
@@ -140,13 +140,12 @@ export default function FedRates() {
   const fomc = fedData?.meetings[0]
 
   return (
-    <PageWrapper>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 1200, margin: '0 auto' }}>
 
         {/* Page header + rate sensitivity slider */}
         <div style={{ marginBottom: 4 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, paddingBottom: 14, borderBottom: `1px solid rgba(255,255,255,0.05)` }}>
-            <div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 14, paddingBottom: 14, borderBottom: `1px solid var(--theme-border-faint, rgba(255,255,255,0.05))` }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <h1 style={{ fontFamily: 'Cinzel, Georgia, serif', fontSize: 18, fontWeight: 700, letterSpacing: '0.06em', color: T.gold, margin: 0, marginBottom: 4 }}>
                 Macro Rate Engine
               </h1>
@@ -206,12 +205,12 @@ export default function FedRates() {
             <div style={{ padding: '0 0 0 0', height: 180 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={adjustedCurve} margin={{ left: 8, right: 16, top: 12, bottom: 4 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--theme-hover, rgba(255,255,255,0.04))" />
                   <XAxis dataKey="tenor" tick={TICK} axisLine={false} tickLine={false} />
                   <YAxis tick={TICK} tickFormatter={v => `${v}%`} domain={['auto','auto']} orientation="right" axisLine={false} tickLine={false} />
                   <Tooltip formatter={(v: number) => [`${v.toFixed(3)}%`, '']} contentStyle={TOOLTIP_STYLE} cursor={CROSSHAIR_CURSOR} />
                   <Legend wrapperStyle={{ fontFamily: T.label, fontSize: 9, paddingBottom: 6 }} />
-                  <Line type="monotone" dataKey="current"  stroke="rgba(255,255,255,0.2)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} name="Current" />
+                  <Line type="monotone" dataKey="current"  stroke="var(--theme-text-faint, rgba(255,255,255,0.2))" strokeWidth={1.5} strokeDasharray="5 3" dot={false} name="Current" />
                   <Line type="monotone" dataKey="adjusted" stroke="#1f5673" strokeWidth={2} dot={{ fill: '#d97736', r: 3 }} name="Adjusted" />
                 </LineChart>
               </ResponsiveContainer>
@@ -225,12 +224,12 @@ export default function FedRates() {
             <div style={{ height: 240, padding: '8px 8px 0' }}>
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={adjustedMeetings} margin={{ left: 0, right: 24, top: 8, bottom: 4 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--theme-hover, rgba(255,255,255,0.04))" />
                   <XAxis dataKey="date" tick={TICK} axisLine={false} tickLine={false} />
                   <YAxis tick={TICK} tickFormatter={v => `${v}%`} domain={['auto','auto']} orientation="right" axisLine={false} tickLine={false} />
                   <Tooltip contentStyle={TOOLTIP_STYLE} cursor={CROSSHAIR_CURSOR} />
                   <Legend wrapperStyle={{ fontFamily: T.label, fontSize: 9, paddingBottom: 6 }} />
-                  <Line type="monotone" dataKey="base_rate"     stroke="rgba(255,255,255,0.18)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} name="Base Path" />
+                  <Line type="monotone" dataKey="base_rate"     stroke="var(--theme-text-faint, rgba(255,255,255,0.18))" strokeWidth={1.5} strokeDasharray="5 3" dot={false} name="Base Path" />
                   <Line type="monotone" dataKey="adjusted_rate" stroke="#1f5673" strokeWidth={2} dot={{ fill: '#d97736', r: 4 }} name="Adjusted Path" />
                 </LineChart>
               </ResponsiveContainer>
@@ -244,7 +243,7 @@ export default function FedRates() {
             <div style={{ height: 220, padding: '8px 8px 0' }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={fedData.meetings} margin={{ left: 0, right: 24, top: 8, bottom: 4 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--theme-hover, rgba(255,255,255,0.04))" />
                   <XAxis dataKey="date" tick={TICK} axisLine={false} tickLine={false} />
                   <YAxis tick={TICK} tickFormatter={v => `${v}%`} orientation="right" axisLine={false} tickLine={false} />
                   <Tooltip contentStyle={TOOLTIP_STYLE} cursor={BAR_CURSOR} />
@@ -259,6 +258,9 @@ export default function FedRates() {
         )}
 
       </div>
-    </PageWrapper>
   )
+}
+
+export default function FedRates() {
+  return <PageWrapper><FedRatesContent /></PageWrapper>
 }

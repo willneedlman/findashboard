@@ -7,26 +7,26 @@ import { fetchOptionsChain } from '../hooks/useApi'
 import axios from 'axios'
 import EmptyState from '../components/EmptyState'
 import { useChartColors } from '../hooks/useChartColors'
-const INPUT: React.CSSProperties = { background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: '#d7e3fc', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, padding: '5px 8px', width: '100%', outline: 'none' }
+const INPUT: React.CSSProperties = { background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-mono)', fontSize: 12, padding: '5px 8px', width: '100%', outline: 'none' }
 const LABEL: React.CSSProperties = { fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', marginBottom: 4, display: 'block' }
-const TH: React.CSSProperties = { fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', padding: '7px 10px', textAlign: 'right', borderBottom: '1px solid rgba(255,255,255,0.08)', whiteSpace: 'nowrap' }
-const TD: React.CSSProperties = { padding: '5px 10px', borderBottom: '1px solid rgba(255,255,255,0.04)', fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: '#d7e3fc', textAlign: 'right', verticalAlign: 'middle' }
+const TH: React.CSSProperties = { fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', padding: '7px 10px', textAlign: 'right', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', whiteSpace: 'nowrap' }
+const TD: React.CSSProperties = { padding: '5px 10px', borderBottom: '1px solid var(--theme-hover, rgba(255,255,255,0.04))', fontSize: 11, fontFamily: 'var(--theme-mono)', color: 'var(--theme-text, #d7e3fc)', textAlign: 'right', verticalAlign: 'middle' }
 const TOOLTIP_STYLE = { background: 'var(--theme-surface, #142032)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', borderRadius: 0 }
-const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'JetBrains Mono, monospace' }
+const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'var(--theme-mono)' }
 
 function SummaryCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div style={{ background: 'var(--theme-surface, #142032)', border: '1px solid rgba(255,255,255,0.07)', borderTop: '3px solid var(--theme-primary, #c9a84c)', padding: 10 }}>
+    <div style={{ background: 'var(--theme-surface, #142032)', border: '1px solid var(--theme-border, rgba(255,255,255,0.07))', borderTop: '3px solid var(--theme-primary, #c9a84c)', padding: 10 }}>
       <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', marginBottom: 6 }}>{label}</div>
-      <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 20, fontWeight: 700, color: '#d7e3fc' }}>{value}</div>
-      {sub && <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', marginTop: 2 }}>{sub}</div>}
+      <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 20, fontWeight: 700, color: 'var(--theme-text, #d7e3fc)' }}>{value}</div>
+      {sub && <div style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', marginTop: 2 }}>{sub}</div>}
     </div>
   )
 }
 
-const SELECT: React.CSSProperties = { background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: '#d7e3fc', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, padding: '5px 8px', width: '100%', outline: 'none' }
+const SELECT: React.CSSProperties = { background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-mono)', fontSize: 12, padding: '5px 8px', width: '100%', outline: 'none' }
 
-export default function OptionsChainScanner() {
+export function OptionsChainScannerContent() {
   const cc = useChartColors()
   const [ticker, setTicker] = useState('SPY')
   const [topN, setTopN]     = useState(12)
@@ -68,21 +68,20 @@ export default function OptionsChainScanner() {
   })
 
   return (
-    <PageWrapper>
-      <SidebarLayout sidebarWidth={190} sidebarTitle="Chain Controls" sidebar={<>
-          <div style={{ padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'var(--theme-surface, #142032)' }}>
+    <SidebarLayout sidebarWidth={190} sidebarTitle="Chain Controls" sidebar={<>
+          <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)' }}>
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#ffffff' }}>Chain Parameters</div>
           </div>
           <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
             <div>
               <label style={LABEL}>Target Ticker</label>
               <input value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())} style={INPUT}
-                onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')} onBlur={e => (e.target.style.borderColor = 'rgba(255,255,255,0.10)')} />
+                onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')} onBlur={e => (e.target.style.borderColor = 'var(--theme-border, rgba(255,255,255,0.10))')} />
             </div>
             <div>
               <label style={LABEL}>Strikes Per Side</label>
               <input type="number" value={topN} step={2} min={4} max={30} onChange={e => setTopN(+e.target.value)} style={INPUT}
-                onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')} onBlur={e => (e.target.style.borderColor = 'rgba(255,255,255,0.10)')} />
+                onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')} onBlur={e => (e.target.style.borderColor = 'var(--theme-border, rgba(255,255,255,0.10))')} />
             </div>
             <div>
               <label style={LABEL}>Expiry</label>
@@ -93,12 +92,12 @@ export default function OptionsChainScanner() {
                   ))}
                 </select>
               ) : (
-                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)' }}>Load chain to see expirations</div>
+                <div style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))' }}>Load chain to see expirations</div>
               )}
-              {spot && <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', marginTop: 4 }}>Spot: <span style={{ color: 'var(--theme-primary, #c9a84c)' }}>${spot.toFixed(2)}</span></div>}
+              {spot && <div style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', marginTop: 4 }}>Spot: <span style={{ color: 'var(--theme-primary, #c9a84c)' }}>${spot.toFixed(2)}</span></div>}
             </div>
           </div>
-          <div style={{ padding: 10, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+          <div style={{ padding: 10, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
             <button onClick={() => mutate()} disabled={isPending} style={{
               width: '100%', background: 'var(--theme-surface, #1f2a3d)', border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)',
               fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
@@ -120,12 +119,12 @@ export default function OptionsChainScanner() {
               </div>
 
               {/* Tabs */}
-              <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+              <div style={{ display: 'flex', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
                 {(['calls', 'puts', 'chart'] as const).map(t => (
                   <button key={t} onClick={() => setView(t)} style={{
                     padding: '7px 16px', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
                     textTransform: 'uppercase', background: 'none', border: 'none', cursor: 'pointer',
-                    color: view === t ? 'var(--theme-primary, #c9a84c)' : 'rgba(255,255,255,0.18)',
+                    color: view === t ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-text-faint, rgba(255,255,255,0.18))',
                     borderBottom: view === t ? '2px solid #c9a84c' : '2px solid transparent',
                     marginBottom: -1,
                   }}>
@@ -136,8 +135,8 @@ export default function OptionsChainScanner() {
 
               {/* OI Chart */}
               {view === 'chart' && (
-                <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)', position: 'relative' }}>
-                  <div style={{ position: 'absolute', top: 0, left: 0, background: 'rgba(46,57,77,0.8)', padding: '3px 8px', borderRight: '1px solid rgba(255,255,255,0.08)', borderBottom: '1px solid rgba(255,255,255,0.08)', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#d7e3fc', zIndex: 10 }}>
+                <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', position: 'relative' }}>
+                  <div style={{ position: 'absolute', top: 0, left: 0, background: 'rgba(46,57,77,0.8)', padding: '3px 8px', borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)', zIndex: 10 }}>
                     Open Interest by Strike — Calls vs Puts
                   </div>
                   <div style={{ paddingTop: 30, padding: '30px 8px 8px' }}>
@@ -146,7 +145,7 @@ export default function OptionsChainScanner() {
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.07)" />
                         <XAxis dataKey="strike" tick={TICK} />
                         <YAxis tick={TICK} tickFormatter={v => Math.abs(v).toLocaleString()} />
-                        <Tooltip formatter={(v: number) => [Math.abs(v).toLocaleString(), '']} contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+                        <Tooltip formatter={(v: number) => [Math.abs(v).toLocaleString(), '']} contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'var(--theme-hover, rgba(255,255,255,0.04))' }} />
                         <Bar dataKey="callOI" name="Call OI" fill={cc.gainMuted} />
                         <Bar dataKey="putOI"  name="Put OI"  fill={cc.lossMuted} />
                       </BarChart>
@@ -157,12 +156,12 @@ export default function OptionsChainScanner() {
 
               {/* Chain table */}
               {view !== 'chart' && (
-                <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                  <div style={{ padding: '6px 10px', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'var(--theme-surface, #142032)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+                  <div style={{ padding: '6px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#ffffff' }}>
                       {view === 'calls' ? 'Call' : 'Put'} Chain — {ticker}
                     </span>
-                    {spot && <span style={{ fontSize: 10, color: 'var(--theme-primary, #c9a84c)', fontFamily: 'JetBrains Mono, monospace' }}>Spot ${spot.toFixed(2)}</span>}
+                    {spot && <span style={{ fontSize: 10, color: 'var(--theme-primary, #c9a84c)', fontFamily: 'var(--theme-mono)' }}>Spot ${spot.toFixed(2)}</span>}
                   </div>
                   <div style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -179,9 +178,9 @@ export default function OptionsChainScanner() {
                           const isATM = spot && Math.abs(row.strike - spot) < spot * 0.005
                           return (
                             <tr key={i} style={{ background: isATM ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 7%, transparent)' : 'transparent' }}
-                              onMouseEnter={e => { if (!isATM) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.03)' }}
+                              onMouseEnter={e => { if (!isATM) (e.currentTarget as HTMLElement).style.background = 'var(--theme-hover, rgba(255,255,255,0.03))' }}
                               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = isATM ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 7%, transparent)' : 'transparent' }}>
-                              <td style={{ ...TD, textAlign: 'left', fontWeight: 700, color: isATM ? 'var(--theme-primary, #c9a84c)' : '#d7e3fc' }}>
+                              <td style={{ ...TD, textAlign: 'left', fontWeight: 700, color: isATM ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-text, #d7e3fc)' }}>
                                 {row.strike}
                                 {isATM && <span style={{ fontSize: 9, color: 'var(--theme-primary, #c9a84c)', marginLeft: 5, letterSpacing: '0.1em' }}>ATM</span>}
                               </td>
@@ -190,7 +189,7 @@ export default function OptionsChainScanner() {
                               <td style={{ ...TD, color: 'var(--theme-secondary, #99907e)' }}>{row.ask?.toFixed(2) ?? '—'}</td>
                               <td style={TD}>{row.volume?.toLocaleString() ?? '—'}</td>
                               <td style={TD}>{row.openInterest?.toLocaleString() ?? '—'}</td>
-                              <td style={{ ...TD, color: row.impliedVolatility > 0.5 ? '#d97736' : '#d7e3fc' }}>
+                              <td style={{ ...TD, color: row.impliedVolatility > 0.5 ? '#d97736' : 'var(--theme-text, #d7e3fc)' }}>
                                 {(row.impliedVolatility * 100)?.toFixed(1)}%
                               </td>
                             </tr>
@@ -208,6 +207,9 @@ export default function OptionsChainScanner() {
             <EmptyState title="Options Chain Scanner" hint="Enter a ticker and expiry, then press Load Chain." />
           )}
         </SidebarLayout>
-    </PageWrapper>
   )
+}
+
+export default function OptionsChainScanner() {
+  return <PageWrapper><OptionsChainScannerContent /></PageWrapper>
 }

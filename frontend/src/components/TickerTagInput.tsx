@@ -10,16 +10,16 @@ interface Props {
 
 const S = {
   bg:         'var(--theme-surface, #0a1628)',
-  border:     'rgba(255,255,255,0.10)',
+  border:     'var(--theme-border, rgba(255,255,255,0.10))',
   borderActive: 'var(--theme-primary, #c9a84c)',
   gold:       'var(--theme-primary, #c9a84c)',
-  text:       '#d7e3fc',
+  text:       'var(--theme-text, #d7e3fc)',
   muted:      'var(--theme-secondary, #5e768f)',
   neg:        '#EF4444',
   chip:       'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, var(--theme-surface, #0a1628))',
   chipBorder: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 25%, transparent)',
-  mono:       'JetBrains Mono, monospace',
-  label:      'IBM Plex Sans, sans-serif',
+  mono:       'var(--theme-mono)',
+  label:      'var(--theme-sans)',
 }
 
 /**

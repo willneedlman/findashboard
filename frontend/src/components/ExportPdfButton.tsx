@@ -3,10 +3,10 @@ import { usePdfExport } from '../hooks/usePdfExport'
 
 const T = {
   surface: 'var(--theme-surface, #0d1826)',
-  border:  'rgba(255,255,255,0.08)',
+  border:  'var(--theme-border, var(--theme-border, rgba(255,255,255,0.08)))',
   gold:    'var(--theme-primary, #c9a84c)',
   muted:   'var(--theme-secondary, #5e768f)',
-  mono:    'JetBrains Mono, monospace',
+  mono:    'var(--theme-mono)',
 }
 
 interface Props {

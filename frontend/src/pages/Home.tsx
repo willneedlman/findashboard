@@ -4,6 +4,7 @@ import {
   TrendingUp, LineChart, Landmark, Bitcoin, BarChart2, Dices,
   GitBranch, Activity, Building2, Calculator, Network, Shuffle, Zap,
   ArrowUpRight, LayoutGrid, Filter, FileText, Upload, X,
+  PieChart, Scale, Globe, BookOpen, Terminal, Brain, Bell, Bot,
 } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import useIsMobile from '../hooks/useIsMobile'
@@ -81,10 +82,10 @@ function PortfolioImportStrip() {
       gap: 12,
       flexWrap: 'wrap' as const,
     } as React.CSSProperties,
-    label: { fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)' } as React.CSSProperties,
-    btn: { background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 30%, transparent)', color: 'var(--theme-primary, #c9a84c)', fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '5px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 } as React.CSSProperties,
-    chip: { display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 7px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--theme-primary, #c9a84c)' } as React.CSSProperties,
-    hint: { fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 9, color: 'var(--theme-secondary, #5e768f)', lineHeight: 1.4 } as React.CSSProperties,
+    label: { fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)' } as React.CSSProperties,
+    btn: { background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 30%, transparent)', color: 'var(--theme-primary, #c9a84c)', fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '5px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 } as React.CSSProperties,
+    chip: { display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 7px', background: 'var(--theme-hover, rgba(255,255,255,0.04))', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-primary, #c9a84c)' } as React.CSSProperties,
+    hint: { fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary, #5e768f)', lineHeight: 1.4 } as React.CSSProperties,
   }
 
   return (
@@ -98,7 +99,7 @@ function PortfolioImportStrip() {
             <Upload size={10} /> Import
           </button>
           <span style={S.hint}>
-            CSV col 1: <span style={{ color: 'var(--theme-secondary, #7a9ab8)', fontFamily: 'JetBrains Mono, monospace' }}>TICKER</span> · col 2: <span style={{ color: 'var(--theme-secondary, #7a9ab8)', fontFamily: 'JetBrains Mono, monospace' }}>WEIGHT</span> · header rows auto-skipped · JSON: array of {'{ticker, weight}'}
+            CSV col 1: <span style={{ color: 'var(--theme-secondary, #7a9ab8)', fontFamily: 'var(--theme-mono)' }}>TICKER</span> · col 2: <span style={{ color: 'var(--theme-secondary, #7a9ab8)', fontFamily: 'var(--theme-mono)' }}>WEIGHT</span> · header rows auto-skipped · JSON: array of {'{ticker, weight}'}
           </span>
         </>
       ) : (
@@ -137,15 +138,8 @@ interface Card {
   tag?: string
 }
 
-// Layout: 4-col grid, each row sums to exactly 4 cols
-// Row 1: [wide=2][wide=2]
-// Row 2: [wide=2][wide=2]
-// Row 3: [1][1][1][1]
-// Row 4: [1][1][1][1]
-// Row 5: [1][1][1][1]
-// Row 6: [full=4]
 const BENTO_CARDS: Card[] = [
-  // Row 1 — AI & Screening
+  // ── Row 1: AI & Screening (wide+wide)
   { to: '/screener', icon: Filter,    size: 'wide', accent: '#2f6b4b', tag: 'SCREENER',
     title: 'Stock Screener',
     body: 'Filter the market by valuation, growth, profitability, and financial health across 25+ variables. Sortable results with full fundamentals.' },
@@ -153,36 +147,51 @@ const BENTO_CARDS: Card[] = [
     title: 'Earnings AI',
     body: 'Claude-powered earnings call summarizer — transcripts, 10-Q/10-K financials, and SEC filings turned into bull/bear points, key metrics, and guidance in seconds.' },
 
-  // Row 2 — Core data
+  // ── Row 2: Core data + sentiment (wide+wide)
   { to: '/market',    icon: TrendingUp, size: 'wide', accent: 'var(--theme-tertiary, #1f5673)', tag: 'PRICE & VOL',
     title: 'Market Data',
     body: 'Historical price action, rolling 30-day volatility, and peak drawdown structural analysis. Entry point for any equity research session.' },
+  { to: '/sentiment', icon: Brain,      size: 'wide', accent: '#7aa2f7', tag: 'SENTIMENT',
+    title: 'Sentiment Tracker',
+    body: 'AI-scored financial news across 7 sources with market-session filtering, entity extraction, macro impact tiers, and velocity tracking.' },
 
-  // Row 3 — Valuation & Quant
-  { to: '/corporate',   icon: Building2,  size: 'normal', accent: 'var(--theme-primary, #c9a84c)', tag: 'CORP',        title: 'Corporate Hub',       body: 'Earnings scanner, insider flow, short interest, and live news aggregator.' },
-  { to: '/dcf',         icon: Calculator, size: 'normal', accent: '#7b5ea7', tag: 'VALUATION',   title: 'DCF Engine',          body: 'Intrinsic value via DCF with WACC, terminal value, and sensitivity tables.' },
-  { to: '/correlation', icon: Network,    size: 'normal', accent: 'var(--theme-tertiary, #1f5673)', tag: 'QUANT',        title: 'Correlation Matrix',  body: 'Rolling return correlation heatmap across any custom ticker basket.' },
-  { to: '/montecarlo',  icon: Dices,      size: 'normal', accent: '#2f6b4b', tag: 'SIMULATION',  title: 'Monte Carlo',         body: 'GBM path simulation with VaR, CVaR, and percentile fan charts.' },
+  // ── Row 3: Valuation & Quant (4×normal)
+  { to: '/corporate',          icon: Building2,  size: 'normal', accent: 'var(--theme-primary, #c9a84c)', tag: 'CORP',       title: 'Corporate Hub',       body: 'Earnings scanner, insider flow, short interest, and live news aggregator.' },
+  { to: '/dcf',                icon: Calculator, size: 'normal', accent: '#7b5ea7',                       tag: 'VALUATION',  title: 'DCF Engine',          body: 'Intrinsic value via DCF with WACC, terminal value, and sensitivity tables.' },
+  { to: '/relative-valuation', icon: Scale,      size: 'normal', accent: '#d97736',                       tag: 'PEERS',      title: 'Peer Valuation',      body: 'Compare valuation multiples against sector peers. EV/EBITDA, P/E, P/S, forward estimates.' },
+  { to: '/supply-chain',       icon: Globe,      size: 'normal', accent: '#2f6b4b',                       tag: 'PROFILE',    title: 'Company Profile',     body: 'Revenue breakdown, supplier exposure, geographic risk, and supply chain dependency map.' },
 
-  // Row 4 — Options suite
-  { to: '/options',     icon: LineChart,  size: 'normal', accent: 'var(--theme-tertiary, #1f5673)', tag: 'OPTIONS',      title: 'Options Pricer',      body: 'Black-Scholes pricing with full Greeks, payoff diagrams, and IV surface.' },
-  { to: '/chain',       icon: BarChart2,  size: 'normal', accent: '#7b5ea7', tag: 'CHAIN',        title: 'Chain Scanner',       body: 'Live options chains with IV rank, OI skew, and put/call ratios by strike.' },
-  { to: '/probability', icon: Activity,   size: 'normal', accent: '#7b5ea7', tag: 'PROB',         title: 'Implied Probability', body: 'Market-implied risk-neutral distributions derived from live options chains.' },
-  { to: '/strategy',    icon: Shuffle,    size: 'normal', accent: '#d97736', tag: 'STRATEGY',     title: 'Strategy Builder',    body: 'Multi-leg options strategy builder with live P&L profiles and breakevens.' },
+  // ── Row 4: Options suite (4×normal)
+  { to: '/options',     icon: LineChart, size: 'normal', accent: 'var(--theme-tertiary, #1f5673)', tag: 'OPTIONS',   title: 'Options Pricer',       body: 'Black-Scholes pricing with full Greeks, payoff diagrams, and IV surface.' },
+  { to: '/chain',       icon: BarChart2, size: 'normal', accent: '#7b5ea7',                       tag: 'CHAIN',     title: 'Chain Scanner',        body: 'Live options chains with IV rank, OI skew, and put/call ratios by strike.' },
+  { to: '/probability', icon: Activity,  size: 'normal', accent: '#7b5ea7',                       tag: 'PROB',      title: 'Implied Probability',  body: 'Market-implied risk-neutral distributions derived from live options chains.' },
+  { to: '/strategy',    icon: Shuffle,   size: 'normal', accent: '#d97736',                       tag: 'STRATEGY',  title: 'Strategy Builder',     body: 'Multi-leg options strategy builder with live P&L profiles and breakevens.' },
 
-  // Row 5 — Macro & Fixed Income
-  { to: '/gex',  icon: Zap,       size: 'normal', accent: 'var(--theme-primary, #c9a84c)', tag: 'GEX',         title: 'Dealer GEX',        body: 'Gamma exposure aggregated across all strikes and expiries.' },
-  { to: '/bond', icon: Landmark,  size: 'normal', accent: '#2f6b4b', tag: 'FIXED INCOME', title: 'Bond Analytics',    body: 'YTM, modified duration, convexity, and full cash flow schedules.' },
-  { to: '/fed',  icon: GitBranch, size: 'normal', accent: 'var(--theme-tertiary, #1f5673)', tag: 'MACRO',        title: 'Macro Rate Engine', body: 'Implied Fed path projections and rate scenario analysis across FOMC meetings.' },
-  { to: '/nav',  icon: Bitcoin,   size: 'normal', accent: 'var(--theme-primary, #c9a84c)', tag: 'NAV',          title: 'NAV Tracker',       body: 'SOTP NAV engine with live MSTR Bitcoin holdings fetched from EDGAR.' },
+  // ── Row 5: Derivatives & Rates (4×normal)
+  { to: '/gex',               icon: Zap,        size: 'normal', accent: 'var(--theme-primary, #c9a84c)',  tag: 'GEX',          title: 'Dealer GEX',          body: 'Gamma exposure aggregated across all strikes and expiries.' },
+  { to: '/bond',              icon: Landmark,   size: 'normal', accent: '#2f6b4b',                        tag: 'FIXED INCOME', title: 'Bond Analytics',      body: 'YTM, modified duration, convexity, and full cash flow schedules.' },
+  { to: '/fed',               icon: GitBranch,  size: 'normal', accent: 'var(--theme-tertiary, #1f5673)', tag: 'MACRO',        title: 'Macro Rate Engine',   body: 'Implied Fed path projections and rate scenario analysis across FOMC meetings.' },
 
-  // Row 6 — Dashboard (full width)
+  // ── Row 6: Macro & Data (4×normal)
+  { to: '/sector-rotation', icon: PieChart,   size: 'normal', accent: '#d97736',                       tag: 'SECTORS',      title: 'Sector Rotation',     body: 'Rolling performance heatmap across GICS sectors. Identify rotation leaders and laggards.' },
+  { to: '/credit-spreads',  icon: Activity,   size: 'normal', accent: '#ef4444',                       tag: 'CREDIT',       title: 'Credit Spreads',      body: 'IG and HY spread monitoring with historical context and risk-on/off signals.' },
+  { to: '/correlation',     icon: Network,    size: 'normal', accent: 'var(--theme-tertiary, #1f5673)', tag: 'QUANT',        title: 'Correlation Matrix',  body: 'Rolling return correlation heatmap across any custom ticker basket.' },
+  { to: '/nav',             icon: Bitcoin,    size: 'normal', accent: 'var(--theme-primary, #c9a84c)', tag: 'NAV',          title: 'NAV Tracker',         body: 'SOTP NAV engine with live MSTR Bitcoin holdings fetched from EDGAR.' },
+
+  // ── Row 7: Portfolio & Simulation (4×normal)
+  { to: '/montecarlo',     icon: Dices,     size: 'normal', accent: '#2f6b4b',                       tag: 'SIMULATION',  title: 'Monte Carlo',           body: 'GBM path simulation with VaR, CVaR, and percentile fan charts.' },
+  { to: '/portfolio',      icon: BarChart2, size: 'normal', accent: '#2f6b4b',                       tag: 'BACKTEST',    title: 'Portfolio Backtester',  body: 'Backtest weighted equity baskets against any benchmark with Sharpe, Sortino, Calmar.' },
+  { to: '/alerts',         icon: Bell,      size: 'normal', accent: 'var(--theme-primary, #c9a84c)', tag: 'ALERTS',      title: 'Price Alerts',          body: 'Set price and 1-day % change alerts. Push to browser on trigger.' },
+
+  // ── Row 8: Trading tools (4×normal)
+  { to: '/trade-journal', icon: BookOpen,  size: 'normal', accent: '#7b5ea7',                       tag: 'JOURNAL',   title: 'Trade Journal',      body: 'Log and analyze your trades. Entry/exit tracking, P&L attribution, and win-rate stats.' },
+  { to: '/paper-trading', icon: Terminal,  size: 'normal', accent: '#2f6b4b',                       tag: 'PAPER',     title: 'Paper Trading',      body: 'Simulated order execution with live prices, position tracking, and P&L.' },
+  { to: '/algo-runner',   icon: Bot,       size: 'normal', accent: '#d97736',                       tag: 'ALGO',      title: 'Algo Runner',        body: 'Run and monitor quantitative strategies. Backtest parameters and live signal output.' },
+
+  // ── Dashboard — full width
   { to: '/dashboard', icon: LayoutGrid, size: 'full' as CardSize, accent: 'var(--theme-primary, #c9a84c)', tag: 'CUSTOM',
     title: 'My Dashboard',
     body: 'Build your own terminal. Drag and arrange price cards, charts, news feeds, options snapshots, portfolio summaries, and macro strips. Layout persists per user account.' },
-  { to: '/portfolio', icon: BarChart2,  size: 'wide', accent: '#2f6b4b', tag: 'BACKTEST',
-    title: 'Portfolio Backtester',
-    body: 'Backtest weighted equity baskets against any benchmark. Per-leg strategy overlays, Sharpe, Sortino, Calmar, and rolling beta.' },
 ]
 
 function sizeClass(size?: CardSize) {
@@ -204,7 +213,7 @@ function BentoCard({ card }: { card: Card }) {
       className={sizeClass(card.size)}
       style={{
         background: 'var(--theme-surface, #0d1b30)',
-        border: '1px solid rgba(255,255,255,0.06)',
+        border: '1px solid var(--theme-border, rgba(255,255,255,0.06))',
         borderTop: '2px solid var(--theme-primary, #c9a84c)',
         padding: isMobile ? 12 : isHero ? 20 : 14,
         cursor: 'pointer',
@@ -233,7 +242,7 @@ function BentoCard({ card }: { card: Card }) {
               fontWeight: 700,
               color: '#e2e8f0',
               letterSpacing: '0.02em',
-              fontFamily: 'IBM Plex Sans, sans-serif',
+              fontFamily: 'var(--theme-sans)',
             }}>
               {card.title}
             </h3>
@@ -241,7 +250,7 @@ function BentoCard({ card }: { card: Card }) {
           {card.tag && (
             <span style={{
               fontSize: 8, fontWeight: 700, letterSpacing: '0.16em',
-              color: 'var(--theme-primary, #c9a84c)', fontFamily: 'IBM Plex Sans, sans-serif',
+              color: 'var(--theme-primary, #c9a84c)', fontFamily: 'var(--theme-sans)',
               opacity: 0.7, flexShrink: 0, paddingTop: 2,
             }}>
               {card.tag}
@@ -260,7 +269,7 @@ function BentoCard({ card }: { card: Card }) {
 
       {/* CTA */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 3, color: 'var(--theme-primary, #c9a84c)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', fontFamily: 'IBM Plex Sans, sans-serif' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 3, color: 'var(--theme-primary, #c9a84c)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', fontFamily: 'var(--theme-sans)' }}>
           OPEN <ArrowUpRight size={10} />
         </div>
       </div>
@@ -283,7 +292,7 @@ export default function Home() {
         }}>
           Financial Research Terminal
         </h1>
-        <p style={{ fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 12, color: 'var(--theme-secondary, #7a9ab8)', letterSpacing: '0.04em' }}>
+        <p style={{ fontFamily: 'var(--theme-sans)', fontSize: 12, color: 'var(--theme-secondary, #7a9ab8)', letterSpacing: '0.04em' }}>
           {visibleCards.length} modules · Select a tile to launch
         </p>
       </div>

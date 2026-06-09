@@ -8,7 +8,7 @@ export default function EmptyState({ title, hint }: EmptyStateProps) {
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
       padding: '48px 24px', gap: 14, textAlign: 'center',
-      background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)',
+      background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.08)))',
       minHeight: 220,
     }}>
       <div style={{
@@ -16,12 +16,12 @@ export default function EmptyState({ title, hint }: EmptyStateProps) {
       }} />
       <div>
         <div style={{
-          fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 11, fontWeight: 700,
-          letterSpacing: '0.14em', textTransform: 'uppercase', color: '#d7e3fc', marginBottom: 6,
+          fontFamily: 'var(--theme-sans)', fontSize: 11, fontWeight: 700,
+          letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)', marginBottom: 6,
         }}>
           {title}
         </div>
-        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.22)', letterSpacing: '0.04em', lineHeight: '16px' }}>
+        <div style={{ fontSize: 11, color: 'var(--theme-text-faint, var(--theme-text-faint, rgba(255,255,255,0.22)))', letterSpacing: '0.04em', lineHeight: '16px' }}>
           {hint}
         </div>
       </div>

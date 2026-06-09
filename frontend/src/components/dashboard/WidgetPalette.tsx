@@ -43,9 +43,9 @@ export default function WidgetPalette({ open, onClose, onAdd }: WidgetPalettePro
             }}
           >
             {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.08)))', flexShrink: 0 }}>
               <div>
-                <div style={{ fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)' }}>
+                <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 12, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)' }}>
                   Add Widget
                 </div>
                 <div style={{ fontSize: 10, color: 'var(--theme-secondary, #5e768f)', marginTop: 2 }}>
@@ -65,15 +65,15 @@ export default function WidgetPalette({ open, onClose, onAdd }: WidgetPalettePro
                   onClick={() => { onAdd(type); onClose() }}
                   style={{
                     display: 'flex', alignItems: 'flex-start', gap: 12, width: '100%',
-                    background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)', padding: '10px 12px',
+                    background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.08)))', padding: '10px 12px',
                     cursor: 'pointer', textAlign: 'left', transition: 'border-color 0.15s',
                   }}
                   onMouseEnter={e => ((e.currentTarget as HTMLElement).style.borderColor = 'color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)')}
-                  onMouseLeave={e => ((e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)')}
+                  onMouseLeave={e => ((e.currentTarget as HTMLElement).style.borderColor = 'var(--theme-border, rgba(255,255,255,0.08))')}
                 >
                   <span style={{ fontSize: 20, flexShrink: 0, lineHeight: 1 }}>{WIDGET_ICONS[type]}</span>
                   <div>
-                    <div style={{ fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 12, fontWeight: 600, color: '#d7e3fc', marginBottom: 3 }}>
+                    <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 12, fontWeight: 600, color: 'var(--theme-text, #d7e3fc)', marginBottom: 3 }}>
                       {WIDGET_LABELS[type]}
                     </div>
                     <div style={{ fontSize: 10, color: 'var(--theme-secondary, #5e768f)', lineHeight: '14px' }}>

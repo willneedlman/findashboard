@@ -1,25 +1,25 @@
 ---
 source_file: "frontend/src/pages/MarketData.tsx"
 type: "code"
-community: "Market Data Charts"
-location: "L1"
+community: "Frontend"
+location: "None"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/Market_Data_Charts
+  - community/Frontend
 ---
 
 # MarketData.tsx
 
 ## Connections
-- [[App.tsx]] - `imports_from` [EXTRACTED]
-- [[ChartPanel()_4]] - `contains` [EXTRACTED]
-- [[PageWrapper.tsx]] - `imports_from` [EXTRACTED]
-- [[TICK_STYLE]] - `contains` [EXTRACTED]
-- [[TOOLTIP_STYLE_4]] - `contains` [EXTRACTED]
-- [[TVChart.tsx]] - `imports_from` [EXTRACTED]
-- [[TerminalMetric()]] - `contains` [EXTRACTED]
-- [[fetchMarketHistory()]] - `imports` [EXTRACTED]
-- [[useApi.ts]] - `imports_from` [EXTRACTED]
+- [[frontend_src_pages_marketdata_tsx_marketdata]] - `defines` [EXTRACTED]
+- [[components_pageheader]] - `imports` [EXTRACTED]
+- [[components_pagewrapper]] - `imports` [EXTRACTED]
+- [[components_sidebarlayout]] - `imports` [EXTRACTED]
+- [[components_charts_tvchart]] - `imports` [EXTRACTED]
+- [[hooks_useapi]] - `imports` [EXTRACTED]
+- [[components_charttooltip]] - `imports` [EXTRACTED]
+- [[components_emptystate]] - `imports` [EXTRACTED]
+- [[hooks_useismobile]] - `imports` [EXTRACTED]
 
-#graphify/code #graphify/EXTRACTED #community/Market_Data_Charts
+#graphify/code #graphify/EXTRACTED #community/Frontend

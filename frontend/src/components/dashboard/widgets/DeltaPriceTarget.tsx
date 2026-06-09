@@ -5,18 +5,18 @@ import type { WidgetConfig } from '../../../hooks/useDashboard'
 import useContainerSize from '../../../hooks/useContainerSize'
 
 const T = {
-  bg: 'var(--theme-bg, #101c2e)', border: 'rgba(255,255,255,0.08)', headerBg: 'var(--theme-surface, #142032)',
-  gold: 'var(--theme-primary, #c9a84c)', text: '#d7e3fc', muted: 'var(--theme-secondary, #5e768f)',
-  mono: 'JetBrains Mono, monospace', label: 'IBM Plex Sans, sans-serif',
+  bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))', headerBg: 'var(--theme-surface, #142032)',
+  gold: 'var(--theme-primary, #c9a84c)', text: 'var(--theme-text, #d7e3fc)', muted: 'var(--theme-secondary, #5e768f)',
+  mono: 'var(--theme-mono)', label: 'var(--theme-sans)',
 }
 
 const shimmerStyle: React.CSSProperties = {
-  background: 'linear-gradient(90deg, var(--theme-surface, #0d0d0d) 25%, rgba(255,255,255,0.05) 50%, var(--theme-surface, #0d0d0d) 75%)',
+  background: 'linear-gradient(90deg, var(--theme-surface, #0d0d0d) 25%, var(--theme-border-faint, var(--theme-border-faint, rgba(255,255,255,0.05))) 50%, var(--theme-surface, #0d0d0d) 75%)',
   backgroundSize: '200% 100%', animation: 'shimmer 2s infinite', borderRadius: 4,
 }
 
 const inputStyle: React.CSSProperties = {
-  background: 'var(--theme-bg, #0a1628)', border: '1px solid rgba(255,255,255,0.10)', color: T.text,
+  background: 'var(--theme-bg, #0a1628)', border: '1px solid var(--theme-border, rgba(255,255,255,0.10))', color: T.text,
   fontFamily: T.mono, fontSize: 11, padding: '4px 6px',
   width: '100%', outline: 'none', boxSizing: 'border-box',
 }
@@ -43,11 +43,11 @@ const PRESETS = [0.10, 0.25, 0.40, 0.50]
 export default function DeltaPriceTarget({ config }: { config: WidgetConfig }) {
   const [ticker, setTicker] = useState(config.ticker ?? 'SPY')
   const [tickerInput, setTickerInput] = useState(config.ticker ?? 'SPY')
-  const [targetDelta, setTargetDelta] = useState(0.25)
-  const [expDays, setExpDays] = useState(30)
-  const [optionType, setOptionType] = useState<'call' | 'put'>('call')
+  const [targetDelta, setTargetDelta] = useState(config.targetDelta ?? 0.25)
+  const [expDays, setExpDays] = useState(config.expDays ?? 30)
+  const [optionType, setOptionType] = useState<'call' | 'put'>(config.optionType ?? 'call')
   // committed values — only updated on Calculate click
-  const [committed, setCommitted] = useState({ targetDelta: 0.25, expDays: 30, optionType: 'call' as 'call' | 'put', ran: false })
+  const [committed, setCommitted] = useState({ targetDelta: config.targetDelta ?? 0.25, expDays: config.expDays ?? 30, optionType: config.optionType ?? 'call', ran: false })
   const { ref, width } = useContainerSize<HTMLDivElement>()
 
   const wide = width >= 440
@@ -181,11 +181,6 @@ export default function DeltaPriceTarget({ config }: { config: WidgetConfig }) {
   return (
     <div ref={ref} style={{ background: T.bg, height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <style>{`@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
-
-      <div style={{ background: T.headerBg, borderBottom: `1px solid ${T.border}`, padding: '6px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-        <span style={{ color: T.gold, fontWeight: 700, fontSize: 9, fontFamily: T.mono, letterSpacing: '0.12em', textTransform: 'uppercase' }}>{ticker} DELTA TARGET</span>
-        <span style={{ color: T.muted, fontSize: 9, fontFamily: T.mono }}>{spot > 0 ? `$${spot.toFixed(2)}` : isLoading ? 'Loading…' : '—'}</span>
-      </div>
 
       {wide ? (
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>

@@ -1,19 +1,14 @@
 ---
 source_file: "backend/routers/correlation.py"
 type: "code"
-community: "Correlation Matrix"
-location: "L12"
+community: "Backend"
+location: "16"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/Correlation_Matrix
+  - community/Backend
 ---
 
 # CorrRequest
 
-## Connections
-- [[BaseModel]] - `inherits` [EXTRACTED]
-- [[CorrelationMatrix.tsx]] - `references` [EXTRACTED]
-- [[correlation.py]] - `contains` [EXTRACTED]
-
-#graphify/code #graphify/EXTRACTED #community/Correlation_Matrix
+#graphify/code #graphify/EXTRACTED #community/Backend

@@ -3,14 +3,14 @@ import { useQuery } from '@tanstack/react-query'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 
 const T = {
-  bg: 'var(--theme-bg, #101c2e)', border: 'rgba(255,255,255,0.08)', headerBg: 'var(--theme-surface, #142032)',
+  bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))', headerBg: 'var(--theme-surface, #142032)',
   gold: 'var(--theme-primary, #c9a84c)', muted: 'var(--theme-secondary, #5e768f)',
-  mono: 'JetBrains Mono, monospace', label: 'IBM Plex Sans, sans-serif',
+  mono: 'var(--theme-mono)', label: 'var(--theme-sans)',
   pos: '#22C55E', neg: '#EF4444',
 }
 
 const shimmerStyle: React.CSSProperties = {
-  background: 'linear-gradient(90deg, var(--theme-surface, #0d0d0d) 25%, rgba(255,255,255,0.05) 50%, var(--theme-surface, #0d0d0d) 75%)',
+  background: 'linear-gradient(90deg, var(--theme-surface, #0d0d0d) 25%, var(--theme-border-faint, rgba(255,255,255,0.05)) 50%, var(--theme-surface, #0d0d0d) 75%)',
   backgroundSize: '200% 100%', animation: 'shimmer 2s infinite', borderRadius: 3,
 }
 
@@ -26,11 +26,11 @@ function splitUnit(value: string): [string, string] {
 function Tile({ label, value, valueColor = T.gold }: { label: string; value: string; valueColor?: string }) {
   const [num, unit] = splitUnit(value)
   return (
-    <div style={{ background: T.headerBg, borderRight: `1px solid ${T.border}`, padding: '0 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 4, minWidth: 0, height: '100%' }}>
-      <span style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.12em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
+    <div style={{ background: T.headerBg, borderRight: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`, padding: '6px 10px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 3, minWidth: 110, height: '100%' }}>
+      <span style={{ fontFamily: T.label, fontSize: 8, fontWeight: 700, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>{label}</span>
       <span style={{ fontFamily: T.mono, fontWeight: 700, color: valueColor, whiteSpace: 'nowrap', lineHeight: 1.1 }}>
-        <span style={{ fontSize: 32 }}>{num}</span>
-        {unit && <span style={{ fontSize: 16, opacity: 0.75 }}>{unit}</span>}
+        <span style={{ fontSize: 26 }}>{num}</span>
+        {unit && <span style={{ fontSize: 13, opacity: 0.85, marginLeft: 2 }}>{unit}</span>}
       </span>
     </div>
   )
@@ -38,14 +38,14 @@ function Tile({ label, value, valueColor = T.gold }: { label: string; value: str
 
 function ShimmerTile() {
   return (
-    <div style={{ background: T.headerBg, borderRight: `1px solid ${T.border}`, padding: '0 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 5, height: '100%' }}>
-      <div style={{ ...shimmerStyle, width: '65%', height: 9 }} />
-      <div style={{ ...shimmerStyle, width: '45%', height: 22 }} />
+    <div style={{ background: T.headerBg, borderRight: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`, padding: '6px 10px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 4, height: '100%', minWidth: 110 }}>
+      <div style={{ ...shimmerStyle, width: '70%', height: 7 }} />
+      <div style={{ ...shimmerStyle, width: '50%', height: 18 }} />
     </div>
   )
 }
 
-const DEFAULT_YIELDS = ['FED', '1Y', '2Y', '5Y', '10Y', 'SPREAD']
+const DEFAULT_YIELDS = ['FED', '1M', '3M', '6M', '1Y', '2Y', '3Y', '5Y', '7Y', '10Y', '20Y', '30Y', 'SPREAD', 'SPREAD_5_30']
 
 export default function MacroStrip({ config }: { config: WidgetConfig }) {
   const selectedKeys = (config.tickers && config.tickers.length > 0) ? config.tickers : DEFAULT_YIELDS
@@ -72,31 +72,43 @@ export default function MacroStrip({ config }: { config: WidgetConfig }) {
   const spread5_30 = (curve['30Y'] != null && curve['5Y'] != null)
     ? Math.round((curve['30Y'] - curve['5Y']) * 100) : null
 
-  // Pure CSS grid — no JS measurement, no flashing
+  // Responsive grid: auto-fill tiles to fit container, min 90px max 1fr, scroll if needed
+  const tileCount = selectedKeys.length
   const gridStyle: React.CSSProperties = {
     display: 'grid',
-    gridTemplateColumns: `repeat(${selectedKeys.length}, 1fr)`,
-    width: '100%',
+    gridTemplateColumns: `repeat(${tileCount}, minmax(90px, 1fr))`,
+    width: 'max-content',
+    minWidth: '100%',
     height: '100%',
+    gap: 0,
   }
 
   const container: React.CSSProperties = {
     background: T.bg, width: '100%', height: '100%',
-    boxSizing: 'border-box', overflow: 'hidden',
+    boxSizing: 'border-box', overflowX: 'auto', overflowY: 'hidden',
     borderTop: `1px solid ${T.border}`,
+    borderRight: `1px solid ${T.border}`,
+    borderBottom: `1px solid ${T.border}`,
+    scrollbarWidth: 'thin',
+    scrollbarColor: 'var(--theme-border) transparent',
   }
 
   const fmt = (v: number | undefined) => v != null ? `${v.toFixed(2)}%` : '—'
 
   const tileForKey = (key: string) => {
     switch (key) {
-      case 'FED':         return <Tile key="FED"         label="Fed Funds"  value={rf != null ? `${(rf * 100).toFixed(2)}%` : '—'} />
-      case '1Y':          return <Tile key="1Y"          label="1Y Yield"   value={fmt(curve['1Y'])} />
-      case '2Y':          return <Tile key="2Y"          label="2Y Yield"   value={fmt(curve['2Y'])} />
-      case '5Y':          return <Tile key="5Y"          label="5Y Yield"   value={fmt(curve['5Y'])} />
-      case '10Y':         return <Tile key="10Y"         label="10Y Yield"  value={fmt(curve['10Y'])} />
-      case '20Y':         return <Tile key="20Y"         label="20Y Yield"  value={fmt(curve['20Y'])} />
-      case '30Y':         return <Tile key="30Y"         label="30Y Yield"  value={fmt(curve['30Y'])} />
+      case 'FED':         return <Tile key="FED"         label="Fed Funds"   value={rf != null ? `${(rf * 100).toFixed(2)}%` : '—'} />
+      case '1M':          return <Tile key="1M"          label="1M Bill"     value={fmt(curve['1M'])} />
+      case '3M':          return <Tile key="3M"          label="3M Bill"     value={fmt(curve['3M'])} />
+      case '6M':          return <Tile key="6M"          label="6M Bill"     value={fmt(curve['6M'])} />
+      case '1Y':          return <Tile key="1Y"          label="1Y Note"     value={fmt(curve['1Y'])} />
+      case '2Y':          return <Tile key="2Y"          label="2Y Note"     value={fmt(curve['2Y'])} />
+      case '3Y':          return <Tile key="3Y"          label="3Y Note"     value={fmt(curve['3Y'])} />
+      case '5Y':          return <Tile key="5Y"          label="5Y Note"     value={fmt(curve['5Y'])} />
+      case '7Y':          return <Tile key="7Y"          label="7Y Note"     value={fmt(curve['7Y'])} />
+      case '10Y':         return <Tile key="10Y"         label="10Y Note"    value={fmt(curve['10Y'])} />
+      case '20Y':         return <Tile key="20Y"         label="20Y Bond"    value={fmt(curve['20Y'])} />
+      case '30Y':         return <Tile key="30Y"         label="30Y Bond"    value={fmt(curve['30Y'])} />
       case 'SPREAD':      return <Tile key="SPREAD"      label="2/10 Spread" value={spread2_10 != null ? `${spread2_10 >= 0 ? '+' : ''}${spread2_10} bps` : '—'} valueColor={spread2_10 == null ? T.muted : spread2_10 >= 0 ? T.pos : T.neg} />
       case 'SPREAD_5_30': return <Tile key="SPREAD_5_30" label="5/30 Spread" value={spread5_30 != null ? `${spread5_30 >= 0 ? '+' : ''}${spread5_30} bps` : '—'} valueColor={spread5_30 == null ? T.muted : spread5_30 >= 0 ? T.pos : T.neg} />
       default:            return null
@@ -106,7 +118,14 @@ export default function MacroStrip({ config }: { config: WidgetConfig }) {
   return (
     <div style={container}>
       <style>{`@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
-      <div style={gridStyle}>
+      <style>{`
+        /* Scrollbar styling */
+        .macro-strip-container::-webkit-scrollbar { height: 6px; }
+        .macro-strip-container::-webkit-scrollbar-track { background: transparent; }
+        .macro-strip-container::-webkit-scrollbar-thumb { background: var(--theme-border, rgba(255,255,255,0.08)); border-radius: 3px; }
+        .macro-strip-container::-webkit-scrollbar-thumb:hover { background: var(--theme-secondary, #5e768f); }
+      `}</style>
+      <div style={gridStyle} className="macro-strip-container">
         {isLoading
           ? selectedKeys.map(k => <ShimmerTile key={k} />)
           : selectedKeys.map(tileForKey)

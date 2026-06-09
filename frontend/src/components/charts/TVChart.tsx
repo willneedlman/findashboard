@@ -36,11 +36,11 @@ export default function TVChart({
       },
       crosshair: { mode: 1 },
       rightPriceScale: {
-        borderColor: 'rgba(255,255,255,0.06)',
+        borderColor: 'var(--theme-border, rgba(255,255,255,0.06))',
         textColor,
       },
       timeScale: {
-        borderColor: 'rgba(255,255,255,0.06)',
+        borderColor: 'var(--theme-border, rgba(255,255,255,0.06))',
         timeVisible: true,
       },
       width: containerRef.current.clientWidth,

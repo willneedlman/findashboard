@@ -38,8 +38,8 @@ interface PortfolioIOProps {
 // ── Styles ───────────────────────────────────────────────────────────────────
 
 const S = {
-  border: 'rgba(255,255,255,0.08)', gold: 'var(--theme-primary, #c9a84c)', muted: 'var(--theme-secondary, #5e768f)', text: '#d7e3fc',
-  mono: 'JetBrains Mono, monospace', label: 'IBM Plex Sans, sans-serif',
+  border: 'var(--theme-border, rgba(255,255,255,0.08))', gold: 'var(--theme-primary, #c9a84c)', muted: 'var(--theme-secondary, #5e768f)', text: 'var(--theme-text, #d7e3fc)',
+  mono: 'var(--theme-mono)', label: 'var(--theme-sans)',
 }
 
 const btn = (primary = false): React.CSSProperties => ({
@@ -187,7 +187,7 @@ export default function PortfolioIO({ mode, assets, onImportAssets, tickers, onI
       </div>
 
       {/* Format hint */}
-      <span style={{ fontFamily: S.label, fontSize: 8, color: 'rgba(255,255,255,0.22)', lineHeight: 1.4 }}>
+      <span style={{ fontFamily: S.label, fontSize: 8, color: 'var(--theme-text-faint, var(--theme-text-faint, rgba(255,255,255,0.22)))', lineHeight: 1.4 }}>
         {mode === 'portfolio'
           ? 'JSON · CSV (ticker,weight,strategy) · or bare ticker list'
           : 'JSON · CSV (one ticker per line)'}

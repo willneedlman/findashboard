@@ -55,7 +55,7 @@ function safeUrl(url: string): string {
 const CONSENSUS_STYLE: Record<string, { color: string; border: string }> = {
   'Strong Buy':    { color: '#22C55E', border: '#22C55E' },
   'Moderate Buy':  { color: '#86efac', border: '#86efac' },
-  'Hold':          { color: 'var(--theme-secondary, #99907e)', border: 'rgba(255,255,255,0.18)' },
+  'Hold':          { color: 'var(--theme-secondary, #99907e)', border: 'var(--theme-text-faint, rgba(255,255,255,0.18))' },
   'Underperform':  { color: '#EF4444', border: '#EF4444' },
 }
 
@@ -85,7 +85,7 @@ function TickerLogo({ ticker }: { ticker: string }) {
       src={`https://assets.parqet.com/logos/symbol/${ticker}?format=png`}
       alt={ticker}
       onError={() => setFailed(true)}
-      style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0, objectFit: 'contain', background: 'var(--theme-surface, #1f2a3d)', border: '1px solid rgba(255,255,255,0.08)' }}
+      style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0, objectFit: 'contain', background: 'var(--theme-surface, #1f2a3d)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
     />
   )
 }
@@ -140,16 +140,16 @@ function InsiderPanel({ sorted, insiderData, insiderPending }: {
   const toggle = (tk: string) => setExpanded(p => ({ ...p, [tk]: !p[tk] }))
 
   return (
-    <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)' }}>
-      <div style={{ padding: '6px 10px', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'var(--theme-surface, #142032)', display: 'flex', alignItems: 'center', gap: 10 }}>
+    <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+      <div style={{ padding: '6px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)', display: 'flex', alignItems: 'center', gap: 10 }}>
         <span style={{ ...LABEL_S, color: '#ffffff' }}>Insider Transaction Flow</span>
         {insiderPending && <span style={{ fontSize: 10, color: 'var(--theme-secondary, #99907e)', letterSpacing: '0.1em' }}>FETCHING…</span>}
       </div>
 
       {/* Summary header */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 110px 90px 90px 24px', padding: '5px 10px', background: 'var(--theme-bg, #0a1628)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 110px 90px 90px 24px', padding: '5px 10px', background: 'var(--theme-bg, #0a1628)', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
         {['Ticker', 'Txns', 'Latest Move', 'Last Date', 'Total Value', ''].map(h => (
-          <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.22)' }}>{h}</div>
+          <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-text-faint, rgba(255,255,255,0.22))' }}>{h}</div>
         ))}
       </div>
 
@@ -162,7 +162,7 @@ function InsiderPanel({ sorted, insiderData, insiderPending }: {
         const latest   = txs?.[0]
         const totalVal = txs?.reduce((s, t) => s + (t.value || 0), 0) ?? 0
         const latestTx = latest?.transaction ?? '—'
-        const txColor  = latestTx === 'Sale' ? '#EF4444' : latestTx === 'Purchase' ? '#22C55E' : '#d7e3fc'
+        const txColor  = latestTx === 'Sale' ? '#EF4444' : latestTx === 'Purchase' ? '#22C55E' : 'var(--theme-text, #d7e3fc)'
 
         return (
           <div key={row.ticker}>
@@ -171,38 +171,38 @@ function InsiderPanel({ sorted, insiderData, insiderPending }: {
               onClick={() => txs && txs.length > 0 && toggle(row.ticker)}
               style={{
                 display: 'grid', gridTemplateColumns: '1fr 90px 110px 90px 90px 24px',
-                padding: '6px 10px', borderBottom: '1px solid rgba(255,255,255,0.04)',
+                padding: '6px 10px', borderBottom: '1px solid var(--theme-hover, rgba(255,255,255,0.04))',
                 cursor: txs && txs.length > 0 ? 'pointer' : 'default', alignItems: 'center',
               }}
-              onMouseEnter={e => { if (txs?.length) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.03)' }}
+              onMouseEnter={e => { if (txs?.length) (e.currentTarget as HTMLElement).style.background = 'var(--theme-hover, rgba(255,255,255,0.03))' }}
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <TickerLogo ticker={row.ticker} />
                 <span style={{ fontWeight: 700, color: 'var(--theme-primary, #c9a84c)', fontSize: 12 }}>{row.ticker}</span>
               </div>
-              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#d7e3fc' }}>
-                {isLoading ? <span style={{ color: 'rgba(255,255,255,0.22)' }}>…</span> : (txs?.length ?? '—')}
+              <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-text, #d7e3fc)' }}>
+                {isLoading ? <span style={{ color: 'var(--theme-text-faint, rgba(255,255,255,0.22))' }}>…</span> : (txs?.length ?? '—')}
               </div>
               <div>
-                {isLoading ? <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.22)' }}>…</span>
+                {isLoading ? <span style={{ fontSize: 11, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))' }}>…</span>
                   : latest ? <span style={{ fontSize: 11, fontWeight: 600, color: txColor }}>{latestTx}</span>
-                  : <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.22)' }}>No data</span>}
+                  : <span style={{ fontSize: 11, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))' }}>No data</span>}
               </div>
-              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--theme-secondary, #99907e)' }}>
+              <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-secondary, #99907e)' }}>
                 {isLoading ? '…' : (latest?.date ?? '—')}
               </div>
-              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#d7e3fc' }}>
+              <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-text, #d7e3fc)' }}>
                 {isLoading ? '…' : totalVal > 0 ? `$${(totalVal / 1e6).toFixed(1)}M` : '—'}
               </div>
-              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', textAlign: 'center' }}>
+              <div style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', textAlign: 'center' }}>
                 {txs && txs.length > 0 ? (isOpen ? '▲' : '▼') : ''}
               </div>
             </div>
 
             {/* Expanded detail table */}
             {isOpen && txs && txs.length > 0 && (
-              <div style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', overflowX: 'auto' }}>
+              <div style={{ borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', overflowX: 'auto' }}>
                 <table style={{ width: '100%', minWidth: 520, borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ background: 'var(--theme-bg, #0a1628)' }}>
@@ -213,17 +213,17 @@ function InsiderPanel({ sorted, insiderData, insiderPending }: {
                   </thead>
                   <tbody>
                     {txs.map((tx, i) => {
-                      const c = tx.transaction === 'Sale' ? '#EF4444' : tx.transaction === 'Purchase' ? '#22C55E' : '#d7e3fc'
+                      const c = tx.transaction === 'Sale' ? '#EF4444' : tx.transaction === 'Purchase' ? '#22C55E' : 'var(--theme-text, #d7e3fc)'
                       return (
                         <tr key={i}
-                          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
+                          onMouseEnter={e => (e.currentTarget.style.background = 'var(--theme-hover, rgba(255,255,255,0.03))')}
                           onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                           <td style={TD_S}>{tx.date}</td>
                           <td style={TD_S}>{tx.insider}</td>
                           <td style={{ ...TD_S, color: 'var(--theme-secondary, #99907e)' }}>{tx.title || 'Unknown'}</td>
                           <td style={TD_S}><span style={{ color: c, fontWeight: 600 }}>{tx.transaction}</span></td>
-                          <td style={{ ...TD_S, fontFamily: 'JetBrains Mono, monospace' }}>{tx.shares > 0 ? tx.shares.toLocaleString() : '—'}</td>
-                          <td style={{ ...TD_S, fontFamily: 'JetBrains Mono, monospace' }}>{tx.value > 0 ? `$${(tx.value / 1e6).toFixed(2)}M` : '—'}</td>
+                          <td style={{ ...TD_S, fontFamily: 'var(--theme-mono)' }}>{tx.shares > 0 ? tx.shares.toLocaleString() : '—'}</td>
+                          <td style={{ ...TD_S, fontFamily: 'var(--theme-mono)' }}>{tx.value > 0 ? `$${(tx.value / 1e6).toFixed(2)}M` : '—'}</td>
                         </tr>
                       )
                     })}
@@ -239,17 +239,17 @@ function InsiderPanel({ sorted, insiderData, insiderPending }: {
 }
 
 const LABEL_S: React.CSSProperties = { fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)' }
-const TH_S: React.CSSProperties    = { fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', padding: '6px 10px', textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.08)', whiteSpace: 'nowrap' }
-const TD_S: React.CSSProperties    = { padding: '5px 10px', borderBottom: '1px solid rgba(255,255,255,0.03)', fontSize: 11, color: '#d7e3fc', verticalAlign: 'middle' }
+const TH_S: React.CSSProperties    = { fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', padding: '6px 10px', textAlign: 'left', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', whiteSpace: 'nowrap' }
+const TD_S: React.CSSProperties    = { padding: '5px 10px', borderBottom: '1px solid var(--theme-hover, rgba(255,255,255,0.03))', fontSize: 11, color: 'var(--theme-text, #d7e3fc)', verticalAlign: 'middle' }
 
 const LABEL: React.CSSProperties = { fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)' }
-const INPUT: React.CSSProperties = { background: 'var(--theme-bg, #0a1628)', border: '1px solid rgba(255,255,255,0.10)', color: '#d7e3fc', fontSize: 12, padding: '5px 8px', width: '100%', outline: 'none', fontFamily: 'inherit' }
-const TH: React.CSSProperties = { fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', padding: '8px 10px', textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.08)', whiteSpace: 'nowrap' }
-const TD: React.CSSProperties = { padding: '7px 10px', borderBottom: '1px solid rgba(255,255,255,0.04)', fontSize: 12, color: '#d7e3fc', verticalAlign: 'middle' }
+const INPUT: React.CSSProperties = { background: 'var(--theme-bg, #0a1628)', border: '1px solid var(--theme-border, rgba(255,255,255,0.10))', color: 'var(--theme-text, #d7e3fc)', fontSize: 12, padding: '5px 8px', width: '100%', outline: 'none', fontFamily: 'inherit' }
+const TH: React.CSSProperties = { fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', padding: '8px 10px', textAlign: 'left', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', whiteSpace: 'nowrap' }
+const TD: React.CSSProperties = { padding: '7px 10px', borderBottom: '1px solid var(--theme-hover, rgba(255,255,255,0.04))', fontSize: 12, color: 'var(--theme-text, #d7e3fc)', verticalAlign: 'middle' }
 
 const DEFAULT_TICKERS = ['NVDA', 'AAPL', 'SLS', 'MSTR', 'TOST', 'VST', 'OWL', 'AMZN']
 
-export default function CorporateHub() {
+export function CorporateHubContent() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { tickers: portfolioTickers } = usePortfolio()
   const [tickers, setTickersRaw] = useState<string[]>(() => {
@@ -363,12 +363,11 @@ export default function CorporateHub() {
   )
 
   return (
-    <PageWrapper>
-      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+    <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
 
         {/* Left sidebar */}
-        <div style={{ width: 190, flexShrink: 0, background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'var(--theme-surface, #142032)' }}>
+        <div style={{ width: 190, flexShrink: 0, background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)' }}>
             <div style={{ ...LABEL, color: '#ffffff' }}>Scan Parameters</div>
           </div>
           <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 12, flex: 1 }}>
@@ -381,7 +380,7 @@ export default function CorporateHub() {
                   style={{
                     marginTop: 6, width: '100%', background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 12%, transparent)',
                     border: '1px solid rgba(201,168,76,0.35)', color: 'var(--theme-primary, #c9a84c)',
-                    fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 9, fontWeight: 700,
+                    fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700,
                     letterSpacing: '0.1em', textTransform: 'uppercase', padding: '5px 0', cursor: 'pointer',
                   }}
                 >
@@ -409,15 +408,15 @@ export default function CorporateHub() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
                 <input type="checkbox" checked={showShort} onChange={e => setShowShort(e.target.checked)} style={{ accentColor: 'var(--theme-primary, #c9a84c)' }} />
-                <span style={{ ...LABEL, color: '#d7e3fc' }}>Short Interest</span>
+                <span style={{ ...LABEL, color: 'var(--theme-text, #d7e3fc)' }}>Short Interest</span>
               </label>
               <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
                 <input type="checkbox" checked={showInsider} onChange={e => setShowInsider(e.target.checked)} style={{ accentColor: 'var(--theme-primary, #c9a84c)' }} />
-                <span style={{ ...LABEL, color: '#d7e3fc' }}>Insider Activity</span>
+                <span style={{ ...LABEL, color: 'var(--theme-text, #d7e3fc)' }}>Insider Activity</span>
               </label>
             </div>
           </div>
-          <div style={{ padding: 10, borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ padding: 10, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', display: 'flex', flexDirection: 'column', gap: 8 }}>
             <PortfolioIO
               mode="tickers"
               tickers={tickers}
@@ -439,8 +438,8 @@ export default function CorporateHub() {
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
 
           {/* Main table */}
-          <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)' }}>
-            <div style={{ padding: '6px 10px', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'var(--theme-surface, #142032)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+            <div style={{ padding: '6px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ ...LABEL, color: '#ffffff' }}>Upcoming Catalysts & Valuation</span>
               {isPending && <span style={{ fontSize: 10, color: 'var(--theme-secondary, #99907e)', letterSpacing: '0.1em' }}>SCANNING…</span>}
             </div>
@@ -458,7 +457,7 @@ export default function CorporateHub() {
                     const cs = CONSENSUS_STYLE[row.consensus] ?? CONSENSUS_STYLE['Hold']
                     return (
                       <tr key={row.ticker} style={{ background: 'transparent' }}
-                        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
+                        onMouseEnter={e => (e.currentTarget.style.background = 'var(--theme-hover, rgba(255,255,255,0.03))')}
                         onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                         <td style={TD}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -469,43 +468,43 @@ export default function CorporateHub() {
                         <td style={{ ...TD, padding: '4px 10px' }}>
                           <Sparkline data={row.sparkline} positive={(row.pctChange ?? 0) >= 0} />
                         </td>
-                        <td style={{ ...TD, fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>{row.date}</td>
+                        <td style={{ ...TD, fontFamily: 'var(--theme-mono)', fontSize: 11 }}>{row.date}</td>
                         <td style={TD}>
                           <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--theme-tertiary, #9bcdef)', letterSpacing: '0.08em' }}>{row.horizon}</span>
                         </td>
                         <td style={TD}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <div style={{ width: 64, height: 4, background: 'rgba(255,255,255,0.08)', borderRadius: 0, overflow: 'hidden' }}>
+                            <div style={{ width: 64, height: 4, background: 'var(--theme-hover, rgba(255,255,255,0.08))', borderRadius: 0, overflow: 'hidden' }}>
                               <div style={{ width: `${Math.min(row.impliedMove / 20 * 100, 100)}%`, height: '100%', background: 'var(--theme-tertiary, #1f5673)' }} />
                             </div>
-                            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>{row.impliedMove.toFixed(1)}%</span>
+                            <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11 }}>{row.impliedMove.toFixed(1)}%</span>
                           </div>
                         </td>
-                        <td style={{ ...TD, fontFamily: 'JetBrains Mono, monospace', fontSize: 11,
+                        <td style={{ ...TD, fontFamily: 'var(--theme-mono)', fontSize: 11,
                           color: row.pctChange == null ? '#4d4637' : row.pctChange >= 0 ? '#22C55E' : '#EF4444' }}>
                           {row.pctChange != null ? `${row.pctChange >= 0 ? '+' : ''}${row.pctChange.toFixed(2)}%` : '—'}
                         </td>
-                        <td style={{ ...TD, fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#d7e3fc' }}>
+                        <td style={{ ...TD, fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-text, #d7e3fc)' }}>
                           {row.marketCap != null
                             ? row.marketCap >= 1e12 ? `$${(row.marketCap / 1e12).toFixed(2)}T`
                             : row.marketCap >= 1e9  ? `$${(row.marketCap / 1e9).toFixed(1)}B`
                             : `$${(row.marketCap / 1e6).toFixed(0)}M`
                             : '—'}
                         </td>
-                        <td style={{ ...TD, fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>{row.pe != null ? `${row.pe.toFixed(2)}x` : '—'}</td>
+                        <td style={{ ...TD, fontFamily: 'var(--theme-mono)', fontSize: 11 }}>{row.pe != null ? `${row.pe.toFixed(2)}x` : '—'}</td>
                         <td style={TD}>
                           <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: cs.color, border: `1px solid ${cs.border}`, padding: '2px 5px', textTransform: 'uppercase', whiteSpace: 'nowrap', display: 'inline-block' }}>
                             {row.consensus}
                           </span>
                         </td>
-                        <td style={{ ...TD, textAlign: 'center', color: row.isConfirmed ? '#22C55E' : 'rgba(255,255,255,0.18)' }}>
+                        <td style={{ ...TD, textAlign: 'center', color: row.isConfirmed ? '#22C55E' : 'var(--theme-text-faint, rgba(255,255,255,0.18))' }}>
                           {row.isConfirmed ? '✓' : '—'}
                         </td>
                       </tr>
                     )
                   })}
                   {isPending && rows.length === 0 && (
-                    <tr><td colSpan={9} style={{ ...TD, textAlign: 'center', color: 'rgba(255,255,255,0.22)', letterSpacing: '0.1em' }}>SCANNING…</td></tr>
+                    <tr><td colSpan={9} style={{ ...TD, textAlign: 'center', color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', letterSpacing: '0.1em' }}>SCANNING…</td></tr>
                   )}
                 </tbody>
               </table>
@@ -514,8 +513,8 @@ export default function CorporateHub() {
 
           {/* Short interest table */}
           {showShort && rows.length > 0 && (
-            <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)' }}>
-              <div style={{ padding: '6px 10px', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'var(--theme-surface, #142032)', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+              <div style={{ padding: '6px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)', display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ ...LABEL, color: '#ffffff' }}>Short Interest Monitor</span>
                 {shortPending && <span style={{ fontSize: 10, color: 'var(--theme-secondary, #99907e)', letterSpacing: '0.1em' }}>FETCHING…</span>}
               </div>
@@ -531,10 +530,10 @@ export default function CorporateHub() {
                 <tbody>
                   {sorted.map(row => {
                     const s = shortData[row.ticker]
-                    const dash = <span style={{ color: 'rgba(255,255,255,0.22)' }}>—</span>
+                    const dash = <span style={{ color: 'var(--theme-text-faint, rgba(255,255,255,0.22))' }}>—</span>
                     return (
                       <tr key={row.ticker}
-                        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
+                        onMouseEnter={e => (e.currentTarget.style.background = 'var(--theme-hover, rgba(255,255,255,0.03))')}
                         onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                         <td style={TD}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -542,9 +541,9 @@ export default function CorporateHub() {
                             <span style={{ fontWeight: 700, color: 'var(--theme-primary, #c9a84c)', fontSize: 13 }}>{row.ticker}</span>
                           </div>
                         </td>
-                        <td style={{ ...TD, fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>{shortPending && !s ? '…' : (s?.shortPctFloat ?? dash)}</td>
-                        <td style={{ ...TD, fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>{shortPending && !s ? '…' : (s?.shortRatio ?? dash)}</td>
-                        <td style={{ ...TD, fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>{shortPending && !s ? '…' : (s?.sharesShort ?? dash)}</td>
+                        <td style={{ ...TD, fontFamily: 'var(--theme-mono)', fontSize: 11 }}>{shortPending && !s ? '…' : (s?.shortPctFloat ?? dash)}</td>
+                        <td style={{ ...TD, fontFamily: 'var(--theme-mono)', fontSize: 11 }}>{shortPending && !s ? '…' : (s?.shortRatio ?? dash)}</td>
+                        <td style={{ ...TD, fontFamily: 'var(--theme-mono)', fontSize: 11 }}>{shortPending && !s ? '…' : (s?.sharesShort ?? dash)}</td>
                       </tr>
                     )
                   })}
@@ -569,7 +568,7 @@ export default function CorporateHub() {
               <button onClick={fetchAiBrief} disabled={aiBriefPending || rows.length === 0} style={{
                 background: aiBriefPending ? 'rgba(201,168,76,0.08)' : 'rgba(201,168,76,0.15)',
                 border: '1px solid rgba(201,168,76,0.4)', color: '#c9a84c',
-                fontFamily: 'JetBrains Mono, monospace', fontSize: 9,
+                fontFamily: 'var(--theme-mono)', fontSize: 9,
                 padding: '2px 8px', cursor: (aiBriefPending || rows.length === 0) ? 'default' : 'pointer',
                 opacity: (aiBriefPending || rows.length === 0) ? 0.5 : 1,
                 letterSpacing: '0.08em',
@@ -577,25 +576,25 @@ export default function CorporateHub() {
             </div>
             <div style={{ padding: '8px 10px' }}>
               {!aiBrief && !aiBriefPending && !aiBriefError && (
-                <div style={{ fontSize: 10, color: 'rgba(215,227,252,0.3)', fontFamily: 'JetBrains Mono, monospace', lineHeight: '15px' }}>
+                <div style={{ fontSize: 10, color: 'rgba(215,227,252,0.3)', fontFamily: 'var(--theme-mono)', lineHeight: '15px' }}>
                   Click Generate for an AI-written market brief on your tracked tickers.
                 </div>
               )}
               {aiBriefError && (
-                <div style={{ fontSize: 9, color: '#ef4444', fontFamily: 'JetBrains Mono, monospace', lineHeight: '14px' }}>
+                <div style={{ fontSize: 9, color: '#ef4444', fontFamily: 'var(--theme-mono)', lineHeight: '14px' }}>
                   {aiBriefError}
                 </div>
               )}
               {aiBriefPending && (
-                <div style={{ fontSize: 9, color: 'rgba(201,168,76,0.5)', fontFamily: 'JetBrains Mono, monospace' }}>Generating…</div>
+                <div style={{ fontSize: 9, color: 'rgba(201,168,76,0.5)', fontFamily: 'var(--theme-mono)' }}>Generating…</div>
               )}
               {aiBrief && !aiBriefPending && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 9, padding: '1px 5px', border: '1px solid rgba(201,168,76,0.3)', color: aiBrief.tone === 'bullish' ? '#22c55e' : aiBrief.tone === 'bearish' ? '#ef4444' : '#c9a84c', fontFamily: 'JetBrains Mono, monospace', textTransform: 'uppercase' }}>{aiBrief.tone}</span>
+                    <span style={{ fontSize: 9, padding: '1px 5px', border: '1px solid rgba(201,168,76,0.3)', color: aiBrief.tone === 'bullish' ? '#22c55e' : aiBrief.tone === 'bearish' ? '#ef4444' : '#c9a84c', fontFamily: 'var(--theme-mono)', textTransform: 'uppercase' }}>{aiBrief.tone}</span>
                   </div>
                   {aiBrief.bullets.map((b, i) => (
-                    <div key={i} style={{ fontSize: 10, color: '#d7e3fc', lineHeight: '15px', paddingLeft: 8, borderLeft: '2px solid rgba(201,168,76,0.3)' }}>
+                    <div key={i} style={{ fontSize: 10, color: 'var(--theme-text, #d7e3fc)', lineHeight: '15px', paddingLeft: 8, borderLeft: '2px solid rgba(201,168,76,0.3)' }}>
                       {b}
                     </div>
                   ))}
@@ -605,15 +604,15 @@ export default function CorporateHub() {
           </div>
 
           {/* News feed */}
-          <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-            <div style={{ padding: '6px 10px', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'var(--theme-surface, #142032)' }}>
+          <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+            <div style={{ padding: '6px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)' }}>
               <div style={{ ...LABEL, color: '#ffffff', marginBottom: 0 }}>Terminal Intelligence Brief</div>
-              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', marginTop: 2 }}>
+              <div style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', marginTop: 2 }}>
                 Live Desk — {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
               </div>
             </div>
             <div style={{ overflowY: 'auto', flex: 1, padding: 10 }}>
-              {isPending && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.22)', letterSpacing: '0.08em' }}>Loading feeds…</div>}
+              {isPending && <div style={{ fontSize: 11, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', letterSpacing: '0.08em' }}>Loading feeds…</div>}
               {sorted.filter(r => r.news.length > 0).map(row => (
                 <div key={row.ticker} style={{ marginBottom: 14 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
@@ -627,10 +626,10 @@ export default function CorporateHub() {
                       <a href={safeUrl(n.link)} target="_blank" rel="noopener noreferrer" style={{ color: '#d97736', fontSize: 11, fontWeight: 600, textDecoration: 'none', lineHeight: '15px', display: 'block' }}>
                         {n.title}
                       </a>
-                      <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', marginTop: 2 }}>Source: {n.publisher}</div>
+                      <div style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', marginTop: 2 }}>Source: {n.publisher}</div>
                     </div>
                   ))}
-                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 4 }} />
+                  <div style={{ borderTop: '1px solid var(--theme-border-faint, rgba(255,255,255,0.05))', paddingTop: 4 }} />
                 </div>
               ))}
             </div>
@@ -638,6 +637,9 @@ export default function CorporateHub() {
         </div>
 
       </div>
-    </PageWrapper>
   )
+}
+
+export default function CorporateHub() {
+  return <PageWrapper><CorporateHubContent /></PageWrapper>
 }

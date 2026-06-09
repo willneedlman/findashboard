@@ -44,7 +44,7 @@ export default function TradingViewChart({ config }: { config: WidgetConfig }) {
     const surface = cs.getPropertyValue('--theme-surface').trim() || '#0d1826'
     const gold    = cs.getPropertyValue('--theme-primary').trim() || '#c9a84c'
     const text    = cs.getPropertyValue('--theme-secondary').trim()|| '#5e768f'
-    const grid    = 'rgba(255,255,255,0.04)'
+    const grid    = 'var(--theme-hover, var(--theme-hover, rgba(255,255,255,0.04)))'
 
     const chart = createChart(el, {
       layout: {
@@ -63,11 +63,11 @@ export default function TradingViewChart({ config }: { config: WidgetConfig }) {
         horzLine: { color: `${gold}66`, labelBackgroundColor: surface },
       },
       rightPriceScale: {
-        borderColor: 'rgba(255,255,255,0.06)',
+        borderColor: 'var(--theme-border, rgba(255,255,255,0.06))',
         textColor:   text,
       },
       timeScale: {
-        borderColor:    'rgba(255,255,255,0.06)',
+        borderColor:    'var(--theme-border, rgba(255,255,255,0.06))',
         timeVisible:    false,
         secondsVisible: false,
       },
@@ -156,62 +156,18 @@ export default function TradingViewChart({ config }: { config: WidgetConfig }) {
   return (
     <div style={{ height: '100%', minHeight: 300, display: 'flex', flexDirection: 'column', background: 'var(--theme-bg, #101c2e)', overflow: 'hidden' }}>
 
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 10px 5px', background: 'var(--theme-surface, #0d1826)', borderBottom: '1px solid rgba(255,255,255,0.07)', flexShrink: 0 }}>
-        <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--theme-primary, #c9a84c)', flexShrink: 0 }} />
-        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700, color: 'var(--theme-primary, #c9a84c)', letterSpacing: '0.1em' }}>
-          {displaySym}
-        </span>
-        {crosshair ? (
-          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: '#d7e3fc', letterSpacing: '0.04em', display: 'flex', gap: 8 }}>
-            <span style={{ color: '#5e768f' }}>{crosshair.date}</span>
-            <span>O <span style={{ color: '#d7e3fc' }}>{crosshair.open.toFixed(2)}</span></span>
-            <span>H <span style={{ color: '#22c55e' }}>{crosshair.high.toFixed(2)}</span></span>
-            <span>L <span style={{ color: '#ef4444' }}>{crosshair.low.toFixed(2)}</span></span>
-            <span>C <span style={{ color: '#d7e3fc' }}>{crosshair.close.toFixed(2)}</span></span>
-            <span style={{ color: pctColor }}>{crosshair.pct >= 0 ? '+' : ''}{crosshair.pct.toFixed(2)}%</span>
-          </span>
-        ) : (
-          <span style={{ fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 9, color: 'rgba(255,255,255,0.18)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-            Candlestick · Daily
-          </span>
-        )}
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 2 }}>
-          {PERIODS.map(p => (
-            <button
-              key={p.value}
-              onClick={() => setPeriod(p.value)}
-              style={{
-                fontFamily:  'JetBrains Mono, monospace',
-                fontSize:    9,
-                fontWeight:  700,
-                padding:     '2px 6px',
-                border:      period === p.value ? '1px solid rgba(201,168,76,0.55)' : '1px solid rgba(255,255,255,0.07)',
-                background:  period === p.value ? 'rgba(201,168,76,0.12)' : 'transparent',
-                color:       period === p.value ? 'var(--theme-primary, #c9a84c)' : 'rgba(255,255,255,0.3)',
-                cursor:      'pointer',
-                letterSpacing: '0.08em',
-                transition:  'all 0.12s',
-              }}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Chart */}
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
         {loading && (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(16,28,46,0.65)' }}>
-            <span style={{ fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 10, color: 'var(--theme-secondary, #5e768f)', letterSpacing: '0.12em' }}>LOADING…</span>
+            <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, color: 'var(--theme-secondary, #5e768f)', letterSpacing: '0.12em' }}>LOADING…</span>
           </div>
         )}
         {error && !loading && (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-            <div style={{ fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 11, color: 'var(--theme-secondary, #5e768f)' }}>Chart unavailable</div>
-            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: 'rgba(255,255,255,0.18)' }}>{error}</div>
+            <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: 'var(--theme-secondary, #5e768f)' }}>Chart unavailable</div>
+            <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.18))' }}>{error}</div>
           </div>
         )}
       </div>

@@ -1,20 +1,26 @@
 ---
-source_file: "backend/math_engine.py"
+source_file: ".claude/worktrees/update-graphify/math_engine.py"
 type: "code"
-community: "Backend Math Engine"
+community: ".Claude"
 location: "L1"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/Backend_Math_Engine
+  - community/.Claude
 ---
 
 # math_engine.py
 
 ## Connections
-- [[bond_price()]] - `contains` [EXTRACTED]
-- [[bs_greeks()]] - `contains` [EXTRACTED]
-- [[bs_price()]] - `contains` [EXTRACTED]
-- [[duration_convexity()]] - `contains` [EXTRACTED]
+- [[scipy_stats]] - `imports` [EXTRACTED]
+- [[claude_worktrees_update_graphify_math_engine_py_bs_price]] - `contains` [EXTRACTED]
+- [[claude_worktrees_update_graphify_math_engine_py_bs_greeks]] - `contains` [EXTRACTED]
+- [[claude_worktrees_update_graphify_math_engine_py_bond_price]] - `contains` [EXTRACTED]
+- [[claude_worktrees_update_graphify_math_engine_py_duration_convexity]] - `contains` [EXTRACTED]
+- [[scipy_stats]] - `imports` [EXTRACTED]
+- [[claude_worktrees_update_graphify_math_engine_py_bs_price]] - `contains` [EXTRACTED]
+- [[claude_worktrees_update_graphify_math_engine_py_bs_greeks]] - `contains` [EXTRACTED]
+- [[claude_worktrees_update_graphify_math_engine_py_bond_price]] - `contains` [EXTRACTED]
+- [[claude_worktrees_update_graphify_math_engine_py_duration_convexity]] - `contains` [EXTRACTED]
 
-#graphify/code #graphify/EXTRACTED #community/Backend_Math_Engine
+#graphify/code #graphify/EXTRACTED #community/.Claude

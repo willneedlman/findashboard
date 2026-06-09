@@ -1,17 +1,14 @@
 ---
-source_file: "frontend/src/pages/BondAnalytics.tsx"
+source_file: "frontend/src/components/ChartTooltip.tsx"
 type: "code"
-community: "Bond Pricing Engine"
-location: "L9"
+community: "Frontend"
+location: "None"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/Bond_Pricing_Engine
+  - community/Frontend
 ---
 
 # TOOLTIP_STYLE
 
-## Connections
-- [[BondAnalytics.tsx]] - `contains` [EXTRACTED]
-
-#graphify/code #graphify/EXTRACTED #community/Bond_Pricing_Engine
+#graphify/code #graphify/EXTRACTED #community/Frontend

@@ -1,17 +1,14 @@
 ---
 source_file: "requirements.txt"
-type: "document"
-community: "HTTP Requests Library"
+type: "code"
+community: "Group 34"
 location: "line 45"
 tags:
-  - graphify/document
-  - graphify/INFERRED
-  - community/HTTP_Requests_Library
+  - graphify/code
+  - graphify/EXTRACTED
+  - community/Group_34
 ---
 
 # requests (main)
 
-## Connections
-- [[requests]] - `semantically_similar_to` [INFERRED]
-
-#graphify/document #graphify/INFERRED #community/HTTP_Requests_Library
+#graphify/code #graphify/EXTRACTED #community/Group_34

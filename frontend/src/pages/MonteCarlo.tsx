@@ -70,24 +70,24 @@ const makeLeg = (ticker: string, weight: number): Leg => ({
 // ── Styles ───────────────────────────────────────────────────────────────────
 
 const INPUT: React.CSSProperties = {
-  background: 'var(--theme-bg, #0a1628)', border: '1px solid rgba(255,255,255,0.10)', color: '#d7e3fc',
-  fontFamily: 'JetBrains Mono, monospace', fontSize: 12, padding: '5px 8px',
+  background: 'var(--theme-bg, #0a1628)', border: '1px solid var(--theme-border, rgba(255,255,255,0.10))', color: 'var(--theme-text, #d7e3fc)',
+  fontFamily: 'var(--theme-mono)', fontSize: 12, padding: '5px 8px',
   width: '100%', outline: 'none', boxSizing: 'border-box',
 }
 const LABEL: React.CSSProperties = {
   fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
   textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', marginBottom: 4, display: 'block',
 }
-const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'JetBrains Mono, monospace' }
+const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'var(--theme-mono)' }
 
 function ChartPanel({ label, height, children }: { label: string; height: number; children: React.ReactNode }) {
   return (
-    <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)', position: 'relative' }}>
+    <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', position: 'relative' }}>
       <div style={{
         position: 'absolute', top: 0, left: 0, zIndex: 10,
         background: 'rgba(46,57,77,0.8)', padding: '3px 8px',
-        borderRight: '1px solid rgba(255,255,255,0.08)', borderBottom: '1px solid rgba(255,255,255,0.08)',
-        fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#d7e3fc',
+        borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
+        fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)',
       }}>
         {label}
       </div>
@@ -118,6 +118,10 @@ export default function MonteCarlo() {
   const [benchmark, setBenchmark] = useState('SPY')
   const [targetPrice, setTargetPrice] = useState(0)
   const [fetching, setFetching] = useState(false)
+  const [slPct, setSlPct] = useState('')
+  const [tpPct, setTpPct] = useState('')
+  const [trailPct, setTrailPct] = useState('')
+  const [posPct, setPosPct] = useState('100')
 
 
   const updateLeg = (i: number, patch: Partial<Leg>) =>
@@ -148,6 +152,30 @@ export default function MonteCarlo() {
     )
     setLegs(updated)
     setFetching(false)
+  }
+
+  function applyRiskControls(paths: number[][]): number[][] {
+    const sl    = slPct    ? parseFloat(slPct)    / 100 : null
+    const tp    = tpPct    ? parseFloat(tpPct)    / 100 : null
+    const trail = trailPct ? parseFloat(trailPct) / 100 : null
+    const pos   = parseFloat(posPct || '100') / 100
+    const S0 = 1.0
+    return paths.map(path => {
+      let peak = S0
+      let exited = false
+      let exitVal = S0
+      return path.map((v, day) => {
+        if (day === 0) { peak = S0; exited = false; return v }
+        if (exited) return exitVal
+        // Position sizing: blend with flat cash portion
+        const scaled = pos * v + (1 - pos) * S0
+        peak = Math.max(peak, v)
+        if (sl   !== null && scaled <= S0 * (1 - sl))   { exited = true; exitVal = S0 * (1 - sl); return exitVal }
+        if (tp   !== null && scaled >= S0 * (1 + tp))   { exited = true; exitVal = S0 * (1 + tp); return exitVal }
+        if (trail !== null && v <= peak * (1 - trail)) { exited = true; exitVal = peak * (1 - trail); return exitVal }
+        return scaled
+      })
+    })
   }
 
   const { mutate, data, isPending } = useMutation({
@@ -191,13 +219,15 @@ export default function MonteCarlo() {
         return runGBM(1.0, mu, sigma, horizon, Math.min(nSims, 500))
       })
 
-      // Combine into weighted portfolio paths (scaled to $100)
-      const portfolioPaths = Array.from({ length: Math.min(nSims, 500) }, (_, simIdx) =>
+      // Combine into weighted portfolio paths (normalized to start at 1.0)
+      const rawPortfolioPaths = Array.from({ length: Math.min(nSims, 500) }, (_, simIdx) =>
         Array.from({ length: horizon + 1 }, (_, day) =>
           legs.reduce((sum, leg, li) =>
-            sum + (leg.weight / totalWeight) * allPaths[li][simIdx][day], 0) * 100
+            sum + (leg.weight / totalWeight) * allPaths[li][simIdx][day], 0)
         )
       )
+      // Apply risk controls then scale to $100
+      const portfolioPaths = applyRiskControls(rawPortfolioPaths).map(p => p.map(v => v * 100))
 
       const benchPaths = runGBM(100, benchDrift / 100, benchVol / 100, horizon, 100)
 
@@ -242,7 +272,7 @@ export default function MonteCarlo() {
   })
 
   const focus = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')
-  const blur  = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = 'rgba(255,255,255,0.10)')
+  const blur  = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = 'var(--theme-border, rgba(255,255,255,0.10))')
   const totalWeight = legs.reduce((s, l) => s + l.weight, 0)
 
   return (
@@ -251,7 +281,7 @@ export default function MonteCarlo() {
 
         {/* ── Left sidebar ─────────────────────────────────────────────── */}
 
-          <div style={{ padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'var(--theme-surface, #142032)' }}>
+          <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)' }}>
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#ffffff' }}>
               Simulation Parameters
             </div>
@@ -273,8 +303,8 @@ export default function MonteCarlo() {
 
               {/* Column headers */}
               <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
-                <span style={{ flex: 7, fontSize: 9, color: 'rgba(255,255,255,0.22)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Ticker</span>
-                <span style={{ flex: 4, fontSize: 9, color: 'rgba(255,255,255,0.22)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Wt %</span>
+                <span style={{ flex: 7, fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Ticker</span>
+                <span style={{ flex: 4, fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Wt %</span>
                 <span style={{ width: 16 }} />
               </div>
 
@@ -296,7 +326,7 @@ export default function MonteCarlo() {
                       onFocus={focus} onBlur={blur}
                     />
                     <button
-                      style={{ width: 16, background: 'none', border: 'none', color: 'rgba(255,255,255,0.22)', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0, flexShrink: 0 }}
+                      style={{ width: 16, background: 'none', border: 'none', color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0, flexShrink: 0 }}
                       onMouseEnter={e => ((e.target as HTMLElement).style.color = '#8c2e36')}
                       onMouseLeave={e => ((e.target as HTMLElement).style.color = '#4d4637')}
                       onClick={() => setLegs(p => p.filter((_, j) => j !== i))}
@@ -305,7 +335,7 @@ export default function MonteCarlo() {
 
                   {/* Fetched stats pill */}
                   {leg.fetched && (
-                    <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.22)', letterSpacing: '0.08em', marginBottom: 4, paddingLeft: 2 }}>
+                    <div style={{ fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', letterSpacing: '0.08em', marginBottom: 4, paddingLeft: 2 }}>
                       ${leg.spot.toLocaleString()} · σ {leg.vol}% · μ {leg.drift}%/yr
                     </div>
                   )}
@@ -323,7 +353,7 @@ export default function MonteCarlo() {
 
                   {/* Leg divider */}
                   {i < legs.length - 1 && (
-                    <div style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', marginTop: 8 }} />
+                    <div style={{ borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.06))', marginTop: 8 }} />
                   )}
                 </div>
               ))}
@@ -331,14 +361,14 @@ export default function MonteCarlo() {
               {/* Add leg + Fetch All */}
               <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
                 <button
-                  style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, letterSpacing: '0.1em' }}
+                  style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', background: 'none', border: 'none', cursor: 'pointer', padding: 0, letterSpacing: '0.1em' }}
                   onMouseEnter={e => ((e.target as HTMLElement).style.color = 'var(--theme-primary, #c9a84c)')}
                   onMouseLeave={e => ((e.target as HTMLElement).style.color = '#4d4637')}
                   onClick={() => setLegs(p => [...p, makeLeg('', Math.max(0, 100 - totalWeight))])}
                 >+ Add Leg</button>
-                <span style={{ color: 'rgba(255,255,255,0.08)', fontSize: 10 }}>·</span>
+                <span style={{ color: 'var(--theme-text-subtle, rgba(255,255,255,0.08))', fontSize: 10 }}>·</span>
                 <button
-                  style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, letterSpacing: '0.1em' }}
+                  style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', background: 'none', border: 'none', cursor: 'pointer', padding: 0, letterSpacing: '0.1em' }}
                   onMouseEnter={e => ((e.target as HTMLElement).style.color = 'var(--theme-primary, #c9a84c)')}
                   onMouseLeave={e => ((e.target as HTMLElement).style.color = '#4d4637')}
                   disabled={fetching}
@@ -348,7 +378,7 @@ export default function MonteCarlo() {
             </div>
 
             {/* Shared simulation params */}
-            <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div>
                 <label style={LABEL}>Horizon (trading days)</label>
                 <input type="number" style={INPUT} value={horizon} step={21} min={5} max={504}
@@ -373,9 +403,65 @@ export default function MonteCarlo() {
                   onFocus={focus} onBlur={blur} />
               </div>
             </div>
+
+            {/* Risk Management */}
+            <div style={{ borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <label style={{ ...LABEL, marginBottom: 0, color: 'var(--theme-primary, #c9a84c)' }}>Risk Controls</label>
+
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                {([
+                  { label: 'Conservative', sl: '8',  tp: '20', trail: '6',  pos: '25' },
+                  { label: 'Moderate',     sl: '15', tp: '35', trail: '10', pos: '50' },
+                  { label: 'Aggressive',   sl: '25', tp: '80', trail: '15', pos: '100' },
+                  { label: 'Uncapped',     sl: '',   tp: '',   trail: '',   pos: '100' },
+                ] as const).map(p => (
+                  <button
+                    key={p.label}
+                    type="button"
+                    onClick={() => { setSlPct(p.sl); setTpPct(p.tp); setTrailPct(p.trail); setPosPct(p.pos) }}
+                    style={{
+                      background: 'rgba(201,168,76,0.08)',
+                      border: '1px solid rgba(201,168,76,0.3)',
+                      color: 'rgba(201,168,76,0.85)',
+                      fontFamily: 'var(--theme-mono)',
+                      fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
+                      padding: '3px 7px', cursor: 'pointer', borderRadius: 2,
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(201,168,76,0.18)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'rgba(201,168,76,0.08)')}
+                  >
+                    {p.label.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+
+              <div>
+                <label style={LABEL}>Stop-Loss %</label>
+                <input type="number" style={INPUT} value={slPct} min={0.1} max={99} step={1}
+                  placeholder="off if blank"
+                  onChange={e => setSlPct(e.target.value)} onFocus={focus} onBlur={blur} />
+              </div>
+              <div>
+                <label style={LABEL}>Take-Profit %</label>
+                <input type="number" style={INPUT} value={tpPct} min={0.1} step={1}
+                  placeholder="off if blank"
+                  onChange={e => setTpPct(e.target.value)} onFocus={focus} onBlur={blur} />
+              </div>
+              <div>
+                <label style={LABEL}>Trailing Stop %</label>
+                <input type="number" style={INPUT} value={trailPct} min={0.1} step={1}
+                  placeholder="off if blank"
+                  onChange={e => setTrailPct(e.target.value)} onFocus={focus} onBlur={blur} />
+              </div>
+              <div>
+                <label style={LABEL}>Position Size %</label>
+                <input type="number" style={INPUT} value={posPct} min={1} max={100} step={5}
+                  onChange={e => setPosPct(e.target.value)} onFocus={focus} onBlur={blur} />
+              </div>
+            </div>
           </div>
 
-          <div style={{ padding: 10, borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ padding: 10, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', display: 'flex', flexDirection: 'column', gap: 8 }}>
             <PortfolioIO
               mode="portfolio"
               assets={legs.map(l => ({ ticker: l.ticker, weight: l.weight, strategy: l.strategy, stratParams: l.stratParams as Record<string, unknown> }))}
@@ -414,11 +500,11 @@ export default function MonteCarlo() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {data.legs.filter((l: any) => l.strategy !== STRATEGIES[0] && l.stratLabel).map((l: any, i: number) => (
                     <div key={i} style={{
-                      background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)',
+                      background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
                       borderLeft: `4px solid ${l.stratAdj >= 0 ? '#2f6b4b' : '#8c2e36'}`,
                       padding: '8px 14px',
                     }}>
-                      <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700, color: l.stratAdj >= 0 ? '#4caf7d' : '#e05c6e', marginBottom: 3 }}>
+                      <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 700, color: l.stratAdj >= 0 ? '#4caf7d' : '#e05c6e', marginBottom: 3 }}>
                         {l.ticker} · {l.strategy} — {l.stratLabel}
                         <span style={{ marginLeft: 10, fontSize: 10, color: 'var(--theme-secondary, #99907e)', fontWeight: 400 }}>
                           Drift adj: {l.stratAdj > 0 ? '+' : ''}{l.stratAdj}% · Eff. drift: {+(l.drift + l.stratAdj).toFixed(1)}%/yr
@@ -431,13 +517,13 @@ export default function MonteCarlo() {
               )}
 
               {/* Portfolio composition */}
-              <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)', padding: '8px 12px', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+              <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '8px 12px', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                 {data.legs.map((l: any, i: number) => (
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700, color: '#d7e3fc' }}>{l.ticker}</span>
+                    <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 700, color: 'var(--theme-text, #d7e3fc)' }}>{l.ticker}</span>
                     <span style={{ fontSize: 10, color: 'var(--theme-primary, #c9a84c)' }}>{l.weight}%</span>
                     {l.fetched && (
-                      <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.22)', letterSpacing: '0.06em' }}>
+                      <span style={{ fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', letterSpacing: '0.06em' }}>
                         ${l.spot.toLocaleString()} · σ {l.vol}%
                       </span>
                     )}

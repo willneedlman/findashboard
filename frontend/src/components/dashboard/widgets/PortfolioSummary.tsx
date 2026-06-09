@@ -8,14 +8,14 @@ import {
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 
 const T = {
-  bg: 'var(--theme-bg, #101c2e)', border: 'rgba(255,255,255,0.08)', headerBg: 'var(--theme-surface, #0d1826)',
-  gold: 'var(--theme-primary, #c9a84c)', text: '#d7e3fc', muted: 'var(--theme-secondary, #5e768f)', dim: '#3a4d62',
-  mono: 'JetBrains Mono, monospace', label: 'IBM Plex Sans, sans-serif',
+  bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))', headerBg: 'var(--theme-surface, #0d1826)',
+  gold: 'var(--theme-primary, #c9a84c)', text: 'var(--theme-text, #d7e3fc)', muted: 'var(--theme-secondary, #5e768f)', dim: '#3a4d62',
+  mono: 'var(--theme-mono)', label: 'var(--theme-sans)',
   pos: '#22C55E', neg: '#EF4444', warn: '#f59e0b', blue: '#60a5fa',
 }
 
 const shimmer: React.CSSProperties = {
-  background: 'linear-gradient(90deg, var(--theme-surface, #0d0d0d) 25%, rgba(255,255,255,0.05) 50%, var(--theme-surface, #0d0d0d) 75%)',
+  background: 'linear-gradient(90deg, var(--theme-surface, #0d0d0d) 25%, var(--theme-border-faint, var(--theme-border-faint, rgba(255,255,255,0.05))) 50%, var(--theme-surface, #0d0d0d) 75%)',
   backgroundSize: '200% 100%', animation: 'shimmer 2s infinite', borderRadius: 3,
 }
 
@@ -41,10 +41,10 @@ interface BacktestResult {
 
 function MetricCell({ label, value, valueColor, sub }: { label: string; value: string; valueColor?: string; sub?: string }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '6px 8px', background: 'rgba(13,24,38,0.6)', border: `1px solid ${T.border}` }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '6px 8px', background: T.headerBg, border: `1px solid ${T.border}` }}>
       <span style={{ fontFamily: T.label, fontSize: 9, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</span>
       <span style={{ fontFamily: T.mono, fontSize: 14, fontWeight: 700, color: valueColor ?? T.text }}>{value}</span>
-      {sub && <span style={{ fontFamily: T.label, fontSize: 8, color: T.dim }}>{sub}</span>}
+      {sub && <span style={{ fontFamily: T.label, fontSize: 8, color: T.muted }}>{sub}</span>}
     </div>
   )
 }
@@ -72,8 +72,8 @@ export default function PortfolioSummary({ config }: { config: WidgetConfig }) {
     : tickers.map(() => 1 / tickers.length)
 
   const [periodIdx, setPeriodIdx] = useState(0)
-  const [activeChart, setActiveChart] = useState<'cumulative' | 'beta'>('cumulative')
   const [legendOpen, setLegendOpen] = useState(true)
+  const activeChart = (config.chartMode as 'cumulative' | 'beta') ?? 'cumulative'
 
   const today = new Date().toISOString().split('T')[0]
   const startDate = PERIODS[periodIdx].start()
@@ -132,22 +132,6 @@ export default function PortfolioSummary({ config }: { config: WidgetConfig }) {
     <div style={base}>
       <style>{`@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
 
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px', background: T.headerBg, borderBottom: `1px solid ${T.border}`, flexShrink: 0, flexWrap: 'wrap' }}>
-        <span style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: T.gold, letterSpacing: '0.08em' }}>PORTFOLIO</span>
-        <span style={{ fontFamily: T.label, fontSize: 9, color: T.muted }}>vs SPY</span>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 3, paddingRight: 26 }}>
-          {PERIODS.map((p, i) => (
-            <button key={p.label} onClick={() => setPeriodIdx(i)} style={{
-              fontFamily: T.mono, fontSize: 9, padding: '2px 6px', cursor: 'pointer', border: 'none',
-              background: i === periodIdx ? 'rgba(201,168,76,0.2)' : 'transparent',
-              color: i === periodIdx ? T.gold : T.muted,
-              outline: i === periodIdx ? `1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)` : '1px solid transparent',
-            }}>{p.label}</button>
-          ))}
-        </div>
-      </div>
-
       {/* Allocation bar */}
       <div style={{ borderBottom: `1px solid ${T.border}`, background: 'var(--theme-bg, #080f1d)', flexShrink: 0 }}>
         <div onClick={() => setLegendOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '3px 8px', cursor: 'pointer', userSelect: 'none' }}>
@@ -180,18 +164,6 @@ export default function PortfolioSummary({ config }: { config: WidgetConfig }) {
         <MetricCell label="Calmar" value={calmar.toFixed(2)} valueColor={calmar >= 0.5 ? T.pos : T.warn} />
         <MetricCell label="Vol" value={`${port_vol.toFixed(1)}%`} />
         <MetricCell label="Beta" value={beta.toFixed(2)} valueColor={Math.abs(beta - 1) < 0.15 ? T.text : beta > 1.3 ? T.warn : T.pos} />
-      </div>
-
-      {/* Chart toggle */}
-      <div style={{ display: 'flex', gap: 0, padding: '0 8px 4px', flexShrink: 0 }}>
-        {(['cumulative', 'beta'] as const).map(c => (
-          <button key={c} onClick={() => setActiveChart(c)} style={{
-            fontFamily: T.label, fontSize: 9, padding: '2px 8px', cursor: 'pointer', border: 'none', textTransform: 'uppercase', letterSpacing: '0.08em',
-            background: activeChart === c ? 'rgba(201,168,76,0.12)' : 'transparent',
-            color: activeChart === c ? T.gold : T.dim,
-            borderBottom: activeChart === c ? `1px solid ${T.gold}` : `1px solid transparent`,
-          }}>{c === 'cumulative' ? 'Growth' : 'Rolling β'}</button>
-        ))}
       </div>
 
       {/* Chart */}

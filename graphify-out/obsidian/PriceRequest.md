@@ -1,21 +1,14 @@
 ---
 source_file: "backend/routers/options.py"
 type: "code"
-community: "Options & Portfolio Routers"
-location: "L14"
+community: "Backend"
+location: "284"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/Options__Portfolio_Routers
+  - community/Backend
 ---
 
 # PriceRequest
 
-## Connections
-- [[BaseModel]] - `inherits` [EXTRACTED]
-- [[greek_surface()]] - `references` [EXTRACTED]
-- [[options.py]] - `contains` [EXTRACTED]
-- [[payoff()]] - `references` [EXTRACTED]
-- [[priceOption()]] - `references` [EXTRACTED]
-
-#graphify/code #graphify/EXTRACTED #community/Options__Portfolio_Routers
+#graphify/code #graphify/EXTRACTED #community/Backend

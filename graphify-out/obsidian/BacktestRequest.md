@@ -1,19 +1,14 @@
 ---
-source_file: "backend/routers/portfolio.py"
+source_file: "backend/routers/algo.py"
 type: "code"
-community: "Options & Portfolio Routers"
-location: "L29"
+community: "Backend"
+location: "12"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/Options__Portfolio_Routers
+  - community/Backend
 ---
 
 # BacktestRequest
 
-## Connections
-- [[BaseModel]] - `inherits` [EXTRACTED]
-- [[backtest()]] - `references` [EXTRACTED]
-- [[portfolio.py]] - `contains` [EXTRACTED]
-
-#graphify/code #graphify/EXTRACTED #community/Options__Portfolio_Routers
+#graphify/code #graphify/EXTRACTED #community/Backend

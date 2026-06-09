@@ -21,6 +21,8 @@ STRATEGIES = [
     "SMA Trend Following (50/200)",
     "RSI Mean Reversion (14)",
     "6-Month Price Momentum",
+    "Bollinger Breakout (20,2)",
+    "MACD Crossover (12,26,9)",
     "Value — Trailing P/E",
     "Earnings Growth Momentum",
 ]
@@ -93,6 +95,47 @@ def compute_signal(close: pd.Series, strategy: str, params: dict) -> tuple[pd.Se
         adj     = float(np.clip(mom * scale, -cap, cap))
         label   = "Positive Momentum" if mom > thresh * 100 else "Negative Momentum"
         detail  = f"{lb}-day return {mom:+.1f}% — {label} (drift {adj:+.1f}%)"
+        return sig, adj, label, detail
+
+    if strategy == "Bollinger Breakout (20,2)":
+        period  = int(p.get("bb_period", 20))
+        std_dev = float(p.get("bb_std", 2.0))
+        bull    = float(p.get("bull_drift_adj", 5.0))
+        bear    = float(p.get("bear_drift_adj", -3.0))
+        mid     = close.rolling(period).mean()
+        std     = close.rolling(period).std()
+        upper   = mid + std_dev * std
+        lower   = mid - std_dev * std
+        sig     = pd.Series(0.0, index=close.index)
+        in_trade = False
+        for i in range(period, len(close)):
+            if not in_trade and close.iloc[i] > upper.iloc[i]:
+                in_trade = True
+            elif in_trade and close.iloc[i] < lower.iloc[i]:
+                in_trade = False
+            sig.iloc[i] = 1.0 if in_trade else 0.0
+        last = float(sig.iloc[-1]) if not sig.empty else 0.0
+        adj   = bull if last == 1.0 else bear
+        label = "Breakout Active" if last == 1.0 else "No Breakout"
+        detail = f"BB({period}, ±{std_dev}σ). {'Price above upper band — long.' if last else 'Price below lower band — cash.'} Drift {adj:+.1f}%."
+        return sig, adj, label, detail
+
+    if strategy == "MACD Crossover (12,26,9)":
+        fast_p  = int(p.get("macd_fast", 12))
+        slow_p  = int(p.get("macd_slow", 26))
+        sig_p   = int(p.get("macd_signal", 9))
+        bull    = float(p.get("bull_drift_adj", 5.0))
+        bear    = float(p.get("bear_drift_adj", -4.0))
+        ema_f   = close.ewm(span=fast_p, adjust=False).mean()
+        ema_s   = close.ewm(span=slow_p, adjust=False).mean()
+        macd    = ema_f - ema_s
+        sig_ln  = macd.ewm(span=sig_p, adjust=False).mean()
+        hist    = macd - sig_ln
+        sig     = (macd > sig_ln).astype(float)
+        last    = float(sig.iloc[-1]) if not sig.empty else 0.0
+        adj     = bull if last == 1.0 else bear
+        label   = "MACD Bullish" if last == 1.0 else "MACD Bearish"
+        detail  = f"EMA({fast_p})–EMA({slow_p}) vs Signal({sig_p}). Histogram {float(hist.iloc[-1]):+.3f}. Drift {adj:+.1f}%."
         return sig, adj, label, detail
 
     if strategy == "Value — Trailing P/E":

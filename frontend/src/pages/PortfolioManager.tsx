@@ -3,16 +3,17 @@ import axios from 'axios'
 import { useQueries } from '@tanstack/react-query'
 import PageWrapper from '../components/PageWrapper'
 import PortfolioIO, { type PortfolioAsset } from '../components/PortfolioIO'
+import { usePortfolio } from '../contexts/PortfolioContext'
 
 const T = {
   bg:      'var(--theme-bg, #101c2e)',
   surface: 'var(--theme-surface, #0d1826)',
-  border:  'rgba(255,255,255,0.08)',
+  border:  'var(--theme-border, rgba(255,255,255,0.08))',
   gold:    'var(--theme-primary, #c9a84c)',
   muted:   'var(--theme-secondary, #5e768f)',
-  text:    '#d7e3fc',
-  mono:    'JetBrains Mono, monospace',
-  label:   'IBM Plex Sans, sans-serif',
+  text:    'var(--theme-text, #d7e3fc)',
+  mono:    'var(--theme-mono)',
+  label:   'var(--theme-sans)',
   pos:     '#22c55e',
   neg:     '#ef4444',
 }
@@ -59,6 +60,8 @@ export default function PortfolioManager() {
   const [newShares,  setNewShares]  = useState('')
   const [newCost,    setNewCost]    = useState('')
   const [editIdx,    setEditIdx]    = useState<number | null>(null)
+  const [syncFlash,  setSyncFlash]  = useState(false)
+  const { setHoldings: syncToContext } = usePortfolio()
 
   useEffect(() => { saveHoldings(holdings) }, [holdings])
 
@@ -120,6 +123,18 @@ export default function PortfolioManager() {
   const totalPnl    = totalValue - totalCost
   const totalPnlPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : null
 
+  const syncToTerminal = useCallback(() => {
+    const priced = rows.filter(r => r.price > 0)
+    if (!priced.length) return
+    const total = priced.reduce((s, r) => s + r.value, 0) || 1
+    syncToContext(priced.map(r => ({
+      ticker: r.ticker,
+      weight: Math.round((r.value / total) * 100 * 10) / 10,
+    })))
+    setSyncFlash(true)
+    setTimeout(() => setSyncFlash(false), 1500)
+  }, [rows, syncToContext])
+
   const lbl: React.CSSProperties = { fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.muted }
 
   return (
@@ -180,6 +195,30 @@ export default function PortfolioManager() {
               </p>
             </div>
 
+            {/* Sync to terminal */}
+            {holdings.length > 0 && (
+              <div>
+                <div style={{ ...lbl, marginBottom: 10 }}>Terminal Sync</div>
+                <button
+                  onClick={syncToTerminal}
+                  disabled={!rows.some(r => r.price > 0)}
+                  style={{
+                    width: '100%', background: syncFlash ? T.gold : 'transparent',
+                    border: `1px solid ${syncFlash ? T.gold : T.border}`,
+                    color: syncFlash ? '#0a1220' : T.gold,
+                    fontFamily: T.label, fontSize: 10, fontWeight: 700,
+                    letterSpacing: '0.12em', textTransform: 'uppercase',
+                    padding: '7px 0', cursor: 'pointer', transition: 'all 0.2s',
+                  }}
+                >
+                  {syncFlash ? '✓ Synced' : '⬢ Sync to Backtester / MonteCarlo'}
+                </button>
+                <p style={{ fontFamily: T.label, fontSize: 8, color: T.muted, marginTop: 6, lineHeight: 1.4 }}>
+                  Pushes value-weighted allocations to all terminal tools.
+                </p>
+              </div>
+            )}
+
             {/* Summary card */}
             {holdings.length > 0 && (
               <div style={{ background: T.surface, border: `1px solid ${T.border}`, padding: '12px 14px' }}>
@@ -220,7 +259,7 @@ export default function PortfolioManager() {
                     {rows.map((r, i) => {
                       const weight = totalValue > 0 ? (r.value / totalValue) * 100 : 0
                       return (
-                        <tr key={r.ticker} style={{ borderBottom: `1px solid ${T.border}`, background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
+                        <tr key={r.ticker} style={{ borderBottom: `1px solid ${T.border}`, background: i % 2 === 0 ? 'transparent' : 'var(--theme-hover, rgba(255,255,255,0.01))' }}>
                           <td style={{ padding: '8px 12px', color: T.gold, fontFamily: T.mono, fontWeight: 700, fontSize: 10, letterSpacing: '0.08em' }}>{r.ticker}</td>
                           <td style={{ padding: '8px 12px', textAlign: 'right', color: T.text }}>{r.shares.toLocaleString()}</td>
                           <td style={{ padding: '8px 12px', textAlign: 'right', color: r.costIsAuto ? T.muted : T.text }}>

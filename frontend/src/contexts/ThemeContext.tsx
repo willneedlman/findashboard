@@ -37,7 +37,7 @@ interface ThemeCtx {
 
 export const DEFAULT_THEME: Theme = {
   primaryColor:    '#c9a84c',
-  secondaryColor:  '#5e768f',
+  secondaryColor:  '#8099b0',
   tertiaryColor:   '#60a5fa',
   bgColor:         '#101c2e',
   surfaceColor:    '#0d1826',
@@ -47,14 +47,26 @@ export const DEFAULT_THEME: Theme = {
   secondaryFontUrl: '',
 }
 
-// Popular font presets users can pick without uploading
+// Popular font presets — chosen for visual distinctiveness across categories
 export const MONO_FONTS = [
-  'JetBrains Mono', 'Fira Code', 'Source Code Pro',
-  'Roboto Mono', 'Inconsolata', 'Courier Prime', 'Space Mono',
+  'JetBrains Mono',   // default — proportional serifs, ligatures
+  'Fira Code',        // rounded, ligature-heavy
+  'Courier Prime',    // classic typewriter feel
+  'Space Mono',       // wide, retro terminal
+  'Inconsolata',      // narrow, clean
+  'Martian Mono',     // ultra-wide condensed blocks
+  'Geist Mono',       // minimal, Vercel-style
+  'DM Mono',          // subtle, editorial
 ]
 export const SANS_FONTS = [
-  'IBM Plex Sans', 'Inter', 'Roboto', 'DM Sans',
-  'Nunito Sans', 'Lato', 'Open Sans', 'Raleway',
+  'IBM Plex Sans',    // default — neutral, technical
+  'Inter',            // clean, UI-optimised
+  'DM Sans',          // geometric, modern
+  'Sora',             // rounded, futuristic
+  'Space Grotesk',    // mono-inspired sans
+  'Anybody',          // wide, display-grade
+  'Oxanium',          // sci-fi / fintech feel
+  'Barlow',           // condensed, editorial
 ]
 
 const STORAGE_USERS   = 'ft-users'
@@ -64,6 +76,15 @@ const STORAGE_SESSION = 'ft-session'
 
 let _styleEl: HTMLStyleElement | null = null
 
+function hexLuminance(hex: string): number {
+  const c = hex.replace('#', '')
+  const r = parseInt(c.slice(0,2), 16) / 255
+  const g = parseInt(c.slice(2,4), 16) / 255
+  const b = parseInt(c.slice(4,6), 16) / 255
+  const lin = (v: number) => v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+}
+
 export function applyTheme(t: Theme) {
   if (!_styleEl) {
     _styleEl = document.createElement('style')
@@ -71,10 +92,24 @@ export function applyTheme(t: Theme) {
     document.head.appendChild(_styleEl)
   }
 
+  const isLight = hexLuminance(t.bgColor) > 0.18
+  const textColor    = isLight ? '#1a1a1a'                   : '#d7e3fc'
+  const textMuted    = isLight ? '#374151'                   : '#8099b0'
+  const textDim      = isLight ? 'rgba(0,0,0,0.45)'  : 'rgba(255,255,255,0.35)'
+  const textFaint    = isLight ? 'rgba(0,0,0,0.30)'  : 'rgba(255,255,255,0.22)'
+  const textSubtle   = isLight ? 'rgba(0,0,0,0.20)'  : 'rgba(255,255,255,0.14)'
+  const borderColor  = isLight ? 'rgba(0,0,0,0.10)'  : 'rgba(255,255,255,0.08)'
+  const borderFaint  = isLight ? 'rgba(0,0,0,0.06)'  : 'rgba(255,255,255,0.05)'
+  const surfaceHover = isLight ? 'rgba(0,0,0,0.04)'  : 'rgba(255,255,255,0.04)'
+
   // Load Google Fonts if no custom URL provided
   const monoSrc   = t.primaryFontUrl   || `https://fonts.googleapis.com/css2?family=${encodeURIComponent(t.primaryFont)}:wght@400;700&display=swap`
   const sansSrc   = t.secondaryFontUrl || `https://fonts.googleapis.com/css2?family=${encodeURIComponent(t.secondaryFont)}:wght@400;600;700&display=swap`
-  const builtinFonts = ['JetBrains Mono', 'IBM Plex Sans']
+  const builtinFonts = [
+    'JetBrains Mono', 'IBM Plex Sans', 'Cinzel', 'Lora', 'IBM Plex Mono',
+    'Fira Code', 'Inconsolata', 'Inter', 'DM Sans', 'Space Grotesk',
+    'Courier Prime', 'Space Mono', 'DM Mono',
+  ]
 
   // Only inject <link> for Google-Fonts-style URLs
   const injectLink = (href: string, id: string) => {
@@ -104,6 +139,14 @@ export function applyTheme(t: Theme) {
       --theme-surface:   ${t.surfaceColor};
       --theme-mono:      '${t.primaryFont}', monospace;
       --theme-sans:      '${t.secondaryFont}', sans-serif;
+      --theme-text:        ${textColor};
+      --theme-text-muted:  ${textMuted};
+      --theme-text-dim:    ${textDim};
+      --theme-text-faint:  ${textFaint};
+      --theme-text-subtle: ${textSubtle};
+      --theme-border:      ${borderColor};
+      --theme-border-faint:${borderFaint};
+      --theme-hover:       ${surfaceHover};
     }
 
     /* ── Layout / Navigation overrides ──────────────────────────────── */
@@ -120,11 +163,19 @@ export function applyTheme(t: Theme) {
 
   // Also push as real CSS custom props onto :root so var() works everywhere
   const root = document.documentElement
-  root.style.setProperty('--theme-primary',   t.primaryColor)
-  root.style.setProperty('--theme-secondary', t.secondaryColor)
-  root.style.setProperty('--theme-tertiary',  t.tertiaryColor)
-  root.style.setProperty('--theme-bg',        t.bgColor)
-  root.style.setProperty('--theme-surface',   t.surfaceColor)
+  root.style.setProperty('--theme-primary',    t.primaryColor)
+  root.style.setProperty('--theme-secondary',  t.secondaryColor)
+  root.style.setProperty('--theme-tertiary',   t.tertiaryColor)
+  root.style.setProperty('--theme-bg',         t.bgColor)
+  root.style.setProperty('--theme-surface',    t.surfaceColor)
+  root.style.setProperty('--theme-text',         textColor)
+  root.style.setProperty('--theme-text-muted',  textMuted)
+  root.style.setProperty('--theme-text-dim',    textDim)
+  root.style.setProperty('--theme-text-faint',  textFaint)
+  root.style.setProperty('--theme-text-subtle', textSubtle)
+  root.style.setProperty('--theme-border',      borderColor)
+  root.style.setProperty('--theme-border-faint',borderFaint)
+  root.style.setProperty('--theme-hover',       surfaceHover)
 }
 
 // ── Persistence helpers ───────────────────────────────────────────────────────
@@ -196,6 +247,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       persistUsers(next)
       setUserId(u.id)
       saveSession(u.id)
+      // Store pin hash for WS auth (SHA-256 of pin, same algorithm as server)
+      try {
+        const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin))
+        const hex = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('')
+        sessionStorage.setItem('ft-pin-hash', hex)
+      } catch { /* crypto not available */ }
       return true
     } catch {
       return false

@@ -6,12 +6,12 @@ import PageHeader from '../components/PageHeader'
 const T = {
   bg:      'var(--theme-bg, #101c2e)',
   surface: 'var(--theme-surface, #0d1826)',
-  border:  'rgba(255,255,255,0.06)',
+  border:  'var(--theme-border, rgba(255,255,255,0.06))',
   gold:    'var(--theme-primary, #c9a84c)',
   muted:   'var(--theme-secondary, #5e768f)',
-  text:    '#d7e3fc',
-  mono:    'JetBrains Mono, monospace',
-  label:   'IBM Plex Sans, sans-serif',
+  text:    'var(--theme-text, #d7e3fc)',
+  mono:    'var(--theme-mono)',
+  label:   'var(--theme-sans)',
   pos:     '#22c55e',
   neg:     '#ef4444',
 }
@@ -55,9 +55,10 @@ interface PeerRow {
 }
 
 interface ValuationResponse {
-  ticker: string
-  sector: string | null
-  peers:  PeerRow[]
+  ticker:       string
+  sector:       string | null
+  peers:        PeerRow[]
+  comps_source: 'ai_generated' | 'sector_fallback' | undefined
 }
 
 function median(vals: number[]): number {
@@ -107,7 +108,7 @@ function SentimentCard({ row, isTarget }: { row: PeerRow; isTarget: boolean }) {
     <div style={{
       background: isTarget
         ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)'
-        : 'rgba(255,255,255,0.02)',
+        : 'var(--theme-hover, rgba(255,255,255,0.02))',
       border: `1px solid ${isTarget ? 'rgba(201,168,76,0.35)' : T.border}`,
       padding: '10px 12px',
       minWidth: 128,
@@ -168,7 +169,7 @@ function MetricBars({
       <div style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.muted, marginBottom: 10 }}>
         {label}
         {med !== null && (
-          <span style={{ fontWeight: 400, letterSpacing: 0, textTransform: 'none', color: 'rgba(255,255,255,0.22)', marginLeft: 6 }}>
+          <span style={{ fontWeight: 400, letterSpacing: 0, textTransform: 'none', color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', marginLeft: 6 }}>
             median {isPct ? `${(med * 100).toFixed(1)}%` : `${med.toFixed(1)}x`}
           </span>
         )}
@@ -185,7 +186,7 @@ function MetricBars({
             <div style={{ width: 40, fontFamily: T.mono, fontSize: 9, color: isTarget ? T.gold : T.muted, textAlign: 'right', flexShrink: 0, fontWeight: isTarget ? 700 : 400 }}>
               {p.ticker}
             </div>
-            <div style={{ flex: 1, height: 14, background: 'rgba(255,255,255,0.04)', position: 'relative', overflow: 'visible' }}>
+            <div style={{ flex: 1, height: 14, background: 'var(--theme-hover, rgba(255,255,255,0.04))', position: 'relative', overflow: 'visible' }}>
               <div style={{
                 width: `${widthPct}%`, height: '100%',
                 background: barColor + '30',
@@ -195,7 +196,7 @@ function MetricBars({
                 <div style={{
                   position: 'absolute', top: -2, bottom: -2,
                   left: `${medLinePct}%`,
-                  width: 1, background: 'rgba(255,255,255,0.2)',
+                  width: 1, background: 'var(--theme-hover, rgba(255,255,255,0.2))',
                   pointerEvents: 'none',
                 }} />
               )}
@@ -220,19 +221,19 @@ function cellColor(val: number | null, med: number | null, lowerBetter: boolean)
   return (lowerBetter ? val < med : val > med) ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)'
 }
 
-export default function RelativeValuation() {
+export function RelativeValuationContent() {
   const [input,   setInput]   = useState('')
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState<string | null>(null)
   const [data,    setData]    = useState<ValuationResponse | null>(null)
 
-  const doFetch = async () => {
-    const sym = input.trim().toUpperCase()
+  const doFetch = async (refresh = false) => {
+    const sym = (refresh ? data?.ticker : input.trim().toUpperCase()) || input.trim().toUpperCase()
     if (!sym) return
     setLoading(true)
     setError(null)
     try {
-      const res = await axios.get(`/api/corporate/peer-valuation?ticker=${sym}`)
+      const res = await axios.get(`/api/corporate/peer-valuation?ticker=${sym}${refresh ? '&refresh=true' : ''}`)
       setData(res.data)
     } catch {
       setError('Failed to fetch valuation data.')
@@ -255,8 +256,7 @@ export default function RelativeValuation() {
   }
 
   return (
-    <PageWrapper>
-      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+    <div style={{ maxWidth: 1200, margin: '0 auto' }}>
 
         <PageHeader
           title="Peer Comparison"
@@ -264,7 +264,7 @@ export default function RelativeValuation() {
         />
 
         {/* Search */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 28, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 28, alignItems: 'center', flexWrap: 'wrap' }}>
           <input
             value={input}
             onChange={e => setInput(e.target.value.toUpperCase())}
@@ -274,7 +274,7 @@ export default function RelativeValuation() {
             style={{ ...inp, width: 120, textTransform: 'uppercase', fontSize: 14, fontWeight: 700 }}
           />
           <button
-            onClick={doFetch}
+            onClick={() => doFetch()}
             disabled={loading}
             style={{
               background: loading ? T.surface : 'color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)',
@@ -285,9 +285,35 @@ export default function RelativeValuation() {
           >
             {loading ? 'LOADING…' : 'FETCH'}
           </button>
+          {data && (
+            <button
+              onClick={() => doFetch(true)}
+              disabled={loading}
+              title="Re-run AI comp discovery and bust the 24hr cache"
+              style={{
+                background: 'transparent',
+                border: `1px solid ${T.border}`, color: T.muted,
+                fontFamily: T.mono, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
+                padding: '6px 12px', cursor: loading ? 'not-allowed' : 'pointer', outline: 'none',
+              }}
+            >
+              ↺ Refresh Comps
+            </button>
+          )}
           {data?.sector && (
             <span style={{ fontFamily: T.label, fontSize: 10, color: T.muted, letterSpacing: '0.06em' }}>
               Sector: <span style={{ color: T.text }}>{data.sector}</span>
+            </span>
+          )}
+          {data?.comps_source && (
+            <span style={{
+              fontFamily: T.mono, fontSize: 8, fontWeight: 700, letterSpacing: '0.1em',
+              textTransform: 'uppercase', padding: '2px 6px',
+              border: `1px solid ${data.comps_source === 'ai_generated' ? 'rgba(201,168,76,0.4)' : T.border}`,
+              color: data.comps_source === 'ai_generated' ? T.gold : T.muted,
+              background: data.comps_source === 'ai_generated' ? 'rgba(201,168,76,0.07)' : 'transparent',
+            }}>
+              {data.comps_source === 'ai_generated' ? '⬢ AI Comps' : 'Sector Fallback'}
             </span>
           )}
           {error && (
@@ -349,7 +375,7 @@ export default function RelativeValuation() {
                         </th>
                       ))}
                     </tr>
-                    <tr style={{ borderBottom: `1px solid ${T.border}`, background: 'rgba(255,255,255,0.015)' }}>
+                    <tr style={{ borderBottom: `1px solid ${T.border}`, background: 'var(--theme-hover, rgba(255,255,255,0.01))' }}>
                       <td colSpan={2} style={{ padding: '4px 10px', fontFamily: T.label, fontSize: 9, color: T.muted, fontStyle: 'italic' }}>
                         Sector median
                       </td>
@@ -370,7 +396,7 @@ export default function RelativeValuation() {
                             borderBottom: `1px solid ${T.border}`,
                             background: isTarget
                               ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 6%, transparent)'
-                              : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.012)',
+                              : i % 2 === 0 ? 'transparent' : 'var(--theme-hover, rgba(255,255,255,0.01))',
                           }}
                         >
                           <td style={{ padding: '7px 10px', color: isTarget ? T.gold : T.text, fontWeight: isTarget ? 700 : 400, whiteSpace: 'nowrap' }}>
@@ -415,6 +441,9 @@ export default function RelativeValuation() {
           </div>
         )}
       </div>
-    </PageWrapper>
   )
+}
+
+export default function RelativeValuation() {
+  return <PageWrapper><RelativeValuationContent /></PageWrapper>
 }

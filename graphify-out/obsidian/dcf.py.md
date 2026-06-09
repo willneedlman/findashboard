@@ -1,19 +1,23 @@
 ---
 source_file: "backend/routers/dcf.py"
 type: "code"
-community: "Backend Cache & DCF Utils"
+community: "Backend"
 location: "L1"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/Backend_Cache__DCF_Utils
+  - community/Backend
 ---
 
 # dcf.py
 
 ## Connections
-- [[DCFRequest]] - `contains` [EXTRACTED]
-- [[dcf_value()]] - `contains` [EXTRACTED]
-- [[get_dcf_fundamentals()]] - `contains` [EXTRACTED]
+- [[fastapi]] - `imports` [EXTRACTED]
+- [[pydantic]] - `imports` [EXTRACTED]
+- [[cache]] - `imports` [EXTRACTED]
+- [[validation]] - `imports` [EXTRACTED]
+- [[backend_routers_dcf_py_dcfrequest]] - `contains` [EXTRACTED]
+- [[backend_routers_dcf_py_get_fundamentals]] - `contains` [EXTRACTED]
+- [[backend_routers_dcf_py_dcf_value]] - `contains` [EXTRACTED]
 
-#graphify/code #graphify/EXTRACTED #community/Backend_Cache__DCF_Utils
+#graphify/code #graphify/EXTRACTED #community/Backend

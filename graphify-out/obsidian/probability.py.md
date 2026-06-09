@@ -1,20 +1,32 @@
 ---
 source_file: "backend/routers/probability.py"
 type: "code"
-community: "Backend Cache & DCF Utils"
+community: "Backend"
 location: "L1"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/Backend_Cache__DCF_Utils
+  - community/Backend
 ---
 
 # probability.py
 
 ## Connections
-- [[ProbRequest]] - `contains` [EXTRACTED]
-- [[_implied_vol()]] - `contains` [EXTRACTED]
-- [[chain_distribution()]] - `contains` [EXTRACTED]
-- [[probability_cone()]] - `contains` [EXTRACTED]
+- [[scipy_stats]] - `imports` [EXTRACTED]
+- [[scipy_optimize]] - `imports` [EXTRACTED]
+- [[fastapi]] - `imports` [EXTRACTED]
+- [[pydantic]] - `imports` [EXTRACTED]
+- [[cache]] - `imports` [EXTRACTED]
+- [[backend_routers_probability_py_implied_vol]] - `contains` [EXTRACTED]
+- [[backend_routers_probability_py_probrequest]] - `contains` [EXTRACTED]
+- [[backend_routers_probability_py_probability_cone]] - `contains` [EXTRACTED]
+- [[backend_routers_probability_py_chain_distribution]] - `contains` [EXTRACTED]
+- [[backend_routers_probability_py_bs_call]] - `contains` [EXTRACTED]
+- [[backend_routers_probability_py_bs_put]] - `contains` [EXTRACTED]
+- [[backend_routers_probability_py_iv_from_price]] - `contains` [EXTRACTED]
+- [[backend_routers_probability_py_call_delta]] - `contains` [EXTRACTED]
+- [[backend_routers_probability_py_enrich]] - `contains` [EXTRACTED]
+- [[routers_rates]] - `imports` [EXTRACTED]
+- [[routers_rates]] - `imports` [EXTRACTED]
 
-#graphify/code #graphify/EXTRACTED #community/Backend_Cache__DCF_Utils
+#graphify/code #graphify/EXTRACTED #community/Backend

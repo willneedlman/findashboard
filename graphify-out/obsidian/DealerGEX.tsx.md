@@ -1,28 +1,22 @@
 ---
 source_file: "frontend/src/pages/DealerGEX.tsx"
 type: "code"
-community: "Dealer GEX View"
-location: "L1"
+community: "Frontend"
+location: "None"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/Dealer_GEX_View
+  - community/Frontend
 ---
 
 # DealerGEX.tsx
 
 ## Connections
-- [[App.tsx]] - `imports_from` [EXTRACTED]
-- [[ChartPanel()_1]] - `contains` [EXTRACTED]
-- [[DealerGEX()]] - `contains` [EXTRACTED]
-- [[INPUT_3]] - `contains` [EXTRACTED]
-- [[LABEL_3]] - `contains` [EXTRACTED]
-- [[MetricCard()_1]] - `contains` [EXTRACTED]
-- [[PageWrapper.tsx]] - `imports_from` [EXTRACTED]
-- [[TICK_1]] - `contains` [EXTRACTED]
-- [[TOOLTIP_STYLE_1]] - `contains` [EXTRACTED]
-- [[fetchGEX()]] - `imports` [EXTRACTED]
-- [[fetchOptionsChain()]] - `imports` [EXTRACTED]
-- [[useApi.ts]] - `imports_from` [EXTRACTED]
+- [[frontend_src_pages_dealergex_tsx_dealergex]] - `defines` [EXTRACTED]
+- [[components_pagewrapper]] - `imports` [EXTRACTED]
+- [[components_sidebarlayout]] - `imports` [EXTRACTED]
+- [[hooks_useapi]] - `imports` [EXTRACTED]
+- [[components_emptystate]] - `imports` [EXTRACTED]
+- [[hooks_usechartcolors]] - `imports` [EXTRACTED]
 
-#graphify/code #graphify/EXTRACTED #community/Dealer_GEX_View
+#graphify/code #graphify/EXTRACTED #community/Frontend

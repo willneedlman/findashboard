@@ -5,12 +5,12 @@ import PageWrapper from '../components/PageWrapper'
 const T = {
   bg:      'var(--theme-bg, #101c2e)',
   surface: 'var(--theme-surface, #0d1826)',
-  border:  'rgba(255,255,255,0.08)',
+  border:  'var(--theme-border, rgba(255,255,255,0.08))',
   gold:    'var(--theme-primary, #c9a84c)',
   muted:   'var(--theme-secondary, #5e768f)',
-  text:    '#d7e3fc',
-  mono:    'JetBrains Mono, monospace',
-  label:   'IBM Plex Sans, sans-serif',
+  text:    'var(--theme-text, #d7e3fc)',
+  mono:    'var(--theme-mono)',
+  label:   'var(--theme-sans)',
   pos:     '#22c55e',
   neg:     '#ef4444',
 }
@@ -284,7 +284,7 @@ export default function GreeksAggregator() {
                 </thead>
                 <tbody>
                   {result.positions.map((pos, i) => (
-                    <tr key={i} style={{ borderBottom: `1px solid ${T.border}`, background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
+                    <tr key={i} style={{ borderBottom: `1px solid ${T.border}`, background: i % 2 === 0 ? 'transparent' : 'var(--theme-hover, rgba(255,255,255,0.01))' }}>
                       <td style={{ padding: '7px 8px', color: T.gold, textAlign: 'left' }}>{pos.ticker}</td>
                       <td style={{ padding: '7px 8px', textAlign: 'right', color: T.text }}>{pos.strike}</td>
                       <td style={{ padding: '7px 8px', textAlign: 'right', color: T.text }}>{pos.expiry}</td>

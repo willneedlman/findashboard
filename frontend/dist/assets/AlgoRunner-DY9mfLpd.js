@@ -1,1 +1,0 @@
-import{c as e}from"./proxy-CvUzr6EJ.js";import t from"./PortfolioBacktester-CX3_Y78S.js";var n=e();function r(){return(0,n.jsx)(t,{initialTab:`strategy`})}export{r as default};

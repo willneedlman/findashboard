@@ -35,7 +35,7 @@ const DEFAULT_MACRO_CATS = ['equity', 'fx', 'bond', 'commodity', 'vol']
 const SPREAD_SERIES_OPTIONS: { key: string; label: string; color: string }[] = [
   { key: 'ig',  label: 'IG OAS', color: '#60a5fa' },
   { key: 'hy',  label: 'HY OAS', color: '#ef4444' },
-  { key: 'vix', label: 'VIX',    color: 'var(--theme-primary, #c9a84c)' },
+  { key: 'vix', label: 'VIX',    color: 'var(--theme-primary)' },
 ]
 const DEFAULT_SPREAD_SERIES = ['ig', 'hy', 'vix']
 
@@ -64,10 +64,10 @@ const S = {
   bg:     'var(--theme-surface, #0d1b30)',
   border: 'rgba(255,255,255,0.08)',
   gold:   'var(--theme-primary, #c9a84c)',
-  muted:  '#5e768f',
+  muted:  'var(--theme-secondary, #5e768f)',
   text:   '#d7e3fc',
-  mono:   'JetBrains Mono, monospace',
-  label:  'IBM Plex Sans, sans-serif',
+  mono:   'var(--theme-mono)',
+  label:  'var(--theme-sans)',
 }
 
 function YieldCheckboxes({
@@ -98,13 +98,12 @@ function YieldCheckboxes({
                 cursor: 'pointer', userSelect: 'none',
               }}
             >
-              {/* Custom checkbox */}
               <div
                 onClick={() => toggle(key)}
                 style={{
                   width: 12, height: 12, flexShrink: 0,
                   border: `1px solid ${checked ? S.gold : S.border}`,
-                  background: checked ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)' : 'transparent',
+                  background: checked ? 'color-mix(in srgb, var(--theme-primary) 35%, transparent)' : 'transparent',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   transition: 'all 0.1s',
                 }}
@@ -117,7 +116,7 @@ function YieldCheckboxes({
                 onClick={() => toggle(key)}
                 style={{
                   fontFamily: S.mono, fontSize: 10,
-                  color: checked ? S.text : S.muted,
+                  color: checked ? 'var(--theme-bg, #0a1628)' : S.muted,
                   transition: 'color 0.1s',
                 }}
               >
@@ -131,7 +130,7 @@ function YieldCheckboxes({
         onClick={onSave}
         style={{
           alignSelf: 'flex-end', background: S.gold, border: 'none',
-          color: 'var(--theme-bg, #0a1628)', fontSize: 9, fontWeight: 700,
+          color: 'var(--theme-bg)', fontSize: 9, fontWeight: 700,
           padding: '3px 12px', cursor: 'pointer',
           letterSpacing: '0.1em', fontFamily: S.label,
         }}
@@ -162,12 +161,12 @@ function ColorCheckboxes({
             <div onClick={() => toggle(key)} style={{
               width: 12, height: 12, flexShrink: 0,
               border: `1px solid ${checked ? color : S.border}`,
-              background: checked ? `color-mix(in srgb, ${color} 22%, transparent)` : 'transparent',
+              background: checked ? `color-mix(in srgb, ${color} 35%, transparent)` : 'transparent',
               display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.1s',
             }}>
               {checked && <div style={{ width: 6, height: 6, background: color }} />}
             </div>
-            <span onClick={() => toggle(key)} style={{ fontFamily: S.mono, fontSize: 10, color: checked ? color : S.muted, transition: 'color 0.1s' }}>
+            <span onClick={() => toggle(key)} style={{ fontFamily: S.mono, fontSize: 10, color: checked ? 'var(--theme-bg, #0a1628)' : S.muted, transition: 'color 0.1s' }}>
               {label}
             </span>
           </label>
@@ -186,7 +185,7 @@ function MacroCatSettings({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <span style={{ fontFamily: S.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: S.muted }}>Categories to display</span>
       <ColorCheckboxes options={MACRO_CAT_OPTIONS} selected={selected} onChange={onChange} />
-      <button onClick={onSave} style={{ alignSelf: 'flex-end', background: S.gold, border: 'none', color: 'var(--theme-bg, #0a1628)', fontSize: 9, fontWeight: 700, padding: '3px 12px', cursor: 'pointer', letterSpacing: '0.1em', fontFamily: S.label }}>APPLY</button>
+      <button onClick={onSave} style={{ alignSelf: 'flex-end', background: S.gold, border: 'none', color: 'var(--theme-bg)', fontSize: 9, fontWeight: 700, padding: '3px 12px', cursor: 'pointer', letterSpacing: '0.1em', fontFamily: S.label }}>APPLY</button>
     </div>
   )
 }
@@ -208,20 +207,19 @@ function CreditSpreadsSettings({
           <button key={val} onClick={() => onLookbackChange(val)} style={{
             fontFamily: S.mono, fontSize: 9, fontWeight: 700, padding: '2px 8px',
             border: lookback === val ? `1px solid ${S.gold}` : `1px solid ${S.border}`,
-            background: lookback === val ? `color-mix(in srgb, var(--theme-primary, #c9a84c) 15%, transparent)` : 'transparent',
-            color: lookback === val ? S.gold : S.muted,
+            background: lookback === val ? `color-mix(in srgb, var(--theme-primary) 30%, transparent)` : 'transparent',
+            color: lookback === val ? 'var(--theme-bg, #0a1628)' : S.muted,
             cursor: 'pointer', letterSpacing: '0.08em', transition: 'all 0.1s',
           }}>{label}</button>
         ))}
       </div>
-      <button onClick={onSave} style={{ alignSelf: 'flex-end', background: S.gold, border: 'none', color: 'var(--theme-bg, #0a1628)', fontSize: 9, fontWeight: 700, padding: '3px 12px', cursor: 'pointer', letterSpacing: '0.1em', fontFamily: S.label }}>APPLY</button>
+      <button onClick={onSave} style={{ alignSelf: 'flex-end', background: S.gold, border: 'none', color: 'var(--theme-bg)', fontSize: 9, fontWeight: 700, padding: '3px 12px', cursor: 'pointer', letterSpacing: '0.1em', fontFamily: S.label }}>APPLY</button>
     </div>
   )
 }
 
 export default function WidgetFrame({ config, editMode, onRemove, onUpdate, children }: WidgetFrameProps) {
   const [configOpen, setConfigOpen] = useState(false)
-  const [hovered, setHovered] = useState(false)
   const [tickerInput, setTickerInput] = useState(config.ticker || '')
   const [tagTickers, setTagTickers] = useState<string[]>(config.tickers ?? [])
   const [yieldSel, setYieldSel] = useState<string[]>(
@@ -288,8 +286,6 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
 
   return (
     <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => { setHovered(false) }}
       style={{
         position: 'relative', height: '100%', display: 'flex', flexDirection: 'column',
         background: 'var(--theme-bg, #101c2e)',
@@ -298,49 +294,45 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
         transition: 'border-color 0.15s', overflow: 'hidden',
         cursor: editMode ? 'grab' : 'default',
       }}>
-      {/* Edit-mode drag bar */}
-      {editMode && (
+      {/* Header bar — always visible for widgets with settings, shows in edit mode too */}
+      {(hasSettings || editMode) && (
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          background: 'rgba(201,168,76,0.12)', borderBottom: '1px solid rgba(201,168,76,0.25)',
+          background: editMode ? 'rgba(201,168,76,0.12)' : 'var(--theme-surface, #0d1826)',
+          borderBottom: editMode ? '1px solid rgba(201,168,76,0.25)' : '1px solid #2e394d',
           padding: '4px 8px', flexShrink: 0,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
-            <GripHorizontal size={13} style={{ color: 'rgba(201,168,76,0.7)', flexShrink: 0 }} />
-            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(201,168,76,0.7)', fontFamily: 'IBM Plex Sans, sans-serif', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {editMode && <GripHorizontal size={13} style={{ color: 'rgba(201,168,76,0.7)', flexShrink: 0 }} />}
+            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
+              color: editMode ? 'rgba(201,168,76,0.7)' : 'var(--theme-text, #d7e3fc)',
+              fontFamily: S.label, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {config.ticker || config.type}
             </span>
           </div>
           <div className="widget-no-drag" style={{ display: 'flex', gap: 4 }}>
             {hasSettings && (
-              <button onClick={() => setConfigOpen(o => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(201,168,76,0.6)', padding: 2, display: 'flex' }}>
-                <Settings size={12} />
+              <button
+                onClick={() => setConfigOpen(o => !o)}
+                style={{
+                  background: configOpen ? 'var(--theme-primary, #c9a84c)' : 'transparent',
+                  border: configOpen ? '1px solid var(--theme-primary, #c9a84c)' : '1px solid transparent',
+                  borderRadius: 3, padding: '3px 4px',
+                  cursor: 'pointer', color: configOpen ? 'var(--theme-bg, #0a1628)' : 'var(--theme-secondary, #5e768f)',
+                  display: 'flex', alignItems: 'center',
+                  transition: 'all 0.15s',
+                }}
+              >
+                <Settings size={11} />
               </button>
             )}
-            <button onClick={onRemove} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', padding: 2, display: 'flex', opacity: 0.7 }}>
-              <X size={12} />
-            </button>
+            {editMode && (
+              <button onClick={onRemove} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', padding: 2, display: 'flex', opacity: 0.7 }}>
+                <X size={12} />
+              </button>
+            )}
           </div>
         </div>
-      )}
-
-      {/* Hover gear — visible in view mode only, fades in on hover */}
-      {!editMode && hasSettings && (
-        <button
-          onClick={() => setConfigOpen(o => !o)}
-          style={{
-            position: 'absolute', top: 6, right: 6, zIndex: 10,
-            background: configOpen ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)' : 'rgba(13,24,38,0.85)',
-            border: `1px solid ${configOpen ? 'rgba(201,168,76,0.5)' : 'rgba(46,57,77,0.8)'}`,
-            borderRadius: 3, padding: '3px 4px',
-            cursor: 'pointer', display: 'flex', alignItems: 'center',
-            opacity: hovered || configOpen ? 1 : 0,
-            transition: 'opacity 0.15s, background 0.15s',
-            pointerEvents: hovered || configOpen ? 'auto' : 'none',
-          }}
-        >
-          <Settings size={11} style={{ color: configOpen ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #5e768f)' }} />
-        </button>
       )}
 
       {/* Config panel */}

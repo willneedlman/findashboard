@@ -15,8 +15,8 @@ function hexToRgb(hex: string): [number, number, number] {
 }
 
 const INPUT: React.CSSProperties = {
-  background: 'var(--theme-bg, #0a1628)', border: '1px solid rgba(255,255,255,0.10)', color: '#d7e3fc',
-  fontFamily: 'JetBrains Mono, monospace', fontSize: 12, padding: '5px 8px',
+  background: 'var(--theme-bg, #0a1628)', border: '1px solid var(--theme-border, rgba(255,255,255,0.10))', color: 'var(--theme-text, #d7e3fc)',
+  fontFamily: 'var(--theme-mono)', fontSize: 12, padding: '5px 8px',
   width: '100%', outline: 'none',
 }
 const LABEL: React.CSSProperties = {
@@ -27,7 +27,7 @@ const LABEL: React.CSSProperties = {
 export default function CorrelationMatrix() {
   const [tickers, setTickers] = useState(['SPY', 'QQQ', 'TLT', 'GLD', 'BTC-USD'])
   const [start, setStart]         = useState('2020-01-01')
-  const [end, setEnd]             = useState('2024-12-31')
+  const [end, setEnd]             = useState(() => new Date().toISOString().split('T')[0])
   const { theme } = useTheme()
 
   const [pr, pg, pb] = hexToRgb(theme.primaryColor)
@@ -42,7 +42,7 @@ export default function CorrelationMatrix() {
   }
   const cellText = (v: number): string => {
     if (v >= 0.999) return '#000'
-    return Math.abs(v) > 0.35 ? '#ffffff' : 'rgba(255,255,255,0.35)'
+    return Math.abs(v) > 0.35 ? '#ffffff' : 'var(--theme-text-dim, rgba(255,255,255,0.35))'
   }
 
   const { mutate, data, isPending } = useMutation({
@@ -55,7 +55,7 @@ export default function CorrelationMatrix() {
   return (
     <PageWrapper>
       <SidebarLayout sidebarWidth={190} sidebarTitle="Correlation Controls" sidebar={<>
-          <div style={{ padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'var(--theme-surface, #142032)' }}>
+          <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)' }}>
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#ffffff' }}>Matrix Controls</div>
           </div>
           <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 12, flex: 1 }}>
@@ -67,18 +67,18 @@ export default function CorrelationMatrix() {
               <label style={LABEL}>Start Date</label>
               <input type="date" value={start} onChange={e => setStart(e.target.value)} style={INPUT}
                 onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')}
-                onBlur={e => (e.target.style.borderColor = 'rgba(255,255,255,0.10)')}
+                onBlur={e => (e.target.style.borderColor = 'var(--theme-border, rgba(255,255,255,0.10))')}
               />
             </div>
             <div>
               <label style={LABEL}>End Date</label>
               <input type="date" value={end} onChange={e => setEnd(e.target.value)} style={INPUT}
                 onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')}
-                onBlur={e => (e.target.style.borderColor = 'rgba(255,255,255,0.10)')}
+                onBlur={e => (e.target.style.borderColor = 'var(--theme-border, rgba(255,255,255,0.10))')}
               />
             </div>
           </div>
-          <div style={{ padding: 10, borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ padding: 10, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', display: 'flex', flexDirection: 'column', gap: 8 }}>
             <PortfolioIO
               mode="tickers"
               tickers={tickers}
@@ -97,12 +97,12 @@ export default function CorrelationMatrix() {
         </>}>
 
         {/* Right: heatmap */}
-          <div style={{ padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'var(--theme-surface, #142032)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#ffffff' }}>
               Asset Correlation Heatmap (Pearson — Daily Returns)
             </span>
             {data && (
-              <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', letterSpacing: '0.08em' }}>
+              <span style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', letterSpacing: '0.08em' }}>
                 {data.tickers.length} assets · {start} → {end}
               </span>
             )}
@@ -138,7 +138,7 @@ export default function CorrelationMatrix() {
                     ))}
                   </div>
                   {/* Cell grid with white border */}
-                  <div style={{ border: '1px solid rgba(255,255,255,0.18)', display: 'inline-block' }}>
+                  <div style={{ border: '1px solid var(--theme-text-faint, rgba(255,255,255,0.18))', display: 'inline-block' }}>
                     {data.tickers.map((row: string) => (
                       <div key={row} style={{ display: 'flex' }}>
                         {data.tickers.map((col: string) => {
@@ -148,7 +148,7 @@ export default function CorrelationMatrix() {
                             <div key={col} style={{
                               width: 68, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center',
                               background: cellBg(v), color: cellText(v),
-                              fontFamily: 'JetBrains Mono, monospace', fontSize: 12, fontWeight: v >= 0.999 ? 700 : 500,
+                              fontFamily: 'var(--theme-mono)', fontSize: 12, fontWeight: v >= 0.999 ? 700 : 500,
                               border: '1px solid rgba(0,0,0,0.25)',
                             }}
                               title={`${row} / ${col}: ${v.toFixed(4)}`}
@@ -167,16 +167,16 @@ export default function CorrelationMatrix() {
               <div style={{ marginTop: 28, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', width: 320 }}>
                   {['-1.0', '-0.5', '0.0', '+0.5', '+1.0'].map(l => (
-                    <span key={l} style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--theme-secondary, #99907e)' }}>{l}</span>
+                    <span key={l} style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-secondary, #99907e)' }}>{l}</span>
                   ))}
                 </div>
                 <div style={{
-                  width: 320, height: 10, border: '1px solid rgba(255,255,255,0.08)',
+                  width: 320, height: 10, border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
                   background: `linear-gradient(to right, rgba(${nr},${ng},${nb},1), rgba(${nr},${ng},${nb},0.05) 48%, rgba(11,20,32,1) 50%, rgba(${tr},${tg},${tb},0.05) 52%, rgba(${tr},${tg},${tb},1))`,
                 }} />
                 <div style={{ display: 'flex', justifyContent: 'space-between', width: 320 }}>
                   <span style={{ fontSize: 10, color: NEG, fontWeight: 700, letterSpacing: '0.1em' }}>NEGATIVE</span>
-                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', letterSpacing: '0.1em' }}>NEUTRAL</span>
+                  <span style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', letterSpacing: '0.1em' }}>NEUTRAL</span>
                   <span style={{ fontSize: 10, color: theme.tertiaryColor, fontWeight: 700, letterSpacing: '0.1em' }}>POSITIVE</span>
                 </div>
               </div>

@@ -9,12 +9,12 @@ import ExportPdfButton from '../components/ExportPdfButton'
 const T = {
   bg:      'var(--theme-bg, #101c2e)',
   surface: 'var(--theme-surface, #0d1826)',
-  border:  'rgba(255,255,255,0.08)',
+  border:  'var(--theme-border, rgba(255,255,255,0.08))',
   gold:    'var(--theme-primary, #c9a84c)',
   muted:   'var(--theme-secondary, #5e768f)',
-  text:    '#d7e3fc',
-  mono:    'JetBrains Mono, monospace',
-  label:   'IBM Plex Sans, sans-serif',
+  text:    'var(--theme-text, #d7e3fc)',
+  mono:    'var(--theme-mono)',
+  label:   'var(--theme-sans)',
   pos:     '#22c55e',
   neg:     '#ef4444',
 }
@@ -39,7 +39,7 @@ interface RotationResponse {
 }
 
 function heatColor(v: number | null, maxAbs = 15): string {
-  if (v == null) return 'rgba(255,255,255,0.04)'
+  if (v == null) return 'var(--theme-hover, rgba(255,255,255,0.04))'
   const intensity = Math.min(Math.abs(v) / maxAbs, 1)
   if (v > 0) return `rgba(34,197,94,${0.12 + intensity * 0.45})`
   return `rgba(239,68,68,${0.12 + intensity * 0.45})`
@@ -128,7 +128,7 @@ export default function SectorRotation() {
                 <button key={k} onClick={() => setSortBy(k)} style={{
                   fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
                   textTransform: 'uppercase', padding: '4px 10px', cursor: 'pointer',
-                  background: sortBy === k ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 15%, transparent)' : 'rgba(255,255,255,0.04)',
+                  background: sortBy === k ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 15%, transparent)' : 'var(--theme-hover, rgba(255,255,255,0.04))',
                   border: `1px solid ${sortBy === k ? T.gold : T.border}`,
                   color: sortBy === k ? T.gold : T.muted,
                 }}>
@@ -156,7 +156,7 @@ export default function SectorRotation() {
                 <button key={v} onClick={() => setView(v)} style={{
                   fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
                   textTransform: 'uppercase', padding: '4px 10px', cursor: 'pointer',
-                  background: view === v ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 15%, transparent)' : 'rgba(255,255,255,0.04)',
+                  background: view === v ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 15%, transparent)' : 'var(--theme-hover, rgba(255,255,255,0.04))',
                   border: `1px solid ${view === v ? T.gold : T.border}`,
                   color: view === v ? T.gold : T.muted,
                 }}>
@@ -343,7 +343,7 @@ export default function SectorRotation() {
                   <ReferenceLine y={data.spy_returns[activePeriod]!} stroke={T.gold} strokeDasharray="4 4" label={{ value: 'SPY', position: 'insideTopRight', fill: T.gold, fontSize: 9, fontFamily: T.mono }} />
                 )}
                 <Tooltip
-                  cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+                  cursor={{ fill: 'var(--theme-hover, rgba(255,255,255,0.04))' }}
                   formatter={(v: number, name: string) => [`${v?.toFixed(2)}%`, name === 'value' ? 'Return' : 'vs SPY']}
                   contentStyle={{ background: T.surface, border: `1px solid ${T.border}`, fontFamily: T.mono, fontSize: 10 }}
                   labelFormatter={(label) => {

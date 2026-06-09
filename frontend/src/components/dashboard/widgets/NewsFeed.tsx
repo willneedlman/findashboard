@@ -5,9 +5,9 @@ import { ChevronDown, ChevronRight } from 'lucide-react'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 
 const T = {
-  bg: 'var(--theme-bg, #101c2e)', border: 'rgba(255,255,255,0.08)', headerBg: 'var(--theme-surface, #142032)', sectionBg: 'var(--theme-surface, #0d1826)',
-  gold: 'var(--theme-primary, #c9a84c)', text: '#d7e3fc', muted: 'var(--theme-secondary, #5e768f)', dim: '#3a4d62',
-  mono: 'JetBrains Mono, monospace', label: 'IBM Plex Sans, sans-serif',
+  bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))', headerBg: 'var(--theme-surface, #142032)', sectionBg: 'var(--theme-surface, #0d1826)',
+  gold: 'var(--theme-primary, #c9a84c)', text: 'var(--theme-text, #d7e3fc)', muted: 'var(--theme-secondary, #5e768f)', dim: '#3a4d62',
+  mono: 'var(--theme-mono)', label: 'var(--theme-sans)',
   pos: '#22C55E', neg: '#EF4444',
 }
 
@@ -29,7 +29,7 @@ function safeUrl(url: string): string {
 }
 
 const shimmer: React.CSSProperties = {
-  background: 'linear-gradient(90deg, var(--theme-surface, #0d0d0d) 25%, rgba(255,255,255,0.05) 50%, var(--theme-surface, #0d0d0d) 75%)',
+  background: 'linear-gradient(90deg, var(--theme-surface, #0d0d0d) 25%, var(--theme-border-faint, var(--theme-border-faint, rgba(255,255,255,0.05))) 50%, var(--theme-surface, #0d0d0d) 75%)',
   backgroundSize: '200% 100%',
   animation: 'shimmer 2s infinite',
   borderRadius: 3,
@@ -158,10 +158,12 @@ export default function NewsFeed({ config }: { config: WidgetConfig }) {
       ? [config.ticker]
       : []
 
-  // Start with all sections open when there's only one ticker, first open otherwise
-  const [openMap, setOpenMap] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(tickers.map((t, i) => [t, i === 0]))
-  )
+  const expandMode = config.newsExpand ?? 'first'
+  const [openMap, setOpenMap] = useState<Record<string, boolean>>(() => {
+    if (expandMode === 'all') return Object.fromEntries(tickers.map(t => [t, true]))
+    if (expandMode === 'none') return Object.fromEntries(tickers.map(t => [t, false]))
+    return Object.fromEntries(tickers.map((t, i) => [t, i === 0]))
+  })
 
   const toggle = (t: string) => setOpenMap(p => ({ ...p, [t]: !p[t] }))
 
@@ -183,11 +185,6 @@ export default function NewsFeed({ config }: { config: WidgetConfig }) {
   if (tickers.length === 0) {
     return (
       <div style={containerStyle}>
-        <div style={{ padding: '6px 12px', background: T.headerBg, borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
-          <span style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, color: T.gold, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-            NEWS WIRE
-          </span>
-        </div>
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <span style={{ color: T.muted, fontSize: 11, fontFamily: T.label }}>Configure tickers in edit mode.</span>
         </div>
@@ -199,34 +196,6 @@ export default function NewsFeed({ config }: { config: WidgetConfig }) {
     <div style={containerStyle}>
       <style>{`@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
 
-      {/* Widget header */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '6px 12px', background: T.headerBg, borderBottom: `1px solid ${T.border}`,
-        flexShrink: 0,
-      }}>
-        <span style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, color: T.gold, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-          NEWS WIRE
-        </span>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          {/* Expand all / collapse all */}
-          <button
-            onClick={() => setOpenMap(Object.fromEntries(tickers.map(t => [t, true])))}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: T.label, fontSize: 9, color: T.muted, letterSpacing: '0.1em', padding: '1px 4px' }}
-          >
-            ALL
-          </button>
-          <span style={{ color: T.border, fontSize: 10 }}>|</span>
-          <button
-            onClick={() => setOpenMap(Object.fromEntries(tickers.map(t => [t, false])))}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: T.label, fontSize: 9, color: T.muted, letterSpacing: '0.1em', padding: '1px 4px' }}
-          >
-            NONE
-          </button>
-        </div>
-      </div>
-
-      {/* Scrollable body */}
       <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
         {tickers.map((ticker, i) => (
           <TickerSection

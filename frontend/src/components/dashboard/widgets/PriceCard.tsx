@@ -6,9 +6,9 @@ import type { IChartApi, ISeriesApi } from 'lightweight-charts'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 
 const T = {
-  bg: 'var(--theme-bg, #101c2e)', border: 'rgba(255,255,255,0.08)', headerBg: 'var(--theme-surface, #0d1826)',
-  gold: 'var(--theme-primary, #c9a84c)', text: '#d7e3fc', muted: 'var(--theme-secondary, #5e768f)',
-  mono: 'JetBrains Mono, monospace', label: 'IBM Plex Sans, sans-serif',
+  bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))', headerBg: 'var(--theme-surface, #0d1826)',
+  gold: 'var(--theme-primary, #c9a84c)', text: 'var(--theme-text, #d7e3fc)', muted: 'var(--theme-secondary, #5e768f)',
+  mono: 'var(--theme-mono)', label: 'var(--theme-sans)',
   pos: '#22C55E', neg: '#EF4444',
 }
 
@@ -22,7 +22,7 @@ interface PriceData {
 }
 
 const shimmer: React.CSSProperties = {
-  background: 'linear-gradient(90deg, var(--theme-surface, #0d0d0d) 25%, rgba(255,255,255,0.05) 50%, var(--theme-surface, #0d0d0d) 75%)',
+  background: 'linear-gradient(90deg, var(--theme-surface, #0d0d0d) 25%, var(--theme-border-faint, var(--theme-border-faint, rgba(255,255,255,0.05))) 50%, var(--theme-surface, #0d0d0d) 75%)',
   backgroundSize: '200% 100%',
   animation: 'shimmer 2s infinite',
   borderRadius: 3,
@@ -65,16 +65,16 @@ function CandleChart({ ticker }: { ticker: string }) {
         fontSize: 10,
       },
       grid: {
-        vertLines: { color: 'rgba(255,255,255,0.03)' },
-        horzLines: { color: 'rgba(255,255,255,0.03)' },
+        vertLines: { color: 'var(--theme-hover, var(--theme-hover, rgba(255,255,255,0.03)))' },
+        horzLines: { color: 'var(--theme-hover, var(--theme-hover, rgba(255,255,255,0.03)))' },
       },
       crosshair: {
         mode: CrosshairMode.Normal,
         vertLine: { color: `${gold}66`, labelBackgroundColor: surface },
         horzLine: { color: `${gold}66`, labelBackgroundColor: surface },
       },
-      rightPriceScale: { borderColor: 'rgba(255,255,255,0.06)', textColor: text },
-      timeScale:       { borderColor: 'rgba(255,255,255,0.06)', timeVisible: false },
+      rightPriceScale: { borderColor: 'var(--theme-border, rgba(255,255,255,0.06))', textColor: text },
+      timeScale:       { borderColor: 'var(--theme-border, rgba(255,255,255,0.06))', timeVisible: false },
       handleScroll: { mouseWheel: true, pressedMouseMove: true },
       handleScale:  { mouseWheel: true, pinch: true },
       width:  el.clientWidth,
@@ -128,9 +128,9 @@ function CandleChart({ ticker }: { ticker: string }) {
       <div style={{ display: 'flex', gap: 2, padding: '3px 8px', background: 'rgba(0,0,0,0.15)', flexShrink: 0 }}>
         {PERIODS.map(p => (
           <button key={p.value} onClick={() => setPeriod(p.value)} style={{
-            fontFamily: 'JetBrains Mono, monospace', fontSize: 9, fontWeight: 700,
+            fontFamily: 'var(--theme-mono)', fontSize: 9, fontWeight: 700,
             padding: '2px 6px',
-            border: period === p.value ? '1px solid rgba(201,168,76,0.55)' : '1px solid rgba(255,255,255,0.07)',
+            border: period === p.value ? '1px solid rgba(201,168,76,0.55)' : '1px solid var(--theme-border, rgba(255,255,255,0.07))',
             background: period === p.value ? 'rgba(201,168,76,0.12)' : 'transparent',
             color: period === p.value ? 'var(--theme-primary, #c9a84c)' : 'rgba(255,255,255,0.3)',
             cursor: 'pointer', letterSpacing: '0.08em',
@@ -141,13 +141,13 @@ function CandleChart({ ticker }: { ticker: string }) {
         <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
         {loading && (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(16,28,46,0.65)' }}>
-            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#5e768f', letterSpacing: '0.12em' }}>LOADING…</span>
+            <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: '#5e768f', letterSpacing: '0.12em' }}>LOADING…</span>
           </div>
         )}
         {error && !loading && (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
             <div style={{ fontSize: 11, color: '#5e768f' }}>Chart unavailable</div>
-            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: 'rgba(255,255,255,0.18)' }}>{error}</div>
+            <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.18))' }}>{error}</div>
           </div>
         )}
       </div>

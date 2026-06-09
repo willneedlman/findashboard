@@ -1,19 +1,14 @@
 ---
 source_file: "frontend/src/components/StrategySelector.tsx"
 type: "code"
-community: "Strategy Selector Component"
-location: "L13"
+community: "Frontend"
+location: "None"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/Strategy_Selector_Component
+  - community/Frontend
 ---
 
 # StrategyParams
 
-## Connections
-- [[MonteCarlo.tsx]] - `imports` [EXTRACTED]
-- [[PortfolioBacktester.tsx]] - `imports` [EXTRACTED]
-- [[StrategySelector.tsx]] - `contains` [EXTRACTED]
-
-#graphify/code #graphify/EXTRACTED #community/Strategy_Selector_Component
+#graphify/code #graphify/EXTRACTED #community/Frontend

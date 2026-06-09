@@ -1,21 +1,21 @@
 ---
 source_file: "backend/cache.py"
 type: "code"
-community: "Backend Cache & DCF Utils"
+community: "Backend"
 location: "L1"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/Backend_Cache__DCF_Utils
+  - community/Backend
 ---
 
 # cache.py
 
 ## Connections
-- [[Centralized caching layer for all yfinance and external API calls. All routers i]] - `rationale_for` [EXTRACTED]
-- [[get_download()]] - `contains` [EXTRACTED]
-- [[get_history()]] - `contains` [EXTRACTED]
-- [[get_info()]] - `contains` [EXTRACTED]
-- [[get_news()]] - `contains` [EXTRACTED]
+- [[cachetools]] - `imports` [EXTRACTED]
+- [[backend_cache_py_get_history]] - `contains` [EXTRACTED]
+- [[backend_cache_py_get_info]] - `contains` [EXTRACTED]
+- [[backend_cache_py_get_news]] - `contains` [EXTRACTED]
+- [[backend_cache_py_get_download]] - `contains` [EXTRACTED]
 
-#graphify/code #graphify/EXTRACTED #community/Backend_Cache__DCF_Utils
+#graphify/code #graphify/EXTRACTED #community/Backend

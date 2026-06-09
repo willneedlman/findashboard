@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useMemo } from 'react'
 import axios from 'axios'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -9,9 +9,9 @@ import type { WidgetConfig } from '../../../hooks/useDashboard'
 import { useOptimalGrid } from '../../../hooks/useOptimalGrid'
 
 const T = {
-  bg: 'var(--theme-bg, #101c2e)', border: 'rgba(255,255,255,0.08)', headerBg: 'var(--theme-surface, #0d1826)', tileBg: 'var(--theme-surface, #0d1826)',
-  gold: 'var(--theme-primary, #c9a84c)', text: '#d7e3fc', muted: 'var(--theme-secondary, #5e768f)', dim: '#3a4d62',
-  mono: 'JetBrains Mono, monospace', label: 'IBM Plex Sans, sans-serif',
+  bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))', headerBg: 'var(--theme-surface, #0d1826)', tileBg: 'var(--theme-surface, #0d1826)',
+  gold: 'var(--theme-primary, #c9a84c)', text: 'var(--theme-text, #d7e3fc)', muted: 'var(--theme-secondary, #5e768f)', dim: '#3a4d62',
+  mono: 'var(--theme-mono)', label: 'var(--theme-sans)',
   pos: '#22C55E', neg: '#EF4444', warn: '#f59e0b',
 }
 
@@ -27,7 +27,7 @@ interface SnapshotData {
 }
 
 const shimmer: React.CSSProperties = {
-  background: 'linear-gradient(90deg, var(--theme-surface, #0d0d0d) 25%, rgba(255,255,255,0.05) 50%, var(--theme-surface, #0d0d0d) 75%)',
+  background: 'linear-gradient(90deg, var(--theme-surface, #0d0d0d) 25%, var(--theme-border-faint, var(--theme-border-faint, rgba(255,255,255,0.05))) 50%, var(--theme-surface, #0d0d0d) 75%)',
   backgroundSize: '200% 100%', animation: 'shimmer 2s infinite', borderRadius: 3,
 }
 
@@ -47,17 +47,6 @@ const DATA_ITEMS = [
 ] as const
 type ItemId = typeof DATA_ITEMS[number]['id']
 const ALL_IDS: ItemId[] = DATA_ITEMS.map(d => d.id)
-
-function loadVisible(ticker: string): Set<ItemId> {
-  try {
-    const raw = localStorage.getItem(`snap-visible-${ticker}`)
-    if (raw) return new Set(JSON.parse(raw) as ItemId[])
-  } catch { /* */ }
-  return new Set(ALL_IDS)
-}
-function saveVisible(ticker: string, set: Set<ItemId>) {
-  try { localStorage.setItem(`snap-visible-${ticker}`, JSON.stringify([...set])) } catch { /* */ }
-}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function consensusColor(c: string): string {
@@ -204,7 +193,7 @@ function VolCone({ spot, atmIv, hv30, expiry }: {
           <Line type="monotone" dataKey="expected" stroke={T.gold} strokeWidth={1} strokeDasharray="3 3" dot={false} legendType="none" />
 
           {/* Current spot */}
-          <ReferenceLine y={spot} stroke="rgba(215,227,252,0.35)" strokeWidth={1} strokeDasharray="2 4"
+          <ReferenceLine y={spot} stroke="var(--theme-text-muted, rgba(215,227,252,0.35))" strokeWidth={1} strokeDasharray="2 4"
             label={{ value: `$${spot.toFixed(2)}`, position: 'insideTopLeft', fontSize: 9, fill: T.text, fontFamily: T.mono }} />
 
           {/* Expiry marker */}
@@ -265,56 +254,11 @@ function ImpliedProb({ spot, atmIv, expiry }: { spot: number; atmIv: number; exp
 }
 
 // ── Checkbox panel ────────────────────────────────────────────────────────────
-function CheckboxPanel({ visible, onToggle }: { visible: Set<ItemId>; onToggle: (id: ItemId) => void }) {
-  const [open, setOpen] = useState(true)
-  return (
-    <div style={{ borderTop: `1px solid ${T.border}`, background: 'var(--theme-bg, #080f1d)', flexShrink: 0 }}>
-      <div
-        onClick={() => setOpen(o => !o)}
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', cursor: 'pointer', userSelect: 'none' }}
-      >
-        <span style={{ fontFamily: T.label, fontSize: 9, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Display</span>
-        <span style={{ color: T.dim, fontSize: 9, fontFamily: T.mono, transition: 'transform 0.15s', display: 'inline-block', transform: open ? 'rotate(0deg)' : 'rotate(-90deg)' }}>▾</span>
-      </div>
-      {open && (
-        <div style={{ padding: '0 8px 6px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: '3px 6px' }}>
-          {DATA_ITEMS.map(({ id, label }) => {
-            const on = visible.has(id)
-            return (
-              <label key={id} onClick={() => onToggle(id)} style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', userSelect: 'none' }}>
-                <div style={{
-                  width: 11, height: 11, flexShrink: 0,
-                  border: `1px solid ${on ? T.gold : T.dim}`,
-                  background: on ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)' : 'transparent',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  transition: 'all 0.1s',
-                }}>
-                  {on && <div style={{ width: 5, height: 5, background: T.gold }} />}
-                </div>
-                <span style={{ fontFamily: T.label, fontSize: 9, color: on ? T.text : T.dim, whiteSpace: 'nowrap' }}>{label}</span>
-              </label>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ── Main widget ───────────────────────────────────────────────────────────────
 export default function OptionsSnapshot({ config }: { config: WidgetConfig }) {
   const ticker = config.ticker
-
-  const [visible, setVisible] = useState<Set<ItemId>>(() => loadVisible(ticker ?? ''))
-
-  const toggle = (id: ItemId) => {
-    setVisible(prev => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      saveVisible(ticker ?? '', next)
-      return next
-    })
-  }
+  const visibleItems = (config.visibleItems ?? ALL_IDS) as ItemId[]
+  const visible = new Set<ItemId>(visibleItems)
 
   const show = (id: ItemId) => visible.has(id)
 
@@ -345,7 +289,6 @@ export default function OptionsSnapshot({ config }: { config: WidgetConfig }) {
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <span style={{ color: T.muted, fontFamily: T.label, fontSize: 12 }}>Configure ticker in edit mode.</span>
         </div>
-        <CheckboxPanel visible={visible} onToggle={toggle} />
       </div>
     )
   }
@@ -360,7 +303,6 @@ export default function OptionsSnapshot({ config }: { config: WidgetConfig }) {
         <div style={{ flex: '0 1 auto', minHeight: 0, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px,1fr))', gap: 6, padding: 8 }}>
           {Array.from({ length: visibleTileCount }).map((_, i) => <div key={i} style={{ ...shimmer, minHeight: 60 }} />)}
         </div>
-        <CheckboxPanel visible={visible} onToggle={toggle} />
       </div>
     )
   }
@@ -374,7 +316,6 @@ export default function OptionsSnapshot({ config }: { config: WidgetConfig }) {
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <span style={{ color: T.muted, fontFamily: T.label, fontSize: 12 }}>Options data unavailable.</span>
         </div>
-        <CheckboxPanel visible={visible} onToggle={toggle} />
       </div>
     )
   }
@@ -390,15 +331,6 @@ export default function OptionsSnapshot({ config }: { config: WidgetConfig }) {
   return (
     <div style={base}>
       <style>{`@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
-
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: T.headerBg, borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
-        <span style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: T.gold, letterSpacing: '0.08em' }}>{ticker}</span>
-        <span style={{ fontFamily: T.label, fontSize: 9, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Options Snapshot</span>
-        <span style={{ marginLeft: 'auto', fontFamily: T.mono, fontSize: 9, color: T.dim, whiteSpace: 'nowrap' }}>
-          {data.expiry ?? '—'}{daysToExpiry != null ? ` · ${daysToExpiry}d` : ''}
-        </span>
-      </div>
 
       {/* Data tiles */}
       {visibleTileCount > 0 && (
@@ -465,9 +397,6 @@ export default function OptionsSnapshot({ config }: { config: WidgetConfig }) {
           )}
         </div>
       )}
-
-      {/* Checkbox panel */}
-      <CheckboxPanel visible={visible} onToggle={toggle} />
     </div>
   )
 }

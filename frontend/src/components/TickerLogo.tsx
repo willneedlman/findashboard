@@ -47,7 +47,7 @@ export default function TickerLogo({ ticker, size = 28 }: TickerLogoProps) {
         flexShrink: 0,
       }}
     >
-      <span style={{ color: '#d7e3fc', fontSize: size * 0.36, fontWeight: 700 }}>
+      <span style={{ color: 'var(--theme-text, #d7e3fc)', fontSize: size * 0.36, fontWeight: 700 }}>
         {ticker.slice(0, 2).toUpperCase()}
       </span>
     </div>

@@ -4,7 +4,7 @@ from validation import validate_ticker
 import datetime as _dt
 import yfinance as yf
 import numpy as np
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from cachetools import TTLCache
 import threading
 import fmp
@@ -174,7 +174,8 @@ def corporate_hub(ticker: str):
         pass
 
     est_date    = (_dt.date.today() + _dt.timedelta(days=45)).strftime("%B %d, %Y")
-    horizon_lbl = f"Q2 {_dt.date.today().year}"
+    _q = (_dt.date.today().month - 1) // 3 + 1
+    horizon_lbl = f"Q{_q} {_dt.date.today().year}"
 
     # 30-day sparkline — raw closes for frontend SVG path
     sparkline: list[float] = []
@@ -465,11 +466,19 @@ def _yf_peer_row(t: str) -> dict:
 
 
 @router.get("/peer-valuation")
-def peer_valuation(ticker: str):
+def peer_valuation(ticker: str, refresh: bool = Query(False)):
     sym = validate_ticker(ticker)
-    with _peer_val_lock:
-        if sym in _peer_val_cache:
-            return _peer_val_cache[sym]
+
+    if refresh:
+        # Bust both caches so Groq re-runs and we re-validate tickers
+        with _groq_lock:
+            _groq_peers_cache.pop(sym, None)
+        with _peer_val_lock:
+            _peer_val_cache.pop(sym, None)
+    else:
+        with _peer_val_lock:
+            if sym in _peer_val_cache:
+                return _peer_val_cache[sym]
 
     from cache import get_info
     info     = get_info(sym)
@@ -480,12 +489,17 @@ def peer_valuation(ticker: str):
 
     # Priority: Groq AI comps → broad sector map → fallback
     groq_peers = _get_groq_peers(sym, name, industry, desc)
+    comps_source: str
     if groq_peers:
-        raw_peers = _validate_tickers(groq_peers)   # drop delisted/invalid
-        if not raw_peers:
-            raw_peers = list(_SECTOR_PEERS.get(sector, _FALLBACK_PEERS))
+        raw_peers = _validate_tickers(groq_peers)
+        if raw_peers:
+            comps_source = "ai_generated"
+        else:
+            raw_peers    = list(_SECTOR_PEERS.get(sector, _FALLBACK_PEERS))
+            comps_source = "sector_fallback"
     else:
-        raw_peers = list(_SECTOR_PEERS.get(sector, _FALLBACK_PEERS))
+        raw_peers    = list(_SECTOR_PEERS.get(sector, _FALLBACK_PEERS))
+        comps_source = "sector_fallback"
 
     peers = [sym] + [p for p in raw_peers if p != sym][:7]
 
@@ -496,7 +510,10 @@ def peer_valuation(ticker: str):
     # Filter out peers with no price data (truly delisted or invalid)
     rows = [r for r in rows if r["ticker"] == sym or r.get("price") is not None]
 
-    result = {"ticker": sym, "sector": sector or None, "industry": industry or None, "peers": rows}
+    result = {
+        "ticker": sym, "sector": sector or None, "industry": industry or None,
+        "peers": rows, "comps_source": comps_source,
+    }
     with _peer_val_lock:
         _peer_val_cache[sym] = result
     return result

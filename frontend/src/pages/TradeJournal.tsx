@@ -66,14 +66,14 @@ function fmt(n: number, decimals = 2, prefix = '') {
 const C = {
   bg:      'var(--theme-bg, #101c2e)',
   surface: 'var(--theme-surface, #142032)',
-  border:  'rgba(255,255,255,0.07)',
+  border:  'var(--theme-border, rgba(255,255,255,0.07))',
   gold:    'var(--theme-primary, #c9a84c)',
   muted:   'var(--theme-secondary, #5e768f)',
-  text:    '#d7e3fc',
-  mono:    'JetBrains Mono, monospace',
+  text:    'var(--theme-text, #d7e3fc)',
+  mono:    'var(--theme-mono)',
   pos:     '#22c55e',
   neg:     '#ef4444',
-  dim:     'rgba(215,227,252,0.35)',
+  dim:     'var(--theme-text-muted, rgba(215,227,252,0.35))',
 }
 
 const label = (text: string): React.CSSProperties => ({
@@ -208,7 +208,7 @@ function AddTradeForm({ onAdd }: { onAdd: (t: Trade) => void }) {
   const inp: React.CSSProperties = {
     fontFamily: C.mono,
     fontSize: 11,
-    background: 'rgba(255,255,255,0.04)',
+    background: 'var(--theme-hover, rgba(255,255,255,0.04))',
     border: `1px solid ${C.border}`,
     borderRadius: 4,
     color: C.text,
@@ -400,7 +400,7 @@ function CloseForm({ trade, onClose }: { trade: Trade; onClose: (exitDate: strin
   const inp: React.CSSProperties = {
     fontFamily: C.mono,
     fontSize: 11,
-    background: 'rgba(255,255,255,0.04)',
+    background: 'var(--theme-hover, rgba(255,255,255,0.04))',
     border: `1px solid ${C.border}`,
     borderRadius: 4,
     color: C.text,
@@ -488,7 +488,7 @@ function DetailPanel({ trade, onUpdateNotes }: { trade: Trade; onUpdateNotes: (n
 
   return (
     <div style={{
-      background: 'rgba(255,255,255,0.025)',
+      background: 'var(--theme-hover, rgba(255,255,255,0.025))',
       border: `1px solid ${C.border}`,
       borderRadius: 6,
       padding: '16px 18px',
@@ -547,7 +547,7 @@ function DetailPanel({ trade, onUpdateNotes }: { trade: Trade; onUpdateNotes: (n
           style={{
             fontFamily: C.mono,
             fontSize: 11,
-            background: 'rgba(255,255,255,0.03)',
+            background: 'var(--theme-hover, rgba(255,255,255,0.03))',
             border: `1px solid ${C.border}`,
             borderRadius: 4,
             color: C.text,
@@ -716,7 +716,7 @@ export default function TradeJournal() {
                 style={{
                   fontFamily: C.mono,
                   fontSize: 11,
-                  background: 'rgba(255,255,255,0.04)',
+                  background: 'var(--theme-hover, rgba(255,255,255,0.04))',
                   border: `1px solid ${C.border}`,
                   borderRadius: 4,
                   color: C.text,
@@ -819,10 +819,10 @@ export default function TradeJournal() {
                           key={t.id}
                           style={{
                             cursor: 'pointer',
-                            background: isExpanded ? 'rgba(255,255,255,0.03)' : 'transparent',
+                            background: isExpanded ? 'var(--theme-hover, rgba(255,255,255,0.03))' : 'transparent',
                             transition: 'background 0.12s',
                           }}
-                          onMouseEnter={e => { if (!isExpanded) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.02)' }}
+                          onMouseEnter={e => { if (!isExpanded) (e.currentTarget as HTMLElement).style.background = 'var(--theme-hover, rgba(255,255,255,0.02))' }}
                           onMouseLeave={e => { if (!isExpanded) (e.currentTarget as HTMLElement).style.background = 'transparent' }}
                           onClick={() => setExpandedId(isExpanded ? null : t.id)}
                         >
@@ -881,7 +881,7 @@ export default function TradeJournal() {
                         {/* Close form row */}
                         {isClosing && (
                           <tr key={`${t.id}-close`}>
-                            <td colSpan={11} style={{ padding: '0 12px 12px', background: 'rgba(255,255,255,0.01)' }}>
+                            <td colSpan={11} style={{ padding: '0 12px 12px', background: 'var(--theme-hover, rgba(255,255,255,0.01))' }}>
                               <CloseForm
                                 trade={t}
                                 onClose={(exitDate, exitPrice, notes) => closeTrade(t.id, exitDate, exitPrice, notes)}
@@ -893,7 +893,7 @@ export default function TradeJournal() {
                         {/* Detail panel row */}
                         {isExpanded && (
                           <tr key={`${t.id}-detail`}>
-                            <td colSpan={11} style={{ padding: '0 12px 12px', background: 'rgba(255,255,255,0.01)' }}>
+                            <td colSpan={11} style={{ padding: '0 12px 12px', background: 'var(--theme-hover, rgba(255,255,255,0.01))' }}>
                               <DetailPanel trade={t} onUpdateNotes={notes => updateNotes(t.id, notes)} />
                             </td>
                           </tr>

@@ -1,14 +1,17 @@
 ---
-source_file: "backend/routers/__init__.py"
+source_file: "backend/strategies/__init__.py"
 type: "code"
-community: "Router Init"
+community: "Backend"
 location: "L1"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/Router_Init
+  - community/Backend
 ---
 
 # __init__.py
 
-#graphify/code #graphify/EXTRACTED #community/Router_Init
+## Connections
+- [[strategies_base]] - `imports` [EXTRACTED]
+
+#graphify/code #graphify/EXTRACTED #community/Backend

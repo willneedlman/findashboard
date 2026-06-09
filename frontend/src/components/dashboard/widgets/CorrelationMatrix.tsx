@@ -5,9 +5,9 @@ import type { WidgetConfig } from '../../../hooks/useDashboard'
 import { useTheme } from '../../../contexts/ThemeContext'
 
 const T = {
-  bg: 'var(--theme-bg, #101c2e)', border: 'rgba(255,255,255,0.08)', headerBg: 'var(--theme-surface, #0d1826)',
-  gold: 'var(--theme-primary, #c9a84c)', text: '#d7e3fc', muted: 'var(--theme-secondary, #5e768f)', dim: '#3a4d62',
-  mono: 'JetBrains Mono, monospace',
+  bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))', headerBg: 'var(--theme-surface, #0d1826)',
+  gold: 'var(--theme-primary, #c9a84c)', text: 'var(--theme-text, #d7e3fc)', muted: 'var(--theme-secondary, #5e768f)', dim: '#3a4d62',
+  mono: 'var(--theme-mono)',
   pos: '#22C55E', neg: '#EF4444',
 }
 
@@ -17,12 +17,7 @@ function hexToRgb(hex: string): [number, number, number] {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
 }
 
-const PERIODS = [
-  { label: '3M', days: 63 },
-  { label: '6M', days: 126 },
-  { label: '1Y', days: 252 },
-  { label: '3Y', days: 756 },
-]
+const PERIOD_OPTIONS = [63, 126, 252, 756]
 
 interface MatrixCell { row: string; col: string; value: number }
 interface MatrixResult { tickers: string[]; matrix: MatrixCell[] }
@@ -30,7 +25,8 @@ interface MatrixResult { tickers: string[]; matrix: MatrixCell[] }
 export default function CorrelationMatrix({ config }: { config: WidgetConfig }) {
   const { theme } = useTheme()
   const tickers = config.tickers?.length ? config.tickers : ['SPY', 'QQQ', 'TLT', 'GLD', 'BTC-USD']
-  const [periodIdx, setPeriodIdx] = useState(2)  // default 1Y
+  const periodDays = config.periodDays ?? 252
+  const periodIdx = [63, 126, 252, 756].indexOf(periodDays)
 
   // Theme-aware cell coloring
   const [pr, pg, pb] = hexToRgb(theme.primaryColor)    // diagonal
@@ -51,7 +47,7 @@ export default function CorrelationMatrix({ config }: { config: WidgetConfig }) 
   const today = new Date().toISOString().split('T')[0]
   const startDate = (() => {
     const d = new Date()
-    d.setDate(d.getDate() - PERIODS[periodIdx].days)
+    d.setDate(d.getDate() - periodDays)
     return d.toISOString().split('T')[0]
   })()
 
@@ -73,7 +69,7 @@ export default function CorrelationMatrix({ config }: { config: WidgetConfig }) 
   const tks = data?.tickers ?? tickers
 
   const shimmer: React.CSSProperties = {
-    background: 'linear-gradient(90deg, var(--theme-surface, #0d0d0d) 25%, rgba(255,255,255,0.05) 50%, var(--theme-surface, #0d0d0d) 75%)',
+    background: 'linear-gradient(90deg, var(--theme-surface, #0d0d0d) 25%, var(--theme-border-faint, var(--theme-border-faint, rgba(255,255,255,0.05))) 50%, var(--theme-surface, #0d0d0d) 75%)',
     backgroundSize: '200% 100%', animation: 'shimmer 2s infinite', borderRadius: 2,
   }
 
@@ -81,23 +77,6 @@ export default function CorrelationMatrix({ config }: { config: WidgetConfig }) 
     <div style={base}>
       <style>{`@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
 
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', background: T.headerBg, borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
-        <span style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: T.gold, letterSpacing: '0.08em' }}>CORRELATION</span>
-        <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted }}>return correlation · {tks.length} tickers</span>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 2, paddingRight: 26 }}>
-          {PERIODS.map((p, i) => (
-            <button key={p.label} onClick={() => setPeriodIdx(i)} style={{
-              fontFamily: T.mono, fontSize: 9, padding: '2px 6px', cursor: 'pointer', border: 'none',
-              background: i === periodIdx ? 'rgba(201,168,76,0.2)' : 'transparent',
-              color: i === periodIdx ? T.gold : T.muted,
-              outline: i === periodIdx ? `1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)` : '1px solid transparent',
-            }}>{p.label}</button>
-          ))}
-        </div>
-      </div>
-
-      {/* Matrix body */}
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '6px 8px', gap: 6 }}>
         {tickers.length < 2 ? (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

@@ -29,8 +29,18 @@ export interface WidgetConfig {
   period?: '1mo' | '3mo' | '6mo' | '1y'
   color?: string
   weights?: number[]
-  categories?: string[]  // global-macro: selected category keys
-  lookback?: number      // credit-spreads: days of history
+  categories?: string[]    // global-macro: selected category keys
+  lookback?: number        // credit-spreads: days of history
+  chartMode?: 'cumulative' | 'beta'         // portfolio-summary
+  periodDays?: number                      // correlation-matrix
+  visibleCols?: string[]                   // watchlist
+  newsExpand?: 'first' | 'all' | 'none'    // news-feed
+  visibleItems?: string[]                  // options-snapshot
+  targetDelta?: number                     // delta-target
+  expDays?: number                         // delta-target, options-pricer
+  optionType?: 'call' | 'put'              // delta-target, options-pricer
+  strike?: number                          // options-pricer
+  vol?: number                             // options-pricer
 }
 
 export interface StoredDashboard {

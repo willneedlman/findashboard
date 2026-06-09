@@ -9,12 +9,12 @@ import ExportPdfButton from '../components/ExportPdfButton'
 const T = {
   bg:      'var(--theme-bg, #101c2e)',
   surface: 'var(--theme-surface, #0d1826)',
-  border:  'rgba(255,255,255,0.08)',
+  border:  'var(--theme-border, rgba(255,255,255,0.08))',
   gold:    'var(--theme-primary, #c9a84c)',
   muted:   'var(--theme-secondary, #5e768f)',
-  text:    '#d7e3fc',
-  mono:    'JetBrains Mono, monospace',
-  label:   'IBM Plex Sans, sans-serif',
+  text:    'var(--theme-text, #d7e3fc)',
+  mono:    'var(--theme-mono)',
+  label:   'var(--theme-sans)',
   pos:     '#22c55e',
   neg:     '#ef4444',
 }
@@ -75,7 +75,7 @@ function StatCell({ label, benchmark, value, change, isVix, last }: { label: str
   )
 }
 
-export default function CreditSpreads() {
+export function CreditSpreadsContent() {
   const [lookback, setLookback] = useState(365)
   const [showVix, setShowVix] = useState(true)
   const [activeKeys, setActiveKeys] = useState<Set<ViewKey>>(new Set(['ig_oas', 'hy_oas']))
@@ -113,13 +113,12 @@ export default function CreditSpreads() {
   const tabBtn = (active: boolean): React.CSSProperties => ({
     fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
     textTransform: 'uppercase', padding: '4px 12px', cursor: 'pointer',
-    background: active ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 15%, transparent)' : 'rgba(255,255,255,0.04)',
+    background: active ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 15%, transparent)' : 'var(--theme-hover, rgba(255,255,255,0.04))',
     border: `1px solid ${active ? T.gold : T.border}`,
     color: active ? T.gold : T.muted,
   })
 
   return (
-    <PageWrapper>
       <div id="credit-spreads-content" style={{ maxWidth: 1100, margin: '0 auto' }}>
         <PageHeader
           title="Credit Spread Monitor"
@@ -188,11 +187,11 @@ export default function CreditSpreads() {
           {data && (
             <ResponsiveContainer width="100%" height={320}>
               <LineChart data={chartData} margin={{ left: 0, right: 40, top: 4, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--theme-hover, rgba(255,255,255,0.04))" />
                 <XAxis dataKey="date" tick={{ fontFamily: T.mono, fontSize: 8, fill: T.muted }} tickLine={false} axisLine={false} tickFormatter={v => v.slice(0, 7)} interval="preserveStartEnd" />
                 <YAxis yAxisId="spread" tickFormatter={v => `${v}`} tick={{ fontFamily: T.mono, fontSize: 8, fill: T.muted }} tickLine={false} axisLine={false} label={{ value: 'OAS (bps)', angle: -90, position: 'insideLeft', fill: T.muted, fontSize: 8, fontFamily: T.mono }} />
                 {showVix && <YAxis yAxisId="vix" orientation="right" tickFormatter={v => `${v}`} tick={{ fontFamily: T.mono, fontSize: 8, fill: T.gold }} tickLine={false} axisLine={false} />}
-                <Tooltip cursor={{ stroke: 'rgba(255,255,255,0.06)', strokeWidth: 1 }} contentStyle={{ background: T.surface, border: `1px solid rgba(201,168,76,0.25)`, fontFamily: T.mono, fontSize: 10, padding: '8px 10px' }} labelStyle={{ color: T.gold, fontFamily: T.label, fontWeight: 700 }} formatter={(v: number, name: string) => [`${v.toFixed(2)}${name === 'vix' ? '' : ' bps'}`, name.toUpperCase()]} />
+                <Tooltip cursor={{ stroke: 'var(--theme-border, rgba(255,255,255,0.06))', strokeWidth: 1 }} contentStyle={{ background: T.surface, border: `1px solid rgba(201,168,76,0.25)`, fontFamily: T.mono, fontSize: 10, padding: '8px 10px' }} labelStyle={{ color: T.gold, fontFamily: T.label, fontWeight: 700 }} formatter={(v: number, name: string) => [`${v.toFixed(2)}${name === 'vix' ? '' : ' bps'}`, name.toUpperCase()]} />
                 {OVERLAY_KEYS.filter(k => activeKeys.has(k)).map(k => (
                   <Line key={k} yAxisId="spread" type="monotone" dataKey={k} stroke={SERIES_COLORS[k]} strokeWidth={1.5} dot={false} name={k} connectNulls />
                 ))}
@@ -223,6 +222,9 @@ export default function CreditSpreads() {
           </div>
         </div>
       </div>
-    </PageWrapper>
   )
+}
+
+export default function CreditSpreads() {
+  return <PageWrapper><CreditSpreadsContent /></PageWrapper>
 }

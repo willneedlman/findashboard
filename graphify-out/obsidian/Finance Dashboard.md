@@ -1,19 +1,18 @@
 ---
 source_file: "requirements.txt"
-type: "concept"
-community: "Backend Dependencies & Config"
+type: "code"
+community: "Group 7"
+location: "None"
 tags:
-  - graphify/concept
-  - graphify/INFERRED
-  - community/Backend_Dependencies__Config
+  - graphify/code
+  - graphify/EXTRACTED
+  - community/Group_7
 ---
 
 # Finance Dashboard
 
 ## Connections
-- [[FastAPI]] - `references` [INFERRED]
-- [[Finance Terminal]] - `conceptually_related_to` [INFERRED]
-- [[Plotly]] - `references` [INFERRED]
-- [[Streamlit]] - `references` [INFERRED]
+- [[requirements_streamlit]] - `references` [INFERRED]
+- [[requirements_plotly]] - `references` [INFERRED]
 
-#graphify/concept #graphify/INFERRED #community/Backend_Dependencies__Config
+#graphify/code #graphify/EXTRACTED #community/Group_7

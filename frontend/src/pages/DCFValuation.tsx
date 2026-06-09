@@ -8,6 +8,7 @@ import SidebarLayout from '../components/SidebarLayout'
 import axios from 'axios'
 import EmptyState from '../components/EmptyState'
 import { useChartColors } from '../hooks/useChartColors'
+import useIsMobile from '../hooks/useIsMobile'
 function fmtM(v: number) {
   const abs = Math.abs(v)
   if (abs >= 1_000_000) return `$${(v / 1_000_000).toFixed(2)}T`
@@ -77,8 +78,8 @@ function computeDCF(
 }
 
 const INPUT: React.CSSProperties = {
-  background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: '#d7e3fc',
-  fontFamily: 'JetBrains Mono, monospace', fontSize: 12, padding: '5px 8px',
+  background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: 'var(--theme-text, #d7e3fc)',
+  fontFamily: 'var(--theme-mono)', fontSize: 12, padding: '5px 8px',
   width: '100%', outline: 'none', boxSizing: 'border-box',
 }
 const LABEL: React.CSSProperties = {
@@ -86,16 +87,16 @@ const LABEL: React.CSSProperties = {
   textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', marginBottom: 4, display: 'block',
 }
 const TOOLTIP_STYLE = { background: 'var(--theme-surface, #142032)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', borderRadius: 0 }
-const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'JetBrains Mono, monospace' }
+const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'var(--theme-mono)' }
 
 function ChartPanel({ label, height, children }: { label: string; height: number; children: React.ReactNode }) {
   return (
-    <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)', position: 'relative' }}>
+    <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', position: 'relative' }}>
       <div style={{
         position: 'absolute', top: 0, left: 0, zIndex: 10,
         background: 'rgba(46,57,77,0.8)', padding: '3px 8px',
-        borderRight: '1px solid rgba(255,255,255,0.08)', borderBottom: '1px solid rgba(255,255,255,0.08)',
-        fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#d7e3fc',
+        borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
+        fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)',
       }}>
         {label}
       </div>
@@ -107,6 +108,7 @@ function ChartPanel({ label, height, children }: { label: string; height: number
 }
 
 export default function DCFValuation() {
+  const isMobile = useIsMobile()
   const cc = useChartColors()
   const [searchParams, setSearchParams] = useSearchParams()
   const [ticker, setTickerRaw] = useState(searchParams.get('ticker') || 'AAPL')
@@ -114,6 +116,7 @@ export default function DCFValuation() {
   const [fetching, setFetching] = useState(false)
   const [aiSuggesting, setAiSuggesting] = useState(false)
   const [aiRationale, setAiRationale] = useState<{ growth: string; margin: string; wacc: string } | null>(null)
+  const [aiSuggested, setAiSuggested] = useState<Partial<typeof p> | null>(null)
   const [p, setP] = useState({
     revenue: 0, op_margin: 15, target_margin: 15, rev_growth_1: 15, rev_growth_2: 10, rev_growth_3: 5,
     wacc: 9, terminal_growth: 2.5, shares: 100, net_debt: 0,
@@ -202,6 +205,7 @@ export default function DCFValuation() {
   const aiSuggest = async () => {
     setAiSuggesting(true)
     setAiRationale(null)
+    setAiSuggested(null)
     try {
       const { data: f } = await axios.get(`/api/dcf/fundamentals?ticker=${ticker}`)
       const { data: r } = await axios.post('/api/ai/dcf-assumptions', {
@@ -209,25 +213,31 @@ export default function DCFValuation() {
         rev_growth: p.rev_growth_1 || f.rev_growth, beta: f.beta ?? 1, sector: f.sector ?? '',
         wacc: p.wacc,
       })
-      setP(prev => ({
-        ...prev,
-        rev_growth_1: r.rev_growth_1 ?? prev.rev_growth_1,
-        rev_growth_2: r.rev_growth_2 ?? prev.rev_growth_2,
-        rev_growth_3: r.rev_growth_3 ?? prev.rev_growth_3,
-        target_margin: r.target_margin ?? prev.target_margin,
-        wacc: r.wacc ?? prev.wacc,
-        terminal_growth: r.terminal_growth ?? prev.terminal_growth,
-      }))
+      const suggested: Partial<typeof p> = {}
+      if (r.rev_growth_1   != null) suggested.rev_growth_1   = r.rev_growth_1
+      if (r.rev_growth_2   != null) suggested.rev_growth_2   = r.rev_growth_2
+      if (r.rev_growth_3   != null) suggested.rev_growth_3   = r.rev_growth_3
+      if (r.target_margin  != null) suggested.target_margin  = r.target_margin
+      if (r.wacc           != null) suggested.wacc           = r.wacc
+      if (r.terminal_growth != null) suggested.terminal_growth = r.terminal_growth
+      setAiSuggested(suggested)
       if (r.rationale) setAiRationale(r.rationale)
     } catch (e) { console.error('AI suggest failed:', e) }
     setAiSuggesting(false)
+  }
+
+  const applyAiSuggestions = () => {
+    if (!aiSuggested) return
+    setP(prev => ({ ...prev, ...aiSuggested }))
+    setAiSuggested(null)
+    setAiRationale(null)
   }
 
   const set = (k: keyof typeof p) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setP(prev => ({ ...prev, [k]: +e.target.value }))
 
   const focus = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')
-  const blur  = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = 'rgba(255,255,255,0.10)')
+  const blur  = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = 'var(--theme-border, rgba(255,255,255,0.10))')
 
   const upside = data?.market_price && data.intrinsic_per_share
     ? (data.intrinsic_per_share / data.market_price - 1) * 100 : null
@@ -242,7 +252,7 @@ export default function DCFValuation() {
 
         {/* Left sidebar */}
 
-          <div style={{ padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'var(--theme-surface, #142032)' }}>
+          <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)' }}>
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#ffffff' }}>
               Model Inputs
             </div>
@@ -255,7 +265,7 @@ export default function DCFValuation() {
               <input style={INPUT} value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())}
                 onFocus={focus} onBlur={blur} placeholder="AAPL" />
               <button onClick={autoFill} disabled={fetching} style={{
-                marginTop: 6, width: '100%', background: 'var(--theme-surface, #1f2a3d)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--theme-secondary, #99907e)',
+                marginTop: 6, width: '100%', background: 'var(--theme-surface, #1f2a3d)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', color: 'var(--theme-secondary, #99907e)',
                 fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em',
                 textTransform: 'uppercase', padding: '5px 0', cursor: fetching ? 'default' : 'pointer',
                 opacity: fetching ? 0.6 : 1,
@@ -271,18 +281,70 @@ export default function DCFValuation() {
               }}>
                 {aiSuggesting ? '⟳ AI Analyzing…' : '⬢ AI Suggest Assumptions'}
               </button>
-              {aiRationale && (
+              {aiSuggested && (() => {
+                const LABELS: Record<string, string> = {
+                  rev_growth_1: 'Yr 1–3 Growth %', rev_growth_2: 'Yr 4–7 Growth %',
+                  rev_growth_3: 'Yr 8–10 Growth %', target_margin: 'Target Margin %',
+                  wacc: 'WACC %', terminal_growth: 'Terminal Growth %',
+                }
+                const changes = Object.entries(aiSuggested) as [keyof typeof p, number][]
+                return (
+                  <div style={{ marginTop: 6, background: 'rgba(201,168,76,0.05)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', padding: '8px' }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)', marginBottom: 6 }}>
+                      ⬢ AI Suggestions
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
+                      {changes.map(([k, v]) => (
+                        <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, fontFamily: 'var(--theme-mono)' }}>
+                          <span style={{ color: 'var(--theme-secondary, #99907e)' }}>{LABELS[k] ?? k}</span>
+                          <span>
+                            <span style={{ color: 'var(--theme-text-dim, rgba(255,255,255,0.3))', textDecoration: 'line-through', marginRight: 6 }}>{p[k]}</span>
+                            <span style={{ color: v > (p[k] as number) ? '#22c55e' : '#f87171', fontWeight: 700 }}>{v}</span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    {aiRationale && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 8, paddingTop: 6, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.06))' }}>
+                        {Object.entries(aiRationale).map(([k, v]) => (
+                          <div key={k} style={{ fontSize: 8, color: 'var(--theme-secondary, #99907e)', lineHeight: '12px' }}>
+                            <span style={{ color: 'var(--theme-primary, #c9a84c)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{k}: </span>{v as string}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button onClick={applyAiSuggestions} style={{
+                        flex: 1, padding: '5px 0', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
+                        textTransform: 'uppercase', fontFamily: 'inherit', cursor: 'pointer',
+                        background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)',
+                        border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)',
+                      }}>
+                        Apply Changes
+                      </button>
+                      <button onClick={() => { setAiSuggested(null); setAiRationale(null) }} style={{
+                        flex: 1, padding: '5px 0', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
+                        textTransform: 'uppercase', fontFamily: 'inherit', cursor: 'pointer',
+                        background: 'transparent', border: '1px solid var(--theme-text-subtle, rgba(255,255,255,0.12))', color: 'var(--theme-text-dim, rgba(255,255,255,0.35))',
+                      }}>
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                )
+              })()}
+              {!aiSuggested && aiRationale && (
                 <div style={{ marginTop: 6, background: 'rgba(201,168,76,0.05)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 25%, transparent)', padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {Object.entries(aiRationale).map(([k, v]) => (
                     <div key={k} style={{ fontSize: 9, color: 'var(--theme-secondary, #99907e)', lineHeight: '13px' }}>
-                      <span style={{ color: 'var(--theme-primary, #c9a84c)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{k}: </span>{v}
+                      <span style={{ color: 'var(--theme-primary, #c9a84c)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{k}: </span>{v as string}
                     </div>
                   ))}
                 </div>
               )}
             </div>
 
-            <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
               {([
                 ['Base Revenue ($M)', 'revenue', 1000],
                 ['Op. Margin % (Current)', 'op_margin', 0.5],
@@ -302,7 +364,7 @@ export default function DCFValuation() {
               ))}
             </div>
 
-            <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
               {([
                 ['Yr 1–3 Growth %', 'rev_growth_1', 0.5],
                 ['Yr 4–7 Growth %', 'rev_growth_2', 0.5],
@@ -319,9 +381,9 @@ export default function DCFValuation() {
             </div>
           </div>
 
-          <div style={{ padding: 10, borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ padding: 10, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', display: 'flex', flexDirection: 'column', gap: 6 }}>
             <button onClick={() => calculate()} disabled={isPending} style={{
-              width: '100%', background: isPending ? 'rgba(255,255,255,0.04)' : 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)',
+              width: '100%', background: isPending ? 'var(--theme-hover, rgba(255,255,255,0.04))' : 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)',
               border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)',
               fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
               textTransform: 'uppercase', padding: '8px 0', cursor: isPending ? 'default' : 'pointer',
@@ -329,7 +391,7 @@ export default function DCFValuation() {
             }}>
               {isPending ? '⟳ Running…' : '⬢ Run DCF Model'}
             </button>
-            {isError && <div style={{ fontSize: 9, color: '#ef4444', textAlign: 'center', fontFamily: 'IBM Plex Sans, sans-serif' }}>Server unavailable — is the backend running?</div>}
+            {isError && <div style={{ fontSize: 9, color: '#ef4444', textAlign: 'center', fontFamily: 'var(--theme-sans)' }}>Server unavailable — is the backend running?</div>}
           </div>
 
       {/* Right panel */}
@@ -353,7 +415,7 @@ export default function DCFValuation() {
                 </div>
               )}
               {/* Summary metrics */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${isMobile ? 2 : 5},1fr)`, gap: 8 }}>
                 <MetricCard label="Enterprise Value" value={fmtM(data.enterprise_value)} />
                 <MetricCard label="Equity Value" value={fmtM(data.equity_value)} />
                 <MetricCard label="Intrinsic / Share" value={`$${data.intrinsic_per_share.toLocaleString()}`} />
@@ -368,15 +430,15 @@ export default function DCFValuation() {
               </div>
 
               {/* Summary sub-line */}
-              <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)', padding: '8px 12px', display: 'flex', gap: 20 }}>
+              <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '8px 12px', display: 'flex', gap: 20 }}>
                 {[
                   ['Terminal Value', fmtM(data.terminal_value)],
                   ['PV of FCFs', fmtM(data.pv_fcfs)],
                   ['Terminal % of EV', data.enterprise_value > 0 ? `${(data.terminal_value / data.enterprise_value * 100).toFixed(1)}%` : '—'],
                 ].map(([label, val]) => (
                   <div key={label}>
-                    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.22)' }}>{label}</span>
-                    <span style={{ marginLeft: 8, fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#d7e3fc' }}>{val}</span>
+                    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-text-faint, rgba(255,255,255,0.22))' }}>{label}</span>
+                    <span style={{ marginLeft: 8, fontFamily: 'var(--theme-mono)', fontSize: 12, color: 'var(--theme-text, #d7e3fc)' }}>{val}</span>
                   </div>
                 ))}
               </div>
@@ -389,9 +451,9 @@ export default function DCFValuation() {
                     <XAxis dataKey="year" tick={TICK} tickFormatter={y => `Y${y}`} />
                     <YAxis yAxisId="rev" orientation="left"  tick={TICK} tickFormatter={v => `$${(v / 1000).toFixed(0)}B`} width={44} />
                     <YAxis yAxisId="fcf" orientation="right" tick={TICK} tickFormatter={v => fmtM(v)} width={56} />
-                    <Tooltip formatter={(v: number, name: string) => [fmtM(v), name]} contentStyle={cc.tooltipStyle} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+                    <Tooltip formatter={(v: number, name: string) => [fmtM(v), name]} contentStyle={cc.tooltipStyle} cursor={{ fill: 'var(--theme-hover, rgba(255,255,255,0.04))' }} />
                     <Legend wrapperStyle={{ fontSize: 10 }} />
-                    <ReferenceLine yAxisId="fcf" y={0} stroke="rgba(255,255,255,0.15)" />
+                    <ReferenceLine yAxisId="fcf" y={0} stroke="var(--theme-text-faint, rgba(255,255,255,0.15))" />
                     <Bar yAxisId="rev" dataKey="revenue" name="Revenue" fill={cc.c2} opacity={0.55} />
                     <Line yAxisId="fcf" type="monotone" dataKey="fcf"    name="Free Cash Flow" stroke={cc.gain}    strokeWidth={2} dot={{ r: 3, fill: cc.gain }}    activeDot={{ r: 5 }} />
                     <Line yAxisId="fcf" type="monotone" dataKey="pv_fcf" name="PV of FCF"      stroke={cc.primary} strokeWidth={2} dot={{ r: 3, fill: cc.primary }} activeDot={{ r: 5 }} strokeDasharray="4 2" />
@@ -401,27 +463,27 @@ export default function DCFValuation() {
 
               {/* Sensitivity heatmap */}
               {data.sensitivity && data.gDeltas && (
-                <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
                   <div style={{
-                    padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'var(--theme-surface, #142032)',
+                    padding: '8px 12px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)',
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                   }}>
                     <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#ffffff' }}>
                       Sensitivity — Yr 1–3 Growth × {data.isPreProfit ? 'Target Margin (Yr 10)' : 'Operating Margin'}
                     </span>
-                    <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', letterSpacing: '0.08em' }}>Intrinsic $/share</span>
+                    <span style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', letterSpacing: '0.08em' }}>Intrinsic $/share</span>
                   </div>
                   <div style={{ padding: 16, overflowX: 'auto' }}>
                     <table style={{ borderSpacing: 3, borderCollapse: 'separate', margin: '0 auto' }}>
                       <thead>
                         <tr>
-                          <th style={{ paddingRight: 12, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.22)', textAlign: 'right', paddingBottom: 8 }}>
+                          <th style={{ paddingRight: 12, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', textAlign: 'right', paddingBottom: 8 }}>
                             Growth ↓ / Margin →
                           </th>
                           {data.mDeltas.map((md: number, mi: number) => {
                             const m = Math.round((data.baseMargin + md) * 10) / 10
                             return (
-                              <th key={mi} style={{ paddingLeft: 3, paddingRight: 3, paddingBottom: 8, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', textAlign: 'center', color: md === 0 ? 'var(--theme-primary, #c9a84c)' : 'rgba(255,255,255,0.18)' }}>
+                              <th key={mi} style={{ paddingLeft: 3, paddingRight: 3, paddingBottom: 8, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', textAlign: 'center', color: md === 0 ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-text-faint, rgba(255,255,255,0.18))' }}>
                                 {m.toFixed(1)}%
                               </th>
                             )
@@ -433,7 +495,7 @@ export default function DCFValuation() {
                           const g = Math.round((data.baseGrowth + gd) * 10) / 10
                           return (
                             <tr key={gi}>
-                              <td style={{ paddingRight: 12, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', textAlign: 'right', paddingTop: 2, paddingBottom: 2, color: gd === 0 ? 'var(--theme-primary, #c9a84c)' : 'rgba(255,255,255,0.18)' }}>
+                              <td style={{ paddingRight: 12, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', textAlign: 'right', paddingTop: 2, paddingBottom: 2, color: gd === 0 ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-text-faint, rgba(255,255,255,0.18))' }}>
                                 {g.toFixed(1)}%
                               </td>
                               {data.mDeltas.map((_: number, mi: number) => {
@@ -444,7 +506,7 @@ export default function DCFValuation() {
                                     <div style={{
                                       width: 64, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
                                       background: heatColor(v, sensiMin, sensiMax), color: '#dce3ed',
-                                      fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 600,
+                                      fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 600,
                                     }}>
                                       {v >= 0 ? `$${v.toFixed(0)}` : `$${v.toFixed(0)}`}
                                     </div>

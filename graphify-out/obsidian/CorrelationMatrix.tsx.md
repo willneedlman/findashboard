@@ -1,26 +1,24 @@
 ---
 source_file: "frontend/src/pages/CorrelationMatrix.tsx"
 type: "code"
-community: "Correlation Matrix"
-location: "L1"
+community: "Frontend"
+location: "None"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/Correlation_Matrix
+  - community/Frontend
 ---
 
 # CorrelationMatrix.tsx
 
 ## Connections
-- [[App.tsx]] - `imports_from` [EXTRACTED]
-- [[CorrRequest]] - `references` [EXTRACTED]
-- [[INPUT_2]] - `contains` [EXTRACTED]
-- [[LABEL_2]] - `contains` [EXTRACTED]
-- [[PageWrapper.tsx]] - `imports_from` [EXTRACTED]
-- [[cellBg()]] - `contains` [EXTRACTED]
-- [[cellText()]] - `contains` [EXTRACTED]
-- [[correlation.py]] - `contains` [EXTRACTED]
-- [[fetchCorrelation()]] - `imports` [EXTRACTED]
-- [[useApi.ts]] - `imports_from` [EXTRACTED]
+- [[frontend_src_pages_correlationmatrix_tsx_correlationmatrix]] - `defines` [EXTRACTED]
+- [[components_pagewrapper]] - `imports` [EXTRACTED]
+- [[components_sidebarlayout]] - `imports` [EXTRACTED]
+- [[hooks_useapi]] - `imports` [EXTRACTED]
+- [[components_emptystate]] - `imports` [EXTRACTED]
+- [[components_tickertaginput]] - `imports` [EXTRACTED]
+- [[components_portfolioio]] - `imports` [EXTRACTED]
+- [[contexts_themecontext]] - `imports` [EXTRACTED]
 
-#graphify/code #graphify/EXTRACTED #community/Correlation_Matrix
+#graphify/code #graphify/EXTRACTED #community/Frontend

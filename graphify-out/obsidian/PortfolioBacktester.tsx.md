@@ -1,28 +1,28 @@
 ---
 source_file: "frontend/src/pages/PortfolioBacktester.tsx"
 type: "code"
-community: "Strategy Selector Component"
-location: "L1"
+community: "Frontend"
+location: "None"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/Strategy_Selector_Component
+  - community/Frontend
 ---
 
 # PortfolioBacktester.tsx
 
 ## Connections
-- [[App.tsx]] - `imports_from` [EXTRACTED]
-- [[ChartPanel()_9]] - `contains` [EXTRACTED]
-- [[DEFAULTS]] - `contains` [EXTRACTED]
-- [[INPUT_11]] - `contains` [EXTRACTED]
-- [[LABEL_10]] - `contains` [EXTRACTED]
-- [[MetricCard.tsx]] - `imports_from` [EXTRACTED]
-- [[PageWrapper.tsx]] - `imports_from` [EXTRACTED]
-- [[STRATEGIES]] - `imports` [EXTRACTED]
-- [[StrategyParams]] - `imports` [EXTRACTED]
-- [[StrategySelector.tsx]] - `imports_from` [EXTRACTED]
-- [[TICK_10]] - `contains` [EXTRACTED]
-- [[TOOLTIP_STYLE_11]] - `contains` [EXTRACTED]
+- [[frontend_src_pages_portfoliobacktester_tsx_portfoliobacktester]] - `defines` [EXTRACTED]
+- [[components_pagewrapper]] - `imports` [EXTRACTED]
+- [[components_metriccard]] - `imports` [EXTRACTED]
+- [[hooks_usechartcolors]] - `imports` [EXTRACTED]
+- [[components_strategyselector]] - `imports` [EXTRACTED]
+- [[components_charttooltip]] - `imports` [EXTRACTED]
+- [[components_charttooltip]] - `imports` [EXTRACTED]
+- [[components_sidebarlayout]] - `imports` [EXTRACTED]
+- [[components_emptystate]] - `imports` [EXTRACTED]
+- [[components_portfolioio]] - `imports` [EXTRACTED]
+- [[contexts_portfoliocontext]] - `imports` [EXTRACTED]
+- [[components_helptip]] - `imports` [EXTRACTED]
 
-#graphify/code #graphify/EXTRACTED #community/Strategy_Selector_Component
+#graphify/code #graphify/EXTRACTED #community/Frontend

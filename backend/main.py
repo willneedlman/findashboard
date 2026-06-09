@@ -18,11 +18,20 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from routers import market, options, bond, portfolio, nav, corporate, rates, correlation, dcf, probability, strategy, users, screener, filings, lob, trading, algo, ai, sentiment
+from routers import market, options, bond, portfolio, nav, corporate, rates, correlation, dcf, probability, strategy, users, screener, filings, lob, trading, algo, ai, sentiment, alerts, regression, paper_strategies
+from contextlib import asynccontextmanager
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
-app = FastAPI(title="Finance Terminal API", version="2.0.0")
+
+@asynccontextmanager
+async def lifespan(app):
+    alerts.start_evaluation_loop()
+    yield
+    alerts.stop_evaluation_loop()
+
+
+app = FastAPI(title="Finance Terminal API", version="2.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -67,6 +76,9 @@ app.include_router(trading.router,    prefix="/api/trading",     tags=["trading"
 app.include_router(algo.router,       prefix="/api/algo",        tags=["algo"])
 app.include_router(ai.router,         prefix="/api/ai",          tags=["ai"])
 app.include_router(sentiment.router,  prefix="/api/sentiment",   tags=["sentiment"])
+app.include_router(alerts.router,      prefix="/api/alerts",      tags=["alerts"])
+app.include_router(regression.router,       prefix="/api/regression",        tags=["regression"])
+app.include_router(paper_strategies.router, prefix="/api/paper-strategies",  tags=["paper-strategies"])
 
 @app.get("/api/health")
 def health():

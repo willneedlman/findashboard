@@ -1,25 +1,22 @@
 ---
 source_file: "frontend/src/pages/ImpliedProbability.tsx"
 type: "code"
-community: "App Layout & Navigation"
-location: "L1"
+community: "Frontend"
+location: "None"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/App_Layout__Navigation
+  - community/Frontend
 ---
 
 # ImpliedProbability.tsx
 
 ## Connections
-- [[App.tsx]] - `imports_from` [EXTRACTED]
-- [[ChartPanel()_3]] - `contains` [EXTRACTED]
-- [[INPUT_4]] - `contains` [EXTRACTED]
-- [[LABEL_4]] - `contains` [EXTRACTED]
-- [[MetricCard()_3]] - `contains` [EXTRACTED]
-- [[PageWrapper.tsx]] - `imports_from` [EXTRACTED]
-- [[SectionHeader()]] - `contains` [EXTRACTED]
-- [[TICK_3]] - `contains` [EXTRACTED]
-- [[TOOLTIP_STYLE_3]] - `contains` [EXTRACTED]
+- [[frontend_src_pages_impliedprobability_tsx_impliedprobabilitycontent]] - `defines` [EXTRACTED]
+- [[frontend_src_pages_impliedprobability_tsx_impliedprobability]] - `defines` [EXTRACTED]
+- [[components_pagewrapper]] - `imports` [EXTRACTED]
+- [[components_sidebarlayout]] - `imports` [EXTRACTED]
+- [[components_emptystate]] - `imports` [EXTRACTED]
+- [[hooks_usechartcolors]] - `imports` [EXTRACTED]
 
-#graphify/code #graphify/EXTRACTED #community/App_Layout__Navigation
+#graphify/code #graphify/EXTRACTED #community/Frontend

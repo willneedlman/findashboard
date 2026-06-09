@@ -17,8 +17,8 @@ import axios from 'axios'
 const INPUT: React.CSSProperties = {
   background: 'var(--theme-bg, #0a1628)',
   border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)',
-  color: '#d7e3fc',
-  fontFamily: 'JetBrains Mono, monospace',
+  color: 'var(--theme-text, #d7e3fc)',
+  fontFamily: 'var(--theme-mono)',
   fontSize: 12,
   padding: '5px 8px',
   width: '100%',
@@ -44,10 +44,10 @@ const TOOLTIP_STYLE = {
   background: 'var(--theme-surface, #142032)',
   border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)',
   borderRadius: 0,
-  fontFamily: 'JetBrains Mono, monospace',
+  fontFamily: 'var(--theme-mono)',
   fontSize: 11,
 }
-const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'JetBrains Mono, monospace' }
+const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'var(--theme-mono)' }
 
 // ── Math helpers ──────────────────────────────────────────────────────────────
 
@@ -142,6 +142,8 @@ function runSimulation(params: SimParams): SimResult {
   const allPaths: number[][] = []
   // cumulative hedge pnl per step, accumulated across sims
   const cumHedgePnlSum: number[] = new Array(totalSteps + 1).fill(0)
+  // Track realized gamma P&L separately: sum(0.5 * Gamma * dS²) — always positive, grows with RV
+  const cumGammaPnlSum: number[] = new Array(totalSteps + 1).fill(0)
 
 
   for (let sim = 0; sim < nSims; sim++) {
@@ -151,9 +153,11 @@ function runSimulation(params: SimParams): SimResult {
     let stradDelta = callDelta + putDelta
 
     let cumulativeHedgePnl = 0
+    let cumulativeGammaPnl = 0
     const pathPnls: number[] = [0]
 
     for (let step = 1; step <= totalSteps; step++) {
+      const T_prev = Math.max(T0 - (step - 1) * dt, 1e-8)
       const T_remain = Math.max(T0 - step * dt, 1e-8)
       const S_old = S
       S = S * Math.exp((r - 0.5 * sigma_rv * sigma_rv) * dt + sigma_rv * Math.sqrt(dt) * rand(state))
@@ -164,12 +168,17 @@ function runSimulation(params: SimParams): SimResult {
 
       const dS = S - S_old
       // P&L from holding the short-delta stock hedge while price moved by dS.
-      // Rebalancing itself is frictionless — no P&L on the trade.
       cumulativeHedgePnl += -stradDelta * dS
+
+      // Realized gamma scalping P&L: 0.5 × Gamma × dS² (convexity gain, independent of direction)
+      const gamma = bsGamma(S_old, K, T_prev, r, sigma_iv)
+      cumulativeGammaPnl += 0.5 * gamma * dS * dS
+
       stradDelta = newStradDelta
 
       pathPnls.push(cumulativeHedgePnl)
       cumHedgePnlSum[step] += cumulativeHedgePnl
+      cumGammaPnlSum[step] += cumulativeGammaPnl
     }
 
     const intrinsic = Math.abs(S - K)
@@ -195,17 +204,18 @@ function runSimulation(params: SimParams): SimResult {
     return raw.map((pnl, day) => ({ day, pnl: position === 'Long Gamma' ? pnl : -pnl }))
   })
 
-  // Average cumulative hedge pnl per step, resampled to day granularity
+  // Average cumulative realized gamma P&L (0.5×Γ×dS²) per step, resampled to day granularity.
+  // This is what the graph should show: convexity gains vs theta cost, both growing over time.
   const stepsPerDayActual = totalSteps / dte
   const avgHedgePnl: { day: number; hedgePnl: number; thetaCost: number }[] = []
   for (let d = 0; d <= dte; d++) {
     const step = Math.min(Math.round(d * stepsPerDayActual), totalSteps)
-    const avgH = cumHedgePnlSum[step] / nSims
+    const avgGamma = cumGammaPnlSum[step] / nSims
     const thetaAcc = -thetaBleedPerDay * d
     avgHedgePnl.push({
       day: d,
-      hedgePnl: position === 'Long Gamma' ? avgH : -avgH,
-      thetaCost: thetaAcc,
+      hedgePnl: position === 'Long Gamma' ? avgGamma : -avgGamma,
+      thetaCost: position === 'Long Gamma' ? thetaAcc : -thetaAcc,
     })
   }
 
@@ -248,7 +258,7 @@ function MetricCard({ label, value, sub, help }: { label: string; value: string;
   return (
     <div style={{
       background: 'var(--theme-surface, #142032)',
-      border: '1px solid rgba(255,255,255,0.07)',
+      border: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.07)))',
       borderTop: '2px solid var(--theme-primary, #c9a84c)',
       padding: '10px 12px',
       position: 'relative',
@@ -261,7 +271,7 @@ function MetricCard({ label, value, sub, help }: { label: string; value: string;
         </span>
         {help && (
           <span
-            style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', cursor: 'help' }}
+            style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', cursor: 'help' }}
             onMouseEnter={() => setShow(true)}
             onMouseLeave={() => setShow(false)}
           >ⓘ</span>
@@ -271,32 +281,32 @@ function MetricCard({ label, value, sub, help }: { label: string; value: string;
             position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)',
             marginBottom: 6, background: 'var(--theme-bg, #0a1628)',
             border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)',
-            padding: '6px 9px', width: 200, fontSize: 11, color: '#d7e3fc',
-            lineHeight: '15px', zIndex: 50, pointerEvents: 'none', fontFamily: 'JetBrains Mono, monospace',
+            padding: '6px 9px', width: 200, fontSize: 11, color: 'var(--theme-text, #d7e3fc)',
+            lineHeight: '15px', zIndex: 50, pointerEvents: 'none', fontFamily: 'var(--theme-mono)',
           }}>
             {help}
           </div>
         )}
       </div>
-      <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 20, fontWeight: 700, color: '#d7e3fc' }}>
+      <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 20, fontWeight: 700, color: 'var(--theme-text, #d7e3fc)' }}>
         {value}
       </div>
-      {sub && <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.28)', marginTop: 3, fontFamily: 'JetBrains Mono, monospace' }}>{sub}</div>}
+      {sub && <div style={{ fontSize: 10, color: 'var(--theme-text-dim, rgba(255,255,255,0.28))', marginTop: 3, fontFamily: 'var(--theme-mono)' }}>{sub}</div>}
     </div>
   )
 }
 
 function ChartPanel({ label, height, note, children }: { label: string; height: number; note?: string; children: React.ReactNode }) {
   return (
-    <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)', position: 'relative' }}>
+    <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', position: 'relative' }}>
       <div style={{
-        display: 'flex', alignItems: 'stretch', borderBottom: '1px solid rgba(255,255,255,0.08)',
+        display: 'flex', alignItems: 'stretch', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
         minHeight: 24, flexWrap: 'wrap',
       }}>
         <div style={{
           flex: 1, zIndex: 10,
           background: 'rgba(46,57,77,0.8)', padding: '3px 8px',
-          fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#d7e3fc',
+          fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)',
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         }}>
           {label}
@@ -304,8 +314,8 @@ function ChartPanel({ label, height, note, children }: { label: string; height: 
         {note && (
           <div style={{
             padding: '3px 8px', flexShrink: 0,
-            fontSize: 10, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.06em', zIndex: 10,
-            background: 'rgba(46,57,77,0.8)', borderLeft: '1px solid rgba(255,255,255,0.08)',
+            fontSize: 10, color: 'var(--theme-text-dim, rgba(255,255,255,0.35))', letterSpacing: '0.06em', zIndex: 10,
+            background: 'rgba(46,57,77,0.8)', borderLeft: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
             whiteSpace: 'nowrap',
           }}>
             {note}
@@ -322,19 +332,19 @@ function ChartPanel({ label, height, note, children }: { label: string; height: 
 function SectionHeader({ label }: { label: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, marginBottom: 2 }}>
-      <div style={{ height: 1, flex: 1, background: 'rgba(255,255,255,0.07)' }} />
+      <div style={{ height: 1, flex: 1, background: 'var(--theme-border, var(--theme-border, rgba(255,255,255,0.07)))' }} />
       <span style={{
         fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase',
-        color: 'rgba(255,255,255,0.22)', whiteSpace: 'nowrap',
+        color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', whiteSpace: 'nowrap',
       }}>{label}</span>
-      <div style={{ height: 1, flex: 1, background: 'rgba(255,255,255,0.07)' }} />
+      <div style={{ height: 1, flex: 1, background: 'var(--theme-border, var(--theme-border, rgba(255,255,255,0.07)))' }} />
     </div>
   )
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function GammaScalping() {
+export function GammaScalpingContent() {
   const cc = useChartColors()
 
   const [ticker, setTicker] = useState('SPY')
@@ -441,7 +451,7 @@ export default function GammaScalping() {
               background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)',
               border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)',
               color: 'var(--theme-primary, #c9a84c)',
-              fontFamily: 'JetBrains Mono, monospace',
+              fontFamily: 'var(--theme-mono)',
               fontSize: 11, padding: '5px 8px', cursor: fetching ? 'wait' : 'pointer',
             }}
           >
@@ -543,7 +553,7 @@ export default function GammaScalping() {
             : 'color-mix(in srgb, var(--theme-primary, #c9a84c) 22%, transparent)',
           border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 55%, transparent)',
           color: 'var(--theme-primary, #c9a84c)',
-          fontFamily: 'JetBrains Mono, monospace',
+          fontFamily: 'var(--theme-mono)',
           fontSize: 11, fontWeight: 700, letterSpacing: '0.1em',
           padding: '9px 0', cursor: mutation.isPending ? 'wait' : 'pointer',
           width: '100%', textAlign: 'center',
@@ -561,14 +571,13 @@ export default function GammaScalping() {
   )
 
   return (
-    <PageWrapper>
-      <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div style={{
-          display: 'flex', alignItems: 'baseline', gap: 10, borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: 10,
+          display: 'flex', alignItems: 'baseline', gap: 10, borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.06))', paddingBottom: 10,
         }}>
           <h1 style={{
-            fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 700,
-            letterSpacing: '0.14em', textTransform: 'uppercase', color: '#d7e3fc', margin: 0,
+            fontFamily: 'var(--theme-mono)', fontSize: 14, fontWeight: 700,
+            letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)', margin: 0,
           }}>
             Gamma Scalping Simulator
           </h1>
@@ -632,7 +641,7 @@ export default function GammaScalping() {
                     <YAxis tick={TICK} width={28} />
                     <Tooltip
                       contentStyle={TOOLTIP_STYLE}
-                      labelStyle={{ color: '#d7e3fc', fontSize: 11 }}
+                      labelStyle={{ color: 'var(--theme-text, #d7e3fc)', fontSize: 11 }}
                       labelFormatter={v => `P&L: $${Number(v).toFixed(2)}`}
                       formatter={(v: number) => [v, 'Paths']}
                     />
@@ -651,11 +660,11 @@ export default function GammaScalping() {
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={pathData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                     <CartesianGrid stroke={cc.gridLine} />
-                    <XAxis dataKey="day" tick={TICK} label={{ value: 'Day', position: 'insideRight', offset: -4, fill: 'rgba(255,255,255,0.22)', fontSize: 9 }} />
+                    <XAxis dataKey="day" tick={TICK} label={{ value: 'Day', position: 'insideRight', offset: -4, fill: 'var(--theme-text-faint, rgba(255,255,255,0.22))', fontSize: 9 }} />
                     <YAxis tick={TICK} width={40} tickFormatter={v => `$${v.toFixed(0)}`} />
                     <Tooltip
                       contentStyle={TOOLTIP_STYLE}
-                      labelStyle={{ color: '#d7e3fc', fontSize: 11 }}
+                      labelStyle={{ color: 'var(--theme-text, #d7e3fc)', fontSize: 11 }}
                       labelFormatter={v => `Day ${v}`}
                       formatter={(v: number, name: string) => [`$${v.toFixed(2)}`, `Path ${name.replace('p', '')}`]}
                     />
@@ -695,18 +704,18 @@ export default function GammaScalping() {
                       </linearGradient>
                     </defs>
                     <CartesianGrid stroke={cc.gridLine} />
-                    <XAxis dataKey="day" tick={TICK} label={{ value: 'Day', position: 'insideBottomRight', offset: 0, fill: 'rgba(255,255,255,0.22)', fontSize: 9 }} />
+                    <XAxis dataKey="day" tick={TICK} label={{ value: 'Day', position: 'insideBottomRight', offset: 0, fill: 'var(--theme-text-faint, rgba(255,255,255,0.22))', fontSize: 9 }} />
                     <YAxis tick={TICK} width={44} tickFormatter={v => `$${v.toFixed(0)}`} />
                     <Tooltip
                       contentStyle={TOOLTIP_STYLE}
-                      labelStyle={{ color: '#d7e3fc', fontSize: 11 }}
+                      labelStyle={{ color: 'var(--theme-text, #d7e3fc)', fontSize: 11 }}
                       labelFormatter={v => `Day ${v}`}
                       formatter={(v: number, name: string) => [`$${v.toFixed(3)}`, name]}
                     />
                     <Legend
                       verticalAlign="top"
                       align="right"
-                      wrapperStyle={{ fontSize: 10, fontFamily: 'JetBrains Mono, monospace', paddingBottom: 4, flexWrap: 'wrap' }}
+                      wrapperStyle={{ fontSize: 10, fontFamily: 'var(--theme-mono)', paddingBottom: 4, flexWrap: 'wrap' }}
                     />
                     <ReferenceLine y={0} stroke={cc.muted} strokeDasharray="4 3" />
                     <Area
@@ -737,6 +746,9 @@ export default function GammaScalping() {
           )}
         </SidebarLayout>
       </div>
-    </PageWrapper>
   )
+}
+
+export default function GammaScalping() {
+  return <PageWrapper><GammaScalpingContent /></PageWrapper>
 }

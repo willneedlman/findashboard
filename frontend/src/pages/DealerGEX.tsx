@@ -6,40 +6,48 @@ import SidebarLayout from '../components/SidebarLayout'
 import { fetchGEX, fetchOptionsChain } from '../hooks/useApi'
 import EmptyState from '../components/EmptyState'
 import { useChartColors } from '../hooks/useChartColors'
-const INPUT: React.CSSProperties = { background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: '#d7e3fc', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, padding: '5px 8px', width: '100%', outline: 'none' }
+const INPUT: React.CSSProperties = { background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-mono)', fontSize: 12, padding: '5px 8px', width: '100%', outline: 'none' }
 const LABEL: React.CSSProperties = { fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', marginBottom: 4, display: 'block' }
 const TOOLTIP_STYLE = { background: 'var(--theme-surface, #142032)', border: '1px solid color-mix(in srgb, var(--theme-primary) 35%, transparent)', borderRadius: 0 }
-const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'JetBrains Mono, monospace' }
+const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'var(--theme-mono)' }
 
 function MetricCard({ label, value, sub, help }: { label: string; value: string; sub?: string; help?: string }) {
   const [show, setShow] = useState(false)
   return (
-    <div style={{ background: 'var(--theme-surface, #142032)', border: '1px solid rgba(255,255,255,0.07)', borderTop: '3px solid var(--theme-primary, #c9a84c)', padding: 10, position: 'relative' }}>
+    <div style={{ background: 'var(--theme-surface, #142032)', border: '1px solid var(--theme-border, rgba(255,255,255,0.07))', borderTop: '3px solid var(--theme-primary, #c9a84c)', padding: 10, position: 'relative' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
         <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)' }}>{label}</span>
-        {help && <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', cursor: 'help' }}
+        {help && <span style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', cursor: 'help' }}
           onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>ⓘ</span>}
         {show && help && (
-          <div style={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: 6, background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', padding: '6px 8px', width: 180, fontSize: 11, color: '#d7e3fc', lineHeight: '15px', zIndex: 50, pointerEvents: 'none' }}>{help}</div>
+          <div style={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: 6, background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', padding: '6px 8px', width: 180, fontSize: 11, color: 'var(--theme-text, #d7e3fc)', lineHeight: '15px', zIndex: 50, pointerEvents: 'none' }}>{help}</div>
         )}
       </div>
-      <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 18, fontWeight: 700, color: '#d7e3fc' }}>{value}</div>
-      {sub && <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', marginTop: 2 }}>{sub}</div>}
+      <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 18, fontWeight: 700, color: 'var(--theme-text, #d7e3fc)' }}>{value}</div>
+      {sub && <div style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', marginTop: 2 }}>{sub}</div>}
     </div>
   )
 }
 
 function ChartPanel({ label, note, height, children }: { label: string; note?: string; height: number; children: React.ReactNode }) {
+  const headerH = note ? 42 : 26
   return (
-    <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)', position: 'relative' }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 10, background: 'rgba(46,57,77,0.8)', padding: '3px 8px', borderRight: '1px solid rgba(255,255,255,0.08)', borderBottom: '1px solid rgba(255,255,255,0.08)', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#d7e3fc' }}>{label}</div>
-      {note && <div style={{ position: 'absolute', top: 0, right: 0, padding: '3px 8px', fontSize: 10, color: 'rgba(255,255,255,0.22)', zIndex: 10, background: 'rgba(46,57,77,0.8)', borderLeft: '1px solid rgba(255,255,255,0.08)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>{note}</div>}
-      <div style={{ paddingTop: 28, paddingLeft: 8, paddingRight: 8, paddingBottom: 8, height }}>{children}</div>
+    <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', position: 'relative' }}>
+      <div style={{
+        background: 'rgba(46,57,77,0.8)',
+        borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
+        padding: '4px 8px',
+        display: 'flex', flexDirection: 'column', gap: 2,
+      }}>
+        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)', lineHeight: 1.3 }}>{label}</span>
+        {note && <span style={{ fontSize: 9, color: 'var(--theme-secondary, #8099b0)', letterSpacing: '0.06em', lineHeight: 1.3 }}>{note}</span>}
+      </div>
+      <div style={{ paddingTop: 8, paddingLeft: 8, paddingRight: 8, paddingBottom: 8, height: height - (headerH - 26) }}>{children}</div>
     </div>
   )
 }
 
-const SELECT: React.CSSProperties = { background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: '#d7e3fc', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, padding: '5px 8px', width: '100%', outline: 'none' }
+const SELECT: React.CSSProperties = { background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-mono)', fontSize: 12, padding: '5px 8px', width: '100%', outline: 'none' }
 
 export default function DealerGEX() {
   const cc = useChartColors()
@@ -118,19 +126,19 @@ export default function DealerGEX() {
   return (
     <PageWrapper>
       <SidebarLayout sidebarWidth={190} sidebarTitle="GEX Controls" sidebar={<>
-          <div style={{ padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'var(--theme-surface, #142032)' }}>
+          <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)' }}>
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#ffffff' }}>GEX Parameters</div>
           </div>
           <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
             <div>
               <label style={LABEL}>Ticker</label>
               <input value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())} style={INPUT}
-                onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')} onBlur={e => (e.target.style.borderColor = 'rgba(255,255,255,0.10)')} />
+                onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')} onBlur={e => (e.target.style.borderColor = 'var(--theme-border, rgba(255,255,255,0.10))')} />
             </div>
             <div>
               <label style={LABEL}>Strikes Each Side</label>
               <input type="number" value={nStrikes} step={5} min={5} max={100} onChange={e => setNStrikes(+e.target.value)} style={INPUT}
-                onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')} onBlur={e => (e.target.style.borderColor = 'rgba(255,255,255,0.10)')} />
+                onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')} onBlur={e => (e.target.style.borderColor = 'var(--theme-border, rgba(255,255,255,0.10))')} />
             </div>
             <div>
               <label style={LABEL}>Expiry</label>
@@ -143,14 +151,14 @@ export default function DealerGEX() {
                 </select>
               ) : (
                 <input value={expiry} onChange={e => setExpiry(e.target.value)} placeholder="e.g. 2026-06-20" style={INPUT}
-                  onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')} onBlur={e => (e.target.style.borderColor = 'rgba(255,255,255,0.10)')} />
+                  onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')} onBlur={e => (e.target.style.borderColor = 'var(--theme-border, rgba(255,255,255,0.10))')} />
               )}
             </div>
-            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', lineHeight: '14px' }}>
+            <div style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', lineHeight: '14px' }}>
               {expiry ? `Showing ${expiry} only.` : 'Aggregates all expiry chains. May take 20–40s on first load.'}
             </div>
           </div>
-          <div style={{ padding: 10, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+          <div style={{ padding: 10, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
             <button onClick={() => mutate()} disabled={isPending} style={{
               width: '100%', background: 'var(--theme-surface, #1f2a3d)', border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)',
               fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
@@ -183,14 +191,14 @@ export default function DealerGEX() {
                       const a = Math.abs(v)
                       return a >= 1000 ? `${(v/1000).toFixed(1)}B` : `${v.toFixed(0)}M`
                     }} orientation="right" />
-                    <Tooltip formatter={(v: number) => [`$${v.toFixed(1)}M`, 'Net GEX']} contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+                    <Tooltip formatter={(v: number) => [`$${v.toFixed(1)}M`, 'Net GEX']} contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'var(--theme-hover, rgba(255,255,255,0.04))' }} />
                     {spot && <ReferenceLine x={spot} stroke="rgba(201,168,76,0.7)" strokeDasharray="4 4"
                       label={{ value: `Spot $${spot.toFixed(0)}`, fill: 'var(--theme-primary, #c9a84c)', fontSize: 9, position: 'insideTopLeft' }} />}
                     {flipLevel && <ReferenceLine x={flipLevel} stroke="rgba(217,119,54,0.7)" strokeDasharray="3 5"
                       label={({ viewBox }: any) => (
                         <g>
                           <rect x={viewBox.x + 3} y={viewBox.y + 2} width={62} height={14} fill="rgba(30,20,10,0.82)" rx={2} />
-                          <text x={viewBox.x + 6} y={viewBox.y + 12} fill="#d97736" fontSize={9} fontFamily="JetBrains Mono, monospace">{`Flip $${flipLevel}`}</text>
+                          <text x={viewBox.x + 6} y={viewBox.y + 12} fill="#d97736" fontSize={9} fontFamily="var(--theme-mono)">{`Flip $${flipLevel}`}</text>
                         </g>
                       )} />}
                     <Bar dataKey="net_gex" name="Net GEX" radius={[2,2,0,0]}>
@@ -212,7 +220,7 @@ export default function DealerGEX() {
                       const a = Math.abs(v)
                       return a >= 1000 ? `${(v/1000).toFixed(1)}B` : `${v.toFixed(0)}M`
                     }} orientation="right" />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'var(--theme-hover, rgba(255,255,255,0.04))' }} />
                     <Legend wrapperStyle={{ fontSize: 10 }} />
                     {spot && <ReferenceLine x={spot} stroke="rgba(201,168,76,0.5)" strokeDasharray="4 4" />}
                     <Bar dataKey="call_gex" name="Call GEX" fill={cc.gainMuted} stackId="s" radius={[2,2,0,0]} />
@@ -258,7 +266,7 @@ export default function DealerGEX() {
                         <XAxis dataKey="strike" tick={TICK} tickFormatter={v => `$${v}`} interval="preserveStartEnd" />
                         <YAxis tick={TICK} orientation="right"
                           tickFormatter={v => Math.abs(v) >= 1000 ? `${(Math.abs(v)/1000).toFixed(0)}k` : Math.abs(v).toFixed(0)} />
-                        <Tooltip formatter={(v: number) => [Math.abs(v).toLocaleString(), '']} contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+                        <Tooltip formatter={(v: number) => [Math.abs(v).toLocaleString(), '']} contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'var(--theme-hover, rgba(255,255,255,0.04))' }} />
                         <Legend wrapperStyle={{ fontSize: 10 }} />
                         {spot && <ReferenceLine x={spot} stroke="rgba(201,168,76,0.7)" strokeDasharray="4 4"
                           label={{ value: 'Spot', fill: 'var(--theme-primary, #c9a84c)', fontSize: 9 }} />}

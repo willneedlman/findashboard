@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import Layout from './components/Layout'
 import { ThemeProvider } from './contexts/ThemeContext'
@@ -35,18 +35,21 @@ const StressTester       = lazy(() => import('./pages/StressTester'))
 const SectorRotation     = lazy(() => import('./pages/SectorRotation'))
 const CreditSpreads      = lazy(() => import('./pages/CreditSpreads'))
 const RelativeValuation  = lazy(() => import('./pages/RelativeValuation'))
-const GreeksAggregator   = lazy(() => import('./pages/GreeksAggregator'))
 const SupplyChain        = lazy(() => import('./pages/SupplyChain'))
-const GammaScalping      = lazy(() => import('./pages/GammaScalping'))
 const TradeJournal       = lazy(() => import('./pages/TradeJournal'))
 const PaperTrading       = lazy(() => import('./pages/PaperTrading'))
 const AlgoRunner         = lazy(() => import('./pages/AlgoRunner'))
 const SentimentTracker   = lazy(() => import('./pages/SentimentTracker'))
+const AlertsPage         = lazy(() => import('./pages/Alerts'))
+const RegressionAnalysis = lazy(() => import('./pages/RegressionAnalysis'))
+const OptionsHub         = lazy(() => import('./pages/OptionsHub'))
+const MacroHub           = lazy(() => import('./pages/MacroHub'))
+const ResearchHub        = lazy(() => import('./pages/ResearchHub'))
 
 function PageLoader() {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
-      <div style={{ fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#2e4460' }}>
+      <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#2e4460' }}>
         Loading…
       </div>
     </div>
@@ -91,13 +94,17 @@ export default function App() {
               <Route path="/sector-rotation" element={<SectorRotation />} />
               <Route path="/credit-spreads"      element={<CreditSpreads />} />
               <Route path="/relative-valuation"  element={<RelativeValuation />} />
-              <Route path="/greeks-aggregator"   element={<GreeksAggregator />} />
               <Route path="/supply-chain"        element={<SupplyChain />} />
-              <Route path="/gamma-scalping"      element={<GammaScalping />} />
+              <Route path="/gamma-scalping"      element={<Navigate to="/paper-trading" replace />} />
               <Route path="/trade-journal"       element={<TradeJournal />} />
               <Route path="/paper-trading"       element={<PaperTrading />} />
               <Route path="/algo-runner"         element={<AlgoRunner />} />
               <Route path="/sentiment"           element={<SentimentTracker />} />
+              <Route path="/alerts"             element={<AlertsPage />} />
+              <Route path="/regression"         element={<RegressionAnalysis />} />
+              <Route path="/options-hub"        element={<OptionsHub />} />
+              <Route path="/macro-hub"          element={<MacroHub />} />
+              <Route path="/research-hub"       element={<ResearchHub />} />
             </Routes>
           </Suspense>
         </AnimatePresence>

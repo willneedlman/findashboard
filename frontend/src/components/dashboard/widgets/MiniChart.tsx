@@ -13,13 +13,13 @@ import type { WidgetConfig } from '../../../hooks/useDashboard'
 
 const T = {
   bg: 'var(--theme-bg, #101c2e)',
-  border: 'rgba(255,255,255,0.08)',
+  border: 'var(--theme-border, rgba(255,255,255,0.08))',
   headerBg: 'var(--theme-surface, #142032)',
   gold: 'var(--theme-primary, #c9a84c)',
-  text: '#d7e3fc',
+  text: 'var(--theme-text, #d7e3fc)',
   muted: 'var(--theme-secondary, #5e768f)',
-  mono: 'JetBrains Mono, monospace',
-  label: 'IBM Plex Sans, sans-serif',
+  mono: 'var(--theme-mono)',
+  label: 'var(--theme-sans)',
   pos: '#22C55E',
   neg: '#EF4444',
 }
@@ -33,7 +33,7 @@ interface ChartData {
 }
 
 const shimmerStyle: React.CSSProperties = {
-  background: 'linear-gradient(90deg, var(--theme-surface, #0d0d0d) 25%, rgba(255,255,255,0.05) 50%, var(--theme-surface, #0d0d0d) 75%)',
+  background: 'linear-gradient(90deg, var(--theme-surface, #0d0d0d) 25%, var(--theme-border-faint, var(--theme-border-faint, rgba(255,255,255,0.05))) 50%, var(--theme-surface, #0d0d0d) 75%)',
   backgroundSize: '200% 100%',
   animation: 'shimmer 2s infinite',
   borderRadius: 4,

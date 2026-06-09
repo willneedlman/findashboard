@@ -1,19 +1,17 @@
 ---
 source_file: "frontend/src/components/charts/TVChart.tsx"
 type: "code"
-community: "Market Data Charts"
-location: "L1"
+community: "Frontend"
+location: "None"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/Market_Data_Charts
+  - community/Frontend
 ---
 
 # TVChart.tsx
 
 ## Connections
-- [[MarketData.tsx]] - `imports_from` [EXTRACTED]
-- [[TVChart()]] - `contains` [EXTRACTED]
-- [[TVChartProps]] - `contains` [EXTRACTED]
+- [[frontend_src_components_charts_tvchart_tsx_tvchart]] - `defines` [EXTRACTED]
 
-#graphify/code #graphify/EXTRACTED #community/Market_Data_Charts
+#graphify/code #graphify/EXTRACTED #community/Frontend

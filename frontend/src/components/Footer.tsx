@@ -1,12 +1,12 @@
 import { Link } from 'react-router-dom'
 
 const S = {
-  border: 'rgba(255,255,255,0.07)',
-  muted:  'rgba(255,255,255,0.22)',
+  border: 'var(--theme-border, rgba(255,255,255,0.07))',
+  muted:  'var(--theme-text-faint, var(--theme-text-faint, rgba(255,255,255,0.22)))',
   text:   'var(--theme-secondary, #5e768f)',
   gold:   'var(--theme-primary, #c9a84c)',
-  mono:   'JetBrains Mono, monospace',
-  label:  'IBM Plex Sans, sans-serif',
+  mono:   'var(--theme-mono)',
+  label:  'var(--theme-sans)',
 }
 
 const LINKS = [

@@ -5,12 +5,12 @@ import type { WidgetConfig } from '../../../hooks/useDashboard'
 const T = {
   bg:       'var(--theme-bg, #101c2e)',
   surface:  'var(--theme-surface, #0d1826)',
-  border:   'rgba(255,255,255,0.08)',
+  border:   'var(--theme-border, rgba(255,255,255,0.08))',
   gold:     'var(--theme-primary, #c9a84c)',
-  text:     '#d7e3fc',
+  text:     'var(--theme-text, #d7e3fc)',
   muted:    'var(--theme-secondary, #5e768f)',
-  mono:     'JetBrains Mono, monospace',
-  label:    'IBM Plex Sans, sans-serif',
+  mono:     'var(--theme-mono)',
+  label:    'var(--theme-sans)',
 }
 
 const CAT_COLOR: Record<string, string> = {
@@ -33,6 +33,7 @@ const CAT_TAG: Record<string, string> = {
 
 interface MacroEvent {
   date: string
+  time_et?: string
   label: string
   category: string
   importance: 'high' | 'medium'
@@ -66,7 +67,7 @@ function groupEvents(events: MacroEvent[]): [string, MacroEvent[]][] {
 }
 
 const shimmer: React.CSSProperties = {
-  background: 'linear-gradient(90deg, var(--theme-surface, #0d0d0d) 25%, rgba(255,255,255,0.05) 50%, var(--theme-surface, #0d0d0d) 75%)',
+  background: 'linear-gradient(90deg, var(--theme-surface, #0d0d0d) 25%, var(--theme-border-faint, var(--theme-border-faint, rgba(255,255,255,0.05))) 50%, var(--theme-surface, #0d0d0d) 75%)',
   backgroundSize: '200% 100%',
   animation: 'shimmer 2s infinite',
   borderRadius: 2,
@@ -82,23 +83,6 @@ export default function MacroCalendar({ config: _ }: { config: WidgetConfig }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: T.bg }}>
-      {/* Header */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '6px 10px', background: T.surface,
-        borderBottom: `1px solid ${T.border}`, flexShrink: 0,
-      }}>
-        <span style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.gold }}>
-          Macro Calendar
-        </span>
-        {data && (
-          <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted }}>
-            {data.events.length} events · 90d
-          </span>
-        )}
-      </div>
-
-      {/* Body */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '6px 0' }}>
         {isLoading && (
           <div style={{ padding: '10px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -131,6 +115,7 @@ export default function MacroCalendar({ config: _ }: { config: WidgetConfig }) {
               const color = CAT_COLOR[e.category] ?? T.gold
               const d     = new Date(e.date + 'T00:00:00')
               const dateStr = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+              const timeStr = e.time_et ? ` ${e.time_et} ET` : ''
 
               return (
                 <div key={`${e.date}-${i}`} style={{
@@ -170,7 +155,7 @@ export default function MacroCalendar({ config: _ }: { config: WidgetConfig }) {
                     color: days <= 3 ? color : T.muted,
                     fontWeight: days <= 3 ? 700 : 400,
                   }}>
-                    {days === 0 ? 'today' : days === 1 ? 'tmrw' : dateStr}
+                    {days === 0 ? 'today' : days === 1 ? 'tmrw' : dateStr}{timeStr}
                   </span>
                 </div>
               )

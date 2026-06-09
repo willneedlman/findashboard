@@ -11,8 +11,26 @@
       "input_tokens": 0,
       "output_tokens": 0,
       "files": 82
+    },
+    {
+      "date": "2026-06-03T18:51:25.324783+00:00",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files": 86
+    },
+    {
+      "date": "2026-06-03T22:22:00.564849+00:00",
+      "input_tokens": 57982,
+      "output_tokens": 0,
+      "files": 71
+    },
+    {
+      "date": "2026-06-03T22:22:54.455858+00:00",
+      "input": 57982,
+      "output": 0,
+      "files": 71
     }
   ],
-  "total_input_tokens": 0,
+  "total_input_tokens": 115964,
   "total_output_tokens": 0
 }

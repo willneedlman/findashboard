@@ -7,12 +7,12 @@ import useIsMobile from '../hooks/useIsMobile'
 const T = {
   bg:      'var(--theme-bg, #060e1c)',
   surface: 'var(--theme-surface, #0d1826)',
-  border:  'rgba(255,255,255,0.06)',
+  border:  'var(--theme-border, rgba(255,255,255,0.06))',
   gold:    'var(--theme-primary, #c9a84c)',
   muted:   'var(--theme-secondary, #5e768f)',
-  text:    '#d7e3fc',
-  mono:    'JetBrains Mono, monospace',
-  label:   'IBM Plex Sans, sans-serif',
+  text:    'var(--theme-text, #d7e3fc)',
+  mono:    'var(--theme-mono)',
+  label:   'var(--theme-sans)',
 }
 
 const SEGMENT_COLORS = ['#c9a84c', '#60a5fa', '#22c55e', '#f97316', '#a78bfa', '#38bdf8', '#fb7185', '#34d399', '#fbbf24', '#e879f9']
@@ -87,7 +87,7 @@ function SegmentBreakdown({ title, data }: { title: string; data: Segment[] }) {
           onMouseLeave={() => setHovered(null)}
           style={{
             padding: '7px 0',
-            borderBottom: i < data.length - 1 ? `1px solid rgba(255,255,255,0.04)` : 'none',
+            borderBottom: i < data.length - 1 ? `1px solid var(--theme-hover, rgba(255,255,255,0.04))` : 'none',
             opacity: hovered !== null && hovered !== i ? 0.45 : 1,
             transition: 'opacity 0.12s',
           }}
@@ -106,7 +106,7 @@ function SegmentBreakdown({ title, data }: { title: string; data: Segment[] }) {
             </div>
           </div>
           {/* Bar */}
-          <div style={{ height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden' }}>
+          <div style={{ height: 4, background: 'var(--theme-hover, rgba(255,255,255,0.06))', borderRadius: 2, overflow: 'hidden' }}>
             <div style={{ width: `${(s.pct / maxPct) * 100}%`, height: '100%', background: SEGMENT_COLORS[i % SEGMENT_COLORS.length], borderRadius: 2 }} />
           </div>
         </div>
@@ -115,7 +115,7 @@ function SegmentBreakdown({ title, data }: { title: string; data: Segment[] }) {
   )
 }
 
-export default function SupplyChain() {
+export function SupplyChainContent() {
   const isMobileLayout = useIsMobile()
   const [input,   setInput]   = useState('')
   const [loading, setLoading] = useState(false)
@@ -139,8 +139,7 @@ export default function SupplyChain() {
   }
 
   return (
-    <PageWrapper>
-      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+    <div style={{ maxWidth: 1100, margin: '0 auto' }}>
 
         <PageHeader
           title="Company Profile"
@@ -191,7 +190,7 @@ export default function SupplyChain() {
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
                     {data.sector && <span style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.gold, background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.2)', padding: '2px 7px' }}>{data.sector}</span>}
-                    {data.industry && <span style={{ fontFamily: T.label, fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.muted, background: 'rgba(255,255,255,0.04)', border: `1px solid ${T.border}`, padding: '2px 7px' }}>{data.industry}</span>}
+                    {data.industry && <span style={{ fontFamily: T.label, fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.muted, background: 'var(--theme-hover, rgba(255,255,255,0.04))', border: `1px solid ${T.border}`, padding: '2px 7px' }}>{data.industry}</span>}
                   </div>
 
                   {/* Key metrics row */}
@@ -227,7 +226,7 @@ export default function SupplyChain() {
                         onClick={() => doFetch(p)}
                         style={{
                           fontFamily: T.mono, fontSize: 10, fontWeight: 700, color: T.text,
-                          background: 'rgba(255,255,255,0.04)', border: `1px solid ${T.border}`,
+                          background: 'var(--theme-hover, rgba(255,255,255,0.04))', border: `1px solid ${T.border}`,
                           padding: '4px 9px', cursor: 'pointer', letterSpacing: '0.06em',
                           transition: 'all 0.12s',
                         }}
@@ -265,6 +264,9 @@ export default function SupplyChain() {
           </div>
         )}
       </div>
-    </PageWrapper>
   )
+}
+
+export default function SupplyChain() {
+  return <PageWrapper><SupplyChainContent /></PageWrapper>
 }

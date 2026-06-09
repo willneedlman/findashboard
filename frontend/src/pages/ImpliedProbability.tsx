@@ -6,40 +6,40 @@ import SidebarLayout from '../components/SidebarLayout'
 import axios from 'axios'
 import EmptyState from '../components/EmptyState'
 import { useChartColors } from '../hooks/useChartColors'
-const INPUT: React.CSSProperties = { background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: '#d7e3fc', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, padding: '5px 8px', width: '100%', outline: 'none' }
+const INPUT: React.CSSProperties = { background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-mono)', fontSize: 12, padding: '5px 8px', width: '100%', outline: 'none' }
 const LABEL: React.CSSProperties = { fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', marginBottom: 4, display: 'block' }
 const TOOLTIP_STYLE = { background: 'var(--theme-surface, #142032)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', borderRadius: 0 }
-const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'JetBrains Mono, monospace' }
+const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'var(--theme-mono)' }
 
 function MetricCard({ label, value, help, sub }: { label: string; value: string; help?: string; sub?: string }) {
   const [show, setShow] = useState(false)
   return (
-    <div style={{ background: 'var(--theme-surface, #142032)', border: '1px solid rgba(255,255,255,0.07)', borderTop: '3px solid var(--theme-primary, #c9a84c)', padding: 10, position: 'relative' }}>
+    <div style={{ background: 'var(--theme-surface, #142032)', border: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.07)))', borderTop: '3px solid var(--theme-primary, #c9a84c)', padding: 10, position: 'relative' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
         <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)' }}>{label}</span>
-        {help && <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', cursor: 'help' }}
+        {help && <span style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', cursor: 'help' }}
           onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>ⓘ</span>}
         {show && help && (
           <div style={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: 6,
             background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', padding: '6px 8px', width: 180, fontSize: 11,
-            color: '#d7e3fc', lineHeight: '15px', zIndex: 50, pointerEvents: 'none' }}>
+            color: 'var(--theme-text, #d7e3fc)', lineHeight: '15px', zIndex: 50, pointerEvents: 'none' }}>
             {help}
           </div>
         )}
       </div>
-      <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 18, fontWeight: 700, color: '#d7e3fc' }}>{value}</div>
-      {sub && <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', marginTop: 2 }}>{sub}</div>}
+      <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 18, fontWeight: 700, color: 'var(--theme-text, #d7e3fc)' }}>{value}</div>
+      {sub && <div style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', marginTop: 2 }}>{sub}</div>}
     </div>
   )
 }
 
 function ChartPanel({ label, height, note, children }: { label: string; height: number; note?: string; children: React.ReactNode }) {
   return (
-    <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)', position: 'relative' }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 10, background: 'rgba(46,57,77,0.8)', padding: '3px 8px', borderRight: '1px solid rgba(255,255,255,0.08)', borderBottom: '1px solid rgba(255,255,255,0.08)', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#d7e3fc' }}>
+    <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', position: 'relative' }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 10, background: 'rgba(46,57,77,0.8)', padding: '3px 8px', borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>
         {label}
       </div>
-      {note && <div style={{ position: 'absolute', top: 0, right: 0, padding: '3px 8px', fontSize: 10, color: 'rgba(255,255,255,0.22)', letterSpacing: '0.06em', zIndex: 10 }}>{note}</div>}
+      {note && <div style={{ position: 'absolute', top: 0, right: 0, padding: '3px 8px', fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', letterSpacing: '0.06em', zIndex: 10 }}>{note}</div>}
       <div style={{ paddingTop: 28, paddingLeft: 8, paddingRight: 8, paddingBottom: 8, height }}>{children}</div>
     </div>
   )
@@ -48,14 +48,14 @@ function ChartPanel({ label, height, note, children }: { label: string; height: 
 function SectionHeader({ label }: { label: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
-      <div style={{ height: 1, flex: 1, background: 'rgba(255,255,255,0.08)' }} />
-      <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.22)', whiteSpace: 'nowrap' }}>{label}</span>
-      <div style={{ height: 1, flex: 1, background: 'rgba(255,255,255,0.08)' }} />
+      <div style={{ height: 1, flex: 1, background: 'var(--theme-hover, rgba(255,255,255,0.08))' }} />
+      <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', whiteSpace: 'nowrap' }}>{label}</span>
+      <div style={{ height: 1, flex: 1, background: 'var(--theme-hover, rgba(255,255,255,0.08))' }} />
     </div>
   )
 }
 
-export default function ImpliedProbability() {
+export function ImpliedProbabilityContent() {
   const cc = useChartColors()
   const [ticker, setTicker] = useState('SPY')
   const [expiry, setExpiry] = useState(() => {
@@ -79,27 +79,26 @@ export default function ImpliedProbability() {
   const dist = data?.dist
 
   return (
-    <PageWrapper>
-      <SidebarLayout sidebarWidth={190} sidebarTitle="Probability Inputs" sidebar={<>
-          <div style={{ padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'var(--theme-surface, #142032)' }}>
+    <SidebarLayout sidebarWidth={190} sidebarTitle="Probability Inputs" sidebar={<>
+          <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)' }}>
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#ffffff' }}>Distribution Parameters</div>
           </div>
           <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
             <div>
               <label style={LABEL}>Target Ticker</label>
               <input value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())} style={INPUT}
-                onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')} onBlur={e => (e.target.style.borderColor = 'rgba(255,255,255,0.10)')} />
+                onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')} onBlur={e => (e.target.style.borderColor = 'var(--theme-border, rgba(255,255,255,0.10))')} />
             </div>
             <div>
               <label style={LABEL}>Target Expiry</label>
               <input type="date" value={expiry} onChange={e => setExpiry(e.target.value)} style={INPUT}
-                onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')} onBlur={e => (e.target.style.borderColor = 'rgba(255,255,255,0.10)')} />
+                onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')} onBlur={e => (e.target.style.borderColor = 'var(--theme-border, rgba(255,255,255,0.10))')} />
             </div>
-            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', lineHeight: '14px' }}>
+            <div style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', lineHeight: '14px' }}>
               Black-Scholes risk-neutral pricing. Reflects market hedging cost, not a directional forecast.
             </div>
           </div>
-          <div style={{ padding: 10, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+          <div style={{ padding: 10, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
             <button onClick={() => mutate()} disabled={isPending} style={{
               width: '100%', background: 'var(--theme-surface, #1f2a3d)', border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)',
               fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
@@ -159,9 +158,9 @@ export default function ImpliedProbability() {
                 <MetricCard label="IV Skew (P−C)" value={`${dist.iv_skew > 0 ? '+' : ''}${dist.iv_skew.toFixed(1)}%`} help="Positive = put premium, fear indicator" />
               </div>
 
-              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', letterSpacing: '0.06em' }}>
+              <div style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', letterSpacing: '0.06em' }}>
                 Expiry: <span style={{ color: 'var(--theme-primary, #c9a84c)' }}>{dist.expiry}</span>
-                &nbsp;·&nbsp; Avg Call IV: <span style={{ color: '#d7e3fc' }}>{dist.avg_call_iv.toFixed(1)}%</span>
+                &nbsp;·&nbsp; Avg Call IV: <span style={{ color: 'var(--theme-text, #d7e3fc)' }}>{dist.avg_call_iv.toFixed(1)}%</span>
                 &nbsp;·&nbsp; Derived from live options chain — call delta ≈ risk-neutral P(S_T &gt; K)
               </div>
 
@@ -201,7 +200,7 @@ export default function ImpliedProbability() {
           )}
 
           {data && !dist && (
-            <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)', padding: 16, fontSize: 12, color: 'rgba(255,255,255,0.22)' }}>
+            <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: 16, fontSize: 12, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))' }}>
               Market-implied distribution unavailable — no options data for this ticker/expiry.
               The volatility cone above uses Black-Scholes with historical volatility.
             </div>
@@ -211,6 +210,9 @@ export default function ImpliedProbability() {
             <EmptyState title="Implied Probability" hint="Enter a ticker and expiry, then press Generate." />
           )}
         </SidebarLayout>
-    </PageWrapper>
   )
+}
+
+export default function ImpliedProbability() {
+  return <PageWrapper><ImpliedProbabilityContent /></PageWrapper>
 }

@@ -12,24 +12,24 @@ const ADMIN_USERS = [
 // ── Palette of preset color schemes ──────────────────────────────────────────
 const PRESETS: { name: string; theme: Partial<Theme> }[] = [
   { name: 'Terminal Gold',  theme: { primaryColor: '#c9a84c', secondaryColor: '#5e768f', tertiaryColor: '#60a5fa', bgColor: '#101c2e', surfaceColor: '#0d1826', primaryFont: 'JetBrains Mono', secondaryFont: 'IBM Plex Sans', primaryFontUrl: '', secondaryFontUrl: '' } },
-  { name: 'Bloomberg',      theme: { primaryColor: '#ff6600', secondaryColor: '#888888', tertiaryColor: '#ffb800', bgColor: '#000000', surfaceColor: '#0d0d0d', primaryFont: 'Courier Prime',   secondaryFont: 'Roboto',        primaryFontUrl: '', secondaryFontUrl: '' } },
+  { name: 'Bloomberg',      theme: { primaryColor: '#ff6600', secondaryColor: '#888888', tertiaryColor: '#ffb800', bgColor: '#000000', surfaceColor: '#0d0d0d', primaryFont: 'Courier Prime',   secondaryFont: 'Barlow',        primaryFontUrl: '', secondaryFontUrl: '' } },
   { name: 'Emerald Dark',   theme: { primaryColor: '#059669', secondaryColor: '#064e3b', tertiaryColor: '#6ee7b7', bgColor: '#010d07', surfaceColor: '#04150c', primaryFont: 'JetBrains Mono', secondaryFont: 'IBM Plex Sans', primaryFontUrl: '', secondaryFontUrl: '' } },
   { name: 'Crimson Night',  theme: { primaryColor: '#e11d48', secondaryColor: '#881337', tertiaryColor: '#fda4af', bgColor: '#0c0009', surfaceColor: '#160310', primaryFont: 'JetBrains Mono', secondaryFont: 'IBM Plex Sans', primaryFontUrl: '', secondaryFontUrl: '' } },
-  { name: 'Mainstreet',     theme: { primaryColor: '#a97c50', secondaryColor: '#adadaf', tertiaryColor: '#d5b080', bgColor: '#1a1410', surfaceColor: '#231d17', primaryFont: 'Courier Prime',   secondaryFont: 'Roboto',        primaryFontUrl: '', secondaryFontUrl: '' } },
+  { name: 'Mainstreet',     theme: { primaryColor: '#a97c50', secondaryColor: '#adadaf', tertiaryColor: '#d5b080', bgColor: '#1a1410', surfaceColor: '#231d17', primaryFont: 'Courier Prime',   secondaryFont: 'Barlow',        primaryFontUrl: '', secondaryFontUrl: '' } },
   { name: 'Stealth Mono',   theme: { primaryColor: '#e2e8f0', secondaryColor: '#475569', tertiaryColor: '#64748b', bgColor: '#000000', surfaceColor: '#0a0a0a', primaryFont: 'Fira Code',       secondaryFont: 'Inter',         primaryFontUrl: '', secondaryFontUrl: '' } },
   { name: 'Dracula',        theme: { primaryColor: '#bd93f9', secondaryColor: '#6272a4', tertiaryColor: '#ff79c6', bgColor: '#1c1e2d', surfaceColor: '#181a27', primaryFont: 'Fira Code',       secondaryFont: 'IBM Plex Sans', primaryFontUrl: '', secondaryFontUrl: '' } },
-  { name: 'Solarized Dark', theme: { primaryColor: '#b58900', secondaryColor: '#586e75', tertiaryColor: '#268bd2', bgColor: '#002b36', surfaceColor: '#00242e', primaryFont: 'Source Code Pro', secondaryFont: 'IBM Plex Sans', primaryFontUrl: '', secondaryFontUrl: '' } },
-  { name: 'Gruvbox',        theme: { primaryColor: '#fabd2f', secondaryColor: '#928374', tertiaryColor: '#83a598', bgColor: '#282828', surfaceColor: '#1d2021', primaryFont: 'JetBrains Mono', secondaryFont: 'IBM Plex Sans', primaryFontUrl: '', secondaryFontUrl: '' } },
-  { name: 'Nord',           theme: { primaryColor: '#88c0d0', secondaryColor: '#4c566a', tertiaryColor: '#a3be8c', bgColor: '#1e2430', surfaceColor: '#19202c', primaryFont: 'JetBrains Mono', secondaryFont: 'IBM Plex Sans', primaryFontUrl: '', secondaryFontUrl: '' } },
-  { name: 'Tokyo Night',    theme: { primaryColor: '#7aa2f7', secondaryColor: '#565f89', tertiaryColor: '#bb9af7', bgColor: '#1a1b2e', surfaceColor: '#16161e', primaryFont: 'JetBrains Mono', secondaryFont: 'DM Sans',       primaryFontUrl: '', secondaryFontUrl: '' } },
-  { name: 'Catppuccin',     theme: { primaryColor: '#cba6f7', secondaryColor: '#585b70', tertiaryColor: '#89b4fa', bgColor: '#1e1e2e', surfaceColor: '#181825', primaryFont: 'JetBrains Mono', secondaryFont: 'DM Sans',       primaryFontUrl: '', secondaryFontUrl: '' } },
+  { name: 'Nord',           theme: { primaryColor: '#88c0d0', secondaryColor: '#4c566a', tertiaryColor: '#a3be8c', bgColor: '#1e2430', surfaceColor: '#19202c', primaryFont: 'Space Mono',     secondaryFont: 'Sora',          primaryFontUrl: '', secondaryFontUrl: '' } },
+  { name: 'Linen',          theme: { primaryColor: '#7c2d12', secondaryColor: '#292524', tertiaryColor: '#1d4ed8', bgColor: '#faf7f2', surfaceColor: '#e8dfd0', primaryFont: 'DM Mono',        secondaryFont: 'IBM Plex Sans', primaryFontUrl: '', secondaryFontUrl: '' } },
+  { name: 'Morning Mist',   theme: { primaryColor: '#1e3a8a', secondaryColor: '#1e293b', tertiaryColor: '#0f766e', bgColor: '#f1f5f9', surfaceColor: '#dbe4ef', primaryFont: 'Fira Code',       secondaryFont: 'Inter',         primaryFontUrl: '', secondaryFontUrl: '' } },
+  { name: 'Rosewood',       theme: { primaryColor: '#881337', secondaryColor: '#1c1917', tertiaryColor: '#6d28d9', bgColor: '#fdf4f4', surfaceColor: '#e8d5d5', primaryFont: 'JetBrains Mono', secondaryFont: 'DM Sans',       primaryFontUrl: '', secondaryFontUrl: '' } },
+  { name: 'Light Mode',     theme: { primaryColor: '#1a6b3c', secondaryColor: '#4b5563', tertiaryColor: '#2563eb', bgColor: '#f8fafc', surfaceColor: '#ffffff', primaryFont: 'Fira Code',      secondaryFont: 'Inter',         primaryFontUrl: '', secondaryFontUrl: '' } },
 ]
 
 // ── Small UI helpers ──────────────────────────────────────────────────────────
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 32 }}>
-      <div style={{ fontFamily: 'var(--theme-sans, IBM Plex Sans, sans-serif)', fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', marginBottom: 12, paddingBottom: 6, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+      <div style={{ fontFamily: 'var(--theme-sans, IBM Plex Sans, sans-serif)', fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', marginBottom: 12, paddingBottom: 6, borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.06))' }}>
         {title}
       </div>
       {children}
@@ -45,7 +45,7 @@ function ColorSwatch({ label, value, onChange }: { label: string; value: string;
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <div
           onClick={() => inputRef.current?.click()}
-          style={{ width: 32, height: 32, background: value, border: '2px solid rgba(255,255,255,0.15)', borderRadius: 3, cursor: 'pointer', flexShrink: 0 }}
+          style={{ width: 32, height: 32, background: value, border: '2px solid var(--theme-text-faint, rgba(255,255,255,0.15))', borderRadius: 3, cursor: 'pointer', flexShrink: 0 }}
           title="Click to pick color"
         />
         <input ref={inputRef} type="color" value={value} onChange={e => onChange(e.target.value)}
@@ -53,19 +53,47 @@ function ColorSwatch({ label, value, onChange }: { label: string; value: string;
         <input
           type="text" value={value}
           onChange={e => { if (/^#[0-9a-fA-F]{0,6}$/.test(e.target.value)) onChange(e.target.value) }}
-          style={{ background: 'var(--theme-bg, #0a1220)', border: '1px solid rgba(255,255,255,0.08)', color: '#d7e3fc', fontFamily: 'var(--theme-mono, JetBrains Mono, monospace)', fontSize: 11, padding: '4px 8px', width: 90, outline: 'none', letterSpacing: '0.05em' }}
+          style={{ background: 'var(--theme-bg, #0a1220)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-mono, JetBrains Mono, monospace)', fontSize: 11, padding: '4px 8px', width: 90, outline: 'none', letterSpacing: '0.05em' }}
         />
       </div>
     </div>
   )
 }
 
-function FontSelector({ label, value, options, onChange, onUpload }: {
+function FontSelector({ label, value, options, onChange, onUpload, isMono = true }: {
   label: string; value: string; options: string[]
   onChange: (v: string) => void
   onUpload: (name: string, url: string) => void
+  isMono?: boolean
 }) {
+  const [open, setOpen] = useState(false)
+  const [fontsInjected, setFontsInjected] = useState(false)
+  const dropRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!open || fontsInjected) return
+    options.forEach(font => {
+      const id = `ft-preview-${font.replace(/\s+/g, '-').toLowerCase()}`
+      if (!document.getElementById(id)) {
+        const link = document.createElement('link')
+        link.id = id; link.rel = 'stylesheet'
+        link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(font)}:wght@400;700&display=swap`
+        document.head.appendChild(link)
+      }
+    })
+    setFontsInjected(true)
+  }, [open, fontsInjected, options])
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (dropRef.current && !dropRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -74,28 +102,67 @@ function FontSelector({ label, value, options, onChange, onUpload }: {
     onUpload(name, url)
     e.target.value = ''
   }
+
+  const sample = isMono ? '0123  AAPL  $4,820  −0.25%' : 'Portfolio  AAPL  Equity'
+  const fallback = isMono ? 'monospace' : 'sans-serif'
+  const isCustom = !options.includes(value)
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{label}</span>
-      <div style={{ display: 'flex', gap: 6 }}>
-        <select
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          style={{ flex: 1, background: 'var(--theme-bg, #0a1220)', border: '1px solid rgba(255,255,255,0.08)', color: '#d7e3fc', fontFamily: `'${value}', monospace`, fontSize: 11, padding: '4px 8px', outline: 'none', cursor: 'pointer' }}
+      <div ref={dropRef} style={{ position: 'relative', display: 'flex', gap: 6 }}>
+
+        {/* Trigger */}
+        <button
+          onClick={() => setOpen(o => !o)}
+          style={{ flex: 1, background: 'var(--theme-bg, #0a1220)', border: `1px solid ${open ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.08))'}`, color: 'var(--theme-text, #d7e3fc)', fontFamily: `'${value}', ${fallback}`, fontSize: 11, padding: '4px 8px', cursor: 'pointer', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center', outline: 'none' }}
         >
-          {options.includes(value) ? null : <option value={value}>{value} (custom)</option>}
-          {options.map(f => <option key={f} value={f} style={{ fontFamily: f }}>{f}</option>)}
-        </select>
+          <span>{value}{isCustom ? ' (custom)' : ''}</span>
+          <span style={{ opacity: 0.4, fontSize: 8, fontFamily: 'var(--theme-sans)', marginLeft: 6 }}>{open ? '▲' : '▼'}</span>
+        </button>
+
         <button
           onClick={() => fileRef.current?.click()}
           title="Upload custom font file (.ttf .woff .woff2)"
-          style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--theme-secondary)', fontFamily: 'var(--theme-sans)', fontSize: 9, padding: '4px 10px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+          style={{ background: 'var(--theme-hover, rgba(255,255,255,0.04))', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', color: 'var(--theme-secondary)', fontFamily: 'var(--theme-sans)', fontSize: 9, padding: '4px 10px', cursor: 'pointer', whiteSpace: 'nowrap' }}
         >
           Upload
         </button>
         <input ref={fileRef} type="file" accept=".ttf,.woff,.woff2,.otf" style={{ display: 'none' }} onChange={handleFile} />
+
+        {/* Custom dropdown panel */}
+        {open && (
+          <div style={{ position: 'absolute', top: 'calc(100% + 3px)', left: 0, right: 52, zIndex: 200, background: 'var(--theme-bg, #0a1220)', border: '1px solid var(--theme-text-subtle, rgba(255,255,255,0.14))', boxShadow: '0 10px 32px rgba(0,0,0,0.7)', maxHeight: 320, overflowY: 'auto' }}>
+            {isCustom && (
+              <div style={{ padding: '7px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.06))', fontFamily: `'${value}', ${fallback}`, fontSize: 12, color: 'var(--theme-primary, #c9a84c)' }}>
+                {value} (custom)
+              </div>
+            )}
+            {options.map(f => {
+              const active = f === value
+              return (
+                <div
+                  key={f}
+                  onClick={() => { onChange(f); setOpen(false) }}
+                  style={{ padding: '7px 10px', borderBottom: '1px solid var(--theme-hover, rgba(255,255,255,0.04))', background: active ? 'rgba(201,168,76,0.10)' : 'transparent', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 2 }}
+                  onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'var(--theme-border-faint, rgba(255,255,255,0.05))' }}
+                  onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent' }}
+                >
+                  <span style={{ fontFamily: `'${f}', ${fallback}`, fontSize: 13, color: active ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-text, #d7e3fc)', letterSpacing: isMono ? '0.03em' : '0' }}>
+                    {sample}
+                  </span>
+                  <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-text-dim, rgba(255,255,255,0.32))', letterSpacing: '0.08em' }}>
+                    {f}{active ? '  ✓' : ''}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
-      <span style={{ fontFamily: `'${value}', monospace`, fontSize: 12, color: 'var(--theme-primary)', letterSpacing: '0.04em' }}>
+
+      {/* Live preview of selected font */}
+      <span style={{ fontFamily: `'${value}', ${fallback}`, fontSize: 12, color: 'var(--theme-primary)', letterSpacing: '0.04em' }}>
         0123  AAPL  $4.82T  Δ−0.25
       </span>
     </div>
@@ -174,10 +241,10 @@ function AdminPanel() {
     }
   }
 
-  const inp: React.CSSProperties = { background: 'var(--theme-bg, #0a1220)', border: '1px solid rgba(255,255,255,0.08)', color: '#d7e3fc', fontFamily: 'var(--theme-mono)', fontSize: 11, padding: '4px 8px', outline: 'none', flex: 1 }
+  const inp: React.CSSProperties = { background: 'var(--theme-bg, #0a1220)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-mono)', fontSize: 11, padding: '4px 8px', outline: 'none', flex: 1 }
   const btn = (active = true): React.CSSProperties => ({
-    background: active ? 'var(--theme-primary)' : 'rgba(255,255,255,0.05)',
-    border: `1px solid ${active ? 'var(--theme-primary)' : 'rgba(255,255,255,0.08)'}`,
+    background: active ? 'var(--theme-primary)' : 'var(--theme-border-faint, rgba(255,255,255,0.05))',
+    border: `1px solid ${active ? 'var(--theme-primary)' : 'var(--theme-border, rgba(255,255,255,0.08))'}`,
     color: active ? '#0a1220' : 'var(--theme-secondary)',
     fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
     textTransform: 'uppercase', padding: '4px 12px', cursor: active ? 'pointer' : 'default',
@@ -198,7 +265,7 @@ function AdminPanel() {
 
       {data && health && (<>
         {/* Tabs */}
-        <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.08)', gap: 0 }}>
+        <div style={{ display: 'flex', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', gap: 0 }}>
           {(['users', 'health'] as const).map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
               background: 'none', border: 'none', borderBottom: tab === t ? '2px solid var(--theme-primary)' : '2px solid transparent',
@@ -214,7 +281,7 @@ function AdminPanel() {
             {/* Summary */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
               {[{ label: 'Total Users', value: data.total_users }, { label: 'Last 7 Days', value: data.new_last_7d }, { label: 'Last 30 Days', value: data.new_last_30d }].map(s => (
-                <div key={s.label} style={{ background: 'var(--theme-bg, #0a1220)', border: '1px solid rgba(255,255,255,0.08)', padding: '8px 10px' }}>
+                <div key={s.label} style={{ background: 'var(--theme-bg, #0a1220)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '8px 10px' }}>
                   <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, color: 'var(--theme-secondary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>{s.label}</div>
                   <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 22, fontWeight: 700, color: 'var(--theme-primary)' }}>{s.value}</div>
                 </div>
@@ -222,7 +289,7 @@ function AdminPanel() {
             </div>
             {/* PIN reset form */}
             {pinReset && (
-              <div style={{ display: 'flex', gap: 6, alignItems: 'center', background: 'var(--theme-bg, #0a1220)', border: '1px solid rgba(255,255,255,0.08)', padding: '8px 10px' }}>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', background: 'var(--theme-bg, #0a1220)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '8px 10px' }}>
                 <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary)', whiteSpace: 'nowrap' }}>New PIN for @{pinReset.username}:</span>
                 <input type="text" inputMode="numeric" maxLength={4} value={pinReset.pin}
                   onChange={e => setPinReset(p => p ? { ...p, pin: e.target.value.replace(/\D/g,'').slice(0,4) } : null)}
@@ -232,15 +299,15 @@ function AdminPanel() {
               </div>
             )}
             {/* User table */}
-            <div style={{ border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden', maxHeight: 340, overflowY: 'auto' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 90px 70px 50px 100px', background: 'var(--theme-bg, #080f1d)', padding: '5px 10px', position: 'sticky', top: 0, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', overflow: 'hidden', maxHeight: 340, overflowY: 'auto' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 90px 70px 50px 100px', background: 'var(--theme-bg, #080f1d)', padding: '5px 10px', position: 'sticky', top: 0, borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
                 {['Display','Username','Joined','Last Login','Logins','Actions'].map(h => (
                   <span key={h} style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, color: 'var(--theme-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{h}</span>
                 ))}
               </div>
               {data.users.map((u, i) => (
                 <div key={u.username} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 90px 70px 50px 100px', padding: '5px 10px', background: i % 2 === 0 ? 'var(--theme-surface, #0d1826)' : 'transparent', borderBottom: i < data.users.length - 1 ? '1px solid #1a2535' : 'none', alignItems: 'center' }}>
-                  <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: '#d7e3fc', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.display_name}</span>
+                  <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-text, #d7e3fc)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.display_name}</span>
                   <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary)' }}>@{u.username}</span>
                   <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary)' }}>{new Date(u.created_at).toLocaleDateString()}</span>
                   <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary)' }}>{u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : '—'}</span>
@@ -269,7 +336,7 @@ function AdminPanel() {
                 {Object.entries(health.api_keys).map(([k, v]) => (
                   <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: v ? '#22C55E' : '#ef4444' }}>{v ? '✓' : '✗'}</span>
-                    <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: '#d7e3fc' }}>{k}</span>
+                    <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-text, #d7e3fc)' }}>{k}</span>
                   </div>
                 ))}
               </div>
@@ -279,7 +346,7 @@ function AdminPanel() {
               <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 8 }}>Disk Cache</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
                 {[{ label: 'Entries', value: health.cache_entries }, { label: 'Size (KB)', value: health.cache_size_kb }].map(s => (
-                  <div key={s.label} style={{ background: 'var(--theme-bg, #0a1220)', border: '1px solid rgba(255,255,255,0.08)', padding: '8px 10px' }}>
+                  <div key={s.label} style={{ background: 'var(--theme-bg, #0a1220)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '8px 10px' }}>
                     <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, color: 'var(--theme-secondary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>{s.label}</div>
                     <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 18, fontWeight: 700, color: 'var(--theme-primary)' }}>{s.value}</div>
                   </div>
@@ -332,12 +399,12 @@ function AuthPanel({ onDone }: { onDone: () => void }) {
     }
   }
 
-  const inp: React.CSSProperties = { background: 'var(--theme-bg, #0a1220)', border: '1px solid rgba(255,255,255,0.08)', color: '#d7e3fc', fontFamily: 'var(--theme-mono)', fontSize: 12, padding: '6px 10px', width: '100%', outline: 'none', boxSizing: 'border-box' }
+  const inp: React.CSSProperties = { background: 'var(--theme-bg, #0a1220)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-mono)', fontSize: 12, padding: '6px 10px', width: '100%', outline: 'none', boxSizing: 'border-box' }
   const lbl: React.CSSProperties = { fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary)', textTransform: 'uppercase', letterSpacing: '0.12em', display: 'block', marginBottom: 4 }
 
   return (
     <div style={{ maxWidth: 340, display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid rgba(255,255,255,0.08)', marginBottom: 4 }}>
+      <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', marginBottom: 4 }}>
         {(['login', 'register'] as const).map(m => (
           <button key={m} onClick={() => { setMode(m); setErr('') }} style={{ flex: 1, background: 'none', border: 'none', borderBottom: mode === m ? '2px solid var(--theme-primary)' : '2px solid transparent', color: mode === m ? 'var(--theme-primary)' : 'var(--theme-secondary)', fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '6px 0', cursor: 'pointer' }}>
             {m === 'login' ? 'Sign In' : 'Create Profile'}
@@ -346,7 +413,7 @@ function AuthPanel({ onDone }: { onDone: () => void }) {
       </div>
 
       <div><label style={lbl}>Username</label><input style={inp} value={uname} onChange={e => setUname(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSubmit()} autoFocus disabled={loading} /></div>
-      {mode === 'register' && <div><label style={lbl}>Display Name <span style={{ color: 'rgba(255,255,255,0.22)' }}>(optional)</span></label><input style={inp} value={display} onChange={e => setDisplay(e.target.value)} disabled={loading} /></div>}
+      {mode === 'register' && <div><label style={lbl}>Display Name <span style={{ color: 'var(--theme-text-faint, rgba(255,255,255,0.22))' }}>(optional)</span></label><input style={inp} value={display} onChange={e => setDisplay(e.target.value)} disabled={loading} /></div>}
       <div><label style={lbl}>PIN (4 digits)</label><input style={inp} type="password" inputMode="numeric" maxLength={4} autoComplete="off" value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))} onKeyDown={e => e.key === 'Enter' && handleSubmit()} disabled={loading} /></div>
       {err && <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, color: '#ef4444' }}>{err}</span>}
       <button onClick={handleSubmit} disabled={loading} style={{ background: loading ? 'rgba(255,255,255,0.08)' : 'var(--theme-primary, #c9a84c)', border: 'none', color: loading ? 'var(--theme-secondary)' : '#0a1220', fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '10px 0', cursor: loading ? 'default' : 'pointer', width: '100%', transition: 'background 0.15s' }}>
@@ -428,7 +495,7 @@ export default function Settings() {
 
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             {dirty && (
-              <button onClick={handleDiscard} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--theme-secondary)', fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '6px 14px', cursor: 'pointer' }}>
+              <button onClick={handleDiscard} style={{ background: 'transparent', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', color: 'var(--theme-secondary)', fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '6px 14px', cursor: 'pointer' }}>
                 Discard
               </button>
             )}
@@ -436,8 +503,8 @@ export default function Settings() {
               onClick={handleSave}
               disabled={!dirty}
               style={{
-                background: dirty ? 'var(--theme-primary)' : 'rgba(255,255,255,0.05)',
-                border: `1px solid ${dirty ? 'var(--theme-primary)' : 'rgba(255,255,255,0.08)'}`,
+                background: dirty ? 'var(--theme-primary)' : 'var(--theme-border-faint, rgba(255,255,255,0.05))',
+                border: `1px solid ${dirty ? 'var(--theme-primary)' : 'var(--theme-border, rgba(255,255,255,0.08))'}`,
                 color: dirty ? '#0a1220' : '#3a4d62',
                 fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700,
                 letterSpacing: '0.12em', textTransform: 'uppercase',
@@ -485,7 +552,7 @@ export default function Settings() {
               </div>
             </Section>
 
-            <button onClick={handleReset} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--theme-secondary)', fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '6px 14px', cursor: 'pointer' }}>
+            <button onClick={handleReset} style={{ background: 'transparent', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', color: 'var(--theme-secondary)', fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '6px 14px', cursor: 'pointer' }}>
               Reset to Defaults
             </button>
           </div>
@@ -507,7 +574,7 @@ export default function Settings() {
                   onUpload={(name, url) => patchDraft({ secondaryFont: name, secondaryFontUrl: url })}
                 />
               </div>
-              <p style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'rgba(255,255,255,0.22)', marginTop: 12, lineHeight: 1.5 }}>
+              <p style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', marginTop: 12, lineHeight: 1.5 }}>
                 Upload .ttf / .woff / .woff2 to use a custom font locally. Uploaded fonts are stored in memory for this session only.
               </p>
             </Section>
@@ -529,12 +596,12 @@ export default function Settings() {
               <Section title={`Account · ${allUsers.length} profile${allUsers.length !== 1 ? 's' : ''}`}>
                 {/* Current user */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
-                  <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 12, color: '#d7e3fc' }}>
+                  <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 12, color: 'var(--theme-text, #d7e3fc)' }}>
                     {user.displayName}
                     <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary)', marginLeft: 8 }}>@{user.username}</span>
                     <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, color: 'var(--theme-primary)', marginLeft: 8, border: `1px solid ${draft.primaryColor}40`, padding: '1px 5px' }}>current</span>
                   </div>
-                  <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'rgba(255,255,255,0.22)' }}>
+                  <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))' }}>
                     Created {new Date(user.createdAt).toLocaleDateString()}
                   </div>
                   {!confirmDel ? (
@@ -545,7 +612,7 @@ export default function Settings() {
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                       <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: '#ef4444' }}>Delete permanently?</span>
                       <button onClick={() => deleteUser(user.id)} style={{ background: '#ef4444', border: 'none', color: '#fff', fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, padding: '3px 10px', cursor: 'pointer' }}>Yes, delete</button>
-                      <button onClick={() => setConfirmDel(false)} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--theme-secondary)', fontFamily: 'var(--theme-sans)', fontSize: 9, padding: '3px 10px', cursor: 'pointer' }}>Cancel</button>
+                      <button onClick={() => setConfirmDel(false)} style={{ background: 'transparent', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', color: 'var(--theme-secondary)', fontFamily: 'var(--theme-sans)', fontSize: 9, padding: '3px 10px', cursor: 'pointer' }}>Cancel</button>
                     </div>
                   )}
                 </div>
@@ -556,20 +623,20 @@ export default function Settings() {
                     <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>
                       All profiles on this device
                     </div>
-                    <div style={{ border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                    <div style={{ border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', overflow: 'hidden' }}>
                       {/* Header */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 90px 60px', background: 'var(--theme-bg, #080f1d)', padding: '5px 10px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 90px 60px', background: 'var(--theme-bg, #080f1d)', padding: '5px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
                         {['Display Name', 'Username', 'Created', ''].map(h => (
-                          <span key={h} style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, color: 'rgba(255,255,255,0.22)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{h}</span>
+                          <span key={h} style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{h}</span>
                         ))}
                       </div>
                       {allUsers.map((u, i) => (
                         <div key={u.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 90px 60px', padding: '6px 10px', background: i % 2 === 0 ? 'var(--theme-surface, #0d1826)' : 'transparent', borderBottom: i < allUsers.length - 1 ? '1px solid #1a2535' : 'none', alignItems: 'center' }}>
-                          <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: u.id === user.id ? 'var(--theme-primary)' : '#d7e3fc' }}>
+                          <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: u.id === user.id ? 'var(--theme-primary)' : 'var(--theme-text, #d7e3fc)' }}>
                             {u.displayName}
                           </span>
                           <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary)' }}>@{u.username}</span>
-                          <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'rgba(255,255,255,0.22)' }}>
+                          <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))' }}>
                             {new Date(u.createdAt).toLocaleDateString()}
                           </span>
                           {u.id !== user.id ? (
@@ -577,12 +644,12 @@ export default function Settings() {
                               Delete
                             </button>
                           ) : (
-                            <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, color: 'rgba(255,255,255,0.22)' }}>you</span>
+                            <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))' }}>you</span>
                           )}
                         </div>
                       ))}
                     </div>
-                    <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, color: 'rgba(255,255,255,0.22)', marginTop: 6 }}>
+                    <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', marginTop: 6 }}>
                       {allUsers.length} profile{allUsers.length !== 1 ? 's' : ''} stored in this browser's localStorage
                     </div>
                   </div>
@@ -594,7 +661,7 @@ export default function Settings() {
 
         {/* ── Admin stats — only visible to whitelisted usernames ────────── */}
         {user && ADMIN_USERS.includes(user.username.toLowerCase()) && (
-          <div style={{ marginTop: 40, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 32 }}>
+          <div style={{ marginTop: 40, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.06))', paddingTop: 32 }}>
             <Section title="Site-Wide User Stats (Admin)">
               <p style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, color: 'var(--theme-secondary)', marginBottom: 12 }}>
                 Enter your <code style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-primary)' }}>ADMIN_SECRET</code> Fly env var to view registrations from all devices.

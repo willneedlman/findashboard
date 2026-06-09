@@ -312,34 +312,60 @@ def run_screen(req: ScreenRequest):
         except Exception as e:
             logger.warning("FMP screener error: %s", e)
 
-    # Fallback: use a hardcoded list of liquid large-caps via yfinance
+    # Fallback: sector-aware liquid tickers via yfinance
+    SECTOR_TICKERS: dict[str, list[str]] = {
+        "technology":            ["AAPL","MSFT","NVDA","GOOGL","META","ORCL","AMD","CSCO","ADBE","CRM","INTC","QCOM","TXN","AMAT","LRCX","MU","KLAC","SNPS","CDNS","ACN","IBM","INTU","NOW","PANW","CRWD"],
+        "healthcare":            ["UNH","LLY","JNJ","ABBV","MRK","TMO","ABT","BMY","AMGN","DHR","PFE","CVS","CI","BSX","ELV","MDT","ISRG","VRTX","REGN","GILD","HCA","HUM","CNC","ZBH","MOH"],
+        "financial services":    ["BRK-B","JPM","V","MA","BAC","GS","MS","AXP","BLK","SPGI","CME","ICE","SCHW","USB","WFC","C","PNC","TFC","MTB","ALLY","COF","SYF","DFS","FITB","KEY"],
+        "consumer cyclical":     ["AMZN","TSLA","HD","MCD","NKE","SBUX","TGT","LOW","COST","BKNG","MAR","HLT","ROST","TJX","DHI","LEN","NVR","PHM","F","GM","UBER","LYFT","SHOP","W","ETSY"],
+        "industrials":           ["CAT","RTX","HON","UPS","DE","BA","MMM","GE","LMT","NOC","GD","EMR","ETN","PH","ROK","CMI","PCAR","FDX","CSX","NSC","UNP","WM","RSG","EXPD","XPO"],
+        "communication services":["GOOGL","META","DIS","CMCSA","NFLX","VZ","T","TMUS","ATVI","EA","TTWO","SNAP","PINS","MTCH","FOXA","PARA","WBD","IPG","OMC","NYT","IAC","ZM","TWLO","BANDWIDTH","SEZL"],
+        "consumer defensive":    ["WMT","PG","KO","PEP","MO","PM","COST","MDLZ","CL","KMB","GIS","K","CPB","HRL","CAG","SJM","MKC","CHD","CLX","TSN","KHC","ADM","BG","CALM","POST"],
+        "energy":                ["XOM","CVX","COP","EOG","SLB","PXD","MPC","VLO","PSX","OXY","DVN","HAL","BKR","FANG","APA","HES","MRO","PR","CLR","SM","RRC","AR","CNX","CTRA","EQT"],
+        "utilities":             ["NEE","DUK","SO","D","AEP","SRE","EXC","XEL","PEG","ED","ES","EIX","FE","ETR","PPL","AES","NI","WEC","CMS","LNT","EVRG","ATO","NWE","OGE","AVA","PNW","OTTR","POR","MGEE","IDACORP","BKH","PNM","UIL","UGI"],
+        "real estate":           ["PLD","AMT","EQIX","CCI","SPG","O","PSA","WELL","DLR","AVB","EQR","MAA","UDR","CPT","ESS","NNN","VICI","GLPI","MGM","MPW","VTR","PEAK","ARE","BXP","KIM"],
+        "basic materials":       ["LIN","APD","ECL","SHW","FCX","NEM","NUE","STLD","RS","VMC","MLM","MOS","CF","DOW","LYB","PPG","RPM","EMN","HUN","OLN","ATI","CC","CSTM","AA","X"],
+    }
+    LIQUID_TICKERS = [
+        "AAPL","MSFT","NVDA","AMZN","GOOGL","META","TSLA","BRK-B","JPM","V",
+        "UNH","XOM","LLY","JNJ","WMT","MA","PG","HD","MRK","ORCL",
+        "COST","ABBV","CVX","BAC","NFLX","KO","PEP","ADBE","TMO","CSCO",
+        "AMD","ACN","MCD","NKE","DHR","INTC","QCOM","IBM","TXN","PM",
+        "UPS","CAT","RTX","HON","AMGN","SBUX","GE","DE","BA","MMM",
+        "GS","MS","AXP","BLK","SPGI","CME","ICE","SCHW","USB","WFC",
+        "DIS","CMCSA","VZ","T","TMUS","CRM","NOW","INTU","AMAT","LRCX",
+        "MU","KLAC","SNPS","CDNS","PANW","CRWD","ZS","OKTA","DDOG","NET",
+        "SHOP","SQ","PYPL","COIN","HOOD","MSTR","PLTR","RBLX","UBER","LYFT",
+    ]
+
     if not candidates:
-        LIQUID_TICKERS = [
-            "AAPL","MSFT","NVDA","AMZN","GOOGL","META","TSLA","BRK-B","JPM","V",
-            "UNH","XOM","LLY","JNJ","WMT","MA","PG","HD","MRK","ORCL",
-            "COST","ABBV","CVX","BAC","NFLX","KO","PEP","ADBE","TMO","CSCO",
-            "AMD","ACN","MCD","NKE","DHR","INTC","QCOM","IBM","TXN","PM",
-            "UPS","CAT","RTX","HON","AMGN","SBUX","GE","DE","BA","MMM",
-            "GS","MS","AXP","BLK","SPGI","CME","ICE","SCHW","USB","WFC",
-            "DIS","CMCSA","VZ","T","TMUS","CRM","NOW","INTU","AMAT","LRCX",
-            "MU","KLAC","SNPS","CDNS","PANW","CRWD","ZS","OKTA","DDOG","NET",
-            "SHOP","SQ","PYPL","COIN","HOOD","MSTR","PLTR","RBLX","UBER","LYFT",
-        ]
         filter_sector = req.sector.lower() if req.sector else None
+        # Use sector-specific tickers when sector is requested; otherwise use broad list
+        if filter_sector and filter_sector in SECTOR_TICKERS:
+            tickers_to_fetch = SECTOR_TICKERS[filter_sector]
+        else:
+            tickers_to_fetch = LIQUID_TICKERS
+
+        def _quick(tk):
+            try:
+                fi = yf.Ticker(tk).fast_info
+                price = getattr(fi, "last_price", None)
+                mc    = getattr(fi, "market_cap", None)
+                return {"ticker": tk, "companyName": tk,
+                        "price":     round(float(price), 2) if price else None,
+                        "marketCap": round(float(mc) / 1e9, 2) if mc else None,
+                        "beta": None, "volume": None, "sector": "", "industry": "", "exchange": ""}
+            except Exception:
+                return None
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=15) as ex:
-            def _quick(tk):
-                try:
-                    fi = yf.Ticker(tk).fast_info
-                    price = getattr(fi, "last_price", None)
-                    mc    = getattr(fi, "market_cap", None)
-                    return {"ticker": tk, "companyName": tk,
-                            "price":     round(float(price), 2) if price else None,
-                            "marketCap": round(float(mc) / 1e9, 2) if mc else None,
-                            "beta": None, "volume": None, "sector": "", "industry": "", "exchange": ""}
-                except Exception:
-                    return None
-            results = list(ex.map(_quick, LIQUID_TICKERS))
+            results = list(ex.map(_quick, tickers_to_fetch))
         candidates = [r for r in results if r and r.get("price")]
+        # Pre-fill sector so post-enrichment filter doesn't strip them if yfinance/FMP fails
+        if filter_sector and req.sector:
+            for c in candidates:
+                if not c.get("sector"):
+                    c["sector"] = req.sector
 
     if not candidates:
         try:
@@ -383,21 +409,35 @@ def run_screen(req: ScreenRequest):
     if not candidates:
         raise HTTPException(503, "No data source available. Configure FMP_API_KEY for best results.")
 
-    # Enrich top candidates in parallel (cap at 60 for speed)
-    to_enrich = candidates[:60]
+    # Enrich top candidates in parallel (cap at 150 to leave room for sector/exchange filtering)
+    to_enrich = candidates[:150]
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
         enriched = list(ex.map(lambda c: _enrich(c["ticker"], c), to_enrich))
+
+    # Apply sector / exchange filters (post-enrichment so sector data is populated)
+    if req.sector:
+        fs = req.sector.lower()
+        enriched = [r for r in enriched if (r.get("sector") or "").lower() == fs]
+    if req.exchange:
+        fe = req.exchange.lower()
+        enriched = [r for r in enriched if (r.get("exchange") or "").lower() == fe]
 
     # Apply precise client-side filters
     filtered = [r for r in enriched if _passes(r, req.filters)]
 
     # Sort
     reverse = req.sort_dir == "desc"
+    STRING_FIELDS = {"ticker", "name", "sector", "industry"}
     def sort_key(r):
         v = r.get(req.sort_by)
+        if req.sort_by in STRING_FIELDS:
+            return str(v).lower() if v is not None else ""
         if v is None:
             return float("-inf") if reverse else float("inf")
-        return float(v)
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return float("-inf") if reverse else float("inf")
     filtered.sort(key=sort_key, reverse=reverse)
 
     result = {"results": filtered[:req.limit], "total": len(filtered)}

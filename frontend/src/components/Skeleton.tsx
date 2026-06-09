@@ -23,7 +23,7 @@ export function SkeletonMetricRow() {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8 }}>
       {Array.from({ length: 4 }).map((_, i) => (
-        <div key={i} style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)', padding: '12px 14px' }}>
+        <div key={i} style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.08)))', padding: '12px 14px' }}>
           <Skeleton height={9} width="60%" className="mb-2" />
           <Skeleton height={22} width="80%" />
         </div>
@@ -34,7 +34,7 @@ export function SkeletonMetricRow() {
 
 export function SkeletonChart({ height = 280 }: { height?: number }) {
   return (
-    <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.08)', position: 'relative' }}>
+    <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.08)))', position: 'relative' }}>
       <div style={{ background: 'rgba(46,57,77,0.8)', width: 120, height: 24 }} />
       <div style={{ padding: '8px 8px 8px 8px', height }}>
         <Skeleton width="100%" height="100%" />
@@ -45,8 +45,8 @@ export function SkeletonChart({ height = 280 }: { height?: number }) {
 
 export function SkeletonTable({ rows = 6, cols = 8 }: { rows?: number; cols?: number }) {
   return (
-    <div style={{ border: '1px solid rgba(255,255,255,0.08)' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 0, borderBottom: '1px solid rgba(255,255,255,0.08)', padding: '8px 10px' }}>
+    <div style={{ border: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.08)))' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 0, borderBottom: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.08)))', padding: '8px 10px' }}>
         {Array.from({ length: cols }).map((_, i) => (
           <Skeleton key={i} height={9} width="70%" />
         ))}
