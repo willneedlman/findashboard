@@ -52,25 +52,24 @@ export const DEFAULT_THEME: Theme = {
 }
 
 // Popular font presets — chosen for visual distinctiveness across categories
+// One monospace, kept for numbers & tabular data (alignment matters in a terminal).
 export const MONO_FONTS = [
-  'JetBrains Mono',   // default — proportional serifs, ligatures
-  'Fira Code',        // rounded, ligature-heavy
-  'Courier Prime',    // classic typewriter feel
-  'Space Mono',       // wide, retro terminal
-  'Inconsolata',      // narrow, clean
-  'Martian Mono',     // ultra-wide condensed blocks
-  'Geist Mono',       // minimal, Vercel-style
-  'DM Mono',          // subtle, editorial
+  'JetBrains Mono',   // the single mono — numbers, code, tabular figures
 ]
+// Interface typeface — a deliberately varied set so the choices look distinct:
+// grotesque · humanist · geometric · rounded · futuristic · serif · display.
 export const SANS_FONTS = [
-  'IBM Plex Sans',    // default — neutral, technical
-  'Inter',            // clean, UI-optimised
-  'DM Sans',          // geometric, modern
-  'Sora',             // rounded, futuristic
-  'Space Grotesk',    // mono-inspired sans
-  'Anybody',          // wide, display-grade
-  'Oxanium',          // sci-fi / fintech feel
-  'Barlow',           // condensed, editorial
+  'Inter',               // neutral grotesque — clean modern default
+  'IBM Plex Sans',       // humanist, technical
+  'Space Grotesk',       // techy, mono-inspired sans
+  'DM Sans',             // geometric, friendly
+  'Manrope',             // semi-rounded, contemporary
+  'Sora',                // futuristic geometric
+  'Geist',               // minimal, Vercel-style
+  'Lora',                // serif — editorial warmth
+  'Fraunces',            // expressive display serif
+  'Bricolage Grotesque', // characterful display grotesque
+  'Barlow',              // slightly condensed grotesque
 ]
 
 const STORAGE_USERS   = 'ft-users'
@@ -122,9 +121,9 @@ export function applyTheme(t: Theme) {
   const monoSrc   = t.primaryFontUrl   || `https://fonts.googleapis.com/css2?family=${encodeURIComponent(t.primaryFont)}:wght@400;700&display=swap`
   const sansSrc   = t.secondaryFontUrl || `https://fonts.googleapis.com/css2?family=${encodeURIComponent(t.secondaryFont)}:wght@400;600;700&display=swap`
   const builtinFonts = [
-    'JetBrains Mono', 'IBM Plex Sans', 'Cinzel', 'Lora', 'IBM Plex Mono',
-    'Fira Code', 'Inconsolata', 'Inter', 'DM Sans', 'Space Grotesk',
-    'Courier Prime', 'Space Mono', 'DM Mono',
+    'JetBrains Mono', 'Cinzel', 'Lora', 'IBM Plex Sans', 'Inter', 'DM Sans',
+    'Space Grotesk', 'Sora', 'Barlow', 'Manrope', 'Geist', 'Fraunces',
+    'Bricolage Grotesque',
   ]
 
   // Only inject <link> for Google-Fonts-style URLs

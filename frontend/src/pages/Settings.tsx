@@ -12,17 +12,17 @@ const ADMIN_USERS = [
 // ── Palette of preset color schemes ──────────────────────────────────────────
 const PRESETS: { name: string; theme: Partial<Theme> }[] = [
   { name: 'Terminal Gold',  theme: { primaryColor: '#c9a84c', secondaryColor: '#5e768f', tertiaryColor: '#60a5fa', bgColor: '#101c2e', surfaceColor: '#0d1826', chartNeutralColor: '#4a7fa5', primaryFont: 'JetBrains Mono', secondaryFont: 'IBM Plex Sans', primaryFontUrl: '', secondaryFontUrl: '' } },
-  { name: 'Bloomberg',      theme: { primaryColor: '#ff6600', secondaryColor: '#888888', tertiaryColor: '#ffb800', bgColor: '#000000', surfaceColor: '#0d0d0d', chartNeutralColor: '#668099', primaryFont: 'Courier Prime',   secondaryFont: 'Barlow',        primaryFontUrl: '', secondaryFontUrl: '' } },
+  { name: 'Bloomberg',      theme: { primaryColor: '#ff6600', secondaryColor: '#888888', tertiaryColor: '#ffb800', bgColor: '#000000', surfaceColor: '#0d0d0d', chartNeutralColor: '#668099', primaryFont: 'JetBrains Mono', secondaryFont: 'Barlow',        primaryFontUrl: '', secondaryFontUrl: '' } },
   { name: 'Emerald Dark',   theme: { primaryColor: '#059669', secondaryColor: '#064e3b', tertiaryColor: '#6ee7b7', bgColor: '#010d07', surfaceColor: '#04150c', chartNeutralColor: '#3a7a5f', primaryFont: 'JetBrains Mono', secondaryFont: 'IBM Plex Sans', primaryFontUrl: '', secondaryFontUrl: '' } },
   { name: 'Crimson Night',  theme: { primaryColor: '#e11d48', secondaryColor: '#881337', tertiaryColor: '#fda4af', bgColor: '#0c0009', surfaceColor: '#160310', chartNeutralColor: '#7a4870', primaryFont: 'JetBrains Mono', secondaryFont: 'IBM Plex Sans', primaryFontUrl: '', secondaryFontUrl: '' } },
-  { name: 'Mainstreet',     theme: { primaryColor: '#a97c50', secondaryColor: '#adadaf', tertiaryColor: '#d5b080', bgColor: '#1a1410', surfaceColor: '#231d17', chartNeutralColor: '#8a7a55', primaryFont: 'Courier Prime',   secondaryFont: 'Barlow',        primaryFontUrl: '', secondaryFontUrl: '' } },
-  { name: 'Stealth Mono',   theme: { primaryColor: '#e2e8f0', secondaryColor: '#475569', tertiaryColor: '#64748b', bgColor: '#000000', surfaceColor: '#0a0a0a', chartNeutralColor: '#5a7090', primaryFont: 'Fira Code',       secondaryFont: 'Inter',         primaryFontUrl: '', secondaryFontUrl: '' } },
-  { name: 'Dracula',        theme: { primaryColor: '#bd93f9', secondaryColor: '#6272a4', tertiaryColor: '#ff79c6', bgColor: '#1c1e2d', surfaceColor: '#181a27', chartNeutralColor: '#6872a8', primaryFont: 'Fira Code',       secondaryFont: 'IBM Plex Sans', primaryFontUrl: '', secondaryFontUrl: '' } },
-  { name: 'Nord',           theme: { primaryColor: '#88c0d0', secondaryColor: '#4c566a', tertiaryColor: '#a3be8c', bgColor: '#1e2430', surfaceColor: '#19202c', chartNeutralColor: '#5a8099', primaryFont: 'Space Mono',     secondaryFont: 'Sora',          primaryFontUrl: '', secondaryFontUrl: '' } },
-  { name: 'Linen',          theme: { primaryColor: '#7c2d12', secondaryColor: '#292524', tertiaryColor: '#1d4ed8', bgColor: '#faf7f2', surfaceColor: '#e8dfd0', chartNeutralColor: '#7a7060', primaryFont: 'DM Mono',        secondaryFont: 'IBM Plex Sans', primaryFontUrl: '', secondaryFontUrl: '' } },
-  { name: 'Morning Mist',   theme: { primaryColor: '#1e3a8a', secondaryColor: '#1e293b', tertiaryColor: '#0f766e', bgColor: '#f1f5f9', surfaceColor: '#dbe4ef', chartNeutralColor: '#5a7590', primaryFont: 'Fira Code',       secondaryFont: 'Inter',         primaryFontUrl: '', secondaryFontUrl: '' } },
-  { name: 'Rosewood',       theme: { primaryColor: '#881337', secondaryColor: '#5a1c1c', tertiaryColor: '#c47878', bgColor: '#fdf4f4', surfaceColor: '#e8d5d5', chartNeutralColor: '#e19dbe', primaryFont: 'JetBrains Mono', secondaryFont: 'DM Sans',       primaryFontUrl: '', secondaryFontUrl: '' } },
-  { name: 'Light Mode',     theme: { primaryColor: '#1a6b3c', secondaryColor: '#4b5563', tertiaryColor: '#2563eb', bgColor: '#f8fafc', surfaceColor: '#ffffff', chartNeutralColor: '#6b7280', primaryFont: 'Fira Code',      secondaryFont: 'Inter',         primaryFontUrl: '', secondaryFontUrl: '' } },
+  { name: 'Mainstreet',     theme: { primaryColor: '#a97c50', secondaryColor: '#adadaf', tertiaryColor: '#d5b080', bgColor: '#1a1410', surfaceColor: '#231d17', chartNeutralColor: '#8a7a55', primaryFont: 'JetBrains Mono', secondaryFont: 'Barlow',        primaryFontUrl: '', secondaryFontUrl: '' } },
+  { name: 'Stealth Mono',   theme: { primaryColor: '#e2e8f0', secondaryColor: '#475569', tertiaryColor: '#64748b', bgColor: '#000000', surfaceColor: '#0a0a0a', chartNeutralColor: '#5a7090', primaryFont: 'JetBrains Mono', secondaryFont: 'Inter',         primaryFontUrl: '', secondaryFontUrl: '' } },
+  { name: 'Dracula',        theme: { primaryColor: '#bd93f9', secondaryColor: '#6272a4', tertiaryColor: '#ff79c6', bgColor: '#1c1e2d', surfaceColor: '#181a27', chartNeutralColor: '#6872a8', primaryFont: 'JetBrains Mono', secondaryFont: 'Space Grotesk', primaryFontUrl: '', secondaryFontUrl: '' } },
+  { name: 'Nord',           theme: { primaryColor: '#88c0d0', secondaryColor: '#4c566a', tertiaryColor: '#a3be8c', bgColor: '#1e2430', surfaceColor: '#19202c', chartNeutralColor: '#5a8099', primaryFont: 'JetBrains Mono', secondaryFont: 'Sora',          primaryFontUrl: '', secondaryFontUrl: '' } },
+  { name: 'Linen',          theme: { primaryColor: '#7c2d12', secondaryColor: '#292524', tertiaryColor: '#1d4ed8', bgColor: '#faf7f2', surfaceColor: '#e8dfd0', chartNeutralColor: '#7a7060', primaryFont: 'JetBrains Mono', secondaryFont: 'Lora', primaryFontUrl: '', secondaryFontUrl: '' } },
+  { name: 'Morning Mist',   theme: { primaryColor: '#1e3a8a', secondaryColor: '#1e293b', tertiaryColor: '#0f766e', bgColor: '#f1f5f9', surfaceColor: '#dbe4ef', chartNeutralColor: '#5a7590', primaryFont: 'JetBrains Mono', secondaryFont: 'Inter',         primaryFontUrl: '', secondaryFontUrl: '' } },
+  { name: 'Rosewood',       theme: { primaryColor: '#881337', secondaryColor: '#5a1c1c', tertiaryColor: '#c47878', bgColor: '#fdf4f4', surfaceColor: '#e8d5d5', chartNeutralColor: '#e19dbe', primaryFont: 'JetBrains Mono', secondaryFont: 'Fraunces',     primaryFontUrl: '', secondaryFontUrl: '' } },
+  { name: 'Light Mode',     theme: { primaryColor: '#1a6b3c', secondaryColor: '#4b5563', tertiaryColor: '#2563eb', bgColor: '#f8fafc', surfaceColor: '#ffffff', chartNeutralColor: '#6b7280', primaryFont: 'JetBrains Mono', secondaryFont: 'Inter',         primaryFontUrl: '', secondaryFontUrl: '' } },
 ]
 
 // ── Small UI helpers ──────────────────────────────────────────────────────────
@@ -602,13 +602,13 @@ export default function Settings() {
             <Section title="Typography">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                 <FontSelector
-                  label="Primary font (numbers, code)"
+                  label="Numbers & data (monospace)"
                   value={draft.primaryFont} options={MONO_FONTS}
                   onChange={v => patchDraft({ primaryFont: v, primaryFontUrl: '' })}
                   onUpload={(name, url) => patchDraft({ primaryFont: name, primaryFontUrl: url })}
                 />
                 <FontSelector
-                  label="Secondary font (labels, UI)"
+                  label="Interface typeface"
                   value={draft.secondaryFont} options={SANS_FONTS}
                   onChange={v => patchDraft({ secondaryFont: v, secondaryFontUrl: '' })}
                   onUpload={(name, url) => patchDraft({ secondaryFont: name, secondaryFontUrl: url })}

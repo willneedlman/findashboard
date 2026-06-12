@@ -336,27 +336,12 @@
   opacity: 1 !important;
 }
 
-/* ── Monospace font stack — switchable via data-font attribute ───────────── */
-/*
- * Three high-quality monospace fonts loaded via Google Fonts:
- *   --font-mono-jetbrains  JetBrains Mono  (default — established project font)
- *   --font-mono-fira       Fira Code       (ligature-rich, excellent readability)
- *   --font-mono-inconsolata Inconsolata    (clean, compact, neutral aesthetic)
- *   --font-mono-ibmplex    IBM Plex Mono   (professional, open-source IBM face)
- *
- * Usage: set data-font="fira" | "inconsolata" | "ibmplex" on <html>
- * Default (no attribute) → JetBrains Mono.
- */
+/* ── Monospace fallback — one mono, for numbers/tabular data ─────────────── */
+/* The interface typeface is chosen in Settings (--theme-sans); the single mono
+   stays JetBrains Mono so figures and tables always align. */
 :root {
-  --font-mono-jetbrains:  'JetBrains Mono', monospace;
-  --font-mono-fira:       'Fira Code', monospace;
-  --font-mono-inconsolata: 'Inconsolata', monospace;
-  --font-mono-ibmplex:    'IBM Plex Mono', monospace;
-  --font-mono:            var(--font-mono-jetbrains);
+  --font-mono: 'JetBrains Mono', monospace;
 }
-html[data-font="fira"]        { --font-mono: var(--font-mono-fira); }
-html[data-font="inconsolata"] { --font-mono: var(--font-mono-inconsolata); }
-html[data-font="ibmplex"]     { --font-mono: var(--font-mono-ibmplex); }
 
 /* ── Recharts — consistent font + grid ──────────────────────────────────── */
 .recharts-text,
