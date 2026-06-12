@@ -189,11 +189,17 @@ function SegmentBreakdown({ title, block }: { title: string; block: SegBlock }) 
                   {typeof y.year === 'number' ? `'${String(y.year).slice(2)}` : y.year}
                 </span>
                 <div style={{ flex: 1, display: 'flex', height: 7, borderRadius: 2, overflow: 'hidden', gap: 1, background: 'var(--theme-hover, rgba(255,255,255,0.04))' }}>
-                  {y.segments.map((s, j) => (
-                    // Colour by rank (j-th = j-th legend item) so years line up even when
-                    // FMP relabels a segment between reports (e.g. "United States" vs "Walmart U S").
-                    <div key={j} title={`${prettyName(s.name)}: ${fmtCap(s.value)}`} style={{ width: `${(s.value / tot) * 100}%`, background: color[block.latest[j]?.name] || SEGMENT_COLORS[j % SEGMENT_COLORS.length] }} />
-                  ))}
+                  {y.segments.map((s, j) => {
+                    // FMP relabels segments between years (e.g. international is "Walmart
+                    // International" in FY26 but "Non-United States" earlier). Present the
+                    // trend with the latest breakdown's segment identity, matched by rank,
+                    // so every year shows the same segments as the legend.
+                    const seg = block.latest[j]
+                    return (
+                      <div key={j} title={`${prettyName(seg?.name ?? s.name)}: ${fmtCap(s.value)}`}
+                        style={{ width: `${(s.value / tot) * 100}%`, background: (seg && color[seg.name]) || SEGMENT_COLORS[j % SEGMENT_COLORS.length] }} />
+                    )
+                  })}
                 </div>
                 <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, width: 54, textAlign: 'right', flexShrink: 0 }}>{fmtCap(y.total)}</span>
               </div>
