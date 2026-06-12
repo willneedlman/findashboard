@@ -235,7 +235,7 @@ export function SupplyChainContent() {
   }
 
   return (
-    <div id="supply-chain-content" style={{ maxWidth: 1100, margin: '0 auto' }}>
+    <div id="supply-chain-content" style={{ width: '100%', maxWidth: 1340, margin: '0 auto' }}>
 
         <PageHeader
           title="Company Profile"
@@ -272,7 +272,7 @@ export function SupplyChainContent() {
         </div>
 
         {data && (
-          <div style={{ display: 'grid', gridTemplateColumns: isMobileLayout ? '1fr' : '300px 1fr', gap: 20, alignItems: 'start' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobileLayout ? '1fr' : '340px 1fr', gap: 20, alignItems: 'start' }}>
 
             {/* ── Left: company card ─────────────────────────────────── */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -340,9 +340,11 @@ export function SupplyChainContent() {
             {/* ── Right: segment breakdowns ──────────────────────────── */}
             <div className="ft-panel">
               <div className="ft-panel-header">Revenue Breakdown</div>
-              <div style={{ padding: '20px 20px 8px' }}>
-                <SegmentBreakdown title="By Product / Segment" block={data.product_segments} />
-                <SegmentBreakdown title="By Geography" block={data.geo_segments} />
+              <div style={{ padding: '20px 22px 10px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '8px 40px', alignItems: 'start' }}>
+                  <SegmentBreakdown title="By Product / Segment" block={data.product_segments} />
+                  <SegmentBreakdown title="By Geography" block={data.geo_segments} />
+                </div>
                 {!data.product_segments.latest.length && !data.geo_segments.latest.length && (
                   <div style={{ padding: '40px 0', textAlign: 'center', color: T.muted, fontFamily: T.label, fontSize: 11 }}>
                     {(data.product_segments.error || data.geo_segments.error) ? (
