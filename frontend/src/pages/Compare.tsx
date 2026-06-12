@@ -58,6 +58,8 @@ const METRIC_GROUPS: { group: string; items: { key: string; label: string; short
 const METRIC_SHORT: Record<string, string> = {}
 const METRIC_UNIT: Record<string, 'x' | '%'> = {}
 METRIC_GROUPS.forEach(g => g.items.forEach(m => { METRIC_SHORT[m.key] = m.short; METRIC_UNIT[m.key] = m.unit }))
+const MACRO_LABEL: Record<string, string> = {}
+MACRO_GROUPS.forEach(g => g.items.forEach(m => { MACRO_LABEL[m.sym] = m.label }))
 
 interface CompareResp {
   period: string; normalize: string; tickers: string[]; overlays: string[]
@@ -223,9 +225,15 @@ export function CompareContent() {
   const ratioUnits: Record<string, string> = {}
   ratios.forEach(r => { ratioUnits[ratioKey(r)] = METRIC_UNIT[r.metric] })
   const hasRight = overlays.length > 0 || ratios.length > 0
-  const leftAxisLabel  = norm === 'indexed' ? 'Indexed to 100' : norm === 'pct' ? 'Change (%)' : 'Price'
-  const rightAxisLabel = ratios.length && overlays.length ? 'Multiples · Macro (raw)'
-    : ratios.length ? 'Multiples / Ratios' : 'Macro (raw)'
+  const leftAxisLabel = norm === 'indexed' ? 'Relative Performance' : norm === 'pct' ? 'Cumulative Return (%)' : 'Price'
+  const rightItems = [
+    ...overlays.map(o => MACRO_LABEL[o] || o),
+    ...ratios.map(r => `${r.ticker} ${METRIC_SHORT[r.metric]}`),
+  ]
+  const rightAxisLabel = rightItems.length === 1 ? rightItems[0]
+    : ratios.length && overlays.length ? 'Macro & Multiples'
+    : ratios.length ? 'Multiples & Ratios'
+    : 'Macro Indicators'
   const axisLabelStyle = { fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', fill: '#5e768f' as const }
 
   return (
