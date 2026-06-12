@@ -14,8 +14,20 @@ PEER_GROUPS = {
 }
 
 def _get_peers_for_ticker(ticker: str, sector: str) -> list:
-    """Matches a ticker to an industry peer group for relative comps analysis."""
+    """Comparable companies for relative comps. Prefers FMP's curated, size-ranked
+    peer list (real business comps, not just same-sector); falls back to broad
+    hardcoded groups only when FMP is unavailable or returns nothing."""
     sym = ticker.strip().upper()
+
+    try:
+        import fmp as _fmp
+        if _fmp.available():
+            fmp_peers = [p for p in _fmp.get_stock_peers(sym, limit=8) if p != sym]
+            if fmp_peers:
+                return fmp_peers
+    except Exception:
+        pass
+
     if sym in ["NVDA", "AMD", "INTC", "AVGO", "QCOM", "MSFT", "AAPL"]:
         return [p for p in PEER_GROUPS["TECH"] if p != sym]
     if sym in ["GOOGL", "META", "NFLX"]:
@@ -355,16 +367,21 @@ async def get_peer_valuation(ticker: str):
         # 1. Map Target Row
         comps.append(build_aligned_row(symbol, info, True))
 
-        # 2. Map Peer Rows
-        for peer in peers[:4]:
+        # 2. Map Peer Rows — fetched concurrently so a larger comp set stays fast
+        def _peer_row(peer):
             try:
-                p_stock = yf.Ticker(peer)
-                p_info = p_stock.info
-                if p_info is None or not isinstance(p_info, dict):
-                    continue
-                comps.append(build_aligned_row(peer, p_info, False))
+                p_info = yf.Ticker(peer).info
+                if isinstance(p_info, dict) and p_info:
+                    return build_aligned_row(peer, p_info, False)
             except Exception:
-                continue
+                pass
+            return None
+
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            for row in pool.map(_peer_row, peers[:8]):
+                if row:
+                    comps.append(row)
 
         return {
             "ticker":  symbol,

@@ -175,6 +175,67 @@ def get_quote(ticker: str) -> dict:
     return _cached(_quote_cache, sym, fetch)
 
 
+_peers_cache: TTLCache = TTLCache(maxsize=300, ttl=86400)  # 24 hr
+
+
+def get_stock_peers(ticker: str, limit: int = 8) -> list:
+    """Business-relevant comparable companies, kept cheap (≤3 API calls).
+
+    Finnhub's /stock/peers is already industry-matched and roughly size-ordered, so
+    it leads (e.g. SBUX → MCD/YUM/CMG, not travel names). FMP's /stock-peers adds
+    breadth plus free market caps, which we use only to drop extreme size mismatches
+    (e.g. a $4T name benchmarked against a $40B one). No per-candidate lookups —
+    avoids the rate-limit storm that per-peer profile fetches caused.
+    """
+    import math
+    sym = ticker.strip().upper()
+
+    def fetch():
+        # FMP peers: free market caps (and breadth)
+        capmap: dict[str, float] = {}
+        try:
+            raw = _get("/stock-peers", {"symbol": sym})
+            for r in (raw if isinstance(raw, list) else []):
+                if isinstance(r, dict):
+                    ps = str(r.get("symbol") or "").upper()
+                    if ps and ps != sym:
+                        capmap[ps] = float(r.get("mktCap") or 0)
+        except Exception:
+            pass
+
+        # Finnhub peers: industry-precise, leads the ordering
+        fh_order: list = []
+        try:
+            import finnhub as _fh
+            if _fh.available():
+                fh_order = [p for p in _fh.get_peers(sym) if p and p != sym]
+        except Exception:
+            pass
+
+        seen, cand = set(), []
+        for p in fh_order + list(capmap.keys()):
+            if p not in seen:
+                seen.add(p)
+                cand.append(p)
+        if not cand:
+            return []
+
+        # Drop extreme size mismatches using free FMP caps; keep unknown-size peers.
+        try:
+            tgt = float(get_profile(sym).get("marketCap") or 0)
+        except Exception:
+            tgt = 0.0
+        if tgt > 0:
+            def size_ok(p: str) -> bool:
+                c = capmap.get(p, 0.0)
+                return c <= 0 or abs(math.log10(c) - math.log10(tgt)) <= 1.6  # ~40x band
+            cand = [p for p in cand if size_ok(p)] or cand
+
+        return cand[:limit]
+
+    return _cached(_peers_cache, sym, fetch)
+
+
 _segments_cache: TTLCache = TTLCache(maxsize=200, ttl=86400)  # 24 hr
 
 

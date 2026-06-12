@@ -36,6 +36,7 @@ _lock          = threading.Lock()
 _quote_cache:   TTLCache = TTLCache(maxsize=300, ttl=1800)   # 30 min
 _ratings_cache: TTLCache = TTLCache(maxsize=300, ttl=86400)  # 24 hr
 _profile_cache: TTLCache = TTLCache(maxsize=300, ttl=86400)  # 24 hr
+_peers_cache:   TTLCache = TTLCache(maxsize=300, ttl=86400)  # 24 hr
 
 
 def available() -> bool:
@@ -58,6 +59,23 @@ def _cached(cache: TTLCache, key: str, fetch_fn):
     with _lock:
         cache[key] = data
     return data
+
+
+# ── Industry peers ────────────────────────────────────────────────────────────
+
+def get_peers(ticker: str) -> list:
+    """Same-industry peer symbols from Finnhub /stock/peers. Industry-precise and
+    US-focused — good where FMP's curated peer list is thin."""
+    sym = ticker.strip().upper()
+    def fetch():
+        try:
+            data = _get("/stock/peers", {"symbol": sym})
+            if isinstance(data, list):
+                return [str(s).upper() for s in data if s and str(s).upper() != sym]
+        except Exception:
+            pass
+        return []
+    return _cached(_peers_cache, sym, fetch)
 
 
 # ── Quote — normalized to FMP /quote shape ────────────────────────────────────
