@@ -5,7 +5,7 @@ import {
   GitBranch, Activity, Building2, Calculator, Network, Shuffle, Zap,
   ArrowUpRight, LayoutGrid, Filter, FileText, Upload, X,
   PieChart, Scale, Globe, BookOpen, Terminal, Brain, Bell, Bot,
-  Briefcase, ShieldAlert, ScatterChart, Layers, Compass, Search, Waves, Gauge,
+  Briefcase, ShieldAlert, ScatterChart, Layers, Compass, Search, Waves, Gauge, GitCompare,
 } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import useIsMobile from '../hooks/useIsMobile'
@@ -158,6 +158,9 @@ const BENTO_CARDS: Card[] = [
   { to: '/research-hub', icon: Search, size: 'wide', accent: '#7b5ea7', tag: 'RESEARCH HUB',
     title: 'Research Hub',
     body: 'One-stop research surface — filings, fundamentals, news, and AI summaries tabbed into a single workspace.' },
+  { to: '/compare', icon: GitCompare, size: 'wide', accent: '#60a5fa', tag: 'COMPARE',
+    title: 'Asset Comparison',
+    body: 'Overlay any assets — stocks, ETFs, crypto, indices, FX, futures — on one normalized chart. Compare performance across price scales and timeframes.' },
 
   // ── Row 3: Valuation & Quant (4×normal)
   { to: '/corporate',          icon: Building2,  size: 'normal', accent: 'var(--theme-primary, #c9a84c)', tag: 'CORP',       title: 'Corporate Hub',       body: 'Earnings scanner, insider flow, short interest, and live news aggregator.' },

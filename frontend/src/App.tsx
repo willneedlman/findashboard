@@ -48,6 +48,7 @@ const ResearchHub        = lazy(() => import('./pages/ResearchHub'))
 const IVTracker          = lazy(() => import('./pages/IVTracker'))
 const OptionsMarketMaker = lazy(() => import('./pages/OptionsMarketMaker'))
 const UnusualOptions     = lazy(() => import('./pages/UnusualOptions'))
+const Compare            = lazy(() => import('./pages/Compare'))
 
 function PageLoader() {
   return (
@@ -111,6 +112,7 @@ export default function App() {
               <Route path="/iv-tracker"         element={<IVTracker />} />
               <Route path="/market-maker"       element={<OptionsMarketMaker />} />
               <Route path="/unusual-options"    element={<UnusualOptions />} />
+              <Route path="/compare"            element={<Compare />} />
             </Routes>
           </Suspense>
         </AnimatePresence>

@@ -3,8 +3,8 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from cache import get_history as _cached_history, get_news as _cached_news
-from validation import validate_ticker, validate_date
+from cache import get_history as _cached_history, get_news as _cached_news, get_download
+from validation import validate_ticker, validate_tickers, validate_date
 
 import yfinance as yf
 
@@ -77,6 +77,106 @@ def get_history(ticker: str, start: str | None = None, end: str | None = None):
         "volatility": [{"date": str(d.date()), "value": round(float(v), 4)} for d, v in rolling_vol.dropna().items()],
         "drawdown": [{"date": str(d.date()), "value": round(float(v), 4)} for d, v in drawdown.items()],
     }
+
+
+_COMPARE_PERIOD_DAYS = {"1m": 31, "3m": 92, "6m": 183, "1y": 366, "2y": 731, "5y": 1827}
+
+
+@router.get("/compare")
+def compare_assets(tickers: str, period: str = "1y", normalize: str = "indexed", overlays: str = ""):
+    """Overlay assets on one timeline. Any yfinance symbol — equities, ETFs, crypto
+    (BTC-USD), indices (^GSPC), FX (EURUSD=X), futures (GC=F), rates (^TNX), vol (^VIX).
+
+    `tickers`  → primary, left axis, normalized by `normalize`
+                 ('indexed' = rebased to 100, 'pct' = cumulative %, 'price' = raw).
+    `overlays` → secondary, right axis, raw values (macro: ^TNX, ^VIX, DX-Y.NYB …).
+    """
+    import datetime as _dt
+
+    def _parse(s: str) -> list:
+        return list(dict.fromkeys([x.strip().upper() for x in s.split(",") if x.strip()]))
+
+    prim = _parse(tickers)[:8]
+    sec  = [x for x in _parse(overlays) if x not in prim][:4]
+    if not prim:
+        raise HTTPException(400, "Provide at least one ticker")
+    allsyms = prim + sec
+    try:
+        validate_tickers(allsyms, max_count=12)
+    except HTTPException:
+        raise HTTPException(400, "Invalid ticker symbol")
+
+    today = _dt.date.today()
+    if period == "ytd":
+        start = _dt.date(today.year, 1, 1)
+    elif period == "max":
+        start = today - _dt.timedelta(days=365 * 15)
+    else:
+        start = today - _dt.timedelta(days=_COMPARE_PERIOD_DAYS.get(period, 366))
+    end = today + _dt.timedelta(days=1)
+
+    try:
+        raw = get_download(tuple(sorted(allsyms)), str(start), str(end))
+    except Exception:
+        raise HTTPException(500, "Internal server error")
+    if raw is None or raw.empty:
+        raise HTTPException(404, "No data for the requested assets")
+
+    if isinstance(raw.columns, pd.MultiIndex):
+        closes = raw["Close"] if "Close" in raw.columns.get_level_values(0) else raw
+    else:
+        col = "Close" if "Close" in raw.columns else raw.columns[0]
+        closes = raw[[col]].copy()
+        closes.columns = [allsyms[0]]
+    if isinstance(closes, pd.Series):
+        closes = closes.to_frame(allsyms[0])
+
+    closes = closes.sort_index().ffill()
+    prim_avail = [s for s in prim if s in closes.columns]
+    sec_avail  = [s for s in sec if s in closes.columns]
+    if not prim_avail:
+        raise HTTPException(404, "No data for the requested assets")
+    # Align on the primary assets' common history (crypto weekends fold into trading days)
+    closes = closes.dropna(subset=prim_avail)
+    if closes.empty:
+        raise HTTPException(404, "No overlapping history for these assets")
+
+    out  = pd.DataFrame(index=closes.index)
+    meta, axis = {}, {}
+    base = closes[prim_avail].iloc[0]
+    for s in prim_avail:
+        col = closes[s]
+        if normalize == "indexed":
+            out[s] = col / base[s] * 100.0
+        elif normalize == "pct":
+            out[s] = (col / base[s] - 1.0) * 100.0
+        else:
+            out[s] = col
+        first, last = float(col.iloc[0]), float(col.iloc[-1])
+        meta[s] = {"start": round(first, 4), "last": round(last, 4),
+                   "change_pct": round((last / first - 1) * 100, 2) if first else None}
+        axis[s] = "left"
+    for s in sec_avail:                         # secondary overlays — raw values
+        col = closes[s]
+        out[s] = col
+        valid = col.dropna()
+        if len(valid):
+            f, l = float(valid.iloc[0]), float(valid.iloc[-1])
+            meta[s] = {"start": round(f, 4), "last": round(l, 4),
+                       "change_pct": round((l / f - 1) * 100, 2) if f else None}
+        axis[s] = "right"
+
+    cols = prim_avail + sec_avail
+    series = []
+    for d, row in out.iterrows():
+        rec = {"date": str(pd.Timestamp(d).date())}
+        for s in cols:
+            v = row[s]
+            rec[s] = round(float(v), 4) if pd.notna(v) else None
+        series.append(rec)
+
+    return {"period": period, "normalize": normalize, "tickers": prim_avail,
+            "overlays": sec_avail, "series": series, "meta": meta, "axis": axis}
 
 
 @router.get("/ohlcv")

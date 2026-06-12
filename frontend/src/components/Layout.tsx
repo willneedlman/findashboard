@@ -7,7 +7,7 @@ import {
   BarChart2, Dices, GitBranch, Building2, Calculator,
   Network, Shuffle, Zap, ChevronLeft, ChevronRight, X, Menu, Settings,
   Filter, FileText, ShieldAlert, PieChart,
-  BookOpen, Terminal, Brain, Bell, Star, Gauge, Activity,
+  BookOpen, Terminal, Brain, Bell, Star, Gauge, Activity, GitCompare,
 } from 'lucide-react'
 import Footer from './Footer'
 import AlertToastQueue from './AlertToastQueue'
@@ -28,6 +28,7 @@ const NAV_SECTIONS = [
       { to: '/sector-rotation',icon: PieChart,       label: 'Sector Rotation' },
       { to: '/research-hub',   icon: Building2,      label: 'Research Hub' },
       { to: '/correlation',    icon: Network,        label: 'Correlation Matrix' },
+      { to: '/compare',        icon: GitCompare,     label: 'Asset Comparison' },
       { to: '/screener',       icon: Filter,         label: 'Stock Screener' },
       { to: '/earnings',       icon: FileText,       label: 'Earnings AI' },
       { to: '/sentiment',      icon: Brain,          label: 'Sentiment Tracker' },
