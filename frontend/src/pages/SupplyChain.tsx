@@ -26,6 +26,7 @@ interface SegBlock {
   latest:        SegItem[]
   history:       SegHistYear[]
   concentration: SegConcentration | null
+  error?:        boolean
 }
 
 const labelStyle: React.CSSProperties = {
@@ -90,7 +91,9 @@ function SegmentBreakdown({ title, block }: { title: string; block: SegBlock }) 
     return (
       <div style={{ marginBottom: 24 }}>
         <div style={labelStyle}>{title}</div>
-        <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11, fontStyle: 'italic' }}>Not reported by this issuer.</div>
+        <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11, fontStyle: 'italic' }}>
+          {block.error ? 'Temporarily unavailable — retry shortly.' : 'Not reported by this issuer.'}
+        </div>
       </div>
     )
   }
@@ -325,8 +328,17 @@ export function SupplyChainContent() {
                 <SegmentBreakdown title="By Geography" block={data.geo_segments} />
                 {!data.product_segments.latest.length && !data.geo_segments.latest.length && (
                   <div style={{ padding: '40px 0', textAlign: 'center', color: T.muted, fontFamily: T.label, fontSize: 11 }}>
-                    No segment breakdown reported for {data.ticker}.<br />
-                    <span style={{ fontSize: 10, opacity: 0.7 }}>Most issuers that file segmented revenue are covered; some (funds, holding companies, certain foreign filers) don't report it.</span>
+                    {(data.product_segments.error || data.geo_segments.error) ? (
+                      <>
+                        Segment data is temporarily unavailable for {data.ticker}.<br />
+                        <span style={{ fontSize: 10, opacity: 0.7 }}>The data provider is rate-limited right now — try again in a little while. Once fetched, results are cached.</span>
+                      </>
+                    ) : (
+                      <>
+                        No segment breakdown reported for {data.ticker}.<br />
+                        <span style={{ fontSize: 10, opacity: 0.7 }}>Most issuers that file segmented revenue are covered; some (funds, holding companies, certain foreign filers) don't report it.</span>
+                      </>
+                    )}
                   </div>
                 )}
               </div>

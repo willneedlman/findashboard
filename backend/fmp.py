@@ -375,7 +375,14 @@ _segments_cache: TTLCache = TTLCache(maxsize=200, ttl=86400)  # 24 hr
 # FMP stable nests the segments under a "data" key; everything else is metadata.
 _SEG_META_KEYS = {"date", "symbol", "reportedCurrency", "period", "fiscalYear", "calendarYear", "cik"}
 
-EMPTY_SEGMENTS = {"fiscalYear": None, "currency": None, "latest": [], "history": [], "concentration": None}
+try:
+    from disk_cache import disk_get, disk_set
+except ImportError:                              # pragma: no cover
+    def disk_get(_k): return None                # type: ignore
+    def disk_set(_k, _v, ttl=0): pass            # type: ignore
+
+# 'error' distinguishes a failed/throttled fetch from a genuine "issuer reports nothing".
+EMPTY_SEGMENTS = {"fiscalYear": None, "currency": None, "latest": [], "history": [], "concentration": None, "error": False}
 
 # Intersegment/corporate reconciliation rows — noise in a revenue mix, not real segments.
 _SEG_NOISE_RE = re.compile(r"reconcil|eliminat|intersegment|^segment reporting", re.I)
@@ -457,26 +464,51 @@ def _segment_history(data, years: int = 6) -> dict:
             "latest": latest_list, "history": history, "concentration": concentration}
 
 
-def get_revenue_segments(ticker: str) -> dict:
-    """Product revenue segments from FMP stable API → latest + history + YoY."""
-    sym = ticker.strip().upper()
-    def fetch():
+def _get_segments(sym: str, path: str, kind: str) -> dict:
+    """Three-layer segment fetch: in-memory → disk (30d) → FMP. Only successful
+    results are cached, so a rate-limited fetch retries next time instead of
+    sticking. Disk persistence keeps segments available across restarts and FMP
+    outages — coverage accumulates as tickers are viewed."""
+    mem_key, disk_key = f"{sym}:{kind}", f"seg:{kind}:{sym}"
+
+    with _lock:
+        cached = _segments_cache.get(mem_key)
+    if isinstance(cached, dict) and cached.get("latest"):
+        return cached
+    try:
+        d = disk_get(disk_key)
+        if isinstance(d, dict) and d.get("latest"):
+            with _lock:
+                _segments_cache[mem_key] = d
+            return d
+    except Exception:
+        pass
+
+    try:
+        result = _segment_history(_get(path, {"symbol": sym, "period": "annual"}))
+    except Exception:
+        out = dict(EMPTY_SEGMENTS)
+        out["error"] = True            # fetch failed (throttled / down) — not a real "no data"
+        return out
+
+    if result.get("latest"):
+        with _lock:
+            _segments_cache[mem_key] = result
         try:
-            return _segment_history(_get("/revenue-product-segmentation", {"symbol": sym, "period": "annual"}))
+            disk_set(disk_key, result, ttl=30 * 86400)
         except Exception:
-            return dict(EMPTY_SEGMENTS)
-    return _cached(_segments_cache, f"{sym}:prod", fetch)
+            pass
+    return result
+
+
+def get_revenue_segments(ticker: str) -> dict:
+    """Product revenue segments (disk-cached) — FMP /revenue-product-segmentation."""
+    return _get_segments(ticker.strip().upper(), "/revenue-product-segmentation", "prod")
 
 
 def get_geo_segments(ticker: str) -> dict:
-    """Geographic revenue segments from FMP stable API → latest + history + YoY."""
-    sym = ticker.strip().upper()
-    def fetch():
-        try:
-            return _segment_history(_get("/revenue-geographic-segmentation", {"symbol": sym, "period": "annual"}))
-        except Exception:
-            return dict(EMPTY_SEGMENTS)
-    return _cached(_segments_cache, f"{sym}:geo", fetch)
+    """Geographic revenue segments (disk-cached) — FMP /revenue-geographic-segmentation."""
+    return _get_segments(ticker.strip().upper(), "/revenue-geographic-segmentation", "geo")
 
 
 def get_dcf_fundamentals(ticker: str) -> dict:
