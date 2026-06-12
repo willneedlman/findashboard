@@ -31,7 +31,11 @@ app = FastAPI(title="Alphatape Terminal API", lifespan=lifespan)
 # Origin, effectively allowing every site to make credentialed requests). The SPA
 # is served same-origin by this app, so an explicit allowlist is sufficient.
 # Override in other environments via ALLOWED_ORIGINS (comma-separated).
-_DEFAULT_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173,https://finance-terminal.fly.dev"
+_DEFAULT_ORIGINS = (
+    "http://localhost:5173,http://127.0.0.1:5173,"
+    "https://alphatape.app,https://www.alphatape.app,"
+    "https://finance-terminal.fly.dev"
+)
 _ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", _DEFAULT_ORIGINS).split(",") if o.strip()]
 
 app.add_middleware(
@@ -41,6 +45,57 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Public, read-only market data: identical for every user, safe to cache at the
+# Cloudflare edge. Maps URL-path prefix -> edge TTL (seconds). Anything NOT listed
+# here stays no-store. NEVER add a user-specific or auth-bearing prefix.
+_PUBLIC_API_TTL = {
+    "/api/rates":       600,
+    "/api/dcf":         600,
+    "/api/corporate":   600,
+    "/api/bond":        300,
+    "/api/correlation": 300,
+    "/api/sentiment":   300,
+    "/api/screener":    300,
+    "/api/regression":  300,
+    "/api/probability": 120,
+    "/api/iv":          120,
+    "/api/market":       60,
+    "/api/options":      60,
+}
+
+
+@app.middleware("http")
+async def cache_control(request, call_next):
+    """Drive browser + Cloudflare-edge caching from one place.
+
+    - /assets/*  content-hashed bundles never change → cache a year, immutable.
+    - /api/*     no-store by default so authenticated/user responses never reach a
+                 shared cache. Public GET endpoints in _PUBLIC_API_TTL opt in to
+                 edge caching; non-GET and errors are never made public.
+    - everything else is the SPA HTML shell → revalidate so deploys are picked up.
+    """
+    response = await call_next(request)
+    path = request.url.path
+    if path.startswith("/assets/"):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    elif path.startswith("/api/"):
+        ttl = None
+        if request.method == "GET" and response.status_code == 200:
+            for prefix, secs in _PUBLIC_API_TTL.items():
+                if path.startswith(prefix):
+                    ttl = secs
+                    break
+        if ttl is not None:
+            response.headers["Cache-Control"] = (
+                f"public, max-age={ttl}, s-maxage={ttl}, stale-while-revalidate={ttl * 2}"
+            )
+        else:
+            response.headers.setdefault("Cache-Control", "no-store")
+    else:
+        response.headers["Cache-Control"] = "no-cache"
+    return response
 
 app.include_router(market.router,            prefix="/api/market",            tags=["market"])
 app.include_router(options.router,           prefix="/api/options",           tags=["options"])

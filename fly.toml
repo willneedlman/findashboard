@@ -7,6 +7,9 @@ primary_region = "iad"
   PORT = "8080"
   PYTHONPATH = "/app/backend"
   SENTIMENT_HISTORY_PATH = "/data/sentiment_history.json"
+  # Persist the API cache on the volume so deploys/restarts don't re-burn the
+  # FMP daily quota. Default is the ephemeral container FS (lost every deploy).
+  DISK_CACHE_PATH = "/data/disk_cache.db"
 
 [http_service]
   internal_port = 8080
