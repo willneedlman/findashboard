@@ -13,8 +13,11 @@ from pydantic import BaseModel, Field
 router = APIRouter()
 
 # ── Database setup ─────────────────────────────────────────────────────────────
-# Store in /data on Fly (persistent volume) or local ./users.db for dev
-_DB_PATH = Path(os.getenv("USERS_DB_PATH", "./users.db"))
+# Store in /data on Fly (persistent volume), else the canonical repo-root users.db.
+# Anchor to the repo root (not the cwd) so launching the server from backend/ vs the
+# repo root doesn't silently create a second, separate user database.
+_DEFAULT_DB = Path(__file__).resolve().parents[2] / "users.db"
+_DB_PATH = Path(os.getenv("USERS_DB_PATH", str(_DEFAULT_DB)))
 _lock = threading.Lock()
 
 def _conn():
