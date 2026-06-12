@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { motion, useReducedMotion } from 'framer-motion'
 import {
   TrendingUp, LineChart, Landmark, Bitcoin, BarChart2, Dices,
   GitBranch, Activity, Building2, Calculator, Network, Shuffle, Zap,
@@ -216,14 +217,32 @@ function sizeClass(size?: CardSize) {
   return ''
 }
 
-function BentoCard({ card }: { card: Card }) {
+const TILE_EASE: [number, number, number, number] = [0.23, 1, 0.32, 1]
+const gridStagger = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.035, delayChildren: 0.05 } },
+}
+const tileReveal = {
+  hidden: { opacity: 0, y: 10 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.34, ease: TILE_EASE } },
+}
+
+function BentoCard({ card, reduce }: { card: Card; reduce: boolean }) {
   const navigate = useNavigate()
   const isMobile = useIsMobile()
   const isHero = card.size === 'hero'
   const isTall = card.size === 'tall'
 
   return (
-    <div
+    <motion.div
+      variants={reduce ? undefined : tileReveal}
+      whileHover={reduce ? undefined : {
+        y: -3,
+        boxShadow: '0 10px 26px rgba(0,0,0,0.32)',
+        backgroundColor: 'color-mix(in srgb, var(--theme-primary) 6%, var(--theme-surface, #0d1b30))',
+      }}
+      whileTap={reduce ? undefined : { y: -1, scale: 0.994 }}
+      transition={{ duration: 0.18, ease: TILE_EASE }}
       onClick={() => navigate(card.to)}
       className={sizeClass(card.size)}
       style={{
@@ -238,13 +257,6 @@ function BentoCard({ card }: { card: Card }) {
         minHeight: isMobile ? 0 : isHero ? 220 : isTall ? 220 : 120,
         position: 'relative',
         overflow: 'hidden',
-        transition: 'background 0.15s',
-      }}
-      onMouseEnter={e => {
-        (e.currentTarget as HTMLElement).style.background = 'color-mix(in srgb, var(--theme-primary) 6%, var(--theme-surface, #0d1b30))'
-      }}
-      onMouseLeave={e => {
-        (e.currentTarget as HTMLElement).style.background = 'var(--theme-surface, #0d1b30)'
       }}
     >
       {/* Content */}
@@ -288,12 +300,13 @@ function BentoCard({ card }: { card: Card }) {
           OPEN <ArrowUpRight size={10} />
         </div>
       </div>
-    </div>
+    </motion.div>
   )
 }
 
 export default function Home() {
   const isMobile = useIsMobile()
+  const reduce = !!useReducedMotion()
   const visibleCards = isMobile ? BENTO_CARDS.filter(c => c.to !== '/dashboard') : BENTO_CARDS
 
   return (
@@ -305,7 +318,7 @@ export default function Home() {
           fontSize: 22, fontWeight: 700, letterSpacing: '0.08em',
           color: 'var(--theme-primary, #c9a84c)', marginBottom: 4,
         }}>
-          Financial Research Terminal
+          Alphatape Terminal
         </h1>
         <p style={{ fontFamily: 'var(--theme-sans)', fontSize: 12, color: 'var(--theme-secondary, #7a9ab8)', letterSpacing: '0.04em' }}>
           {visibleCards.length} modules · Select a tile to launch
@@ -313,11 +326,16 @@ export default function Home() {
       </div>
 
       {/* Bento grid */}
-      <div className="bento-grid">
+      <motion.div
+        className="bento-grid"
+        variants={reduce ? undefined : gridStagger}
+        initial={reduce ? undefined : 'hidden'}
+        animate={reduce ? undefined : 'show'}
+      >
         {visibleCards.map(card => (
-          <BentoCard key={card.to} card={card} />
+          <BentoCard key={card.to} card={card} reduce={reduce} />
         ))}
-      </div>
+      </motion.div>
 
     </PageWrapper>
   )

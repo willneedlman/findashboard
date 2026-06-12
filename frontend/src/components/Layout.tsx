@@ -121,7 +121,7 @@ export default function Layout({ children }: LayoutProps) {
         }}>
           <Link to="/" style={{ textDecoration: 'none' }}>
             <div style={{ fontFamily: 'Cinzel, Georgia, serif', color: 'var(--theme-primary, #c9a84c)', fontSize: 15, fontWeight: 700, letterSpacing: '0.08em' }}>
-              FINANCE <span style={{ color: 'var(--theme-secondary, #5e768f)', fontSize: 10, letterSpacing: '0.2em', fontFamily: 'var(--theme-sans)', fontWeight: 600 }}>TERMINAL</span>
+              ALPHATAPE <span style={{ color: 'var(--theme-secondary, #5e768f)', fontSize: 10, letterSpacing: '0.2em', fontFamily: 'var(--theme-sans)', fontWeight: 600 }}>TERMINAL</span>
             </div>
           </Link>
           <button
@@ -276,7 +276,7 @@ export default function Layout({ children }: LayoutProps) {
           {!collapsed && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
               <Link to="/" className="block ft-logo">
-                <div className="font-display ft-logo text-base font-bold tracking-[0.08em]" style={{ color: 'var(--theme-primary, #c9a84c)' }}>FINANCE</div>
+                <div className="font-display ft-logo text-base font-bold tracking-[0.08em]" style={{ color: 'var(--theme-primary, #c9a84c)' }}>ALPHATAPE</div>
                 <div className="ft-logo-sub text-[9px] tracking-[0.22em] uppercase font-bold mt-0.5" style={{ color: 'var(--theme-secondary, #5e768f)' }}>TERMINAL</div>
               </Link>
             </motion.div>

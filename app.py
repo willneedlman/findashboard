@@ -562,7 +562,7 @@ def get_insider_transactions(ticker):
         return pd.DataFrame()
 
 # ── PAGE CONFIGURATION ────────────────────────────────────────────────────────
-st.set_page_config(page_title="Finance Terminal", layout="wide")
+st.set_page_config(page_title="Alphatape Terminal", layout="wide")
 
 # ── THEME STATE ───────────────────────────────────────────────────────────────
 # ── SESSION STATE ROUTING ─────────────────────────────────────────────────────
@@ -964,15 +964,15 @@ import base64 as _b64
 _logo_svg = """\
 <svg xmlns="http://www.w3.org/2000/svg" width="220" height="52" viewBox="0 0 220 52">
   <text x="3" y="28" font-family="Georgia,'Times New Roman',serif"
-        font-size="20" font-weight="700" fill="#c9a84c" letter-spacing="3.5">FINANCE</text>
-  <line x1="3" y1="33" x2="62" y2="33" stroke="#c9a84c" stroke-width="0.7" opacity="0.55"/>
+        font-size="20" font-weight="700" fill="#c9a84c" letter-spacing="2.4">ALPHATAPE</text>
+  <line x1="3" y1="33" x2="120" y2="33" stroke="#c9a84c" stroke-width="0.7" opacity="0.55"/>
   <text x="4" y="46" font-family="Georgia,'Times New Roman',serif"
-        font-size="9.5" fill="#8a9ab0" letter-spacing="7">DASHBOARD</text>
+        font-size="9.5" fill="#8a9ab0" letter-spacing="7">TERMINAL</text>
 </svg>"""
 _icon_svg = """\
 <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
   <text x="20" y="30" font-family="Georgia,'Times New Roman',serif"
-        font-size="26" font-weight="700" fill="#c9a84c" text-anchor="middle">F</text>
+        font-size="26" font-weight="700" fill="#c9a84c" text-anchor="middle">A</text>
 </svg>"""
 st.logo(
     "data:image/svg+xml;base64," + _b64.b64encode(_logo_svg.encode()).decode(),
@@ -1000,7 +1000,7 @@ def render_home():
     <div style='padding: 2rem 0 1.2rem 0;'>
       <div style='font-family:"Cinzel",Georgia,serif;font-size:2.1rem;font-weight:700;
                   letter-spacing:0.08em;color:#c9a84c;line-height:1.1;'>
-        FINANCIAL RESEARCH TERMINAL
+        ALPHATAPE TERMINAL
       </div>
       <div style='margin-top:0.5rem;font-size:0.95rem;color:#5e768f;letter-spacing:0.04em;'>
         Select a module to launch the respective model.

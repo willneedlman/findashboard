@@ -621,7 +621,7 @@ export default function Settings() {
 
             <Section title="Preview">
               <div style={{ background: 'var(--theme-surface, #0d1826)', border: `1px solid ${draft.primaryColor}40`, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-primary)', fontWeight: 700, letterSpacing: '0.1em' }}>FINANCE TERMINAL</div>
+                <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-primary)', fontWeight: 700, letterSpacing: '0.1em' }}>ALPHATAPE TERMINAL</div>
                 <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>Options Snapshot · NVDA</div>
                 <div style={{ display: 'flex', gap: 16, marginTop: 4 }}>
                   <div><div style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, color: 'var(--theme-secondary)', marginBottom: 2 }}>ATM IV</div><div style={{ fontFamily: 'var(--theme-mono)', fontSize: 20, fontWeight: 700, color: 'var(--theme-primary)' }}>54.7%</div></div>

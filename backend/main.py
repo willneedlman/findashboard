@@ -25,7 +25,7 @@ async def lifespan(app: FastAPI):
     yield
     paper_scheduler.stop_scheduler()
 
-app = FastAPI(title="Finance Terminal API", lifespan=lifespan)
+app = FastAPI(title="Alphatape Terminal API", lifespan=lifespan)
 
 # CORS: never combine wildcard origins with credentials (browsers reflect the
 # Origin, effectively allowing every site to make credentialed requests). The SPA

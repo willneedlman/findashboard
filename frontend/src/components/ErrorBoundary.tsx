@@ -22,7 +22,7 @@ export default class ErrorBoundary extends Component<Props, State> {
           background: 'var(--theme-bg, #0a1628)', flexDirection: 'column', gap: 16, padding: 32,
         }}>
           <div style={{ fontFamily: 'Cinzel, Georgia, serif', color: 'var(--theme-primary, #c9a84c)', fontSize: 18, fontWeight: 700, letterSpacing: '0.08em' }}>
-            FINANCE TERMINAL
+            ALPHATAPE TERMINAL
           </div>
           <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid #8c2e36', padding: '16px 20px', maxWidth: 560, width: '100%' }}>
             <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#EF4444', marginBottom: 8 }}>

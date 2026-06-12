@@ -4,7 +4,7 @@ export default function TermsOfUse() {
   return (
     <LegalPage title="Terms of Use" lastUpdated="June 2026">
       <Section title="1. Acceptance of Terms">
-        <P>By accessing or using Finance Terminal ("the Platform"), you agree to be bound by these Terms of Use. If you do not agree, do not use the Platform.</P>
+        <P>By accessing or using Alphatape Terminal ("the Platform"), you agree to be bound by these Terms of Use. If you do not agree, do not use the Platform.</P>
       </Section>
 
       <Section title="2. No Investment Advice">

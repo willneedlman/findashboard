@@ -1,5 +1,5 @@
 #!/bin/bash
-# Finance Terminal — Full Reboot (kill, reinstall deps, restart)
+# Alphatape Terminal — Full Reboot (kill, reinstall deps, restart)
 
 set -e
 
@@ -46,7 +46,7 @@ npm run dev &
 FRONTEND_PID=$!
 
 echo ""
-echo "Finance Terminal rebooted:"
+echo "Alphatape Terminal rebooted:"
 echo "  Frontend → http://localhost:5173"
 echo "  API Docs → http://localhost:8000/docs"
 echo ""

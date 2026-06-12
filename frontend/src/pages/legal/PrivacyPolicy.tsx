@@ -4,7 +4,7 @@ export default function PrivacyPolicy() {
   return (
     <LegalPage title="Privacy Policy" lastUpdated="June 2026">
       <Section title="1. Overview">
-        <P>Finance Terminal ("we", "us", "our") is committed to protecting your privacy. This policy describes what information we collect, how we use it, and your rights regarding that information.</P>
+        <P>Alphatape Terminal ("we", "us", "our") is committed to protecting your privacy. This policy describes what information we collect, how we use it, and your rights regarding that information.</P>
         <P>This platform is a personal financial analytics tool. We do not sell, rent, or share your personal data with third parties for marketing purposes.</P>
       </Section>
 

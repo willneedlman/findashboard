@@ -42,7 +42,7 @@ export default function RiskDisclosure() {
       </Section>
 
       <Section title="No Regulatory Registration">
-        <P>Finance Terminal is not registered with the SEC, FINRA, NFA, CFTC, or any other financial regulatory body. We are not a broker-dealer, investment adviser, commodity trading adviser, or any other registered financial intermediary. We do not provide personalized investment recommendations.</P>
+        <P>Alphatape Terminal is not registered with the SEC, FINRA, NFA, CFTC, or any other financial regulatory body. We are not a broker-dealer, investment adviser, commodity trading adviser, or any other registered financial intermediary. We do not provide personalized investment recommendations.</P>
       </Section>
     </LegalPage>
   )

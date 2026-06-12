@@ -399,6 +399,30 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus
   box-shadow: 0 0 0 2px var(--theme-bg, #101c2e), 0 0 0 4px rgba(201,168,76,0.55);
 }
 
+/* Smooth in-page scrolling (anchor jumps, scrollIntoView). */
+html { scroll-behavior: smooth; }
+
+/* Opt-in hover lift for interactive cards — transform/shadow only, no layout. */
+.ft-lift {
+  transition: transform 180ms var(--ease-out), box-shadow 180ms var(--ease-out), border-color 180ms var(--ease-out);
+}
+.ft-lift:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(0,0,0,0.28); }
+.ft-lift:active { transform: translateY(0); }
+
+/* Links ease their colour rather than snapping. */
+a { transition: color 120ms var(--ease-out); }
+
+/* Form controls share one calm focus motion. */
+input, select, textarea {
+  transition: border-color 150ms var(--ease-out), box-shadow 150ms var(--ease-out), background-color 150ms var(--ease-out);
+}
+/* Soft gold glow on pointer focus; keyboard users keep the stronger ring above. */
+input:focus:not(:focus-visible),
+select:focus:not(:focus-visible),
+textarea:focus:not(:focus-visible) {
+  box-shadow: 0 0 0 3px rgba(201,168,76,0.14);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

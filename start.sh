@@ -1,5 +1,5 @@
 #!/bin/bash
-# Finance Terminal — start backend + frontend
+# Alphatape Terminal — start backend + frontend
 
 # Check Node
 if ! command -v node &> /dev/null; then
@@ -22,7 +22,7 @@ npm install --silent
 npm run dev &
 FRONTEND_PID=$!
 
-echo "✓ Finance Terminal running:"
+echo "✓ Alphatape Terminal running:"
 echo "  Frontend → http://localhost:5173"
 echo "  API Docs → http://localhost:8000/docs"
 echo ""

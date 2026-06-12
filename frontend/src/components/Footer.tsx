@@ -67,7 +67,7 @@ export default function Footer() {
           ))}
         </div>
         <span style={{ fontFamily: S.mono, fontSize: 9, color: S.muted, letterSpacing: '0.1em' }}>
-          © {new Date().getFullYear()} Finance Terminal · Not FINRA/SEC registered · Not investment advice
+          © {new Date().getFullYear()} Alphatape Terminal · Not FINRA/SEC registered · Not investment advice
         </span>
       </div>
     </footer>
