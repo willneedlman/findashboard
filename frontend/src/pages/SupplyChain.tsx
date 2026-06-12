@@ -34,6 +34,15 @@ const labelStyle: React.CSSProperties = {
   textTransform: 'uppercase', color: T.muted, marginBottom: 10,
 }
 
+// FMP returns some geography labels in ALL CAPS (UNITED STATES, CHINA) and others
+// already cased. Title-case the all-caps ones; leave mixed-case names (iPhone,
+// International Segment) and known acronyms untouched.
+const GEO_ACRONYMS = new Set(['US', 'USA', 'UK', 'EU', 'EMEA', 'APAC', 'UAE', 'LATAM', 'ROW', 'ASEAN', 'MEA'])
+function prettyName(name: string): string {
+  if (/[a-z]/.test(name)) return name
+  return name.replace(/[A-Z0-9]+/g, w => GEO_ACRONYMS.has(w) ? w : w[0] + w.slice(1).toLowerCase())
+}
+
 function colorMapFor(block: SegBlock): Record<string, string> {
   const names: string[] = []
   block.latest.forEach(s => { if (!names.includes(s.name)) names.push(s.name) })
@@ -141,7 +150,7 @@ function SegmentBreakdown({ title, block }: { title: string; block: SegBlock }) 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 5 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
               <div style={{ width: 8, height: 8, borderRadius: 2, background: color[s.name], flexShrink: 0 }} />
-              <span style={{ fontFamily: T.label, fontSize: 12, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+              <span style={{ fontFamily: T.label, fontSize: 12, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prettyName(s.name)}</span>
             </div>
             <div style={{ display: 'flex', gap: isMobile ? 8 : 12, alignItems: 'center', flexShrink: 0 }}>
               <YoYChip v={s.yoy_pct} />
@@ -181,7 +190,7 @@ function SegmentBreakdown({ title, block }: { title: string; block: SegBlock }) 
                 </span>
                 <div style={{ flex: 1, display: 'flex', height: 7, borderRadius: 2, overflow: 'hidden', gap: 1, background: 'var(--theme-hover, rgba(255,255,255,0.04))' }}>
                   {y.segments.map((s, j) => (
-                    <div key={j} title={`${s.name}: ${fmtCap(s.value)}`} style={{ width: `${(s.value / tot) * 100}%`, background: color[s.name] || T.muted }} />
+                    <div key={j} title={`${prettyName(s.name)}: ${fmtCap(s.value)}`} style={{ width: `${(s.value / tot) * 100}%`, background: color[s.name] || T.muted }} />
                   ))}
                 </div>
                 <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, width: 54, textAlign: 'right', flexShrink: 0 }}>{fmtCap(y.total)}</span>
