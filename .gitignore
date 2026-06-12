@@ -12,3 +12,14 @@ backend/users.db
 
 # graphify generated cache
 graphify-out/cache/
+
+# Accidentally vendored Google Cloud SDK (kept on disk, out of git)
+gcloud auth login/
+
+# Local caches, databases, runtime + tool artifacts
+.cache/
+backend/.cache/
+*.db
+.playwright-mcp/
+.zshrc
+smoke-test.png
