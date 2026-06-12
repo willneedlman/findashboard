@@ -3,11 +3,12 @@ import { createContext, useContext, useEffect, useState, useCallback } from 'rea
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface Theme {
-  primaryColor:   string   // gold accent  default #c9a84c
-  secondaryColor: string   // muted text   default #5e768f
-  tertiaryColor:  string   // blue accent  default #60a5fa
-  bgColor:        string   // app bg       default #101c2e
-  surfaceColor:   string   // card/panel   default #0d1826
+  primaryColor:        string   // gold accent       default #c9a84c
+  secondaryColor:      string   // muted text        default #5e768f
+  tertiaryColor:       string   // blue accent       default #60a5fa
+  bgColor:             string   // app bg            default #101c2e
+  surfaceColor:        string   // card/panel        default #0d1826
+  chartNeutralColor:   string   // neutral chart fill default #4a7fa5
   primaryFont:    string   // mono font    default JetBrains Mono
   secondaryFont:  string   // label font   default IBM Plex Sans
   primaryFontUrl:   string // '' = use Google Fonts / system
@@ -27,24 +28,27 @@ interface ThemeCtx {
   user:        User | null
   allUsers:    User[]
   setTheme:    (t: Partial<Theme>) => void
-  login:       (username: string, pin: string) => Promise<boolean>
+  login:       (username: string, password: string) => Promise<'ok' | 'migrate' | false>
   logout:      () => void
-  register:    (username: string, displayName: string, pin: string) => Promise<boolean>
+  register:    (username: string, displayName: string, password: string) => Promise<boolean>
   deleteUser:  (id: string) => void
+  mustSetPassword: boolean
+  setPassword: (newPassword: string) => Promise<boolean>
 }
 
 // ── Defaults ──────────────────────────────────────────────────────────────────
 
 export const DEFAULT_THEME: Theme = {
-  primaryColor:    '#c9a84c',
-  secondaryColor:  '#8099b0',
-  tertiaryColor:   '#60a5fa',
-  bgColor:         '#101c2e',
-  surfaceColor:    '#0d1826',
-  primaryFont:     'JetBrains Mono',
-  secondaryFont:   'IBM Plex Sans',
-  primaryFontUrl:  '',
-  secondaryFontUrl: '',
+  primaryColor:      '#c9a84c',
+  secondaryColor:    '#8099b0',
+  tertiaryColor:     '#60a5fa',
+  bgColor:           '#101c2e',
+  surfaceColor:      '#0d1826',
+  chartNeutralColor: '#4a7fa5',
+  primaryFont:       'JetBrains Mono',
+  secondaryFont:     'IBM Plex Sans',
+  primaryFontUrl:    '',
+  secondaryFontUrl:  '',
 }
 
 // Popular font presets — chosen for visual distinctiveness across categories
@@ -93,14 +97,26 @@ export function applyTheme(t: Theme) {
   }
 
   const isLight = hexLuminance(t.bgColor) > 0.18
-  const textColor    = isLight ? '#1a1a1a'                   : '#d7e3fc'
-  const textMuted    = isLight ? '#374151'                   : '#8099b0'
+  // For light themes: use the theme's primary accent colour as the main text colour
+  // so values/numbers read as themed (not pure black). Guard: only if primary is
+  // dark enough for WCAG AA on white (luminance < 0.18).
+  const primLum = hexLuminance(t.primaryColor)
+  const textColor    = isLight ? (primLum < 0.18 ? t.primaryColor : '#374151') : '#d7e3fc'
+  const textMuted    = isLight ? t.secondaryColor             : '#8099b0'
   const textDim      = isLight ? 'rgba(0,0,0,0.45)'  : 'rgba(255,255,255,0.35)'
   const textFaint    = isLight ? 'rgba(0,0,0,0.30)'  : 'rgba(255,255,255,0.22)'
   const textSubtle   = isLight ? 'rgba(0,0,0,0.20)'  : 'rgba(255,255,255,0.14)'
   const borderColor  = isLight ? 'rgba(0,0,0,0.10)'  : 'rgba(255,255,255,0.08)'
   const borderFaint  = isLight ? 'rgba(0,0,0,0.06)'  : 'rgba(255,255,255,0.05)'
   const surfaceHover = isLight ? 'rgba(0,0,0,0.04)'  : 'rgba(255,255,255,0.04)'
+  // Semantic positive/negative/warn: dark on light bg, soft on dark bg — WCAG AA on both
+  const posStrong    = isLight ? '#15803d' : '#52c48a'
+  const posSoft      = isLight ? '#16a34a' : '#86efac'
+  const negStrong    = isLight ? '#991b1b' : '#e07878'
+  const negSoft      = isLight ? '#dc2626' : '#fca5a5'
+  // Warn (amber): b45309 on light (5.7:1 on white), e8c04a on dark
+  const warnSoft     = isLight ? '#b45309' : '#e8c04a'
+  const warnStrong   = isLight ? '#92400e' : '#d97706'
 
   // Load Google Fonts if no custom URL provided
   const monoSrc   = t.primaryFontUrl   || `https://fonts.googleapis.com/css2?family=${encodeURIComponent(t.primaryFont)}:wght@400;700&display=swap`
@@ -132,11 +148,12 @@ export function applyTheme(t: Theme) {
     ${customFontFace(t.secondaryFont, t.secondaryFontUrl)}
 
     :root {
-      --theme-primary:   ${t.primaryColor};
-      --theme-secondary: ${t.secondaryColor};
-      --theme-tertiary:  ${t.tertiaryColor};
-      --theme-bg:        ${t.bgColor};
-      --theme-surface:   ${t.surfaceColor};
+      --theme-primary:        ${t.primaryColor};
+      --theme-secondary:      ${t.secondaryColor};
+      --theme-tertiary:       ${t.tertiaryColor};
+      --theme-bg:             ${t.bgColor};
+      --theme-surface:        ${t.surfaceColor};
+      --theme-chart-neutral:  ${t.chartNeutralColor ?? '#4a7fa5'};
       --theme-mono:      '${t.primaryFont}', monospace;
       --theme-sans:      '${t.secondaryFont}', sans-serif;
       --theme-text:        ${textColor};
@@ -147,6 +164,12 @@ export function applyTheme(t: Theme) {
       --theme-border:      ${borderColor};
       --theme-border-faint:${borderFaint};
       --theme-hover:       ${surfaceHover};
+      --theme-positive:        ${posSoft};
+      --theme-positive-strong: ${posStrong};
+      --theme-negative:        ${negSoft};
+      --theme-negative-strong: ${negStrong};
+      --theme-warn:            ${warnSoft};
+      --theme-warn-strong:     ${warnStrong};
     }
 
     /* ── Layout / Navigation overrides ──────────────────────────────── */
@@ -163,11 +186,12 @@ export function applyTheme(t: Theme) {
 
   // Also push as real CSS custom props onto :root so var() works everywhere
   const root = document.documentElement
-  root.style.setProperty('--theme-primary',    t.primaryColor)
-  root.style.setProperty('--theme-secondary',  t.secondaryColor)
-  root.style.setProperty('--theme-tertiary',   t.tertiaryColor)
-  root.style.setProperty('--theme-bg',         t.bgColor)
-  root.style.setProperty('--theme-surface',    t.surfaceColor)
+  root.style.setProperty('--theme-primary',         t.primaryColor)
+  root.style.setProperty('--theme-secondary',       t.secondaryColor)
+  root.style.setProperty('--theme-tertiary',        t.tertiaryColor)
+  root.style.setProperty('--theme-bg',              t.bgColor)
+  root.style.setProperty('--theme-surface',         t.surfaceColor)
+  root.style.setProperty('--theme-chart-neutral',   t.chartNeutralColor ?? '#4a7fa5')
   root.style.setProperty('--theme-text',         textColor)
   root.style.setProperty('--theme-text-muted',  textMuted)
   root.style.setProperty('--theme-text-dim',    textDim)
@@ -176,6 +200,12 @@ export function applyTheme(t: Theme) {
   root.style.setProperty('--theme-border',      borderColor)
   root.style.setProperty('--theme-border-faint',borderFaint)
   root.style.setProperty('--theme-hover',       surfaceHover)
+  root.style.setProperty('--theme-positive',         posSoft)
+  root.style.setProperty('--theme-positive-strong',  posStrong)
+  root.style.setProperty('--theme-negative',         negSoft)
+  root.style.setProperty('--theme-negative-strong',  negStrong)
+  root.style.setProperty('--theme-warn',             warnSoft)
+  root.style.setProperty('--theme-warn-strong',      warnStrong)
 }
 
 // ── Persistence helpers ───────────────────────────────────────────────────────
@@ -198,13 +228,15 @@ function saveSession(id: string | null) {
 
 const Ctx = createContext<ThemeCtx>({
   theme: DEFAULT_THEME, user: null, allUsers: [],
-  setTheme: () => {}, login: async () => false, logout: () => {},
+  setTheme: () => {}, login: async () => false as const, logout: () => {},
   register: async () => false, deleteUser: () => {},
+  mustSetPassword: false, setPassword: async () => false,
 })
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [users,   setUsersState] = useState<User[]>(loadUsers)
   const [userId,  setUserId]     = useState<string | null>(loadSession)
+  const [mustSetPassword, setMustSetPassword] = useState(false)
 
   const user = users.find(u => u.id === userId) ?? null
   const theme = user?.theme ?? DEFAULT_THEME
@@ -224,15 +256,17 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     persistUsers(users.map(u => u.id === userId ? { ...u, theme: { ...u.theme, ...patch } } : u))
   }, [userId, users, persistUsers])
 
-  const login = useCallback(async (username: string, pin: string): Promise<boolean> => {
+  const login = useCallback(async (username: string, password: string): Promise<'ok' | 'migrate' | false> => {
     try {
       const res = await fetch('/api/users/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, pin }),
+        body: JSON.stringify({ username, pin: password }),
       })
       if (!res.ok) return false
-      const data: { id: string; username: string; display_name: string; created_at: string } = await res.json()
+      const data: { id: string; username: string; display_name: string; created_at: string; token?: string; must_set_password?: boolean } = await res.json()
+      if (data.token) localStorage.setItem('ft-session-token', data.token)
+      setMustSetPassword(!!data.must_set_password)
       const existing = users.find(u => u.id === data.id)
       const u: User = {
         id:          data.id,
@@ -247,34 +281,38 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       persistUsers(next)
       setUserId(u.id)
       saveSession(u.id)
-      // Store pin hash for WS auth (SHA-256 of pin, same algorithm as server)
-      try {
-        const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin))
-        const hex = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('')
-        sessionStorage.setItem('ft-pin-hash', hex)
-      } catch { /* crypto not available */ }
-      return true
+      return data.must_set_password ? 'migrate' : 'ok'
     } catch {
       return false
     }
   }, [users, persistUsers])
 
   const logout = useCallback(() => {
+    // Best-effort server-side session invalidation, then clear the local token.
+    const token = localStorage.getItem('ft-session-token')
+    if (token) {
+      fetch('/api/users/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } }).catch(() => {})
+    }
+    localStorage.removeItem('ft-session-token')
+    setMustSetPassword(false)
     setUserId(null)
     saveSession(null)
     applyTheme(DEFAULT_THEME)
   }, [])
 
-  const register = useCallback(async (username: string, displayName: string, pin: string): Promise<boolean> => {
+  const register = useCallback(async (username: string, displayName: string, password: string): Promise<boolean> => {
     const id = crypto.randomUUID()
     const createdAt = new Date().toISOString()
     try {
       const res = await fetch('/api/users/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, username, display_name: displayName || username, pin, created_at: createdAt }),
+        body: JSON.stringify({ id, username, display_name: displayName || username, pin: password, created_at: createdAt }),
       })
       if (!res.ok) return false
+      const data = await res.json().catch(() => null)
+      if (data?.token) localStorage.setItem('ft-session-token', data.token)
+      setMustSetPassword(false)   // new accounts register with a password directly
       const u: User = { id, username, displayName: displayName || username, theme: { ...DEFAULT_THEME }, createdAt }
       persistUsers([...users, u])
       setUserId(id)
@@ -285,13 +323,30 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
   }, [users, persistUsers])
 
+  const setPassword = useCallback(async (newPassword: string): Promise<boolean> => {
+    const token = localStorage.getItem('ft-session-token')
+    if (!token) return false
+    try {
+      const res = await fetch('/api/users/set-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ new_password: newPassword }),
+      })
+      if (!res.ok) return false
+      setMustSetPassword(false)
+      return true
+    } catch {
+      return false
+    }
+  }, [])
+
   const deleteUser = useCallback((id: string) => {
     persistUsers(users.filter(u => u.id !== id))
     if (userId === id) { setUserId(null); saveSession(null); applyTheme(DEFAULT_THEME) }
   }, [users, userId, persistUsers])
 
   return (
-    <Ctx.Provider value={{ theme, user, allUsers: users, setTheme, login, logout, register, deleteUser }}>
+    <Ctx.Provider value={{ theme, user, allUsers: users, setTheme, login, logout, register, deleteUser, mustSetPassword, setPassword }}>
       {children}
     </Ctx.Provider>
   )

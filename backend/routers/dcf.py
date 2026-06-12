@@ -6,6 +6,7 @@ from pydantic import BaseModel
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import fmp
+import damodaran
 from cache import get_info
 from validation import validate_ticker
 
@@ -40,8 +41,8 @@ def get_fundamentals(ticker: str):
     # yfinance fallback
     try:
         info = get_info(ticker)
-        revenue    = (info.get("totalRevenue") or 0) / 1e6
-        op_margin  = (info.get("operatingMargins") or 0.15) * 100
+        revenue       = (info.get("totalRevenue") or 0) / 1e6
+        op_margin_raw = info.get("operatingMargins")
         shares     = (info.get("sharesOutstanding") or 0) / 1e6
         total_debt = (info.get("totalDebt") or 0) / 1e6
         # yfinance uses different field names across versions/tickers; try all
@@ -55,8 +56,21 @@ def get_fundamentals(ticker: str):
         total_cash = total_cash_raw / 1e6
         net_debt   = total_debt - total_cash
         rev_growth = (info.get("revenueGrowth") or 0.10) * 100
-        beta       = float(info.get("beta") or 1.0)
         price      = float(info.get("currentPrice") or info.get("regularMarketPrice") or 0) or None
+
+        # Damodaran fallback — backstop beta / operating margin when yfinance is thin.
+        beta_raw = info.get("beta")
+        assumptions_source = "yfinance"
+        if beta_raw and op_margin_raw:
+            beta      = float(beta_raw)
+            op_margin = float(op_margin_raw) * 100
+        else:
+            dmd = damodaran.lookup(info.get("sector"), info.get("industry"))
+            beta      = float(beta_raw) if beta_raw else dmd["beta"]
+            op_margin = float(op_margin_raw) * 100 if op_margin_raw else dmd["op_margin"]
+            tag = dmd["name"] if dmd.get("matched") else "market avg"
+            assumptions_source = f"Damodaran {dmd['updated']} — {tag}"
+
         return {
             "revenue":      max(0.0, round(revenue, 0)),
             "op_margin":    round(op_margin, 1),
@@ -71,8 +85,9 @@ def get_fundamentals(ticker: str):
             "market_price": price,
             "market_cap":   None,
             "de_ratio":     0.0,
+            "assumptions_source": assumptions_source,
         }
-    except Exception as e:
+    except Exception:
         logger.exception("internal error"); raise HTTPException(500, "Internal server error")
 
 

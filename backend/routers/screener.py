@@ -5,11 +5,9 @@ from pydantic import BaseModel, Field
 from cachetools import TTLCache
 import threading
 import yfinance as yf
-import numpy as np
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import fmp
-from validation import validate_ticker
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -96,7 +94,7 @@ def _fmp_params_from_filters(filters: list[FilterRule], sector, exchange, limit)
     if sector:
         p["sector"] = sector
     if exchange:
-        p["exchange"] = exchange
+        p["exchange"] = exchange.lower()  # FMP expects lowercase exchange codes
 
     field_map = {
         "marketCap":     ("marketCapMoreThan", "marketCapLessThan", 1e9),
@@ -179,6 +177,11 @@ def _enrich(ticker: str, base: dict) -> dict:
                 interest        = abs(income.get("interestExpense") or 0)
                 ev_raw          = mktcap + total_debt - (bal.get("cashAndCashEquivalents") or 0)
 
+                # Map FMP exchangeShortName to standard display name
+                fmp_exch = (prof.get("exchangeShortName") or "").upper()
+                if fmp_exch and not base.get("exchange"):
+                    detail["exchange"] = fmp_exch
+
                 detail.update({
                     "companyName":    prof.get("companyName") or base.get("companyName"),
                     "sector":         prof.get("sector") or base.get("sector"),
@@ -207,6 +210,24 @@ def _enrich(ticker: str, base: dict) -> dict:
         # Always use yfinance for company name if FMP didn't provide it or it equals the ticker
         company_from_base = base.get("companyName") or ""
         needs_name = not detail.get("companyName") or detail.get("companyName") == ticker
+
+        # Map yfinance exchange codes to standard display names (used as fallback if FMP didn't populate it)
+        _YF_EXCHANGE_MAP = {
+            "NMS": "NASDAQ", "NGM": "NASDAQ", "NCM": "NASDAQ", "NAS": "NASDAQ",
+            "NYQ": "NYSE",   "NYS": "NYSE",
+            "ASE": "AMEX",   "PCX": "AMEX",
+        }
+
+        # Populate exchange from yfinance whenever it's not already set (from base or FMP profile)
+        if not detail.get("exchange") and not base.get("exchange"):
+            try:
+                info_dict = tkr.info
+                yf_exch = (info_dict.get("exchange") or "").upper()
+                mapped_exch = _YF_EXCHANGE_MAP.get(yf_exch, yf_exch)
+                if mapped_exch:
+                    detail["exchange"] = mapped_exch
+            except Exception:
+                pass
 
         if not fmp_ok or needs_name:
             try:
@@ -279,7 +300,9 @@ def _passes(row: dict, filters: list[FilterRule]) -> bool:
 @router.post("/run")
 def run_screen(req: ScreenRequest):
     import json, hashlib
-    cache_key = hashlib.md5(json.dumps(req.model_dump(), sort_keys=True).encode()).hexdigest()
+    # Bump CACHE_VER whenever screener logic changes to invalidate stale disk-cached results
+    CACHE_VER = "v3"
+    cache_key = CACHE_VER + hashlib.md5(json.dumps(req.model_dump(), sort_keys=True).encode()).hexdigest()
     with _lock:
         if cache_key in _screen_cache:
             return _screen_cache[cache_key]
@@ -291,11 +314,13 @@ def run_screen(req: ScreenRequest):
 
     candidates: list[dict] = []
 
+    fmp_screened = False  # tracks whether FMP already applied sector/exchange filtering
     if fmp.available():
         try:
             params = _fmp_params_from_filters(req.filters, req.sector, req.exchange, req.limit)
             raw = fmp._get("/stock-screener", params)
-            if isinstance(raw, list):
+            if isinstance(raw, list) and raw:
+                fmp_screened = True
                 for r in raw:
                     candidates.append({
                         "ticker":      r.get("symbol", ""),
@@ -308,6 +333,7 @@ def run_screen(req: ScreenRequest):
                         "industry":    r.get("industry", ""),
                         "exchange":    r.get("exchangeShortName", ""),
                         "change1d":    r.get("changesPercentage"),
+                        "_fmp_screened": True,
                     })
         except Exception as e:
             logger.warning("FMP screener error: %s", e)
@@ -370,7 +396,6 @@ def run_screen(req: ScreenRequest):
     if not candidates:
         try:
             from ai_client import groq_complete, parse_json
-            import json as _json
             tickers_str = ", ".join(LIQUID_TICKERS[:20])
             raw = groq_complete(
                 f"Return estimated fundamentals for: {tickers_str}\n"
@@ -414,11 +439,14 @@ def run_screen(req: ScreenRequest):
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
         enriched = list(ex.map(lambda c: _enrich(c["ticker"], c), to_enrich))
 
-    # Apply sector / exchange filters (post-enrichment so sector data is populated)
-    if req.sector:
+    # Apply sector / exchange filters (post-enrichment so sector data is populated).
+    # Skip for FMP-screened candidates — FMP already filtered them at the source,
+    # and its profile endpoint may use different sector naming (e.g. "Consumer Discretionary"
+    # vs "Consumer Cyclical") which would incorrectly eliminate valid results.
+    if req.sector and not fmp_screened:
         fs = req.sector.lower()
         enriched = [r for r in enriched if (r.get("sector") or "").lower() == fs]
-    if req.exchange:
+    if req.exchange and not fmp_screened:
         fe = req.exchange.lower()
         enriched = [r for r in enriched if (r.get("exchange") or "").lower() == fe]
 
@@ -439,6 +467,10 @@ def run_screen(req: ScreenRequest):
         except (TypeError, ValueError):
             return float("-inf") if reverse else float("inf")
     filtered.sort(key=sort_key, reverse=reverse)
+
+    # Strip internal bookkeeping keys before returning
+    for r in filtered:
+        r.pop("_fmp_screened", None)
 
     result = {"results": filtered[:req.limit], "total": len(filtered)}
     with _lock:

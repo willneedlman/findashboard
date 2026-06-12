@@ -29,7 +29,7 @@ function Sparkline({ data, positive }: { data: number[]; positive: boolean }) {
     const y = H - pad - ((v - min) / range) * (H - pad * 2)
     return `${x.toFixed(1)},${y.toFixed(1)}`
   }).join(' ')
-  const color = positive ? '#22C55E' : '#EF4444'
+  const color = positive ? 'var(--theme-positive)' : 'var(--theme-negative)'
   return (
     <svg width={W} height={H} style={{ display: 'block', overflow: 'visible' }}>
       <polyline points={pts} fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round" opacity={0.85} />
@@ -53,10 +53,10 @@ function safeUrl(url: string): string {
 }
 
 const CONSENSUS_STYLE: Record<string, { color: string; border: string }> = {
-  'Strong Buy':    { color: '#22C55E', border: '#22C55E' },
-  'Moderate Buy':  { color: '#86efac', border: '#86efac' },
+  'Strong Buy':    { color: 'var(--theme-positive-strong)', border: 'var(--theme-positive-strong)' },
+  'Moderate Buy':  { color: 'var(--theme-positive)', border: 'var(--theme-positive)' },
   'Hold':          { color: 'var(--theme-secondary, #99907e)', border: 'var(--theme-text-faint, rgba(255,255,255,0.18))' },
-  'Underperform':  { color: '#EF4444', border: '#EF4444' },
+  'Underperform':  { color: 'var(--theme-negative)', border: 'var(--theme-negative)' },
 }
 
 const TIMEOUT = 10_000
@@ -142,7 +142,7 @@ function InsiderPanel({ sorted, insiderData, insiderPending }: {
   return (
     <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
       <div style={{ padding: '6px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ ...LABEL_S, color: '#ffffff' }}>Insider Transaction Flow</span>
+        <span style={{ ...LABEL_S, color: 'var(--theme-text, #d7e3fc)' }}>Insider Transaction Flow</span>
         {insiderPending && <span style={{ fontSize: 10, color: 'var(--theme-secondary, #99907e)', letterSpacing: '0.1em' }}>FETCHING…</span>}
       </div>
 
@@ -162,7 +162,7 @@ function InsiderPanel({ sorted, insiderData, insiderPending }: {
         const latest   = txs?.[0]
         const totalVal = txs?.reduce((s, t) => s + (t.value || 0), 0) ?? 0
         const latestTx = latest?.transaction ?? '—'
-        const txColor  = latestTx === 'Sale' ? '#EF4444' : latestTx === 'Purchase' ? '#22C55E' : 'var(--theme-text, #d7e3fc)'
+        const txColor  = latestTx === 'Sale' ? 'var(--theme-negative)' : latestTx === 'Purchase' ? 'var(--theme-positive)' : 'var(--theme-text, #d7e3fc)'
 
         return (
           <div key={row.ticker}>
@@ -213,7 +213,7 @@ function InsiderPanel({ sorted, insiderData, insiderPending }: {
                   </thead>
                   <tbody>
                     {txs.map((tx, i) => {
-                      const c = tx.transaction === 'Sale' ? '#EF4444' : tx.transaction === 'Purchase' ? '#22C55E' : 'var(--theme-text, #d7e3fc)'
+                      const c = tx.transaction === 'Sale' ? 'var(--theme-negative)' : tx.transaction === 'Purchase' ? 'var(--theme-positive)' : 'var(--theme-text, #d7e3fc)'
                       return (
                         <tr key={i}
                           onMouseEnter={e => (e.currentTarget.style.background = 'var(--theme-hover, rgba(255,255,255,0.03))')}
@@ -368,7 +368,7 @@ export function CorporateHubContent() {
         {/* Left sidebar */}
         <div style={{ width: 190, flexShrink: 0, background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)' }}>
-            <div style={{ ...LABEL, color: '#ffffff' }}>Scan Parameters</div>
+            <div style={{ ...LABEL, color: 'var(--theme-text, #d7e3fc)' }}>Scan Parameters</div>
           </div>
           <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 12, flex: 1 }}>
             <div>
@@ -429,7 +429,7 @@ export function CorporateHubContent() {
               textTransform: 'uppercase', padding: '8px 0', cursor: isPending ? 'default' : 'pointer',
               opacity: isPending ? 0.6 : 1,
             }}>
-              {isPending ? 'Scanning…' : '⬢ Execute Scan'}
+              {isPending ? 'Scanning…' : 'Execute Scan'}
             </button>
           </div>
         </div>
@@ -440,14 +440,14 @@ export function CorporateHubContent() {
           {/* Main table */}
           <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
             <div style={{ padding: '6px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ ...LABEL, color: '#ffffff' }}>Upcoming Catalysts & Valuation</span>
+              <span style={{ ...LABEL, color: 'var(--theme-text, #d7e3fc)' }}>Upcoming Catalysts & Valuation</span>
               {isPending && <span style={{ fontSize: 10, color: 'var(--theme-secondary, #99907e)', letterSpacing: '0.1em' }}>SCANNING…</span>}
             </div>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', minWidth: 700, borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ background: 'var(--theme-bg, #0a1628)' }}>
-                    {['Ticker', '30D', 'Date', 'Horizon', 'Implied Move', '1D %', 'Market Cap', 'Fwd P/E', 'Consensus', '✓'].map(h => (
+                    {['Ticker', 'Chart', 'Date', 'Horizon', 'Implied Move', '1D %', 'Market Cap', 'Fwd P/E', 'Consensus', 'Conf'].map(h => (
                       <th key={h} style={TH}>{h}</th>
                     ))}
                   </tr>
@@ -481,7 +481,7 @@ export function CorporateHubContent() {
                           </div>
                         </td>
                         <td style={{ ...TD, fontFamily: 'var(--theme-mono)', fontSize: 11,
-                          color: row.pctChange == null ? '#4d4637' : row.pctChange >= 0 ? '#22C55E' : '#EF4444' }}>
+                          color: row.pctChange == null ? 'var(--theme-text-faint)' : row.pctChange >= 0 ? 'var(--theme-positive)' : 'var(--theme-negative)' }}>
                           {row.pctChange != null ? `${row.pctChange >= 0 ? '+' : ''}${row.pctChange.toFixed(2)}%` : '—'}
                         </td>
                         <td style={{ ...TD, fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-text, #d7e3fc)' }}>
@@ -497,8 +497,8 @@ export function CorporateHubContent() {
                             {row.consensus}
                           </span>
                         </td>
-                        <td style={{ ...TD, textAlign: 'center', color: row.isConfirmed ? '#22C55E' : 'var(--theme-text-faint, rgba(255,255,255,0.18))' }}>
-                          {row.isConfirmed ? '✓' : '—'}
+                        <td style={{ ...TD, textAlign: 'center', color: row.isConfirmed ? 'var(--theme-positive)' : 'var(--theme-text-faint, rgba(255,255,255,0.18))' }}>
+                          {row.isConfirmed ? 'Yes' : '—'}
                         </td>
                       </tr>
                     )
@@ -515,7 +515,7 @@ export function CorporateHubContent() {
           {showShort && rows.length > 0 && (
             <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
               <div style={{ padding: '6px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)', display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ ...LABEL, color: '#ffffff' }}>Short Interest Monitor</span>
+                <span style={{ ...LABEL, color: 'var(--theme-text, #d7e3fc)' }}>Short Interest Monitor</span>
                 {shortPending && <span style={{ fontSize: 10, color: 'var(--theme-secondary, #99907e)', letterSpacing: '0.1em' }}>FETCHING…</span>}
               </div>
               <div style={{ overflowX: 'auto' }}>
@@ -564,10 +564,10 @@ export function CorporateHubContent() {
           {/* AI Brief section */}
           <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(201,168,76,0.25)', marginBottom: 8 }}>
             <div style={{ padding: '6px 10px', borderBottom: '1px solid rgba(201,168,76,0.15)', background: 'rgba(201,168,76,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#c9a84c' }}>⬢ AI Intelligence</span>
+              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)' }}>AI Intelligence</span>
               <button onClick={fetchAiBrief} disabled={aiBriefPending || rows.length === 0} style={{
-                background: aiBriefPending ? 'rgba(201,168,76,0.08)' : 'rgba(201,168,76,0.15)',
-                border: '1px solid rgba(201,168,76,0.4)', color: '#c9a84c',
+                background: aiBriefPending ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)' : 'color-mix(in srgb, var(--theme-primary, #c9a84c) 15%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)', color: 'var(--theme-primary, #c9a84c)',
                 fontFamily: 'var(--theme-mono)', fontSize: 9,
                 padding: '2px 8px', cursor: (aiBriefPending || rows.length === 0) ? 'default' : 'pointer',
                 opacity: (aiBriefPending || rows.length === 0) ? 0.5 : 1,
@@ -576,22 +576,22 @@ export function CorporateHubContent() {
             </div>
             <div style={{ padding: '8px 10px' }}>
               {!aiBrief && !aiBriefPending && !aiBriefError && (
-                <div style={{ fontSize: 10, color: 'rgba(215,227,252,0.3)', fontFamily: 'var(--theme-mono)', lineHeight: '15px' }}>
+                <div style={{ fontSize: 10, color: 'var(--theme-secondary, #5e768f)', fontFamily: 'var(--theme-mono)', lineHeight: '15px' }}>
                   Click Generate for an AI-written market brief on your tracked tickers.
                 </div>
               )}
               {aiBriefError && (
-                <div style={{ fontSize: 9, color: '#ef4444', fontFamily: 'var(--theme-mono)', lineHeight: '14px' }}>
+                <div style={{ fontSize: 9, color: 'var(--theme-negative)', fontFamily: 'var(--theme-mono)', lineHeight: '14px' }}>
                   {aiBriefError}
                 </div>
               )}
               {aiBriefPending && (
-                <div style={{ fontSize: 9, color: 'rgba(201,168,76,0.5)', fontFamily: 'var(--theme-mono)' }}>Generating…</div>
+                <div style={{ fontSize: 9, color: 'var(--theme-primary, #c9a84c)', opacity: 0.6, fontFamily: 'var(--theme-mono)' }}>Generating…</div>
               )}
               {aiBrief && !aiBriefPending && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 9, padding: '1px 5px', border: '1px solid rgba(201,168,76,0.3)', color: aiBrief.tone === 'bullish' ? '#22c55e' : aiBrief.tone === 'bearish' ? '#ef4444' : '#c9a84c', fontFamily: 'var(--theme-mono)', textTransform: 'uppercase' }}>{aiBrief.tone}</span>
+                    <span style={{ fontSize: 9, padding: '1px 5px', border: '1px solid rgba(201,168,76,0.3)', color: aiBrief.tone === 'bullish' ? 'var(--theme-positive)' : aiBrief.tone === 'bearish' ? 'var(--theme-negative)' : 'var(--theme-primary, #c9a84c)', fontFamily: 'var(--theme-mono)', textTransform: 'uppercase' }}>{aiBrief.tone}</span>
                   </div>
                   {aiBrief.bullets.map((b, i) => (
                     <div key={i} style={{ fontSize: 10, color: 'var(--theme-text, #d7e3fc)', lineHeight: '15px', paddingLeft: 8, borderLeft: '2px solid rgba(201,168,76,0.3)' }}>
@@ -606,7 +606,7 @@ export function CorporateHubContent() {
           {/* News feed */}
           <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
             <div style={{ padding: '6px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)' }}>
-              <div style={{ ...LABEL, color: '#ffffff', marginBottom: 0 }}>Terminal Intelligence Brief</div>
+              <div style={{ ...LABEL, color: 'var(--theme-text, #d7e3fc)', marginBottom: 0 }}>Terminal Intelligence Brief</div>
               <div style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', marginTop: 2 }}>
                 Live Desk — {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
               </div>
@@ -623,7 +623,7 @@ export function CorporateHubContent() {
                   </div>
                   {row.news.map((n, i) => (
                     <div key={i} style={{ marginBottom: 8 }}>
-                      <a href={safeUrl(n.link)} target="_blank" rel="noopener noreferrer" style={{ color: '#d97736', fontSize: 11, fontWeight: 600, textDecoration: 'none', lineHeight: '15px', display: 'block' }}>
+                      <a href={safeUrl(n.link)} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--theme-primary, #c9a84c)', fontSize: 11, fontWeight: 600, textDecoration: 'none', lineHeight: '15px', display: 'block' }}>
                         {n.title}
                       </a>
                       <div style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', marginTop: 2 }}>Source: {n.publisher}</div>
@@ -641,5 +641,5 @@ export function CorporateHubContent() {
 }
 
 export default function CorporateHub() {
-  return <PageWrapper><CorporateHubContent /></PageWrapper>
+  return <PageWrapper title="Corporate Hub"><CorporateHubContent /></PageWrapper>
 }

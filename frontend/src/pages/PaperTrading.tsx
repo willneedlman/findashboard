@@ -1,10 +1,12 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import axios from 'axios'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ComposedChart, Line } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import HelpTip from '../components/HelpTip'
 import { GammaScalpingContent } from './GammaScalping'
+import CustomStrategyModal, { type CustomStrategyDef } from '../components/CustomStrategyModal'
+import { loadCustomStrategies, saveCustomStrategy } from '../utils/customStrategies'
 
 // ─── Theme tokens ────────────────────────────────────────────────────────────
 const T = {
@@ -15,9 +17,9 @@ const T = {
   muted:   'var(--theme-secondary, #5e768f)',
   text:    'var(--theme-text, #d7e3fc)',
   mono:    'var(--theme-mono)',
-  pos:     '#22c55e',
-  neg:     '#ef4444',
-  orange:  '#f97316',
+  pos:     'var(--theme-positive)',
+  neg:     'var(--theme-negative)',
+  warn:    'var(--theme-warn)',
   dim:     'var(--theme-text-muted, var(--theme-text-muted, rgba(215,227,252,0.35)))',
 }
 
@@ -329,12 +331,24 @@ function OrderTicket({ onOrderPlaced, importTemplate, onTemplateConsumed, import
 
   // Option state
   const [opUnderlying, setOpUnderlying] = useState('')
-  const [opSymbol, setOpSymbol]         = useState('')
+  const [opExpDate, setOpExpDate]       = useState('')
+  const [opStrike, setOpStrike]         = useState('')
+  const [opCallPut, setOpCallPut]       = useState<'C' | 'P'>('C')
   const [opSide, setOpSide]             = useState('buy_to_open')
   const [opQty, setOpQty]               = useState('')
   const [opType, setOpType]             = useState('market')
   const [opPrice, setOpPrice]           = useState('')
   const [opDur, setOpDur]               = useState('day')
+
+  const opSymbol = useMemo(() => {
+    if (!opUnderlying || !opExpDate || !opStrike || isNaN(parseFloat(opStrike))) return ''
+    const d = new Date(opExpDate + 'T00:00:00')
+    const yy = String(d.getFullYear()).slice(2)
+    const mm = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
+    const strikeInt = Math.round(parseFloat(opStrike) * 1000)
+    return `${opUnderlying}${yy}${mm}${dd}${opCallPut}${String(strikeInt).padStart(8, '0')}`
+  }, [opUnderlying, opExpDate, opStrike, opCallPut])
 
   // Multi-leg state
   const [mlUnderlying, setMlUnderlying]           = useState('')
@@ -390,7 +404,7 @@ function OrderTicket({ onOrderPlaced, importTemplate, onTemplateConsumed, import
     mutationFn: (body: object) => axios.post('/api/trading/order/option', body).then(r => r.data),
     onSuccess: () => {
       showFeedback(true, 'Option order placed')
-      setOpUnderlying(''); setOpSymbol(''); setOpQty(''); setOpPrice('')
+      setOpUnderlying(''); setOpExpDate(''); setOpStrike(''); setOpQty(''); setOpPrice('')
       onOrderPlaced()
     },
     onError: (err: unknown) => {
@@ -460,7 +474,7 @@ function OrderTicket({ onOrderPlaced, importTemplate, onTemplateConsumed, import
         flex: 1, padding: '7px 0', fontFamily: T.mono, fontSize: 9, fontWeight: 700,
         letterSpacing: '0.10em', cursor: 'pointer', border: 'none',
         background: tab === id ? T.gold : 'transparent',
-        color: tab === id ? '#0d1826' : T.muted,
+        color: tab === id ? 'var(--theme-bg)' : T.muted,
         transition: 'all 0.15s',
       }}
     >
@@ -563,7 +577,7 @@ function OrderTicket({ onOrderPlaced, importTemplate, onTemplateConsumed, import
                 letterSpacing: '0.12em', cursor: isPending ? 'wait' : 'pointer',
                 border: 'none',
                 background: eqSide === 'buy' ? T.gold : T.neg,
-                color: eqSide === 'buy' ? '#0d1826' : '#fff',
+                color: 'var(--theme-bg)',
                 opacity: (!eqSymbol || !eqQty) ? 0.45 : 1,
                 transition: 'opacity 0.15s',
               }}
@@ -587,20 +601,56 @@ function OrderTicket({ onOrderPlaced, importTemplate, onTemplateConsumed, import
             </div>
 
             <div>
-              <span style={lbl}>
-                Option Symbol (OCC)
-                <HelpTip text="OCC format: ROOT + YYMMDD + C/P + 8-digit strike padded to 3 decimals. Example: SPY250117C00580000 = SPY, Jan 17 2025, Call, $580 strike. Find the symbol in the Chain Scanner." position="right" width={250} />
-              </span>
+              <span style={lbl}>Expiration Date</span>
               <input
                 style={inp}
-                value={opSymbol}
-                onChange={e => setOpSymbol(e.target.value)}
-                placeholder="SPY250117C00580000"
+                type="date"
+                value={opExpDate}
+                onChange={e => setOpExpDate(e.target.value)}
               />
-              <span style={{ fontSize: 9, color: T.dim, fontFamily: T.mono, marginTop: 3, display: 'block' }}>
-                ROOT + YYMMDD + C/P + 8-digit strike×1000
-              </span>
             </div>
+
+            <div>
+              <span style={lbl}>Strike Price</span>
+              <input
+                style={inp}
+                type="number"
+                min="0"
+                step="0.5"
+                value={opStrike}
+                onChange={e => setOpStrike(e.target.value)}
+                placeholder="580.00"
+              />
+            </div>
+
+            <div>
+              <span style={lbl}>Call / Put</span>
+              <div style={{ display: 'flex', gap: 0 }}>
+                {(['C', 'P'] as const).map(cp => (
+                  <button
+                    key={cp}
+                    onClick={() => setOpCallPut(cp)}
+                    style={{
+                      flex: 1, padding: '6px 0', fontFamily: T.mono, fontSize: 11, fontWeight: 700,
+                      letterSpacing: '0.1em', cursor: 'pointer', border: `1px solid ${T.border}`,
+                      background: opCallPut === cp ? (cp === 'C' ? T.pos : T.neg) : T.bg,
+                      color: opCallPut === cp ? 'var(--theme-bg)' : T.muted,
+                      borderRight: cp === 'C' ? 'none' : undefined,
+                      transition: 'background 0.15s, color 0.15s',
+                    }}
+                  >
+                    {cp === 'C' ? 'CALL' : 'PUT'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {opSymbol && (
+              <div style={{ padding: '5px 8px', background: 'color-mix(in srgb, var(--theme-primary) 6%, transparent)', border: `1px solid color-mix(in srgb, var(--theme-primary) 20%, transparent)` }}>
+                <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', color: T.muted, fontFamily: T.mono }}>OCC SYMBOL</span>
+                <div style={{ fontSize: 12, fontFamily: T.mono, color: T.gold, marginTop: 2, letterSpacing: '0.04em' }}>{opSymbol}</div>
+              </div>
+            )}
 
             <div>
               <span style={lbl}>
@@ -647,14 +697,14 @@ function OrderTicket({ onOrderPlaced, importTemplate, onTemplateConsumed, import
 
             <button
               onClick={handleOptionSubmit}
-              disabled={isPending || !opUnderlying || !opSymbol || !opQty}
+              disabled={isPending || !opSymbol || !opQty}
               style={{
                 width: '100%', padding: '9px 0', fontFamily: T.mono, fontSize: 11, fontWeight: 700,
                 letterSpacing: '0.12em', cursor: isPending ? 'wait' : 'pointer',
                 border: 'none',
                 background: opSide.startsWith('buy') ? T.gold : T.neg,
-                color: opSide.startsWith('buy') ? '#0d1826' : '#fff',
-                opacity: (!opUnderlying || !opSymbol || !opQty) ? 0.45 : 1,
+                color: 'var(--theme-bg)',
+                opacity: (!opSymbol || !opQty) ? 0.45 : 1,
                 transition: 'opacity 0.15s',
               }}
             >
@@ -689,7 +739,7 @@ function OrderTicket({ onOrderPlaced, importTemplate, onTemplateConsumed, import
                     onClick={() => { setMlTemplate(null); setMlLegHints([]); setMlLegs([{ ...EMPTY_LEG }, { ...EMPTY_LEG }]) }}
                     style={{ padding: '3px 8px', fontSize: 9, fontFamily: T.mono, cursor: 'pointer',
                       border: `1px solid ${T.border}`, background: 'transparent', color: T.neg }}
-                  >✕ clear</button>
+                  >Clear</button>
                 )}
               </div>
               {mlTemplate && (
@@ -782,7 +832,7 @@ function OrderTicket({ onOrderPlaced, importTemplate, onTemplateConsumed, import
                 letterSpacing: '0.12em', cursor: isPending ? 'wait' : 'pointer',
                 border: 'none',
                 background: T.gold,
-                color: '#0d1826',
+                color: 'var(--theme-bg)',
                 opacity: (!mlUnderlying || mlValidLegs.length < 2) ? 0.45 : 1,
                 transition: 'opacity 0.15s',
               }}
@@ -799,7 +849,7 @@ function OrderTicket({ onOrderPlaced, importTemplate, onTemplateConsumed, import
             border: `1px solid ${feedback.ok ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)'}`,
             color: feedback.ok ? T.pos : T.neg,
           }}>
-            {feedback.ok ? '✓ ' : '✗ '}{feedback.msg}
+            {feedback.ok ? '' : '! '}{feedback.msg}
           </div>
         )}
 
@@ -884,8 +934,8 @@ function TickerChartModal({ ticker, onClose }: { ticker: string; onClose: () => 
               <AreaChart data={slice} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor={up ? '#22c55e' : '#ef4444'} stopOpacity={0.25} />
-                    <stop offset="95%" stopColor={up ? '#22c55e' : '#ef4444'} stopOpacity={0.02} />
+                    <stop offset="5%"  stopColor={up ? 'var(--theme-positive)' : 'var(--theme-negative)'} stopOpacity={0.25} />
+                    <stop offset="95%" stopColor={up ? 'var(--theme-positive)' : 'var(--theme-negative)'} stopOpacity={0.02} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--theme-hover, rgba(255,255,255,0.04))" />
@@ -909,7 +959,7 @@ function TickerChartModal({ ticker, onClose }: { ticker: string; onClose: () => 
                 />
                 <Area
                   type="monotone" dataKey="close"
-                  stroke={up ? '#22c55e' : '#ef4444'} strokeWidth={1.5}
+                  stroke={up ? 'var(--theme-positive)' : 'var(--theme-negative)'} strokeWidth={1.5}
                   fill="url(#chartGrad)" dot={false}
                 />
               </AreaChart>
@@ -1032,17 +1082,47 @@ function PositionsPanel({ positions }: { positions: Position[] }) {
 }
 
 // ─── Orders panel ─────────────────────────────────────────────────────────────
-function OrdersPanel({ orders, onCancel, onCancelAll, cancelAllPending, cancelAllError }: {
+function OrdersPanel({ orders, onCancel, onCancelAll, cancelAllPending, cancelAllError, automatedOrders }: {
   orders: Order[]
   onCancel: (id: string) => void
   onCancelAll: () => void
   cancelAllPending?: boolean
   cancelAllError?: boolean
+  automatedOrders?: Record<string, string>
 }) {
+  const [statusF, setStatusF] = useState<'all'|'filled'|'pending'|'rejected'|'canceled'>('all')
+  const [sideF,   setSideF]   = useState<'all'|'buy'|'sell'>('all')
+
   const isPending = (status: string) =>
     ['pending', 'open', 'partially_filled'].includes(status?.toLowerCase())
 
   const pendingOrders = orders.filter(o => isPending(o.status))
+
+  const filtered = orders.filter(o => {
+    const s    = o.status?.toLowerCase() ?? ''
+    const side = o.side?.toLowerCase()   ?? ''
+    if (statusF === 'filled'   && s !== 'filled') return false
+    if (statusF === 'pending'  && !isPending(o.status)) return false
+    if (statusF === 'rejected' && s !== 'rejected') return false
+    if (statusF === 'canceled' && !['canceled','cancelled','expired'].includes(s)) return false
+    if (sideF   === 'buy'  && !side.startsWith('buy')  && side !== 'buy')  return false
+    if (sideF   === 'sell' && !side.startsWith('sell') && side !== 'sell') return false
+    return true
+  })
+
+  const pill = (active: boolean, label: string, onClick: () => void, color?: string) => (
+    <button
+      onClick={onClick}
+      style={{
+        padding: '2px 6px', fontSize: 8, fontFamily: T.mono, fontWeight: 700,
+        letterSpacing: '0.07em', cursor: 'pointer',
+        border: `1px solid ${active ? (color ?? T.gold) : T.border}`,
+        background: active ? `color-mix(in srgb, ${color ?? T.gold} 14%, transparent)` : 'transparent',
+        color: active ? (color ?? T.gold) : T.dim,
+        transition: 'all 0.1s',
+      }}
+    >{label}</button>
+  )
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -1060,69 +1140,106 @@ function OrdersPanel({ orders, onCancel, onCancelAll, cancelAllPending, cancelAl
               opacity: cancelAllPending ? 0.6 : 1,
             }}
           >
-            {cancelAllPending ? 'Cancelling…' : cancelAllError ? '✕ Failed — retry' : `✕ CANCEL ALL (${pendingOrders.length})`}
+            {cancelAllPending ? 'Cancelling…' : cancelAllError ? 'Failed — retry' : `Cancel All (${pendingOrders.length})`}
           </button>
         )}
       </div>
+
+      {/* Filter bar */}
+      <div style={{ padding: '6px 10px', borderBottom: `1px solid ${T.border}`, display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+          {pill(statusF === 'all',      'ALL',      () => setStatusF('all'))}
+          {pill(statusF === 'filled',   'FILLED',   () => setStatusF('filled'),   T.pos)}
+          {pill(statusF === 'pending',  'PENDING',  () => setStatusF('pending'),  T.gold)}
+          {pill(statusF === 'rejected', 'REJECTED', () => setStatusF('rejected'), T.neg)}
+          {pill(statusF === 'canceled', 'CANCELED', () => setStatusF('canceled'), T.muted)}
+        </div>
+        <div style={{ display: 'flex', gap: 3 }}>
+          {pill(sideF === 'all',  'ALL',  () => setSideF('all'))}
+          {pill(sideF === 'buy',  'BUY',  () => setSideF('buy'),  T.pos)}
+          {pill(sideF === 'sell', 'SELL', () => setSideF('sell'), T.neg)}
+        </div>
+      </div>
+
       {orders.length === 0 ? (
         <div style={{
           flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
           color: T.dim, fontFamily: T.mono, fontSize: 12, flexDirection: 'column', gap: 6,
         }}>
-          <span style={{ fontSize: 24, opacity: 0.3 }}>📋</span>
+          
           No orders yet
+        </div>
+      ) : filtered.length === 0 ? (
+        <div style={{
+          flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: T.dim, fontFamily: T.mono, fontSize: 11,
+        }}>
+          No orders match filters
         </div>
       ) : (
         <div style={{ overflowY: 'auto', flex: 1, padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {orders.map(o => (
-            <div key={o.id} style={{
-              background: T.bg,
-              border: `1px solid ${T.border}`,
-              padding: '9px 10px',
-              position: 'relative',
-            }}>
-              {/* Symbol + cancel */}
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 5 }}>
-                <span style={{ fontFamily: T.mono, fontSize: 13, fontWeight: 700, color: T.gold }}>{o.symbol}</span>
-                {isPending(o.status) && (
-                  <button
-                    onClick={() => onCancel(o.id)}
-                    title="Cancel order"
-                    style={{
-                      background: 'none', border: `1px solid rgba(239,68,68,0.35)`,
-                      color: T.neg, cursor: 'pointer', fontSize: 11, lineHeight: 1,
-                      padding: '2px 6px', fontFamily: T.mono,
-                    }}
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
+          {filtered.map(o => {
+            const stratName = automatedOrders?.[o.id]
+            return (
+              <div key={o.id} style={{
+                background: T.bg,
+                border: `1px solid ${stratName ? 'rgba(167,139,250,0.28)' : T.border}`,
+                padding: '9px 10px',
+                position: 'relative',
+              }}>
+                {/* Symbol + automated badge + cancel */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 5 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+                    <span style={{ fontFamily: T.mono, fontSize: 13, fontWeight: 700, color: T.gold }}>{o.symbol}</span>
+                    {stratName && (
+                      <span style={{
+                        fontSize: 8, fontWeight: 700, padding: '1px 5px',
+                        background: 'rgba(167,139,250,0.12)', color: '#a78bfa',
+                        border: '1px solid rgba(167,139,250,0.38)', fontFamily: T.mono,
+                        letterSpacing: '0.07em', whiteSpace: 'nowrap',
+                      }}>{stratName}</span>
+                    )}
+                  </div>
+                  {isPending(o.status) && (
+                    <button
+                      onClick={() => onCancel(o.id)}
+                      title="Cancel order"
+                      style={{
+                        background: 'none', border: `1px solid rgba(239,68,68,0.35)`,
+                        color: T.neg, cursor: 'pointer', fontSize: 11, lineHeight: 1,
+                        padding: '2px 6px', fontFamily: T.mono, flexShrink: 0,
+                      }}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
 
-              {/* Side / qty / price */}
-              <div style={{ fontFamily: T.mono, fontSize: 11, color: T.text, marginBottom: 5 }}>
-                {o.side} {o.quantity}
-                {o.avg_fill_price
-                  ? <span style={{ color: T.pos }}> @ {fmt$(o.avg_fill_price)}</span>
-                  : o.price
-                    ? <span style={{ color: T.muted }}> @ {fmt$(o.price)}</span>
-                    : <span style={{ color: T.dim }}> @ MKT</span>
-                }
-              </div>
+                {/* Side / qty / price */}
+                <div style={{ fontFamily: T.mono, fontSize: 11, color: T.text, marginBottom: 5 }}>
+                  {o.side} {o.quantity}
+                  {o.avg_fill_price
+                    ? <span style={{ color: T.pos }}> @ {fmt$(o.avg_fill_price)}</span>
+                    : o.price
+                      ? <span style={{ color: T.muted }}> @ {fmt$(o.price)}</span>
+                      : <span style={{ color: T.dim }}> @ MKT</span>
+                  }
+                </div>
 
-              {/* Status + type + date */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{
-                  fontSize: 9, fontWeight: 700, letterSpacing: '0.12em',
-                  color: statusColor(o.status), fontFamily: T.mono,
-                  textTransform: 'uppercase' as const,
-                }}>
-                  {o.status}
-                </span>
-                <span style={{ fontSize: 9, color: T.dim, fontFamily: T.mono }}>{fmtDate(o.create_date)}</span>
+                {/* Status + date */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{
+                    fontSize: 9, fontWeight: 700, letterSpacing: '0.12em',
+                    color: statusColor(o.status), fontFamily: T.mono,
+                    textTransform: 'uppercase' as const,
+                  }}>
+                    {o.status}
+                  </span>
+                  <span style={{ fontSize: 9, color: T.dim, fontFamily: T.mono }}>{fmtDate(o.create_date)}</span>
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
@@ -1175,6 +1292,11 @@ export default function PaperTrading() {
 
   const [gammaOpen, setGammaOpen] = useState(false)
 
+  // Automated order tracking: orderId → strategyName
+  const [automatedOrders, setAutomatedOrders] = useState<Record<string, string>>({})
+  const handleAutomatedOrder = (id: string, name: string) =>
+    setAutomatedOrders(prev => ({ ...prev, [id]: name }))
+
   // Template import from StrategyPanel → OrderTicket
   const [importedTemplate, setImportedTemplate] = useState<StrategyTemplate | null>(null)
 
@@ -1213,7 +1335,7 @@ export default function PaperTrading() {
   }, [])
 
   return (
-    <PageWrapper>
+    <PageWrapper title="Paper Trading">
       <div style={{ fontFamily: T.mono, color: T.text, display: 'flex', flexDirection: 'column', height: '100%' }}>
 
         {/* ── Error banner ── */}
@@ -1223,7 +1345,7 @@ export default function PaperTrading() {
             background: 'rgba(239,68,68,0.1)', border: `1px solid rgba(239,68,68,0.4)`,
             color: T.neg, fontSize: 12, fontFamily: T.mono,
           }}>
-            ⚠ Tradier sandbox unavailable — check API key in .env
+            Tradier sandbox unavailable — check API key in .env
           </div>
         )}
 
@@ -1236,19 +1358,14 @@ export default function PaperTrading() {
           borderBottom: `2px solid ${T.gold}`,
           marginBottom: 10,
         }}>
-          {/* Title */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.14em', color: T.gold }}>
-              PAPER TRADING
-            </span>
-            <span style={{
-              fontSize: 9, fontWeight: 700, padding: '2px 7px',
-              background: 'rgba(249,115,22,0.18)', color: T.orange,
-              border: `1px solid rgba(249,115,22,0.4)`, letterSpacing: '0.1em',
-            }}>
-              SANDBOX
-            </span>
-          </div>
+          {/* Sandbox badge */}
+          <span style={{
+            fontSize: 9, fontWeight: 700, padding: '2px 7px',
+            background: 'color-mix(in srgb, var(--theme-warn) 18%, transparent)', color: T.warn,
+            border: `1px solid rgba(249,115,22,0.4)`, letterSpacing: '0.1em',
+          }}>
+            SANDBOX
+          </span>
 
           <div style={{ width: 1, height: 18, background: T.border }} />
 
@@ -1259,7 +1376,7 @@ export default function PaperTrading() {
             <>
               <HeaderMetric label="EQUITY" value={fmt$(bal.total_equity)} />
               <HeaderMetric label="BUYING POWER" value={fmt$(bal.buying_power)} />
-              <HeaderMetric label="DAY P&L" value={fmt$(bal.day_change)} valueColor={dayChangeColor} />
+              <HeaderMetric label="TOTAL P&L" value={fmt$(bal.day_change)} valueColor={dayChangeColor} />
               <HeaderMetric label="CASH" value={fmt$(bal.cash)} />
             </>
           ) : null}
@@ -1337,6 +1454,7 @@ export default function PaperTrading() {
               onCancelAll={() => cancelAllMutation.mutate()}
               cancelAllPending={cancelAllMutation.isPending}
               cancelAllError={cancelAllMutation.isError}
+              automatedOrders={automatedOrders}
             />
           </div>
         </div>
@@ -1347,6 +1465,7 @@ export default function PaperTrading() {
           pendingBuilderStrategy={pendingBuilderStrategy}
           onApproveBuilderStrategy={approveBuilderStrategy}
           onDismissBuilderStrategy={() => { localStorage.removeItem(PT_LS_KEY); setPendingBuilderStrategy(null) }}
+          onAutomatedOrder={handleAutomatedOrder}
         />
 
         </>)}
@@ -1407,6 +1526,38 @@ const BUILTIN_STRATEGY_INFO: Record<string, {
     help: 'IV/RV regime proxy using short-term (5-day) vs long-term (20-day) realized volatility ratio. Buys when recent volatility expands above the long-term baseline (vol expansion = long gamma regime); exits when vol compresses below the threshold. Repurposed from the Gamma Scalping simulator — captures convexity-driven moves without requiring live options data.',
     usedIn: [],
   },
+  micro_scalp: {
+    label: 'EMA Micro-Scalp (3/8)',
+    help: 'Very short-term EMA crossover scalp. Enters when EMA(3) crosses above EMA(8) — a fast micro-trend burst. Exits on the reverse cross. Optional ATR filter skips signals when the market is too quiet. Generates frequent round trips; best on volatile, trending assets.',
+    usedIn: ['backtester', 'montecarlo'],
+    backtesterKey: 'micro_scalp', montecarloKey: 'EMA Micro-Scalp (3/8)',
+  },
+}
+
+// ─── Paper strategy param definitions (mirrors backend initialize() defaults) ─
+
+const PAPER_DEFAULT_PARAMS: Record<string, Record<string, number>> = {
+  rsi_mean_reversion:  { period: 14, oversold: 30, overbought: 70 },
+  sma_trend_following: { sma_fast: 50, sma_slow: 200 },
+  bollinger_breakout:  { period: 20, std_dev: 2.0 },
+  momentum:            { lookback_days: 126, threshold_pct: 0 },
+  macd_crossover:      { ema_fast: 12, ema_slow: 26, signal_period: 9 },
+  value_pe:            { pe_deep_value: 12, pe_fair_value: 20, pe_expensive: 35, pe_very_expensive: 50 },
+  earnings_growth:     { exit_threshold_pct: -5 },
+  gamma_scalping:      { short_window: 5, long_window: 20, entry_ratio: 1.3, exit_ratio: 0.8 },
+  micro_scalp:         { ema_fast: 3, ema_slow: 8, atr_period: 5, atr_mult: 0.3 },
+}
+
+const PAPER_PARAM_LABELS: Record<string, Record<string, string>> = {
+  rsi_mean_reversion:  { period: 'Period', oversold: 'Oversold', overbought: 'Overbought' },
+  sma_trend_following: { sma_fast: 'Fast SMA', sma_slow: 'Slow SMA' },
+  bollinger_breakout:  { period: 'Period', std_dev: 'Std Dev' },
+  momentum:            { lookback_days: 'Lookback', threshold_pct: 'Threshold %' },
+  macd_crossover:      { ema_fast: 'Fast EMA', ema_slow: 'Slow EMA', signal_period: 'Signal' },
+  value_pe:            { pe_deep_value: 'Deep Value P/E', pe_fair_value: 'Fair Value P/E', pe_expensive: 'Exit P/E', pe_very_expensive: 'Very Exp P/E' },
+  earnings_growth:     { exit_threshold_pct: 'Exit EPS %' },
+  gamma_scalping:      { short_window: 'Short Window', long_window: 'Long Window', entry_ratio: 'Entry Ratio', exit_ratio: 'Exit Ratio' },
+  micro_scalp:         { ema_fast: 'Fast EMA', ema_slow: 'Slow EMA', atr_period: 'ATR Period', atr_mult: 'Min ATR %' },
 }
 
 // ─── Strategy Signal Chart ───────────────────────────────────────────────────
@@ -1433,8 +1584,8 @@ function computeReplayStats(data: ChartPoint[]) {
   }
 }
 
-function StrategySignalChart({ data, ticker, mode }: {
-  data: ChartPoint[]; ticker: string; mode: 'replay' | 'live'
+function StrategySignalChart({ data, ticker, mode, intervalMs = 15_000 }: {
+  data: ChartPoint[]; ticker: string; mode: 'replay' | 'live'; intervalMs?: number
 }) {
   const buyCount  = data.filter(d => d.buy  != null).length
   const sellCount = data.filter(d => d.sell != null).length
@@ -1478,7 +1629,7 @@ function StrategySignalChart({ data, ticker, mode }: {
         )}
         {mode === 'live' && (
           <span style={{ fontSize: 9, color: T.dim, fontFamily: T.mono, marginLeft: 'auto' }}>
-            {xCount} ticks · updates every 15s
+            {xCount} ticks · updates every {intervalMs / 1000}s
           </span>
         )}
       </div>
@@ -1588,17 +1739,76 @@ interface StrategyEntry {
   name: string; version: string; author: string; description: string
   parameters: Record<string, unknown>; enabled: boolean
 }
+interface ReplayEvent { strategy_name: string; timestamp: number; symbol: string; signal: string; price: number }
 interface ReplayResult {
   ticker: string; bars_processed: number
-  events: { strategy_name: string; timestamp: number; symbol: string; signal: string; price: number }[]
+  events: ReplayEvent[]
   summary: Record<string, { BUY: number; SELL: number; HOLD: number }>
 }
 
-function StrategyPanel({ onImportTemplate, pendingBuilderStrategy, onApproveBuilderStrategy, onDismissBuilderStrategy }: {
+interface RiskConfig {
+  stop_loss: string
+  take_profit: string
+  trailing_stop: string
+  max_hold: string
+}
+const RISK_DEFAULTS: RiskConfig = { stop_loss: '', take_profit: '', trailing_stop: '', max_hold: '' }
+
+function applyRiskToChart(
+  events: ReplayEvent[],
+  riskByStrategy: Record<string, RiskConfig>,
+  prices: { date: string; value: number }[],
+): { date: string; price: number; buy?: number; sell?: number }[] {
+  const strategyNames = [...new Set(events.map(e => e.strategy_name))]
+  const finalSig: Record<string, 'BUY' | 'SELL'> = {}
+
+  for (const name of strategyNames) {
+    const risk = riskByStrategy[name] ?? RISK_DEFAULTS
+    const sl   = risk.stop_loss     ? parseFloat(risk.stop_loss)     : null
+    const tp   = risk.take_profit   ? parseFloat(risk.take_profit)   : null
+    const ts   = risk.trailing_stop ? parseFloat(risk.trailing_stop) : null
+    const mh   = risk.max_hold      ? parseInt(risk.max_hold)        : null
+
+    const rawByDate: Record<string, 'BUY' | 'SELL'> = {}
+    for (const ev of events.filter(e => e.strategy_name === name)) {
+      rawByDate[new Date(ev.timestamp * 1000).toISOString().slice(0, 10)] = ev.signal as 'BUY' | 'SELL'
+    }
+
+    let inTrade = false, entryPrice = 0, peak = 0, bars = 0
+    for (const bar of prices) {
+      const raw = rawByDate[bar.date]
+      if (!inTrade) {
+        if (raw === 'BUY') {
+          inTrade = true; entryPrice = bar.value; peak = bar.value; bars = 0
+          finalSig[bar.date] = 'BUY'
+        }
+      } else {
+        bars++; peak = Math.max(peak, bar.value)
+        const stopHit  = sl && bar.value <= entryPrice * (1 - sl / 100)
+        const tpHit    = tp && bar.value >= entryPrice * (1 + tp / 100)
+        const trailHit = ts && bar.value <= peak * (1 - ts / 100)
+        const timeHit  = mh && bars >= mh
+        if (stopHit || tpHit || trailHit || timeHit || raw === 'SELL') {
+          inTrade = false
+          finalSig[bar.date] = 'SELL'
+        }
+      }
+    }
+  }
+
+  return prices.map(p => ({
+    date: p.date, price: p.value,
+    buy:  finalSig[p.date] === 'BUY'  ? p.value : undefined,
+    sell: finalSig[p.date] === 'SELL' ? p.value : undefined,
+  }))
+}
+
+function StrategyPanel({ onImportTemplate, pendingBuilderStrategy, onApproveBuilderStrategy, onDismissBuilderStrategy, onAutomatedOrder }: {
   onImportTemplate: (tpl: StrategyTemplate) => void
   pendingBuilderStrategy: PendingOptionStrategy | null
   onApproveBuilderStrategy: (ps: PendingOptionStrategy) => void
   onDismissBuilderStrategy: () => void
+  onAutomatedOrder?: (id: string, strategyName: string) => void
 }) {
   const qc = useQueryClient()
   const [open, setOpen] = useState(false)
@@ -1609,39 +1819,117 @@ function StrategyPanel({ onImportTemplate, pendingBuilderStrategy, onApproveBuil
   const [execStatus, setExecStatus] = useState<string | null>(null)
   const [liveActive, setLiveActive] = useState(false)
   const [liveStatus, setLiveStatus] = useState<string | null>(null)
+  const [offlineStatus, setOfflineStatus] = useState<string | null>(null)
+  const [customModalOpen, setCustomModalOpen] = useState(false)
   const liveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [liveIntervalMs, setLiveIntervalMs] = useState(15_000)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  // Per-strategy param overrides and param-editor open state
+  const [stratParams, setStratParams] = useState<Record<string, Record<string, number>>>({})
+  const [paramsOpen, setParamsOpen] = useState<Record<string, boolean>>({})
+  const [cardOpen, setCardOpen] = useState<Record<string, boolean>>({})
+  const [stratColOpen, setStratColOpen] = useState(true)
+
+  // Per-strategy risk controls
+  const [riskParams, setRiskParams] = useState<Record<string, RiskConfig>>({})
+  const [riskOpen, setRiskOpen] = useState<Record<string, boolean>>({})
+  // Live-mode per-strategy position state for risk tracking
+  const liveTradeState = useRef<Record<string, { inTrade: boolean; entryPrice: number; peak: number; bars: number }>>({})
 
   const [chartData, setChartData] = useState<ChartPoint[]>([])
   const [liveChart, setLiveChart] = useState<ChartPoint[]>([])
 
   const { data: strategies = [] } = useQuery<StrategyEntry[]>({
-    queryKey: ['paper-strategies'],
-    queryFn: () => axios.get('/api/paper-strategies/').then(r => r.data),
+    queryKey: ['paper/strategies'],
+    queryFn: () => axios.get('/api/paper/strategies/').then(r => r.data),
     enabled: open,
+  })
+
+  // ── Scheduler queries (scoped to this panel, enabled when open) ──────────────
+  const { data: schedulerStatus } = useQuery<SchedulerStatus>({
+    queryKey: ['paper/scheduler/status'],
+    queryFn: () => axios.get('/api/paper/scheduler/status').then(r => r.data),
+    refetchInterval: 15_000,
+  })
+
+  const { data: schedulerJobs = [] } = useQuery<SchedulerJob[]>({
+    queryKey: ['paper/scheduler/jobs'],
+    queryFn: () => axios.get('/api/paper/scheduler/jobs').then(r => r.data),
+    enabled: open,
+    refetchInterval: open ? 15_000 : false,
+  })
+
+  const { data: schedulerLog = [] } = useQuery<SchedulerLogEntry[]>({
+    queryKey: ['paper/scheduler/log'],
+    queryFn: () => axios.get('/api/paper/scheduler/log?limit=50').then(r => r.data),
+    enabled: open,
+    refetchInterval: open ? 30_000 : false,
+  })
+
+  const createJobMut = useMutation({
+    mutationFn: (body: { ticker: string; strategy_name: string; qty: number; params: Record<string, number> }) =>
+      axios.post('/api/paper/scheduler/jobs', body).then(r => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['paper/scheduler/jobs'] })
+      qc.invalidateQueries({ queryKey: ['paper/scheduler/status'] })
+    },
+  })
+
+  const deleteJobMut = useMutation({
+    mutationFn: (id: string) => axios.delete(`/api/paper/scheduler/jobs/${id}`).then(r => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['paper/scheduler/jobs'] })
+      qc.invalidateQueries({ queryKey: ['paper/scheduler/status'] })
+    },
+  })
+
+  const toggleJobMut = useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
+      axios.patch(`/api/paper/scheduler/jobs/${id}/toggle`, { enabled }).then(r => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['paper/scheduler/jobs'] }),
   })
 
   const toggleMut = useMutation({
     mutationFn: ({ name, enabled }: { name: string; enabled: boolean }) =>
-      axios.post(`/api/paper-strategies/${name}/toggle`, { enabled }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['paper-strategies'] }),
+      axios.post(`/api/paper/strategies/${name}/toggle`, { enabled }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['paper/strategies'] }),
   })
 
   const uploadMut = useMutation({
     mutationFn: (file: File) => {
       const fd = new FormData(); fd.append('file', file)
-      return axios.post('/api/paper-strategies/upload', fd)
+      return axios.post('/api/paper/strategies/upload', fd)
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['paper-strategies'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['paper/strategies'] }),
   })
 
   const deleteMut = useMutation({
-    mutationFn: (name: string) => axios.delete(`/api/paper-strategies/${name}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['paper-strategies'] }),
+    mutationFn: (name: string) => axios.delete(`/api/paper/strategies/${name}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['paper/strategies'] }),
   })
 
+  const createCustomMut = useMutation({
+    mutationFn: (body: { name: string; rules: object; bull_drift: number; bear_drift: number }) =>
+      axios.post('/api/paper/strategies/custom', body).then(r => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['paper/strategies'] })
+      setCustomModalOpen(false)
+    },
+  })
+
+  const handleCustomSave = (def: CustomStrategyDef) => {
+    saveCustomStrategy(def)
+    createCustomMut.mutate({
+      name: def.name,
+      rules: { buy: def.buy, sell: def.sell },
+      bull_drift: def.bull_drift,
+      bear_drift: def.bear_drift,
+    })
+  }
+
   const replayMut = useMutation({
-    mutationFn: () => axios.post('/api/paper-strategies/replay', {
+    mutationFn: () => axios.post('/api/paper/strategies/replay', {
       ticker: replayTicker.toUpperCase(), start: replayStart,
     }).then(r => r.data),
     onSuccess: async (d: ReplayResult) => {
@@ -1649,18 +1937,7 @@ function StrategyPanel({ onImportTemplate, pendingBuilderStrategy, onApproveBuil
       try {
         const hist = await axios.get(`/api/market/history?ticker=${d.ticker}&start=${replayStart}`)
         const prices: { date: string; value: number }[] = hist.data.price ?? []
-        // build a date → signal map from events
-        const signalMap: Record<string, 'BUY' | 'SELL'> = {}
-        for (const ev of d.events) {
-          const dateStr = new Date(ev.timestamp * 1000).toISOString().slice(0, 10)
-          signalMap[dateStr] = ev.signal as 'BUY' | 'SELL'
-        }
-        setChartData(prices.map(p => ({
-          date: p.date,
-          price: p.value,
-          buy:  signalMap[p.date] === 'BUY'  ? p.value : undefined,
-          sell: signalMap[p.date] === 'SELL' ? p.value : undefined,
-        })))
+        setChartData(applyRiskToChart(d.events, riskParams, prices))
       } catch { /* chart optional */ }
     },
   })
@@ -1679,7 +1956,9 @@ function StrategyPanel({ onImportTemplate, pendingBuilderStrategy, onApproveBuil
     let ok = 0, fail = 0
     for (const ev of events) {
       try {
-        await placeOrder(ev.symbol, ev.signal === 'BUY' ? 'buy' : 'sell', qty)
+        const r = await placeOrder(ev.symbol, ev.signal === 'BUY' ? 'buy' : 'sell', qty)
+        const orderId = r.data?.order?.id ?? r.data?.id
+        if (orderId) onAutomatedOrder?.(String(orderId), 'Replay')
         ok++
       } catch { fail++ }
     }
@@ -1690,32 +1969,65 @@ function StrategyPanel({ onImportTemplate, pendingBuilderStrategy, onApproveBuil
   const startLive = () => {
     const ticker = replayTicker.toUpperCase()
     const qty = Math.max(1, parseInt(execQty) || 1)
+    const scalping = strategies.some(s => s.enabled && s.name === 'micro_scalp')
+    const intervalMs = scalping ? 3_000 : 15_000
+    setLiveIntervalMs(intervalMs)
     setLiveActive(true)
-    setLiveStatus('Live — waiting for first tick…')
+    setLiveStatus(`Live — waiting for first tick… (${scalping ? '3s' : '15s'} interval)`)
     setLiveChart([])
     setChartData([])
+    liveTradeState.current = {}
     liveIntervalRef.current = setInterval(async () => {
       try {
         const priceRes = await axios.get(`/api/market/quote/${ticker}`)
         const price: number = priceRes.data?.current_price ?? priceRes.data?.last ?? priceRes.data?.price
         if (!price) return
         const now = new Date().toLocaleTimeString()
-        const signals: { strategy_name: string; signal: string }[] =
-          await axios.post('/api/paper-strategies/tick', {
+        const rawSignals: { strategy_name: string; signal: string }[] =
+          await axios.post('/api/paper/strategies/tick', {
             timestamp: Date.now() / 1000, symbol: ticker, price, size: 0, side: 'trade',
           }).then(r => r.data)
-        const sigMap: Record<string, string> = {}
-        for (const s of signals) sigMap[s.strategy_name] = s.signal
+
+        // Apply per-strategy risk overrides
+        const signals = rawSignals.map(s => {
+          const state = liveTradeState.current[s.strategy_name] ??
+            (liveTradeState.current[s.strategy_name] = { inTrade: false, entryPrice: 0, peak: 0, bars: 0 })
+          const risk = riskParams[s.strategy_name] ?? RISK_DEFAULTS
+          const sl  = risk.stop_loss     ? parseFloat(risk.stop_loss)     : null
+          const tp  = risk.take_profit   ? parseFloat(risk.take_profit)   : null
+          const ts  = risk.trailing_stop ? parseFloat(risk.trailing_stop) : null
+          const mh  = risk.max_hold      ? parseInt(risk.max_hold)        : null
+
+          if (s.signal === 'BUY' && !state.inTrade) {
+            state.inTrade = true; state.entryPrice = price; state.peak = price; state.bars = 0
+            return s
+          }
+          if (state.inTrade) {
+            state.bars++; state.peak = Math.max(state.peak, price)
+            const stopHit  = sl && price <= state.entryPrice * (1 - sl / 100)
+            const tpHit    = tp && price >= state.entryPrice * (1 + tp / 100)
+            const trailHit = ts && price <= state.peak * (1 - ts / 100)
+            const timeHit  = mh && state.bars >= mh
+            if (stopHit || tpHit || trailHit || timeHit) {
+              state.inTrade = false
+              return { ...s, signal: 'SELL' }
+            }
+            if (s.signal === 'SELL') { state.inTrade = false; return s }
+          }
+          return s
+        })
+
         const firstSig = signals.find(s => s.signal === 'BUY' || s.signal === 'SELL')
         setLiveChart(prev => [...prev.slice(-199), {
-          date: now,
-          price,
+          date: now, price,
           buy:  firstSig?.signal === 'BUY'  ? price : undefined,
           sell: firstSig?.signal === 'SELL' ? price : undefined,
         }])
         for (const s of signals) {
           if (s.signal === 'BUY' || s.signal === 'SELL') {
-            await placeOrder(ticker, s.signal === 'BUY' ? 'buy' : 'sell', qty)
+            const r = await placeOrder(ticker, s.signal === 'BUY' ? 'buy' : 'sell', qty)
+            const orderId = r.data?.order?.id ?? r.data?.id
+            if (orderId) onAutomatedOrder?.(String(orderId), s.strategy_name)
             setLiveStatus(`${now} — ${s.strategy_name}: ${s.signal} ${qty}x ${ticker} @ $${price.toFixed(2)}`)
             qc.invalidateQueries({ queryKey: ['account'] })
           }
@@ -1724,7 +2036,7 @@ function StrategyPanel({ onImportTemplate, pendingBuilderStrategy, onApproveBuil
       } catch (e) {
         setLiveStatus(`Error: ${(e as Error).message}`)
       }
-    }, 15_000)
+    }, intervalMs)
   }
 
   const stopLive = () => {
@@ -1733,7 +2045,41 @@ function StrategyPanel({ onImportTemplate, pendingBuilderStrategy, onApproveBuil
     setLiveStatus(null)
   }
 
+  const runOffline = async () => {
+    const ticker = replayTicker.toUpperCase()
+    const qty = Math.max(1, parseInt(execQty) || 1)
+    const active = strategies.filter(s => s.enabled)
+    if (active.length === 0) { setOfflineStatus('Enable at least one strategy first.'); return }
+    setOfflineStatus('Scheduling…')
+    let created = 0
+    for (const s of active) {
+      const defaults = PAPER_DEFAULT_PARAMS[s.name] ?? {}
+      const overrides = stratParams[s.name] ?? {}
+      const risk = riskParams[s.name] ?? RISK_DEFAULTS
+      const riskNums: Record<string, number> = {}
+      if (risk.stop_loss)     riskNums.stop_loss     = parseFloat(risk.stop_loss)
+      if (risk.take_profit)   riskNums.take_profit   = parseFloat(risk.take_profit)
+      if (risk.trailing_stop) riskNums.trailing_stop = parseFloat(risk.trailing_stop)
+      if (risk.max_hold)      riskNums.max_hold      = parseInt(risk.max_hold)
+      try {
+        await createJobMut.mutateAsync({ ticker, strategy_name: s.name, qty, params: { ...defaults, ...overrides, ...riskNums } })
+        created++
+      } catch { /* skip duplicates or unknown strategies */ }
+    }
+    const hasScalp = active.some(s => s.name === 'micro_scalp')
+    const intervalNote = hasScalp
+      ? active.length > 1
+        ? 'micro_scalp every 3s, others every 60s'
+        : 'every 3s'
+      : 'every 60s'
+    setOfflineStatus(`Scheduled ${created} job${created !== 1 ? 's' : ''} for ${ticker} — ${intervalNote} during market hours`)
+  }
+
   useEffect(() => () => { if (liveIntervalRef.current) clearInterval(liveIntervalRef.current) }, [])
+
+  // All jobs grouped by ticker
+  const allTickers = [...new Set(schedulerJobs.map(j => j.ticker))].sort()
+  const sigColor   = (s: string) => s === 'BUY' ? T.pos : s === 'SELL' ? T.neg : T.dim
 
   return (
     <div style={{ marginTop: 10, border: `1px solid ${T.border}`, background: T.surface, flexShrink: 0 }}>
@@ -1746,14 +2092,37 @@ function StrategyPanel({ onImportTemplate, pendingBuilderStrategy, onApproveBuil
           borderBottom: open ? `1px solid ${T.border}` : 'none',
         }}
       >
-        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', color: T.gold }}>⬡ STRATEGIES</span>
-        <span style={{ fontSize: 9, color: T.muted, fontFamily: T.mono }}>
-          {strategies.length} loaded · {strategies.filter(s => s.enabled).length} active
-        </span>
+        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', color: T.gold, fontFamily: T.mono }}>STRATEGIES</span>
+
+        {/* Enabled-for-replay/live count */}
+        {(() => {
+          const enabledN = strategies.filter(s => s.enabled).length
+          return (
+            <span style={{
+              fontSize: 8, padding: '1px 5px', fontFamily: T.mono, letterSpacing: '0.07em',
+              border: `1px solid ${enabledN > 0 ? 'rgba(201,168,76,0.4)' : T.border}`,
+              color: enabledN > 0 ? T.gold : T.muted,
+              background: enabledN > 0 ? 'rgba(201,168,76,0.06)' : 'transparent',
+            }}>
+              {enabledN} / {strategies.length} enabled
+            </span>
+          )
+        })()}
+
+        {/* Offline scheduler jobs — separate from "enabled" above */}
+        {schedulerStatus && schedulerStatus.active_jobs > 0 && (
+          <span style={{
+            fontSize: 8, padding: '1px 5px', fontFamily: T.mono, letterSpacing: '0.07em',
+            border: '1px solid rgba(34,197,94,0.4)', color: T.pos, background: 'rgba(34,197,94,0.06)',
+          }}>
+            {schedulerStatus.active_jobs} scheduler job{schedulerStatus.active_jobs !== 1 ? 's' : ''} running
+          </span>
+        )}
+
         {pendingBuilderStrategy && (
           <span style={{ fontSize: 9, fontWeight: 700, color: T.gold, fontFamily: T.mono,
             padding: '1px 6px', border: `1px solid ${T.gold}`, marginLeft: 4, animation: 'pulse 1.5s infinite' }}>
-            ⚡ PENDING
+            PENDING
           </span>
         )}
         <span style={{ marginLeft: 'auto', fontSize: 10, color: T.muted }}>{open ? '▲' : '▼'}</span>
@@ -1781,19 +2150,15 @@ function StrategyPanel({ onImportTemplate, pendingBuilderStrategy, onApproveBuil
             </div>
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
-            <button
-              onClick={() => onApproveBuilderStrategy(pendingBuilderStrategy)}
+            <button onClick={() => onApproveBuilderStrategy(pendingBuilderStrategy)}
               style={{ padding: '6px 14px', fontSize: 10, fontFamily: T.mono, fontWeight: 700,
-                cursor: 'pointer', border: 'none', background: T.gold, color: '#0d1826', letterSpacing: '0.1em' }}
-            >
-              ✓ APPROVE
+                cursor: 'pointer', border: 'none', background: T.gold, color: 'var(--theme-bg)', letterSpacing: '0.1em' }}>
+              APPROVE
             </button>
-            <button
-              onClick={onDismissBuilderStrategy}
+            <button onClick={onDismissBuilderStrategy}
               style={{ padding: '6px 10px', fontSize: 10, fontFamily: T.mono, cursor: 'pointer',
-                border: `1px solid ${T.border}`, background: 'transparent', color: T.muted }}
-            >
-              ✕
+                border: `1px solid ${T.border}`, background: 'transparent', color: T.muted }}>
+              Dismiss
             </button>
           </div>
         </div>
@@ -1803,65 +2168,260 @@ function StrategyPanel({ onImportTemplate, pendingBuilderStrategy, onApproveBuil
         <div>
         <div style={{ padding: '10px 14px', display: 'flex', gap: 14, flexWrap: 'wrap' }}>
 
-          {/* Strategy list */}
-          <div style={{ flex: 1, minWidth: 300 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-              <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', color: T.muted, textTransform: 'uppercase' }}>
-                Strategies
-              </span>
-              <HelpTip width={280} position="right" text="Enable/disable strategies that run during live auto-trade and replay. Multiple enabled strategies all fire signals simultaneously — place orders for whichever fires first per tick. Toggle OFF strategies you don't want active. Builtin strategies cannot be deleted. Upload custom .py strategies below." />
+          {/* Strategy list — collapsible column */}
+          <div style={{ flex: stratColOpen ? 1 : 'none', minWidth: stratColOpen ? 300 : 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+              <button
+                onClick={() => setStratColOpen(o => !o)}
+                title={stratColOpen ? 'Collapse strategy list' : 'Expand strategy list'}
+                style={{
+                  background: 'none', border: `1px solid ${T.border}`, color: T.muted,
+                  cursor: 'pointer', padding: '1px 6px', fontFamily: T.mono, fontSize: 9, flexShrink: 0,
+                }}
+              >{stratColOpen ? '◀ Hide' : '▶ Strategies'}</button>
+              {stratColOpen && (
+                <>
+                  <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', color: T.muted, textTransform: 'uppercase' }}>
+                    Strategies
+                  </span>
+                  <HelpTip width={280} position="right" text="Enable/disable strategies that run during live auto-trade, replay, and Run Offline. Expand ▶ Parameters to customise each strategy's settings — these flow through to all three execution modes." />
+                </>
+              )}
             </div>
-            {strategies.length === 0 && (
+
+            {/* Status summary (always shown when column is open) */}
+            {stratColOpen && (() => {
+              const enabledStrats = strategies.filter(s => s.enabled)
+              const jobCount = schedulerStatus?.active_jobs ?? 0
+              return (
+                <div style={{
+                  marginBottom: 8, padding: '7px 10px',
+                  background: 'rgba(0,0,0,0.15)', border: `1px solid ${T.border}`,
+                  fontSize: 9, fontFamily: T.mono, display: 'flex', flexDirection: 'column', gap: 4,
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: T.muted }}>For Replay / Live:</span>
+                    <span style={{ color: enabledStrats.length > 0 ? T.gold : T.dim, fontWeight: 700 }}>
+                      {enabledStrats.length === 0
+                        ? 'none enabled'
+                        : enabledStrats.map(s => BUILTIN_STRATEGY_INFO[s.name]?.label ?? s.name).join(', ')}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: T.muted }}>Scheduler jobs (server-side):</span>
+                    <span style={{ color: jobCount > 0 ? T.pos : T.dim, fontWeight: 700 }}>
+                      {jobCount > 0 ? `${jobCount} running` : 'none'}
+                    </span>
+                  </div>
+                </div>
+              )
+            })()}
+            {stratColOpen && strategies.length === 0 && (
               <div style={{ fontSize: 10, color: T.dim, fontFamily: T.mono }}>No strategies loaded.</div>
             )}
-            {strategies.map(s => {
+            {stratColOpen && strategies.map(s => {
               const info = BUILTIN_STRATEGY_INFO[s.name]
+              const defaults = PAPER_DEFAULT_PARAMS[s.name] ?? {}
+              const labels  = PAPER_PARAM_LABELS[s.name]  ?? {}
+              const overrides = stratParams[s.name] ?? {}
+              const merged  = { ...defaults, ...overrides }
+              const paramKeys = Object.keys(defaults)
+              const pOpen = paramsOpen[s.name] ?? false
+              const risk  = riskParams[s.name] ?? RISK_DEFAULTS
+              const rOpen = riskOpen[s.name] ?? false
+              const cOpen = cardOpen[s.name] ?? false
+              const hasRisk = !!(risk.stop_loss || risk.take_profit || risk.trailing_stop || risk.max_hold)
+              const hasCustomParams = Object.keys(overrides).length > 0
+              const setRisk = (k: keyof RiskConfig, v: string) =>
+                setRiskParams(prev => ({ ...prev, [s.name]: { ...(prev[s.name] ?? RISK_DEFAULTS), [k]: v } }))
               return (
-                <div key={s.name} style={{ marginBottom: 6, padding: '7px 10px',
+                <div key={s.name} style={{ marginBottom: 4,
                   border: `1px solid ${s.enabled ? 'rgba(201,168,76,0.25)' : T.border}`,
-                  background: s.enabled ? 'rgba(201,168,76,0.04)' : 'var(--theme-hover, rgba(255,255,255,0.01))' }}>
-                  {/* Row 1: name + help + toggle + delete */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ flex: 1, fontSize: 11, fontWeight: 700, color: T.text, fontFamily: T.mono }}>
-                      {info?.label ?? s.name}
-                    </span>
-                    {info && <HelpTip width={300} position="right" text={info.help} />}
+                  background: s.enabled ? 'rgba(201,168,76,0.03)' : 'var(--theme-hover, rgba(255,255,255,0.01))' }}>
+
+                  {/* ── Collapsed header row (always visible) ── */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                    {/* Expand/collapse toggle */}
                     <button
-                      onClick={() => toggleMut.mutate({ name: s.name, enabled: !s.enabled })}
+                      onClick={() => setCardOpen(p => ({ ...p, [s.name]: !cOpen }))}
                       style={{
-                        padding: '2px 8px', fontSize: 9, fontFamily: T.mono, fontWeight: 700, cursor: 'pointer', border: '1px solid',
+                        padding: '8px 8px 8px 10px', background: 'none', border: 'none', cursor: 'pointer',
+                        color: T.dim, fontSize: 9, flexShrink: 0, lineHeight: 1,
+                      }}
+                      title={cOpen ? 'Collapse' : 'Expand settings'}
+                    >
+                      {cOpen ? '▼' : '▶'}
+                    </button>
+
+                    {/* Strategy name — clicking also expands */}
+                    <button
+                      onClick={() => setCardOpen(p => ({ ...p, [s.name]: !cOpen }))}
+                      style={{
+                        flex: 1, textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer',
+                        padding: '8px 4px',
+                      }}
+                    >
+                      <span style={{ fontSize: 11, fontWeight: 700, color: s.enabled ? T.text : T.muted, fontFamily: T.mono }}>
+                        {info?.label ?? s.name}
+                      </span>
+                      {/* Inline status indicators when collapsed */}
+                      {!cOpen && (
+                        <span style={{ marginLeft: 8, fontSize: 8, color: T.dim, fontFamily: T.mono }}>
+                          {hasCustomParams && <span style={{ color: T.gold, marginRight: 5 }}>customised</span>}
+                          {hasRisk && <span style={{ color: T.warn, marginRight: 5 }}>risk</span>}
+                          <span style={{ color: T.dim }}>{s.description?.slice(0, 48)}{(s.description?.length ?? 0) > 48 ? '…' : ''}</span>
+                        </span>
+                      )}
+                    </button>
+
+                    {info && <HelpTip width={300} position="right" text={info.help} />}
+
+                    {/* ON/OFF toggle */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); toggleMut.mutate({ name: s.name, enabled: !s.enabled }) }}
+                      style={{
+                        padding: '3px 8px', fontSize: 9, fontFamily: T.mono, fontWeight: 700, cursor: 'pointer', border: '1px solid',
                         borderColor: s.enabled ? 'rgba(34,197,94,0.5)' : T.border,
                         background: s.enabled ? 'rgba(34,197,94,0.1)' : 'transparent',
                         color: s.enabled ? T.pos : T.muted, letterSpacing: '0.08em',
+                        margin: '0 4px', flexShrink: 0,
                       }}
                     >{s.enabled ? 'ON' : 'OFF'}</button>
+
                     {s.author !== 'builtin' && (
-                      <button onClick={() => deleteMut.mutate(s.name)}
-                        style={{ background: 'none', border: 'none', color: T.neg, cursor: 'pointer', fontSize: 12, padding: '0 4px' }}>×</button>
+                      <button onClick={(e) => { e.stopPropagation(); deleteMut.mutate(s.name) }}
+                        style={{ background: 'none', border: 'none', color: T.neg, cursor: 'pointer', fontSize: 12, padding: '0 8px', flexShrink: 0 }}>×</button>
                     )}
                   </div>
-                  {/* Row 2: description */}
-                  <div style={{ fontSize: 9, color: T.dim, marginTop: 3, fontFamily: T.mono, lineHeight: '13px' }}>
-                    {s.description}
-                  </div>
-                  {/* Row 3: cross-tool badges */}
-                  {info && info.usedIn.length > 0 && (
-                    <div style={{ display: 'flex', gap: 4, marginTop: 5 }}>
-                      {info.usedIn.includes('backtester') && (
-                        <a href="/backtester" style={{ textDecoration: 'none' }}>
-                          <span style={{ fontSize: 8, padding: '1px 5px', border: '1px solid rgba(96,165,250,0.4)',
-                            color: '#60a5fa', fontFamily: T.mono, cursor: 'pointer', letterSpacing: '0.06em' }}>
-                            ↗ BACKTESTER
-                          </span>
-                        </a>
+
+                  {/* ── Expanded body (collapsible) ── */}
+                  {cOpen && (
+                    <div style={{ padding: '6px 10px 10px', borderTop: `1px solid ${T.border}` }}>
+                      {/* Description */}
+                      <div style={{ fontSize: 9, color: T.dim, marginBottom: 8, fontFamily: T.mono, lineHeight: '14px' }}>
+                        {s.description}
+                      </div>
+
+                      {/* Parameters */}
+                      {paramKeys.length > 0 && (
+                        <div style={{ marginBottom: 6 }}>
+                          <button
+                            onClick={() => setParamsOpen(p => ({ ...p, [s.name]: !pOpen }))}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 4,
+                              fontSize: 9, fontFamily: T.mono, color: pOpen ? T.gold : T.muted,
+                              background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                              letterSpacing: '0.08em',
+                            }}
+                          >
+                            <span style={{ fontSize: 8 }}>{pOpen ? '▼' : '▶'}</span> Parameters
+                            {hasCustomParams && (
+                              <span style={{ fontSize: 7, color: T.gold, fontFamily: T.mono, padding: '0 3px',
+                                border: '1px solid rgba(201,168,76,0.4)', marginLeft: 2 }}>customised</span>
+                            )}
+                          </button>
+                          {pOpen && (
+                            <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                              {paramKeys.map(key => (
+                                <div key={key} style={{ minWidth: 70, flex: 1 }}>
+                                  <span style={{ ...lbl, fontSize: 8 }}>{labels[key] ?? key}</span>
+                                  <input
+                                    type="number"
+                                    value={merged[key] ?? defaults[key]}
+                                    step={key.includes('ratio') || key === 'std_dev' ? 0.1 : 1}
+                                    onChange={e => setStratParams(p => ({
+                                      ...p,
+                                      [s.name]: { ...(p[s.name] ?? {}), [key]: parseFloat(e.target.value) || defaults[key] },
+                                    }))}
+                                    style={{ ...inp, fontSize: 11, padding: '4px 6px' }}
+                                  />
+                                </div>
+                              ))}
+                              {hasCustomParams && (
+                                <div style={{ width: '100%' }}>
+                                  <button
+                                    onClick={() => setStratParams(p => { const n = { ...p }; delete n[s.name]; return n })}
+                                    style={{ fontSize: 8, fontFamily: T.mono, color: T.muted, background: 'none',
+                                      border: `1px solid ${T.border}`, padding: '1px 6px', cursor: 'pointer' }}
+                                  >↺ Reset defaults</button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       )}
-                      {info.usedIn.includes('montecarlo') && (
-                        <a href="/monte-carlo" style={{ textDecoration: 'none' }}>
-                          <span style={{ fontSize: 8, padding: '1px 5px', border: '1px solid rgba(167,139,250,0.4)',
-                            color: '#a78bfa', fontFamily: T.mono, cursor: 'pointer', letterSpacing: '0.06em' }}>
-                            ↗ MONTE CARLO
-                          </span>
-                        </a>
+
+                      {/* Risk controls */}
+                      <div style={{ marginBottom: 6 }}>
+                        <button
+                          onClick={() => setRiskOpen(p => ({ ...p, [s.name]: !rOpen }))}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 4,
+                            fontSize: 9, fontFamily: T.mono, color: rOpen ? T.warn : hasRisk ? T.warn : T.muted,
+                            background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                            letterSpacing: '0.08em',
+                          }}
+                        >
+                          <span style={{ fontSize: 8 }}>{rOpen ? '▼' : '▶'}</span> Risk Controls
+                          {hasRisk && (
+                            <span style={{ fontSize: 7, color: T.warn, padding: '0 3px',
+                              border: '1px solid color-mix(in srgb, var(--theme-warn) 40%, transparent)', marginLeft: 2 }}>active</span>
+                          )}
+                        </button>
+                        {rOpen && (
+                          <div style={{ marginTop: 6, padding: '8px 10px', background: 'color-mix(in srgb, var(--theme-warn) 4%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-warn) 15%, transparent)' }}>
+                            <div style={{ fontSize: 8, color: T.dim, fontFamily: T.mono, marginBottom: 8, lineHeight: '12px' }}>
+                              Leave blank to disable. Applied to replay chart, live mode, and scheduled jobs.
+                            </div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                              {([
+                                { key: 'stop_loss' as const,     label: 'Stop Loss %',     help: 'Exit if price drops X% from entry. e.g. 2' },
+                                { key: 'take_profit' as const,   label: 'Take Profit %',   help: 'Exit if price rises X% from entry. e.g. 5' },
+                                { key: 'trailing_stop' as const, label: 'Trailing Stop %', help: 'Exit if price drops X% from its peak since entry. e.g. 1.5' },
+                                { key: 'max_hold' as const,      label: 'Max Hold (days)', help: 'Force exit after N trading days regardless of signal.' },
+                              ] as { key: keyof RiskConfig; label: string; help: string }[]).map(({ key, label, help }) => (
+                                <div key={key} style={{ minWidth: 80, flex: 1 }}>
+                                  <span style={{ ...lbl, fontSize: 8, color: 'color-mix(in srgb, var(--theme-warn) 70%, var(--theme-secondary))' }}>{label}</span>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    step={key === 'max_hold' ? 1 : 0.1}
+                                    placeholder="off"
+                                    value={risk[key]}
+                                    title={help}
+                                    onChange={e => setRisk(key, e.target.value)}
+                                    style={{ ...inp, fontSize: 11, padding: '4px 6px', borderColor: risk[key] ? 'color-mix(in srgb, var(--theme-warn) 40%, transparent)' : undefined }}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                            {hasRisk && (
+                              <button
+                                onClick={() => setRiskParams(p => { const n = { ...p }; delete n[s.name]; return n })}
+                                style={{ marginTop: 6, fontSize: 8, fontFamily: T.mono, color: T.muted, background: 'none',
+                                  border: `1px solid ${T.border}`, padding: '1px 6px', cursor: 'pointer' }}
+                              >↺ Clear risk</button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Cross-tool badges */}
+                      {info && info.usedIn.length > 0 && (
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          {info.usedIn.includes('backtester') && (
+                            <a href="/backtester" style={{ textDecoration: 'none' }}>
+                              <span style={{ fontSize: 8, padding: '1px 5px', border: '1px solid rgba(96,165,250,0.4)',
+                                color: '#60a5fa', fontFamily: T.mono, cursor: 'pointer', letterSpacing: '0.06em' }}>↗ BACKTESTER</span>
+                            </a>
+                          )}
+                          {info.usedIn.includes('montecarlo') && (
+                            <a href="/monte-carlo" style={{ textDecoration: 'none' }}>
+                              <span style={{ fontSize: 8, padding: '1px 5px', border: '1px solid rgba(167,139,250,0.4)',
+                                color: '#a78bfa', fontFamily: T.mono, cursor: 'pointer', letterSpacing: '0.06em' }}>↗ MONTE CARLO</span>
+                            </a>
+                          )}
+                        </div>
                       )}
                     </div>
                   )}
@@ -1869,31 +2429,84 @@ function StrategyPanel({ onImportTemplate, pendingBuilderStrategy, onApproveBuil
               )
             })}
 
-            {/* Upload */}
-            <div style={{ marginTop: 8, display: 'flex', gap: 6 }}>
-              <input ref={fileRef} type="file" accept=".py" style={{ display: 'none' }}
-                onChange={e => { const f = e.target.files?.[0]; if (f) uploadMut.mutate(f) }} />
-              <button
-                onClick={() => fileRef.current?.click()}
-                style={{ ...btn, flex: 1 }}
-              >
-                {uploadMut.isPending ? 'Uploading…' : '↑ Upload Strategy (.py)'}
-              </button>
-            </div>
-            {uploadMut.isError && (
+            {/* Upload + Build Custom */}
+            {stratColOpen && (
+              <div style={{ marginTop: 8, display: 'flex', gap: 6 }}>
+                <input ref={fileRef} type="file" accept=".py" style={{ display: 'none' }}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) uploadMut.mutate(f) }} />
+                <button onClick={() => fileRef.current?.click()} style={{ ...btn, flex: 1 }}>
+                  {uploadMut.isPending ? 'Uploading…' : '↑ Upload (.py)'}
+                </button>
+                <button
+                  onClick={() => setCustomModalOpen(true)}
+                  style={{ ...btn, flex: 1, borderColor: 'rgba(201,168,76,0.5)', color: T.gold }}
+                >Build Custom</button>
+              </div>
+            )}
+            {stratColOpen && uploadMut.isError && (
               <div style={{ marginTop: 4, fontSize: 9, color: T.neg, fontFamily: T.mono }}>
                 {(uploadMut.error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Upload failed'}
               </div>
             )}
+            {stratColOpen && createCustomMut.isError && (
+              <div style={{ marginTop: 4, fontSize: 9, color: T.neg, fontFamily: T.mono }}>
+                {(createCustomMut.error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to create strategy'}
+              </div>
+            )}
+
+            {/* Strategy Library — saved custom strategies from other tools */}
+            {stratColOpen && (() => {
+              const registeredNames = new Set(strategies.map(s => s.name))
+              const unregistered = loadCustomStrategies().filter(d => !registeredNames.has(d.name))
+              if (unregistered.length === 0) return null
+              return (
+                <div style={{ marginTop: 10, padding: '8px 10px', border: `1px solid rgba(201,168,76,0.2)`, background: 'rgba(201,168,76,0.04)' }}>
+                  <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.gold, marginBottom: 6, fontFamily: T.mono }}>
+                    Strategy Library
+                  </div>
+                  <div style={{ fontSize: 8, color: T.muted, fontFamily: T.mono, marginBottom: 8 }}>
+                    Strategies built in Monte Carlo / Backtester — click Register to add to paper trading
+                  </div>
+                  {unregistered.map(def => {
+                    const buyCount  = def.buy.groups.reduce((s, g) => s + g.conditions.length, 0)
+                    const sellCount = def.sell.groups.reduce((s, g) => s + g.conditions.length, 0)
+                    return (
+                      <div key={def.name} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 0', borderBottom: `1px solid ${T.border}` }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: T.text, fontFamily: T.mono, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {def.name}
+                          </div>
+                          <div style={{ fontSize: 8, color: T.muted, fontFamily: T.mono }}>
+                            B:{buyCount} cond · S:{sellCount} cond
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => createCustomMut.mutate({
+                            name: def.name,
+                            rules: { buy: def.buy, sell: def.sell },
+                            bull_drift: def.bull_drift ?? 0,
+                            bear_drift: def.bear_drift ?? 0,
+                          })}
+                          disabled={createCustomMut.isPending}
+                          style={{ ...btn, fontSize: 8, padding: '3px 8px', borderColor: 'rgba(201,168,76,0.4)', color: T.gold, flexShrink: 0 }}
+                        >
+                          + Register
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })()}
           </div>
 
-          {/* Replay + Live Execution */}
+          {/* Replay + Live + Offline */}
           <div style={{ width: 300, flexShrink: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
               <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', color: T.muted, textTransform: 'uppercase' }}>
-                Replay & Auto-Execute
+                Replay & Execute
               </span>
-              <HelpTip width={290} position="right" text="Replay: runs all enabled strategies against historical daily closes (via yfinance) for the chosen ticker + date range. Shows BUY/SELL/HOLD counts and a price chart with signal markers. 'Execute Signals' converts every non-HOLD signal into a real paper order. Qty = number of shares per order." />
+              <HelpTip width={290} position="right" text="Replay runs enabled strategies against historical closes. Start Live polls the market every 15s and places orders in your browser session. Run Offline schedules server-side jobs that trade automatically even when this page is closed — uses the params set per strategy above." />
             </div>
 
             {/* Ticker / date / qty */}
@@ -1933,14 +2546,13 @@ function StrategyPanel({ onImportTemplate, pendingBuilderStrategy, onApproveBuil
                     <div style={{ color: T.dim }}>No BUY/SELL signals.</div>
                   )}
                 </div>
-                {/* Execute replay signals as paper orders */}
                 {replayResult.events.length > 0 && (
                   <button
                     onClick={executeSignals}
                     style={{ ...btn, width: '100%', marginBottom: 4,
                       borderColor: 'rgba(201,168,76,0.6)', background: 'rgba(201,168,76,0.14)' }}
                   >
-                    ⚡ Execute {replayResult.events.filter(e => e.signal !== 'HOLD').length} Signal Orders
+                    Execute {replayResult.events.filter(e => e.signal !== 'HOLD').length} Signal Orders
                   </button>
                 )}
                 {execStatus && (
@@ -1949,28 +2561,153 @@ function StrategyPanel({ onImportTemplate, pendingBuilderStrategy, onApproveBuil
               </>
             )}
 
-            {/* Live mode */}
+            {/* Live + Offline buttons */}
             <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 8, marginTop: 4 }}>
               <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', color: T.muted, marginBottom: 6, textTransform: 'uppercase' }}>
-                Live Auto-Trade (15s poll) <HelpTip width={270} position="top" text="Polls the current market price every 15 seconds. Feeds each tick to all enabled strategies. If any strategy returns BUY or SELL, a real paper order is placed immediately for the specified qty. The price chart updates live. NOTE: strategies need warm-up bars — RSI needs 14+ ticks, SMA-200 needs 200+ ticks before signalling. Best used during market hours." />
+                Live & Offline
+                <HelpTip width={270} position="top" text="Start Live: polls price every 15s (3s for EMA Micro-Scalp) in this browser tab — stops when you close the page. Run Offline: registers server-side jobs that run every 60s (3s for EMA Micro-Scalp) during market hours using the params configured per strategy above, even with the browser closed." />
               </div>
-              {!liveActive ? (
+              <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                {!liveActive ? (
+                  <button
+                    onClick={startLive}
+                    disabled={strategies.filter(s => s.enabled).length === 0}
+                    style={{ ...btn, flex: 1, borderColor: 'rgba(34,197,94,0.4)', color: T.pos }}
+                  >● Start Live</button>
+                ) : (
+                  <button onClick={stopLive}
+                    style={{ ...btn, flex: 1, borderColor: 'rgba(239,68,68,0.4)', color: T.neg }}>■ Stop Live</button>
+                )}
                 <button
-                  onClick={startLive}
+                  onClick={runOffline}
                   disabled={strategies.filter(s => s.enabled).length === 0}
-                  style={{ ...btn, width: '100%', borderColor: 'rgba(34,197,94,0.4)', color: T.pos }}
-                >
-                  ● Start Live
-                </button>
-              ) : (
-                <button onClick={stopLive}
-                  style={{ ...btn, width: '100%', borderColor: 'rgba(239,68,68,0.4)', color: T.neg }}>
-                  ■ Stop Live
-                </button>
-              )}
+                  style={{ ...btn, flex: 1, borderColor: 'rgba(96,165,250,0.4)', color: '#60a5fa' }}
+                >Run Offline</button>
+              </div>
+
               {liveStatus && (
-                <div style={{ marginTop: 4, fontSize: 9, color: liveActive ? T.pos : T.muted, fontFamily: T.mono, wordBreak: 'break-all' }}>
+                <div style={{ fontSize: 9, color: liveActive ? T.pos : T.muted, fontFamily: T.mono, wordBreak: 'break-all', marginBottom: 4 }}>
                   {liveStatus}
+                </div>
+              )}
+              {offlineStatus && (
+                <div style={{ fontSize: 9, color: '#60a5fa', fontFamily: T.mono, wordBreak: 'break-all', marginBottom: 6 }}>
+                  {offlineStatus}
+                </div>
+              )}
+
+              {/* Scheduler status pills */}
+              {schedulerStatus && (
+                <div style={{ display: 'flex', gap: 4, marginBottom: 6, flexWrap: 'wrap' }}>
+                  <span style={{
+                    fontSize: 8, padding: '1px 5px', fontFamily: T.mono,
+                    border: `1px solid ${schedulerStatus.scheduler_running ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)'}`,
+                    color: schedulerStatus.scheduler_running ? T.pos : T.neg,
+                    background: schedulerStatus.scheduler_running ? 'rgba(34,197,94,0.06)' : 'rgba(239,68,68,0.06)',
+                  }}>
+                    {schedulerStatus.scheduler_running ? '● RUNNING' : '○ STOPPED'}
+                  </span>
+                  <span style={{
+                    fontSize: 8, padding: '1px 5px', fontFamily: T.mono,
+                    border: `1px solid ${schedulerStatus.market_open ? 'rgba(201,168,76,0.4)' : T.border}`,
+                    color: schedulerStatus.market_open ? T.gold : T.muted,
+                  }}>
+                    {schedulerStatus.market_open ? 'MARKET OPEN' : 'CLOSED'}
+                  </span>
+                  {schedulerStatus.active_jobs > 0 && (
+                    <span style={{ fontSize: 8, padding: '1px 5px', fontFamily: T.mono, color: T.muted, border: `1px solid ${T.border}` }}>
+                      {schedulerStatus.active_jobs} job{schedulerStatus.active_jobs !== 1 ? 's' : ''} active
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* All scheduler jobs grouped by ticker */}
+              {schedulerJobs.length > 0 && (
+                <div style={{ marginBottom: 6 }}>
+                  <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', color: T.muted, textTransform: 'uppercase', marginBottom: 4 }}>
+                    Active Jobs — All Tickers
+                  </div>
+                  {allTickers.map(ticker => {
+                    const jobs = schedulerJobs.filter(j => j.ticker === ticker)
+                    return (
+                      <div key={ticker} style={{ marginBottom: 6 }}>
+                        <div style={{
+                          fontSize: 8, fontWeight: 700, letterSpacing: '0.1em',
+                          color: ticker === replayTicker.toUpperCase() ? T.gold : T.muted,
+                          fontFamily: T.mono, marginBottom: 3, paddingLeft: 2,
+                        }}>
+                          {ticker}
+                          {ticker === replayTicker.toUpperCase() && (
+                            <span style={{ fontWeight: 400, color: T.dim, marginLeft: 5 }}>selected</span>
+                          )}
+                        </div>
+                        {jobs.map(job => (
+                          <div key={job.id} style={{
+                            display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2,
+                            padding: '4px 7px',
+                            border: `1px solid ${job.enabled ? 'rgba(201,168,76,0.2)' : T.border}`,
+                            background: job.enabled ? 'rgba(201,168,76,0.03)' : 'transparent',
+                          }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 10, fontFamily: T.mono, color: T.text, fontWeight: 600 }}>
+                                {BUILTIN_STRATEGY_INFO[job.strategy_name]?.label ?? job.strategy_name}
+                              </div>
+                              {job.last_signal ? (
+                                <div style={{ fontSize: 8, fontFamily: T.mono, color: sigColor(job.last_signal) }}>
+                                  {job.last_signal} @ ${job.last_price?.toFixed(2)}
+                                  {job.warmed_up
+                                    ? <span style={{ color: T.dim }}> · ready</span>
+                                    : <span style={{ color: T.dim }}> · warming</span>
+                                  }
+                                </div>
+                              ) : (
+                                <div style={{ fontSize: 8, fontFamily: T.mono, color: T.dim }}>
+                                  {job.warmed_up ? 'ready · no signal yet' : 'warming up…'}
+                                </div>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => toggleJobMut.mutate({ id: job.id, enabled: !job.enabled })}
+                              style={{
+                                padding: '1px 6px', fontSize: 8, fontFamily: T.mono, fontWeight: 700, cursor: 'pointer', border: '1px solid',
+                                borderColor: job.enabled ? 'rgba(34,197,94,0.5)' : T.border,
+                                background: job.enabled ? 'rgba(34,197,94,0.1)' : 'transparent',
+                                color: job.enabled ? T.pos : T.muted, flexShrink: 0,
+                              }}
+                            >{job.enabled ? 'ON' : 'OFF'}</button>
+                            <button
+                              onClick={() => deleteJobMut.mutate(job.id)}
+                              style={{ background: 'none', border: 'none', color: T.neg, cursor: 'pointer', fontSize: 13, padding: '0 2px', flexShrink: 0 }}
+                            >×</button>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* Recent activity — all tickers */}
+              {schedulerLog.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', color: T.muted, textTransform: 'uppercase', marginBottom: 3 }}>
+                    Recent Activity
+                  </div>
+                  {schedulerLog.slice(0, 10).map(e => (
+                    <div key={e.id} style={{ display: 'flex', gap: 5, alignItems: 'baseline',
+                      padding: '2px 0', borderBottom: `1px solid ${T.border}` }}>
+                      <span style={{ fontSize: 7, color: T.dim, fontFamily: T.mono, whiteSpace: 'nowrap' }}>
+                        {new Date(e.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      <span style={{ fontSize: 8, fontWeight: 700, color: sigColor(e.signal), fontFamily: T.mono }}>{e.signal}</span>
+                      <span style={{ fontSize: 8, color: T.gold, fontFamily: T.mono, fontWeight: 700 }}>{e.ticker}</span>
+                      <span style={{ fontSize: 8, color: T.muted, fontFamily: T.mono }}>${e.price.toFixed(2)}</span>
+                      <span style={{ fontSize: 7, color: T.dim, fontFamily: T.mono, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {e.strategy_name}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -1979,7 +2716,7 @@ function StrategyPanel({ onImportTemplate, pendingBuilderStrategy, onApproveBuil
           {/* Option Leg Strategy Import */}
           <div style={{ flex: 1, minWidth: 260 }}>
             <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', color: T.muted, marginBottom: 8, textTransform: 'uppercase' }}>
-              Option Leg Strategies → Order Ticket <HelpTip width={270} position="top" text="Click any preset to instantly pre-load the correct leg structure (sides, quantities, order type) into the multileg order ticket above. You still fill in the OCC option symbols — use the Chain Scanner to find them. Hover each button in the order ticket for a description of that strategy's P&L profile." />
+              Option Leg Strategies → Order Ticket <HelpTip width={270} position="top" text="Click any preset to instantly pre-load the correct leg structure (sides, quantities, order type) into the multileg order ticket above. You still fill in the OCC option symbols — use the Chain Scanner to find them." />
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
               {OPTION_STRATEGY_TEMPLATES.map(tpl => (
@@ -1998,9 +2735,7 @@ function StrategyPanel({ onImportTemplate, pendingBuilderStrategy, onApproveBuil
                   }}
                   onMouseEnter={e => { (e.target as HTMLButtonElement).style.color = T.gold; (e.target as HTMLButtonElement).style.borderColor = T.gold }}
                   onMouseLeave={e => { (e.target as HTMLButtonElement).style.color = T.muted; (e.target as HTMLButtonElement).style.borderColor = T.border }}
-                >
-                  {tpl.shortName} ↑
-                </button>
+                >{tpl.shortName} ↑</button>
               ))}
             </div>
             <div style={{ marginTop: 8, fontSize: 9, color: T.dim, fontFamily: T.mono }}>
@@ -2008,17 +2743,6 @@ function StrategyPanel({ onImportTemplate, pendingBuilderStrategy, onApproveBuil
             </div>
           </div>
 
-          {/* Code snippet */}
-          <div style={{ flex: 1, minWidth: 260 }}>
-            <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', color: T.muted, marginBottom: 8, textTransform: 'uppercase' }}>
-              Custom Strategy Template <HelpTip width={270} position="top" text="Paste this into a .py file and upload via the button above. Implement on_data() — it receives a MarketDataPoint (price, timestamp, symbol) per tick and must return Signal.BUY, Signal.SELL, or Signal.HOLD. initialize() runs once with your params dict. metadata() must be a pure function — no I/O." />
-            </div>
-            <pre style={{
-              margin: 0, padding: '8px 10px', background: 'rgba(0,0,0,0.3)', border: `1px solid ${T.border}`,
-              fontSize: 9, color: '#a8c9f0', fontFamily: T.mono, overflowX: 'auto', lineHeight: 1.5,
-              userSelect: 'all',
-            }}>{STRATEGY_TEMPLATE}</pre>
-          </div>
         </div>
 
         {/* Signal chart — replay or live */}
@@ -2027,12 +2751,56 @@ function StrategyPanel({ onImportTemplate, pendingBuilderStrategy, onApproveBuil
             data={liveActive ? liveChart : chartData}
             ticker={replayTicker}
             mode={liveActive ? 'live' : 'replay'}
+            intervalMs={liveIntervalMs}
           />
         )}
         </div>
       )}
+
+      <CustomStrategyModal
+        open={customModalOpen}
+        onClose={() => setCustomModalOpen(false)}
+        onSave={handleCustomSave}
+      />
     </div>
   )
+}
+
+// ─── Scheduler interfaces (used by StrategyPanel) ─────────────────────────────
+
+interface SchedulerStatus {
+  scheduler_running: boolean
+  market_open: boolean
+  poll_interval_s: number
+  total_jobs: number
+  active_jobs: number
+  log_entries: number
+}
+
+interface SchedulerJob {
+  id: string
+  ticker: string
+  strategy_name: string
+  params: Record<string, unknown>
+  qty: number
+  enabled: boolean
+  warmed_up: boolean
+  last_signal: string | null
+  last_price: number | null
+  last_run_ts: number | null
+  created_at: number
+}
+
+interface SchedulerLogEntry {
+  id: string
+  job_id: string
+  ticker: string
+  strategy_name: string
+  signal: string
+  price: number
+  timestamp: number
+  order_id: string | null
+  notes: string | null
 }
 
 function HeaderMetric({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {

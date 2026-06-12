@@ -3,7 +3,6 @@ logger = logging.getLogger(__name__)
 
 import numpy as np
 import pandas as pd
-import datetime
 from scipy.stats import norm
 from scipy.optimize import brentq
 from fastapi import APIRouter, HTTPException
@@ -44,7 +43,7 @@ def probability_cone(req: ProbRequest):
         S0 = float(hist["Close"].dropna().iloc[-1])
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("internal error"); raise HTTPException(500, "Internal server error")
 
     sigma = _implied_vol(req.ticker)
@@ -109,7 +108,7 @@ def chain_distribution(ticker: str, expiry: str = ""):
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("internal error"); raise HTTPException(500, "Internal server error")
 
     r = 0.045
@@ -132,15 +131,18 @@ def chain_distribution(ticker: str, expiry: str = ""):
         d2 = d1 - sigma * np.sqrt(T)
         return float(K * np.exp(-r * T) * norm.cdf(-d2) - S0 * norm.cdf(-d1))
 
+    # Widen solver range for long-dated options (T > 6 months)
+    iv_max = 10.0 if T > 0.5 else 5.0
+
     def _iv_from_price(K: float, price: float, is_put: bool) -> float | None:
-        if price < 0.01:
+        if price < 0.005:
             return None
         fn = _bs_put if is_put else _bs_call
         intrinsic = max((K * np.exp(-r * T) - S0) if is_put else (S0 - K * np.exp(-r * T)), 0)
         if price <= intrinsic + 0.001:
             return None
         try:
-            return float(brentq(lambda sig: fn(K, sig) - price, 1e-4, 5.0, maxiter=50))
+            return float(brentq(lambda sig: fn(K, sig) - price, 1e-4, iv_max, maxiter=100))
         except Exception:
             return None
 
@@ -150,8 +152,13 @@ def chain_distribution(ticker: str, expiry: str = ""):
 
     def _enrich(df: pd.DataFrame, is_put: bool) -> pd.DataFrame:
         df = df[["strike", "bid", "ask", "lastPrice"]].copy().dropna(subset=["strike"])
-        df["mid"] = np.where(df["bid"] > 0, (df["bid"] + df["ask"]) / 2, df["lastPrice"].fillna(0))
-        df = df[df["mid"] > 0.01]
+        # For LEAPS (bid=0), prefer ask*0.95 over stale lastPrice
+        df["mid"] = np.where(
+            df["bid"] > 0,
+            (df["bid"] + df["ask"]) / 2,
+            np.where(df["ask"] > 0.005, df["ask"] * 0.95, df["lastPrice"].fillna(0)),
+        )
+        df = df[df["mid"] >= 0.005]
         df["iv"] = df.apply(lambda row: _iv_from_price(row["strike"], row["mid"], is_put), axis=1)
         df = df.dropna(subset=["iv"])
         df["delta"] = df.apply(lambda row: _call_delta(row["strike"], row["iv"]), axis=1)
@@ -171,8 +178,36 @@ def chain_distribution(ticker: str, expiry: str = ""):
     ]).sort_values("strike").drop_duplicates("strike").dropna(subset=["delta"])
     combined = combined[(combined["delta"] >= 0.01) & (combined["delta"] <= 0.99)]
 
+    # Fall back to Black-Scholes synthetic distribution when options chain is too sparse
     if len(combined) < 4:
-        raise HTTPException(404, "Not enough strikes for distribution")
+        # Best available ATM IV: nearest call/put IV, then yf.info, then HV
+        atm_iv: float = 0.0
+        if len(calls_df) > 0:
+            atm_calls = calls_df[calls_df["strike"] <= S0 * 1.05]
+            atm_iv = float(atm_calls["iv"].iloc[0]) if len(atm_calls) > 0 else float(calls_df["iv"].iloc[0])
+        if atm_iv == 0.0 and len(puts_df) > 0:
+            atm_puts = puts_df[puts_df["strike"] >= S0 * 0.95]
+            atm_iv = float(atm_puts["iv"].iloc[-1]) if len(atm_puts) > 0 else float(puts_df["iv"].iloc[-1])
+        if atm_iv == 0.0:
+            try:
+                raw_iv = tkr.info.get("impliedVolatility")
+                atm_iv = float(raw_iv) if raw_iv else 0.0
+            except Exception:
+                pass
+        if atm_iv == 0.0:
+            atm_iv = _implied_vol(ticker)
+
+        # Synthetic delta curve via Black-Scholes across ±3.5σ
+        n_synth = 80
+        lo = S0 * np.exp(-3.5 * atm_iv * np.sqrt(T))
+        hi = S0 * np.exp(+3.5 * atm_iv * np.sqrt(T))
+        synth_strikes = np.linspace(lo, hi, n_synth)
+        synth_deltas  = np.array([_call_delta(float(k), atm_iv) for k in synth_strikes])
+        combined = pd.DataFrame({"strike": synth_strikes, "delta": synth_deltas})
+        combined = combined[(combined["delta"] >= 0.01) & (combined["delta"] <= 0.99)]
+        avg_call_iv = atm_iv
+        avg_put_iv  = atm_iv
+        iv_skew = 0.0
 
     strikes = combined["strike"].values
     deltas  = combined["delta"].values

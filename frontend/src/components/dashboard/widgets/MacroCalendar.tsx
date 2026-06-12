@@ -46,6 +46,14 @@ interface CalendarResponse {
   as_of: string
 }
 
+function fmtTime(t: string): string {
+  const [hStr, mStr] = t.split(':')
+  const h = parseInt(hStr, 10)
+  const suffix = h >= 12 ? 'PM' : 'AM'
+  const h12 = h > 12 ? h - 12 : h === 0 ? 12 : h
+  return `${h12}:${mStr} ${suffix}`
+}
+
 function daysUntil(ds: string): number {
   const today = new Date(); today.setHours(0, 0, 0, 0)
   return Math.round((new Date(ds + 'T00:00:00').getTime() - today.getTime()) / 86_400_000)
@@ -73,7 +81,11 @@ const shimmer: React.CSSProperties = {
   borderRadius: 2,
 }
 
-export default function MacroCalendar({ config: _ }: { config: WidgetConfig }) {
+const ALL_CATS = ['monetary', 'inflation', 'employment', 'growth', 'housing', 'sentiment']
+
+export default function MacroCalendar({ config }: { config: WidgetConfig }) {
+  const activeCats = config.categories?.length ? config.categories : ALL_CATS
+
   const { data, isLoading, isError } = useQuery<CalendarResponse>({
     queryKey: ['macro-calendar'],
     queryFn: () => axios.get('/api/rates/macro-calendar').then(r => r.data),
@@ -93,12 +105,12 @@ export default function MacroCalendar({ config: _ }: { config: WidgetConfig }) {
         )}
 
         {isError && (
-          <div style={{ padding: 12, fontFamily: T.mono, fontSize: 10, color: '#ef4444' }}>
+          <div style={{ padding: 12, fontFamily: T.mono, fontSize: 10, color: 'var(--theme-negative)' }}>
             Failed to load calendar
           </div>
         )}
 
-        {data && groupEvents(data.events).map(([week, events]) => (
+        {data && groupEvents(data.events.filter(e => activeCats.includes(e.category))).map(([week, events]) => (
           <div key={week}>
             {/* Week label */}
             <div style={{
@@ -115,7 +127,7 @@ export default function MacroCalendar({ config: _ }: { config: WidgetConfig }) {
               const color = CAT_COLOR[e.category] ?? T.gold
               const d     = new Date(e.date + 'T00:00:00')
               const dateStr = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-              const timeStr = e.time_et ? ` ${e.time_et} ET` : ''
+              const timeStr = e.time_et ? ` ${fmtTime(e.time_et)} ET` : ''
 
               return (
                 <div key={`${e.date}-${i}`} style={{
@@ -163,7 +175,7 @@ export default function MacroCalendar({ config: _ }: { config: WidgetConfig }) {
           </div>
         ))}
 
-        {data && data.events.length === 0 && (
+        {data && data.events.filter(e => activeCats.includes(e.category)).length === 0 && (
           <div style={{ padding: 16, fontFamily: T.mono, fontSize: 10, color: T.muted, textAlign: 'center' }}>
             No events in the next 90 days
           </div>

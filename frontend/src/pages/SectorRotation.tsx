@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer, Cell } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
-import ExportPdfButton from '../components/ExportPdfButton'
 
 const T = {
   bg:      'var(--theme-bg, #101c2e)',
@@ -109,7 +108,6 @@ export default function SectorRotation() {
         <PageHeader
           title="Sector Rotation"
           subtitle="S&P 500 sector relative strength and momentum across rolling windows. SPY benchmark included."
-          actions={<ExportPdfButton targetId="sector-rotation-content" filename="sector-rotation.pdf" />}
         />
 
         {/* Controls */}

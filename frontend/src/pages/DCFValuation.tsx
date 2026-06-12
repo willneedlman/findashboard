@@ -94,7 +94,7 @@ function ChartPanel({ label, height, children }: { label: string; height: number
     <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', position: 'relative' }}>
       <div style={{
         position: 'absolute', top: 0, left: 0, zIndex: 10,
-        background: 'rgba(46,57,77,0.8)', padding: '3px 8px',
+        background: 'var(--theme-surface, rgba(46,57,77,0.8))', padding: '3px 8px',
         borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
         fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)',
       }}>
@@ -247,7 +247,7 @@ export default function DCFValuation() {
   const sensiMax = sensiValues.length ? Math.max(...sensiValues) : 0
 
   return (
-    <PageWrapper>
+    <PageWrapper title="DCF Valuation">
       <SidebarLayout sidebarWidth={220} sidebarTitle="DCF Parameters" sidebar={<>
 
         {/* Left sidebar */}
@@ -279,7 +279,7 @@ export default function DCFValuation() {
                 fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
                 padding: '5px 0', cursor: aiSuggesting ? 'default' : 'pointer', opacity: aiSuggesting ? 0.6 : 1,
               }}>
-                {aiSuggesting ? '⟳ AI Analyzing…' : '⬢ AI Suggest Assumptions'}
+                {aiSuggesting ? 'AI Analyzing…' : 'AI Suggest Assumptions'}
               </button>
               {aiSuggested && (() => {
                 const LABELS: Record<string, string> = {
@@ -291,7 +291,7 @@ export default function DCFValuation() {
                 return (
                   <div style={{ marginTop: 6, background: 'rgba(201,168,76,0.05)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', padding: '8px' }}>
                     <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)', marginBottom: 6 }}>
-                      ⬢ AI Suggestions
+                      AI Suggestions
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
                       {changes.map(([k, v]) => (
@@ -299,7 +299,7 @@ export default function DCFValuation() {
                           <span style={{ color: 'var(--theme-secondary, #99907e)' }}>{LABELS[k] ?? k}</span>
                           <span>
                             <span style={{ color: 'var(--theme-text-dim, rgba(255,255,255,0.3))', textDecoration: 'line-through', marginRight: 6 }}>{p[k]}</span>
-                            <span style={{ color: v > (p[k] as number) ? '#22c55e' : '#f87171', fontWeight: 700 }}>{v}</span>
+                            <span style={{ color: v > (p[k] as number) ? 'var(--theme-positive)' : 'var(--theme-negative)', fontWeight: 700 }}>{v}</span>
                           </span>
                         </div>
                       ))}
@@ -389,7 +389,7 @@ export default function DCFValuation() {
               textTransform: 'uppercase', padding: '8px 0', cursor: isPending ? 'default' : 'pointer',
               opacity: isPending ? 0.6 : 1, transition: 'opacity 0.15s',
             }}>
-              {isPending ? '⟳ Running…' : '⬢ Run DCF Model'}
+              {isPending ? 'Running…' : 'Run DCF Model'}
             </button>
             {isError && <div style={{ fontSize: 9, color: '#ef4444', textAlign: 'center', fontFamily: 'var(--theme-sans)' }}>Server unavailable — is the backend running?</div>}
           </div>

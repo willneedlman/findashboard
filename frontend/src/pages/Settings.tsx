@@ -11,18 +11,18 @@ const ADMIN_USERS = [
 
 // ── Palette of preset color schemes ──────────────────────────────────────────
 const PRESETS: { name: string; theme: Partial<Theme> }[] = [
-  { name: 'Terminal Gold',  theme: { primaryColor: '#c9a84c', secondaryColor: '#5e768f', tertiaryColor: '#60a5fa', bgColor: '#101c2e', surfaceColor: '#0d1826', primaryFont: 'JetBrains Mono', secondaryFont: 'IBM Plex Sans', primaryFontUrl: '', secondaryFontUrl: '' } },
-  { name: 'Bloomberg',      theme: { primaryColor: '#ff6600', secondaryColor: '#888888', tertiaryColor: '#ffb800', bgColor: '#000000', surfaceColor: '#0d0d0d', primaryFont: 'Courier Prime',   secondaryFont: 'Barlow',        primaryFontUrl: '', secondaryFontUrl: '' } },
-  { name: 'Emerald Dark',   theme: { primaryColor: '#059669', secondaryColor: '#064e3b', tertiaryColor: '#6ee7b7', bgColor: '#010d07', surfaceColor: '#04150c', primaryFont: 'JetBrains Mono', secondaryFont: 'IBM Plex Sans', primaryFontUrl: '', secondaryFontUrl: '' } },
-  { name: 'Crimson Night',  theme: { primaryColor: '#e11d48', secondaryColor: '#881337', tertiaryColor: '#fda4af', bgColor: '#0c0009', surfaceColor: '#160310', primaryFont: 'JetBrains Mono', secondaryFont: 'IBM Plex Sans', primaryFontUrl: '', secondaryFontUrl: '' } },
-  { name: 'Mainstreet',     theme: { primaryColor: '#a97c50', secondaryColor: '#adadaf', tertiaryColor: '#d5b080', bgColor: '#1a1410', surfaceColor: '#231d17', primaryFont: 'Courier Prime',   secondaryFont: 'Barlow',        primaryFontUrl: '', secondaryFontUrl: '' } },
-  { name: 'Stealth Mono',   theme: { primaryColor: '#e2e8f0', secondaryColor: '#475569', tertiaryColor: '#64748b', bgColor: '#000000', surfaceColor: '#0a0a0a', primaryFont: 'Fira Code',       secondaryFont: 'Inter',         primaryFontUrl: '', secondaryFontUrl: '' } },
-  { name: 'Dracula',        theme: { primaryColor: '#bd93f9', secondaryColor: '#6272a4', tertiaryColor: '#ff79c6', bgColor: '#1c1e2d', surfaceColor: '#181a27', primaryFont: 'Fira Code',       secondaryFont: 'IBM Plex Sans', primaryFontUrl: '', secondaryFontUrl: '' } },
-  { name: 'Nord',           theme: { primaryColor: '#88c0d0', secondaryColor: '#4c566a', tertiaryColor: '#a3be8c', bgColor: '#1e2430', surfaceColor: '#19202c', primaryFont: 'Space Mono',     secondaryFont: 'Sora',          primaryFontUrl: '', secondaryFontUrl: '' } },
-  { name: 'Linen',          theme: { primaryColor: '#7c2d12', secondaryColor: '#292524', tertiaryColor: '#1d4ed8', bgColor: '#faf7f2', surfaceColor: '#e8dfd0', primaryFont: 'DM Mono',        secondaryFont: 'IBM Plex Sans', primaryFontUrl: '', secondaryFontUrl: '' } },
-  { name: 'Morning Mist',   theme: { primaryColor: '#1e3a8a', secondaryColor: '#1e293b', tertiaryColor: '#0f766e', bgColor: '#f1f5f9', surfaceColor: '#dbe4ef', primaryFont: 'Fira Code',       secondaryFont: 'Inter',         primaryFontUrl: '', secondaryFontUrl: '' } },
-  { name: 'Rosewood',       theme: { primaryColor: '#881337', secondaryColor: '#1c1917', tertiaryColor: '#6d28d9', bgColor: '#fdf4f4', surfaceColor: '#e8d5d5', primaryFont: 'JetBrains Mono', secondaryFont: 'DM Sans',       primaryFontUrl: '', secondaryFontUrl: '' } },
-  { name: 'Light Mode',     theme: { primaryColor: '#1a6b3c', secondaryColor: '#4b5563', tertiaryColor: '#2563eb', bgColor: '#f8fafc', surfaceColor: '#ffffff', primaryFont: 'Fira Code',      secondaryFont: 'Inter',         primaryFontUrl: '', secondaryFontUrl: '' } },
+  { name: 'Terminal Gold',  theme: { primaryColor: '#c9a84c', secondaryColor: '#5e768f', tertiaryColor: '#60a5fa', bgColor: '#101c2e', surfaceColor: '#0d1826', chartNeutralColor: '#4a7fa5', primaryFont: 'JetBrains Mono', secondaryFont: 'IBM Plex Sans', primaryFontUrl: '', secondaryFontUrl: '' } },
+  { name: 'Bloomberg',      theme: { primaryColor: '#ff6600', secondaryColor: '#888888', tertiaryColor: '#ffb800', bgColor: '#000000', surfaceColor: '#0d0d0d', chartNeutralColor: '#668099', primaryFont: 'Courier Prime',   secondaryFont: 'Barlow',        primaryFontUrl: '', secondaryFontUrl: '' } },
+  { name: 'Emerald Dark',   theme: { primaryColor: '#059669', secondaryColor: '#064e3b', tertiaryColor: '#6ee7b7', bgColor: '#010d07', surfaceColor: '#04150c', chartNeutralColor: '#3a7a5f', primaryFont: 'JetBrains Mono', secondaryFont: 'IBM Plex Sans', primaryFontUrl: '', secondaryFontUrl: '' } },
+  { name: 'Crimson Night',  theme: { primaryColor: '#e11d48', secondaryColor: '#881337', tertiaryColor: '#fda4af', bgColor: '#0c0009', surfaceColor: '#160310', chartNeutralColor: '#7a4870', primaryFont: 'JetBrains Mono', secondaryFont: 'IBM Plex Sans', primaryFontUrl: '', secondaryFontUrl: '' } },
+  { name: 'Mainstreet',     theme: { primaryColor: '#a97c50', secondaryColor: '#adadaf', tertiaryColor: '#d5b080', bgColor: '#1a1410', surfaceColor: '#231d17', chartNeutralColor: '#8a7a55', primaryFont: 'Courier Prime',   secondaryFont: 'Barlow',        primaryFontUrl: '', secondaryFontUrl: '' } },
+  { name: 'Stealth Mono',   theme: { primaryColor: '#e2e8f0', secondaryColor: '#475569', tertiaryColor: '#64748b', bgColor: '#000000', surfaceColor: '#0a0a0a', chartNeutralColor: '#5a7090', primaryFont: 'Fira Code',       secondaryFont: 'Inter',         primaryFontUrl: '', secondaryFontUrl: '' } },
+  { name: 'Dracula',        theme: { primaryColor: '#bd93f9', secondaryColor: '#6272a4', tertiaryColor: '#ff79c6', bgColor: '#1c1e2d', surfaceColor: '#181a27', chartNeutralColor: '#6872a8', primaryFont: 'Fira Code',       secondaryFont: 'IBM Plex Sans', primaryFontUrl: '', secondaryFontUrl: '' } },
+  { name: 'Nord',           theme: { primaryColor: '#88c0d0', secondaryColor: '#4c566a', tertiaryColor: '#a3be8c', bgColor: '#1e2430', surfaceColor: '#19202c', chartNeutralColor: '#5a8099', primaryFont: 'Space Mono',     secondaryFont: 'Sora',          primaryFontUrl: '', secondaryFontUrl: '' } },
+  { name: 'Linen',          theme: { primaryColor: '#7c2d12', secondaryColor: '#292524', tertiaryColor: '#1d4ed8', bgColor: '#faf7f2', surfaceColor: '#e8dfd0', chartNeutralColor: '#7a7060', primaryFont: 'DM Mono',        secondaryFont: 'IBM Plex Sans', primaryFontUrl: '', secondaryFontUrl: '' } },
+  { name: 'Morning Mist',   theme: { primaryColor: '#1e3a8a', secondaryColor: '#1e293b', tertiaryColor: '#0f766e', bgColor: '#f1f5f9', surfaceColor: '#dbe4ef', chartNeutralColor: '#5a7590', primaryFont: 'Fira Code',       secondaryFont: 'Inter',         primaryFontUrl: '', secondaryFontUrl: '' } },
+  { name: 'Rosewood',       theme: { primaryColor: '#881337', secondaryColor: '#5a1c1c', tertiaryColor: '#c47878', bgColor: '#fdf4f4', surfaceColor: '#e8d5d5', chartNeutralColor: '#e19dbe', primaryFont: 'JetBrains Mono', secondaryFont: 'DM Sans',       primaryFontUrl: '', secondaryFontUrl: '' } },
+  { name: 'Light Mode',     theme: { primaryColor: '#1a6b3c', secondaryColor: '#4b5563', tertiaryColor: '#2563eb', bgColor: '#f8fafc', surfaceColor: '#ffffff', chartNeutralColor: '#6b7280', primaryFont: 'Fira Code',      secondaryFont: 'Inter',         primaryFontUrl: '', secondaryFontUrl: '' } },
 ]
 
 // ── Small UI helpers ──────────────────────────────────────────────────────────
@@ -152,7 +152,7 @@ function FontSelector({ label, value, options, onChange, onUpload, isMono = true
                     {sample}
                   </span>
                   <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-text-dim, rgba(255,255,255,0.32))', letterSpacing: '0.08em' }}>
-                    {f}{active ? '  ✓' : ''}
+                    {f}{active ? ' [on]' : ''}
                   </span>
                 </div>
               )
@@ -222,7 +222,7 @@ function AdminPanel() {
     if (!pinReset) return
     try {
       await axios.post(`/api/users/admin/reset-pin/${pinReset.username}`, { new_pin: pinReset.pin }, { headers: hdrs })
-      setActionMsg(`PIN reset for @${pinReset.username}`)
+      setActionMsg(`Password reset for @${pinReset.username}`)
       setPinReset(null)
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
@@ -287,14 +287,14 @@ function AdminPanel() {
                 </div>
               ))}
             </div>
-            {/* PIN reset form */}
+            {/* Password reset form */}
             {pinReset && (
               <div style={{ display: 'flex', gap: 6, alignItems: 'center', background: 'var(--theme-bg, #0a1220)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '8px 10px' }}>
-                <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary)', whiteSpace: 'nowrap' }}>New PIN for @{pinReset.username}:</span>
-                <input type="text" inputMode="numeric" maxLength={4} value={pinReset.pin}
-                  onChange={e => setPinReset(p => p ? { ...p, pin: e.target.value.replace(/\D/g,'').slice(0,4) } : null)}
-                  style={{ ...inp, width: 60, flex: 'none' }} placeholder="4 digits" />
-                <button onClick={resetPin} style={btn(pinReset.pin.length === 4)}>Save</button>
+                <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary)', whiteSpace: 'nowrap' }}>New password for @{pinReset.username}:</span>
+                <input type="password" autoComplete="new-password" value={pinReset.pin}
+                  onChange={e => setPinReset(p => p ? { ...p, pin: e.target.value } : null)}
+                  style={{ ...inp, flex: 1 }} placeholder="8+ characters" />
+                <button onClick={resetPin} style={btn(pinReset.pin.length >= 8)}>Save</button>
                 <button onClick={() => setPinReset(null)} style={btn(false)}>Cancel</button>
               </div>
             )}
@@ -314,7 +314,7 @@ function AdminPanel() {
                   <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-secondary)', textAlign: 'right' }}>{u.login_count}</span>
                   <div style={{ display: 'flex', gap: 4 }}>
                     <button onClick={() => setPinReset({ username: u.username, pin: '' })}
-                      style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)', color: 'var(--theme-tertiary, #60a5fa)', fontFamily: 'var(--theme-sans)', fontSize: 7, padding: '2px 5px', cursor: 'pointer' }}>PIN</button>
+                      style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)', color: 'var(--theme-tertiary, #60a5fa)', fontFamily: 'var(--theme-sans)', fontSize: 7, padding: '2px 5px', cursor: 'pointer' }}>PW</button>
                     <button onClick={() => deleteUser(u.username)}
                       style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', fontFamily: 'var(--theme-sans)', fontSize: 7, padding: '2px 5px', cursor: 'pointer' }}>DEL</button>
                   </div>
@@ -335,7 +335,7 @@ function AdminPanel() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {Object.entries(health.api_keys).map(([k, v]) => (
                   <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: v ? '#22C55E' : '#ef4444' }}>{v ? '✓' : '✗'}</span>
+                    <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: v ? '#22C55E' : '#ef4444' }}>{v ? 'YES' : 'NO'}</span>
                     <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-text, #d7e3fc)' }}>{k}</span>
                   </div>
                 ))}
@@ -367,30 +367,41 @@ function AdminPanel() {
 }
 
 // ── Auth forms ────────────────────────────────────────────────────────────────
+const MIN_PW = 8
+
 function AuthPanel({ onDone }: { onDone: () => void }) {
-  const { login, register } = useTheme()
+  const { login, register, setPassword } = useTheme()
   const [mode,    setMode]   = useState<'login' | 'register'>('login')
   const [uname,   setUname]  = useState('')
   const [display, setDisplay] = useState('')
-  const [pin,     setPin]    = useState('')
+  const [pw,      setPw]     = useState('')
   const [err,     setErr]    = useState('')
   const [loading, setLoading] = useState(false)
+  // Forced migration step for legacy 4-digit-PIN users.
+  const [migrate, setMigrate] = useState(false)
+  const [newPw,   setNewPw]  = useState('')
+  const [newPw2,  setNewPw2] = useState('')
+
+  const inp: React.CSSProperties = { background: 'var(--theme-bg, #0a1220)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-mono)', fontSize: 12, padding: '6px 10px', width: '100%', outline: 'none', boxSizing: 'border-box' }
+  const lbl: React.CSSProperties = { fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary)', textTransform: 'uppercase', letterSpacing: '0.12em', display: 'block', marginBottom: 4 }
+  const submitBtn: React.CSSProperties = { background: 'var(--theme-primary, #c9a84c)', border: 'none', color: '#0a1220', fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '10px 0', cursor: 'pointer', width: '100%', transition: 'background 0.15s' }
 
   const handleSubmit = async () => {
     setErr('')
     const trimmedUser = uname.trim()
-    const trimmedPin  = pin.trim()
-    if (!trimmedUser || !trimmedPin) { setErr('Enter username and PIN.'); return }
-    if (!/^\d{4}$/.test(trimmedPin)) { setErr('PIN must be exactly 4 digits.'); return }
+    const cred = pw   // password (legacy PIN still accepted by server on login)
+    if (!trimmedUser || !cred) { setErr('Enter username and password.'); return }
+    if (mode === 'register' && cred.length < MIN_PW) { setErr(`Password must be at least ${MIN_PW} characters.`); return }
     if (mode === 'register' && trimmedUser.length < 2) { setErr('Username must be at least 2 characters.'); return }
     setLoading(true)
     try {
       if (mode === 'login') {
-        const ok = await login(trimmedUser, trimmedPin)
-        if (!ok) setErr('Username or PIN not recognized.')
+        const res = await login(trimmedUser, cred)
+        if (!res) setErr('Username or password not recognized.')
+        else if (res === 'migrate') setMigrate(true)   // legacy PIN — force a password
         else onDone()
       } else {
-        const ok = await register(trimmedUser, display.trim() || trimmedUser, trimmedPin)
+        const ok = await register(trimmedUser, display.trim() || trimmedUser, cred)
         if (!ok) setErr('Username already taken — try signing in instead.')
         else onDone()
       }
@@ -399,8 +410,36 @@ function AuthPanel({ onDone }: { onDone: () => void }) {
     }
   }
 
-  const inp: React.CSSProperties = { background: 'var(--theme-bg, #0a1220)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-mono)', fontSize: 12, padding: '6px 10px', width: '100%', outline: 'none', boxSizing: 'border-box' }
-  const lbl: React.CSSProperties = { fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary)', textTransform: 'uppercase', letterSpacing: '0.12em', display: 'block', marginBottom: 4 }
+  const handleMigrate = async () => {
+    setErr('')
+    if (newPw.length < MIN_PW) { setErr(`Password must be at least ${MIN_PW} characters.`); return }
+    if (newPw !== newPw2) { setErr('Passwords do not match.'); return }
+    setLoading(true)
+    try {
+      const ok = await setPassword(newPw)
+      if (!ok) setErr('Could not set password — please sign in again.')
+      else onDone()
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // ── Forced password migration for legacy PIN accounts ──
+  if (migrate) {
+    return (
+      <div style={{ maxWidth: 340, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: 'var(--theme-text)', lineHeight: '16px' }}>
+          For your security, 4-digit PINs are no longer supported. Please set a password to continue.
+        </div>
+        <div><label style={lbl}>New password ({MIN_PW}+ characters)</label><input style={inp} type="password" autoComplete="new-password" value={newPw} onChange={e => setNewPw(e.target.value)} autoFocus disabled={loading} /></div>
+        <div><label style={lbl}>Confirm password</label><input style={inp} type="password" autoComplete="new-password" value={newPw2} onChange={e => setNewPw2(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleMigrate()} disabled={loading} /></div>
+        {err && <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, color: '#ef4444' }}>{err}</span>}
+        <button onClick={handleMigrate} disabled={loading} style={{ ...submitBtn, background: loading ? 'rgba(255,255,255,0.08)' : submitBtn.background, color: loading ? 'var(--theme-secondary)' : submitBtn.color, cursor: loading ? 'default' : 'pointer' }}>
+          {loading ? '…' : 'Set Password'}
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div style={{ maxWidth: 340, display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -414,9 +453,9 @@ function AuthPanel({ onDone }: { onDone: () => void }) {
 
       <div><label style={lbl}>Username</label><input style={inp} value={uname} onChange={e => setUname(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSubmit()} autoFocus disabled={loading} /></div>
       {mode === 'register' && <div><label style={lbl}>Display Name <span style={{ color: 'var(--theme-text-faint, rgba(255,255,255,0.22))' }}>(optional)</span></label><input style={inp} value={display} onChange={e => setDisplay(e.target.value)} disabled={loading} /></div>}
-      <div><label style={lbl}>PIN (4 digits)</label><input style={inp} type="password" inputMode="numeric" maxLength={4} autoComplete="off" value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))} onKeyDown={e => e.key === 'Enter' && handleSubmit()} disabled={loading} /></div>
+      <div><label style={lbl}>Password{mode === 'register' ? ` (${MIN_PW}+ characters)` : ''}</label><input style={inp} type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} value={pw} onChange={e => setPw(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSubmit()} disabled={loading} /></div>
       {err && <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, color: '#ef4444' }}>{err}</span>}
-      <button onClick={handleSubmit} disabled={loading} style={{ background: loading ? 'rgba(255,255,255,0.08)' : 'var(--theme-primary, #c9a84c)', border: 'none', color: loading ? 'var(--theme-secondary)' : '#0a1220', fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '10px 0', cursor: loading ? 'default' : 'pointer', width: '100%', transition: 'background 0.15s' }}>
+      <button onClick={handleSubmit} disabled={loading} style={{ ...submitBtn, background: loading ? 'rgba(255,255,255,0.08)' : submitBtn.background, color: loading ? 'var(--theme-secondary)' : submitBtn.color, cursor: loading ? 'default' : 'pointer' }}>
         {loading ? '…' : mode === 'login' ? 'Sign In' : 'Create & Sign In'}
       </button>
     </div>
@@ -489,7 +528,7 @@ export default function Settings() {
               TERMINAL SETTINGS
             </h1>
             <p style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: dirty ? '#f59e0b' : 'var(--theme-secondary)', marginTop: 4, transition: 'color 0.2s' }}>
-              {user ? (dirty ? 'Unsaved changes' : saved ? '✓ Saved' : `Signed in as ${user.displayName}`) : 'Guest session · sign in to persist settings'}
+              {user ? (dirty ? 'Unsaved changes' : saved ? 'Saved' : `Signed in as ${user.displayName}`) : 'Guest session · sign in to persist settings'}
             </p>
           </div>
 
@@ -505,14 +544,14 @@ export default function Settings() {
               style={{
                 background: dirty ? 'var(--theme-primary)' : 'var(--theme-border-faint, rgba(255,255,255,0.05))',
                 border: `1px solid ${dirty ? 'var(--theme-primary)' : 'var(--theme-border, rgba(255,255,255,0.08))'}`,
-                color: dirty ? '#0a1220' : '#3a4d62',
+                color: dirty ? 'var(--theme-bg)' : 'var(--theme-text-dim)',
                 fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700,
                 letterSpacing: '0.12em', textTransform: 'uppercase',
                 padding: '6px 20px', cursor: dirty ? 'pointer' : 'default',
                 transition: 'all 0.15s',
               }}
             >
-              {saved ? '✓ Saved' : 'Save'}
+              {saved ? 'Saved' : 'Save'}
             </button>
             {user && (
               <button onClick={logout} style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.35)', color: '#ef4444', fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '6px 14px', cursor: 'pointer' }}>
@@ -544,11 +583,12 @@ export default function Settings() {
 
             <Section title="Custom Colors">
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                <ColorSwatch label="Primary (accent)"     value={draft.primaryColor}   onChange={v => patchDraft({ primaryColor: v })} />
-                <ColorSwatch label="Secondary (muted)"    value={draft.secondaryColor} onChange={v => patchDraft({ secondaryColor: v })} />
-                <ColorSwatch label="Tertiary (highlight)" value={draft.tertiaryColor}  onChange={v => patchDraft({ tertiaryColor: v })} />
-                <ColorSwatch label="Background"           value={draft.bgColor}        onChange={v => patchDraft({ bgColor: v })} />
-                <ColorSwatch label="Surface / Cards"      value={draft.surfaceColor}   onChange={v => patchDraft({ surfaceColor: v })} />
+                <ColorSwatch label="Primary (accent)"     value={draft.primaryColor}        onChange={v => patchDraft({ primaryColor: v })} />
+                <ColorSwatch label="Secondary (muted)"    value={draft.secondaryColor}      onChange={v => patchDraft({ secondaryColor: v })} />
+                <ColorSwatch label="Tertiary (highlight)" value={draft.tertiaryColor}       onChange={v => patchDraft({ tertiaryColor: v })} />
+                <ColorSwatch label="Background"           value={draft.bgColor}             onChange={v => patchDraft({ bgColor: v })} />
+                <ColorSwatch label="Surface / Cards"      value={draft.surfaceColor}        onChange={v => patchDraft({ surfaceColor: v })} />
+                <ColorSwatch label="Chart Neutral"        value={draft.chartNeutralColor ?? '#4a7fa5'} onChange={v => patchDraft({ chartNeutralColor: v })} />
               </div>
             </Section>
 

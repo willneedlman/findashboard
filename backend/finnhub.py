@@ -11,6 +11,8 @@ Set FINNHUB_API_KEY in backend/.env.
 import os
 import threading
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from cachetools import TTLCache
 from dotenv import load_dotenv
 
@@ -19,6 +21,16 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 _API_KEY = os.getenv("FINNHUB_API_KEY", "")
 _BASE    = "https://finnhub.io/api/v1"
 _TIMEOUT = 8
+
+# Shared session: connection pooling + automatic retry/backoff on transient 429/5xx.
+_session = requests.Session()
+_retry = Retry(
+    total=2, backoff_factor=0.5,
+    status_forcelist=(429, 500, 502, 503, 504),
+    allowed_methods=("GET",),
+    respect_retry_after_header=True,
+)
+_session.mount("https://", HTTPAdapter(max_retries=_retry, pool_connections=10, pool_maxsize=20))
 
 _lock          = threading.Lock()
 _quote_cache:   TTLCache = TTLCache(maxsize=300, ttl=1800)   # 30 min
@@ -33,7 +45,7 @@ def available() -> bool:
 def _get(path: str, params: dict | None = None) -> dict | list:
     p = dict(params or {})
     p["token"] = _API_KEY
-    r = requests.get(f"{_BASE}{path}", params=p, timeout=_TIMEOUT)
+    r = _session.get(f"{_BASE}{path}", params=p, timeout=_TIMEOUT)
     r.raise_for_status()
     return r.json()
 

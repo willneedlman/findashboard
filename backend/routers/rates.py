@@ -139,8 +139,6 @@ def yield_curve():
                 )
                 import xml.etree.ElementTree as ET
                 root = ET.fromstring(resp.content)
-                # SDMX namespaces
-                ns = {"ns": "http://www.sdmx.org/resources/sdmxml/schemas/v2_1"}
                 for obs in root.iter("{http://www.sdmx.org/resources/sdmxml/schemas/v2_1}Obs"):
                     if "OBS_VALUE" in obs.attrib and obs.attrib["OBS_VALUE"] not in ("ND", "NaN"):
                         val = float(obs.attrib["OBS_VALUE"])
@@ -288,18 +286,167 @@ def risk_free_rate():
     return result
 
 
+_FED_CACHE: TTLCache = TTLCache(maxsize=1, ttl=3600)
+_FED_LOCK = threading.Lock()
+
+
+def _fred_latest(series_id: str) -> float | None:
+    """Most recent valid observation of a FRED series (handles '.' gaps).
+    Tries the keyed endpoint, then the keyless demo endpoint."""
+    for keyed in (True, False):
+        if keyed and not _FRED_KEY:
+            continue
+        params = {"series_id": series_id, "sort_order": "desc", "limit": 5, "file_type": "json"}
+        if keyed:
+            params["api_key"] = _FRED_KEY
+        try:
+            resp = requests.get("https://api.stlouisfed.org/fred/series/observations",
+                                params=params, timeout=5)
+            for obs in resp.json().get("observations", []):
+                v = obs.get("value")
+                if v not in (None, ".", ""):
+                    val = float(v)
+                    if 0 < val < 25:
+                        return round(val, 4)
+        except Exception:
+            continue
+    return None
+
+
+def _current_ffr() -> float | None:
+    """Current effective Fed Funds Rate from FRED (DFF), falling back to the
+    front-month ZQ future. None if neither is reachable."""
+    val = _fred_latest("DFF")
+    if val is not None:
+        return val
+    try:
+        import yfinance as yf
+        today = date.today()
+        sym = f"ZQ{_ZQ_MONTH[today.month]}{str(today.year)[-2:]}=F"
+        h = yf.Ticker(sym).history(period="5d")
+        if not h.empty:
+            return round(100.0 - float(h["Close"].iloc[-1]), 4)
+    except Exception:
+        pass
+    return None
+
+
+def _zq_implied_rate(meeting: date) -> float | None:
+    """Market-implied average funds rate for a meeting's month, from the ZQ
+    future (price = 100 - rate). None if the contract has no data."""
+    try:
+        import yfinance as yf
+        sym = f"ZQ{_ZQ_MONTH[meeting.month]}{str(meeting.year)[-2:]}=F"
+        h = yf.Ticker(sym).history(period="5d")
+        if h.empty:
+            return None
+        return round(100.0 - float(h["Close"].iloc[-1]), 4)
+    except Exception:
+        return None
+
+
+def _curve_implied_path(upcoming: list[date], current_rate: float | None) -> list[float] | None:
+    """Back out an expected funds-rate path from the Treasury bill curve (FRED).
+
+    The constant-maturity yield y(T) approximates the average expected short rate
+    to horizon T, so the forward rate over each inter-meeting window estimates the
+    rate the market expects after that meeting. Free and always available when
+    FRED is reachable; carries a small term premium so it is an approximation."""
+    pts: list[tuple[float, float]] = []
+    if current_rate is not None:
+        pts.append((0.0, current_rate))
+    for series, T in (("DGS1MO", 1 / 12), ("DGS3MO", 0.25), ("DGS6MO", 0.5), ("DGS1", 1.0), ("DGS2", 2.0)):
+        y = _fred_latest(series)
+        if y is not None:
+            pts.append((T, y))
+    pts = sorted(set(pts))
+    if len(pts) < 2:
+        return None
+
+    def y_interp(T: float) -> float:
+        if T <= pts[0][0]:
+            return pts[0][1]
+        if T >= pts[-1][0]:
+            return pts[-1][1]
+        for (t0, y0), (t1, y1) in zip(pts, pts[1:]):
+            if t0 <= T <= t1:
+                return y0 + (y1 - y0) * (T - t0) / (t1 - t0)
+        return pts[-1][1]
+
+    today = date.today()
+    out: list[float] = []
+    prev_T = 0.0
+    for mtg in upcoming:
+        T = max((mtg - today).days / 365.0, prev_T + 1e-6)
+        fwd = (y_interp(T) * T - y_interp(prev_T) * prev_T) / (T - prev_T)
+        out.append(round(fwd, 4))
+        prev_T = T
+    return out
+
+
 @router.get("/fed-projections")
 def fed_projections():
-    meetings = [
-        {"date": "2025-03", "rate": 5.25, "prob_hike": 5, "prob_hold": 70, "prob_cut": 25},
-        {"date": "2025-05", "rate": 5.00, "prob_hike": 3, "prob_hold": 55, "prob_cut": 42},
-        {"date": "2025-06", "rate": 4.75, "prob_hike": 2, "prob_hold": 48, "prob_cut": 50},
-        {"date": "2025-07", "rate": 4.50, "prob_hike": 2, "prob_hold": 52, "prob_cut": 46},
-        {"date": "2025-09", "rate": 4.25, "prob_hike": 1, "prob_hold": 60, "prob_cut": 39},
-        {"date": "2025-11", "rate": 4.00, "prob_hike": 1, "prob_hold": 65, "prob_cut": 34},
-        {"date": "2025-12", "rate": 3.75, "prob_hike": 1, "prob_hold": 68, "prob_cut": 31},
-    ]
-    return {"meetings": meetings, "current_rate": 5.25}
+    """Market-implied Fed funds path + per-meeting hike/hold/cut probabilities.
+
+    Layered, all from free data: a Treasury-curve-implied expected path (FRED) is
+    the always-available backbone; CME ZQ fed-funds futures override per meeting
+    when available for true market-implied pricing. No hardcoded probabilities."""
+    with _FED_LOCK:
+        if "fed" in _FED_CACHE:
+            return _FED_CACHE["fed"]
+
+    today = date.today()
+    upcoming = [d for d in (date.fromisoformat(x) for x in _FOMC_DATES) if d >= today][:8]
+    current_rate = _current_ffr()
+    curve_path = _curve_implied_path(upcoming, current_rate)
+
+    meetings: list[dict] = []
+    prev_rate = current_rate
+    used_futures = False
+    for i, mtg in enumerate(upcoming):
+        zq = _zq_implied_rate(mtg)
+        if zq is not None:
+            implied, src = zq, "futures"
+            used_futures = True
+        elif curve_path is not None:
+            implied, src = curve_path[i], "curve"
+        elif prev_rate is not None:
+            implied, src = prev_rate, "carry"
+        else:
+            continue  # no data source at all — skip rather than fabricate
+
+        # Per-meeting move probabilities from the step vs the prior implied rate,
+        # scaled to a standard 25bp increment.
+        if prev_rate is not None:
+            delta = implied - prev_rate
+            prob_cut  = max(0.0, min(1.0, -delta / 0.25))
+            prob_hike = max(0.0, min(1.0,  delta / 0.25))
+            prob_hold = max(0.0, 1.0 - prob_cut - prob_hike)
+        else:
+            prob_cut = prob_hike = 0.0
+            prob_hold = 1.0
+
+        meetings.append({
+            "date":      mtg.strftime("%Y-%m"),
+            "rate":      round(implied, 2),
+            "prob_hike": round(prob_hike * 100),
+            "prob_hold": round(prob_hold * 100),
+            "prob_cut":  round(prob_cut * 100),
+            "source":    src,
+        })
+        prev_rate = implied
+
+    source = ("CME ZQ futures + FRED curve" if used_futures
+              else "FRED Treasury-curve-implied path" if curve_path is not None
+              else "unavailable")
+    result = {
+        "meetings":     meetings,
+        "current_rate": round(current_rate, 2) if current_rate is not None else None,
+        "source":       source,
+    }
+    with _FED_LOCK:
+        _FED_CACHE["fed"] = result
+    return result
 
 
 # ── Macro Calendar ─────────────────────────────────────────────────────────────
@@ -307,13 +454,19 @@ def fed_projections():
 _CAL_CACHE: TTLCache = TTLCache(maxsize=1, ttl=3600)
 _CAL_LOCK = threading.Lock()
 
-# FOMC meeting end-dates through 2026
+# FOMC meeting end-dates (2027 dates are estimates until officially confirmed)
 _FOMC_DATES = [
     "2025-01-29", "2025-03-19", "2025-05-07", "2025-06-18",
     "2025-07-30", "2025-09-17", "2025-10-29", "2025-12-10",
     "2026-01-28", "2026-03-18", "2026-04-29", "2026-06-17",
     "2026-07-29", "2026-09-16", "2026-10-28", "2026-12-09",
+    "2027-01-27", "2027-03-17", "2027-04-28", "2027-06-16",
+    "2027-07-28", "2027-09-15", "2027-10-27", "2027-12-08",
 ]
+
+# ZQ (30-Day Fed Funds futures) month codes — used to build CME contract symbols.
+_ZQ_MONTH = {1: 'F', 2: 'G', 3: 'H', 4: 'J', 5: 'K', 6: 'M',
+             7: 'N', 8: 'Q', 9: 'U', 10: 'V', 11: 'X', 12: 'Z'}
 
 # Beige Book — released ~2 weeks before each FOMC
 _BEIGE_BOOK_DATES = [
@@ -433,7 +586,6 @@ def _computed_schedule(start: date, end: date) -> list[dict]:
             add(thu, "Initial Jobless Claims", "employment", "high", "K")
 
         # JOLTS: ~5 weeks after reference month (released with lag)
-        jolts_month = m - 2 if m > 2 else (m + 10, y - 1)[0]
         try:
             jolts = _nth_weekday(y, m, 1, 2) + timedelta(days=2)  # ~3rd Wed
             add(jolts, "JOLTS Job Openings", "employment", "high", "M")
@@ -616,7 +768,8 @@ def _fred_series_history(series_id: str, lookback_days: int = 365) -> list[dict]
         if data.get("error_code"):
             return []
         obs = data.get("observations", [])
-        return [{"date": o["date"], "value": float(o["value"])}
+        # FRED BofA OAS series are in percent (e.g. 0.84); multiply by 100 → basis points
+        return [{"date": o["date"], "value": round(float(o["value"]) * 100, 2)}
                 for o in obs if o["value"] != "."]
     except Exception:
         return []
@@ -679,24 +832,32 @@ def credit_spreads(lookback: int = 365):
     result = {}
     for key, (series_id, label, description, benchmark) in _CREDIT_SERIES.items():
         history = _fred_series_history(series_id, lookback)
+        using_proxy = False
         # Fall back to yfinance ETF proxy when FRED is unavailable
         if not history and key in _YF_PROXY_TICKERS:
             etf_ticker, proxy_label, proxy_benchmark = _YF_PROXY_TICKERS[key]
             history = _yf_spread_history(etf_ticker, lookback)
             if history:
-                label     = proxy_label
-                benchmark = proxy_benchmark
+                label       = proxy_label
+                benchmark   = proxy_benchmark
+                using_proxy = True
         if not history:
             result[key] = {"label": label, "description": description, "benchmark": benchmark, "current": None, "history": []}
             continue
         current = history[-1]["value"]
-        prev_year = history[0]["value"] if len(history) > 1 else current
+        # change_1y is only meaningful with real FRED OAS data; the yf proxy uses a
+        # static base yield so all series would show the same TNX drift, not spread changes.
+        if using_proxy:
+            change_1y = None
+        else:
+            prev_year = history[0]["value"] if len(history) > 1 else current
+            change_1y = round(current - prev_year, 2)
         result[key] = {
             "label":       label,
             "description": description,
             "benchmark":   benchmark,
             "current":     round(current, 2),
-            "change_1y":   round(current - prev_year, 2),
+            "change_1y":   change_1y,
             "history":     history[-252:],   # ~1 trading year
         }
 
@@ -720,3 +881,89 @@ def credit_spreads(lookback: int = 365):
     with _CREDIT_LOCK:
         _CREDIT_CACHE[cache_key] = payload
     return payload
+
+
+# ── Yield Curve History ────────────────────────────────────────────────────────
+
+_CURVE_HIST_CACHE: TTLCache = TTLCache(maxsize=1, ttl=3600)
+_CURVE_HIST_LOCK  = threading.Lock()
+
+_YF_ANCHOR_TICKERS = {"3M": ("^IRX", 0.25), "5Y": ("^FVX", 5.0), "10Y": ("^TNX", 10.0), "30Y": ("^TYX", 30.0)}
+_FULL_TENOR_YEARS  = {"1M": 1/12, "3M": 0.25, "6M": 0.5, "1Y": 1.0, "2Y": 2.0,
+                      "3Y": 3.0,  "5Y": 5.0,  "7Y": 7.0, "10Y": 10.0, "20Y": 20.0, "30Y": 30.0}
+
+def _interp_curve(anchors: dict) -> dict:
+    """Build full 11-tenor curve from {years: rate} anchors via linear interp."""
+    pts = sorted(anchors.items())
+    yrs = [p[0] for p in pts]; ylds = [p[1] for p in pts]
+    def _i(t: float) -> float:
+        if t <= yrs[0]:  return ylds[0]
+        if t >= yrs[-1]: return ylds[-1]
+        for i in range(len(yrs) - 1):
+            if yrs[i] <= t <= yrs[i + 1]:
+                f = (t - yrs[i]) / (yrs[i + 1] - yrs[i])
+                return ylds[i] + f * (ylds[i + 1] - ylds[i])
+        return ylds[-1]
+    return {label: round(_i(t), 4) for label, t in _FULL_TENOR_YEARS.items()}
+
+def _curve_at(close: pd.DataFrame, target_date) -> dict:
+    """Interpolate full yield curve at/before target_date from anchor closes."""
+    anchors: dict[float, float] = {}
+    td = pd.Timestamp(target_date).normalize()
+    for _lbl, (sym, years) in _YF_ANCHOR_TICKERS.items():
+        if sym not in close.columns: continue
+        s = close[sym].dropna()
+        s = s[s.index.normalize() <= td]
+        if s.empty: continue
+        val = float(s.iloc[-1])
+        anchors[years] = val if val < 20.0 else val / 100.0
+    if len(anchors) < 2:
+        return {}
+    return _interp_curve(anchors)
+
+
+@router.get("/yield-curve-history")
+def yield_curve_history():
+    with _CURVE_HIST_LOCK:
+        if "hist" in _CURVE_HIST_CACHE:
+            return _CURVE_HIST_CACHE["hist"]
+
+    start = (date.today() - timedelta(days=400)).isoformat()
+    end   = date.today().isoformat()
+    syms  = tuple(v[0] for v in _YF_ANCHOR_TICKERS.values())
+
+    try:
+        raw = get_download(syms, start=start, end=end)
+        close = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw
+        close = close.ffill()
+    except Exception:
+        close = pd.DataFrame()
+
+    today  = date.today()
+    result = {
+        "current": _curve_at(close, today),
+        "snapshots": {
+            "1M":  _curve_at(close, today - timedelta(days=30)),
+            "3M":  _curve_at(close, today - timedelta(days=90)),
+            "1Y":  _curve_at(close, today - timedelta(days=365)),
+        },
+        "spread_history": [],
+        "as_of": today.isoformat(),
+    }
+
+    # 3M/10Y spread history (key recession signal — inverts before downturns)
+    irx = "^IRX"; tnx = "^TNX"
+    if not close.empty and irx in close.columns and tnx in close.columns:
+        merged = close[[irx, tnx]].dropna()
+        for dt, row in merged.iterrows():
+            t3m  = float(row[irx]); t3m  = t3m  if t3m  < 20 else t3m  / 100
+            t10y = float(row[tnx]); t10y = t10y if t10y < 20 else t10y / 100
+            result["spread_history"].append({
+                "date":   str(dt.date()),
+                "spread": round((t10y - t3m) * 100, 1),
+            })
+        result["spread_history"] = result["spread_history"][-252:]
+
+    with _CURVE_HIST_LOCK:
+        _CURVE_HIST_CACHE["hist"] = result
+    return result

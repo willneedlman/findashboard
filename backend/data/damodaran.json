@@ -1,0 +1,685 @@
+{
+  "source": "Damodaran Online (NYU Stern) \u2014 US industry data",
+  "url": "https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datacurrent.html",
+  "updated": "2026-01",
+  "note": "Industry-average betas and pre-tax operating margins. Fallback only.",
+  "market": {
+    "beta": 0.99,
+    "unlevered_beta": 0.88,
+    "op_margin": 14.65
+  },
+  "industries": [
+    {
+      "name": "Advertising",
+      "firms": 52,
+      "beta": 1.21,
+      "unlevered_beta": 0.93,
+      "op_margin": 13.3
+    },
+    {
+      "name": "Aerospace/Defense",
+      "firms": 79,
+      "beta": 0.95,
+      "unlevered_beta": 0.85,
+      "op_margin": 9.8
+    },
+    {
+      "name": "Air Transport",
+      "firms": 23,
+      "beta": 1.19,
+      "unlevered_beta": 0.7,
+      "op_margin": 5.68
+    },
+    {
+      "name": "Apparel",
+      "firms": 35,
+      "beta": 0.94,
+      "unlevered_beta": 0.76,
+      "op_margin": 10.18
+    },
+    {
+      "name": "Auto & Truck",
+      "firms": 33,
+      "beta": 1.46,
+      "unlevered_beta": 1.27,
+      "op_margin": 3.16
+    },
+    {
+      "name": "Auto Parts",
+      "firms": 35,
+      "beta": 1.34,
+      "unlevered_beta": 1.02,
+      "op_margin": 6.37
+    },
+    {
+      "name": "Bank (Money Center)",
+      "firms": 15,
+      "beta": 0.76,
+      "unlevered_beta": 0.34,
+      "op_margin": 2.3
+    },
+    {
+      "name": "Banks (Regional)",
+      "firms": 568,
+      "beta": 0.4,
+      "unlevered_beta": 0.29,
+      "op_margin": 1.6
+    },
+    {
+      "name": "Beverage (Alcoholic)",
+      "firms": 14,
+      "beta": 0.81,
+      "unlevered_beta": 0.61,
+      "op_margin": 23.37
+    },
+    {
+      "name": "Beverage (Soft)",
+      "firms": 27,
+      "beta": 0.64,
+      "unlevered_beta": 0.56,
+      "op_margin": 21.01
+    },
+    {
+      "name": "Broadcasting",
+      "firms": 24,
+      "beta": 0.47,
+      "unlevered_beta": 0.29,
+      "op_margin": 13.28
+    },
+    {
+      "name": "Brokerage & Investment Banking",
+      "firms": 32,
+      "beta": 1.17,
+      "unlevered_beta": 0.58,
+      "op_margin": 2.51
+    },
+    {
+      "name": "Building Materials",
+      "firms": 41,
+      "beta": 1.11,
+      "unlevered_beta": 0.93,
+      "op_margin": 13.28
+    },
+    {
+      "name": "Business & Consumer Services",
+      "firms": 155,
+      "beta": 0.89,
+      "unlevered_beta": 0.77,
+      "op_margin": 13.66
+    },
+    {
+      "name": "Cable TV",
+      "firms": 9,
+      "beta": 0.74,
+      "unlevered_beta": 0.35,
+      "op_margin": 19.55
+    },
+    {
+      "name": "Chemical (Basic)",
+      "firms": 29,
+      "beta": 1.01,
+      "unlevered_beta": 0.58,
+      "op_margin": 3.06
+    },
+    {
+      "name": "Chemical (Diversified)",
+      "firms": 4,
+      "beta": 0.85,
+      "unlevered_beta": 0.37,
+      "op_margin": 3.76
+    },
+    {
+      "name": "Chemical (Specialty)",
+      "firms": 59,
+      "beta": 0.97,
+      "unlevered_beta": 0.79,
+      "op_margin": 12.85
+    },
+    {
+      "name": "Coal & Related Energy",
+      "firms": 16,
+      "beta": 1.07,
+      "unlevered_beta": 1.02,
+      "op_margin": -2.89
+    },
+    {
+      "name": "Computer Services",
+      "firms": 64,
+      "beta": 1.09,
+      "unlevered_beta": 0.92,
+      "op_margin": 8.27
+    },
+    {
+      "name": "Computers/Peripherals",
+      "firms": 36,
+      "beta": 1.35,
+      "unlevered_beta": 1.31,
+      "op_margin": 24.96
+    },
+    {
+      "name": "Construction Supplies",
+      "firms": 40,
+      "beta": 1.15,
+      "unlevered_beta": 1.02,
+      "op_margin": 15.67
+    },
+    {
+      "name": "Diversified",
+      "firms": 20,
+      "beta": 0.88,
+      "unlevered_beta": 0.79,
+      "op_margin": 22.83
+    },
+    {
+      "name": "Drugs (Biotechnology)",
+      "firms": 496,
+      "beta": 1.14,
+      "unlevered_beta": 1.03,
+      "op_margin": 16.17
+    },
+    {
+      "name": "Drugs (Pharmaceutical)",
+      "firms": 228,
+      "beta": 0.98,
+      "unlevered_beta": 0.89,
+      "op_margin": 31.24
+    },
+    {
+      "name": "Education",
+      "firms": 32,
+      "beta": 0.78,
+      "unlevered_beta": 0.66,
+      "op_margin": 16.7
+    },
+    {
+      "name": "Electrical Equipment",
+      "firms": 112,
+      "beta": 1.25,
+      "unlevered_beta": 1.15,
+      "op_margin": 10.9
+    },
+    {
+      "name": "Electronics (Consumer & Office)",
+      "firms": 8,
+      "beta": 0.87,
+      "unlevered_beta": 0.83,
+      "op_margin": -0.2
+    },
+    {
+      "name": "Electronics (General)",
+      "firms": 114,
+      "beta": 0.97,
+      "unlevered_beta": 0.9,
+      "op_margin": 11.8
+    },
+    {
+      "name": "Engineering/Construction",
+      "firms": 48,
+      "beta": 1.21,
+      "unlevered_beta": 1.09,
+      "op_margin": 7.04
+    },
+    {
+      "name": "Entertainment",
+      "firms": 92,
+      "beta": 0.83,
+      "unlevered_beta": 0.74,
+      "op_margin": 13.33
+    },
+    {
+      "name": "Environmental & Waste Services",
+      "firms": 53,
+      "beta": 0.95,
+      "unlevered_beta": 0.81,
+      "op_margin": 15.32
+    },
+    {
+      "name": "Farming/Agriculture",
+      "firms": 35,
+      "beta": 1.13,
+      "unlevered_beta": 0.81,
+      "op_margin": 5.65
+    },
+    {
+      "name": "Financial Svcs. (Non-bank & Insurance)",
+      "firms": 176,
+      "beta": 0.97,
+      "unlevered_beta": 0.32,
+      "op_margin": 20.85
+    },
+    {
+      "name": "Food Processing",
+      "firms": 78,
+      "beta": 0.61,
+      "unlevered_beta": 0.46,
+      "op_margin": 11.0
+    },
+    {
+      "name": "Food Wholesalers",
+      "firms": 13,
+      "beta": 0.87,
+      "unlevered_beta": 0.64,
+      "op_margin": 2.75
+    },
+    {
+      "name": "Furn/Home Furnishings",
+      "firms": 27,
+      "beta": 0.82,
+      "unlevered_beta": 0.62,
+      "op_margin": 7.19
+    },
+    {
+      "name": "Green & Renewable Energy",
+      "firms": 15,
+      "beta": 0.86,
+      "unlevered_beta": 0.46,
+      "op_margin": 20.43
+    },
+    {
+      "name": "Healthcare Products",
+      "firms": 204,
+      "beta": 0.91,
+      "unlevered_beta": 0.83,
+      "op_margin": 17.4
+    },
+    {
+      "name": "Healthcare Support Services",
+      "firms": 104,
+      "beta": 0.87,
+      "unlevered_beta": 0.69,
+      "op_margin": 3.21
+    },
+    {
+      "name": "Heathcare Information and Technology",
+      "firms": 115,
+      "beta": 1.11,
+      "unlevered_beta": 0.99,
+      "op_margin": 17.12
+    },
+    {
+      "name": "Homebuilding",
+      "firms": 30,
+      "beta": 0.91,
+      "unlevered_beta": 0.78,
+      "op_margin": 12.91
+    },
+    {
+      "name": "Hospitals/Healthcare Facilities",
+      "firms": 31,
+      "beta": 0.8,
+      "unlevered_beta": 0.55,
+      "op_margin": 14.05
+    },
+    {
+      "name": "Hotel/Gaming",
+      "firms": 63,
+      "beta": 1.08,
+      "unlevered_beta": 0.83,
+      "op_margin": 21.58
+    },
+    {
+      "name": "Household Products",
+      "firms": 110,
+      "beta": 0.82,
+      "unlevered_beta": 0.72,
+      "op_margin": 19.54
+    },
+    {
+      "name": "Information Services",
+      "firms": 15,
+      "beta": 0.92,
+      "unlevered_beta": 0.74,
+      "op_margin": 13.51
+    },
+    {
+      "name": "Insurance (General)",
+      "firms": 21,
+      "beta": 0.67,
+      "unlevered_beta": 0.56,
+      "op_margin": 23.07
+    },
+    {
+      "name": "Insurance (Life)",
+      "firms": 20,
+      "beta": 0.64,
+      "unlevered_beta": 0.43,
+      "op_margin": 11.09
+    },
+    {
+      "name": "Insurance (Prop/Cas.)",
+      "firms": 57,
+      "beta": 0.48,
+      "unlevered_beta": 0.44,
+      "op_margin": 15.67
+    },
+    {
+      "name": "Investments & Asset Management",
+      "firms": 283,
+      "beta": 0.66,
+      "unlevered_beta": 0.53,
+      "op_margin": 30.59
+    },
+    {
+      "name": "Machinery",
+      "firms": 105,
+      "beta": 0.96,
+      "unlevered_beta": 0.87,
+      "op_margin": 16.78
+    },
+    {
+      "name": "Metals & Mining",
+      "firms": 73,
+      "beta": 1.04,
+      "unlevered_beta": 0.96,
+      "op_margin": 24.37
+    },
+    {
+      "name": "Office Equipment & Services",
+      "firms": 14,
+      "beta": 1.33,
+      "unlevered_beta": 0.98,
+      "op_margin": 11.71
+    },
+    {
+      "name": "Oil/Gas (Integrated)",
+      "firms": 4,
+      "beta": 0.3,
+      "unlevered_beta": 0.27,
+      "op_margin": 11.56
+    },
+    {
+      "name": "Oil/Gas (Production and Exploration)",
+      "firms": 142,
+      "beta": 0.72,
+      "unlevered_beta": 0.56,
+      "op_margin": 26.32
+    },
+    {
+      "name": "Oil/Gas Distribution",
+      "firms": 23,
+      "beta": 0.67,
+      "unlevered_beta": 0.47,
+      "op_margin": 26.56
+    },
+    {
+      "name": "Oilfield Svcs/Equip.",
+      "firms": 97,
+      "beta": 0.95,
+      "unlevered_beta": 0.74,
+      "op_margin": 4.98
+    },
+    {
+      "name": "Packaging & Container",
+      "firms": 19,
+      "beta": 1.02,
+      "unlevered_beta": 0.72,
+      "op_margin": 10.03
+    },
+    {
+      "name": "Paper/Forest Products",
+      "firms": 6,
+      "beta": 0.96,
+      "unlevered_beta": 0.72,
+      "op_margin": 7.02
+    },
+    {
+      "name": "Power",
+      "firms": 46,
+      "beta": 0.48,
+      "unlevered_beta": 0.31,
+      "op_margin": 21.9
+    },
+    {
+      "name": "Precious Metals",
+      "firms": 56,
+      "beta": 0.84,
+      "unlevered_beta": 0.79,
+      "op_margin": 41.01
+    },
+    {
+      "name": "Publishing & Newspapers",
+      "firms": 19,
+      "beta": 0.56,
+      "unlevered_beta": 0.48,
+      "op_margin": 11.01
+    },
+    {
+      "name": "R.E.I.T.",
+      "firms": 190,
+      "beta": 0.64,
+      "unlevered_beta": 0.39,
+      "op_margin": 26.37
+    },
+    {
+      "name": "Real Estate (Development)",
+      "firms": 14,
+      "beta": 0.84,
+      "unlevered_beta": 0.48,
+      "op_margin": 22.4
+    },
+    {
+      "name": "Real Estate (General/Diversified)",
+      "firms": 12,
+      "beta": 0.81,
+      "unlevered_beta": 0.58,
+      "op_margin": 23.61
+    },
+    {
+      "name": "Real Estate (Operations & Services)",
+      "firms": 54,
+      "beta": 0.97,
+      "unlevered_beta": 0.81,
+      "op_margin": 4.55
+    },
+    {
+      "name": "Recreation",
+      "firms": 49,
+      "beta": 1.02,
+      "unlevered_beta": 0.7,
+      "op_margin": 11.37
+    },
+    {
+      "name": "Reinsurance",
+      "firms": 1,
+      "beta": 0.58,
+      "unlevered_beta": 0.44,
+      "op_margin": 7.45
+    },
+    {
+      "name": "Restaurant/Dining",
+      "firms": 64,
+      "beta": 0.92,
+      "unlevered_beta": 0.77,
+      "op_margin": 17.16
+    },
+    {
+      "name": "Retail (Automotive)",
+      "firms": 34,
+      "beta": 0.94,
+      "unlevered_beta": 0.7,
+      "op_margin": 6.51
+    },
+    {
+      "name": "Retail (Building Supply)",
+      "firms": 14,
+      "beta": 1.54,
+      "unlevered_beta": 1.31,
+      "op_margin": 12.4
+    },
+    {
+      "name": "Retail (Distributors)",
+      "firms": 62,
+      "beta": 0.95,
+      "unlevered_beta": 0.78,
+      "op_margin": 10.56
+    },
+    {
+      "name": "Retail (General)",
+      "firms": 23,
+      "beta": 0.81,
+      "unlevered_beta": 0.76,
+      "op_margin": 8.15
+    },
+    {
+      "name": "Retail (Grocery and Food)",
+      "firms": 15,
+      "beta": 1.12,
+      "unlevered_beta": 0.8,
+      "op_margin": 2.55
+    },
+    {
+      "name": "Retail (REITs)",
+      "firms": 26,
+      "beta": 0.62,
+      "unlevered_beta": 0.44,
+      "op_margin": 41.63
+    },
+    {
+      "name": "Retail (Special Lines)",
+      "firms": 94,
+      "beta": 1.09,
+      "unlevered_beta": 0.95,
+      "op_margin": 8.41
+    },
+    {
+      "name": "Rubber& Tires",
+      "firms": 3,
+      "beta": 0.53,
+      "unlevered_beta": 0.14,
+      "op_margin": 2.38
+    },
+    {
+      "name": "Semiconductor",
+      "firms": 66,
+      "beta": 1.52,
+      "unlevered_beta": 1.49,
+      "op_margin": 40.37
+    },
+    {
+      "name": "Semiconductor Equip",
+      "firms": 31,
+      "beta": 1.4,
+      "unlevered_beta": 1.35,
+      "op_margin": 28.34
+    },
+    {
+      "name": "Shipbuilding & Marine",
+      "firms": 8,
+      "beta": 0.75,
+      "unlevered_beta": 0.64,
+      "op_margin": 13.29
+    },
+    {
+      "name": "Shoe",
+      "firms": 11,
+      "beta": 1.02,
+      "unlevered_beta": 0.93,
+      "op_margin": 10.4
+    },
+    {
+      "name": "Software (Entertainment)",
+      "firms": 77,
+      "beta": 1.03,
+      "unlevered_beta": 1.01,
+      "op_margin": 41.35
+    },
+    {
+      "name": "Software (Internet)",
+      "firms": 29,
+      "beta": 1.69,
+      "unlevered_beta": 1.55,
+      "op_margin": 18.55
+    },
+    {
+      "name": "Software (System & Application)",
+      "firms": 309,
+      "beta": 1.28,
+      "unlevered_beta": 1.23,
+      "op_margin": 40.81
+    },
+    {
+      "name": "Steel",
+      "firms": 19,
+      "beta": 1.06,
+      "unlevered_beta": 0.9,
+      "op_margin": 4.5
+    },
+    {
+      "name": "Telecom (Wireless)",
+      "firms": 12,
+      "beta": 0.54,
+      "unlevered_beta": 0.39,
+      "op_margin": 21.98
+    },
+    {
+      "name": "Telecom. Equipment",
+      "firms": 57,
+      "beta": 0.92,
+      "unlevered_beta": 0.86,
+      "op_margin": 25.9
+    },
+    {
+      "name": "Telecom. Services",
+      "firms": 39,
+      "beta": 0.63,
+      "unlevered_beta": 0.37,
+      "op_margin": 21.05
+    },
+    {
+      "name": "Tobacco",
+      "firms": 10,
+      "beta": 0.79,
+      "unlevered_beta": 0.68,
+      "op_margin": 44.04
+    },
+    {
+      "name": "Transportation",
+      "firms": 19,
+      "beta": 0.86,
+      "unlevered_beta": 0.68,
+      "op_margin": 8.45
+    },
+    {
+      "name": "Transportation (Railroads)",
+      "firms": 4,
+      "beta": 0.98,
+      "unlevered_beta": 0.81,
+      "op_margin": 37.9
+    },
+    {
+      "name": "Trucking",
+      "firms": 26,
+      "beta": 1.01,
+      "unlevered_beta": 0.85,
+      "op_margin": 7.31
+    },
+    {
+      "name": "Utility (General)",
+      "firms": 14,
+      "beta": 0.24,
+      "unlevered_beta": 0.15,
+      "op_margin": 23.84
+    },
+    {
+      "name": "Utility (Water)",
+      "firms": 14,
+      "beta": 0.41,
+      "unlevered_beta": 0.28,
+      "op_margin": 34.46
+    },
+    {
+      "name": "Total Market",
+      "firms": 5994,
+      "beta": 0.91,
+      "unlevered_beta": 0.72,
+      "op_margin": 14.39
+    },
+    {
+      "name": "Total Market (without financials)",
+      "firms": 4822,
+      "beta": 0.99,
+      "unlevered_beta": 0.88,
+      "op_margin": 14.65
+    }
+  ]
+}

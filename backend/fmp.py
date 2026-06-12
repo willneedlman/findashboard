@@ -10,9 +10,12 @@ Set FMP_API_KEY in backend/.env or as an environment variable.
 """
 
 import os
+import re
 import threading
 import concurrent.futures
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from cachetools import TTLCache
 from dotenv import load_dotenv
 import logging
@@ -24,6 +27,18 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 _API_KEY = os.getenv("FMP_API_KEY", "")
 _BASE    = "https://financialmodelingprep.com/stable"
 _TIMEOUT = 8
+
+# Shared session: connection pooling (keep-alive) + automatic retry with backoff
+# on transient 429/5xx. Honors Retry-After headers from FMP rate limits.
+_session = requests.Session()
+_retry = Retry(
+    total=2, backoff_factor=0.5,
+    status_forcelist=(429, 500, 502, 503, 504),
+    allowed_methods=("GET",),
+    respect_retry_after_header=True,
+)
+_adapter = HTTPAdapter(max_retries=_retry, pool_connections=10, pool_maxsize=20)
+_session.mount("https://", _adapter)
 
 _lock            = threading.Lock()
 _profile_cache:   TTLCache = TTLCache(maxsize=300, ttl=86400)  # 24 hr
@@ -41,7 +56,16 @@ def available() -> bool:
 def _get(path: str, params: dict | None = None) -> list | dict:
     p = dict(params or {})
     p["apikey"] = _API_KEY
-    r = requests.get(f"{_BASE}{path}", params=p, timeout=_TIMEOUT)
+    r = _session.get(f"{_BASE}{path}", params=p, timeout=_TIMEOUT)
+    r.raise_for_status()
+    return r.json()
+
+
+def _get_v4(path: str, params: dict | None = None) -> list | dict:
+    """FMP v4 API — broader coverage for segment data and other endpoints."""
+    p = dict(params or {})
+    p["apikey"] = _API_KEY
+    r = _session.get(f"https://financialmodelingprep.com/api/v4{path}", params=p, timeout=_TIMEOUT)
     r.raise_for_status()
     return r.json()
 
@@ -149,6 +173,116 @@ def get_quote(ticker: str) -> dict:
                     pass
             return {}
     return _cached(_quote_cache, sym, fetch)
+
+
+_segments_cache: TTLCache = TTLCache(maxsize=200, ttl=86400)  # 24 hr
+
+
+# FMP stable nests the segments under a "data" key; everything else is metadata.
+_SEG_META_KEYS = {"date", "symbol", "reportedCurrency", "period", "fiscalYear", "calendarYear", "cik"}
+
+EMPTY_SEGMENTS = {"fiscalYear": None, "currency": None, "latest": [], "history": [], "concentration": None}
+
+# Intersegment/corporate reconciliation rows — noise in a revenue mix, not real segments.
+_SEG_NOISE_RE = re.compile(r"reconcil|eliminat|intersegment|^segment reporting", re.I)
+
+
+def _clean_segment_name(name: str) -> str:
+    """Strip FMP's XBRL ' Member' suffix and collapse whitespace."""
+    s = re.sub(r"\s+", " ", str(name)).strip()
+    return re.sub(r"\s*\bMember\b$", "", s).strip()
+
+
+def _clean_segments(src: dict) -> dict:
+    """Filter a raw segment dict to real, positive revenue segments with tidy names."""
+    out: dict = {}
+    for k, v in src.items():
+        if k in _SEG_META_KEYS or not isinstance(v, (int, float)) or v <= 0:
+            continue
+        name = _clean_segment_name(k)
+        if not name or _SEG_NOISE_RE.search(name):
+            continue
+        out[name] = out.get(name, 0.0) + float(v)   # merge any name collisions
+    return out
+
+
+def _segment_history(data, years: int = 6) -> dict:
+    """Parse FMP segmentation into latest breakdown + multi-year history + YoY + concentration.
+
+    Handles the current stable shape (segments nested under "data") and the
+    older flat shape (segment keys at the top level).
+    """
+    if not isinstance(data, list) or not data:
+        return dict(EMPTY_SEGMENTS)
+
+    rows = []
+    for entry in data:
+        if not isinstance(entry, dict):
+            continue
+        src = entry.get("data") if isinstance(entry.get("data"), dict) else entry
+        segs = _clean_segments(src)
+        if not segs:
+            continue
+        fy = entry.get("fiscalYear") or entry.get("calendarYear") or str(entry.get("date") or "")[:4]
+        try:
+            fy = int(fy)
+        except (TypeError, ValueError):
+            pass
+        rows.append({"year": fy, "date": str(entry.get("date") or ""),
+                     "segments": segs, "total": sum(segs.values())})
+
+    if not rows:
+        return dict(EMPTY_SEGMENTS)
+
+    rows.sort(key=lambda r: (r["date"], str(r["year"])), reverse=True)   # newest first
+    rows = rows[:years]
+    latest = rows[0]
+    prior = rows[1]["segments"] if len(rows) > 1 else {}
+    total = latest["total"] or 1.0
+
+    latest_list = []
+    for name, val in sorted(latest["segments"].items(), key=lambda x: -x[1]):
+        prev = prior.get(name)
+        yoy = round((val - prev) / prev * 100, 1) if prev else None
+        latest_list.append({"name": name, "value": val,
+                            "pct": round(val / total * 100, 1), "yoy_pct": yoy})
+
+    shares = [v / total for v in latest["segments"].values()]
+    concentration = {"topShare": round(max(shares) * 100, 1),
+                     "hhi": round(sum(s * s for s in shares) * 10000),
+                     "count": len(latest["segments"])}
+
+    history = [{"year": r["year"], "total": r["total"],
+                "segments": [{"name": n, "value": v}
+                             for n, v in sorted(r["segments"].items(), key=lambda x: -x[1])]}
+               for r in reversed(rows)]   # oldest -> newest for charting
+
+    currency = next((e.get("reportedCurrency") for e in data
+                     if isinstance(e, dict) and e.get("reportedCurrency")), None)
+    return {"fiscalYear": latest["year"], "currency": currency,
+            "latest": latest_list, "history": history, "concentration": concentration}
+
+
+def get_revenue_segments(ticker: str) -> dict:
+    """Product revenue segments from FMP stable API → latest + history + YoY."""
+    sym = ticker.strip().upper()
+    def fetch():
+        try:
+            return _segment_history(_get("/revenue-product-segmentation", {"symbol": sym, "period": "annual"}))
+        except Exception:
+            return dict(EMPTY_SEGMENTS)
+    return _cached(_segments_cache, f"{sym}:prod", fetch)
+
+
+def get_geo_segments(ticker: str) -> dict:
+    """Geographic revenue segments from FMP stable API → latest + history + YoY."""
+    sym = ticker.strip().upper()
+    def fetch():
+        try:
+            return _segment_history(_get("/revenue-geographic-segmentation", {"symbol": sym, "period": "annual"}))
+        except Exception:
+            return dict(EMPTY_SEGMENTS)
+    return _cached(_segments_cache, f"{sym}:geo", fetch)
 
 
 def get_dcf_fundamentals(ticker: str) -> dict:

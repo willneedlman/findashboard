@@ -36,7 +36,7 @@ function MetricCard({ label, value, help, sub }: { label: string; value: string;
 function ChartPanel({ label, height, note, children }: { label: string; height: number; note?: string; children: React.ReactNode }) {
   return (
     <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', position: 'relative' }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 10, background: 'rgba(46,57,77,0.8)', padding: '3px 8px', borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 10, background: 'var(--theme-surface, rgba(46,57,77,0.8))', padding: '3px 8px', borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>
         {label}
       </div>
       {note && <div style={{ position: 'absolute', top: 0, right: 0, padding: '3px 8px', fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', letterSpacing: '0.06em', zIndex: 10 }}>{note}</div>}
@@ -62,16 +62,20 @@ export function ImpliedProbabilityContent() {
     const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().split('T')[0]
   })
 
-  const { mutate, data, isPending } = useMutation({
+  const { mutate, data, isPending, error: mutError } = useMutation({
     mutationFn: async () => {
       const [coneResp, distResp] = await Promise.allSettled([
         axios.post('/api/prob/cone', { ticker, expiry }),
         axios.get(`/api/prob/chain-distribution?ticker=${ticker}&expiry=${expiry}`),
       ])
-      return {
-        cone: coneResp.status === 'fulfilled' ? coneResp.value.data : null,
-        dist: distResp.status === 'fulfilled' ? distResp.value.data : null,
+      const cone = coneResp.status === 'fulfilled' ? coneResp.value.data : null
+      const dist = distResp.status === 'fulfilled' ? distResp.value.data : null
+      if (!cone && !dist) {
+        const err = coneResp.status === 'rejected' ? coneResp.reason : null
+        const isNetwork = err?.code === 'ERR_NETWORK' || err?.message?.includes('Network Error')
+        throw Object.assign(new Error(isNetwork ? 'backend_down' : 'no_data'), { cone, dist })
       }
+      return { cone, dist }
     },
   })
 
@@ -206,7 +210,15 @@ export function ImpliedProbabilityContent() {
             </div>
           )}
 
-          {!data && !isPending && (
+          {mutError && (
+            <div style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.3)', padding: '12px 16px', fontSize: 12, color: 'var(--theme-text, #d7e3fc)' }}>
+              {(mutError as Error).message === 'backend_down'
+                ? 'Backend unreachable — start the API server (uvicorn main:app --reload --port 8000) and try again.'
+                : 'No data returned — check ticker and try again.'}
+            </div>
+          )}
+
+          {!data && !mutError && !isPending && (
             <EmptyState title="Implied Probability" hint="Enter a ticker and expiry, then press Generate." />
           )}
         </SidebarLayout>
@@ -214,5 +226,5 @@ export function ImpliedProbabilityContent() {
 }
 
 export default function ImpliedProbability() {
-  return <PageWrapper><ImpliedProbabilityContent /></PageWrapper>
+  return <PageWrapper title="Implied Probability"><ImpliedProbabilityContent /></PageWrapper>
 }

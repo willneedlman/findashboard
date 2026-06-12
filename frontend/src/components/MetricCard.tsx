@@ -75,7 +75,7 @@ export default function MetricCard({ label, value, delta, deltaPositive, classNa
           fontSize: 11,
           marginTop: 2,
           fontVariantNumeric: 'tabular-nums',
-          color: deltaPositive ? '#22C55E' : '#EF4444',
+          color: deltaPositive ? 'var(--theme-positive)' : 'var(--theme-negative)',
           margin: '2px 0 0 0',
         }}>
           {delta}

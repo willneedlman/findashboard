@@ -15,16 +15,17 @@ Endpoints
 
 from __future__ import annotations
 
-import time
+import os
+import hmac
 import logging
 from typing import Any
 
 import yfinance as yf
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, Header, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from core.loader import LoadError, SandboxViolation, StrategyLoader
-from strategies.base import MarketDataPoint, Signal, SignalEvent, Strategy
+from strategies.base import MarketDataPoint, Signal, Strategy
 
 _log = logging.getLogger(__name__)
 router = APIRouter()
@@ -46,6 +47,7 @@ def _register_builtins() -> None:
     from strategies.builtin.value_pe           import ValuePEStrategy
     from strategies.builtin.earnings_growth    import EarningsGrowthStrategy
     from strategies.builtin.gamma_scalping     import GammaScalpingStrategy
+    from strategies.builtin.micro_scalp        import MicroScalpStrategy
     for cls in [
         RSIMeanReversionStrategy,
         SMATrendStrategy,
@@ -55,6 +57,7 @@ def _register_builtins() -> None:
         ValuePEStrategy,
         EarningsGrowthStrategy,
         GammaScalpingStrategy,
+        MicroScalpStrategy,
     ]:
         inst = cls()
         meta = inst.metadata()
@@ -81,6 +84,12 @@ class StrategyEntry(BaseModel):
 class ToggleRequest(BaseModel):
     enabled: bool
     params:  dict[str, Any] = {}
+
+class CustomStrategyCreate(BaseModel):
+    name:       str
+    rules:      dict
+    bull_drift: float = 5.0
+    bear_drift: float = -3.0
 
 class TickRequest(BaseModel):
     timestamp: float
@@ -146,12 +155,22 @@ def _fetch_bars(ticker: str, start: str, end: str | None) -> list[dict]:
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────
 
+_ADMIN_SECRET = os.getenv("ADMIN_SECRET", "")
+
+
 @router.post("/upload", response_model=StrategyEntry)
-async def upload_strategy(file: UploadFile = File(...)):
+async def upload_strategy(file: UploadFile = File(...), x_admin_secret: str = Header(default="")):
     """
     Upload a .py file containing a single Strategy subclass.
-    The file is AST-scanned before execution.
+
+    SECURITY: uploaded code is executed server-side. The AST sandbox in
+    core.loader is a denylist and NOT a hard security boundary, so this endpoint
+    is gated behind ADMIN_SECRET. Normal users should use the parameterized
+    /custom rule builder, which executes no arbitrary code. For untrusted upload
+    at scale, run strategies in an isolated process/container instead.
     """
+    if not _ADMIN_SECRET or not hmac.compare_digest(x_admin_secret, _ADMIN_SECRET):
+        raise HTTPException(403, "Strategy upload requires admin authorization.")
     if not (file.filename or "").endswith(".py"):
         raise HTTPException(400, "File must be a .py file.")
 
@@ -207,6 +226,30 @@ def load_builtin(name: str):
         raise HTTPException(404, f"No builtin strategy named '{name}'.")
     _active[name]["enabled"] = True
     return _build_entry(name)
+
+
+@router.post("/custom", response_model=StrategyEntry)
+def create_custom_strategy(body: CustomStrategyCreate):
+    """Register a user-defined rule strategy in the active registry."""
+    from strategies.builtin.custom_rule_strategy import CustomRuleStrategy
+
+    safe_name = body.name.strip().lower().replace(" ", "_")[:40]
+    if not safe_name:
+        raise HTTPException(400, "Strategy name must not be empty.")
+
+    params = {
+        "name":       safe_name,
+        "rules":      body.rules,
+        "bull_drift": body.bull_drift,
+        "bear_drift": body.bear_drift,
+    }
+    inst = CustomRuleStrategy()
+    inst.initialize(params)
+
+    _active[safe_name] = {"cls": CustomRuleStrategy, "params": params, "enabled": True}
+    _loader._registry[safe_name] = CustomRuleStrategy
+    _log.info("Registered custom rule strategy '%s'", safe_name)
+    return _build_entry(safe_name)
 
 
 @router.post("/tick", response_model=list[SignalEventOut])

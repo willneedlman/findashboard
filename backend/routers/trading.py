@@ -16,7 +16,7 @@ def get_account():
         positions = _tradier.get_positions()
         orders    = _tradier.get_orders()
         return {"balances": balances, "positions": positions, "orders": orders}
-    except Exception as e:
+    except Exception:
         logger.exception("account fetch error")
         raise HTTPException(500, "Internal server error")
 
@@ -25,7 +25,7 @@ def get_account():
 def get_positions():
     try:
         return {"positions": _tradier.get_positions()}
-    except Exception as e:
+    except Exception:
         logger.exception("positions fetch error")
         raise HTTPException(500, "Internal server error")
 
@@ -34,7 +34,7 @@ def get_positions():
 def get_orders():
     try:
         return {"orders": _tradier.get_orders()}
-    except Exception as e:
+    except Exception:
         logger.exception("orders fetch error")
         raise HTTPException(500, "Internal server error")
 
@@ -60,7 +60,7 @@ def place_equity_order(req: EquityOrderRequest):
             duration=req.duration,
         )
         return result
-    except Exception as e:
+    except Exception:
         logger.exception("equity order error")
         raise HTTPException(500, "Internal server error")
 
@@ -88,7 +88,7 @@ def place_option_order(req: OptionOrderRequest):
             duration=req.duration,
         )
         return result
-    except Exception as e:
+    except Exception:
         logger.exception("option order error")
         raise HTTPException(500, "Internal server error")
 
@@ -130,6 +130,6 @@ def place_multileg_order(req: MultilegOrderRequest):
 def cancel_order(order_id: str):
     try:
         return _tradier.cancel_order(order_id)
-    except Exception as e:
+    except Exception:
         logger.exception("cancel order error")
         raise HTTPException(500, "Internal server error")

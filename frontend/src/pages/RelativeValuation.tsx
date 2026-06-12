@@ -232,9 +232,35 @@ export function RelativeValuationContent() {
     if (!sym) return
     setLoading(true)
     setError(null)
+    
     try {
       const res = await axios.get(`/api/corporate/peer-valuation?ticker=${sym}${refresh ? '&refresh=true' : ''}`)
-      setData(res.data)
+      
+      // THE INTERCEPTOR: Deep-clean the payload before React renders it
+      const safeData = {
+        ...res.data,
+        peers: (res.data.peers || []).map((row: any) => {
+          const safeRow = { ...row }
+          // The exact keys React attempts to run math or .toFixed() on
+          const numericKeys = [
+            'pe', 'ev_ebitda', 'ps', 'pb', 'pfcf', 'roe', 
+            'revenue_growth', 'price', 'target_mean_price', 'recommendation_mean'
+          ]
+          
+          numericKeys.forEach(k => {
+            // If the data is missing, explicitly null, or Not-A-Number, force it to null
+            if (safeRow[k] === undefined || safeRow[k] === null || Number.isNaN(Number(safeRow[k]))) {
+              safeRow[k] = null
+            } else if (typeof safeRow[k] === 'string') {
+              // Catch any string numbers and cast them to pure floats
+              safeRow[k] = parseFloat(safeRow[k])
+            }
+          })
+          return safeRow
+        })
+      }
+
+      setData(safeData)
     } catch {
       setError('Failed to fetch valuation data.')
     } finally {
@@ -256,7 +282,7 @@ export function RelativeValuationContent() {
   }
 
   return (
-    <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+    <div id="relative-valuation-content" style={{ maxWidth: 1200, margin: '0 auto' }}>
 
         <PageHeader
           title="Peer Comparison"
@@ -313,7 +339,7 @@ export function RelativeValuationContent() {
               color: data.comps_source === 'ai_generated' ? T.gold : T.muted,
               background: data.comps_source === 'ai_generated' ? 'rgba(201,168,76,0.07)' : 'transparent',
             }}>
-              {data.comps_source === 'ai_generated' ? '⬢ AI Comps' : 'Sector Fallback'}
+              {data.comps_source === 'ai_generated' ? 'AI Comps' : 'Sector Fallback'}
             </span>
           )}
           {error && (

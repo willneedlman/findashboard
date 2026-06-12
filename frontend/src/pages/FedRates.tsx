@@ -132,126 +132,117 @@ export function FedRatesContent() {
   const summaryItems = [
     { label: 'Next Meeting Implied',   value: nextRate != null ? `${nextRate.toFixed(2)}%` : '—',
       delta: twist !== 0 ? `${(twist * FED_WEIGHTS[0]).toFixed(1)} bps adj` : undefined, positive: twist < 0 },
-    { label: 'Year-End 2026',           value: yearEnd != null ? `${yearEnd.toFixed(2)}%` : '—' },
+    { label: adjustedMeetings[4]?.date ? `${adjustedMeetings[4].date} Implied` : 'Forward Implied',
+      value: yearEnd != null ? `${yearEnd.toFixed(2)}%` : '—' },
     { label: 'Total Projected Move',    value: `${totalMove > 0 ? '+' : ''}${totalMove.toFixed(0)} bps`,
       sub: 'Through last FOMC meeting' },
   ]
 
   const fomc = fedData?.meetings[0]
 
+  const gridTwo: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(440px, 1fr))', gap: 12 }
+
   return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 1200, margin: '0 auto' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-        {/* Page header + rate sensitivity slider */}
-        <div style={{ marginBottom: 4 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 14, paddingBottom: 14, borderBottom: `1px solid var(--theme-border-faint, rgba(255,255,255,0.05))` }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <h1 style={{ fontFamily: 'Cinzel, Georgia, serif', fontSize: 18, fontWeight: 700, letterSpacing: '0.06em', color: T.gold, margin: 0, marginBottom: 4 }}>
-                Macro Rate Engine
-              </h1>
-              <p style={{ fontFamily: T.label, fontSize: 11, color: T.muted, margin: 0 }}>
-                Fed Funds implied path, Treasury yield curve, and FOMC meeting probabilities.
-              </p>
-            </div>
-
-            {/* Sensitivity slider — top right */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: T.surface, border: `1px solid ${T.border}`, padding: '8px 14px', flexShrink: 0 }}>
-              <span style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.muted, whiteSpace: 'nowrap' }}>
-                Rate Scenario
-              </span>
-              <input
-                type="range" min={-200} max={200} step={5} value={twist}
-                onChange={e => setTwist(+e.target.value)}
-                style={{ width: 120, accentColor: T.gold }}
-              />
-              <span style={{ fontFamily: T.mono, fontSize: 13, fontWeight: 700, color: T.gold, width: 64, textAlign: 'right', whiteSpace: 'nowrap' }}>
-                {twist > 0 ? '+' : ''}{twist} bps
-              </span>
-              {twist !== 0 && (
-                <button
-                  onClick={() => setTwist(0)}
-                  style={{ fontFamily: T.label, fontSize: 9, color: T.muted, background: 'none', border: `1px solid ${T.border}`, padding: '2px 7px', cursor: 'pointer', letterSpacing: '0.1em', textTransform: 'uppercase' }}
-                >
-                  Reset
-                </button>
-              )}
-            </div>
+        {/* Rate sensitivity slider */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 16, marginBottom: 2, paddingBottom: 14, borderBottom: `1px solid var(--theme-border-faint, rgba(255,255,255,0.05))` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: T.surface, border: `1px solid ${T.border}`, padding: '8px 14px', flexShrink: 0 }}>
+            <span style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.muted, whiteSpace: 'nowrap' }}>
+              Rate Scenario
+            </span>
+            <input
+              type="range" min={-200} max={200} step={5} value={twist}
+              onChange={e => setTwist(+e.target.value)}
+              style={{ width: 120, accentColor: T.gold }}
+            />
+            <span style={{ fontFamily: T.mono, fontSize: 13, fontWeight: 700, color: T.gold, width: 64, textAlign: 'right', whiteSpace: 'nowrap' }}>
+              {twist > 0 ? '+' : ''}{twist} bps
+            </span>
+            {twist !== 0 && (
+              <button
+                onClick={() => setTwist(0)}
+                style={{ fontFamily: T.label, fontSize: 9, color: T.muted, background: 'none', border: `1px solid ${T.border}`, padding: '2px 7px', cursor: 'pointer', letterSpacing: '0.1em', textTransform: 'uppercase' }}
+              >
+                Reset
+              </button>
+            )}
           </div>
         </div>
 
-        {/* ── Summary metrics — single panel, stats separated by dividers ── */}
-        {adjustedMeetings.length > 0 && (
-          <Panel>
-            <StatRow items={summaryItems} />
-          </Panel>
-        )}
+        {/* ── Summary + next-meeting probabilities, side by side ─────────── */}
+        <div style={gridTwo}>
+          {adjustedMeetings.length > 0 && (
+            <Panel title="Rate Outlook">
+              <StatRow items={summaryItems} />
+            </Panel>
+          )}
+          {fomc && (
+            <Panel title="Next FOMC Meeting — Probability Breakdown">
+              <StatRow items={[
+                { label: 'Hike',  value: `${fomc.prob_hike}%` },
+                { label: 'Hold',  value: `${fomc.prob_hold}%` },
+                { label: 'Cut',   value: `${fomc.prob_cut}%`  },
+              ]} />
+            </Panel>
+          )}
+        </div>
 
-        {/* ── FOMC next meeting probabilities ─────────────────────────────── */}
-        {fomc && (
-          <Panel title="Next FOMC Meeting — Probability Breakdown">
-            <StatRow items={[
-              { label: 'Hike +50 bps',  value: `${fomc.prob_hike ?? 2}%`  },
-              { label: 'Hike +25 bps',  value: '10%' },
-              { label: 'Hold',          value: `${fomc.prob_hold ?? 82}%` },
-              { label: 'Cut −25 bps',   value: `${fomc.prob_cut ?? 6}%`   },
-            ]} />
-          </Panel>
-        )}
+        {/* ── Two primary charts, side by side ───────────────────────────── */}
+        <div style={gridTwo}>
+          {adjustedMeetings.length > 0 && (
+            <Panel title="Market-Implied Fed Funds Rate Path">
+              <div style={{ height: 260, padding: '8px 8px 0' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={adjustedMeetings} margin={{ left: 0, right: 28, top: 8, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--theme-hover, rgba(255,255,255,0.04))" />
+                    <XAxis dataKey="date" tick={TICK} axisLine={false} tickLine={false} />
+                    <YAxis tick={TICK} tickFormatter={v => `${v}%`} domain={['auto','auto']} axisLine={false} tickLine={false} width={44} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} cursor={CROSSHAIR_CURSOR} />
+                    <Legend wrapperStyle={{ fontFamily: T.label, fontSize: 9, paddingBottom: 6 }} />
+                    <Line type="monotone" dataKey="base_rate"     stroke="var(--theme-text-faint, rgba(255,255,255,0.18))" strokeWidth={1.5} strokeDasharray="5 3" dot={false} name="Base Path" />
+                    <Line type="monotone" dataKey="adjusted_rate" stroke="var(--theme-tertiary, #60a5fa)" strokeWidth={2} dot={{ fill: 'var(--theme-primary, #c9a84c)', r: 4 }} name="Adjusted Path" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </Panel>
+          )}
 
-        {/* ── Treasury yields — single panel, tenors in one row ─────────── */}
+          {fedData && (
+            <Panel title="Meeting Probability Distribution — Hike / Hold / Cut">
+              <div style={{ height: 260, padding: '8px 8px 0' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={fedData.meetings} margin={{ left: 0, right: 28, top: 8, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--theme-hover, rgba(255,255,255,0.04))" />
+                    <XAxis dataKey="date" tick={TICK} axisLine={false} tickLine={false} />
+                    <YAxis tick={TICK} tickFormatter={v => `${v}%`} axisLine={false} tickLine={false} width={44} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} cursor={BAR_CURSOR} />
+                    <Legend wrapperStyle={{ fontFamily: T.label, fontSize: 9, paddingBottom: 6 }} />
+                    <Bar dataKey="prob_hike" name="Hike" fill="#c0394d" stackId="a" />
+                    <Bar dataKey="prob_hold" name="Hold" fill="var(--theme-chart-neutral, #4a7fa5)" stackId="a" />
+                    <Bar dataKey="prob_cut"  name="Cut"  fill="#2e9a62" stackId="a" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </Panel>
+          )}
+        </div>
+
+        {/* ── Treasury yield curve — full width ──────────────────────────── */}
         {adjustedCurve.length > 0 && (
           <Panel title="US Treasury Yield Curve">
             <YieldTable curve={curveData?.curve ?? {}} adjusted={adjustedCurve} twist={twist} />
-            <div style={{ padding: '0 0 0 0', height: 180 }}>
+            <div style={{ height: 200 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={adjustedCurve} margin={{ left: 8, right: 16, top: 12, bottom: 4 }}>
+                <LineChart data={adjustedCurve} margin={{ left: 0, right: 24, top: 12, bottom: 4 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--theme-hover, rgba(255,255,255,0.04))" />
                   <XAxis dataKey="tenor" tick={TICK} axisLine={false} tickLine={false} />
-                  <YAxis tick={TICK} tickFormatter={v => `${v}%`} domain={['auto','auto']} orientation="right" axisLine={false} tickLine={false} />
+                  <YAxis tick={TICK} tickFormatter={v => `${v}%`} domain={['auto','auto']} axisLine={false} tickLine={false} width={44} />
                   <Tooltip formatter={(v: number) => [`${v.toFixed(3)}%`, '']} contentStyle={TOOLTIP_STYLE} cursor={CROSSHAIR_CURSOR} />
                   <Legend wrapperStyle={{ fontFamily: T.label, fontSize: 9, paddingBottom: 6 }} />
                   <Line type="monotone" dataKey="current"  stroke="var(--theme-text-faint, rgba(255,255,255,0.2))" strokeWidth={1.5} strokeDasharray="5 3" dot={false} name="Current" />
-                  <Line type="monotone" dataKey="adjusted" stroke="#1f5673" strokeWidth={2} dot={{ fill: '#d97736', r: 3 }} name="Adjusted" />
+                  <Line type="monotone" dataKey="adjusted" stroke="var(--theme-tertiary, #60a5fa)" strokeWidth={2} dot={{ fill: 'var(--theme-primary, #c9a84c)', r: 3 }} name="Adjusted" />
                 </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </Panel>
-        )}
-
-        {/* ── Fed Funds rate path chart ─────────────────────────────────── */}
-        {adjustedMeetings.length > 0 && (
-          <Panel title="Market-Implied Fed Funds Rate Path">
-            <div style={{ height: 240, padding: '8px 8px 0' }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={adjustedMeetings} margin={{ left: 0, right: 24, top: 8, bottom: 4 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--theme-hover, rgba(255,255,255,0.04))" />
-                  <XAxis dataKey="date" tick={TICK} axisLine={false} tickLine={false} />
-                  <YAxis tick={TICK} tickFormatter={v => `${v}%`} domain={['auto','auto']} orientation="right" axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} cursor={CROSSHAIR_CURSOR} />
-                  <Legend wrapperStyle={{ fontFamily: T.label, fontSize: 9, paddingBottom: 6 }} />
-                  <Line type="monotone" dataKey="base_rate"     stroke="var(--theme-text-faint, rgba(255,255,255,0.18))" strokeWidth={1.5} strokeDasharray="5 3" dot={false} name="Base Path" />
-                  <Line type="monotone" dataKey="adjusted_rate" stroke="#1f5673" strokeWidth={2} dot={{ fill: '#d97736', r: 4 }} name="Adjusted Path" />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </Panel>
-        )}
-
-        {/* ── Meeting probability distribution ─────────────────────────── */}
-        {fedData && (
-          <Panel title="Meeting Probability Distribution — Hike / Hold / Cut">
-            <div style={{ height: 220, padding: '8px 8px 0' }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={fedData.meetings} margin={{ left: 0, right: 24, top: 8, bottom: 4 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--theme-hover, rgba(255,255,255,0.04))" />
-                  <XAxis dataKey="date" tick={TICK} axisLine={false} tickLine={false} />
-                  <YAxis tick={TICK} tickFormatter={v => `${v}%`} orientation="right" axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} cursor={BAR_CURSOR} />
-                  <Legend wrapperStyle={{ fontFamily: T.label, fontSize: 9, paddingBottom: 6 }} />
-                  <Bar dataKey="prob_hike" name="Hike" fill="#8c2e36" stackId="a" />
-                  <Bar dataKey="prob_hold" name="Hold" fill={T.muted}  stackId="a" />
-                  <Bar dataKey="prob_cut"  name="Cut"  fill="#2f6b4b"  stackId="a" />
-                </BarChart>
               </ResponsiveContainer>
             </div>
           </Panel>
@@ -262,5 +253,5 @@ export function FedRatesContent() {
 }
 
 export default function FedRates() {
-  return <PageWrapper><FedRatesContent /></PageWrapper>
+  return <PageWrapper title="Fed Rates"><FedRatesContent /></PageWrapper>
 }

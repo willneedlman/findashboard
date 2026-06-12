@@ -27,8 +27,8 @@ const DEFAULT_TICKER  = 'SPY'
 const DEFAULT_EXPIRY  = (() => {
   const d = new Date(); d.setMonth(d.getMonth() + 2); return d.toISOString().slice(0, 10)
 })()
-const mk = (type: Leg['option_type'], action: Leg['action'], K: number, premium: number): Leg =>
-  ({ option_type: type, action, K, premium, quantity: 1, ticker: DEFAULT_TICKER, expiry: DEFAULT_EXPIRY })
+const mk = (type: Leg['option_type'], action: Leg['action'], K: number, premium: number, qty = 1): Leg =>
+  ({ option_type: type, action, K, premium, quantity: qty, ticker: DEFAULT_TICKER, expiry: DEFAULT_EXPIRY })
 
 // Round to nearest options strike increment based on spot price
 function roundToStrike(k: number, spot: number): number {
@@ -43,25 +43,73 @@ function scalePreset(legs: Leg[], spot: number): Leg[] {
 }
 
 const GREEK_COLORS: Record<string, string> = {
-  delta: '#60a5fa', gamma: '#22c55e', theta: '#ef4444', vega: '#a78bfa',
+  delta: 'var(--theme-tertiary)', gamma: 'var(--theme-positive)', theta: 'var(--theme-negative)', vega: '#a78bfa',
 }
 
 const PRESETS: Record<string, Leg[]> = {
-  'Long Call':     [mk('call', 'buy',  100, 3)],
-  'Long Put':      [mk('put',  'buy',  100, 3)],
-  'Bull Spread':   [mk('call', 'buy',  95, 6), mk('call', 'sell', 105, 2)],
-  'Long Straddle': [mk('call', 'buy',  100, 3), mk('put',  'buy',  100, 3)],
-  'Iron Condor':   [mk('put',  'buy',  85, 1), mk('put',  'sell', 90, 2),
-                    mk('call', 'sell', 110, 2), mk('call', 'buy',  115, 1)],
+  // Single Leg
+  'Long Call':          [mk('call', 'buy',  100, 3)],
+  'Long Put':           [mk('put',  'buy',  100, 3)],
+  'Short Put':          [mk('put',  'sell',  95, 2)],
+  'Short Call':         [mk('call', 'sell', 105, 2)],
+  // Vertical Spreads
+  'Bull Call Spread':   [mk('call', 'buy',  95, 6),  mk('call', 'sell', 105, 2)],
+  'Bear Put Spread':    [mk('put',  'buy', 105, 6),  mk('put',  'sell',  95, 2)],
+  'Bull Put Spread':    [mk('put',  'sell', 100, 4), mk('put',  'buy',   90, 1.5)],
+  'Bear Call Spread':   [mk('call', 'sell', 100, 4), mk('call', 'buy',  110, 1.5)],
+  // Volatility
+  'Long Straddle':      [mk('call', 'buy',  100, 3), mk('put',  'buy',  100, 3)],
+  'Long Strangle':      [mk('put',  'buy',   90, 1.5), mk('call', 'buy', 110, 1.5)],
+  'Short Straddle':     [mk('call', 'sell', 100, 3), mk('put',  'sell', 100, 3)],
+  'Short Strangle':     [mk('put',  'sell',  90, 1.5), mk('call', 'sell', 110, 1.5)],
+  // Butterfly
+  'Call Butterfly':     [mk('call', 'buy',   90, 8), mk('call', 'sell', 100, 3, 2), mk('call', 'buy',  110, 1)],
+  'Put Butterfly':      [mk('put',  'buy',  110, 8), mk('put',  'sell', 100, 3, 2), mk('put',  'buy',   90, 1)],
+  'Iron Butterfly':     [mk('put',  'buy',   85, 0.5), mk('put',  'sell', 100, 3), mk('call', 'sell', 100, 3), mk('call', 'buy',  115, 0.5)],
+  // Condor
+  'Iron Condor':        [mk('put',  'buy',   85, 1), mk('put',  'sell',  90, 2), mk('call', 'sell', 110, 2), mk('call', 'buy',  115, 1)],
+  'Long Condor':        [mk('call', 'buy',   90, 8), mk('call', 'sell',  95, 5), mk('call', 'sell', 105, 2), mk('call', 'buy',  110, 1)],
+  'Rev. Iron Condor':   [mk('put',  'sell',  85, 1), mk('put',  'buy',   90, 2), mk('call', 'buy',  110, 2), mk('call', 'sell', 115, 1)],
+  // Ratio / Advanced
+  'Call Ratio 1x2':     [mk('call', 'buy',  100, 3), mk('call', 'sell', 110, 1.5, 2)],
+  'Risk Reversal':      [mk('put',  'sell',  95, 2), mk('call', 'buy',  105, 2)],
+  'Jade Lizard':        [mk('put',  'sell',  90, 1.5), mk('call', 'sell', 110, 1.5), mk('call', 'buy', 115, 0.75)],
+  'Synthetic Long':     [mk('call', 'buy',  100, 3), mk('put',  'sell', 100, 3)],
 }
 
 const PRESET_DESC: Record<string, string> = {
-  'Long Call':     'Bullish. Unlimited upside, capped loss at premium paid.',
-  'Long Put':      'Bearish. Profit as price falls, max loss is premium.',
-  'Bull Spread':   'Capped bull play — lower cost, lower max gain.',
-  'Long Straddle': 'Profit from big move in either direction. Needs volatility.',
-  'Iron Condor':   'Range-bound income. Max profit if price stays between short strikes.',
+  'Long Call':         'Bullish. Unlimited upside, capped loss at premium paid.',
+  'Long Put':          'Bearish. Profit as price falls, max loss is premium.',
+  'Short Put':         'Bullish/neutral. Collect premium; obligated to buy at strike if assigned.',
+  'Short Call':        'Bearish/neutral. Collect premium; unlimited risk if price rises.',
+  'Bull Call Spread':  'Debit spread. Capped bull play — lower cost, lower max gain.',
+  'Bear Put Spread':   'Debit spread. Profit from decline; cost and gain are capped.',
+  'Bull Put Spread':   'Credit spread. Keep premium if stock stays above short strike.',
+  'Bear Call Spread':  'Credit spread. Keep premium if stock stays below short strike.',
+  'Long Straddle':     'Profit from big move either direction. Needs volatility.',
+  'Long Strangle':     'Cheaper straddle. Needs larger move; lower premium at risk.',
+  'Short Straddle':    'Sell ATM call + put. Max income if price pins at strike.',
+  'Short Strangle':    'Sell OTM call + put. Wider profit zone than short straddle.',
+  'Call Butterfly':    'Profit if price pins near middle strike. Low cost, capped.',
+  'Put Butterfly':     'Same payoff as call butterfly but constructed with puts.',
+  'Iron Butterfly':    'Short straddle with wings. Defined risk version of short straddle.',
+  'Iron Condor':       'Range-bound income. Max profit if price stays between short strikes.',
+  'Long Condor':       'Profit if price lands in middle zone. Lower cost than butterfly.',
+  'Rev. Iron Condor':  'Long strangle with short wings. Profit from large move, defined risk.',
+  'Call Ratio 1x2':    'Mildly bullish. Profit window above long strike; risk if underlying surges.',
+  'Risk Reversal':     'Synthetic long exposure. Bullish with minimal net premium.',
+  'Jade Lizard':       'Short OTM put + short call spread. No upside loss; income in range.',
+  'Synthetic Long':    'Replicates long stock. Unlimited upside and downside from ATM.',
 }
+
+const PRESET_GROUPS: { label: string; keys: string[] }[] = [
+  { label: 'Single Leg',        keys: ['Long Call', 'Long Put', 'Short Put', 'Short Call'] },
+  { label: 'Vertical Spreads',  keys: ['Bull Call Spread', 'Bear Put Spread', 'Bull Put Spread', 'Bear Call Spread'] },
+  { label: 'Volatility',        keys: ['Long Straddle', 'Long Strangle', 'Short Straddle', 'Short Strangle'] },
+  { label: 'Butterfly',         keys: ['Call Butterfly', 'Put Butterfly', 'Iron Butterfly'] },
+  { label: 'Condor',            keys: ['Iron Condor', 'Long Condor', 'Rev. Iron Condor'] },
+  { label: 'Ratio / Advanced',  keys: ['Call Ratio 1x2', 'Risk Reversal', 'Jade Lizard', 'Synthetic Long'] },
+]
 
 const LEG_COLORS = ['#1f5673', '#7b5ea7', '#d97736', '#2f6b4b', '#8c2e36']
 
@@ -113,6 +161,9 @@ function intrinsic(S: number, leg: Leg): number {
 export default function StrategyBuilder() {
   const [legs, setLegs]               = useState<Leg[]>(PRESETS['Long Call'])
   const [preset, setPreset]           = useState('Long Call')
+  const [openGroups, setOpenGroups]   = useState<Record<string, boolean>>(
+    Object.fromEntries(PRESET_GROUPS.map(g => [g.label, g.label === 'Single Leg']))
+  )
   const [spotOverrides, setSpotOverrides] = useState<Record<string, number>>({})
   const [greekResult, setGreekResult] = useState<GreekResult | null>(null)
   const [greekLoading, setGreekLoading] = useState(false)
@@ -349,29 +400,54 @@ export default function StrategyBuilder() {
     setLegs(p => p.map((l, idx) => idx === i ? { ...l, [k]: v } : l))
 
   return (
-    <PageWrapper>
-      <SidebarLayout sidebarWidth={210} sidebarTitle="Strategy Builder" sidebar={<>
-          <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)' }}>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#ffffff' }}>Strategy Builder</div>
-          </div>
+    <PageWrapper title="Strategy Builder">
+      <SidebarLayout sidebarWidth={210} sidebarTitle="Parameters" sidebar={<>
           <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 10, flex: 1, overflowY: 'auto' }}>
 
             {/* Presets */}
             <div>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', marginBottom: 5 }}>Presets</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                {Object.keys(PRESETS).map(name => (
-                  <button key={name} onClick={() => { setPreset(name); setLegs(scalePreset(PRESETS[name], getSpot(primaryTicker))); setSpotOverrides({}); setLegChains({}) }} style={{
-                    padding: '6px 8px', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
-                    background: preset === name ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 12%, transparent)' : 'transparent',
-                    border: `1px solid ${preset === name ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.08))'}`,
-                    color: preset === name ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #5e768f)', cursor: 'pointer', textAlign: 'left',
-                  }}>
-                    <div>{name}</div>
-                    <div style={{ fontSize: 9, fontWeight: 400, letterSpacing: '0.03em', textTransform: 'none', color: preset === name ? 'var(--theme-secondary, #99907e)' : 'var(--theme-border, rgba(255,255,255,0.10))', marginTop: 2, lineHeight: '12px' }}>
-                      {PRESET_DESC[name]}
-                    </div>
-                  </button>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', marginBottom: 6 }}>Presets</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {PRESET_GROUPS.map(group => (
+                  <div key={group.label}>
+                    <button
+                      onClick={() => setOpenGroups(s => ({ ...s, [group.label]: !s[group.label] }))}
+                      style={{
+                        width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        padding: '5px 6px', marginBottom: 2, background: 'var(--theme-hover, rgba(255,255,255,0.03))',
+                        border: '1px solid var(--theme-border, rgba(255,255,255,0.06))',
+                        cursor: 'pointer', color: 'var(--theme-secondary, #5e768f)',
+                        fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
+                      }}
+                    >
+                      <span>{group.label}</span>
+                      <span style={{ fontSize: 8, opacity: 0.6 }}>{openGroups[group.label] ? '▲' : '▼'}</span>
+                    </button>
+                    {openGroups[group.label] && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 4, paddingLeft: 4 }}>
+                        {group.keys.map(name => (
+                          <button key={name} onClick={() => {
+                            setPreset(name)
+                            setLegs(scalePreset(PRESETS[name], getSpot(primaryTicker)))
+                            setSpotOverrides({})
+                            setLegChains({})
+                            setOpenGroups(s => ({ ...s, [group.label]: true }))
+                          }} style={{
+                            padding: '5px 8px', fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase',
+                            background: preset === name ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 12%, transparent)' : 'transparent',
+                            border: `1px solid ${preset === name ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.07))'}`,
+                            color: preset === name ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #5e768f)',
+                            cursor: 'pointer', textAlign: 'left',
+                          }}>
+                            <div>{name}</div>
+                            <div style={{ fontSize: 9, fontWeight: 400, letterSpacing: '0.02em', textTransform: 'none', color: preset === name ? 'rgba(201,168,76,0.6)' : 'rgba(255,255,255,0.15)', marginTop: 2, lineHeight: '12px' }}>
+                              {PRESET_DESC[name]}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
 
@@ -382,16 +458,16 @@ export default function StrategyBuilder() {
                   marginTop: 8, width: '100%', padding: '7px 8px',
                   fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
                   cursor: 'pointer', border: '1px solid',
-                  borderColor: sentToPaperTrader ? '#22c55e' : 'rgba(201,168,76,0.5)',
-                  background: sentToPaperTrader ? 'rgba(34,197,94,0.12)' : 'rgba(201,168,76,0.07)',
-                  color: sentToPaperTrader ? '#22c55e' : 'var(--theme-primary, #c9a84c)',
+                  borderColor: sentToPaperTrader ? 'var(--theme-positive)' : 'rgba(201,168,76,0.5)',
+                  background: sentToPaperTrader ? 'color-mix(in srgb, var(--theme-positive) 12%, transparent)' : 'rgba(201,168,76,0.07)',
+                  color: sentToPaperTrader ? 'var(--theme-positive)' : 'var(--theme-primary, #c9a84c)',
                   transition: 'all 0.2s',
                 }}
               >
-                {sentToPaperTrader ? '✓ Sent — approve in Paper Trader' : '→ Send to Paper Trader'}
+                {sentToPaperTrader ? 'Sent — approve in Paper Trader' : 'Send to Paper Trader'}
               </button>
               {sentToPaperTrader && (
-                <a href="/paper-trading" style={{ display: 'block', marginTop: 4, fontSize: 9, color: '#22c55e',
+                <a href="/paper-trading" style={{ display: 'block', marginTop: 4, fontSize: 9, color: 'var(--theme-positive)',
                   fontFamily: 'var(--theme-mono)', textAlign: 'center', textDecoration: 'underline' }}>
                   Go to Paper Trader ↗
                 </a>
@@ -408,7 +484,7 @@ export default function StrategyBuilder() {
                 {legs.map((leg, i) => (
                   <div key={i} style={{ background: 'var(--theme-bg, #0a1628)', border: `1px solid ${LEG_COLORS[i % LEG_COLORS.length]}44`, padding: 7 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-                      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: leg.action === 'buy' ? '#22C55E' : '#EF4444', textTransform: 'uppercase' }}>
+                      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: leg.action === 'buy' ? 'var(--theme-positive)' : 'var(--theme-negative)', textTransform: 'uppercase' }}>
                         LEG {i + 1}
                       </span>
                       <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
@@ -450,7 +526,7 @@ export default function StrategyBuilder() {
                           fontSize: 14, padding: '0 8px', cursor: legChains[i]?.loading ? 'default' : 'pointer',
                           flexShrink: 0, lineHeight: 1,
                         }}>
-                        {legChains[i]?.loading ? '…' : '↓'}
+                        {legChains[i]?.loading ? '…' : 'v'}
                       </button>
                     </div>
 
@@ -558,8 +634,8 @@ export default function StrategyBuilder() {
                         style={{ background: 'var(--theme-bg, #0a1628)', border: '1px solid var(--theme-text-subtle, rgba(255,255,255,0.12))', color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-mono)', fontSize: 11, padding: '3px 6px', outline: 'none' }}
                       />
                       {exp && dteN !== null && (
-                        <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: '#c9a84c' }}>
-                          {fmtExpiry(exp)} · <span style={{ color: dteN <= 7 ? '#ef4444' : dteN <= 30 ? '#f97316' : '#22c55e' }}>{dteN}d</span>
+                        <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-primary, #c9a84c)' }}>
+                          {fmtExpiry(exp)} · <span style={{ color: dteN <= 7 ? 'var(--theme-negative)' : dteN <= 30 ? 'var(--theme-warn)' : 'var(--theme-positive)' }}>{dteN}d</span>
                         </span>
                       )}
                     </div>
@@ -610,7 +686,7 @@ export default function StrategyBuilder() {
                                   <div style={{
                                     height: 12, borderRadius: 2,
                                     width: col === 5 ? 60 : col % 5 === 0 ? 32 : 48,
-                                    background: 'linear-gradient(90deg,#0d1826 25%,#162030 50%,#0d1826 75%)',
+                                    background: 'linear-gradient(90deg, var(--theme-surface) 25%, var(--theme-hover) 50%, var(--theme-surface) 75%)',
                                     backgroundSize: '200% 100%',
                                     animation: '_shimmer 1.6s infinite',
                                     margin: '0 auto',
@@ -630,19 +706,19 @@ export default function StrategyBuilder() {
                         <thead>
                           <tr style={{ background: 'rgba(0,0,0,0.25)', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.06))' }}>
                             {/* Calls side */}
-                            <th style={{ ...TH, textAlign: 'right', color: '#4ade8088' }}>Δ</th>
+                            <th style={{ ...TH, textAlign: 'right', color: 'color-mix(in srgb, var(--theme-positive) 55%, transparent)' }}>Δ</th>
                             <th style={{ ...TH, textAlign: 'right' }}>OI</th>
                             <th style={{ ...TH, textAlign: 'right' }}>Vol</th>
                             <th style={{ ...TH, textAlign: 'right' }}>Bid</th>
-                            <th style={{ ...TH, textAlign: 'right', color: '#4ade8088' }}>Ask</th>
+                            <th style={{ ...TH, textAlign: 'right', color: 'color-mix(in srgb, var(--theme-positive) 55%, transparent)' }}>Ask</th>
                             {/* Center */}
-                            <th style={{ ...TH, textAlign: 'center', color: '#c9a84c88', background: 'rgba(201,168,76,0.05)', minWidth: 80 }}>CALLS · STRIKE · PUTS</th>
+                            <th style={{ ...TH, textAlign: 'center', color: 'color-mix(in srgb, var(--theme-primary) 55%, transparent)', background: 'rgba(201,168,76,0.05)', minWidth: 80 }}>CALLS · STRIKE · PUTS</th>
                             {/* Puts side */}
-                            <th style={{ ...TH, textAlign: 'left', color: '#ef444488' }}>Bid</th>
+                            <th style={{ ...TH, textAlign: 'left', color: 'color-mix(in srgb, var(--theme-negative) 55%, transparent)' }}>Bid</th>
                             <th style={{ ...TH, textAlign: 'left' }}>Ask</th>
                             <th style={{ ...TH, textAlign: 'left' }}>Vol</th>
                             <th style={{ ...TH, textAlign: 'left' }}>OI</th>
-                            <th style={{ ...TH, textAlign: 'left', color: '#ef444488' }}>Δ</th>
+                            <th style={{ ...TH, textAlign: 'left', color: 'color-mix(in srgb, var(--theme-negative) 55%, transparent)' }}>Δ</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -665,43 +741,43 @@ export default function StrategyBuilder() {
                                 onMouseLeave={e => (e.currentTarget.style.background = rowBg)}>
 
                                 {/* Call cells */}
-                                <td onClick={callClick} style={{ ...TD_base, textAlign: 'right', cursor: 'pointer', color: '#4ade80', background: callSel ? 'rgba(201,168,76,0.12)' : undefined }}>
+                                <td onClick={callClick} style={{ ...TD_base, textAlign: 'right', cursor: 'pointer', color: 'var(--theme-positive)', background: callSel ? 'rgba(201,168,76,0.12)' : undefined }}>
                                   {c?.delta?.toFixed(2) ?? '—'}
                                 </td>
-                                <td onClick={callClick} style={{ ...TD_base, textAlign: 'right', cursor: 'pointer', color: '#8a9bb0', background: callSel ? 'rgba(201,168,76,0.12)' : undefined }}>
+                                <td onClick={callClick} style={{ ...TD_base, textAlign: 'right', cursor: 'pointer', color: 'var(--theme-text-dim)', background: callSel ? 'rgba(201,168,76,0.12)' : undefined }}>
                                   {c?.openInterest ? (c.openInterest >= 1000 ? `${(c.openInterest/1000).toFixed(1)}k` : c.openInterest) : '—'}
                                 </td>
-                                <td onClick={callClick} style={{ ...TD_base, textAlign: 'right', cursor: 'pointer', color: '#8a9bb0', background: callSel ? 'rgba(201,168,76,0.12)' : undefined }}>
+                                <td onClick={callClick} style={{ ...TD_base, textAlign: 'right', cursor: 'pointer', color: 'var(--theme-text-dim)', background: callSel ? 'rgba(201,168,76,0.12)' : undefined }}>
                                   {c?.volume ? (c.volume >= 1000 ? `${(c.volume/1000).toFixed(1)}k` : c.volume) : '—'}
                                 </td>
                                 <td onClick={callClick} style={{ ...TD_base, textAlign: 'right', cursor: 'pointer', color: 'var(--theme-text, #d7e3fc)', background: callSel ? 'rgba(201,168,76,0.12)' : undefined }}>
                                   {c?.bid > 0 ? c.bid.toFixed(2) : '—'}
                                 </td>
-                                <td onClick={callClick} style={{ ...TD_base, textAlign: 'right', cursor: 'pointer', color: '#4ade80', fontWeight: callSel ? 700 : 400, background: callSel ? 'rgba(201,168,76,0.18)' : undefined }}>
+                                <td onClick={callClick} style={{ ...TD_base, textAlign: 'right', cursor: 'pointer', color: 'var(--theme-positive)', fontWeight: callSel ? 700 : 400, background: callSel ? 'rgba(201,168,76,0.18)' : undefined }}>
                                   {c?.ask > 0 ? c.ask.toFixed(2) : '—'}
                                 </td>
 
                                 {/* Strike */}
                                 <td style={{ ...TD_base, textAlign: 'center', background: 'rgba(201,168,76,0.05)', fontWeight: 700,
-                                  color: isATM ? '#c9a84c' : spot && K < spot ? 'var(--theme-text, #d7e3fc)' : '#6b7f97' }}>
+                                  color: isATM ? 'var(--theme-primary, #c9a84c)' : spot && K < spot ? 'var(--theme-text, #d7e3fc)' : 'var(--theme-text-dim)' }}>
                                   {K}
-                                  {isATM && <span style={{ fontSize: 8, color: '#c9a84c', marginLeft: 4, letterSpacing: '0.08em' }}>ATM</span>}
+                                  {isATM && <span style={{ fontSize: 8, color: 'var(--theme-primary, #c9a84c)', marginLeft: 4, letterSpacing: '0.08em' }}>ATM</span>}
                                 </td>
 
                                 {/* Put cells */}
-                                <td onClick={putClick} style={{ ...TD_base, textAlign: 'left', cursor: 'pointer', color: '#ef4444', fontWeight: putSel ? 700 : 400, background: putSel ? 'rgba(140,46,54,0.35)' : undefined }}>
+                                <td onClick={putClick} style={{ ...TD_base, textAlign: 'left', cursor: 'pointer', color: 'var(--theme-negative)', fontWeight: putSel ? 700 : 400, background: putSel ? 'color-mix(in srgb, var(--theme-negative) 20%, transparent)' : undefined }}>
                                   {p?.bid > 0 ? p.bid.toFixed(2) : '—'}
                                 </td>
-                                <td onClick={putClick} style={{ ...TD_base, textAlign: 'left', cursor: 'pointer', color: 'var(--theme-text, #d7e3fc)', background: putSel ? 'rgba(140,46,54,0.35)' : undefined }}>
+                                <td onClick={putClick} style={{ ...TD_base, textAlign: 'left', cursor: 'pointer', color: 'var(--theme-text, #d7e3fc)', background: putSel ? 'color-mix(in srgb, var(--theme-negative) 20%, transparent)' : undefined }}>
                                   {p?.ask > 0 ? p.ask.toFixed(2) : '—'}
                                 </td>
-                                <td onClick={putClick} style={{ ...TD_base, textAlign: 'left', cursor: 'pointer', color: '#8a9bb0', background: putSel ? 'rgba(140,46,54,0.35)' : undefined }}>
+                                <td onClick={putClick} style={{ ...TD_base, textAlign: 'left', cursor: 'pointer', color: 'var(--theme-text-dim)', background: putSel ? 'color-mix(in srgb, var(--theme-negative) 20%, transparent)' : undefined }}>
                                   {p?.volume ? (p.volume >= 1000 ? `${(p.volume/1000).toFixed(1)}k` : p.volume) : '—'}
                                 </td>
-                                <td onClick={putClick} style={{ ...TD_base, textAlign: 'left', cursor: 'pointer', color: '#8a9bb0', background: putSel ? 'rgba(140,46,54,0.35)' : undefined }}>
+                                <td onClick={putClick} style={{ ...TD_base, textAlign: 'left', cursor: 'pointer', color: 'var(--theme-text-dim)', background: putSel ? 'color-mix(in srgb, var(--theme-negative) 20%, transparent)' : undefined }}>
                                   {p?.openInterest ? (p.openInterest >= 1000 ? `${(p.openInterest/1000).toFixed(1)}k` : p.openInterest) : '—'}
                                 </td>
-                                <td onClick={putClick} style={{ ...TD_base, textAlign: 'left', cursor: 'pointer', color: '#ef4444', background: putSel ? 'rgba(140,46,54,0.45)' : undefined }}>
+                                <td onClick={putClick} style={{ ...TD_base, textAlign: 'left', cursor: 'pointer', color: 'var(--theme-negative)', background: putSel ? 'color-mix(in srgb, var(--theme-negative) 25%, transparent)' : undefined }}>
                                   {p?.delta?.toFixed(2) ?? '—'}
                                 </td>
                               </tr>
@@ -723,7 +799,7 @@ export default function StrategyBuilder() {
 
           {/* Expiry Payoff Diagram */}
           <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', position: 'relative' }}>
-            <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 10, background: 'rgba(46,57,77,0.8)', padding: '3px 8px', borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 10, background: 'var(--theme-surface, rgba(46,57,77,0.8))', padding: '3px 8px', borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>
               {primaryTicker} P&L at Expiry
             </div>
             <div style={{ position: 'absolute', top: 0, right: 0, padding: '3px 8px', fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', zIndex: 10 }}>
@@ -792,7 +868,7 @@ export default function StrategyBuilder() {
                     {[-20, -10, 0, +10, +20].map(p => (
                       <button key={p} onClick={() => setPrimary(+(chartData.atm * (1 + p / 100)).toFixed(2))}
                         style={{ fontSize: 9, fontFamily: 'var(--theme-mono)',
-                          color: p === 0 ? 'var(--theme-primary, #c9a84c)' : p < 0 ? '#EF4444' : '#22C55E',
+                          color: p === 0 ? 'var(--theme-primary, #c9a84c)' : p < 0 ? 'var(--theme-negative)' : 'var(--theme-positive)',
                           background: 'none', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '2px 5px', cursor: 'pointer' }}>
                         {p === 0 ? 'ATM' : `${p > 0 ? '+' : ''}${p}%`}
                       </button>
@@ -803,7 +879,7 @@ export default function StrategyBuilder() {
                   <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 14, fontWeight: 700, color: 'var(--theme-primary, #c9a84c)' }}>
                     ${chartData.spot.toFixed(2)}
                   </div>
-                  <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: chartData.pct >= 0 ? '#22C55E' : '#EF4444' }}>
+                  <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: chartData.pct >= 0 ? 'var(--theme-positive)' : 'var(--theme-negative)' }}>
                     {chartData.pct >= 0 ? '+' : ''}{chartData.pct.toFixed(1)}% vs ATM
                   </div>
                 </div>
@@ -915,7 +991,7 @@ export default function StrategyBuilder() {
                           <td style={{ padding: '5px 8px', textAlign: 'right', color: 'var(--theme-secondary, #5e768f)' }}>{pos.dte}d</td>
                           <td style={{ padding: '5px 8px', textAlign: 'right', color: 'var(--theme-text, #d7e3fc)' }}>{pos.spot.toFixed(2)}</td>
                           <td style={{ padding: '5px 8px', textAlign: 'right', color: 'var(--theme-secondary, #5e768f)' }}>{pos.option_type}</td>
-                          <td style={{ padding: '5px 8px', textAlign: 'right', color: pos.position_type === 'long' ? '#22c55e' : '#ef4444' }}>{pos.position_type}</td>
+                          <td style={{ padding: '5px 8px', textAlign: 'right', color: pos.position_type === 'long' ? 'var(--theme-positive)' : 'var(--theme-negative)' }}>{pos.position_type}</td>
                           <td style={{ padding: '5px 8px', textAlign: 'right', color: 'var(--theme-text, #d7e3fc)' }}>{pos.qty}</td>
                           {(['delta','gamma','theta','vega'] as const).map(g => (
                             <td key={g} style={{ padding: '5px 8px', textAlign: 'right', color: GREEK_COLORS[g] }}>{pos[g].toFixed(4)}</td>
@@ -942,7 +1018,7 @@ export default function StrategyBuilder() {
           {/* ── AI Risk Narrative ──────────────────────────────────────────── */}
           <div style={{ margin: '0 14px 14px', border: '1px solid rgba(201,168,76,0.2)', background: 'rgba(201,168,76,0.03)' }}>
             <div style={{ padding: '6px 10px', borderBottom: '1px solid rgba(201,168,76,0.12)', background: 'rgba(201,168,76,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#c9a84c' }}>AI Risk Analysis</span>
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)' }}>AI Risk Analysis</span>
               <button
                 onClick={async () => {
                   if (!greekResult) return
@@ -964,13 +1040,13 @@ export default function StrategyBuilder() {
                 }}
                 disabled={aiNarrativePending || !greekResult}
                 style={{
-                  background: 'color-mix(in srgb, #c9a84c 10%, transparent)',
-                  border: '1px solid rgba(201,168,76,0.4)', color: '#c9a84c',
+                  background: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)',
+                  border: '1px solid rgba(201,168,76,0.4)', color: 'var(--theme-primary, #c9a84c)',
                   fontFamily: 'var(--theme-mono)', fontSize: 9,
                   padding: '2px 6px', cursor: (aiNarrativePending || !greekResult) ? 'default' : 'pointer',
                   opacity: (aiNarrativePending || !greekResult) ? 0.5 : 1,
                 }}
-              >{aiNarrativePending ? '…' : '⬢ Analyze'}</button>
+              >{aiNarrativePending ? '…' : 'Analyze'}</button>
             </div>
             {!aiNarrative && !aiNarrativePending && (
               <div style={{ padding: '10px 12px', fontSize: 10, color: 'var(--theme-secondary, #5e768f)', fontFamily: 'var(--theme-sans)' }}>
@@ -980,30 +1056,30 @@ export default function StrategyBuilder() {
             {aiNarrative && (
               <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#c9a84c', fontFamily: 'var(--theme-mono)' }}>{aiNarrative.strategy_name}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--theme-primary, #c9a84c)', fontFamily: 'var(--theme-mono)' }}>{aiNarrative.strategy_name}</span>
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--theme-text, #d7e3fc)', lineHeight: '16px', fontFamily: 'var(--theme-sans)' }}>{aiNarrative.summary}</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   {[
-                    { label: 'Max Loss', text: aiNarrative.max_loss_scenario, color: '#ef4444' },
-                    { label: 'Max Gain', text: aiNarrative.max_gain_scenario, color: '#22c55e' },
-                  ].map(({ label, text, color }) => (
-                    <div key={label} style={{ padding: '6px 8px', border: `1px solid ${color}22`, background: `${color}08` }}>
+                    { label: 'Max Loss', text: aiNarrative.max_loss_scenario, color: 'var(--theme-negative)', borderColor: 'color-mix(in srgb, var(--theme-negative) 13%, transparent)', bg: 'color-mix(in srgb, var(--theme-negative) 5%, transparent)' },
+                    { label: 'Max Gain', text: aiNarrative.max_gain_scenario, color: 'var(--theme-positive)', borderColor: 'color-mix(in srgb, var(--theme-positive) 13%, transparent)', bg: 'color-mix(in srgb, var(--theme-positive) 5%, transparent)' },
+                  ].map(({ label, text, color, borderColor, bg }) => (
+                    <div key={label} style={{ padding: '6px 8px', border: `1px solid ${borderColor}`, background: bg }}>
                       <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', color, textTransform: 'uppercase', marginBottom: 3 }}>{label}</div>
                       <div style={{ fontSize: 10, color: 'var(--theme-text, #d7e3fc)', lineHeight: '14px', fontFamily: 'var(--theme-sans)' }}>{text}</div>
                     </div>
                   ))}
                 </div>
                 {aiNarrative.ideal_conditions && (
-                  <div style={{ fontSize: 10, color: 'rgba(215,227,252,0.7)', lineHeight: '14px', fontFamily: 'var(--theme-sans)' }}>
-                    <span style={{ color: '#c9a84c', fontWeight: 700 }}>Ideal: </span>{aiNarrative.ideal_conditions}
+                  <div style={{ fontSize: 10, color: 'var(--theme-text, #d7e3fc)', lineHeight: '14px', fontFamily: 'var(--theme-sans)' }}>
+                    <span style={{ color: 'var(--theme-primary, #c9a84c)', fontWeight: 700 }}>Ideal: </span>{aiNarrative.ideal_conditions}
                   </div>
                 )}
                 {Array.isArray(aiNarrative.key_risks) && aiNarrative.key_risks.length > 0 && (
                   <div>
-                    <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', color: '#ef4444', textTransform: 'uppercase', marginBottom: 4 }}>Key Risks</div>
+                    <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--theme-negative)', textTransform: 'uppercase', marginBottom: 4 }}>Key Risks</div>
                     {aiNarrative.key_risks.map((r: string, i: number) => (
-                      <div key={i} style={{ fontSize: 10, color: 'rgba(215,227,252,0.7)', lineHeight: '14px', paddingLeft: 8, borderLeft: '2px solid rgba(239,68,68,0.3)', marginBottom: 3, fontFamily: 'var(--theme-sans)' }}>{r}</div>
+                      <div key={i} style={{ fontSize: 10, color: 'var(--theme-text, #d7e3fc)', lineHeight: '14px', paddingLeft: 8, borderLeft: '2px solid color-mix(in srgb, var(--theme-negative) 30%, transparent)', marginBottom: 3, fontFamily: 'var(--theme-sans)' }}>{r}</div>
                     ))}
                   </div>
                 )}

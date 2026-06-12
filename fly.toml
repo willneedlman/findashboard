@@ -5,6 +5,7 @@ primary_region = "iad"
 
 [env]
   PORT = "8080"
+  PYTHONPATH = "/app/backend"
   SENTIMENT_HISTORY_PATH = "/data/sentiment_history.json"
 
 [http_service]

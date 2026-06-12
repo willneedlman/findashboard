@@ -47,8 +47,15 @@ function ShimmerTile() {
 
 const DEFAULT_YIELDS = ['FED', '1M', '3M', '6M', '1Y', '2Y', '3Y', '5Y', '7Y', '10Y', '20Y', '30Y', 'SPREAD', 'SPREAD_5_30']
 
+const MATURITY_RANK: Record<string, number> = {
+  FED: 0, '1M': 1, '3M': 2, '6M': 3, '1Y': 4, '2Y': 5,
+  '3Y': 6, '5Y': 7, '7Y': 8, '10Y': 9, '20Y': 10, '30Y': 11,
+  SPREAD: 12, SPREAD_5_30: 13,
+}
+
 export default function MacroStrip({ config }: { config: WidgetConfig }) {
-  const selectedKeys = (config.tickers && config.tickers.length > 0) ? config.tickers : DEFAULT_YIELDS
+  const rawKeys      = (config.tickers && config.tickers.length > 0) ? config.tickers : DEFAULT_YIELDS
+  const selectedKeys = [...rawKeys].sort((a, b) => (MATURITY_RANK[a] ?? 99) - (MATURITY_RANK[b] ?? 99))
 
   const { data: yieldData, isLoading: yieldLoading } = useQuery<{ curve: Record<string, number> }>({
     queryKey: ['yield-curve'],

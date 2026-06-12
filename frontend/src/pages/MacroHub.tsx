@@ -16,7 +16,7 @@ export default function MacroHub() {
   const [tab, setTab] = useState<TabKey>('rates')
 
   return (
-    <PageWrapper>
+    <PageWrapper title="Macro Hub">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
         <div style={{ display: 'flex', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', marginBottom: 16 }}>
           {TABS.map(t => (

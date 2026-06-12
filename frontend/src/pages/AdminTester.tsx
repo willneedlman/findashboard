@@ -113,15 +113,15 @@ const RED_DIM = 'rgba(239,68,68,0.12)'
 const RED_BORDER = 'rgba(239,68,68,0.25)'
 
 const inp: React.CSSProperties = {
-  background: '#0a0505', border: `1px solid ${RED_BORDER}`,
-  color: '#fca5a5', fontFamily: 'var(--theme-mono)', fontSize: 11,
+  background: 'var(--theme-bg)', border: `1px solid ${RED_BORDER}`,
+  color: 'var(--theme-negative)', fontFamily: 'var(--theme-mono)', fontSize: 11,
   padding: '5px 9px', outline: 'none', flex: 1,
 }
 
 const btn = (active = true): React.CSSProperties => ({
   background: active ? RED : 'var(--theme-hover, rgba(255,255,255,0.04))',
   border: `1px solid ${active ? RED : RED_BORDER}`,
-  color: active ? '#fff' : '#6b7280',
+  color: active ? '#fff' : 'var(--theme-text-dim)',
   fontFamily: 'var(--theme-mono)', fontSize: 10, fontWeight: 700,
   letterSpacing: '0.08em', textTransform: 'uppercase',
   padding: '5px 14px', cursor: active ? 'pointer' : 'default',
@@ -280,7 +280,7 @@ export default function AdminTester() {
       <PageWrapper>
         <div style={{ maxWidth: 420, margin: '60px auto', padding: 32, background: RED_DIM, border: `1px solid ${RED_BORDER}` }}>
           <p style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: RED, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 20 }}>
-            ⚠ Admin Access Required
+            Admin Access Required
           </p>
           <div style={{ display: 'flex', gap: 6 }}>
             <input
@@ -309,7 +309,7 @@ export default function AdminTester() {
           <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: RED, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
             Admin Mode Active
           </span>
-          <button onClick={() => setUnlocked(false)} style={{ ...btn(), marginLeft: 'auto', background: 'none', border: `1px solid ${RED_BORDER}`, color: '#6b7280', fontSize: 9 }}>
+          <button onClick={() => setUnlocked(false)} style={{ ...btn(), marginLeft: 'auto', background: 'none', border: `1px solid ${RED_BORDER}`, color: 'var(--theme-text-dim)', fontSize: 9 }}>
             Lock
           </button>
         </div>
@@ -319,7 +319,7 @@ export default function AdminTester() {
           {(['health', 'users', 'cache', 'endpoints', 'lob', 'regression', 'stress'] as Tab[]).map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
               background: 'none', border: 'none', borderBottom: tab === t ? `2px solid ${RED}` : '2px solid transparent',
-              color: tab === t ? RED : '#6b7280', fontFamily: 'var(--theme-mono)', fontSize: 10,
+              color: tab === t ? RED : 'var(--theme-text-dim)', fontFamily: 'var(--theme-mono)', fontSize: 10,
               fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
               padding: '8px 16px', cursor: 'pointer',
             }}>
@@ -346,8 +346,8 @@ export default function AdminTester() {
                       ['Cache Size', `${health.cache_size_kb} KB`],
                     ].map(([k, v]) => (
                       <div key={String(k)}>
-                        <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: '#6b7280' }}>{k}</span>
-                        <p style={{ fontFamily: 'var(--theme-mono)', fontSize: 12, color: '#fca5a5', margin: '2px 0 0' }}>{v}</p>
+                        <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-text-dim)' }}>{k}</span>
+                        <p style={{ fontFamily: 'var(--theme-mono)', fontSize: 12, color: 'var(--theme-negative)', margin: '2px 0 0' }}>{v}</p>
                       </div>
                     ))}
                   </div>
@@ -360,9 +360,9 @@ export default function AdminTester() {
                         fontFamily: 'var(--theme-mono)', fontSize: 9, padding: '3px 8px',
                         background: ok ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.15)',
                         border: `1px solid ${ok ? 'rgba(34,197,94,0.3)' : RED_BORDER}`,
-                        color: ok ? '#86efac' : '#fca5a5',
+                        color: ok ? 'var(--theme-positive)' : 'var(--theme-negative)',
                       }}>
-                        {key} {ok ? '✓' : '✗'}
+                        {key} {ok ? 'OK' : 'FAIL'}
                       </span>
                     ))}
                   </div>
@@ -404,11 +404,11 @@ export default function AdminTester() {
                     <tbody>
                       {stats.users.map(u => (
                         <tr key={u.id} style={{ borderBottom: `1px solid rgba(239,68,68,0.07)` }}>
-                          <td style={{ padding: '6px 8px', color: '#fca5a5' }}>@{u.username}</td>
-                          <td style={{ padding: '6px 8px', color: '#d1d5db' }}>{u.display_name}</td>
-                          <td style={{ padding: '6px 8px', color: '#6b7280' }}>{u.created_at?.slice(0, 10)}</td>
-                          <td style={{ padding: '6px 8px', color: '#6b7280' }}>{u.last_login_at?.slice(0, 10) ?? '—'}</td>
-                          <td style={{ padding: '6px 8px', color: '#d1d5db' }}>{u.login_count}</td>
+                          <td style={{ padding: '6px 8px', color: 'var(--theme-negative)' }}>@{u.username}</td>
+                          <td style={{ padding: '6px 8px', color: 'var(--theme-text)' }}>{u.display_name}</td>
+                          <td style={{ padding: '6px 8px', color: 'var(--theme-text-dim)' }}>{u.created_at?.slice(0, 10)}</td>
+                          <td style={{ padding: '6px 8px', color: 'var(--theme-text-dim)' }}>{u.last_login_at?.slice(0, 10) ?? '—'}</td>
+                          <td style={{ padding: '6px 8px', color: 'var(--theme-text)' }}>{u.login_count}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -423,18 +423,18 @@ export default function AdminTester() {
         {tab === 'cache' && (
           <div>
             {msg && (
-              <p style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: msgErr ? RED : '#86efac', marginBottom: 12 }}>{msg}</p>
+              <p style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: msgErr ? RED : 'var(--theme-positive)', marginBottom: 12 }}>{msg}</p>
             )}
             <div style={card}>
               <p style={label('Cache Control')}>Cache Control</p>
-              <p style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: '#6b7280', marginBottom: 14 }}>
+              <p style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: 'var(--theme-text-dim)', marginBottom: 14 }}>
                 Evicts all expired entries from the in-memory cache. Use after restarting the backend or rotating API keys.
               </p>
               <button onClick={evictCache} style={btn()}>Evict Expired Cache</button>
             </div>
             <div style={card}>
               <p style={label('Info')}>How caching works</p>
-              <p style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: '#6b7280', lineHeight: 1.7 }}>
+              <p style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: 'var(--theme-text-dim)', lineHeight: 1.7 }}>
                 Market data responses are cached in-memory with TTLs per endpoint type.
                 Eviction removes entries past their TTL — active entries remain.
                 Check the Health tab for current entry count and size.
@@ -476,7 +476,7 @@ export default function AdminTester() {
                   style={{
                     fontFamily: 'var(--theme-mono)', fontSize: 9, padding: '3px 8px',
                     background: 'rgba(239,68,68,0.07)', border: `1px solid ${RED_BORDER}`,
-                    color: '#fca5a5', cursor: 'pointer',
+                    color: 'var(--theme-negative)', cursor: 'pointer',
                   }}
                 >
                   {p.label}
@@ -487,7 +487,7 @@ export default function AdminTester() {
             {epResult && (
               <pre style={{
                 background: '#0a0505', border: `1px solid ${RED_BORDER}`,
-                color: '#fca5a5', fontFamily: 'var(--theme-mono)', fontSize: 10,
+                color: 'var(--theme-negative)', fontFamily: 'var(--theme-mono)', fontSize: 10,
                 padding: 14, overflowX: 'auto', maxHeight: 400, lineHeight: 1.6,
               }}>
                 {epResult}
@@ -499,19 +499,19 @@ export default function AdminTester() {
         {/* ── LOB Replay tab ── */}
         {tab === 'lob' && (
           <div>
-            <p style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: '#6b7280', marginBottom: 10 }}>
-              Paste CSV with columns: <code style={{ fontFamily: 'var(--theme-mono)', color: '#fca5a5', fontSize: 10 }}>timestamp, side, price, size, order_id</code>
+            <p style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: 'var(--theme-text-dim)', marginBottom: 10 }}>
+              Paste CSV with columns: <code style={{ fontFamily: 'var(--theme-mono)', color: 'var(--theme-negative)', fontSize: 10 }}>timestamp, side, price, size, order_id</code>
             </p>
 
             {/* Load options */}
             <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
               <button
                 onClick={() => setLobCsv(SAMPLE_CSV)}
-                style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, padding: '4px 10px', background: 'rgba(239,68,68,0.1)', border: `1px solid ${RED_BORDER}`, color: '#fca5a5', cursor: 'pointer' }}
+                style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, padding: '4px 10px', background: 'rgba(239,68,68,0.1)', border: `1px solid ${RED_BORDER}`, color: 'var(--theme-negative)', cursor: 'pointer' }}
               >
                 Load Sample Data
               </button>
-              <label style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, padding: '4px 10px', background: 'rgba(239,68,68,0.07)', border: `1px solid ${RED_BORDER}`, color: '#fca5a5', cursor: 'pointer' }}>
+              <label style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, padding: '4px 10px', background: 'rgba(239,68,68,0.07)', border: `1px solid ${RED_BORDER}`, color: 'var(--theme-negative)', cursor: 'pointer' }}>
                 Upload CSV
                 <input type="file" accept=".csv" style={{ display: 'none' }} onChange={e => {
                   const file = e.target.files?.[0]
@@ -524,7 +524,7 @@ export default function AdminTester() {
               </label>
               {lobCsv && (
                 <button onClick={() => { setLobCsv(''); setLobResult(null); setLobErr('') }}
-                  style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, padding: '4px 10px', background: 'transparent', border: `1px solid ${RED_BORDER}`, color: '#6b7280', cursor: 'pointer' }}>
+                  style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, padding: '4px 10px', background: 'transparent', border: `1px solid ${RED_BORDER}`, color: 'var(--theme-text-dim)', cursor: 'pointer' }}>
                   Clear
                 </button>
               )}
@@ -559,7 +559,7 @@ export default function AdminTester() {
               style={{
                 width: '100%', boxSizing: 'border-box', resize: 'vertical',
                 background: '#0a0505', border: `1px solid ${RED_BORDER}`,
-                color: '#fca5a5', fontFamily: 'var(--theme-mono)', fontSize: 10,
+                color: 'var(--theme-negative)', fontFamily: 'var(--theme-mono)', fontSize: 10,
                 padding: 10, outline: 'none', lineHeight: 1.6, marginBottom: 12,
               }}
             />
@@ -585,7 +585,7 @@ export default function AdminTester() {
                 {/* Snapshot navigator */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
                   <button onClick={() => setLobSnap(s => Math.max(0, s - 1))} disabled={lobSnap === 0} style={btn(lobSnap > 0)}>◀</button>
-                  <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: '#fca5a5' }}>
+                  <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-negative)' }}>
                     Snapshot {lobSnap + 1} / {lobResult.snapshots.length} &nbsp;·&nbsp; msg #{lobResult.snapshots[lobSnap]?.msg}
                   </span>
                   <button onClick={() => setLobSnap(s => Math.min(lobResult.snapshots.length - 1, s + 1))} disabled={lobSnap >= lobResult.snapshots.length - 1} style={btn(lobSnap < lobResult.snapshots.length - 1)}>▶</button>
@@ -599,11 +599,11 @@ export default function AdminTester() {
                   return (
                     <div style={{ ...card, fontFamily: 'var(--theme-mono)', fontSize: 11 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
-                        <span style={{ color: '#6b7280' }}>
-                          Mid: <span style={{ color: '#fca5a5' }}>{snap.mid?.toFixed(4) ?? 'N/A'}</span>
+                        <span style={{ color: 'var(--theme-text-dim)' }}>
+                          Mid: <span style={{ color: 'var(--theme-negative)' }}>{snap.mid?.toFixed(4) ?? 'N/A'}</span>
                         </span>
-                        <span style={{ color: '#6b7280' }}>
-                          Imbalance: <span style={{ color: snap.imbalance != null && snap.imbalance > 0 ? '#86efac' : '#fca5a5' }}>
+                        <span style={{ color: 'var(--theme-text-dim)' }}>
+                          Imbalance: <span style={{ color: snap.imbalance != null && snap.imbalance > 0 ? 'var(--theme-positive)' : 'var(--theme-negative)' }}>
                             {snap.imbalance != null ? (snap.imbalance >= 0 ? '+' : '') + snap.imbalance.toFixed(3) : 'N/A'}
                           </span>
                         </span>
@@ -611,21 +611,21 @@ export default function AdminTester() {
                       {/* Asks (reversed so best ask is closest to mid) */}
                       {[...snap.asks].reverse().map(([price, size]) => (
                         <div key={price} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                          <span style={{ color: '#fca5a5', width: 80, textAlign: 'right' }}>{price.toFixed(4)}</span>
+                          <span style={{ color: 'var(--theme-negative)', width: 80, textAlign: 'right' }}>{price.toFixed(4)}</span>
                           <div style={{ flex: 1, background: 'rgba(239,68,68,0.08)', height: 12, position: 'relative' }}>
                             <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${(size / maxSize) * 100}%`, background: 'rgba(239,68,68,0.4)' }} />
                           </div>
-                          <span style={{ color: '#6b7280', width: 60 }}>{size.toFixed(0)}</span>
+                          <span style={{ color: 'var(--theme-text-dim)', width: 60 }}>{size.toFixed(0)}</span>
                         </div>
                       ))}
                       <div style={{ borderTop: `1px solid ${RED_BORDER}`, margin: '6px 0' }} />
                       {snap.bids.map(([price, size]) => (
                         <div key={price} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                          <span style={{ color: '#86efac', width: 80, textAlign: 'right' }}>{price.toFixed(4)}</span>
+                          <span style={{ color: 'var(--theme-positive)', width: 80, textAlign: 'right' }}>{price.toFixed(4)}</span>
                           <div style={{ flex: 1, background: 'rgba(34,197,94,0.08)', height: 12, position: 'relative' }}>
                             <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${(size / maxSize) * 100}%`, background: 'rgba(34,197,94,0.35)' }} />
                           </div>
-                          <span style={{ color: '#6b7280', width: 60 }}>{size.toFixed(0)}</span>
+                          <span style={{ color: 'var(--theme-text-dim)', width: 60 }}>{size.toFixed(0)}</span>
                         </div>
                       ))}
                     </div>
@@ -636,12 +636,12 @@ export default function AdminTester() {
           </div>
         )}
         {tab === 'regression' && (
-          <Suspense fallback={<div style={{ color: '#6b7280', padding: 32 }}>Loading…</div>}>
+          <Suspense fallback={<div style={{ color: 'var(--theme-text-dim)', padding: 32 }}>Loading…</div>}>
             <RegressionAnalysis />
           </Suspense>
         )}
         {tab === 'stress' && (
-          <Suspense fallback={<div style={{ color: '#6b7280', padding: 32 }}>Loading…</div>}>
+          <Suspense fallback={<div style={{ color: 'var(--theme-text-dim)', padding: 32 }}>Loading…</div>}>
             <StressTester />
           </Suspense>
         )}

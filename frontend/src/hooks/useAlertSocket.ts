@@ -26,7 +26,7 @@ export function useAlertSocket(userId: string | null, onAlert: Handler) {
   const onAlertRef  = useRef<Handler>(onAlert)
   onAlertRef.current = onAlert
 
-  const token = sessionStorage.getItem('ft-pin-hash') ?? ''
+  const token = localStorage.getItem('ft-session-token') ?? ''
 
   const clearTimers = () => {
     if (retryTimer.current) { clearTimeout(retryTimer.current); retryTimer.current = null }

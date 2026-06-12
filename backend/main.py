@@ -1,105 +1,82 @@
-import os
-import logging
-import pathlib
+from contextlib import asynccontextmanager
 from pathlib import Path
-import appdirs as ad
+import os
 from dotenv import load_dotenv
+load_dotenv(Path(__file__).parent / ".env")
 
-# Load .env from project root (one level above backend/)
-load_dotenv(Path(__file__).parent.parent / ".env")
-
-CACHE_DIR = ".cache"
-ad.user_cache_dir = lambda *args: CACHE_DIR
-Path(CACHE_DIR).mkdir(exist_ok=True)
-
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from starlette.middleware.base import BaseHTTPMiddleware
 
-from routers import market, options, bond, portfolio, nav, corporate, rates, correlation, dcf, probability, strategy, users, screener, filings, lob, trading, algo, ai, sentiment, alerts, regression, paper_strategies
-from contextlib import asynccontextmanager
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-
+from routers import (
+    market, options, bond, portfolio, nav,
+    corporate, rates, correlation, dcf, users,
+    strategy, probability, ai, alerts, algo,
+    sentiment, trading,
+    filings, lob, regression, screener,
+    paper_scheduler, paper_strategies,
+    iv_tracker,
+)
 
 @asynccontextmanager
-async def lifespan(app):
-    alerts.start_evaluation_loop()
+async def lifespan(app: FastAPI):
+    paper_scheduler.start_scheduler()
     yield
-    alerts.stop_evaluation_loop()
+    paper_scheduler.stop_scheduler()
 
+app = FastAPI(title="Finance Terminal API", lifespan=lifespan)
 
-app = FastAPI(title="Finance Terminal API", version="2.0.0", lifespan=lifespan)
+# CORS: never combine wildcard origins with credentials (browsers reflect the
+# Origin, effectively allowing every site to make credentialed requests). The SPA
+# is served same-origin by this app, so an explicit allowlist is sufficient.
+# Override in other environments via ALLOWED_ORIGINS (comma-separated).
+_DEFAULT_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173,https://finance-terminal.fly.dev"
+_ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", _DEFAULT_ORIGINS).split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
-    allow_methods=["GET", "POST", "DELETE"],
-    allow_headers=["Content-Type", "Accept", "X-Admin-Secret"],
-    allow_credentials=False,
+    allow_origins=_ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
+app.include_router(market.router,            prefix="/api/market",            tags=["market"])
+app.include_router(options.router,           prefix="/api/options",           tags=["options"])
+app.include_router(bond.router,              prefix="/api/bond",              tags=["bond"])
+app.include_router(portfolio.router,         prefix="/api/portfolio",         tags=["portfolio"])
+app.include_router(nav.router,               prefix="/api/nav",               tags=["nav"])
+app.include_router(corporate.router,         prefix="/api/corporate",         tags=["corporate"])
+app.include_router(rates.router,             prefix="/api/rates",             tags=["rates"])
+app.include_router(correlation.router,       prefix="/api/correlation",       tags=["correlation"])
+app.include_router(dcf.router,               prefix="/api/dcf",               tags=["dcf"])
+app.include_router(users.router,             prefix="/api/users",             tags=["users"])
+app.include_router(strategy.router,          prefix="/api/strategy",          tags=["strategy"])
+app.include_router(probability.router,       prefix="/api/prob",              tags=["probability"])
+app.include_router(ai.router,                prefix="/api/ai",                tags=["ai"])
+app.include_router(alerts.router,            prefix="/api/alerts",            tags=["alerts"])
+app.include_router(algo.router,              prefix="/api/algo",              tags=["algo"])
+app.include_router(sentiment.router,         prefix="/api/sentiment",         tags=["sentiment"])
+app.include_router(trading.router,           prefix="/api/trading",           tags=["trading"])
+app.include_router(filings.router,           prefix="/api/filings",           tags=["filings"])
+app.include_router(lob.router,               prefix="/api/lob",               tags=["lob"])
+app.include_router(regression.router,        prefix="/api/regression",        tags=["regression"])
+app.include_router(screener.router,          prefix="/api/screener",          tags=["screener"])
+app.include_router(paper_scheduler.router,   prefix="/api/paper/scheduler",   tags=["paper-trading"])
+app.include_router(paper_strategies.router,  prefix="/api/paper/strategies",  tags=["paper-trading"])
+app.include_router(iv_tracker.router,        prefix="/api/iv",                tags=["iv-tracker"])
 
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next) -> Response:
-        response = await call_next(request)
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        # Static assets get long-lived cache; everything else (API, HTML) gets no-store
-        if request.url.path.startswith("/assets/"):
-            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
-        else:
-            response.headers["Cache-Control"] = "no-store"
-        return response
-
-app.add_middleware(SecurityHeadersMiddleware)
-
-app.include_router(market.router,      prefix="/api/market",      tags=["market"])
-app.include_router(options.router,     prefix="/api/options",     tags=["options"])
-app.include_router(bond.router,        prefix="/api/bond",        tags=["bond"])
-app.include_router(portfolio.router,   prefix="/api/portfolio",   tags=["portfolio"])
-app.include_router(nav.router,         prefix="/api/nav",         tags=["nav"])
-app.include_router(corporate.router,   prefix="/api/corporate",   tags=["corporate"])
-app.include_router(rates.router,       prefix="/api/rates",       tags=["rates"])
-app.include_router(correlation.router, prefix="/api/correlation", tags=["correlation"])
-app.include_router(dcf.router,         prefix="/api/dcf",         tags=["dcf"])
-app.include_router(probability.router, prefix="/api/prob",        tags=["probability"])
-app.include_router(strategy.router,   prefix="/api/strategy",    tags=["strategy"])
-app.include_router(users.router,      prefix="/api/users",       tags=["users"])
-app.include_router(screener.router,   prefix="/api/screener",    tags=["screener"])
-app.include_router(filings.router,    prefix="/api/filings",     tags=["filings"])
-app.include_router(lob.router,        prefix="/api/admin/lob",   tags=["lob"])
-app.include_router(trading.router,    prefix="/api/trading",     tags=["trading"])
-app.include_router(algo.router,       prefix="/api/algo",        tags=["algo"])
-app.include_router(ai.router,         prefix="/api/ai",          tags=["ai"])
-app.include_router(sentiment.router,  prefix="/api/sentiment",   tags=["sentiment"])
-app.include_router(alerts.router,      prefix="/api/alerts",      tags=["alerts"])
-app.include_router(regression.router,       prefix="/api/regression",        tags=["regression"])
-app.include_router(paper_strategies.router, prefix="/api/paper-strategies",  tags=["paper-strategies"])
 
 @app.get("/api/health")
-def health():
-    return {"status": "ok"}
+def health_check():
+    return {"status": "Terminal Backend Online", "systems": "Nominal"}
 
 
-# ── Serve React build in production ──────────────────────────────────────────
-_FRONTEND_DIST = os.getenv("FRONTEND_DIST", "")
+_DIST = Path(os.getenv("FRONTEND_DIST", Path(__file__).parent.parent / "frontend" / "dist"))
+if _DIST.exists():
+    app.mount("/assets", StaticFiles(directory=str(_DIST / "assets")), name="assets")
 
-if _FRONTEND_DIST and Path(_FRONTEND_DIST).exists():
-    _dist = Path(_FRONTEND_DIST)
-
-    # /assets/* — Vite JS/CSS/image bundles (long-lived, immutable)
-    if (_dist / "assets").exists():
-        app.mount("/assets", StaticFiles(directory=str(_dist / "assets")), name="assets")
-
-    # Catch-all: serve real files from dist root (favicon.svg, robots.txt, etc.)
-    # then fall through to index.html for SPA routes
-    @app.get("/{full_path:path}", include_in_schema=False)
-    async def serve_spa(full_path: str):
-        candidate = _dist / full_path
-        if candidate.exists() and candidate.is_file():
-            return FileResponse(str(candidate))
-        return FileResponse(str(_dist / "index.html"))
+    @app.get("/{full_path:path}")
+    def serve_spa(full_path: str):
+        return FileResponse(str(_DIST / "index.html"))

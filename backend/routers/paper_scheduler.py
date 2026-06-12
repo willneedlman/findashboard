@@ -31,7 +31,7 @@ import sqlite3
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -39,7 +39,7 @@ import yfinance as yf
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from strategies.base import MarketDataPoint, Signal, SignalEvent, Strategy
+from strategies.base import MarketDataPoint, SignalEvent, Strategy
 
 _log = logging.getLogger(__name__)
 router = APIRouter()
@@ -47,9 +47,17 @@ router = APIRouter()
 # ── DB ────────────────────────────────────────────────────────────────────────
 
 _DB_PATH = Path(os.getenv("PAPER_SCHEDULER_DB", "./paper_scheduler.db"))
-_POLL_INTERVAL   = 60    # seconds between market polls
+_LOOP_SLEEP      = 3     # how often the main loop wakes (seconds)
+_POLL_INTERVAL   = 60    # default per-job interval for most strategies
+_FAST_INTERVAL   = 3     # per-job interval for high-frequency strategies
 _WARMUP_BARS     = 200   # historical bars fed on first run
 _MAX_LOG_ROWS    = 5_000 # prune log beyond this
+
+# Strategies that need sub-minute polling
+_FAST_STRATEGIES: frozenset[str] = frozenset({"micro_scalp"})
+
+def _job_interval(strategy_name: str) -> int:
+    return _FAST_INTERVAL if strategy_name in _FAST_STRATEGIES else _POLL_INTERVAL
 
 def _db() -> sqlite3.Connection:
     conn = sqlite3.connect(str(_DB_PATH))
@@ -104,7 +112,20 @@ def _get_strategy_cls(name: str) -> type[Strategy]:
 
 
 def _build_instance(job_id: str, strategy_name: str, params: dict) -> Strategy:
-    cls = _get_strategy_cls(strategy_name)
+    try:
+        cls = _get_strategy_cls(strategy_name)
+    except ValueError:
+        # Custom rule strategies survive restarts if their rules are in params_json
+        if "rules" in params:
+            from strategies.builtin.custom_rule_strategy import CustomRuleStrategy
+            from routers.paper_strategies import _active, _loader
+            _active[strategy_name] = {
+                "cls": CustomRuleStrategy, "params": params, "enabled": True,
+            }
+            _loader._registry[strategy_name] = CustomRuleStrategy
+            cls = CustomRuleStrategy
+        else:
+            raise
     inst: Strategy = cls()
     inst.initialize(params)
     return inst
@@ -183,15 +204,18 @@ _loop_running = False
 
 async def _run_scheduler_loop() -> None:
     global _loop_running
-    _log.info("Paper scheduler loop started (interval=%ds)", _POLL_INTERVAL)
+    _log.info("Paper scheduler loop started (loop=%ds, default=%ds, fast=%ds)",
+              _LOOP_SLEEP, _POLL_INTERVAL, _FAST_INTERVAL)
     _loop_running = True
     loop = asyncio.get_event_loop()
 
     while _loop_running:
         try:
             if not _is_market_open():
-                await asyncio.sleep(_POLL_INTERVAL)
+                await asyncio.sleep(_LOOP_SLEEP)
                 continue
+
+            now_ts = int(time.time())
 
             # Load all enabled jobs
             with _db() as conn:
@@ -200,10 +224,21 @@ async def _run_scheduler_loop() -> None:
                 ).fetchall()]
 
             if not jobs:
-                await asyncio.sleep(_POLL_INTERVAL)
+                await asyncio.sleep(_LOOP_SLEEP)
                 continue
 
-            tickers = list({j["ticker"].upper() for j in jobs})
+            # Filter to jobs that are due (each job has its own interval)
+            due_jobs = [
+                j for j in jobs
+                if (j["last_run_ts"] is None or
+                    now_ts - j["last_run_ts"] >= _job_interval(j["strategy_name"]))
+            ]
+
+            if not due_jobs:
+                await asyncio.sleep(_LOOP_SLEEP)
+                continue
+
+            tickers = list({j["ticker"].upper() for j in due_jobs})
 
             # Fetch prices (parallel via executor)
             prices: dict[str, float | None] = {}
@@ -214,11 +249,10 @@ async def _run_scheduler_loop() -> None:
                 except Exception:
                     prices[t] = None
 
-            now_ts = int(time.time())
             log_rows: list[tuple] = []
             job_updates: list[tuple] = []
 
-            for job in jobs:
+            for job in due_jobs:
                 job_id = job["id"]
                 ticker = job["ticker"].upper()
                 price  = prices.get(ticker)
@@ -307,7 +341,7 @@ async def _run_scheduler_loop() -> None:
         except Exception as e:
             _log.error("Scheduler loop error: %s", e)
 
-        await asyncio.sleep(_POLL_INTERVAL)
+        await asyncio.sleep(_LOOP_SLEEP)
 
     _loop_running = False
     _log.info("Paper scheduler loop stopped")
@@ -383,6 +417,8 @@ def scheduler_status():
         "scheduler_running": running,
         "market_open": market_open,
         "poll_interval_s": _POLL_INTERVAL,
+        "fast_interval_s": _FAST_INTERVAL,
+        "loop_sleep_s": _LOOP_SLEEP,
         "total_jobs": total,
         "active_jobs": active,
         "log_entries": logs,

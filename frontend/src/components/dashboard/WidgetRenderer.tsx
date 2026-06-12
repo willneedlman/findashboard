@@ -14,6 +14,7 @@ import CorrelationMatrixWidget from './widgets/CorrelationMatrix'
 import MacroCalendar from './widgets/MacroCalendar'
 import GlobalMacro from './widgets/GlobalMacro'
 import CreditSpreadsWidget from './widgets/CreditSpreadsWidget'
+import YieldCurveWidget from './widgets/YieldCurveWidget'
 
 export default function WidgetRenderer({ config }: { config: WidgetConfig }) {
   switch (config.type) {
@@ -32,6 +33,7 @@ export default function WidgetRenderer({ config }: { config: WidgetConfig }) {
     case 'macro-calendar':     return <MacroCalendar config={config} />
     case 'global-macro':       return <GlobalMacro config={config} />
     case 'credit-spreads':     return <CreditSpreadsWidget config={config} />
+    case 'yield-curve':        return <YieldCurveWidget config={config} />
     default:                   return null
   }
 }

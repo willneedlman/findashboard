@@ -19,6 +19,7 @@ export type WidgetType =
   | 'macro-calendar'
   | 'global-macro'
   | 'credit-spreads'
+  | 'yield-curve'
 
 export interface WidgetConfig {
   id: string
@@ -67,6 +68,7 @@ export const WIDGET_DEFAULT_SIZE: Record<WidgetType, { w: number; h: number }> =
   'macro-calendar':      { w: 5, h: 9 },
   'global-macro':        { w: 3, h: 9 },
   'credit-spreads':      { w: 4, h: 7 },
+  'yield-curve':         { w: 4, h: 7 },
 }
 
 export const WIDGET_LABELS: Record<WidgetType, string> = {
@@ -85,6 +87,7 @@ export const WIDGET_LABELS: Record<WidgetType, string> = {
   'macro-calendar':      'Macro Calendar',
   'global-macro':        'Global Macro',
   'credit-spreads':      'Credit Spreads',
+  'yield-curve':         'Yield Curve',
 }
 
 export const WIDGET_DESCRIPTIONS: Record<WidgetType, string> = {
@@ -103,6 +106,7 @@ export const WIDGET_DESCRIPTIONS: Record<WidgetType, string> = {
   'macro-calendar':      'Upcoming macro events: FOMC, CPI, NFP, GDP, PPI, Retail Sales — next 90 days.',
   'global-macro':        'Live FX, commodities, bond yields, equity indices and VIX — refreshed every 5 minutes.',
   'credit-spreads':      'BofA ICE IG & HY OAS spreads vs VIX — 90-day sparkline with 1Y change.',
+  'yield-curve':         'US Treasury yield curve with 1M/3M/1Y comparisons, key spreads, and 3M/10Y inversion history.',
 }
 
 export const WIDGET_ICONS: Record<WidgetType, string> = {
@@ -121,19 +125,20 @@ export const WIDGET_ICONS: Record<WidgetType, string> = {
   'macro-calendar':      'CAL',
   'global-macro':        'FX',
   'credit-spreads':      'CR',
+  'yield-curve':         'YC',
 }
 
-// ── Default layout — all 15 widget types ─────────────────────────────────────
+// ── Default layout — all 16 widget types, one each ───────────────────────────
 //
 // 12-col grid, rowHeight=60px:
 //
-//  y=0   [══════════════ MACRO STRIP (12×2) ══════════════════════════════]
-//  y=2   [ TV CHART NVDA (8×9)         ] [ WATCHLIST (4×5)              ]
-//  y=7   [                             ] [ NEWS FEED (4×4)               ]
-//  y=11  [ GLOBAL MACRO (4×7) ] [ CREDIT SPREADS (4×7) ] [ OPT SNAP (4×7)]
-//  y=18  [ PORTFOLIO SUMMARY (6×4)     ] [ EARNINGS CAL (6×4)           ]
-//  y=22  [ CORR MATRIX (4×6) ] [ MACRO CAL (4×6)  ] [ MINI CHART SPY (4×6)]
-//  y=28  [ OPT PRICER (4×5)  ] [ DELTA TARGET (4×5)] [ PRICE CARD NVDA (4×7)]
+//  y=0   [══════════════════ MACRO STRIP (12×2) ═══════════════════════════]
+//  y=2   [ TV CHART NVDA (8×9)              ][ WATCHLIST (4×5)            ]
+//        [                                  ][ NEWS FEED  (4×4)           ]
+//  y=11  [ GLOBAL MACRO (3×9) ][ MACRO CAL (5×9) ][ CREDIT SPREADS (4×9) ]
+//  y=20  [ CORR MATRIX (4×6)  ][ MINI CHART (4×6)][ EARNINGS CAL  (4×6)  ]
+//  y=26  [ YIELD CURVE (4×7)  ][ OPT SNAP   (4×7)][ PRICE CARD    (4×7)  ]
+//  y=33  [ PORTFOLIO   (4×5)  ][ OPT PRICER (4×5)][ DELTA TARGET  (4×5)  ]
 
 export const DEFAULT_WIDGETS: WidgetConfig[] = [
   { id: 'w1',  type: 'macro-strip' },
@@ -147,53 +152,69 @@ export const DEFAULT_WIDGETS: WidgetConfig[] = [
   { id: 'w9',  type: 'earnings-calendar',  tickers: ['NVDA','AAPL','MSFT','AMZN','META','GOOGL'] },
   { id: 'w10', type: 'correlation-matrix', tickers: ['SPY','QQQ','TLT','GLD','BTC-USD'] },
   { id: 'w11', type: 'macro-calendar' },
-  { id: 'w12', type: 'mini-chart',         ticker: 'SPY',     period: '1y' },
+  { id: 'w12', type: 'mini-chart',         ticker: 'SPY', period: '1y' },
   { id: 'w13', type: 'options-pricer',     ticker: 'SPY' },
   { id: 'w14', type: 'delta-target',       ticker: 'SPY' },
   { id: 'w15', type: 'price-card',         ticker: 'NVDA' },
+  { id: 'w16', type: 'yield-curve' },
 ]
 
 export const DEFAULT_LAYOUTS: Layout[] = [
-  // Full-width macro strip
-  { i: 'w1',  x: 0,  y: 0,  w: 12, h: 2 },
-  // Main chart + market feeds
-  { i: 'w2',  x: 0,  y: 2,  w: 8,  h: 9,  minH: 6, minW: 3 },
-  { i: 'w3',  x: 8,  y: 2,  w: 4,  h: 5 },
-  { i: 'w4',  x: 8,  y: 7,  w: 4,  h: 4 },
-  // Market intelligence row
-  { i: 'w5',  x: 0,  y: 11, w: 4,  h: 7 },
-  { i: 'w6',  x: 4,  y: 11, w: 4,  h: 7 },
-  { i: 'w7',  x: 8,  y: 11, w: 4,  h: 7 },
-  // Portfolio & earnings
-  { i: 'w8',  x: 0,  y: 18, w: 6,  h: 4 },
-  { i: 'w9',  x: 6,  y: 18, w: 6,  h: 4 },
-  // Deep analytics
-  { i: 'w10', x: 0,  y: 22, w: 4,  h: 6 },
-  { i: 'w11', x: 4,  y: 22, w: 4,  h: 6 },
-  { i: 'w12', x: 8,  y: 22, w: 4,  h: 6,  minH: 4 },
-  // Options tools + price card
-  { i: 'w13', x: 0,  y: 28, w: 4,  h: 5 },
-  { i: 'w14', x: 4,  y: 28, w: 4,  h: 5 },
-  { i: 'w15', x: 8,  y: 28, w: 4,  h: 7,  minH: 6, minW: 3 },
+  // Row A — full-width macro strip
+  { i: 'w1',  x: 0, y: 0,  w: 12, h: 2 },
+
+  // Row B — hero chart + watchlist/news sidebar
+  { i: 'w2',  x: 0, y: 2,  w: 8,  h: 9,  minH: 6, minW: 3 },
+  { i: 'w3',  x: 8, y: 2,  w: 4,  h: 5 },
+  { i: 'w4',  x: 8, y: 7,  w: 4,  h: 4 },
+
+  // Row C — macro / rates intel (all 9 rows tall)
+  { i: 'w5',  x: 0, y: 11, w: 3,  h: 9 },
+  { i: 'w11', x: 3, y: 11, w: 5,  h: 9 },
+  { i: 'w6',  x: 8, y: 11, w: 4,  h: 9 },
+
+  // Row D — analytics trio
+  { i: 'w10', x: 0, y: 20, w: 4,  h: 6 },
+  { i: 'w12', x: 4, y: 20, w: 4,  h: 6,  minH: 4 },
+  { i: 'w9',  x: 8, y: 20, w: 4,  h: 6 },
+
+  // Row E — rates tools + price card
+  { i: 'w16', x: 0, y: 26, w: 4,  h: 7 },
+  { i: 'w7',  x: 4, y: 26, w: 4,  h: 7,  minH: 4, minW: 3 },
+  { i: 'w15', x: 8, y: 26, w: 4,  h: 7,  minH: 6, minW: 3 },
+
+  // Row F — options tools + portfolio
+  { i: 'w8',  x: 0, y: 33, w: 4,  h: 5 },
+  { i: 'w13', x: 4, y: 33, w: 4,  h: 5 },
+  { i: 'w14', x: 8, y: 33, w: 4,  h: 5 },
 ]
 
 // ── Size constraints ──────────────────────────────────────────────────────────
 
-const TV_TYPES: WidgetType[] = ['tradingview-chart', 'price-card']
-const TV_MIN_H = 6
-const TV_MIN_W = 3
+const WIDGET_MIN_SIZES: Partial<Record<WidgetType, { minW: number; minH: number }>> = {
+  'tradingview-chart': { minW: 3, minH: 6 },
+  'price-card':        { minW: 3, minH: 6 },
+  'options-snapshot':  { minW: 3, minH: 4 },
+}
 
 function applyConstraints(widgets: WidgetConfig[], layouts: Layout[]): Layout[] {
   return layouts.map(item => {
     const widget = widgets.find(w => w.id === item.i)
-    if (!widget || !TV_TYPES.includes(widget.type)) return item
-    return { ...item, minH: TV_MIN_H, minW: TV_MIN_W, h: Math.max(item.h, TV_MIN_H), w: Math.max(item.w, TV_MIN_W) }
+    if (!widget) return item
+    const mins = WIDGET_MIN_SIZES[widget.type]
+    if (!mins) return item
+    return {
+      ...item,
+      minH: mins.minH, minW: mins.minW,
+      h: Math.max(item.h, mins.minH),
+      w: Math.max(item.w, mins.minW),
+    }
   })
 }
 
 // ── Storage — per-user when a userId is provided ──────────────────────────────
 
-const BASE_KEY = 'finance-terminal-dashboard-v2'
+const BASE_KEY = 'finance-terminal-dashboard-v3'
 
 function storageKey(userId?: string | null) {
   return userId ? `${BASE_KEY}-user-${userId}` : BASE_KEY

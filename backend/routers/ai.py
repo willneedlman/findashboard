@@ -6,9 +6,9 @@ import logging
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
-from ai_client import groq_complete, parse_json
+from ai_client import groq_complete, parse_json, MODEL_FAST
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -25,32 +25,32 @@ class DCFAssumptionsRequest(BaseModel):
     sector: str = ""
     wacc: float = 10.0
 
-@router.post("/dcf-assumptions")
-def dcf_assumptions(req: DCFAssumptionsRequest):
-    prompt = f"""You are a financial analyst. Given these current fundamentals for {req.ticker}:
-- TTM Revenue: ${req.revenue:,.0f}M
-- Current Operating Margin: {req.op_margin:.1f}%
-- Recent Revenue Growth: {req.rev_growth:.1f}%
-- Beta: {req.beta:.2f}
-- Sector: {req.sector or "unknown"}
-- Current WACC estimate: {req.wacc:.1f}%
-
-Suggest realistic 10-year DCF model assumptions. Consider the sector, growth stage, and competitive position.
+_DCF_SYSTEM = """You are a financial analyst. Suggest realistic 10-year DCF model assumptions from the provided fundamentals. Consider the sector, growth stage, and competitive position.
 Respond ONLY with valid JSON (no markdown):
-{{
+{
   "rev_growth_1": <yr 1-3 annual growth %, float>,
   "rev_growth_2": <yr 4-7 annual growth %, float>,
   "rev_growth_3": <yr 8-10 annual growth %, float>,
   "target_margin": <yr 10 operating margin %, float>,
   "wacc": <suggested WACC %, float>,
   "terminal_growth": <terminal growth rate %, float, typically 2-3>,
-  "rationale": {{
+  "rationale": {
     "growth": "one sentence on growth trajectory",
     "margin": "one sentence on margin expansion thesis",
     "wacc": "one sentence on discount rate reasoning"
-  }}
-}}"""
-    raw = groq_complete(prompt, max_tokens=450)
+  }
+}"""
+
+@router.post("/dcf-assumptions")
+def dcf_assumptions(req: DCFAssumptionsRequest):
+    prompt = f"""Fundamentals for {req.ticker}:
+- TTM Revenue: ${req.revenue:,.0f}M
+- Current Operating Margin: {req.op_margin:.1f}%
+- Recent Revenue Growth: {req.rev_growth:.1f}%
+- Beta: {req.beta:.2f}
+- Sector: {req.sector or "unknown"}
+- Current WACC estimate: {req.wacc:.1f}%"""
+    raw = groq_complete(prompt, max_tokens=450, model=MODEL_FAST, system=_DCF_SYSTEM)
     return parse_json(raw)
 
 
@@ -59,10 +59,7 @@ Respond ONLY with valid JSON (no markdown):
 class ScreenerParseRequest(BaseModel):
     query: str
 
-@router.post("/screener-parse")
-def screener_parse(req: ScreenerParseRequest):
-    prompt = f"""Convert this stock screener query into structured filter rules.
-Query: "{req.query}"
+_SCREENER_SYSTEM = """Convert the stock screener query into structured filter rules.
 
 Available field IDs and their units:
 marketCap (billions), peRatio (ratio), forwardPE (ratio), pbRatio (ratio),
@@ -77,14 +74,18 @@ Sectors: Technology, Healthcare, Financials, Consumer Cyclical, Communication Se
 Industrials, Consumer Defensive, Energy, Utilities, Real Estate, Basic Materials
 
 Respond ONLY with valid JSON (no markdown):
-{{
+{
   "filters": [
-    {{"field": "fieldId", "operator": "gt", "value": 0.0, "value2": null}}
+    {"field": "fieldId", "operator": "gt", "value": 0.0, "value2": null}
   ],
   "sector": "SectorName or null",
   "explanation": "one sentence describing what this screen finds"
-}}"""
-    raw = groq_complete(prompt, max_tokens=400)
+}"""
+
+@router.post("/screener-parse")
+def screener_parse(req: ScreenerParseRequest):
+    raw = groq_complete(f'Query: "{req.query}"', max_tokens=400,
+                        model=MODEL_FAST, system=_SCREENER_SYSTEM)
     return parse_json(raw)
 
 
@@ -93,6 +94,17 @@ Respond ONLY with valid JSON (no markdown):
 class CorporateBriefRequest(BaseModel):
     tickers: list[str]
     rows: list[dict] = []
+
+_BRIEF_SYSTEM = """Write a concise 3-bullet terminal intelligence brief for the given tickers using the available data.
+Respond ONLY with valid JSON (no markdown):
+{
+  "bullets": [
+    "bullet covering price action or key catalyst",
+    "bullet covering valuation or analyst sentiment",
+    "bullet covering risk or macro context"
+  ],
+  "tone": "bullish|neutral|bearish|mixed"
+}"""
 
 @router.post("/corporate-brief")
 def corporate_brief(req: CorporateBriefRequest):
@@ -107,21 +119,11 @@ def corporate_brief(req: CorporateBriefRequest):
     tickers_str = ", ".join(req.tickers)
     context = "\n".join(summaries) or tickers_str
 
-    prompt = f"""Write a concise 3-bullet terminal intelligence brief for: {tickers_str}
+    prompt = f"""Write a brief for: {tickers_str}
 
 Available data:
-{context}
-
-Respond ONLY with valid JSON (no markdown):
-{{
-  "bullets": [
-    "bullet covering price action or key catalyst",
-    "bullet covering valuation or analyst sentiment",
-    "bullet covering risk or macro context"
-  ],
-  "tone": "bullish|neutral|bearish|mixed"
-}}"""
-    raw = groq_complete(prompt, max_tokens=300)
+{context}"""
+    raw = groq_complete(prompt, max_tokens=300, model=MODEL_FAST, system=_BRIEF_SYSTEM)
     return parse_json(raw)
 
 
@@ -214,22 +216,22 @@ class BondNarrativeRequest(BaseModel):
     market_price: float
     face: float
 
-@router.post("/bond-narrative")
-def bond_narrative(req: BondNarrativeRequest):
-    prompt = f"""Provide a concise fixed-income analysis:
-- Bond type: {req.bond_type}
-- Coupon: {req.coupon_rate}%  Maturity: {req.maturity} years
-- Market Price: ${req.market_price:.2f}  Face: ${req.face:.0f}
-- YTM: {req.ytm}%  Modified Duration: {req.mod_duration}  Convexity: {req.convexity}
-
+_BOND_SYSTEM = """Provide a concise fixed-income analysis of the given bond.
 Respond ONLY with valid JSON (no markdown):
-{{
+{
   "summary": "2-sentence plain-English assessment of this bond's positioning",
   "rate_sensitivity": "one sentence: how a 100bps rate move affects this bond given its duration",
   "yield_context": "one sentence comparing this YTM to typical investment-grade or treasury levels",
   "investor_fit": "one sentence on what investor profile suits this bond"
-}}"""
-    raw = groq_complete(prompt, max_tokens=300)
+}"""
+
+@router.post("/bond-narrative")
+def bond_narrative(req: BondNarrativeRequest):
+    prompt = f"""- Bond type: {req.bond_type}
+- Coupon: {req.coupon_rate}%  Maturity: {req.maturity} years
+- Market Price: ${req.market_price:.2f}  Face: ${req.face:.0f}
+- YTM: {req.ytm}%  Modified Duration: {req.mod_duration}  Convexity: {req.convexity}"""
+    raw = groq_complete(prompt, max_tokens=300, model=MODEL_FAST, system=_BOND_SYSTEM)
     return parse_json(raw)
 
 

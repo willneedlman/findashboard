@@ -4,8 +4,17 @@
 
 @layer base {
   html, body, #root {
-    @apply bg-navy-900 text-slate-bright font-serif;
+    @apply bg-navy-900 font-serif;
+    color: var(--theme-secondary, #5e768f);
     height: 100%;
+  }
+
+  /* Force all native form/interactive elements to inherit theme color
+     instead of falling back to the UA stylesheet black */
+  button, input, select, textarea, optgroup, option,
+  [role="button"], [role="option"], [role="listbox"] {
+    color: inherit;
+    font: inherit;
   }
 
   input[type=number]::-webkit-inner-spin-button,
@@ -25,8 +34,8 @@
 
   .ft-panel {
     background: var(--theme-surface, #0d1826);
-    border: 1px solid rgba(255,255,255,0.06);
-    box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+    border: 1px solid var(--theme-border, rgba(255,255,255,0.06));
+    box-shadow: 0 1px 4px rgba(0,0,0,0.18);
   }
 
   .ft-panel-header {
@@ -34,8 +43,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 8px 14px;
-    background: rgba(0,0,0,0.18);
-    border-bottom: 1px solid rgba(255,255,255,0.05);
+    background: var(--theme-hover, rgba(0,0,0,0.12));
+    border-bottom: 1px solid var(--theme-border-faint, rgba(255,255,255,0.05));
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 9px;
     font-weight: 700;
@@ -52,7 +61,7 @@
   .ft-page-header {
     margin-bottom: 24px;
     padding-bottom: 16px;
-    border-bottom: 1px solid rgba(255,255,255,0.05);
+    border-bottom: 1px solid var(--theme-border-faint, rgba(255,255,255,0.05));
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
@@ -81,8 +90,8 @@
   /* ── Metric card — no gold cap, consistent depth ──────────────────────── */
   .ft-metric {
     background: var(--theme-surface, #0d1826);
-    border: 1px solid rgba(255,255,255,0.06);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    border: 1px solid var(--theme-border, rgba(255,255,255,0.06));
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
     padding: 12px 14px;
   }
 
@@ -100,21 +109,21 @@
     font-family: 'JetBrains Mono', monospace;
     font-size: 20px;
     font-weight: 700;
-    color: #d7e3fc;
+    color: var(--theme-text, #d7e3fc);
     line-height: 1.1;
   }
 
   /* ── Chart panel ──────────────────────────────────────────────────────── */
   .ft-chart-panel {
     background: var(--theme-surface, #0d1826);
-    border: 1px solid rgba(255,255,255,0.06);
-    box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+    border: 1px solid var(--theme-border, rgba(255,255,255,0.06));
+    box-shadow: 0 1px 4px rgba(0,0,0,0.18);
   }
 
   .ft-chart-label {
     padding: 7px 12px;
-    background: rgba(0,0,0,0.18);
-    border-bottom: 1px solid rgba(255,255,255,0.05);
+    background: var(--theme-hover, rgba(0,0,0,0.12));
+    border-bottom: 1px solid var(--theme-border-faint, rgba(255,255,255,0.05));
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 9px;
     font-weight: 700;
@@ -126,7 +135,7 @@
   /* ── Sidebar layout ───────────────────────────────────────────────────── */
   .ft-sidebar-panel {
     background: var(--theme-surface, #0d1826);
-    border-right: 1px solid rgba(255,255,255,0.06);
+    border-right: 1px solid var(--theme-border, rgba(255,255,255,0.06));
     display: flex;
     flex-direction: column;
     min-height: 0;
@@ -134,8 +143,8 @@
 
   .ft-sidebar-title {
     padding: 10px 14px;
-    background: rgba(0,0,0,0.18);
-    border-bottom: 1px solid rgba(255,255,255,0.06);
+    background: var(--theme-hover, rgba(0,0,0,0.12));
+    border-bottom: 1px solid var(--theme-border, rgba(255,255,255,0.06));
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 9px;
     font-weight: 700;
@@ -170,27 +179,27 @@
   /* ── Legacy card ─────────────────────────────────────────────────────── */
   .card {
     background: var(--theme-surface, #0d1826);
-    border: 1px solid rgba(255,255,255,0.07);
+    border: 1px solid var(--theme-border, rgba(255,255,255,0.07));
     border-left: 2px solid rgba(201,168,76,0.28);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
   }
-  .card-blue  { border-left: 2px solid #1f5673 !important; }
+  .card-blue  { border-left: 2px solid var(--theme-tertiary, #60a5fa) !important; }
   .card-purple{ border-left: 2px solid #7b5ea7 !important; }
-  .card-green { border-left: 2px solid #2f6b4b !important; }
+  .card-green { border-left: 2px solid #2e9a62 !important; }
 
   .metric-card {
     background: var(--theme-surface, #0d1826);
-    border: 1px solid rgba(255,255,255,0.07);
+    border: 1px solid var(--theme-border, rgba(255,255,255,0.07));
     border-left: 2px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 28%, transparent);
     @apply px-4 py-3;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
   }
 
   /* ── Shared form elements ─────────────────────────────────────────────── */
   .ft-input {
     background: var(--theme-bg, #060e1c);
-    border: 1px solid rgba(255,255,255,0.09);
-    color: #d7e3fc;
+    border: 1px solid var(--theme-border, rgba(255,255,255,0.09));
+    color: var(--theme-text, #d7e3fc);
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
     padding: 5px 8px;
@@ -231,7 +240,7 @@
     letter-spacing: 0.18em;
     text-transform: uppercase;
     color: color-mix(in srgb, var(--theme-secondary, #5e768f) 70%, transparent);
-    border-bottom: 1px solid rgba(255,255,255,0.05);
+    border-bottom: 1px solid var(--theme-border-faint, rgba(255,255,255,0.05));
     padding-bottom: 6px;
     margin-bottom: 14px;
     margin-top: 20px;
@@ -368,10 +377,48 @@ html[data-font="ibmplex"]     { --font-mono: var(--font-mono-ibmplex); }
   font-family: var(--theme-mono, var(--font-mono)) !important;
   font-size: 10px !important;
 }
+/* Legend text inherits theme secondary color */
+.recharts-legend-wrapper,
+.recharts-legend-item-text {
+  color: var(--theme-secondary, #5e768f) !important;
+}
 
 /* ── iOS Safari zoom prevention — inputs must be ≥16px on mobile ─────────── */
 @media (max-width: 768px) {
   input, textarea, select, .ft-input {
     font-size: 16px !important;
+  }
+}
+
+/* ── Craft layer — motion & interaction polish (emil-design-eng) ──────────
+   Tunes feel only; no visual change at rest. Custom ease-out curves, press
+   feedback on buttons, keyboard-only focus rings, reduced-motion aware. */
+:root {
+  --ease-out:    cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Buttons get a press response. transform/box-shadow only — never `all`. */
+button, [role="button"] {
+  transition: transform 90ms var(--ease-out), box-shadow 140ms var(--ease-out);
+}
+button:active:not(:disabled), [role="button"]:not([aria-disabled="true"]):active {
+  transform: scale(0.97);
+}
+
+/* Focus ring shows for keyboard users only, and follows each element's shape. */
+button:focus-visible, [role="button"]:focus-visible, a[href]:focus-visible,
+input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--theme-bg, #101c2e), 0 0 0 4px rgba(201,168,76,0.55);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

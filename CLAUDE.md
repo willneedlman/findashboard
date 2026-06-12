@@ -1,5 +1,9 @@
 # Finance Dashboard — Claude Project Instructions
 
+## 0. Addressing the User
+
+The user's name is **Will**. Address him by name (Will) in every response.
+
 ## 1. Graphify — Codebase Knowledge Graph
 
 **At the start of every session**, run `/graphify --update`. No exceptions — this keeps the structural map current and reduces token usage on codebase questions.
@@ -60,3 +64,23 @@ Stacks: `react`, `nextjs`, `shadcn`, `html-tailwind` (default)
 - Data: yfinance + FMP API for market data; cache layer in `backend/cache.py`
 - No comments unless the WHY is non-obvious
 - No backwards-compat shims; delete unused code outright
+
+## 5. Skill Auto-Invocation Rules
+
+These are mandatory — invoke the listed skill/tool proactively without waiting to be asked:
+
+| When | Required action |
+|---|---|
+| Any frontend component/page/style change | Query `ui-ux-pro-max` before writing; invoke `/impeccable` before marking the task done |
+| UI verification (does it look right?) | Use playwright MCP: `browser_navigate` → `browser_screenshot` — do not claim success without a visual check |
+| Codebase structure question ("what calls X", "trace Y") | `/graphify query "<question>"` — never crawl raw files for structural info |
+| After editing any `.py` file | graphify auto-extracts via PostToolUse hook; no manual step needed |
+| Before any `git commit` | `/caveman-commit` for the commit message |
+| Before `git push` / opening a PR | `/code-review` to audit the diff |
+| Design decision (color, spacing, font, layout) | `python3 ui-ux-pro-max-skill/src/ui-ux-pro-max/scripts/search.py "<topic>" --domain <domain>` |
+
+**Hook coverage** (what fires automatically without any action needed):
+- `SessionStart` → graphify diff check
+- `UserPromptSubmit` → intent router (injects skill hints into context)
+- `PreToolUse Edit|Write` → ui-ux guard on frontend files
+- `PostToolUse Edit|Write` → graphify AST auto-extract on `.py` files

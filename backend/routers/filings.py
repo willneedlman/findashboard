@@ -35,26 +35,34 @@ _lock = threading.Lock()
 
 _EDGAR_HEADERS = {"User-Agent": "FinanceTerminal research@finterm.io"}
 
-def _get_cik(ticker: str) -> str | None:
+# Module-level cache so we only download the 5 MB company_tickers.json once per process
+_cik_by_ticker: dict[str, str] = {}
+_company_tickers_loaded = False
+
+def _ensure_company_tickers():
+    global _company_tickers_loaded
+    if _company_tickers_loaded:
+        return
     try:
         r = requests.get(
-            f"https://efts.sec.gov/LATEST/search-index?q=%22{ticker}%22&dateRange=custom&startdt=2020-01-01&forms=10-K",
-            headers=_EDGAR_HEADERS, timeout=6,
+            "https://www.sec.gov/files/company_tickers.json",
+            headers=_EDGAR_HEADERS, timeout=20,
         )
-        hits = r.json().get("hits", {}).get("hits", [])
-        if hits:
-            return hits[0]["_source"].get("entity_id")
-    except Exception:
-        pass
-    # Fallback: company_tickers.json
-    try:
-        r = requests.get("https://www.sec.gov/files/company_tickers.json", headers=_EDGAR_HEADERS, timeout=6)
         for entry in r.json().values():
-            if entry.get("ticker", "").upper() == ticker.upper():
-                return str(entry["cik_str"]).zfill(10)
-    except Exception:
-        pass
-    return None
+            t = entry.get("ticker", "")
+            if t:
+                _cik_by_ticker[t.upper()] = str(entry["cik_str"]).zfill(10)
+        _company_tickers_loaded = True
+    except Exception as e:
+        logger.warning("company_tickers.json load failed: %s", e)
+
+
+def _get_cik(ticker: str) -> str | None:
+    upper = ticker.upper()
+    if upper in _cik_by_ticker:
+        return _cik_by_ticker[upper]
+    _ensure_company_tickers()
+    return _cik_by_ticker.get(upper)
 
 
 def _get_recent_filings(ticker: str, form_types: list[str]) -> list[dict]:
@@ -195,11 +203,30 @@ def _get_finnhub_financials(ticker: str) -> str:
 
 # ── Claude summariser ─────────────────────────────────────────────────────────
 
+def _sanitise_quarter(result: dict, cur_year: int) -> None:
+    """
+    Guard against the LLM producing a plain calendar-year quarter that is in
+    the future (e.g. "Q1 2027" when today is mid-2026).  If the label looks
+    like "Q{N} {YYYY}" with YYYY > cur_year, rewrite it as "Q{N} FY{YYYY}" so
+    the fiscal-year nature is explicit rather than appearing to be a future date.
+    Also patches any text fields (verdict, guidance) that contain the same label.
+    """
+    q = result.get("quarter", "")
+    if not q:
+        return
+    import re as _re
+    m = _re.match(r"^(Q[1-4])\s+(\d{4})$", q.strip())
+    if m and int(m.group(2)) > cur_year:
+        old_label = q.strip()
+        new_label = f"{m.group(1)} FY{m.group(2)}"
+        result["quarter"] = new_label
+        for field in ("verdict", "guidance", "analyst_questions_focus"):
+            if isinstance(result.get(field), str):
+                result[field] = result[field].replace(old_label, new_label)
+
+
 def _summarise_with_claude(ticker: str, context: str) -> dict:
-    if not _GROQ_KEY:
-        raise HTTPException(503, "GROQ_API_KEY not configured")
-    from groq import Groq
-    client = Groq(api_key=_GROQ_KEY)
+    from ai_client import groq_chat, MODEL_SMART
     import datetime as _dt
     _today = _dt.date.today().strftime("%B %d, %Y")
     prompt = f"""You are a senior equity research analyst. Today's date is {_today}. Analyze the following earnings materials for {ticker} and produce a structured research note.
@@ -210,7 +237,7 @@ def _summarise_with_claude(ticker: str, context: str) -> dict:
 
 Respond ONLY with valid JSON matching this exact schema (no markdown, no extra text):
 {{
-  "quarter": "Use the company's actual fiscal quarter label from the materials (e.g. Q4 FY2025, Q1 2026). If unclear, derive from the report date and today ({_today}).",
+  "quarter": "Extract the fiscal period label from the materials — look for 'quarter ended', 'period ended', or explicit quarter labels in the financial statements. Use the MOST RECENT completed period found in the materials. If the company has a non-calendar fiscal year, use 'Q{{N}} FY{{YEAR}}' format (e.g. Q1 FY2027). If calendar year, use 'Q{{N}} {{YEAR}}' (e.g. Q3 2025). The period-end date MUST be on or before today ({_today}) — NEVER produce a future quarter.",
   "verdict": "one-sentence overall assessment",
   "bull_points": ["point 1", "point 2", "point 3"],
   "bear_points": ["point 1", "point 2", "point 3"],
@@ -225,12 +252,14 @@ Respond ONLY with valid JSON matching this exact schema (no markdown, no extra t
   "analyst_questions_focus": "main topics analysts pressed on"
 }}"""
 
-    msg = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+    msg = groq_chat(
+        [{"role": "user", "content": prompt}],
+        model=MODEL_SMART,
         max_tokens=2048,
-        messages=[{"role": "user", "content": prompt}],
     )
     raw = msg.choices[0].message.content.strip()
+    import datetime as _dt2
+    _cur_year = _dt2.date.today().year
     # Strip any accidental markdown fences
     raw = re.sub(r"^```(?:json)?\s*", "", raw)
     raw = re.sub(r"\s*```$", "", raw)
@@ -238,7 +267,9 @@ Respond ONLY with valid JSON matching this exact schema (no markdown, no extra t
 
     # Attempt direct parse first
     try:
-        return json.loads(raw)
+        parsed = json.loads(raw)
+        _sanitise_quarter(parsed, _cur_year)
+        return parsed
     except json.JSONDecodeError:
         pass
 
@@ -252,7 +283,9 @@ Respond ONLY with valid JSON matching this exact schema (no markdown, no extra t
         repaired = raw.rstrip().rstrip(',')
         repaired += ']' * max(open_brackets, 0)
         repaired += '}' * max(open_braces, 0)
-        return json.loads(repaired)
+        parsed = json.loads(repaired)
+        _sanitise_quarter(parsed, _cur_year)
+        return parsed
     except Exception:
         raise HTTPException(500, "Claude returned malformed JSON — try again")
 
@@ -273,14 +306,29 @@ class FilingsRequest(BaseModel):
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 @router.get("/transcripts/{ticker}")
-def get_transcripts(ticker: str, limit: int = 2):
+def get_transcripts(ticker: str, limit: int = 3):
     sym = validate_ticker(ticker)
-    if not fmp.available():
-        raise HTTPException(503, "FMP_API_KEY required for transcripts")
-    txs = _get_transcripts(sym, limit)
-    if not txs:
-        raise HTTPException(404, f"No transcripts found for {sym}")
-    return {"ticker": sym, "transcripts": txs}
+    # Try FMP transcripts first (requires paid plan — silently falls through if unavailable)
+    if fmp.available():
+        txs = _get_transcripts(sym, limit)
+        if txs:
+            return {"ticker": sym, "transcripts": txs, "source": "fmp"}
+    # Fall back: EDGAR 8-K earnings releases are free and always available
+    filings_8k = _get_recent_filings(sym, ["8-K"])
+    if filings_8k:
+        pseudo = [
+            {
+                "date": f["date"],
+                "quarter": None,
+                "year": int(f["date"][:4]),
+                "form": "8-K",
+                "url": f["url"],
+                "content": "",
+            }
+            for f in filings_8k[:limit]
+        ]
+        return {"ticker": sym, "transcripts": pseudo, "source": "sec_8k"}
+    raise HTTPException(404, f"No transcripts or 8-K filings found for {sym}")
 
 
 @router.get("/filings/{ticker}")
@@ -288,6 +336,31 @@ def get_sec_filings(ticker: str):
     sym = validate_ticker(ticker)
     filings = _get_recent_filings(sym, ["10-K", "10-Q", "8-K"])
     return {"ticker": sym, "filings": filings}
+
+
+@router.delete("/cache/{ticker}")
+def clear_ticker_cache(ticker: str):
+    """Evict all cached summaries for a ticker from both in-memory and disk caches."""
+    sym = validate_ticker(ticker)
+    evicted = 0
+    with _lock:
+        keys_to_delete = [k for k in list(_summary_cache.keys()) if k.startswith(f"{sym}:")]
+        for k in keys_to_delete:
+            del _summary_cache[k]
+            evicted += 1
+    try:
+        import sqlite3, os
+        # disk_cache.py resolves path relative to server's CWD (project root)
+        db_path = os.path.join(os.getcwd(), '.cache', 'disk_cache.db')
+        if os.path.exists(db_path):
+            conn = sqlite3.connect(db_path)
+            conn.execute("DELETE FROM cache WHERE key LIKE ?", (f"summary:{sym}:%",))
+            evicted += conn.total_changes
+            conn.commit()
+            conn.close()
+    except Exception as e:
+        logger.warning("disk cache clear %s: %s", sym, e)
+    return {"ticker": sym, "evicted": evicted}
 
 
 @router.post("/summarise")
@@ -477,7 +550,6 @@ async def summarise_stream(req: SummariseRequest):
         import concurrent.futures
         queues: dict[str, list] = {t: [] for t in tickers}
 
-        loop = asyncio.get_event_loop()
         with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(tickers), 4)) as ex:
             futures = {ex.submit(_summarise_one_streaming, t, req, queues[t]): t for t in tickers}
             # Poll until all done, flushing SSE chunks as they appear

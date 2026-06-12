@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
-import PageHeader from '../components/PageHeader'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
@@ -57,7 +56,7 @@ export default function MarketData() {
   })
 
   const m = data?.metrics
-  const returnColor = m ? (m.total_return >= 0 ? '#22C55E' : '#EF4444') : 'var(--theme-text, #d7e3fc)'
+  const returnColor = m ? (m.total_return >= 0 ? 'var(--theme-positive)' : 'var(--theme-negative)') : 'var(--theme-text, #d7e3fc)'
 
   const inputStyle = {
     background: 'var(--theme-surface, #142032)', border: '1px solid var(--theme-border, rgba(255,255,255,0.10))', color: 'var(--theme-text, #d7e3fc)',
@@ -66,7 +65,7 @@ export default function MarketData() {
   }
 
   return (
-    <PageWrapper>
+    <PageWrapper title="Market Data">
       <SidebarLayout sidebarWidth={180} sidebarTitle="Market Controls" sidebar={<>
           <div>
             <span className="ft-sidebar-label">Ticker</span>
@@ -112,7 +111,7 @@ export default function MarketData() {
             {isPending ? 'Loading…' : '↓ Load Data'}
           </button>
 
-          {error && <div style={{ color: '#EF4444', fontSize: 10, lineHeight: '14px' }}>Error — check ticker and date range.</div>}
+          {error && <div style={{ color: 'var(--theme-negative)', fontSize: 10, lineHeight: '14px' }}>Error — check ticker and date range.</div>}
         </>}>
 
         {/* Right: metrics + charts */}
@@ -123,7 +122,7 @@ export default function MarketData() {
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)' }}>
                   {[
                     { label: 'Total Return',    value: `${m!.total_return > 0 ? '+' : ''}${m!.total_return}%`, color: returnColor },
-                    { label: 'Max Drawdown',    value: `${m!.max_drawdown}%`,  color: '#EF4444' },
+                    { label: 'Max Drawdown',    value: `${m!.max_drawdown}%`,  color: 'var(--theme-negative)' },
                     { label: 'Ann. Volatility', value: `${m!.ann_volatility}%` },
                     { label: 'Current Price',   value: `$${m!.current_price.toLocaleString()}`, color: 'var(--theme-primary, #c9a84c)' },
                   ].map((stat, i) => (

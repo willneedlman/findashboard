@@ -13,6 +13,7 @@ from pydantic import BaseModel, field_validator, model_validator
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from validation import validate_ticker, validate_date
+from strategies.indicators import get_indicator as _get_ind
 
 router = APIRouter()
 
@@ -25,6 +26,7 @@ STRATEGIES = [
     "MACD Crossover (12,26,9)",
     "Value — Trailing P/E",
     "Earnings Growth Momentum",
+    "EMA Micro-Scalp (3/8)",
 ]
 
 
@@ -182,6 +184,29 @@ def compute_signal(close: pd.Series, strategy: str, params: dict) -> tuple[pd.Se
         detail  = f"Quarterly EPS growth {eg*100:+.1f}% — {label} (drift {adj:+.1f}%)"
         return sig, adj, label, detail
 
+    if strategy == "EMA Micro-Scalp (3/8)":
+        fast_p  = int(p.get("ema_fast", 3))
+        slow_p  = int(p.get("ema_slow", 8))
+        atr_per = int(p.get("atr_period", 5))
+        atr_mul = float(p.get("atr_mult", 0.3))
+        bull    = float(p.get("bull_drift_adj", 8.0))
+        bear    = float(p.get("bear_drift_adj", -5.0))
+        ema_f   = close.ewm(span=fast_p, adjust=False).mean()
+        ema_s   = close.ewm(span=slow_p, adjust=False).mean()
+        # ATR filter: suppress signal when market is too quiet
+        tr      = close.diff().abs()
+        atr     = tr.rolling(atr_per, min_periods=1).mean()
+        atr_pct = atr / close * 100
+        atr_ok  = (atr_pct >= atr_mul) if atr_mul > 0 else pd.Series(True, index=close.index)
+        sig     = ((ema_f > ema_s) & atr_ok).astype(float)
+        last    = float(sig.iloc[-1]) if not sig.empty else 0.0
+        adj     = bull if last == 1.0 else bear
+        last_f  = float(ema_f.iloc[-1]); last_s = float(ema_s.iloc[-1])
+        label   = "EMA Bullish" if last == 1.0 else "EMA Bearish"
+        detail  = (f"EMA({fast_p}) ${last_f:.2f} vs EMA({slow_p}) ${last_s:.2f} — {label}. "
+                   f"ATR({atr_per}) {float(atr_pct.iloc[-1]):.2f}% (min {atr_mul}%). Drift {adj:+.1f}%.")
+        return sig, adj, label, detail
+
     return pd.Series(dtype=float), 0.0, "No Signal", ""
 
 
@@ -217,7 +242,7 @@ def get_strategy_signal(req: StrategyRequest):
             raise HTTPException(404, "No price data")
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("internal error"); raise HTTPException(500, "Internal server error")
 
     sig, adj, label, detail = compute_signal(close, req.strategy, req.params)
@@ -230,3 +255,133 @@ def get_strategy_signal(req: StrategyRequest):
 @router.get("/list")
 def list_strategies():
     return {"strategies": STRATEGIES}
+
+
+# ─── Custom rule strategy ─────────────────────────────────────────────────────
+
+def _eval_cond_at(cond: dict, i: int, prices: np.ndarray,
+                  cache: dict[str, np.ndarray]) -> bool:
+    def _ind(ref: dict) -> np.ndarray:
+        key = repr(sorted(ref.items()))
+        if key not in cache:
+            cache[key] = _get_ind(ref, prices)
+        return cache[key]
+
+    lhs_arr = _ind(cond.get("lhs", {"type": "PRICE"}))
+    lhs = lhs_arr[i]
+    if np.isnan(lhs):
+        return False
+
+    op       = cond.get("op", "gt")
+    rhs_type = cond.get("rhs_type", "number")
+    if rhs_type == "number":
+        rhs = float(cond.get("rhs_num", 0))
+        prev_rhs = rhs
+    else:
+        rhs_arr  = _ind(cond.get("rhs_ind", {"type": "PRICE"}))
+        rhs      = rhs_arr[i]
+        if np.isnan(rhs):
+            return False
+        prev_rhs = rhs_arr[i - 1] if i > 0 else float("nan")
+
+    if op == "gt":  return bool(lhs > rhs)
+    if op == "lt":  return bool(lhs < rhs)
+    if op == "gte": return bool(lhs >= rhs)
+    if op == "lte": return bool(lhs <= rhs)
+    if i < 1:
+        return False
+    prev_lhs = lhs_arr[i - 1]
+    if np.isnan(prev_lhs) or np.isnan(prev_rhs):
+        return False
+    if op == "crosses_above": return bool(prev_lhs <= prev_rhs and lhs > rhs)
+    if op == "crosses_below": return bool(prev_lhs >= prev_rhs and lhs < rhs)
+    return False
+
+
+def _eval_group_at(group: dict, i: int, prices: np.ndarray,
+                   cache: dict) -> bool:
+    conds = group.get("conditions", [])
+    if not conds:
+        return False
+    logic   = group.get("logic", "AND")
+    results = [_eval_cond_at(c, i, prices, cache) for c in conds]
+    return all(results) if logic == "AND" else any(results)
+
+
+def _eval_block_at(block: dict, i: int, prices: np.ndarray,
+                   cache: dict) -> bool:
+    groups = block.get("groups")
+    # backwards compat: flat conditions → treat as single group
+    if not groups:
+        flat = block.get("conditions", [])
+        if not flat:
+            return False
+        groups = [{"logic": block.get("logic", "AND"), "conditions": flat}]
+    top_logic = block.get("logic", "AND")
+    results   = [_eval_group_at(g, i, prices, cache) for g in groups]
+    return all(results) if top_logic == "AND" else any(results)
+
+
+def evaluate_custom_rules(prices: np.ndarray, rules: dict) -> np.ndarray:
+    """Bar-by-bar evaluation. Returns 1.0 = invested, 0.0 = cash."""
+    n        = len(prices)
+    signal   = np.zeros(n)
+    cache: dict[str, np.ndarray] = {}
+    buy_blk  = rules.get("buy",  {"logic": "AND", "conditions": []})
+    sell_blk = rules.get("sell", {"logic": "AND", "conditions": []})
+    in_trade = False
+    for i in range(1, n):
+        if not in_trade:
+            if _eval_block_at(buy_blk, i, prices, cache):
+                in_trade   = True
+                signal[i]  = 1.0
+        else:
+            if _eval_block_at(sell_blk, i, prices, cache):
+                in_trade  = False
+                signal[i] = 0.0
+            else:
+                signal[i] = 1.0
+    return signal
+
+
+class CustomSignalRequest(BaseModel):
+    ticker:     str
+    start:      str  = "2020-01-01"
+    end:        str  = "2024-12-31"
+    rules:      dict = {}
+    bull_drift: float = 5.0
+    bear_drift: float = -3.0
+
+    @model_validator(mode="after")
+    def _validate(self):
+        self.ticker = validate_ticker(self.ticker)
+        validate_date(self.start); validate_date(self.end)
+        return self
+
+
+@router.post("/custom-signal")
+def get_custom_signal(req: CustomSignalRequest):
+    try:
+        close = _fetch_close(req.ticker, req.start, req.end)
+        if close.empty:
+            raise HTTPException(404, "No price data")
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("custom-signal fetch failed")
+        raise HTTPException(500, "Failed to fetch price data")
+
+    prices   = close.values.astype(float)
+    sig_arr  = evaluate_custom_rules(prices, req.rules)
+    last_sig = float(sig_arr[-1]) if len(sig_arr) else 0.0
+    invested = int(np.sum(sig_arr))
+    pct      = 100 * invested / max(1, len(sig_arr))
+    adj      = req.bull_drift if last_sig == 1.0 else req.bear_drift
+    label    = "Custom — Invested" if last_sig == 1.0 else "Custom — Cash"
+    detail   = (f"Custom rules. {invested}/{len(sig_arr)} bars invested ({pct:.0f}%). "
+                f"Current: {'Invested' if last_sig else 'Cash'}. Drift {adj:+.1f}%.")
+
+    signal_list = [{"date": str(d.date()), "value": float(v)}
+                   for d, v in zip(close.index, sig_arr)]
+    return {"signal": signal_list, "drift_adj": round(adj, 2),
+            "label": label, "detail": detail}

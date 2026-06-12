@@ -1,7 +1,6 @@
 import logging
 logger = logging.getLogger(__name__)
 
-import numpy as np
 import pandas as pd
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, model_validator
@@ -41,7 +40,7 @@ def correlation_matrix(req: CorrRequest):
             raw = raw.to_frame(req.tickers[0])
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("internal error"); raise HTTPException(500, "Internal server error")
 
     raw = raw.dropna()

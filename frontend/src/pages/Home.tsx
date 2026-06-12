@@ -5,6 +5,7 @@ import {
   GitBranch, Activity, Building2, Calculator, Network, Shuffle, Zap,
   ArrowUpRight, LayoutGrid, Filter, FileText, Upload, X,
   PieChart, Scale, Globe, BookOpen, Terminal, Brain, Bell, Bot,
+  Briefcase, ShieldAlert, ScatterChart, Layers, Compass, Search, Waves, Gauge,
 } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import useIsMobile from '../hooks/useIsMobile'
@@ -114,7 +115,7 @@ function PortfolioImportStrip() {
           <button style={S.btn} onClick={() => fileRef.current?.click()}><Upload size={10} /> Replace</button>
           <button
             onClick={clearPortfolio}
-            style={{ ...S.btn, background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', color: '#ef4444' }}
+            style={{ ...S.btn, background: 'color-mix(in srgb, var(--theme-negative) 6%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-negative) 20%, transparent)', color: 'var(--theme-negative)' }}
           >
             <X size={10} /> Clear
           </button>
@@ -154,33 +155,44 @@ const BENTO_CARDS: Card[] = [
   { to: '/sentiment', icon: Brain,      size: 'wide', accent: '#7aa2f7', tag: 'SENTIMENT',
     title: 'Sentiment Tracker',
     body: 'AI-scored financial news across 7 sources with market-session filtering, entity extraction, macro impact tiers, and velocity tracking.' },
+  { to: '/research-hub', icon: Search, size: 'wide', accent: '#7b5ea7', tag: 'RESEARCH HUB',
+    title: 'Research Hub',
+    body: 'One-stop research surface — filings, fundamentals, news, and AI summaries tabbed into a single workspace.' },
 
   // ── Row 3: Valuation & Quant (4×normal)
   { to: '/corporate',          icon: Building2,  size: 'normal', accent: 'var(--theme-primary, #c9a84c)', tag: 'CORP',       title: 'Corporate Hub',       body: 'Earnings scanner, insider flow, short interest, and live news aggregator.' },
-  { to: '/dcf',                icon: Calculator, size: 'normal', accent: '#7b5ea7',                       tag: 'VALUATION',  title: 'DCF Engine',          body: 'Intrinsic value via DCF with WACC, terminal value, and sensitivity tables.' },
-  { to: '/relative-valuation', icon: Scale,      size: 'normal', accent: '#d97736',                       tag: 'PEERS',      title: 'Peer Valuation',      body: 'Compare valuation multiples against sector peers. EV/EBITDA, P/E, P/S, forward estimates.' },
+  { to: '/dcf',                icon: Calculator, size: 'normal', accent: '#7b5ea7',                       tag: 'VALUATION',  title: 'DCF Valuation',          body: 'Intrinsic value via DCF with WACC, terminal value, and sensitivity tables.' },
+  { to: '/relative-valuation', icon: Scale,      size: 'normal', accent: '#d97736',                       tag: 'PEERS',      title: 'Peer Comparison',      body: 'Compare valuation multiples against sector peers. EV/EBITDA, P/E, P/S, forward estimates.' },
   { to: '/supply-chain',       icon: Globe,      size: 'normal', accent: '#2f6b4b',                       tag: 'PROFILE',    title: 'Company Profile',     body: 'Revenue breakdown, supplier exposure, geographic risk, and supply chain dependency map.' },
 
   // ── Row 4: Options suite (4×normal)
   { to: '/options',     icon: LineChart, size: 'normal', accent: 'var(--theme-tertiary, #1f5673)', tag: 'OPTIONS',   title: 'Options Pricer',       body: 'Black-Scholes pricing with full Greeks, payoff diagrams, and IV surface.' },
-  { to: '/chain',       icon: BarChart2, size: 'normal', accent: '#7b5ea7',                       tag: 'CHAIN',     title: 'Chain Scanner',        body: 'Live options chains with IV rank, OI skew, and put/call ratios by strike.' },
+  { to: '/chain',       icon: BarChart2, size: 'normal', accent: '#7b5ea7',                       tag: 'CHAIN',     title: 'Options Chain Scanner',        body: 'Live options chains with IV rank, OI skew, and put/call ratios by strike.' },
   { to: '/probability', icon: Activity,  size: 'normal', accent: '#7b5ea7',                       tag: 'PROB',      title: 'Implied Probability',  body: 'Market-implied risk-neutral distributions derived from live options chains.' },
   { to: '/strategy',    icon: Shuffle,   size: 'normal', accent: '#d97736',                       tag: 'STRATEGY',  title: 'Strategy Builder',     body: 'Multi-leg options strategy builder with live P&L profiles and breakevens.' },
+  { to: '/options-hub',     icon: Layers,   size: 'normal', accent: 'var(--theme-tertiary, #1f5673)', tag: 'OPTIONS HUB', title: 'Options Hub',          body: 'Unified options workspace — pricing, chains, IV, and flow in one tabbed surface.' },
+  { to: '/iv-tracker',      icon: Waves,    size: 'normal', accent: '#7aa2f7',                       tag: 'IV',          title: 'IV Tracker',           body: 'Implied volatility rank and percentile, term structure, and IV-vs-realized over time.' },
+  { to: '/unusual-options', icon: Activity, size: 'normal', accent: '#d97736',                       tag: 'FLOW',        title: 'Options Flow',         body: 'Scan chains for volume and volume/OI surges, ranked by traded premium. Flags freshly-opened positioning.' },
+  { to: '/market-maker',    icon: Gauge,    size: 'normal', accent: '#2f6b4b',                       tag: 'MM SIM',      title: 'Options MM Simulator',     body: 'Quote two-sided markets, manage inventory, and delta-hedge under simulated order flow.' },
 
   // ── Row 5: Derivatives & Rates (4×normal)
   { to: '/gex',               icon: Zap,        size: 'normal', accent: 'var(--theme-primary, #c9a84c)',  tag: 'GEX',          title: 'Dealer GEX',          body: 'Gamma exposure aggregated across all strikes and expiries.' },
   { to: '/bond',              icon: Landmark,   size: 'normal', accent: '#2f6b4b',                        tag: 'FIXED INCOME', title: 'Bond Analytics',      body: 'YTM, modified duration, convexity, and full cash flow schedules.' },
-  { to: '/fed',               icon: GitBranch,  size: 'normal', accent: 'var(--theme-tertiary, #1f5673)', tag: 'MACRO',        title: 'Macro Rate Engine',   body: 'Implied Fed path projections and rate scenario analysis across FOMC meetings.' },
+  { to: '/fed',               icon: GitBranch,  size: 'normal', accent: 'var(--theme-tertiary, #1f5673)', tag: 'MACRO',        title: 'Fed Rates',   body: 'Implied Fed path projections and rate scenario analysis across FOMC meetings.' },
+  { to: '/macro-hub',         icon: Compass,    size: 'normal', accent: 'var(--theme-tertiary, #1f5673)', tag: 'MACRO HUB',    title: 'Macro Hub',           body: 'Key macro series — growth, inflation, and employment — on a single board.' },
 
   // ── Row 6: Macro & Data (4×normal)
   { to: '/sector-rotation', icon: PieChart,   size: 'normal', accent: '#d97736',                       tag: 'SECTORS',      title: 'Sector Rotation',     body: 'Rolling performance heatmap across GICS sectors. Identify rotation leaders and laggards.' },
-  { to: '/credit-spreads',  icon: Activity,   size: 'normal', accent: '#ef4444',                       tag: 'CREDIT',       title: 'Credit Spreads',      body: 'IG and HY spread monitoring with historical context and risk-on/off signals.' },
+  { to: '/credit-spreads',  icon: Activity,   size: 'normal', accent: '#ef4444',                       tag: 'CREDIT',       title: 'Credit Spread Monitor',      body: 'IG and HY spread monitoring with historical context and risk-on/off signals.' },
   { to: '/correlation',     icon: Network,    size: 'normal', accent: 'var(--theme-tertiary, #1f5673)', tag: 'QUANT',        title: 'Correlation Matrix',  body: 'Rolling return correlation heatmap across any custom ticker basket.' },
+  { to: '/regression',      icon: ScatterChart, size: 'normal', accent: '#7b5ea7',                     tag: 'REGRESSION',   title: 'Regression Analysis', body: 'Factor and pairwise regressions — beta, alpha, R-squared, and residual diagnostics.' },
   { to: '/nav',             icon: Bitcoin,    size: 'normal', accent: 'var(--theme-primary, #c9a84c)', tag: 'NAV',          title: 'NAV Tracker',         body: 'SOTP NAV engine with live MSTR Bitcoin holdings fetched from EDGAR.' },
 
   // ── Row 7: Portfolio & Simulation (4×normal)
   { to: '/montecarlo',     icon: Dices,     size: 'normal', accent: '#2f6b4b',                       tag: 'SIMULATION',  title: 'Monte Carlo',           body: 'GBM path simulation with VaR, CVaR, and percentile fan charts.' },
   { to: '/portfolio',      icon: BarChart2, size: 'normal', accent: '#2f6b4b',                       tag: 'BACKTEST',    title: 'Portfolio Backtester',  body: 'Backtest weighted equity baskets against any benchmark with Sharpe, Sortino, Calmar.' },
+  { to: '/portfolio-manager', icon: Briefcase,   size: 'normal', accent: 'var(--theme-primary, #c9a84c)', tag: 'PORTFOLIO', title: 'Portfolio Manager',     body: 'Holdings, live P&L, position weights, and aggregated option greeks across the book.' },
+  { to: '/stress-test',       icon: ShieldAlert, size: 'normal', accent: '#ef4444',                       tag: 'STRESS',    title: 'Portfolio Stress Tester',         body: 'Replay 2008, COVID, and 2022 shocks against your current portfolio and read the P&L hit.' },
   { to: '/alerts',         icon: Bell,      size: 'normal', accent: 'var(--theme-primary, #c9a84c)', tag: 'ALERTS',      title: 'Price Alerts',          body: 'Set price and 1-day % change alerts. Push to browser on trigger.' },
 
   // ── Row 8: Trading tools (4×normal)
@@ -240,7 +252,7 @@ function BentoCard({ card }: { card: Card }) {
             <h3 style={{
               fontSize: isHero ? 15 : 13,
               fontWeight: 700,
-              color: '#e2e8f0',
+              color: 'var(--theme-text)',
               letterSpacing: '0.02em',
               fontFamily: 'var(--theme-sans)',
             }}>

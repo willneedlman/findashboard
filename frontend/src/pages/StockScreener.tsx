@@ -179,12 +179,8 @@ export default function StockScreener() {
   const blur  = (e: React.FocusEvent<HTMLElement>) => ((e.target as HTMLElement).style.borderColor = C.border)
 
   return (
-    <PageWrapper>
+    <PageWrapper title="Stock Screener">
       <SidebarLayout sidebarWidth={260} sidebarTitle="Screen Controls" sidebar={<>
-        <div style={{ padding: '8px 10px', borderBottom: `1px solid ${C.border}`, background: C.header }}>
-          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>Stock Screener</span>
-        </div>
-
         <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 10, flex: 1, overflowY: 'auto' }}>
 
           {/* Sector + Exchange */}
@@ -258,16 +254,15 @@ export default function StockScreener() {
               </select>
             </div>
           </div>
-        </div>
 
-        <div style={{ padding: 10, borderTop: `1px solid ${C.border}` }}>
+          {/* Run button — inline after controls */}
           <button onClick={() => mutate()} disabled={isPending} style={{
             width: '100%', background: 'var(--theme-surface, #1f2a3d)', border: `1px solid ${C.gold}`, color: C.gold,
             fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
             textTransform: 'uppercase', padding: '8px 0', cursor: isPending ? 'default' : 'pointer',
             opacity: isPending ? 0.6 : 1,
           }}>
-            {isPending ? 'Screening…' : '⬢ Run Screen'}
+            {isPending ? 'Screening…' : 'Run Screen'}
           </button>
         </div>
       </>}>

@@ -8,19 +8,22 @@ RUN npm run build
 
 # ── Stage 2: Python backend ──────────────────────────────────────────────────
 FROM python:3.11-slim
-WORKDIR /app/backend
+WORKDIR /app
 
-# Install system deps (needed by some yfinance/scipy transitive deps)
+# Install system deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc g++ curl \
     && rm -rf /var/lib/apt/lists/*
+
+# Set Python environment to find modules in /app/backend
+ENV PYTHONPATH=/app/backend
 
 # Python dependencies
 COPY backend/requirements_api.txt .
 RUN pip install --no-cache-dir -r requirements_api.txt
 
-# Application code
-COPY backend/ .
+# Copy backend files specifically into the backend directory
+COPY backend/ /app/backend/
 
 # Built React app
 COPY --from=frontend-build /frontend/dist /app/frontend/dist
@@ -33,4 +36,5 @@ ENV PORT=8080
 
 EXPOSE 8080
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+# Run uvicorn from the root, pointing to the app in backend/main
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8080"]

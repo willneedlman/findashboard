@@ -3,7 +3,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from math_engine import bond_price, duration_convexity
+from math_engine import duration_convexity
 
 router = APIRouter()
 

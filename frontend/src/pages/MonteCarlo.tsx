@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Legend } from 'recharts'
+import { AreaChart, Area, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Legend } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import MetricCard from '../components/MetricCard'
 import { useChartColors } from '../hooks/useChartColors'
-import StrategySelector, { STRATEGIES, type StrategyParams } from '../components/StrategySelector'
+import StrategySelector, { STRATEGIES, CUSTOM_STRATEGY_KEY, type StrategyParams } from '../components/StrategySelector'
 import { TOOLTIP_STYLE, CROSSHAIR_CURSOR, BAR_CURSOR } from '../components/ChartTooltip'
 import SidebarLayout from '../components/SidebarLayout'
 import axios from 'axios'
@@ -80,12 +80,12 @@ const LABEL: React.CSSProperties = {
 }
 const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'var(--theme-mono)' }
 
-function ChartPanel({ label, height, children }: { label: string; height: number; children: React.ReactNode }) {
+function ChartPanel({ label, height, children }: { label: React.ReactNode; height: number; children: React.ReactNode }) {
   return (
     <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', position: 'relative' }}>
       <div style={{
         position: 'absolute', top: 0, left: 0, zIndex: 10,
-        background: 'rgba(46,57,77,0.8)', padding: '3px 8px',
+        background: 'var(--theme-surface, rgba(46,57,77,0.8))', padding: '3px 8px',
         borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
         fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)',
       }}>
@@ -187,15 +187,52 @@ export default function MonteCarlo() {
       const [legAdjs, benchResult] = await Promise.all([
         Promise.all(
           legs.map(async (leg) => {
-            if (leg.strategy === STRATEGIES[0]) return { stratAdj: 0, stratLabel: '', stratDetail: '' }
+            if (leg.strategy === STRATEGIES[0]) return { stratAdj: 0, stratLabel: '', stratDetail: '', stratChartData: [], stratBuyCount: 0, stratSellCount: 0 }
             try {
-              const { data: sig } = await axios.post('/api/strategy/signal', {
-                ticker: leg.ticker, strategy: leg.strategy,
-                start: '2022-01-01', end: new Date().toISOString().split('T')[0],
-                params: leg.stratParams,
+              const today = new Date().toISOString().split('T')[0]
+              const isCustom = leg.strategy === CUSTOM_STRATEGY_KEY
+              const customDef = isCustom && leg.stratParams._custom_def
+                ? JSON.parse(leg.stratParams._custom_def)
+                : null
+              if (isCustom && !customDef) return { stratAdj: 0, stratLabel: 'Custom — no rules', stratDetail: '', stratChartData: [], stratBuyCount: 0, stratSellCount: 0 }
+              const [sigResp, priceResp] = await Promise.all([
+                isCustom
+                  ? axios.post('/api/strategy/custom-signal', {
+                      ticker: leg.ticker, start: '2022-01-01', end: today,
+                      rules: customDef, bull_drift: customDef.bull_drift ?? 5, bear_drift: customDef.bear_drift ?? -3,
+                    })
+                  : axios.post('/api/strategy/signal', {
+                      ticker: leg.ticker, strategy: leg.strategy,
+                      start: '2022-01-01', end: today,
+                      params: leg.stratParams,
+                    }),
+                axios.get(`/api/market/history?ticker=${leg.ticker}&start=2022-01-01`),
+              ])
+              const signalArr: {date: string; value: number}[] = sigResp.data.signal ?? []
+              const priceArr:  {date: string; value: number}[] = priceResp.data?.price ?? []
+              const sigMap: Record<string, number> = {}
+              signalArr.forEach(s => { sigMap[s.date] = s.value })
+              let prevSig: number | null = null
+              let buyCount = 0, sellCount = 0
+              const chartData = priceArr.map(p => {
+                const sig = sigMap[p.date]
+                let action: 'buy' | 'sell' | null = null
+                if (sig !== undefined && prevSig !== null) {
+                  if (sig === 1 && prevSig === 0) { action = 'buy'; buyCount++ }
+                  else if (sig === 0 && prevSig === 1) { action = 'sell'; sellCount++ }
+                }
+                if (sig !== undefined) prevSig = sig
+                return { date: p.date, price: p.value, action }
               })
-              return { stratAdj: sig.drift_adj ?? 0, stratLabel: sig.label ?? '', stratDetail: sig.detail ?? '' }
-            } catch { return { stratAdj: 0, stratLabel: '', stratDetail: '' } }
+              return {
+                stratAdj: sigResp.data.drift_adj ?? 0,
+                stratLabel: sigResp.data.label ?? '',
+                stratDetail: sigResp.data.detail ?? '',
+                stratChartData: chartData,
+                stratBuyCount: buyCount,
+                stratSellCount: sellCount,
+              }
+            } catch { return { stratAdj: 0, stratLabel: '', stratDetail: '', stratChartData: [], stratBuyCount: 0, stratSellCount: 0 } }
           })
         ),
         axios.get(`/api/market/history?ticker=${benchmark}&start=2020-01-01`)
@@ -276,7 +313,7 @@ export default function MonteCarlo() {
   const totalWeight = legs.reduce((s, l) => s + l.weight, 0)
 
   return (
-    <PageWrapper>
+    <PageWrapper title="Monte Carlo Simulator">
       <SidebarLayout sidebarWidth={210} sidebarTitle="Simulation Controls" sidebar={<>
 
         {/* ── Left sidebar ─────────────────────────────────────────────── */}
@@ -295,7 +332,7 @@ export default function MonteCarlo() {
                 <label style={{ ...LABEL, marginBottom: 0 }}>Portfolio Legs</label>
                 <span style={{
                   fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
-                  color: totalWeight === 100 ? '#2f6b4b' : '#8c2e36',
+                  color: totalWeight === 100 ? 'var(--theme-positive)' : 'var(--theme-negative)',
                 }}>
                   {totalWeight}%
                 </span>
@@ -420,15 +457,15 @@ export default function MonteCarlo() {
                     type="button"
                     onClick={() => { setSlPct(p.sl); setTpPct(p.tp); setTrailPct(p.trail); setPosPct(p.pos) }}
                     style={{
-                      background: 'rgba(201,168,76,0.08)',
-                      border: '1px solid rgba(201,168,76,0.3)',
-                      color: 'rgba(201,168,76,0.85)',
+                      background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)',
+                      border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)',
+                      color: 'var(--theme-primary, #c9a84c)',
                       fontFamily: 'var(--theme-mono)',
                       fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
                       padding: '3px 7px', cursor: 'pointer', borderRadius: 2,
                     }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(201,168,76,0.18)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'rgba(201,168,76,0.08)')}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)')}
                   >
                     {p.label.toUpperCase()}
                   </button>
@@ -482,7 +519,7 @@ export default function MonteCarlo() {
               textTransform: 'uppercase', padding: '8px 0', cursor: (isPending || legs.length === 0) ? 'default' : 'pointer',
               opacity: (isPending || legs.length === 0) ? 0.6 : 1,
             }}>
-              {isPending ? 'Simulating…' : '⬢ Run Simulation'}
+              {isPending ? 'Simulating…' : 'Run Simulation'}
             </button>
           </div>
 
@@ -495,27 +532,6 @@ export default function MonteCarlo() {
 
           {data && (
             <>
-              {/* Active strategy signals */}
-              {data.legs.some((l: any) => l.strategy !== STRATEGIES[0] && l.stratLabel) && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {data.legs.filter((l: any) => l.strategy !== STRATEGIES[0] && l.stratLabel).map((l: any, i: number) => (
-                    <div key={i} style={{
-                      background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
-                      borderLeft: `4px solid ${l.stratAdj >= 0 ? '#2f6b4b' : '#8c2e36'}`,
-                      padding: '8px 14px',
-                    }}>
-                      <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 700, color: l.stratAdj >= 0 ? '#4caf7d' : '#e05c6e', marginBottom: 3 }}>
-                        {l.ticker} · {l.strategy} — {l.stratLabel}
-                        <span style={{ marginLeft: 10, fontSize: 10, color: 'var(--theme-secondary, #99907e)', fontWeight: 400 }}>
-                          Drift adj: {l.stratAdj > 0 ? '+' : ''}{l.stratAdj}% · Eff. drift: {+(l.drift + l.stratAdj).toFixed(1)}%/yr
-                        </span>
-                      </div>
-                      <div style={{ fontSize: 10, color: 'var(--theme-secondary, #99907e)' }}>{l.stratDetail}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
               {/* Portfolio composition */}
               <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '8px 12px', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                 {data.legs.map((l: any, i: number) => (
@@ -528,7 +544,7 @@ export default function MonteCarlo() {
                       </span>
                     )}
                     {l.strategy !== STRATEGIES[0] && (
-                      <span style={{ fontSize: 9, color: l.stratAdj >= 0 ? '#4caf7d' : '#e05c6e', letterSpacing: '0.06em' }}>
+                      <span style={{ fontSize: 9, color: l.stratAdj >= 0 ? 'var(--theme-positive)' : 'var(--theme-negative)', letterSpacing: '0.06em' }}>
                         [{l.strategy.split(' ')[0]}]
                       </span>
                     )}
@@ -602,6 +618,74 @@ export default function MonteCarlo() {
                   </BarChart>
                 </ResponsiveContainer>
               </ChartPanel>
+
+              {/* Active strategy signals */}
+              {data.legs.some((l: any) => l.strategy !== STRATEGIES[0] && l.stratLabel) && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {data.legs.filter((l: any) => l.strategy !== STRATEGIES[0] && l.stratLabel).map((l: any, i: number) => (
+                    <div key={i} style={{
+                      background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
+                      borderLeft: `4px solid ${l.stratAdj >= 0 ? 'var(--theme-positive)' : 'var(--theme-negative)'}`,
+                      padding: '8px 14px',
+                    }}>
+                      <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 700, color: l.stratAdj >= 0 ? 'var(--theme-positive)' : 'var(--theme-negative)', marginBottom: 3 }}>
+                        {l.ticker} · {l.strategy} — {l.stratLabel}
+                        <span style={{ marginLeft: 10, fontSize: 10, color: 'var(--theme-secondary, #99907e)', fontWeight: 400 }}>
+                          Drift adj: {l.stratAdj > 0 ? '+' : ''}{l.stratAdj}% · Eff. drift: {+(l.drift + l.stratAdj).toFixed(1)}%/yr
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 10, color: 'var(--theme-secondary, #99907e)' }}>{l.stratDetail}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Buy/Sell signal chart — price line with ▲ BUY / ▼ SELL markers */}
+              {data.legs.some((l: any) => l.strategy !== STRATEGIES[0] && l.stratChartData?.length > 0) && (
+                <>
+                  {data.legs
+                    .filter((l: any) => l.strategy !== STRATEGIES[0] && l.stratChartData?.length > 0)
+                    .map((l: any, idx: number) => {
+                      const renderDot = (dotProps: any) => {
+                        const { cx, cy, payload, index } = dotProps
+                        if (payload.action === 'buy')
+                          return <polygon key={`b${index}`} points={`${cx},${cy - 9} ${cx - 6},${cy + 4} ${cx + 6},${cy + 4}`} style={{ fill: 'var(--theme-positive)' }} stroke="none" />
+                        if (payload.action === 'sell')
+                          return <polygon key={`s${index}`} points={`${cx},${cy + 9} ${cx - 6},${cy - 4} ${cx + 6},${cy - 4}`} style={{ fill: 'var(--theme-negative)' }} stroke="none" />
+                        return <g key={`n${index}`} />
+                      }
+                      const header = (
+                        <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                          <span style={{ color: 'var(--theme-text, #d7e3fc)' }}>▶ {l.ticker}</span>
+                          <span style={{ color: 'var(--theme-text-faint, rgba(255,255,255,0.3))' }}>·</span>
+                          <span style={{ color: 'var(--theme-positive)' }}>▲ {l.stratBuyCount} BUY</span>
+                          <span style={{ color: 'var(--theme-text-faint, rgba(255,255,255,0.3))' }}>·</span>
+                          <span style={{ color: 'var(--theme-negative)' }}>▼ {l.stratSellCount} SELL</span>
+                          <span style={{ color: 'var(--theme-text-faint, rgba(255,255,255,0.3))', fontWeight: 400 }}>— {l.strategy}</span>
+                        </span>
+                      )
+                      return (
+                        <ChartPanel key={idx} label={header} height={248}>
+                          <ResponsiveContainer width="100%" height={212}>
+                            <LineChart data={l.stratChartData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.07)" />
+                              <XAxis dataKey="date" tick={TICK} tickFormatter={(d: string) => d.slice(0, 7)} interval="preserveStartEnd" />
+                              <YAxis tick={TICK} tickFormatter={(v: number) => `$${v.toFixed(0)}`} orientation="right" />
+                              <Tooltip contentStyle={TOOLTIP_STYLE}
+                                formatter={(v: number, _: string, p: any) => [
+                                  `$${v.toFixed(2)}${p.payload.action === 'buy' ? '  ▲ BUY' : p.payload.action === 'sell' ? '  ▼ SELL' : ''}`,
+                                  l.ticker,
+                                ]}
+                                labelFormatter={(d: string) => d}
+                              />
+                              <Line type="monotone" dataKey="price" stroke={cc.primary} strokeWidth={1.5} dot={renderDot} activeDot={{ r: 3, fill: cc.primary }} isAnimationActive={false} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </ChartPanel>
+                      )
+                    })}
+                </>
+              )}
             </>
           )}
       </SidebarLayout>

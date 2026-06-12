@@ -16,7 +16,7 @@ function MetricCard({ label, value, delta, deltaPositive }: { label: string; val
     <div style={{ background: 'var(--theme-surface, #142032)', border: '1px solid var(--theme-border, rgba(255,255,255,0.07))', borderTop: '3px solid var(--theme-primary, #c9a84c)', padding: 10 }}>
       <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', marginBottom: 6 }}>{label}</div>
       <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 18, fontWeight: 700, color: 'var(--theme-text, #d7e3fc)' }}>{value}</div>
-      {delta && <div style={{ fontSize: 10, marginTop: 2, color: deltaPositive ? '#22C55E' : '#EF4444' }}>{delta}</div>}
+      {delta && <div style={{ fontSize: 10, marginTop: 2, color: deltaPositive ? 'var(--theme-positive)' : 'var(--theme-negative)' }}>{delta}</div>}
     </div>
   )
 }
@@ -24,7 +24,7 @@ function MetricCard({ label, value, delta, deltaPositive }: { label: string; val
 function ChartPanel({ label, height, children }: { label: string; height: number; children: React.ReactNode }) {
   return (
     <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', position: 'relative' }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 10, background: 'rgba(46,57,77,0.8)', padding: '3px 8px', borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>{label}</div>
+      <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 10, background: 'var(--theme-surface, rgba(46,57,77,0.8))', padding: '3px 8px', borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>{label}</div>
       <div style={{ paddingTop: 28, paddingLeft: 8, paddingRight: 8, paddingBottom: 8, height }}>{children}</div>
     </div>
   )
@@ -93,7 +93,7 @@ export function BondAnalyticsContent() {
               textTransform: 'uppercase', padding: '8px 0', cursor: isPending ? 'default' : 'pointer',
               opacity: isPending ? 0.6 : 1, transition: 'opacity 0.15s',
             }}>
-              {isPending ? '⟳ Analyzing…' : '⬢ Analyze Bond'}
+              {isPending ? 'Analyzing…' : 'Analyze Bond'}
             </button>
             {isError && <div style={{ fontSize: 9, color: '#ef4444', textAlign: 'center', fontFamily: 'var(--theme-sans)' }}>Server unavailable — is the backend running?</div>}
           </div>
@@ -173,7 +173,7 @@ export function BondAnalyticsContent() {
           {(aiNarrativePending || aiNarrative) && (
             <div style={{ border: '1px solid rgba(201,168,76,0.2)', background: 'rgba(201,168,76,0.03)' }}>
               <div style={{ padding: '6px 12px', borderBottom: '1px solid rgba(201,168,76,0.12)', background: 'rgba(201,168,76,0.06)' }}>
-                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#c9a84c' }}>AI Bond Analysis</span>
+                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)' }}>AI Bond Analysis</span>
               </div>
               {aiNarrativePending && !aiNarrative && (
                 <div style={{ padding: '10px 12px', fontSize: 10, color: 'var(--theme-text-muted, rgba(215,227,252,0.5))', fontFamily: 'var(--theme-sans)' }}>Analyzing…</div>
@@ -187,8 +187,8 @@ export function BondAnalyticsContent() {
                     { label: 'Investor Fit', text: aiNarrative.investor_fit },
                   ].map(({ label, text }) => text ? (
                     <div key={label} style={{ paddingLeft: 8, borderLeft: '2px solid rgba(201,168,76,0.3)' }}>
-                      <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', color: '#c9a84c', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
-                      <div style={{ fontSize: 10, color: 'rgba(215,227,252,0.8)', lineHeight: '14px', fontFamily: 'var(--theme-sans)' }}>{text}</div>
+                      <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--theme-primary, #c9a84c)', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
+                      <div style={{ fontSize: 10, color: 'var(--theme-text, #d7e3fc)', lineHeight: '14px', fontFamily: 'var(--theme-sans)' }}>{text}</div>
                     </div>
                   ) : null)}
                 </div>
@@ -203,5 +203,5 @@ export function BondAnalyticsContent() {
 }
 
 export default function BondAnalytics() {
-  return <PageWrapper><BondAnalyticsContent /></PageWrapper>
+  return <PageWrapper title="Bond Analytics"><BondAnalyticsContent /></PageWrapper>
 }

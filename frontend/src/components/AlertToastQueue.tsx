@@ -82,7 +82,7 @@ export default function AlertToastQueue({ alerts }: Props) {
       {toasts.map(t => (
         <div key={t.key} style={{
           pointerEvents: 'auto',
-          background: '#0d1826',
+          background: 'var(--theme-surface)',
           border: `1px solid ${T.gold}`,
           borderLeft: `3px solid ${T.gold}`,
           padding: '10px 12px',
@@ -94,7 +94,7 @@ export default function AlertToastQueue({ alerts }: Props) {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                 <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', color: T.gold, fontFamily: T.mono }}>
-                  🔔 ALERT TRIGGERED
+                  ALERT TRIGGERED
                 </span>
               </div>
               <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--theme-text, #d7e3fc)', fontFamily: T.mono, letterSpacing: '0.06em' }}>

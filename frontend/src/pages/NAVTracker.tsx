@@ -23,7 +23,7 @@ function ChartPanel({ label, height, children }: { label: string; height: number
     <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', position: 'relative' }}>
       <div style={{
         position: 'absolute', top: 0, left: 0, zIndex: 10,
-        background: 'rgba(46,57,77,0.8)', padding: '3px 8px',
+        background: 'var(--theme-surface, rgba(46,57,77,0.8))', padding: '3px 8px',
         borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
         fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)',
       }}>
@@ -58,7 +58,7 @@ export default function NAVTracker() {
   const blur  = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = 'var(--theme-border, rgba(255,255,255,0.10))')
 
   return (
-    <PageWrapper>
+    <PageWrapper title="NAV Tracker">
       <SidebarLayout sidebarWidth={200} sidebarTitle="NAV Controls" sidebar={<>
 
         {/* Left sidebar */}
@@ -111,7 +111,7 @@ export default function NAVTracker() {
                   onChange={e => setP(x => ({ ...x, use_live: e.target.checked }))}
                   style={{ accentColor: 'var(--theme-primary, #c9a84c)', cursor: 'pointer' }}
                 />
-                <span style={{ fontSize: 10, color: 'var(--theme-secondary, #99907e)', lineHeight: '14px' }}>Auto-fetch SEC EDGAR 8-K</span>
+                <span style={{ fontSize: 10, color: 'var(--theme-secondary, #99907e)', lineHeight: '14px' }}>Auto-fetch from SEC EDGAR</span>
               </label>
 
               {!p.use_live && (
@@ -133,7 +133,7 @@ export default function NAVTracker() {
 
               {p.use_live && (
                 <div style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', lineHeight: '14px' }}>
-                  Pulled from most recent 8-K filing. Disable to enter manually.
+                  Pulled from most recent EDGAR BTC update filing. Disable to enter manually.
                 </div>
               )}
             </div>
@@ -146,7 +146,7 @@ export default function NAVTracker() {
               textTransform: 'uppercase', padding: '8px 0', cursor: isPending ? 'default' : 'pointer',
               opacity: isPending ? 0.6 : 1,
             }}>
-              {isPending ? 'Loading…' : '⬢ Execute SOTP Matrix'}
+              {isPending ? 'Loading…' : 'Execute SOTP Matrix'}
             </button>
           </div>
 
@@ -188,9 +188,9 @@ export default function NAVTracker() {
                           display: 'inline-flex', alignItems: 'center', gap: 4, alignSelf: 'flex-start',
                           padding: '2px 7px', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
                           textTransform: 'uppercase',
-                          background: isEdgar ? 'rgba(34,197,94,0.12)' : 'rgba(245,158,11,0.12)',
-                          border: `1px solid ${isEdgar ? 'rgba(34,197,94,0.35)' : 'rgba(245,158,11,0.35)'}`,
-                          color: isEdgar ? '#22C55E' : '#f59e0b',
+                          background: isEdgar ? 'color-mix(in srgb, var(--theme-positive) 12%, transparent)' : 'color-mix(in srgb, var(--theme-warn) 12%, transparent)',
+                          border: `1px solid ${isEdgar ? 'color-mix(in srgb, var(--theme-positive) 35%, transparent)' : 'color-mix(in srgb, var(--theme-warn) 35%, transparent)'}`,
+                          color: isEdgar ? 'var(--theme-positive)' : 'var(--theme-warn)',
                         }}>
                           {isEdgar ? '● EDGAR live' : isFallback ? '▲ Stored fallback' : '● Manual'}
                         </span>

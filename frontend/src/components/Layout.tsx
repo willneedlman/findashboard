@@ -7,7 +7,7 @@ import {
   BarChart2, Dices, GitBranch, Building2, Calculator,
   Network, Shuffle, Zap, ChevronLeft, ChevronRight, X, Menu, Settings,
   Filter, FileText, ShieldAlert, PieChart,
-  BookOpen, Terminal, Brain, Bell, Star,
+  BookOpen, Terminal, Brain, Bell, Star, Gauge, Activity,
 } from 'lucide-react'
 import Footer from './Footer'
 import AlertToastQueue from './AlertToastQueue'
@@ -37,6 +37,8 @@ const NAV_SECTIONS = [
     label: 'Derivatives & Rates',
     items: [
       { to: '/options-hub',  icon: LineChart,   label: 'Options Hub' },
+      { to: '/iv-tracker',   icon: TrendingUp,  label: 'IV Tracker' },
+      { to: '/unusual-options', icon: Activity,  label: 'Options Flow' },
       { to: '/strategy',     icon: Shuffle,     label: 'Strategy Builder' },
       { to: '/gex',          icon: Zap,         label: 'Dealer GEX' },
       { to: '/macro-hub',    icon: GitBranch,   label: 'Macro Hub' },
@@ -45,7 +47,7 @@ const NAV_SECTIONS = [
   {
     label: 'Portfolio & Valuation',
     items: [
-      { to: '/portfolio',   icon: BarChart2,   label: 'Backtester' },
+      { to: '/portfolio',   icon: BarChart2,   label: 'Portfolio Backtester' },
       { to: '/montecarlo',  icon: Dices,         label: 'Monte Carlo' },
       { to: '/dcf',         icon: Calculator,    label: 'DCF Valuation' },
       { to: '/nav',         icon: Bitcoin,       label: 'NAV Tracker' },
@@ -55,6 +57,7 @@ const NAV_SECTIONS = [
     label: 'Trading & Simulation',
     items: [
       { to: '/paper-trading',  icon: Terminal,  label: 'Paper Trading' },
+      { to: '/market-maker',   icon: Gauge,     label: 'Options MM Simulator' },
       { to: '/trade-journal',  icon: BookOpen,  label: 'Trade Journal' },
       { to: '/alerts',         icon: Bell,      label: 'Price Alerts' },
     ],
@@ -205,9 +208,9 @@ export default function Layout({ children }: LayoutProps) {
                       style={{
                         display: 'flex', alignItems: 'center', gap: 10,
                         padding: '11px 10px', minHeight: 44, marginBottom: 2, textDecoration: 'none',
-                        background: location.pathname === '/admin' ? 'rgba(239,68,68,0.1)' : 'transparent',
-                        borderLeft: location.pathname === '/admin' ? '2px solid #ef4444' : '2px solid transparent',
-                        color: location.pathname === '/admin' ? '#ef4444' : 'rgba(239,68,68,0.55)',
+                        background: location.pathname === '/admin' ? 'color-mix(in srgb, var(--theme-negative) 10%, transparent)' : 'transparent',
+                        borderLeft: location.pathname === '/admin' ? '2px solid var(--theme-negative)' : '2px solid transparent',
+                        color: location.pathname === '/admin' ? 'var(--theme-negative)' : 'color-mix(in srgb, var(--theme-negative) 55%, transparent)',
                         fontSize: 13, fontFamily: 'var(--theme-sans)', transition: 'all 0.15s',
                       }}
                     >
@@ -342,9 +345,9 @@ export default function Layout({ children }: LayoutProps) {
               title={collapsed ? 'Admin Tester' : undefined}
               className="ft-nav-link flex items-center gap-2.5 py-1.5 transition-all duration-150 my-0.5"
               style={{
-                color: location.pathname === '/admin' ? '#ef4444' : 'rgba(239,68,68,0.55)',
-                background: location.pathname === '/admin' ? 'rgba(239,68,68,0.1)' : 'transparent',
-                borderLeft: location.pathname === '/admin' ? '2px solid #ef4444' : '2px solid transparent',
+                color: location.pathname === '/admin' ? 'var(--theme-negative)' : 'color-mix(in srgb, var(--theme-negative) 55%, transparent)',
+                background: location.pathname === '/admin' ? 'color-mix(in srgb, var(--theme-negative) 10%, transparent)' : 'transparent',
+                borderLeft: location.pathname === '/admin' ? '2px solid var(--theme-negative)' : '2px solid transparent',
                 paddingLeft: collapsed ? undefined : location.pathname === '/admin' ? 10 : 12,
                 justifyContent: collapsed ? 'center' : undefined,
                 fontSize: '0.82rem',

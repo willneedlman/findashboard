@@ -1,0 +1,607 @@
+import { useState, useCallback } from 'react'
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+export type IndicatorType =
+  | 'PRICE' | 'RSI' | 'SMA' | 'EMA'
+  | 'MACD_LINE' | 'MACD_SIGNAL'
+  | 'BB_UPPER' | 'BB_MID' | 'BB_LOWER'
+  | 'ATR' | 'MOMENTUM'
+
+export interface IndicatorRef {
+  type: IndicatorType
+  period?: number
+  fast?: number
+  slow?: number
+  signal_period?: number
+  std?: number
+}
+
+export type OpType = 'gt' | 'lt' | 'gte' | 'lte' | 'crosses_above' | 'crosses_below'
+
+export interface ConditionRow {
+  id: string
+  lhs: IndicatorRef
+  op: OpType
+  rhs_type: 'number' | 'indicator'
+  rhs_num: number
+  rhs_ind: IndicatorRef
+}
+
+export interface ConditionGroup {
+  id: string
+  logic: 'AND' | 'OR'
+  conditions: ConditionRow[]
+}
+
+export interface RuleBlock {
+  logic: 'AND' | 'OR'   // how groups combine at block level
+  groups: ConditionGroup[]
+}
+
+export interface CustomStrategyDef {
+  name: string
+  buy: RuleBlock
+  sell: RuleBlock
+  bull_drift: number
+  bear_drift: number
+}
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const IND_LABELS: Record<IndicatorType, string> = {
+  PRICE: 'Price', RSI: 'RSI', SMA: 'SMA', EMA: 'EMA',
+  MACD_LINE: 'MACD Line', MACD_SIGNAL: 'MACD Signal',
+  BB_UPPER: 'BB Upper', BB_MID: 'BB Mid', BB_LOWER: 'BB Lower',
+  ATR: 'ATR', MOMENTUM: 'Momentum',
+}
+
+const IND_TYPES: IndicatorType[] = [
+  'PRICE', 'RSI', 'SMA', 'EMA',
+  'MACD_LINE', 'MACD_SIGNAL',
+  'BB_UPPER', 'BB_MID', 'BB_LOWER',
+  'ATR', 'MOMENTUM',
+]
+
+const OP_LABELS: Record<OpType, string> = {
+  gt: '> above', lt: '< below', gte: '≥ at or above', lte: '≤ at or below',
+  crosses_above: '↑ crosses above', crosses_below: '↓ crosses below',
+}
+
+const DEFAULT_IND: Record<IndicatorType, IndicatorRef> = {
+  PRICE:       { type: 'PRICE' },
+  RSI:         { type: 'RSI', period: 14 },
+  SMA:         { type: 'SMA', period: 50 },
+  EMA:         { type: 'EMA', period: 20 },
+  MACD_LINE:   { type: 'MACD_LINE', fast: 12, slow: 26, signal_period: 9 },
+  MACD_SIGNAL: { type: 'MACD_SIGNAL', fast: 12, slow: 26, signal_period: 9 },
+  BB_UPPER:    { type: 'BB_UPPER', period: 20, std: 2.0 },
+  BB_MID:      { type: 'BB_MID', period: 20, std: 2.0 },
+  BB_LOWER:    { type: 'BB_LOWER', period: 20, std: 2.0 },
+  ATR:         { type: 'ATR', period: 14 },
+  MOMENTUM:    { type: 'MOMENTUM', period: 126 },
+}
+
+const DEFAULT_RHS: Record<IndicatorType, number> = {
+  PRICE: 100, RSI: 30, SMA: 0, EMA: 0,
+  MACD_LINE: 0, MACD_SIGNAL: 0,
+  BB_UPPER: 0, BB_MID: 0, BB_LOWER: 0,
+  ATR: 1, MOMENTUM: 0,
+}
+
+// ── Theme tokens — all use CSS variables so they track the active colour preset ──
+
+const T = {
+  bg:      'var(--theme-bg, #101c2e)',
+  surface: 'var(--theme-surface, #0d1826)',
+  border:  'var(--theme-border, rgba(255,255,255,0.10))',
+  text:    'var(--theme-text, #d7e3fc)',
+  muted:   'var(--theme-secondary, #99907e)',
+  dim:     'var(--theme-text-faint, rgba(255,255,255,0.28))',
+  gold:    'var(--theme-primary, #c9a84c)',
+  pos:     'var(--theme-pos, #4caf7d)',
+  neg:     'var(--theme-neg, #e05c6e)',
+  blue:    '#60a5fa',
+  mono:    'var(--theme-mono, "JetBrains Mono", monospace)',
+}
+
+const inp: React.CSSProperties = {
+  background: T.bg, border: `1px solid ${T.border}`,
+  color: T.text, fontFamily: T.mono, fontSize: 11,
+  padding: '4px 6px', outline: 'none', width: '100%', boxSizing: 'border-box',
+}
+
+const sel: React.CSSProperties = {
+  ...inp, cursor: 'pointer', appearance: 'none',
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath fill='%2399907e' d='M0 0l4 5 4-5z'/%3E%3C/svg%3E")`,
+  backgroundRepeat: 'no-repeat', backgroundPosition: 'right 6px center',
+  paddingRight: 22,
+}
+
+const btn: React.CSSProperties = {
+  background: 'transparent', border: `1px solid ${T.border}`,
+  color: T.muted, fontFamily: T.mono, fontSize: 9,
+  padding: '4px 10px', cursor: 'pointer', letterSpacing: '0.08em',
+}
+
+function uid() { return Math.random().toString(36).slice(2, 9) }
+
+// ── IndicatorSelector ─────────────────────────────────────────────────────────
+
+function IndicatorSelector({ value, onChange }: {
+  value: IndicatorRef
+  onChange: (v: IndicatorRef) => void
+}) {
+  const t = value.type
+
+  const setType = (type: IndicatorType) => onChange(DEFAULT_IND[type])
+  const set = (field: keyof IndicatorRef, v: number) =>
+    onChange({ ...value, [field]: v })
+
+  return (
+    <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+      <select value={t} onChange={e => setType(e.target.value as IndicatorType)}
+        style={{ ...sel, width: 110, flexShrink: 0 }}>
+        {IND_TYPES.map(it => (
+          <option key={it} value={it}>{IND_LABELS[it]}</option>
+        ))}
+      </select>
+      {(t === 'RSI' || t === 'SMA' || t === 'EMA' || t === 'ATR' || t === 'MOMENTUM' ||
+        t === 'BB_UPPER' || t === 'BB_MID' || t === 'BB_LOWER') && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+          <span style={{ fontSize: 8, color: T.muted, fontFamily: T.mono }}>period</span>
+          <input type="number" value={value.period ?? 14} min={1} max={500}
+            onChange={e => set('period', +e.target.value || 1)}
+            style={{ ...inp, width: 46 }} />
+        </div>
+      )}
+      {(t === 'BB_UPPER' || t === 'BB_MID' || t === 'BB_LOWER') && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+          <span style={{ fontSize: 8, color: T.muted, fontFamily: T.mono }}>std</span>
+          <input type="number" value={value.std ?? 2.0} min={0.1} max={5} step={0.1}
+            onChange={e => set('std', +e.target.value || 2)}
+            style={{ ...inp, width: 40 }} />
+        </div>
+      )}
+      {(t === 'MACD_LINE' || t === 'MACD_SIGNAL') && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+            <span style={{ fontSize: 8, color: T.muted, fontFamily: T.mono }}>fast</span>
+            <input type="number" value={value.fast ?? 12} min={1} max={100}
+              onChange={e => set('fast', +e.target.value || 12)}
+              style={{ ...inp, width: 40 }} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+            <span style={{ fontSize: 8, color: T.muted, fontFamily: T.mono }}>slow</span>
+            <input type="number" value={value.slow ?? 26} min={1} max={200}
+              onChange={e => set('slow', +e.target.value || 26)}
+              style={{ ...inp, width: 40 }} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+            <span style={{ fontSize: 8, color: T.muted, fontFamily: T.mono }}>sig</span>
+            <input type="number" value={value.signal_period ?? 9} min={1} max={50}
+              onChange={e => set('signal_period', +e.target.value || 9)}
+              style={{ ...inp, width: 40 }} />
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// ── ConditionRowEditor ────────────────────────────────────────────────────────
+
+function ConditionRowEditor({ cond, onChange, onRemove, index }: {
+  cond: ConditionRow
+  onChange: (c: ConditionRow) => void
+  onRemove: () => void
+  index: number
+}) {
+  const u = (patch: Partial<ConditionRow>) => onChange({ ...cond, ...patch })
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'flex-start', gap: 6, flexWrap: 'wrap',
+      padding: '7px 10px',
+      background: index % 2 === 0 ? 'rgba(255,255,255,0.015)' : 'transparent',
+      border: `1px solid ${T.border}`,
+      marginBottom: 4,
+    }}>
+      {/* LHS */}
+      <div style={{ flex: '1 1 200px', minWidth: 200 }}>
+        <div style={{ fontSize: 8, color: T.muted, fontFamily: T.mono, marginBottom: 3, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+          When
+        </div>
+        <IndicatorSelector value={cond.lhs} onChange={lhs => u({ lhs })} />
+      </div>
+
+      {/* Operator */}
+      <div style={{ flexShrink: 0, paddingTop: 17 }}>
+        <select value={cond.op} onChange={e => u({ op: e.target.value as OpType })}
+          style={{ ...sel, width: 140 }}>
+          {(Object.entries(OP_LABELS) as [OpType, string][]).map(([k, v]) => (
+            <option key={k} value={k}>{v}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* RHS */}
+      <div style={{ flex: '1 1 180px', minWidth: 160 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
+          <span style={{ fontSize: 8, color: T.muted, fontFamily: T.mono, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+            Value
+          </span>
+          <button
+            onClick={() => u({ rhs_type: cond.rhs_type === 'number' ? 'indicator' : 'number' })}
+            style={{ ...btn, padding: '1px 5px', fontSize: 8,
+              color: cond.rhs_type === 'indicator' ? T.blue : T.gold,
+              borderColor: cond.rhs_type === 'indicator' ? 'rgba(96,165,250,0.4)' : 'rgba(201,168,76,0.4)',
+            }}
+          >{cond.rhs_type === 'number' ? '# literal' : '≈ indicator'}</button>
+        </div>
+        {cond.rhs_type === 'number' ? (
+          <input type="number" value={cond.rhs_num} step={0.1}
+            onChange={e => u({ rhs_num: parseFloat(e.target.value) || 0 })}
+            style={{ ...inp }} />
+        ) : (
+          <IndicatorSelector value={cond.rhs_ind}
+            onChange={rhs_ind => u({ rhs_ind })} />
+        )}
+      </div>
+
+      {/* Remove */}
+      <button onClick={onRemove}
+        style={{ background: 'none', border: 'none', color: T.neg, cursor: 'pointer', fontSize: 16, padding: '14px 4px 0', flexShrink: 0 }}>
+        ×
+      </button>
+    </div>
+  )
+}
+
+// ── ConditionGroupEditor ──────────────────────────────────────────────────────
+
+function ConditionGroupEditor({ group, onChange, onRemove, canRemove, isBuy, accentColor }: {
+  group: ConditionGroup
+  onChange: (g: ConditionGroup) => void
+  onRemove: () => void
+  canRemove: boolean
+  isBuy: boolean
+  accentColor: string
+}) {
+  const addCond = () => {
+    const c: ConditionRow = {
+      id: uid(),
+      lhs: DEFAULT_IND['RSI'],
+      op: isBuy ? 'lt' : 'gt',
+      rhs_type: 'number',
+      rhs_num: isBuy ? 30 : 70,
+      rhs_ind: DEFAULT_IND['PRICE'],
+    }
+    onChange({ ...group, conditions: [...group.conditions, c] })
+  }
+
+  const updateCond = (i: number, c: ConditionRow) => {
+    const next = [...group.conditions]; next[i] = c
+    onChange({ ...group, conditions: next })
+  }
+
+  const removeCond = (i: number) =>
+    onChange({ ...group, conditions: group.conditions.filter((_, j) => j !== i) })
+
+  return (
+    <div style={{
+      border: `1px solid ${accentColor}30`,
+      background: `${accentColor}05`,
+      padding: '8px 10px',
+      marginBottom: 8,
+    }}>
+      {/* Group header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+        <span style={{ fontSize: 8, color: T.dim, fontFamily: T.mono }}>match</span>
+        <select value={group.logic}
+          onChange={e => onChange({ ...group, logic: e.target.value as 'AND' | 'OR' })}
+          style={{ ...sel, width: 60 }}>
+          <option value="AND">ALL</option>
+          <option value="OR">ANY</option>
+        </select>
+        <span style={{ fontSize: 8, color: T.dim, fontFamily: T.mono }}>of these conditions</span>
+        <button onClick={addCond}
+          style={{ ...btn, marginLeft: 'auto', fontSize: 8, borderColor: `${accentColor}50`, color: accentColor }}>
+          + Add Condition
+        </button>
+        {canRemove && (
+          <button onClick={onRemove}
+            style={{ background: 'none', border: `1px solid ${T.neg}40`, color: T.neg, fontFamily: T.mono,
+              fontSize: 8, padding: '3px 8px', cursor: 'pointer', letterSpacing: '0.06em' }}>
+            ÷ Remove Group
+          </button>
+        )}
+      </div>
+
+      {group.conditions.length === 0 && (
+        <div style={{ fontSize: 9, color: T.dim, fontFamily: T.mono, padding: '6px 8px',
+          border: `1px dashed ${T.border}`, textAlign: 'center' }}>
+          No conditions — click "+ Add Condition"
+        </div>
+      )}
+
+      {group.conditions.map((c, i) => (
+        <ConditionRowEditor
+          key={c.id}
+          index={i}
+          cond={c}
+          onChange={nc => updateCond(i, nc)}
+          onRemove={() => removeCond(i)}
+        />
+      ))}
+    </div>
+  )
+}
+
+// ── RuleBlockEditor ───────────────────────────────────────────────────────────
+
+function RuleBlockEditor({ label, block, onChange, accentColor }: {
+  label: string
+  block: RuleBlock
+  onChange: (b: RuleBlock) => void
+  accentColor: string
+}) {
+  const isBuy = label === 'BUY'
+
+  const addGroup = () => {
+    const g: ConditionGroup = { id: uid(), logic: 'AND', conditions: [] }
+    onChange({ ...block, groups: [...block.groups, g] })
+  }
+
+  const updateGroup = (i: number, g: ConditionGroup) => {
+    const next = [...block.groups]; next[i] = g
+    onChange({ ...block, groups: next })
+  }
+
+  const removeGroup = (i: number) =>
+    onChange({ ...block, groups: block.groups.filter((_, j) => j !== i) })
+
+  const totalConditions = block.groups.reduce((s, g) => s + g.conditions.length, 0)
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      {/* Block header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <span style={{
+          fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase',
+          color: accentColor, fontFamily: T.mono, padding: '2px 8px',
+          border: `1px solid ${accentColor}44`, background: `${accentColor}0d`,
+        }}>
+          {label}
+        </span>
+        {block.groups.length > 1 && (
+          <>
+            <span style={{ fontSize: 9, color: T.muted, fontFamily: T.mono }}>when</span>
+            <select value={block.logic}
+              onChange={e => onChange({ ...block, logic: e.target.value as 'AND' | 'OR' })}
+              style={{ ...sel, width: 60 }}>
+              <option value="AND">ALL</option>
+              <option value="OR">ANY</option>
+            </select>
+            <span style={{ fontSize: 9, color: T.muted, fontFamily: T.mono }}>of these groups are met</span>
+          </>
+        )}
+        <button onClick={addGroup}
+          style={{ ...btn, marginLeft: 'auto', borderColor: `${accentColor}60`, color: accentColor }}>
+          + Add Group
+        </button>
+      </div>
+
+      {totalConditions === 0 && (
+        <div style={{ fontSize: 10, color: T.dim, fontFamily: T.mono, padding: '8px 10px',
+          border: `1px dashed ${T.border}`, textAlign: 'center', marginBottom: 8 }}>
+          No conditions — add a group and define conditions
+        </div>
+      )}
+
+      {block.groups.map((g, i) => (
+        <ConditionGroupEditor
+          key={g.id}
+          group={g}
+          onChange={ng => updateGroup(i, ng)}
+          onRemove={() => removeGroup(i)}
+          canRemove={block.groups.length > 1}
+          isBuy={isBuy}
+          accentColor={accentColor}
+        />
+      ))}
+    </div>
+  )
+}
+
+// ── Main modal ────────────────────────────────────────────────────────────────
+
+const EMPTY_BLOCK = (): RuleBlock => ({
+  logic: 'AND',
+  groups: [{ id: uid(), logic: 'AND', conditions: [] }],
+})
+
+const DEFAULTS: CustomStrategyDef = {
+  name: '',
+  buy: {
+    logic: 'AND',
+    groups: [{
+      id: uid(), logic: 'AND',
+      conditions: [{
+        id: uid(),
+        lhs: { type: 'RSI', period: 14 },
+        op: 'lt',
+        rhs_type: 'number',
+        rhs_num: 30,
+        rhs_ind: DEFAULT_IND['PRICE'],
+      }],
+    }],
+  },
+  sell: {
+    logic: 'OR',
+    groups: [{
+      id: uid(), logic: 'OR',
+      conditions: [{
+        id: uid(),
+        lhs: { type: 'RSI', period: 14 },
+        op: 'gt',
+        rhs_type: 'number',
+        rhs_num: 70,
+        rhs_ind: DEFAULT_IND['PRICE'],
+      }],
+    }],
+  },
+  bull_drift: 0.0,
+  bear_drift: 0.0,
+}
+
+interface Props {
+  open: boolean
+  onClose: () => void
+  onSave: (def: CustomStrategyDef) => void
+  initialDef?: CustomStrategyDef | null
+}
+
+export default function CustomStrategyModal({ open, onClose, onSave, initialDef }: Props) {
+  const [def, setDef] = useState<CustomStrategyDef>(() => initialDef ?? { ...DEFAULTS, buy: { ...DEFAULTS.buy }, sell: { ...DEFAULTS.sell }, name: '' })
+  const [nameError, setNameError] = useState('')
+
+  const reset = useCallback(() => {
+    setDef(initialDef ?? { ...DEFAULTS, buy: { ...DEFAULTS.buy }, sell: { ...DEFAULTS.sell }, name: '' })
+    setNameError('')
+  }, [initialDef])
+
+  if (!open) return null
+
+  const u = (patch: Partial<CustomStrategyDef>) => setDef(d => ({ ...d, ...patch }))
+
+  const hasConditions = (block: RuleBlock) =>
+    block.groups.some(g => g.conditions.length > 0)
+
+  const handleSave = () => {
+    if (!def.name.trim()) { setNameError('Strategy name is required.'); return }
+    if (!hasConditions(def.buy) && !hasConditions(def.sell)) {
+      setNameError('Add at least one BUY or SELL condition.'); return
+    }
+    onSave({ ...def, name: def.name.trim() })
+    onClose()
+  }
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 1000,
+      display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end',
+    }}>
+      {/* Backdrop */}
+      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)' }}
+        onClick={onClose} />
+
+      {/* Drawer */}
+      <div style={{
+        position: 'relative', zIndex: 1,
+        width: 'min(820px, 96vw)', height: '100vh',
+        background: T.bg, borderLeft: `1px solid ${T.border}`,
+        display: 'flex', flexDirection: 'column',
+        overflowY: 'auto',
+      }}>
+        {/* Header */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '14px 18px', borderBottom: `1px solid ${T.border}`,
+          background: T.surface, flexShrink: 0,
+        }}>
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', color: T.gold, fontFamily: T.mono, textTransform: 'uppercase' }}>
+            Custom Strategy Builder
+          </span>
+          <span style={{ fontSize: 9, color: T.dim, fontFamily: T.mono, flex: 1 }}>
+            Define buy & sell rules from technical indicators
+          </span>
+          <button onClick={() => { reset(); onClose() }}
+            style={{ background: 'none', border: 'none', color: T.muted, cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: '0 4px' }}>
+            ×
+          </button>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: '16px 18px', flex: 1 }}>
+          {/* Strategy name */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', color: T.muted, textTransform: 'uppercase', marginBottom: 5, fontFamily: T.mono }}>
+              Strategy Name
+            </div>
+            <input
+              value={def.name}
+              onChange={e => { u({ name: e.target.value }); setNameError('') }}
+              placeholder="e.g. RSI Oversold + SMA Trend"
+              style={{ ...inp, fontSize: 13, padding: '7px 10px' }}
+            />
+            {nameError && (
+              <div style={{ fontSize: 9, color: T.neg, fontFamily: T.mono, marginTop: 4 }}>{nameError}</div>
+            )}
+          </div>
+
+          {/* Divider */}
+          <div style={{ height: 1, background: T.border, marginBottom: 16 }} />
+
+          {/* BUY block */}
+          <RuleBlockEditor
+            label="BUY"
+            block={def.buy}
+            onChange={buy => u({ buy })}
+            accentColor={T.pos}
+          />
+
+          {/* SELL block */}
+          <RuleBlockEditor
+            label="SELL"
+            block={def.sell}
+            onChange={sell => u({ sell })}
+            accentColor={T.neg}
+          />
+
+          {/* Reference guide */}
+          <div style={{ marginTop: 16, padding: '10px 12px', background: T.surface, border: `1px solid ${T.border}` }}>
+            <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', color: T.muted, textTransform: 'uppercase', marginBottom: 6, fontFamily: T.mono }}>
+              Indicator Reference
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 20px' }}>
+              {([
+                ['Price', 'Raw closing price'],
+                ['RSI(n)', 'Relative strength index, n-period'],
+                ['SMA(n)', 'Simple moving average, n-period'],
+                ['EMA(n)', 'Exponential moving average'],
+                ['MACD Line', 'EMA(fast) − EMA(slow)'],
+                ['MACD Signal', 'EMA(sig) of MACD line'],
+                ['BB Upper/Mid/Lower', 'Bollinger bands: mid ± std×σ'],
+                ['ATR(n)', 'Average true range (close-to-close proxy)'],
+                ['Momentum(n)', 'Price[i] / Price[i-n] − 1'],
+              ] as [string, string][]).map(([name, desc]) => (
+                <div key={name} style={{ fontSize: 9, color: T.muted, fontFamily: T.mono }}>
+                  <span style={{ color: T.text }}>{name}</span>
+                  <span style={{ color: T.dim }}> — {desc}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{
+          display: 'flex', gap: 8, justifyContent: 'flex-end',
+          padding: '12px 18px', borderTop: `1px solid ${T.border}`,
+          background: T.surface, flexShrink: 0,
+        }}>
+          <button onClick={() => { reset(); onClose() }} style={{ ...btn, padding: '6px 16px' }}>
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            style={{ ...btn, padding: '6px 20px', fontWeight: 700,
+              background: T.gold, border: 'none', color: T.surface, letterSpacing: '0.1em' }}
+          >
+            Save Strategy
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}

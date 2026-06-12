@@ -9,19 +9,67 @@ from pydantic import BaseModel
 
 router = APIRouter()
 
-FALLBACK_BTC = 843706.0       # SEC EDGAR 8-K 2026-06-01
-FALLBACK_AVG_COST = 75699.0   # SEC EDGAR 8-K 2026-06-01
+FALLBACK_BTC = 845256.0       # SEC EDGAR 8-K 2026-06-08 (as of June 7, 2026)
+FALLBACK_AVG_COST = 75680.0   # SEC EDGAR 8-K 2026-06-08
+
+
+def _extract_btc_from_text(text: str, date: str) -> dict | None:
+    """
+    Parse BTC holdings and average cost from a cleaned 8-K filing text.
+
+    Strategy's 8-K format has evolved. Two variants are in use:
+
+    Variant A (no purchases that week):
+        "Aggregate BTC Holdings ... 843,706 $63.87 $75,699"
+
+    Variant B (with purchases — new format, the table now has a 'During Period'
+    column that comes BEFORE the cumulative total):
+        "Aggregate BTC Holdings ... 1,550 $101.3 $65,332 845,256 $63.97 $75,680"
+
+    In both cases the cumulative holdings value is the first number > 100,000
+    that appears in the 600 characters after the "Aggregate BTC Holdings" marker.
+    """
+    import re
+    idx = text.find("Aggregate BTC Holdings")
+    if idx == -1:
+        return None
+
+    window = text[idx: idx + 600]
+
+    # Find all comma-separated numbers (NNN,NNN or N,NNN,NNN style)
+    candidates = re.findall(r"(\d[\d,]*\d)", window)
+    btc = None
+    for raw in candidates:
+        val = float(raw.replace(",", ""))
+        if 100_000 < val < 10_000_000:
+            btc = val
+            break
+
+    if btc is None:
+        return None
+
+    # Average purchase price per BTC (USD, range 10k–500k).
+    # Strategy's tables include both a period avg and a cumulative avg; the
+    # cumulative is always the LAST valid dollar amount in the range.
+    avg_cost = FALLBACK_AVG_COST
+    dollar_candidates = re.findall(r"\$\s*([\d,]{4,8})\b", window)
+    valid_prices = [float(r.replace(",", "")) for r in dollar_candidates
+                    if 10_000 <= float(r.replace(",", "")) <= 500_000]
+    if valid_prices:
+        avg_cost = valid_prices[-1]
+
+    return {"btc": btc, "avg_cost": avg_cost, "source": f"SEC EDGAR 8-K ({date})"}
 
 
 def _get_mstr_btc():
     """
-    Scrapes MSTR BTC holdings from SEC EDGAR 8-K filings (static HTML, always accessible).
-    strategy.com uses JS rendering and cannot be scraped with HTTP.
+    Fetches MSTR BTC holdings from SEC EDGAR 8-K filings.
+    Scans the most recent filings in order; returns as soon as a 'BTC Update'
+    section is found and parsed successfully.
     """
     import re
     headers = {"User-Agent": "finance-terminal research@example.com"}
     try:
-        # Step 1: get recent filings for Strategy Inc (CIK 0001050446)
         sub = requests.get(
             "https://data.sec.gov/submissions/CIK0001050446.json",
             headers=headers, timeout=8
@@ -32,7 +80,6 @@ def _get_mstr_btc():
         accns  = recent.get("accessionNumber", [])
         docs   = recent.get("primaryDocument", [])
 
-        # Step 2: find the most recent 8-K
         for form, date, acc, doc in zip(forms, dates, accns, docs):
             if form != "8-K":
                 continue
@@ -42,40 +89,22 @@ def _get_mstr_btc():
             if resp.status_code != 200:
                 continue
 
-            # Strip HTML/entities and search for BTC holdings block
             text = re.sub(r"<[^>]+>", " ", resp.text)
             text = re.sub(r"&[a-z#0-9]+;", " ", text)
             text = re.sub(r"\s+", " ", text)
 
-            # "Aggregate BTC Holdings ... <headers> ... NNN,NNN $price $avg"
-            m = re.search(
-                r"Aggregate BTC Holdings[^0-9]{0,300}([\d]{3},[\d]{3})", text, re.IGNORECASE
-            )
-            if not m:
-                # Fallback: number followed by dollar amounts near "Bitcoin"
-                m = re.search(
-                    r"([\d]{3},[\d]{3})\s+\$[\d.]+\s+\$[\d,]+\s+\*?Bitcoin", text, re.IGNORECASE
-                )
-            if m:
-                btc = float(m.group(1).replace(",", ""))
-                if 100_000 < btc < 5_000_000:
-                    # Extract per-BTC average purchase price (the 5-6 digit number after aggregate price)
-                    # Text structure: "843,706 $63.87 $75,699" — want the 5-digit dollar amount
-                    avg_match = re.search(
-                        r"Average Purchase Price[^\d$]{0,50}\$([\d,]{4,8})\b", text, re.IGNORECASE
-                    )
-                    if not avg_match:
-                        # Fallback: find the per-BTC price near the BTC count
-                        idx_btc = text.find(m.group(1))
-                        nearby = text[idx_btc:idx_btc + 60] if idx_btc != -1 else ""
-                        price_m = re.search(r"\$([\d,]{5,6})\b", nearby)
-                        avg_match = price_m
-                    avg_cost = float(avg_match.group(1).replace(",", "")) if avg_match else FALLBACK_AVG_COST
-                    return {"btc": btc, "avg_cost": avg_cost, "source": f"SEC EDGAR 8-K ({date})"}
+            # Only process filings that have a BTC update section
+            if not re.search(r"BTC Update|Aggregate BTC Holdings", text, re.IGNORECASE):
+                continue
+
+            result = _extract_btc_from_text(text, date)
+            if result:
+                return result
 
         return {"btc": FALLBACK_BTC, "avg_cost": FALLBACK_AVG_COST, "source": "EDGAR parse failed — enter manually"}
     except Exception as e:
-        return {"btc": FALLBACK_BTC, "avg_cost": FALLBACK_AVG_COST, "source": f"EDGAR unavailable — enter manually"}
+        logger.warning("_get_mstr_btc: %s", e)
+        return {"btc": FALLBACK_BTC, "avg_cost": FALLBACK_AVG_COST, "source": "EDGAR unavailable — enter manually"}
 
 
 class NavRequest(BaseModel):
@@ -116,7 +145,7 @@ def nav_proxy(req: NavRequest):
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("internal error"); raise HTTPException(500, "Internal server error")
 
     mstr_live = None

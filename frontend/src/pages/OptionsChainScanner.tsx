@@ -103,7 +103,7 @@ export function OptionsChainScannerContent() {
               fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
               textTransform: 'uppercase', padding: '8px 0', cursor: isPending ? 'default' : 'pointer', opacity: isPending ? 0.6 : 1,
             }}>
-              {isPending ? 'Loading…' : '⬢ Load Chain'}
+              {isPending ? 'Loading…' : 'Load Chain'}
             </button>
           </div>
         </>}>
@@ -125,7 +125,7 @@ export function OptionsChainScannerContent() {
                     padding: '7px 16px', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
                     textTransform: 'uppercase', background: 'none', border: 'none', cursor: 'pointer',
                     color: view === t ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-text-faint, rgba(255,255,255,0.18))',
-                    borderBottom: view === t ? '2px solid #c9a84c' : '2px solid transparent',
+                    borderBottom: view === t ? '2px solid var(--theme-primary, #c9a84c)' : '2px solid transparent',
                     marginBottom: -1,
                   }}>
                     {t === 'chart' ? 'OI Chart' : t}
@@ -136,7 +136,7 @@ export function OptionsChainScannerContent() {
               {/* OI Chart */}
               {view === 'chart' && (
                 <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', position: 'relative' }}>
-                  <div style={{ position: 'absolute', top: 0, left: 0, background: 'rgba(46,57,77,0.8)', padding: '3px 8px', borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)', zIndex: 10 }}>
+                  <div style={{ position: 'absolute', top: 0, left: 0, background: 'var(--theme-surface, rgba(46,57,77,0.8))', padding: '3px 8px', borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)', zIndex: 10 }}>
                     Open Interest by Strike — Calls vs Puts
                   </div>
                   <div style={{ paddingTop: 30, padding: '30px 8px 8px' }}>
@@ -211,5 +211,5 @@ export function OptionsChainScannerContent() {
 }
 
 export default function OptionsChainScanner() {
-  return <PageWrapper><OptionsChainScannerContent /></PageWrapper>
+  return <PageWrapper title="Options Chain Scanner"><OptionsChainScannerContent /></PageWrapper>
 }

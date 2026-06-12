@@ -185,7 +185,7 @@ export default function PortfolioSummary({ config }: { config: WidgetConfig }) {
               <XAxis dataKey="date" tick={{ fontSize: 8, fill: T.muted, fontFamily: T.mono }} tickLine={false} axisLine={false} interval={tickInterval} />
               <YAxis tick={{ fontSize: 8, fill: T.muted, fontFamily: T.mono }} tickLine={false} axisLine={false} tickFormatter={v => `${v.toFixed(0)}`} width={32} />
               <Tooltip content={<ChartTooltip />} />
-              <ReferenceLine y={100} stroke="rgba(215,227,252,0.15)" strokeDasharray="3 4" />
+              <ReferenceLine y={100} stroke="var(--theme-text-subtle, rgba(215,227,252,0.15))" strokeDasharray="3 4" />
               <Area type="monotone" dataKey="benchmark" name="SPY" stroke={T.muted} strokeWidth={1} fill="url(#bg)" dot={false} isAnimationActive={false} />
               <Area type="monotone" dataKey="portfolio" name="Port" stroke={T.gold} strokeWidth={1.5} fill="url(#pg)" dot={false} isAnimationActive={false} />
             </AreaChart>
@@ -195,7 +195,7 @@ export default function PortfolioSummary({ config }: { config: WidgetConfig }) {
               <XAxis dataKey="date" tick={{ fontSize: 8, fill: T.muted, fontFamily: T.mono }} tickLine={false} axisLine={false} interval={Math.max(1, Math.floor(betaData.length / 6))} />
               <YAxis tick={{ fontSize: 8, fill: T.muted, fontFamily: T.mono }} tickLine={false} axisLine={false} width={32} />
               <Tooltip content={<ChartTooltip />} />
-              <ReferenceLine y={1} stroke="rgba(215,227,252,0.2)" strokeDasharray="3 4" label={{ value: 'β=1', position: 'insideTopRight', fontSize: 8, fill: T.dim, fontFamily: T.label }} />
+              <ReferenceLine y={1} stroke="var(--theme-text-subtle, rgba(215,227,252,0.2))" strokeDasharray="3 4" label={{ value: 'β=1', position: 'insideTopRight', fontSize: 8, fill: T.dim, fontFamily: T.label }} />
               <Line type="monotone" dataKey="value" name="β" stroke={T.blue} strokeWidth={1.5} dot={false} isAnimationActive={false} />
             </LineChart>
           )}

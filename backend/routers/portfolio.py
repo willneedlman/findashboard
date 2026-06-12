@@ -66,7 +66,7 @@ def backtest(req: BacktestRequest):
             raw = raw.to_frame(all_tickers[0])
         if raw.index.tz is not None:
             raw.index = raw.index.tz_convert(None)
-    except Exception as e:
+    except Exception:
         logger.exception("internal error"); raise HTTPException(500, "Internal server error")
 
     raw = raw.dropna()
@@ -147,7 +147,7 @@ def monte_carlo(req: MonteCarloRequest):
         closes = hist["Close"].dropna()
         if closes.index.tz is not None:
             closes.index = closes.index.tz_convert(None)
-    except Exception as e:
+    except Exception:
         logger.exception("internal error"); raise HTTPException(500, "Internal server error")
 
     log_returns = np.log(closes / closes.shift(1)).dropna()

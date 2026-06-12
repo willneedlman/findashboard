@@ -649,3 +649,125 @@ def aggregate_greeks(req: GreeksAggregateRequest):
 
     net = {k: round(v, 4) for k, v in net.items()}
     return {"positions": rows, "net": net}
+
+
+# ── Unusual options activity scanner ──────────────────────────────────────────
+
+_UNUSUAL_DEFAULT = [
+    "SPY", "QQQ", "IWM", "AAPL", "NVDA", "TSLA", "AMD", "MSFT", "AMZN",
+    "META", "GOOGL", "NFLX", "COIN", "PLTR", "MSTR",
+]
+_unusual_cache: TTLCache = TTLCache(maxsize=64, ttl=300)   # 5 min
+_unusual_lock = threading.Lock()
+
+
+def _scan_ticker_unusual(sym: str, expiries: int, min_volume: int, min_vol_oi: float) -> list[dict]:
+    import datetime as _dt
+    today = _dt.date.today()
+    try:
+        exps = _tradier.get_expirations(sym)
+    except Exception as e:
+        logger.warning("unusual: expirations failed %s: %s", sym, e)
+        return []
+    future = [e for e in exps if _dt.date.fromisoformat(e) > today][:expiries]
+    if not future:
+        return []
+    try:
+        q = _tradier.get_quote(sym)
+        spot = float(q.get("last") or q.get("close") or 0) or None
+    except Exception:
+        spot = None
+
+    out: list[dict] = []
+    for exp in future:
+        try:
+            chain = _tradier.get_options_chain(sym, exp)
+        except Exception as e:
+            logger.warning("unusual: chain failed %s %s: %s", sym, exp, e)
+            continue
+        dte = max((_dt.date.fromisoformat(exp) - today).days, 0)
+        for typ, contracts in (("call", chain["calls"]), ("put", chain["puts"])):
+            for c in contracts:
+                vol = int(c.get("volume") or 0)
+                oi  = int(c.get("openInterest") or 0)
+                if vol < min_volume:
+                    continue
+                # No prior OI ⇒ freshly opened position; always notable. Otherwise gate on ratio.
+                vol_oi = (vol / oi) if oi > 0 else float(vol)
+                if oi > 0 and vol_oi < min_vol_oi:
+                    continue
+                strike = float(c.get("strike") or 0)
+                mid = ((c.get("bid") or 0) + (c.get("ask") or 0)) / 2 or float(c.get("lastPrice") or 0)
+                out.append({
+                    "ticker":       sym,
+                    "type":         typ,
+                    "strike":       round(strike, 2),
+                    "expiry":       exp,
+                    "dte":          dte,
+                    "spot":         round(spot, 2) if spot else None,
+                    "moneyness":    round((strike / spot - 1) * 100, 1) if spot else None,
+                    "volume":       vol,
+                    "openInterest": oi,
+                    "volOiRatio":   round(vol_oi, 2),
+                    "iv":           round(float(c.get("impliedVolatility") or 0) * 100, 1),
+                    "mid":          round(mid, 2),
+                    "premium":      round(vol * mid * 100),
+                })
+    return out
+
+
+@router.get("/unusual")
+def unusual_activity(
+    tickers: str | None = None,
+    expiries: int = 2,
+    min_volume: int = 300,
+    min_vol_oi: float = 1.5,
+    limit: int = 60,
+):
+    """Scan option chains for unusual activity: high volume and volume/OI spikes.
+
+    Sorted by traded premium (volume × mid × 100), descending.
+    """
+    import datetime as _dt
+    from concurrent.futures import ThreadPoolExecutor
+
+    syms = [s.strip().upper() for s in (tickers.split(",") if tickers else _UNUSUAL_DEFAULT) if s.strip()]
+    syms = [s for s in dict.fromkeys(syms)][:25]   # dedupe, cap
+    expiries   = max(1, min(expiries, 4))
+    min_volume = max(0, min_volume)
+    limit      = max(1, min(limit, 200))
+
+    valid = []
+    for s in syms:
+        try:
+            validate_ticker(s)
+            valid.append(s)
+        except Exception:
+            continue
+
+    cache_key = f"{','.join(valid)}|{expiries}|{min_volume}|{min_vol_oi}|{limit}"
+    with _unusual_lock:
+        cached = _unusual_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    rows: list[dict] = []
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = pool.map(
+            lambda s: _scan_ticker_unusual(s, expiries, min_volume, min_vol_oi),
+            valid,
+        )
+        for r in results:
+            rows.extend(r)
+
+    rows.sort(key=lambda r: r["premium"], reverse=True)
+    result = {
+        "asOf":    _dt.datetime.utcnow().isoformat() + "Z",
+        "scanned": valid,
+        "count":   len(rows[:limit]),
+        "rows":    rows[:limit],
+        "params":  {"expiries": expiries, "minVolume": min_volume, "minVolOi": min_vol_oi},
+    }
+    with _unusual_lock:
+        _unusual_cache[cache_key] = result
+    return result

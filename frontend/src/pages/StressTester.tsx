@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import axios from 'axios'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer, Cell } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
-import ExportPdfButton from '../components/ExportPdfButton'
+import PageHeader from '../components/PageHeader'
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 const T = {
@@ -188,18 +188,10 @@ export default function StressTester() {
     <PageWrapper>
       <div id="stress-tester-content" style={{ maxWidth: 1100, margin: '0 auto' }}>
 
-        {/* Page header */}
-        <div style={{ marginBottom: 28, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-          <div>
-            <h1 style={{ fontFamily: T.mono, fontSize: 18, fontWeight: 700, color: T.gold, letterSpacing: '0.08em', margin: 0 }}>
-              PORTFOLIO STRESS TESTER
-            </h1>
-            <p style={{ fontFamily: T.label, fontSize: 11, color: T.muted, marginTop: 6 }}>
-              Simulate how your portfolio would have performed during major historical market shocks.
-            </p>
-          </div>
-          <ExportPdfButton targetId="stress-tester-content" filename="stress-test.pdf" />
-        </div>
+        <PageHeader
+          title="Portfolio Stress Tester"
+          subtitle="Simulate how your portfolio would have performed during major historical market shocks."
+        />
 
         <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 24, alignItems: 'start' }}>
 
@@ -246,7 +238,7 @@ export default function StressTester() {
                   + Add
                 </button>
                 <span style={{ fontFamily: T.mono, fontSize: 10, color: weightOk ? T.pos : T.neg }}>
-                  {totalWeight.toFixed(1)}% {weightOk ? '✓' : '≠ 100%'}
+                  {totalWeight.toFixed(1)}% {weightOk ? 'OK' : '≠ 100%'}
                 </span>
               </div>
             </Section>
@@ -350,7 +342,7 @@ export default function StressTester() {
                       </Bar>
                       <Bar dataKey="spy" name="spy" radius={[2, 2, 0, 0]}>
                         {chartData.map((d, i) => (
-                          <Cell key={i} fill={T.muted} opacity={0.4} />
+                          <Cell key={i} fill="var(--theme-chart-neutral, #4a7fa5)" opacity={0.45} />
                         ))}
                       </Bar>
                     </BarChart>

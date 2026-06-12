@@ -59,15 +59,15 @@ const PRESETS  = [
 ]
 
 const C = {
-  bg:      '#101c2e',
-  surf:    '#0d1826',
-  border:  '#1e3a5f',
-  gold:    '#c9a84c',
+  bg:      'var(--theme-bg)',
+  surf:    'var(--theme-surface)',
+  border:  'var(--theme-border)',
+  gold:    'var(--theme-primary)',
   text:    'var(--theme-text, #d7e3fc)',
-  muted:   '#7a8fa6',
-  blue:    '#7aa2f7',
-  green:   '#22c55e',
-  red:     '#f7768e',
+  muted:   'var(--theme-text-dim)',
+  blue:    'var(--theme-tertiary)',
+  green:   'var(--theme-positive)',
+  red:     'var(--theme-negative)',
   purple:  '#bb9af7',
 }
 
@@ -327,7 +327,7 @@ export default function RegressionAnalysis() {
         </div>
 
         <button onClick={run} disabled={mutation.isPending}
-          style={{ ...btnStyle, background: C.gold, color: '#000', fontWeight: 700, padding: '8px 20px' }}>
+          style={{ ...btnStyle, background: C.gold, color: 'var(--theme-bg)', fontWeight: 700, padding: '8px 20px' }}>
           {mutation.isPending ? 'Running…' : 'Run Regression'}
         </button>
       </div>
@@ -432,7 +432,7 @@ export default function RegressionAnalysis() {
 // ── Shared styles ─────────────────────────────────────────────────────────────
 
 const inputStyle: React.CSSProperties = {
-  background: '#0d1826', border: '1px solid #1e3a5f', borderRadius: 4,
+  background: 'var(--theme-bg)', border: '1px solid var(--theme-border)', borderRadius: 4,
   color: 'var(--theme-text, #d7e3fc)', padding: '6px 10px', fontSize: 12,
   fontFamily: 'var(--theme-mono)', width: 130, outline: 'none',
 }
@@ -442,7 +442,7 @@ const selectStyle: React.CSSProperties = {
 }
 
 const btnStyle: React.CSSProperties = {
-  background: '#0d1826', border: '1px solid #1e3a5f', borderRadius: 4,
+  background: 'var(--theme-bg)', border: '1px solid var(--theme-border)', borderRadius: 4,
   color: 'var(--theme-text, #d7e3fc)', padding: '6px 14px', fontSize: 12,
   fontFamily: 'var(--theme-mono)', cursor: 'pointer',
 }

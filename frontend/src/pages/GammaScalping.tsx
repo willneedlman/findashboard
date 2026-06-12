@@ -5,7 +5,6 @@ import {
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
   ReferenceLine, Legend, Cell,
 } from 'recharts'
-import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
 import EmptyState from '../components/EmptyState'
 import HelpTip from '../components/HelpTip'
@@ -455,7 +454,7 @@ export function GammaScalpingContent() {
               fontSize: 11, padding: '5px 8px', cursor: fetching ? 'wait' : 'pointer',
             }}
           >
-            {fetching ? '…' : '↓'}
+            {fetching ? '…' : 'Fill'}
           </button>
         </div>
         {fetchErr && <div style={{ fontSize: 10, color: cc.loss, marginTop: 3 }}>{fetchErr}</div>}
@@ -499,7 +498,7 @@ export function GammaScalpingContent() {
       <div>
         <span style={LABEL}>
           Realized Vol (%)
-          <HelpTip text="Actual stock vol in sim. RV > IV = long gamma edge. Auto-filled by ↓." width={160} />
+          <HelpTip text="Actual stock vol in sim. RV > IV = long gamma edge. Auto-filled by the fetch button." width={160} />
         </span>
         <input style={INPUT} type="number" min={1} max={500} step={0.1} value={rv}
           onChange={e => setRv(parseFloat(e.target.value) || 0)} />
@@ -559,7 +558,7 @@ export function GammaScalpingContent() {
           width: '100%', textAlign: 'center',
         }}
       >
-        {mutation.isPending ? 'Running…' : '↓ Run Simulation'}
+        {mutation.isPending ? 'Running…' : 'Run Simulation'}
       </button>
 
       {mutation.isError && (
@@ -590,7 +589,7 @@ export function GammaScalpingContent() {
           {!result ? (
             <EmptyState
               title="No simulation run yet"
-              hint="Configure position parameters in the sidebar and click ↓ Run Simulation."
+              hint="Configure position parameters in the sidebar and click Run Simulation."
             />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -747,8 +746,4 @@ export function GammaScalpingContent() {
         </SidebarLayout>
       </div>
   )
-}
-
-export default function GammaScalping() {
-  return <PageWrapper><GammaScalpingContent /></PageWrapper>
 }

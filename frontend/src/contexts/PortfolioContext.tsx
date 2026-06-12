@@ -26,9 +26,14 @@ function saveToStorage(key: string, h: PortfolioHolding[]) {
   try { localStorage.setItem(key, JSON.stringify(h)) } catch { /* quota */ }
 }
 
+function authHeaders(): Record<string, string> {
+  const token = localStorage.getItem('ft-session-token')
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 async function fetchFromServer(userId: string): Promise<PortfolioHolding[]> {
   try {
-    const res = await fetch(`/api/users/portfolio/${userId}`)
+    const res = await fetch(`/api/users/portfolio/${userId}`, { headers: { ...authHeaders() } })
     if (!res.ok) return []
     const data = await res.json()
     return data.holdings ?? []
@@ -39,7 +44,7 @@ async function pushToServer(userId: string, holdings: PortfolioHolding[]) {
   try {
     await fetch('/api/users/portfolio', {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ user_id: userId, holdings }),
     })
   } catch { /* network error — ignore, localStorage is source of truth */ }

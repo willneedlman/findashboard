@@ -8,16 +8,13 @@ Price Alert System
 - WS auth via ?token= (SHA-256 of user PIN, same as users.py)
 """
 import asyncio
-import hashlib
 import logging
 import os
 import sqlite3
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
 
 import aiosqlite
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
@@ -89,13 +86,19 @@ async def _ws_broadcast(user_id: str, payload: dict):
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
 def _valid_token(user_id: str, token: str) -> bool:
-    """Validate token = SHA-256(pin) against users.db."""
+    """Validate a session token (from /api/users/login) against users.db.
+
+    Uses the sessions table rather than the credential hash — the hash is now a
+    salted PBKDF2 digest, and a credential hash should never be used as a bearer
+    token anyway."""
+    if not token:
+        return False
     try:
         from pathlib import Path as _Path
         users_db = _Path(os.getenv("USERS_DB_PATH", "./users.db"))
         with sqlite3.connect(str(users_db)) as conn:
-            row = conn.execute("SELECT pin_hash FROM users WHERE id = ?", (user_id,)).fetchone()
-        return row is not None and row[0] == token
+            row = conn.execute("SELECT user_id FROM sessions WHERE token = ?", (token,)).fetchone()
+        return row is not None and row[0] == user_id
     except Exception as e:
         _log.warning("Token validation error: %s", e)
         return False

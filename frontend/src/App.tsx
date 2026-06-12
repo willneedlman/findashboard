@@ -45,6 +45,9 @@ const RegressionAnalysis = lazy(() => import('./pages/RegressionAnalysis'))
 const OptionsHub         = lazy(() => import('./pages/OptionsHub'))
 const MacroHub           = lazy(() => import('./pages/MacroHub'))
 const ResearchHub        = lazy(() => import('./pages/ResearchHub'))
+const IVTracker          = lazy(() => import('./pages/IVTracker'))
+const OptionsMarketMaker = lazy(() => import('./pages/OptionsMarketMaker'))
+const UnusualOptions     = lazy(() => import('./pages/UnusualOptions'))
 
 function PageLoader() {
   return (
@@ -105,6 +108,9 @@ export default function App() {
               <Route path="/options-hub"        element={<OptionsHub />} />
               <Route path="/macro-hub"          element={<MacroHub />} />
               <Route path="/research-hub"       element={<ResearchHub />} />
+              <Route path="/iv-tracker"         element={<IVTracker />} />
+              <Route path="/market-maker"       element={<OptionsMarketMaker />} />
+              <Route path="/unusual-options"    element={<UnusualOptions />} />
             </Routes>
           </Suspense>
         </AnimatePresence>

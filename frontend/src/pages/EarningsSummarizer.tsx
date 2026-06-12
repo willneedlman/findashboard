@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
 import TickerTagInput from '../components/TickerTagInput'
@@ -48,16 +47,25 @@ function Pill({ label, color = C.muted }: { label: string; color?: string }) {
 }
 
 function ResultCard({ result }: { result: Result }) {
-  const [filings, setFilings] = useState<Filing[] | null>(null)
-  const [loadingFilings, setLoadingFilings] = useState(false)
+  const [filings,       setFilings]       = useState<Filing[] | null>(null)
+  const [loadingFilings,setLoadingFilings] = useState(false)
+  const [filingsErr,    setFilingsErr]     = useState<string | null>(null)
 
   const fetchFilings = async () => {
     setLoadingFilings(true)
+    setFilings(null)
+    setFilingsErr(null)
     try {
       const res = await axios.get(`/api/filings/filings/${result.ticker}`)
-      setFilings(res.data.filings)
-    } catch { setFilings([]) }
-    finally { setLoadingFilings(false) }
+      const list: Filing[] = res.data.filings ?? []
+      setFilings(list)
+      if (list.length === 0) setFilingsErr('No recent filings found on EDGAR')
+    } catch {
+      setFilings([])
+      setFilingsErr('Could not reach SEC EDGAR — try again')
+    } finally {
+      setLoadingFilings(false)
+    }
   }
 
   if (result.error) {
@@ -162,9 +170,9 @@ function ResultCard({ result }: { result: Result }) {
 
         {/* SEC filings */}
         <div>
-          <button onClick={fetchFilings} disabled={loadingFilings || filings !== null}
-            style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.muted, fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '4px 12px', cursor: 'pointer' }}>
-            {loadingFilings ? 'Loading filings…' : filings !== null ? 'SEC Filings' : 'Fetch SEC Filings'}
+          <button onClick={fetchFilings} disabled={loadingFilings}
+            style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.muted, fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '4px 12px', cursor: loadingFilings ? 'default' : 'pointer', opacity: loadingFilings ? 0.6 : 1 }}>
+            {loadingFilings ? 'Loading…' : filings && filings.length > 0 ? '↺ Refresh SEC Filings' : 'Fetch SEC Filings'}
           </button>
           {filings && filings.length > 0 && (
             <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -176,8 +184,8 @@ function ResultCard({ result }: { result: Result }) {
               ))}
             </div>
           )}
-          {filings && filings.length === 0 && (
-            <span style={{ fontFamily: C.sans, fontSize: 9, color: C.dim, marginLeft: 8 }}>No recent filings found</span>
+          {filingsErr && (
+            <span style={{ fontFamily: C.sans, fontSize: 9, color: C.warn, marginLeft: 8 }}>{filingsErr}</span>
           )}
         </div>
       </div>
@@ -294,28 +302,11 @@ export default function EarningsSummarizer() {
     setOverallProgress(Math.round(sumPct / totalTickers))
   }, [tickerProgress, tickers.length, inProgress])
 
-  // Fetch transcripts list for a single ticker preview
-  const { data: txPreview, refetch: fetchTx, isFetching: txFetching } = useQuery({
-    queryKey: ['tx-preview', tickers[0]],
-    queryFn: () => tickers[0] ? axios.get(`/api/filings/transcripts/${tickers[0]}?limit=3`).then(r => r.data) : null,
-    enabled: false,
-  })
-
   const check: React.CSSProperties = { width: 12, height: 12, flexShrink: 0, cursor: 'pointer' }
 
   return (
-    <PageWrapper>
+    <PageWrapper title="Earnings Summarizer">
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-
-        {/* Page header */}
-        <div>
-          <h1 style={{ fontFamily: C.mono, fontSize: 16, fontWeight: 700, color: C.gold, letterSpacing: '0.08em', margin: 0 }}>
-            AI EARNINGS SUMMARIZER
-          </h1>
-          <p style={{ fontFamily: C.sans, fontSize: 11, color: C.muted, marginTop: 4 }}>
-            Fetch earnings call transcripts, quarterly financials, and SEC filings · analyzed by Claude
-          </p>
-        </div>
 
         {/* Control bar */}
         <div style={{ background: C.surface, border: `1px solid ${C.border}`, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -351,25 +342,11 @@ export default function EarningsSummarizer() {
             {/* Run button */}
             <button onClick={startAnalysis} disabled={isPending || tickers.length === 0}
               style={{ marginLeft: 'auto', background: 'var(--theme-surface, #1f2a3d)', border: `1px solid ${C.gold}`, color: C.gold, fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', padding: '8px 20px', cursor: isPending || tickers.length === 0 ? 'default' : 'pointer', opacity: isPending || tickers.length === 0 ? 0.6 : 1 }}>
-              {isPending ? `Analyzing… (${overallProgress}%)` : '⬢ Analyze'}
+              {isPending ? `Analyzing… (${overallProgress}%)` : 'Analyze'}
             </button>
           </div>
         </div>
 
-        {/* Transcript browser (sidebar helper) */}
-        {tickers.length > 0 && (
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button onClick={() => fetchTx()} disabled={txFetching}
-              style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.muted, fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '4px 12px', cursor: 'pointer' }}>
-              {txFetching ? 'Loading…' : `Browse ${tickers[0]} transcripts`}
-            </button>
-            {txPreview?.transcripts?.map((tx: { date: string; quarter: number; year: number }, i: number) => (
-              <span key={i} style={{ fontFamily: C.sans, fontSize: 9, color: C.dim, border: `1px solid ${C.border}`, padding: '3px 8px' }}>
-                Q{tx.quarter} {tx.year} · {tx.date?.slice(0, 10)}
-              </span>
-            ))}
-          </div>
-        )}
 
         {/* Error */}
         {error && (

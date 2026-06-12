@@ -262,7 +262,9 @@ MACRO_ASSETS = [
     ("DX-Y.NYB",  "DXY",       "fx"),
     # Commodities
     ("CL=F",      "WTI Oil",   "commodity"),
+    ("BZ=F",      "Brent Oil", "commodity"),
     ("GC=F",      "Gold",      "commodity"),
+    ("SI=F",      "Silver",    "commodity"),
     ("HG=F",      "Copper",    "commodity"),
     ("NG=F",      "Nat Gas",   "commodity"),
     # Bonds (yfinance)
@@ -286,45 +288,48 @@ TREASURY_TENORS = {
     "7Y":  ("BC_7YEAR",   "US 7Y"),
 }
 
-def _fetch_treasury_yields() -> dict[str, float]:
-    """Get interpolated yields for missing tenors from yfinance anchors."""
-    import yfinance as yf
+def _fetch_treasury_yields() -> dict[str, tuple[float, float]]:
+    """Return (current_yield, prev_yield) for interpolated tenors."""
     try:
-        # Get the 4 reliable yfinance tenors
         syms = {"3M": "^IRX", "5Y": "^FVX", "10Y": "^TNX", "30Y": "^TYX"}
-        anchors = {}
-        for label, sym in syms.items():
+        anchors_cur: dict[str, float] = {}
+        anchors_prev: dict[str, float] = {}
+        for lbl, sym in syms.items():
             t = yf.Ticker(sym)
             hist = t.history(period="5d")
             if not hist.empty:
-                val = float(hist["Close"].dropna().iloc[-1])
-                anchors[label] = val if val < 20.0 else val / 100.0
+                closes = hist["Close"].dropna()
+                cur  = float(closes.iloc[-1])
+                prev = float(closes.iloc[-2]) if len(closes) >= 2 else cur
+                anchors_cur[lbl]  = cur  if cur  < 20.0 else cur  / 100.0
+                anchors_prev[lbl] = prev if prev < 20.0 else prev / 100.0
 
-        if len(anchors) < 2:
+        if len(anchors_cur) < 2:
             return {}
 
-        # Linear interpolation
         anchor_map = {"3M": 0.25, "5Y": 5.0, "10Y": 10.0, "30Y": 30.0}
-        sorted_anchors = sorted([(anchor_map[k], v) for k, v in anchors.items() if k in anchor_map])
 
-        def interp(target_yrs: float) -> float:
-            years = [a[0] for a in sorted_anchors]
-            yields = [a[1] for a in sorted_anchors]
-            if target_yrs <= years[0]:
-                return yields[0]
-            if target_yrs >= years[-1]:
-                return yields[-1]
-            for i in range(len(years) - 1):
-                if years[i] <= target_yrs <= years[i + 1]:
-                    t = (target_yrs - years[i]) / (years[i + 1] - years[i])
-                    return yields[i] + t * (yields[i + 1] - yields[i])
-            return yields[-1]
+        def make_interp(anchors: dict[str, float]):
+            pts = sorted([(anchor_map[k], v) for k, v in anchors.items() if k in anchor_map])
+            yrs = [p[0] for p in pts]
+            yld = [p[1] for p in pts]
+            def _interp(target: float) -> float:
+                if target <= yrs[0]:  return yld[0]
+                if target >= yrs[-1]: return yld[-1]
+                for i in range(len(yrs) - 1):
+                    if yrs[i] <= target <= yrs[i + 1]:
+                        tt = (target - yrs[i]) / (yrs[i + 1] - yrs[i])
+                        return yld[i] + tt * (yld[i + 1] - yld[i])
+                return yld[-1]
+            return _interp
 
+        interp_cur  = make_interp(anchors_cur)
+        interp_prev = make_interp(anchors_prev) if len(anchors_prev) >= 2 else interp_cur
+
+        targets = {"1M": 1/12, "6M": 0.5, "3Y": 3.0, "7Y": 7.0}
         return {
-            "1M": round(interp(1/12), 4),
-            "6M": round(interp(0.5), 4),
-            "3Y": round(interp(3.0), 4),
-            "7Y": round(interp(7.0), 4),
+            tenor: (round(interp_cur(yrs), 4), round(interp_prev(yrs), 4))
+            for tenor, yrs in targets.items()
         }
     except Exception:
         return {}
@@ -366,9 +371,21 @@ def macro_dashboard():
     treasury_yields = _fetch_treasury_yields()
     for tenor, (field, label) in TREASURY_TENORS.items():
         if tenor in treasury_yields:
-            price = treasury_yields[tenor]
+            price, prev = treasury_yields[tenor]
+            chg = price - prev
+            pct = (chg / prev * 100) if prev else 0.0
             results.append({"ticker": f"UST{tenor}", "label": label, "category": "bond",
-                             "price": price, "change": None, "pct": None})
+                             "price": price, "change": round(chg, 4), "pct": round(pct, 3)})
+
+    # Sort bond results by maturity so the yield curve reads short → long
+    _bond_maturity = {
+        "US 1M": 1, "US 3M": 2, "US 6M": 3, "US 1Y": 4,
+        "US 3Y": 5, "US 5Y": 6, "US 7Y": 7, "US 10Y": 8, "US 30Y": 9,
+    }
+    non_bonds = [r for r in results if r["category"] != "bond"]
+    bonds     = sorted([r for r in results if r["category"] == "bond"],
+                       key=lambda a: _bond_maturity.get(a["label"], 99))
+    results   = non_bonds + bonds
 
     payload = {"assets": results, "as_of": date.today().isoformat()}
     with _MACRO_LOCK:

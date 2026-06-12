@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import axios from 'axios'
 import { useQueries } from '@tanstack/react-query'
 import PageWrapper from '../components/PageWrapper'
@@ -14,8 +14,8 @@ const T = {
   text:    'var(--theme-text, #d7e3fc)',
   mono:    'var(--theme-mono)',
   label:   'var(--theme-sans)',
-  pos:     '#22c55e',
-  neg:     '#ef4444',
+  pos:     'var(--theme-positive)',
+  neg:     'var(--theme-negative)',
 }
 
 const STORAGE_KEY = 'ft-portfolio-manager'
@@ -59,11 +59,17 @@ export default function PortfolioManager() {
   const [newTicker,  setNewTicker]  = useState('')
   const [newShares,  setNewShares]  = useState('')
   const [newCost,    setNewCost]    = useState('')
-  const [editIdx,    setEditIdx]    = useState<number | null>(null)
-  const [syncFlash,  setSyncFlash]  = useState(false)
+
+  const [saveFlash,  setSaveFlash]  = useState(false)
+  const [dirty,      setDirty]      = useState(false)
   const { setHoldings: syncToContext } = usePortfolio()
 
-  useEffect(() => { saveHoldings(holdings) }, [holdings])
+  const mountRef = useRef(false)
+  useEffect(() => {
+    if (!mountRef.current) { mountRef.current = true; return }
+    saveHoldings(holdings)
+    setDirty(true)
+  }, [holdings])
 
   // Fetch live prices for all tickers
   const priceResults = useQueries({
@@ -123,32 +129,68 @@ export default function PortfolioManager() {
   const totalPnl    = totalValue - totalCost
   const totalPnlPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : null
 
-  const syncToTerminal = useCallback(() => {
+  const handleSave = useCallback(() => {
+    saveHoldings(holdings)
     const priced = rows.filter(r => r.price > 0)
-    if (!priced.length) return
-    const total = priced.reduce((s, r) => s + r.value, 0) || 1
-    syncToContext(priced.map(r => ({
-      ticker: r.ticker,
-      weight: Math.round((r.value / total) * 100 * 10) / 10,
-    })))
-    setSyncFlash(true)
-    setTimeout(() => setSyncFlash(false), 1500)
-  }, [rows, syncToContext])
+    if (priced.length > 0) {
+      const total = priced.reduce((s, r) => s + r.value, 0) || 1
+      syncToContext(priced.map(r => ({
+        ticker: r.ticker,
+        weight: Math.round((r.value / total) * 100 * 10) / 10,
+      })))
+    } else if (holdings.length > 0) {
+      const w = Math.round(1000 / holdings.length) / 10
+      syncToContext(holdings.map(h => ({ ticker: h.ticker, weight: w })))
+    }
+    setSaveFlash(true)
+    setDirty(false)
+    setTimeout(() => setSaveFlash(false), 2000)
+  }, [holdings, rows, syncToContext])
 
   const lbl: React.CSSProperties = { fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.muted }
 
   return (
-    <PageWrapper>
+    <PageWrapper title="Portfolio Manager">
       <div style={{ maxWidth: 1050, margin: '0 auto' }}>
 
         {/* Header */}
-        <div style={{ marginBottom: 24 }}>
-          <h1 style={{ fontFamily: T.mono, fontSize: 18, fontWeight: 700, color: T.gold, letterSpacing: '0.08em', margin: 0 }}>
-            PORTFOLIO MANAGER
-          </h1>
-          <p style={{ fontFamily: T.label, fontSize: 11, color: T.muted, marginTop: 6 }}>
-            Track holdings by shares and cost basis. Import from CSV or JSON.
-          </p>
+        <div style={{ marginBottom: 24, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+          <div>
+            <h1 style={{ fontFamily: T.mono, fontSize: 18, fontWeight: 700, color: T.gold, letterSpacing: '0.08em', margin: 0 }}>
+              PORTFOLIO MANAGER
+            </h1>
+            <p style={{ fontFamily: T.label, fontSize: 11, color: T.muted, marginTop: 6, marginBottom: 0 }}>
+              Track holdings by shares and cost basis. Import from CSV or JSON.
+            </p>
+          </div>
+          {holdings.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
+              <button
+                onClick={handleSave}
+                style={{
+                  background: saveFlash ? T.gold : dirty ? 'color-mix(in srgb, var(--theme-primary) 15%, transparent)' : 'transparent',
+                  border: `1px solid ${saveFlash ? T.gold : dirty ? T.gold : T.border}`,
+                  color: saveFlash ? 'var(--theme-bg)' : T.gold,
+                  fontFamily: T.label, fontSize: 10, fontWeight: 700,
+                  letterSpacing: '0.12em', textTransform: 'uppercase',
+                  padding: '8px 20px', cursor: 'pointer',
+                  transition: 'all 0.2s', whiteSpace: 'nowrap',
+                }}
+              >
+                {saveFlash ? 'Saved' : 'Save Portfolio'}
+              </button>
+              {dirty && !saveFlash && (
+                <span style={{ fontFamily: T.mono, fontSize: 8, color: T.muted, letterSpacing: '0.08em' }}>
+                  unsaved changes
+                </span>
+              )}
+              {saveFlash && (
+                <span style={{ fontFamily: T.mono, fontSize: 8, color: 'var(--theme-positive)', letterSpacing: '0.08em' }}>
+                  synced to all tools
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 24, alignItems: 'start' }}>
@@ -170,7 +212,7 @@ export default function PortfolioManager() {
                   placeholder="Avg Cost ($)" type="number" min="0" style={inp}
                   onKeyDown={e => e.key === 'Enter' && addHolding()} />
                 <button onClick={addHolding} style={{
-                  background: T.gold, border: 'none', color: '#0a1220',
+                  background: T.gold, border: 'none', color: 'var(--theme-bg)',
                   fontFamily: T.label, fontSize: 10, fontWeight: 700,
                   letterSpacing: '0.12em', textTransform: 'uppercase',
                   padding: '7px 0', cursor: 'pointer',
@@ -195,29 +237,6 @@ export default function PortfolioManager() {
               </p>
             </div>
 
-            {/* Sync to terminal */}
-            {holdings.length > 0 && (
-              <div>
-                <div style={{ ...lbl, marginBottom: 10 }}>Terminal Sync</div>
-                <button
-                  onClick={syncToTerminal}
-                  disabled={!rows.some(r => r.price > 0)}
-                  style={{
-                    width: '100%', background: syncFlash ? T.gold : 'transparent',
-                    border: `1px solid ${syncFlash ? T.gold : T.border}`,
-                    color: syncFlash ? '#0a1220' : T.gold,
-                    fontFamily: T.label, fontSize: 10, fontWeight: 700,
-                    letterSpacing: '0.12em', textTransform: 'uppercase',
-                    padding: '7px 0', cursor: 'pointer', transition: 'all 0.2s',
-                  }}
-                >
-                  {syncFlash ? '✓ Synced' : '⬢ Sync to Backtester / MonteCarlo'}
-                </button>
-                <p style={{ fontFamily: T.label, fontSize: 8, color: T.muted, marginTop: 6, lineHeight: 1.4 }}>
-                  Pushes value-weighted allocations to all terminal tools.
-                </p>
-              </div>
-            )}
 
             {/* Summary card */}
             {holdings.length > 0 && (

@@ -656,7 +656,7 @@ export default function TradeJournal() {
   }
 
   return (
-    <PageWrapper>
+    <PageWrapper title="Trade Journal">
       <div style={{
         display: 'flex',
         height: 'calc(100vh - 52px)',
@@ -674,11 +674,8 @@ export default function TradeJournal() {
           overflow: 'hidden',
         }}>
           {/* Header */}
-          <div style={{ padding: '18px 20px 12px', borderBottom: `1px solid ${C.border}` }}>
-            <div style={{ fontFamily: C.mono, fontSize: 13, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: C.gold }}>
-              Trade Journal
-            </div>
-            <div style={{ fontFamily: C.mono, fontSize: 9, color: C.muted, marginTop: 3, letterSpacing: '0.1em' }}>
+          <div style={{ padding: '12px 20px 10px', borderBottom: `1px solid ${C.border}` }}>
+            <div style={{ fontFamily: C.mono, fontSize: 9, color: C.muted, letterSpacing: '0.1em' }}>
               track · learn · improve
             </div>
           </div>

@@ -100,7 +100,7 @@ export default function CorrelationMatrix({ config }: { config: WidgetConfig }) 
             {/* Heatmap — outlined, fills available height */}
             <div style={{
               flex: 1, minHeight: 0,
-              border: '1px solid rgba(215,227,252,0.18)',
+              border: '1px solid var(--theme-border, rgba(215,227,252,0.18))',
               borderRadius: 2, padding: 6,
               display: 'flex', flexDirection: 'column', gap: 2,
             }}>
@@ -151,7 +151,7 @@ export default function CorrelationMatrix({ config }: { config: WidgetConfig }) 
             {/* Legend — outlined */}
             <div style={{
               flexShrink: 0,
-              border: '1px solid rgba(215,227,252,0.18)',
+              border: '1px solid var(--theme-border, rgba(215,227,252,0.18))',
               borderRadius: 2, padding: '5px 8px',
               display: 'flex', alignItems: 'center', gap: 10,
             }}>

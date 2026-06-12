@@ -27,7 +27,6 @@ import ast
 import importlib.util
 import inspect
 import os
-import sys
 import types
 from pathlib import Path
 from typing import Type
@@ -287,9 +286,10 @@ def _safe_builtins() -> dict:
         "int", "float", "str", "bool", "bytes", "bytearray",
         "list", "dict", "set", "frozenset", "tuple",
         "complex", "range",
-        # Type checks
-        "isinstance", "issubclass", "type", "callable", "len",
-        "hasattr", "getattr", "setattr", "delattr",
+        # Type checks. getattr/setattr/delattr/vars/dir are intentionally EXCLUDED:
+        # with a string argument they bypass the AST dunder-access block
+        # (e.g. getattr(object, "__subclasses__")()) and enable a sandbox escape.
+        "isinstance", "issubclass", "type", "callable", "len", "hasattr",
         # Iteration
         "zip", "map", "filter", "enumerate", "reversed", "sorted",
         "min", "max", "sum", "abs", "round", "divmod", "pow",
@@ -301,7 +301,7 @@ def _safe_builtins() -> dict:
         "AttributeError", "StopIteration", "RuntimeError", "NotImplementedError",
         "OverflowError", "ZeroDivisionError",
         # Misc
-        "print", "hash", "id", "vars", "dir",
+        "print", "hash", "id",
         "staticmethod", "classmethod", "property",
         "object", "super", "NotImplemented", "Ellipsis",
         "True", "False", "None",

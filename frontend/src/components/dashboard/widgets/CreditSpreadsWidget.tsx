@@ -1,12 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 
 const T = {
   bg:      'var(--theme-bg, #101c2e)',
   surface: 'var(--theme-surface, #0d1826)',
-  border:  'var(--theme-border, var(--theme-border, rgba(255,255,255,0.08)))',
+  border:  'var(--theme-border, rgba(255,255,255,0.08))',
   gold:    'var(--theme-primary, #c9a84c)',
   muted:   'var(--theme-secondary, #5e768f)',
   text:    'var(--theme-text, #d7e3fc)',
@@ -17,15 +17,24 @@ const T = {
 }
 
 const shimmer: React.CSSProperties = {
-  background: 'linear-gradient(90deg, var(--theme-surface, #0d0d0d) 25%, var(--theme-border-faint, var(--theme-border-faint, rgba(255,255,255,0.05))) 50%, var(--theme-surface, #0d0d0d) 75%)',
+  background: 'linear-gradient(90deg, var(--theme-surface, #0d0d0d) 25%, rgba(255,255,255,0.05) 50%, var(--theme-surface, #0d0d0d) 75%)',
   backgroundSize: '200% 100%', animation: 'shimmer 2s infinite', borderRadius: 2,
 }
 
+const SERIES_META: Record<string, { backendKey: string; label: string; color: string; isVix?: boolean }> = {
+  ig:     { backendKey: 'ig_oas', label: 'IG OAS',  color: '#60a5fa' },
+  hy:     { backendKey: 'hy_oas', label: 'HY OAS',  color: '#ef4444' },
+  ig_3_5: { backendKey: 'ig_3_5', label: 'IG 3–5Y', color: '#818cf8' },
+  hy_b:   { backendKey: 'hy_b',   label: 'HY B',    color: '#f97316' },
+  hy_ccc: { backendKey: 'hy_ccc', label: 'HY CCC',  color: '#fb7185' },
+  vix:    { backendKey: 'vix',    label: 'VIX',     color: 'var(--theme-primary, #c9a84c)', isVix: true },
+}
+
 interface SeriesData {
-  label:   string
-  current: number | null
-  change_1y: number | null
-  history: { date: string; value: number }[]
+  label:      string
+  current:    number | null
+  change_1y?: number | null
+  history:    { date: string; value: number }[]
 }
 
 interface CreditResponse {
@@ -44,18 +53,47 @@ export default function CreditSpreadsWidget({ config }: { config: WidgetConfig }
     retry: 1,
   })
 
-  const ig  = data?.series.ig_oas
-  const hy  = data?.series.hy_oas
-  const vix = data?.series.vix
+  const hasVix       = activeSeries.includes('vix')
+  const creditSeries = activeSeries.filter(k => SERIES_META[k] && !SERIES_META[k].isVix)
 
+  // Build chart data — credit keys on left axis, vix on right axis (different scale)
   const chartData = (() => {
-    const dateMap: Record<string, { ig?: number; hy?: number }> = {}
-    if (activeSeries.includes('ig') && ig)
-      ig.history.slice(-lookback).forEach(d => { dateMap[d.date] = { ...dateMap[d.date], ig: d.value } })
-    if (activeSeries.includes('hy') && hy)
-      hy.history.slice(-lookback).forEach(d => { dateMap[d.date] = { ...dateMap[d.date], hy: d.value } })
+    const dateMap: Record<string, Record<string, number>> = {}
+    for (const key of creditSeries) {
+      const meta   = SERIES_META[key]
+      const series = data?.series[meta.backendKey]
+      if (!series) continue
+      series.history.slice(-lookback).forEach(d => {
+        dateMap[d.date] = { ...dateMap[d.date], [key]: d.value }
+      })
+    }
+    if (hasVix && data?.series.vix) {
+      data.series.vix.history.slice(-lookback).forEach(d => {
+        dateMap[d.date] = { ...dateMap[d.date], _vix: d.value }
+      })
+    }
     return Object.entries(dateMap).sort(([a], [b]) => a.localeCompare(b)).map(([date, v]) => ({ date, ...v }))
   })()
+
+  const statItems = activeSeries
+    .map(key => {
+      const meta   = SERIES_META[key]
+      if (!meta) return null
+      const series = data?.series[meta.backendKey]
+      return { key, label: meta.label, color: meta.color, value: series?.current ?? null, isVix: !!meta.isVix }
+    })
+    .filter(Boolean) as { key: string; label: string; color: string; value: number | null; isVix: boolean }[]
+
+  const changeItems = creditSeries.map(key => {
+    const meta   = SERIES_META[key]
+    const series = data?.series[meta.backendKey]
+    return { key, label: `${meta.label} vs 1Y`, color: meta.color, val: series?.change_1y ?? null }
+  })
+
+  // Grid columns: fit all on 1 row if ≤4, else split evenly across 2 rows
+  const changeCols = changeItems.length <= 4 ? changeItems.length : Math.ceil(changeItems.length / 2)
+
+  const showChart = creditSeries.length > 0 || hasVix
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: T.bg }}>
@@ -71,55 +109,97 @@ export default function CreditSpreadsWidget({ config }: { config: WidgetConfig }
 
       {data && (
         <>
-          {/* Stat row */}
-          <div style={{ display: 'grid', gridTemplateColumns: [activeSeries.includes('ig') && '1fr', activeSeries.includes('hy') && '1fr', activeSeries.includes('vix') && '1fr'].filter(Boolean).join(' '), borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
-            {[
-              { key: 'ig',  label: 'IG OAS', value: ig?.current,  color: '#60a5fa' },
-              { key: 'hy',  label: 'HY OAS', value: hy?.current,  color: '#ef4444' },
-              { key: 'vix', label: 'VIX',    value: vix?.current, color: T.gold   },
-            ].filter(s => activeSeries.includes(s.key)).map(({ label, value, color }) => (
+          {/* Stat tiles */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: `repeat(${statItems.length}, 1fr)`,
+            borderBottom: `1px solid ${T.border}`,
+            flexShrink: 0,
+          }}>
+            {statItems.map(({ label, value, color, isVix }) => (
               <div key={label} style={{ padding: '8px 10px', borderRight: `1px solid ${T.border}` }}>
                 <div style={{ fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.muted, marginBottom: 4 }}>{label}</div>
                 <div style={{ fontFamily: T.mono, fontSize: 16, fontWeight: 700, color, lineHeight: 1 }}>
                   {value != null ? value.toFixed(0) : '—'}
-                  <span style={{ fontSize: 9, opacity: 0.6 }}>{label === 'VIX' ? '' : ' bps'}</span>
+                  {!isVix && <span style={{ fontSize: 9, opacity: 0.6 }}> bps</span>}
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Sparkline chart */}
-          <div style={{ flex: 1, minHeight: 0, padding: '6px 4px 4px' }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ left: 2, right: 2, top: 2, bottom: 0 }}>
-                <XAxis dataKey="date" hide />
-                <YAxis hide domain={['auto', 'auto']} />
-                <Tooltip
-                  cursor={{ stroke: T.border }}
-                  contentStyle={{ background: T.surface, border: `1px solid ${T.border}`, fontFamily: T.mono, fontSize: 9, padding: '4px 8px' }}
-                  labelStyle={{ color: T.gold, fontSize: 8 }}
-                  formatter={(v: number, name: string) => [`${v.toFixed(0)} bps`, name === 'ig' ? 'IG OAS' : 'HY OAS']}
-                />
-                {activeSeries.includes('ig') && <Line type="monotone" dataKey="ig" stroke="#60a5fa" strokeWidth={1.5} dot={false} />}
-                {activeSeries.includes('hy') && <Line type="monotone" dataKey="hy" stroke="#ef4444" strokeWidth={1.5} dot={false} />}
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          {/* Chart — credit series on left axis, VIX on right axis */}
+          {showChart && (
+            <div style={{ flex: 1, minHeight: 0, padding: '6px 4px 4px' }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData} margin={{ left: 2, right: hasVix ? 2 : 2, top: 2, bottom: 0 }}>
+                  <XAxis dataKey="date" hide />
+                  {creditSeries.length > 0 && (
+                    <YAxis yAxisId="left" hide domain={['auto', 'auto']} />
+                  )}
+                  {hasVix && (
+                    <YAxis yAxisId="right" orientation="right" hide domain={['auto', 'auto']} />
+                  )}
+                  <Tooltip
+                    cursor={{ stroke: T.border }}
+                    contentStyle={{ background: T.surface, border: `1px solid ${T.border}`, fontFamily: T.mono, fontSize: 9, padding: '4px 8px' }}
+                    labelStyle={{ color: T.gold, fontSize: 8 }}
+                    formatter={(v: number, key: string) => {
+                      if (key === '_vix') return [`${v.toFixed(1)}`, 'VIX']
+                      return [`${v.toFixed(0)} bps`, SERIES_META[key]?.label ?? key]
+                    }}
+                  />
+                  {creditSeries.map(key => (
+                    <Line
+                      key={key}
+                      yAxisId="left"
+                      type="monotone"
+                      dataKey={key}
+                      stroke={SERIES_META[key]?.color ?? T.muted}
+                      strokeWidth={1.5}
+                      dot={false}
+                      connectNulls
+                    />
+                  ))}
+                  {hasVix && (
+                    <Line
+                      yAxisId="right"
+                      type="monotone"
+                      dataKey="_vix"
+                      stroke={SERIES_META.vix.color}
+                      strokeWidth={1.5}
+                      dot={false}
+                      connectNulls
+                    />
+                  )}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
 
-          {/* Change indicators */}
-          <div style={{ display: 'flex', gap: 0, borderTop: `1px solid ${T.border}`, flexShrink: 0 }}>
-            {[
-              { key: 'ig', label: 'IG vs 1Y', val: ig?.change_1y, color: '#60a5fa' },
-              { key: 'hy', label: 'HY vs 1Y', val: hy?.change_1y, color: '#ef4444' },
-            ].filter(s => activeSeries.includes(s.key)).map(({ label, val, color }) => (
-              <div key={label} style={{ flex: 1, padding: '5px 10px', borderRight: `1px solid ${T.border}` }}>
-                <span style={{ fontFamily: T.label, fontSize: 8, color: T.muted }}>{label}: </span>
-                <span style={{ fontFamily: T.mono, fontSize: 9, fontWeight: 700, color: val == null ? T.muted : val >= 0 ? T.neg : T.pos }}>
-                  {val != null ? `${val >= 0 ? '+' : ''}${val.toFixed(0)} bps` : '—'}
-                </span>
-              </div>
-            ))}
-          </div>
+          {/* Change vs 1Y — grid so overflow wraps evenly */}
+          {changeItems.length > 0 && (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: `repeat(${changeCols}, 1fr)`,
+              borderTop: `1px solid ${T.border}`,
+              flexShrink: 0,
+            }}>
+              {changeItems.map(({ label, val, color }) => (
+                <div key={label} style={{ padding: '5px 10px', borderRight: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}` }}>
+                  <span style={{ fontFamily: T.label, fontSize: 8, color: T.muted }}>{label}: </span>
+                  {val != null ? (
+                    <span style={{ fontFamily: T.mono, fontSize: 9, fontWeight: 700, color: val >= 0 ? T.neg : T.pos }}>
+                      {val >= 0 ? '+' : ''}{val.toFixed(0)} bps
+                    </span>
+                  ) : (
+                    <span style={{ fontFamily: T.mono, fontSize: 8, color: T.muted }} title="FRED API key required for accurate 1Y spread changes">
+                      n/a
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </>
       )}
     </div>

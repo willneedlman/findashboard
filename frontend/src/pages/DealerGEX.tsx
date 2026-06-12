@@ -34,7 +34,7 @@ function ChartPanel({ label, note, height, children }: { label: string; note?: s
   return (
     <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', position: 'relative' }}>
       <div style={{
-        background: 'rgba(46,57,77,0.8)',
+        background: 'var(--theme-bg, #101c2e)',
         borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
         padding: '4px 8px',
         display: 'flex', flexDirection: 'column', gap: 2,
@@ -124,7 +124,7 @@ export default function DealerGEX() {
   }
 
   return (
-    <PageWrapper>
+    <PageWrapper title="Dealer GEX">
       <SidebarLayout sidebarWidth={190} sidebarTitle="GEX Controls" sidebar={<>
           <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)' }}>
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#ffffff' }}>GEX Parameters</div>
@@ -164,7 +164,7 @@ export default function DealerGEX() {
               fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
               textTransform: 'uppercase', padding: '8px 0', cursor: isPending ? 'default' : 'pointer', opacity: isPending ? 0.6 : 1,
             }}>
-              {isPending ? 'Loading chains…' : '⬢ Load GEX Profile'}
+              {isPending ? 'Loading chains…' : 'Load GEX Profile'}
             </button>
           </div>
         </>}>

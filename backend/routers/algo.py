@@ -131,6 +131,19 @@ def _compute_signal(close: pd.Series, strategy: str, params: dict) -> pd.Series:
         sig_v = 1.0 if (eg is None or eg > exit_t) else 0.0
         return pd.Series(sig_v, index=close.index)
 
+    elif strategy == "micro_scalp":
+        fast_p  = int(p.get("ema_fast", 3))
+        slow_p  = int(p.get("ema_slow", 8))
+        atr_per = int(p.get("atr_period", 5))
+        atr_mul = float(p.get("atr_mult", 0.3))
+        ema_f   = close.ewm(span=fast_p, adjust=False).mean()
+        ema_s   = close.ewm(span=slow_p, adjust=False).mean()
+        tr      = close.diff().abs()
+        atr_pct = tr.rolling(atr_per, min_periods=1).mean() / close * 100
+        atr_ok  = (atr_pct >= atr_mul) if atr_mul > 0 else pd.Series(True, index=close.index)
+        signal  = ((ema_f > ema_s) & atr_ok).astype(float)
+        return signal
+
     else:
         raise HTTPException(status_code=400, detail=f"Unknown strategy: {strategy}")
 

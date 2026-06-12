@@ -53,7 +53,7 @@ export default function CorrelationMatrix() {
   })
 
   return (
-    <PageWrapper>
+    <PageWrapper title="Correlation Matrix">
       <SidebarLayout sidebarWidth={190} sidebarTitle="Correlation Controls" sidebar={<>
           <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)' }}>
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#ffffff' }}>Matrix Controls</div>
@@ -91,7 +91,7 @@ export default function CorrelationMatrix() {
               textTransform: 'uppercase', padding: '8px 0', cursor: isPending ? 'default' : 'pointer',
               opacity: isPending ? 0.6 : 1,
             }}>
-              {isPending ? 'Computing…' : '⬢ Compute Matrix'}
+              {isPending ? 'Computing…' : 'Compute Matrix'}
             </button>
           </div>
         </>}>

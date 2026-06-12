@@ -60,7 +60,7 @@ function ChartPanel({ label, height, children }: { label: string; height: number
   return (
     <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', position: 'relative' }}>
       <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 10,
-        background: 'rgba(46,57,77,0.8)', padding: '3px 8px',
+        background: 'var(--theme-surface, rgba(46,57,77,0.8))', padding: '3px 8px',
         borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
         fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>
         {label}
@@ -129,7 +129,7 @@ export function OptionsPricerContent() {
               textTransform: 'uppercase', padding: '8px 0', cursor: pricePending ? 'default' : 'pointer',
               opacity: pricePending ? 0.6 : 1, transition: 'opacity 0.15s',
             }}>
-              {pricePending ? '⟳ Calculating…' : '⬢ Calculate'}
+              {pricePending ? 'Calculating…' : 'Calculate'}
             </button>
             {priceError && <div style={{ fontSize: 9, color: '#ef4444', textAlign: 'center', fontFamily: 'var(--theme-sans)' }}>Server unavailable — is the backend running?</div>}
           </div>
@@ -171,7 +171,7 @@ export function OptionsPricerContent() {
                 padding: '7px 16px', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
                 textTransform: 'uppercase', background: 'none', border: 'none', cursor: 'pointer',
                 color: view === t ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-text-faint, rgba(255,255,255,0.18))',
-                borderBottom: view === t ? '2px solid #c9a84c' : '2px solid transparent',
+                borderBottom: view === t ? '2px solid var(--theme-primary, #c9a84c)' : '2px solid transparent',
                 marginBottom: -1,
               }}>
                 {t === '2d' ? '2D Greeks' : 'Payoff Diagram'}
@@ -189,9 +189,9 @@ export function OptionsPricerContent() {
                   <YAxis tick={TICK} tickFormatter={v => `$${v.toFixed(2)}`} orientation="right" />
                   <Tooltip formatter={(v: number) => [`$${v.toFixed(4)}`, 'P&L']} contentStyle={TOOLTIP_STYLE} />
                   <ReferenceLine y={0} stroke="var(--theme-text-faint, rgba(255,255,255,0.15))" strokeDasharray="4 4" />
-                  <ReferenceLine x={String(params.K.toFixed(1))} stroke="#d97736" strokeDasharray="4 4"
-                    label={{ value: 'Strike', fill: '#d97736', fontSize: 9 }} />
-                  <Line type="monotone" dataKey="pnl" stroke="#2f6b4b" strokeWidth={2} dot={false} />
+                  <ReferenceLine x={String(params.K.toFixed(1))} stroke="var(--theme-warn, #d97736)" strokeDasharray="4 4"
+                    label={{ value: 'Strike', fill: 'var(--theme-warn, #d97736)', fontSize: 9 }} />
+                  <Line type="monotone" dataKey="pnl" stroke="var(--theme-positive)" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </ChartPanel>
@@ -222,5 +222,5 @@ export function OptionsPricerContent() {
 }
 
 export default function OptionsPricer() {
-  return <PageWrapper><OptionsPricerContent /></PageWrapper>
+  return <PageWrapper title="Options Pricer"><OptionsPricerContent /></PageWrapper>
 }

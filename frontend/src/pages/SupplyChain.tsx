@@ -17,7 +17,41 @@ const T = {
 
 const SEGMENT_COLORS = ['#c9a84c', '#60a5fa', '#22c55e', '#f97316', '#a78bfa', '#38bdf8', '#fb7185', '#34d399', '#fbbf24', '#e879f9']
 
-interface Segment { name: string; value: number; pct: number }
+interface SegItem { name: string; value: number; pct: number; yoy_pct: number | null }
+interface SegHistYear { year: number | string; total: number; segments: { name: string; value: number }[] }
+interface SegConcentration { topShare: number; hhi: number; count: number }
+interface SegBlock {
+  fiscalYear:    number | string | null
+  currency:      string | null
+  latest:        SegItem[]
+  history:       SegHistYear[]
+  concentration: SegConcentration | null
+}
+
+const labelStyle: React.CSSProperties = {
+  fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em',
+  textTransform: 'uppercase', color: T.muted, marginBottom: 10,
+}
+
+function colorMapFor(block: SegBlock): Record<string, string> {
+  const names: string[] = []
+  block.latest.forEach(s => { if (!names.includes(s.name)) names.push(s.name) })
+  block.history.forEach(y => y.segments.forEach(s => { if (!names.includes(s.name)) names.push(s.name) }))
+  const map: Record<string, string> = {}
+  names.forEach((n, i) => { map[n] = SEGMENT_COLORS[i % SEGMENT_COLORS.length] })
+  return map
+}
+
+function YoYChip({ v }: { v: number | null }) {
+  if (v == null) return <span style={{ fontFamily: T.mono, fontSize: 10, color: T.muted, opacity: 0.5 }}>·</span>
+  const up = v >= 0
+  return (
+    <span style={{ fontFamily: T.mono, fontSize: 10, fontWeight: 700, minWidth: 52, textAlign: 'right',
+      color: up ? 'var(--theme-positive)' : 'var(--theme-negative)' }}>
+      {up ? '▲' : '▼'} {Math.abs(v).toFixed(1)}%
+    </span>
+  )
+}
 
 interface SupplyChainData {
   ticker:           string
@@ -28,8 +62,8 @@ interface SupplyChainData {
   price:            number | null
   market_cap:       number | null
   employees:        number | null
-  product_segments: Segment[]
-  geo_segments:     Segment[]
+  product_segments: SegBlock
+  geo_segments:     SegBlock
   peers:            string[]
 }
 
@@ -47,39 +81,48 @@ function fmtEmp(v: number | null): string {
   return `${v}`
 }
 
-// Horizontal stacked bar breakdown
-function SegmentBreakdown({ title, data }: { title: string; data: Segment[] }) {
+// Latest breakdown + YoY + concentration + multi-year mix trend
+function SegmentBreakdown({ title, block }: { title: string; block: SegBlock }) {
   const [hovered, setHovered] = useState<number | null>(null)
   const isMobile = useIsMobile()
 
-  if (!data.length) {
+  if (!block.latest.length) {
     return (
       <div style={{ marginBottom: 24 }}>
-        <div style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, marginBottom: 10 }}>{title}</div>
-        <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11, fontStyle: 'italic' }}>No segment data available for this ticker.</div>
+        <div style={labelStyle}>{title}</div>
+        <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11, fontStyle: 'italic' }}>Not reported by this issuer.</div>
       </div>
     )
   }
 
+  const color  = colorMapFor(block)
+  const data   = block.latest
   const maxPct = Math.max(...data.map(d => d.pct))
 
   return (
     <div style={{ marginBottom: 28 }}>
-      <div style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, marginBottom: 12 }}>{title}</div>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div style={{ ...labelStyle, marginBottom: 0 }}>{title}</div>
+        {block.fiscalYear != null && (
+          <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted }}>
+            FY{block.fiscalYear}{block.currency ? ` · ${block.currency}` : ''}
+          </span>
+        )}
+      </div>
 
-      {/* Stacked color bar */}
+      {/* Stacked color bar (latest year) */}
       <div style={{ display: 'flex', height: 10, borderRadius: 2, overflow: 'hidden', marginBottom: 16, gap: 1 }}>
         {data.map((s, i) => (
           <div
             key={i}
-            style={{ width: `${s.pct}%`, background: SEGMENT_COLORS[i % SEGMENT_COLORS.length], transition: 'opacity 0.15s', opacity: hovered !== null && hovered !== i ? 0.4 : 1, cursor: 'default' }}
+            style={{ width: `${s.pct}%`, background: color[s.name], transition: 'opacity 0.15s', opacity: hovered !== null && hovered !== i ? 0.4 : 1, cursor: 'default' }}
             onMouseEnter={() => setHovered(i)}
             onMouseLeave={() => setHovered(null)}
           />
         ))}
       </div>
 
-      {/* Rows */}
+      {/* Rows with YoY */}
       {data.map((s, i) => (
         <div
           key={i}
@@ -92,25 +135,58 @@ function SegmentBreakdown({ title, data }: { title: string; data: Segment[] }) {
             transition: 'opacity 0.12s',
           }}
         >
-          {/* Label row */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 5 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
-              <div style={{ width: 8, height: 8, borderRadius: 2, background: SEGMENT_COLORS[i % SEGMENT_COLORS.length], flexShrink: 0 }} />
+              <div style={{ width: 8, height: 8, borderRadius: 2, background: color[s.name], flexShrink: 0 }} />
               <span style={{ fontFamily: T.label, fontSize: 12, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
             </div>
             <div style={{ display: 'flex', gap: isMobile ? 8 : 12, alignItems: 'center', flexShrink: 0 }}>
+              <YoYChip v={s.yoy_pct} />
               {s.value > 0 && (
                 <span style={{ fontFamily: T.mono, fontSize: 11, color: T.muted }}>{fmtCap(s.value)}</span>
               )}
-              <span style={{ fontFamily: T.mono, fontSize: 12, fontWeight: 700, color: SEGMENT_COLORS[i % SEGMENT_COLORS.length], minWidth: 44, textAlign: 'right' }}>{s.pct.toFixed(1)}%</span>
+              <span style={{ fontFamily: T.mono, fontSize: 12, fontWeight: 700, color: color[s.name], minWidth: 44, textAlign: 'right' }}>{s.pct.toFixed(1)}%</span>
             </div>
           </div>
-          {/* Bar */}
           <div style={{ height: 4, background: 'var(--theme-hover, rgba(255,255,255,0.06))', borderRadius: 2, overflow: 'hidden' }}>
-            <div style={{ width: `${(s.pct / maxPct) * 100}%`, height: '100%', background: SEGMENT_COLORS[i % SEGMENT_COLORS.length], borderRadius: 2 }} />
+            <div style={{ width: `${(s.pct / maxPct) * 100}%`, height: '100%', background: color[s.name], borderRadius: 2 }} />
           </div>
         </div>
       ))}
+
+      {/* Concentration */}
+      {block.concentration && (
+        <div style={{ marginTop: 12, fontFamily: T.mono, fontSize: 10, color: T.muted, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+          <span>Top <b style={{ color: T.text }}>{block.concentration.topShare.toFixed(1)}%</b></span>
+          <span>{block.concentration.count} segments</span>
+          <span title="Herfindahl-Hirschman index (0–10,000). Higher = more concentrated.">
+            HHI <b style={{ color: block.concentration.hhi >= 2500 ? T.gold : T.text }}>{block.concentration.hhi.toLocaleString()}</b>
+          </span>
+        </div>
+      )}
+
+      {/* Multi-year mix trend */}
+      {block.history.length > 1 && (
+        <div style={{ marginTop: 18 }}>
+          <div style={{ ...labelStyle, fontSize: 8, marginBottom: 8 }}>Mix trend · {block.history.length}y</div>
+          {block.history.map(y => {
+            const tot = y.total || 1
+            return (
+              <div key={String(y.year)} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 5 }}>
+                <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, width: 30, flexShrink: 0 }}>
+                  {typeof y.year === 'number' ? `'${String(y.year).slice(2)}` : y.year}
+                </span>
+                <div style={{ flex: 1, display: 'flex', height: 7, borderRadius: 2, overflow: 'hidden', gap: 1, background: 'var(--theme-hover, rgba(255,255,255,0.04))' }}>
+                  {y.segments.map((s, j) => (
+                    <div key={j} title={`${s.name}: ${fmtCap(s.value)}`} style={{ width: `${(s.value / tot) * 100}%`, background: color[s.name] || T.muted }} />
+                  ))}
+                </div>
+                <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, width: 54, textAlign: 'right', flexShrink: 0 }}>{fmtCap(y.total)}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
@@ -139,7 +215,7 @@ export function SupplyChainContent() {
   }
 
   return (
-    <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+    <div id="supply-chain-content" style={{ maxWidth: 1100, margin: '0 auto' }}>
 
         <PageHeader
           title="Company Profile"
@@ -172,7 +248,7 @@ export function SupplyChainContent() {
           >
             {loading ? 'Loading…' : 'Fetch'}
           </button>
-          {error && <span style={{ fontFamily: T.mono, fontSize: 10, color: '#ef4444' }}>{error}</span>}
+          {error && <span style={{ fontFamily: T.mono, fontSize: 10, color: 'var(--theme-negative)' }}>{error}</span>}
         </div>
 
         {data && (
@@ -245,12 +321,12 @@ export function SupplyChainContent() {
             <div className="ft-panel">
               <div className="ft-panel-header">Revenue Breakdown</div>
               <div style={{ padding: '20px 20px 8px' }}>
-                <SegmentBreakdown title="By Product / Segment" data={data.product_segments} />
-                <SegmentBreakdown title="By Geography" data={data.geo_segments} />
-                {!data.product_segments.length && !data.geo_segments.length && (
+                <SegmentBreakdown title="By Product / Segment" block={data.product_segments} />
+                <SegmentBreakdown title="By Geography" block={data.geo_segments} />
+                {!data.product_segments.latest.length && !data.geo_segments.latest.length && (
                   <div style={{ padding: '40px 0', textAlign: 'center', color: T.muted, fontFamily: T.label, fontSize: 11 }}>
-                    Detailed segment data not yet available for {data.ticker}.<br />
-                    <span style={{ fontSize: 10, opacity: 0.7 }}>Coverage includes AAPL, MSFT, GOOGL, AMZN, META, NVDA, and 30+ others.</span>
+                    No segment breakdown reported for {data.ticker}.<br />
+                    <span style={{ fontSize: 10, opacity: 0.7 }}>Most issuers that file segmented revenue are covered; some (funds, holding companies, certain foreign filers) don't report it.</span>
                   </div>
                 )}
               </div>

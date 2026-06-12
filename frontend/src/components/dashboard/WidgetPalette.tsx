@@ -12,6 +12,7 @@ const ALL_TYPES: WidgetType[] = [
   'macro-calendar',
   'global-macro',
   'credit-spreads',
+  'yield-curve',
 ]
 
 interface WidgetPaletteProps {

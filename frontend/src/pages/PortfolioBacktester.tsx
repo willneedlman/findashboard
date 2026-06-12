@@ -8,7 +8,7 @@ import {
 import PageWrapper from '../components/PageWrapper'
 import MetricCard from '../components/MetricCard'
 import { useChartColors } from '../hooks/useChartColors'
-import StrategySelector, { STRATEGIES, type StrategyParams } from '../components/StrategySelector'
+import StrategySelector, { STRATEGIES, CUSTOM_STRATEGY_KEY, type StrategyParams } from '../components/StrategySelector'
 import { TOOLTIP_STYLE, CROSSHAIR_CURSOR, BAR_CURSOR } from '../components/ChartTooltip'
 import ChartTooltip from '../components/ChartTooltip'
 import axios from 'axios'
@@ -88,6 +88,7 @@ const ALGO_STRATEGIES = [
   { value: 'macd_crossover',      label: 'MACD Crossover' },
   { value: 'value_pe',            label: 'Value — P/E' },
   { value: 'earnings_momentum',   label: 'Earnings Growth' },
+  { value: 'micro_scalp',         label: 'EMA Micro-Scalp (3/8)' },
 ]
 
 const ALGO_DEFAULT_PARAMS: Record<string, Record<string, number>> = {
@@ -98,6 +99,7 @@ const ALGO_DEFAULT_PARAMS: Record<string, Record<string, number>> = {
   macd_crossover:      { fast: 12, slow: 26, signal: 9 },
   value_pe:            { pe_in_threshold: 35 },
   earnings_momentum:   { exit_threshold_pct: -5 },
+  micro_scalp:         { ema_fast: 3, ema_slow: 8, atr_period: 5, atr_mult: 0.3 },
 }
 
 const ALGO_PARAM_LABELS: Record<string, Record<string, string>> = {
@@ -108,6 +110,7 @@ const ALGO_PARAM_LABELS: Record<string, Record<string, string>> = {
   macd_crossover:      { fast: 'Fast EMA', slow: 'Slow EMA', signal: 'Signal EMA' },
   value_pe:            { pe_in_threshold: 'P/E Exit Threshold' },
   earnings_momentum:   { exit_threshold_pct: 'EPS Exit %' },
+  micro_scalp:         { ema_fast: 'Fast EMA', ema_slow: 'Slow EMA', atr_period: 'ATR Period', atr_mult: 'Min ATR %' },
 }
 
 const ALGO_INPUT: React.CSSProperties = {
@@ -169,7 +172,7 @@ function PortChartPanel({ label, height, children }: { label: string; height: nu
     <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', position: 'relative' }}>
       <div style={{
         position: 'absolute', top: 0, left: 0, zIndex: 10,
-        background: 'rgba(46,57,77,0.8)', padding: '3px 8px',
+        background: 'var(--theme-surface, rgba(46,57,77,0.8))', padding: '3px 8px',
         borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
         fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)',
       }}>
@@ -217,6 +220,10 @@ function PortfolioTab() {
   const [start, setStart] = useState('2020-01-01')
   const [end, setEnd] = useState(() => new Date().toISOString().split('T')[0])
   const [portSignalData, setPortSignalData] = useState<{ ticker: string; data: SignalChartPoint[]; trades: { date: string; action: string; price: number }[] }[]>([])
+  const [slPct,    setSlPct]    = useState('')
+  const [tpPct,    setTpPct]    = useState('')
+  const [trailPct, setTrailPct] = useState('')
+  const [posPct,   setPosPct]   = useState('100')
 
   const { mutate, data, isPending } = useMutation({
     mutationFn: async () => {
@@ -229,12 +236,19 @@ function PortfolioTab() {
           weights,
           benchmark, start, end,
         }),
-        ...assets.map(a =>
-          a.strategy !== STRATEGIES[0]
-            ? axios.post('/api/strategy/signal', { ticker: a.ticker, strategy: a.strategy, start, end, params: a.stratParams })
-                .then(r => r.data).catch(() => null)
-            : Promise.resolve(null)
-        ),
+        ...assets.map(a => {
+          if (a.strategy === STRATEGIES[0]) return Promise.resolve(null)
+          if (a.strategy === CUSTOM_STRATEGY_KEY) {
+            const customDef = a.stratParams._custom_def ? JSON.parse(a.stratParams._custom_def) : null
+            if (!customDef) return Promise.resolve(null)
+            return axios.post('/api/strategy/custom-signal', {
+              ticker: a.ticker, start, end,
+              rules: customDef, bull_drift: customDef.bull_drift ?? 5, bear_drift: customDef.bear_drift ?? -3,
+            }).then(r => r.data).catch(() => null)
+          }
+          return axios.post('/api/strategy/signal', { ticker: a.ticker, strategy: a.strategy, start, end, params: a.stratParams })
+            .then(r => r.data).catch(() => null)
+        }),
       ])
 
       const rfDaily = 0.045 / 252
@@ -256,13 +270,32 @@ function PortfolioTab() {
           tickerRetMaps[a.ticker] = map
         }
 
+        const sl    = slPct    ? parseFloat(slPct)    / 100 : null
+        const tp    = tpPct    ? parseFloat(tpPct)    / 100 : null
+        const trail = trailPct ? parseFloat(trailPct) / 100 : null
+        const pos   = parseFloat(posPct || '100') / 100
+
+        const legInTrade  = assets.map(() => false)
+        const legEntryCum = assets.map(() => 1.0)
+        const legPeakCum  = assets.map(() => 1.0)
+        const legStopped  = assets.map(() => false)
+
         let stratVal = 100, portVal = 100, benchVal = 100
         const stratCumulative: { date: string; strategy: number; portfolio: number; benchmark: number }[] = []
 
         bt.cumulative.forEach((row: any, i: number) => {
           assets.forEach((_, li) => {
             const sv = sigMaps[li][row.date]
-            if (sv !== undefined) lastSigs[li] = sv
+            if (sv !== undefined) {
+              const wasIn = lastSigs[li] > 0.5
+              const nowIn = sv > 0.5
+              if (wasIn && !nowIn) {
+                legInTrade[li] = false; legEntryCum[li] = 1.0; legPeakCum[li] = 1.0; legStopped[li] = false
+              } else if (!wasIn && nowIn) {
+                legInTrade[li] = true; legEntryCum[li] = 1.0; legPeakCum[li] = 1.0; legStopped[li] = false
+              }
+              lastSigs[li] = sv
+            }
           })
 
           if (i > 0) {
@@ -273,7 +306,17 @@ function PortfolioTab() {
             assets.forEach((a, li) => {
               const wt = a.weight / totalWeight
               const actualRet = tickerRetMaps[a.ticker][row.date] ?? 0
-              stratPortRet += wt * (lastSigs[li] > 0.5 ? actualRet : rfDaily)
+              if (!legInTrade[li] || legStopped[li]) { stratPortRet += wt * rfDaily; return }
+              legEntryCum[li] *= (1 + actualRet)
+              legPeakCum[li]   = Math.max(legPeakCum[li], legEntryCum[li])
+              const gain         = legEntryCum[li] - 1.0
+              const drawFromPeak = legPeakCum[li] > 0 ? (legPeakCum[li] - legEntryCum[li]) / legPeakCum[li] : 0
+              if ((sl    !== null && gain         < -sl)    ||
+                  (tp    !== null && gain         > tp)     ||
+                  (trail !== null && drawFromPeak > trail)) {
+                legStopped[li] = true; stratPortRet += wt * rfDaily; return
+              }
+              stratPortRet += wt * (pos * actualRet + (1 - pos) * rfDaily)
             })
 
             const portRet = bt.daily_returns[i]?.value / 100 || 0
@@ -418,6 +461,48 @@ function PortfolioTab() {
           </div>
         </div>
 
+        {/* Risk Controls */}
+        <div style={{ padding: '10px 10px 0', borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <label style={{ ...PORT_LABEL, marginBottom: 0, color: 'var(--theme-primary, #c9a84c)' }}>Risk Controls</label>
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            {([
+              { label: 'Conservative', sl: '8',  tp: '20', trail: '6',  pos: '25' },
+              { label: 'Moderate',     sl: '15', tp: '35', trail: '10', pos: '50' },
+              { label: 'Aggressive',   sl: '25', tp: '80', trail: '15', pos: '100' },
+              { label: 'Uncapped',     sl: '',   tp: '',   trail: '',   pos: '100' },
+            ] as const).map(p => (
+              <button key={p.label} type="button"
+                onClick={() => { setSlPct(p.sl); setTpPct(p.tp); setTrailPct(p.trail); setPosPct(p.pos) }}
+                style={{
+                  background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)',
+                  color: 'var(--theme-primary, #c9a84c)',
+                  fontFamily: 'var(--theme-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
+                  padding: '3px 7px', cursor: 'pointer', borderRadius: 2,
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)')}
+              >{p.label.toUpperCase()}</button>
+            ))}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+            {[
+              { label: 'Stop-Loss %', val: slPct,    set: setSlPct },
+              { label: 'Take-Profit %', val: tpPct,  set: setTpPct },
+              { label: 'Trailing Stop %', val: trailPct, set: setTrailPct },
+              { label: 'Position Size %', val: posPct,   set: setPosPct },
+            ].map(({ label, val, set }) => (
+              <div key={label}>
+                <label style={{ ...PORT_LABEL, fontSize: 9, marginBottom: 2 }}>{label}</label>
+                <input type="number" style={{ ...PORT_INPUT, padding: '3px 6px', fontSize: 10 }}
+                  value={val} placeholder={label.includes('Position') ? '100' : 'off'}
+                  onChange={e => set(e.target.value)} min={0.1} step={1}
+                  onFocus={focus} onBlur={blur} />
+              </div>
+            ))}
+          </div>
+        </div>
+
         <div style={{ padding: 10, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <PortfolioIO
             mode="portfolio"
@@ -438,7 +523,7 @@ function PortfolioTab() {
             textTransform: 'uppercase', padding: '8px 0', cursor: isPending ? 'default' : 'pointer',
             opacity: isPending ? 0.6 : 1,
           }}>
-            {isPending ? 'Running…' : '⬢ Run Portfolio Engine'}
+            {isPending ? 'Running…' : 'Run Portfolio Engine'}
           </button>
         </div>
     </>}>
@@ -594,26 +679,26 @@ function BacktestSignalChart({ data, ticker, trades }: {
   const BuyDot = (props: DotProps) => {
     const { cx = 0, cy = 0, value } = props
     if (value == null) return null
-    return <polygon points={`${cx},${cy - 7} ${cx - 5},${cy + 1} ${cx + 5},${cy + 1}`} fill="#22c55e" stroke="none" />
+    return <polygon points={`${cx},${cy - 7} ${cx - 5},${cy + 1} ${cx + 5},${cy + 1}`} style={{ fill: 'var(--theme-positive)' }} stroke="none" />
   }
 
   const SellDot = (props: DotProps) => {
     const { cx = 0, cy = 0, value } = props
     if (value == null) return null
-    return <polygon points={`${cx},${cy + 7} ${cx - 5},${cy - 1} ${cx + 5},${cy - 1}`} fill="#ef4444" stroke="none" />
+    return <polygon points={`${cx},${cy + 7} ${cx - 5},${cy - 1} ${cx + 5},${cy - 1}`} style={{ fill: 'var(--theme-negative)' }} stroke="none" />
   }
 
   return (
     <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 12,
-        background: 'rgba(46,57,77,0.85)', padding: '4px 10px',
+        background: 'var(--theme-surface, rgba(46,57,77,0.85))', padding: '4px 10px',
         borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.06))',
         fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase',
       }}>
         <span style={{ color: 'var(--theme-text, #d7e3fc)' }}>▶ REPLAY · {ticker}</span>
-        <span style={{ color: '#22c55e' }}>▲ {buyCount} BUY</span>
-        <span style={{ color: '#ef4444' }}>▼ {sellCount} SELL</span>
+        <span style={{ color: 'var(--theme-positive)' }}>▲ {buyCount} BUY</span>
+        <span style={{ color: 'var(--theme-negative)' }}>▼ {sellCount} SELL</span>
       </div>
       <div style={{ padding: '4px 8px 8px 8px', height: 260 }}>
         {data.length === 0 ? (
@@ -810,7 +895,7 @@ function StrategyTab() {
           onChange={e => handleStrategyChange(e.target.value)}
         >
           {ALGO_STRATEGIES.map(s => (
-            <option key={s.value} value={s.value} style={{ background: '#0d1826' }}>
+            <option key={s.value} value={s.value} style={{ background: 'var(--theme-surface)' }}>
               {s.label}
             </option>
           ))}
@@ -1111,7 +1196,7 @@ function StrategyTab() {
                   padding: '2px 6px', cursor: aiCommentaryPending ? 'default' : 'pointer',
                   opacity: aiCommentaryPending ? 0.5 : 1,
                 }}
-              >{aiCommentaryPending ? '…' : '⬢ Analyze'}</button>
+              >{aiCommentaryPending ? '…' : 'Analyze'}</button>
             </div>
             {!aiCommentary && !aiCommentaryPending && (
               <div style={{ padding: '8px 10px', fontSize: 10, color: 'var(--theme-secondary, #5e768f)', fontFamily: 'var(--theme-sans)' }}>
@@ -1123,13 +1208,13 @@ function StrategyTab() {
                 <div style={{ fontSize: 11, color: 'var(--theme-text, #d7e3fc)', lineHeight: '16px', fontFamily: 'var(--theme-sans)' }}>{aiCommentary.verdict}</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   {[
-                    { label: 'Strengths', items: aiCommentary.strengths, color: '#22c55e' },
-                    { label: 'Weaknesses', items: aiCommentary.weaknesses, color: '#ef4444' },
+                    { label: 'Strengths', items: aiCommentary.strengths, color: 'var(--theme-positive)' },
+                    { label: 'Weaknesses', items: aiCommentary.weaknesses, color: 'var(--theme-negative)' },
                   ].map(({ label, items, color }) => (
                     <div key={label}>
                       <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', color, textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
                       {(items ?? []).map((s: string, i: number) => (
-                        <div key={i} style={{ fontSize: 10, color: 'rgba(215,227,252,0.8)', lineHeight: '14px', paddingLeft: 8, borderLeft: `2px solid ${color}44`, marginBottom: 3, fontFamily: 'var(--theme-sans)' }}>{s}</div>
+                        <div key={i} style={{ fontSize: 10, color: 'var(--theme-text, #d7e3fc)', lineHeight: '14px', paddingLeft: 8, borderLeft: `2px solid ${color}44`, marginBottom: 3, fontFamily: 'var(--theme-sans)' }}>{s}</div>
                       ))}
                     </div>
                   ))}
@@ -1138,7 +1223,7 @@ function StrategyTab() {
                   <div>
                     <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', color: '#c9a84c', textTransform: 'uppercase', marginBottom: 4 }}>Suggestions</div>
                     {aiCommentary.suggestions.map((s: string, i: number) => (
-                      <div key={i} style={{ fontSize: 10, color: 'rgba(215,227,252,0.7)', lineHeight: '14px', paddingLeft: 8, borderLeft: '2px solid rgba(201,168,76,0.3)', marginBottom: 3, fontFamily: 'var(--theme-sans)' }}>{s}</div>
+                      <div key={i} style={{ fontSize: 10, color: 'var(--theme-text, #d7e3fc)', lineHeight: '14px', paddingLeft: 8, borderLeft: '2px solid rgba(201,168,76,0.3)', marginBottom: 3, fontFamily: 'var(--theme-sans)' }}>{s}</div>
                     ))}
                   </div>
                 )}
@@ -1329,61 +1414,12 @@ function StrategyTab() {
   )
 }
 
-// ── Unified Backtester page ──────────────────────────────────────────────────
+// ── Backtester page ──────────────────────────────────────────────────────────
 
-interface BacktesterProps {
-  initialTab?: Tab
-}
-
-export default function PortfolioBacktester({ initialTab = 'portfolio' }: BacktesterProps) {
-  const [activeTab, setActiveTab] = useState<Tab>(initialTab)
-
+export default function PortfolioBacktester() {
   return (
-    <PageWrapper>
-      {/* Page header */}
-      <div style={{ marginBottom: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 12 }}>
-          <h1 style={{
-            fontFamily: 'var(--theme-mono)',
-            fontSize: 14, fontWeight: 700, letterSpacing: '0.18em',
-            textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)', margin: 0,
-          }}>
-            Backtester
-          </h1>
-          <span style={{
-            fontSize: 9, color: 'var(--theme-secondary, #5e768f)',
-            fontFamily: 'var(--theme-mono)', letterSpacing: '0.12em',
-          }}>
-            Portfolio simulation &amp; strategy analysis
-          </span>
-        </div>
-
-        {/* Tab bar */}
-        <div style={TAB_BAR}>
-          {(['portfolio', 'strategy'] as Tab[]).map(tab => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              style={{
-                ...TAB_BASE,
-                color: activeTab === tab
-                  ? 'var(--theme-primary, #c9a84c)'
-                  : 'var(--theme-secondary, #5e768f)',
-                borderBottom: activeTab === tab
-                  ? '2px solid var(--theme-primary, #c9a84c)'
-                  : '2px solid transparent',
-              }}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Tab content */}
-      <div style={{ marginTop: 16 }}>
-        {activeTab === 'portfolio' ? <PortfolioTab /> : <StrategyTab />}
-      </div>
+    <PageWrapper title="Portfolio Backtester">
+      <PortfolioTab />
     </PageWrapper>
   )
 }

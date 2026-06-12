@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
-import ExportPdfButton from '../components/ExportPdfButton'
 
 const T = {
   bg:      'var(--theme-bg, #101c2e)',
@@ -15,8 +14,8 @@ const T = {
   text:    'var(--theme-text, #d7e3fc)',
   mono:    'var(--theme-mono)',
   label:   'var(--theme-sans)',
-  pos:     '#22c55e',
-  neg:     '#ef4444',
+  pos:     'var(--theme-positive)',
+  neg:     'var(--theme-negative)',
 }
 
 const SERIES_COLORS: Record<string, string> = {
@@ -123,7 +122,6 @@ export function CreditSpreadsContent() {
         <PageHeader
           title="Credit Spread Monitor"
           subtitle="BofA ICE IG & HY option-adjusted spreads (OAS) vs. equity volatility. Widening spreads signal credit stress."
-          actions={<ExportPdfButton targetId="credit-spreads-content" filename="credit-spreads.pdf" />}
         />
 
         {/* Stat row — single panel, stats separated by dividers */}

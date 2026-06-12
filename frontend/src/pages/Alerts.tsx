@@ -126,7 +126,7 @@ export default function Alerts() {
   }
 
   return (
-    <PageWrapper>
+    <PageWrapper title="Price Alerts">
       <div style={{ maxWidth: 820, margin: '0 auto' }}>
 
         {/* Header */}
@@ -152,7 +152,7 @@ export default function Alerts() {
           </div>
         )}
         {notifState === 'denied' && (
-          <div style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.25)', padding: '8px 14px', marginBottom: 20, fontSize: 10, color: '#fca5a5', fontFamily: T.mono }}>
+          <div style={{ background: 'color-mix(in srgb, var(--theme-negative) 7%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-negative) 25%, transparent)', padding: '8px 14px', marginBottom: 20, fontSize: 10, color: 'var(--theme-negative)', fontFamily: T.mono }}>
             Browser notifications blocked.
           </div>
         )}
