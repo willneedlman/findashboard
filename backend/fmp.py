@@ -236,6 +236,60 @@ def get_stock_peers(ticker: str, limit: int = 8) -> list:
     return _cached(_peers_cache, sym, fetch)
 
 
+_fundamentals_cache: TTLCache = TTLCache(maxsize=300, ttl=86400)  # 24 hr
+
+_FUND_INCOME_FIELD = {"revenue": "revenue", "net_income": "netIncome", "eps": "eps", "ebitda": "ebitda"}
+_FUND_MARGIN_NUM   = {"gross_margin": "grossProfit", "operating_margin": "operatingIncome", "net_margin": "netIncome"}
+
+
+def _fund_points(rows, field: str) -> list:
+    out = []
+    for r in (rows if isinstance(rows, list) else []):
+        v, d = r.get(field), r.get("date")
+        if d and v is not None:
+            try:
+                out.append({"date": d, "value": float(v)})
+            except (TypeError, ValueError):
+                pass
+    return sorted(out, key=lambda x: x["date"])
+
+
+def get_fundamental_series(ticker: str, metric: str = "revenue", period: str = "quarter", limit: int = 24) -> list:
+    """Time series of a fundamental metric for chart overlays. Returns [{date, value}]
+    oldest-first. metric: revenue | net_income | eps | ebitda | fcf | gross_margin |
+    operating_margin | net_margin (margins in %, the rest in raw reported units)."""
+    sym = ticker.strip().upper()
+    period = period if period in ("quarter", "annual") else "quarter"
+    key = f"{sym}:{metric}:{period}:{limit}"
+
+    def _one(per: str) -> list:
+        if metric == "fcf":
+            rows = _get("/cash-flow-statement", {"symbol": sym, "period": per, "limit": limit})
+            return _fund_points(rows, "freeCashFlow")
+        rows = _get("/income-statement", {"symbol": sym, "period": per, "limit": limit})
+        if metric in _FUND_MARGIN_NUM:
+            num = _FUND_MARGIN_NUM[metric]
+            out = []
+            for r in (rows if isinstance(rows, list) else []):
+                rev, v = r.get("revenue"), r.get(num)
+                if rev and v is not None and r.get("date"):
+                    out.append({"date": r["date"], "value": round(float(v) / float(rev) * 100, 3)})
+            return sorted(out, key=lambda x: x["date"])
+        return _fund_points(rows, _FUND_INCOME_FIELD.get(metric, "revenue"))
+
+    def fetch():
+        try:
+            pts = _one(period)
+            # Some FMP tiers gate quarterly statements — fall back to annual.
+            if not pts and period != "annual":
+                pts = _one("annual")
+            return pts
+        except Exception:
+            return []
+
+    return _cached(_fundamentals_cache, key, fetch)
+
+
 _segments_cache: TTLCache = TTLCache(maxsize=200, ttl=86400)  # 24 hr
 
 

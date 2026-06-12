@@ -179,6 +179,22 @@ def compare_assets(tickers: str, period: str = "1y", normalize: str = "indexed",
             "overlays": sec_avail, "series": series, "meta": meta, "axis": axis}
 
 
+@router.get("/fundamental-series")
+def fundamental_series(ticker: str, metric: str = "revenue", period: str = "quarter"):
+    """Fundamental metric time series for chart overlays — revenue, net income, EPS,
+    EBITDA, free cash flow, and gross/operating/net margins."""
+    ticker = validate_ticker(ticker)
+    import fmp as _fmp
+    if not _fmp.available():
+        raise HTTPException(503, "Fundamentals data source unavailable")
+    pts = _fmp.get_fundamental_series(ticker, metric, period, 24)
+    if not pts:
+        raise HTTPException(404, "No fundamental data for this ticker/metric")
+    units = {"revenue": "$", "net_income": "$", "eps": "$", "ebitda": "$", "fcf": "$",
+             "gross_margin": "%", "operating_margin": "%", "net_margin": "%"}
+    return {"ticker": ticker.upper(), "metric": metric, "unit": units.get(metric, ""), "points": pts}
+
+
 @router.get("/ohlcv")
 def get_ohlcv(ticker: str, period: str = "1y"):
     ticker = validate_ticker(ticker)

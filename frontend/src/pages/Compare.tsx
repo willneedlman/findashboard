@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import axios from 'axios'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueries } from '@tanstack/react-query'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
@@ -21,8 +21,9 @@ const T = {
   neg:     'var(--theme-negative)',
 }
 
-const SERIES_COLORS = ['#c9a84c', '#60a5fa', '#34d399', '#f97316', '#a78bfa', '#38bdf8', '#fb7185', '#fbbf24']
+const SERIES_COLORS  = ['#c9a84c', '#60a5fa', '#34d399', '#f97316', '#a78bfa', '#38bdf8', '#fb7185', '#fbbf24']
 const OVERLAY_COLORS = ['#94a3b8', '#5eead4', '#fca5a5', '#c4b5fd']
+const FUND_COLORS    = ['#e879f9', '#22d3ee', '#facc15', '#a3e635']
 
 const PERIODS = ['1m', '3m', '6m', 'ytd', '1y', '5y'] as const
 type Period = typeof PERIODS[number]
@@ -31,12 +32,34 @@ const NORMS: { key: Norm; label: string }[] = [
   { key: 'indexed', label: 'Indexed 100' }, { key: 'pct', label: '% Change' }, { key: 'price', label: 'Price' },
 ]
 
-const ASSET_PRESETS = ['SPY', 'QQQ', 'BTC-USD', 'GLD', 'TLT', '^GSPC', 'EURUSD=X', 'CL=F']
-const MACRO = [
-  { sym: '^TNX', label: '10Y Yield' }, { sym: '^FVX', label: '5Y Yield' }, { sym: '^IRX', label: '13W T-Bill' },
-  { sym: '^VIX', label: 'VIX' }, { sym: 'DX-Y.NYB', label: 'US Dollar' }, { sym: 'GC=F', label: 'Gold' },
-  { sym: 'CL=F', label: 'Crude Oil' }, { sym: '^GSPC', label: 'S&P 500' },
+const ASSET_PRESETS = ['SPY', 'QQQ', 'BTC-USD', 'ETH-USD', 'GLD', 'TLT', '^GSPC', 'EURUSD=X']
+const MACRO_GROUPS: { group: string; items: { sym: string; label: string }[] }[] = [
+  { group: 'Rates', items: [
+    { sym: '^TNX', label: '10Y Yield' }, { sym: '^FVX', label: '5Y Yield' }, { sym: '^TYX', label: '30Y Yield' }, { sym: '^IRX', label: '13W T-Bill' },
+  ]},
+  { group: 'Volatility', items: [
+    { sym: '^VIX', label: 'VIX' }, { sym: '^VXN', label: 'Nasdaq VIX' }, { sym: '^OVX', label: 'Oil VIX' }, { sym: '^VVIX', label: 'Vol-of-Vol' },
+  ]},
+  { group: 'Commodities', items: [
+    { sym: 'GC=F', label: 'Gold' }, { sym: 'SI=F', label: 'Silver' }, { sym: 'HG=F', label: 'Copper' }, { sym: 'CL=F', label: 'Crude (WTI)' },
+    { sym: 'BZ=F', label: 'Brent' }, { sym: 'NG=F', label: 'Nat Gas' }, { sym: 'PL=F', label: 'Platinum' },
+  ]},
+  { group: 'FX & Dollar', items: [
+    { sym: 'DX-Y.NYB', label: 'US Dollar' }, { sym: 'EURUSD=X', label: 'EUR/USD' }, { sym: 'USDJPY=X', label: 'USD/JPY' }, { sym: 'GBPUSD=X', label: 'GBP/USD' },
+  ]},
+  { group: 'Indices', items: [
+    { sym: '^GSPC', label: 'S&P 500' }, { sym: '^IXIC', label: 'Nasdaq' }, { sym: '^DJI', label: 'Dow' }, { sym: '^RUT', label: 'Russell 2000' },
+  ]},
 ]
+const FUND_METRICS = [
+  { key: 'revenue', label: 'Revenue' }, { key: 'net_income', label: 'Net Income' }, { key: 'eps', label: 'EPS' },
+  { key: 'ebitda', label: 'EBITDA' }, { key: 'fcf', label: 'Free Cash Flow' },
+  { key: 'gross_margin', label: 'Gross Margin' }, { key: 'operating_margin', label: 'Op. Margin' }, { key: 'net_margin', label: 'Net Margin' },
+]
+const METRIC_SHORT: Record<string, string> = {
+  revenue: 'Rev', net_income: 'NI', eps: 'EPS', ebitda: 'EBITDA', fcf: 'FCF',
+  gross_margin: 'GM', operating_margin: 'OM', net_margin: 'NM',
+}
 
 interface CompareResp {
   period: string; normalize: string; tickers: string[]; overlays: string[]
@@ -44,15 +67,13 @@ interface CompareResp {
   meta: Record<string, { start: number; last: number; change_pct: number | null }>
   axis: Record<string, 'left' | 'right'>
 }
+interface FundSeries { ticker: string; metric: string; unit: string; points: { date: string; value: number }[] }
+interface Fund { ticker: string; metric: string }
 
-// ── client-side technicals (computed from the focus asset's series) ──────────
+// ── technicals (client-side) ────────────────────────────────────────────────
 function sma(v: (number | null)[], n: number): (number | null)[] {
   const out: (number | null)[] = []; const q: number[] = []; let s = 0
-  for (const x of v) {
-    if (x == null) { out.push(null); continue }
-    q.push(x); s += x; if (q.length > n) s -= q.shift()!
-    out.push(q.length === n ? +(s / n).toFixed(4) : null)
-  }
+  for (const x of v) { if (x == null) { out.push(null); continue } q.push(x); s += x; if (q.length > n) s -= q.shift()!; out.push(q.length === n ? +(s / n).toFixed(4) : null) }
   return out
 }
 function ema(v: (number | null)[], n: number): (number | null)[] {
@@ -64,11 +85,19 @@ function bollinger(v: (number | null)[], n = 20, m = 2) {
   for (let i = 0; i < v.length; i++) {
     const x = v[i]; if (x != null) { q.push(x); if (q.length > n) q.shift() }
     if (mid[i] == null || q.length < n) { up.push(null); lo.push(null); continue }
-    const mean = mid[i] as number
-    const sd = Math.sqrt(q.reduce((a, c) => a + (c - mean) ** 2, 0) / n)
+    const mean = mid[i] as number; const sd = Math.sqrt(q.reduce((a, c) => a + (c - mean) ** 2, 0) / n)
     up.push(+(mean + m * sd).toFixed(4)); lo.push(+(mean - m * sd).toFixed(4))
   }
   return { up, lo }
+}
+// step-align a sparse (quarterly) series onto the chart's daily dates, then rebase
+function alignRebase(points: { date: string; value: number }[], dates: string[], norm: Norm): (number | null)[] {
+  const pts = [...points].sort((a, b) => a.date.localeCompare(b.date))
+  const raw: (number | null)[] = []; let i = 0; let cur: number | null = null
+  for (const d of dates) { while (i < pts.length && pts[i].date <= d) { cur = pts[i].value; i++ } raw.push(cur) }
+  const base = raw.find(v => v != null) ?? null
+  if (base == null || base === 0) return raw
+  return raw.map(v => v == null ? null : norm === 'pct' ? +((v / base - 1) * 100).toFixed(3) : +((v / base) * 100).toFixed(3))
 }
 
 function Section({ title, badge, open, onToggle, children }: { title: string; badge?: string; open: boolean; onToggle: () => void; children: React.ReactNode }) {
@@ -93,11 +122,12 @@ const ctrlBtn = (active: boolean): React.CSSProperties => ({
   background: active ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 16%, transparent)' : 'var(--theme-hover, rgba(255,255,255,0.04))',
   border: `1px solid ${active ? T.gold : T.border}`, color: active ? T.gold : T.muted,
 })
+const selStyle: React.CSSProperties = { background: T.bg, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.mono, fontSize: 11, padding: '6px 8px', outline: 'none' }
 
 function CompareTooltip({ active, payload, label, norm, overlays }: any) {
   if (!active || !payload?.length) return null
   const ov = new Set(overlays)
-  const fmt = (key: string, v: number) => ov.has(key.split('·')[0]) ? v.toFixed(2)
+  const fmt = (key: string, v: number) => ov.has(key) ? v.toFixed(2)
     : norm === 'pct' ? `${v >= 0 ? '+' : ''}${v.toFixed(1)}%` : v.toFixed(norm === 'price' ? 2 : 1)
   return (
     <div style={{ background: T.surface, border: `1px solid ${T.border}`, padding: '8px 10px', fontFamily: T.mono, fontSize: 11 }}>
@@ -115,16 +145,23 @@ export function CompareContent() {
   const isMobile = useIsMobile()
   const [assets, setAssets]     = useState<string[]>(['SPY', 'QQQ', 'BTC-USD'])
   const [overlays, setOverlays] = useState<string[]>([])
+  const [funds, setFunds]       = useState<Fund[]>([])
+  const [colors, setColors]     = useState<Record<string, string>>({})
   const [period, setPeriod]     = useState<Period>('1y')
   const [norm, setNorm]         = useState<Norm>('indexed')
   const [hidden, setHidden]     = useState<Set<string>>(new Set())
   const [focus, setFocus]       = useState('SPY')
   const [tech, setTech]         = useState({ sma50: false, sma200: false, ema20: false, bb: false })
-  const [open, setOpen]         = useState({ assets: true, technicals: false, macro: false })
+  const [open, setOpen]         = useState({ assets: true, technicals: false, macro: false, fundamentals: false })
   const [aDraft, setADraft]     = useState('')
+  const [fTicker, setFTicker]   = useState('')
+  const [fMetric, setFMetric]   = useState('revenue')
 
-  const colorOf = (t: string) => SERIES_COLORS[Math.max(0, assets.indexOf(t)) % SERIES_COLORS.length]
+  const defColor = (t: string) => SERIES_COLORS[Math.max(0, assets.indexOf(t)) % SERIES_COLORS.length]
+  const colorOf  = (t: string) => colors[t] ?? defColor(t)
   const ovColorOf = (t: string) => OVERLAY_COLORS[Math.max(0, overlays.indexOf(t)) % OVERLAY_COLORS.length]
+  const fundKey  = (f: Fund) => `${f.ticker}·${METRIC_SHORT[f.metric] || f.metric}`
+  const fundColorOf = (f: Fund) => FUND_COLORS[Math.max(0, funds.findIndex(x => x.ticker === f.ticker && x.metric === f.metric)) % FUND_COLORS.length]
 
   const { data, isFetching, isError } = useQuery<CompareResp>({
     queryKey: ['compare', assets, overlays, period, norm],
@@ -132,23 +169,34 @@ export function CompareContent() {
     enabled: assets.length > 0, staleTime: 300_000, retry: 1,
   })
 
+  const fundResults = useQueries({
+    queries: funds.map(f => ({
+      queryKey: ['fund', f.ticker, f.metric],
+      queryFn: () => axios.get(`/api/market/fundamental-series?ticker=${encodeURIComponent(f.ticker)}&metric=${f.metric}&period=quarter`).then(r => r.data as FundSeries),
+      staleTime: 3_600_000, retry: 1,
+    })),
+  })
+
   const addAsset = (raw?: string) => {
     const t = (raw ?? aDraft).trim().toUpperCase()
     if (!t || assets.includes(t) || assets.length >= 8) return
     setAssets([...assets, t]); setADraft('')
   }
-  const removeAsset = (t: string) => {
-    setAssets(assets.filter(x => x !== t))
-    if (focus === t) setFocus(assets.filter(x => x !== t)[0] ?? '')
-  }
+  const removeAsset = (t: string) => { setAssets(assets.filter(x => x !== t)); if (focus === t) setFocus(assets.filter(x => x !== t)[0] ?? '') }
   const toggleOverlay = (s: string) => setOverlays(prev => prev.includes(s) ? prev.filter(x => x !== s) : prev.length >= 4 ? prev : [...prev, s])
+  const addFund = () => {
+    const t = (fTicker || focus || assets[0] || '').trim().toUpperCase()
+    if (!t || funds.some(f => f.ticker === t && f.metric === fMetric) || funds.length >= 4) return
+    setFunds([...funds, { ticker: t, metric: fMetric }]); setFTicker('')
+  }
+  const removeFund = (f: Fund) => setFunds(funds.filter(x => !(x.ticker === f.ticker && x.metric === f.metric)))
   const toggleHidden = (t: string) => setHidden(prev => { const n = new Set(prev); n.has(t) ? n.delete(t) : n.add(t); return n })
   const toggleSection = (k: keyof typeof open) => setOpen(p => ({ ...p, [k]: !p[k] }))
 
-  // chart data with client-side technicals on the focus asset
   const chartData = useMemo(() => {
     if (!data) return []
     const rows = data.series.map(p => ({ ...p })) as Record<string, number | string | null>[]
+    const dates = rows.map(r => r.date as string)
     if (focus && data.tickers.includes(focus)) {
       const vals = rows.map(r => r[focus] as number | null)
       if (tech.sma50)  { const a = sma(vals, 50);  rows.forEach((r, i) => r[`${focus}·SMA50`]  = a[i]) }
@@ -156,17 +204,23 @@ export function CompareContent() {
       if (tech.ema20)  { const a = ema(vals, 20);  rows.forEach((r, i) => r[`${focus}·EMA20`]  = a[i]) }
       if (tech.bb)     { const b = bollinger(vals, 20, 2); rows.forEach((r, i) => { r[`${focus}·BB↑`] = b.up[i]; r[`${focus}·BB↓`] = b.lo[i] }) }
     }
+    funds.forEach((f, idx) => {
+      const res = fundResults[idx]
+      if (res?.data?.points?.length) {
+        const aligned = alignRebase(res.data.points, dates, norm)
+        const key = fundKey(f)
+        rows.forEach((r, i) => r[key] = aligned[i])
+      }
+    })
     return rows
-  }, [data, focus, tech])
+  }, [data, focus, tech, funds, fundResults.map(r => r.dataUpdatedAt).join(','), norm]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const baseline = norm === 'pct' ? 0 : norm === 'indexed' ? 100 : null
   const techLines = (() => {
     const out: string[] = []
     if (!data?.tickers.includes(focus)) return out
-    if (tech.sma50)  out.push(`${focus}·SMA50`)
-    if (tech.sma200) out.push(`${focus}·SMA200`)
-    if (tech.ema20)  out.push(`${focus}·EMA20`)
-    if (tech.bb)     { out.push(`${focus}·BB↑`, `${focus}·BB↓`) }
+    if (tech.sma50) out.push(`${focus}·SMA50`); if (tech.sma200) out.push(`${focus}·SMA200`)
+    if (tech.ema20) out.push(`${focus}·EMA20`); if (tech.bb) out.push(`${focus}·BB↑`, `${focus}·BB↓`)
     return out
   })()
 
@@ -174,7 +228,7 @@ export function CompareContent() {
     <div style={{ maxWidth: 1320, margin: '0 auto' }}>
       <PageHeader
         title="Asset Comparison"
-        subtitle="Overlay assets, technicals, and macro on one chart. Left axis: normalized assets. Right axis: raw macro series."
+        subtitle="Overlay assets, technicals, fundamentals, and macro on one chart. Left axis: normalized assets, technicals & fundamentals. Right axis: raw macro."
       />
 
       <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexDirection: isMobile ? 'column' : 'row' }}>
@@ -190,7 +244,10 @@ export function CompareContent() {
                     padding: '4px 7px', border: `1px solid ${off ? T.border : colorOf(t)}`, color: off ? T.muted : T.text,
                     background: off ? 'transparent' : `color-mix(in srgb, ${colorOf(t)} 12%, transparent)`, opacity: off ? 0.55 : 1,
                   }}>
-                    <span style={{ width: 7, height: 7, borderRadius: 2, background: colorOf(t) }} />{t}
+                    <input type="color" value={colorOf(t)} title="Line color"
+                      onClick={e => e.stopPropagation()} onChange={e => setColors({ ...colors, [t]: e.target.value })}
+                      style={{ width: 13, height: 13, padding: 0, border: 'none', background: 'none', cursor: 'pointer' }} />
+                    {t}
                     {ch != null && <span style={{ color: ch >= 0 ? T.pos : T.neg, fontSize: 10 }}>{ch >= 0 ? '+' : ''}{ch.toFixed(1)}%</span>}
                     <span onClick={e => { e.stopPropagation(); removeAsset(t) }} style={{ color: T.muted, fontWeight: 400 }}>×</span>
                   </span>
@@ -199,7 +256,7 @@ export function CompareContent() {
             </div>
             <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
               <input value={aDraft} onChange={e => setADraft(e.target.value.toUpperCase())} onKeyDown={e => { if (e.key === 'Enter') addAsset() }}
-                placeholder="ADD SYMBOL" style={{ flex: 1, minWidth: 0, background: T.bg, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.mono, fontSize: 11, fontWeight: 700, padding: '6px 8px', outline: 'none' }} />
+                placeholder="ADD SYMBOL" style={{ ...selStyle, flex: 1, minWidth: 0, fontWeight: 700 }} />
               <button onClick={() => addAsset()} style={ctrlBtn(false)}>+</button>
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
@@ -207,35 +264,57 @@ export function CompareContent() {
                 <button key={p} onClick={() => addAsset(p)} style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, background: 'var(--theme-hover, rgba(255,255,255,0.04))', border: `1px solid ${T.border}`, padding: '2px 6px', cursor: 'pointer' }}>{p}</button>
               ))}
             </div>
+            <div style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, opacity: 0.6, marginTop: 8 }}>Click the swatch to recolor a line.</div>
           </Section>
 
           <Section title="Technicals" badge={techLines.length ? 'on' : undefined} open={open.technicals} onToggle={() => toggleSection('technicals')}>
             <label style={{ display: 'block', fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.muted, marginBottom: 6 }}>Apply to</label>
-            <select value={focus} onChange={e => setFocus(e.target.value)} style={{ width: '100%', background: T.bg, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.mono, fontSize: 11, padding: '6px 8px', outline: 'none', marginBottom: 12 }}>
+            <select value={focus} onChange={e => setFocus(e.target.value)} style={{ ...selStyle, width: '100%', marginBottom: 12 }}>
               {assets.map(a => <option key={a} value={a}>{a}</option>)}
             </select>
             {([['sma50', 'SMA 50'], ['sma200', 'SMA 200'], ['ema20', 'EMA 20'], ['bb', 'Bollinger (20, 2σ)']] as const).map(([k, lbl]) => (
               <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', cursor: 'pointer', fontFamily: T.mono, fontSize: 12, color: T.text }}>
-                <input type="checkbox" checked={tech[k]} onChange={e => setTech(p => ({ ...p, [k]: e.target.checked }))} />
-                {lbl}
+                <input type="checkbox" checked={tech[k]} onChange={e => setTech(p => ({ ...p, [k]: e.target.checked }))} />{lbl}
               </label>
             ))}
           </Section>
 
-          <Section title="Macro · right axis" badge={overlays.length ? `${overlays.length}` : undefined} open={open.macro} onToggle={() => toggleSection('macro')}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {MACRO.map(m => {
-                const on = overlays.includes(m.sym)
-                return (
-                  <label key={m.sym} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', cursor: 'pointer', fontFamily: T.mono, fontSize: 12, color: on ? T.text : T.muted }}>
-                    <input type="checkbox" checked={on} onChange={() => toggleOverlay(m.sym)} />
-                    <span style={{ width: 7, height: 7, borderRadius: 2, background: on ? ovColorOf(m.sym) : T.border }} />
-                    {m.label} <span style={{ color: T.muted, opacity: 0.7 }}>{m.sym}</span>
-                  </label>
-                )
-              })}
+          <Section title="Fundamentals · left axis" badge={funds.length ? `${funds.length}` : undefined} open={open.fundamentals} onToggle={() => toggleSection('fundamentals')}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+              {funds.map(f => (
+                <span key={fundKey(f)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontFamily: T.mono, fontSize: 11, padding: '4px 7px', border: `1px solid ${fundColorOf(f)}55`, color: T.text }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 2, background: fundColorOf(f) }} />{f.ticker} {METRIC_SHORT[f.metric]}
+                  <span onClick={() => removeFund(f)} style={{ color: T.muted, cursor: 'pointer', marginLeft: 'auto' }}>×</span>
+                </span>
+              ))}
             </div>
-            <div style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, opacity: 0.65, marginTop: 8, lineHeight: 1.5 }}>Plotted raw on the right axis. Use one scale at a time for clarity.</div>
+            <input value={fTicker} onChange={e => setFTicker(e.target.value.toUpperCase())} placeholder={`TICKER (e.g. ${focus || 'NVDA'})`} style={{ ...selStyle, width: '100%', fontWeight: 700, marginBottom: 6 }} />
+            <div style={{ display: 'flex', gap: 6 }}>
+              <select value={fMetric} onChange={e => setFMetric(e.target.value)} style={{ ...selStyle, flex: 1, minWidth: 0 }}>
+                {FUND_METRICS.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
+              </select>
+              <button onClick={addFund} style={ctrlBtn(false)}>+ Add</button>
+            </div>
+            <div style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, opacity: 0.6, marginTop: 8, lineHeight: 1.5 }}>Rebased to 100 (quarterly) so you can compare a stock's price vs its fundamentals.</div>
+          </Section>
+
+          <Section title="Macro · right axis" badge={overlays.length ? `${overlays.length}` : undefined} open={open.macro} onToggle={() => toggleSection('macro')}>
+            {MACRO_GROUPS.map(g => (
+              <div key={g.group} style={{ marginBottom: 8 }}>
+                <div style={{ fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, margin: '6px 0 3px' }}>{g.group}</div>
+                {g.items.map(m => {
+                  const on = overlays.includes(m.sym)
+                  return (
+                    <label key={m.sym} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', cursor: 'pointer', fontFamily: T.mono, fontSize: 11.5, color: on ? T.text : T.muted }}>
+                      <input type="checkbox" checked={on} onChange={() => toggleOverlay(m.sym)} />
+                      <span style={{ width: 7, height: 7, borderRadius: 2, background: on ? ovColorOf(m.sym) : T.border }} />
+                      {m.label} <span style={{ color: T.muted, opacity: 0.6, fontSize: 9 }}>{m.sym}</span>
+                    </label>
+                  )
+                })}
+              </div>
+            ))}
+            <div style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, opacity: 0.65, marginTop: 4, lineHeight: 1.5 }}>Raw on right axis — one scale family at a time reads best.</div>
           </Section>
         </aside>
 
@@ -256,20 +335,18 @@ export function CompareContent() {
                     <CartesianGrid stroke={T.border} strokeDasharray="2 4" vertical={false} />
                     <XAxis dataKey="date" tick={{ fontFamily: 'var(--theme-mono)', fontSize: 9, fill: '#5e768f' }} minTickGap={50} stroke={T.border} />
                     <YAxis yAxisId="left" tick={{ fontFamily: 'var(--theme-mono)', fontSize: 9, fill: '#5e768f' }} width={46} stroke={T.border} domain={['auto', 'auto']} tickFormatter={(v: number) => norm === 'pct' ? `${v}%` : `${v}`} />
-                    {overlays.length > 0 && (
-                      <YAxis yAxisId="right" orientation="right" tick={{ fontFamily: 'var(--theme-mono)', fontSize: 9, fill: '#94a3b8' }} width={46} stroke={T.border} domain={['auto', 'auto']} />
-                    )}
+                    {overlays.length > 0 && <YAxis yAxisId="right" orientation="right" tick={{ fontFamily: 'var(--theme-mono)', fontSize: 9, fill: '#94a3b8' }} width={46} stroke={T.border} domain={['auto', 'auto']} />}
                     {baseline != null && <ReferenceLine yAxisId="left" y={baseline} stroke={T.muted} strokeDasharray="3 3" />}
                     <Tooltip content={<CompareTooltip norm={norm} overlays={overlays} />} />
-                    {/* assets */}
                     {assets.filter(t => !hidden.has(t) && data.tickers.includes(t)).map(t => (
                       <Line key={t} yAxisId="left" type="monotone" dataKey={t} stroke={colorOf(t)} strokeWidth={1.8} dot={false} isAnimationActive={false} connectNulls />
                     ))}
-                    {/* technicals on focus asset */}
                     {techLines.map(k => (
                       <Line key={k} yAxisId="left" type="monotone" dataKey={k} stroke={colorOf(focus)} strokeWidth={1} strokeDasharray="4 3" strokeOpacity={0.65} dot={false} isAnimationActive={false} connectNulls />
                     ))}
-                    {/* macro overlays — right axis */}
+                    {funds.map(f => (
+                      <Line key={fundKey(f)} yAxisId="left" type="monotone" dataKey={fundKey(f)} stroke={fundColorOf(f)} strokeWidth={1.4} strokeDasharray="1 3" dot={false} isAnimationActive={false} connectNulls />
+                    ))}
                     {overlays.filter(o => data.overlays.includes(o)).map(o => (
                       <Line key={o} yAxisId="right" type="monotone" dataKey={o} stroke={ovColorOf(o)} strokeWidth={1.5} strokeDasharray="6 3" dot={false} isAnimationActive={false} connectNulls />
                     ))}
@@ -279,7 +356,7 @@ export function CompareContent() {
             )}
           </div>
           <div style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, opacity: 0.6, marginTop: 10, lineHeight: 1.5 }}>
-            Left axis: assets (normalized) + technicals. Right axis: macro (raw, dashed). Yahoo symbols — crypto BTC-USD, indices ^GSPC, FX EURUSD=X. Not investment advice.
+            Left axis: assets (normalized) + technicals + fundamentals (rebased). Right axis: macro (raw, dashed). Yahoo symbols — crypto BTC-USD, futures GC=F/SI=F, FX EURUSD=X. Not investment advice.
           </div>
         </div>
       </div>

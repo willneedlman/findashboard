@@ -5,7 +5,9 @@ from fastapi import HTTPException
 
 logger = logging.getLogger(__name__)
 
-_TICKER_RE = re.compile(r'^[A-Z0-9.\-\^]{1,20}$')
+# Allows Yahoo symbol forms: equities (AAPL, BRK-B), indices (^GSPC), FX (EURUSD=X),
+# futures (GC=F, SI=F, CL=F), and dotted tickers (DX-Y.NYB).
+_TICKER_RE = re.compile(r'^[A-Z0-9.\-\^=]{1,20}$')
 
 
 def validate_ticker(t: str) -> str:
