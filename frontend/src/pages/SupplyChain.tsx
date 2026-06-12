@@ -190,7 +190,9 @@ function SegmentBreakdown({ title, block }: { title: string; block: SegBlock }) 
                 </span>
                 <div style={{ flex: 1, display: 'flex', height: 7, borderRadius: 2, overflow: 'hidden', gap: 1, background: 'var(--theme-hover, rgba(255,255,255,0.04))' }}>
                   {y.segments.map((s, j) => (
-                    <div key={j} title={`${prettyName(s.name)}: ${fmtCap(s.value)}`} style={{ width: `${(s.value / tot) * 100}%`, background: color[s.name] || T.muted }} />
+                    // Colour by rank (j-th = j-th legend item) so years line up even when
+                    // FMP relabels a segment between reports (e.g. "United States" vs "Walmart U S").
+                    <div key={j} title={`${prettyName(s.name)}: ${fmtCap(s.value)}`} style={{ width: `${(s.value / tot) * 100}%`, background: color[block.latest[j]?.name] || SEGMENT_COLORS[j % SEGMENT_COLORS.length] }} />
                   ))}
                 </div>
                 <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, width: 54, textAlign: 'right', flexShrink: 0 }}>{fmtCap(y.total)}</span>
