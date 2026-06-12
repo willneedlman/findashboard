@@ -223,6 +223,10 @@ export function CompareContent() {
   const ratioUnits: Record<string, string> = {}
   ratios.forEach(r => { ratioUnits[ratioKey(r)] = METRIC_UNIT[r.metric] })
   const hasRight = overlays.length > 0 || ratios.length > 0
+  const leftAxisLabel  = norm === 'indexed' ? 'Indexed to 100' : norm === 'pct' ? 'Change (%)' : 'Price'
+  const rightAxisLabel = ratios.length && overlays.length ? 'Multiples · Macro (raw)'
+    : ratios.length ? 'Multiples / Ratios' : 'Macro (raw)'
+  const axisLabelStyle = { fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', fill: '#5e768f' as const }
 
   return (
     <div style={{ maxWidth: 1320, margin: '0 auto' }}>
@@ -323,8 +327,10 @@ export function CompareContent() {
                   <LineChart data={chartData} margin={{ top: 6, right: hasRight ? 8 : 16, left: 4, bottom: 4 }}>
                     <CartesianGrid stroke={T.border} strokeDasharray="2 4" vertical={false} />
                     <XAxis dataKey="date" tick={{ fontFamily: 'var(--theme-mono)', fontSize: 9, fill: '#5e768f' }} minTickGap={50} stroke={T.border} />
-                    <YAxis yAxisId="left" tick={{ fontFamily: 'var(--theme-mono)', fontSize: 9, fill: '#5e768f' }} width={46} stroke={T.border} domain={['auto', 'auto']} tickFormatter={(v: number) => norm === 'pct' ? `${v}%` : `${v}`} />
-                    {hasRight && <YAxis yAxisId="right" orientation="right" tick={{ fontFamily: 'var(--theme-mono)', fontSize: 9, fill: '#94a3b8' }} width={46} stroke={T.border} domain={['auto', 'auto']} />}
+                    <YAxis yAxisId="left" tick={{ fontFamily: 'var(--theme-mono)', fontSize: 9, fill: '#5e768f' }} width={60} stroke={T.border} domain={['auto', 'auto']} tickFormatter={(v: number) => norm === 'pct' ? `${v}%` : `${v}`}
+                      label={{ value: leftAxisLabel, angle: -90, position: 'insideLeft', offset: 4, style: { ...axisLabelStyle, textAnchor: 'middle' } }} />
+                    {hasRight && <YAxis yAxisId="right" orientation="right" tick={{ fontFamily: 'var(--theme-mono)', fontSize: 9, fill: '#94a3b8' }} width={60} stroke={T.border} domain={['auto', 'auto']}
+                      label={{ value: rightAxisLabel, angle: 90, position: 'insideRight', offset: 4, style: { ...axisLabelStyle, fill: '#94a3b8', textAnchor: 'middle' } }} />}
                     {baseline != null && <ReferenceLine yAxisId="left" y={baseline} stroke={T.muted} strokeDasharray="3 3" />}
                     <Tooltip content={<CompareTooltip norm={norm} overlaySet={overlaySet} ratioUnits={ratioUnits} />} />
                     {assets.filter(t => !hidden.has(t) && data.tickers.includes(t)).map(t => (
