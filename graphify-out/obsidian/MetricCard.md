@@ -11,8 +11,4 @@ tags:
 
 # MetricCard
 
-## Connections
-- [[frontend_components_metric_card_props]] - `defines` [EXTRACTED]
-- [[frontend_components_metric_card_help_tooltip]] - `uses` [EXTRACTED]
-
 #graphify/code #graphify/EXTRACTED #community/Frontend

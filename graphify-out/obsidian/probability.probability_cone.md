@@ -2,7 +2,7 @@
 source_file: "backend/routers/probability.py"
 type: "code"
 community: "Backend"
-location: "39"
+location: "38"
 tags:
   - graphify/code
   - graphify/EXTRACTED

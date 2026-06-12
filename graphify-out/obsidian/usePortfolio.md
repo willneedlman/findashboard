@@ -2,7 +2,7 @@
 source_file: "frontend/src/contexts/PortfolioContext.tsx"
 type: "code"
 community: "Frontend"
-location: "L48"
+location: "117"
 tags:
   - graphify/code
   - graphify/EXTRACTED

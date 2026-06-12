@@ -2,7 +2,7 @@
 source_file: "backend/routers/screener.py"
 type: "code"
 community: "Backend"
-location: "26"
+location: "24"
 tags:
   - graphify/code
   - graphify/EXTRACTED

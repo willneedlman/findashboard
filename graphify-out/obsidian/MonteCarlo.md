@@ -12,8 +12,13 @@ tags:
 # MonteCarlo
 
 ## Connections
-- [[frontend_pages_monte_carlo_run_gbm]] - `calls` [EXTRACTED]
-- [[frontend_pages_monte_carlo_apply_risk_controls]] - `calls` [EXTRACTED]
-- [[frontend_pages_monte_carlo_chart_panel]] - `renders` [EXTRACTED]
+- [[frontend_src_components_pagewrapper]] - `renders` [EXTRACTED]
+- [[frontend_src_components_sidebarlayout]] - `renders` [EXTRACTED]
+- [[frontend_src_components_strategyselector]] - `renders` [EXTRACTED]
+- [[frontend_src_components_portfolioio]] - `renders` [EXTRACTED]
+- [[frontend_src_components_emptystate]] - `renders` [EXTRACTED]
+- [[frontend_src_components_metriccard]] - `renders` [EXTRACTED]
+- [[frontend_src_hooks_usechartcolors]] - `calls` [EXTRACTED]
+- [[frontend_src_contexts_portfoliocontext]] - `calls` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

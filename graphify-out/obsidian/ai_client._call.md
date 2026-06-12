@@ -1,0 +1,14 @@
+---
+source_file: "backend/ai_client.py"
+type: "code"
+community: "Backend"
+location: "65"
+tags:
+  - graphify/code
+  - graphify/EXTRACTED
+  - community/Backend
+---
+
+# ai_client._call
+
+#graphify/code #graphify/EXTRACTED #community/Backend

@@ -12,7 +12,10 @@ tags:
 # DealerGEX
 
 ## Connections
-- [[frontend_pages_dealer_gex_metric_card]] - `renders` [EXTRACTED]
-- [[frontend_pages_dealer_gex_chart_panel]] - `renders` [EXTRACTED]
+- [[frontend_src_components_pagewrapper]] - `renders` [EXTRACTED]
+- [[frontend_src_components_sidebarlayout]] - `renders` [EXTRACTED]
+- [[frontend_src_components_emptystate]] - `renders` [EXTRACTED]
+- [[frontend_src_hooks_useapi]] - `calls` [EXTRACTED]
+- [[frontend_src_hooks_usechartcolors]] - `calls` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

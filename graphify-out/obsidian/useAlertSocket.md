@@ -2,7 +2,7 @@
 source_file: "frontend/src/hooks/useAlertSocket.ts"
 type: "code"
 community: "Frontend"
-location: "None"
+location: "21"
 tags:
   - graphify/code
   - graphify/EXTRACTED

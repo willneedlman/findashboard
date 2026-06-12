@@ -12,6 +12,8 @@ tags:
 # finnhub.py
 
 ## Connections
+- [[requests_adapters]] - `imports` [EXTRACTED]
+- [[urllib3_util_retry]] - `imports` [EXTRACTED]
 - [[cachetools]] - `imports` [EXTRACTED]
 - [[dotenv]] - `imports` [EXTRACTED]
 - [[backend_finnhub_py_available]] - `contains` [EXTRACTED]

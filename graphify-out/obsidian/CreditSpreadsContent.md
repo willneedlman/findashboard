@@ -2,7 +2,7 @@
 source_file: "frontend/src/pages/CreditSpreads.tsx"
 type: "code"
 community: "Frontend"
-location: "None"
+location: "77"
 tags:
   - graphify/code
   - graphify/EXTRACTED

@@ -2,7 +2,7 @@
 source_file: "frontend/src/components/AlertToastQueue.tsx"
 type: "code"
 community: "Frontend"
-location: "None"
+location: "37"
 tags:
   - graphify/code
   - graphify/EXTRACTED

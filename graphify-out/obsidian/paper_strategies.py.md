@@ -21,6 +21,7 @@ tags:
 - [[backend_routers_paper_strategies_py_register_builtins]] - `contains` [EXTRACTED]
 - [[backend_routers_paper_strategies_py_strategyentry]] - `contains` [EXTRACTED]
 - [[backend_routers_paper_strategies_py_togglerequest]] - `contains` [EXTRACTED]
+- [[backend_routers_paper_strategies_py_customstrategycreate]] - `contains` [EXTRACTED]
 - [[backend_routers_paper_strategies_py_tickrequest]] - `contains` [EXTRACTED]
 - [[backend_routers_paper_strategies_py_replayrequest]] - `contains` [EXTRACTED]
 - [[backend_routers_paper_strategies_py_signaleventout]] - `contains` [EXTRACTED]
@@ -31,6 +32,5 @@ tags:
 - [[backend_routers_paper_strategies_py_list_strategies]] - `contains` [EXTRACTED]
 - [[backend_routers_paper_strategies_py_toggle_strategy]] - `contains` [EXTRACTED]
 - [[backend_routers_paper_strategies_py_delete_strategy]] - `contains` [EXTRACTED]
-- [[backend_routers_paper_strategies_py_list_builtins]] - `contains` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Backend

@@ -2,7 +2,7 @@
 source_file: "frontend/src/pages/FedRates.tsx"
 type: "code"
 community: "Frontend"
-location: "None"
+location: "255"
 tags:
   - graphify/code
   - graphify/EXTRACTED
@@ -10,5 +10,8 @@ tags:
 ---
 
 # FedRates
+
+## Connections
+- [[frontend_src_components_pagewrapper]] - `renders` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

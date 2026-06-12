@@ -1,8 +1,8 @@
 ---
-source_file: "frontend/src/components/dashboard/widgets/MacroCalendar.tsx"
+source_file: "frontend/src/components/dashboard/widgets/GlobalMacro.tsx"
 type: "code"
 community: "Frontend"
-location: "16"
+location: "26"
 tags:
   - graphify/code
   - graphify/EXTRACTED

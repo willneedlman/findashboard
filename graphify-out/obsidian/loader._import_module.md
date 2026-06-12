@@ -2,7 +2,7 @@
 source_file: "backend/core/loader.py"
 type: "code"
 community: "Backend"
-location: "232"
+location: "231"
 tags:
   - graphify/code
   - graphify/EXTRACTED

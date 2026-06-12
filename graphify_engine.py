@@ -37,7 +37,7 @@ ALL_TRACK_EXTS = SEMANTIC_EXTS | frozenset({
 EXCLUDE_DIRS = frozenset({
     "node_modules", "venv", ".venv", "__pycache__", ".git", "graphify-out",
     ".mypy_cache", ".pytest_cache", "htmlcov", ".eggs", "build", "dist",
-    "coverage", ".tox",
+    "coverage", ".tox", "worktrees", "design-mockups",
 })
 
 
@@ -65,7 +65,7 @@ def load_graph() -> dict:
     return {"directed": True, "multigraph": False, "graph": {}, "nodes": [], "links": [], "hyperedges": []}
 
 
-HIDDEN_ALLOW = frozenset({".claude", ".continue", ".devcontainer", ".github", ".vscode"})
+HIDDEN_ALLOW = frozenset({".devcontainer", ".github", ".vscode"})
 
 
 def scan_files():

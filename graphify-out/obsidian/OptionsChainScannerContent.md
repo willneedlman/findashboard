@@ -2,7 +2,7 @@
 source_file: "frontend/src/pages/OptionsChainScanner.tsx"
 type: "code"
 community: "Frontend"
-location: "None"
+location: "29"
 tags:
   - graphify/code
   - graphify/EXTRACTED

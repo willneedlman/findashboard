@@ -2,7 +2,7 @@
 source_file: "backend/finnhub.py"
 type: "code"
 community: "Backend"
-location: "29"
+location: "41"
 tags:
   - graphify/code
   - graphify/EXTRACTED

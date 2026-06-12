@@ -1,12 +1,12 @@
 ---
 source_file: "graphify_engine.py"
 type: "code"
-community: "Group 6"
+community: "Group 11"
 location: "L1"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/Group_6
+  - community/Group_11
 ---
 
 # graphify_engine.py
@@ -33,4 +33,4 @@ tags:
 - [[graphify_engine_py_cmd_merge]] - `contains` [EXTRACTED]
 - [[graphify_engine_py_cmd_extract_python]] - `contains` [EXTRACTED]
 
-#graphify/code #graphify/EXTRACTED #community/Group_6
+#graphify/code #graphify/EXTRACTED #community/Group_11

@@ -1,5 +1,5 @@
 ---
-source_file: "frontend/src/components/dashboard/widgets/MacroCalendar.tsx"
+source_file: "frontend/src/components/dashboard/widgets/GlobalMacro.tsx"
 type: "code"
 community: "Frontend"
 location: "5"

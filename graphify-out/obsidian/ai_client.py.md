@@ -13,8 +13,13 @@ tags:
 
 ## Connections
 - [[fastapi]] - `imports` [EXTRACTED]
+- [[backend_ai_client_py_get_client]] - `contains` [EXTRACTED]
+- [[backend_ai_client_py_is_retryable]] - `contains` [EXTRACTED]
+- [[backend_ai_client_py_with_backoff]] - `contains` [EXTRACTED]
+- [[backend_ai_client_py_groq_chat]] - `contains` [EXTRACTED]
 - [[backend_ai_client_py_groq_complete]] - `contains` [EXTRACTED]
 - [[backend_ai_client_py_parse_json]] - `contains` [EXTRACTED]
+- [[backend_ai_client_py_call]] - `contains` [EXTRACTED]
 - [[groq]] - `imports` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Backend

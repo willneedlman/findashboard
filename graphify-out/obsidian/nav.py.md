@@ -14,6 +14,7 @@ tags:
 ## Connections
 - [[fastapi]] - `imports` [EXTRACTED]
 - [[pydantic]] - `imports` [EXTRACTED]
+- [[backend_routers_nav_py_extract_btc_from_text]] - `contains` [EXTRACTED]
 - [[backend_routers_nav_py_get_mstr_btc]] - `contains` [EXTRACTED]
 - [[backend_routers_nav_py_navrequest]] - `contains` [EXTRACTED]
 - [[backend_routers_nav_py_nav_proxy]] - `contains` [EXTRACTED]

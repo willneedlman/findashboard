@@ -2,7 +2,7 @@
 source_file: "frontend/src/contexts/PortfolioContext.tsx"
 type: "code"
 community: "Frontend"
-location: "L26"
+location: "57"
 tags:
   - graphify/code
   - graphify/EXTRACTED
@@ -10,5 +10,8 @@ tags:
 ---
 
 # PortfolioProvider
+
+## Connections
+- [[frontend_src_contexts_themecontext]] - `calls` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend
