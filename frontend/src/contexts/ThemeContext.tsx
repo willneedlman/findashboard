@@ -52,9 +52,16 @@ export const DEFAULT_THEME: Theme = {
 }
 
 // Popular font presets — chosen for visual distinctiveness across categories
-// One monospace, kept for numbers & tabular data (alignment matters in a terminal).
+// Monospace faces for numbers & tabular data (all monospaced so figures align),
+// chosen to be visually distinct in character rather than near-identical.
 export const MONO_FONTS = [
-  'JetBrains Mono',   // the single mono — numbers, code, tabular figures
+  'JetBrains Mono',   // modern terminal — default
+  'IBM Plex Mono',    // corporate, professional
+  'Roboto Mono',      // clean, neutral
+  'Fira Code',        // rounded, ligature-rich
+  'Space Mono',       // retro, wide character
+  'DM Mono',          // light, editorial
+  'Martian Mono',     // ultra-wide condensed blocks
 ]
 // Interface typeface — a deliberately varied set so the choices look distinct:
 // grotesque · humanist · geometric · rounded · futuristic · serif · display.
@@ -121,9 +128,10 @@ export function applyTheme(t: Theme) {
   const monoSrc   = t.primaryFontUrl   || `https://fonts.googleapis.com/css2?family=${encodeURIComponent(t.primaryFont)}:wght@400;700&display=swap`
   const sansSrc   = t.secondaryFontUrl || `https://fonts.googleapis.com/css2?family=${encodeURIComponent(t.secondaryFont)}:wght@400;600;700&display=swap`
   const builtinFonts = [
-    'JetBrains Mono', 'Cinzel', 'Lora', 'IBM Plex Sans', 'Inter', 'DM Sans',
-    'Space Grotesk', 'Sora', 'Barlow', 'Manrope', 'Geist', 'Fraunces',
-    'Bricolage Grotesque',
+    'JetBrains Mono', 'IBM Plex Mono', 'Roboto Mono', 'Fira Code', 'Space Mono',
+    'DM Mono', 'Martian Mono', 'Cinzel', 'Lora', 'IBM Plex Sans', 'Inter',
+    'DM Sans', 'Space Grotesk', 'Sora', 'Barlow', 'Manrope', 'Geist',
+    'Fraunces', 'Bricolage Grotesque',
   ]
 
   // Only inject <link> for Google-Fonts-style URLs
