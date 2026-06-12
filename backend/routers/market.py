@@ -180,19 +180,25 @@ def compare_assets(tickers: str, period: str = "1y", normalize: str = "indexed",
 
 
 @router.get("/fundamental-series")
-def fundamental_series(ticker: str, metric: str = "revenue", period: str = "quarter"):
-    """Fundamental metric time series for chart overlays — revenue, net income, EPS,
-    EBITDA, free cash flow, and gross/operating/net margins."""
+def fundamental_series(ticker: str, metric: str = "pe", period: str = "quarter"):
+    """Time series of a standardized multiple/ratio (P/E, EV/EBITDA, P/S, P/B, ROE,
+    ROIC, margins, D/E, yields) for chart overlays — all size-neutral and comparable
+    across companies. Also serves absolute fundamentals (revenue, FCF, …) if requested."""
     ticker = validate_ticker(ticker)
     import fmp as _fmp
     if not _fmp.available():
         raise HTTPException(503, "Fundamentals data source unavailable")
-    pts = _fmp.get_fundamental_series(ticker, metric, period, 24)
+
+    if metric in _fmp.RATIO_METRICS:
+        pts = _fmp.get_ratio_series(ticker, metric, period if period in ("quarter", "annual") else "annual", 16)
+        unit = "%" if _fmp._RATIO_REGISTRY[metric][2] else "x"
+    else:
+        pts = _fmp.get_fundamental_series(ticker, metric, period, 24)
+        unit = {"revenue": "$", "net_income": "$", "eps": "$", "ebitda": "$", "fcf": "$",
+                "gross_margin": "%", "operating_margin": "%", "net_margin": "%"}.get(metric, "")
     if not pts:
-        raise HTTPException(404, "No fundamental data for this ticker/metric")
-    units = {"revenue": "$", "net_income": "$", "eps": "$", "ebitda": "$", "fcf": "$",
-             "gross_margin": "%", "operating_margin": "%", "net_margin": "%"}
-    return {"ticker": ticker.upper(), "metric": metric, "unit": units.get(metric, ""), "points": pts}
+        raise HTTPException(404, "No data for this ticker/metric")
+    return {"ticker": ticker.upper(), "metric": metric, "unit": unit, "points": pts}
 
 
 @router.get("/ohlcv")

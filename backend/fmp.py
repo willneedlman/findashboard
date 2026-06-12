@@ -290,6 +290,85 @@ def get_fundamental_series(ticker: str, metric: str = "revenue", period: str = "
     return _cached(_fundamentals_cache, key, fetch)
 
 
+# ── Standardized multiples & ratios (size-neutral, comparable across companies) ──
+_stmt_cache:  TTLCache = TTLCache(maxsize=300, ttl=86400)  # raw /ratios & /key-metrics
+_ratio_cache: TTLCache = TTLCache(maxsize=400, ttl=86400)  # computed metric series
+
+# metric -> (FMP endpoint, candidate field names, is_percent)
+_RATIO_REGISTRY = {
+    "pe":              ("/ratios",      ["priceToEarningsRatio", "priceEarningsRatio", "peRatio"], False),
+    "ps":              ("/ratios",      ["priceToSalesRatio", "priceSalesRatio"], False),
+    "pb":              ("/ratios",      ["priceToBookRatio", "priceBookValueRatio", "pbRatio"], False),
+    "p_fcf":           ("/ratios",      ["priceToFreeCashFlowsRatio", "priceToFreeCashFlowRatio"], False),
+    "ev_ebitda":       ("/key-metrics", ["enterpriseValueOverEBITDA", "evToEBITDA", "enterpriseValueMultiple"], False),
+    "ev_sales":        ("/key-metrics", ["evToSales", "enterpriseValueOverSales"], False),
+    "gross_margin":    ("/ratios",      ["grossProfitMargin"], True),
+    "operating_margin":("/ratios",      ["operatingProfitMargin", "operatingMargin"], True),
+    "net_margin":      ("/ratios",      ["netProfitMargin", "netIncomeMargin"], True),
+    "roe":             ("/ratios",      ["returnOnEquity"], True),
+    "roa":             ("/ratios",      ["returnOnAssets"], True),
+    "roic":            ("/key-metrics", ["returnOnInvestedCapital", "roic"], True),
+    "debt_equity":     ("/ratios",      ["debtToEquityRatio", "debtEquityRatio"], False),
+    "current_ratio":   ("/ratios",      ["currentRatio"], False),
+    "dividend_yield":  ("/ratios",      ["dividendYield", "dividendYielPercentage"], True),
+    "fcf_yield":       ("/key-metrics", ["freeCashFlowYield"], True),
+}
+
+RATIO_METRICS = frozenset(_RATIO_REGISTRY)
+
+
+def _statement(path: str, sym: str, period: str, limit: int) -> list:
+    key = f"{path}:{sym}:{period}:{limit}"
+    def fetch():
+        try:
+            d = _get(path, {"symbol": sym, "period": period, "limit": limit})
+            return d if isinstance(d, list) else []
+        except Exception:
+            return []
+    return _cached(_stmt_cache, key, fetch)
+
+
+def get_ratio_series(ticker: str, metric: str, period: str = "annual", limit: int = 16) -> list:
+    """Time series of a standardized multiple/ratio (P/E, EV/EBITDA, ROE, margins …)
+    for chart overlays. Returns [{date, value}] oldest-first; percent metrics scaled
+    to %, multiples left raw. Falls back to the other reporting period if empty."""
+    spec = _RATIO_REGISTRY.get(metric)
+    if not spec:
+        return []
+    sym = ticker.strip().upper()
+    period = period if period in ("quarter", "annual") else "annual"
+    path, fields, is_pct = spec
+    key = f"{sym}:{metric}:{period}:{limit}"
+
+    def extract(per: str) -> list:
+        rows = _statement(path, sym, per, limit)
+        out = []
+        for r in (rows or []):
+            d = r.get("date")
+            v = next((r.get(f) for f in fields if r.get(f) is not None), None)
+            if d is None or v is None:
+                continue
+            try:
+                out.append({"date": d, "value": float(v)})
+            except (TypeError, ValueError):
+                pass
+        out.sort(key=lambda x: x["date"])
+        if is_pct and out:                       # FMP returns decimals (0.45) — scale to %
+            mags = sorted(abs(p["value"]) for p in out)
+            if mags and mags[len(mags) // 2] < 3:
+                for p in out:
+                    p["value"] = round(p["value"] * 100, 3)
+        return out
+
+    def fetch():
+        pts = extract(period)
+        if not pts:
+            pts = extract("quarter" if period == "annual" else "annual")
+        return pts
+
+    return _cached(_ratio_cache, key, fetch)
+
+
 _segments_cache: TTLCache = TTLCache(maxsize=200, ttl=86400)  # 24 hr
 
 
