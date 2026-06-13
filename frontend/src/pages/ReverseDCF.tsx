@@ -6,25 +6,7 @@ import SidebarLayout from '../components/SidebarLayout'
 import MetricCard from '../components/MetricCard'
 import EmptyState from '../components/EmptyState'
 import { useChartColors } from '../hooks/useChartColors'
-
-const INPUT: React.CSSProperties = {
-  background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)',
-  color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-mono)', fontSize: 12, padding: '5px 8px',
-  width: '100%', outline: 'none', boxSizing: 'border-box',
-}
-const LABEL: React.CSSProperties = {
-  fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase',
-  color: 'var(--theme-secondary, #99907e)', marginBottom: 4, display: 'block',
-}
-const TOOLTIP_STYLE = { background: 'var(--theme-surface, #142032)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', borderRadius: 0 }
-const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'var(--theme-mono)' }
-
-function fmtM(v: number) {
-  const abs = Math.abs(v)
-  if (abs >= 1_000_000) return `$${(v / 1_000_000).toFixed(2)}T`
-  if (abs >= 1_000)     return `$${(v / 1_000).toFixed(1)}B`
-  return `$${v.toFixed(0)}M`
-}
+import { INPUT, LABEL, HINT, SIDEBAR, SECTION, PRIMARY_BTN, GHOST_BTN, READOUT_ROW, TOOLTIP_STYLE, TOOLTIP_LABEL, TOOLTIP_ITEM, TOOLTIP_CURSOR, TICK, METRIC_GRID, STACK, fmtM, ChartPanel } from './valuationShared'
 
 type Reverse = {
   implied_growth: number | null
@@ -40,9 +22,9 @@ type Reverse = {
 }
 
 const VERDICT_COPY: Record<string, { label: string; color: string; blurb: string }> = {
-  demanding:   { label: 'Demanding',   color: '#f85149', blurb: 'The price bakes in materially faster growth than the company is currently delivering. Expectations are high.' },
-  'in-line':   { label: 'In line',     color: '#c9a84c', blurb: 'The price implies roughly the growth the company is already running. Expectations look reasonable.' },
-  undemanding: { label: 'Undemanding', color: '#3fb950', blurb: 'The price implies slower growth than the company is currently delivering. Expectations are conservative.' },
+  demanding:   { label: 'Demanding',   color: '#f85149', blurb: 'That is materially faster than the company is currently growing, so the price leaves little room for error.' },
+  'in-line':   { label: 'In line',     color: '#c9a84c', blurb: 'That is roughly the pace the company is already running, so expectations look reasonable.' },
+  undemanding: { label: 'Undemanding', color: '#3fb950', blurb: 'That is slower than the company is currently growing, so expectations look conservative.' },
 }
 
 export function ReverseDCFContent() {
@@ -53,7 +35,6 @@ export function ReverseDCFContent() {
   const [wacc, setWacc] = useState(9)
   const [termGrowth, setTermGrowth] = useState(2.5)
   const [years, setYears] = useState(5)
-  // fixed fundamentals carried from the load, not user-tuned here
   const [funda, setFunda] = useState<any>(null)
   const [data, setData] = useState<Reverse | null>(null)
   const [loading, setLoading] = useState(false)
@@ -93,57 +74,62 @@ export function ReverseDCFContent() {
   const verdict = data?.verdict ? VERDICT_COPY[data.verdict] : null
 
   return (
-    <SidebarLayout sidebarWidth={220} sidebarTitle="Reverse DCF Inputs" sidebar={<>
-      <div style={{ marginBottom: 12 }}>
-        <label style={LABEL}>Ticker</label>
-        <input style={INPUT} value={ticker} onChange={e => setTicker(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && loadAndSolve(false)} placeholder="AAPL" />
-      </div>
-      <button onClick={() => loadAndSolve(false)} disabled={loading}
-        style={{ ...INPUT, width: '100%', cursor: 'pointer', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
-          color: 'var(--theme-primary, #c9a84c)', borderColor: 'var(--theme-primary, #c9a84c)', marginBottom: 16 }}>
-        {loading ? 'Solving…' : 'Load & Solve'}
-      </button>
+    <SidebarLayout sidebarWidth={232} sidebarTitle="Reverse DCF Inputs" sidebar={
+      <div style={SIDEBAR}>
+        <div>
+          <label style={LABEL}>Ticker</label>
+          <input style={INPUT} value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())}
+            onKeyDown={e => e.key === 'Enter' && loadAndSolve(false)} placeholder="AAPL" />
+          <button onClick={() => loadAndSolve(false)} disabled={loading} style={{ ...PRIMARY_BTN, marginTop: 8 }}>
+            {loading ? 'Solving…' : 'Load & Solve'}
+          </button>
+        </div>
 
-      {funda && <>
-        <div style={{ marginBottom: 10 }}>
-          <label style={LABEL}>Market price ($)</label>
-          <input style={INPUT} type="number" value={marketPrice}
-            onChange={e => setMarketPrice(e.target.value === '' ? '' : Number(e.target.value))} />
-        </div>
-        <div style={{ marginBottom: 10 }}>
-          <label style={LABEL}>Operating margin (%)</label>
-          <input style={INPUT} type="number" value={opMargin} onChange={e => setOpMargin(Number(e.target.value))} />
-        </div>
-        <div style={{ marginBottom: 10 }}>
-          <label style={LABEL}>WACC (%)</label>
-          <input style={INPUT} type="number" value={wacc} onChange={e => setWacc(Number(e.target.value))} />
-        </div>
-        <div style={{ marginBottom: 10 }}>
-          <label style={LABEL}>Terminal growth (%)</label>
-          <input style={INPUT} type="number" value={termGrowth} onChange={e => setTermGrowth(Number(e.target.value))} />
-        </div>
-        <div style={{ marginBottom: 14 }}>
-          <label style={LABEL}>Projection years</label>
-          <input style={INPUT} type="number" min={3} max={10} value={years} onChange={e => setYears(Number(e.target.value))} />
-        </div>
-        <button onClick={() => loadAndSolve(true)} disabled={loading}
-          style={{ ...INPUT, width: '100%', cursor: 'pointer', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-          Re-solve
-        </button>
-        <div style={{ marginTop: 14, fontSize: 9, fontFamily: 'var(--theme-mono)', color: 'var(--theme-secondary, #99907e)', lineHeight: 1.7 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Revenue (TTM)</span><span>{fmtM(funda.revenue)}</span></div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Shares</span><span>{funda.shares?.toFixed(0)}M</span></div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Net debt</span><span>{fmtM(funda.net_debt)}</span></div>
-          {funda.rev_growth != null && <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Current growth</span><span>{funda.rev_growth.toFixed(1)}%</span></div>}
-        </div>
-      </>}
-    </>}>
+        {funda && <>
+          <div>
+            <label style={LABEL}>Price to solve against</label>
+            <input style={INPUT} type="number" value={marketPrice}
+              onChange={e => setMarketPrice(e.target.value === '' ? '' : Number(e.target.value))} />
+            <div style={HINT}>Auto-filled with the live price. Change it to test a different entry point.</div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={SECTION}>Assumptions</div>
+            <div>
+              <label style={LABEL}>Operating margin (%)</label>
+              <input style={INPUT} type="number" value={opMargin} onChange={e => setOpMargin(Number(e.target.value))} />
+            </div>
+            <div>
+              <label style={LABEL}>Discount rate / WACC (%)</label>
+              <input style={INPUT} type="number" value={wacc} onChange={e => setWacc(Number(e.target.value))} />
+            </div>
+            <div>
+              <label style={LABEL}>Terminal growth (%)</label>
+              <input style={INPUT} type="number" value={termGrowth} onChange={e => setTermGrowth(Number(e.target.value))} />
+            </div>
+            <div>
+              <label style={LABEL}>Projection years</label>
+              <input style={INPUT} type="number" min={3} max={10} value={years} onChange={e => setYears(Number(e.target.value))} />
+            </div>
+          </div>
+
+          <button onClick={() => loadAndSolve(true)} disabled={loading} style={GHOST_BTN}>Re-solve</button>
+
+          <div style={{ paddingTop: 4, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+            <div style={READOUT_ROW}><span>Revenue (TTM)</span><span>{fmtM(funda.revenue)}</span></div>
+            <div style={READOUT_ROW}><span>Shares</span><span>{funda.shares?.toFixed(0)}M</span></div>
+            <div style={READOUT_ROW}><span>Net debt</span><span>{fmtM(funda.net_debt)}</span></div>
+            {funda.rev_growth != null && <div style={READOUT_ROW}><span>Current growth</span><span>{funda.rev_growth.toFixed(1)}%</span></div>}
+          </div>
+        </>}
+      </div>
+    }>
 
       {error && <div style={{ color: '#f85149', fontFamily: 'var(--theme-mono)', fontSize: 12, marginBottom: 12 }}>{error}</div>}
 
       {!data && !error && (
-        <EmptyState title="Reverse DCF" hint="Enter a ticker and Load & Solve to back out the revenue growth the market price is pricing in." />
+        <EmptyState title="Reverse DCF"
+          hint="A reverse DCF flips a normal DCF around. Instead of guessing growth to get a value, it solves for the revenue growth rate the current price already implies, holding margins fixed. Enter a ticker and Load & Solve." />
       )}
 
       {data && implied == null && (
@@ -153,46 +139,44 @@ export function ReverseDCFContent() {
       )}
 
       {data && implied != null && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
-            <MetricCard label="Market-implied growth" value={`${implied.toFixed(1)}%`} />
+        <div style={STACK}>
+          <p style={{ margin: 0, fontFamily: 'var(--theme-mono)', fontSize: 13.5, lineHeight: 1.6, color: 'var(--theme-text, #d7e3fc)' }}>
+            To justify today's <b style={{ color: 'var(--theme-primary, #c9a84c)' }}>${data.market_price.toFixed(2)}</b> price at a {opMargin.toFixed(1)}% operating margin and {wacc}% discount rate,
+            revenue must grow <b style={{ color: 'var(--theme-primary, #c9a84c)' }}>{implied.toFixed(1)}% a year</b> for {years} years.
+          </p>
+
+          <div style={METRIC_GRID}>
+            <MetricCard label="Implied revenue growth" value={`${implied.toFixed(1)}%`} help="Annual revenue growth the price implies, with margins held constant" />
             <MetricCard label="Current growth" value={data.current_growth != null ? `${data.current_growth.toFixed(1)}%` : 'n/a'} />
-            <MetricCard label="Growth gap" value={data.growth_gap != null ? `${data.growth_gap > 0 ? '+' : ''}${data.growth_gap.toFixed(1)} pts` : 'n/a'} />
-            <MetricCard label="Market price" value={`$${data.market_price.toFixed(2)}`} />
+            <MetricCard label="Growth gap" value={data.growth_gap != null ? `${data.growth_gap > 0 ? '+' : ''}${data.growth_gap.toFixed(1)} pts` : 'n/a'} deltaPositive={(data.growth_gap ?? 0) <= 0} />
+            <MetricCard label="Price solved against" value={`$${data.market_price.toFixed(2)}`} />
           </div>
 
           {verdict && (
             <div style={{ border: `1px solid ${verdict.color}55`, background: `${verdict.color}11`, padding: '12px 14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-                <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: verdict.color }}>
-                  Expectations: {verdict.label}
-                </span>
+              <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: verdict.color, marginBottom: 6 }}>
+                Expectations: {verdict.label}
               </div>
               <p style={{ margin: 0, fontFamily: 'var(--theme-mono)', fontSize: 12, lineHeight: 1.6, color: 'var(--theme-text, #d7e3fc)' }}>
-                At ${data.market_price.toFixed(2)}, the market is pricing in {implied.toFixed(1)}% annual revenue growth over the next {years} years. {verdict.blurb}
+                The market implies {implied.toFixed(1)}% growth versus the {data.current_growth != null ? `${data.current_growth.toFixed(1)}%` : 'rate'} the company is currently running. {verdict.blurb}
               </p>
             </div>
           )}
 
           {data.fcfs && data.fcfs.length > 0 && (
-            <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '28px 8px 8px', position: 'relative' }}>
-              <div style={{ position: 'absolute', top: 0, left: 0, background: 'var(--theme-surface, rgba(46,57,77,0.8))', padding: '3px 8px', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>
-                Implied free cash flow path
-              </div>
-              <div style={{ height: 240 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={data.fcfs}>
-                    <CartesianGrid strokeDasharray="2 4" stroke="var(--theme-border, rgba(255,255,255,0.08))" />
-                    <XAxis dataKey="year" tick={TICK} tickFormatter={(y) => `Y${y}`} />
-                    <YAxis tick={TICK} tickFormatter={(v) => fmtM(v)} width={56} />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => fmtM(v)} labelFormatter={(y) => `Year ${y}`} />
-                    <Bar dataKey="fcf" name="FCF" radius={[2, 2, 0, 0]}>
-                      {data.fcfs.map((_, i) => <Cell key={i} fill={cc.c1} />)}
-                    </Bar>
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+            <ChartPanel title="Implied free cash flow path">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={data.fcfs}>
+                  <CartesianGrid strokeDasharray="2 4" stroke="var(--theme-border, rgba(255,255,255,0.08))" />
+                  <XAxis dataKey="year" tick={TICK} tickFormatter={(y) => `Y${y}`} />
+                  <YAxis tick={TICK} tickFormatter={(v) => fmtM(v)} width={56} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL} itemStyle={TOOLTIP_ITEM} cursor={TOOLTIP_CURSOR} formatter={(v: number) => fmtM(v)} labelFormatter={(y) => `Year ${y}`} />
+                  <Bar dataKey="fcf" name="FCF" radius={[2, 2, 0, 0]}>
+                    {data.fcfs.map((_, i) => <Cell key={i} fill={cc.c1} />)}
+                  </Bar>
+                </ComposedChart>
+              </ResponsiveContainer>
+            </ChartPanel>
           )}
         </div>
       )}

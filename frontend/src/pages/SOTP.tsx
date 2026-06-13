@@ -6,27 +6,10 @@ import SidebarLayout from '../components/SidebarLayout'
 import MetricCard from '../components/MetricCard'
 import EmptyState from '../components/EmptyState'
 import { useChartColors } from '../hooks/useChartColors'
-
-const INPUT: React.CSSProperties = {
-  background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)',
-  color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-mono)', fontSize: 12, padding: '5px 8px',
-  width: '100%', outline: 'none', boxSizing: 'border-box',
-}
-const LABEL: React.CSSProperties = {
-  fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase',
-  color: 'var(--theme-secondary, #99907e)', marginBottom: 4, display: 'block',
-}
-const TOOLTIP_STYLE = { background: 'var(--theme-surface, #142032)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', borderRadius: 0 }
-const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'var(--theme-mono)' }
-const TH: React.CSSProperties = { fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', padding: '6px 8px', textAlign: 'right', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }
-const TD: React.CSSProperties = { fontFamily: 'var(--theme-mono)', fontSize: 12, padding: '6px 8px', textAlign: 'right', color: 'var(--theme-text, #d7e3fc)' }
-
-function fmtM(v: number) {
-  const abs = Math.abs(v)
-  if (abs >= 1_000_000) return `$${(v / 1_000_000).toFixed(2)}T`
-  if (abs >= 1_000)     return `$${(v / 1_000).toFixed(1)}B`
-  return `$${v.toFixed(0)}M`
-}
+import {
+  INPUT, LABEL, SIDEBAR, SECTION, PRIMARY_BTN, READOUT_ROW, TOOLTIP_STYLE, TOOLTIP_LABEL,
+  TOOLTIP_ITEM, TOOLTIP_CURSOR, TICK, TH, TD, PANEL, METRIC_GRID, STACK, fmtM, ChartPanel,
+} from './valuationShared'
 
 type Seg = { name: string; revenue: number; pct: number | null }
 type SotpData = {
@@ -49,8 +32,6 @@ export function SOTPContent() {
       const res = await axios.get(`/api/valuation/sotp?ticker=${ticker.trim().toUpperCase()}`)
       const d: SotpData = res.data
       setData(d)
-      // Seed every segment at the company's current blended EV/Sales so the tool
-      // starts near fair value; the user then tunes each segment up or down.
       const start = d.suggested_multiple ?? 3.0
       const seed: Record<string, number> = {}
       for (const s of d.segments) seed[s.name] = start
@@ -74,72 +55,78 @@ export function SOTPContent() {
   }, [data, mult])
 
   return (
-    <SidebarLayout sidebarWidth={240} sidebarTitle="SOTP Inputs" sidebar={<>
-      <div style={{ marginBottom: 12 }}>
-        <label style={LABEL}>Ticker</label>
-        <input style={INPUT} value={ticker} onChange={e => setTicker(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && load()} placeholder="AAPL" />
-      </div>
-      <button onClick={load} disabled={loading}
-        style={{ ...INPUT, width: '100%', cursor: 'pointer', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
-          color: 'var(--theme-primary, #c9a84c)', borderColor: 'var(--theme-primary, #c9a84c)', marginBottom: 16 }}>
-        {loading ? 'Loading…' : 'Load segments'}
-      </button>
-
-      {calc && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)' }}>
-            EV / Sales per segment
-          </div>
-          {calc.rows.map(r => (
-            <div key={r.name}>
-              <label style={{ ...LABEL, marginBottom: 2, textTransform: 'none', letterSpacing: 0, fontSize: 10, color: 'var(--theme-text, #d7e3fc)' }}>{r.name}</label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <input type="range" min={0.5} max={15} step={0.1} value={r.mult}
-                  onChange={e => setMult(m => ({ ...m, [r.name]: Number(e.target.value) }))} style={{ flex: 1, accentColor: 'var(--theme-primary, #c9a84c)' }} />
-                <input type="number" min={0} step={0.1} value={r.mult}
-                  onChange={e => setMult(m => ({ ...m, [r.name]: Number(e.target.value) }))} style={{ ...INPUT, width: 56, padding: '3px 6px' }} />
-              </div>
-            </div>
-          ))}
-          <div style={{ marginTop: 8, fontSize: 9, fontFamily: 'var(--theme-mono)', color: 'var(--theme-secondary, #99907e)', lineHeight: 1.7 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Net debt</span><span>{fmtM(data!.net_debt ?? 0)}</span></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Shares</span><span>{data!.shares?.toFixed(0)}M</span></div>
-            {data!.fiscalYear && <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Segments FY</span><span>{data!.fiscalYear}</span></div>}
-          </div>
+    <SidebarLayout sidebarWidth={250} sidebarTitle="SOTP Inputs" sidebar={
+      <div style={SIDEBAR}>
+        <div>
+          <label style={LABEL}>Ticker</label>
+          <input style={INPUT} value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())}
+            onKeyDown={e => e.key === 'Enter' && load()} placeholder="AAPL" />
+          <button onClick={load} disabled={loading} style={{ ...PRIMARY_BTN, marginTop: 8 }}>
+            {loading ? 'Loading…' : 'Load segments'}
+          </button>
         </div>
-      )}
-    </>}>
+
+        {calc && <>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={SECTION}>EV / Sales per segment</div>
+            {calc.rows.map(r => (
+              <div key={r.name}>
+                <label style={{ ...LABEL, textTransform: 'none', letterSpacing: 0, fontSize: 11, color: 'var(--theme-text, #d7e3fc)', marginBottom: 6 }}>{r.name}</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <input type="range" min={0.5} max={15} step={0.1} value={r.mult}
+                    onChange={e => setMult(m => ({ ...m, [r.name]: Number(e.target.value) }))}
+                    style={{ flex: 1, accentColor: 'var(--theme-primary, #c9a84c)' }} />
+                  <input type="number" min={0} step={0.1} value={r.mult}
+                    onChange={e => setMult(m => ({ ...m, [r.name]: Number(e.target.value) }))}
+                    style={{ ...INPUT, width: 62, padding: '4px 6px', textAlign: 'right', color: 'var(--theme-primary, #c9a84c)' }} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ paddingTop: 4, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+            <div style={READOUT_ROW}><span>Net debt</span><span>{fmtM(data!.net_debt ?? 0)}</span></div>
+            <div style={READOUT_ROW}><span>Shares</span><span>{data!.shares?.toFixed(0)}M</span></div>
+            {data!.fiscalYear && <div style={READOUT_ROW}><span>Segments FY</span><span>{data!.fiscalYear}</span></div>}
+          </div>
+        </>}
+      </div>
+    }>
 
       {error && <div style={{ color: '#f85149', fontFamily: 'var(--theme-mono)', fontSize: 12, marginBottom: 12 }}>{error}</div>}
 
       {!data && !error && (
-        <EmptyState title="Sum-of-the-Parts" hint="Enter a ticker and Load segments to value each business segment on its own EV/Sales multiple." />
+        <EmptyState title="Sum-of-the-Parts"
+          hint="Value each business segment on its own EV/Sales multiple, then sum to an enterprise value and net out debt. Enter a ticker and Load segments." />
       )}
 
       {data && !data.segments.length && (
-        <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 13, color: 'var(--theme-text, #d7e3fc)', lineHeight: 1.7 }}>
+        <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 13, color: 'var(--theme-text, #d7e3fc)', lineHeight: 1.7, maxWidth: 620 }}>
           {data.note || 'No segment breakdown available for this issuer.'}
         </div>
       )}
 
       {calc && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+        <div style={STACK}>
+          <p style={{ margin: 0, fontFamily: 'var(--theme-mono)', fontSize: 13.5, lineHeight: 1.6, color: 'var(--theme-text, #d7e3fc)' }}>
+            Each segment is valued on the EV/Sales multiple you set. They sum to an enterprise value of <b style={{ color: 'var(--theme-primary, #c9a84c)' }}>{fmtM(calc.totalEV)}</b>,
+            or <b style={{ color: 'var(--theme-primary, #c9a84c)' }}>${calc.perShare.toFixed(2)}</b> per share after net debt.
+          </p>
+
+          <div style={METRIC_GRID}>
             <MetricCard label="Enterprise value" value={fmtM(calc.totalEV)} />
             <MetricCard label="Equity value" value={fmtM(calc.equity)} />
             <MetricCard label="Value / share" value={`$${calc.perShare.toFixed(2)}`} />
             <MetricCard label="Upside vs price" value={calc.upside != null ? `${calc.upside > 0 ? '+' : ''}${calc.upside.toFixed(1)}%` : 'n/a'}
-              delta={calc.upside != null ? `${data!.market_price?.toFixed(2)} mkt` : undefined} deltaPositive={(calc.upside ?? 0) >= 0} />
+              delta={calc.upside != null ? `$${data!.market_price?.toFixed(2)} mkt` : undefined} deltaPositive={(calc.upside ?? 0) >= 0} />
           </div>
 
           {(data!.source || data!.fiscalYear) && (
-            <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, letterSpacing: '0.08em', color: 'var(--theme-secondary, #99907e)', marginTop: -6 }}>
-              Segments: {data!.source ?? 'data'}{data!.fiscalYear ? ` · FY${data!.fiscalYear}` : ''}
+            <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 9.5, letterSpacing: '0.08em', color: 'var(--theme-secondary, #99907e)', marginTop: -8 }}>
+              Segment revenue: {data!.source ?? 'data'}{data!.fiscalYear ? ` · FY${data!.fiscalYear}` : ''}
             </div>
           )}
 
-          <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+          <div style={PANEL}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr>
                 <th style={{ ...TH, textAlign: 'left' }}>Segment</th>
@@ -159,24 +146,19 @@ export function SOTPContent() {
             </table>
           </div>
 
-          <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '28px 8px 8px', position: 'relative' }}>
-            <div style={{ position: 'absolute', top: 0, left: 0, background: 'var(--theme-surface, rgba(46,57,77,0.8))', padding: '3px 8px', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>
-              Enterprise value by segment
-            </div>
-            <div style={{ height: 240 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={calc.rows} layout="vertical" margin={{ left: 20 }}>
-                  <CartesianGrid strokeDasharray="2 4" stroke="var(--theme-border, rgba(255,255,255,0.08))" />
-                  <XAxis type="number" tick={TICK} tickFormatter={(v) => fmtM(v)} />
-                  <YAxis type="category" dataKey="name" tick={TICK} width={110} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => fmtM(v)} />
-                  <Bar dataKey="ev" name="Segment EV" radius={[0, 2, 2, 0]}>
-                    {calc.rows.map((_, i) => <Cell key={i} fill={cc.c1} />)}
-                  </Bar>
-                </ComposedChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
+          <ChartPanel title="Enterprise value by segment">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={calc.rows} layout="vertical" margin={{ left: 20 }}>
+                <CartesianGrid strokeDasharray="2 4" stroke="var(--theme-border, rgba(255,255,255,0.08))" />
+                <XAxis type="number" tick={TICK} tickFormatter={(v) => fmtM(v)} />
+                <YAxis type="category" dataKey="name" tick={TICK} width={120} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL} itemStyle={TOOLTIP_ITEM} cursor={TOOLTIP_CURSOR} formatter={(v: number) => fmtM(v)} />
+                <Bar dataKey="ev" name="Segment EV" radius={[0, 2, 2, 0]}>
+                  {calc.rows.map((_, i) => <Cell key={i} fill={cc.c1} />)}
+                </Bar>
+              </ComposedChart>
+            </ResponsiveContainer>
+          </ChartPanel>
         </div>
       )}
     </SidebarLayout>

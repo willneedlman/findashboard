@@ -1,1 +1,0 @@
-import{I as e}from"./index-y-hcM-Ry.js";var t=e(`ChevronDown`,[[`path`,{d:`m6 9 6 6 6-6`,key:`qrunsl`}]]);export{t};
