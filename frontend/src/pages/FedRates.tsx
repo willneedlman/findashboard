@@ -108,8 +108,13 @@ function YieldTable({ curve, adjusted, twist }: { curve: Record<string, number>;
 export function FedRatesContent() {
   const [twist, setTwist] = useState(0)
 
-  const { data: curveData } = useQuery({ queryKey: ['yield-curve'],    queryFn: fetchYieldCurve })
-  const { data: fedData }   = useQuery({ queryKey: ['fed-projections'], queryFn: fetchFedProjections })
+  const { data: curveData, isError: curveErr } = useQuery({ queryKey: ['yield-curve'],    queryFn: fetchYieldCurve })
+  const { data: fedData, isError: fedErr }      = useQuery({ queryKey: ['fed-projections'], queryFn: fetchFedProjections })
+
+  // Both feeds drive different widgets; fed-projections is slow on a cold cache.
+  // Gate every panel on both so the tab loads as one piece instead of staggering.
+  const ready = !!curveData && !!fedData
+  const failed = curveErr || fedErr
 
   const adjustedMeetings = fedData?.meetings.map((m: any, i: number) => ({
     ...m,
@@ -170,6 +175,16 @@ export function FedRatesContent() {
           </div>
         </div>
 
+        {failed ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 320, fontFamily: T.label, fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-negative, #c0394d)' }}>
+            Rate data is unavailable right now. Try again shortly.
+          </div>
+        ) : !ready ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 320, fontFamily: T.label, fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted }}>
+            Loading rate engine
+          </div>
+        ) : (
+        <>
         {/* ── Summary + next-meeting probabilities, side by side ─────────── */}
         <div style={gridTwo}>
           {adjustedMeetings.length > 0 && (
@@ -246,6 +261,8 @@ export function FedRatesContent() {
               </ResponsiveContainer>
             </div>
           </Panel>
+        )}
+        </>
         )}
 
       </div>
