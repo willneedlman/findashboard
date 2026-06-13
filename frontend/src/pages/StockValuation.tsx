@@ -3,11 +3,12 @@ import PageWrapper from '../components/PageWrapper'
 import EmptyState from '../components/EmptyState'
 import { DCFValuationContent } from './DCFValuation'
 import { ReverseDCFContent } from './ReverseDCF'
+import { SOTPContent } from './SOTP'
 
 const TABS = [
   { key: 'dcf',       label: 'DCF',          ready: true },
   { key: 'reverse',   label: 'Reverse DCF',  ready: true },
-  { key: 'sotp',      label: 'SOTP',         ready: false },
+  { key: 'sotp',      label: 'SOTP',         ready: true },
   { key: 'ddm',       label: 'Dividend Discount', ready: false },
   { key: 'multiples', label: 'Multiples',    ready: false },
 ] as const
@@ -15,7 +16,6 @@ const TABS = [
 type TabKey = typeof TABS[number]['key']
 
 const SOON: Record<string, string> = {
-  sotp:      'Sum-of-the-parts: value each business segment on its own multiple, then sum to an enterprise value. Coming in the next pass.',
   ddm:       'Dividend discount model: value the stock off its dividend stream and growth. Coming in the next pass.',
   multiples: 'Multiples: dial a metric and a target multiple to see how the implied valuation moves. Coming in the next pass.',
 }
@@ -47,7 +47,8 @@ export default function StockValuation() {
         </div>
         {tab === 'dcf'     && <DCFValuationContent />}
         {tab === 'reverse' && <ReverseDCFContent />}
-        {(tab === 'sotp' || tab === 'ddm' || tab === 'multiples') && (
+        {tab === 'sotp'    && <SOTPContent />}
+        {(tab === 'ddm' || tab === 'multiples') && (
           <EmptyState title={TABS.find(t => t.key === tab)!.label} hint={SOON[tab]} />
         )}
       </div>

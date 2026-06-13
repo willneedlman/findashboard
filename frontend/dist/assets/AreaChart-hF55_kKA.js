@@ -1,1 +1,0 @@
-import{n as e,o as t,r as n,t as r}from"./generateCategoricalChart-DPo88Us1.js";import{t as i}from"./Area-DUdUpWsb.js";var a=r({chartName:`AreaChart`,GraphicalChild:i,axisComponents:[{axisType:`xAxis`,AxisComp:n},{axisType:`yAxis`,AxisComp:e}],formatAxisMap:t});export{a as t};
