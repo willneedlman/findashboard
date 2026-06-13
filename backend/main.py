@@ -22,7 +22,7 @@ from routers import (
     sentiment, trading,
     filings, lob, regression, screener,
     paper_scheduler, paper_strategies,
-    iv_tracker,
+    iv_tracker, valuation,
 )
 
 @asynccontextmanager
@@ -126,6 +126,7 @@ app.include_router(screener.router,          prefix="/api/screener",          ta
 app.include_router(paper_scheduler.router,   prefix="/api/paper/scheduler",   tags=["paper-trading"])
 app.include_router(paper_strategies.router,  prefix="/api/paper/strategies",  tags=["paper-trading"])
 app.include_router(iv_tracker.router,        prefix="/api/iv",                tags=["iv-tracker"])
+app.include_router(valuation.router,         prefix="/api/valuation",         tags=["valuation"])
 
 
 @app.get("/api/health")
