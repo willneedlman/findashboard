@@ -159,11 +159,11 @@ function ScatterPlot({ result }: { result: RegressionResult }) {
 
   return (
     <ResponsiveContainer width="100%" height={300}>
-      <ScatterChart margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+      <ScatterChart margin={{ top: 10, right: 20, left: 0, bottom: 24 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
         <XAxis dataKey="x" type="number" name={result.x_tickers[0]}
           stroke={C.muted} tick={{ fill: C.muted, fontSize: 10 }}
-          label={{ value: result.x_tickers[0], fill: C.muted, fontSize: 11, position: 'insideBottom', offset: -5 }} />
+          label={{ value: result.x_tickers[0], fill: C.muted, fontSize: 11, position: 'insideBottom', offset: -10 }} />
         <YAxis dataKey="y" type="number" name={result.y_ticker}
           stroke={C.muted} tick={{ fill: C.muted, fontSize: 10 }}
           label={{ value: result.y_ticker, fill: C.muted, fontSize: 11, angle: -90, position: 'insideLeft' }} />
@@ -175,7 +175,7 @@ function ScatterPlot({ result }: { result: RegressionResult }) {
         <Scatter name="Data" data={scatterData} fill={C.blue} opacity={0.5} r={3} />
         <Scatter name="Fit" data={lineData} fill={C.gold} opacity={0.9} r={2}
           line={{ stroke: C.gold, strokeWidth: 2 }} shape={() => null as any} />
-        <Legend wrapperStyle={{ color: C.muted, fontSize: 11 }} />
+        <Legend verticalAlign="top" align="center" wrapperStyle={{ color: C.muted, fontSize: 11, paddingBottom: 10 }} />
       </ScatterChart>
     </ResponsiveContainer>
   )
