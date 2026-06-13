@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 import {
   TrendingUp, LineChart, Landmark, Bitcoin, BarChart2, Dices,
-  GitBranch, Activity, Building2, Calculator, Network, Shuffle, Zap,
+  GitBranch, Activity, Building2, Calculator, Shuffle, Zap,
   ArrowUpRight, LayoutGrid, Filter, FileText, Upload, X,
   PieChart, Scale, Globe, BookOpen, Terminal, Brain, Bell,
   Briefcase, Layers, Compass, Search, Waves, Gauge, GitCompare,
@@ -188,7 +188,6 @@ const BENTO_CARDS: Card[] = [
   // ── Row 6: Macro & Data (4×normal)
   { to: '/sector-rotation', icon: PieChart,   size: 'normal', accent: '#d97736',                       tag: 'SECTORS',      title: 'Sector Rotation',     body: 'Rolling performance heatmap across GICS sectors. Identify rotation leaders and laggards.' },
   { to: '/credit-spreads',  icon: Activity,   size: 'normal', accent: '#ef4444',                       tag: 'CREDIT',       title: 'Credit Spread Monitor',      body: 'IG and HY spread monitoring with historical context and risk-on/off signals.' },
-  { to: '/correlation',     icon: Network,    size: 'normal', accent: 'var(--theme-tertiary, #1f5673)', tag: 'QUANT',        title: 'Correlation Matrix',  body: 'Rolling return correlation heatmap across any custom ticker basket.' },
   { to: '/regression',      icon: Activity,   size: 'normal', accent: '#7aa2f7',                       tag: 'QUANT',        title: 'Regression & Correlation', body: 'Cross-asset correlation and OLS regression on any stock, ETF, crypto, or index. Heatmap, rolling correlation, beta, and plain-English readouts.' },
   { to: '/nav',             icon: Bitcoin,    size: 'normal', accent: 'var(--theme-primary, #c9a84c)', tag: 'NAV',          title: 'NAV Tracker',         body: 'SOTP NAV engine with live MSTR Bitcoin holdings fetched from EDGAR.' },
 

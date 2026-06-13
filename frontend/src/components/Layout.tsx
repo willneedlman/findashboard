@@ -5,7 +5,7 @@ import {
   Home, LayoutGrid, Briefcase,
   TrendingUp, LineChart, Bitcoin,
   BarChart2, Dices, GitBranch, Building2, Calculator,
-  Network, Shuffle, Zap, X, Menu, Settings,
+  Shuffle, Zap, X, Menu, Settings,
   Filter, FileText, ShieldAlert, PieChart,
   BookOpen, Terminal, Brain, Bell, Star, Gauge, Activity, GitCompare,
 } from 'lucide-react'
@@ -28,7 +28,6 @@ const NAV_SECTIONS = [
       { to: '/market',         icon: TrendingUp,    label: 'Market Data' },
       { to: '/sector-rotation',icon: PieChart,       label: 'Sector Rotation' },
       { to: '/research-hub',   icon: Building2,      label: 'Research Hub' },
-      { to: '/correlation',    icon: Network,        label: 'Correlation Matrix' },
       { to: '/regression',     icon: Activity,       label: 'Regression & Correlation' },
       { to: '/compare',        icon: GitCompare,     label: 'Asset Comparison' },
       { to: '/screener',       icon: Filter,         label: 'Stock Screener' },

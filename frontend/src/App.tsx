@@ -27,7 +27,6 @@ const FedRates           = lazy(() => import('./pages/FedRates'))
 const CorporateHub       = lazy(() => import('./pages/CorporateHub'))
 const StockValuation     = lazy(() => import('./pages/StockValuation'))
 const OptionsChainScanner = lazy(() => import('./pages/OptionsChainScanner'))
-const CorrelationMatrix  = lazy(() => import('./pages/CorrelationMatrix'))
 const RegressionAnalysis = lazy(() => import('./pages/RegressionAnalysis'))
 const StrategyBuilder    = lazy(() => import('./pages/StrategyBuilder'))
 const DealerGEX          = lazy(() => import('./pages/DealerGEX'))
@@ -133,7 +132,7 @@ export default function App() {
               <Route path="/valuation"  element={<StockValuation />} />
               <Route path="/dcf"        element={<Navigate to="/valuation" replace />} />
               <Route path="/chain"      element={<OptionsChainScanner />} />
-              <Route path="/correlation" element={<CorrelationMatrix />} />
+              <Route path="/correlation" element={<Navigate to="/regression" replace />} />
               <Route path="/strategy"   element={<StrategyBuilder />} />
               <Route path="/gex"        element={<DealerGEX />} />
               <Route path="/dashboard"       element={<CustomDashboard />} />
