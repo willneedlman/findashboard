@@ -13,7 +13,7 @@ function Nav({ active }: { active: Active }) {
   )
   return (
     <nav><div className="nav-in">
-      <Link className="brand" to="/"><AlphaMark size={20} style={{ verticalAlign: 'middle', marginRight: 8 }} />ALPHATAPE <span>TERMINAL</span></Link>
+      <Link className="brand" to="/"><AlphaMark size={20} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 8 }} />ALPHATAPE <span>TERMINAL</span></Link>
       <div className="nav-links">
         {link('/product/options', 'options', 'Options')}
         {link('/product/valuation', 'valuation', 'Valuation')}
@@ -30,7 +30,7 @@ function Footer() {
   return (
     <footer><div className="wrap foot">
       <div className="col">
-        <Link className="brand" to="/" style={{ display: 'inline-block', marginBottom: 14 }}><AlphaMark size={20} style={{ verticalAlign: 'middle', marginRight: 8 }} />ALPHATAPE <span>TERMINAL</span></Link>
+        <Link className="brand" to="/" style={{ display: 'inline-block', marginBottom: 14 }}><AlphaMark size={20} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 8 }} />ALPHATAPE <span>TERMINAL</span></Link>
         <p className="disc">Market analytics for independent traders. Not investment advice — for research and educational use only.</p>
       </div>
       <div className="col"><h4>Product</h4>
@@ -205,6 +205,15 @@ const EquityCurve = () => (
   </svg>
 )
 
+const YieldCurveBig = () => (
+  <svg viewBox="0 0 280 120" style={{ width: '100%', height: 120, display: 'block' }} role="img" aria-label="UST yield curve">
+    {[26, 53, 80].map(y => <line key={y} x1="0" y1={y} x2="280" y2={y} stroke="rgba(255,255,255,0.04)" />)}
+    <line x1="0" y1="106" x2="280" y2="106" stroke="rgba(255,255,255,0.08)" />
+    <polyline points="14,80 70,84 122,70 178,48 232,38 270,32" fill="none" stroke="#c9a84c" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+    {([[14, 80], [70, 84], [122, 70], [178, 48], [232, 38], [270, 32]] as [number, number][]).map(([x, y]) => <circle key={x} cx={x} cy={y} r="2.8" fill="#0a1320" stroke="#c9a84c" strokeWidth="1.5" />)}
+  </svg>
+)
+
 /* ── Landing ────────────────────────────────────────────────────────────── */
 
 export function Landing() {
@@ -352,7 +361,7 @@ export function OptionsPage() {
       <section className="blk"><div className="wrap">
         <div className="sec-head">
           <div className="eyebrow">Flow · gamma · vol · probability</div>
-          <h2>Four live surfaces on the chain.</h2>
+          <h2>Four surfaces on the options chain.</h2>
         </div>
         <div className="showcase">
           <div className="vpanel">
@@ -380,7 +389,7 @@ export function OptionsPage() {
             <div className="vtags"><span className="tag">Risk-neutral PDF</span><span className="tag">P(touch)</span><span className="tag">P(ITM)</span></div>
           </div>
         </div>
-        <div className="modgrid" style={{ gridTemplateColumns: 'repeat(2,1fr)' }}>
+        <div className="modgrid">
           <div className="mod"><div className="mh"><span className="mi"><Calculator size={15} /></span><h4>Options Pricer</h4></div><p>Black-Scholes with the full greek set — delta, gamma, theta, vega, rho — and instant what-if on spot, vol and time.</p></div>
           <div className="mod"><div className="mh"><span className="mi"><Filter size={15} /></span><h4>Chain Scanner</h4></div><p>The full chain with greeks, bid/ask and open interest. Filter by delta, DTE and moneyness to isolate the contracts you trade.</p></div>
           <div className="mod"><div className="mh"><span className="mi"><Bot size={15} /></span><h4>Market-Maker Simulator</h4></div><p>Quote two-sided markets, absorb simulated flow, and manage inventory and delta hedging — see the other side of your trade.</p></div>
@@ -390,9 +399,7 @@ export function OptionsPage() {
 
       <section className="blk"><div className="wrap">
         <div className="final">
-          <div className="eyebrow">Eight modules. One chain of data.</div>
-          <h2>Read the options market like a desk.</h2>
-          <p>Flow, gamma, vol and pricing in one place — so the whole picture moves with the tape.</p>
+          <h2>All eight options modules, in the terminal.</h2>
           <Link to="/app" className="btn btn-gold btn-lg">Launch Terminal →</Link>
         </div>
       </div></section>
@@ -414,8 +421,8 @@ export function ValuationPage() {
 
       <section className="blk"><div className="wrap">
         <div className="sec-head">
-          <div className="eyebrow">Price in, value out</div>
-          <h2>Intrinsic value — and how robust it is.</h2>
+          <div className="eyebrow">Valuation methods</div>
+          <h2>Intrinsic value, and how sensitive it is.</h2>
         </div>
         <div className="showcase">
           <div className="vpanel">
@@ -435,7 +442,7 @@ export function ValuationPage() {
             <p className="vd">The same model across a grid of discount-rate and growth assumptions — see how much the call depends on its inputs, not just the point estimate.</p>
           </div>
         </div>
-        <div className="modgrid" style={{ gridTemplateColumns: 'repeat(2,1fr)' }}>
+        <div className="modgrid">
           <div className="mod"><div className="mh"><span className="mi"><BarChart3 size={15} /></span><h4>DCF Valuation</h4></div><p>Free-cash-flow model with WACC and terminal growth. When a company's beta or margins are missing, it resolves from industry data instead of stalling.</p></div>
           <div className="mod"><div className="mh"><span className="mi"><Scale size={15} /></span><h4>Relative Valuation</h4></div><p>Peer comparison across P/E, EV/EBITDA, EV/Sales and P/B against sector medians — green where a name beats the set, red where it lags.</p></div>
           <div className="mod"><div className="mh"><span className="mi"><Sigma size={15} /></span><h4>Reverse DCF</h4></div><p>Solve for the growth and margins the current price already implies, and judge whether the market's expectations are reasonable.</p></div>
@@ -445,9 +452,7 @@ export function ValuationPage() {
 
       <section className="blk"><div className="wrap">
         <div className="final">
-          <div className="eyebrow">Always an answer</div>
-          <h2>Valuation that doesn't stall on missing data.</h2>
-          <p>Real statements when they exist, industry averages when they don't — every model resolves.</p>
+          <h2>The full valuation suite, in the terminal.</h2>
           <Link to="/app" className="btn btn-gold btn-lg">Launch Terminal →</Link>
         </div>
       </div></section>
@@ -469,8 +474,8 @@ export function PortfolioPage() {
 
       <section className="blk"><div className="wrap">
         <div className="sec-head">
-          <div className="eyebrow">Track it, then pressure-test it</div>
-          <h2>The book, and what could happen to it.</h2>
+          <div className="eyebrow">Portfolio &amp; risk</div>
+          <h2>Track the book, model the risk.</h2>
         </div>
         <div className="bento">
           <div className="card c-3">
@@ -511,9 +516,7 @@ export function PortfolioPage() {
 
       <section className="blk"><div className="wrap">
         <div className="final">
-          <div className="eyebrow">Risk, quantified</div>
-          <h2>The drawdown shouldn't be a surprise.</h2>
-          <p>Backtest, simulate, and size with numbers — before the market runs the experiment for you.</p>
+          <h2>Track and model your book in the terminal.</h2>
           <Link to="/app" className="btn btn-gold btn-lg">Launch Terminal →</Link>
         </div>
       </div></section>
@@ -554,8 +557,18 @@ export function MacroPage() {
           </div>
           <div className="vpanel">
             <div className="vh"><span className="vt">Yield curve · UST</span><span className="tag-prev">preview</span></div>
-            <div className="vb" style={{ paddingTop: 26 }}><MacroViz /></div>
-            <p className="vd">Curve shape and the 2s10s inversion at a glance — the recession-signal context behind every position you size.</p>
+            <div className="vb">
+              <YieldCurveBig />
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5, fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--dim)' }}>
+                <span>2Y</span><span>5Y</span><span>10Y</span><span>20Y</span><span>30Y</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--line)', fontFamily: 'var(--mono)', fontSize: 11 }}>
+                {([['2Y', '3.71'], ['10Y', '4.05'], ['30Y', '4.42'], ['2s10s', '+0.34']] as [string, string][]).map(([l, v]) => (
+                  <div key={l}><span style={{ color: 'var(--dim)', fontSize: 9, display: 'block', letterSpacing: '0.06em' }}>{l}</span><span style={{ color: 'var(--text)' }}>{v}</span></div>
+                ))}
+              </div>
+            </div>
+            <p className="vd">Curve shape and the 2s10s spread at a glance — the recession-signal context behind every position.</p>
           </div>
         </div>
 
@@ -579,9 +592,7 @@ export function MacroPage() {
 
       <section className="blk"><div className="wrap">
         <div className="final">
-          <div className="eyebrow">Regime-aware</div>
-          <h2>Trade with the cycle, not against it.</h2>
-          <p>Every ticker means more when you can see the rates and credit backdrop behind it.</p>
+          <h2>The macro and rates board, in the terminal.</h2>
           <Link to="/app" className="btn btn-gold btn-lg">Launch Terminal →</Link>
         </div>
       </div></section>
@@ -603,8 +614,8 @@ export function TradingPage() {
 
       <section className="blk"><div className="wrap">
         <div className="sec-head">
-          <div className="eyebrow">Idea → fill → review</div>
-          <h2>One continuous loop.</h2>
+          <div className="eyebrow">Trading workflow</div>
+          <h2>From strategy to journaled fill.</h2>
         </div>
         <div className="loop">
           <div className="lp"><div className="lpn"><b><GitBranch size={13} /></b> Strategy Builder</div><h4>Define the rules.</h4><p>Compose entry and exit rules, parameters and signals into a repeatable strategy — no code required.</p><div className="lptags"><span className="tag">Rules</span><span className="tag">Signals</span></div></div>
@@ -616,9 +627,9 @@ export function TradingPage() {
 
       <section className="blk" style={{ borderTop: '1px solid var(--line)', background: 'var(--bg2)' }}><div className="wrap split">
         <div>
-          <div className="eyebrow">The discipline that compounds</div>
-          <h2 style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.02em', margin: '12px 0 14px' }}>Every fill makes the next trade better.</h2>
-          <p style={{ color: 'var(--muted)', fontSize: 15, lineHeight: 1.65 }}>Paper-trade the strategy, journal the outcome, and let the win-rate and expectancy tell you what's actually working — not what you remember working.</p>
+          <div className="eyebrow">Trade journal</div>
+          <h2 style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.02em', margin: '12px 0 14px' }}>Win-rate and expectancy over time.</h2>
+          <p style={{ color: 'var(--muted)', fontSize: 15, lineHeight: 1.65 }}>Log every trade and tag the setup. The journal tracks win-rate, average expectancy, and which setups actually carry their weight.</p>
           <div className="statline">
             <div className="statbox"><div className="sbv pos">58%</div><div className="sbl">Win rate</div></div>
             <div className="statbox"><div className="sbv">1.9R</div><div className="sbl">Avg. expectancy</div></div>
@@ -633,9 +644,7 @@ export function TradingPage() {
 
       <section className="blk"><div className="wrap">
         <div className="final">
-          <div className="eyebrow">The full loop</div>
-          <h2>Build it. Test it. Trade it. Review it.</h2>
-          <p>Idea to fill to journal — one continuous workflow, so every trade makes the next one better.</p>
+          <h2>Build, paper-trade, and journal in the terminal.</h2>
           <Link to="/app" className="btn btn-gold btn-lg">Launch Terminal →</Link>
         </div>
       </div></section>

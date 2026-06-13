@@ -23,8 +23,8 @@
 .mkt .brand{font-family:var(--mono);font-size:14px;font-weight:700;letter-spacing:0.14em;color:var(--gold);white-space:nowrap}
 .mkt .brand span{color:var(--dim);font-size:10px;letter-spacing:0.24em}
 .mkt .nav-links{display:flex;align-items:center;gap:22px}
-.mkt .nav-links a{font-size:13px;color:var(--muted);transition:color 150ms var(--ease);white-space:nowrap}
-.mkt .nav-links a:hover{color:var(--text)}
+.mkt .nav-links a:not(.btn){font-size:13px;color:var(--muted);transition:color 150ms var(--ease);white-space:nowrap}
+.mkt .nav-links a:not(.btn):hover{color:var(--text)}
 .mkt .nav-links a.active{color:var(--text)}
 .mkt .nav-links a.active::after{content:"";display:block;height:2px;background:var(--gold);margin-top:5px;border-radius:2px}
 
@@ -33,7 +33,7 @@
   transition:transform 90ms var(--ease),background 150ms var(--ease),box-shadow 150ms var(--ease);display:inline-flex;align-items:center;gap:7px}
 .mkt .btn:active{transform:scale(0.97)}
 .mkt .btn:focus-visible{outline:none;box-shadow:0 0 0 2px var(--bg),0 0 0 4px rgba(201,168,76,0.6)}
-.mkt .btn-gold{background:var(--gold);color:#1a1505;box-shadow:0 6px 20px -8px rgba(201,168,76,0.6)}
+.mkt .btn-gold{background:var(--gold);color:#0a1628;box-shadow:0 6px 20px -8px rgba(201,168,76,0.6)}
 .mkt .btn-gold:hover{background:#d8b95e}
 .mkt .btn-ghost{background:rgba(255,255,255,0.04);color:var(--text);border-color:var(--line)}
 .mkt .btn-ghost:hover{background:rgba(255,255,255,0.08)}
@@ -175,7 +175,7 @@
 .mkt .vpanel .vd{font-size:13px;color:var(--muted);line-height:1.55;padding:0 14px 14px;margin-top:auto}
 .mkt .vpanel .vtags{display:flex;flex-wrap:wrap;gap:6px;padding:0 14px 16px}
 
-.mkt .modgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:18px}
+.mkt .modgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-top:18px}
 .mkt .mod{background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:16px;transition:border-color 200ms var(--ease),transform 200ms var(--ease)}
 .mkt .mod:hover{border-color:rgba(255,255,255,0.16);transform:translateY(-2px)}
 .mkt .mod .mh{display:flex;align-items:center;gap:9px;margin-bottom:9px}
@@ -211,7 +211,6 @@
   .mkt .nav-links{display:none}
   .mkt .flow{grid-template-columns:1fr 1fr;gap:30px 0}.mkt .flow::before{display:none}
   .mkt .showcase{grid-template-columns:1fr}
-  .mkt .modgrid{grid-template-columns:1fr 1fr}
   .mkt .loop{grid-template-columns:1fr 1fr}
   .mkt .statline{grid-template-columns:1fr}
 }

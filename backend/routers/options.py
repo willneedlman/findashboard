@@ -531,21 +531,24 @@ def dealer_gex(ticker: str, expiry: str | None = None):
 
     # ── Data-freshness metadata — this tool must be transparent about staleness ──
     _env = os.getenv("TRADIER_ENV", "sandbox")
-    if used_yf_fallback:
-        _source, _delayed = "yfinance (~15-min delayed)", True
-    elif _env == "production":
-        _source, _delayed = "Tradier", False
-    else:
-        _source, _delayed = "Tradier sandbox (delayed)", True
-    _quote_time = None
+    _qdt = None
     if quote_ms:
         try:
-            _quote_time = _dt.datetime.fromtimestamp(int(quote_ms) / 1000, _dt.timezone.utc).isoformat()
+            _qdt = _dt.datetime.fromtimestamp(int(quote_ms) / 1000, _dt.timezone.utc)
         except Exception:
             pass
+    # "delayed" reflects the ACTUAL age of the quote, not assumptions about the feed.
+    _age_s = (_dt.datetime.now(_dt.timezone.utc) - _qdt).total_seconds() if _qdt else None
+    _delayed = (_age_s is None) or (_age_s > 180)
+    if used_yf_fallback:
+        _source = "yfinance"
+    elif _env == "production":
+        _source = "Tradier"
+    else:
+        _source = "Tradier sandbox"
     _meta = {
         "as_of": _dt.datetime.now(_dt.timezone.utc).isoformat(),
-        "quote_time": _quote_time,
+        "quote_time": _qdt.isoformat() if _qdt else None,
         "source": _source,
         "delayed": _delayed,
     }
