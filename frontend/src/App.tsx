@@ -2,7 +2,7 @@ import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import Layout from './components/Layout'
-import { ThemeProvider } from './contexts/ThemeContext'
+import { ThemeProvider, useTheme } from './contexts/ThemeContext'
 import { PortfolioProvider } from './contexts/PortfolioContext'
 
 // Marketing launchpad — chrome-free, lives at / and /product/*
@@ -79,6 +79,20 @@ function TerminalChrome() {
   )
 }
 
+// Root route gate. New visitors (no account yet) get the marketing landing.
+// Returning users who already have an account skip the splash and land on the
+// terminal home — but only on the first launch of a browser session, so they
+// can still navigate back to / to view the marketing page if they want.
+function RootGate() {
+  const { allUsers } = useTheme()
+  const hasAccount = allUsers.length > 0
+  if (hasAccount && sessionStorage.getItem('ft-launched') !== '1') {
+    sessionStorage.setItem('ft-launched', '1')
+    return <Navigate to="/app" replace />
+  }
+  return <Landing />
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -87,7 +101,7 @@ export default function App() {
         <Suspense fallback={<PageLoader />}>
           <Routes>
             {/* Marketing launchpad — no terminal chrome */}
-            <Route path="/"                  element={<Landing />} />
+            <Route path="/"                  element={<RootGate />} />
             <Route path="/product/options"   element={<MktOptions />} />
             <Route path="/product/valuation" element={<MktValuation />} />
             <Route path="/product/portfolio" element={<MktPortfolio />} />
