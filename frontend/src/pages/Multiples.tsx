@@ -90,10 +90,6 @@ export function MultiplesContent() {
 
       {rows && data!.metrics.length > 0 && (
         <div style={STACK}>
-          <p style={{ margin: 0, fontFamily: 'var(--theme-mono)', fontSize: 13.5, lineHeight: 1.6, color: 'var(--theme-text, #d7e3fc)' }}>
-            Each line applies your target multiple to the company's metric. The blended implied value is <b style={{ color: 'var(--theme-primary, #c9a84c)' }}>{rows.avg != null ? `$${rows.avg.toFixed(2)}` : 'n/a'}</b> versus a ${data!.price?.toFixed(2)} price.
-          </p>
-
           <div style={METRIC_GRID}>
             <MetricCard label="Blended implied value" value={rows.avg != null ? `$${rows.avg.toFixed(2)}` : 'n/a'} />
             <MetricCard label="Market price" value={data!.price ? `$${data!.price.toFixed(2)}` : 'n/a'} />
@@ -128,9 +124,6 @@ export function MultiplesContent() {
                 ))}
               </tbody>
             </table>
-          </div>
-          <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 9.5, letterSpacing: '0.04em', color: 'var(--theme-secondary, #99907e)', lineHeight: 1.6 }}>
-            Per share is the company's metric per share (for EV/EBITDA, EBITDA per share). EV/EBITDA nets out debt per share. Blended value averages the positive implied prices.
           </div>
         </div>
       )}

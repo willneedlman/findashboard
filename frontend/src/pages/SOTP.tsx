@@ -107,11 +107,6 @@ export function SOTPContent() {
 
       {calc && (
         <div style={STACK}>
-          <p style={{ margin: 0, fontFamily: 'var(--theme-mono)', fontSize: 13.5, lineHeight: 1.6, color: 'var(--theme-text, #d7e3fc)' }}>
-            Each segment is valued on the EV/Sales multiple you set. They sum to an enterprise value of <b style={{ color: 'var(--theme-primary, #c9a84c)' }}>{fmtM(calc.totalEV)}</b>,
-            or <b style={{ color: 'var(--theme-primary, #c9a84c)' }}>${calc.perShare.toFixed(2)}</b> per share after net debt.
-          </p>
-
           <div style={METRIC_GRID}>
             <MetricCard label="Enterprise value" value={fmtM(calc.totalEV)} />
             <MetricCard label="Equity value" value={fmtM(calc.equity)} />

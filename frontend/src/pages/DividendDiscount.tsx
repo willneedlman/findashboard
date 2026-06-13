@@ -124,11 +124,6 @@ export function DividendDiscountContent() {
             </div>
           )}
 
-          <p style={{ margin: 0, fontFamily: 'var(--theme-mono)', fontSize: 13.5, lineHeight: 1.6, color: 'var(--theme-text, #d7e3fc)' }}>
-            Discounting the ${data!.dps?.toFixed(2)} dividend at a {r}% cost of equity, growing {g1}% for {years} years then {g2}% forever,
-            values the stock at <b style={{ color: 'var(--theme-primary, #c9a84c)' }}>{calc.validTerminal ? `$${calc.value.toFixed(2)}` : 'n/a'}</b>.
-          </p>
-
           <div style={METRIC_GRID}>
             <MetricCard label="Intrinsic value" value={calc.validTerminal ? `$${calc.value.toFixed(2)}` : 'n/a'} />
             <MetricCard label="Market price" value={data!.price ? `$${data!.price.toFixed(2)}` : 'n/a'} />
