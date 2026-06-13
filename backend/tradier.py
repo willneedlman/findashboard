@@ -1,6 +1,7 @@
 import os
 import httpx
 from functools import lru_cache
+from cachetools.func import ttl_cache  # thread-safe short-TTL memoisation
 
 _KEY = os.getenv("TRADIER_API_KEY", "")
 _ENV = os.getenv("TRADIER_ENV", "sandbox")
@@ -24,12 +25,14 @@ def _post(path: str, data: dict | None = None) -> dict:
 
 # ── Market data ───────────────────────────────────────────────────────────────
 
+@ttl_cache(maxsize=512, ttl=20)   # live quotes — dedupe bursts, ~real-time
 def get_quote(symbol: str) -> dict:
     data = _get("/markets/quotes", {"symbols": symbol, "greeks": "false"})
     q = data.get("quotes", {}).get("quote", {})
     return q
 
 
+@ttl_cache(maxsize=256, ttl=3600)   # expirations barely change intraday
 def get_expirations(symbol: str) -> list[str]:
     data = _get("/markets/options/expirations", {"symbol": symbol, "includeAllRoots": "true"})
     exps = data.get("expirations", {})
@@ -39,6 +42,7 @@ def get_expirations(symbol: str) -> list[str]:
     return dates if isinstance(dates, list) else [dates]
 
 
+@ttl_cache(maxsize=2048, ttl=45)   # chains: OI/greeks move slowly; 45s dedupes the GEX fan-out
 def get_options_chain(symbol: str, expiration: str, greeks: bool = True) -> dict:
     """Returns {"calls": [...], "puts": [...]} with full OI, bid, ask, greeks."""
     data = _get("/markets/options/chains", {

@@ -7,13 +7,27 @@ import './marketing.css'
 
 type Active = 'options' | 'valuation' | 'portfolio' | 'macro' | 'trading' | null
 
+/** α + vertical rule + ALPHATAPE / TERMINAL lockup (matches the terminal header). */
+function BrandLockup({ markSize = 30 }: { markSize?: number }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+      <AlphaMark size={markSize} style={{ display: 'block' }} />
+      <span aria-hidden="true" style={{ width: 1, height: Math.round(markSize * 0.92), background: 'rgba(201,168,76,0.28)', margin: '0 13px' }} />
+      <span style={{ display: 'block', lineHeight: 1, textAlign: 'left' }}>
+        <span style={{ display: 'block', fontFamily: "'Cinzel', Georgia, serif", fontWeight: 700, fontSize: Math.round(markSize * 0.62), letterSpacing: '0.09em', color: 'var(--gold)' }}>ALPHATAPE</span>
+        <span style={{ display: 'block', fontFamily: "'IBM Plex Sans', system-ui, sans-serif", fontWeight: 700, fontSize: Math.round(markSize * 3.1) / 10, letterSpacing: '0.34em', color: 'var(--muted)', marginTop: Math.round(markSize * 0.1) }}>TERMINAL</span>
+      </span>
+    </span>
+  )
+}
+
 function Nav({ active }: { active: Active }) {
   const link = (to: string, key: Active, label: string) => (
     <Link to={to} className={active === key ? 'active' : undefined}>{label}</Link>
   )
   return (
     <nav><div className="nav-in">
-      <Link className="brand" to="/"><AlphaMark size={20} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 8 }} />ALPHATAPE <span>TERMINAL</span></Link>
+      <Link to="/" aria-label="AlphaTape Terminal" style={{ textDecoration: 'none' }}><BrandLockup markSize={30} /></Link>
       <div className="nav-links">
         {link('/product/options', 'options', 'Options')}
         {link('/product/valuation', 'valuation', 'Valuation')}
@@ -30,7 +44,7 @@ function Footer() {
   return (
     <footer><div className="wrap foot">
       <div className="col">
-        <Link className="brand" to="/" style={{ display: 'inline-block', marginBottom: 14 }}><AlphaMark size={20} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 8 }} />ALPHATAPE <span>TERMINAL</span></Link>
+        <Link to="/" aria-label="AlphaTape Terminal" style={{ display: 'inline-block', marginBottom: 14, textDecoration: 'none' }}><BrandLockup markSize={28} /></Link>
         <p className="disc">Market analytics for independent traders. Not investment advice — for research and educational use only.</p>
       </div>
       <div className="col"><h4>Product</h4>
