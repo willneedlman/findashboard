@@ -815,7 +815,7 @@ export default function SentimentTracker() {
               const isNoArticles = err === 'no articles collected'
               const isNoKey = err === 'GROQ_API_KEY not configured'
               let headline = 'SCORING UNAVAILABLE'
-              let detail = 'Groq API error. Every article defaulted to neutral (50) — numbers below do not reflect actual sentiment.'
+              let detail = 'Groq API error. Every article defaulted to neutral (50). The numbers below do not reflect actual sentiment.'
               if (isRateLimit) {
                 headline = 'DAILY TOKEN LIMIT REACHED'
                 const retryIn = rateLimitMatch ? rateLimitMatch[1].trim() : null

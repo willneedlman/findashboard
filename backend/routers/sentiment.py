@@ -893,6 +893,16 @@ def _score_all_sources(
         else:
             result[label].append(_base(h))
 
+    # Silent degradation: the Groq call did not raise but produced no usable signal,
+    # so every article fell back to neutral 50. Surface it rather than presenting
+    # fabricated neutral scores as if they were real.
+    if groq_error is None:
+        usable = min(len(scores), len(uncached))
+        if uncached and usable == 0:
+            groq_error = "Groq returned no usable scores"
+        elif usable and all(int(x.get("score", 50)) == 50 for x in scores[:usable]):
+            groq_error = "Groq returned all-neutral scores; scoring likely failed"
+
     return result, groq_error
 
 # ── Momentum signal ───────────────────────────────────────────────────────────
