@@ -380,9 +380,9 @@ const NavBars = ({ grow }: { grow?: boolean }) => {
   return grow ? <div style={{ position: 'relative', flex: 1, minHeight: 90, marginTop: 14 }}>{svg}</div> : svg
 }
 
-// Trade journal: distribution of trade R-multiples. Losses (red) left of the zero line,
+// Trade journal: distribution of closed-trade P&L. Losses (red) left of the zero line,
 // wins (green) right. A histogram, not a line.
-const RHistogram = ({ grow }: { grow?: boolean }) => {
+const PnlHistogram = ({ grow }: { grow?: boolean }) => {
   const buckets = [4, 9, 17, 23, 13, 21, 29, 22, 12, 6]
   const zero = 4
   const max = Math.max(...buckets)
@@ -390,7 +390,7 @@ const RHistogram = ({ grow }: { grow?: boolean }) => {
   const svg = (
     <svg viewBox="0 0 240 80" preserveAspectRatio={grow ? 'none' : 'xMidYMid meet'}
       style={grow ? { position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' } : { width: '100%', height: 80, display: 'block' }}
-      role="img" aria-label="Distribution of trade R-multiples">
+      role="img" aria-label="Distribution of closed-trade profit and loss">
       <line x1="0" y1="70" x2="240" y2="70" stroke="rgba(255,255,255,0.08)" />
       {buckets.map((v, i) => { const x = 8 + i * 23, h = (v / max) * 56; return <rect key={i} x={x} y={70 - h} width="16" height={h} rx="1.5" fill={i >= zero ? 'rgba(63,185,80,0.7)' : 'rgba(248,81,73,0.7)'} /> })}
       <line x1={line} y1="8" x2={line} y2="72" stroke="rgba(255,255,255,0.16)" strokeDasharray="2 3" />
@@ -464,13 +464,13 @@ export function Landing() {
       <section className="blk" id="tools"><div className="wrap">
         <Reveal className="sec-head">
           <div className="eyebrow">One terminal, every workflow</div>
-          <h2>Built like a trading desk, not a toy dashboard.</h2>
-          <p>Each module is a real analytical surface with live data, not a static chart. Move from a macro thesis to an options structure to a paper fill without leaving the terminal.</p>
+          <h2>Every module runs on live market data.</h2>
+          <p>Each tool pulls live data and stays interactive, so you read positioning, value a name, and size a position in the same place. You move from a macro thesis to an options structure to a paper fill without leaving the terminal.</p>
         </Reveal>
         <StaggerGroup className="bento">
           <TiltCard className="card c-tall glow-gold" to="/product/options" item={item}>
             <div className="k">Options intelligence</div>
-            <h3>See the flow before it moves price.</h3>
+            <h3>Track flow, gamma, and volatility.</h3>
             <p>Abnormal options activity, dealer gamma exposure, IV rank, implied probability, and a full market-maker simulator.</p>
             <div className="mini">
               <div className="row"><span>Dealer GEX</span><span className="pos mono">+2.1B</span></div>
@@ -480,17 +480,17 @@ export function Landing() {
             <div className="tags"><span className="tag">GEX</span><span className="tag">Abnormal flow</span><span className="tag">IV surface</span><span className="tag">MM sim</span></div>
           </TiltCard>
           <TiltCard className="card c-2" to="/product/valuation" item={item}>
-            <div className="k">Valuation</div><h3>Find what it's worth.</h3>
+            <div className="k">Valuation</div><h3>Value a company three ways.</h3>
             <p>Discounted cash flow, reverse-DCF, and peer comparison to judge fair value against the market price.</p>
             <ValuationViz />
           </TiltCard>
           <TiltCard className="card c-2 glow-blue" to="/product/portfolio" item={item}>
-            <div className="k">Portfolio &amp; risk</div><h3>Backtest, simulate, analyze.</h3>
+            <div className="k">Portfolio &amp; risk</div><h3>Backtest and stress-test the book.</h3>
             <p>Monte Carlo paths, correlation analysis, and net-greek exposure across the book.</p>
             <PortfolioViz />
           </TiltCard>
           <TiltCard className="card c-wide" to="/product/macro" item={item}>
-            <div className="k">Macro &amp; rates</div><h3>Top-down context, wired into every ticker.</h3>
+            <div className="k">Macro &amp; rates</div><h3>Read the rates and credit regime.</h3>
             <p>Fed-path probabilities, credit spreads, the yield curve, and sector rotation. The regime backdrop for every trade you size.</p>
             <MacroViz />
             <div className="tags"><span className="tag">Fed path</span><span className="tag">Credit spreads</span><span className="tag">Yield curve</span><span className="tag">Sector rotation</span></div>
@@ -501,8 +501,8 @@ export function Landing() {
       <section className="blk" id="depth" style={{ borderTop: '1px solid var(--line)', background: 'var(--bg2)' }}>
         <div className="wrap split">
           <Reveal>
-            <div className="eyebrow">Signal, not noise</div>
-            <h2 style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-0.02em', margin: '12px 0 14px' }}>Catch the print soon after it hits the tape.</h2>
+            <div className="eyebrow">Unusual options flow</div>
+            <h2 style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-0.02em', margin: '12px 0 14px' }}>Scan liquid chains for unusual options activity.</h2>
             <p style={{ color: 'var(--muted)', fontSize: 15.5, lineHeight: 1.65 }}>The flow scanner sweeps liquid chains for volume spikes and volume/open-interest surges, ranks by traded premium, and flags freshly-opened positioning. Sort by DTE, moneyness, or premium and drill straight into the contract.</p>
             <div className="cta" style={{ marginTop: 24 }}><Link to="/product/options" className="btn btn-ghost btn-lg">Open Options →</Link></div>
           </Reveal>
@@ -527,7 +527,7 @@ export function Landing() {
       <section className="blk" style={{ borderTop: '1px solid var(--line)' }}><div className="wrap">
         <Reveal className="sec-head">
           <div className="eyebrow">One continuous workflow</div>
-          <h2>From idea to reviewed trade.</h2>
+          <h2>Research, analyze, size, and review in one place.</h2>
           <p>The whole loop lives in one terminal. You reach a decision without exporting to three other tabs.</p>
         </Reveal>
         <StaggerGroup className="flow">
@@ -542,7 +542,7 @@ export function Landing() {
           <div className="final">
             <div className="eyebrow">Built for independent traders</div>
             <h2>Open the terminal.</h2>
-            <p>An institutional-style analytics desk that runs in your browser. Bring your own thesis.</p>
+            <p>An institutional-style analytics desk that runs in your browser. No installs and no exports.</p>
             <Magnetic><Link to="/app" className="btn btn-gold btn-lg">Launch Terminal →</Link></Magnetic>
           </div>
         </Reveal>
@@ -833,7 +833,7 @@ export function TradingPage() {
         <div className="loop">
           <div className="lp"><div className="lpn"><b><GitBranch size={13} /></b> Strategy Builder</div><h4>Define the rules.</h4><p>Compose entry and exit rules, parameters, and signals into a repeatable strategy. No code required.</p><div className="lptags"><span className="tag">Rules</span><span className="tag">Signals</span></div></div>
           <div className="lp"><div className="lpn"><b><FileText size={13} /></b> Paper Trading</div><h4>Trade it, risk-free.</h4><p>Simulated order execution with live prices. Equities and options, with position tracking and P&L.</p><div className="lptags"><span className="tag">Live prices</span><span className="tag">Equities + options</span></div></div>
-          <div className="lp"><div className="lpn"><b><BookOpen size={13} /></b> Trade Journal</div><h4>Review the result.</h4><p>Log every trade, tag the setup, and track win-rate and expectancy over time.</p><div className="lptags"><span className="tag">Win rate</span><span className="tag">Expectancy</span></div></div>
+          <div className="lp"><div className="lpn"><b><BookOpen size={13} /></b> Trade Journal</div><h4>Review the result.</h4><p>Log every trade, tag the setup, and track win rate and profit factor over time.</p><div className="lptags"><span className="tag">Win rate</span><span className="tag">Profit factor</span></div></div>
           <div className="lp"><div className="lpn"><b><Bell size={13} /></b> Price Alerts</div><h4>Never miss the trigger.</h4><p>Set price and 1-day % change alerts, pushed to your browser the moment they fire.</p><div className="lptags"><span className="tag">Price</span><span className="tag">% change</span></div></div>
         </div>
       </div></section>
@@ -841,17 +841,17 @@ export function TradingPage() {
       <section className="blk" style={{ borderTop: '1px solid var(--line)', background: 'var(--bg2)' }}><div className="wrap split">
         <div>
           <div className="eyebrow">Trade journal</div>
-          <h2 style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.02em', margin: '12px 0 14px' }}>Win-rate and expectancy over time.</h2>
-          <p style={{ color: 'var(--muted)', fontSize: 15, lineHeight: 1.65 }}>Log every trade and tag the setup. The journal tracks win-rate, average expectancy, and which setups actually carry their weight.</p>
+          <h2 style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.02em', margin: '12px 0 14px' }}>Win rate, profit factor, and per-trade P&L.</h2>
+          <p style={{ color: 'var(--muted)', fontSize: 15, lineHeight: 1.65 }}>Log every trade and tag the setup. The journal tracks win rate, average win and loss, profit factor, and the P&L on each closed position.</p>
           <div className="statline">
             <div className="statbox"><div className="sbv pos">58%</div><div className="sbl">Win rate</div></div>
-            <div className="statbox"><div className="sbv">1.9R</div><div className="sbl">Avg. expectancy</div></div>
+            <div className="statbox"><div className="sbv">1.7</div><div className="sbl">Profit factor</div></div>
             <div className="statbox"><div className="sbv">142</div><div className="sbl">Trades logged</div></div>
           </div>
         </div>
         <div className="vpanel">
-          <div className="vh"><span className="vt">Journal · R-multiple distribution</span><span className="tag-prev">preview</span></div>
-          <div className="vb"><RHistogram grow /></div>
+          <div className="vh"><span className="vt">Journal · closed-trade P&L</span><span className="tag-prev">preview</span></div>
+          <div className="vb"><PnlHistogram grow /></div>
         </div>
       </div></section>
 
