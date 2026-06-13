@@ -193,6 +193,120 @@ def extract_python_ast(path: Path, rel_path: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Regex-based extraction for TS/JS/React files (zero token cost)
+# ---------------------------------------------------------------------------
+
+FRONTEND_EXTS = frozenset({".tsx", ".ts", ".jsx", ".js"})
+
+# Top-level definitions only (anchored at column 0) to keep the graph clean.
+_FE_DEF_PATTERNS = [
+    re.compile(r"^export\s+default\s+function\s+([A-Za-z_]\w*)"),
+    re.compile(r"^export\s+(?:async\s+)?function\s+([A-Za-z_]\w*)"),
+    re.compile(r"^(?:async\s+)?function\s+([A-Za-z_]\w*)"),
+    re.compile(r"^export\s+(?:abstract\s+)?class\s+([A-Za-z_]\w*)"),
+    re.compile(r"^(?:abstract\s+)?class\s+([A-Za-z_]\w*)"),
+    re.compile(r"^const\s+([A-Z]\w*)\s*[:=].*=>"),       # top-level component
+    re.compile(r"^const\s+(use[A-Za-z]\w*)\s*[:=]"),     # top-level hook
+    re.compile(r"^export\s+const\s+([A-Za-z_]\w*)"),
+    re.compile(r"^export\s+(?:interface|type)\s+([A-Za-z_]\w*)"),
+]
+_FE_IMPORT_RE = re.compile(r"^import\s+(.+?)\s+from\s+['\"]([^'\"]+)['\"]", re.M)
+_FE_JSX_RE = re.compile(r"<([A-Z][A-Za-z0-9]*)")
+
+
+def _fe_resolve_import(rel_path: str, module: str) -> str:
+    """Map an import target to a node id. Relative paths resolve to the real file's
+    node id (so render/import edges connect to actual component nodes); bare modules
+    become a sanitized module-name node (same convention as the Python extractor)."""
+    if not module.startswith("."):
+        return re.sub(r"[^a-z0-9]+", "_", module.lower()).strip("_")
+    base = (ROOT / rel_path).parent
+    cand = Path(os.path.normpath(str(base / module)))
+    for e in (".tsx", ".ts", ".jsx", ".js", ""):
+        f = Path(str(cand) + e)
+        if f.is_file():
+            r = f.relative_to(ROOT).as_posix()
+            return node_id(r, Path(r).stem)
+    for e in (".tsx", ".ts", ".jsx", ".js"):
+        f = cand / f"index{e}"
+        if f.is_file():
+            r = f.relative_to(ROOT).as_posix()
+            return node_id(r, Path(r).stem)
+    return re.sub(r"[^a-z0-9]+", "_", module.lower()).strip("_")
+
+
+def extract_frontend_regex(path: Path, rel_path: str) -> dict:
+    try:
+        source = path.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return {"nodes": [], "edges": [], "hyperedges": []}
+
+    file_nid = node_id(rel_path, Path(rel_path).stem)
+    nodes = {file_nid: {
+        "id": file_nid, "label": Path(rel_path).name, "file_type": "code",
+        "source_file": rel_path, "source_location": "L1",
+    }}
+    edges = []
+    seen_edges = set()
+
+    def add_edge(src, tgt, rel):
+        key = (src, tgt, rel)
+        if src and tgt and src != tgt and key not in seen_edges:
+            seen_edges.add(key)
+            edges.append({"source": src, "target": tgt, "relation": rel,
+                          "confidence": "EXTRACTED", "confidence_score": 1.0,
+                          "source_file": rel_path, "weight": 1.0})
+
+    local_defs = {}  # name -> node id
+    for lineno, line in enumerate(source.splitlines(), 1):
+        for pat in _FE_DEF_PATTERNS:
+            m = pat.match(line)
+            if m:
+                name = m.group(1)
+                if name in local_defs:
+                    break
+                nid = node_id(rel_path, name)
+                local_defs[name] = nid
+                nodes.setdefault(nid, {
+                    "id": nid, "label": f"{Path(rel_path).stem}.{name}",
+                    "file_type": "code", "source_file": rel_path,
+                    "source_location": str(lineno),
+                })
+                add_edge(file_nid, nid, "contains")
+                break
+
+    # Imports: map imported names to targets, and add file->module import edges.
+    import_map = {}
+    for m in _FE_IMPORT_RE.finditer(source):
+        clause, module = m.group(1), m.group(2)
+        target = _fe_resolve_import(rel_path, module)
+        add_edge(file_nid, target, "imports")
+        named = re.search(r"\{([^}]*)\}", clause)
+        if named:
+            for part in named.group(1).split(","):
+                part = part.strip()
+                if not part:
+                    continue
+                local = part.split(" as ")[-1].strip() if " as " in part else part
+                if re.match(r"^[A-Za-z_]\w*$", local):
+                    import_map[local] = target
+        before = clause.split("{")[0].strip().rstrip(",").strip()
+        if " as " in before:
+            before = before.split(" as ")[-1].strip()
+        if re.match(r"^[A-Za-z_]\w*$", before) and before != "type":
+            import_map[before] = target
+
+    # JSX usage -> render edges, resolved to local defs or imported components.
+    for tag in set(_FE_JSX_RE.findall(source)):
+        if tag in local_defs:
+            add_edge(file_nid, local_defs[tag], "renders")
+        elif tag in import_map:
+            add_edge(file_nid, import_map[tag], "renders")
+
+    return {"nodes": list(nodes.values()), "edges": edges, "hyperedges": []}
+
+
+# ---------------------------------------------------------------------------
 # Community detection (union-find connected components)
 # ---------------------------------------------------------------------------
 
@@ -569,6 +683,19 @@ def cmd_extract_python(abs_path: str, hash_val: str):
     print(f"AST-extracted {nodes} nodes, {edges} edges → cache/semantic/{hash_val[:16]}…")
 
 
+def cmd_extract_frontend(abs_path: str, hash_val: str):
+    """Extract nodes/edges from a TS/JS/React file via regex (no LLM)."""
+    p = Path(abs_path)
+    rel = str(p.relative_to(ROOT))
+    data = extract_frontend_regex(p, rel)
+    SEMANTIC_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_file = SEMANTIC_CACHE_DIR / f"{hash_val}.json"
+    cache_file.write_text(json.dumps(data))
+    nodes = len(data.get("nodes", []))
+    edges = len(data.get("edges", []))
+    print(f"Regex-extracted {nodes} nodes, {edges} edges → cache/semantic/{hash_val[:16]}…")
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
@@ -593,6 +720,8 @@ if __name__ == "__main__":
         cmd_stats()
     elif cmd == "extract_python" and len(args) >= 3:
         cmd_extract_python(args[1], args[2])
+    elif cmd == "extract_frontend" and len(args) >= 3:
+        cmd_extract_frontend(args[1], args[2])
     else:
         print(f"Unknown command: {cmd}", file=sys.stderr)
         print(__doc__)
