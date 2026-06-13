@@ -165,7 +165,7 @@ const BENTO_CARDS: Card[] = [
 
   // ── Row 3: Valuation & Quant (4×normal)
   { to: '/corporate',          icon: Building2,  size: 'normal', accent: 'var(--theme-primary, #c9a84c)', tag: 'CORP',       title: 'Corporate Hub',       body: 'Earnings scanner, insider flow, short interest, and live news aggregator.' },
-  { to: '/dcf',                icon: Calculator, size: 'normal', accent: '#7b5ea7',                       tag: 'VALUATION',  title: 'DCF Valuation',          body: 'Intrinsic value via DCF with WACC, terminal value, and sensitivity tables.' },
+  { to: '/valuation',          icon: Calculator, size: 'normal', accent: '#7b5ea7',                       tag: 'VALUATION',  title: 'Stock Valuation',        body: 'Five models in one hub: DCF, Reverse DCF, SOTP, DDM, and Multiples with shared inputs.' },
   { to: '/relative-valuation', icon: Scale,      size: 'normal', accent: '#d97736',                       tag: 'PEERS',      title: 'Peer Comparison',      body: 'Compare valuation multiples against sector peers. EV/EBITDA, P/E, P/S, forward estimates.' },
   { to: '/supply-chain',       icon: Globe,      size: 'normal', accent: '#2f6b4b',                       tag: 'PROFILE',    title: 'Company Profile',     body: 'Revenue breakdown, supplier exposure, geographic risk, and supply chain dependency map.' },
 
