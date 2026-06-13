@@ -21,12 +21,6 @@ type Reverse = {
   note?: string
 }
 
-const VERDICT_COPY: Record<string, { label: string; color: string; blurb: string }> = {
-  demanding:   { label: 'Demanding',   color: '#f85149', blurb: 'That is materially faster than the company is currently growing, so the price leaves little room for error.' },
-  'in-line':   { label: 'In line',     color: '#c9a84c', blurb: 'That is roughly the pace the company is already running, so expectations look reasonable.' },
-  undemanding: { label: 'Undemanding', color: '#3fb950', blurb: 'That is slower than the company is currently growing, so expectations look conservative.' },
-}
-
 export function ReverseDCFContent() {
   const cc = useChartColors()
   const [ticker, setTicker] = useState('AAPL')
@@ -71,7 +65,6 @@ export function ReverseDCFContent() {
   }
 
   const implied = data?.implied_growth
-  const verdict = data?.verdict ? VERDICT_COPY[data.verdict] : null
 
   return (
     <SidebarLayout sidebarWidth={232} sidebarTitle="Reverse DCF Inputs" sidebar={
@@ -140,28 +133,12 @@ export function ReverseDCFContent() {
 
       {data && implied != null && (
         <div style={STACK}>
-          <p style={{ margin: 0, fontFamily: 'var(--theme-mono)', fontSize: 13.5, lineHeight: 1.6, color: 'var(--theme-text, #d7e3fc)' }}>
-            To justify today's <b style={{ color: 'var(--theme-primary, #c9a84c)' }}>${data.market_price.toFixed(2)}</b> price at a {opMargin.toFixed(1)}% operating margin and {wacc}% discount rate,
-            revenue must grow <b style={{ color: 'var(--theme-primary, #c9a84c)' }}>{implied.toFixed(1)}% a year</b> for {years} years.
-          </p>
-
           <div style={METRIC_GRID}>
             <MetricCard label="Implied revenue growth" value={`${implied.toFixed(1)}%`} help="Annual revenue growth the price implies, with margins held constant" />
             <MetricCard label="Current growth" value={data.current_growth != null ? `${data.current_growth.toFixed(1)}%` : 'n/a'} />
             <MetricCard label="Growth gap" value={data.growth_gap != null ? `${data.growth_gap > 0 ? '+' : ''}${data.growth_gap.toFixed(1)} pts` : 'n/a'} deltaPositive={(data.growth_gap ?? 0) <= 0} />
             <MetricCard label="Price solved against" value={`$${data.market_price.toFixed(2)}`} />
           </div>
-
-          {verdict && (
-            <div style={{ border: `1px solid ${verdict.color}55`, background: `${verdict.color}11`, padding: '12px 14px' }}>
-              <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: verdict.color, marginBottom: 6 }}>
-                Expectations: {verdict.label}
-              </div>
-              <p style={{ margin: 0, fontFamily: 'var(--theme-mono)', fontSize: 12, lineHeight: 1.6, color: 'var(--theme-text, #d7e3fc)' }}>
-                The market implies {implied.toFixed(1)}% growth versus the {data.current_growth != null ? `${data.current_growth.toFixed(1)}%` : 'rate'} the company is currently running. {verdict.blurb}
-              </p>
-            </div>
-          )}
 
           {data.fcfs && data.fcfs.length > 0 && (
             <ChartPanel title="Implied free cash flow path">
