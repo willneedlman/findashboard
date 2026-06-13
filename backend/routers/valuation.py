@@ -62,12 +62,11 @@ def sotp(ticker: str):
     shares   = round(f.get("shares") or 0, 1)
     price    = f.get("market_price")
 
-    # Seed the UI at the company's current blended EV/Sales so SOTP starts near the
+    # Seed the UI at the company's current blended P/S so SOTP starts near the
     # market price and the user tunes individual segments up or down from fair.
     suggested = None
     if price and shares and total_rev:
-        implied_ev = price * shares + net_debt
-        suggested = round(max(0.5, min(implied_ev / total_rev, 25.0)), 1)
+        suggested = round(max(0.1, min(price * shares / total_rev, 25.0)), 1)
 
     return {
         "ticker":             sym,

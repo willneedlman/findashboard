@@ -1,1 +1,0 @@
-import{t as e}from"./jsx-runtime-B_R34ikJ.js";import t from"./PortfolioBacktester-D7oV7CPR.js";var n=e();function r(){return(0,n.jsx)(t,{})}export{r as default};

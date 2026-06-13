@@ -46,12 +46,12 @@ export function SOTPContent() {
 
   const calc = useMemo(() => {
     if (!data || !data.segments.length) return null
-    const rows = data.segments.map(s => ({ ...s, mult: mult[s.name] ?? 3.0, ev: s.revenue * (mult[s.name] ?? 3.0) }))
-    const totalEV = rows.reduce((a, r) => a + r.ev, 0)
-    const equity = totalEV - (data.net_debt ?? 0)
-    const perShare = data.shares ? equity / data.shares : 0
+    // P/S is an equity multiple, so segment value sums straight to equity (no net-debt step).
+    const rows = data.segments.map(s => ({ ...s, mult: mult[s.name] ?? 1.0, value: s.revenue * (mult[s.name] ?? 1.0) }))
+    const total = rows.reduce((a, r) => a + r.value, 0)
+    const perShare = data.shares ? total / data.shares : 0
     const upside = data.market_price ? (perShare / data.market_price - 1) * 100 : null
-    return { rows, totalEV, equity, perShare, upside }
+    return { rows, total, perShare, upside }
   }, [data, mult])
 
   return (
@@ -68,7 +68,7 @@ export function SOTPContent() {
 
         {calc && <>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={SECTION}>EV / Sales per segment</div>
+            <div style={SECTION}>P / S per segment</div>
             {calc.rows.map(r => (
               <div key={r.name}>
                 <label style={{ ...LABEL, textTransform: 'none', letterSpacing: 0, fontSize: 11, color: 'var(--theme-text, #d7e3fc)', marginBottom: 6 }}>{r.name}</label>
@@ -84,7 +84,6 @@ export function SOTPContent() {
             ))}
           </div>
           <div style={{ paddingTop: 4, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
-            <div style={READOUT_ROW}><span>Net debt</span><span>{fmtM(data!.net_debt ?? 0)}</span></div>
             <div style={READOUT_ROW}><span>Shares</span><span>{data!.shares?.toFixed(0)}M</span></div>
             {data!.fiscalYear && <div style={READOUT_ROW}><span>Segments FY</span><span>{data!.fiscalYear}</span></div>}
           </div>
@@ -96,7 +95,7 @@ export function SOTPContent() {
 
       {!data && !error && (
         <EmptyState title="Sum-of-the-Parts"
-          hint="Value each business segment on its own EV/Sales multiple, then sum to an enterprise value and net out debt. Enter a ticker and Load segments." />
+          hint="Value each business segment on its own P/S multiple, then sum to an equity value. Enter a ticker and Load segments." />
       )}
 
       {data && !data.segments.length && (
@@ -108,8 +107,7 @@ export function SOTPContent() {
       {calc && (
         <div style={STACK}>
           <div style={METRIC_GRID}>
-            <MetricCard label="Enterprise value" value={fmtM(calc.totalEV)} />
-            <MetricCard label="Equity value" value={fmtM(calc.equity)} />
+            <MetricCard label="Implied market value" value={fmtM(calc.total)} />
             <MetricCard label="Value / share" value={`$${calc.perShare.toFixed(2)}`} />
             <MetricCard label="Upside vs price" value={calc.upside != null ? `${calc.upside > 0 ? '+' : ''}${calc.upside.toFixed(1)}%` : 'n/a'}
               delta={calc.upside != null ? `$${data!.market_price?.toFixed(2)} mkt` : undefined} deltaPositive={(calc.upside ?? 0) >= 0} />
@@ -125,7 +123,7 @@ export function SOTPContent() {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr>
                 <th style={{ ...TH, textAlign: 'left' }}>Segment</th>
-                <th style={TH}>Revenue</th><th style={TH}>% mix</th><th style={TH}>EV/Sales</th><th style={TH}>Segment EV</th>
+                <th style={TH}>Revenue</th><th style={TH}>% mix</th><th style={TH}>P/S</th><th style={TH}>Segment value</th>
               </tr></thead>
               <tbody>
                 {calc.rows.map(r => (
@@ -134,21 +132,21 @@ export function SOTPContent() {
                     <td style={TD}>{fmtM(r.revenue)}</td>
                     <td style={{ ...TD, color: 'var(--theme-secondary, #99907e)' }}>{r.pct != null ? `${r.pct}%` : '—'}</td>
                     <td style={{ ...TD, color: 'var(--theme-primary, #c9a84c)' }}>{r.mult.toFixed(1)}x</td>
-                    <td style={TD}>{fmtM(r.ev)}</td>
+                    <td style={TD}>{fmtM(r.value)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
 
-          <ChartPanel title="Enterprise value by segment">
+          <ChartPanel title="Value by segment">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={calc.rows} layout="vertical" margin={{ left: 20 }}>
                 <CartesianGrid strokeDasharray="2 4" stroke="var(--theme-border, rgba(255,255,255,0.08))" />
                 <XAxis type="number" tick={TICK} tickFormatter={(v) => fmtM(v)} />
                 <YAxis type="category" dataKey="name" tick={TICK} width={120} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL} itemStyle={TOOLTIP_ITEM} cursor={TOOLTIP_CURSOR} formatter={(v: number) => fmtM(v)} />
-                <Bar dataKey="ev" name="Segment EV" radius={[0, 2, 2, 0]}>
+                <Bar dataKey="value" name="Segment value" radius={[0, 2, 2, 0]}>
                   {calc.rows.map((_, i) => <Cell key={i} fill={cc.c1} />)}
                 </Bar>
               </ComposedChart>
