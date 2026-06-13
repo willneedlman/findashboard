@@ -1,24 +1,20 @@
 import { useState } from 'react'
 import PageWrapper from '../components/PageWrapper'
-import EmptyState from '../components/EmptyState'
 import { DCFValuationContent } from './DCFValuation'
 import { ReverseDCFContent } from './ReverseDCF'
 import { SOTPContent } from './SOTP'
+import { DividendDiscountContent } from './DividendDiscount'
+import { MultiplesContent } from './Multiples'
 
 const TABS = [
   { key: 'dcf',       label: 'DCF',          ready: true },
   { key: 'reverse',   label: 'Reverse DCF',  ready: true },
   { key: 'sotp',      label: 'SOTP',         ready: true },
-  { key: 'ddm',       label: 'Dividend Discount', ready: false },
-  { key: 'multiples', label: 'Multiples',    ready: false },
+  { key: 'ddm',       label: 'Dividend Discount', ready: true },
+  { key: 'multiples', label: 'Multiples',    ready: true },
 ] as const
 
 type TabKey = typeof TABS[number]['key']
-
-const SOON: Record<string, string> = {
-  ddm:       'Dividend discount model: value the stock off its dividend stream and growth. Coming in the next pass.',
-  multiples: 'Multiples: dial a metric and a target multiple to see how the implied valuation moves. Coming in the next pass.',
-}
 
 export default function StockValuation() {
   const [tab, setTab] = useState<TabKey>('dcf')
@@ -45,12 +41,11 @@ export default function StockValuation() {
             </button>
           ))}
         </div>
-        {tab === 'dcf'     && <DCFValuationContent />}
-        {tab === 'reverse' && <ReverseDCFContent />}
-        {tab === 'sotp'    && <SOTPContent />}
-        {(tab === 'ddm' || tab === 'multiples') && (
-          <EmptyState title={TABS.find(t => t.key === tab)!.label} hint={SOON[tab]} />
-        )}
+        {tab === 'dcf'       && <DCFValuationContent />}
+        {tab === 'reverse'   && <ReverseDCFContent />}
+        {tab === 'sotp'      && <SOTPContent />}
+        {tab === 'ddm'       && <DividendDiscountContent />}
+        {tab === 'multiples' && <MultiplesContent />}
       </div>
     </PageWrapper>
   )
