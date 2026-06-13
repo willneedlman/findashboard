@@ -2,7 +2,11 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 import os
 from dotenv import load_dotenv
+# backend/.env is authoritative when present; the repo-root .env fills any gaps
+# (e.g. GROQ_API_KEY) so every module sees the same keys sentiment.py already loads.
+# Must run before the router imports below, which read keys at import time.
 load_dotenv(Path(__file__).parent / ".env")
+load_dotenv(Path(__file__).parent.parent / ".env")
 
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
