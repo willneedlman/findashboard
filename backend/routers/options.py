@@ -12,6 +12,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from math_engine import bs_price, bs_greeks
 import fmp
 import tradier as _tradier
+from market_hours import is_market_open
+from disk_cache import disk_get, disk_set
 from validation import validate_ticker
 from cachetools import TTLCache
 import threading
@@ -443,16 +445,27 @@ def options_chain(ticker: str, expiry: str | None = None):
 def dealer_gex(ticker: str, expiry: str | None = None):
     import datetime as _dt
     sym = ticker.strip().upper()
+    open_now = is_market_open()
+    cache_key = f"gex:{sym}:{expiry or 'all'}"
 
-    # ── Spot price ────────────────────────────────────────────────────────────
+    # Market closed → the profile can't change; serve the last cached one instead
+    # of spending Tradier requests on stale, last-session data.
+    if not open_now:
+        cached = disk_get(cache_key)
+        if cached:
+            cached["delayed"] = True
+            return cached
+
+    # ── Spot price (Tradier only while live; else yfinance) ─────────────────────
     spot = None
     quote_ms = None
-    try:
-        quote = _tradier.get_quote(sym)
-        spot = float(quote.get("last") or quote.get("close") or 0) or None
-        quote_ms = quote.get("trade_date")  # epoch ms of the last quote — the true "as of"
-    except Exception:
-        pass
+    if open_now:
+        try:
+            quote = _tradier.get_quote(sym)
+            spot = float(quote.get("last") or quote.get("close") or 0) or None
+            quote_ms = quote.get("trade_date")  # epoch ms of the last quote — the true "as of"
+        except Exception:
+            pass
     if not spot:
         try:
             hist = yf.Ticker(sym).history(period="5d")
@@ -462,11 +475,18 @@ def dealer_gex(ticker: str, expiry: str | None = None):
     if not spot:
         raise HTTPException(404, "Could not fetch spot price")
 
-    # ── Expirations ───────────────────────────────────────────────────────────
-    try:
-        all_expirations = _tradier.get_expirations(sym)
-    except Exception:
-        all_expirations = list(yf.Ticker(sym).options or [])
+    # ── Expirations (Tradier only while live; else yfinance) ────────────────────
+    all_expirations = []
+    if open_now:
+        try:
+            all_expirations = _tradier.get_expirations(sym)
+        except Exception:
+            pass
+    if not all_expirations:
+        try:
+            all_expirations = list(yf.Ticker(sym).options or [])
+        except Exception:
+            all_expirations = []
 
     today = _dt.date.today()
     future_exps = [e for e in all_expirations if _dt.date.fromisoformat(e) > today]
@@ -482,12 +502,13 @@ def dealer_gex(ticker: str, expiry: str | None = None):
         days_out = max((exp_dt - today).days, 1)
         T        = days_out / 365.25
 
-        # ── Fetch chain via Tradier (real OI + gamma), fall back to yfinance ──
+        # ── Fetch chain via Tradier (live only), else yfinance ──
         chain = None
-        try:
-            chain = _tradier.get_options_chain(sym, exp, greeks=True)
-        except Exception as e:
-            logger.warning("Tradier GEX chain %s %s: %s", sym, exp, e)
+        if open_now:
+            try:
+                chain = _tradier.get_options_chain(sym, exp, greeks=True)
+            except Exception as e:
+                logger.warning("Tradier GEX chain %s %s: %s", sym, exp, e)
 
         if not chain or (not chain.get("calls") and not chain.get("puts")):
             used_yf_fallback = True
@@ -564,13 +585,15 @@ def dealer_gex(ticker: str, expiry: str | None = None):
             pivot[col] = 0.0
     pivot["net_gex"] = pivot["call_gex"] + pivot["put_gex"]
     pivot = pivot.reset_index().sort_values("strike")
-    return {
+    result = {
         "spot": spot,
         "data": pivot.round(4).to_dict(orient="records"),
         "expirations": all_expirations,
         "expiry": expiry,
         **_meta,
     }
+    disk_set(cache_key, result, ttl=86400)   # reuse while the market is closed
+    return result
 
 
 class StrategyLeg(BaseModel):

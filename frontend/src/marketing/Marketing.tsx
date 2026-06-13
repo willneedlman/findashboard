@@ -220,11 +220,13 @@ const EquityCurve = () => (
 )
 
 const YieldCurveBig = () => (
-  <svg viewBox="0 0 280 120" style={{ width: '100%', height: 120, display: 'block' }} role="img" aria-label="UST yield curve">
-    {[26, 53, 80].map(y => <line key={y} x1="0" y1={y} x2="280" y2={y} stroke="rgba(255,255,255,0.04)" />)}
-    <line x1="0" y1="106" x2="280" y2="106" stroke="rgba(255,255,255,0.08)" />
-    <polyline points="14,80 70,84 122,70 178,48 232,38 270,32" fill="none" stroke="#c9a84c" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-    {([[14, 80], [70, 84], [122, 70], [178, 48], [232, 38], [270, 32]] as [number, number][]).map(([x, y]) => <circle key={x} cx={x} cy={y} r="2.8" fill="#0a1320" stroke="#c9a84c" strokeWidth="1.5" />)}
+  <svg viewBox="0 0 520 150" preserveAspectRatio="none" style={{ width: '100%', height: 150, display: 'block' }} role="img" aria-label="UST yield curve">
+    <defs><linearGradient id="ycg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="rgba(201,168,76,0.22)" /><stop offset="1" stopColor="rgba(201,168,76,0)" /></linearGradient></defs>
+    {[34, 74, 114].map(y => <line key={y} x1="0" y1={y} x2="520" y2={y} stroke="rgba(255,255,255,0.04)" />)}
+    <line x1="0" y1="136" x2="520" y2="136" stroke="rgba(255,255,255,0.08)" />
+    <path d="M10,118 L100,112 L200,74 L300,52 L410,34 L510,22 L510,136 L10,136 Z" fill="url(#ycg)" />
+    <polyline points="10,118 100,112 200,74 300,52 410,34 510,22" fill="none" stroke="#c9a84c" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+    {([[10, 118], [100, 112], [200, 74], [300, 52], [410, 34], [510, 22]] as [number, number][]).map(([x, y]) => <circle key={x} cx={x} cy={y} r="3.4" fill="#0a1320" stroke="#c9a84c" strokeWidth="1.8" vectorEffect="non-scaling-stroke" />)}
   </svg>
 )
 
