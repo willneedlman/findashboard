@@ -68,14 +68,6 @@ interface CorrelationResult {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const PERIODS  = ['1mo', '3mo', '6mo', '1y', '2y', '3y', '5y']
-const PRESETS  = [
-  { label: 'SPY ~ QQQ',        y: 'SPY', xs: ['QQQ'] },
-  { label: 'SPY ~ VIX',        y: 'SPY', xs: ['^VIX'] },
-  { label: 'AAPL ~ SPY',       y: 'AAPL', xs: ['SPY'] },
-  { label: 'BTC ~ ETH',        y: 'BTC-USD', xs: ['ETH-USD'] },
-  { label: 'GLD ~ DXY',        y: 'GLD', xs: ['UUP'] },
-  { label: 'Multi: SPY ~ QQQ+DIA', y: 'SPY', xs: ['QQQ', 'DIA'] },
-]
 
 const C = {
   bg:      'var(--theme-bg)',
@@ -241,11 +233,6 @@ function RegressionMode() {
     })
   }
 
-  const applyPreset = (p: typeof PRESETS[0]) => {
-    setYTicker(p.y)
-    setXTickers(p.xs)
-  }
-
   const addX = () => {
     const t = xInput.trim().toUpperCase()
     if (t && !xTickers.includes(t)) setXTickers(prev => [...prev, t])
@@ -258,16 +245,6 @@ function RegressionMode() {
 
   return (
     <>
-      {/* Presets */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-        {PRESETS.map(p => (
-          <button key={p.label} onClick={() => applyPreset(p)} style={{
-            background: C.surf, border: `1px solid ${C.border}`, borderRadius: 4,
-            color: C.muted, padding: '4px 10px', fontSize: 11, cursor: 'pointer',
-          }}>{p.label}</button>
-        ))}
-      </div>
-
       {/* Controls */}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20, alignItems: 'flex-end' }}>
 
@@ -443,13 +420,6 @@ function RegressionMode() {
 
 // ── Correlation mode ────────────────────────────────────────────────────────────
 
-const CORR_PRESETS = [
-  { label: 'Equity indices', ts: ['SPY', 'QQQ', 'DIA', 'IWM'] },
-  { label: 'Stocks vs SPY',  ts: ['AAPL', 'MSFT', 'NVDA', 'SPY'] },
-  { label: 'Crypto',         ts: ['BTC-USD', 'ETH-USD', 'SOL-USD'] },
-  { label: 'Cross-asset',    ts: ['SPY', 'TLT', 'GLD', 'BTC-USD', 'USO'] },
-]
-
 // |r| → strength band + sign, the basis for every plain-English line.
 function strength(v: number): { word: string; color: string } {
   const a = Math.abs(v)
@@ -596,16 +566,6 @@ function CorrelationMode() {
 
   return (
     <>
-      {/* Presets */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-        {CORR_PRESETS.map(p => (
-          <button key={p.label} onClick={() => setTickers(p.ts)} style={{
-            background: C.surf, border: `1px solid ${C.border}`, borderRadius: 4,
-            color: C.muted, padding: '4px 10px', fontSize: 11, cursor: 'pointer',
-          }}>{p.label}</button>
-        ))}
-      </div>
-
       {/* Controls */}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20, alignItems: 'flex-end' }}>
         <div>
