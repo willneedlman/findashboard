@@ -346,6 +346,59 @@ const EquityCurve = ({ grow }: { grow?: boolean }) => {
   return grow ? <div style={{ position: 'relative', flex: 1, minHeight: 90, marginTop: 14 }}>{svg}</div> : svg
 }
 
+// Monte Carlo: percentile cone (gold median inside a widening blue band). Reads as a
+// fan of outcomes, distinct from the green equity-curve area.
+const PercentileCone = ({ grow }: { grow?: boolean }) => {
+  const svg = (
+    <svg viewBox="0 0 260 80" preserveAspectRatio={grow ? 'none' : 'xMidYMid meet'}
+      style={grow ? { position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' } : { width: '100%', height: 80, display: 'block' }}
+      role="img" aria-label="Monte Carlo percentile cone">
+      <path d="M6,40 L70,30 L134,21 L200,13 L256,7 L256,73 L200,67 L134,59 L70,50 Z" fill="rgba(108,140,255,0.16)" />
+      <polyline points="6,40 70,30 134,21 200,13 256,7" fill="none" stroke="rgba(108,140,255,0.5)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+      <polyline points="6,40 70,50 134,59 200,67 256,73" fill="none" stroke="rgba(108,140,255,0.5)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+      <polyline points="6,40 70,37 134,33 200,30 256,27" fill="none" stroke="#c9a84c" strokeWidth="1.8" vectorEffect="non-scaling-stroke" />
+      <circle cx="6" cy="40" r="2.6" fill="#c9a84c" />
+    </svg>
+  )
+  return grow ? <div style={{ position: 'relative', flex: 1, minHeight: 90, marginTop: 16 }}>{svg}</div> : svg
+}
+
+// NAV Tracker: net-contribution bars (blue) with the NAV line (gold) on top. Bar+line
+// combo, deliberately not another filled area curve.
+const NavBars = ({ grow }: { grow?: boolean }) => {
+  const bars = [22, 30, 26, 38, 34, 46, 42, 58]
+  const svg = (
+    <svg viewBox="0 0 240 80" preserveAspectRatio={grow ? 'none' : 'xMidYMid meet'}
+      style={grow ? { position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' } : { width: '100%', height: 80, display: 'block' }}
+      role="img" aria-label="NAV over net contributions">
+      <line x1="0" y1="68" x2="240" y2="68" stroke="rgba(255,255,255,0.08)" />
+      {bars.map((h, i) => { const x = 10 + i * 28; return <rect key={i} x={x} y={68 - h} width="15" height={h} rx="1.5" fill="rgba(108,140,255,0.3)" /> })}
+      <polyline points="17,54 45,49 73,50 101,40 129,41 157,28 185,30 213,16" fill="none" stroke="#c9a84c" strokeWidth="1.8" vectorEffect="non-scaling-stroke" />
+      {([[17, 54], [73, 50], [129, 41], [185, 30], [213, 16]] as [number, number][]).map(([x, y]) => <circle key={x} cx={x} cy={y} r="2.2" fill="#0a1320" stroke="#c9a84c" strokeWidth="1.3" vectorEffect="non-scaling-stroke" />)}
+    </svg>
+  )
+  return grow ? <div style={{ position: 'relative', flex: 1, minHeight: 90, marginTop: 14 }}>{svg}</div> : svg
+}
+
+// Trade journal: distribution of trade R-multiples. Losses (red) left of the zero line,
+// wins (green) right. A histogram, not a line.
+const RHistogram = ({ grow }: { grow?: boolean }) => {
+  const buckets = [4, 9, 17, 23, 13, 21, 29, 22, 12, 6]
+  const zero = 4
+  const max = Math.max(...buckets)
+  const line = 8 + zero * 23 - 3.5
+  const svg = (
+    <svg viewBox="0 0 240 80" preserveAspectRatio={grow ? 'none' : 'xMidYMid meet'}
+      style={grow ? { position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' } : { width: '100%', height: 80, display: 'block' }}
+      role="img" aria-label="Distribution of trade R-multiples">
+      <line x1="0" y1="70" x2="240" y2="70" stroke="rgba(255,255,255,0.08)" />
+      {buckets.map((v, i) => { const x = 8 + i * 23, h = (v / max) * 56; return <rect key={i} x={x} y={70 - h} width="16" height={h} rx="1.5" fill={i >= zero ? 'rgba(63,185,80,0.7)' : 'rgba(248,81,73,0.7)'} /> })}
+      <line x1={line} y1="8" x2={line} y2="72" stroke="rgba(255,255,255,0.16)" strokeDasharray="2 3" />
+    </svg>
+  )
+  return grow ? <div style={{ position: 'relative', flex: 1, minHeight: 90, marginTop: 14 }}>{svg}</div> : svg
+}
+
 const YieldCurveBig = () => (
   <svg viewBox="0 0 520 150" preserveAspectRatio="none" style={{ width: '100%', height: 150, display: 'block' }} role="img" aria-label="UST yield curve">
     <defs><linearGradient id="ycg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="rgba(201,168,76,0.22)" /><stop offset="1" stopColor="rgba(201,168,76,0)" /></linearGradient></defs>
@@ -659,7 +712,7 @@ export function PortfolioPage() {
           <div className="card c-2 glow-gold">
             <div className="k">03 · Monte Carlo</div><h3>Thousands of futures.</h3>
             <p>Forward paths into percentile cones and value-at-risk.</p>
-            <PortfolioViz grow />
+            <PercentileCone grow />
           </div>
           <div className="card c-2">
             <div className="k">04 · Correlation Matrix</div><h3>What moves together.</h3>
@@ -669,7 +722,7 @@ export function PortfolioPage() {
           <div className="card c-2">
             <div className="k">05 · NAV Tracker</div><h3>NAV over time.</h3>
             <p>NAV, contributions, and time-weighted returns, with deposits stripped out.</p>
-            <EquityCurve grow />
+            <NavBars grow />
           </div>
         </div>
       </div></section>
@@ -797,8 +850,8 @@ export function TradingPage() {
           </div>
         </div>
         <div className="vpanel">
-          <div className="vh"><span className="vt">Journal · equity curve</span><span className="tag-prev">preview</span></div>
-          <div className="vb"><EquityCurve grow /></div>
+          <div className="vh"><span className="vt">Journal · R-multiple distribution</span><span className="tag-prev">preview</span></div>
+          <div className="vb"><RHistogram grow /></div>
         </div>
       </div></section>
 
