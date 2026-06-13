@@ -14,6 +14,8 @@ The user's name is **Will**. Address him by name (Will) in every response.
 
 ## 2. UI/UX Design System (`./ui-ux-pro-max-skill`)
 
+**Design context:** `PRODUCT.md` (register, users, purpose, anti-references, principles) and `DESIGN.md` (color tokens, typography, layout, components, copy voice) at the repo root are the source of truth for this product's identity and visual system. Read them before any design work. The `/impeccable` skill loads them automatically. Keep them current when tokens or conventions change.
+
 Before making any frontend change, query the design system search engine:
 
 ```bash
