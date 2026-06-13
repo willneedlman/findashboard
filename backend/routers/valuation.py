@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import fmp
+import sec_segments
 from validation import validate_ticker
 
 router = APIRouter()
@@ -35,19 +36,22 @@ def sotp(ticker: str):
     EV/Sales multiple per segment, sums to enterprise value, then subtracts net
     debt for an equity value per share. Revenue returned in $M."""
     sym = validate_ticker(ticker)
-    if not fmp.available():
-        raise HTTPException(503, "Segment data source unavailable")
 
-    seg = fmp.get_revenue_segments(sym)
+    # SEC EDGAR first: free, no quota, parsed from the latest 10-K's inline XBRL.
+    seg = sec_segments.get_segment_revenue(sym)
     latest = seg.get("latest") or []
+    source = "SEC 10-K"
+    # Fall back to FMP (cleaner names, quarterly) only if SEC has nothing.
+    if not latest and fmp.available():
+        fseg = fmp.get_revenue_segments(sym)
+        if fseg.get("latest"):
+            latest, seg, source = fseg["latest"], fseg, "FMP"
+
     if not latest:
-        if seg.get("error"):
-            note = ("Segment data is temporarily unavailable (the data provider is rate-limiting). "
-                    "Try again in a moment, or use the DCF or Reverse DCF tabs.")
-        else:
-            note = ("This issuer does not report a product-segment revenue breakdown, "
-                    "so a sum-of-the-parts valuation is not available. Use the DCF or Reverse DCF tabs instead.")
-        return {"ticker": sym, "segments": [], "note": note, "error": bool(seg.get("error"))}
+        note = ("No product-segment revenue breakdown was found in this issuer's latest 10-K. "
+                "Single-segment reporters and foreign filers (20-F) will not have one. "
+                "Use the DCF or Reverse DCF tabs instead.")
+        return {"ticker": sym, "segments": [], "note": note, "error": False}
 
     segments = [{"name": s["name"], "revenue": round(s["value"] / 1e6, 1), "pct": s.get("pct")}
                 for s in latest if s.get("value", 0) > 0]
@@ -69,6 +73,7 @@ def sotp(ticker: str):
         "ticker":             sym,
         "fiscalYear":         seg.get("fiscalYear"),
         "currency":           seg.get("currency"),
+        "source":             source,
         "segments":           segments,
         "total_revenue":      total_rev,
         "net_debt":           net_debt,
