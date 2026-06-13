@@ -84,11 +84,11 @@ const C = {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+function StatCard({ label, value, sub, tip }: { label: string; value: string | number; sub?: string; tip?: string }) {
   return (
-    <div style={{
+    <div title={tip} style={{
       background: C.surf, border: `1px solid ${C.border}`, borderRadius: 6,
-      padding: '10px 14px', minWidth: 120,
+      padding: '10px 14px', minWidth: 120, cursor: tip ? 'help' : undefined,
     }}>
       <div style={{ color: C.muted, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>{label}</div>
       <div style={{ color: C.gold, fontSize: 18, fontWeight: 700, marginTop: 2 }}>{value}</div>
@@ -334,14 +334,20 @@ function RegressionMode() {
         <>
           {/* Summary stats row */}
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20 }}>
-            <StatCard label="R²" value={r.r_squared.toFixed(4)} sub={`Adj R²: ${r.adj_r_squared.toFixed(4)}`} />
-            <StatCard label="Observations" value={r.observations} />
-            <StatCard label="F-Statistic" value={r.f_statistic?.toFixed(2) ?? 'n/a'} />
-            <StatCard label="MSE" value={r.mse.toExponential(3)} />
-            <StatCard label="Intercept" value={r.intercept.toFixed(6)} sub={`p = ${r.intercept_p.toExponential(2)}`} />
+            <StatCard label="R²" value={r.r_squared.toFixed(4)} sub={`Adj R²: ${r.adj_r_squared.toFixed(4)}`}
+              tip={`Share of ${r.y_ticker}'s variation explained by the model (0 to 1). Higher is a tighter fit. Adj R² penalizes extra variables.`} />
+            <StatCard label="Observations" value={r.observations}
+              tip="Number of data points (days) used in the regression. More is a more stable estimate." />
+            <StatCard label="F-Statistic" value={r.f_statistic?.toFixed(2) ?? 'n/a'}
+              tip="Tests whether the model as a whole beats just guessing the average. Higher means more confident the relationship is real." />
+            <StatCard label="MSE" value={r.mse.toExponential(3)}
+              tip="Mean squared residual. Its square root is the typical prediction error, in the dependent variable's units." />
+            <StatCard label="Intercept" value={r.intercept.toFixed(6)} sub={`p = ${r.intercept_p.toExponential(2)}`}
+              tip={`Expected ${r.y_ticker} when every input is zero (alpha). A p-value above 0.05 means it is not distinguishable from zero.`} />
             {r.coefficients.map((c, i) => (
               <StatCard key={i} label={`β(${r.feature_names[i]})`}
-                value={c.toFixed(6)} sub={`p = ${r.p_values[i].toExponential(2)}`} />
+                value={c.toFixed(6)} sub={`p = ${r.p_values[i].toExponential(2)}`}
+                tip={`Slope: ${r.y_ticker} moves this much per 1-unit move in ${r.feature_names[i]}, holding others fixed. A p-value below 0.05 means it is statistically significant.`} />
             ))}
           </div>
 
