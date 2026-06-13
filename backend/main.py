@@ -121,7 +121,7 @@ app.include_router(sentiment.router,         prefix="/api/sentiment",         ta
 app.include_router(trading.router,           prefix="/api/trading",           tags=["trading"])
 app.include_router(filings.router,           prefix="/api/filings",           tags=["filings"])
 app.include_router(lob.router,               prefix="/api/lob",               tags=["lob"])
-app.include_router(regression.router,        prefix="/api/regression",        tags=["regression"], dependencies=[Depends(require_admin)])
+app.include_router(regression.router,        prefix="/api/regression",        tags=["regression"])
 app.include_router(screener.router,          prefix="/api/screener",          tags=["screener"])
 app.include_router(paper_scheduler.router,   prefix="/api/paper/scheduler",   tags=["paper-trading"])
 app.include_router(paper_strategies.router,  prefix="/api/paper/strategies",  tags=["paper-trading"])

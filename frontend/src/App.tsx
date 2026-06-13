@@ -28,6 +28,7 @@ const CorporateHub       = lazy(() => import('./pages/CorporateHub'))
 const StockValuation     = lazy(() => import('./pages/StockValuation'))
 const OptionsChainScanner = lazy(() => import('./pages/OptionsChainScanner'))
 const CorrelationMatrix  = lazy(() => import('./pages/CorrelationMatrix'))
+const RegressionAnalysis = lazy(() => import('./pages/RegressionAnalysis'))
 const StrategyBuilder    = lazy(() => import('./pages/StrategyBuilder'))
 const DealerGEX          = lazy(() => import('./pages/DealerGEX'))
 const CustomDashboard    = lazy(() => import('./pages/CustomDashboard'))
@@ -151,7 +152,7 @@ export default function App() {
               <Route path="/algo-runner"         element={<Navigate to="/admin" replace />} />
               <Route path="/sentiment"           element={<SentimentTracker />} />
               <Route path="/alerts"             element={<AlertsPage />} />
-              <Route path="/regression"         element={<Navigate to="/admin" replace />} />
+              <Route path="/regression"         element={<RegressionAnalysis />} />
               <Route path="/options-hub"        element={<OptionsHub />} />
               <Route path="/macro-hub"          element={<MacroHub />} />
               <Route path="/research-hub"       element={<ResearchHub />} />

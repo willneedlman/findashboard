@@ -238,6 +238,114 @@ def regression_analyze(req: RegressionRequest):
     }
 
 
+class CorrelationRequest(BaseModel):
+    tickers:        list[str]
+    period:         str  = "2y"
+    use_returns:    bool = True
+    benchmark:      str | None = None
+    rolling_window: int  = 60
+    pair:           list[str] | None = None
+
+
+@router.post("/correlation")
+def regression_correlation(req: CorrelationRequest):
+    """Cross-asset correlation across any basket of tickers (stocks/ETFs/crypto/
+    indices). Returns the Pearson matrix, a diversification summary, per-asset beta
+    vs an optional benchmark, and a rolling correlation series for one pair."""
+    tickers = list(dict.fromkeys(t.upper().strip() for t in req.tickers if t.strip()))
+    if len(tickers) < 2:
+        raise HTTPException(400, "Provide at least 2 distinct tickers")
+    if len(tickers) > 12:
+        raise HTTPException(400, "Maximum 12 tickers")
+    if req.period not in _VALID_PERIODS:
+        raise HTTPException(400, f"period must be one of {_VALID_PERIODS}")
+    if not 5 <= req.rolling_window <= 252:
+        raise HTTPException(400, "rolling_window must be between 5 and 252")
+
+    benchmark = req.benchmark.upper().strip() if req.benchmark else None
+    fetch_list = list(tickers)
+    if benchmark and benchmark not in fetch_list:
+        fetch_list.append(benchmark)
+
+    df = pd.concat([_fetch_series(t, req.period, req.use_returns) for t in fetch_list], axis=1)
+    df = df.loc[:, ~df.columns.duplicated()].dropna()
+    if len(df) < 10:
+        raise HTTPException(400, "Fewer than 10 overlapping data points — try a longer period")
+
+    corr_df = df[tickers].corr()
+    matrix = [
+        {"row": t1, "col": t2, "value": round(float(corr_df.loc[t1, t2]), 4)}
+        for t1 in tickers for t2 in tickers
+    ]
+
+    # Unique off-diagonal pairs drive the summary + interpretation.
+    pairs = [
+        {"a": tickers[i], "b": tickers[j], "value": round(float(corr_df.iloc[i, j]), 4)}
+        for i in range(len(tickers)) for j in range(i + 1, len(tickers))
+    ]
+    avg_abs = round(float(np.mean([abs(p["value"]) for p in pairs])), 4) if pairs else 0.0
+    strongest = max(pairs, key=lambda p: p["value"]) if pairs else None
+    most_negative = min(pairs, key=lambda p: p["value"]) if pairs else None
+
+    # Per-asset beta + R² vs the benchmark (the bridge to the regression tab).
+    betas = None
+    if benchmark and benchmark in df.columns:
+        bench = df[benchmark].values.reshape(-1, 1)
+        betas = []
+        for t in tickers:
+            if t == benchmark:
+                betas.append({"ticker": t, "beta": 1.0, "r_squared": 1.0})
+                continue
+            m = LinearRegression().fit(bench, df[t].values)
+            betas.append({
+                "ticker":    t,
+                "beta":      round(float(m.coef_[0]), 4),
+                "r_squared": round(float(m.score(bench, df[t].values)), 4),
+            })
+
+    # Rolling correlation + scatter for one pair — defaults to the strongest |r| pair.
+    if req.pair and len(req.pair) == 2:
+        pa, pb = req.pair[0].upper().strip(), req.pair[1].upper().strip()
+    elif pairs:
+        sp = max(pairs, key=lambda p: abs(p["value"]))
+        pa, pb = sp["a"], sp["b"]
+    else:
+        pa = pb = None
+
+    rolling = scatter = None
+    if pa and pb and pa != pb and pa in df.columns and pb in df.columns:
+        rc = df[pa].rolling(req.rolling_window).corr(df[pb]).dropna()
+        rolling = {
+            "pair":   [pa, pb],
+            "window": req.rolling_window,
+            "dates":  rc.index.strftime("%Y-%m-%d").tolist(),
+            "corr":   [round(float(v), 4) for v in rc.values],
+        }
+        scatter = {
+            "pair": [pa, pb],
+            "x":    [round(float(v), 8) for v in df[pa].tolist()],
+            "y":    [round(float(v), 8) for v in df[pb].tolist()],
+        }
+
+    return {
+        "tickers":      tickers,
+        "benchmark":    benchmark,
+        "period":       req.period,
+        "use_returns":  req.use_returns,
+        "observations": int(len(df)),
+        "matrix":       matrix,
+        "pairs":        pairs,
+        "summary": {
+            "avg_abs_correlation": avg_abs,
+            "strongest_pair":      strongest,
+            "most_negative_pair":  most_negative,
+        },
+        "betas":   betas,
+        "rolling": rolling,
+        "scatter": scatter,
+    }
+
+
 @router.get("/quick")
 def regression_quick(
     y:       str  = Query(..., description="Dependent variable ticker"),

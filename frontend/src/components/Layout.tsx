@@ -29,6 +29,7 @@ const NAV_SECTIONS = [
       { to: '/sector-rotation',icon: PieChart,       label: 'Sector Rotation' },
       { to: '/research-hub',   icon: Building2,      label: 'Research Hub' },
       { to: '/correlation',    icon: Network,        label: 'Correlation Matrix' },
+      { to: '/regression',     icon: Activity,       label: 'Regression & Correlation' },
       { to: '/compare',        icon: GitCompare,     label: 'Asset Comparison' },
       { to: '/screener',       icon: Filter,         label: 'Stock Screener' },
       { to: '/earnings',       icon: FileText,       label: 'Earnings AI' },
