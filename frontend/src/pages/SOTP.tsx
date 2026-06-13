@@ -30,7 +30,7 @@ function fmtM(v: number) {
 
 type Seg = { name: string; revenue: number; pct: number | null }
 type SotpData = {
-  ticker: string; fiscalYear?: number; currency?: string
+  ticker: string; fiscalYear?: number | string; currency?: string; source?: string
   segments: Seg[]; total_revenue?: number; net_debt?: number; shares?: number; market_price?: number | null
   suggested_multiple?: number | null; note?: string
 }
@@ -132,6 +132,12 @@ export function SOTPContent() {
             <MetricCard label="Upside vs price" value={calc.upside != null ? `${calc.upside > 0 ? '+' : ''}${calc.upside.toFixed(1)}%` : 'n/a'}
               delta={calc.upside != null ? `${data!.market_price?.toFixed(2)} mkt` : undefined} deltaPositive={(calc.upside ?? 0) >= 0} />
           </div>
+
+          {(data!.source || data!.fiscalYear) && (
+            <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, letterSpacing: '0.08em', color: 'var(--theme-secondary, #99907e)', marginTop: -6 }}>
+              Segments: {data!.source ?? 'data'}{data!.fiscalYear ? ` · FY${data!.fiscalYear}` : ''}
+            </div>
+          )}
 
           <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
