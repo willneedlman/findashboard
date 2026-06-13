@@ -7,15 +7,15 @@ import MetricCard from '../components/MetricCard'
 import EmptyState from '../components/EmptyState'
 import { useChartColors } from '../hooks/useChartColors'
 import {
-  INPUT, LABEL, SIDEBAR, SECTION, PRIMARY_BTN, READOUT_ROW, TOOLTIP_STYLE, TOOLTIP_LABEL,
+  INPUT, LABEL, HINT, SIDEBAR, SECTION, PRIMARY_BTN, GHOST_BTN, READOUT_ROW, TOOLTIP_STYLE, TOOLTIP_LABEL,
   TOOLTIP_ITEM, TOOLTIP_CURSOR, TICK, TH, TD, PANEL, METRIC_GRID, STACK, fmtM, ChartPanel,
 } from './valuationShared'
 
-type Seg = { name: string; revenue: number; pct: number | null }
+type Seg = { name: string; revenue: number; pct: number | null; sector?: string | null }
 type SotpData = {
   ticker: string; fiscalYear?: number | string; currency?: string; source?: string
   segments: Seg[]; total_revenue?: number; net_debt?: number; shares?: number; market_price?: number | null
-  suggested_multiple?: number | null; note?: string
+  suggested_multiple?: number | null; sector_ps?: Record<string, number>; note?: string
 }
 
 export function SOTPContent() {
@@ -23,8 +23,12 @@ export function SOTPContent() {
   const [ticker, setTicker] = useState('AAPL')
   const [data, setData] = useState<SotpData | null>(null)
   const [mult, setMult] = useState<Record<string, number>>({})
+  const [sector, setSector] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const blended = data?.suggested_multiple ?? null
+  const sectorPS = data?.sector_ps ?? {}
 
   async function load() {
     setLoading(true); setError(null)
@@ -32,16 +36,45 @@ export function SOTPContent() {
       const res = await axios.get(`/api/valuation/sotp?ticker=${ticker.trim().toUpperCase()}`)
       const d: SotpData = res.data
       setData(d)
+      // Default: seed every segment at the company's blended P/S, so SOTP opens
+      // exactly at fair value. The peer multiples are an opt-in overlay below.
       const start = d.suggested_multiple ?? 3.0
       const seed: Record<string, number> = {}
-      for (const s of d.segments) seed[s.name] = start
+      const sec: Record<string, string> = {}
+      for (const s of d.segments) {
+        seed[s.name] = start
+        if (s.sector) sec[s.name] = s.sector
+      }
       setMult(seed)
+      setSector(sec)
     } catch (e: any) {
       setError(e?.response?.data?.detail || 'Could not load segment data.')
       setData(null)
     } finally {
       setLoading(false)
     }
+  }
+
+  // Tag a segment to a peer group and apply that group's P/S immediately. An empty
+  // selection clears the tag and falls back to the blended multiple.
+  function applySector(segName: string, sec: string) {
+    setSector(s => ({ ...s, [segName]: sec }))
+    const ps = sectorPS[sec]
+    setMult(m => ({ ...m, [segName]: ps != null ? ps : (blended ?? m[segName]) }))
+  }
+  function applyPeerAll() {
+    setMult(m => {
+      const next = { ...m }
+      for (const s of data?.segments ?? []) {
+        const ps = sectorPS[sector[s.name]]
+        if (ps != null) next[s.name] = ps
+      }
+      return next
+    })
+  }
+  function resetBlended() {
+    if (blended == null) return
+    setMult(m => Object.fromEntries(Object.keys(m).map(k => [k, blended])))
   }
 
   const calc = useMemo(() => {
@@ -69,6 +102,22 @@ export function SOTPContent() {
         {calc && <>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={SECTION}>P / S per segment</div>
+            {blended != null && (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={applyPeerAll} style={{ ...PRIMARY_BTN, flex: 1, padding: '5px 6px', fontSize: 10 }}>
+                  Apply peer P/S
+                </button>
+                <button onClick={resetBlended} style={{ ...GHOST_BTN, flex: 1, padding: '5px 6px', fontSize: 10 }}>
+                  Reset to blended
+                </button>
+              </div>
+            )}
+            {blended != null && (
+              <div style={{ ...HINT, marginTop: -6 }}>
+                Seeded at the blended {blended.toFixed(2)}x (current price). Tag a segment to its
+                peer group to value it on pure-play comps instead.
+              </div>
+            )}
             {calc.rows.map(r => (
               <div key={r.name}>
                 <label style={{ ...LABEL, textTransform: 'none', letterSpacing: 0, fontSize: 11, color: 'var(--theme-text, #d7e3fc)', marginBottom: 6 }}>{r.name}</label>
@@ -80,6 +129,17 @@ export function SOTPContent() {
                     onChange={e => setMult(m => ({ ...m, [r.name]: Number(e.target.value) }))}
                     style={{ ...INPUT, width: 64, padding: '4px 6px', textAlign: 'right', color: 'var(--theme-primary, #c9a84c)' }} />
                 </div>
+                {/* Pick a peer group → its P/S is applied to this segment immediately. */}
+                <select value={sector[r.name] ?? ''} onChange={e => applySector(r.name, e.target.value)}
+                  style={{ ...INPUT, marginTop: 6, padding: '5px 28px 5px 8px', fontSize: 11, cursor: 'pointer',
+                    appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none',
+                    backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2399907e' stroke-width='2.5'><path d='M6 9l6 6 6-6'/></svg>")`,
+                    backgroundRepeat: 'no-repeat', backgroundPosition: 'right 9px center' }}>
+                  <option value="">Peer group — blended</option>
+                  {Object.entries(sectorPS).map(([name, ps]) => (
+                    <option key={name} value={name}>{name} · {ps}x</option>
+                  ))}
+                </select>
               </div>
             ))}
           </div>
@@ -126,15 +186,27 @@ export function SOTPContent() {
                 <th style={TH}>Revenue</th><th style={TH}>% mix</th><th style={TH}>P/S</th><th style={TH}>Segment value</th>
               </tr></thead>
               <tbody>
-                {calc.rows.map(r => (
-                  <tr key={r.name}>
-                    <td style={{ ...TD, textAlign: 'left', fontWeight: 700 }}>{r.name}</td>
-                    <td style={TD}>{fmtM(r.revenue)}</td>
-                    <td style={{ ...TD, color: 'var(--theme-secondary, #99907e)' }}>{r.pct != null ? `${r.pct}%` : '—'}</td>
-                    <td style={{ ...TD, color: 'var(--theme-primary, #c9a84c)' }}>{r.mult.toFixed(2)}x</td>
-                    <td style={TD}>{fmtM(r.value)}</td>
-                  </tr>
-                ))}
+                {calc.rows.map(r => {
+                  const sel = sector[r.name]
+                  const peer = sectorPS[sel]
+                  const onBlended = blended != null && Math.abs(r.mult - blended) < 0.001
+                  const onPeer = peer != null && Math.abs(r.mult - peer) < 0.001
+                  const basis = onBlended ? 'Blended' : onPeer ? sel : 'Custom'
+                  return (
+                    <tr key={r.name}>
+                      <td style={{ ...TD, textAlign: 'left', fontWeight: 700 }}>
+                        {r.name}
+                        <span style={{ display: 'block', fontWeight: 400, fontSize: 9.5, letterSpacing: '0.04em', color: 'var(--theme-secondary, #99907e)' }}>
+                          {basis}
+                        </span>
+                      </td>
+                      <td style={TD}>{fmtM(r.revenue)}</td>
+                      <td style={{ ...TD, color: 'var(--theme-secondary, #99907e)' }}>{r.pct != null ? `${r.pct}%` : '—'}</td>
+                      <td style={{ ...TD, color: 'var(--theme-primary, #c9a84c)' }}>{r.mult.toFixed(2)}x</td>
+                      <td style={TD}>{fmtM(r.value)}</td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

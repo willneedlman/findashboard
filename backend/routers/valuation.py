@@ -30,11 +30,66 @@ def _fundamentals(ticker: str) -> dict:
     return {"shares": shares, "net_debt": total_debt - cash, "market_price": price}
 
 
+# Bundled sector P/S reference snapshot (US median price/sales, refresh annually —
+# same fallback pattern as data/damodaran.json). These are the "if each part traded
+# like its pure-play peers" anchors the SOTP tab offers as a one-click apply.
+SECTOR_PS = {
+    "Software / Cloud":       7.5,
+    "Semiconductors":         6.0,
+    "Payments / Fintech":     6.0,
+    "Internet / Media":       4.5,
+    "Healthcare / Pharma":    3.5,
+    "Gaming / Entertainment": 3.0,
+    "Financials / Banks":     2.5,
+    "Advertising":            2.5,
+    "Consumer Electronics":   2.2,
+    "Hardware / Devices":     2.0,
+    "Aerospace / Defense":    1.9,
+    "Industrials":            1.8,
+    "Telecom":                1.5,
+    "Consumer Staples":       1.4,
+    "E-commerce / Retail":    1.2,
+    "Energy":                 1.1,
+    "Automotive":             0.8,
+}
+
+# Keyword → sector, checked in order so more specific tags win. Best-effort: the
+# UI pre-selects the guess but never forces it into the headline value.
+_SECTOR_KEYWORDS = [
+    ("Semiconductors",         ("semiconduct", "chip", "silicon", "processor", "gpu", "foundry", "data center", "datacenter")),
+    ("Software / Cloud",       ("cloud", "azure", "aws", "saas", "software", "platform", "subscription", "license")),
+    ("Payments / Fintech",     ("payment", "fintech", "merchant", "card network")),
+    ("Gaming / Entertainment", ("gaming", "game", "xbox", "console", "studio")),
+    ("Advertising",            ("advertis", "ad ", "ads", "marketing")),
+    ("Internet / Media",       ("service", "search", "youtube", "media", "streaming", "content", "network")),
+    ("Consumer Electronics",   ("wearable", "accessor", "audio", "headphone")),
+    ("Hardware / Devices",     ("iphone", "mac", "ipad", "device", "hardware", "equipment", "instrument")),
+    ("Automotive",             ("auto", "vehicle", "automotive", "mobility")),
+    ("Energy",                 ("energy", "oil", "gas", "petroleum", "refining")),
+    ("Financials / Banks",     ("bank", "lending", "credit", "deposit", "insurance")),
+    ("Healthcare / Pharma",    ("health", "pharma", "drug", "medical", "biotech", "therapeut")),
+    ("Aerospace / Defense",    ("aerospace", "defense", "aviation", "space")),
+    ("E-commerce / Retail",    ("retail", "store", "commerce", "marketplace", "merchandise")),
+    ("Industrials",            ("industrial", "manufactur", "logistics", "machinery")),
+    ("Consumer Staples",       ("food", "beverage", "household", "staple")),
+]
+
+
+def _guess_sector(name: str) -> str | None:
+    low = name.lower()
+    for sector, keys in _SECTOR_KEYWORDS:
+        if any(k in low for k in keys):
+            return sector
+    return None
+
+
 @router.get("/sotp")
 def sotp(ticker: str):
-    """Segment revenue for a sum-of-the-parts valuation. The client applies an
-    EV/Sales multiple per segment, sums to enterprise value, then subtracts net
-    debt for an equity value per share. Revenue returned in $M."""
+    """Segment revenue for a sum-of-the-parts valuation. The client applies a P/S
+    multiple per segment and sums straight to an equity value per share (P/S is an
+    equity multiple, so no net-debt step). Segments are seeded at the company's
+    blended P/S; each can be retagged to a peer group for a pure-play comp. Revenue
+    returned in $M."""
     sym = validate_ticker(ticker)
 
     # SEC EDGAR first: free, no quota, parsed from the latest 10-K's inline XBRL.
@@ -53,7 +108,8 @@ def sotp(ticker: str):
                 "Use the DCF or Reverse DCF tabs instead.")
         return {"ticker": sym, "segments": [], "note": note, "error": False}
 
-    segments = [{"name": s["name"], "revenue": round(s["value"] / 1e6, 1), "pct": s.get("pct")}
+    segments = [{"name": s["name"], "revenue": round(s["value"] / 1e6, 1), "pct": s.get("pct"),
+                 "sector": _guess_sector(s["name"])}
                 for s in latest if s.get("value", 0) > 0]
     total_rev = round(sum(s["revenue"] for s in segments), 1)
 
@@ -79,6 +135,7 @@ def sotp(ticker: str):
         "shares":             shares,
         "market_price":       price,
         "suggested_multiple": suggested,
+        "sector_ps":          SECTOR_PS,
     }
 
 
