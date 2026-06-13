@@ -4,11 +4,12 @@ logger = logging.getLogger(__name__)
 import numpy as np
 import pandas as pd
 import requests
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field, model_validator
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from cache import get_download
+from admin_auth import require_admin
 from validation import validate_tickers, validate_ticker, validate_date
 
 _FRED_KEY = os.getenv("FRED_API_KEY", "")
@@ -270,7 +271,7 @@ def _period_return(prices: pd.Series, start: str, end: str) -> float | None:
         return None
 
 
-@router.post("/stress-test")
+@router.post("/stress-test", dependencies=[Depends(require_admin)])
 def stress_test(req: StressRequest):
     tickers = [h.ticker.upper() for h in req.holdings]
     weights = {h.ticker.upper(): h.weight for h in req.holdings}

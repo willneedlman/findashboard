@@ -4,10 +4,12 @@ import os
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent / ".env")
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+
+from admin_auth import require_admin
 
 from routers import (
     market, options, bond, portfolio, nav,
@@ -58,7 +60,6 @@ _PUBLIC_API_TTL = {
     "/api/correlation": 300,
     "/api/sentiment":   300,
     "/api/screener":    300,
-    "/api/regression":  300,
     "/api/probability": 120,
     "/api/iv":          120,
     "/api/market":       60,
@@ -116,7 +117,7 @@ app.include_router(sentiment.router,         prefix="/api/sentiment",         ta
 app.include_router(trading.router,           prefix="/api/trading",           tags=["trading"])
 app.include_router(filings.router,           prefix="/api/filings",           tags=["filings"])
 app.include_router(lob.router,               prefix="/api/lob",               tags=["lob"])
-app.include_router(regression.router,        prefix="/api/regression",        tags=["regression"])
+app.include_router(regression.router,        prefix="/api/regression",        tags=["regression"], dependencies=[Depends(require_admin)])
 app.include_router(screener.router,          prefix="/api/screener",          tags=["screener"])
 app.include_router(paper_scheduler.router,   prefix="/api/paper/scheduler",   tags=["paper-trading"])
 app.include_router(paper_strategies.router,  prefix="/api/paper/strategies",  tags=["paper-trading"])
@@ -129,9 +130,16 @@ def health_check():
 
 
 _DIST = Path(os.getenv("FRONTEND_DIST", Path(__file__).parent.parent / "frontend" / "dist"))
+_DIST_RESOLVED = _DIST.resolve()
 if _DIST.exists():
     app.mount("/assets", StaticFiles(directory=str(_DIST / "assets")), name="assets")
 
     @app.get("/{full_path:path}")
     def serve_spa(full_path: str):
+        # Serve real root files (favicon.svg, robots.txt, ...) when they exist;
+        # otherwise fall back to index.html so client-side routes resolve.
+        if full_path:
+            candidate = (_DIST / full_path).resolve()
+            if candidate.is_file() and _DIST_RESOLVED in candidate.parents:
+                return FileResponse(str(candidate))
         return FileResponse(str(_DIST / "index.html"))

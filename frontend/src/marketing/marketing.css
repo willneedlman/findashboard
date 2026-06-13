@@ -1,0 +1,218 @@
+/* Alphatape Terminal — marketing site. Everything is scoped under .mkt so it
+   cannot leak into the terminal app (which owns generic class names too). */
+.mkt{
+  --bg:#0a1320; --bg2:#0b1626; --surface:#0d1826; --line:rgba(255,255,255,0.08);
+  --gold:#c9a84c; --text:#e6eefc; --muted:#7e93ad; --dim:#5e768f;
+  --pos:#3fb950; --neg:#f85149; --blue:#6c8cff;
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+  --sans:'Inter',-apple-system,system-ui,sans-serif;
+  --ease:cubic-bezier(0.23,1,0.32,1);
+  background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.5;
+  -webkit-font-smoothing:antialiased;min-height:100vh;overflow-x:hidden;
+}
+.mkt *{box-sizing:border-box;margin:0;padding:0}
+.mkt a{color:inherit;text-decoration:none}
+.mkt .wrap{max-width:1180px;margin:0 auto;padding:0 28px}
+.mkt .mono{font-family:var(--mono)}
+.mkt .eyebrow{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:0.22em;text-transform:uppercase;color:var(--gold)}
+.mkt .pos{color:var(--pos)} .mkt .neg{color:var(--neg)} .mkt .g{color:var(--gold)}
+
+/* nav */
+.mkt nav{position:sticky;top:0;z-index:40;backdrop-filter:blur(10px);background:rgba(10,19,32,0.72);border-bottom:1px solid var(--line)}
+.mkt .nav-in{max-width:1180px;margin:0 auto;padding:14px 28px;display:flex;align-items:center;justify-content:space-between;gap:24px}
+.mkt .brand{font-family:var(--mono);font-size:14px;font-weight:700;letter-spacing:0.14em;color:var(--gold);white-space:nowrap}
+.mkt .brand span{color:var(--dim);font-size:10px;letter-spacing:0.24em}
+.mkt .nav-links{display:flex;align-items:center;gap:22px}
+.mkt .nav-links a{font-size:13px;color:var(--muted);transition:color 150ms var(--ease);white-space:nowrap}
+.mkt .nav-links a:hover{color:var(--text)}
+.mkt .nav-links a.active{color:var(--text)}
+.mkt .nav-links a.active::after{content:"";display:block;height:2px;background:var(--gold);margin-top:5px;border-radius:2px}
+
+/* buttons */
+.mkt .btn{font-family:var(--sans);font-size:13px;font-weight:600;padding:9px 16px;border-radius:8px;cursor:pointer;border:1px solid transparent;
+  transition:transform 90ms var(--ease),background 150ms var(--ease),box-shadow 150ms var(--ease);display:inline-flex;align-items:center;gap:7px}
+.mkt .btn:active{transform:scale(0.97)}
+.mkt .btn:focus-visible{outline:none;box-shadow:0 0 0 2px var(--bg),0 0 0 4px rgba(201,168,76,0.6)}
+.mkt .btn-gold{background:var(--gold);color:#1a1505;box-shadow:0 6px 20px -8px rgba(201,168,76,0.6)}
+.mkt .btn-gold:hover{background:#d8b95e}
+.mkt .btn-ghost{background:rgba(255,255,255,0.04);color:var(--text);border-color:var(--line)}
+.mkt .btn-ghost:hover{background:rgba(255,255,255,0.08)}
+.mkt .btn-lg{padding:13px 22px;font-size:14px;border-radius:9px}
+
+/* hero (home) */
+.mkt .hero{position:relative;padding:84px 0 72px;overflow:hidden}
+.mkt .hero::before{content:"";position:absolute;inset:0;z-index:-2;
+  background:radial-gradient(900px 460px at 78% -8%,rgba(108,140,255,0.10),transparent 60%),
+             radial-gradient(760px 420px at 6% 4%,rgba(201,168,76,0.08),transparent 58%)}
+.mkt .hero::after{content:"";position:absolute;inset:0;z-index:-1;opacity:0.5;
+  background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-size:46px 46px;mask-image:radial-gradient(680px 380px at 70% 20%,#000,transparent 72%)}
+.mkt .hero-grid{display:grid;grid-template-columns:1.04fr 1.12fr;gap:48px;align-items:center}
+.mkt .hero h1{font-family:var(--mono);font-weight:600;font-size:52px;line-height:1.04;letter-spacing:-0.025em;margin:18px 0 0}
+.mkt .hero .lede{font-size:17px;color:var(--muted);margin:22px 0 30px;max-width:520px}
+.mkt .cta{display:flex;gap:12px;flex-wrap:wrap}
+.mkt .trust{margin-top:26px;font-family:var(--mono);font-size:11px;letter-spacing:0.06em;color:var(--dim)}
+.mkt .trust b{color:var(--muted);font-weight:600}
+
+/* page hero (sub-pages) */
+.mkt .phero{position:relative;padding:72px 0 40px;overflow:hidden;border-bottom:1px solid var(--line)}
+.mkt .phero::before{content:"";position:absolute;inset:0;z-index:-1;
+  background:radial-gradient(700px 360px at 20% -20%,rgba(201,168,76,0.10),transparent 60%)}
+.mkt .phero h1{font-family:var(--mono);font-weight:600;font-size:42px;line-height:1.08;letter-spacing:-0.025em;margin:16px 0 0;max-width:760px}
+.mkt .phero .lede{font-size:17px;color:var(--muted);margin:20px 0 0;max-width:600px}
+.mkt .phero .cta{margin-top:28px}
+
+/* terminal panel (illustrative product preview) */
+.mkt .term{background:linear-gradient(180deg,rgba(255,255,255,0.04),transparent 80px),var(--surface);
+  border:1px solid var(--line);border-radius:12px;overflow:hidden;
+  box-shadow:0 1px 0 rgba(255,255,255,0.05) inset,0 40px 80px -36px rgba(0,0,0,0.8)}
+.mkt .term.float{animation:mkt-float 7s ease-in-out infinite}
+@keyframes mkt-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
+.mkt .term .tbar{display:flex;align-items:center;gap:7px;padding:10px 13px;border-bottom:1px solid var(--line)}
+.mkt .term .tbar i{width:9px;height:9px;border-radius:50%;background:#27384f}
+.mkt .term .tbar .name{margin-left:8px;font-family:var(--mono);font-size:10px;letter-spacing:0.14em;color:var(--dim);text-transform:uppercase}
+.mkt .term .thead{display:flex;justify-content:space-between;align-items:baseline;padding:11px 14px;border-bottom:1px solid var(--line)}
+.mkt .term .thead .t{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--gold)}
+.mkt .term .thead .tag-prev{font-family:var(--mono);font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:0.12em;border:1px solid var(--line);padding:2px 7px;border-radius:5px}
+.mkt .term table{width:100%;border-collapse:collapse;font-family:var(--mono)}
+.mkt .term th{font-size:8.5px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);padding:8px 14px;text-align:right;border-bottom:1px solid var(--line)}
+.mkt .term th:first-child{text-align:left}
+.mkt .term td{font-size:11.5px;padding:7px 14px;text-align:right;border-bottom:1px solid rgba(255,255,255,0.04)}
+.mkt .term td:first-child{text-align:left;font-weight:700;color:var(--text)}
+.mkt .term tr:last-child td{border-bottom:none}
+.mkt .bar7{display:inline-block;width:42px;height:4px;border-radius:3px;background:rgba(255,255,255,0.08);vertical-align:middle;overflow:hidden}
+.mkt .bar7 i{display:block;height:100%;background:linear-gradient(90deg,var(--blue),var(--pos))}
+
+/* stat strip */
+.mkt .strip{border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--bg2)}
+.mkt .strip-in{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap;padding:22px 28px;max-width:1180px;margin:0 auto}
+.mkt .stat .n{font-family:var(--mono);font-size:26px;font-weight:700;letter-spacing:-0.02em}
+.mkt .stat .l{font-size:12px;color:var(--muted);margin-top:2px}
+
+/* sections */
+.mkt section.blk{padding:80px 0}
+.mkt .sec-head{max-width:700px;margin-bottom:40px}
+.mkt .sec-head h2{font-size:34px;font-weight:700;letter-spacing:-0.02em;margin:12px 0 0}
+.mkt .sec-head p{font-size:16px;color:var(--muted);margin-top:14px}
+
+/* bento */
+.mkt .bento{display:grid;grid-template-columns:repeat(6,1fr);grid-auto-rows:minmax(150px,auto);gap:16px}
+.mkt .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px;position:relative;overflow:hidden;
+  transition:transform 220ms var(--ease),border-color 220ms var(--ease),box-shadow 220ms var(--ease)}
+.mkt a.card:hover{transform:translateY(-3px);border-color:rgba(255,255,255,0.16);box-shadow:0 24px 50px -28px rgba(0,0,0,0.8)}
+.mkt .card .k{font-family:var(--mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--gold)}
+.mkt .card h3{font-size:19px;font-weight:600;letter-spacing:-0.01em;margin:12px 0 8px}
+.mkt .card p{font-size:13.5px;color:var(--muted);line-height:1.6}
+.mkt .card .tags{margin-top:14px;display:flex;flex-wrap:wrap;gap:6px}
+.mkt .tag{font-family:var(--mono);font-size:10px;color:var(--muted);padding:3px 8px;border:1px solid var(--line);border-radius:6px}
+.mkt .c-wide{grid-column:span 4} .mkt .c-tall{grid-column:span 2;grid-row:span 2} .mkt .c-2{grid-column:span 2} .mkt .c-3{grid-column:span 3}
+.mkt .glow-gold::after,.mkt .glow-blue::after{content:"";position:absolute;width:240px;height:240px;border-radius:50%;filter:blur(60px);z-index:0;opacity:.5;top:-80px;right:-60px}
+.mkt .glow-gold::after{background:rgba(201,168,76,0.18)} .mkt .glow-blue::after{background:rgba(108,140,255,0.16)}
+.mkt .card>*{position:relative;z-index:1}
+.mkt .mini{margin-top:16px;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--bg)}
+.mkt .mini .row{display:flex;justify-content:space-between;padding:7px 11px;font-family:var(--mono);font-size:11px;border-bottom:1px solid rgba(255,255,255,0.04)}
+.mkt .mini .row:last-child{border-bottom:none}
+.mkt .mini .row span:first-child{color:var(--text);font-weight:600}
+
+/* feature list (category pages) */
+.mkt .flist{display:flex;flex-direction:column;gap:0;border-top:1px solid var(--line)}
+.mkt .frow{display:grid;grid-template-columns:54px 1fr;gap:20px;padding:26px 4px;border-bottom:1px solid var(--line);transition:background 180ms var(--ease)}
+.mkt .frow:hover{background:rgba(255,255,255,0.018)}
+.mkt .frow .idx{font-family:var(--mono);font-size:13px;color:var(--gold);padding-top:4px}
+.mkt .frow h3{font-size:20px;font-weight:600;letter-spacing:-0.01em;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.mkt .frow .badge{font-family:var(--mono);font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);border:1px solid var(--line);background:rgba(255,255,255,0.03);padding:2px 7px;border-radius:5px}
+.mkt .frow p{font-size:14.5px;color:var(--muted);line-height:1.65;margin-top:8px;max-width:680px}
+.mkt .frow .tags{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px}
+
+/* split */
+.mkt .split{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center}
+
+/* final cta */
+.mkt .final{position:relative;border:1px solid var(--line);border-radius:20px;padding:64px 40px;text-align:center;overflow:hidden;background:var(--surface)}
+.mkt .final::before{content:"";position:absolute;inset:0;z-index:0;background:radial-gradient(600px 300px at 50% -20%,rgba(201,168,76,0.16),transparent 60%)}
+.mkt .final>*{position:relative;z-index:1}
+.mkt .final h2{font-family:var(--mono);font-size:38px;font-weight:600;letter-spacing:-0.025em}
+.mkt .final p{color:var(--muted);font-size:16px;margin:16px auto 28px;max-width:520px}
+
+/* footer */
+.mkt footer{border-top:1px solid var(--line);margin-top:80px;padding:48px 0 60px}
+.mkt .foot{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:32px}
+.mkt .foot .col h4{font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--dim);margin-bottom:14px}
+.mkt .foot .col a{display:block;font-size:13px;color:var(--muted);padding:5px 0;transition:color 150ms var(--ease)}
+.mkt .foot .col a:hover{color:var(--text)}
+.mkt .foot .disc{font-size:11.5px;color:var(--dim);margin-top:14px;max-width:280px;line-height:1.6}
+
+/* feature tape — a scrolling marquee of the toolset (decorative, on-brand) */
+.mkt .tape{border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--bg2);overflow:hidden;padding:11px 0;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 7%,#000 93%,transparent);mask-image:linear-gradient(90deg,transparent,#000 7%,#000 93%,transparent)}
+.mkt .tape-track{display:inline-flex;align-items:center;white-space:nowrap;animation:mkt-tape 46s linear infinite;will-change:transform}
+.mkt .tape:hover .tape-track{animation-play-state:paused}
+@keyframes mkt-tape{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.mkt .tape-cell{display:inline-flex;align-items:center}
+.mkt .tape-item{font-family:var(--mono);font-size:11.5px;letter-spacing:0.16em;text-transform:uppercase;color:var(--muted)}
+.mkt .tape-dot{color:var(--gold);padding:0 18px;font-size:11px}
+
+/* mini card visual */
+.mkt .cardviz{margin-top:16px;width:100%;height:58px;display:block;overflow:visible}
+
+/* workflow stepper */
+.mkt .flow{display:grid;grid-template-columns:repeat(5,1fr);position:relative;margin-top:42px}
+.mkt .flow::before{content:"";position:absolute;top:21px;left:9%;right:9%;height:1px;
+  background:linear-gradient(90deg,transparent,var(--line) 12%,var(--line) 88%,transparent);z-index:0}
+.mkt .flow .step{text-align:center;padding:0 14px;position:relative;z-index:1}
+.mkt .flow .node{width:44px;height:44px;border-radius:50%;border:1px solid rgba(201,168,76,0.4);background:var(--surface);
+  display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-family:var(--mono);font-size:14px;font-weight:700;color:var(--gold)}
+.mkt .flow .step h4{font-size:14.5px;font-weight:600;margin-bottom:7px}
+.mkt .flow .step p{font-size:12.5px;color:var(--muted);line-height:1.55}
+
+/* ── product-page building blocks ───────────────────────────────────────── */
+.mkt .showcase{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:10px}
+.mkt .vpanel{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+.mkt .vpanel .vh{display:flex;justify-content:space-between;align-items:center;padding:11px 14px;border-bottom:1px solid var(--line)}
+.mkt .vpanel .vt{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--gold)}
+.mkt .vpanel .vtag{font-family:var(--mono);font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:0.1em;border:1px solid var(--line);padding:2px 7px;border-radius:5px}
+.mkt .vpanel .vb{padding:14px}
+.mkt .vpanel .vd{font-size:13px;color:var(--muted);line-height:1.55;padding:0 14px 14px;margin-top:auto}
+.mkt .vpanel .vtags{display:flex;flex-wrap:wrap;gap:6px;padding:0 14px 16px}
+
+.mkt .modgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:18px}
+.mkt .mod{background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:16px;transition:border-color 200ms var(--ease),transform 200ms var(--ease)}
+.mkt .mod:hover{border-color:rgba(255,255,255,0.16);transform:translateY(-2px)}
+.mkt .mod .mh{display:flex;align-items:center;gap:9px;margin-bottom:9px}
+.mkt .mod .mi{width:28px;height:28px;border-radius:7px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.28);color:var(--gold);display:flex;align-items:center;justify-content:center;flex:none}
+.mkt .mod h4{font-size:14px;font-weight:600}
+.mkt .mod p{font-size:12.5px;color:var(--muted);line-height:1.55}
+
+.mkt .heat{display:grid;gap:3px}
+.mkt .heat .hc{aspect-ratio:1;border-radius:3px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:8.5px;color:rgba(255,255,255,0.7)}
+
+.mkt .sectors{display:grid;grid-template-columns:repeat(auto-fit,minmax(74px,1fr));gap:8px;margin-top:10px}
+.mkt .sct{border:1px solid var(--line);border-radius:8px;padding:11px 8px;text-align:center;background:var(--surface)}
+.mkt .sct .scl{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--text);letter-spacing:0.04em}
+.mkt .sct .scv{font-family:var(--mono);font-size:11px;margin-top:4px}
+
+.mkt .loop{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:10px}
+.mkt .lp{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px}
+.mkt .lp .lpn{font-family:var(--mono);font-size:11px;color:var(--gold);letter-spacing:0.1em;margin-bottom:12px;display:flex;align-items:center;gap:9px}
+.mkt .lp .lpn b{width:23px;height:23px;border-radius:50%;border:1px solid rgba(201,168,76,0.4);display:flex;align-items:center;justify-content:center;font-weight:700}
+.mkt .lp h4{font-size:15px;font-weight:600;margin-bottom:7px}
+.mkt .lp p{font-size:12.5px;color:var(--muted);line-height:1.55}
+.mkt .lp .lptags{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px}
+
+.mkt .statline{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px}
+.mkt .statbox{border:1px solid var(--line);border-radius:10px;padding:14px;background:var(--surface)}
+.mkt .statbox .sbv{font-family:var(--mono);font-size:20px;font-weight:700;letter-spacing:-0.02em}
+.mkt .statbox .sbl{font-size:11px;color:var(--muted);margin-top:3px}
+
+@media (max-width:900px){
+  .mkt .hero-grid,.mkt .split,.mkt .foot{grid-template-columns:1fr}
+  .mkt .hero h1{font-size:40px}.mkt .phero h1{font-size:34px}
+  .mkt .bento{grid-template-columns:repeat(2,1fr)}.mkt .c-wide,.mkt .c-tall,.mkt .c-3,.mkt .c-2{grid-column:span 2;grid-row:auto}
+  .mkt .nav-links{display:none}
+  .mkt .flow{grid-template-columns:1fr 1fr;gap:30px 0}.mkt .flow::before{display:none}
+  .mkt .showcase{grid-template-columns:1fr}
+  .mkt .modgrid{grid-template-columns:1fr 1fr}
+  .mkt .loop{grid-template-columns:1fr 1fr}
+  .mkt .statline{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){.mkt .term.float{animation:none}.mkt .tape-track{animation:none}}

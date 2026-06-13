@@ -23,8 +23,8 @@
 
   ::-webkit-scrollbar { width: 4px; height: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: rgba(201,168,76,0.22); border-radius: 2px; }
-  ::-webkit-scrollbar-thumb:hover { background: rgba(201,168,76,0.45); }
+  ::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--theme-primary, #c9a84c) 22%, transparent); border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent); }
 }
 
 @layer components {

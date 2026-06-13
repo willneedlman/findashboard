@@ -5,11 +5,12 @@ import {
   Home, LayoutGrid, Briefcase,
   TrendingUp, LineChart, Bitcoin,
   BarChart2, Dices, GitBranch, Building2, Calculator,
-  Network, Shuffle, Zap, ChevronLeft, ChevronRight, X, Menu, Settings,
+  Network, Shuffle, Zap, X, Menu, Settings,
   Filter, FileText, ShieldAlert, PieChart,
   BookOpen, Terminal, Brain, Bell, Star, Gauge, Activity, GitCompare,
 } from 'lucide-react'
 import Footer from './Footer'
+import AlphaMark from './AlphaMark'
 import AlertToastQueue from './AlertToastQueue'
 import { useAlertSocket, type AlertPayload } from '../hooks/useAlertSocket'
 import clsx from 'clsx'
@@ -119,7 +120,8 @@ export default function Layout({ children }: LayoutProps) {
           background: 'var(--theme-bg, #060e1c)', borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)',
           position: 'sticky', top: 0, zIndex: 40,
         }}>
-          <Link to="/" style={{ textDecoration: 'none' }}>
+          <Link to="/app" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <AlphaMark size={22} color="var(--theme-primary, #c9a84c)" />
             <div style={{ fontFamily: 'Cinzel, Georgia, serif', color: 'var(--theme-primary, #c9a84c)', fontSize: 15, fontWeight: 700, letterSpacing: '0.08em' }}>
               ALPHATAPE <span style={{ color: 'var(--theme-secondary, #5e768f)', fontSize: 10, letterSpacing: '0.2em', fontFamily: 'var(--theme-sans)', fontWeight: 600 }}>TERMINAL</span>
             </div>
@@ -197,7 +199,7 @@ export default function Layout({ children }: LayoutProps) {
                 <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)', marginBottom: 2, paddingLeft: 14, fontFamily: 'var(--theme-sans)' }}>
                   Workspaces
                 </p>
-                <MobileNavLink to="/" icon={Home} label="Home" active={location.pathname === '/'} isBaseline />
+                <MobileNavLink to="/app" icon={Home} label="Home" active={location.pathname === '/app'} isBaseline />
                 <MobileNavLink to="/dashboard" icon={LayoutGrid} label="My Dashboard" active={location.pathname === '/dashboard'} isBaseline />
                 <MobileNavLink to="/portfolio-manager" icon={Briefcase} label="Portfolio Manager" active={location.pathname === '/portfolio-manager'} isBaseline />
               </div>
@@ -272,23 +274,21 @@ export default function Layout({ children }: LayoutProps) {
         className="ft-sidebar flex-shrink-0 flex flex-col overflow-hidden"
         style={{ background: 'var(--theme-bg, #060e1c)', borderRight: '1px solid var(--theme-primary, #c9a84c)30' }}
       >
-        <div className="flex items-center justify-between px-3 py-4 border-b border-gold/10 min-h-[64px]">
-          {!collapsed && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
-              <Link to="/" className="block ft-logo">
-                <div className="font-display ft-logo text-base font-bold tracking-[0.08em]" style={{ color: 'var(--theme-primary, #c9a84c)' }}>ALPHATAPE</div>
-                <div className="ft-logo-sub text-[9px] tracking-[0.22em] uppercase font-bold mt-0.5" style={{ color: 'var(--theme-secondary, #5e768f)' }}>TERMINAL</div>
-              </Link>
-            </motion.div>
-          )}
-          {collapsed && (
-            <Link to="/" className="mx-auto ft-logo">
-              <div className="font-display text-lg font-bold" style={{ color: 'var(--theme-primary, #c9a84c)' }}>F</div>
-            </Link>
-          )}
-          <button onClick={() => setCollapsed(c => !c)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-secondary, #5e768f)', padding: 0, minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, transition: 'color 0.15s' }} onMouseEnter={e => (e.currentTarget.style.color = 'var(--theme-primary, #c9a84c)')} onMouseLeave={e => (e.currentTarget.style.color = 'var(--theme-secondary, #5e768f)')}>
-
-            {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+        <div className={`flex px-3 py-4 border-b border-gold/10 min-h-[64px] ${collapsed ? 'justify-center' : 'items-center'}`}>
+          {/* The mark itself toggles the sidebar open/closed — no separate arrow. */}
+          <button
+            onClick={() => setCollapsed(c => !c)}
+            aria-label={collapsed ? 'Open sidebar' : 'Close sidebar'}
+            title={collapsed ? 'Open sidebar' : 'Close sidebar'}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 9 }}
+          >
+            <AlphaMark size={22} color="var(--theme-primary, #c9a84c)" />
+            {!collapsed && (
+              <span style={{ display: 'block', paddingLeft: 9, borderLeft: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 28%, transparent)', textAlign: 'left' }}>
+                <span className="font-display text-base font-bold tracking-[0.08em]" style={{ color: 'var(--theme-primary, #c9a84c)', display: 'block', lineHeight: 1.05 }}>ALPHATAPE</span>
+                <span className="ft-logo-sub text-[9px] tracking-[0.22em] uppercase font-bold" style={{ color: 'var(--theme-secondary, #5e768f)', display: 'block' }}>TERMINAL</span>
+              </span>
+            )}
           </button>
         </div>
 
@@ -303,7 +303,7 @@ export default function Layout({ children }: LayoutProps) {
               Workspaces
             </p>
           )}
-          <WorkspaceNavLink to="/" icon={Home} label="Home" collapsed={collapsed} active={location.pathname === '/'} />
+          <WorkspaceNavLink to="/app" icon={Home} label="Home" collapsed={collapsed} active={location.pathname === '/app'} />
           <WorkspaceNavLink to="/dashboard" icon={LayoutGrid} label="My Dashboard" collapsed={collapsed} active={location.pathname === '/dashboard'} />
           <WorkspaceNavLink to="/portfolio-manager" icon={Briefcase} label="Portfolio Manager" collapsed={collapsed} active={location.pathname === '/portfolio-manager'} />
         </div>

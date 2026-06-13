@@ -1,9 +1,18 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import Layout from './components/Layout'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { PortfolioProvider } from './contexts/PortfolioContext'
+
+// Marketing launchpad — chrome-free, lives at / and /product/*
+const Landing        = lazy(() => import('./marketing/Marketing').then(m => ({ default: m.Landing })))
+const MktOptions     = lazy(() => import('./marketing/Marketing').then(m => ({ default: m.OptionsPage })))
+const MktValuation   = lazy(() => import('./marketing/Marketing').then(m => ({ default: m.ValuationPage })))
+const MktPortfolio   = lazy(() => import('./marketing/Marketing').then(m => ({ default: m.PortfolioPage })))
+const MktMacro       = lazy(() => import('./marketing/Marketing').then(m => ({ default: m.MacroPage })))
+const MktTrading     = lazy(() => import('./marketing/Marketing').then(m => ({ default: m.TradingPage })))
+const MktShell       = lazy(() => import('./marketing/Marketing').then(m => ({ default: m.MarketingShell })))
 
 // Lazy-load all pages — crash in one route can't bring down the whole app
 const Home               = lazy(() => import('./pages/Home'))
@@ -31,17 +40,14 @@ const StockScreener      = lazy(() => import('./pages/StockScreener'))
 const EarningsSummarizer = lazy(() => import('./pages/EarningsSummarizer'))
 const PortfolioManager   = lazy(() => import('./pages/PortfolioManager'))
 const AdminTester        = lazy(() => import('./pages/AdminTester'))
-const StressTester       = lazy(() => import('./pages/StressTester'))
 const SectorRotation     = lazy(() => import('./pages/SectorRotation'))
 const CreditSpreads      = lazy(() => import('./pages/CreditSpreads'))
 const RelativeValuation  = lazy(() => import('./pages/RelativeValuation'))
 const SupplyChain        = lazy(() => import('./pages/SupplyChain'))
 const TradeJournal       = lazy(() => import('./pages/TradeJournal'))
 const PaperTrading       = lazy(() => import('./pages/PaperTrading'))
-const AlgoRunner         = lazy(() => import('./pages/AlgoRunner'))
 const SentimentTracker   = lazy(() => import('./pages/SentimentTracker'))
 const AlertsPage         = lazy(() => import('./pages/Alerts'))
-const RegressionAnalysis = lazy(() => import('./pages/RegressionAnalysis'))
 const OptionsHub         = lazy(() => import('./pages/OptionsHub'))
 const MacroHub           = lazy(() => import('./pages/MacroHub'))
 const ResearchHub        = lazy(() => import('./pages/ResearchHub'))
@@ -60,16 +66,45 @@ function PageLoader() {
   )
 }
 
+function TerminalChrome() {
+  const location = useLocation()
+  return (
+    <Layout>
+      <AnimatePresence mode="wait">
+        <Suspense key={location.pathname} fallback={<PageLoader />}>
+          <Outlet />
+        </Suspense>
+      </AnimatePresence>
+    </Layout>
+  )
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <ThemeProvider>
       <PortfolioProvider>
-      <Layout>
-        <AnimatePresence mode="wait">
-          <Suspense fallback={<PageLoader />}>
-            <Routes>
-              <Route path="/"           element={<Home />} />
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            {/* Marketing launchpad — no terminal chrome */}
+            <Route path="/"                  element={<Landing />} />
+            <Route path="/product/options"   element={<MktOptions />} />
+            <Route path="/product/valuation" element={<MktValuation />} />
+            <Route path="/product/portfolio" element={<MktPortfolio />} />
+            <Route path="/product/macro"     element={<MktMacro />} />
+            <Route path="/product/trading"   element={<MktTrading />} />
+
+            {/* Legal — marketing chrome (no terminal sidebar) */}
+            <Route element={<MktShell />}>
+              <Route path="/privacy"         element={<PrivacyPolicy />} />
+              <Route path="/terms"           element={<TermsOfUse />} />
+              <Route path="/risk-disclosure" element={<RiskDisclosure />} />
+              <Route path="/data-sources"    element={<DataSources />} />
+            </Route>
+
+            {/* Terminal — wrapped in the sidebar Layout */}
+            <Route element={<TerminalChrome />}>
+              <Route path="/app"        element={<Home />} />
               <Route path="/market"     element={<MarketData />} />
               <Route path="/options"    element={<OptionsPricer />} />
               <Route path="/bond"       element={<BondAnalytics />} />
@@ -86,15 +121,11 @@ export default function App() {
               <Route path="/strategy"   element={<StrategyBuilder />} />
               <Route path="/gex"        element={<DealerGEX />} />
               <Route path="/dashboard"       element={<CustomDashboard />} />
-              <Route path="/privacy"         element={<PrivacyPolicy />} />
-              <Route path="/terms"           element={<TermsOfUse />} />
-              <Route path="/risk-disclosure" element={<RiskDisclosure />} />
-              <Route path="/data-sources"    element={<DataSources />} />
               <Route path="/settings"        element={<SettingsPage />} />
               <Route path="/screener"        element={<StockScreener />} />
               <Route path="/earnings"        element={<EarningsSummarizer />} />
               <Route path="/admin"           element={<AdminTester />} />
-              <Route path="/stress-test"     element={<StressTester />} />
+              <Route path="/stress-test"     element={<Navigate to="/admin" replace />} />
               <Route path="/sector-rotation" element={<SectorRotation />} />
               <Route path="/credit-spreads"      element={<CreditSpreads />} />
               <Route path="/relative-valuation"  element={<RelativeValuation />} />
@@ -102,10 +133,10 @@ export default function App() {
               <Route path="/gamma-scalping"      element={<Navigate to="/paper-trading" replace />} />
               <Route path="/trade-journal"       element={<TradeJournal />} />
               <Route path="/paper-trading"       element={<PaperTrading />} />
-              <Route path="/algo-runner"         element={<AlgoRunner />} />
+              <Route path="/algo-runner"         element={<Navigate to="/admin" replace />} />
               <Route path="/sentiment"           element={<SentimentTracker />} />
               <Route path="/alerts"             element={<AlertsPage />} />
-              <Route path="/regression"         element={<RegressionAnalysis />} />
+              <Route path="/regression"         element={<Navigate to="/admin" replace />} />
               <Route path="/options-hub"        element={<OptionsHub />} />
               <Route path="/macro-hub"          element={<MacroHub />} />
               <Route path="/research-hub"       element={<ResearchHub />} />
@@ -113,10 +144,10 @@ export default function App() {
               <Route path="/market-maker"       element={<OptionsMarketMaker />} />
               <Route path="/unusual-options"    element={<UnusualOptions />} />
               <Route path="/compare"            element={<Compare />} />
-            </Routes>
-          </Suspense>
-        </AnimatePresence>
-      </Layout>
+              <Route path="*"                   element={<Navigate to="/app" replace />} />
+            </Route>
+          </Routes>
+        </Suspense>
       </PortfolioProvider>
       </ThemeProvider>
     </BrowserRouter>

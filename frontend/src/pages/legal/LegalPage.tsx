@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import PageWrapper from '../../components/PageWrapper'
 
 const S = {
@@ -41,13 +41,17 @@ function UL({ items }: { items: string[] }) {
 interface Props { title: string; lastUpdated: string; children: React.ReactNode }
 
 export default function LegalPage({ title, lastUpdated, children }: Props) {
+  const navigate = useNavigate()
   return (
     <PageWrapper>
       <div style={{ maxWidth: 760, margin: '0 auto' }}>
-        {/* Back */}
-        <Link to="/" style={{ fontFamily: S.label, fontSize: 11, color: S.muted, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 24, letterSpacing: '0.06em' }}>
-          ← Back to Terminal
-        </Link>
+        {/* Back — return to wherever the reader came from (landing or terminal) */}
+        <button
+          onClick={() => { if (window.history.length > 1) navigate(-1); else navigate('/') }}
+          style={{ fontFamily: S.label, fontSize: 11, color: S.muted, background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 24, letterSpacing: '0.06em', padding: 0 }}
+        >
+          ← Back
+        </button>
 
         {/* Header */}
         <div style={{ background: S.header, border: `1px solid ${S.border}`, padding: '16px 20px', marginBottom: 28 }}>

@@ -14,7 +14,9 @@ export interface AlertPayload {
 
 type Handler = (alert: AlertPayload) => void
 
-const WS_BASE   = `ws://${window.location.host}`
+// Match the page protocol: wss:// on HTTPS, ws:// on plain HTTP. A hardcoded
+// ws:// is blocked as mixed content when the app is served over HTTPS.
+const WS_BASE   = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`
 const POLL_MS   = 30_000   // polling interval when tab hidden
 const BACKOFF   = [1000, 2000, 4000, 8000, 16000, 30000]
 

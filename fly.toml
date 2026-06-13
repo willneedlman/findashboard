@@ -10,6 +10,9 @@ primary_region = "iad"
   # Persist the API cache on the volume so deploys/restarts don't re-burn the
   # FMP daily quota. Default is the ephemeral container FS (lost every deploy).
   DISK_CACHE_PATH = "/data/disk_cache.db"
+  # Persist the user/auth database on the volume too — otherwise every deploy
+  # recreates an empty users.db and wipes all accounts.
+  USERS_DB_PATH = "/data/users.db"
 
 [http_service]
   internal_port = 8080

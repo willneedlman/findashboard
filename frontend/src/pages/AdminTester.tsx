@@ -1,9 +1,10 @@
-import { useState, useCallback, lazy, Suspense } from 'react'
+import { useState, useCallback, useEffect, lazy, Suspense } from 'react'
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
 
 const RegressionAnalysis = lazy(() => import('./RegressionAnalysis'))
 const StressTester       = lazy(() => import('./StressTester'))
+const AlgoRunner         = lazy(() => import('./AlgoRunner'))
 
 const SAMPLE_CSV = `timestamp,side,price,size,order_id
 2024-01-02 09:30:00.000,A,150.30,200,ORD001
@@ -148,7 +149,7 @@ interface UserStats {
   users: { id: string; username: string; display_name: string; created_at: string; last_login_at: string | null; login_count: number }[]
 }
 
-type Tab = 'health' | 'users' | 'cache' | 'endpoints' | 'lob' | 'regression' | 'stress'
+type Tab = 'health' | 'users' | 'cache' | 'endpoints' | 'lob' | 'regression' | 'stress' | 'algo'
 
 interface LOBSnapshot {
   msg: number
@@ -200,6 +201,18 @@ export default function AdminTester() {
   const [lobSnap, setLobSnap] = useState(0)
 
   const hdrs = { 'x-admin-secret': secret }
+
+  // Embedded admin tools (Regression, Stress) call the API via the global axios
+  // instance. While unlocked, attach the secret so the now-locked endpoints
+  // authenticate; clear it on lock or when leaving the console.
+  useEffect(() => {
+    if (unlocked && secret) {
+      axios.defaults.headers.common['x-admin-secret'] = secret
+    } else {
+      delete axios.defaults.headers.common['x-admin-secret']
+    }
+    return () => { delete axios.defaults.headers.common['x-admin-secret'] }
+  }, [unlocked, secret])
 
   const unlock = useCallback(async () => {
     setAuthErr('')
@@ -316,7 +329,7 @@ export default function AdminTester() {
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 0, borderBottom: `1px solid ${RED_BORDER}`, marginBottom: 20 }}>
-          {(['health', 'users', 'cache', 'endpoints', 'lob', 'regression', 'stress'] as Tab[]).map(t => (
+          {(['health', 'users', 'cache', 'endpoints', 'lob', 'regression', 'stress', 'algo'] as Tab[]).map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
               background: 'none', border: 'none', borderBottom: tab === t ? `2px solid ${RED}` : '2px solid transparent',
               color: tab === t ? RED : 'var(--theme-text-dim)', fontFamily: 'var(--theme-mono)', fontSize: 10,
@@ -643,6 +656,11 @@ export default function AdminTester() {
         {tab === 'stress' && (
           <Suspense fallback={<div style={{ color: 'var(--theme-text-dim)', padding: 32 }}>Loading…</div>}>
             <StressTester />
+          </Suspense>
+        )}
+        {tab === 'algo' && (
+          <Suspense fallback={<div style={{ color: 'var(--theme-text-dim)', padding: 32 }}>Loading…</div>}>
+            <AlgoRunner />
           </Suspense>
         )}
       </div>

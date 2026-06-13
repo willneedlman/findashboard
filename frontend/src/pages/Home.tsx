@@ -5,8 +5,8 @@ import {
   TrendingUp, LineChart, Landmark, Bitcoin, BarChart2, Dices,
   GitBranch, Activity, Building2, Calculator, Network, Shuffle, Zap,
   ArrowUpRight, LayoutGrid, Filter, FileText, Upload, X,
-  PieChart, Scale, Globe, BookOpen, Terminal, Brain, Bell, Bot,
-  Briefcase, ShieldAlert, ScatterChart, Layers, Compass, Search, Waves, Gauge, GitCompare,
+  PieChart, Scale, Globe, BookOpen, Terminal, Brain, Bell,
+  Briefcase, Layers, Compass, Search, Waves, Gauge, GitCompare,
 } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import useIsMobile from '../hooks/useIsMobile'
@@ -189,20 +189,17 @@ const BENTO_CARDS: Card[] = [
   { to: '/sector-rotation', icon: PieChart,   size: 'normal', accent: '#d97736',                       tag: 'SECTORS',      title: 'Sector Rotation',     body: 'Rolling performance heatmap across GICS sectors. Identify rotation leaders and laggards.' },
   { to: '/credit-spreads',  icon: Activity,   size: 'normal', accent: '#ef4444',                       tag: 'CREDIT',       title: 'Credit Spread Monitor',      body: 'IG and HY spread monitoring with historical context and risk-on/off signals.' },
   { to: '/correlation',     icon: Network,    size: 'normal', accent: 'var(--theme-tertiary, #1f5673)', tag: 'QUANT',        title: 'Correlation Matrix',  body: 'Rolling return correlation heatmap across any custom ticker basket.' },
-  { to: '/regression',      icon: ScatterChart, size: 'normal', accent: '#7b5ea7',                     tag: 'REGRESSION',   title: 'Regression Analysis', body: 'Factor and pairwise regressions — beta, alpha, R-squared, and residual diagnostics.' },
   { to: '/nav',             icon: Bitcoin,    size: 'normal', accent: 'var(--theme-primary, #c9a84c)', tag: 'NAV',          title: 'NAV Tracker',         body: 'SOTP NAV engine with live MSTR Bitcoin holdings fetched from EDGAR.' },
 
   // ── Row 7: Portfolio & Simulation (4×normal)
   { to: '/montecarlo',     icon: Dices,     size: 'normal', accent: '#2f6b4b',                       tag: 'SIMULATION',  title: 'Monte Carlo',           body: 'GBM path simulation with VaR, CVaR, and percentile fan charts.' },
   { to: '/portfolio',      icon: BarChart2, size: 'normal', accent: '#2f6b4b',                       tag: 'BACKTEST',    title: 'Portfolio Backtester',  body: 'Backtest weighted equity baskets against any benchmark with Sharpe, Sortino, Calmar.' },
   { to: '/portfolio-manager', icon: Briefcase,   size: 'normal', accent: 'var(--theme-primary, #c9a84c)', tag: 'PORTFOLIO', title: 'Portfolio Manager',     body: 'Holdings, live P&L, position weights, and aggregated option greeks across the book.' },
-  { to: '/stress-test',       icon: ShieldAlert, size: 'normal', accent: '#ef4444',                       tag: 'STRESS',    title: 'Portfolio Stress Tester',         body: 'Replay 2008, COVID, and 2022 shocks against your current portfolio and read the P&L hit.' },
   { to: '/alerts',         icon: Bell,      size: 'normal', accent: 'var(--theme-primary, #c9a84c)', tag: 'ALERTS',      title: 'Price Alerts',          body: 'Set price and 1-day % change alerts. Push to browser on trigger.' },
 
   // ── Row 8: Trading tools (4×normal)
   { to: '/trade-journal', icon: BookOpen,  size: 'normal', accent: '#7b5ea7',                       tag: 'JOURNAL',   title: 'Trade Journal',      body: 'Log and analyze your trades. Entry/exit tracking, P&L attribution, and win-rate stats.' },
   { to: '/paper-trading', icon: Terminal,  size: 'normal', accent: '#2f6b4b',                       tag: 'PAPER',     title: 'Paper Trading',      body: 'Simulated order execution with live prices, position tracking, and P&L.' },
-  { to: '/algo-runner',   icon: Bot,       size: 'normal', accent: '#d97736',                       tag: 'ALGO',      title: 'Algo Runner',        body: 'Run and monitor quantitative strategies. Backtest parameters and live signal output.' },
 
   // ── Dashboard — full width
   { to: '/dashboard', icon: LayoutGrid, size: 'full' as CardSize, accent: 'var(--theme-primary, #c9a84c)', tag: 'CUSTOM',
