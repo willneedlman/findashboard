@@ -536,7 +536,7 @@ export function GammaScalpingContent() {
       <div>
         <span style={LABEL}>
           Simulations
-          <HelpTip text="More paths = smoother distribution. 500 is balanced; 2000 for precision." width={160} />
+          <HelpTip text="More paths = smoother distribution. 500 is balanced. Use 2000 for precision." width={160} />
         </span>
         <input style={INPUT} type="number" min={100} max={2000} step={100} value={nSims}
           onChange={e => setNSims(Math.max(100, Math.min(2000, parseInt(e.target.value) || 500)))} />

@@ -1487,13 +1487,13 @@ const BUILTIN_STRATEGY_INFO: Record<string, {
   },
   sma_trend_following: {
     label: 'SMA Trend Following',
-    help: 'Golden Cross / Death Cross strategy. Buys when the 50-day SMA crosses above the 200-day SMA and price is above both (confirmed uptrend). Sells when both conditions reverse. Trend-following — performs best in strongly trending markets; whipsaws in choppy conditions. Also used in Backtester/Monte Carlo as drift adjustment.',
+    help: 'Golden Cross / Death Cross strategy. Buys when the 50-day SMA crosses above the 200-day SMA and price is above both (confirmed uptrend). Sells when both conditions reverse. Trend-following. Performs best in strongly trending markets. Whipsaws in choppy conditions. Also used in Backtester and Monte Carlo as drift adjustment.',
     usedIn: ['backtester', 'montecarlo'],
     backtesterKey: 'SMA Trend Following (50/200)', montecarloKey: 'SMA Trend Following (50/200)',
   },
   bollinger_breakout: {
     label: 'Bollinger Breakout',
-    help: 'Computes a 20-period Bollinger Band (±2σ). Enters long when price closes above the upper band (volatility breakout). Exits when price falls below the lower band. Targets explosive breakout moves. Works well on trending assets; prone to false signals during consolidation.',
+    help: 'Computes a 20-period Bollinger Band (±2σ). Enters long when price closes above the upper band (volatility breakout). Exits when price falls below the lower band. Targets breakout moves. Works well on trending assets. Prone to false signals during consolidation.',
     usedIn: ['backtester', 'montecarlo'],
     backtesterKey: 'bollinger_breakout', montecarloKey: 'Bollinger Breakout (20,2)',
   },
@@ -1505,30 +1505,30 @@ const BUILTIN_STRATEGY_INFO: Record<string, {
   },
   macd_crossover: {
     label: 'MACD Crossover',
-    help: 'Moving Average Convergence Divergence. Computes EMA(12) − EMA(26) = MACD line, and EMA(9) of that = signal line. Buys when MACD crosses above the signal line (bullish momentum shift); sells on cross below. Combines trend and momentum. Lags at turning points; strong in trending environments.',
+    help: 'Moving Average Convergence Divergence. Computes EMA(12) − EMA(26) = MACD line, and EMA(9) of it = signal line. Buys when MACD crosses above the signal line (bullish momentum shift). Sells on cross below. Combines trend and momentum. Lags at turning points. Strong in trending environments.',
     usedIn: ['backtester', 'montecarlo'],
     backtesterKey: 'macd_crossover', montecarloKey: 'MACD Crossover (12,26,9)',
   },
   value_pe: {
-    label: 'Value — P/E',
-    help: 'Fundamental value strategy. Fetches trailing P/E at session start. Buys when P/E < fair-value threshold (stock is cheap), sells when P/E exceeds expensive threshold. Holds neutral in between. NOTE: P/E is static per session — this strategy emits a sustained BUY or SELL signal rather than reacting to price ticks.',
+    label: 'Value P/E',
+    help: 'Fundamental value strategy. Fetches trailing P/E at session start. Buys when P/E < fair-value threshold (stock is cheap), sells when P/E exceeds the expensive threshold. Holds neutral in between. Note: P/E is static per session. This strategy emits a sustained BUY or SELL signal rather than reacting to price ticks.',
     usedIn: ['backtester', 'montecarlo'],
     backtesterKey: 'value_pe', montecarloKey: 'Value — Trailing P/E',
   },
   earnings_growth: {
     label: 'Earnings Growth',
-    help: 'Fundamental earnings momentum. Fetches quarterly EPS growth at session start. Buys when EPS growth is positive (company is growing earnings), exits when growth falls below the exit threshold. Like Value P/E, this is a session-level signal — set the ticker param to match your position.',
+    help: 'Fundamental earnings momentum. Fetches quarterly EPS growth at session start. Buys when EPS growth is positive (company is growing earnings), exits when growth falls below the exit threshold. Like Value P/E, this is a session-level signal. Set the ticker param to match your position.',
     usedIn: ['backtester', 'montecarlo'],
     backtesterKey: 'earnings_momentum', montecarloKey: 'Earnings Growth Momentum',
   },
   gamma_scalping: {
     label: 'Gamma Scalping',
-    help: 'IV/RV regime proxy using short-term (5-day) vs long-term (20-day) realized volatility ratio. Buys when recent volatility expands above the long-term baseline (vol expansion = long gamma regime); exits when vol compresses below the threshold. Repurposed from the Gamma Scalping simulator — captures convexity-driven moves without requiring live options data.',
+    help: 'IV/RV regime proxy using the short-term (5-day) vs long-term (20-day) realized volatility ratio. Buys when recent volatility expands above the long-term baseline (vol expansion = long gamma regime). Exits when vol compresses below the threshold. Repurposed from the Gamma Scalping simulator. Captures convexity-driven moves without requiring live options data.',
     usedIn: [],
   },
   micro_scalp: {
     label: 'EMA Micro-Scalp (3/8)',
-    help: 'Very short-term EMA crossover scalp. Enters when EMA(3) crosses above EMA(8) — a fast micro-trend burst. Exits on the reverse cross. Optional ATR filter skips signals when the market is too quiet. Generates frequent round trips; best on volatile, trending assets.',
+    help: 'Very short-term EMA crossover scalp. Enters when EMA(3) crosses above EMA(8), a fast micro-trend burst. Exits on the reverse cross. Optional ATR filter skips signals when the market is too quiet. Generates frequent round trips. Best on volatile, trending assets.',
     usedIn: ['backtester', 'montecarlo'],
     backtesterKey: 'micro_scalp', montecarloKey: 'EMA Micro-Scalp (3/8)',
   },
@@ -2184,7 +2184,7 @@ function StrategyPanel({ onImportTemplate, pendingBuilderStrategy, onApproveBuil
                   <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', color: T.muted, textTransform: 'uppercase' }}>
                     Strategies
                   </span>
-                  <HelpTip width={280} position="right" text="Enable/disable strategies that run during live auto-trade, replay, and Run Offline. Expand ▶ Parameters to customise each strategy's settings — these flow through to all three execution modes." />
+                  <HelpTip width={280} position="right" text="Enable or disable strategies that run during live auto-trade, replay, and Run Offline. Expand Parameters to set each strategy's options. They flow through to all three execution modes." />
                 </>
               )}
             </div>
@@ -2506,7 +2506,7 @@ function StrategyPanel({ onImportTemplate, pendingBuilderStrategy, onApproveBuil
               <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', color: T.muted, textTransform: 'uppercase' }}>
                 Replay & Execute
               </span>
-              <HelpTip width={290} position="right" text="Replay runs enabled strategies against historical closes. Start Live polls the market every 15s and places orders in your browser session. Run Offline schedules server-side jobs that trade automatically even when this page is closed — uses the params set per strategy above." />
+              <HelpTip width={290} position="right" text="Replay runs enabled strategies against historical closes. Start Live polls the market every 15s and places orders in your browser session. Run Offline schedules server-side jobs that trade automatically even when this page is closed. It uses the params set per strategy above." />
             </div>
 
             {/* Ticker / date / qty */}
@@ -2565,7 +2565,7 @@ function StrategyPanel({ onImportTemplate, pendingBuilderStrategy, onApproveBuil
             <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 8, marginTop: 4 }}>
               <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', color: T.muted, marginBottom: 6, textTransform: 'uppercase' }}>
                 Live & Offline
-                <HelpTip width={270} position="top" text="Start Live: polls price every 15s (3s for EMA Micro-Scalp) in this browser tab — stops when you close the page. Run Offline: registers server-side jobs that run every 60s (3s for EMA Micro-Scalp) during market hours using the params configured per strategy above, even with the browser closed." />
+                <HelpTip width={270} position="top" text="Start Live: polls price every 15s (3s for EMA Micro-Scalp) in this browser tab. Stops when you close the page. Run Offline: registers server-side jobs that run every 60s (3s for EMA Micro-Scalp) during market hours using the params configured per strategy above, even with the browser closed." />
               </div>
               <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
                 {!liveActive ? (
@@ -2716,7 +2716,7 @@ function StrategyPanel({ onImportTemplate, pendingBuilderStrategy, onApproveBuil
           {/* Option Leg Strategy Import */}
           <div style={{ flex: 1, minWidth: 260 }}>
             <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', color: T.muted, marginBottom: 8, textTransform: 'uppercase' }}>
-              Option Leg Strategies → Order Ticket <HelpTip width={270} position="top" text="Click any preset to instantly pre-load the correct leg structure (sides, quantities, order type) into the multileg order ticket above. You still fill in the OCC option symbols — use the Chain Scanner to find them." />
+              Option Leg Strategies → Order Ticket <HelpTip width={270} position="top" text="Click any preset to pre-load the correct leg structure (sides, quantities, order type) into the multileg order ticket above. You still fill in the OCC option symbols. Use the Chain Scanner to find them." />
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
               {OPTION_STRATEGY_TEMPLATES.map(tpl => (

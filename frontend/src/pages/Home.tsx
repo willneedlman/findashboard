@@ -147,7 +147,7 @@ const BENTO_CARDS: Card[] = [
     body: 'Filter the market by valuation, growth, profitability, and financial health across 25+ variables. Sortable results with full fundamentals.' },
   { to: '/earnings', icon: FileText,  size: 'wide', accent: '#7b5ea7', tag: 'AI RESEARCH',
     title: 'Earnings AI',
-    body: 'Claude-powered earnings call summarizer — transcripts, 10-Q/10-K financials, and SEC filings turned into bull/bear points, key metrics, and guidance in seconds.' },
+    body: 'Claude-powered earnings call summarizer. Turns transcripts, 10-Q/10-K financials, and SEC filings into bull/bear points, key metrics, and guidance in seconds.' },
 
   // ── Row 2: Core data + sentiment (wide+wide)
   { to: '/market',    icon: TrendingUp, size: 'wide', accent: 'var(--theme-tertiary, #1f5673)', tag: 'PRICE & VOL',
@@ -158,10 +158,10 @@ const BENTO_CARDS: Card[] = [
     body: 'AI-scored financial news across 7 sources with market-session filtering, entity extraction, macro impact tiers, and velocity tracking.' },
   { to: '/research-hub', icon: Search, size: 'wide', accent: '#7b5ea7', tag: 'RESEARCH HUB',
     title: 'Research Hub',
-    body: 'One-stop research surface — filings, fundamentals, news, and AI summaries tabbed into a single workspace.' },
+    body: 'One-stop research surface. Filings, fundamentals, news, and AI summaries tabbed into a single workspace.' },
   { to: '/compare', icon: GitCompare, size: 'wide', accent: '#60a5fa', tag: 'COMPARE',
     title: 'Asset Comparison',
-    body: 'Overlay any assets — stocks, ETFs, crypto, indices, FX, futures — on one normalized chart. Compare performance across price scales and timeframes.' },
+    body: 'Overlay any assets on one normalized chart: stocks, ETFs, crypto, indices, FX, futures. Compare performance across price scales and timeframes.' },
 
   // ── Row 3: Valuation & Quant (4×normal)
   { to: '/corporate',          icon: Building2,  size: 'normal', accent: 'var(--theme-primary, #c9a84c)', tag: 'CORP',       title: 'Corporate Hub',       body: 'Earnings scanner, insider flow, short interest, and live news aggregator.' },
@@ -174,7 +174,7 @@ const BENTO_CARDS: Card[] = [
   { to: '/chain',       icon: BarChart2, size: 'normal', accent: '#7b5ea7',                       tag: 'CHAIN',     title: 'Options Chain Scanner',        body: 'Live options chains with IV rank, OI skew, and put/call ratios by strike.' },
   { to: '/probability', icon: Activity,  size: 'normal', accent: '#7b5ea7',                       tag: 'PROB',      title: 'Implied Probability',  body: 'Market-implied risk-neutral distributions derived from live options chains.' },
   { to: '/strategy',    icon: Shuffle,   size: 'normal', accent: '#d97736',                       tag: 'STRATEGY',  title: 'Strategy Builder',     body: 'Multi-leg options strategy builder with live P&L profiles and breakevens.' },
-  { to: '/options-hub',     icon: Layers,   size: 'normal', accent: 'var(--theme-tertiary, #1f5673)', tag: 'OPTIONS HUB', title: 'Options Hub',          body: 'Unified options workspace — pricing, chains, IV, and flow in one tabbed surface.' },
+  { to: '/options-hub',     icon: Layers,   size: 'normal', accent: 'var(--theme-tertiary, #1f5673)', tag: 'OPTIONS HUB', title: 'Options Hub',          body: 'Unified options workspace. Pricing, chains, IV, and flow in one tabbed surface.' },
   { to: '/iv-tracker',      icon: Waves,    size: 'normal', accent: '#7aa2f7',                       tag: 'IV',          title: 'IV Tracker',           body: 'Implied volatility rank and percentile, term structure, and IV-vs-realized over time.' },
   { to: '/unusual-options', icon: Activity, size: 'normal', accent: '#d97736',                       tag: 'FLOW',        title: 'Options Flow',         body: 'Scan chains for volume and volume/OI surges, ranked by traded premium. Flags freshly-opened positioning.' },
   { to: '/market-maker',    icon: Gauge,    size: 'normal', accent: '#2f6b4b',                       tag: 'MM SIM',      title: 'Options MM Simulator',     body: 'Quote two-sided markets, manage inventory, and delta-hedge under simulated order flow.' },
@@ -183,7 +183,7 @@ const BENTO_CARDS: Card[] = [
   { to: '/gex',               icon: Zap,        size: 'normal', accent: 'var(--theme-primary, #c9a84c)',  tag: 'GEX',          title: 'Dealer GEX',          body: 'Gamma exposure aggregated across all strikes and expiries.' },
   { to: '/bond',              icon: Landmark,   size: 'normal', accent: '#2f6b4b',                        tag: 'FIXED INCOME', title: 'Bond Analytics',      body: 'YTM, modified duration, convexity, and full cash flow schedules.' },
   { to: '/fed',               icon: GitBranch,  size: 'normal', accent: 'var(--theme-tertiary, #1f5673)', tag: 'MACRO',        title: 'Fed Rates',   body: 'Implied Fed path projections and rate scenario analysis across FOMC meetings.' },
-  { to: '/macro-hub',         icon: Compass,    size: 'normal', accent: 'var(--theme-tertiary, #1f5673)', tag: 'MACRO HUB',    title: 'Macro Hub',           body: 'Key macro series — growth, inflation, and employment — on a single board.' },
+  { to: '/macro-hub',         icon: Compass,    size: 'normal', accent: 'var(--theme-tertiary, #1f5673)', tag: 'MACRO HUB',    title: 'Macro Hub',           body: 'Key macro series on a single board: growth, inflation, and employment.' },
 
   // ── Row 6: Macro & Data (4×normal)
   { to: '/sector-rotation', icon: PieChart,   size: 'normal', accent: '#d97736',                       tag: 'SECTORS',      title: 'Sector Rotation',     body: 'Rolling performance heatmap across GICS sectors. Identify rotation leaders and laggards.' },

@@ -923,7 +923,7 @@ function StrategyTab() {
       <div style={ALGO_SECTION_DIVIDER}>
         <span style={{ ...ALGO_LABEL, color: 'var(--theme-primary, #c9a84c)', marginBottom: 8 }}>
           Risk Management
-          <HelpTip text="Stop-loss and take-profit exit the position when price moves the specified % from entry. Position size controls how much of the portfolio is deployed per trade — remainder stays in cash." position="bottom" width={230} />
+          <HelpTip text="Stop-loss and take-profit exit the position when price moves the specified % from entry. Position size controls how much of the portfolio is deployed per trade. The remainder stays in cash." position="bottom" width={230} />
         </span>
         {/* Preset risk profiles */}
         <div style={{ display: 'flex', gap: 4, marginBottom: 10, flexWrap: 'wrap' }}>
