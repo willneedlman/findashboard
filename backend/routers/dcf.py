@@ -91,12 +91,13 @@ def get_fundamentals(ticker: str):
         logger.exception("internal error"); raise HTTPException(500, "Internal server error")
 
 
-@router.post("/value")
-def dcf_value(req: DCFRequest):
+def _project(req, rev_growth: float):
+    """FCFF projection + terminal value at a given revenue growth rate.
+    Shared by the forward DCF and the reverse-DCF solver."""
     fcfs = []
     rev = req.revenue
     for y in range(1, req.years + 1):
-        rev = rev * (1 + req.rev_growth / 100)
+        rev = rev * (1 + rev_growth / 100)
         ebit = rev * (req.op_margin / 100)
         nopat = ebit * (1 - req.tax_rate / 100)
         da = rev * (req.da_pct / 100)
@@ -111,8 +112,13 @@ def dcf_value(req: DCFRequest):
     pv_fcfs = sum(f["pv_fcf"] for f in fcfs)
     enterprise_value = pv_fcfs + pv_terminal
     equity_value = enterprise_value - req.net_debt
-    intrinsic_per_share = equity_value / req.shares if req.shares else 0
+    intrinsic_per_share = equity_value / req.shares if req.shares else 0.0
+    return fcfs, pv_fcfs, pv_terminal, enterprise_value, equity_value, intrinsic_per_share
 
+
+@router.post("/value")
+def dcf_value(req: DCFRequest):
+    fcfs, pv_fcfs, pv_terminal, enterprise_value, equity_value, intrinsic_per_share = _project(req, req.rev_growth)
     return {
         "fcfs": fcfs,
         "pv_fcfs": round(pv_fcfs, 1),
@@ -120,4 +126,74 @@ def dcf_value(req: DCFRequest):
         "enterprise_value": round(enterprise_value, 1),
         "equity_value": round(equity_value, 1),
         "intrinsic_per_share": round(intrinsic_per_share, 2),
+    }
+
+
+class ReverseDCFRequest(BaseModel):
+    ticker: str
+    revenue: float
+    op_margin: float = 15.0
+    wacc: float = 10.0
+    terminal_growth: float = 2.5
+    years: int = 5
+    shares: float = 100.0
+    net_debt: float = 0.0
+    tax_rate: float = 21.0
+    capex_pct: float = 5.0
+    da_pct: float = 4.0
+    market_price: float = 0.0
+    current_growth: float | None = None   # the company's actual growth, for context
+
+
+@router.post("/reverse")
+def dcf_reverse(req: ReverseDCFRequest):
+    """Solve for the annual revenue growth rate the current market price implies,
+    holding every other DCF assumption fixed. The classic reverse-DCF question:
+    'what does the market expect this company to do?'"""
+    from scipy.optimize import brentq
+
+    if req.market_price <= 0:
+        raise HTTPException(400, "market_price must be positive")
+    if req.wacc <= req.terminal_growth:
+        raise HTTPException(400, "WACC must exceed terminal growth for a finite valuation")
+
+    def gap(g: float) -> float:
+        return _project(req, g)[5] - req.market_price
+
+    lo, hi = -50.0, 150.0
+    implied = None
+    try:
+        if gap(lo) * gap(hi) <= 0:
+            implied = brentq(gap, lo, hi, xtol=1e-3, maxiter=200)
+    except Exception:
+        implied = None
+
+    if implied is None:
+        return {
+            "implied_growth": None,
+            "market_price": round(req.market_price, 2),
+            "current_growth": req.current_growth,
+            "note": "The market price implies a growth rate outside a plausible range. Revisit the margin, WACC, or terminal-growth assumptions.",
+        }
+
+    fcfs, pv_fcfs, pv_terminal, ev, equity, ips = _project(req, implied)
+    verdict = None
+    if req.current_growth is not None:
+        delta = implied - req.current_growth
+        if   delta >  3: verdict = "demanding"   # market prices in materially faster growth than current
+        elif delta < -3: verdict = "undemanding"
+        else:            verdict = "in-line"
+
+    return {
+        "implied_growth":      round(implied, 2),
+        "market_price":        round(req.market_price, 2),
+        "intrinsic_per_share": round(ips, 2),
+        "current_growth":      req.current_growth,
+        "growth_gap":          round(implied - req.current_growth, 2) if req.current_growth is not None else None,
+        "verdict":             verdict,
+        "enterprise_value":    round(ev, 1),
+        "equity_value":        round(equity, 1),
+        "pv_fcfs":             round(pv_fcfs, 1),
+        "terminal_value":      round(pv_terminal, 1),
+        "fcfs":                fcfs,
     }
