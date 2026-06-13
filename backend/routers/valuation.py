@@ -41,8 +41,12 @@ def sotp(ticker: str):
     seg = fmp.get_revenue_segments(sym)
     latest = seg.get("latest") or []
     if not latest:
-        note = ("This issuer does not report a product-segment revenue breakdown, "
-                "so a sum-of-the-parts valuation is not available. Use the DCF or Multiples tabs instead.")
+        if seg.get("error"):
+            note = ("Segment data is temporarily unavailable (the data provider is rate-limiting). "
+                    "Try again in a moment, or use the DCF or Reverse DCF tabs.")
+        else:
+            note = ("This issuer does not report a product-segment revenue breakdown, "
+                    "so a sum-of-the-parts valuation is not available. Use the DCF or Reverse DCF tabs instead.")
         return {"ticker": sym, "segments": [], "note": note, "error": bool(seg.get("error"))}
 
     segments = [{"name": s["name"], "revenue": round(s["value"] / 1e6, 1), "pct": s.get("pct")}
