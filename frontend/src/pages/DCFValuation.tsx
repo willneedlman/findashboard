@@ -413,6 +413,23 @@ export function DCFValuationContent() {
                   </div>
                 </div>
               )}
+              {/* Terminal-dominated warning: when the explicit window adds nothing (or
+                  subtracts), the whole valuation rests on the terminal assumption and the
+                  per-share number is not trustworthy on its own. */}
+              {(data.pv_fcfs < 0 || data.enterprise_value <= 0 ||
+                (data.enterprise_value > 0 && data.terminal_value / data.enterprise_value > 0.85)) && (
+                <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid color-mix(in srgb, var(--theme-negative) 35%, transparent)', borderLeft: '4px solid var(--theme-negative)', padding: '8px 14px' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--theme-negative)', marginBottom: 3 }}>
+                    Terminal-Dominated Result: Treat With Caution
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--theme-secondary, #99907e)', lineHeight: '14px' }}>
+                    {data.pv_fcfs < 0
+                      ? 'The projected cash flows are negative across the explicit window, so all value (and more) comes from the terminal year. '
+                      : 'Over 85% of enterprise value sits in the terminal value. '}
+                    The intrinsic figure depends almost entirely on the Target Margin and terminal-growth assumptions, not near-term fundamentals. For a cash-burning name, cross-check with Multiples or Reverse DCF.
+                  </div>
+                </div>
+              )}
               {/* Summary metrics */}
               <div style={{ display: 'grid', gridTemplateColumns: `repeat(${isMobile ? 2 : 5},1fr)`, gap: 8 }}>
                 <MetricCard label="Enterprise Value" value={fmtM(data.enterprise_value)} />

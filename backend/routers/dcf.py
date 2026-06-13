@@ -118,6 +118,12 @@ def _project(req, rev_growth: float):
 
 @router.post("/value")
 def dcf_value(req: DCFRequest):
+    # The Gordon terminal value is only finite when WACC > terminal growth. Past
+    # that, (wacc - g) flips negative and a negative terminal FCF turns into a
+    # spuriously huge positive terminal value — a meaningless result, not a number
+    # worth returning.
+    if req.wacc <= req.terminal_growth:
+        raise HTTPException(400, "WACC must exceed terminal growth for a finite valuation")
     fcfs, pv_fcfs, pv_terminal, enterprise_value, equity_value, intrinsic_per_share = _project(req, req.rev_growth)
     return {
         "fcfs": fcfs,
