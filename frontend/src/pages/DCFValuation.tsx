@@ -107,7 +107,7 @@ function ChartPanel({ label, height, children }: { label: string; height: number
   )
 }
 
-export default function DCFValuation() {
+export function DCFValuationContent() {
   const isMobile = useIsMobile()
   const cc = useChartColors()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -247,7 +247,6 @@ export default function DCFValuation() {
   const sensiMax = sensiValues.length ? Math.max(...sensiValues) : 0
 
   return (
-    <PageWrapper title="DCF Valuation">
       <SidebarLayout sidebarWidth={220} sidebarTitle="DCF Parameters" sidebar={<>
 
         {/* Left sidebar */}
@@ -524,6 +523,9 @@ export default function DCFValuation() {
             </>
           )}
       </SidebarLayout>
-    </PageWrapper>
   )
+}
+
+export default function DCFValuation() {
+  return <PageWrapper title="DCF Valuation"><DCFValuationContent /></PageWrapper>
 }

@@ -25,7 +25,7 @@ const MonteCarlo         = lazy(() => import('./pages/MonteCarlo'))
 const ImpliedProbability = lazy(() => import('./pages/ImpliedProbability'))
 const FedRates           = lazy(() => import('./pages/FedRates'))
 const CorporateHub       = lazy(() => import('./pages/CorporateHub'))
-const DCFValuation       = lazy(() => import('./pages/DCFValuation'))
+const StockValuation     = lazy(() => import('./pages/StockValuation'))
 const OptionsChainScanner = lazy(() => import('./pages/OptionsChainScanner'))
 const CorrelationMatrix  = lazy(() => import('./pages/CorrelationMatrix'))
 const StrategyBuilder    = lazy(() => import('./pages/StrategyBuilder'))
@@ -129,7 +129,8 @@ export default function App() {
               <Route path="/probability" element={<ImpliedProbability />} />
               <Route path="/fed"        element={<FedRates />} />
               <Route path="/corporate"  element={<CorporateHub />} />
-              <Route path="/dcf"        element={<DCFValuation />} />
+              <Route path="/valuation"  element={<StockValuation />} />
+              <Route path="/dcf"        element={<Navigate to="/valuation" replace />} />
               <Route path="/chain"      element={<OptionsChainScanner />} />
               <Route path="/correlation" element={<CorrelationMatrix />} />
               <Route path="/strategy"   element={<StrategyBuilder />} />

@@ -51,7 +51,7 @@ const NAV_SECTIONS = [
     items: [
       { to: '/portfolio',   icon: BarChart2,   label: 'Portfolio Backtester' },
       { to: '/montecarlo',  icon: Dices,         label: 'Monte Carlo' },
-      { to: '/dcf',         icon: Calculator,    label: 'DCF Valuation' },
+      { to: '/valuation',   icon: Calculator,    label: 'Stock Valuation' },
       { to: '/nav',         icon: Bitcoin,       label: 'NAV Tracker' },
     ],
   },
