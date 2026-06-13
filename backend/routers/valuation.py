@@ -66,7 +66,7 @@ def sotp(ticker: str):
     # market price and the user tunes individual segments up or down from fair.
     suggested = None
     if price and shares and total_rev:
-        suggested = round(max(0.1, min(price * shares / total_rev, 25.0)), 1)
+        suggested = round(max(0.1, min(price * shares / total_rev, 25.0)), 2)
 
     return {
         "ticker":             sym,

@@ -73,12 +73,12 @@ export function SOTPContent() {
               <div key={r.name}>
                 <label style={{ ...LABEL, textTransform: 'none', letterSpacing: 0, fontSize: 11, color: 'var(--theme-text, #d7e3fc)', marginBottom: 6 }}>{r.name}</label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <input type="range" min={0.5} max={15} step={0.1} value={r.mult}
+                  <input type="range" min={0.1} max={15} step={0.05} value={r.mult}
                     onChange={e => setMult(m => ({ ...m, [r.name]: Number(e.target.value) }))}
                     style={{ flex: 1, accentColor: 'var(--theme-primary, #c9a84c)' }} />
-                  <input type="number" min={0} step={0.1} value={r.mult}
+                  <input type="number" min={0} step={0.05} value={Number(r.mult.toFixed(2))}
                     onChange={e => setMult(m => ({ ...m, [r.name]: Number(e.target.value) }))}
-                    style={{ ...INPUT, width: 62, padding: '4px 6px', textAlign: 'right', color: 'var(--theme-primary, #c9a84c)' }} />
+                    style={{ ...INPUT, width: 64, padding: '4px 6px', textAlign: 'right', color: 'var(--theme-primary, #c9a84c)' }} />
                 </div>
               </div>
             ))}
@@ -131,7 +131,7 @@ export function SOTPContent() {
                     <td style={{ ...TD, textAlign: 'left', fontWeight: 700 }}>{r.name}</td>
                     <td style={TD}>{fmtM(r.revenue)}</td>
                     <td style={{ ...TD, color: 'var(--theme-secondary, #99907e)' }}>{r.pct != null ? `${r.pct}%` : '—'}</td>
-                    <td style={{ ...TD, color: 'var(--theme-primary, #c9a84c)' }}>{r.mult.toFixed(1)}x</td>
+                    <td style={{ ...TD, color: 'var(--theme-primary, #c9a84c)' }}>{r.mult.toFixed(2)}x</td>
                     <td style={TD}>{fmtM(r.value)}</td>
                   </tr>
                 ))}
