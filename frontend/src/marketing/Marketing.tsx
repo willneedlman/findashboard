@@ -426,7 +426,7 @@ export function Landing() {
         <div className="wrap hero-grid">
           <motion.div variants={container} initial="hidden" animate="show">
             <motion.div className="eyebrow" variants={item}>Institutional-style analytics</motion.div>
-            <motion.h1 variants={item}>The whole desk,<br />in one <span className="g">terminal</span>.</motion.h1>
+            <motion.h1 variants={item}>Options, valuation, macro, and trading<br />in one <span className="g">terminal</span>.</motion.h1>
             <motion.p className="lede" variants={item}>Options flow, dealer gamma, DCF valuation, macro rates, backtesting, paper trading. 30+ analytics tools in one dark terminal. Go from first idea to sized position.</motion.p>
             <motion.div className="cta" variants={item}>
               <Magnetic><Link to="/app" className="btn btn-gold btn-lg">Launch Terminal →</Link></Magnetic>
@@ -491,7 +491,7 @@ export function Landing() {
           </TiltCard>
           <TiltCard className="card c-wide" to="/product/macro" item={item}>
             <div className="k">Macro &amp; rates</div><h3>Read the rates and credit regime.</h3>
-            <p>Fed-path probabilities, credit spreads, the yield curve, and sector rotation. The regime backdrop for every trade you size.</p>
+            <p>Fed-path probabilities, credit spreads, the yield curve, and sector rotation on one board.</p>
             <MacroViz />
             <div className="tags"><span className="tag">Fed path</span><span className="tag">Credit spreads</span><span className="tag">Yield curve</span><span className="tag">Sector rotation</span></div>
           </TiltCard>
@@ -508,15 +508,15 @@ export function Landing() {
           </Reveal>
           <Reveal delay={0.12}>
             <div className="term">
-              <div className="tbar"><i></i><i></i><i></i><span className="name">portfolio · risk</span></div>
-              <div className="thead"><span className="t">Portfolio</span><span className="tag-prev">preview</span></div>
+              <div className="tbar"><i></i><i></i><i></i><span className="name">options · flow</span></div>
+              <div className="thead"><span className="t">Unusual flow</span><span className="tag-prev">preview</span></div>
               <table>
-                <thead><tr><th>Symbol</th><th>Day%</th><th>Value</th><th>Weight</th></tr></thead>
+                <thead><tr><th>Contract</th><th>Vol/OI</th><th>Premium</th><th>Rank</th></tr></thead>
                 <tbody>
-                  <tr><td>NVDA</td><td className="pos">+2.14</td><td>$260,128</td><td><span className="bar7"><i style={{ width: '100%' }}></i></span></td></tr>
-                  <tr><td>MSFT</td><td className="pos">+0.88</td><td>$149,436</td><td><span className="bar7"><i style={{ width: '57%' }}></i></span></td></tr>
-                  <tr><td>AAPL</td><td className="neg">-0.42</td><td>$146,470</td><td><span className="bar7"><i style={{ width: '56%' }}></i></span></td></tr>
-                  <tr><td>SPY</td><td className="pos">+0.31</td><td>$108,819</td><td><span className="bar7"><i style={{ width: '42%' }}></i></span></td></tr>
+                  <tr><td>NVDA 1300C</td><td className="pos">8.4x</td><td>$18.4M</td><td><span className="bar7"><i style={{ width: '100%' }}></i></span></td></tr>
+                  <tr><td>SPY 605C</td><td className="pos">3.1x</td><td>$9.1M</td><td><span className="bar7"><i style={{ width: '49%' }}></i></span></td></tr>
+                  <tr><td>TSLA 400P</td><td className="neg">2.0x</td><td>$6.2M</td><td><span className="bar7"><i style={{ width: '34%' }}></i></span></td></tr>
+                  <tr><td>AAPL 230C</td><td className="pos">1.9x</td><td>$4.0M</td><td><span className="bar7"><i style={{ width: '22%' }}></i></span></td></tr>
                 </tbody>
               </table>
             </div>
@@ -566,7 +566,7 @@ export function OptionsPage() {
     <Shell active="options">
       <header className="phero"><div className="wrap">
         <div className="eyebrow">Options intelligence</div>
-        <h1>Trade the second derivative.</h1>
+        <h1>Options flow, gamma, and volatility.</h1>
         <p className="lede">Eight modules covering flow, positioning, volatility and pricing. See where the money is, what dealers are forced to hedge, and exactly what you're paying for convexity.</p>
         <div className="cta"><LaunchCTAs secondary={{ to: '/', label: 'Overview' }} /></div>
       </div></header>
@@ -627,8 +627,8 @@ export function ValuationPage() {
     <Shell active="valuation">
       <header className="phero"><div className="wrap">
         <div className="eyebrow">Valuation</div>
-        <h1>Know what it's worth,<br />not what it costs.</h1>
-        <p className="lede">Discounted cash flow, peer comps, and reverse-DCF. Every model resolves to an answer, even when a company's reported data is thin.</p>
+        <h1>Three ways to value a company.</h1>
+        <p className="lede">Discounted cash flow, peer comps, and reverse-DCF. When a company's beta or margins are missing, the DCF fills them from industry data instead of stalling.</p>
         <div className="cta"><LaunchCTAs secondary={{ to: '/', label: 'Overview' }} /></div>
       </div></header>
 
@@ -680,15 +680,15 @@ export function PortfolioPage() {
     <Shell active="portfolio">
       <header className="phero"><div className="wrap">
         <div className="eyebrow">Portfolio &amp; risk</div>
-        <h1>Know your risk before<br />the market tells you.</h1>
-        <p className="lede">Track the book, then pressure-test it. Backtests, thousands of Monte Carlo paths, and correlation analysis. The drawdown becomes a number you have already modeled, not a surprise.</p>
+        <h1>Holdings, greeks, and drawdown.</h1>
+        <p className="lede">Live holdings with aggregated option greeks, historical backtests, thousands of Monte Carlo paths, and rolling correlations across every position.</p>
         <div className="cta"><LaunchCTAs secondary={{ to: '/', label: 'Overview' }} /></div>
       </div></header>
 
       <section className="blk"><div className="wrap">
         <div className="sec-head">
           <div className="eyebrow">Portfolio &amp; risk</div>
-          <h2>Track the book, model the risk.</h2>
+          <h2>Holdings, backtests, and risk models.</h2>
         </div>
         <div className="bento">
           <div className="card c-3">
@@ -704,7 +704,7 @@ export function PortfolioPage() {
           </div>
           <div className="card c-3 glow-blue">
             <div className="k">02 · Backtester</div>
-            <h3>Test the rule, not the hunch.</h3>
+            <h3>Strategy rules over history.</h3>
             <p>Run allocation and strategy rules over history with CAGR, Sharpe and max-drawdown.</p>
             <EquityCurve grow />
             <div className="tags"><span className="tag">CAGR</span><span className="tag">Sharpe</span><span className="tag">Max drawdown</span></div>
@@ -744,8 +744,8 @@ export function MacroPage() {
     <Shell active="macro">
       <header className="phero"><div className="wrap">
         <div className="eyebrow">Macro &amp; rates</div>
-        <h1>Top-down context for<br />every trade you size.</h1>
-        <p className="lede">The regime backdrop wired alongside your tickers. Fed path, credit, the curve, and sector leadership. Trade with the cycle, not against it.</p>
+        <h1>The rates and credit regime.</h1>
+        <p className="lede">Fed-path probabilities, IG and HY credit spreads, the yield curve, and sector rotation on one board.</p>
         <div className="cta"><LaunchCTAs secondary={{ to: '/', label: 'Overview' }} /></div>
       </div></header>
 
@@ -828,7 +828,7 @@ export function TradingPage() {
       <section className="blk"><div className="wrap">
         <div className="sec-head">
           <div className="eyebrow">Trading workflow</div>
-          <h2>From strategy to journaled fill.</h2>
+          <h2>Strategy, paper trade, journal, alerts.</h2>
         </div>
         <div className="loop">
           <div className="lp"><div className="lpn"><b><GitBranch size={13} /></b> Strategy Builder</div><h4>Define the rules.</h4><p>Compose entry and exit rules, parameters, and signals into a repeatable strategy. No code required.</p><div className="lptags"><span className="tag">Rules</span><span className="tag">Signals</span></div></div>
