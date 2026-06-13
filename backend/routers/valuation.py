@@ -81,3 +81,119 @@ def sotp(ticker: str):
         "market_price":       price,
         "suggested_multiple": suggested,
     }
+
+
+# ── Dividend Discount Model ─────────────────────────────────────────────────────
+
+_RISK_FREE = 4.3   # 3M T-bill proxy, %
+_EQUITY_RISK_PREMIUM = 5.0   # %
+
+
+@router.get("/ddm")
+def ddm(ticker: str):
+    """Inputs for a dividend discount model: trailing dividend per share, its
+    historical growth, and a CAPM-suggested required return. The client runs the
+    Gordon / two-stage math so growth and discount rate stay interactive."""
+    sym = validate_ticker(ticker)
+    from cache import get_info
+    info = get_info(sym)
+    price = float(info.get("currentPrice") or info.get("regularMarketPrice") or 0) or None
+    dps = info.get("trailingAnnualDividendRate") or info.get("dividendRate")
+
+    if not dps or float(dps) <= 0:
+        return {"ticker": sym, "pays_dividend": False, "price": price,
+                "note": ("This company does not currently pay a dividend, so a dividend "
+                         "discount model does not apply. Use the DCF or Multiples tabs.")}
+    dps = float(dps)
+
+    # Historical dividend CAGR from full calendar years (exclude the partial current year).
+    growth = None
+    try:
+        import yfinance as yf, datetime as _dt
+        div = yf.Ticker(sym).dividends
+        if div is not None and len(div) > 0:
+            ann = div.groupby(div.index.year).sum()
+            ann = ann[(ann > 0) & (ann.index < _dt.date.today().year)]
+            if len(ann) >= 2:
+                first, last = float(ann.iloc[0]), float(ann.iloc[-1])
+                yrs = int(ann.index[-1]) - int(ann.index[0])
+                if first > 0 and yrs > 0:
+                    growth = round(((last / first) ** (1 / yrs) - 1) * 100, 1)
+    except Exception:
+        pass
+
+    beta = info.get("beta")
+    req = round(_RISK_FREE + (float(beta) if beta else 1.0) * _EQUITY_RISK_PREMIUM, 1)
+    # Seed perpetual growth at the historical rate, but keep it safely below the
+    # discount rate (Gordon diverges as g -> r).
+    sug_g = growth if growth is not None else 4.0
+    if sug_g >= req - 1.0:
+        sug_g = round(req - 2.0, 1)
+
+    div_yield = round(dps / price * 100, 2) if price else None
+    low_yield = div_yield is not None and div_yield < 0.5
+
+    return {
+        "ticker":        sym,
+        "pays_dividend": True,
+        "price":         price,
+        "dps":           round(dps, 2),
+        "div_yield":     div_yield,
+        "div_growth":    growth,
+        "beta":          round(float(beta), 2) if beta else None,
+        "suggested_r":   req,
+        "suggested_g":   sug_g,
+        "low_yield":     low_yield,
+        "note":          (f"{sym} pays only a negligible dividend ({div_yield}% yield), so a dividend "
+                          "discount model is not a meaningful valuation here. Prefer the DCF or Multiples tabs.") if low_yield else None,
+    }
+
+
+# ── Multiples ───────────────────────────────────────────────────────────────────
+
+@router.get("/multiples")
+def multiples(ticker: str):
+    """Current per-share metrics and trading multiples. The client sets a target
+    multiple per line to see the implied share price move."""
+    sym = validate_ticker(ticker)
+    from cache import get_info
+    info = get_info(sym)
+    price  = float(info.get("currentPrice") or info.get("regularMarketPrice") or 0) or None
+    shares = (info.get("sharesOutstanding") or 0) / 1e6        # M
+    total_debt = (info.get("totalDebt") or 0) / 1e6
+    cash       = (info.get("totalCash") or info.get("cashAndCashEquivalents") or 0) / 1e6
+    net_debt   = total_debt - cash
+
+    eps      = info.get("trailingEps")
+    eps_fwd  = info.get("forwardEps")
+    book_ps  = info.get("bookValue")                          # per share
+    revenue  = (info.get("totalRevenue") or 0) / 1e6          # $M
+    ebitda   = (info.get("ebitda") or 0) / 1e6                # $M
+    sales_ps  = revenue / shares if shares else None
+    ebitda_ps = ebitda / shares if shares else None
+    ev = (price * shares + net_debt) if (price and shares) else None
+
+    metrics: list[dict] = []
+    def add(key, label, per_share, cur_mult, ev_based=False):
+        if per_share and per_share > 0:
+            metrics.append({"key": key, "label": label, "per_share": round(per_share, 2),
+                            "current_mult": round(cur_mult, 1) if cur_mult and cur_mult > 0 else None,
+                            "ev_based": ev_based})
+
+    if eps:     add("pe",     "P/E (trailing)", float(eps),     price / eps if price else None)
+    if eps_fwd: add("pe_fwd", "P/E (forward)",  float(eps_fwd), price / eps_fwd if price else None)
+    if sales_ps: add("ps",    "P/S",            sales_ps,       price / sales_ps if price else None)
+    if book_ps: add("pb",     "P/B",            float(book_ps), price / book_ps if price else None)
+    if ebitda_ps: add("ev_ebitda", "EV/EBITDA", ebitda_ps,     ev / ebitda if (ev and ebitda > 0) else None, ev_based=True)
+
+    if not metrics:
+        return {"ticker": sym, "price": price, "metrics": [],
+                "note": "No usable per-share metrics were available for this ticker."}
+
+    return {
+        "ticker":   sym,
+        "price":    round(price, 2) if price else None,
+        "shares":   round(shares, 1),
+        "net_debt": round(net_debt, 1),
+        "metrics":  metrics,
+    }
