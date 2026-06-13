@@ -224,6 +224,8 @@ function PortfolioTab() {
   const [tpPct,    setTpPct]    = useState('')
   const [trailPct, setTrailPct] = useState('')
   const [posPct,   setPosPct]   = useState('100')
+  const [leverage,   setLeverage]   = useState('1')
+  const [borrowRate, setBorrowRate] = useState('0')
 
   const { mutate, data, isPending } = useMutation({
     mutationFn: async () => {
@@ -235,6 +237,8 @@ function PortfolioTab() {
           tickers: assets.map(a => a.ticker),
           weights,
           benchmark, start, end,
+          leverage: Number(leverage) || 1,
+          borrow_rate: Number(borrowRate) || 0,
         }),
         ...assets.map(a => {
           if (a.strategy === STRATEGIES[0]) return Promise.resolve(null)
@@ -458,6 +462,18 @@ function PortfolioTab() {
               <label style={PORT_LABEL}>End</label>
               <input type="date" style={PORT_INPUT} value={end} onChange={e => setEnd(e.target.value)} onFocus={focus} onBlur={blur} />
             </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+              <div>
+                <label style={PORT_LABEL}>Leverage (x)</label>
+                <input type="number" style={PORT_INPUT} value={leverage} min={1} max={5} step={0.25}
+                  onChange={e => setLeverage(e.target.value)} onFocus={focus} onBlur={blur} />
+              </div>
+              <div>
+                <label style={PORT_LABEL}>Borrow Rate %</label>
+                <input type="number" style={PORT_INPUT} value={borrowRate} min={0} max={30} step={0.5}
+                  onChange={e => setBorrowRate(e.target.value)} onFocus={focus} onBlur={blur} />
+              </div>
+            </div>
           </div>
         </div>
 
@@ -534,6 +550,23 @@ function PortfolioTab() {
 
         {data && (
           <>
+            {data.leverage > 1 && (
+              <div style={{
+                background: 'var(--theme-bg, #101c2e)',
+                border: `1px solid color-mix(in srgb, ${data.liquidated ? 'var(--theme-negative)' : 'var(--theme-primary, #c9a84c)'} 35%, transparent)`,
+                borderLeft: `4px solid ${data.liquidated ? 'var(--theme-negative)' : 'var(--theme-primary, #c9a84c)'}`,
+                padding: '8px 14px', fontFamily: 'var(--theme-mono)', fontSize: 11, lineHeight: 1.5,
+              }}>
+                <span style={{ color: data.liquidated ? 'var(--theme-negative)' : 'var(--theme-primary, #c9a84c)', fontWeight: 700 }}>
+                  {data.liquidated ? 'LIQUIDATED' : `LEVERED ${data.leverage}x`}
+                </span>
+                <span style={{ color: 'var(--theme-secondary, #99907e)', marginLeft: 8 }}>
+                  {data.liquidated
+                    ? `Equity hit zero at ${data.leverage}x leverage. The portfolio was wiped out; the curve below stops at -100%.`
+                    : `Borrowing ${(data.leverage - 1).toFixed(2)}x capital at ${data.borrow_rate}% to magnify returns. Metrics reflect the levered equity.`}
+                </span>
+              </div>
+            )}
             {data.strategyResult?.legs?.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {data.strategyResult.legs.map((l: any, i: number) => (

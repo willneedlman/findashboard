@@ -194,6 +194,7 @@ const BENTO_CARDS: Card[] = [
   // ── Row 7: Portfolio & Simulation (4×normal)
   { to: '/montecarlo',     icon: Dices,     size: 'normal', accent: '#2f6b4b',                       tag: 'SIMULATION',  title: 'Monte Carlo',           body: 'GBM path simulation with VaR, CVaR, and percentile fan charts.' },
   { to: '/portfolio',      icon: BarChart2, size: 'normal', accent: '#2f6b4b',                       tag: 'BACKTEST',    title: 'Portfolio Backtester',  body: 'Backtest weighted equity baskets against any benchmark with Sharpe, Sortino, Calmar.' },
+  { to: '/portfolio-compare', icon: Scale,  size: 'normal', accent: '#7aa2f7',                       tag: 'COMPARE',     title: 'Compare Portfolios',    body: 'Run 2-4 portfolios side by side, each with its own assets and leverage, on one equity-curve chart with a metrics table.' },
   { to: '/portfolio-manager', icon: Briefcase,   size: 'normal', accent: 'var(--theme-primary, #c9a84c)', tag: 'PORTFOLIO', title: 'Portfolio Manager',     body: 'Holdings, live P&L, position weights, and aggregated option greeks across the book.' },
   { to: '/alerts',         icon: Bell,      size: 'normal', accent: 'var(--theme-primary, #c9a84c)', tag: 'ALERTS',      title: 'Price Alerts',          body: 'Set price and 1-day % change alerts. Push to browser on trigger.' },
 

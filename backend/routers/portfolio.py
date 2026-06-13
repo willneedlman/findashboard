@@ -37,12 +37,56 @@ def _get_risk_free_rate() -> float:
         return 0.045
 
 
+def _lever_equity(cum_gross: pd.Series, leverage: float, borrow_rate: float) -> tuple[pd.Series, bool]:
+    """Equity path of a portfolio that borrows (leverage-1)x its capital at borrow_rate (annual %)
+    and holds it statically over the window — not a daily-rebalanced leveraged ETF. cum_gross is the
+    unlevered wealth index. Returns (leveraged equity index, liquidated). On wipeout (equity <= 0)
+    the position is floored at 0 from the first non-positive point onward."""
+    t = np.arange(len(cum_gross))
+    b_d = (1 + borrow_rate / 100.0) ** (1 / 252)
+    eq = leverage * cum_gross.values - (leverage - 1) * (b_d ** t)
+    liquidated = bool((eq <= 0).any())
+    if liquidated:
+        first = int(np.argmax(eq <= 0))
+        eq = eq.copy()
+        eq[first:] = 0.0
+    return pd.Series(eq, index=cum_gross.index), liquidated
+
+
+def _series_metrics(equity: pd.Series, bench_ret: pd.Series, rf: float) -> dict:
+    """Risk/return metrics from a wealth-index series and the benchmark's daily returns."""
+    years = max((equity.index[-1] - equity.index[0]).days / 365.25, 1.0)
+    start_val, end_val = float(equity.iloc[0]), float(equity.iloc[-1])
+    cagr = (end_val / start_val) ** (1 / years) - 1 if end_val > 0 and start_val > 0 else -1.0
+    ret = equity.pct_change().replace([np.inf, -np.inf], np.nan).dropna()
+    vol = float(ret.std() * np.sqrt(252)) if len(ret) > 1 else 0.0
+    sharpe = (cagr - rf) / vol if vol else 0.0
+    cummax = equity.cummax()
+    max_dd = float(((equity - cummax) / cummax).min())
+    common = ret.index.intersection(bench_ret.index)
+    if len(common) > 2 and float(bench_ret.loc[common].var()) > 0:
+        beta = float(np.cov(ret.loc[common].values, bench_ret.loc[common].values)[0, 1] / np.var(bench_ret.loc[common].values))
+    else:
+        beta = 0.0
+    neg = ret[ret < 0]
+    down_vol = float(neg.std() * np.sqrt(252)) if len(neg) > 1 else vol
+    sortino = (cagr - rf) / down_vol if down_vol else 0.0
+    calmar = cagr / abs(max_dd) if max_dd != 0 else 0.0
+    return {
+        "cagr": round(cagr * 100, 2), "vol": round(vol * 100, 2), "sharpe": round(sharpe, 2),
+        "max_drawdown": round(max_dd * 100, 2), "sortino": round(sortino, 2),
+        "calmar": round(calmar, 2), "beta": round(beta, 2),
+    }
+
+
 class BacktestRequest(BaseModel):
     tickers: list[str] = Field(min_length=1, max_length=20)
     weights: list[float] = Field(min_length=1, max_length=20)
     benchmark: str = "SPY"
     start: str = "2020-01-01"
     end: str = "2024-12-31"
+    leverage: float = Field(default=1.0, ge=1.0, le=5.0)
+    borrow_rate: float = Field(default=0.0, ge=0.0, le=30.0)
 
     @model_validator(mode='after')
     def _validate(self):
@@ -78,44 +122,38 @@ def backtest(req: BacktestRequest):
     port = (daily[req.tickers] * w).sum(axis=1)
     bench = daily[req.benchmark]
 
-    cum_port = (1 + port).cumprod() * 100
+    cum_gross = (1 + port).cumprod()
+    equity, liquidated = _lever_equity(cum_gross, req.leverage, req.borrow_rate)
+    cum_port = equity * 100
     cum_bench = (1 + bench).cumprod() * 100
 
-    years = max((cum_port.index[-1] - cum_port.index[0]).days / 365.25, 1.0)
-    port_cagr = (cum_port.iloc[-1] / 100) ** (1 / years) - 1
-    bench_cagr = (cum_bench.iloc[-1] / 100) ** (1 / years) - 1
-    port_vol = float(port.std() * np.sqrt(252))
     rf = _get_risk_free_rate()
-    port_sharpe = (port_cagr - rf) / port_vol if port_vol else 0
+    m = _series_metrics(equity, bench, rf)
+    bench_m = _series_metrics((1 + bench).cumprod(), bench, rf)
 
-    wealth = cum_port / 100
-    max_dd = float(((wealth - wealth.cummax()) / wealth.cummax()).min())
-    beta = float(np.cov(port.values, bench.values)[0, 1] / np.var(bench.values))
-    down_vol = float(port[port < 0].std() * np.sqrt(252)) if len(port[port < 0]) > 0 else port_vol
-    sortino = (port_cagr - rf) / down_vol if down_vol else 0
-    calmar = port_cagr / abs(max_dd) if max_dd != 0 else 0
-
+    lev_ret = equity.pct_change().replace([np.inf, -np.inf], np.nan).dropna()
     window = 60
-    rolling_cov = port.rolling(window).cov(bench)
-    rolling_var = bench.rolling(window).var()
-    rolling_beta = rolling_cov / rolling_var
+    rolling_beta = lev_ret.rolling(window).cov(bench) / bench.rolling(window).var()
 
     return {
         "metrics": {
-            "port_cagr": round(port_cagr * 100, 2),
-            "bench_cagr": round(bench_cagr * 100, 2),
-            "port_sharpe": round(port_sharpe, 2),
-            "port_vol": round(port_vol * 100, 2),
-            "max_drawdown": round(max_dd * 100, 2),
-            "sortino": round(sortino, 2),
-            "calmar": round(calmar, 2),
-            "beta": round(beta, 2),
+            "port_cagr": m["cagr"],
+            "bench_cagr": bench_m["cagr"],
+            "port_sharpe": m["sharpe"],
+            "port_vol": m["vol"],
+            "max_drawdown": m["max_drawdown"],
+            "sortino": m["sortino"],
+            "calmar": m["calmar"],
+            "beta": m["beta"],
         },
+        "leverage": req.leverage,
+        "borrow_rate": req.borrow_rate,
+        "liquidated": liquidated,
         "cumulative": [
             {"date": str(d.date()), "portfolio": round(float(p), 2), "benchmark": round(float(b), 2)}
             for d, p, b in zip(cum_port.index, cum_port, cum_bench)
         ],
-        "daily_returns": [{"date": str(d.date()), "value": round(float(v) * 100, 4)} for d, v in port.items()],
+        "daily_returns": [{"date": str(d.date()), "value": round(float(v) * 100, 4)} for d, v in lev_ret.items()],
         "rolling_beta": [{"date": str(d.date()), "value": round(float(v), 4)} for d, v in rolling_beta.dropna().items()],
         "per_ticker_returns": {
             ticker: [{"date": str(d.date()), "value": round(float(v) * 100, 6)} for d, v in daily[ticker].items()]
@@ -125,67 +163,142 @@ def backtest(req: BacktestRequest):
 
 
 class MonteCarloRequest(BaseModel):
-    ticker: str
+    tickers: list[str] = Field(min_length=1, max_length=20)
+    weights: list[float] | None = None
     start: str = "2020-01-01"
     end: str = "2024-12-31"
     n_sims: int = Field(default=500, ge=10, le=1000)
     horizon_days: int = Field(default=252, ge=1, le=2520)
+    leverage: float = Field(default=1.0, ge=1.0, le=5.0)
+    borrow_rate: float = Field(default=0.0, ge=0.0, le=30.0)
 
     @model_validator(mode='after')
     def _validate(self):
-        self.ticker = validate_ticker(self.ticker)
+        self.tickers = validate_tickers(self.tickers)
         validate_date(self.start); validate_date(self.end)
+        if not self.weights or len(self.weights) != len(self.tickers):
+            self.weights = [1.0] * len(self.tickers)
         return self
 
 
 @router.post("/montecarlo")
 def monte_carlo(req: MonteCarloRequest):
+    """GBM simulation of a (optionally levered) portfolio. Returns terminal equity as a growth
+    multiple of starting capital (1.0 = breakeven)."""
     try:
-        tkr = yf.Ticker(req.ticker.strip().upper())
-        hist = tkr.history(start=req.start, end=req.end)
-        if hist.empty:
-            raise HTTPException(404, "No data")
-        closes = hist["Close"].dropna()
-        if closes.index.tz is not None:
-            closes.index = closes.index.tz_convert(None)
+        dl = get_download(tuple(sorted(req.tickers)), req.start, req.end)
+        raw = dl["Close"] if isinstance(dl.columns, pd.MultiIndex) and "Close" in dl.columns.get_level_values(0) else dl
+        if isinstance(raw, pd.Series):
+            raw = raw.to_frame(req.tickers[0])
+        if raw.index.tz is not None:
+            raw.index = raw.index.tz_convert(None)
     except Exception:
         logger.exception("internal error"); raise HTTPException(500, "Internal server error")
+    raw = raw[req.tickers].dropna()
+    if raw.empty:
+        raise HTTPException(404, "No data")
 
-    log_returns = np.log(closes / closes.shift(1)).dropna()
-    mu = float(log_returns.mean())
-    sigma = float(log_returns.std())
-    S0 = float(closes.iloc[-1])
-    n_sims = min(req.n_sims, 1000)
-    T = req.horizon_days
+    w = np.array(req.weights, dtype=float); w = w / w.sum()
+    port_ret = (raw.pct_change().dropna() * w).sum(axis=1)
+    log_ret = np.log1p(port_ret)
+    mu = float(log_ret.mean()); sigma = float(log_ret.std())
+    n_sims = min(req.n_sims, 1000); T = req.horizon_days
+    L = req.leverage; b_d = (1 + req.borrow_rate / 100.0) ** (1 / 252)
 
     rng = np.random.default_rng()
-    paths = S0 * np.exp(np.cumsum(
-        (mu - 0.5 * sigma**2) + sigma * rng.standard_normal((T, n_sims)), axis=0
-    ))
+    shocks = (mu - 0.5 * sigma ** 2) + sigma * rng.standard_normal((T, n_sims))
+    gross = np.vstack([np.ones((1, n_sims)), np.exp(np.cumsum(shocks, axis=0))])   # (T+1, n_sims), starts at 1.0
+    tcol = np.arange(T + 1).reshape(-1, 1)
+    equity = L * gross - (L - 1) * (b_d ** tcol)
+    equity = np.where(np.cumsum(equity <= 0, axis=0) > 0, 0.0, equity)             # floor wiped-out paths
 
-    final = paths[-1, :]
-    percentiles = {
-        "p5":  round(float(np.percentile(final, 5)), 2),
-        "p25": round(float(np.percentile(final, 25)), 2),
-        "p50": round(float(np.percentile(final, 50)), 2),
-        "p75": round(float(np.percentile(final, 75)), 2),
-        "p95": round(float(np.percentile(final, 95)), 2),
-    }
-    var_95 = round(float((S0 - np.percentile(final, 5)) / S0 * 100), 2)
-    cvar_95 = round(float((S0 - final[final <= np.percentile(final, 5)].mean()) / S0 * 100), 2)
+    final = equity[-1, :]
+    p5 = float(np.percentile(final, 5))
+    percentiles = {k: round(float(np.percentile(final, q)), 3)
+                   for k, q in [("p5", 5), ("p25", 25), ("p50", 50), ("p75", 75), ("p95", 95)]}
+    var_95 = round(float((1.0 - p5) * 100), 2)
+    tail = final[final <= p5]
+    cvar_95 = round(float((1.0 - tail.mean()) * 100), 2) if len(tail) else var_95
 
-    # Return sample paths (every 10th sim to limit payload)
-    sample = paths[:, ::max(1, n_sims // 50)].tolist()
-
+    step = max(1, n_sims // 50)
+    sample = equity[:, ::step]
     return {
-        "S0": S0,
         "mu": round(mu * 252, 4),
         "sigma": round(sigma * np.sqrt(252), 4),
+        "leverage": L,
+        "borrow_rate": req.borrow_rate,
         "percentiles": percentiles,
         "var_95": var_95,
         "cvar_95": cvar_95,
-        "sample_paths": [[round(v, 2) for v in row] for row in sample],
-        "histogram": sorted([round(float(v), 2) for v in final]),
+        "pct_wiped": round(float((final <= 0).mean() * 100), 1),
+        "sample_paths": [[round(float(v), 3) for v in row] for row in sample],
+        "histogram": sorted([round(float(v), 3) for v in final]),
+    }
+
+
+# ── Multi-portfolio comparison ──────────────────────────────────────────────────
+
+class ComparePortfolio(BaseModel):
+    name: str = "Portfolio"
+    tickers: list[str] = Field(min_length=1, max_length=20)
+    weights: list[float] = Field(min_length=1, max_length=20)
+    leverage: float = Field(default=1.0, ge=1.0, le=5.0)
+    borrow_rate: float = Field(default=0.0, ge=0.0, le=30.0)
+
+
+class CompareRequest(BaseModel):
+    portfolios: list[ComparePortfolio] = Field(min_length=2, max_length=4)
+    benchmark: str = "SPY"
+    start: str = "2020-01-01"
+    end: str = "2024-12-31"
+
+    @model_validator(mode='after')
+    def _validate(self):
+        for p in self.portfolios:
+            p.tickers = validate_tickers(p.tickers)
+        self.benchmark = validate_ticker(self.benchmark)
+        validate_date(self.start); validate_date(self.end)
+        return self
+
+
+@router.post("/compare")
+def compare(req: CompareRequest):
+    """Leveraged equity curves + metrics for 2-4 portfolios on a common date range."""
+    union = list(dict.fromkeys([t for p in req.portfolios for t in p.tickers] + [req.benchmark]))
+    try:
+        dl = get_download(tuple(sorted(union)), req.start, req.end)
+        raw = dl["Close"] if isinstance(dl.columns, pd.MultiIndex) and "Close" in dl.columns.get_level_values(0) else dl
+        if isinstance(raw, pd.Series):
+            raw = raw.to_frame(union[0])
+        if raw.index.tz is not None:
+            raw.index = raw.index.tz_convert(None)
+    except Exception:
+        logger.exception("internal error"); raise HTTPException(500, "Internal server error")
+    raw = raw.dropna()
+    if raw.empty:
+        raise HTTPException(404, "No overlapping data")
+
+    daily = raw.pct_change().dropna()
+    rf = _get_risk_free_rate()
+    bench_ret = daily[req.benchmark]
+    cum_bench = (1 + bench_ret).cumprod() * 100
+
+    series, metrics = [], []
+    for p in req.portfolios:
+        wv = np.array(p.weights, dtype=float); wv = wv / wv.sum()
+        port = (daily[p.tickers] * wv).sum(axis=1)
+        equity, liquidated = _lever_equity((1 + port).cumprod(), p.leverage, p.borrow_rate)
+        idx = equity * 100
+        series.append({"name": p.name,
+                       "points": [{"date": str(d.date()), "value": round(float(v), 2)} for d, v in idx.items()]})
+        metrics.append({"name": p.name, "leverage": p.leverage, "borrow_rate": p.borrow_rate,
+                        "liquidated": liquidated, **_series_metrics(equity, bench_ret, rf)})
+
+    return {
+        "benchmark": req.benchmark,
+        "benchmark_points": [{"date": str(d.date()), "value": round(float(v), 2)} for d, v in cum_bench.items()],
+        "series": series,
+        "metrics": metrics,
     }
 
 

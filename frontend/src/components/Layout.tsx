@@ -7,7 +7,7 @@ import {
   BarChart2, Dices, GitBranch, Building2, Calculator,
   Shuffle, Zap, X, Menu, Settings,
   Filter, FileText, ShieldAlert, PieChart,
-  BookOpen, Terminal, Brain, Bell, Star, Gauge, Activity, GitCompare,
+  BookOpen, Terminal, Brain, Bell, Star, Gauge, Activity, GitCompare, Scale,
 } from 'lucide-react'
 import Footer from './Footer'
 import AlphaMark from './AlphaMark'
@@ -51,6 +51,7 @@ const NAV_SECTIONS = [
     items: [
       { to: '/portfolio',   icon: BarChart2,   label: 'Portfolio Backtester' },
       { to: '/montecarlo',  icon: Dices,         label: 'Monte Carlo' },
+      { to: '/portfolio-compare', icon: Scale,   label: 'Compare Portfolios' },
       { to: '/valuation',   icon: Calculator,    label: 'Stock Valuation' },
       { to: '/nav',         icon: Bitcoin,       label: 'NAV Tracker' },
     ],

@@ -122,6 +122,8 @@ export default function MonteCarlo() {
   const [tpPct, setTpPct] = useState('')
   const [trailPct, setTrailPct] = useState('')
   const [posPct, setPosPct] = useState('100')
+  const [leverage, setLeverage] = useState('1')
+  const [borrowRate, setBorrowRate] = useState('0')
 
 
   const updateLeg = (i: number, patch: Partial<Leg>) =>
@@ -263,8 +265,20 @@ export default function MonteCarlo() {
             sum + (leg.weight / totalWeight) * allPaths[li][simIdx][day], 0)
         )
       )
-      // Apply risk controls then scale to $100
-      const portfolioPaths = applyRiskControls(rawPortfolioPaths).map(p => p.map(v => v * 100))
+      // Apply borrow-to-magnify leverage to the gross portfolio paths (static debt, floored
+      // at 0 on wipeout), then risk controls, then scale to $100.
+      const L = Number(leverage) || 1
+      const bDaily = Math.pow(1 + (Number(borrowRate) || 0) / 100, 1 / 252)
+      const leveredPaths = L === 1 ? rawPortfolioPaths : rawPortfolioPaths.map(path => {
+        let wiped = false
+        return path.map((g, day) => {
+          if (wiped) return 0
+          const eq = L * g - (L - 1) * Math.pow(bDaily, day)
+          if (eq <= 0) { wiped = true; return 0 }
+          return eq
+        })
+      })
+      const portfolioPaths = applyRiskControls(leveredPaths).map(p => p.map(v => v * 100))
 
       const benchPaths = runGBM(100, benchDrift / 100, benchVol / 100, horizon, 100)
 
@@ -431,6 +445,18 @@ export default function MonteCarlo() {
                 <input style={INPUT} value={benchmark}
                   onChange={e => setBenchmark(e.target.value.toUpperCase())}
                   onFocus={focus} onBlur={blur} />
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={LABEL}>Leverage (x)</label>
+                  <input type="number" style={INPUT} value={leverage} step={0.25} min={1} max={5}
+                    onChange={e => setLeverage(e.target.value)} onFocus={focus} onBlur={blur} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={LABEL}>Borrow Rate %</label>
+                  <input type="number" style={INPUT} value={borrowRate} step={0.5} min={0} max={30}
+                    onChange={e => setBorrowRate(e.target.value)} onFocus={focus} onBlur={blur} />
+                </div>
               </div>
               <div>
                 <label style={LABEL}>Target Endpoint ($)</label>
