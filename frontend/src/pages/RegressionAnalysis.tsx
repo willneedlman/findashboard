@@ -6,6 +6,7 @@ import {
   CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
 import { TrendingUp, Download, Plus, X, BarChart2, LayoutGrid, GitCompare } from 'lucide-react'
+import HelpTip from '../components/HelpTip'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -86,11 +87,13 @@ const C = {
 
 function StatCard({ label, value, sub, tip }: { label: string; value: string | number; sub?: string; tip?: string }) {
   return (
-    <div title={tip} style={{
+    <div style={{
       background: C.surf, border: `1px solid ${C.border}`, borderRadius: 6,
-      padding: '10px 14px', minWidth: 120, cursor: tip ? 'help' : undefined,
+      padding: '10px 14px', minWidth: 120,
     }}>
-      <div style={{ color: C.muted, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>{label}</div>
+      <div style={{ display: 'flex', alignItems: 'center', color: C.muted, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>
+        {label}{tip && <HelpTip text={tip} width={240} />}
+      </div>
       <div style={{ color: C.gold, fontSize: 18, fontWeight: 700, marginTop: 2 }}>{value}</div>
       {sub && <div style={{ color: C.muted, fontSize: 10, marginTop: 2 }}>{sub}</div>}
     </div>
