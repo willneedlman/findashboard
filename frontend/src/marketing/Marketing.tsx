@@ -125,15 +125,20 @@ const ValuationViz = () => (
     <rect x="150" y="12" width="52" height="38" rx="2" fill="#c9a84c" />
   </svg>
 )
-const PortfolioViz = () => (
-  <svg className="cardviz" viewBox="0 0 260 58" role="img" aria-label="Simulated forward paths">
-    <polyline points="4,40 92,33 180,19 256,5" fill="none" stroke="#3fb950" strokeWidth="1.6" />
-    <polyline points="4,40 92,38 180,30 256,22" fill="none" stroke="rgba(108,140,255,0.75)" strokeWidth="1.2" />
-    <polyline points="4,40 92,42 180,45 256,44" fill="none" stroke="rgba(126,147,173,0.6)" strokeWidth="1.2" />
-    <polyline points="4,40 92,46 180,52 256,55" fill="none" stroke="rgba(248,81,73,0.6)" strokeWidth="1.2" />
-    <circle cx="4" cy="40" r="2.6" fill="#c9a84c" />
-  </svg>
-)
+const PortfolioViz = ({ grow }: { grow?: boolean }) => {
+  const svg = (
+    <svg viewBox="0 0 260 58" preserveAspectRatio={grow ? 'none' : 'xMidYMid meet'} className={grow ? undefined : 'cardviz'}
+      style={grow ? { position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' } : undefined}
+      role="img" aria-label="Simulated forward paths">
+      <polyline points="4,40 92,33 180,19 256,5" fill="none" stroke="#3fb950" strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
+      <polyline points="4,40 92,38 180,30 256,22" fill="none" stroke="rgba(108,140,255,0.75)" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
+      <polyline points="4,40 92,42 180,45 256,44" fill="none" stroke="rgba(126,147,173,0.6)" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
+      <polyline points="4,40 92,46 180,52 256,55" fill="none" stroke="rgba(248,81,73,0.6)" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
+      <circle cx="4" cy="40" r="2.6" fill="#c9a84c" />
+    </svg>
+  )
+  return grow ? <div style={{ position: 'relative', flex: 1, minHeight: 90, marginTop: 16 }}>{svg}</div> : svg
+}
 const MacroViz = () => (
   <svg className="cardviz" viewBox="0 0 260 58" role="img" aria-label="Yield curve">
     <line x1="0" y1="52" x2="260" y2="52" stroke="rgba(255,255,255,0.08)" />
@@ -211,13 +216,18 @@ const CorrHeatmap = () => {
   return <div className="heat" style={{ gridTemplateColumns: 'repeat(5,1fr)' }}>{m.flatMap((row, r) => row.map((v, c) => <div key={`${r}-${c}`} className="hc" style={{ background: v > 0.999 ? 'rgba(201,168,76,0.5)' : cc(v) }}>{v.toFixed(2)}</div>))}</div>
 }
 
-const EquityCurve = () => (
-  <svg viewBox="0 0 240 80" style={{ width: '100%', height: 80, display: 'block' }} role="img" aria-label="Equity curve">
-    <defs><linearGradient id="eqg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="rgba(63,185,80,0.28)" /><stop offset="1" stopColor="rgba(63,185,80,0)" /></linearGradient></defs>
-    <path d="M4,68 L40,60 L76,64 L112,46 L148,50 L184,30 L236,12 L236,80 L4,80 Z" fill="url(#eqg)" />
-    <polyline points="4,68 40,60 76,64 112,46 148,50 184,30 236,12" fill="none" stroke="#3fb950" strokeWidth="1.8" />
-  </svg>
-)
+const EquityCurve = ({ grow }: { grow?: boolean }) => {
+  const svg = (
+    <svg viewBox="0 0 240 80" preserveAspectRatio={grow ? 'none' : 'xMidYMid meet'}
+      style={grow ? { position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' } : { width: '100%', height: 80, display: 'block' }}
+      role="img" aria-label="Equity curve">
+      <defs><linearGradient id="eqg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="rgba(63,185,80,0.28)" /><stop offset="1" stopColor="rgba(63,185,80,0)" /></linearGradient></defs>
+      <path d="M4,68 L40,60 L76,64 L112,46 L148,50 L184,30 L236,12 L236,80 L4,80 Z" fill="url(#eqg)" />
+      <polyline points="4,68 40,60 76,64 112,46 148,50 184,30 236,12" fill="none" stroke="#3fb950" strokeWidth="1.8" vectorEffect="non-scaling-stroke" />
+    </svg>
+  )
+  return grow ? <div style={{ position: 'relative', flex: 1, minHeight: 90, marginTop: 14 }}>{svg}</div> : svg
+}
 
 const YieldCurveBig = () => (
   <svg viewBox="0 0 520 150" preserveAspectRatio="none" style={{ width: '100%', height: 150, display: 'block' }} role="img" aria-label="UST yield curve">
@@ -509,13 +519,13 @@ export function PortfolioPage() {
             <div className="k">02 · Backtester</div>
             <h3>Test the rule, not the hunch.</h3>
             <p>Run allocation and strategy rules over history with CAGR, Sharpe and max-drawdown.</p>
-            <EquityCurve />
+            <EquityCurve grow />
             <div className="tags"><span className="tag">CAGR</span><span className="tag">Sharpe</span><span className="tag">Max drawdown</span></div>
           </div>
           <div className="card c-2 glow-gold">
             <div className="k">03 · Monte Carlo</div><h3>Thousands of futures.</h3>
             <p>Forward paths into percentile cones and value-at-risk.</p>
-            <PortfolioViz />
+            <PortfolioViz grow />
           </div>
           <div className="card c-2">
             <div className="k">04 · Correlation Matrix</div><h3>What moves together.</h3>
@@ -525,7 +535,7 @@ export function PortfolioPage() {
           <div className="card c-2">
             <div className="k">05 · NAV Tracker</div><h3>NAV over time.</h3>
             <p>NAV, contributions and time-weighted returns — deposits stripped out.</p>
-            <EquityCurve />
+            <EquityCurve grow />
           </div>
         </div>
       </div></section>
@@ -654,7 +664,7 @@ export function TradingPage() {
         </div>
         <div className="vpanel">
           <div className="vh"><span className="vt">Journal · equity curve</span><span className="tag-prev">preview</span></div>
-          <div className="vb"><EquityCurve /></div>
+          <div className="vb"><EquityCurve grow /></div>
         </div>
       </div></section>
 
