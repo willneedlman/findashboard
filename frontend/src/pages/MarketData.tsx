@@ -66,7 +66,8 @@ export default function MarketData() {
 
   return (
     <PageWrapper title="Market Data">
-      <SidebarLayout sidebarWidth={180} sidebarTitle="Market Controls" sidebar={<>
+      <SidebarLayout sidebarWidth={180} sidebarTitle="Market Controls" sidebar={
+        <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div>
             <span className="ft-sidebar-label">Ticker</span>
             <input
@@ -111,8 +112,8 @@ export default function MarketData() {
             {isPending ? 'Loading…' : '↓ Load Data'}
           </button>
 
-          {error && <div style={{ color: 'var(--theme-negative)', fontSize: 10, lineHeight: '14px' }}>Error — check ticker and date range.</div>}
-        </>}>
+          {error && <div style={{ color: 'var(--theme-negative)', fontSize: 10, lineHeight: '14px' }}>Error: check ticker and date range.</div>}
+        </div>}>
 
         {/* Right: metrics + charts */}
           {data && (
