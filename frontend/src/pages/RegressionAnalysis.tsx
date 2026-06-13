@@ -342,13 +342,13 @@ function RegressionMode() {
             <StatCard label="Observations" value={r.observations}
               tip="Number of data points (days) used in the regression. More is a more stable estimate." />
             <StatCard label="F-Statistic" value={r.f_statistic?.toFixed(2) ?? 'n/a'}
-              tip="Tests whether the model as a whole beats just guessing the average. Higher means more confident the relationship is real." />
+              tip="Tests whether the model as a whole beats just guessing the average. Above ~4 is significant at the 5% level (one predictor); dozens or more is very strong. Pair it with R², since large samples inflate F." />
             <StatCard label="MSE" value={r.mse.toExponential(3)}
               tip="Mean squared residual. Its square root is the typical prediction error, in the dependent variable's units." />
             <StatCard label="Intercept" value={r.intercept.toFixed(6)} sub={`p = ${r.intercept_p.toExponential(2)}`}
               tip={`Expected ${r.y_ticker} when every input is zero (alpha). A p-value above 0.05 means it is not distinguishable from zero.`} />
             {r.coefficients.map((c, i) => (
-              <StatCard key={i} label={`β(${r.feature_names[i]})`}
+              <StatCard key={i} label={`Beta (${r.feature_names[i]})`}
                 value={c.toFixed(6)} sub={`p = ${r.p_values[i].toExponential(2)}`}
                 tip={`Slope: ${r.y_ticker} moves this much per 1-unit move in ${r.feature_names[i]}, holding others fixed. A p-value below 0.05 means it is statistically significant.`} />
             ))}
