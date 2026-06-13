@@ -170,6 +170,14 @@ export default function DealerGEX() {
         </>}>
           {data && (
             <>
+              {data.source && (
+                <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 12, fontFamily: 'var(--theme-mono)', fontSize: 10.5, letterSpacing: '0.04em', color: data.delayed ? '#e0a93f' : 'var(--theme-positive, #3fb950)' }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', flex: 'none', background: data.delayed ? '#e0a93f' : 'var(--theme-positive, #3fb950)', boxShadow: `0 0 0 3px ${data.delayed ? 'rgba(224,169,63,0.18)' : 'rgba(63,185,80,0.18)'}` }} />
+                  <span style={{ fontWeight: 700 }}>{data.delayed ? 'DELAYED DATA' : 'LIVE'}</span>
+                  <span>· {data.source}</span>
+                  {data.quote_time && <span style={{ color: 'var(--theme-secondary, #5e768f)' }}>· quote as of {new Date(data.quote_time).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>}
+                </div>
+              )}
               <div className="metric-grid">
                 <MetricCard label="Spot Price" value={`$${spot?.toFixed(2)}`} />
                 <MetricCard label="Net GEX" value={`${totalNet > 0 ? '+' : ''}$${totalNet.toFixed(1)}M`}

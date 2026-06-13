@@ -446,9 +446,11 @@ def dealer_gex(ticker: str, expiry: str | None = None):
 
     # ── Spot price ────────────────────────────────────────────────────────────
     spot = None
+    quote_ms = None
     try:
         quote = _tradier.get_quote(sym)
         spot = float(quote.get("last") or quote.get("close") or 0) or None
+        quote_ms = quote.get("trade_date")  # epoch ms of the last quote — the true "as of"
     except Exception:
         pass
     if not spot:
@@ -473,6 +475,7 @@ def dealer_gex(ticker: str, expiry: str | None = None):
 
     r = 0.045
     rows = []
+    used_yf_fallback = False
 
     for exp in exps_to_process:
         exp_dt   = _dt.date.fromisoformat(exp)
@@ -487,6 +490,7 @@ def dealer_gex(ticker: str, expiry: str | None = None):
             logger.warning("Tradier GEX chain %s %s: %s", sym, exp, e)
 
         if not chain or (not chain.get("calls") and not chain.get("puts")):
+            used_yf_fallback = True
             try:
                 yf_chain = yf.Ticker(sym).option_chain(exp)
                 def _yf_gex_rows(df):
@@ -525,8 +529,29 @@ def dealer_gex(ticker: str, expiry: str | None = None):
                 gex_m = sign * oi * 100 * gamma * spot * spot * 0.01 / 1e6
                 rows.append({"strike": K, "side": side, "gex_m": gex_m})
 
+    # ── Data-freshness metadata — this tool must be transparent about staleness ──
+    _env = os.getenv("TRADIER_ENV", "sandbox")
+    if used_yf_fallback:
+        _source, _delayed = "yfinance (~15-min delayed)", True
+    elif _env == "production":
+        _source, _delayed = "Tradier", False
+    else:
+        _source, _delayed = "Tradier sandbox (delayed)", True
+    _quote_time = None
+    if quote_ms:
+        try:
+            _quote_time = _dt.datetime.fromtimestamp(int(quote_ms) / 1000, _dt.timezone.utc).isoformat()
+        except Exception:
+            pass
+    _meta = {
+        "as_of": _dt.datetime.now(_dt.timezone.utc).isoformat(),
+        "quote_time": _quote_time,
+        "source": _source,
+        "delayed": _delayed,
+    }
+
     if not rows:
-        return {"spot": spot, "data": [], "expirations": all_expirations, "expiry": expiry}
+        return {"spot": spot, "data": [], "expirations": all_expirations, "expiry": expiry, **_meta}
 
     df = pd.DataFrame(rows)
     pivot = (df.groupby(["strike", "side"])["gex_m"].sum()
@@ -541,6 +566,7 @@ def dealer_gex(ticker: str, expiry: str | None = None):
         "data": pivot.round(4).to_dict(orient="records"),
         "expirations": all_expirations,
         "expiry": expiry,
+        **_meta,
     }
 
 
