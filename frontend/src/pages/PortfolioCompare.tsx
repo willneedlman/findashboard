@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import axios from 'axios'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceDot } from 'recharts'
 import { Plus, X } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
@@ -73,6 +73,16 @@ export default function PortfolioCompare() {
     return Object.values(map).sort((a: any, b: any) => (a.date < b.date ? -1 : 1))
   })() : []
 
+  // Mark where a leveraged portfolio was wiped out (equity floored to 0)
+  const liquidations = r
+    ? r.series.map((s, i) => {
+        const mt = r.metrics.find(x => x.name === s.name)
+        if (!mt?.liquidated) return null
+        const pt = s.points.find(p => p.value <= 0)
+        return pt ? { name: s.name, date: pt.date, color: LINE_COLORS[i] } : null
+      }).filter(Boolean) as { name: string; date: string; color: string }[]
+    : []
+
   return (
     <PageWrapper title="Compare Portfolios">
       <SidebarLayout sidebarWidth={264} sidebarTitle="Portfolios" sidebar={
@@ -108,7 +118,7 @@ export default function PortfolioCompare() {
               <div style={{ display: 'flex', gap: 6 }}>
                 <div style={{ flex: 1 }}>
                   <label style={labelStyle}>Leverage (x)</label>
-                  <input type="number" step={0.25} min={1} max={5} style={inputStyle} value={p.leverage} onChange={e => update(i, 'leverage', e.target.value)} />
+                  <input type="number" step={0.25} min={1} style={inputStyle} value={p.leverage} onChange={e => update(i, 'leverage', e.target.value)} />
                 </div>
                 {(Number(p.leverage) || 1) > 1 && (
                   <div style={{ flex: 1 }}>
@@ -158,8 +168,18 @@ export default function PortfolioCompare() {
                   {r.series.map((s, i) => (
                     <Line key={s.name} type="monotone" dataKey={s.name} name={s.name} stroke={LINE_COLORS[i]} strokeWidth={2} dot={false} />
                   ))}
+                  {liquidations.map(liq => (
+                    <ReferenceDot key={liq.name} x={liq.date} y={0} r={5} isFront
+                      fill={C.red} stroke={C.bg} strokeWidth={1.5}
+                      label={{ value: 'Liquidated', position: 'top', fill: C.red, fontSize: 9, fontFamily: 'var(--theme-mono)' }} />
+                  ))}
                 </LineChart>
               </ResponsiveContainer>
+              {liquidations.length > 0 && (
+                <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: C.red, marginTop: 8 }}>
+                  {liquidations.map(l => l.name).join(', ')} wiped out at this leverage — equity floored to $0 from the liquidation date.
+                </div>
+              )}
             </div>
             <div style={{ ...panel, overflowX: 'auto' }}>
               <div style={panelTitle}>Metrics</div>

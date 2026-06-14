@@ -242,7 +242,9 @@ class ComparePortfolio(BaseModel):
     name: str = "Portfolio"
     tickers: list[str] = Field(min_length=1, max_length=20)
     weights: list[float] = Field(min_length=1, max_length=20)
-    leverage: float = Field(default=1.0, ge=1.0, le=5.0)
+    # No upper cap on leverage — a wipeout is handled gracefully by flooring the
+    # equity at 0 from the liquidation point onward (see _lever_equity).
+    leverage: float = Field(default=1.0, ge=1.0)
     borrow_rate: float = Field(default=0.0, ge=0.0, le=30.0)
 
 
