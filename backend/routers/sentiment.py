@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env"))
+from cache import get_history
 
 _log = logging.getLogger(__name__)
 router = APIRouter()
@@ -331,7 +332,6 @@ def _fetch_market_context() -> dict:
 
     ctx: dict = {}
     try:
-        import yfinance as yf
         from datetime import date
 
         def _pct(new: float, old: float) -> float:
@@ -351,7 +351,7 @@ def _fetch_market_context() -> dict:
             ("BTC-USD", "btc"),
         ]:
             try:
-                hist = yf.Ticker(sym).history(period="6mo")
+                hist = get_history(sym, period="6mo")
                 if hist.empty:
                     continue
                 c = hist["Close"].dropna()
@@ -427,7 +427,7 @@ def _fetch_market_context() -> dict:
         for mtg in upcoming:
             try:
                 zq = f"ZQ{_ZQ_MONTH[mtg.month]}{str(mtg.year)[-2:]}=F"
-                zh = yf.Ticker(zq).history(period="5d")
+                zh = get_history(zq, period="5d")
                 if zh.empty:
                     continue
                 zq_price   = float(zh["Close"].iloc[-1])
@@ -464,7 +464,7 @@ def _fetch_market_context() -> dict:
         dec_year = today.year if today.month <= 11 else today.year + 1
         try:
             zq_dec = f"ZQ{_ZQ_MONTH[12]}{str(dec_year)[-2:]}=F"
-            zh_dec = yf.Ticker(zq_dec).history(period="5d")
+            zh_dec = get_history(zq_dec, period="5d")
             if not zh_dec.empty and ffr is not None:
                 dec_impl = 100.0 - float(zh_dec["Close"].iloc[-1])
                 cum_bps  = round((ffr - dec_impl) * 100, 0)

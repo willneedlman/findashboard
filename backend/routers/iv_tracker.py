@@ -20,9 +20,13 @@ from pathlib import Path
 from threading import Lock
 from typing import Optional
 
+import sys
 import yfinance as yf
 from fastapi import APIRouter, HTTPException, Query
 from scipy.optimize import brentq
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from cache import get_history
 from scipy.stats import norm
 
 logger = logging.getLogger(__name__)
@@ -41,7 +45,7 @@ _MAX_SNAPS   = 17_520   # ~2 years of hourly snapshots per option
 def _risk_free_rate() -> float:
     """13-week T-bill yield; falls back to a hard-coded approximation."""
     try:
-        h = yf.Ticker("^IRX").history(period="5d")
+        h = get_history("^IRX", period="5d")
         if not h.empty:
             return float(h["Close"].iloc[-1]) / 100.0
     except Exception:
@@ -288,7 +292,7 @@ def get_strikes(
         if df.empty:
             raise HTTPException(404, "No option chain data")
         strikes = sorted(float(s) for s in df["strike"].tolist())
-        hist    = t.history(period="2d")
+        hist    = get_history(sym, period="2d")
         spot    = float(hist["Close"].iloc[-1]) if not hist.empty else 0.0
         atm     = min(strikes, key=lambda s: abs(s - spot))
         return {
@@ -346,7 +350,7 @@ def get_iv_history(
         # ── 2. Historical stock data ──────────────────────────────────────────
         # Fetch extra days for the 30d HV warm-up window
         fetch_period = f"{days + 90}d"
-        hist = yticker.history(period=fetch_period)
+        hist = get_history(sym, period=fetch_period)
         if hist.empty:
             raise HTTPException(404, f"No price history for {sym}")
 
@@ -497,7 +501,7 @@ def get_iv_surface(ticker: str = Query(...)):
         if not future:
             raise HTTPException(404, f"No options for {sym}")
 
-        hist = t.history(period="2d")
+        hist = get_history(sym, period="2d")
         spot = float(hist["Close"].iloc[-1]) if not hist.empty else 0.0
         r    = _risk_free_rate()
         rows = []

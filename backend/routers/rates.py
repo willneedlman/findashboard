@@ -6,7 +6,7 @@ import sys, os
 from datetime import date, timedelta
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import pandas as pd
-from cache import get_history, get_download
+from cache import get_history, get_download, get_info
 
 try:
     from disk_cache import disk_get, disk_set
@@ -320,10 +320,9 @@ def _current_ffr() -> float | None:
     if val is not None:
         return val
     try:
-        import yfinance as yf
         today = date.today()
         sym = f"ZQ{_ZQ_MONTH[today.month]}{str(today.year)[-2:]}=F"
-        h = yf.Ticker(sym).history(period="5d")
+        h = get_history(sym, period="5d")
         if not h.empty:
             return round(100.0 - float(h["Close"].iloc[-1]), 4)
     except Exception:
@@ -335,9 +334,8 @@ def _zq_implied_rate(meeting: date) -> float | None:
     """Market-implied average funds rate for a meeting's month, from the ZQ
     future (price = 100 - rate). None if the contract has no data."""
     try:
-        import yfinance as yf
         sym = f"ZQ{_ZQ_MONTH[meeting.month]}{str(meeting.year)[-2:]}=F"
-        h = yf.Ticker(sym).history(period="5d")
+        h = get_history(sym, period="5d")
         if h.empty:
             return None
         return round(100.0 - float(h["Close"].iloc[-1]), 4)
@@ -804,8 +802,7 @@ def _yf_spread_history(etf_ticker: str, lookback_days: int) -> list[dict]:
         # Better proxy: use yfinance info yield - treasury yield where available
         etf_info = {}
         try:
-            import yfinance as yf
-            etf_info = yf.Ticker(etf_ticker).info or {}
+            etf_info = get_info(etf_ticker) or {}
         except Exception:
             pass
         base_yield = etf_info.get("yield") or etf_info.get("trailingAnnualDividendYield")
