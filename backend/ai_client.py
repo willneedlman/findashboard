@@ -159,7 +159,9 @@ def groq_complete(prompt: str, max_tokens: int = 512, *,
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
     resp = groq_chat(messages, model=model, max_tokens=max_tokens)
-    return resp.choices[0].message.content.strip()
+    # content can be None when a reasoning fallback model (gpt-oss) spends its
+    # whole budget thinking; coerce so callers never hit .strip() on None.
+    return (resp.choices[0].message.content or "").strip()
 
 
 def parse_json(raw: str):

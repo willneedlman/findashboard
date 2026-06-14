@@ -257,7 +257,7 @@ Respond ONLY with valid JSON matching this exact schema (no markdown, no extra t
         model=MODEL_SMART,
         max_tokens=2048,
     )
-    raw = msg.choices[0].message.content.strip()
+    raw = (msg.choices[0].message.content or "").strip()
     import datetime as _dt2
     _cur_year = _dt2.date.today().year
     # Strip any accidental markdown fences

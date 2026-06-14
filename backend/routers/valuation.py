@@ -229,18 +229,20 @@ def multiples(ticker: str):
     ebitda_ps = ebitda / shares if shares else None
     ev = (price * shares + net_debt) if (price and shares) else None
 
+    # Only earnings-based lines signal "not profitable" — a negative P/E or
+    # EV/EBITDA has no valuation reading because earnings are a loss. P/B and P/S
+    # can also go non-positive (e.g. negative book equity from heavy buybacks at
+    # very profitable names like MCD/HD), so those are dropped silently and must
+    # NOT flag the company as pre-profit.
+    _EARNINGS_KEYS = {"pe", "pe_fwd", "ev_ebitda"}
     metrics: list[dict] = []
     dropped: list[str] = []
     def add(key, label, per_share, cur_mult, ev_based=False):
-        # Earnings-based lines are meaningless when the underlying figure is a loss:
-        # a negative P/E or EV/EBITDA has no valuation reading. Drop them and fall
-        # back to sales- and book-based multiples, which stay valid for pre-profit
-        # companies — the standard way to value a loss-maker.
         if per_share and per_share > 0:
             metrics.append({"key": key, "label": label, "per_share": round(per_share, 2),
                             "current_mult": round(cur_mult, 1) if cur_mult and cur_mult > 0 else None,
                             "ev_based": ev_based})
-        elif per_share is not None and per_share <= 0:
+        elif per_share is not None and per_share <= 0 and key in _EARNINGS_KEYS:
             dropped.append(label)
 
     if eps is not None:     add("pe",     "P/E (trailing)", float(eps),     price / eps if (price and eps) else None)
