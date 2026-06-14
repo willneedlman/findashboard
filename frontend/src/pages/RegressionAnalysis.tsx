@@ -429,26 +429,6 @@ function RegressionMode() {
 
 // ── Correlation mode ────────────────────────────────────────────────────────────
 
-// |r| → strength band + sign, the basis for every plain-English line.
-function strength(v: number): { word: string; color: string } {
-  const a = Math.abs(v)
-  const word = a > 0.7 ? 'strong' : a > 0.4 ? 'moderate' : a > 0.2 ? 'weak' : 'little'
-  const color = a > 0.7 ? (v > 0 ? C.green : C.red) : a > 0.4 ? C.gold : C.muted
-  return { word, color }
-}
-
-function pairSentence(p: CorrPair): string {
-  const { word } = strength(p.value)
-  const dir = p.value >= 0 ? 'positive' : 'negative'
-  if (Math.abs(p.value) <= 0.2)
-    return `${p.a} and ${p.b} (${p.value.toFixed(2)}): little linear relationship. They move largely independently.`
-  if (p.value >= 0.7)
-    return `${p.a} and ${p.b} (+${p.value.toFixed(2)}): ${word} positive link. They move almost in lockstep, so holding both adds little diversification.`
-  if (p.value <= -0.4)
-    return `${p.a} and ${p.b} (${p.value.toFixed(2)}): ${word} negative link. They tend to move in opposite directions, a natural hedge.`
-  return `${p.a} and ${p.b} (${p.value >= 0 ? '+' : ''}${p.value.toFixed(2)}): ${word} ${dir} relationship.`
-}
-
 // Divergent cell color: red for negative, green for positive, transparent near zero.
 function corrCell(v: number): string {
   const pct = Math.round(Math.abs(v) * 70)
@@ -571,7 +551,6 @@ function CorrelationMode() {
   const r = mutation.data
   const avg = r?.summary.avg_abs_correlation ?? 0
   const divLabel = avg > 0.6 ? 'Highly correlated basket' : avg > 0.35 ? 'Moderately correlated' : 'Well diversified'
-  const divColor = avg > 0.6 ? C.red : avg > 0.35 ? C.gold : C.green
 
   return (
     <>
@@ -664,26 +643,6 @@ function CorrelationMode() {
                 sub={`${r.summary.most_negative_pair.a} ↔ ${r.summary.most_negative_pair.b}`} />
             )}
             <StatCard label="Observations" value={r.observations} sub={`${r.period} · ${r.use_returns ? 'returns' : 'prices'}`} />
-          </div>
-
-          {/* Diversification interpretation */}
-          <div style={{ background: C.surf, border: `1px solid ${C.border}`, borderLeft: `3px solid ${divColor}`,
-            borderRadius: 6, padding: '12px 16px', marginBottom: 20 }}>
-            <div style={{ color: divColor, fontSize: 12, fontWeight: 700, marginBottom: 6 }}>
-              {divLabel} (avg |r| = {avg.toFixed(2)})
-            </div>
-            <div style={{ color: C.text, fontSize: 12, lineHeight: 1.6 }}>
-              {avg > 0.6
-                ? 'These assets mostly rise and fall together, so combining them gives limited diversification. In a drawdown they will tend to fall as one.'
-                : avg > 0.35
-                ? 'A mix of shared and independent movement. Some diversification benefit, but watch the strongly linked pairs below.'
-                : 'Low average correlation: these assets move fairly independently, which is what you want for diversification.'}
-            </div>
-            <ul style={{ margin: '10px 0 0', paddingLeft: 18, color: C.muted, fontSize: 11, lineHeight: 1.7 }}>
-              {r.summary.strongest_pair && <li>{pairSentence(r.summary.strongest_pair)}</li>}
-              {r.summary.most_negative_pair && r.summary.most_negative_pair.value < 0 &&
-                <li>{pairSentence(r.summary.most_negative_pair)}</li>}
-            </ul>
           </div>
 
           {/* Heatmap */}
