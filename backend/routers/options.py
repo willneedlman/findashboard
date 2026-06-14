@@ -10,6 +10,7 @@ from pydantic import BaseModel
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from math_engine import bs_price, bs_greeks
+from cache import get_history
 import fmp
 import tradier as _tradier
 from market_hours import is_market_open
@@ -51,7 +52,7 @@ def options_snapshot(ticker: str):
     tkr = yf.Ticker(sym)
 
     # ── Price history ─────────────────────────────────────────────────────────
-    hist = tkr.history(period="1y")
+    hist = get_history(sym, period="1y")
     if hist.empty:
         raise HTTPException(404, "No price history")
 
@@ -362,7 +363,7 @@ def options_chain(ticker: str, expiry: str | None = None):
             expirations = list(tkr.options or [])
             if not spot:
                 try:
-                    hist = tkr.history(period="2d")
+                    hist = get_history(sym, period="2d")
                     spot = float(hist["Close"].dropna().iloc[-1]) if not hist.empty else None
                 except Exception:
                     pass
@@ -468,7 +469,7 @@ def dealer_gex(ticker: str, expiry: str | None = None):
             pass
     if not spot:
         try:
-            hist = yf.Ticker(sym).history(period="5d")
+            hist = get_history(sym, period="5d")
             spot = float(hist["Close"].dropna().iloc[-1]) if not hist.empty else None
         except Exception:
             pass
@@ -654,8 +655,7 @@ def aggregate_greeks(req: GreeksAggregateRequest):
 
     def get_spot(sym: str) -> float:
         try:
-            tkr = yf.Ticker(sym)
-            hist = tkr.history(period="2d")
+            hist = get_history(sym, period="2d")
             if not hist.empty:
                 return float(hist["Close"].iloc[-1])
         except Exception:
