@@ -935,3 +935,99 @@ def yield_curve_history():
         result["spread_history"] = result["spread_history"][-252:]
 
     return result
+
+
+# ── Economy monitor: unemployment + inflation (FRED) ──────────────────────────
+_ECON_DISK_TTL = 6 * 3600   # FRED macro series update monthly; 6h is plenty
+
+
+def _fred_obs(series_id: str, limit: int) -> list[dict]:
+    """Latest `limit` observations for a FRED series, ascending, missing ('.')
+    values dropped. Returns [] on any failure so the endpoint degrades softly."""
+    if not _FRED_KEY:
+        return []
+    try:
+        resp = requests.get(
+            "https://api.stlouisfed.org/fred/series/observations",
+            params={"series_id": series_id, "sort_order": "desc", "limit": limit,
+                    "api_key": _FRED_KEY, "file_type": "json"},
+            timeout=8,
+        )
+        obs = resp.json().get("observations", [])
+    except Exception:
+        return []
+    out = []
+    for o in obs:
+        v = o.get("value")
+        if v in (None, ".", ""):
+            continue
+        try:
+            out.append({"date": o["date"], "value": float(v)})
+        except (ValueError, KeyError):
+            continue
+    out.reverse()  # ascending by date
+    return out
+
+
+def _yoy(levels: list[dict]) -> list[dict]:
+    """Year-over-year % change of a monthly index series (value[t] vs value[t-12])."""
+    out = []
+    for i in range(12, len(levels)):
+        prev = levels[i - 12]["value"]
+        if prev:
+            out.append({"date": levels[i]["date"], "value": round((levels[i]["value"] / prev - 1) * 100, 2)})
+    return out
+
+
+@router.get("/economy")
+def economy():
+    """Unemployment + inflation dashboard from FRED: jobless rate, nonfarm payroll
+    monthly change, and CPI / Core CPI / PCE year-over-year, each with a 24-month
+    trend. Cached on disk (monthly data)."""
+    ckey = f"economy:{_CACHE_VERSION}"
+    cached_val = disk_get(ckey)
+    if cached_val is not None:
+        return cached_val
+
+    TREND = 24
+    last = lambda s: s[-1] if s else None
+
+    unrate = _fred_obs("UNRATE", TREND + 2)
+    payems = _fred_obs("PAYEMS", TREND + 2)
+    cpi  = _yoy(_fred_obs("CPIAUCSL", TREND + 14))
+    core = _yoy(_fred_obs("CPILFESL", TREND + 14))
+    pce  = _yoy(_fred_obs("PCEPI",    TREND + 14))
+
+    # Nonfarm payroll month-over-month change (thousands)
+    pay_change = [{"date": payems[i]["date"], "value": round(payems[i]["value"] - payems[i - 1]["value"], 1)}
+                  for i in range(1, len(payems))]
+
+    # Merge inflation gauges onto the CPI date spine for a single multi-line chart
+    core_map = {s["date"]: s["value"] for s in core}
+    pce_map  = {s["date"]: s["value"] for s in pce}
+    infl_trend = [{"d": s["date"][:7], "cpi": s["value"],
+                   "core": core_map.get(s["date"]), "pce": pce_map.get(s["date"])}
+                  for s in cpi[-TREND:]]
+
+    result = {
+        "unemployment": {
+            "value": (last(unrate) or {}).get("value"),
+            "prev":  unrate[-2]["value"] if len(unrate) > 1 else None,
+            "date":  (last(unrate) or {}).get("date"),
+            "trend": [{"d": s["date"][:7], "v": s["value"]} for s in unrate[-TREND:]],
+        },
+        "payrolls": {
+            "value": (last(pay_change) or {}).get("value"),
+            "date":  (last(pay_change) or {}).get("date"),
+            "trend": [{"d": s["date"][:7], "v": s["value"]} for s in pay_change[-TREND:]],
+        },
+        "inflation": {
+            "cpi":  (last(cpi)  or {}).get("value"),
+            "core": (last(core) or {}).get("value"),
+            "pce":  (last(pce)  or {}).get("value"),
+            "date": (last(cpi)  or {}).get("date"),
+            "trend": infl_trend,
+        },
+    }
+    disk_set(ckey, result, ttl=_ECON_DISK_TTL)
+    return result

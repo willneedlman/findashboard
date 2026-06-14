@@ -3,9 +3,11 @@ import PageWrapper from '../components/PageWrapper'
 import { FedRatesContent } from './FedRates'
 import { BondAnalyticsContent } from './BondAnalytics'
 import { CreditSpreadsContent } from './CreditSpreads'
+import { EconomyMonitorContent } from './EconomyMonitor'
 
 const TABS = [
   { key: 'rates',   label: 'Rate Engine' },
+  { key: 'economy', label: 'Jobs & Inflation' },
   { key: 'bonds',   label: 'Bond Analytics' },
   { key: 'credit',  label: 'Credit Spreads' },
 ] as const
@@ -36,9 +38,10 @@ export default function MacroHub() {
             </button>
           ))}
         </div>
-        {tab === 'rates'  && <FedRatesContent />}
-        {tab === 'bonds'  && <BondAnalyticsContent />}
-        {tab === 'credit' && <CreditSpreadsContent />}
+        {tab === 'rates'   && <FedRatesContent />}
+        {tab === 'economy' && <EconomyMonitorContent />}
+        {tab === 'bonds'   && <BondAnalyticsContent />}
+        {tab === 'credit'  && <CreditSpreadsContent />}
       </div>
     </PageWrapper>
   )
