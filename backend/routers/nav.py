@@ -2,16 +2,20 @@ import logging
 logger = logging.getLogger(__name__)
 
 import re
+import os
+import sys
 import json
 import threading
 from pathlib import Path
 
 import pandas as pd
-import yfinance as yf
 import requests
 from cachetools import TTLCache
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from cache import get_history, get_info
 
 router = APIRouter()
 
@@ -210,7 +214,7 @@ def _get_sprott_nav(slug: str) -> float | None:
 def _get_etf_nav(ticker: str) -> float | None:
     """Live NAV per share for ETFs that expose navPrice via yfinance."""
     try:
-        nav = yf.Ticker(ticker.strip().upper()).info.get("navPrice")
+        nav = get_info(ticker).get("navPrice")
         return float(nav) if nav else None
     except Exception as e:
         logger.warning("_get_etf_nav(%s): %s", ticker, e)
@@ -251,24 +255,15 @@ def nav_proxy(req: NavRequest):
     target = req.target.strip().upper()
     entry = REGISTRY.get(target)
     try:
-        target_tkr = yf.Ticker(target)
-        asset_tkr  = yf.Ticker(req.asset.strip().upper())
-
-        target_hist = target_tkr.history(start=req.start, end=end)
-        asset_hist  = asset_tkr.history(start=req.start, end=end)
+        target_hist = get_history(target, start=req.start, end=end)
+        asset_hist  = get_history(req.asset, start=req.start, end=end)
 
         if target_hist.empty:
             raise HTTPException(404, f"No data for {req.target}")
         if asset_hist.empty:
             raise HTTPException(404, f"No data for {req.asset}")
 
-        # Strip timezone
-        if target_hist.index.tz is not None:
-            target_hist.index = target_hist.index.tz_localize(None)
-        if asset_hist.index.tz is not None:
-            asset_hist.index = asset_hist.index.tz_localize(None)
-
-        info = target_tkr.info
+        info = get_info(target)
         shares = (info.get("sharesOutstanding") or info.get("impliedSharesOutstanding") or 100_000_000)
         latest_spot = float(asset_hist["Close"].dropna().iloc[-1])
         live_debt_m = (info.get("totalDebt") or 0) / 1e6

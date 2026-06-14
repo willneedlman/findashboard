@@ -7,12 +7,12 @@ Each strategy returns a daily signal (1=invested, 0=cash) and a drift adjustment
 """
 import numpy as np
 import pandas as pd
-import yfinance as yf
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, field_validator, model_validator
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from validation import validate_ticker, validate_date
+from cache import get_history, get_info
 from strategies.indicators import get_indicator as _get_ind
 
 router = APIRouter()
@@ -31,12 +31,9 @@ STRATEGIES = [
 
 
 def _fetch_close(ticker: str, start: str, end: str) -> pd.Series:
-    tkr = yf.Ticker(ticker.strip().upper())
-    hist = tkr.history(start=start, end=end)
+    hist = get_history(ticker, start=start, end=end)
     if hist.empty:
         return pd.Series(dtype=float)
-    if hist.index.tz is not None:
-        hist.index = hist.index.tz_localize(None)
     return hist["Close"].dropna()
 
 
@@ -149,7 +146,7 @@ def compute_signal(close: pd.Series, strategy: str, params: dict) -> tuple[pd.Se
         bear    = float(p.get("bear_drift_adj", -6.0))
         tkr_sym = close.name or "UNKNOWN"
         try:
-            info = yf.Ticker(str(tkr_sym)).info
+            info = get_info(str(tkr_sym))
             pe   = info.get("trailingPE") or info.get("forwardPE")
         except Exception:
             pe = None
@@ -171,7 +168,7 @@ def compute_signal(close: pd.Series, strategy: str, params: dict) -> tuple[pd.Se
         cap    = float(p.get("adj_cap", 10.0))
         tkr_sym = close.name or "UNKNOWN"
         try:
-            info = yf.Ticker(str(tkr_sym)).info
+            info = get_info(str(tkr_sym))
             eg   = info.get("earningsQuarterlyGrowth")
         except Exception:
             eg = None

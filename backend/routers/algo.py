@@ -1,10 +1,10 @@
 import numpy as np
 import pandas as pd
-import yfinance as yf
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from cache import get_history, get_info
 
 router = APIRouter()
 
@@ -30,12 +30,9 @@ class SignalRequest(BaseModel):
 
 
 def _fetch_close(ticker: str, start: str, end: str | None) -> pd.Series:
-    tkr = yf.Ticker(ticker.strip().upper())
-    hist = tkr.history(start=start, end=end)
+    hist = get_history(ticker, start=start, end=end)
     if hist.empty:
         raise HTTPException(status_code=404, detail=f"No data for {ticker}")
-    if hist.index.tz is not None:
-        hist.index = hist.index.tz_localize(None)
     return hist["Close"].dropna()
 
 
@@ -113,7 +110,7 @@ def _compute_signal(close: pd.Series, strategy: str, params: dict) -> pd.Series:
         pe_threshold = float(p.get("pe_in_threshold", 35.0))
         tkr_sym = str(close.name) if close.name else "UNKNOWN"
         try:
-            info = yf.Ticker(tkr_sym).info
+            info = get_info(tkr_sym)
             pe = info.get("trailingPE") or info.get("forwardPE")
         except Exception:
             pe = None
@@ -124,7 +121,7 @@ def _compute_signal(close: pd.Series, strategy: str, params: dict) -> pd.Series:
         exit_t = float(p.get("exit_threshold_pct", -5.0)) / 100
         tkr_sym = str(close.name) if close.name else "UNKNOWN"
         try:
-            info = yf.Ticker(tkr_sym).info
+            info = get_info(tkr_sym)
             eg = info.get("earningsQuarterlyGrowth")
         except Exception:
             eg = None
@@ -376,7 +373,7 @@ def signal(req: SignalRequest):
         pe_threshold = float(p.get("pe_in_threshold", 35.0))
         tkr_sym = req.ticker.strip().upper()
         try:
-            info = yf.Ticker(tkr_sym).info
+            info = get_info(tkr_sym)
             pe = info.get("trailingPE") or info.get("forwardPE") or 0
         except Exception:
             pe = 0
@@ -387,7 +384,7 @@ def signal(req: SignalRequest):
     elif req.strategy == "earnings_momentum":
         tkr_sym = req.ticker.strip().upper()
         try:
-            info = yf.Ticker(tkr_sym).info
+            info = get_info(tkr_sym)
             eg = info.get("earningsQuarterlyGrowth") or 0
         except Exception:
             eg = 0
