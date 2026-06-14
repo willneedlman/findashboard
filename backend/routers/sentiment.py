@@ -1091,13 +1091,25 @@ def _build_sentiment(sample_size: int = DEFAULT_SAMPLE_SIZE, timeframe_hours: in
     qualifying = [s for s in source_results if s["qualifies"]]
     N          = len(qualifying)
 
-    if qualifying:
+    if N >= 2:
+        # Enough multi-article sources for a de-noised, cross-source composite.
         # Source-level weight = editorial_weight / N (equal floor) × source weight multiplier
         base_weight = 1.0 / N if N > 0 else 1.0
         eff_weights = [base_weight * s["weight"] for s in qualifying]
         total_eff   = sum(eff_weights) or 1.0
         composite   = sum(s["avg_score"]     * w for s, w in zip(qualifying, eff_weights)) / total_eff
         direction   = sum(s["avg_direction"] * s["avg_tier"] * w for s, w in zip(qualifying, eff_weights)) / total_eff
+    elif all_scored_flat:
+        # Thin window: fewer than 2 sources clear the per-source bar, so a
+        # source-level composite would silently drop single-article sources and
+        # mis-read the tape (e.g. one neutral 3-article source hiding two bullish
+        # single-article ones). Fall back to an article-level composite over every
+        # scored article, weighted by tier / confidence / recency / market impact.
+        def _aw(i: dict) -> float:
+            return (i.get("macro_tier", 1) ** 1.2) * i["confidence"] * i.get("recency_weight", 1.0) * i.get("market_impact_weight", 0.5)
+        tot_aw    = sum(_aw(i) for i in all_scored_flat) or 1.0
+        composite = sum(i["score"]     * _aw(i) for i in all_scored_flat) / tot_aw
+        direction = sum(i["direction"] * i.get("macro_tier", 1) * _aw(i) for i in all_scored_flat) / tot_aw
     else:
         composite = 50.0
         direction = 0.0
@@ -1118,7 +1130,8 @@ def _build_sentiment(sample_size: int = DEFAULT_SAMPLE_SIZE, timeframe_hours: in
         )
 
     session_conf  = min(1.0, in_window_total / max(1, MIN_SIGNAL_HEADLINES))
-    total_unique  = sum(s["count"] for s in qualifying)
+    # When the composite falls back to article level, count every scored article
+    total_unique  = sum(s["count"] for s in qualifying) if N >= 2 else len(all_scored_flat)
 
     if composite >= 70:   lbl = "Extreme Greed"
     elif composite >= 60: lbl = "Greed"
