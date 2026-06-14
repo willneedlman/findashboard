@@ -22,7 +22,7 @@ const PRESETS: { name: string; theme: Partial<Theme> }[] = [
   { name: 'Linen',          theme: { primaryColor: '#7c2d12', secondaryColor: '#292524', tertiaryColor: '#1d4ed8', bgColor: '#faf7f2', surfaceColor: '#e8dfd0', chartNeutralColor: '#7a7060', primaryFont: 'JetBrains Mono', secondaryFont: 'Lora', primaryFontUrl: '', secondaryFontUrl: '' } },
   { name: 'Morning Mist',   theme: { primaryColor: '#1e3a8a', secondaryColor: '#1e293b', tertiaryColor: '#0f766e', bgColor: '#f1f5f9', surfaceColor: '#dbe4ef', chartNeutralColor: '#5a7590', primaryFont: 'JetBrains Mono', secondaryFont: 'Inter',         primaryFontUrl: '', secondaryFontUrl: '' } },
   { name: 'Rosewood',       theme: { primaryColor: '#881337', secondaryColor: '#5a1c1c', tertiaryColor: '#c47878', bgColor: '#fdf4f4', surfaceColor: '#e8d5d5', chartNeutralColor: '#e19dbe', primaryFont: 'JetBrains Mono', secondaryFont: 'Fraunces',     primaryFontUrl: '', secondaryFontUrl: '' } },
-  { name: 'Light Mode',     theme: { primaryColor: '#1a6b3c', secondaryColor: '#4b5563', tertiaryColor: '#2563eb', bgColor: '#f8fafc', surfaceColor: '#ffffff', chartNeutralColor: '#6b7280', primaryFont: 'JetBrains Mono', secondaryFont: 'Inter',         primaryFontUrl: '', secondaryFontUrl: '' } },
+  { name: 'Paper White',    theme: { primaryColor: '#171717', secondaryColor: '#64748b', tertiaryColor: '#404040', bgColor: '#ffffff', surfaceColor: '#f4f4f5', chartNeutralColor: '#9ca3af', primaryFont: 'JetBrains Mono', secondaryFont: 'Inter',         primaryFontUrl: '', secondaryFontUrl: '' } },
 ]
 
 // ── Small UI helpers ──────────────────────────────────────────────────────────
