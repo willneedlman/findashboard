@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
+import { RailSection } from './valuationShared'
 
 /*
  * Options Market-Making Simulator
@@ -203,6 +204,7 @@ interface Frame {
 
 export default function OptionsMarketMaker() {
   const sim = useRef<SimState>(freshState())
+  const [paramsOpen, setParamsOpen] = useState(true)
   const [baseIv, setBaseIv]         = useState(0.25)
   const [skew, setSkew]             = useState(0.06)
   const [halfSpread, setHalfSpread] = useState(0.04)
@@ -284,7 +286,8 @@ export default function OptionsMarketMaker() {
   )
 
   const sidebar = (
-    <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 4, fontFamily: T.mono }}>
+    <RailSection title="MM Controls" open={paramsOpen} onToggle={() => setParamsOpen(o => !o)}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontFamily: T.mono }}>
       {sliderRow('Sim Speed', `${speed.toFixed(1)}x`, range(speed, SPEED_MIN, SPEED_MAX, 0.1, setSpeed))}
       {sliderRow('Base Implied Vol', `${(baseIv * 100).toFixed(0)}%`, range(baseIv, 0.05, 0.80, 0.01, setBaseIv))}
       {sliderRow('IV Skew', skew.toFixed(2), range(skew, -0.20, 0.20, 0.01, setSkew), ['High strikes', 'Low strikes'])}
@@ -357,11 +360,12 @@ export default function OptionsMarketMaker() {
         )}
       </div>
     </div>
+    </RailSection>
   )
 
   return (
     <PageWrapper title="Options Market-Making Simulator">
-      <SidebarLayout sidebarWidth={236} sidebarTitle="MM Controls" sidebar={sidebar}>
+      <SidebarLayout sidebarWidth={236} sidebarTitle="" sidebar={sidebar}>
         {!f ? (
           <div style={{ padding: 24, fontFamily: T.mono, color: T.muted }}>Starting desk…</div>
         ) : (

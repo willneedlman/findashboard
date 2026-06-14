@@ -3,6 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
+import { RailSection } from './valuationShared'
 import EmptyState from '../components/EmptyState'
 
 const C = {
@@ -91,6 +92,7 @@ export default function StockScreener() {
   const [filters, setFilters] = useState<FilterRow[]>([
     { id: 1, field: 'marketCap', operator: 'gt', value: '1', value2: '' },
   ])
+  const [paramsOpen, setParamsOpen] = useState(true)
   const [sector,   setSector]   = useState('')
   const [exchange, setExchange] = useState('')
   const [sortBy,   setSortBy]   = useState('marketCap')
@@ -180,8 +182,9 @@ export default function StockScreener() {
 
   return (
     <PageWrapper title="Stock Screener">
-      <SidebarLayout sidebarWidth={260} sidebarTitle="Screen Controls" sidebar={<>
-        <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 10, flex: 1, overflowY: 'auto' }}>
+      <SidebarLayout sidebarWidth={260} sidebarTitle="" sidebar={<>
+          <RailSection title="Screen Controls" open={paramsOpen} onToggle={() => setParamsOpen(o => !o)}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
 
           {/* Sector + Exchange */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -265,6 +268,7 @@ export default function StockScreener() {
             {isPending ? 'Screening…' : 'Run Screen'}
           </button>
         </div>
+        </RailSection>
       </>}>
 
         {/* Results */}
