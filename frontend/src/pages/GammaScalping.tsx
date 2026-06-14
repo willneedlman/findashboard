@@ -13,7 +13,7 @@ import axios from 'axios'
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-import { INPUT, SELECT, LABEL, TOOLTIP_STYLE, TICK } from './valuationShared'
+import { INPUT, SELECT, LABEL, TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
 
 // ── Math helpers ──────────────────────────────────────────────────────────────
 
@@ -314,6 +314,7 @@ export function GammaScalpingContent() {
   const cc = useChartColors()
 
   const [ticker, setTicker] = useState('SPY')
+  const [paramsOpen, setParamsOpen] = useState(true)
   const [spot, setSpot] = useState(500)
   const [strike, setStrike] = useState(500)
   const [dte, setDte] = useState(30)
@@ -397,7 +398,8 @@ export function GammaScalpingContent() {
   })()
 
   const sidebar = (
-    <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <RailSection title="Sim Controls" open={paramsOpen} onToggle={() => setParamsOpen(o => !o)}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <SectionHeader label="Underlying" />
 
       <div>
@@ -534,6 +536,7 @@ export function GammaScalpingContent() {
         </div>
       )}
     </div>
+    </RailSection>
   )
 
   return (
@@ -552,7 +555,7 @@ export function GammaScalpingContent() {
           </span>
         </div>
 
-        <SidebarLayout sidebar={sidebar} sidebarTitle="Sim Controls" sidebarWidth={210}>
+        <SidebarLayout sidebar={sidebar} sidebarTitle="" sidebarWidth={210}>
           {!result ? (
             <EmptyState
               title="No simulation run yet"
