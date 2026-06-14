@@ -13,9 +13,9 @@ const C = {
   green: 'var(--theme-positive)', red: 'var(--theme-negative)',
 }
 const LINE_COLORS = ['#7aa2f7', '#c9a84c', '#2f9a62', '#bb9af7']
-const BENCH_COLOR = 'var(--theme-text-faint, rgba(255,255,255,0.4))'
 
-interface Port { name: string; tickers: string; leverage: string; borrow: string }
+interface Leg { ticker: string; weight: number }
+interface Port { name: string; legs: Leg[]; leverage: string; borrow: string }
 interface Metric {
   name: string; leverage: number; borrow_rate: number; liquidated: boolean
   cagr: number; vol: number; sharpe: number; max_drawdown: number; sortino: number; calmar: number; beta: number
@@ -28,7 +28,7 @@ interface CompareResult {
 }
 
 const inputStyle: React.CSSProperties = {
-  background: 'var(--theme-bg)', border: '1px solid var(--theme-border)', color: 'var(--theme-text, #d7e3fc)',
+  background: 'var(--theme-bg)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: 'var(--theme-text, #d7e3fc)',
   padding: '5px 8px', fontSize: 12, fontFamily: 'var(--theme-mono)', width: '100%', outline: 'none', boxSizing: 'border-box',
 }
 const labelStyle: React.CSSProperties = {
@@ -40,33 +40,36 @@ const panelTitle: React.CSSProperties = { color: C.gold, fontSize: 12, marginBot
 
 export default function PortfolioCompare() {
   const [ports, setPorts] = useState<Port[]>([
-    { name: 'Portfolio A', tickers: 'SPY', leverage: '1', borrow: '0' },
-    { name: 'Portfolio B', tickers: 'QQQ, TLT', leverage: '1', borrow: '0' },
+    { name: 'Portfolio A', legs: [{ ticker: 'SPY', weight: 100 }], leverage: '1', borrow: '0' },
+    { name: 'Portfolio B', legs: [{ ticker: 'QQQ', weight: 60 }, { ticker: 'TLT', weight: 40 }], leverage: '1', borrow: '0' },
   ])
-  const [benchmark, setBenchmark] = useState('SPY')
   const [start, setStart] = useState('2020-01-01')
   const [end, setEnd] = useState(() => new Date().toISOString().split('T')[0])
 
   const m = useMutation<CompareResult, Error, void>({
     mutationFn: () => axios.post('/api/portfolio/compare', {
-      benchmark, start, end,
+      start, end,
       portfolios: ports.map(p => {
-        const ts = p.tickers.split(/[,\s]+/).map(t => t.trim().toUpperCase()).filter(Boolean)
-        return { name: p.name || 'Portfolio', tickers: ts, weights: ts.map(() => 1),
+        const legs = p.legs.filter(l => l.ticker.trim())
+        return { name: p.name || 'Portfolio', tickers: legs.map(l => l.ticker.trim().toUpperCase()),
+                 weights: legs.map(l => l.weight || 0),
                  leverage: Number(p.leverage) || 1, borrow_rate: Number(p.borrow) || 0 }
       }),
     }).then(r => r.data),
   })
 
-  const update = (i: number, k: keyof Port, v: string) => setPorts(p => p.map((x, j) => j === i ? { ...x, [k]: v } : x))
-  const addPort = () => ports.length < 4 && setPorts(p => [...p, { name: `Portfolio ${String.fromCharCode(65 + p.length)}`, tickers: '', leverage: '1', borrow: '0' }])
+  const update = (i: number, k: 'name' | 'leverage' | 'borrow', v: string) => setPorts(p => p.map((x, j) => j === i ? { ...x, [k]: v } : x))
+  const updateLeg = (i: number, li: number, k: keyof Leg, v: string) =>
+    setPorts(p => p.map((x, j) => j === i ? { ...x, legs: x.legs.map((l, m) => m === li ? { ...l, [k]: k === 'weight' ? (Number(v) || 0) : v.toUpperCase() } : l) } : x))
+  const addLeg = (i: number) => setPorts(p => p.map((x, j) => j === i ? { ...x, legs: [...x.legs, { ticker: '', weight: 0 }] } : x))
+  const removeLeg = (i: number, li: number) => setPorts(p => p.map((x, j) => j === i && x.legs.length > 1 ? { ...x, legs: x.legs.filter((_, m) => m !== li) } : x))
+  const addPort = () => ports.length < 4 && setPorts(p => [...p, { name: `Portfolio ${String.fromCharCode(65 + p.length)}`, legs: [{ ticker: '', weight: 100 }], leverage: '1', borrow: '0' }])
   const removePort = (i: number) => ports.length > 2 && setPorts(p => p.filter((_, j) => j !== i))
 
   const r = m.data
   const chartData = r ? (() => {
     const map: Record<string, any> = {}
     for (const s of r.series) for (const pt of s.points) (map[pt.date] ??= { date: pt.date })[s.name] = pt.value
-    for (const pt of r.benchmark_points) (map[pt.date] ??= { date: pt.date })['_bench'] = pt.value
     return Object.values(map).sort((a: any, b: any) => (a.date < b.date ? -1 : 1))
   })() : []
 
@@ -82,19 +85,37 @@ export default function PortfolioCompare() {
                 {ports.length > 2 && <X size={14} style={{ cursor: 'pointer', color: C.muted, flexShrink: 0 }} onClick={() => removePort(i)} />}
               </div>
               <div>
-                <label style={labelStyle}>Tickers (equal-weight)</label>
-                <input style={inputStyle} placeholder="AAPL, MSFT, NVDA" value={p.tickers}
-                  onChange={e => update(i, 'tickers', e.target.value.toUpperCase())} />
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <label style={labelStyle}>Holdings</label>
+                  <label style={{ ...labelStyle, marginRight: 22 }}>Weight</label>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {p.legs.map((leg, li) => (
+                    <div key={li} style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                      <input style={{ ...inputStyle, flex: 1 }} placeholder="AAPL" value={leg.ticker}
+                        onChange={e => updateLeg(i, li, 'ticker', e.target.value)} />
+                      <input type="number" min={0} step={1} style={{ ...inputStyle, width: 52, textAlign: 'right' }} value={leg.weight}
+                        onChange={e => updateLeg(i, li, 'weight', e.target.value)} />
+                      <X size={13} style={{ cursor: 'pointer', color: p.legs.length > 1 ? C.muted : 'transparent', flexShrink: 0 }}
+                        onClick={() => removeLeg(i, li)} />
+                    </div>
+                  ))}
+                </div>
+                <button onClick={() => addLeg(i)} style={{ ...inputStyle, cursor: 'pointer', color: C.muted, marginTop: 4, padding: '3px 0', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                  <Plus size={11} /> Add ticker
+                </button>
               </div>
               <div style={{ display: 'flex', gap: 6 }}>
                 <div style={{ flex: 1 }}>
                   <label style={labelStyle}>Leverage (x)</label>
                   <input type="number" step={0.25} min={1} max={5} style={inputStyle} value={p.leverage} onChange={e => update(i, 'leverage', e.target.value)} />
                 </div>
-                <div style={{ flex: 1 }}>
-                  <label style={labelStyle}>Borrow %</label>
-                  <input type="number" step={0.5} min={0} max={30} style={inputStyle} value={p.borrow} onChange={e => update(i, 'borrow', e.target.value)} />
-                </div>
+                {(Number(p.leverage) || 1) > 1 && (
+                  <div style={{ flex: 1 }}>
+                    <label style={labelStyle}>Borrow %</label>
+                    <input type="number" step={0.5} min={0} max={30} style={inputStyle} value={p.borrow} onChange={e => update(i, 'borrow', e.target.value)} />
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -104,7 +125,6 @@ export default function PortfolioCompare() {
             </button>
           )}
           <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div><label style={labelStyle}>Benchmark</label><input style={inputStyle} value={benchmark} onChange={e => setBenchmark(e.target.value.toUpperCase())} /></div>
             <div style={{ display: 'flex', gap: 6 }}>
               <div style={{ flex: 1 }}><label style={labelStyle}>Start</label><input type="date" style={inputStyle} value={start} onChange={e => setStart(e.target.value)} /></div>
               <div style={{ flex: 1 }}><label style={labelStyle}>End</label><input type="date" style={inputStyle} value={end} onChange={e => setEnd(e.target.value)} /></div>
@@ -135,7 +155,6 @@ export default function PortfolioCompare() {
                   <YAxis stroke={C.muted} tick={{ fill: C.muted, fontSize: 10 }} />
                   <Tooltip contentStyle={{ background: 'var(--theme-surface)', border: `1px solid ${C.border}`, color: C.text, fontSize: 11 }} />
                   <Legend wrapperStyle={{ color: C.muted, fontSize: 11 }} />
-                  <Line type="monotone" dataKey="_bench" name={`${r.benchmark} (bench)`} stroke={BENCH_COLOR} strokeWidth={1.5} strokeDasharray="5 3" dot={false} />
                   {r.series.map((s, i) => (
                     <Line key={s.name} type="monotone" dataKey={s.name} name={s.name} stroke={LINE_COLORS[i]} strokeWidth={2} dot={false} />
                   ))}
@@ -147,7 +166,7 @@ export default function PortfolioCompare() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontFamily: 'var(--theme-mono)' }}>
                 <thead>
                   <tr style={{ borderBottom: `1px solid ${C.border}`, color: C.muted }}>
-                    {['Portfolio', 'Lev', 'CAGR %', 'Vol %', 'Sharpe', 'Max DD %', 'Sortino', 'Calmar', 'Beta'].map(h => (
+                    {['Portfolio', 'Lev', 'CAGR %', 'Vol %', 'Sharpe', 'Max DD %', 'Sortino', 'Calmar'].map(h => (
                       <th key={h} style={{ padding: '6px 10px', textAlign: h === 'Portfolio' ? 'left' : 'right', fontWeight: 500 }}>{h}</th>
                     ))}
                   </tr>
@@ -165,7 +184,6 @@ export default function PortfolioCompare() {
                       <td style={{ padding: '6px 10px', textAlign: 'right', color: C.red }}>{mt.max_drawdown}</td>
                       <td style={{ padding: '6px 10px', textAlign: 'right', color: C.text }}>{mt.sortino}</td>
                       <td style={{ padding: '6px 10px', textAlign: 'right', color: C.text }}>{mt.calmar}</td>
-                      <td style={{ padding: '6px 10px', textAlign: 'right', color: C.text }}>{mt.beta}</td>
                     </tr>
                   ))}
                 </tbody>

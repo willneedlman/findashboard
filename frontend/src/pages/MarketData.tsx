@@ -59,7 +59,7 @@ export default function MarketData() {
   const returnColor = m ? (m.total_return >= 0 ? 'var(--theme-positive)' : 'var(--theme-negative)') : 'var(--theme-text, #d7e3fc)'
 
   const inputStyle = {
-    background: 'var(--theme-surface, #142032)', border: '1px solid var(--theme-border, rgba(255,255,255,0.10))', color: 'var(--theme-text, #d7e3fc)',
+    background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: 'var(--theme-text, #d7e3fc)',
     fontFamily: 'var(--theme-mono)', fontSize: 12, padding: '5px 8px',
     width: '100%', outline: 'none',
   }

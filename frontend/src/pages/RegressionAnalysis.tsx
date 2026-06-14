@@ -752,7 +752,7 @@ export default function RegressionAnalysis() {
 // ── Shared styles ─────────────────────────────────────────────────────────────
 
 const inputStyle: React.CSSProperties = {
-  background: 'var(--theme-bg)', border: '1px solid var(--theme-border)', borderRadius: 4,
+  background: 'var(--theme-bg)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)',
   color: 'var(--theme-text, #d7e3fc)', padding: '6px 10px', fontSize: 12,
   fontFamily: 'var(--theme-mono)', width: 130, outline: 'none',
 }
@@ -762,7 +762,7 @@ const selectStyle: React.CSSProperties = {
 }
 
 const btnStyle: React.CSSProperties = {
-  background: 'var(--theme-bg)', border: '1px solid var(--theme-border)', borderRadius: 4,
+  background: 'var(--theme-bg)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)',
   color: 'var(--theme-text, #d7e3fc)', padding: '6px 14px', fontSize: 12,
   fontFamily: 'var(--theme-mono)', cursor: 'pointer',
 }
