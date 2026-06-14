@@ -6,7 +6,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from cache import get_history as _cached_history, get_news as _cached_news, get_download
 from validation import validate_ticker, validate_tickers, validate_date
 
-import yfinance as yf
 
 router = APIRouter()
 
@@ -417,8 +416,7 @@ def _fetch_treasury_yields() -> dict[str, tuple[float, float]]:
         anchors_cur: dict[str, float] = {}
         anchors_prev: dict[str, float] = {}
         for lbl, sym in syms.items():
-            t = yf.Ticker(sym)
-            hist = t.history(period="5d")
+            hist = _cached_history(sym, period="5d")
             if not hist.empty:
                 closes = hist["Close"].dropna()
                 cur  = float(closes.iloc[-1])

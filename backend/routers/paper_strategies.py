@@ -16,11 +16,14 @@ Endpoints
 from __future__ import annotations
 
 import os
+import sys
 import hmac
 import logging
 from typing import Any
 
-import yfinance as yf
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from cache import get_history
+
 from fastapi import APIRouter, File, Header, HTTPException, UploadFile
 from pydantic import BaseModel
 
@@ -136,12 +139,9 @@ def _build_entry(name: str) -> StrategyEntry:
     )
 
 def _fetch_bars(ticker: str, start: str, end: str | None) -> list[dict]:
-    tkr  = yf.Ticker(ticker.strip().upper())
-    hist = tkr.history(start=start, end=end)
+    hist = get_history(ticker, start=start, end=end)
     if hist.empty:
         raise HTTPException(404, f"No price data for {ticker}")
-    if hist.index.tz is not None:
-        hist.index = hist.index.tz_localize(None)
     bars = []
     for ts, row in hist.iterrows():
         bars.append({
