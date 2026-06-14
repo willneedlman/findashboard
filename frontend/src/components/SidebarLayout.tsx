@@ -33,7 +33,7 @@ export default function SidebarLayout({
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <SlidersHorizontal size={12} style={{ color: 'var(--theme-primary, #c9a84c)' }} />
               <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)' }}>
-                {sidebarTitle}
+                {sidebarTitle || 'Controls'}
               </span>
             </div>
             {open
@@ -61,7 +61,8 @@ export default function SidebarLayout({
         flexDirection: 'column',
         alignSelf: 'stretch',
       }}>
-        {/* Sidebar title strip */}
+        {/* Sidebar title strip — omitted when the tool supplies its own RailSection headers (sidebarTitle="") */}
+        {sidebarTitle && (
         <div style={{
           padding: '9px 14px',
           background: 'rgba(0,0,0,0.2)',
@@ -80,6 +81,7 @@ export default function SidebarLayout({
             {sidebarTitle}
           </span>
         </div>
+        )}
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflowY: 'auto' }}>
           {sidebar}
         </div>

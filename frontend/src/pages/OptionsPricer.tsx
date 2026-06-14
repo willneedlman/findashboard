@@ -19,7 +19,7 @@ const GREEK_COLOR: Record<string, string> = {
   delta: 'var(--theme-tertiary, #1f5673)', gamma: '#7b5ea7', theta: '#8c2e36', vega: '#2f6b4b',
 }
 
-import { INPUT, LABEL, TOOLTIP_STYLE, TICK } from './valuationShared'
+import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
 
 function GreekCard({ label, value, help }: { label: string; value: number; help?: string }) {
   const [show, setShow] = useState(false)
@@ -66,6 +66,7 @@ export function OptionsPricerContent() {
   const isMobile = useIsMobile()
   const [params, setParams] = useState({ S: 100, K: 100, T: 30, sigma: 20, r: 5, option_type: 'call' })
   const [view, setView] = useState<'2d' | 'payoff'>('2d')
+  const [paramsOpen, setParamsOpen] = useState(true)
 
   const { mutate: calcPrice,   data: priceData,   isPending: pricePending,   isError: priceError }   = useMutation({ mutationFn: () => priceOption(params) })
   const { mutate: calcPayoff,  data: payoffData }  = useMutation({ mutationFn: () => optionPayoff(params) })
@@ -80,13 +81,9 @@ export function OptionsPricerContent() {
   const isCall = params.option_type === 'call'
 
   return (
-      <SidebarLayout sidebarWidth={190} sidebarTitle="Pricer Inputs" sidebar={<>
-          <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)' }}>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#ffffff' }}>
-              Pricing Parameters
-            </div>
-          </div>
-          <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
+      <SidebarLayout sidebarWidth={210} sidebarTitle="" sidebar={<>
+          <RailSection title="Pricing Parameters" open={paramsOpen} onToggle={() => setParamsOpen(o => !o)}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {([
               { label: 'Spot Price ($)',     key: 'S',     step: 1 },
               { label: 'Strike Price ($)',   key: 'K',     step: 1 },
@@ -111,7 +108,8 @@ export function OptionsPricerContent() {
               </select>
             </div>
           </div>
-          <div style={{ padding: 10, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          </RailSection>
+          <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
             <button onClick={recalc} disabled={pricePending} style={{
               width: '100%', background: pricePending ? 'var(--theme-hover, rgba(255,255,255,0.04))' : 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)',
               border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)',
