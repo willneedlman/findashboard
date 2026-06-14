@@ -77,7 +77,7 @@ function computeDCF(
   return { fcfs, pvFcfs, terminalValue, ev, equity, ips }
 }
 
-import { INPUT, LABEL, TOOLTIP_STYLE, TICK } from './valuationShared'
+import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
 
 function ChartPanel({ label, height, children }: { label: string; height: number; children: React.ReactNode }) {
   return (
@@ -105,6 +105,7 @@ export function DCFValuationContent() {
   const setTicker = (v: string) => { setTickerRaw(v); setSearchParams(p => { p.set('ticker', v); return p }) }
   const [fetching, setFetching] = useState(false)
   const [aiSuggesting, setAiSuggesting] = useState(false)
+  const [paramsOpen, setParamsOpen] = useState(true)
   const [aiRationale, setAiRationale] = useState<{ growth: string; margin: string; wacc: string } | null>(null)
   const [aiSuggested, setAiSuggested] = useState<Partial<typeof p> | null>(null)
   const [p, setP] = useState({
@@ -237,17 +238,9 @@ export function DCFValuationContent() {
   const sensiMax = sensiValues.length ? Math.max(...sensiValues) : 0
 
   return (
-      <SidebarLayout sidebarWidth={220} sidebarTitle="DCF Parameters" sidebar={<>
-
-        {/* Left sidebar */}
-
-          <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)' }}>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#ffffff' }}>
-              Model Inputs
-            </div>
-          </div>
-
-          <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 10, flex: 1, overflowY: 'auto' }}>
+      <SidebarLayout sidebarWidth={220} sidebarTitle="" sidebar={<>
+          <RailSection title="Model Inputs" open={paramsOpen} onToggle={() => setParamsOpen(o => !o)}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {/* Ticker + fetch */}
             <div>
               <label style={LABEL}>Ticker</label>
@@ -369,8 +362,8 @@ export function DCFValuationContent() {
               ))}
             </div>
           </div>
-
-          <div style={{ padding: 10, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          </RailSection>
+          <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
             <button onClick={() => calculate()} disabled={isPending} style={{
               width: '100%', background: isPending ? 'var(--theme-hover, rgba(255,255,255,0.04))' : 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)',
               border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)',
