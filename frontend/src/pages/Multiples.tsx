@@ -8,7 +8,7 @@ import { INPUT, LABEL, SIDEBAR, RailSection, PRIMARY_BTN, READOUT_ROW, TH, TD, P
 
 type Metric = { key: string; label: string; per_share: number; current_mult: number | null; ev_based: boolean }
 type MultiplesData = {
-  ticker: string; price?: number | null; shares?: number; net_debt?: number; metrics: Metric[]; note?: string
+  ticker: string; price?: number | null; shares?: number; net_debt?: number; metrics: Metric[]; note?: string; pre_profit?: boolean
 }
 
 export function MultiplesContent() {
@@ -93,6 +93,11 @@ export function MultiplesContent() {
 
       {rows && data!.metrics.length > 0 && (
         <div style={STACK}>
+          {data!.pre_profit && data!.note && (
+            <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 12, color: 'var(--theme-text-dim, #8aa0c2)', lineHeight: 1.6, padding: '10px 12px', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderRadius: 6, background: 'var(--theme-bg, #101c2e)' }}>
+              {data!.note}
+            </div>
+          )}
           <div style={METRIC_GRID}>
             <MetricCard label="Blended implied value" value={rows.avg != null ? `$${rows.avg.toFixed(2)}` : 'n/a'} />
             <MetricCard label="Market price" value={data!.price ? `$${data!.price.toFixed(2)}` : 'n/a'} />

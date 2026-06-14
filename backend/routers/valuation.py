@@ -230,26 +230,42 @@ def multiples(ticker: str):
     ev = (price * shares + net_debt) if (price and shares) else None
 
     metrics: list[dict] = []
+    dropped: list[str] = []
     def add(key, label, per_share, cur_mult, ev_based=False):
+        # Earnings-based lines are meaningless when the underlying figure is a loss:
+        # a negative P/E or EV/EBITDA has no valuation reading. Drop them and fall
+        # back to sales- and book-based multiples, which stay valid for pre-profit
+        # companies — the standard way to value a loss-maker.
         if per_share and per_share > 0:
             metrics.append({"key": key, "label": label, "per_share": round(per_share, 2),
                             "current_mult": round(cur_mult, 1) if cur_mult and cur_mult > 0 else None,
                             "ev_based": ev_based})
+        elif per_share is not None and per_share <= 0:
+            dropped.append(label)
 
-    if eps:     add("pe",     "P/E (trailing)", float(eps),     price / eps if price else None)
-    if eps_fwd: add("pe_fwd", "P/E (forward)",  float(eps_fwd), price / eps_fwd if price else None)
+    if eps is not None:     add("pe",     "P/E (trailing)", float(eps),     price / eps if (price and eps) else None)
+    if eps_fwd is not None: add("pe_fwd", "P/E (forward)",  float(eps_fwd), price / eps_fwd if (price and eps_fwd) else None)
     if sales_ps: add("ps",    "P/S",            sales_ps,       price / sales_ps if price else None)
-    if book_ps: add("pb",     "P/B",            float(book_ps), price / book_ps if price else None)
-    if ebitda_ps: add("ev_ebitda", "EV/EBITDA", ebitda_ps,     ev / ebitda if (ev and ebitda > 0) else None, ev_based=True)
+    if book_ps is not None: add("pb",     "P/B",            float(book_ps), price / book_ps if (price and book_ps) else None)
+    if ebitda_ps is not None: add("ev_ebitda", "EV/EBITDA", ebitda_ps,     ev / ebitda if (ev and ebitda > 0) else None, ev_based=True)
 
     if not metrics:
         return {"ticker": sym, "price": price, "metrics": [],
                 "note": "No usable per-share metrics were available for this ticker."}
 
+    pre_profit = bool(dropped)
+    note = None
+    if pre_profit:
+        note = (f"{sym} is not yet profitable, so earnings multiples ({', '.join(dropped)}) "
+                "have no meaningful reading and are hidden. Sales- and book-based multiples "
+                "are shown instead, which is the standard way to value a loss-making company.")
+
     return {
-        "ticker":   sym,
-        "price":    round(price, 2) if price else None,
-        "shares":   round(shares, 1),
-        "net_debt": round(net_debt, 1),
-        "metrics":  metrics,
+        "ticker":     sym,
+        "price":      round(price, 2) if price else None,
+        "shares":     round(shares, 1),
+        "net_debt":   round(net_debt, 1),
+        "metrics":    metrics,
+        "pre_profit": pre_profit,
+        "note":       note,
     }

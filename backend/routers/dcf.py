@@ -17,6 +17,9 @@ class DCFRequest(BaseModel):
     ticker: str
     revenue: float
     op_margin: float = 15.0
+    # Maturity operating margin a loss-making company is assumed to reach by the
+    # final projection year. Drives the pre-profit margin ramp in _project.
+    target_margin: float | None = None
     rev_growth: float = 10.0
     wacc: float = 10.0
     terminal_growth: float = 2.5
@@ -91,6 +94,16 @@ def get_fundamentals(ticker: str):
         logger.exception("internal error"); raise HTTPException(500, "Internal server error")
 
 
+def _margin_for_year(op_margin: float, target_margin, y: int, years: int) -> float:
+    """Pre-profit fallback. A loss-making company (negative operating margin) is
+    modeled as ramping linearly from its current margin to a positive maturity
+    target over the projection horizon, so FCF can turn positive and the model
+    stays solvable. Profitable companies keep a flat margin (classic DCF)."""
+    if op_margin < 0 and target_margin is not None and target_margin > op_margin:
+        return op_margin + (target_margin - op_margin) * (y / max(years, 1))
+    return op_margin
+
+
 def _project(req, rev_growth: float):
     """FCFF projection + terminal value at a given revenue growth rate.
     Shared by the forward DCF and the reverse-DCF solver."""
@@ -98,7 +111,8 @@ def _project(req, rev_growth: float):
     rev = req.revenue
     for y in range(1, req.years + 1):
         rev = rev * (1 + rev_growth / 100)
-        ebit = rev * (req.op_margin / 100)
+        margin = _margin_for_year(req.op_margin, getattr(req, "target_margin", None), y, req.years)
+        ebit = rev * (margin / 100)
         nopat = ebit * (1 - req.tax_rate / 100)
         da = rev * (req.da_pct / 100)
         capex = rev * (req.capex_pct / 100)
@@ -139,6 +153,7 @@ class ReverseDCFRequest(BaseModel):
     ticker: str
     revenue: float
     op_margin: float = 15.0
+    target_margin: float | None = None
     wacc: float = 10.0
     terminal_growth: float = 2.5
     years: int = 5
@@ -163,6 +178,13 @@ def dcf_reverse(req: ReverseDCFRequest):
     if req.wacc <= req.terminal_growth:
         raise HTTPException(400, "WACC must exceed terminal growth for a finite valuation")
 
+    # Pre-profit fallback: a loss-making company can't be solved holding a
+    # negative margin flat (FCF never turns positive). Ramp toward a positive
+    # maturity target; default it when the caller didn't supply one.
+    pre_profit = req.op_margin < 0
+    if pre_profit and req.target_margin is None:
+        req.target_margin = 12.0
+
     def gap(g: float) -> float:
         return _project(req, g)[5] - req.market_price
 
@@ -179,7 +201,14 @@ def dcf_reverse(req: ReverseDCFRequest):
             "implied_growth": None,
             "market_price": round(req.market_price, 2),
             "current_growth": req.current_growth,
-            "note": "The market price implies a growth rate outside a plausible range. Revisit the margin, WACC, or terminal-growth assumptions.",
+            "pre_profit": pre_profit,
+            "note": (
+                f"Even assuming this pre-profit company ramps to a {req.target_margin:.0f}% operating "
+                f"margin by year {req.years}, no plausible growth rate matches the price. Try a higher "
+                f"target margin or a longer projection."
+                if pre_profit else
+                "The market price implies a growth rate outside a plausible range. Revisit the margin, WACC, or terminal-growth assumptions."
+            ),
         }
 
     fcfs, pv_fcfs, pv_terminal, ev, equity, ips = _project(req, implied)
@@ -202,4 +231,7 @@ def dcf_reverse(req: ReverseDCFRequest):
         "pv_fcfs":             round(pv_fcfs, 1),
         "terminal_value":      round(pv_terminal, 1),
         "fcfs":                fcfs,
+        "pre_profit":          pre_profit,
+        "assumed_target_margin": round(req.target_margin, 1) if pre_profit else None,
+        "note": (f"Pre-profit company: operating margin assumed to ramp from {req.op_margin:.1f}% to {req.target_margin:.1f}% by year {req.years}, holding revenue growth as the solved variable." if pre_profit else None),
     }

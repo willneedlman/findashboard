@@ -19,6 +19,8 @@ type Reverse = {
   equity_value?: number
   fcfs?: { year: number; revenue: number; fcf: number; pv_fcf: number }[]
   note?: string
+  pre_profit?: boolean
+  assumed_target_margin?: number | null
 }
 
 export function ReverseDCFContent() {
@@ -27,6 +29,7 @@ export function ReverseDCFContent() {
   const [inputsOpen, setInputsOpen] = useState(true)
   const [marketPrice, setMarketPrice] = useState<number | ''>('')
   const [opMargin, setOpMargin] = useState(20)
+  const [targetMargin, setTargetMargin] = useState(12)
   const [wacc, setWacc] = useState(9)
   const [termGrowth, setTermGrowth] = useState(2.5)
   const [years, setYears] = useState(5)
@@ -48,9 +51,11 @@ export function ReverseDCFContent() {
       }
       const price = (useLoaded && marketPrice !== '') ? Number(marketPrice) : (f.market_price ?? Number(marketPrice))
       if (!price || price <= 0) { setError('No market price available. Enter one manually.'); setLoading(false); return }
+      const effMargin = useLoaded ? opMargin : (f.op_margin ?? opMargin)
       const body = {
         ticker: ticker.trim().toUpperCase(),
-        revenue: f.revenue, op_margin: useLoaded ? opMargin : (f.op_margin ?? opMargin),
+        revenue: f.revenue, op_margin: effMargin,
+        target_margin: effMargin < 0 ? targetMargin : null,
         wacc, terminal_growth: termGrowth, years,
         shares: f.shares, net_debt: f.net_debt, tax_rate: f.tax_rate ?? 21,
         capex_pct: f.capex_pct ?? 5, da_pct: f.da_pct ?? 4,
@@ -94,6 +99,13 @@ export function ReverseDCFContent() {
               <label style={LABEL}>Operating margin (%)</label>
               <input style={INPUT} type="number" value={opMargin} onChange={e => setOpMargin(Number(e.target.value))} />
             </div>
+            {opMargin < 0 && (
+              <div>
+                <label style={LABEL}>Maturity margin (%)</label>
+                <input style={INPUT} type="number" value={targetMargin} onChange={e => setTargetMargin(Number(e.target.value))} />
+                <div style={HINT}>This company runs at a loss. Margin is ramped from {opMargin.toFixed(1)}% to this target over the projection so cash flow can turn positive.</div>
+              </div>
+            )}
             <div>
               <label style={LABEL}>Discount rate / WACC (%)</label>
               <input style={INPUT} type="number" value={wacc} onChange={e => setWacc(Number(e.target.value))} />
@@ -136,6 +148,11 @@ export function ReverseDCFContent() {
 
       {data && implied != null && (
         <div style={STACK}>
+          {data.pre_profit && data.note && (
+            <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 12, color: 'var(--theme-text-dim, #8aa0c2)', lineHeight: 1.6, padding: '10px 12px', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderRadius: 6, background: 'var(--theme-bg, #101c2e)' }}>
+              {data.note}
+            </div>
+          )}
           <div style={METRIC_GRID}>
             <MetricCard label="Implied revenue growth" value={`${implied.toFixed(1)}%`} help="Annual revenue growth the price implies, with margins held constant" />
             <MetricCard label="Current growth" value={data.current_growth != null ? `${data.current_growth.toFixed(1)}%` : 'n/a'} />
