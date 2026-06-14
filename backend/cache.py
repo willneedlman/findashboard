@@ -8,10 +8,14 @@ TTLs:
   news           — 5 min
   rates/yield    — 10 min
 """
+import functools
+import hashlib
 import threading
 import pandas as pd
 import yfinance as yf
 from cachetools import TTLCache
+
+from disk_cache import disk_get, disk_set
 
 _lock = threading.Lock()
 
@@ -21,13 +25,61 @@ _news_cache:    TTLCache = TTLCache(maxsize=200, ttl=300)     # 5 min
 _download_cache: TTLCache = TTLCache(maxsize=100, ttl=300)   # 5 min
 
 
-def get_history(ticker: str, period: str = "1y") -> pd.DataFrame:
-    key = f"{ticker}:{period}"
+def _key(prefix: str, args: tuple, kwargs: dict) -> str:
+    raw = f"{prefix}|{args!r}|{sorted(kwargs.items())!r}"
+    return prefix + ":" + hashlib.md5(raw.encode()).hexdigest()
+
+
+def cached(ttl: int = 300, maxsize: int = 256, persist: bool = False):
+    """
+    Memoize an expensive function with a per-function TTL cache.
+
+    Replaces the ad-hoc module-level TTLCache instances scattered across
+    routers. Set persist=True to also back the result with the SQLite
+    disk cache (survives restarts) — only for JSON-serializable returns
+    (dicts/lists); DataFrames stay memory-only.
+
+    The wrapper exposes .cache_clear() to flush the in-memory tier.
+    """
+    def deco(fn):
+        mem: TTLCache = TTLCache(maxsize=maxsize, ttl=ttl)
+        flock = threading.Lock()
+        prefix = f"{fn.__module__}.{fn.__qualname__}"
+
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            k = _key(prefix, args, kwargs)
+            with flock:
+                if k in mem:
+                    return mem[k]
+            if persist:
+                hit = disk_get(k)
+                if hit is not None:
+                    with flock:
+                        mem[k] = hit
+                    return hit
+            val = fn(*args, **kwargs)
+            with flock:
+                mem[k] = val
+            if persist:
+                disk_set(k, val, ttl=ttl)
+            return val
+
+        wrapper.cache_clear = mem.clear
+        return wrapper
+    return deco
+
+
+def get_history(ticker: str, period: str = "1y",
+                start: str | None = None, end: str | None = None) -> pd.DataFrame:
+    sym = ticker.strip().upper()
+    key = f"{sym}:{period}:{start}:{end}"
     with _lock:
         if key in _history_cache:
             return _history_cache[key]
     try:
-        df = yf.Ticker(ticker.strip().upper()).history(period=period)
+        tkr = yf.Ticker(sym)
+        df = tkr.history(start=start, end=end) if (start or end) else tkr.history(period=period)
         if df.index.tz is not None:
             df.index = df.index.tz_localize(None)
     except Exception:

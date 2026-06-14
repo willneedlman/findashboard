@@ -5,11 +5,13 @@ scraping fallback for JS-rendered data sources.
 
 taste (matplotlib wrapper) + matplotlib generate downloadable chart PNGs.
 """
-import io, base64, logging
+import io, base64, logging, os, sys
 import numpy as np
 import pandas as pd
-import yfinance as yf
 from scipy import stats
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from cache import get_history
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
 from fastapi import APIRouter, HTTPException, Query
@@ -30,7 +32,7 @@ _VALID_MODELS  = {"linear", "polynomial"}
 
 def _fetch_series(ticker: str, period: str, use_returns: bool) -> pd.Series:
     ticker = ticker.upper().strip()
-    df = yf.download(ticker, period=period, auto_adjust=True, progress=False)
+    df = get_history(ticker, period=period)
     if df.empty:
         raise HTTPException(404, f"No price data for {ticker}")
     closes = df["Close"].squeeze().dropna()
