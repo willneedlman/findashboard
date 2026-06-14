@@ -5,9 +5,12 @@ import TickerTagInput from '../components/TickerTagInput'
 import { useAnalysis } from '../context/AnalysisContext'
 
 const C = {
-  bg: 'var(--theme-bg, #101c2e)', border: 'rgba(255,255,255,0.08)', header: 'var(--theme-surface, #0d1826)', surface: 'var(--theme-bg, #0a1220)',
-  gold: 'var(--theme-primary, #c9a84c)', text: 'var(--theme-text, #d7e3fc)', muted: 'var(--theme-secondary, #5e768f)', dim: '#3a4d62',
-  pos: '#22C55E', neg: '#EF4444', warn: '#f59e0b', blue: '#60a5fa',
+  bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))', header: 'var(--theme-surface, #0d1826)', surface: 'var(--theme-bg, #101c2e)',
+  gold: 'var(--theme-primary, #c9a84c)', text: 'var(--theme-text, #d7e3fc)', muted: 'var(--theme-secondary, #5e768f)',
+  // Dimmer than muted, but theme-aware: a faded secondary toward the bg so it
+  // never renders as a fixed navy on light themes (Paper White).
+  dim: 'color-mix(in srgb, var(--theme-secondary, #5e768f) 62%, var(--theme-bg, #101c2e))',
+  pos: '#22C55E', neg: '#EF4444', warn: '#f59e0b', blue: 'var(--theme-tertiary, #60a5fa)',
   mono: 'var(--theme-mono)', sans: 'var(--theme-sans)',
 }
 
