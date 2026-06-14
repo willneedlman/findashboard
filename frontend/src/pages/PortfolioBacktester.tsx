@@ -10,6 +10,7 @@ import MetricCard from '../components/MetricCard'
 import { useChartColors } from '../hooks/useChartColors'
 import StrategySelector, { STRATEGIES, CUSTOM_STRATEGY_KEY, type StrategyParams } from '../components/StrategySelector'
 import { TOOLTIP_STYLE, CROSSHAIR_CURSOR, BAR_CURSOR } from '../components/ChartTooltip'
+import { FUTURES } from '../lib/futures'
 import ChartTooltip from '../components/ChartTooltip'
 import axios from 'axios'
 import SidebarLayout from '../components/SidebarLayout'
@@ -419,8 +420,10 @@ function PortfolioTab() {
               <div key={i} style={{ marginBottom: 10 }}>
                 <div style={{ display: 'flex', gap: 4, marginBottom: 4, alignItems: 'center' }}>
                   <input style={{ ...PORT_INPUT, flex: 7, padding: '4px 6px' }} value={a.ticker}
+                    list="ft-futures" placeholder="e.g. AAPL or ES=F"
                     onChange={e => updateAsset(i, { ticker: e.target.value.toUpperCase() })}
                     onFocus={focus} onBlur={blur} />
+                  {i === 0 && <datalist id="ft-futures">{FUTURES.map(f => <option key={f.sym} value={f.sym}>{f.label}</option>)}</datalist>}
                   <input type="number" style={{ ...PORT_INPUT, flex: 4, padding: '4px 6px' }} value={a.weight} step={1}
                     onChange={e => updateAsset(i, { weight: +e.target.value })}
                     onFocus={focus} onBlur={blur} />

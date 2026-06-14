@@ -32,7 +32,7 @@ const NORMS: { key: Norm; label: string }[] = [
   { key: 'indexed', label: 'Indexed 100' }, { key: 'pct', label: '% Change' }, { key: 'price', label: 'Price' },
 ]
 
-const ASSET_PRESETS = ['SPY', 'QQQ', 'BTC-USD', 'ETH-USD', 'GLD', 'TLT', '^GSPC', 'EURUSD=X']
+const ASSET_PRESETS = ['SPY', 'QQQ', 'BTC-USD', 'ETH-USD', 'GLD', 'TLT', '^GSPC', 'EURUSD=X', 'ES=F', 'NQ=F', 'CL=F', 'GC=F']
 const MACRO_GROUPS: { group: string; items: { sym: string; label: string }[] }[] = [
   { group: 'Rates', items: [{ sym: '^TNX', label: '10Y Yield' }, { sym: '^FVX', label: '5Y Yield' }, { sym: '^TYX', label: '30Y Yield' }, { sym: '^IRX', label: '13W T-Bill' }] },
   { group: 'Volatility', items: [{ sym: '^VIX', label: 'VIX' }, { sym: '^VXN', label: 'Nasdaq VIX' }, { sym: '^OVX', label: 'Oil VIX' }, { sym: '^VVIX', label: 'Vol-of-Vol' }] },

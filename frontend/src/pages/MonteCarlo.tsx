@@ -6,6 +6,7 @@ import MetricCard from '../components/MetricCard'
 import { useChartColors } from '../hooks/useChartColors'
 import StrategySelector, { STRATEGIES, CUSTOM_STRATEGY_KEY, type StrategyParams } from '../components/StrategySelector'
 import { TOOLTIP_STYLE, CROSSHAIR_CURSOR, BAR_CURSOR } from '../components/ChartTooltip'
+import { FUTURES } from '../lib/futures'
 import SidebarLayout from '../components/SidebarLayout'
 import axios from 'axios'
 import EmptyState from '../components/EmptyState'
@@ -350,10 +351,11 @@ export default function MonteCarlo() {
                   <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 4 }}>
                     <input
                       style={{ ...INPUT, flex: 7, padding: '4px 6px', fontSize: 11 }}
-                      value={leg.ticker}
+                      value={leg.ticker} list="mc-futures" placeholder="e.g. AAPL or CL=F"
                       onChange={e => updateLeg(i, { ticker: e.target.value.toUpperCase(), fetched: false })}
                       onFocus={focus} onBlur={blur}
                     />
+                    {i === 0 && <datalist id="mc-futures">{FUTURES.map(f => <option key={f.sym} value={f.sym}>{f.label}</option>)}</datalist>}
                     <input
                       type="number" min={0} max={100} step={5}
                       style={{ ...INPUT, flex: 4, padding: '4px 6px', fontSize: 11 }}

@@ -4,6 +4,7 @@ import { useQueries, useQuery } from '@tanstack/react-query'
 import PageWrapper from '../components/PageWrapper'
 import PortfolioIO, { type PortfolioAsset } from '../components/PortfolioIO'
 import { usePortfolio } from '../contexts/PortfolioContext'
+import { FUTURES, FUTURES_BY_GROUP, futuresSpec } from '../lib/futures'
 
 const T = {
   bg:      'var(--theme-bg, #101c2e)',
@@ -87,6 +88,22 @@ const emptyLeg = (type: OptType = 'call', side: Side = 'long'): LegDraft =>
 
 interface OptLegMark { mark: number | null; delta: number | null; source: string | null }
 
+// ── Futures positions ───────────────────────────────────────────────────────────
+interface FuturePosition {
+  id:         string
+  symbol:     string   // yfinance =F symbol
+  side:       Side
+  contracts:  number
+  entryPrice: number   // price per point at entry
+}
+const FUT_STORAGE_KEY = 'pm-futures-v1'
+function loadFutures(): FuturePosition[] {
+  try { return JSON.parse(localStorage.getItem(FUT_STORAGE_KEY) ?? '[]') } catch { return [] }
+}
+function saveFutures(p: FuturePosition[]) {
+  localStorage.setItem(FUT_STORAGE_KEY, JSON.stringify(p))
+}
+
 function fmt(v: number, pre = '', suf = '', d = 2) {
   return `${pre}${v.toFixed(d)}${suf}`
 }
@@ -117,6 +134,14 @@ const ghostBtn: React.CSSProperties = {
   fontFamily: T.label, fontSize: 9, fontWeight: 700,
   letterSpacing: '0.12em', textTransform: 'uppercase', padding: '6px 0', cursor: 'pointer',
 }
+const editBtn: React.CSSProperties = {
+  background: 'none', border: 'none', cursor: 'pointer', fontFamily: T.label,
+  fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '0 4px',
+}
+const editInp: React.CSSProperties = {
+  background: T.bg, border: `1px solid ${T.gold}`, color: T.text, fontFamily: T.mono,
+  fontSize: 10, padding: '3px 6px', width: 70, outline: 'none', boxSizing: 'border-box', textAlign: 'right',
+}
 
 export default function PortfolioManager() {
   const [holdings, setHoldings] = useState<Holding[]>(loadHoldings)
@@ -130,10 +155,22 @@ export default function PortfolioManager() {
 
   // Option positions + entry form state
   const [options, setOptions] = useState<OptionPosition[]>(loadOptions)
-  const [entryMode, setEntryMode] = useState<'stock' | 'option'>('stock')
+  const [entryMode, setEntryMode] = useState<'stock' | 'option' | 'future'>('stock')
   const [optUnderlying, setOptUnderlying] = useState('')
   const [optPreset, setOptPreset] = useState(OPT_PRESETS[0].name)
   const [optLegs, setOptLegs] = useState<LegDraft[]>([emptyLeg()])
+
+  // Futures positions + entry form state
+  const [futures, setFutures] = useState<FuturePosition[]>(loadFutures)
+  const [futSym, setFutSym] = useState(FUTURES[0].sym)
+  const [futSide, setFutSide] = useState<Side>('long')
+  const [futContracts, setFutContracts] = useState('1')
+  const [futEntry, setFutEntry] = useState('')
+
+  // Inline edit state — edit shares/avgCost (stocks) or contracts/entry (futures)
+  // in place instead of deleting and re-adding.
+  const [editStock, setEditStock] = useState<{ i: number; shares: string; avgCost: string } | null>(null)
+  const [editFut, setEditFut] = useState<{ id: string; contracts: string; entry: string } | null>(null)
 
   const mountRef = useRef(false)
   useEffect(() => {
@@ -148,6 +185,13 @@ export default function PortfolioManager() {
     saveOptions(options)
     setDirty(true)
   }, [options])
+
+  const futMountRef = useRef(false)
+  useEffect(() => {
+    if (!futMountRef.current) { futMountRef.current = true; return }
+    saveFutures(futures)
+    setDirty(true)
+  }, [futures])
 
   // Apply a preset: reseed the leg drafts with its type/side template
   const applyPreset = useCallback((name: string) => {
@@ -178,6 +222,50 @@ export default function PortfolioManager() {
       retry: 1,
     })),
   })
+
+  // Live marks for futures (unique symbols)
+  const futSymbols = Array.from(new Set(futures.map(f => f.symbol)))
+  const futQuotes = useQueries({
+    queries: futSymbols.map(sym => ({
+      queryKey: ['pm-fut-quote', sym],
+      queryFn:  () => axios.get(`/api/market/quote/${encodeURIComponent(sym)}`).then(r => r.data as QuoteData),
+      staleTime: 60_000,
+      retry: 1,
+    })),
+  })
+  const futMarkBySym: Record<string, { price: number; pct1d: number | null; loading: boolean }> = {}
+  futSymbols.forEach((sym, i) => {
+    const q = futQuotes[i]?.data as QuoteData | undefined
+    futMarkBySym[sym] = { price: q?.current_price ?? 0, pct1d: q?.pct_change_1d ?? null, loading: !!futQuotes[i]?.isLoading }
+  })
+
+  const addFuture = useCallback(() => {
+    const symbol = futSym.trim().toUpperCase()
+    const contracts = parseFloat(futContracts)
+    const entryPrice = parseFloat(futEntry)
+    if (!symbol || isNaN(contracts) || contracts <= 0 || isNaN(entryPrice) || entryPrice <= 0) return
+    const id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now())
+    setFutures(prev => [...prev, { id, symbol, side: futSide, contracts, entryPrice }])
+    setFutContracts('1'); setFutEntry('')
+  }, [futSym, futSide, futContracts, futEntry])
+  const removeFuture = (id: string) => setFutures(prev => prev.filter(f => f.id !== id))
+
+  // ── Inline edit handlers ──
+  const saveEditStock = () => {
+    if (!editStock) return
+    const shares = parseFloat(editStock.shares)
+    const avgCost = editStock.avgCost.trim() === '' ? 0 : parseFloat(editStock.avgCost)  // blank = auto-fill
+    if (isNaN(shares) || shares <= 0 || isNaN(avgCost) || avgCost < 0) return
+    setHoldings(prev => prev.map((h, j) => j === editStock.i ? { ...h, shares, avgCost } : h))
+    setEditStock(null)
+  }
+  const saveEditFut = () => {
+    if (!editFut) return
+    const contracts = parseFloat(editFut.contracts), entry = parseFloat(editFut.entry)
+    if (isNaN(contracts) || contracts <= 0 || isNaN(entry) || entry <= 0) return
+    setFutures(prev => prev.map(f => f.id === editFut.id ? { ...f, contracts, entryPrice: entry } : f))
+    setEditFut(null)
+  }
 
   const addHolding = useCallback(() => {
     const ticker  = newTicker.trim().toUpperCase()
@@ -279,8 +367,24 @@ export default function PortfolioManager() {
     return { ...p, legViews, cost, value: priced ? value : null, pnl, pnlPct, netDelta: priced ? netDelta : null, priced }
   })
 
-  // Combined (equities + options) for the summary card
-  const combinedValue  = totalValue + optTotalValue
+  // Futures rows — notional + mark-to-market P&L (multiplier-aware)
+  let futTotalPnl = 0
+  const futRows = futures.map(f => {
+    const spec = futuresSpec(f.symbol)
+    const mult = spec?.multiplier ?? 1
+    const mk = futMarkBySym[f.symbol] || { price: 0, pct1d: null, loading: true }
+    const sign = f.side === 'long' ? 1 : -1
+    const notional = mk.price * mult * f.contracts
+    const pnl = mk.price > 0 ? sign * (mk.price - f.entryPrice) * mult * f.contracts : null
+    const pnlPct = (mk.price > 0 && f.entryPrice > 0) ? sign * (mk.price - f.entryPrice) / f.entryPrice * 100 : null
+    if (pnl != null) futTotalPnl += pnl
+    return { ...f, label: spec?.label ?? f.symbol, mult, price: mk.price, pct1d: mk.pct1d, loading: mk.loading, notional, pnl, pnlPct }
+  })
+
+  // Combined account equity (equities + options value + futures mark-to-market P&L).
+  // Futures contribute only their unrealized P&L — adding full notional would dwarf
+  // the cash-funded book since you post margin, not the notional.
+  const combinedValue  = totalValue + optTotalValue + futTotalPnl
   const combinedCost   = totalCost + optTotalCost
   const combinedPnl    = combinedValue - combinedCost
   const combinedPnlPct = combinedCost > 0 ? (combinedPnl / combinedCost) * 100 : null
@@ -288,6 +392,7 @@ export default function PortfolioManager() {
   const handleSave = useCallback(() => {
     saveHoldings(holdings)
     saveOptions(options)
+    saveFutures(futures)
     const priced = rows.filter(r => r.price > 0)
     if (priced.length > 0) {
       const total = priced.reduce((s, r) => s + r.value, 0) || 1
@@ -302,7 +407,7 @@ export default function PortfolioManager() {
     setSaveFlash(true)
     setDirty(false)
     setTimeout(() => setSaveFlash(false), 2000)
-  }, [holdings, options, rows, syncToContext])
+  }, [holdings, options, futures, rows, syncToContext])
 
   const lbl: React.CSSProperties = { fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.muted }
 
@@ -320,7 +425,7 @@ export default function PortfolioManager() {
               Track stocks and option positions (single or multi-leg) with live mark-to-market P&amp;L.
             </p>
           </div>
-          {(holdings.length > 0 || options.length > 0) && (
+          {(holdings.length > 0 || options.length > 0 || futures.length > 0) && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
               <button
                 onClick={handleSave}
@@ -358,14 +463,14 @@ export default function PortfolioManager() {
             {/* Add position */}
             <div>
               <div style={{ display: 'flex', marginBottom: 10, border: `1px solid ${T.border}` }}>
-                {(['stock', 'option'] as const).map(m => (
+                {(['stock', 'option', 'future'] as const).map(m => (
                   <button key={m} onClick={() => setEntryMode(m)} style={{
                     flex: 1, padding: '6px 0', cursor: 'pointer', border: 'none',
                     background: entryMode === m ? T.gold : 'transparent',
                     color: entryMode === m ? 'var(--theme-bg)' : T.muted,
                     fontFamily: T.label, fontSize: 9, fontWeight: 700,
-                    letterSpacing: '0.12em', textTransform: 'uppercase',
-                  }}>{m === 'stock' ? 'Stock' : 'Option'}</button>
+                    letterSpacing: '0.1em', textTransform: 'uppercase',
+                  }}>{m === 'stock' ? 'Stock' : m === 'option' ? 'Option' : 'Future'}</button>
                 ))}
               </div>
 
@@ -382,7 +487,7 @@ export default function PortfolioManager() {
                     onKeyDown={e => e.key === 'Enter' && addHolding()} />
                   <button onClick={addHolding} style={addBtn}>Add</button>
                 </div>
-              ) : (
+              ) : entryMode === 'option' ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <input value={optUnderlying} onChange={e => setOptUnderlying(e.target.value.toUpperCase())}
                     placeholder="Underlying (e.g. AAPL)" style={inp} />
@@ -414,6 +519,28 @@ export default function PortfolioManager() {
                   <button onClick={addLeg} style={ghostBtn}>+ Add leg</button>
                   <button onClick={addOption} style={addBtn}>Add Position</button>
                 </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <select value={futSym} onChange={e => setFutSym(e.target.value)} style={inp}>
+                    {FUTURES_BY_GROUP.map(g => (
+                      <optgroup key={g.group} label={g.group}>
+                        {g.items.map(f => <option key={f.sym} value={f.sym}>{f.label} ({f.sym})</option>)}
+                      </optgroup>
+                    ))}
+                  </select>
+                  <div style={{ display: 'flex', gap: 5 }}>
+                    <select value={futSide} onChange={e => setFutSide(e.target.value as Side)} style={{ ...inp, flex: 1 }}>
+                      <option value="long">Long</option><option value="short">Short</option>
+                    </select>
+                    <input value={futContracts} onChange={e => setFutContracts(e.target.value)} placeholder="Contracts" type="number" min="0" style={{ ...inp, flex: 1 }} />
+                  </div>
+                  <input value={futEntry} onChange={e => setFutEntry(e.target.value)} placeholder="Entry price" type="number" min="0" style={inp}
+                    onKeyDown={e => e.key === 'Enter' && addFuture()} />
+                  <div style={{ fontFamily: T.label, fontSize: 8, color: T.muted }}>
+                    {(() => { const s = futuresSpec(futSym); return s ? `1.00 move = $${s.multiplier.toLocaleString()} per contract` : '' })()}
+                  </div>
+                  <button onClick={addFuture} style={addBtn}>Add Position</button>
+                </div>
               )}
             </div>
 
@@ -434,7 +561,7 @@ export default function PortfolioManager() {
 
 
             {/* Summary card */}
-            {(holdings.length > 0 || options.length > 0) && (
+            {(holdings.length > 0 || options.length > 0 || futures.length > 0) && (
               <div style={{ background: T.surface, border: `1px solid ${T.border}`, padding: '12px 14px' }}>
                 <div style={{ ...lbl, marginBottom: 12 }}>Summary</div>
                 {[
@@ -444,6 +571,7 @@ export default function PortfolioManager() {
                   ['Return',         combinedPnlPct != null ? `${combinedPnlPct >= 0 ? '+' : ''}${combinedPnlPct.toFixed(2)}%` : '—'],
                   ['Stocks',         String(holdings.length)],
                   ['Options',        String(options.length)],
+                  ['Futures',        String(futures.length)],
                 ].map(([k, v]) => (
                   <div key={k} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                     <span style={{ fontFamily: T.label, fontSize: 10, color: T.muted }}>{k}</span>
@@ -456,9 +584,9 @@ export default function PortfolioManager() {
 
           {/* ── Holdings table ── */}
           <div>
-            {holdings.length === 0 && options.length === 0 ? (
+            {holdings.length === 0 && options.length === 0 && futures.length === 0 ? (
               <div style={{ height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${T.border}`, color: T.muted, fontFamily: T.mono, fontSize: 11 }}>
-                Add a stock or option, or import a portfolio file
+                Add a stock, option, or future, or import a portfolio file
               </div>
             ) : (<>
               {holdings.length > 0 && (
@@ -477,10 +605,19 @@ export default function PortfolioManager() {
                       return (
                         <tr key={r.ticker} style={{ borderBottom: `1px solid ${T.border}`, background: i % 2 === 0 ? 'transparent' : 'var(--theme-hover, rgba(255,255,255,0.01))' }}>
                           <td style={{ padding: '8px 12px', color: T.gold, fontFamily: T.mono, fontWeight: 700, fontSize: 10, letterSpacing: '0.08em' }}>{r.ticker}</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'right', color: T.text }}>{r.shares.toLocaleString()}</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'right', color: r.costIsAuto ? T.muted : T.text }}>
-                            {r.loading ? '…' : r.avgCost > 0 ? `$${r.avgCost.toFixed(2)}${r.costIsAuto ? '*' : ''}` : '—'}
-                          </td>
+                          {editStock?.i === i ? (<>
+                            <td style={{ padding: '4px 8px', textAlign: 'right' }}>
+                              <input value={editStock.shares} onChange={e => setEditStock({ ...editStock, shares: e.target.value })} type="number" style={editInp} onKeyDown={e => { if (e.key === 'Enter') saveEditStock(); if (e.key === 'Escape') setEditStock(null) }} autoFocus />
+                            </td>
+                            <td style={{ padding: '4px 8px', textAlign: 'right' }}>
+                              <input value={editStock.avgCost} onChange={e => setEditStock({ ...editStock, avgCost: e.target.value })} type="number" placeholder="auto" style={editInp} onKeyDown={e => { if (e.key === 'Enter') saveEditStock(); if (e.key === 'Escape') setEditStock(null) }} />
+                            </td>
+                          </>) : (<>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', color: T.text }}>{r.shares.toLocaleString()}</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', color: r.costIsAuto ? T.muted : T.text }}>
+                              {r.loading ? '…' : r.avgCost > 0 ? `$${r.avgCost.toFixed(2)}${r.costIsAuto ? '*' : ''}` : '—'}
+                            </td>
+                          </>)}
                           <td style={{ padding: '8px 12px', textAlign: 'right', color: T.text }}>{r.loading ? '…' : r.price > 0 ? `$${r.price.toFixed(2)}` : '—'}</td>
                           <td style={{ padding: '8px 12px', textAlign: 'right', color: r.pct1d == null ? T.muted : r.pct1d >= 0 ? T.pos : T.neg }}>
                             {r.loading ? '…' : r.pct1d != null ? `${r.pct1d >= 0 ? '+' : ''}${r.pct1d.toFixed(2)}%` : '—'}
@@ -495,8 +632,14 @@ export default function PortfolioManager() {
                           <td style={{ padding: '8px 12px', textAlign: 'right', color: T.muted }}>
                             {r.loading ? '…' : totalValue > 0 && r.price > 0 ? `${weight.toFixed(1)}%` : '—'}
                           </td>
-                          <td style={{ padding: '8px 6px', textAlign: 'right' }}>
-                            <button onClick={() => removeHolding(i)} style={{ background: 'none', border: 'none', color: T.muted, cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '0 4px' }}>×</button>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                            {editStock?.i === i ? (<>
+                              <button onClick={saveEditStock} style={{ ...editBtn, color: T.gold }}>Save</button>
+                              <button onClick={() => setEditStock(null)} style={{ ...editBtn, color: T.muted }}>×</button>
+                            </>) : (<>
+                              <button onClick={() => setEditStock({ i, shares: String(holdings[i].shares), avgCost: holdings[i].avgCost > 0 ? String(holdings[i].avgCost) : '' })} style={{ ...editBtn, color: T.muted }}>Edit</button>
+                              <button onClick={() => removeHolding(i)} style={{ background: 'none', border: 'none', color: T.muted, cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '0 4px' }}>×</button>
+                            </>)}
                           </td>
                         </tr>
                       )
@@ -572,6 +715,61 @@ export default function PortfolioManager() {
                   </table>
                   <div style={{ padding: '4px 12px 6px', fontSize: 9, color: T.muted, fontFamily: T.mono }}>
                     Δ = net share-equivalent delta. Marks from the live chain, Black-Scholes when a contract is unlisted.
+                  </div>
+                </div>
+              )}
+
+              {/* ── Futures ── */}
+              {futures.length > 0 && (
+                <div style={{ background: T.surface, border: `1px solid ${T.border}`, overflow: 'hidden', marginTop: (holdings.length > 0 || options.length > 0) ? 16 : 0 }}>
+                  <div style={{ ...lbl, padding: '8px 12px', borderBottom: `1px solid ${T.border}`, background: T.bg }}>Futures</div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: T.mono, fontSize: 10 }}>
+                    <thead>
+                      <tr style={{ borderBottom: `1px solid ${T.border}`, background: T.bg }}>
+                        {['Contract', 'Side', 'Qty', 'Entry', 'Mark', '1D %', 'Notional', 'P&L', 'Return', ''].map(h => (
+                          <th key={h} style={{ padding: '7px 12px', textAlign: (h === 'Contract' || h === 'Side') ? 'left' : 'right', fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.muted, whiteSpace: 'nowrap' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {futRows.map((f, i) => (
+                        <tr key={f.id} style={{ borderBottom: `1px solid ${T.border}`, background: i % 2 === 0 ? 'transparent' : 'var(--theme-hover, rgba(255,255,255,0.01))' }}>
+                          <td style={{ padding: '8px 12px' }}>
+                            <div style={{ color: T.gold, fontWeight: 700, letterSpacing: '0.08em' }}>{f.symbol}</div>
+                            <div style={{ color: T.muted, fontSize: 9, marginTop: 2 }}>{f.label}</div>
+                          </td>
+                          <td style={{ padding: '8px 12px', color: f.side === 'long' ? T.pos : T.neg, fontWeight: 700, textTransform: 'capitalize' }}>{f.side}</td>
+                          {editFut?.id === f.id ? (<>
+                            <td style={{ padding: '4px 8px', textAlign: 'right' }}>
+                              <input value={editFut.contracts} onChange={e => setEditFut({ ...editFut, contracts: e.target.value })} type="number" style={{ ...editInp, width: 50 }} onKeyDown={e => { if (e.key === 'Enter') saveEditFut(); if (e.key === 'Escape') setEditFut(null) }} autoFocus />
+                            </td>
+                            <td style={{ padding: '4px 8px', textAlign: 'right' }}>
+                              <input value={editFut.entry} onChange={e => setEditFut({ ...editFut, entry: e.target.value })} type="number" style={editInp} onKeyDown={e => { if (e.key === 'Enter') saveEditFut(); if (e.key === 'Escape') setEditFut(null) }} />
+                            </td>
+                          </>) : (<>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', color: T.text }}>{f.contracts}</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', color: T.text }}>{f.entryPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                          </>)}
+                          <td style={{ padding: '8px 12px', textAlign: 'right', color: T.text }}>{f.loading ? '…' : f.price > 0 ? f.price.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'}</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', color: f.pct1d == null ? T.muted : f.pct1d >= 0 ? T.pos : T.neg }}>{f.pct1d != null ? `${f.pct1d >= 0 ? '+' : ''}${f.pct1d.toFixed(2)}%` : '—'}</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', color: T.text }}>{f.price > 0 ? fmtMoney(f.notional) : '—'}</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, color: f.pnl == null ? T.muted : f.pnl >= 0 ? T.pos : T.neg }}>{f.pnl != null ? `${f.pnl >= 0 ? '+' : ''}${fmtMoney(f.pnl)}` : '…'}</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', color: f.pnlPct == null ? T.muted : f.pnlPct >= 0 ? T.pos : T.neg }}>{f.pnlPct != null ? `${f.pnlPct >= 0 ? '+' : ''}${f.pnlPct.toFixed(1)}%` : '—'}</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                            {editFut?.id === f.id ? (<>
+                              <button onClick={saveEditFut} style={{ ...editBtn, color: T.gold }}>Save</button>
+                              <button onClick={() => setEditFut(null)} style={{ ...editBtn, color: T.muted }}>×</button>
+                            </>) : (<>
+                              <button onClick={() => setEditFut({ id: f.id, contracts: String(f.contracts), entry: String(f.entryPrice) })} style={{ ...editBtn, color: T.muted }}>Edit</button>
+                              <button onClick={() => removeFuture(f.id)} style={{ background: 'none', border: 'none', color: T.muted, cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '0 4px' }}>×</button>
+                            </>)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div style={{ padding: '4px 12px 6px', fontSize: 9, color: T.muted, fontFamily: T.mono }}>
+                    Notional = mark × contract multiplier × contracts. P&L is mark-to-market on the continuous contract.
                   </div>
                 </div>
               )}
