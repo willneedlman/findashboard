@@ -369,40 +369,58 @@ function AdminPanel() {
 // ── Auth forms ────────────────────────────────────────────────────────────────
 const MIN_PW = 8
 
+const emailValid = (e: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e.trim())
+
 function AuthPanel({ onDone }: { onDone: () => void }) {
-  const { login, register, setPassword } = useTheme()
+  const { login, register, setPassword, setEmail, forgotPassword, mustSetEmail } = useTheme()
+  const [step,    setStep]   = useState<'auth' | 'set-password' | 'set-email' | 'forgot'>('auth')
   const [mode,    setMode]   = useState<'login' | 'register'>('login')
   const [uname,   setUname]  = useState('')
   const [display, setDisplay] = useState('')
+  const [emailIn, setEmailIn] = useState('')
   const [pw,      setPw]     = useState('')
   const [err,     setErr]    = useState('')
+  const [info,    setInfo]   = useState('')
   const [loading, setLoading] = useState(false)
-  // Forced migration step for legacy 4-digit-PIN users.
-  const [migrate, setMigrate] = useState(false)
   const [newPw,   setNewPw]  = useState('')
   const [newPw2,  setNewPw2] = useState('')
 
   const inp: React.CSSProperties = { background: 'var(--theme-bg, #0a1220)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-mono)', fontSize: 12, padding: '6px 10px', width: '100%', outline: 'none', boxSizing: 'border-box' }
   const lbl: React.CSSProperties = { fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary)', textTransform: 'uppercase', letterSpacing: '0.12em', display: 'block', marginBottom: 4 }
   const submitBtn: React.CSSProperties = { background: 'var(--theme-primary, #c9a84c)', border: 'none', color: '#0a1220', fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '10px 0', cursor: 'pointer', width: '100%', transition: 'background 0.15s' }
+  const linkBtn: React.CSSProperties = { background: 'none', border: 'none', color: 'var(--theme-secondary)', fontFamily: 'var(--theme-sans)', fontSize: 10, cursor: 'pointer', padding: 0, textDecoration: 'underline', letterSpacing: '0.04em', alignSelf: 'flex-start' }
+  const liveBtn = (fn: () => void, label: string) => (
+    <button onClick={fn} disabled={loading} style={{ ...submitBtn, background: loading ? 'rgba(255,255,255,0.08)' : submitBtn.background, color: loading ? 'var(--theme-secondary)' : submitBtn.color, cursor: loading ? 'default' : 'pointer' }}>
+      {loading ? '…' : label}
+    </button>
+  )
+  const errLine = err && <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, color: '#ef4444' }}>{err}</span>
+  const infoLine = info && <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, color: 'var(--theme-positive, #4ea674)', lineHeight: '15px' }}>{info}</span>
+  const wrap = { maxWidth: 340, display: 'flex', flexDirection: 'column' as const, gap: 14 }
 
   const handleSubmit = async () => {
     setErr('')
     const trimmedUser = uname.trim()
     const cred = pw   // password (legacy PIN still accepted by server on login)
     if (!trimmedUser || !cred) { setErr('Enter username and password.'); return }
-    if (mode === 'register' && cred.length < MIN_PW) { setErr(`Password must be at least ${MIN_PW} characters.`); return }
-    if (mode === 'register' && trimmedUser.length < 2) { setErr('Username must be at least 2 characters.'); return }
+    if (mode === 'register') {
+      if (trimmedUser.length < 2) { setErr('Username must be at least 2 characters.'); return }
+      if (cred.length < MIN_PW) { setErr(`Password must be at least ${MIN_PW} characters.`); return }
+      if (!emailValid(emailIn)) { setErr('Enter a valid email address.'); return }
+    }
     setLoading(true)
     try {
       if (mode === 'login') {
         const res = await login(trimmedUser, cred)
         if (!res) setErr('Username or password not recognized.')
-        else if (res === 'migrate') setMigrate(true)   // legacy PIN — force a password
+        else if (res === 'migrate') setStep('set-password')   // legacy PIN — force a password
+        else if (res === 'set-email') setStep('set-email')    // legacy account with no email
         else onDone()
       } else {
-        const ok = await register(trimmedUser, display.trim() || trimmedUser, cred)
-        if (!ok) setErr('Username already taken — try signing in instead.')
+        const res = await register(trimmedUser, display.trim() || trimmedUser, cred, emailIn.trim())
+        if (res === 'taken') setErr('Username already taken — try signing in instead.')
+        else if (res === 'email-taken') setErr('That email is already registered.')
+        else if (!res) setErr('Could not create your profile. Try again.')
         else onDone()
       }
     } finally {
@@ -410,39 +428,95 @@ function AuthPanel({ onDone }: { onDone: () => void }) {
     }
   }
 
-  const handleMigrate = async () => {
+  const handleSetPassword = async () => {
     setErr('')
     if (newPw.length < MIN_PW) { setErr(`Password must be at least ${MIN_PW} characters.`); return }
     if (newPw !== newPw2) { setErr('Passwords do not match.'); return }
     setLoading(true)
     try {
       const ok = await setPassword(newPw)
-      if (!ok) setErr('Could not set password — please sign in again.')
+      if (!ok) { setErr('Could not set password — please sign in again.'); return }
+      // Legacy accounts also lack an email: chain to the email gate when needed.
+      if (mustSetEmail) { setStep('set-email'); setNewPw(''); setNewPw2('') }
       else onDone()
     } finally {
       setLoading(false)
     }
   }
 
+  const handleSetEmail = async () => {
+    setErr('')
+    if (!emailValid(emailIn)) { setErr('Enter a valid email address.'); return }
+    setLoading(true)
+    try {
+      const res = await setEmail(emailIn.trim())
+      if (res === 'taken') setErr('That email is already registered.')
+      else if (!res) setErr('Could not save your email. Try again.')
+      else onDone()
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleForgot = async () => {
+    setErr(''); setInfo('')
+    if (!emailValid(emailIn)) { setErr('Enter a valid email address.'); return }
+    setLoading(true)
+    try {
+      await forgotPassword(emailIn.trim())
+      setInfo('If that email has an account, a reset link is on its way. Check your inbox.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   // ── Forced password migration for legacy PIN accounts ──
-  if (migrate) {
+  if (step === 'set-password') {
     return (
-      <div style={{ maxWidth: 340, display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={wrap}>
         <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: 'var(--theme-text)', lineHeight: '16px' }}>
           For your security, 4-digit PINs are no longer supported. Please set a password to continue.
         </div>
         <div><label style={lbl}>New password ({MIN_PW}+ characters)</label><input style={inp} type="password" autoComplete="new-password" value={newPw} onChange={e => setNewPw(e.target.value)} autoFocus disabled={loading} /></div>
-        <div><label style={lbl}>Confirm password</label><input style={inp} type="password" autoComplete="new-password" value={newPw2} onChange={e => setNewPw2(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleMigrate()} disabled={loading} /></div>
-        {err && <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, color: '#ef4444' }}>{err}</span>}
-        <button onClick={handleMigrate} disabled={loading} style={{ ...submitBtn, background: loading ? 'rgba(255,255,255,0.08)' : submitBtn.background, color: loading ? 'var(--theme-secondary)' : submitBtn.color, cursor: loading ? 'default' : 'pointer' }}>
-          {loading ? '…' : 'Set Password'}
-        </button>
+        <div><label style={lbl}>Confirm password</label><input style={inp} type="password" autoComplete="new-password" value={newPw2} onChange={e => setNewPw2(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSetPassword()} disabled={loading} /></div>
+        {errLine}
+        {liveBtn(handleSetPassword, 'Set Password')}
+      </div>
+    )
+  }
+
+  // ── Email gate for legacy accounts created before email was required ──
+  if (step === 'set-email') {
+    return (
+      <div style={wrap}>
+        <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: 'var(--theme-text)', lineHeight: '16px' }}>
+          Add an email to your account. You will need it to recover your password if you ever forget it.
+        </div>
+        <div><label style={lbl}>Email</label><input style={inp} type="email" autoComplete="email" value={emailIn} onChange={e => setEmailIn(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSetEmail()} autoFocus disabled={loading} /></div>
+        {errLine}
+        {liveBtn(handleSetEmail, 'Save Email')}
+      </div>
+    )
+  }
+
+  // ── Forgot password: request a reset link ──
+  if (step === 'forgot') {
+    return (
+      <div style={wrap}>
+        <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: 'var(--theme-text)', lineHeight: '16px' }}>
+          Enter the email on your account. We will send you a link to set a new password.
+        </div>
+        <div><label style={lbl}>Email</label><input style={inp} type="email" autoComplete="email" value={emailIn} onChange={e => setEmailIn(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleForgot()} autoFocus disabled={loading} /></div>
+        {errLine}
+        {infoLine}
+        {liveBtn(handleForgot, 'Send Reset Link')}
+        <button onClick={() => { setStep('auth'); setErr(''); setInfo('') }} style={linkBtn}>Back to sign in</button>
       </div>
     )
   }
 
   return (
-    <div style={{ maxWidth: 340, display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div style={wrap}>
       <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', marginBottom: 4 }}>
         {(['login', 'register'] as const).map(m => (
           <button key={m} onClick={() => { setMode(m); setErr('') }} style={{ flex: 1, background: 'none', border: 'none', borderBottom: mode === m ? '2px solid var(--theme-primary)' : '2px solid transparent', color: mode === m ? 'var(--theme-primary)' : 'var(--theme-secondary)', fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '6px 0', cursor: 'pointer' }}>
@@ -453,11 +527,11 @@ function AuthPanel({ onDone }: { onDone: () => void }) {
 
       <div><label style={lbl}>Username</label><input style={inp} value={uname} onChange={e => setUname(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSubmit()} autoFocus disabled={loading} /></div>
       {mode === 'register' && <div><label style={lbl}>Display Name <span style={{ color: 'var(--theme-text-faint, rgba(255,255,255,0.22))' }}>(optional)</span></label><input style={inp} value={display} onChange={e => setDisplay(e.target.value)} disabled={loading} /></div>}
+      {mode === 'register' && <div><label style={lbl}>Email</label><input style={inp} type="email" autoComplete="email" value={emailIn} onChange={e => setEmailIn(e.target.value)} disabled={loading} /></div>}
       <div><label style={lbl}>Password{mode === 'register' ? ` (${MIN_PW}+ characters)` : ''}</label><input style={inp} type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} value={pw} onChange={e => setPw(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSubmit()} disabled={loading} /></div>
-      {err && <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, color: '#ef4444' }}>{err}</span>}
-      <button onClick={handleSubmit} disabled={loading} style={{ ...submitBtn, background: loading ? 'rgba(255,255,255,0.08)' : submitBtn.background, color: loading ? 'var(--theme-secondary)' : submitBtn.color, cursor: loading ? 'default' : 'pointer' }}>
-        {loading ? '…' : mode === 'login' ? 'Sign In' : 'Create & Sign In'}
-      </button>
+      {errLine}
+      {liveBtn(handleSubmit, mode === 'login' ? 'Sign In' : 'Create & Sign In')}
+      {mode === 'login' && <button onClick={() => { setStep('forgot'); setErr(''); setInfo('') }} style={linkBtn}>Forgot password?</button>}
     </div>
   )
 }

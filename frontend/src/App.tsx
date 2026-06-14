@@ -56,6 +56,7 @@ const IVTracker          = lazy(() => import('./pages/IVTracker'))
 const OptionsMarketMaker = lazy(() => import('./pages/OptionsMarketMaker'))
 const UnusualOptions     = lazy(() => import('./pages/UnusualOptions'))
 const Compare            = lazy(() => import('./pages/Compare'))
+const ResetPassword      = lazy(() => import('./pages/ResetPassword'))
 
 function PageLoader() {
   return (
@@ -108,6 +109,9 @@ export default function App() {
             <Route path="/product/portfolio" element={<MktPortfolio />} />
             <Route path="/product/macro"     element={<MktMacro />} />
             <Route path="/product/trading"   element={<MktTrading />} />
+
+            {/* Password reset — chrome-free, reached from the email link */}
+            <Route path="/reset-password"    element={<ResetPassword />} />
 
             {/* Legal — marketing chrome (no terminal sidebar) */}
             <Route element={<MktShell />}>

@@ -28,12 +28,16 @@ interface ThemeCtx {
   user:        User | null
   allUsers:    User[]
   setTheme:    (t: Partial<Theme>) => void
-  login:       (username: string, password: string) => Promise<'ok' | 'migrate' | false>
+  login:       (username: string, password: string) => Promise<'ok' | 'migrate' | 'set-email' | false>
   logout:      () => void
-  register:    (username: string, displayName: string, password: string) => Promise<boolean>
+  register:    (username: string, displayName: string, password: string, email: string) => Promise<boolean | 'taken' | 'email-taken'>
   deleteUser:  (id: string) => void
   mustSetPassword: boolean
   setPassword: (newPassword: string) => Promise<boolean>
+  mustSetEmail: boolean
+  setEmail:    (email: string) => Promise<boolean | 'taken'>
+  forgotPassword: (email: string) => Promise<boolean>
+  resetPassword:  (token: string, newPassword: string) => Promise<boolean>
 }
 
 // ── Defaults ──────────────────────────────────────────────────────────────────
@@ -238,12 +242,15 @@ const Ctx = createContext<ThemeCtx>({
   setTheme: () => {}, login: async () => false as const, logout: () => {},
   register: async () => false, deleteUser: () => {},
   mustSetPassword: false, setPassword: async () => false,
+  mustSetEmail: false, setEmail: async () => false,
+  forgotPassword: async () => false, resetPassword: async () => false,
 })
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [users,   setUsersState] = useState<User[]>(loadUsers)
   const [userId,  setUserId]     = useState<string | null>(loadSession)
   const [mustSetPassword, setMustSetPassword] = useState(false)
+  const [mustSetEmail, setMustSetEmail] = useState(false)
 
   const user = users.find(u => u.id === userId) ?? null
   const theme = user?.theme ?? DEFAULT_THEME
@@ -263,7 +270,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     persistUsers(users.map(u => u.id === userId ? { ...u, theme: { ...u.theme, ...patch } } : u))
   }, [userId, users, persistUsers])
 
-  const login = useCallback(async (username: string, password: string): Promise<'ok' | 'migrate' | false> => {
+  const login = useCallback(async (username: string, password: string): Promise<'ok' | 'migrate' | 'set-email' | false> => {
     try {
       const res = await fetch('/api/users/login', {
         method: 'POST',
@@ -271,9 +278,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ username, pin: password }),
       })
       if (!res.ok) return false
-      const data: { id: string; username: string; display_name: string; created_at: string; token?: string; must_set_password?: boolean } = await res.json()
+      const data: { id: string; username: string; display_name: string; created_at: string; token?: string; must_set_password?: boolean; must_set_email?: boolean } = await res.json()
       if (data.token) localStorage.setItem('ft-session-token', data.token)
       setMustSetPassword(!!data.must_set_password)
+      setMustSetEmail(!!data.must_set_email)
       const existing = users.find(u => u.id === data.id)
       const u: User = {
         id:          data.id,
@@ -288,7 +296,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       persistUsers(next)
       setUserId(u.id)
       saveSession(u.id)
-      return data.must_set_password ? 'migrate' : 'ok'
+      return data.must_set_password ? 'migrate' : data.must_set_email ? 'set-email' : 'ok'
     } catch {
       return false
     }
@@ -307,19 +315,26 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     applyTheme(DEFAULT_THEME)
   }, [])
 
-  const register = useCallback(async (username: string, displayName: string, password: string): Promise<boolean> => {
+  const register = useCallback(async (username: string, displayName: string, password: string, email: string): Promise<boolean | 'taken' | 'email-taken'> => {
     const id = crypto.randomUUID()
     const createdAt = new Date().toISOString()
     try {
       const res = await fetch('/api/users/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, username, display_name: displayName || username, pin: password, created_at: createdAt }),
+        body: JSON.stringify({ id, username, display_name: displayName || username, pin: password, created_at: createdAt, email }),
       })
-      if (!res.ok) return false
+      if (!res.ok) {
+        if (res.status === 409) {
+          const d = await res.json().catch(() => null)
+          return /email/i.test(d?.detail ?? '') ? 'email-taken' : 'taken'
+        }
+        return false
+      }
       const data = await res.json().catch(() => null)
       if (data?.token) localStorage.setItem('ft-session-token', data.token)
       setMustSetPassword(false)   // new accounts register with a password directly
+      setMustSetEmail(false)
       const u: User = { id, username, displayName: displayName || username, theme: { ...DEFAULT_THEME }, createdAt }
       persistUsers([...users, u])
       setUserId(id)
@@ -347,13 +362,56 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
+  const setEmail = useCallback(async (email: string): Promise<boolean | 'taken'> => {
+    const token = localStorage.getItem('ft-session-token')
+    if (!token) return false
+    try {
+      const res = await fetch('/api/users/set-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ email }),
+      })
+      if (!res.ok) return res.status === 409 ? 'taken' : false
+      setMustSetEmail(false)
+      return true
+    } catch {
+      return false
+    }
+  }, [])
+
+  const forgotPassword = useCallback(async (email: string): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/users/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      return res.ok   // always ok-shaped server-side; no user enumeration
+    } catch {
+      return false
+    }
+  }, [])
+
+  const resetPassword = useCallback(async (token: string, newPassword: string): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/users/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, new_password: newPassword }),
+      })
+      return res.ok
+    } catch {
+      return false
+    }
+  }, [])
+
   const deleteUser = useCallback((id: string) => {
     persistUsers(users.filter(u => u.id !== id))
     if (userId === id) { setUserId(null); saveSession(null); applyTheme(DEFAULT_THEME) }
   }, [users, userId, persistUsers])
 
   return (
-    <Ctx.Provider value={{ theme, user, allUsers: users, setTheme, login, logout, register, deleteUser, mustSetPassword, setPassword }}>
+    <Ctx.Provider value={{ theme, user, allUsers: users, setTheme, login, logout, register, deleteUser, mustSetPassword, setPassword, mustSetEmail, setEmail, forgotPassword, resetPassword }}>
       {children}
     </Ctx.Provider>
   )
