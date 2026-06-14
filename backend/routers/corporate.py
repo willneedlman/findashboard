@@ -333,12 +333,14 @@ async def get_peer_valuation(ticker: str):
             ps    = _n(d.get("priceToSalesTrailing12Months") or d.get("priceToSales"))
             pb    = _n(d.get("priceToBook"))
             ev_ebitda = _n(d.get("enterpriseToEbitda"))
+            # yfinance returns these as decimal fractions (0.6764 = 67.64%); the
+            # frontend multiplies by 100 to render a percent, so keep them raw here.
             try:
-                roe = round(float(d["returnOnEquity"]) * 100, 2) if d.get("returnOnEquity") else None
+                roe = round(float(d["returnOnEquity"]), 4) if d.get("returnOnEquity") else None
             except (TypeError, ValueError):
                 roe = None
             try:
-                rev_growth = round(float(d["revenueGrowth"]) * 100, 2) if d.get("revenueGrowth") else None
+                rev_growth = round(float(d["revenueGrowth"]), 4) if d.get("revenueGrowth") else None
             except (TypeError, ValueError):
                 rev_growth = None
             try:
