@@ -11,7 +11,7 @@ const C = {
   mono: 'var(--theme-mono)', sans: 'var(--theme-sans)',
 }
 
-const LABEL: React.CSSProperties = { fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', marginBottom: 4, display: 'block' }
+const LABEL: React.CSSProperties = { fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', marginBottom: 4, display: 'block' }
 
 const TONE_COLOR: Record<string, string> = {
   bullish: C.pos, neutral: C.muted, cautious: C.warn, mixed: C.blue,

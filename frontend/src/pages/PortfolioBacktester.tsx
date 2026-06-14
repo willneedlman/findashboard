@@ -73,6 +73,7 @@ const PORT_INPUT: React.CSSProperties = {
 }
 
 const PORT_LABEL: React.CSSProperties = {
+  fontFamily: 'var(--theme-sans)',
   fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
   textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', marginBottom: 4, display: 'block',
 }
@@ -127,6 +128,7 @@ const ALGO_INPUT: React.CSSProperties = {
 }
 
 const ALGO_LABEL: React.CSSProperties = {
+  fontFamily: 'var(--theme-sans)',
   fontSize: 9,
   fontWeight: 700,
   letterSpacing: '0.14em',

@@ -238,11 +238,11 @@ function InsiderPanel({ sorted, insiderData, insiderPending }: {
   )
 }
 
-const LABEL_S: React.CSSProperties = { fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)' }
+const LABEL_S: React.CSSProperties = { fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)' }
 const TH_S: React.CSSProperties    = { fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', padding: '6px 10px', textAlign: 'left', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', whiteSpace: 'nowrap' }
 const TD_S: React.CSSProperties    = { padding: '5px 10px', borderBottom: '1px solid var(--theme-hover, rgba(255,255,255,0.03))', fontSize: 11, color: 'var(--theme-text, #d7e3fc)', verticalAlign: 'middle' }
 
-const LABEL: React.CSSProperties = { fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)' }
+const LABEL: React.CSSProperties = { fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)' }
 const INPUT: React.CSSProperties = { background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: 'var(--theme-text, #d7e3fc)', fontSize: 12, padding: '5px 8px', width: '100%', outline: 'none', fontFamily: 'var(--theme-mono)' }
 const TH: React.CSSProperties = { fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', padding: '8px 10px', textAlign: 'left', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', whiteSpace: 'nowrap' }
 const TD: React.CSSProperties = { padding: '7px 10px', borderBottom: '1px solid var(--theme-hover, rgba(255,255,255,0.04))', fontSize: 12, color: 'var(--theme-text, #d7e3fc)', verticalAlign: 'middle' }

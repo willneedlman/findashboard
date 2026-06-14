@@ -18,6 +18,7 @@ export const SELECT: React.CSSProperties = {
 }
 
 export const LABEL: React.CSSProperties = {
+  fontFamily: 'var(--theme-sans)',
   fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase',
   color: 'var(--theme-secondary, #99907e)', marginBottom: 5, display: 'block',
 }
@@ -31,6 +32,7 @@ export const HINT: React.CSSProperties = {
 export const SIDEBAR: React.CSSProperties = { padding: 14, display: 'flex', flexDirection: 'column', gap: 14 }
 
 export const SECTION: React.CSSProperties = {
+  fontFamily: 'var(--theme-sans)',
   fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase',
   color: 'var(--theme-text, #d7e3fc)', paddingBottom: 6,
   borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))',

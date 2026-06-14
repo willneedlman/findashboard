@@ -27,6 +27,7 @@ const INPUT: React.CSSProperties = {
   width: '100%', boxSizing: 'border-box',
 }
 const LABEL: React.CSSProperties = {
+  fontFamily: 'var(--theme-sans)',
   fontSize: 9, fontWeight: 700, letterSpacing: '0.14em',
   textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', marginBottom: 4, display: 'block',
 }
