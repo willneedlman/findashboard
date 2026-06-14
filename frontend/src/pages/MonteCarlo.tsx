@@ -69,7 +69,7 @@ const makeLeg = (ticker: string, weight: number): Leg => ({
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 
-import { INPUT, LABEL, TICK } from './valuationShared'
+import { INPUT, LABEL, TICK, RailSection } from './valuationShared'
 
 function ChartPanel({ label, height, children }: { label: React.ReactNode; height: number; children: React.ReactNode }) {
   return (
@@ -105,6 +105,7 @@ export default function MonteCarlo() {
     return [makeLeg('SPY', 100)]
   })
   const [horizon, setHorizon] = useState(252)
+  const [paramsOpen, setParamsOpen] = useState(true)
   const [nSims, setNSims] = useState(500)
   const [benchmark, setBenchmark] = useState('SPY')
   const [targetPrice, setTargetPrice] = useState(0)
@@ -319,17 +320,9 @@ export default function MonteCarlo() {
 
   return (
     <PageWrapper title="Monte Carlo Simulator">
-      <SidebarLayout sidebarWidth={210} sidebarTitle="Simulation Controls" sidebar={<>
-
-        {/* ── Left sidebar ─────────────────────────────────────────────── */}
-
-          <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)' }}>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#ffffff' }}>
-              Simulation Parameters
-            </div>
-          </div>
-
-          <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 10, flex: 1, overflowY: 'auto' }}>
+      <SidebarLayout sidebarWidth={210} sidebarTitle="" sidebar={<>
+          <RailSection title="Simulation Parameters" open={paramsOpen} onToggle={() => setParamsOpen(o => !o)}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
 
             {/* Per-leg inputs */}
             <div>
@@ -539,6 +532,7 @@ export default function MonteCarlo() {
               {isPending ? 'Simulating…' : 'Run Simulation'}
             </button>
           </div>
+          </RailSection>
 
       {/* ── Right panel ──────────────────────────────────────────────── */}
       </>}>

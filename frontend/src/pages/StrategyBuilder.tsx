@@ -148,7 +148,7 @@ function fmtExpiry(exp: string): string {
   const d = new Date(exp + 'T12:00:00')
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
-import { TOOLTIP_STYLE, TICK } from './valuationShared'
+import { TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
 
 // Pure intrinsic payoff at expiry — no Black-Scholes needed
 function intrinsic(S: number, leg: Leg): number {
@@ -160,6 +160,7 @@ function intrinsic(S: number, leg: Leg): number {
 export default function StrategyBuilder() {
   const [legs, setLegs]               = useState<Leg[]>(PRESETS['Long Call'])
   const [preset, setPreset]           = useState('Long Call')
+  const [paramsOpen, setParamsOpen]   = useState(true)
   const [openGroups, setOpenGroups]   = useState<Record<string, boolean>>(
     Object.fromEntries(PRESET_GROUPS.map(g => [g.label, g.label === 'Single Leg']))
   )
@@ -400,8 +401,9 @@ export default function StrategyBuilder() {
 
   return (
     <PageWrapper title="Strategy Builder">
-      <SidebarLayout sidebarWidth={210} sidebarTitle="Parameters" sidebar={<>
-          <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 10, flex: 1, overflowY: 'auto' }}>
+      <SidebarLayout sidebarWidth={210} sidebarTitle="" sidebar={<>
+          <RailSection title="Parameters" open={paramsOpen} onToggle={() => setParamsOpen(o => !o)}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
 
             {/* Presets */}
             <div>
@@ -573,6 +575,7 @@ export default function StrategyBuilder() {
               </div>
             </div>
           </div>
+          </RailSection>
         </>}>
 
         {/* ── Right: payoff chart ── */}

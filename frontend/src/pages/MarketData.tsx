@@ -4,6 +4,7 @@ import { useMutation } from '@tanstack/react-query'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
+import { RailSection } from './valuationShared'
 import TVChart from '../components/charts/TVChart'
 import { fetchMarketHistory } from '../hooks/useApi'
 import { TOOLTIP_STYLE, CROSSHAIR_CURSOR, BAR_CURSOR } from '../components/ChartTooltip'
@@ -44,6 +45,7 @@ export default function MarketData() {
   const isMobile = useIsMobile()
   const [searchParams, setSearchParams] = useSearchParams()
   const [ticker, setTickerState] = useState(searchParams.get('ticker') || 'SPY')
+  const [paramsOpen, setParamsOpen] = useState(true)
   const [start, setStartState]   = useState(searchParams.get('start')  || '2020-01-01')
   const [end, setEndState]       = useState(searchParams.get('end')    || new Date().toISOString().split('T')[0])
 
@@ -66,8 +68,9 @@ export default function MarketData() {
 
   return (
     <PageWrapper title="Market Data">
-      <SidebarLayout sidebarWidth={180} sidebarTitle="Market Controls" sidebar={
-        <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <SidebarLayout sidebarWidth={210} sidebarTitle="" sidebar={
+        <RailSection title="Market Controls" open={paramsOpen} onToggle={() => setParamsOpen(o => !o)}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div>
             <span className="ft-sidebar-label">Ticker</span>
             <input
@@ -113,7 +116,8 @@ export default function MarketData() {
           </button>
 
           {error && <div style={{ color: 'var(--theme-negative)', fontSize: 10, lineHeight: '14px' }}>Error: check ticker and date range.</div>}
-        </div>}>
+        </div>
+        </RailSection>}>
 
         {/* Right: metrics + charts */}
           {data && (
