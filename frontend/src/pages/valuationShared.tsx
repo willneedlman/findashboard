@@ -84,6 +84,28 @@ export const METRIC_GRID: React.CSSProperties = {
 
 export const STACK: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: 18 }
 
+// Canonical collapsible rail section — the Asset Comparison sidebox pattern.
+// Header is uppercase, gold when open / muted when closed, with an optional
+// "· badge" count and a chevron; each section carries a full-width bottom rule.
+// Use this to build every tool's side/parameter rail so they read as one system.
+export function RailSection({ title, badge, open, onToggle, children }:
+  { title: string; badge?: string | number; open: boolean; onToggle: () => void; children: React.ReactNode }) {
+  return (
+    <div style={{ borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+      <button onClick={onToggle} style={{
+        width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 12px',
+        background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700,
+        letterSpacing: '0.12em', textTransform: 'uppercase',
+        color: open ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #99907e)', outline: 'none',
+      }}>
+        <span>{title}{badge != null && badge !== '' ? <span style={{ color: 'var(--theme-secondary, #99907e)', fontWeight: 400 }}> · {badge}</span> : null}</span>
+        <span style={{ display: 'inline-block', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s', color: 'var(--theme-secondary, #99907e)' }}>›</span>
+      </button>
+      {open && <div style={{ padding: '2px 12px 14px' }}>{children}</div>}
+    </div>
+  )
+}
+
 export function fmtM(v: number) {
   const abs = Math.abs(v)
   if (abs >= 1_000_000) return `$${(v / 1_000_000).toFixed(2)}T`
