@@ -6,7 +6,7 @@ import SidebarLayout from '../components/SidebarLayout'
 import axios from 'axios'
 import EmptyState from '../components/EmptyState'
 import { useChartColors } from '../hooks/useChartColors'
-import { INPUT, LABEL, TOOLTIP_STYLE, TICK } from './valuationShared'
+import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
 
 function MetricCard({ label, value, help, sub }: { label: string; value: string; help?: string; sub?: string }) {
   const [show, setShow] = useState(false)
@@ -55,6 +55,7 @@ function SectionHeader({ label }: { label: string }) {
 export function ImpliedProbabilityContent() {
   const cc = useChartColors()
   const [ticker, setTicker] = useState('SPY')
+  const [paramsOpen, setParamsOpen] = useState(true)
   const [expiry, setExpiry] = useState(() => {
     const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().split('T')[0]
   })
@@ -80,11 +81,9 @@ export function ImpliedProbabilityContent() {
   const dist = data?.dist
 
   return (
-    <SidebarLayout sidebarWidth={190} sidebarTitle="Probability Inputs" sidebar={<>
-          <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)' }}>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#ffffff' }}>Distribution Parameters</div>
-          </div>
-          <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
+    <SidebarLayout sidebarWidth={210} sidebarTitle="" sidebar={<>
+          <RailSection title="Distribution Parameters" open={paramsOpen} onToggle={() => setParamsOpen(o => !o)}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div>
               <label style={LABEL}>Target Ticker</label>
               <input value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())} style={INPUT}
@@ -99,7 +98,8 @@ export function ImpliedProbabilityContent() {
               Black-Scholes risk-neutral pricing. Reflects market hedging cost, not a directional forecast.
             </div>
           </div>
-          <div style={{ padding: 10, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+          </RailSection>
+          <div style={{ padding: 12 }}>
             <button onClick={() => mutate()} disabled={isPending} style={{
               width: '100%', background: 'var(--theme-surface, #1f2a3d)', border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)',
               fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',

@@ -6,7 +6,7 @@ import SidebarLayout from '../components/SidebarLayout'
 import { fetchGEX, fetchOptionsChain } from '../hooks/useApi'
 import EmptyState from '../components/EmptyState'
 import { useChartColors } from '../hooks/useChartColors'
-import { INPUT, LABEL, TOOLTIP_STYLE, TICK } from './valuationShared'
+import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
 
 function MetricCard({ label, value, sub, help }: { label: string; value: string; sub?: string; help?: string }) {
   const [show, setShow] = useState(false)
@@ -50,6 +50,7 @@ export default function DealerGEX() {
   const cc = useChartColors()
   const [ticker, setTicker] = useState('SPY')
   const [nStrikes, setNStrikes] = useState(20)
+  const [paramsOpen, setParamsOpen] = useState(true)
   const [expiry, setExpiry] = useState<string>('')
 
   const { mutate, data, isPending } = useMutation({
@@ -122,11 +123,9 @@ export default function DealerGEX() {
 
   return (
     <PageWrapper title="Dealer GEX">
-      <SidebarLayout sidebarWidth={190} sidebarTitle="GEX Controls" sidebar={<>
-          <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)' }}>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#ffffff' }}>GEX Parameters</div>
-          </div>
-          <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
+      <SidebarLayout sidebarWidth={210} sidebarTitle="" sidebar={<>
+          <RailSection title="GEX Parameters" open={paramsOpen} onToggle={() => setParamsOpen(o => !o)}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div>
               <label style={LABEL}>Ticker</label>
               <input value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())} style={INPUT}
@@ -155,7 +154,8 @@ export default function DealerGEX() {
               {expiry ? `Showing ${expiry} only.` : 'Aggregates all expiry chains. May take 20–40s on first load.'}
             </div>
           </div>
-          <div style={{ padding: 10, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+          </RailSection>
+          <div style={{ padding: 12 }}>
             <button onClick={() => mutate()} disabled={isPending} style={{
               width: '100%', background: 'var(--theme-surface, #1f2a3d)', border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)',
               fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',

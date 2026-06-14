@@ -6,7 +6,7 @@ import { fetchBondAnalytics } from '../hooks/useApi'
 import SidebarLayout from '../components/SidebarLayout'
 import EmptyState from '../components/EmptyState'
 import axios from 'axios'
-import { INPUT, LABEL, TOOLTIP_STYLE, TICK } from './valuationShared'
+import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
 
 function MetricCard({ label, value, delta, deltaPositive }: { label: string; value: string; delta?: string; deltaPositive?: boolean }) {
   return (
@@ -30,6 +30,7 @@ function ChartPanel({ label, height, children }: { label: string; height: number
 export function BondAnalyticsContent() {
   const [p, setP]     = useState({ face: 1000, coupon_rate: 5, market_price: 1000, maturity: 10 })
   const [shift, setShift] = useState(0)
+  const [paramsOpen, setParamsOpen] = useState(true)
   const [aiNarrative, setAiNarrative] = useState<any>(null)
   const [aiNarrativePending, setAiNarrativePending] = useState(false)
 
@@ -64,11 +65,9 @@ export function BondAnalyticsContent() {
   })()
 
   return (
-      <SidebarLayout sidebarWidth={190} sidebarTitle="Bond Parameters" sidebar={<>
-          <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)' }}>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#ffffff' }}>Bond Parameters</div>
-          </div>
-          <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
+      <SidebarLayout sidebarWidth={210} sidebarTitle="" sidebar={<>
+          <RailSection title="Bond Parameters" open={paramsOpen} onToggle={() => setParamsOpen(o => !o)}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {([
               { label: 'Face Value ($)',    key: 'face',         step: 100  },
               { label: 'Coupon Rate (%)',   key: 'coupon_rate',  step: 0.25 },
@@ -82,7 +81,8 @@ export function BondAnalyticsContent() {
               </div>
             ))}
           </div>
-          <div style={{ padding: 10, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          </RailSection>
+          <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
             <button onClick={() => mutate()} disabled={isPending} style={{
               width: '100%', background: isPending ? 'var(--theme-hover, rgba(255,255,255,0.04))' : 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)',
               border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)',
