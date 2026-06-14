@@ -189,7 +189,7 @@ const BENTO_CARDS: Card[] = [
   { to: '/sector-rotation', icon: PieChart,   size: 'normal', accent: '#d97736',                       tag: 'SECTORS',      title: 'Sector Rotation',     body: 'Rolling performance heatmap across GICS sectors. Identify rotation leaders and laggards.' },
   { to: '/credit-spreads',  icon: Activity,   size: 'normal', accent: '#ef4444',                       tag: 'CREDIT',       title: 'Credit Spread Monitor',      body: 'IG and HY spread monitoring with historical context and risk-on/off signals.' },
   { to: '/regression',      icon: Activity,   size: 'normal', accent: '#7aa2f7',                       tag: 'QUANT',        title: 'Regression & Correlation', body: 'Cross-asset correlation and OLS regression on any stock, ETF, crypto, or index. Heatmap, rolling correlation, beta, and plain-English readouts.' },
-  { to: '/nav',             icon: Bitcoin,    size: 'normal', accent: 'var(--theme-primary, #c9a84c)', tag: 'NAV',          title: 'NAV Tracker',         body: 'SOTP NAV engine with live MSTR Bitcoin holdings fetched from EDGAR.' },
+  { to: '/nav',             icon: Bitcoin,    size: 'normal', accent: 'var(--theme-primary, #c9a84c)', tag: 'NAV',          title: 'NAV Tracker',         body: 'NAV premium/discount for asset-backed proxies: crypto treasuries, metals and materials trusts.' },
 
   // ── Row 7: Portfolio & Simulation (4×normal)
   { to: '/montecarlo',     icon: Dices,     size: 'normal', accent: '#2f6b4b',                       tag: 'SIMULATION',  title: 'Monte Carlo',           body: 'GBM path simulation with VaR, CVaR, and percentile fan charts.' },

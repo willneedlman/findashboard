@@ -1,0 +1,21 @@
+{
+  "_meta": {
+    "note": "Asset-backed proxy registry for the NAV Tracker. Metadata + live-source config only — NO holdings/cost/debt/share figures are stored here; everything financial is fetched live at request time so nothing goes stale.",
+    "live_sources": {
+      "mstr_edgar": "MSTR only — dedicated SEC EDGAR 8-K scraper for BTC holdings + avg cost.",
+      "coingecko":  "Crypto treasuries — CoinGecko public_treasury API (coin = bitcoin/ethereum); holdings + entry value matched by ticker.",
+      "sprott":     "Sprott physical bullion trusts — scrape NAV per unit from the public api-update page (sprott_slug).",
+      "etf_nav":    "ETFs that expose navPrice via yfinance (e.g. SLV)."
+    },
+    "model": "holdings: nav_per_share = (holdings*asset_spot - net_debt)/shares. reported_nav: NAV/unit fetched live, history reconstructed as (nav/current_spot)*asset_spot_series. Debt/cash come live from yfinance totalDebt/totalCash."
+  },
+
+  "MSTR":  { "name": "MicroStrategy",                 "category": "Crypto Treasury", "asset": "BTC-USD", "asset_label": "BTC",           "model": "holdings",     "live": "mstr_edgar" },
+
+  "PHYS":  { "name": "Sprott Physical Gold Trust",    "category": "Metals",          "asset": "GC=F",    "asset_label": "Gold (oz)",     "model": "reported_nav", "live": "sprott", "sprott_slug": "gold" },
+  "PSLV":  { "name": "Sprott Physical Silver Trust",  "category": "Metals",          "asset": "SI=F",    "asset_label": "Silver (oz)",   "model": "reported_nav", "live": "sprott", "sprott_slug": "silver" },
+
+  "SLV":   { "name": "iShares Silver Trust",          "category": "Materials",       "asset": "SI=F",    "asset_label": "Silver (oz)",   "model": "reported_nav", "live": "etf_nav" },
+  "URA":   { "name": "Global X Uranium ETF",          "category": "Materials",       "asset": "URA",     "asset_label": "URA NAV",       "model": "reported_nav", "live": "etf_nav",
+             "note": "Open-ended uranium-MINERS equity ETF (not physical U3O8); arbitrages to ~NAV so premium/discount stays near zero. asset=self because there is no uranium spot on yfinance. Use a physical-uranium trust with a published NAV feed if you need true U3O8 premium tracking." }
+}

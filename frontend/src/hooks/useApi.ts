@@ -26,6 +26,13 @@ export const fetchBondAnalytics = (body: object) =>
 export const fetchNAVProxy = (body: object) =>
   api.post('/nav/proxy', body).then(r => r.data)
 
+export interface NavPreset {
+  ticker: string; name: string; category: string
+  asset: string; asset_label: string; live: string
+}
+export const fetchNAVRegistry = (): Promise<NavPreset[]> =>
+  api.get('/nav/registry').then(r => r.data)
+
 export const fetchYieldCurve = () =>
   api.get('/rates/yield-curve').then(r => r.data)
 
