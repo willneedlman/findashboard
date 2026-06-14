@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 import {
@@ -126,215 +126,323 @@ function PortfolioImportStrip() {
   )
 }
 
-// ── Bento card sizes ─────────────────────────────────────────────────────────
-// 'wide' spans 2 columns, 'tall' spans 2 rows, 'hero' spans 2×2
-type CardSize = 'normal' | 'wide' | 'tall' | 'hero'
+// ── Module catalog ────────────────────────────────────────────────────────────
+// Grouped to match the sidebar taxonomy. Descriptors are terse on purpose: this
+// is a launcher for a user who knows the tools, not a marketing page.
+interface Mod { to: string; icon: React.ElementType; title: string; desc: string; accent: string }
+interface Section { label: string; mods: Mod[] }
 
-interface Card {
-  to: string
-  icon: React.ElementType
-  title: string
-  body: string
-  accent: string
-  size?: CardSize
-  tag?: string
+const FEATURED: Mod = {
+  to: '/dashboard', icon: LayoutGrid, accent: 'var(--theme-primary, #c9a84c)',
+  title: 'My Dashboard',
+  desc: 'Build your own terminal. Drag price cards, charts, news, options snapshots, and macro strips into a layout that persists per account.',
 }
 
-const BENTO_CARDS: Card[] = [
-  // ── Row 1: AI & Screening (wide+wide)
-  { to: '/screener', icon: Filter,    size: 'wide', accent: '#2f6b4b', tag: 'SCREENER',
-    title: 'Stock Screener',
-    body: 'Filter the market by valuation, growth, profitability, and financial health across 25+ variables. Sortable results with full fundamentals.' },
-  { to: '/earnings', icon: FileText,  size: 'wide', accent: '#7b5ea7', tag: 'AI RESEARCH',
-    title: 'Earnings AI',
-    body: 'Claude-powered earnings call summarizer. Turns transcripts, 10-Q/10-K financials, and SEC filings into bull/bear points, key metrics, and guidance in seconds.' },
-
-  // ── Row 2: Core data + sentiment (wide+wide)
-  { to: '/market',    icon: TrendingUp, size: 'wide', accent: 'var(--theme-tertiary, #1f5673)', tag: 'PRICE & VOL',
-    title: 'Market Data',
-    body: 'Historical price action, rolling 30-day volatility, and peak drawdown structural analysis. Entry point for any equity research session.' },
-  { to: '/sentiment', icon: Brain,      size: 'wide', accent: '#7aa2f7', tag: 'SENTIMENT',
-    title: 'Sentiment Tracker',
-    body: 'AI-scored financial news across 7 sources with market-session filtering, entity extraction, macro impact tiers, and velocity tracking.' },
-  { to: '/research-hub', icon: Search, size: 'wide', accent: '#7b5ea7', tag: 'RESEARCH HUB',
-    title: 'Research Hub',
-    body: 'One-stop research surface. Filings, fundamentals, news, and AI summaries tabbed into a single workspace.' },
-  { to: '/compare', icon: GitCompare, size: 'wide', accent: '#60a5fa', tag: 'COMPARE',
-    title: 'Asset Comparison',
-    body: 'Overlay any assets on one normalized chart: stocks, ETFs, crypto, indices, FX, futures. Compare performance across price scales and timeframes.' },
-
-  // ── Row 3: Valuation & Quant (4×normal)
-  { to: '/corporate',          icon: Building2,  size: 'normal', accent: 'var(--theme-primary, #c9a84c)', tag: 'CORP',       title: 'Corporate Hub',       body: 'Earnings scanner, insider flow, short interest, and live news aggregator.' },
-  { to: '/valuation',          icon: Calculator, size: 'normal', accent: '#7b5ea7',                       tag: 'VALUATION',  title: 'Stock Valuation',        body: 'Five models in one hub: DCF, Reverse DCF, SOTP, DDM, and Multiples with shared inputs.' },
-  { to: '/relative-valuation', icon: Scale,      size: 'normal', accent: '#d97736',                       tag: 'PEERS',      title: 'Peer Comparison',      body: 'Compare valuation multiples against sector peers. EV/EBITDA, P/E, P/S, forward estimates.' },
-  { to: '/supply-chain',       icon: Globe,      size: 'normal', accent: '#2f6b4b',                       tag: 'PROFILE',    title: 'Company Profile',     body: 'Revenue breakdown, supplier exposure, geographic risk, and supply chain dependency map.' },
-
-  // ── Row 4: Options suite (4×normal)
-  { to: '/options',     icon: LineChart, size: 'normal', accent: 'var(--theme-tertiary, #1f5673)', tag: 'OPTIONS',   title: 'Options Pricer',       body: 'Black-Scholes pricing with full Greeks, payoff diagrams, and IV surface.' },
-  { to: '/chain',       icon: BarChart2, size: 'normal', accent: '#7b5ea7',                       tag: 'CHAIN',     title: 'Options Chain Scanner',        body: 'Live options chains with IV rank, OI skew, and put/call ratios by strike.' },
-  { to: '/probability', icon: Activity,  size: 'normal', accent: '#7b5ea7',                       tag: 'PROB',      title: 'Implied Probability',  body: 'Market-implied risk-neutral distributions derived from live options chains.' },
-  { to: '/strategy',    icon: Shuffle,   size: 'normal', accent: '#d97736',                       tag: 'STRATEGY',  title: 'Strategy Builder',     body: 'Multi-leg options strategy builder with live P&L profiles and breakevens.' },
-  { to: '/options-hub',     icon: Layers,   size: 'normal', accent: 'var(--theme-tertiary, #1f5673)', tag: 'OPTIONS HUB', title: 'Options Hub',          body: 'Unified options workspace. Pricing, chains, IV, and flow in one tabbed surface.' },
-  { to: '/iv-tracker',      icon: Waves,    size: 'normal', accent: '#7aa2f7',                       tag: 'IV',          title: 'IV Tracker',           body: 'Implied volatility rank and percentile, term structure, and IV-vs-realized over time.' },
-  { to: '/unusual-options', icon: Activity, size: 'normal', accent: '#d97736',                       tag: 'FLOW',        title: 'Options Flow',         body: 'Scan chains for volume and volume/OI surges, ranked by traded premium. Flags freshly-opened positioning.' },
-  { to: '/market-maker',    icon: Gauge,    size: 'normal', accent: '#2f6b4b',                       tag: 'MM SIM',      title: 'Options MM Simulator',     body: 'Quote two-sided markets, manage inventory, and delta-hedge under simulated order flow.' },
-
-  // ── Row 5: Derivatives & Rates (4×normal)
-  { to: '/gex',               icon: Zap,        size: 'normal', accent: 'var(--theme-primary, #c9a84c)',  tag: 'GEX',          title: 'Dealer GEX',          body: 'Gamma exposure aggregated across all strikes and expiries.' },
-  { to: '/bond',              icon: Landmark,   size: 'normal', accent: '#2f6b4b',                        tag: 'FIXED INCOME', title: 'Bond Analytics',      body: 'YTM, modified duration, convexity, and full cash flow schedules.' },
-  { to: '/fed',               icon: GitBranch,  size: 'normal', accent: 'var(--theme-tertiary, #1f5673)', tag: 'MACRO',        title: 'Fed Rates',   body: 'Implied Fed path projections and rate scenario analysis across FOMC meetings.' },
-  { to: '/macro-hub',         icon: Compass,    size: 'normal', accent: 'var(--theme-tertiary, #1f5673)', tag: 'MACRO HUB',    title: 'Macro Hub',           body: 'Key macro series on a single board: growth, inflation, and employment.' },
-
-  // ── Row 6: Macro & Data (4×normal)
-  { to: '/sector-rotation', icon: PieChart,   size: 'normal', accent: '#d97736',                       tag: 'SECTORS',      title: 'Sector Rotation',     body: 'Rolling performance heatmap across GICS sectors. Identify rotation leaders and laggards.' },
-  { to: '/credit-spreads',  icon: Activity,   size: 'normal', accent: '#ef4444',                       tag: 'CREDIT',       title: 'Credit Spread Monitor',      body: 'IG and HY spread monitoring with historical context and risk-on/off signals.' },
-  { to: '/regression',      icon: Activity,   size: 'normal', accent: '#7aa2f7',                       tag: 'QUANT',        title: 'Regression & Correlation', body: 'Cross-asset correlation and OLS regression on any stock, ETF, crypto, or index. Heatmap, rolling correlation, beta, and plain-English readouts.' },
-  { to: '/nav',             icon: Bitcoin,    size: 'normal', accent: 'var(--theme-primary, #c9a84c)', tag: 'NAV',          title: 'NAV Tracker',         body: 'NAV premium/discount for asset-backed proxies: crypto treasuries, metals and materials trusts.' },
-
-  // ── Row 7: Portfolio & Simulation (4×normal)
-  { to: '/montecarlo',     icon: Dices,     size: 'normal', accent: '#2f6b4b',                       tag: 'SIMULATION',  title: 'Monte Carlo',           body: 'GBM path simulation with VaR, CVaR, and percentile fan charts.' },
-  { to: '/portfolio',      icon: BarChart2, size: 'normal', accent: '#2f6b4b',                       tag: 'BACKTEST',    title: 'Portfolio Backtester',  body: 'Backtest weighted equity baskets against any benchmark with Sharpe, Sortino, Calmar.' },
-  { to: '/portfolio-compare', icon: Scale,  size: 'normal', accent: '#7aa2f7',                       tag: 'COMPARE',     title: 'Compare Portfolios',    body: 'Run 2-4 portfolios side by side, each with its own assets and leverage, on one equity-curve chart with a metrics table.' },
-  { to: '/portfolio-manager', icon: Briefcase,   size: 'normal', accent: 'var(--theme-primary, #c9a84c)', tag: 'PORTFOLIO', title: 'Portfolio Manager',     body: 'Holdings, live P&L, position weights, and aggregated option greeks across the book.' },
-  { to: '/alerts',         icon: Bell,      size: 'normal', accent: 'var(--theme-primary, #c9a84c)', tag: 'ALERTS',      title: 'Price Alerts',          body: 'Set price and 1-day % change alerts. Push to browser on trigger.' },
-
-  // ── Row 8: Trading tools (4×normal)
-  { to: '/trade-journal', icon: BookOpen,  size: 'normal', accent: '#7b5ea7',                       tag: 'JOURNAL',   title: 'Trade Journal',      body: 'Log and analyze your trades. Entry/exit tracking, P&L attribution, and win-rate stats.' },
-  { to: '/paper-trading', icon: Terminal,  size: 'normal', accent: '#2f6b4b',                       tag: 'PAPER',     title: 'Paper Trading',      body: 'Simulated order execution with live prices, position tracking, and P&L.' },
-
-  // ── Dashboard — full width
-  { to: '/dashboard', icon: LayoutGrid, size: 'full' as CardSize, accent: 'var(--theme-primary, #c9a84c)', tag: 'CUSTOM',
-    title: 'My Dashboard',
-    body: 'Build your own terminal. Drag and arrange price cards, charts, news feeds, options snapshots, portfolio summaries, and macro strips. Layout persists per user account.' },
+const SECTIONS: Section[] = [
+  {
+    label: 'Research & Data',
+    mods: [
+      { to: '/screener',     icon: Filter,     title: 'Stock Screener',          desc: '25+ fundamental filters',        accent: '#2f6b4b' },
+      { to: '/market',       icon: TrendingUp, title: 'Market Data',             desc: 'Price, volatility, drawdown',    accent: 'var(--theme-tertiary, #1f5673)' },
+      { to: '/sentiment',    icon: Brain,      title: 'Sentiment Tracker',       desc: 'AI news across 7 sources',       accent: '#7aa2f7' },
+      { to: '/research-hub', icon: Search,     title: 'Research Hub',            desc: 'Filings, fundamentals, news, AI', accent: '#7b5ea7' },
+      { to: '/earnings',     icon: FileText,   title: 'Earnings AI',             desc: 'AI call and filing summaries',   accent: '#7b5ea7' },
+      { to: '/regression',   icon: Activity,   title: 'Regression & Correlation', desc: 'OLS, correlation, beta',        accent: '#7aa2f7' },
+      { to: '/compare',      icon: GitCompare, title: 'Asset Comparison',        desc: 'Overlay assets on one chart',    accent: '#60a5fa' },
+      { to: '/sector-rotation', icon: PieChart, title: 'Sector Rotation',        desc: 'GICS performance heatmap',       accent: '#d97736' },
+    ],
+  },
+  {
+    label: 'Valuation & Company',
+    mods: [
+      { to: '/valuation',          icon: Calculator, title: 'Stock Valuation',  desc: 'DCF, DDM, SOTP, multiples',      accent: '#7b5ea7' },
+      { to: '/relative-valuation', icon: Scale,      title: 'Peer Comparison',  desc: 'Multiples vs sector peers',      accent: '#d97736' },
+      { to: '/supply-chain',       icon: Globe,      title: 'Company Profile',  desc: 'Revenue, supply chain, geo',     accent: '#2f6b4b' },
+      { to: '/corporate',          icon: Building2,  title: 'Corporate Hub',    desc: 'Earnings, insiders, short interest', accent: 'var(--theme-primary, #c9a84c)' },
+    ],
+  },
+  {
+    label: 'Options & Derivatives',
+    mods: [
+      { to: '/options-hub',     icon: Layers,    title: 'Options Hub',           desc: 'Pricing, chains, IV, flow',     accent: 'var(--theme-tertiary, #1f5673)' },
+      { to: '/options',         icon: LineChart, title: 'Options Pricer',        desc: 'Black-Scholes greeks, payoff',  accent: 'var(--theme-tertiary, #1f5673)' },
+      { to: '/chain',           icon: BarChart2, title: 'Options Chain Scanner', desc: 'Live chains, IV rank, skew',    accent: '#7b5ea7' },
+      { to: '/iv-tracker',      icon: Waves,     title: 'IV Tracker',            desc: 'IV rank, term structure',       accent: '#7aa2f7' },
+      { to: '/unusual-options', icon: Activity,  title: 'Options Flow',          desc: 'Volume and OI surges',          accent: '#d97736' },
+      { to: '/probability',     icon: Activity,  title: 'Implied Probability',   desc: 'Risk-neutral distributions',    accent: '#7b5ea7' },
+      { to: '/strategy',        icon: Shuffle,   title: 'Strategy Builder',      desc: 'Multi-leg P&L profiles',        accent: '#d97736' },
+      { to: '/gex',             icon: Zap,       title: 'Dealer GEX',            desc: 'Gamma exposure by strike',      accent: 'var(--theme-primary, #c9a84c)' },
+      { to: '/market-maker',    icon: Gauge,     title: 'Options MM Simulator',  desc: 'Two-sided quoting, hedging',    accent: '#2f6b4b' },
+    ],
+  },
+  {
+    label: 'Macro & Rates',
+    mods: [
+      { to: '/fed',            icon: GitBranch, title: 'Fed Rates',             desc: 'Implied FOMC path',             accent: 'var(--theme-tertiary, #1f5673)' },
+      { to: '/macro-hub',      icon: Compass,   title: 'Macro Hub',             desc: 'Growth, inflation, jobs',       accent: 'var(--theme-tertiary, #1f5673)' },
+      { to: '/bond',           icon: Landmark,  title: 'Bond Analytics',        desc: 'YTM, duration, convexity',      accent: '#2f6b4b' },
+      { to: '/credit-spreads', icon: Activity,  title: 'Credit Spread Monitor', desc: 'IG and HY spreads',             accent: '#ef4444' },
+      { to: '/nav',            icon: Bitcoin,   title: 'NAV Tracker',           desc: 'Premium/discount on proxies',   accent: 'var(--theme-primary, #c9a84c)' },
+    ],
+  },
+  {
+    label: 'Portfolio & Simulation',
+    mods: [
+      { to: '/portfolio',         icon: BarChart2, title: 'Portfolio Backtester', desc: 'Sharpe, Sortino, Calmar',    accent: '#2f6b4b' },
+      { to: '/montecarlo',        icon: Dices,     title: 'Monte Carlo',          desc: 'GBM paths, VaR, CVaR',       accent: '#2f6b4b' },
+      { to: '/portfolio-compare', icon: Scale,     title: 'Compare Portfolios',   desc: '2-4 books side by side',     accent: '#7aa2f7' },
+      { to: '/portfolio-manager', icon: Briefcase, title: 'Portfolio Manager',    desc: 'Holdings, P&L, greeks',      accent: 'var(--theme-primary, #c9a84c)' },
+    ],
+  },
+  {
+    label: 'Trading & Journal',
+    mods: [
+      { to: '/paper-trading', icon: Terminal, title: 'Paper Trading', desc: 'Simulated live execution',    accent: '#2f6b4b' },
+      { to: '/trade-journal', icon: BookOpen, title: 'Trade Journal', desc: 'Entry/exit, P&L, win rate',   accent: '#7b5ea7' },
+      { to: '/alerts',        icon: Bell,     title: 'Price Alerts',  desc: 'Price and % change alerts',   accent: 'var(--theme-primary, #c9a84c)' },
+    ],
+  },
 ]
-
-function sizeClass(size?: CardSize) {
-  if (size === 'hero') return 'bento-hero'
-  if (size === 'wide') return 'bento-wide'
-  if (size === 'tall') return 'bento-tall'
-  return ''
-}
 
 const TILE_EASE: [number, number, number, number] = [0.23, 1, 0.32, 1]
 const gridStagger = {
   hidden: {},
-  show: { transition: { staggerChildren: 0.035, delayChildren: 0.05 } },
+  show: { transition: { staggerChildren: 0.02, delayChildren: 0.03 } },
 }
 const tileReveal = {
-  hidden: { opacity: 0, y: 10 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.34, ease: TILE_EASE } },
+  hidden: { opacity: 0, y: 8 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.3, ease: TILE_EASE } },
 }
 
-function BentoCard({ card, reduce }: { card: Card; reduce: boolean }) {
+function ModTile({ mod, reduce, featured = false }: { mod: Mod; reduce: boolean; featured?: boolean }) {
   const navigate = useNavigate()
-  const isMobile = useIsMobile()
-  const isHero = card.size === 'hero'
-  const isTall = card.size === 'tall'
+  const [hover, setHover] = useState(false)
+  const [focus, setFocus] = useState(false)
+  const active = hover || focus
+  const Icon = mod.icon
 
   return (
     <motion.div
       variants={reduce ? undefined : tileReveal}
-      whileHover={reduce ? undefined : {
-        y: -3,
-        boxShadow: '0 10px 26px rgba(0,0,0,0.32)',
-        backgroundColor: 'color-mix(in srgb, var(--theme-primary) 6%, var(--theme-surface, #0d1b30))',
-      }}
-      whileTap={reduce ? undefined : { y: -1, scale: 0.994 }}
-      transition={{ duration: 0.18, ease: TILE_EASE }}
-      onClick={() => navigate(card.to)}
-      className={sizeClass(card.size)}
+      whileHover={reduce ? undefined : { y: -2 }}
+      whileTap={reduce ? undefined : { scale: 0.995 }}
+      transition={{ duration: 0.16, ease: TILE_EASE }}
+      onClick={() => navigate(mod.to)}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onFocus={() => setFocus(true)}
+      onBlur={() => setFocus(false)}
+      role="button"
+      aria-label={`${mod.title}. ${mod.desc}`}
+      tabIndex={0}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(mod.to) } }}
       style={{
-        background: 'var(--theme-surface, #0d1b30)',
-        border: '1px solid var(--theme-border, rgba(255,255,255,0.06))',
-        borderTop: '2px solid var(--theme-primary, #c9a84c)',
-        padding: isMobile ? 12 : isHero ? 20 : 14,
+        gridColumn: featured ? '1 / -1' : undefined,
+        background: featured
+          ? (active
+              ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, var(--theme-surface, #0d1826))'
+              : 'color-mix(in srgb, var(--theme-primary, #c9a84c) 6%, var(--theme-surface, #0d1826))')
+          : (active
+              ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 5%, var(--theme-surface, #0d1826))'
+              : 'var(--theme-surface, #0d1826)'),
+        border: '1px solid ' + (
+          active
+            ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 42%, transparent)'
+            : featured
+              ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 30%, transparent)'
+              : 'var(--theme-border, rgba(255,255,255,0.08))'
+        ),
+        boxShadow: focus ? '0 0 0 2px color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)' : 'none',
+        padding: featured ? '14px 16px' : '11px 13px',
         cursor: 'pointer',
         display: 'flex',
         flexDirection: 'column',
-        justifyContent: 'space-between',
-        minHeight: isMobile ? 0 : isHero ? 220 : isTall ? 220 : 120,
+        gap: featured ? 6 : 4,
         position: 'relative',
-        overflow: 'hidden',
+        outline: 'none',
+        transition: 'background 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease',
       }}
     >
-      {/* Content */}
-      <div>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: isHero ? 10 : 6 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-            <card.icon size={isHero ? 18 : 14} style={{ color: 'var(--theme-primary, #c9a84c)', flexShrink: 0 }} />
-            <h3 style={{
-              fontSize: isHero ? 15 : 13,
-              fontWeight: 700,
-              color: 'var(--theme-text)',
-              letterSpacing: '0.02em',
-              fontFamily: 'var(--theme-sans)',
-            }}>
-              {card.title}
-            </h3>
-          </div>
-          {card.tag && (
-            <span style={{
-              fontSize: 8, fontWeight: 700, letterSpacing: '0.16em',
-              color: 'var(--theme-primary, #c9a84c)', fontFamily: 'var(--theme-sans)',
-              opacity: 0.7, flexShrink: 0, paddingTop: 2,
-            }}>
-              {card.tag}
-            </span>
-          )}
-        </div>
-        <p style={{
-          fontSize: isHero ? 12 : 11,
-          color: 'var(--theme-secondary, #7a9ab8)',
-          lineHeight: '16px',
-          maxWidth: isHero ? 340 : '100%',
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+        <Icon size={featured ? 16 : 14} style={{ color: mod.accent, flexShrink: 0 }} />
+        <h3 style={{
+          fontSize: featured ? 14 : 12.5,
+          fontWeight: 700,
+          color: 'var(--theme-text, #d7e3fc)',
+          letterSpacing: '0.01em',
+          fontFamily: 'var(--theme-sans)',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          minWidth: 0,
         }}>
-          {card.body}
-        </p>
+          {mod.title}
+        </h3>
+        <ArrowUpRight
+          size={13}
+          style={{
+            marginLeft: 'auto',
+            flexShrink: 0,
+            color: 'var(--theme-primary, #c9a84c)',
+            opacity: active ? 0.9 : 0,
+            transform: active ? 'translate(1px, -1px)' : 'none',
+            transition: 'opacity 0.14s ease, transform 0.14s ease',
+          }}
+        />
+      </div>
+      <p style={{
+        fontSize: featured ? 11.5 : 11,
+        color: 'var(--theme-secondary, #8099b0)',
+        lineHeight: 1.45,
+        fontFamily: 'var(--theme-sans)',
+        margin: 0,
+        maxWidth: featured ? 460 : '100%',
+      }}>
+        {mod.desc}
+      </p>
+    </motion.div>
+  )
+}
+
+function SectionBlock({ section, reduce }: { section: Section; reduce: boolean }) {
+  return (
+    <div style={{ marginTop: 22 }}>
+      {/* Section header: tiny gold tick (the scalpel), label, count, hairline rule */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+        <span style={{ width: 5, height: 5, background: 'var(--theme-primary, #c9a84c)', flexShrink: 0 }} />
+        <span style={{
+          fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700,
+          letterSpacing: '0.16em', textTransform: 'uppercase',
+          color: 'var(--theme-secondary, #8099b0)', whiteSpace: 'nowrap',
+        }}>
+          {section.label}
+        </span>
+        <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-secondary, #5e768f)', opacity: 0.7 }}>
+          {section.mods.length}
+        </span>
+        <div style={{ flex: 1, height: 1, background: 'var(--theme-border, rgba(255,255,255,0.07))' }} />
       </div>
 
-      {/* CTA */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 3, color: 'var(--theme-primary, #c9a84c)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', fontFamily: 'var(--theme-sans)' }}>
-          OPEN <ArrowUpRight size={10} />
-        </div>
-      </div>
-    </motion.div>
+      <motion.div
+        variants={reduce ? undefined : gridStagger}
+        initial={reduce ? undefined : 'hidden'}
+        animate={reduce ? undefined : 'show'}
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(212px, 1fr))',
+          gap: 10,
+        }}
+      >
+        {section.mods.map(m => <ModTile key={m.to} mod={m} reduce={reduce} />)}
+      </motion.div>
+    </div>
   )
 }
 
 export default function Home() {
   const isMobile = useIsMobile()
   const reduce = !!useReducedMotion()
-  const visibleCards = isMobile ? BENTO_CARDS.filter(c => c.to !== '/dashboard') : BENTO_CARDS
+  const [q, setQ] = useState('')
+  const [focused, setFocused] = useState(false)
+
+  const ql = q.trim().toLowerCase()
+  const totalCount = useMemo(() => SECTIONS.reduce((n, s) => n + s.mods.length, 0) + 1, [])
+
+  const sections = useMemo(() => {
+    if (!ql) return SECTIONS
+    return SECTIONS
+      .map(s => ({ ...s, mods: s.mods.filter(m => `${m.title} ${m.desc} ${s.label}`.toLowerCase().includes(ql)) }))
+      .filter(s => s.mods.length > 0)
+  }, [ql])
+
+  const matchCount = sections.reduce((n, s) => n + s.mods.length, 0)
+  const featuredMatches = !isMobile && (!ql || `${FEATURED.title} ${FEATURED.desc}`.toLowerCase().includes(ql))
 
   return (
     <PageWrapper>
-      {/* Hero strip */}
-      <div style={{ marginBottom: 20, paddingBottom: 14, borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 15%, transparent)' }}>
-        <h1 style={{
-          fontFamily: 'Cinzel, Georgia, serif',
-          fontSize: 22, fontWeight: 700, letterSpacing: '0.08em',
-          color: 'var(--theme-primary, #c9a84c)', marginBottom: 4,
+      {/* Hero: wordmark + filter */}
+      <div style={{
+        display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
+        gap: 16, flexWrap: 'wrap',
+        marginBottom: 14, paddingBottom: 14,
+        borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 15%, transparent)',
+      }}>
+        <div>
+          <h1 style={{
+            fontFamily: 'Cinzel, Georgia, serif',
+            fontSize: 22, fontWeight: 700, letterSpacing: '0.08em',
+            color: 'var(--theme-primary, #c9a84c)', marginBottom: 4,
+          }}>
+            Alphatape Terminal
+          </h1>
+          <p style={{ fontFamily: 'var(--theme-sans)', fontSize: 12, color: 'var(--theme-secondary, #8099b0)', letterSpacing: '0.04em' }}>
+            {ql ? `${matchCount} of ${totalCount} modules` : `${totalCount} modules · ${SECTIONS.length} categories`}
+          </p>
+        </div>
+
+        {/* Filter */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          background: 'var(--theme-bg, #101c2e)',
+          border: `1px solid ${focused ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 55%, transparent)' : 'var(--theme-border, rgba(255,255,255,0.09))'}`,
+          padding: '7px 11px', minWidth: 240, transition: 'border-color 0.15s ease',
         }}>
-          Alphatape Terminal
-        </h1>
-        <p style={{ fontFamily: 'var(--theme-sans)', fontSize: 12, color: 'var(--theme-secondary, #7a9ab8)', letterSpacing: '0.04em' }}>
-          {visibleCards.length} modules · Select a tile to launch
-        </p>
+          <Search size={13} style={{ color: 'var(--theme-secondary, #5e768f)', flexShrink: 0 }} />
+          <input
+            value={q}
+            onChange={e => setQ(e.target.value)}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            aria-label="Filter modules"
+            placeholder="Filter modules…"
+            style={{
+              background: 'transparent', border: 'none', outline: 'none',
+              color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-sans)', fontSize: 12,
+              width: '100%', letterSpacing: '0.02em',
+            }}
+          />
+          {q && (
+            <button
+              onClick={() => setQ('')}
+              aria-label="Clear filter"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-secondary, #5e768f)', display: 'flex', padding: 0 }}
+            >
+              <X size={12} />
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Bento grid */}
-      <motion.div
-        className="bento-grid"
-        variants={reduce ? undefined : gridStagger}
-        initial={reduce ? undefined : 'hidden'}
-        animate={reduce ? undefined : 'show'}
-      >
-        {visibleCards.map(card => (
-          <BentoCard key={card.to} card={card} reduce={reduce} />
-        ))}
-      </motion.div>
+      {/* Featured workspace */}
+      {featuredMatches && (
+        <motion.div
+          variants={reduce ? undefined : gridStagger}
+          initial={reduce ? undefined : 'hidden'}
+          animate={reduce ? undefined : 'show'}
+          style={{ display: 'grid', gridTemplateColumns: '1fr' }}
+        >
+          <ModTile mod={FEATURED} reduce={reduce} featured />
+        </motion.div>
+      )}
 
+      {/* Sections */}
+      {sections.map(s => <SectionBlock key={s.label} section={s} reduce={reduce} />)}
+
+      {/* Empty state */}
+      {ql && matchCount === 0 && !featuredMatches && (
+        <div style={{
+          marginTop: 40, textAlign: 'center',
+          fontFamily: 'var(--theme-sans)', fontSize: 12,
+          color: 'var(--theme-secondary, #8099b0)',
+        }}>
+          No modules match <span style={{ color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-mono)' }}>{q}</span>
+        </div>
+      )}
+
+      {/* Portfolio import — page footer */}
+      <div style={{ marginTop: 26 }}>
+        <PortfolioImportStrip />
+      </div>
     </PageWrapper>
   )
 }
