@@ -148,8 +148,7 @@ function fmtExpiry(exp: string): string {
   const d = new Date(exp + 'T12:00:00')
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
-const TOOLTIP_STYLE = { background: 'var(--theme-surface, #142032)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', borderRadius: 0 }
-const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'var(--theme-mono)' }
+import { TOOLTIP_STYLE, TICK } from './valuationShared'
 
 // Pure intrinsic payoff at expiry — no Black-Scholes needed
 function intrinsic(S: number, leg: Leg): number {

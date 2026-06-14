@@ -66,7 +66,7 @@ const PORT_DEFAULTS: Asset[] = [
 ]
 
 const PORT_INPUT: React.CSSProperties = {
-  background: 'var(--theme-bg, #0a1628)', border: '1px solid var(--theme-border, rgba(255,255,255,0.10))', color: 'var(--theme-text, #d7e3fc)',
+  background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: 'var(--theme-text, #d7e3fc)',
   fontFamily: 'var(--theme-mono)', fontSize: 12, padding: '5px 8px',
   width: '100%', outline: 'none', boxSizing: 'border-box',
 }
@@ -115,7 +115,7 @@ const ALGO_PARAM_LABELS: Record<string, Record<string, string>> = {
 
 const ALGO_INPUT: React.CSSProperties = {
   background: 'transparent',
-  border: '1px solid var(--theme-border, rgba(255,255,255,0.10))',
+  border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)',
   color: 'var(--theme-text, #d7e3fc)',
   fontFamily: 'var(--theme-mono)',
   fontSize: 12,
@@ -451,10 +451,6 @@ function PortfolioTab() {
 
           <div style={{ borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div>
-              <label style={PORT_LABEL}>Benchmark</label>
-              <input style={PORT_INPUT} value={benchmark} onChange={e => setBenchmark(e.target.value.toUpperCase())} onFocus={focus} onBlur={blur} />
-            </div>
-            <div>
               <label style={PORT_LABEL}>Start</label>
               <input type="date" style={PORT_INPUT} value={start} onChange={e => setStart(e.target.value)} onFocus={focus} onBlur={blur} />
             </div>
@@ -468,11 +464,13 @@ function PortfolioTab() {
                 <input type="number" style={PORT_INPUT} value={leverage} min={1} max={5} step={0.25}
                   onChange={e => setLeverage(e.target.value)} onFocus={focus} onBlur={blur} />
               </div>
-              <div>
-                <label style={PORT_LABEL}>Borrow Rate %</label>
-                <input type="number" style={PORT_INPUT} value={borrowRate} min={0} max={30} step={0.5}
-                  onChange={e => setBorrowRate(e.target.value)} onFocus={focus} onBlur={blur} />
-              </div>
+              {(Number(leverage) || 1) > 1 && (
+                <div>
+                  <label style={PORT_LABEL}>Borrow Rate %</label>
+                  <input type="number" style={PORT_INPUT} value={borrowRate} min={0} max={30} step={0.5}
+                    onChange={e => setBorrowRate(e.target.value)} onFocus={focus} onBlur={blur} />
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -520,6 +518,10 @@ function PortfolioTab() {
         </div>
 
         <div style={{ padding: 10, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div>
+            <label style={PORT_LABEL}>Benchmark</label>
+            <input style={PORT_INPUT} value={benchmark} onChange={e => setBenchmark(e.target.value.toUpperCase())} onFocus={focus} onBlur={blur} />
+          </div>
           <PortfolioIO
             mode="portfolio"
             assets={assets.map(a => ({ ticker: a.ticker, weight: a.weight, strategy: a.strategy, stratParams: a.stratParams as Record<string, unknown> }))}
