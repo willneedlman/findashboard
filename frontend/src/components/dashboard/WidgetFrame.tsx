@@ -344,7 +344,7 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
       style={{
         position: 'relative', height: '100%', display: 'flex', flexDirection: 'column',
         background: 'var(--theme-bg, #101c2e)',
-        border: editMode ? '1px solid rgba(201,168,76,0.55)' : '1px solid #2e394d',
+        border: editMode ? '1px solid rgba(201,168,76,0.55)' : '1px solid var(--theme-border, rgba(255,255,255,0.08))',
         boxShadow: editMode ? '0 0 0 1px rgba(201,168,76,0.08) inset' : 'none',
         transition: 'border-color 0.15s', overflow: 'hidden',
         cursor: editMode ? 'grab' : 'default',
@@ -354,7 +354,7 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           background: editMode ? 'rgba(201,168,76,0.12)' : 'var(--theme-surface, #0d1826)',
-          borderBottom: editMode ? '1px solid rgba(201,168,76,0.25)' : '1px solid #2e394d',
+          borderBottom: editMode ? '1px solid rgba(201,168,76,0.25)' : '1px solid var(--theme-border, rgba(255,255,255,0.08))',
           padding: '4px 8px', flexShrink: 0,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
