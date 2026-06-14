@@ -13,6 +13,7 @@ import { TOOLTIP_STYLE, CROSSHAIR_CURSOR, BAR_CURSOR } from '../components/Chart
 import ChartTooltip from '../components/ChartTooltip'
 import axios from 'axios'
 import SidebarLayout from '../components/SidebarLayout'
+import { RailSection } from './valuationShared'
 import EmptyState from '../components/EmptyState'
 import PortfolioIO, { type PortfolioAsset } from '../components/PortfolioIO'
 import { usePortfolio } from '../contexts/PortfolioContext'
@@ -217,6 +218,7 @@ function PortfolioTab() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const [assets, setAssets] = useState<Asset[]>(initialAssets)
   const [benchmark, setBenchmark] = useState('SPY')
+  const [portOpen, setPortOpen] = useState(true)
   const [start, setStart] = useState('2020-01-01')
   const [end, setEnd] = useState(() => new Date().toISOString().split('T')[0])
   const [portSignalData, setPortSignalData] = useState<{ ticker: string; data: SignalChartPoint[]; trades: { date: string; action: string; price: number }[] }[]>([])
@@ -400,8 +402,9 @@ function PortfolioTab() {
   const blur  = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = 'var(--theme-border, rgba(255,255,255,0.10))')
 
   return (
-    <SidebarLayout sidebarWidth={240} sidebarTitle="Portfolio Controls" sidebar={<>
-        <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 10, flex: 1, overflowY: 'auto' }}>
+    <SidebarLayout sidebarWidth={240} sidebarTitle="" sidebar={<>
+        <RailSection title="Portfolio Controls" open={portOpen} onToggle={() => setPortOpen(o => !o)}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div>
             <label style={PORT_LABEL}>Allocation</label>
             <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
@@ -544,6 +547,7 @@ function PortfolioTab() {
             {isPending ? 'Running…' : 'Run Portfolio Engine'}
           </button>
         </div>
+        </RailSection>
     </>}>
 
         {!data && !isPending && (
@@ -810,6 +814,7 @@ function StrategyTab() {
   const [strategy, setStrategy] = useState('rsi_mean_reversion')
   const [params, setParams] = useState<Record<string, number>>(ALGO_DEFAULT_PARAMS.rsi_mean_reversion)
   const [startDate, setStartDate] = useState('2022-01-01')
+  const [stratOpen, setStratOpen] = useState(true)
   const [stopLoss, setStopLoss] = useState('')
   const [takeProfit, setTakeProfit] = useState('')
   const [trailingStop, setTrailingStop] = useState('')
@@ -908,7 +913,8 @@ function StrategyTab() {
   const paramLabels = ALGO_PARAM_LABELS[strategy] ?? {}
 
   const sidebar = (
-    <div style={{ padding: '14px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <RailSection title="Strategy Controls" open={stratOpen} onToggle={() => setStratOpen(o => !o)}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div>
         <span style={ALGO_LABEL}>Ticker</span>
         <input
@@ -1133,10 +1139,11 @@ function StrategyTab() {
         )}
       </div>
     </div>
+    </RailSection>
   )
 
   return (
-    <SidebarLayout sidebar={sidebar} sidebarTitle="Strategy Controls" sidebarWidth={220}>
+    <SidebarLayout sidebar={sidebar} sidebarTitle="" sidebarWidth={220}>
       {!result && !backtestMutation.isPending && (
         <EmptyState
           title="No backtest results yet"
