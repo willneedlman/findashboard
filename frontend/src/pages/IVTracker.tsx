@@ -402,7 +402,7 @@ export default function IVTracker() {
               onChange={e => handleTickerInput(e.target.value)}
               placeholder="AAPL"
               style={{
-                background: T.bg, border: `1px solid ${T.border}`,
+                background: T.bg, border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)',
                 color: T.text, fontFamily: T.mono, fontSize: 12,
                 padding: '5px 10px', outline: 'none', width: 90,
                 textTransform: 'uppercase',

@@ -45,7 +45,7 @@ function conditionLabel(cond: string, threshold: number): string {
 }
 
 const inp: React.CSSProperties = {
-  background: T.surface, border: `1px solid ${T.border}`,
+  background: T.surface, border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)',
   color: T.text, fontFamily: T.mono, fontSize: 11,
   padding: '6px 10px', outline: 'none', width: '100%', boxSizing: 'border-box',
 }

@@ -319,7 +319,7 @@ export default function OptionsMarketMaker() {
           <input type="number" min={0} step={25} value={hedgeQty}
             onChange={e => setHedgeQty(Math.max(0, Math.round(+e.target.value) || 0))}
             aria-label="Trade size in shares"
-            style={{ width: 64, background: T.bg, border: `1px solid ${T.border}`, color: T.gold, fontFamily: T.mono, fontSize: 11, padding: '2px 5px', outline: 'none', textAlign: 'right' }} />
+            style={{ width: 64, background: T.bg, border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: T.gold, fontFamily: T.mono, fontSize: 11, padding: '2px 5px', outline: 'none', textAlign: 'right' }} />
           <span style={{ fontSize: 9, color: T.muted, fontFamily: T.sans }}>sh</span>
         </div>
       </div>

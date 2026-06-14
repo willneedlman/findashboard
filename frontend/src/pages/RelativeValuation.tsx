@@ -277,7 +277,7 @@ export function RelativeValuationContent() {
   }
 
   const inp: React.CSSProperties = {
-    background: T.surface, border: `1px solid ${T.border}`, color: T.text,
+    background: T.surface, border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: T.text,
     fontFamily: T.mono, fontSize: 12, padding: '6px 10px', outline: 'none',
   }
 

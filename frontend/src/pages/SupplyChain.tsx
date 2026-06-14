@@ -251,7 +251,7 @@ export function SupplyChainContent() {
             placeholder="TICKER"
             maxLength={6}
             style={{
-              background: T.surface, border: `1px solid ${T.border}`, color: T.text,
+              background: T.surface, border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: T.text,
               fontFamily: T.mono, fontSize: 13, fontWeight: 700, padding: '8px 12px',
               outline: 'none', width: 120, textTransform: 'uppercase', letterSpacing: '0.06em',
             }}
