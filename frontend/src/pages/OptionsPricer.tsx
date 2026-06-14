@@ -19,17 +19,7 @@ const GREEK_COLOR: Record<string, string> = {
   delta: 'var(--theme-tertiary, #1f5673)', gamma: '#7b5ea7', theta: '#8c2e36', vega: '#2f6b4b',
 }
 
-const INPUT: React.CSSProperties = {
-  background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: 'var(--theme-text, #d7e3fc)',
-  fontFamily: 'var(--theme-mono)', fontSize: 12, padding: '5px 8px',
-  width: '100%', outline: 'none',
-}
-const LABEL: React.CSSProperties = {
-  fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
-  textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', marginBottom: 4, display: 'block',
-}
-const TOOLTIP_STYLE = { background: 'var(--theme-surface, #142032)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', borderRadius: 0 }
-const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'var(--theme-mono)' }
+import { INPUT, LABEL, TOOLTIP_STYLE, TICK } from './valuationShared'
 
 function GreekCard({ label, value, help }: { label: string; value: number; help?: string }) {
   const [show, setShow] = useState(false)

@@ -8,6 +8,15 @@ export const INPUT: React.CSSProperties = {
   padding: '6px 8px', width: '100%', outline: 'none', boxSizing: 'border-box',
 }
 
+// Native <select> styled to match INPUT: reset appearance, add a gold-muted chevron.
+export const SELECT: React.CSSProperties = {
+  ...INPUT,
+  appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none',
+  cursor: 'pointer', paddingRight: 26,
+  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2399907e' stroke-width='1.4' fill='none'/%3E%3C/svg%3E\")",
+  backgroundRepeat: 'no-repeat', backgroundPosition: 'right 9px center',
+}
+
 export const LABEL: React.CSSProperties = {
   fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase',
   color: 'var(--theme-secondary, #99907e)', marginBottom: 5, display: 'block',

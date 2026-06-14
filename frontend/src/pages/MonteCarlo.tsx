@@ -69,16 +69,7 @@ const makeLeg = (ticker: string, weight: number): Leg => ({
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 
-const INPUT: React.CSSProperties = {
-  background: 'var(--theme-bg, #0a1628)', border: '1px solid var(--theme-border, rgba(255,255,255,0.10))', color: 'var(--theme-text, #d7e3fc)',
-  fontFamily: 'var(--theme-mono)', fontSize: 12, padding: '5px 8px',
-  width: '100%', outline: 'none', boxSizing: 'border-box',
-}
-const LABEL: React.CSSProperties = {
-  fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
-  textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', marginBottom: 4, display: 'block',
-}
-const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'var(--theme-mono)' }
+import { INPUT, LABEL, TICK } from './valuationShared'
 
 function ChartPanel({ label, height, children }: { label: React.ReactNode; height: number; children: React.ReactNode }) {
   return (
@@ -446,18 +437,18 @@ export default function MonteCarlo() {
                   onChange={e => setBenchmark(e.target.value.toUpperCase())}
                   onFocus={focus} onBlur={blur} />
               </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <div style={{ flex: 1 }}>
-                  <label style={LABEL}>Leverage (x)</label>
-                  <input type="number" style={INPUT} value={leverage} step={0.25} min={1} max={5}
-                    onChange={e => setLeverage(e.target.value)} onFocus={focus} onBlur={blur} />
-                </div>
-                <div style={{ flex: 1 }}>
+              <div>
+                <label style={LABEL}>Leverage (x)</label>
+                <input type="number" style={INPUT} value={leverage} step={0.25} min={1} max={5}
+                  onChange={e => setLeverage(e.target.value)} onFocus={focus} onBlur={blur} />
+              </div>
+              {(Number(leverage) || 1) > 1 && (
+                <div>
                   <label style={LABEL}>Borrow Rate %</label>
                   <input type="number" style={INPUT} value={borrowRate} step={0.5} min={0} max={30}
                     onChange={e => setBorrowRate(e.target.value)} onFocus={focus} onBlur={blur} />
                 </div>
-              </div>
+              )}
               <div>
                 <label style={LABEL}>Target Endpoint ($)</label>
                 <input type="number" style={INPUT} value={targetPrice || ''} step={5} min={0}
