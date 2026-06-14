@@ -225,6 +225,43 @@ def _sanitise_quarter(result: dict, cur_year: int) -> None:
                 result[field] = result[field].replace(old_label, new_label)
 
 
+def _canonical_quarter_label(income: list) -> str | None:
+    """Authoritative fiscal-period label from the most recent FMP quarterly income
+    statement, so the displayed quarter comes from real statement data rather than
+    an LLM guess. Returns e.g. 'Q1 FY2027' (non-calendar fiscal year, fiscalYear
+    differs from the calendar year of the period end) or 'Q3 2025'. Skips any row
+    whose period-end is in the future (preliminary/bad data)."""
+    import datetime as _d
+    for row in income or []:
+        row = row or {}
+        period = str(row.get("period") or "").upper()
+        if not re.match(r"^Q[1-4]$", period):
+            continue
+        date_str = str(row.get("date") or "")[:10]
+        try:
+            if date_str and _d.date.fromisoformat(date_str) > _d.date.today():
+                continue
+        except ValueError:
+            date_str = ""
+        fiscal   = str(row.get("fiscalYear") or "").strip()
+        calendar = str(row.get("calendarYear") or (date_str[:4] if date_str else "")).strip()
+        if fiscal and calendar and fiscal != calendar:
+            return f"{period} FY{fiscal}"
+        yr = fiscal or calendar
+        return f"{period} {yr}" if yr else None
+    return None
+
+
+def _finalise_quarter(result: dict, ticker: str, cur_year: int) -> None:
+    """Prefer the period straight from the financial statements (authoritative);
+    fall back to sanitising the LLM's guess only when no statement data exists."""
+    label = _canonical_quarter_label(_get_quarterly_financials(ticker).get("income", []))
+    if label:
+        result["quarter"] = label
+    else:
+        _sanitise_quarter(result, cur_year)
+
+
 def _summarise_with_claude(ticker: str, context: str) -> dict:
     from ai_client import groq_chat, MODEL_SMART
     import datetime as _dt
@@ -268,7 +305,7 @@ Respond ONLY with valid JSON matching this exact schema (no markdown, no extra t
     # Attempt direct parse first
     try:
         parsed = json.loads(raw)
-        _sanitise_quarter(parsed, _cur_year)
+        _finalise_quarter(parsed, ticker, _cur_year)
         return parsed
     except json.JSONDecodeError:
         pass
@@ -284,7 +321,7 @@ Respond ONLY with valid JSON matching this exact schema (no markdown, no extra t
         repaired += ']' * max(open_brackets, 0)
         repaired += '}' * max(open_braces, 0)
         parsed = json.loads(repaired)
-        _sanitise_quarter(parsed, _cur_year)
+        _finalise_quarter(parsed, ticker, _cur_year)
         return parsed
     except Exception:
         raise HTTPException(500, "Claude returned malformed JSON — try again")
