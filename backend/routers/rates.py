@@ -725,8 +725,6 @@ def macro_calendar():
 
 # ── Credit Spread Monitor ──────────────────────────────────────────────────────
 
-_CREDIT_CACHE: TTLCache = TTLCache(maxsize=1, ttl=3600)
-_CREDIT_LOCK  = threading.Lock()
 
 # BofA ICE FRED series — (series_id, label, description, benchmark)
 _CREDIT_SERIES = {
@@ -806,12 +804,8 @@ def _yf_spread_history(etf_ticker: str, lookback_days: int) -> list[dict]:
 
 
 @router.get("/credit-spreads")
+@cached(ttl=3600, maxsize=8)
 def credit_spreads(lookback: int = 365):
-    cache_key = f"credit:{lookback}"
-    with _CREDIT_LOCK:
-        if cache_key in _CREDIT_CACHE:
-            return _CREDIT_CACHE[cache_key]
-
     result = {}
     for key, (series_id, label, description, benchmark) in _CREDIT_SERIES.items():
         history = _fred_series_history(series_id, lookback)
@@ -861,8 +855,6 @@ def credit_spreads(lookback: int = 365):
         result["vix"] = {"label": "VIX", "description": "Equity Volatility Index", "current": None, "history": []}
 
     payload = {"series": result, "as_of": date.today().isoformat()}
-    with _CREDIT_LOCK:
-        _CREDIT_CACHE[cache_key] = payload
     return payload
 
 
