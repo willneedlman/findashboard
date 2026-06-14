@@ -282,7 +282,7 @@ export function RelativeValuationContent() {
   }
 
   return (
-    <div id="relative-valuation-content" style={{ maxWidth: 1200, margin: '0 auto' }}>
+    <div id="relative-valuation-content" style={{ width: '100%', maxWidth: 1340, margin: '0 auto' }}>
 
         <PageHeader
           title="Peer Comparison"
