@@ -21,7 +21,7 @@ const OPERATORS = [
 ]
 
 const INPUT: React.CSSProperties = {
-  background: 'var(--theme-bg, #0a1628)', border: `1px solid ${C.border}`, color: C.text,
+  background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: C.text,
   fontFamily: C.mono, fontSize: 11, padding: '4px 7px', outline: 'none',
   width: '100%', boxSizing: 'border-box',
 }
