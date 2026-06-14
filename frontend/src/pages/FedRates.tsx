@@ -152,14 +152,14 @@ export function FedRatesContent() {
 
         {/* Rate sensitivity slider */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 16, marginBottom: 2, paddingBottom: 14, borderBottom: `1px solid var(--theme-border-faint, rgba(255,255,255,0.05))` }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: T.surface, border: `1px solid ${T.border}`, padding: '8px 14px', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: T.surface, border: `1px solid ${T.border}`, padding: '8px 14px', flex: 1 }}>
             <span style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.muted, whiteSpace: 'nowrap' }}>
               Rate Scenario
             </span>
             <input
               type="range" min={-200} max={200} step={5} value={twist}
               onChange={e => setTwist(+e.target.value)}
-              style={{ width: 120, accentColor: T.gold }}
+              style={{ flex: 1, accentColor: T.gold }}
             />
             <span style={{ fontFamily: T.mono, fontSize: 13, fontWeight: 700, color: T.gold, width: 64, textAlign: 'right', whiteSpace: 'nowrap' }}>
               {twist > 0 ? '+' : ''}{twist} bps
