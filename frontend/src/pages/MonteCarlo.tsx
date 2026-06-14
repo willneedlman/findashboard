@@ -288,6 +288,7 @@ export default function MonteCarlo() {
       const p95     = terminal[Math.floor(terminal.length * 0.95)]
       const median  = terminal[Math.floor(terminal.length * 0.50)]
       const probProfit = terminal.filter(v => v > S0).length / terminal.length * 100
+      const probRuin   = terminal.filter(v => v <= 0).length / terminal.length * 100  // paths wiped to $0
       const varAmt  = S0 - p5
       const cvarSlice = terminal.slice(0, Math.floor(terminal.length * 0.05))
       const cvarAmt = S0 - cvarSlice.reduce((s, v) => s + v, 0) / (cvarSlice.length || 1)
@@ -307,7 +308,7 @@ export default function MonteCarlo() {
         : null
 
       return {
-        bands, histogram, S0, median, p5, p95, probProfit, varAmt, cvarAmt, effDrift,
+        bands, histogram, S0, median, p5, p95, probProfit, probRuin, varAmt, cvarAmt, effDrift,
         probTarget, targetPrice,
         benchmark, legs: legs.map((l, i) => ({ ...l, ...legAdjs[i] })),
       }
@@ -432,7 +433,7 @@ export default function MonteCarlo() {
               </div>
               <div>
                 <label style={LABEL}>Leverage (x)</label>
-                <input type="number" style={INPUT} value={leverage} step={0.25} min={1} max={5}
+                <input type="number" style={INPUT} value={leverage} step={0.25} min={1}
                   onChange={e => setLeverage(e.target.value)} onFocus={focus} onBlur={blur} />
               </div>
               {(Number(leverage) || 1) > 1 && (
@@ -586,6 +587,10 @@ export default function MonteCarlo() {
                 <MetricCard label="P95 Outcome" value={`$${data.p95.toFixed(2)}`} />
                 <MetricCard label="CVaR 95%" value={`$${data.cvarAmt.toFixed(2)}`} deltaPositive={false} />
                 <MetricCard label="Eff. Portfolio Drift" value={`${data.effDrift.toFixed(1)}%`} />
+                {data.probRuin > 0 && (
+                  <MetricCard label="Prob of Ruin" value={`${data.probRuin.toFixed(1)}%`}
+                    delta="wiped to $0" deltaPositive={false} />
+                )}
               </div>
 
               <ChartPanel label={`Simulated Portfolio Paths vs ${data.benchmark}`} height={328}>

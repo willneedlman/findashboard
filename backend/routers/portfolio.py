@@ -170,7 +170,8 @@ class MonteCarloRequest(BaseModel):
     end: str = "2024-12-31"
     n_sims: int = Field(default=500, ge=10, le=1000)
     horizon_days: int = Field(default=252, ge=1, le=2520)
-    leverage: float = Field(default=1.0, ge=1.0, le=5.0)
+    # No upper cap — wiped-out simulation paths are floored at 0 (see monte_carlo).
+    leverage: float = Field(default=1.0, ge=1.0)
     borrow_rate: float = Field(default=0.0, ge=0.0, le=30.0)
 
     @model_validator(mode='after')
