@@ -1,6 +1,10 @@
 import logging
+import os, sys
 from fastapi import APIRouter, HTTPException
 import yfinance as yf
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from cache import get_history, get_info
 
 router = APIRouter()
 logger = logging.getLogger("backend.routers.corporate")
@@ -115,7 +119,7 @@ async def get_corporate_hub(ticker: str):
         stock = yf.Ticker(symbol)
 
         try:
-            info = stock.info
+            info = get_info(symbol)
         except Exception as info_err:
             logger.error(f"Error fetching info for symbol {symbol}: {info_err}")
             info = None
@@ -153,7 +157,7 @@ async def get_corporate_hub(ticker: str):
         # 30-day closing price sparkline
         sparkline = []
         try:
-            hist = stock.history(period="1mo")
+            hist = get_history(symbol, period="1mo")
             if hist is not None and not hist.empty and "Close" in hist.columns:
                 closes = hist["Close"].dropna().tolist()
                 sparkline = [round(float(v), 2) for v in closes]
@@ -210,9 +214,8 @@ async def get_corporate_hub_short(ticker: str):
     """Returns short interest data for a ticker."""
     try:
         symbol = ticker.strip().upper()
-        stock = yf.Ticker(symbol)
         try:
-            info = stock.info or {}
+            info = get_info(symbol)
         except Exception:
             info = {}
 
@@ -273,8 +276,7 @@ async def get_corporate_profile(ticker: str):
     """Fetches deep corporate profile details, explicitly safeguarding executive list arrays."""
     try:
         symbol = ticker.strip().upper()
-        stock = yf.Ticker(symbol)
-        info = stock.info or {}
+        info = get_info(symbol)
 
         officers = []
         raw_officers = info.get("companyOfficers", [])
@@ -309,9 +311,8 @@ async def get_peer_valuation(ticker: str):
     """Calculates relative comps matrix with exhaustive alignment variations to completely immunize against frontend .toFixed() crashes."""
     try:
         symbol = ticker.strip().upper()
-        stock = yf.Ticker(symbol)
-        info = stock.info or {}
-        
+        info = get_info(symbol)
+
         sector = info.get("sector", "")
         peers = _get_peers_for_ticker(symbol, sector)
         
@@ -370,7 +371,7 @@ async def get_peer_valuation(ticker: str):
         # 2. Map Peer Rows — fetched concurrently so a larger comp set stays fast
         def _peer_row(peer):
             try:
-                p_info = yf.Ticker(peer).info
+                p_info = get_info(peer)
                 if isinstance(p_info, dict) and p_info:
                     return build_aligned_row(peer, p_info, False)
             except Exception:
@@ -398,10 +399,8 @@ async def get_supply_chain(ticker: str):
     """Company profile: basic info + product/geo revenue segments + peer list."""
     try:
         symbol = ticker.strip().upper()
-        stock = yf.Ticker(symbol)
-
         try:
-            info = stock.info or {}
+            info = get_info(symbol)
         except Exception:
             info = {}
 
