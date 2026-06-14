@@ -3,7 +3,7 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from cache import get_history as _cached_history, get_news as _cached_news, get_download
+from cache import get_history as _cached_history, get_news as _cached_news, get_download, cached
 from validation import validate_ticker, validate_tickers, validate_date
 
 
@@ -372,8 +372,6 @@ def sector_rotation():
 
 # ── Global Macro Dashboard ─────────────────────────────────────────────────────
 
-_MACRO_CACHE: TTLCache = TTLCache(maxsize=1, ttl=300)
-_MACRO_LOCK = threading.Lock()
 
 MACRO_ASSETS = [
     # FX
@@ -455,11 +453,8 @@ def _fetch_treasury_yields() -> dict[str, tuple[float, float]]:
         return {}
 
 @router.get("/macro-dashboard")
+@cached(ttl=300, maxsize=1)
 def macro_dashboard():
-    with _MACRO_LOCK:
-        if "data" in _MACRO_CACHE:
-            return _MACRO_CACHE["data"]
-
     tickers = [a[0] for a in MACRO_ASSETS]
     results = []
 
@@ -508,6 +503,4 @@ def macro_dashboard():
     results   = non_bonds + bonds
 
     payload = {"assets": results, "as_of": date.today().isoformat()}
-    with _MACRO_LOCK:
-        _MACRO_CACHE["data"] = payload
     return payload

@@ -6,7 +6,7 @@ import sys, os
 from datetime import date, timedelta
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import pandas as pd
-from cache import get_history, get_download, get_info
+from cache import get_history, get_download, get_info, cached
 
 try:
     from disk_cache import disk_get, disk_set
@@ -286,8 +286,6 @@ def risk_free_rate():
     return result
 
 
-_FED_CACHE: TTLCache = TTLCache(maxsize=1, ttl=3600)
-_FED_LOCK = threading.Lock()
 
 
 def _fred_latest(series_id: str) -> float | None:
@@ -383,16 +381,13 @@ def _curve_implied_path(upcoming: list[date], current_rate: float | None) -> lis
 
 
 @router.get("/fed-projections")
+@cached(ttl=3600, maxsize=1)
 def fed_projections():
     """Market-implied Fed funds path + per-meeting hike/hold/cut probabilities.
 
     Layered, all from free data: a Treasury-curve-implied expected path (FRED) is
     the always-available backbone; CME ZQ fed-funds futures override per meeting
     when available for true market-implied pricing. No hardcoded probabilities."""
-    with _FED_LOCK:
-        if "fed" in _FED_CACHE:
-            return _FED_CACHE["fed"]
-
     today = date.today()
     upcoming = [d for d in (date.fromisoformat(x) for x in _FOMC_DATES) if d >= today][:8]
     current_rate = _current_ffr()
@@ -442,15 +437,11 @@ def fed_projections():
         "current_rate": round(current_rate, 2) if current_rate is not None else None,
         "source":       source,
     }
-    with _FED_LOCK:
-        _FED_CACHE["fed"] = result
     return result
 
 
 # ── Macro Calendar ─────────────────────────────────────────────────────────────
 
-_CAL_CACHE: TTLCache = TTLCache(maxsize=1, ttl=3600)
-_CAL_LOCK = threading.Lock()
 
 # FOMC meeting end-dates (2027 dates are estimates until officially confirmed)
 _FOMC_DATES = [
@@ -705,11 +696,8 @@ def _computed_schedule(start: date, end: date) -> list[dict]:
 
 
 @router.get("/macro-calendar")
+@cached(ttl=3600, maxsize=1)
 def macro_calendar():
-    with _CAL_LOCK:
-        if "cal" in _CAL_CACHE:
-            return _CAL_CACHE["cal"]
-
     today = date.today()
     cutoff = today + timedelta(days=90)
     events: list[dict] = []
@@ -732,8 +720,6 @@ def macro_calendar():
     events.sort(key=lambda e: e["date"])
 
     result = {"events": events, "as_of": today.isoformat()}
-    with _CAL_LOCK:
-        _CAL_CACHE["cal"] = result
     return result
 
 
@@ -882,8 +868,6 @@ def credit_spreads(lookback: int = 365):
 
 # ── Yield Curve History ────────────────────────────────────────────────────────
 
-_CURVE_HIST_CACHE: TTLCache = TTLCache(maxsize=1, ttl=3600)
-_CURVE_HIST_LOCK  = threading.Lock()
 
 _YF_ANCHOR_TICKERS = {"3M": ("^IRX", 0.25), "5Y": ("^FVX", 5.0), "10Y": ("^TNX", 10.0), "30Y": ("^TYX", 30.0)}
 _FULL_TENOR_YEARS  = {"1M": 1/12, "3M": 0.25, "6M": 0.5, "1Y": 1.0, "2Y": 2.0,
@@ -920,11 +904,8 @@ def _curve_at(close: pd.DataFrame, target_date) -> dict:
 
 
 @router.get("/yield-curve-history")
+@cached(ttl=3600, maxsize=1)
 def yield_curve_history():
-    with _CURVE_HIST_LOCK:
-        if "hist" in _CURVE_HIST_CACHE:
-            return _CURVE_HIST_CACHE["hist"]
-
     start = (date.today() - timedelta(days=400)).isoformat()
     end   = date.today().isoformat()
     syms  = tuple(v[0] for v in _YF_ANCHOR_TICKERS.values())
@@ -961,6 +942,4 @@ def yield_curve_history():
             })
         result["spread_history"] = result["spread_history"][-252:]
 
-    with _CURVE_HIST_LOCK:
-        _CURVE_HIST_CACHE["hist"] = result
     return result
