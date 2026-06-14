@@ -150,9 +150,27 @@ function statusColor(status: string) {
   }
 }
 
+// ─── OCC option symbol helpers ────────────────────────────────────────────────
+function buildOCC(underlying: string, expDate: string, strike: string, callPut: 'C' | 'P'): string {
+  if (!underlying || !expDate || !strike || isNaN(parseFloat(strike))) return ''
+  const d = new Date(expDate + 'T00:00:00')
+  const yy = String(d.getFullYear()).slice(2)
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  const strikeInt = Math.round(parseFloat(strike) * 1000)
+  return `${underlying.toUpperCase()}${yy}${mm}${dd}${callPut}${String(strikeInt).padStart(8, '0')}`
+}
+
+function parseOCC(occ: string): { expDate: string; strike: string; callPut: 'C' | 'P' } | null {
+  const m = occ.trim().toUpperCase().match(/[A-Z]+(\d{2})(\d{2})(\d{2})([CP])(\d{8})$/)
+  if (!m) return null
+  const [, yy, mm, dd, cp, strike] = m
+  return { expDate: `20${yy}-${mm}-${dd}`, strike: String(parseInt(strike, 10) / 1000), callPut: cp as 'C' | 'P' }
+}
+
 // ─── Multi-leg leg row ────────────────────────────────────────────────────────
-interface LegState { symbol: string; side: string; qty: string }
-const EMPTY_LEG: LegState = { symbol: '', side: 'buy_to_open', qty: '1' }
+interface LegState { expDate: string; strike: string; callPut: 'C' | 'P'; side: string; qty: string }
+const EMPTY_LEG: LegState = { expDate: '', strike: '', callPut: 'C', side: 'buy_to_open', qty: '1' }
 
 interface StrategyTemplate {
   name: string; shortName: string; orderType: string
@@ -262,15 +280,17 @@ const OPTION_STRATEGY_TEMPLATES: StrategyTemplate[] = [
 ]
 
 function LegRow({
-  index, leg, hint, onChange, onRemove, canRemove,
+  index, leg, hint, underlying, onChange, onRemove, canRemove,
 }: {
   index: number
   leg: LegState
   hint?: string
+  underlying: string
   onChange: (l: LegState) => void
   onRemove: () => void
   canRemove: boolean
 }) {
+  const occ = buildOCC(underlying, leg.expDate, leg.strike, leg.callPut)
   return (
     <div style={{ border: `1px solid ${T.border}`, padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -285,11 +305,38 @@ function LegRow({
           }}>×</button>
         )}
       </div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ flex: 1 }}>
+          <span style={lbl}>Expiration</span>
+          <input style={inp} type="date" value={leg.expDate}
+            onChange={e => onChange({ ...leg, expDate: e.target.value })} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <span style={lbl}>Strike</span>
+          <input style={inp} type="number" min="0" step="0.5" value={leg.strike}
+            onChange={e => onChange({ ...leg, strike: e.target.value })} placeholder="580.00" />
+        </div>
+      </div>
       <div>
-        <span style={lbl}>OCC Symbol</span>
-        <input style={inp} value={leg.symbol}
-          onChange={e => onChange({ ...leg, symbol: e.target.value })}
-          placeholder="SPY250117C00580000" />
+        <span style={lbl}>Call / Put</span>
+        <div style={{ display: 'flex', gap: 0 }}>
+          {(['C', 'P'] as const).map(cp => (
+            <button
+              key={cp}
+              onClick={() => onChange({ ...leg, callPut: cp })}
+              style={{
+                flex: 1, padding: '6px 0', fontFamily: T.mono, fontSize: 11, fontWeight: 700,
+                letterSpacing: '0.1em', cursor: 'pointer', border: `1px solid ${T.border}`,
+                background: leg.callPut === cp ? (cp === 'C' ? T.pos : T.neg) : T.bg,
+                color: leg.callPut === cp ? 'var(--theme-bg)' : T.muted,
+                borderRight: cp === 'C' ? 'none' : undefined,
+                transition: 'background 0.15s, color 0.15s',
+              }}
+            >
+              {cp === 'C' ? 'CALL' : 'PUT'}
+            </button>
+          ))}
+        </div>
       </div>
       <div style={{ display: 'flex', gap: 6 }}>
         <div style={{ flex: 2 }}>
@@ -307,6 +354,12 @@ function LegRow({
             onChange={e => onChange({ ...leg, qty: e.target.value })} placeholder="1" />
         </div>
       </div>
+      {occ && (
+        <div style={{ padding: '4px 8px', background: 'color-mix(in srgb, var(--theme-primary) 6%, transparent)', border: `1px solid color-mix(in srgb, var(--theme-primary) 20%, transparent)` }}>
+          <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', color: T.muted, fontFamily: T.mono }}>OCC SYMBOL</span>
+          <div style={{ fontSize: 11, fontFamily: T.mono, color: T.gold, marginTop: 1, letterSpacing: '0.04em' }}>{occ}</div>
+        </div>
+      )}
     </div>
   )
 }
@@ -340,15 +393,10 @@ function OrderTicket({ onOrderPlaced, importTemplate, onTemplateConsumed, import
   const [opPrice, setOpPrice]           = useState('')
   const [opDur, setOpDur]               = useState('day')
 
-  const opSymbol = useMemo(() => {
-    if (!opUnderlying || !opExpDate || !opStrike || isNaN(parseFloat(opStrike))) return ''
-    const d = new Date(opExpDate + 'T00:00:00')
-    const yy = String(d.getFullYear()).slice(2)
-    const mm = String(d.getMonth() + 1).padStart(2, '0')
-    const dd = String(d.getDate()).padStart(2, '0')
-    const strikeInt = Math.round(parseFloat(opStrike) * 1000)
-    return `${opUnderlying}${yy}${mm}${dd}${opCallPut}${String(strikeInt).padStart(8, '0')}`
-  }, [opUnderlying, opExpDate, opStrike, opCallPut])
+  const opSymbol = useMemo(
+    () => buildOCC(opUnderlying, opExpDate, opStrike, opCallPut),
+    [opUnderlying, opExpDate, opStrike, opCallPut],
+  )
 
   // Multi-leg state
   const [mlUnderlying, setMlUnderlying]           = useState('')
@@ -362,7 +410,7 @@ function OrderTicket({ onOrderPlaced, importTemplate, onTemplateConsumed, import
   const applyTemplate = (tpl: StrategyTemplate) => {
     setMlTemplate(tpl)
     setMlType(tpl.orderType)
-    setMlLegs(tpl.legs.map(l => ({ symbol: '', side: l.side, qty: l.qty })))
+    setMlLegs(tpl.legs.map(l => ({ expDate: '', strike: '', callPut: l.hint.toLowerCase().includes('put') ? 'P' : 'C', side: l.side, qty: l.qty })))
     setMlLegHints(tpl.legs.map(l => l.hint))
   }
 
@@ -370,9 +418,14 @@ function OrderTicket({ onOrderPlaced, importTemplate, onTemplateConsumed, import
     if (!importTemplate) return
     setTab('multileg')
     applyTemplate(importTemplate)
-    // If real OCC symbols provided (from Strategy Builder), overwrite leg symbols + underlying
+    // If real OCC symbols provided (from Strategy Builder), parse them into leg params
     if (importOCCLegs) {
-      setMlLegs(importOCCLegs.map(l => ({ symbol: l.symbol, side: l.side, qty: l.qty })))
+      setMlLegs(importOCCLegs.map(l => {
+        const parsed = parseOCC(l.symbol)
+        return parsed
+          ? { ...parsed, side: l.side, qty: l.qty }
+          : { expDate: '', strike: '', callPut: 'C' as const, side: l.side, qty: l.qty }
+      }))
     }
     if (importUnderlying) setMlUnderlying(importUnderlying)
     onTemplateConsumed?.()
@@ -452,12 +505,14 @@ function OrderTicket({ onOrderPlaced, importTemplate, onTemplateConsumed, import
   }
 
   function handleMultilegSubmit() {
-    const validLegs = mlLegs.filter(l => l.symbol.trim() && l.qty)
+    const validLegs = mlLegs
+      .map(l => ({ occ: buildOCC(mlUnderlying, l.expDate, l.strike, l.callPut), side: l.side, qty: l.qty }))
+      .filter(l => l.occ && l.qty)
     if (!mlUnderlying || validLegs.length < 2) return
     mlMutation.mutate({
       symbol: mlUnderlying.toUpperCase(),
       legs: validLegs.map(l => ({
-        option_symbol: l.symbol.trim(),
+        option_symbol: l.occ,
         side: l.side,
         quantity: parseInt(l.qty),
       })),
@@ -499,7 +554,7 @@ function OrderTicket({ onOrderPlaced, importTemplate, onTemplateConsumed, import
   )
 
   const isPending = eqMutation.isPending || opMutation.isPending || mlMutation.isPending
-  const mlValidLegs = mlLegs.filter(l => l.symbol.trim() && l.qty)
+  const mlValidLegs = mlLegs.filter(l => buildOCC(mlUnderlying, l.expDate, l.strike, l.callPut) && l.qty)
 
   return (
     <div id="order-ticket-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -775,6 +830,7 @@ function OrderTicket({ onOrderPlaced, importTemplate, onTemplateConsumed, import
                   index={i}
                   leg={leg}
                   hint={mlLegHints[i]}
+                  underlying={mlUnderlying}
                   onChange={updated => setMlLegs(prev => prev.map((l, j) => j === i ? updated : l))}
                   onRemove={() => { setMlLegs(prev => prev.filter((_, j) => j !== i)); setMlLegHints(prev => prev.filter((_, j) => j !== i)) }}
                   canRemove={mlLegs.length > 2}
@@ -1461,7 +1517,6 @@ export default function PaperTrading() {
 
         {/* ── Strategy Panel ── */}
         <StrategyPanel
-          onImportTemplate={setImportedTemplate}
           pendingBuilderStrategy={pendingBuilderStrategy}
           onApproveBuilderStrategy={approveBuilderStrategy}
           onDismissBuilderStrategy={() => { localStorage.removeItem(PT_LS_KEY); setPendingBuilderStrategy(null) }}
@@ -1803,8 +1858,7 @@ function applyRiskToChart(
   }))
 }
 
-function StrategyPanel({ onImportTemplate, pendingBuilderStrategy, onApproveBuilderStrategy, onDismissBuilderStrategy, onAutomatedOrder }: {
-  onImportTemplate: (tpl: StrategyTemplate) => void
+function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy, onDismissBuilderStrategy, onAutomatedOrder }: {
   pendingBuilderStrategy: PendingOptionStrategy | null
   onApproveBuilderStrategy: (ps: PendingOptionStrategy) => void
   onDismissBuilderStrategy: () => void
@@ -2710,36 +2764,6 @@ function StrategyPanel({ onImportTemplate, pendingBuilderStrategy, onApproveBuil
                   ))}
                 </div>
               )}
-            </div>
-          </div>
-
-          {/* Option Leg Strategy Import */}
-          <div style={{ flex: 1, minWidth: 260 }}>
-            <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', color: T.muted, marginBottom: 8, textTransform: 'uppercase' }}>
-              Option Leg Strategies → Order Ticket <HelpTip width={270} position="top" text="Click any preset to pre-load the correct leg structure (sides, quantities, order type) into the multileg order ticket above. You still fill in the OCC option symbols. Use the Chain Scanner to find them." />
-            </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-              {OPTION_STRATEGY_TEMPLATES.map(tpl => (
-                <button
-                  key={tpl.name}
-                  title={tpl.description}
-                  onClick={() => {
-                    onImportTemplate(tpl)
-                    document.getElementById('order-ticket-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                  }}
-                  style={{
-                    padding: '4px 9px', fontSize: 9, fontFamily: T.mono, cursor: 'pointer',
-                    border: `1px solid ${T.border}`, background: 'rgba(201,168,76,0.06)',
-                    color: T.muted, letterSpacing: '0.05em', whiteSpace: 'nowrap',
-                    transition: 'color 0.12s, border-color 0.12s',
-                  }}
-                  onMouseEnter={e => { (e.target as HTMLButtonElement).style.color = T.gold; (e.target as HTMLButtonElement).style.borderColor = T.gold }}
-                  onMouseLeave={e => { (e.target as HTMLButtonElement).style.color = T.muted; (e.target as HTMLButtonElement).style.borderColor = T.border }}
-                >{tpl.shortName} ↑</button>
-              ))}
-            </div>
-            <div style={{ marginTop: 8, fontSize: 9, color: T.dim, fontFamily: T.mono }}>
-              Click any strategy to pre-load leg structure into the multileg order ticket.
             </div>
           </div>
 
