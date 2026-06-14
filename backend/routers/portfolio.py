@@ -85,7 +85,8 @@ class BacktestRequest(BaseModel):
     benchmark: str = "SPY"
     start: str = "2020-01-01"
     end: str = "2024-12-31"
-    leverage: float = Field(default=1.0, ge=1.0, le=5.0)
+    # No upper cap — a wipeout is floored at 0 from the liquidation point.
+    leverage: float = Field(default=1.0, ge=1.0)
     borrow_rate: float = Field(default=0.0, ge=0.0, le=30.0)
 
     @model_validator(mode='after')

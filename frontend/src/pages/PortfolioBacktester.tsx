@@ -466,7 +466,7 @@ function PortfolioTab() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
               <div>
                 <label style={PORT_LABEL}>Leverage (x)</label>
-                <input type="number" style={PORT_INPUT} value={leverage} min={1} max={5} step={0.25}
+                <input type="number" style={PORT_INPUT} value={leverage} min={1} step={0.25}
                   onChange={e => setLeverage(e.target.value)} onFocus={focus} onBlur={blur} />
               </div>
               {(Number(leverage) || 1) > 1 && (
