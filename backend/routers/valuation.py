@@ -229,45 +229,29 @@ def multiples(ticker: str):
     ebitda_ps = ebitda / shares if shares else None
     ev = (price * shares + net_debt) if (price and shares) else None
 
-    # Only earnings-based lines signal "not profitable" — a negative P/E or
-    # EV/EBITDA has no valuation reading because earnings are a loss. P/B and P/S
-    # can also go non-positive (e.g. negative book equity from heavy buybacks at
-    # very profitable names like MCD/HD), so those are dropped silently and must
-    # NOT flag the company as pre-profit.
-    _EARNINGS_KEYS = {"pe", "pe_fwd", "ev_ebitda"}
+    # Non-positive per-share figures (negative EPS for a loss-maker, negative book
+    # equity from buybacks) have no valuation reading, so those lines are dropped.
     metrics: list[dict] = []
-    dropped: list[str] = []
     def add(key, label, per_share, cur_mult, ev_based=False):
         if per_share and per_share > 0:
             metrics.append({"key": key, "label": label, "per_share": round(per_share, 2),
                             "current_mult": round(cur_mult, 1) if cur_mult and cur_mult > 0 else None,
                             "ev_based": ev_based})
-        elif per_share is not None and per_share <= 0 and key in _EARNINGS_KEYS:
-            dropped.append(label)
 
-    if eps is not None:     add("pe",     "P/E (trailing)", float(eps),     price / eps if (price and eps) else None)
-    if eps_fwd is not None: add("pe_fwd", "P/E (forward)",  float(eps_fwd), price / eps_fwd if (price and eps_fwd) else None)
+    if eps:     add("pe",     "P/E (trailing)", float(eps),     price / eps if price else None)
+    if eps_fwd: add("pe_fwd", "P/E (forward)",  float(eps_fwd), price / eps_fwd if price else None)
     if sales_ps: add("ps",    "P/S",            sales_ps,       price / sales_ps if price else None)
-    if book_ps is not None: add("pb",     "P/B",            float(book_ps), price / book_ps if (price and book_ps) else None)
-    if ebitda_ps is not None: add("ev_ebitda", "EV/EBITDA", ebitda_ps,     ev / ebitda if (ev and ebitda > 0) else None, ev_based=True)
+    if book_ps: add("pb",     "P/B",            float(book_ps), price / book_ps if price else None)
+    if ebitda_ps: add("ev_ebitda", "EV/EBITDA", ebitda_ps,     ev / ebitda if (ev and ebitda > 0) else None, ev_based=True)
 
     if not metrics:
         return {"ticker": sym, "price": price, "metrics": [],
                 "note": "No usable per-share metrics were available for this ticker."}
 
-    pre_profit = bool(dropped)
-    note = None
-    if pre_profit:
-        note = (f"{sym} is not yet profitable, so earnings multiples ({', '.join(dropped)}) "
-                "have no meaningful reading and are hidden. Sales- and book-based multiples "
-                "are shown instead, which is the standard way to value a loss-making company.")
-
     return {
-        "ticker":     sym,
-        "price":      round(price, 2) if price else None,
-        "shares":     round(shares, 1),
-        "net_debt":   round(net_debt, 1),
-        "metrics":    metrics,
-        "pre_profit": pre_profit,
-        "note":       note,
+        "ticker":   sym,
+        "price":    round(price, 2) if price else None,
+        "shares":   round(shares, 1),
+        "net_debt": round(net_debt, 1),
+        "metrics":  metrics,
     }
