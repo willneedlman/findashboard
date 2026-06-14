@@ -84,8 +84,9 @@ def get_history(ticker: str, period: str = "1y",
             df.index = df.index.tz_localize(None)
     except Exception:
         df = pd.DataFrame()
-    with _lock:
-        _history_cache[key] = df
+    if not df.empty:                      # don't cache transient failures
+        with _lock:
+            _history_cache[key] = df
     return df
 
 
@@ -98,8 +99,9 @@ def get_info(ticker: str) -> dict:
         info = yf.Ticker(sym).info
     except Exception:
         info = {}
-    with _lock:
-        _info_cache[sym] = info
+    if info:                              # don't cache transient failures
+        with _lock:
+            _info_cache[sym] = info
     return info
 
 
@@ -112,8 +114,9 @@ def get_news(ticker: str) -> list:
         news = yf.Ticker(sym).news or []
     except Exception:
         news = []
-    with _lock:
-        _news_cache[sym] = news
+    if news:                              # don't cache transient failures
+        with _lock:
+            _news_cache[sym] = news
     return news
 
 
@@ -128,6 +131,7 @@ def get_download(tickers: tuple, start: str, end: str) -> pd.DataFrame:
             df.index = df.index.tz_localize(None)
     except Exception:
         df = pd.DataFrame()
-    with _lock:
-        _download_cache[key] = df
+    if not df.empty:                      # don't cache transient failures
+        with _lock:
+            _download_cache[key] = df
     return df
