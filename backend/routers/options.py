@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from math_engine import bs_price, bs_greeks
+from math_engine import bs_price, bs_greeks, bs_core
 from cache import get_history
 import fmp
 import tradier as _tradier
@@ -77,16 +77,10 @@ def options_snapshot(ticker: str):
         from scipy.optimize import brentq
 
         def _bs_call(S, K, T_y, r, sigma):
-            if T_y <= 0 or sigma <= 0: return max(S - K, 0)
-            d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T_y) / (sigma * np.sqrt(T_y))
-            d2 = d1 - sigma * np.sqrt(T_y)
-            return S * norm.cdf(d1) - K * np.exp(-r * T_y) * norm.cdf(d2)
+            return bs_core(S, K, T_y, r, sigma, "call")
 
         def _bs_put(S, K, T_y, r, sigma):
-            if T_y <= 0 or sigma <= 0: return max(K - S, 0)
-            d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T_y) / (sigma * np.sqrt(T_y))
-            d2 = d1 - sigma * np.sqrt(T_y)
-            return K * np.exp(-r * T_y) * norm.cdf(-d2) - S * norm.cdf(-d1)
+            return bs_core(S, K, T_y, r, sigma, "put")
 
         def _implied_vol(price, S, K, T_y, r, flag):
             fn = _bs_call if flag == 'c' else _bs_put

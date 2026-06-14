@@ -1,13 +1,23 @@
 import numpy as np
 from scipy.stats import norm
 
-def bs_price(S, K, T, r, sigma, option_type):
-    T, r, sigma = T/365, r/100, sigma/100
+def bs_core(S, K, T, r, sigma, option_type):
+    """Black-Scholes price in raw units: T in years, r and sigma as decimals.
+
+    Shared primitive — bs_price wraps this with day/percent unit conversion;
+    callers already working in year/decimal space (e.g. IV solvers) use it
+    directly.
+    """
+    if T <= 0 or sigma <= 0:
+        return max(S - K, 0.0) if option_type == "call" else max(K - S, 0.0)
     d1 = (np.log(S/K) + (r + 0.5*sigma**2)*T) / (sigma*np.sqrt(T))
     d2 = d1 - sigma*np.sqrt(T)
     if option_type == "call":
         return S*norm.cdf(d1) - K*np.exp(-r*T)*norm.cdf(d2)
     return K*np.exp(-r*T)*norm.cdf(-d2) - S*norm.cdf(-d1)
+
+def bs_price(S, K, T, r, sigma, option_type):
+    return bs_core(S, K, T/365, r/100, sigma/100, option_type)
 
 def bs_greeks(S, K, T, r, sigma, option_type):
     T, r, sigma = T/365, r/100, sigma/100
