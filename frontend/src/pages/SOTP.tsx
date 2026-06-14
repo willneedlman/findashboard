@@ -7,7 +7,7 @@ import MetricCard from '../components/MetricCard'
 import EmptyState from '../components/EmptyState'
 import { useChartColors } from '../hooks/useChartColors'
 import {
-  INPUT, LABEL, HINT, SIDEBAR, SECTION, PRIMARY_BTN, GHOST_BTN, READOUT_ROW, TOOLTIP_STYLE, TOOLTIP_LABEL,
+  INPUT, LABEL, HINT, SIDEBAR, SECTION, RailSection, PRIMARY_BTN, GHOST_BTN, READOUT_ROW, TOOLTIP_STYLE, TOOLTIP_LABEL,
   TOOLTIP_ITEM, TOOLTIP_CURSOR, TICK, TH, TD, PANEL, METRIC_GRID, STACK, fmtM, ChartPanel,
 } from './valuationShared'
 
@@ -21,6 +21,7 @@ type SotpData = {
 export function SOTPContent() {
   const cc = useChartColors()
   const [ticker, setTicker] = useState('AAPL')
+  const [inputsOpen, setInputsOpen] = useState(true)
   const [data, setData] = useState<SotpData | null>(null)
   const [mult, setMult] = useState<Record<string, number>>({})
   const [sector, setSector] = useState<Record<string, string>>({})
@@ -88,8 +89,9 @@ export function SOTPContent() {
   }, [data, mult])
 
   return (
-    <SidebarLayout sidebarWidth={250} sidebarTitle="SOTP Inputs" sidebar={
-      <div style={SIDEBAR}>
+    <SidebarLayout sidebarWidth={250} sidebarTitle="" sidebar={
+      <RailSection title="SOTP Inputs" open={inputsOpen} onToggle={() => setInputsOpen(o => !o)}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div>
           <label style={LABEL}>Ticker</label>
           <input style={INPUT} value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())}
@@ -149,6 +151,7 @@ export function SOTPContent() {
           </div>
         </>}
       </div>
+      </RailSection>
     }>
 
       {error && <div style={{ color: '#f85149', fontFamily: 'var(--theme-mono)', fontSize: 12, marginBottom: 12 }}>{error}</div>}

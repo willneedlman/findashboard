@@ -6,7 +6,7 @@ import SidebarLayout from '../components/SidebarLayout'
 import MetricCard from '../components/MetricCard'
 import EmptyState from '../components/EmptyState'
 import { useChartColors } from '../hooks/useChartColors'
-import { INPUT, LABEL, HINT, SIDEBAR, SECTION, PRIMARY_BTN, GHOST_BTN, READOUT_ROW, TOOLTIP_STYLE, TOOLTIP_LABEL, TOOLTIP_ITEM, TOOLTIP_CURSOR, TICK, METRIC_GRID, STACK, fmtM, ChartPanel } from './valuationShared'
+import { INPUT, LABEL, HINT, SIDEBAR, SECTION, RailSection, PRIMARY_BTN, GHOST_BTN, READOUT_ROW, TOOLTIP_STYLE, TOOLTIP_LABEL, TOOLTIP_ITEM, TOOLTIP_CURSOR, TICK, METRIC_GRID, STACK, fmtM, ChartPanel } from './valuationShared'
 
 type Reverse = {
   implied_growth: number | null
@@ -24,6 +24,7 @@ type Reverse = {
 export function ReverseDCFContent() {
   const cc = useChartColors()
   const [ticker, setTicker] = useState('AAPL')
+  const [inputsOpen, setInputsOpen] = useState(true)
   const [marketPrice, setMarketPrice] = useState<number | ''>('')
   const [opMargin, setOpMargin] = useState(20)
   const [wacc, setWacc] = useState(9)
@@ -67,8 +68,9 @@ export function ReverseDCFContent() {
   const implied = data?.implied_growth
 
   return (
-    <SidebarLayout sidebarWidth={232} sidebarTitle="Reverse DCF Inputs" sidebar={
-      <div style={SIDEBAR}>
+    <SidebarLayout sidebarWidth={232} sidebarTitle="" sidebar={
+      <RailSection title="Reverse DCF Inputs" open={inputsOpen} onToggle={() => setInputsOpen(o => !o)}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div>
           <label style={LABEL}>Ticker</label>
           <input style={INPUT} value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())}
@@ -116,6 +118,7 @@ export function ReverseDCFContent() {
           </div>
         </>}
       </div>
+      </RailSection>
     }>
 
       {error && <div style={{ color: '#f85149', fontFamily: 'var(--theme-mono)', fontSize: 12, marginBottom: 12 }}>{error}</div>}

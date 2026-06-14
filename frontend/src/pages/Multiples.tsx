@@ -4,7 +4,7 @@ import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
 import MetricCard from '../components/MetricCard'
 import EmptyState from '../components/EmptyState'
-import { INPUT, LABEL, SIDEBAR, PRIMARY_BTN, READOUT_ROW, TH, TD, PANEL, METRIC_GRID, STACK } from './valuationShared'
+import { INPUT, LABEL, SIDEBAR, RailSection, PRIMARY_BTN, READOUT_ROW, TH, TD, PANEL, METRIC_GRID, STACK } from './valuationShared'
 
 type Metric = { key: string; label: string; per_share: number; current_mult: number | null; ev_based: boolean }
 type MultiplesData = {
@@ -13,6 +13,7 @@ type MultiplesData = {
 
 export function MultiplesContent() {
   const [ticker, setTicker] = useState('AAPL')
+  const [inputsOpen, setInputsOpen] = useState(true)
   const [data, setData] = useState<MultiplesData | null>(null)
   const [target, setTarget] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(false)
@@ -51,8 +52,9 @@ export function MultiplesContent() {
   }, [data, target])
 
   return (
-    <SidebarLayout sidebarWidth={232} sidebarTitle="Multiples Inputs" sidebar={
-      <div style={SIDEBAR}>
+    <SidebarLayout sidebarWidth={232} sidebarTitle="" sidebar={
+      <RailSection title="Multiples Inputs" open={inputsOpen} onToggle={() => setInputsOpen(o => !o)}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div>
           <label style={LABEL}>Ticker</label>
           <input style={INPUT} value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())}
@@ -73,6 +75,7 @@ export function MultiplesContent() {
           </>
         )}
       </div>
+      </RailSection>
     }>
 
       {error && <div style={{ color: '#f85149', fontFamily: 'var(--theme-mono)', fontSize: 12, marginBottom: 12 }}>{error}</div>}

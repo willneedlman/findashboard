@@ -7,7 +7,7 @@ import MetricCard from '../components/MetricCard'
 import EmptyState from '../components/EmptyState'
 import { useChartColors } from '../hooks/useChartColors'
 import {
-  INPUT, LABEL, HINT, SIDEBAR, SECTION, PRIMARY_BTN, READOUT_ROW, TOOLTIP_STYLE, TOOLTIP_LABEL,
+  INPUT, LABEL, HINT, SIDEBAR, SECTION, RailSection, PRIMARY_BTN, READOUT_ROW, TOOLTIP_STYLE, TOOLTIP_LABEL,
   TOOLTIP_ITEM, TOOLTIP_CURSOR, TICK, METRIC_GRID, STACK, Field, ChartPanel,
 } from './valuationShared'
 
@@ -20,6 +20,7 @@ type DDM = {
 export function DividendDiscountContent() {
   const cc = useChartColors()
   const [ticker, setTicker] = useState('KO')
+  const [inputsOpen, setInputsOpen] = useState(true)
   const [data, setData] = useState<DDM | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -66,8 +67,9 @@ export function DividendDiscountContent() {
   }, [data, r, g1, g2, years])
 
   return (
-    <SidebarLayout sidebarWidth={250} sidebarTitle="DDM Inputs" sidebar={
-      <div style={SIDEBAR}>
+    <SidebarLayout sidebarWidth={250} sidebarTitle="" sidebar={
+      <RailSection title="DDM Inputs" open={inputsOpen} onToggle={() => setInputsOpen(o => !o)}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div>
           <label style={LABEL}>Ticker</label>
           <input style={INPUT} value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())}
@@ -101,6 +103,7 @@ export function DividendDiscountContent() {
           </div>
         </>}
       </div>
+      </RailSection>
     }>
 
       {error && <div style={{ color: '#f85149', fontFamily: 'var(--theme-mono)', fontSize: 12, marginBottom: 12 }}>{error}</div>}
