@@ -14,8 +14,11 @@
 
   "PHYS":  { "name": "Sprott Physical Gold Trust",    "category": "Metals",          "asset": "GC=F",    "asset_label": "Gold (oz)",     "model": "reported_nav", "live": "sprott", "sprott_slug": "gold" },
   "PSLV":  { "name": "Sprott Physical Silver Trust",  "category": "Metals",          "asset": "SI=F",    "asset_label": "Silver (oz)",   "model": "reported_nav", "live": "sprott", "sprott_slug": "silver" },
+  "PPLT":  { "name": "abrdn Physical Platinum ETF",   "category": "Metals",          "asset": "PL=F",    "asset_label": "Platinum (oz)", "model": "reported_nav", "live": "etf_nav" },
 
   "SLV":   { "name": "iShares Silver Trust",          "category": "Materials",       "asset": "SI=F",    "asset_label": "Silver (oz)",   "model": "reported_nav", "live": "etf_nav" },
+  "CPER":  { "name": "United States Copper Index Fund","category": "Materials",      "asset": "HG=F",    "asset_label": "Copper (lb)",   "model": "reported_nav", "live": "etf_nav",
+             "note": "Futures-based copper index fund (no physical copper trust exists; copper is too bulky to vault). Trades near NAV." },
   "URA":   { "name": "Global X Uranium ETF",          "category": "Materials",       "asset": "URA",     "asset_label": "URA NAV",       "model": "reported_nav", "live": "etf_nav",
              "note": "Open-ended uranium-MINERS equity ETF (not physical U3O8); arbitrages to ~NAV so premium/discount stays near zero. asset=self because there is no uranium spot on yfinance. Use a physical-uranium trust with a published NAV feed if you need true U3O8 premium tracking." }
 }
