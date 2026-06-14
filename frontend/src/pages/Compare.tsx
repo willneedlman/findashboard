@@ -39,6 +39,7 @@ const MACRO_GROUPS: { group: string; items: { sym: string; label: string }[] }[]
   { group: 'Commodities', items: [{ sym: 'GC=F', label: 'Gold' }, { sym: 'SI=F', label: 'Silver' }, { sym: 'HG=F', label: 'Copper' }, { sym: 'CL=F', label: 'Crude (WTI)' }, { sym: 'BZ=F', label: 'Brent' }, { sym: 'NG=F', label: 'Nat Gas' }, { sym: 'PL=F', label: 'Platinum' }] },
   { group: 'FX & Dollar', items: [{ sym: 'DX-Y.NYB', label: 'US Dollar' }, { sym: 'EURUSD=X', label: 'EUR/USD' }, { sym: 'USDJPY=X', label: 'USD/JPY' }, { sym: 'GBPUSD=X', label: 'GBP/USD' }] },
   { group: 'Indices', items: [{ sym: '^GSPC', label: 'S&P 500' }, { sym: '^IXIC', label: 'Nasdaq' }, { sym: '^DJI', label: 'Dow' }, { sym: '^RUT', label: 'Russell 2000' }] },
+  { group: 'Economy (FRED)', items: [{ sym: 'FRED:UNEMP', label: 'Unemployment %' }, { sym: 'FRED:CPI', label: 'CPI YoY %' }, { sym: 'FRED:CORE', label: 'Core CPI YoY %' }, { sym: 'FRED:PCE', label: 'PCE YoY %' }] },
 ]
 // Standardized, size-neutral metrics only (no absolute $ or EPS — not fairly comparable)
 const METRIC_GROUPS: { group: string; items: { key: string; label: string; short: string; unit: 'x' | '%' }[] }[] = [

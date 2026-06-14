@@ -941,44 +941,6 @@ def yield_curve_history():
 _ECON_DISK_TTL = 6 * 3600   # FRED macro series update monthly; 6h is plenty
 
 
-def _fred_obs(series_id: str, limit: int) -> list[dict]:
-    """Latest `limit` observations for a FRED series, ascending, missing ('.')
-    values dropped. Returns [] on any failure so the endpoint degrades softly."""
-    if not _FRED_KEY:
-        return []
-    try:
-        resp = requests.get(
-            "https://api.stlouisfed.org/fred/series/observations",
-            params={"series_id": series_id, "sort_order": "desc", "limit": limit,
-                    "api_key": _FRED_KEY, "file_type": "json"},
-            timeout=8,
-        )
-        obs = resp.json().get("observations", [])
-    except Exception:
-        return []
-    out = []
-    for o in obs:
-        v = o.get("value")
-        if v in (None, ".", ""):
-            continue
-        try:
-            out.append({"date": o["date"], "value": float(v)})
-        except (ValueError, KeyError):
-            continue
-    out.reverse()  # ascending by date
-    return out
-
-
-def _yoy(levels: list[dict]) -> list[dict]:
-    """Year-over-year % change of a monthly index series (value[t] vs value[t-12])."""
-    out = []
-    for i in range(12, len(levels)):
-        prev = levels[i - 12]["value"]
-        if prev:
-            out.append({"date": levels[i]["date"], "value": round((levels[i]["value"] / prev - 1) * 100, 2)})
-    return out
-
-
 @router.get("/economy")
 def economy():
     """Unemployment + inflation dashboard from FRED: jobless rate, nonfarm payroll
@@ -989,14 +951,16 @@ def economy():
     if cached_val is not None:
         return cached_val
 
+    import fred
+
     TREND = 24
     last = lambda s: s[-1] if s else None
 
-    unrate = _fred_obs("UNRATE", TREND + 2)
-    payems = _fred_obs("PAYEMS", TREND + 2)
-    cpi  = _yoy(_fred_obs("CPIAUCSL", TREND + 14))
-    core = _yoy(_fred_obs("CPILFESL", TREND + 14))
-    pce  = _yoy(_fred_obs("PCEPI",    TREND + 14))
+    unrate = fred.observations("UNRATE", TREND + 2)
+    payems = fred.observations("PAYEMS", TREND + 2)
+    cpi  = fred.yoy(fred.observations("CPIAUCSL", TREND + 14))
+    core = fred.yoy(fred.observations("CPILFESL", TREND + 14))
+    pce  = fred.yoy(fred.observations("PCEPI",    TREND + 14))
 
     # Nonfarm payroll month-over-month change (thousands)
     pay_change = [{"date": payems[i]["date"], "value": round(payems[i]["value"] - payems[i - 1]["value"], 1)}

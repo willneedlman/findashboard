@@ -80,6 +80,16 @@ def get_history(ticker: str, start: str | None = None, end: str | None = None):
 
 _COMPARE_PERIOD_DAYS = {"1m": 31, "3m": 92, "6m": 183, "1y": 366, "2y": 731, "5y": 1827}
 
+# Macro overlays sourced from FRED rather than yfinance. (series_id, kind) — kind
+# 'level' plots the raw series, 'yoy' plots the year-over-year % change. Monthly
+# data is forward-filled onto the chart's daily index.
+_FRED_OVERLAYS = {
+    "FRED:UNEMP": ("UNRATE",   "level"),
+    "FRED:CPI":   ("CPIAUCSL", "yoy"),
+    "FRED:CORE":  ("CPILFESL", "yoy"),
+    "FRED:PCE":   ("PCEPI",    "yoy"),
+}
+
 
 @router.get("/compare")
 def compare_assets(tickers: str, period: str = "1y", normalize: str = "indexed", overlays: str = ""):
@@ -96,10 +106,12 @@ def compare_assets(tickers: str, period: str = "1y", normalize: str = "indexed",
         return list(dict.fromkeys([x.strip().upper() for x in s.split(",") if x.strip()]))
 
     prim = _parse(tickers)[:8]
-    sec  = [x for x in _parse(overlays) if x not in prim][:4]
+    ov_all = [x for x in _parse(overlays) if x not in prim]
+    fred_ov = [x for x in ov_all if x in _FRED_OVERLAYS][:4]
+    sec     = [x for x in ov_all if x not in _FRED_OVERLAYS][:4]
     if not prim:
         raise HTTPException(400, "Provide at least one ticker")
-    allsyms = prim + sec
+    allsyms = prim + sec   # yfinance symbols only; FRED overlays fetched separately
     try:
         validate_tickers(allsyms, max_count=12)
     except HTTPException:
@@ -165,7 +177,30 @@ def compare_assets(tickers: str, period: str = "1y", normalize: str = "indexed",
                        "change_pct": round((l / f - 1) * 100, 2) if f else None}
         axis[s] = "right"
 
-    cols = prim_avail + sec_avail
+    # FRED macro overlays — monthly, forward-filled onto the daily chart index
+    fred_avail: list[str] = []
+    if fred_ov:
+        import fred as _fred
+        months = max(24, (today - start).days // 30 + 16)   # cover window + 12 for YoY
+        for key in fred_ov:
+            series_id, kind = _FRED_OVERLAYS[key]
+            obs = _fred.observations(series_id, months + 2)
+            if kind == "yoy":
+                obs = _fred.yoy(obs)
+            if not obs:
+                continue
+            s = pd.Series({pd.Timestamp(o["date"]): o["value"] for o in obs}).sort_index()
+            aligned = s.reindex(out.index.union(s.index)).ffill().reindex(out.index)
+            out[key] = aligned
+            valid = aligned.dropna()
+            if len(valid):
+                f, l = float(valid.iloc[0]), float(valid.iloc[-1])
+                meta[key] = {"start": round(f, 4), "last": round(l, 4),
+                             "change_pct": round((l / f - 1) * 100, 2) if f else None}
+            axis[key] = "right"
+            fred_avail.append(key)
+
+    cols = prim_avail + sec_avail + fred_avail
     series = []
     for d, row in out.iterrows():
         rec = {"date": str(pd.Timestamp(d).date())}
@@ -175,7 +210,7 @@ def compare_assets(tickers: str, period: str = "1y", normalize: str = "indexed",
         series.append(rec)
 
     return {"period": period, "normalize": normalize, "tickers": prim_avail,
-            "overlays": sec_avail, "series": series, "meta": meta, "axis": axis}
+            "overlays": sec_avail + fred_avail, "series": series, "meta": meta, "axis": axis}
 
 
 @router.get("/fundamental-series")
