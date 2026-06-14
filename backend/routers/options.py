@@ -6,7 +6,7 @@ import pandas as pd
 import yfinance as yf
 from scipy.stats import norm
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from math_engine import bs_price, bs_greeks, bs_core
@@ -434,6 +434,81 @@ def options_chain(ticker: str, expiry: str | None = None):
     except Exception:
         logger.exception("chain error"); raise HTTPException(500, "Internal server error")
 
+
+class MarkLeg(BaseModel):
+    underlying:   str
+    expiry:       str            # YYYY-MM-DD
+    strike:       float
+    option_type:  str            # 'call' | 'put'
+
+
+class MarksRequest(BaseModel):
+    legs: list[MarkLeg] = Field(min_length=1, max_length=50)
+
+
+@router.post("/marks")
+def option_marks(req: MarksRequest):
+    """Current mark + delta per option leg, for portfolio mark-to-market.
+
+    Live chain mid (bid/ask) is preferred, then last trade; if the contract
+    isn't listed, fall back to Black-Scholes off the chain's spot and IV. One
+    chain fetch per unique (underlying, expiry) is reused across legs."""
+    _RF = 5.0  # risk-free %, matches the chain endpoint
+    chain_cache: dict[tuple[str, str], dict] = {}
+
+    def get_chain(sym: str, exp: str) -> dict:
+        key = (sym, exp)
+        if key not in chain_cache:
+            try:
+                chain_cache[key] = options_chain(ticker=sym, expiry=exp)
+            except Exception:
+                chain_cache[key] = {"calls": [], "puts": [], "spot": None, "dte": 1}
+        return chain_cache[key]
+
+    out = []
+    for leg in req.legs:
+        sym  = leg.underlying.strip().upper()
+        flag = "put" if leg.option_type.lower().startswith("p") else "call"
+        chain = get_chain(sym, leg.expiry)
+        rows = (chain.get("puts") if flag == "put" else chain.get("calls")) or []
+        spot = chain.get("spot")
+        dte  = chain.get("dte") or 1
+
+        match = next((r for r in rows if abs(float(r.get("strike") or 0) - leg.strike) < 0.01), None)
+        mark = None
+        iv   = float(match.get("impliedVolatility") or 0) if match else 0.0
+        source = None
+        if match:
+            bid, ask = float(match.get("bid") or 0), float(match.get("ask") or 0)
+            last = float(match.get("lastPrice") or 0)
+            if bid > 0 and ask > 0:
+                mark, source = round((bid + ask) / 2, 4), "chain"
+            elif last > 0:
+                mark, source = round(last, 4), "chain"
+
+        if mark is None and spot and spot > 0:
+            if iv <= 0:
+                ivs = [float(r.get("impliedVolatility") or 0) for r in rows if float(r.get("impliedVolatility") or 0) > 0]
+                iv = (sum(ivs) / len(ivs)) if ivs else 0.30
+            iv_pct = iv * 100 if iv < 1.0 else iv
+            try:
+                mark, source = round(float(bs_price(spot, leg.strike, dte, _RF, iv_pct, flag)), 4), "bs"
+            except Exception:
+                mark = None
+
+        delta = None
+        if match and match.get("delta"):
+            delta = round(float(match["delta"]), 4)
+        elif spot and spot > 0:
+            iv_pct = (iv * 100 if 0 < iv < 1.0 else (iv or 30.0))
+            try:
+                delta = round(float(bs_greeks(spot, leg.strike, dte, _RF, iv_pct, flag)["delta"]), 4)
+            except Exception:
+                delta = None
+
+        out.append({"mark": mark, "iv": round(iv, 4) if iv else None,
+                    "delta": delta, "source": source})
+    return {"marks": out}
 
 
 @router.get("/gex")
