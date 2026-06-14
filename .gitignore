@@ -23,3 +23,24 @@ backend/.cache/
 .playwright-mcp/
 .zshrc
 smoke-test.png
+
+# Local screenshots / visual-check artifacts (root-level only)
+/*.png
+
+# Vendored third-party design skills (not project skills; scoped to skills/ dirs
+# so tracked project skills like caveman-commit/impeccable stay tracked). No
+# trailing slash so both real dirs (.agents) and symlinks (.claude/.continue) match.
+**/skills/brandkit
+**/skills/design-taste-frontend
+**/skills/design-taste-frontend-v1
+**/skills/emil-design-eng
+**/skills/full-output-enforcement
+**/skills/gpt-taste
+**/skills/high-end-visual-design
+**/skills/image-to-code
+**/skills/imagegen-frontend-mobile
+**/skills/imagegen-frontend-web
+**/skills/industrial-brutalist-ui
+**/skills/minimalist-ui
+**/skills/redesign-existing-projects
+**/skills/stitch-design-taste
