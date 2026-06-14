@@ -80,7 +80,7 @@ function fmtNum(n: number): string {
 
 const inputStyle: React.CSSProperties = {
   background:   T.bg,
-  border:       `1px solid ${T.border}`,
+  border:       '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)',
   color:        T.text,
   fontFamily:   T.mono,
   fontSize:     12,

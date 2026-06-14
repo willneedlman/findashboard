@@ -208,9 +208,8 @@ function AddTradeForm({ onAdd }: { onAdd: (t: Trade) => void }) {
   const inp: React.CSSProperties = {
     fontFamily: C.mono,
     fontSize: 11,
-    background: 'var(--theme-hover, rgba(255,255,255,0.04))',
-    border: `1px solid ${C.border}`,
-    borderRadius: 4,
+    background: 'var(--theme-bg, #0a1628)',
+    border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)',
     color: C.text,
     padding: '6px 9px',
     width: '100%',
@@ -400,9 +399,8 @@ function CloseForm({ trade, onClose }: { trade: Trade; onClose: (exitDate: strin
   const inp: React.CSSProperties = {
     fontFamily: C.mono,
     fontSize: 11,
-    background: 'var(--theme-hover, rgba(255,255,255,0.04))',
-    border: `1px solid ${C.border}`,
-    borderRadius: 4,
+    background: 'var(--theme-bg, #0a1628)',
+    border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)',
     color: C.text,
     padding: '6px 9px',
     width: '100%',
