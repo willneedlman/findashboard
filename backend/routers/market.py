@@ -3,7 +3,7 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from cache import get_history as _cached_history, get_news as _cached_news, get_download, cached
+from cache import get_history as _cached_history, get_news as _cached_news, get_download, cached, get_info
 from validation import validate_ticker, validate_tickers, validate_date
 
 
@@ -28,6 +28,46 @@ def get_quote(ticker: str):
         raise
     except Exception:
         raise HTTPException(404, "Could not fetch quote")
+
+
+@router.get("/dividends")
+def get_dividends(tickers: str):
+    """Per-ticker dividend snapshot for portfolio income tracking.
+
+    Returns annual_dividend ($/share, forward where available) and
+    dividend_yield (%). Sourced from yfinance info so figures line up with what
+    Yahoo reports; non-payers come back as zeros.
+    """
+    # Portfolios can hold more than the default 20-ticker cap; raise it here so a
+    # large book's whole dividend panel doesn't 400. Still bounded to limit work.
+    syms = validate_tickers([t.strip() for t in tickers.split(",") if t.strip()][:50], max_count=50)
+    out: dict[str, dict] = {}
+    for sym in syms:
+        annual = 0.0
+        yld = 0.0
+        try:
+            info = get_info(sym)
+            price = info.get("currentPrice") or info.get("regularMarketPrice")
+            if not price:
+                hist = _cached_history(sym, period="5d")
+                if not hist.empty:
+                    price = float(hist["Close"].dropna().iloc[-1])
+            price = float(price) if price else 0.0
+            # Stocks expose a $/share rate (forward preferred); ETFs/funds instead
+            # expose a trailing `yield` fraction. Use whichever is present so both
+            # dividend stocks and dividend ETFs report correctly.
+            rate = info.get("dividendRate") or info.get("trailingAnnualDividendRate") or 0.0
+            yield_frac = info.get("yield") or info.get("trailingAnnualDividendYield") or 0.0
+            if rate and price:
+                annual = float(rate)
+                yld = annual / price * 100
+            elif yield_frac and price:
+                yld = float(yield_frac) * 100
+                annual = float(yield_frac) * price
+        except Exception:
+            pass
+        out[sym] = {"annual_dividend": round(annual, 4), "dividend_yield": round(yld, 2)}
+    return out
 
 
 def _get_history(ticker: str) -> pd.DataFrame:

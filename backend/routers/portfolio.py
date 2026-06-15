@@ -242,12 +242,22 @@ def monte_carlo(req: MonteCarloRequest):
 
 class ComparePortfolio(BaseModel):
     name: str = "Portfolio"
-    tickers: list[str] = Field(min_length=1, max_length=20)
-    weights: list[float] = Field(min_length=1, max_length=20)
+    # 25 (not 20) so a full 20-name book plus a CASH sleeve leg survives field
+    # validation; _validate strips CASH out before the 20-cap validate_tickers.
+    tickers: list[str] = Field(min_length=1, max_length=25)
+    weights: list[float] = Field(min_length=1, max_length=25)
     # No upper cap on leverage — a wipeout is handled gracefully by flooring the
     # equity at 0 from the liquidation point onward (see _lever_equity).
     leverage: float = Field(default=1.0, ge=1.0)
     borrow_rate: float = Field(default=0.0, ge=0.0, le=30.0)
+    # Filled by CompareRequest._validate from any "CASH" legs (see CASH_SYMBOL):
+    # the weight allocated to a zero-volatility cash sleeve, growing at the
+    # risk-free rate. Kept out of `tickers` so it never hits ticker validation.
+    cash_weight: float = 0.0
+
+
+# Reserved leg symbol the Portfolio Manager import uses for a cash allocation.
+CASH_SYMBOL = "CASH"
 
 
 class CompareRequest(BaseModel):
@@ -259,7 +269,17 @@ class CompareRequest(BaseModel):
     @model_validator(mode='after')
     def _validate(self):
         for p in self.portfolios:
-            p.tickers = validate_tickers(p.tickers)
+            # Pull any CASH legs out into cash_weight before ticker validation.
+            eq_t, eq_w = [], []
+            for t, w in zip(p.tickers, p.weights):
+                if t.strip().upper() == CASH_SYMBOL:
+                    p.cash_weight += w
+                else:
+                    eq_t.append(t); eq_w.append(w)
+            p.tickers = validate_tickers(eq_t) if eq_t else []
+            p.weights = eq_w
+            if not p.tickers and p.cash_weight <= 0:
+                raise HTTPException(400, f"Portfolio '{p.name}' has no holdings")
         self.benchmark = validate_ticker(self.benchmark)
         validate_date(self.start); validate_date(self.end)
         return self
@@ -284,13 +304,24 @@ def compare(req: CompareRequest):
 
     daily = raw.pct_change().dropna()
     rf = _get_risk_free_rate()
+    cash_daily = (1 + rf) ** (1 / 252) - 1   # zero-vol cash sleeve return
     bench_ret = daily[req.benchmark]
     cum_bench = (1 + bench_ret).cumprod() * 100
 
     series, metrics = [], []
     for p in req.portfolios:
-        wv = np.array(p.weights, dtype=float); wv = wv / wv.sum()
-        port = (daily[p.tickers] * wv).sum(axis=1)
+        # Normalize equity + cash weights together so a cash sleeve dilutes the
+        # equity exposure (true cash drag) rather than being dropped.
+        eq_w = np.array(p.weights, dtype=float) if p.tickers else np.array([])
+        total_w = eq_w.sum() + p.cash_weight
+        if total_w <= 0:
+            total_w = 1.0
+        if len(eq_w):
+            port = (daily[p.tickers] * (eq_w / total_w)).sum(axis=1)
+        else:
+            port = pd.Series(0.0, index=daily.index)
+        if p.cash_weight > 0:
+            port = port + (p.cash_weight / total_w) * cash_daily
         equity, liquidated = _lever_equity((1 + port).cumprod(), p.leverage, p.borrow_rate)
         idx = equity * 100
         series.append({"name": p.name,
