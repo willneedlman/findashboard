@@ -5,6 +5,7 @@ import PageWrapper from '../components/PageWrapper'
 import PortfolioIO, { type PortfolioAsset } from '../components/PortfolioIO'
 import { usePortfolio } from '../contexts/PortfolioContext'
 import { FUTURES, FUTURES_BY_GROUP, futuresSpec } from '../lib/futures'
+import { normalizeTicker } from '../lib/pmImport'
 
 const T = {
   bg:      'var(--theme-bg, #101c2e)',
@@ -267,15 +268,38 @@ export default function PortfolioManager() {
     retry: 1,
   })
 
-  // Fetch live prices for all tickers
+  // Heal legacy share-class symbols (BRK.B -> BRK-B) so they resolve and quote;
+  // runs only when a stored ticker actually differs from its normalized form.
+  useEffect(() => {
+    if (holdings.some(h => h.ticker !== normalizeTicker(h.ticker))) {
+      setHoldings(prev => prev.map(h => ({ ...h, ticker: normalizeTicker(h.ticker) })))
+    }
+  }, [holdings, setHoldings])
+
+  // Fetch live prices for all tickers (normalize so a legacy BRK.B never 404s
+  // in the render before the heal effect above persists BRK-B).
   const priceResults = useQueries({
-    queries: holdings.map(h => ({
-      queryKey: ['pm-quote', h.ticker],
-      queryFn:  () => axios.get(`/api/market/quote/${h.ticker}`).then(r => r.data as QuoteData),
-      staleTime: 60_000,
-      retry: 1,
-    })),
+    queries: holdings.map(h => {
+      const sym = normalizeTicker(h.ticker)
+      return {
+        queryKey: ['pm-quote', sym],
+        queryFn:  () => axios.get(`/api/market/quote/${encodeURIComponent(sym)}`).then(r => r.data as QuoteData),
+        staleTime: 60_000,
+        retry: 1,
+      }
+    }),
   })
+
+  // Dividend snapshot (yield + $/share) for every distinct holding, batched.
+  const divTickers = Array.from(new Set(holdings.map(h => normalizeTicker(h.ticker)))).sort()
+  const dividendsQuery = useQuery({
+    queryKey: ['pm-dividends', divTickers.join(',')],
+    queryFn:  () => axios.get(`/api/market/dividends?tickers=${divTickers.join(',')}`)
+                      .then(r => r.data as Record<string, { annual_dividend: number; dividend_yield: number }>),
+    enabled:  divTickers.length > 0,
+    staleTime: 6 * 60 * 60_000,   // dividends move slowly; refetch a few times a day
+  })
+  const divData = dividendsQuery.data ?? {}
 
   // Live marks for futures (unique symbols)
   const futSymbols = Array.from(new Set(futures.map(f => f.symbol)))
@@ -337,7 +361,7 @@ export default function PortfolioManager() {
   const removeCash = (id: string) => setCash(prev => prev.filter(c => c.id !== id))
 
   const addHolding = useCallback(() => {
-    const ticker  = newTicker.trim().toUpperCase()
+    const ticker  = normalizeTicker(newTicker)
     const shares  = parseFloat(newShares)
     const avgCost = parseFloat(newCost)
     if (!ticker || isNaN(shares) || shares <= 0 || isNaN(avgCost) || avgCost <= 0) return
@@ -395,6 +419,7 @@ export default function PortfolioManager() {
   // Compute portfolio stats
   let totalValue = 0
   let totalCost  = 0
+  let totalAnnualIncome = 0   // sum of (annual $/share dividend × shares)
   const rows = holdings.map((h, i) => {
     const q        = priceResults[i]?.data as QuoteData | undefined
     const price    = q?.current_price ?? 0
@@ -405,12 +430,20 @@ export default function PortfolioManager() {
     const cost     = h.shares * avgCost
     const pnl      = costIsAuto ? 0 : value - cost
     const pnlPct   = costIsAuto ? 0 : (cost > 0 ? (pnl / cost) * 100 : null)
+    const div      = divData[normalizeTicker(h.ticker)]
+    const divYield = div?.dividend_yield ?? 0
+    const annualIncome = (div?.annual_dividend ?? 0) * h.shares
     if (price > 0) totalValue += value
     if (cost > 0) totalCost += cost
-    return { ...h, avgCost, costIsAuto, price, value, cost, pnl, pnlPct, loading: priceResults[i]?.isLoading, pct1d: q?.pct_change_1d }
+    totalAnnualIncome += annualIncome
+    return { ...h, avgCost, costIsAuto, price, value, cost, pnl, pnlPct, divYield, annualIncome, loading: priceResults[i]?.isLoading, pct1d: q?.pct_change_1d }
   })
   const totalPnl    = totalValue - totalCost
   const totalPnlPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : null
+  // Portfolio income metrics: blended yield on current equity value, and
+  // yield-on-cost against what was paid for the dividend-paying holdings.
+  const portfolioYield   = totalValue > 0 ? (totalAnnualIncome / totalValue) * 100 : null
+  const yieldOnCost      = totalCost  > 0 ? (totalAnnualIncome / totalCost)  * 100 : null
 
   // Option position rows — marks are aligned to the flatten order of allLegs
   const marks = marksQuery.data ?? []
@@ -697,6 +730,24 @@ export default function PortfolioManager() {
                     <span style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: k === 'Total P&L' || k === 'Return' ? (combinedPnl >= 0 ? T.pos : T.neg) : T.text }}>{v}</span>
                   </div>
                 ))}
+
+                {/* Dividend income — only when the book actually pays */}
+                {totalAnnualIncome > 0 && (
+                  <div style={{ marginTop: 6, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
+                    <div style={{ ...lbl, marginBottom: 10, color: T.gold }}>Dividend Income</div>
+                    {[
+                      ['Annual Income',  fmtMoney(totalAnnualIncome)],
+                      ['Monthly Avg',    fmtMoney(totalAnnualIncome / 12)],
+                      ['Portfolio Yield', portfolioYield != null ? `${portfolioYield.toFixed(2)}%` : '—'],
+                      ['Yield on Cost',  yieldOnCost != null ? `${yieldOnCost.toFixed(2)}%` : '—'],
+                    ].map(([k, v]) => (
+                      <div key={k} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <span style={{ fontFamily: T.label, fontSize: 10, color: T.muted }}>{k}</span>
+                        <span style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: k === 'Annual Income' || k === 'Monthly Avg' ? T.pos : T.text }}>{v}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -710,10 +761,11 @@ export default function PortfolioManager() {
             ) : (<>
               {holdings.length > 0 && (
               <div style={{ background: T.surface, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: T.mono, fontSize: 10 }}>
+                <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', minWidth: 720, borderCollapse: 'collapse', fontFamily: T.mono, fontSize: 10 }}>
                   <thead>
                     <tr style={{ borderBottom: `1px solid ${T.border}`, background: T.bg }}>
-                      {['Ticker', 'Shares', 'Avg Cost', 'Price', '1D %', 'Value', 'P&L', 'Return', 'Weight', ''].map(h => (
+                      {['Ticker', 'Shares', 'Avg Cost', 'Price', '1D %', 'Value', 'P&L', 'Return', 'Income/yr', 'Weight', ''].map(h => (
                         <th key={h} style={{ padding: '7px 12px', textAlign: h === 'Ticker' ? 'left' : 'right', fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.muted, whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
                     </tr>
@@ -748,6 +800,11 @@ export default function PortfolioManager() {
                           <td style={{ padding: '8px 12px', textAlign: 'right', color: r.costIsAuto ? T.muted : r.pnlPct == null ? T.muted : r.pnlPct >= 0 ? T.pos : T.neg }}>
                             {r.loading ? '…' : r.costIsAuto ? '—' : r.pnlPct != null ? `${r.pnlPct >= 0 ? '+' : ''}${r.pnlPct.toFixed(2)}%` : '—'}
                           </td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', color: r.annualIncome > 0 ? T.text : T.muted, whiteSpace: 'nowrap' }}>
+                            {dividendsQuery.isLoading ? '…' : r.annualIncome > 0
+                              ? <>{fmtMoney(r.annualIncome)}<span style={{ color: T.muted, fontSize: 9 }}> · {r.divYield.toFixed(2)}%</span></>
+                              : '—'}
+                          </td>
                           <td style={{ padding: '8px 12px', textAlign: 'right', color: T.muted }}>
                             {r.loading ? '…' : totalValue > 0 && r.price > 0 ? `${weight.toFixed(1)}%` : '—'}
                           </td>
@@ -765,6 +822,7 @@ export default function PortfolioManager() {
                     })}
                   </tbody>
                 </table>
+                </div>
 
                 {/* Auto-cost footnote */}
                 {rows.some(r => r.costIsAuto) && (
