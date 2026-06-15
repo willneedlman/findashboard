@@ -45,6 +45,7 @@ export default function PortfolioCompare() {
   ])
   const [start, setStart] = useState('2020-01-01')
   const [end, setEnd] = useState(() => new Date().toISOString().split('T')[0])
+  const [mode, setMode] = useState<'dollar' | 'pct'>('dollar')   // $100 growth vs % change
 
   const m = useMutation<CompareResult, Error, void>({
     mutationFn: () => axios.post('/api/portfolio/compare', {
@@ -67,9 +68,13 @@ export default function PortfolioCompare() {
   const removePort = (i: number) => ports.length > 2 && setPorts(p => p.filter((_, j) => j !== i))
 
   const r = m.data
+  // Backend returns each series indexed to 100. % mode rebases to cumulative
+  // return (value - 100); $ mode keeps the growth-of-$100 value.
+  const toMode = (v: number) => (mode === 'pct' ? v - 100 : v)
+  const floorY = mode === 'pct' ? -100 : 0   // a wiped-out portfolio's floored value
   const chartData = r ? (() => {
     const map: Record<string, any> = {}
-    for (const s of r.series) for (const pt of s.points) (map[pt.date] ??= { date: pt.date })[s.name] = pt.value
+    for (const s of r.series) for (const pt of s.points) (map[pt.date] ??= { date: pt.date })[s.name] = toMode(pt.value)
     return Object.values(map).sort((a: any, b: any) => (a.date < b.date ? -1 : 1))
   })() : []
 
@@ -157,19 +162,33 @@ export default function PortfolioCompare() {
         {r && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             <div style={panel}>
-              <div style={panelTitle}>Growth of $100</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ ...panelTitle, marginBottom: 0 }}>{mode === 'pct' ? 'Cumulative Return' : 'Growth of $100'}</div>
+                <div style={{ display: 'flex', border: `1px solid ${C.border}` }}>
+                  {([['dollar', '$100'], ['pct', '% Change']] as const).map(([k, lbl]) => (
+                    <button key={k} onClick={() => setMode(k)} style={{
+                      background: mode === k ? C.gold : 'transparent',
+                      color: mode === k ? 'var(--theme-bg)' : C.muted,
+                      border: 'none', cursor: 'pointer', fontFamily: 'var(--theme-mono)',
+                      fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 11px',
+                    }}>{lbl}</button>
+                  ))}
+                </div>
+              </div>
               <ResponsiveContainer width="100%" height={340}>
                 <LineChart data={chartData} margin={{ top: 6, right: 20, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                   <XAxis dataKey="date" stroke={C.muted} tick={{ fill: C.muted, fontSize: 9 }} minTickGap={60} />
-                  <YAxis stroke={C.muted} tick={{ fill: C.muted, fontSize: 10 }} />
-                  <Tooltip contentStyle={{ background: 'var(--theme-surface)', border: `1px solid ${C.border}`, color: C.text, fontSize: 11 }} />
+                  <YAxis stroke={C.muted} tick={{ fill: C.muted, fontSize: 10 }} width={52}
+                    tickFormatter={(v: number) => (mode === 'pct' ? `${v}%` : `$${v}`)} />
+                  <Tooltip contentStyle={{ background: 'var(--theme-surface)', border: `1px solid ${C.border}`, color: C.text, fontSize: 11 }}
+                    formatter={(v: number) => (mode === 'pct' ? `${v >= 0 ? '+' : ''}${v.toFixed(2)}%` : `$${v.toFixed(2)}`)} />
                   <Legend wrapperStyle={{ color: C.muted, fontSize: 11 }} />
                   {r.series.map((s, i) => (
                     <Line key={s.name} type="monotone" dataKey={s.name} name={s.name} stroke={LINE_COLORS[i]} strokeWidth={2} dot={false} />
                   ))}
                   {liquidations.map(liq => (
-                    <ReferenceDot key={liq.name} x={liq.date} y={0} r={5} isFront
+                    <ReferenceDot key={liq.name} x={liq.date} y={floorY} r={5} isFront
                       fill={C.red} stroke={C.bg} strokeWidth={1.5}
                       label={{ value: 'Liquidated', position: 'top', fill: C.red, fontSize: 9, fontFamily: 'var(--theme-mono)' }} />
                   ))}
@@ -177,7 +196,7 @@ export default function PortfolioCompare() {
               </ResponsiveContainer>
               {liquidations.length > 0 && (
                 <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: C.red, marginTop: 8 }}>
-                  {liquidations.map(l => l.name).join(', ')} wiped out at this leverage — equity floored to $0 from the liquidation date.
+                  {liquidations.map(l => l.name).join(', ')} wiped out at this leverage — equity floored to {mode === 'pct' ? '-100%' : '$0'} from the liquidation date.
                 </div>
               )}
             </div>
