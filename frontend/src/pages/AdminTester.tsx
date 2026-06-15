@@ -146,7 +146,8 @@ interface UserStats {
   total_users: number
   new_last_7d: number
   new_last_30d: number
-  users: { id: string; username: string; display_name: string; created_at: string; last_login_at: string | null; login_count: number }[]
+  users_with_email?: number
+  users: { id: string; username: string; display_name: string; email: string | null; created_at: string; last_login_at: string | null; login_count: number }[]
 }
 
 type Tab = 'traffic' | 'health' | 'users' | 'cache' | 'endpoints' | 'lob' | 'regression' | 'stress' | 'algo'
@@ -469,11 +470,23 @@ export default function AdminTester() {
             <button onClick={loadStats} disabled={loading} style={{ ...btn(), marginBottom: 16 }}>
               {loading ? '…' : 'Load Users'}
             </button>
-            {stats && (
+            {stats && (() => {
+              const emails = stats.users.map(u => u.email).filter((e): e is string => !!e)
+              const copyEmails = () => navigator.clipboard?.writeText(emails.join('\n'))
+              const downloadCsv = () => {
+                const rows = [['email', 'username', 'display_name', 'created_at'],
+                  ...stats.users.map(u => [u.email ?? '', u.username, u.display_name, u.created_at])]
+                const csv = rows.map(r => r.map(f => `"${String(f).replace(/"/g, '""')}"`).join(',')).join('\n')
+                const a = document.createElement('a')
+                a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
+                a.download = 'alphatape-users.csv'; a.click(); URL.revokeObjectURL(a.href)
+              }
+              return (
               <>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 16 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 12 }}>
                   {[
                     ['Total Users', stats.total_users],
+                    ['With Email', stats.users_with_email ?? emails.length],
                     ['New (7d)', stats.new_last_7d],
                     ['New (30d)', stats.new_last_30d],
                   ].map(([k, v]) => (
@@ -483,11 +496,15 @@ export default function AdminTester() {
                     </div>
                   ))}
                 </div>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                  <button onClick={copyEmails} disabled={!emails.length} style={btn(!!emails.length)}>Copy {emails.length} Emails</button>
+                  <button onClick={downloadCsv} disabled={!stats.users.length} style={btn(!!stats.users.length)}>Download CSV</button>
+                </div>
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--theme-mono)', fontSize: 10 }}>
                     <thead>
                       <tr style={{ borderBottom: `1px solid ${RED_BORDER}` }}>
-                        {['Username', 'Display Name', 'Created', 'Last Login', 'Logins'].map(h => (
+                        {['Username', 'Email', 'Display Name', 'Created', 'Last Login', 'Logins'].map(h => (
                           <th key={h} style={{ textAlign: 'left', padding: '6px 8px', color: 'rgba(239,68,68,0.6)', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{h}</th>
                         ))}
                       </tr>
@@ -496,6 +513,7 @@ export default function AdminTester() {
                       {stats.users.map(u => (
                         <tr key={u.id} style={{ borderBottom: `1px solid rgba(239,68,68,0.07)` }}>
                           <td style={{ padding: '6px 8px', color: 'var(--theme-negative)' }}>@{u.username}</td>
+                          <td style={{ padding: '6px 8px', color: u.email ? 'var(--theme-text)' : 'var(--theme-text-dim)' }}>{u.email ?? '—'}</td>
                           <td style={{ padding: '6px 8px', color: 'var(--theme-text)' }}>{u.display_name}</td>
                           <td style={{ padding: '6px 8px', color: 'var(--theme-text-dim)' }}>{u.created_at?.slice(0, 10)}</td>
                           <td style={{ padding: '6px 8px', color: 'var(--theme-text-dim)' }}>{u.last_login_at?.slice(0, 10) ?? '—'}</td>
@@ -506,7 +524,8 @@ export default function AdminTester() {
                   </table>
                 </div>
               </>
-            )}
+              )
+            })()}
           </div>
         )}
 

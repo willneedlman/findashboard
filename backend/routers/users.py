@@ -417,14 +417,16 @@ def stats(x_admin_secret: str = Header(default="")):
         last_30d = c.execute(
             "SELECT COUNT(*) FROM users WHERE created_at >= datetime('now', '-30 days')"
         ).fetchone()[0]
+        with_email = c.execute("SELECT COUNT(*) FROM users WHERE email IS NOT NULL AND email <> ''").fetchone()[0]
         rows = c.execute(
-            "SELECT id, username, display_name, created_at, last_login_at, login_count "
-            "FROM users ORDER BY created_at DESC LIMIT 200"
+            "SELECT id, username, display_name, email, created_at, last_login_at, login_count "
+            "FROM users ORDER BY created_at DESC LIMIT 500"
         ).fetchall()
     return {
-        "total_users":    total,
-        "new_last_7d":    last_7d,
-        "new_last_30d":   last_30d,
+        "total_users":      total,
+        "new_last_7d":      last_7d,
+        "new_last_30d":     last_30d,
+        "users_with_email": with_email,
         "users": [dict(r) for r in rows],
     }
 
