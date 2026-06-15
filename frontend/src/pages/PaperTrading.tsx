@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ComposedChart, Line } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import HelpTip from '../components/HelpTip'
+import ExpirySelect from '../components/ExpirySelect'
 import { GammaScalpingContent } from './GammaScalping'
 import CustomStrategyModal, { type CustomStrategyDef } from '../components/CustomStrategyModal'
 import { loadCustomStrategies, saveCustomStrategy } from '../utils/customStrategies'
@@ -308,8 +309,8 @@ function LegRow({
       <div style={{ display: 'flex', gap: 6 }}>
         <div style={{ flex: 1 }}>
           <span style={lbl}>Expiration</span>
-          <input style={inp} type="date" value={leg.expDate}
-            onChange={e => onChange({ ...leg, expDate: e.target.value })} />
+          <ExpirySelect ticker={underlying} value={leg.expDate} autoSelect={false}
+            onChange={v => onChange({ ...leg, expDate: v })} style={inp} />
         </div>
         <div style={{ flex: 1 }}>
           <span style={lbl}>Strike</span>
@@ -657,12 +658,7 @@ function OrderTicket({ onOrderPlaced, importTemplate, onTemplateConsumed, import
 
             <div>
               <span style={lbl}>Expiration Date</span>
-              <input
-                style={inp}
-                type="date"
-                value={opExpDate}
-                onChange={e => setOpExpDate(e.target.value)}
-              />
+              <ExpirySelect ticker={opUnderlying} value={opExpDate} onChange={setOpExpDate} autoSelect={false} style={inp} />
             </div>
 
             <div>

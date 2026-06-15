@@ -5,6 +5,7 @@ import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
 import axios from 'axios'
 import EmptyState from '../components/EmptyState'
+import ExpirySelect from '../components/ExpirySelect'
 import { useChartColors } from '../hooks/useChartColors'
 import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
 
@@ -91,8 +92,7 @@ export function ImpliedProbabilityContent() {
             </div>
             <div>
               <label style={LABEL}>Target Expiry</label>
-              <input type="date" value={expiry} onChange={e => setExpiry(e.target.value)} style={INPUT}
-                onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')} onBlur={e => (e.target.style.borderColor = 'var(--theme-border, rgba(255,255,255,0.10))')} />
+              <ExpirySelect ticker={ticker} value={expiry} onChange={setExpiry} style={INPUT} />
             </div>
             <div style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', lineHeight: '14px' }}>
               Black-Scholes risk-neutral pricing. Reflects market hedging cost, not a directional forecast.

@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { ComposedChart, Area, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
+import ExpirySelect from '../components/ExpirySelect'
 import axios from 'axios'
 
 interface Leg {
@@ -318,19 +319,6 @@ export default function StrategyBuilder() {
 
   const activeChain = activeChainLeg !== null ? legChains[activeChainLeg] : null
 
-  // Snap typed date to nearest available expiry
-  const snapToExpiry = (raw: string, legIdx: number) => {
-    const expiries = legChains[legIdx]?.expiries ?? []
-    if (!expiries.length || !raw) return
-    const target = new Date(raw + 'T12:00:00').getTime()
-    const closest = expiries.reduce((best, exp) =>
-      Math.abs(new Date(exp + 'T12:00:00').getTime() - target) <
-      Math.abs(new Date(best + 'T12:00:00').getTime() - target) ? exp : best
-    )
-    fetchExpiry(legIdx, closest)
-    setDateInput(closest)
-  }
-
   // DTE from expiry string
   const dte = (exp: string) => {
     const d = Math.round((new Date(exp + 'T12:00:00').getTime() - Date.now()) / 86400000)
@@ -563,12 +551,16 @@ export default function StrategyBuilder() {
                         </div>
                       ))}
                     </div>
-                    {/* Expiry */}
+                    {/* Expiry — restricted to the ticker's real option expiries */}
                     <div>
                       <div style={{ fontSize: 8, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', marginBottom: 2 }}>EXPIRY</div>
-                      <input type="date" value={leg.expiry ?? ''}
-                        onChange={e => updateLeg(i, 'expiry', e.target.value)}
-                        style={{ ...INPUT, width: '100%', fontSize: 11 }} />
+                      <ExpirySelect
+                        ticker={leg.ticker}
+                        value={leg.expiry ?? ''}
+                        expirations={legChains[i]?.expiries?.length ? legChains[i].expiries : undefined}
+                        onChange={v => { if (legChains[i]?.expiries?.length) fetchExpiry(i, v); else updateLeg(i, 'expiry', v) }}
+                        style={{ ...INPUT, width: '100%', fontSize: 11 }}
+                      />
                     </div>
                   </div>
                 ))}
@@ -626,13 +618,14 @@ export default function StrategyBuilder() {
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                    {/* Date input with snap */}
+                    {/* Expiry dropdown — only the chain's real expiries */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-text-dim, rgba(255,255,255,0.35))', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Expiry</span>
-                      <input type="date" value={dateInput}
-                        onChange={e => setDateInput(e.target.value)}
-                        onBlur={e => snapToExpiry(e.target.value, activeChainLeg)}
-                        onKeyDown={e => e.key === 'Enter' && snapToExpiry(dateInput, activeChainLeg)}
+                      <ExpirySelect
+                        ticker={leg.ticker}
+                        value={exp || dateInput}
+                        expirations={activeChain.expiries?.length ? activeChain.expiries : undefined}
+                        onChange={v => { fetchExpiry(activeChainLeg, v); setDateInput(v) }}
                         style={{ background: 'var(--theme-bg, #0a1628)', border: '1px solid var(--theme-text-subtle, rgba(255,255,255,0.12))', color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-mono)', fontSize: 11, padding: '3px 6px', outline: 'none' }}
                       />
                       {exp && dteN !== null && (
