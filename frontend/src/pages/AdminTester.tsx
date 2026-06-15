@@ -404,7 +404,14 @@ export default function AdminTester() {
               onKeyDown={e => e.key === 'Enter' && unlock()}
               placeholder="ADMIN_SECRET"
               style={inp}
-              autoComplete="off"
+              // Keep password managers from autofilling a stale saved password
+              // over the field. "new-password" + ignore hints are what Chrome,
+              // 1Password, and LastPass actually respect.
+              name="ft-admin-secret"
+              autoComplete="new-password"
+              data-lpignore="true"
+              data-1p-ignore="true"
+              data-form-type="other"
             />
             <button onClick={unlock} disabled={!secret} style={btn(!!secret)}>Unlock</button>
           </div>
