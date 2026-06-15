@@ -7,8 +7,6 @@ Historical IV strategy (yfinance provides current chains only):
   PROXY    : Immediate history via 30-day rolling Historical Volatility (HV)
              scaled to match the current IV level. Preserves relative vol
              movement while anchoring to today's actual implied vol.
-  PREMIUM  : Set env var ALPHA_VANTAGE_KEY to unlock historical option
-             chains (requires a paid AV subscription, no code changes needed).
 """
 import json
 import logging
@@ -221,42 +219,6 @@ def iv_rank_percentile(iv_series: list[float],
     }
 
 
-# ── Alpha Vantage hook (premium, optional) ────────────────────────────────────
-# If ALPHA_VANTAGE_KEY is set, this function replaces the HV-proxy path with
-# real historical options data.  Requires a premium AV subscription.
-# Returns a list of {"date": "YYYY-MM-DD", "iv": float} or None.
-
-def _try_alpha_vantage_iv(ticker: str, expiry: str, opt_type: str,
-                           strike: float) -> Optional[list[dict]]:
-    key = os.getenv("ALPHA_VANTAGE_KEY", "").strip()
-    if not key:
-        return None
-    try:
-        import requests
-        url = (
-            f"https://www.alphavantage.co/query?function=HISTORICAL_OPTIONS"
-            f"&symbol={ticker}&apikey={key}"
-        )
-        resp = requests.get(url, timeout=15)
-        resp.raise_for_status()
-        data = resp.json().get("data", [])
-        rows = []
-        for d in data:
-            try:
-                if (d.get("expiration") == expiry
-                        and d.get("type", "").lower() == opt_type
-                        and abs(float(d.get("strike", 0)) - strike) < 0.01):
-                    iv_val = float(d.get("implied_volatility", 0) or 0)
-                    if iv_val > 0:
-                        rows.append({"date": d["date"], "iv": iv_val})
-            except Exception:
-                continue
-        return sorted(rows, key=lambda x: x["date"]) if rows else None
-    except Exception as e:
-        logger.warning("Alpha Vantage IV fetch failed: %s", e)
-        return None
-
-
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.get("/expirations")
@@ -321,7 +283,6 @@ def get_iv_history(
     Primary endpoint. Returns:
       - current IV, bid/ask, greeks, IV rank, IV percentile
       - time_series: daily {date, stock_price, iv, hv_30d, source}
-      - data_note explaining the IV source/methodology
     """
     sym = ticker.strip().upper()
     try:
@@ -371,14 +332,10 @@ def get_iv_history(
         else:
             scale = 1.0
 
-        # ── 4. Optional Alpha Vantage premium data ───────────────────────────
-        av_rows = _try_alpha_vantage_iv(sym, expiry, option_type, actual_strike)
-        av_by_date = {r["date"]: r["iv"] for r in av_rows} if av_rows else {}
-
-        # ── 5. Stored snapshots ───────────────────────────────────────────────
+        # ── 4. Stored snapshots ───────────────────────────────────────────────
         snap_by_date = _snaps_by_date(sym, expiry, option_type, actual_strike)
 
-        # ── 6. Build aligned time-series (last `days` rows) ─────────────────
+        # ── 5. Build aligned time-series (last `days` rows) ─────────────────
         tail_closes   = closes[-days:]
         tail_dates    = date_strs[-days:]
         tail_hv       = hv_all[-days:]
@@ -390,9 +347,6 @@ def get_iv_history(
             if d_str in snap_by_date:
                 iv_pt  = snap_by_date[d_str]
                 source = "snapshot"
-            elif d_str in av_by_date:
-                iv_pt  = av_by_date[d_str]
-                source = "alpha_vantage"
             elif hv_val is not None:
                 iv_pt  = hv_val * scale
                 source = "hv_proxy"
@@ -411,10 +365,10 @@ def get_iv_history(
                 "source":      source,
             })
 
-        # ── 7. IV Rank / IV Percentile ────────────────────────────────────────
+        # ── 6. IV Rank / IV Percentile ────────────────────────────────────────
         stats = iv_rank_percentile(iv_vals_for_stats, current_iv) if iv_vals_for_stats else {}
 
-        # ── 8. Greeks ────────────────────────────────────────────────────────
+        # ── 7. Greeks ────────────────────────────────────────────────────────
         r_free  = _risk_free_rate()
         exp_dt  = datetime.strptime(expiry, "%Y-%m-%d").date()
         T_years = max((exp_dt - date.today()).days / 365.0, 1 / 365)
@@ -423,33 +377,16 @@ def get_iv_history(
             greeks = bs_greeks_raw(spot, actual_strike, T_years, r_free,
                                    current_iv, option_type)
 
-        # ── 9. Record this query as a live snapshot ───────────────────────────
+        # ── 8. Record this query as a live snapshot ───────────────────────────
         if current_iv > 0 and mid > 0:
             _record_snap(sym, expiry, option_type, actual_strike,
                          current_iv, spot, mid)
 
-        # ── 10. IV premium over HV (IV – HV) ─────────────────────────────────
+        # ── 9. IV premium over HV (IV – HV) ─────────────────────────────────
         iv_premium = (
             round((current_iv - current_hv) * 100, 2)
             if current_hv and current_iv else None
         )
-
-        # Determine data source narrative
-        if av_by_date:
-            data_note = "Historical IV from Alpha Vantage (real options chains)."
-        elif snap_by_date:
-            data_note = (
-                "Recent history uses stored IV snapshots. "
-                "Older dates use 30d HV scaled to current IV level (proxy). "
-                "Accuracy improves as this page is visited regularly."
-            )
-        else:
-            data_note = (
-                "Historical IV is estimated using 30-day Historical Volatility "
-                "scaled to match today's actual implied vol level. "
-                "This preserves the shape of volatility movement but is an "
-                "approximation. Snapshots will accumulate as you revisit this page."
-            )
 
         return {
             "ticker":       sym,
@@ -475,7 +412,6 @@ def get_iv_history(
             "greeks":       greeks,
             # Chart data
             "time_series":  time_series,
-            "data_note":    data_note,
         }
 
     except HTTPException:

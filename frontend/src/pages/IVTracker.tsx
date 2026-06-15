@@ -18,7 +18,6 @@ const T = {
   text:    'var(--theme-text)',
   dim:     'var(--theme-text-dim)',
   mono:    'var(--theme-mono)',
-  sans:    'var(--theme-sans)',
   pos:     'var(--theme-positive)',
   neg:     'var(--theme-negative)',
   warn:    'var(--theme-warn)',
@@ -81,7 +80,6 @@ interface IVData {
   iv_mean:         number | null
   greeks:          Greeks
   time_series:     TsPoint[]
-  data_note:       string
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -373,20 +371,11 @@ export default function IVTracker() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <PageWrapper title="IV Tracker">
+    <PageWrapper
+      title="IV Tracker"
+      subtitle="Track and analyze implied volatility for a specific option over time. Historical IV is built from actual snapshots plus a 30d HV proxy."
+    >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-
-        {/* ── Header ── */}
-        <div>
-          <div style={{ fontSize: 14, fontWeight: 700, fontFamily: T.mono,
-                        color: T.gold, letterSpacing: '0.1em', marginBottom: 2 }}>
-            IV TRACKER
-          </div>
-          <div style={{ fontSize: 10, color: T.muted, fontFamily: T.sans }}>
-            Track and analyze Implied Volatility for a specific option over time.
-            Historical IV is built from actual snapshots + a 30d HV proxy.
-          </div>
-        </div>
 
         {/* ── Controls ── */}
         <div style={{ ...PANEL, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-end' }}>
@@ -727,18 +716,6 @@ export default function IVTracker() {
               </>
             )}
 
-            {/* ── Data provenance note ── */}
-            <div style={{
-              fontSize: 8, color: T.dim, fontFamily: T.mono, lineHeight: 1.7,
-              padding: '8px 10px',
-              background: T.hover,
-              border: `1px solid ${T.border}`,
-            }}>
-              <span style={{ color: T.muted, fontWeight: 700 }}>DATA NOTE  </span>
-              {data.data_note}
-              {' '}Set env <span style={{ color: T.gold }}>ALPHA_VANTAGE_KEY</span> to unlock
-              real historical options chains (premium AV plan required).
-            </div>
           </>
         )}
 

@@ -13,12 +13,13 @@ const variants = {
 interface PageWrapperProps {
   children: React.ReactNode
   title?: string
+  subtitle?: string
 }
 
-export default function PageWrapper({ children, title }: PageWrapperProps) {
+export default function PageWrapper({ children, title, subtitle }: PageWrapperProps) {
   return (
     <motion.div variants={variants} initial="initial" animate="animate" exit="exit">
-      {title && <PageHeader title={title} />}
+      {title && <PageHeader title={title} subtitle={subtitle} />}
       {children}
     </motion.div>
   )
