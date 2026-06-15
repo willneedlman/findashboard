@@ -105,7 +105,8 @@ function Rule({ tag, children }: { tag: string; children: React.ReactNode }) {
 // ── Compact (sidebar) sub-components ────────────────────────────────────────
 
 const C_INPUT: React.CSSProperties = {
-  background: 'var(--theme-bg, #0a1628)', border: '1px solid var(--theme-border, rgba(255,255,255,0.10))', color: 'var(--theme-text, #d7e3fc)',
+  // Gold-tinted border to match the ticker/weight inputs (Compare aesthetic).
+  background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: 'var(--theme-text, #d7e3fc)',
   fontFamily: 'var(--theme-mono)', fontSize: 11, padding: '4px 6px',
   width: '100%', outline: 'none', boxSizing: 'border-box',
 }
@@ -120,7 +121,7 @@ function CNum({ label, value, step, min, max, help, onChange }: {
 }) {
   const [showTip, setShowTip] = useState(false)
   const focus = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')
-  const blur  = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = 'var(--theme-border, rgba(255,255,255,0.10))')
+  const blur  = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = 'color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)')
   return (
     <div style={{ position: 'relative' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>

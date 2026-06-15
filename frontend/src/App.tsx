@@ -20,15 +20,13 @@ const MarketData         = lazy(() => import('./pages/MarketData'))
 const OptionsPricer      = lazy(() => import('./pages/OptionsPricer'))
 const BondAnalytics      = lazy(() => import('./pages/BondAnalytics'))
 const NAVTracker         = lazy(() => import('./pages/NAVTracker'))
-const PortfolioBacktester = lazy(() => import('./pages/PortfolioBacktester'))
-const MonteCarlo         = lazy(() => import('./pages/MonteCarlo'))
 const ImpliedProbability = lazy(() => import('./pages/ImpliedProbability'))
 const FedRates           = lazy(() => import('./pages/FedRates'))
 const CorporateHub       = lazy(() => import('./pages/CorporateHub'))
 const StockValuation     = lazy(() => import('./pages/StockValuation'))
 const OptionsChainScanner = lazy(() => import('./pages/OptionsChainScanner'))
 const RegressionAnalysis = lazy(() => import('./pages/RegressionAnalysis'))
-const PortfolioCompare   = lazy(() => import('./pages/PortfolioCompare'))
+const PortfolioSkills    = lazy(() => import('./pages/PortfolioSkills'))
 const StrategyBuilder    = lazy(() => import('./pages/StrategyBuilder'))
 const DealerGEX          = lazy(() => import('./pages/DealerGEX'))
 const CustomDashboard    = lazy(() => import('./pages/CustomDashboard'))
@@ -146,9 +144,9 @@ export default function App() {
               <Route path="/options"    element={<OptionsPricer />} />
               <Route path="/bond"       element={<BondAnalytics />} />
               <Route path="/nav"        element={<NAVTracker />} />
-              <Route path="/portfolio"  element={<PortfolioBacktester />} />
+              <Route path="/portfolio"  element={<Navigate to="/portfolio-skills?tab=backtest" replace />} />
               <Route path="/portfolio-manager" element={<PortfolioManager />} />
-              <Route path="/montecarlo" element={<MonteCarlo />} />
+              <Route path="/montecarlo" element={<Navigate to="/portfolio-skills?tab=montecarlo" replace />} />
               <Route path="/probability" element={<ImpliedProbability />} />
               <Route path="/fed"        element={<FedRates />} />
               <Route path="/corporate"  element={<CorporateHub />} />
@@ -156,7 +154,8 @@ export default function App() {
               <Route path="/dcf"        element={<Navigate to="/valuation" replace />} />
               <Route path="/chain"      element={<OptionsChainScanner />} />
               <Route path="/correlation" element={<Navigate to="/regression" replace />} />
-              <Route path="/portfolio-compare" element={<PortfolioCompare />} />
+              <Route path="/portfolio-compare" element={<Navigate to="/portfolio-skills?tab=compare" replace />} />
+              <Route path="/portfolio-skills" element={<PortfolioSkills />} />
               <Route path="/strategy"   element={<StrategyBuilder />} />
               <Route path="/gex"        element={<DealerGEX />} />
               <Route path="/dashboard"       element={<CustomDashboard />} />

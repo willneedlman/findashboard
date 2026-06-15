@@ -40,7 +40,7 @@ const labelStyle: React.CSSProperties = {
 const panel: React.CSSProperties = { background: C.surf, border: `1px solid ${C.border}`, padding: 16 }
 const panelTitle: React.CSSProperties = { color: C.gold, fontSize: 12, marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.1em' }
 
-export default function PortfolioCompare() {
+export function PortfolioCompareContent() {
   const [ports, setPorts] = useState<Port[]>([
     { name: 'Portfolio A', legs: [{ ticker: 'SPY', weight: 100 }], leverage: '1', borrow: '0' },
     { name: 'Portfolio B', legs: [{ ticker: 'QQQ', weight: 60 }, { ticker: 'TLT', weight: 40 }], leverage: '1', borrow: '0' },
@@ -101,7 +101,7 @@ export default function PortfolioCompare() {
     : []
 
   return (
-    <PageWrapper title="Compare Portfolios">
+    <>
       <SidebarLayout sidebarWidth={264} sidebarTitle="Portfolios" sidebar={
         <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
           {ports.map((p, i) => (
@@ -244,6 +244,10 @@ export default function PortfolioCompare() {
           </div>
         )}
       </SidebarLayout>
-    </PageWrapper>
+    </>
   )
+}
+
+export default function PortfolioCompare() {
+  return <PageWrapper title="Compare Portfolios"><PortfolioCompareContent /></PageWrapper>
 }

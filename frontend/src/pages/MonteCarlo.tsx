@@ -13,6 +13,7 @@ import EmptyState from '../components/EmptyState'
 import PortfolioIO, { type PortfolioAsset } from '../components/PortfolioIO'
 import PMImportPicker from '../components/PMImportPicker'
 import { CASH_SYMBOL } from '../lib/pmImport'
+import { weightTotal, normalizeTo100 } from '../components/portfolio/weights'
 import { usePortfolio, type PortfolioHolding } from '../contexts/PortfolioContext'
 // ── GBM math ────────────────────────────────────────────────────────────────
 
@@ -94,7 +95,7 @@ function ChartPanel({ label, height, children }: { label: React.ReactNode; heigh
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export default function MonteCarlo() {
+export function MonteCarloContent() {
   const cc = useChartColors()
   const { holdings, setHoldings } = usePortfolio()
   const [legs, setLegs] = useState<Leg[]>(() => {
@@ -324,10 +325,15 @@ export default function MonteCarlo() {
 
   const focus = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')
   const blur  = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = 'var(--theme-border, rgba(255,255,255,0.10))')
-  const totalWeight = legs.reduce((s, l) => s + l.weight, 0)
+  // Clean total (no 99.99999999% float noise) + a one-click rescale to 100%.
+  const totalWeight = weightTotal(legs.map(l => l.weight))
+  const normalizeWeights = () => {
+    const w = normalizeTo100(legs.map(l => l.weight))
+    setLegs(prev => prev.map((l, i) => ({ ...l, weight: w[i] })))
+  }
 
   return (
-    <PageWrapper title="Monte Carlo Simulator">
+    <>
       <SidebarLayout sidebarWidth={210} sidebarTitle="" sidebar={<>
           <RailSection title="Simulation Parameters" open={paramsOpen} onToggle={() => setParamsOpen(o => !o)}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -336,18 +342,21 @@ export default function MonteCarlo() {
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                 <label style={{ ...LABEL, marginBottom: 0 }}>Portfolio Legs</label>
-                <span style={{
-                  fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
-                  color: totalWeight === 100 ? 'var(--theme-positive)' : 'var(--theme-negative)',
-                }}>
-                  {totalWeight}%
-                </span>
+                {totalWeight === 100 ? (
+                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--theme-positive)' }}>100%</span>
+                ) : (
+                  <button onClick={normalizeWeights} title="Rescale weights to total 100%"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit',
+                      fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--theme-negative)' }}>
+                    {totalWeight}% → 100%
+                  </button>
+                )}
               </div>
 
               {/* Column headers */}
               <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
-                <span style={{ flex: 7, fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Ticker</span>
-                <span style={{ flex: 4, fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Wt %</span>
+                <span style={{ flex: 7, fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Holdings</span>
+                <span style={{ flex: 4, fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Weight</span>
                 <span style={{ width: 16 }} />
               </div>
 
@@ -550,8 +559,8 @@ export default function MonteCarlo() {
               name="montecarlo"
             />
             <button onClick={() => mutate()} disabled={isPending || legs.length === 0} style={{
-              width: '100%', background: 'var(--theme-surface, #1f2a3d)', border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)',
-              fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
+              width: '100%', background: 'var(--theme-primary, #c9a84c)', border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-bg)',
+              fontFamily: 'inherit', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em',
               textTransform: 'uppercase', padding: '8px 0', cursor: (isPending || legs.length === 0) ? 'default' : 'pointer',
               opacity: (isPending || legs.length === 0) ? 0.6 : 1,
             }}>
@@ -730,6 +739,10 @@ export default function MonteCarlo() {
             </>
           )}
       </SidebarLayout>
-    </PageWrapper>
+    </>
   )
+}
+
+export default function MonteCarlo() {
+  return <PageWrapper title="Monte Carlo Simulator"><MonteCarloContent /></PageWrapper>
 }

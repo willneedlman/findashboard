@@ -18,6 +18,7 @@ import { RailSection } from './valuationShared'
 import EmptyState from '../components/EmptyState'
 import PortfolioIO, { type PortfolioAsset } from '../components/PortfolioIO'
 import { usePortfolio } from '../contexts/PortfolioContext'
+import { weightTotal, normalizeTo100 } from '../components/portfolio/weights'
 import HelpTip from '../components/HelpTip'
 
 // ── Shared ──────────────────────────────────────────────────────────────────
@@ -211,7 +212,7 @@ function AlgoChartPanel({ label, height, children }: { label: string; height: nu
 
 // ── Portfolio tab content ────────────────────────────────────────────────────
 
-function PortfolioTab() {
+export function PortfolioTab() {
   const cc = useChartColors()
   const { holdings } = usePortfolio()
   const initialAssets = useMemo(() => {
@@ -410,10 +411,25 @@ function PortfolioTab() {
         <RailSection title="Portfolio Controls" open={portOpen} onToggle={() => setPortOpen(o => !o)}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div>
-            <label style={PORT_LABEL}>Allocation</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label style={PORT_LABEL}>Allocation</label>
+              {(() => {
+                const total = weightTotal(assets.map(a => a.weight))
+                return total === 100 ? (
+                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--theme-positive)', marginBottom: 4 }}>100%</span>
+                ) : (
+                  <button onClick={() => { const w = normalizeTo100(assets.map(a => a.weight)); setAssets(p => p.map((a, i) => ({ ...a, weight: w[i] }))) }}
+                    title="Rescale weights to total 100%"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit', marginBottom: 4,
+                      fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--theme-negative)' }}>
+                    {total}% → 100%
+                  </button>
+                )
+              })()}
+            </div>
             <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
-              <span style={{ flex: 7, fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Ticker</span>
-              <span style={{ flex: 4, fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Wt %</span>
+              <span style={{ flex: 7, fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Holdings</span>
+              <span style={{ flex: 4, fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Weight</span>
               <span style={{ width: 16 }} />
             </div>
 
@@ -546,8 +562,8 @@ function PortfolioTab() {
             name="portfolio"
           />
           <button onClick={() => mutate()} disabled={isPending} style={{
-            width: '100%', background: 'var(--theme-surface, #1f2a3d)', border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)',
-            fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
+            width: '100%', background: 'var(--theme-primary, #c9a84c)', border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-bg)',
+            fontFamily: 'inherit', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em',
             textTransform: 'uppercase', padding: '8px 0', cursor: isPending ? 'default' : 'pointer',
             opacity: isPending ? 0.6 : 1,
           }}>

@@ -188,9 +188,9 @@ const SECTIONS: Section[] = [
   {
     label: 'Portfolio & Simulation',
     mods: [
-      { to: '/portfolio',         icon: BarChart2, title: 'Portfolio Backtester', desc: 'Sharpe, Sortino, Calmar',    accent: '#2f6b4b' },
-      { to: '/montecarlo',        icon: Dices,     title: 'Monte Carlo',          desc: 'GBM paths, VaR, CVaR',       accent: '#2f6b4b' },
-      { to: '/portfolio-compare', icon: Scale,     title: 'Compare Portfolios',   desc: '2-4 books side by side',     accent: '#7aa2f7' },
+      { to: '/portfolio-skills?tab=backtest',   icon: BarChart2, title: 'Portfolio Backtester', desc: 'Sharpe, Sortino, Calmar',    accent: '#2f6b4b' },
+      { to: '/portfolio-skills?tab=montecarlo', icon: Dices,     title: 'Monte Carlo',          desc: 'GBM paths, VaR, CVaR',       accent: '#2f6b4b' },
+      { to: '/portfolio-skills?tab=compare',    icon: Scale,     title: 'Compare Portfolios',   desc: '2-4 books side by side',     accent: '#7aa2f7' },
       { to: '/portfolio-manager', icon: Briefcase, title: 'Portfolio Manager',    desc: 'Holdings, P&L, greeks',      accent: 'var(--theme-primary, #c9a84c)' },
     ],
   },

@@ -49,9 +49,7 @@ const NAV_SECTIONS = [
   {
     label: 'Portfolio & Valuation',
     items: [
-      { to: '/portfolio',   icon: BarChart2,   label: 'Portfolio Backtester' },
-      { to: '/montecarlo',  icon: Dices,         label: 'Monte Carlo' },
-      { to: '/portfolio-compare', icon: Scale,   label: 'Compare Portfolios' },
+      { to: '/portfolio-skills', icon: Scale,    label: 'Portfolio Skills' },
       { to: '/valuation',   icon: Calculator,    label: 'Stock Valuation' },
       { to: '/nav',         icon: Bitcoin,       label: 'NAV Tracker' },
     ],
