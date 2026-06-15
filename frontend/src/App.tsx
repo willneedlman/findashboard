@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import Layout from './components/Layout'
@@ -68,6 +68,23 @@ function PageLoader() {
   )
 }
 
+// Fire-and-forget first-party pageview beacon on every route change (landing +
+// terminal). Cookieless; the backend hashes the IP so nothing here identifies a
+// user. Never blocks or breaks navigation.
+function PageviewTracker() {
+  const location = useLocation()
+  useEffect(() => {
+    try {
+      fetch('/api/analytics/pageview', {
+        method: 'POST', keepalive: true,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: location.pathname, referrer: document.referrer || '' }),
+      }).catch(() => {})
+    } catch { /* analytics must never affect the page */ }
+  }, [location.pathname])
+  return null
+}
+
 function TerminalChrome() {
   const location = useLocation()
   return (
@@ -98,6 +115,7 @@ function RootGate() {
 export default function App() {
   return (
     <BrowserRouter>
+      <PageviewTracker />
       <ThemeProvider>
       <PortfolioProvider>
         <Suspense fallback={<PageLoader />}>

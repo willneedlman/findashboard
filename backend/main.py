@@ -22,7 +22,7 @@ from routers import (
     sentiment, trading,
     filings, lob, regression, screener,
     paper_scheduler, paper_strategies,
-    iv_tracker, valuation,
+    iv_tracker, valuation, analytics,
 )
 
 @asynccontextmanager
@@ -112,6 +112,7 @@ app.include_router(rates.router,             prefix="/api/rates",             ta
 app.include_router(correlation.router,       prefix="/api/correlation",       tags=["correlation"])
 app.include_router(dcf.router,               prefix="/api/dcf",               tags=["dcf"])
 app.include_router(users.router,             prefix="/api/users",             tags=["users"])
+app.include_router(analytics.router,         prefix="/api/analytics",         tags=["analytics"])
 app.include_router(strategy.router,          prefix="/api/strategy",          tags=["strategy"])
 app.include_router(probability.router,       prefix="/api/prob",              tags=["probability"])
 app.include_router(ai.router,                prefix="/api/ai",                tags=["ai"])

@@ -149,7 +149,7 @@ interface UserStats {
   users: { id: string; username: string; display_name: string; created_at: string; last_login_at: string | null; login_count: number }[]
 }
 
-type Tab = 'health' | 'users' | 'cache' | 'endpoints' | 'lob' | 'regression' | 'stress' | 'algo'
+type Tab = 'traffic' | 'health' | 'users' | 'cache' | 'endpoints' | 'lob' | 'regression' | 'stress' | 'algo'
 
 interface LOBSnapshot {
   msg: number
@@ -177,10 +177,11 @@ export default function AdminTester() {
   const [secret, setSecret] = useState('')
   const [unlocked, setUnlocked] = useState(false)
   const [authErr, setAuthErr] = useState('')
-  const [tab, setTab] = useState<Tab>('health')
+  const [tab, setTab] = useState<Tab>('traffic')
 
   const [health, setHealth] = useState<HealthData | null>(null)
   const [stats, setStats] = useState<UserStats | null>(null)
+  const [traffic, setTraffic] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState('')
   const [msgErr, setMsgErr] = useState(false)
@@ -239,6 +240,20 @@ export default function AdminTester() {
       setStats(res.data)
     } finally { setLoading(false) }
   }, [secret])
+
+  const loadTraffic = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await axios.get('/api/analytics/summary?days=30', { headers: hdrs })
+      setTraffic(res.data)
+    } finally { setLoading(false) }
+  }, [secret])
+
+  // Auto-load traffic when the tab opens (it's the default tab and the thing
+  // you most want to glance at).
+  useEffect(() => {
+    if (unlocked && tab === 'traffic' && !traffic) loadTraffic()
+  }, [unlocked, tab, traffic, loadTraffic])
 
   const evictCache = useCallback(async () => {
     setMsg(''); setMsgErr(false)
@@ -329,7 +344,7 @@ export default function AdminTester() {
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 0, borderBottom: `1px solid ${RED_BORDER}`, marginBottom: 20 }}>
-          {(['health', 'users', 'cache', 'endpoints', 'lob', 'regression', 'stress', 'algo'] as Tab[]).map(t => (
+          {(['traffic', 'health', 'users', 'cache', 'endpoints', 'lob', 'regression', 'stress', 'algo'] as Tab[]).map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
               background: 'none', border: 'none', borderBottom: tab === t ? `2px solid ${RED}` : '2px solid transparent',
               color: tab === t ? RED : 'var(--theme-text-dim)', fontFamily: 'var(--theme-mono)', fontSize: 10,
@@ -342,6 +357,69 @@ export default function AdminTester() {
         </div>
 
         {/* ── Health tab ── */}
+        {tab === 'traffic' && (
+          <div>
+            <button onClick={loadTraffic} disabled={loading} style={{ ...btn(), marginBottom: 16 }}>
+              {loading ? '…' : 'Refresh Traffic'}
+            </button>
+            {traffic && (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 12 }}>
+                  {[
+                    ['Today · Views', traffic.today_views],
+                    ['Today · Visitors', traffic.today_visitors],
+                    [`${traffic.window_days}d · Views`, traffic.window_views],
+                    [`${traffic.window_days}d · Visitors`, traffic.window_visitors],
+                  ].map(([k, v]) => (
+                    <div key={String(k)} style={card}>
+                      <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-text-dim)' }}>{k}</span>
+                      <p style={{ fontFamily: 'var(--theme-mono)', fontSize: 22, fontWeight: 700, color: 'var(--theme-primary, #c9a84c)', margin: '4px 0 0' }}>{v ?? 0}</p>
+                    </div>
+                  ))}
+                </div>
+                <div style={card}>
+                  <p style={label('Views by day')}>Views by day</p>
+                  {(traffic.by_day ?? []).length === 0 ? (
+                    <p style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-text-dim)' }}>No traffic yet — share the link and check back.</p>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 80 }}>
+                      {traffic.by_day.map((d: { day: string; views: number; visitors: number }) => {
+                        const max = Math.max(...traffic.by_day.map((x: { views: number }) => x.views), 1)
+                        return <div key={d.day} title={`${d.day}: ${d.views} views, ${d.visitors} visitors`}
+                          style={{ flex: 1, minWidth: 4, background: 'var(--theme-primary, #c9a84c)', height: `${(d.views / max) * 100}%`, opacity: 0.85 }} />
+                      })}
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <div style={card}>
+                    <p style={label('Top pages')}>Top pages</p>
+                    {(traffic.top_paths ?? []).map((p: { path: string; views: number; visitors: number }) => (
+                      <div key={p.path} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-text)', padding: '2px 0' }}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.path}</span>
+                        <span style={{ color: 'var(--theme-text-dim)', whiteSpace: 'nowrap' }}>{p.views} · {p.visitors}u</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={card}>
+                    <p style={label('Top referrers')}>Top referrers</p>
+                    {(traffic.top_referrers ?? []).length === 0 ? (
+                      <p style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-text-dim)' }}>Direct / none yet.</p>
+                    ) : traffic.top_referrers.map((r: { referrer: string; views: number }) => (
+                      <div key={r.referrer} style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-text)', padding: '2px 0' }}>
+                        <span>{r.referrer}</span><span style={{ color: 'var(--theme-text-dim)' }}>{r.views}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <p style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-text-dim)', marginTop: 10 }}>
+                  Cookieless first-party analytics · IP hashed, no PII · {traffic.total_views} views all-time
+                </p>
+              </>
+            )}
+          </div>
+        )}
+
         {tab === 'health' && (
           <div>
             <button onClick={loadHealth} disabled={loading} style={{ ...btn(), marginBottom: 16 }}>
