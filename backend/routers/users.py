@@ -62,6 +62,13 @@ def _init_db():
             c.execute("ALTER TABLE users ADD COLUMN email TEXT")
         except Exception:
             pass
+        # Per-account app data (portfolios, watchlists, journal, dashboard, …) as a
+        # single JSON object keyed by the frontend's localStorage key. This is what
+        # makes saved data follow the account across devices/browsers/IPs.
+        try:
+            c.execute("ALTER TABLE users ADD COLUMN app_data_json TEXT")
+        except Exception:
+            pass
         c.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL")
         # Session tokens — bind portfolio access to the authenticated user.
         c.execute("""
@@ -231,6 +238,10 @@ class PortfolioSaveRequest(BaseModel):
     user_id:  str
     holdings: list  # list of {ticker, weight, strategy?}
 
+class AppDataSaveRequest(BaseModel):
+    user_id: str
+    data:    dict   # { localStorage-key: JSON value } — merged into the account
+
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 @router.post("/register")
@@ -269,7 +280,6 @@ def sync_user(req: RegisterRequest):
         )
         c.commit()
     return {"ok": True}
-
 
 @router.post("/login")
 def login(req: LoginRequest, request: Request):
@@ -532,6 +542,48 @@ def save_portfolio(req: PortfolioSaveRequest, authorization: str = Header(defaul
                   (json.dumps(req.holdings), req.user_id))
         c.commit()
     return {"ok": True}
+
+
+@router.get("/appdata/{user_id}")
+def get_app_data(user_id: str, authorization: str = Header(default=""),
+                 x_session_token: str = Header(default="")):
+    """All of the caller's synced app data (portfolios, journal, dashboard, …)."""
+    import json
+    _require_owner(user_id, authorization, x_session_token)
+    with _lock, _conn() as c:
+        row = c.execute("SELECT app_data_json FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not row:
+        return {"data": {}}
+    try:
+        return {"data": json.loads(row["app_data_json"] or "{}")}
+    except Exception:
+        return {"data": {}}
+
+
+@router.put("/appdata")
+def save_app_data(req: AppDataSaveRequest, authorization: str = Header(default=""),
+                  x_session_token: str = Header(default="")):
+    """Merge the given keys into the caller's stored app data (last write wins
+    per key). Sending a key with value null deletes it."""
+    import json
+    _require_owner(req.user_id, authorization, x_session_token)
+    with _lock, _conn() as c:
+        row = c.execute("SELECT app_data_json FROM users WHERE id = ?", (req.user_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "User not found")
+        try:
+            current = json.loads(row["app_data_json"] or "{}")
+        except Exception:
+            current = {}
+        for k, v in req.data.items():
+            if v is None:
+                current.pop(k, None)
+            else:
+                current[k] = v
+        c.execute("UPDATE users SET app_data_json = ? WHERE id = ?",
+                  (json.dumps(current), req.user_id))
+        c.commit()
+    return {"ok": True, "keys": len(current)}
 
 
 @router.post("/admin/cache/evict")

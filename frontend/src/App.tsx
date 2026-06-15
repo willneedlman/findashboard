@@ -4,6 +4,7 @@ import { AnimatePresence } from 'framer-motion'
 import Layout from './components/Layout'
 import { ThemeProvider, useTheme } from './contexts/ThemeContext'
 import { PortfolioProvider } from './contexts/PortfolioContext'
+import AccountSync from './components/AccountSync'
 
 // Marketing launchpad — chrome-free, lives at / and /product/*
 const Landing        = lazy(() => import('./marketing/Marketing').then(m => ({ default: m.Landing })))
@@ -116,6 +117,7 @@ export default function App() {
       <PageviewTracker />
       <ThemeProvider>
       <PortfolioProvider>
+        <AccountSync />
         <Suspense fallback={<PageLoader />}>
           <Routes>
             {/* Marketing launchpad — no terminal chrome */}
