@@ -264,7 +264,7 @@ function ModTile({ mod, reduce, featured = false }: { mod: Mod; reduce: boolean;
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-        <Icon size={featured ? 16 : 14} style={{ color: mod.accent, flexShrink: 0 }} />
+        <Icon size={featured ? 16 : 14} style={{ color: 'var(--theme-primary, #c9a84c)', flexShrink: 0 }} />
         <h3 style={{
           fontSize: featured ? 14 : 12.5,
           fontWeight: 700,
