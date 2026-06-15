@@ -227,8 +227,12 @@ const ENDPOINT_PRESETS = [
   { label: 'GET /api/corporate/overview/AAPL', method: 'GET', url: '/api/corporate/overview/AAPL', requiresAdmin: false },
 ]
 
+const SECRET_KEY = 'alphatape-admin-secret'
+
 export default function AdminTester() {
-  const [secret, setSecret] = useState('')
+  // Persist the secret for the browser-tab session so the console only asks
+  // once: sessionStorage clears when the tab closes (safer than localStorage).
+  const [secret, setSecret] = useState(() => sessionStorage.getItem(SECRET_KEY) ?? '')
   const [unlocked, setUnlocked] = useState(false)
   const [authErr, setAuthErr] = useState('')
   const [tab, setTab] = useState<Tab>('traffic')
@@ -272,12 +276,31 @@ export default function AdminTester() {
   const unlock = useCallback(async () => {
     setAuthErr('')
     try {
-      await axios.get('/api/users/admin/health', { headers: hdrs })
+      await axios.get('/api/users/admin/health', { headers: { 'x-admin-secret': secret } })
+      sessionStorage.setItem(SECRET_KEY, secret)
       setUnlocked(true)
     } catch {
+      sessionStorage.removeItem(SECRET_KEY)
       setAuthErr('Invalid secret — access denied')
     }
   }, [secret])
+
+  const lock = useCallback(() => {
+    sessionStorage.removeItem(SECRET_KEY)
+    setUnlocked(false)
+  }, [])
+
+  // Auto-unlock on mount if a secret from earlier this session is still valid,
+  // so navigating back into the console doesn't re-prompt.
+  useEffect(() => {
+    const saved = sessionStorage.getItem(SECRET_KEY)
+    if (!saved || unlocked) return
+    axios.get('/api/users/admin/health', { headers: { 'x-admin-secret': saved } })
+      .then(() => setUnlocked(true))
+      .catch(() => sessionStorage.removeItem(SECRET_KEY))
+    // run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const loadHealth = useCallback(async () => {
     setLoading(true)
@@ -400,7 +423,7 @@ export default function AdminTester() {
           <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: RED, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
             Admin Mode Active
           </span>
-          <button onClick={() => setUnlocked(false)} style={{ ...btn(), marginLeft: 'auto', background: 'none', border: `1px solid ${RED_BORDER}`, color: 'var(--theme-text-dim)', fontSize: 9 }}>
+          <button onClick={lock} style={{ ...btn(), marginLeft: 'auto', background: 'none', border: `1px solid ${RED_BORDER}`, color: 'var(--theme-text-dim)', fontSize: 9 }}>
             Lock
           </button>
         </div>

@@ -37,9 +37,12 @@ def _fred() -> dict:
         return {"status": "unconfigured", "latency_ms": None, "detail": "no FRED_API_KEY"}
     import requests
     t0 = time.perf_counter()
+    # Same endpoint + params the app actually uses (routers/rates.py) so the
+    # probe reflects real FRED health, not a different endpoint's quirks.
     r = requests.get(
-        "https://api.stlouisfed.org/fred/series",
-        params={"series_id": "DGS10", "api_key": key, "file_type": "json"},
+        "https://api.stlouisfed.org/fred/series/observations",
+        params={"series_id": "DGS10", "sort_order": "desc", "limit": 1,
+                "api_key": key, "file_type": "json"},
         timeout=4,
     )
     ms = (time.perf_counter() - t0) * 1000

@@ -219,7 +219,7 @@ export default function Layout({ children }: LayoutProps) {
                       }}
                     >
                       <ShieldAlert size={15} style={{ flexShrink: 0 }} />
-                      <span>Admin Tester</span>
+                      <span>Admin Hub</span>
                     </Link>
                   </>
                 )}
@@ -344,7 +344,7 @@ export default function Layout({ children }: LayoutProps) {
           {isAdmin && (
             <Link
               to="/admin"
-              title={collapsed ? 'Admin Tester' : undefined}
+              title={collapsed ? 'Admin Hub' : undefined}
               className="ft-nav-link flex items-center gap-2.5 py-1.5 transition-all duration-150 my-0.5"
               style={{
                 color: location.pathname === '/admin' ? 'var(--theme-negative)' : 'color-mix(in srgb, var(--theme-negative) 55%, transparent)',
@@ -359,7 +359,7 @@ export default function Layout({ children }: LayoutProps) {
               <ShieldAlert size={14} style={{ flexShrink: 0 }} />
               {!collapsed && (
                 <span style={{ fontFamily: 'var(--theme-sans)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  Admin Tester
+                  Admin Hub
                 </span>
               )}
             </Link>
