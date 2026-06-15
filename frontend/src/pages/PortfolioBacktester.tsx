@@ -17,6 +17,8 @@ import SidebarLayout from '../components/SidebarLayout'
 import { RailSection } from './valuationShared'
 import EmptyState from '../components/EmptyState'
 import PortfolioIO, { type PortfolioAsset } from '../components/PortfolioIO'
+import PMImportPicker from '../components/PMImportPicker'
+import { CASH_SYMBOL, type ImportResult } from '../lib/pmImport'
 import { usePortfolio } from '../contexts/PortfolioContext'
 import { weightTotal, normalizeTo100 } from '../components/portfolio/weights'
 import HelpTip from '../components/HelpTip'
@@ -548,6 +550,14 @@ export function PortfolioTab() {
             <label style={PORT_LABEL}>Benchmark</label>
             <input style={PORT_INPUT} value={benchmark} onChange={e => setBenchmark(e.target.value.toUpperCase())} onFocus={focus} onBlur={blur} />
           </div>
+          <PMImportPicker
+            style={{ ...PORT_INPUT, cursor: 'pointer' }}
+            onImport={(r: ImportResult) => {
+              const next: Asset[] = r.legs.map(l => makeAsset(l.ticker, l.weight))
+              if (r.cashWeight > 0) next.push(makeAsset(CASH_SYMBOL, r.cashWeight))
+              if (next.length) setAssets(next)
+            }}
+          />
           <PortfolioIO
             mode="portfolio"
             assets={assets.map(a => ({ ticker: a.ticker, weight: a.weight, strategy: a.strategy, stratParams: a.stratParams as Record<string, unknown> }))}

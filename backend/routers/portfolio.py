@@ -80,18 +80,29 @@ def _series_metrics(equity: pd.Series, bench_ret: pd.Series, rf: float) -> dict:
 
 
 class BacktestRequest(BaseModel):
-    tickers: list[str] = Field(min_length=1, max_length=20)
-    weights: list[float] = Field(min_length=1, max_length=20)
+    # 25 (not 20) so a full 20-name book plus a CASH sleeve leg validates.
+    tickers: list[str] = Field(min_length=1, max_length=25)
+    weights: list[float] = Field(min_length=1, max_length=25)
     benchmark: str = "SPY"
     start: str = "2020-01-01"
     end: str = "2024-12-31"
     # No upper cap — a wipeout is floored at 0 from the liquidation point.
     leverage: float = Field(default=1.0, ge=1.0)
     borrow_rate: float = Field(default=0.0, ge=0.0, le=30.0)
+    cash_weight: float = 0.0   # filled from any CASH legs (see CASH_SYMBOL)
 
     @model_validator(mode='after')
     def _validate(self):
-        self.tickers = validate_tickers(self.tickers)
+        eq_t, eq_w = [], []
+        for t, w in zip(self.tickers, self.weights):
+            if t.strip().upper() == CASH_SYMBOL:
+                self.cash_weight += w
+            else:
+                eq_t.append(t); eq_w.append(w)
+        self.tickers = validate_tickers(eq_t) if eq_t else []
+        self.weights = eq_w
+        if not self.tickers and self.cash_weight <= 0:
+            raise HTTPException(400, "No holdings provided")
         self.benchmark = validate_ticker(self.benchmark)
         validate_date(self.start); validate_date(self.end)
         return self
@@ -99,10 +110,11 @@ class BacktestRequest(BaseModel):
 
 @router.post("/backtest")
 def backtest(req: BacktestRequest):
-    if not req.tickers:
-        raise HTTPException(400, "No tickers provided")
-    w = np.array(req.weights)
-    w = w / w.sum()
+    # Normalize equity + cash weights together so a cash sleeve dilutes exposure.
+    eq_w = np.array(req.weights, dtype=float) if req.tickers else np.array([])
+    total_w = eq_w.sum() + req.cash_weight
+    if total_w <= 0:
+        total_w = 1.0
 
     all_tickers = list(dict.fromkeys(req.tickers + [req.benchmark]))
     try:
@@ -120,7 +132,13 @@ def backtest(req: BacktestRequest):
         raise HTTPException(404, "No overlapping data")
 
     daily = raw.pct_change().dropna()
-    port = (daily[req.tickers] * w).sum(axis=1)
+    cash_daily = (1 + _get_risk_free_rate()) ** (1 / 252) - 1   # zero-vol cash sleeve
+    if len(eq_w):
+        port = (daily[req.tickers] * (eq_w / total_w)).sum(axis=1)
+    else:
+        port = pd.Series(0.0, index=daily.index)
+    if req.cash_weight > 0:
+        port = port + (req.cash_weight / total_w) * cash_daily
     bench = daily[req.benchmark]
 
     cum_gross = (1 + port).cumprod()
