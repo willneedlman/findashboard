@@ -13,6 +13,9 @@ primary_region = "iad"
   # Persist the user/auth database on the volume too — otherwise every deploy
   # recreates an empty users.db and wipes all accounts.
   USERS_DB_PATH = "/data/users.db"
+  # Email an alert (to ADMIN_ALERT_EMAIL) on unhandled server errors so crashes
+  # aren't silent. Off by default in dev; on in prod.
+  ERROR_ALERTS = "1"
 
 [http_service]
   internal_port = 8080

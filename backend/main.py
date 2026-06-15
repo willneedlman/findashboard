@@ -33,6 +33,22 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Alphatape Terminal API", lifespan=lifespan)
 
+
+# Alert on unhandled crashes so they're never silent (gated by ERROR_ALERTS=1).
+import logging as _logging
+import error_alert
+from fastapi import Request as _Request
+from fastapi.responses import JSONResponse as _JSONResponse
+
+_log = _logging.getLogger("main")
+
+
+@app.exception_handler(Exception)
+async def _on_unhandled_error(request: _Request, exc: Exception):
+    _log.exception("unhandled error on %s %s", request.method, request.url.path)
+    error_alert.alert_exception(request.url.path, request.method, exc, 500)
+    return _JSONResponse({"detail": "Internal server error"}, status_code=500)
+
 # CORS: never combine wildcard origins with credentials (browsers reflect the
 # Origin, effectively allowing every site to make credentialed requests). The SPA
 # is served same-origin by this app, so an explicit allowlist is sufficient.
