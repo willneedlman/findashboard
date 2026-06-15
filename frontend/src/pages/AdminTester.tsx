@@ -134,12 +134,65 @@ const card: React.CSSProperties = {
   padding: '14px 16px', marginBottom: 12,
 }
 
+function fmtUptime(secs: number): string {
+  const s = Math.floor(secs)
+  const d = Math.floor(s / 86400)
+  const h = Math.floor((s % 86400) / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  if (d > 0) return `${d}d ${h}h`
+  if (h > 0) return `${h}h ${m}m`
+  if (m > 0) return `${m}m ${s % 60}s`
+  return `${s}s`
+}
+
+// Semantic status palette for dependency probes (independent of the red admin chrome).
+function depColor(status: string): { fg: string; bg: string; border: string } {
+  switch (status) {
+    case 'up':
+    case 'configured':   return { fg: '#22c55e', bg: 'rgba(34,197,94,0.12)',  border: 'rgba(34,197,94,0.3)' }
+    case 'degraded':     return { fg: '#f59e0b', bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.3)' }
+    case 'unconfigured': return { fg: '#8b98a8', bg: 'rgba(139,152,168,0.1)', border: 'rgba(139,152,168,0.25)' }
+    default:             return { fg: '#ef4444', bg: 'rgba(239,68,68,0.12)',  border: RED_BORDER }   // down
+  }
+}
+
+// Inline request-per-minute sparkline (last 60 min).
+function Spark({ data, color = '#ef4444' }: { data: number[]; color?: string }) {
+  const max = Math.max(1, ...data)
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 1, height: 34 }}>
+      {data.map((v, i) => (
+        <div key={i} title={`${v} req`} style={{
+          width: 4, height: `${Math.max(2, (v / max) * 34)}px`,
+          background: v > 0 ? color : 'rgba(255,255,255,0.06)',
+        }} />
+      ))}
+    </div>
+  )
+}
+
+interface DepStatus { status: string; latency_ms: number | null; detail: string }
 interface HealthData {
   python: string
   users_db: string
   cache_entries: number
   cache_size_kb: number
   api_keys: Record<string, boolean>
+  metrics?: {
+    uptime_seconds: number
+    total_requests: number
+    requests_per_min: number
+    error_count: number
+    error_rate: number
+    avg_latency_ms: number
+    max_latency_ms: number
+    slow_requests: number
+    by_status: Record<string, number>
+    by_path: { path: string; count: number; errors: number; avg_ms: number; max_ms: number }[]
+    sparkline: number[]
+    ai: { groq: { ok: number; fail: number }; cerebras: { ok: number; fail: number }; last_error: string | null }
+  }
+  dependencies?: { checked_at: number; services: Record<string, DepStatus> }
 }
 
 interface UserStats {
@@ -255,6 +308,15 @@ export default function AdminTester() {
   useEffect(() => {
     if (unlocked && tab === 'traffic' && !traffic) loadTraffic()
   }, [unlocked, tab, traffic, loadTraffic])
+
+  // Health tab is a live view: load on open, then refresh every 10s while it's
+  // the active tab (dependency probes are server-cached so this is cheap).
+  useEffect(() => {
+    if (!unlocked || tab !== 'health') return
+    loadHealth()
+    const id = setInterval(loadHealth, 10_000)
+    return () => clearInterval(id)
+  }, [unlocked, tab, loadHealth])
 
   const evictCache = useCallback(async () => {
     setMsg(''); setMsgErr(false)
@@ -423,9 +485,128 @@ export default function AdminTester() {
 
         {tab === 'health' && (
           <div>
-            <button onClick={loadHealth} disabled={loading} style={{ ...btn(), marginBottom: 16 }}>
-              {loading ? '…' : 'Run Health Check'}
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+              <button onClick={loadHealth} disabled={loading} style={btn()}>
+                {loading ? '…' : 'Refresh'}
+              </button>
+              <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-text-dim)' }}>
+                Live · auto-refresh 10s
+                {health?.metrics && <> · up {fmtUptime(health.metrics.uptime_seconds)}</>}
+              </span>
+            </div>
+            {health?.metrics && (() => {
+              const m = health.metrics
+              const kpis: [string, string, string?][] = [
+                ['Requests', m.total_requests.toLocaleString(), undefined],
+                ['Req / min', String(m.requests_per_min), undefined],
+                ['Error rate', `${m.error_rate}%`, m.error_rate > 2 ? '#ef4444' : '#22c55e'],
+                ['5xx errors', String(m.error_count), m.error_count > 0 ? '#ef4444' : undefined],
+                ['Avg latency', `${m.avg_latency_ms} ms`, m.avg_latency_ms > 800 ? '#f59e0b' : undefined],
+                ['Max latency', `${m.max_latency_ms} ms`, undefined],
+              ]
+              return (
+              <>
+                {/* KPI row */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10, marginBottom: 12 }}>
+                  {kpis.map(([k, v, c]) => (
+                    <div key={k} style={card}>
+                      <p style={label(k)}>{k}</p>
+                      <p style={{ fontFamily: 'var(--theme-mono)', fontSize: 18, fontWeight: 700, margin: '4px 0 0', color: c ?? 'var(--theme-text)' }}>{v}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Sparkline + status breakdown */}
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 10, marginBottom: 12 }}>
+                  <div style={card}>
+                    <p style={label('Requests / min (last 60m)')}>Requests / min (last 60m)</p>
+                    <Spark data={m.sparkline} />
+                  </div>
+                  <div style={card}>
+                    <p style={label('Status codes')}>Status codes</p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                      {Object.entries(m.by_status).map(([cls, n]) => {
+                        const c = cls === '2xx' ? '#22c55e' : cls === '5xx' ? '#ef4444' : cls === '4xx' ? '#f59e0b' : '#8b98a8'
+                        return (
+                          <span key={cls} style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, padding: '3px 8px', color: c, border: `1px solid ${c}40`, background: `${c}18` }}>
+                            {cls} {n}
+                          </span>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Dependency health */}
+                {health.dependencies && (
+                  <div style={card}>
+                    <p style={label('Dependencies')}>Dependencies</p>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
+                      {Object.entries(health.dependencies.services).map(([name, d]) => {
+                        const col = depColor(d.status)
+                        return (
+                          <div key={name} style={{ border: `1px solid ${col.border}`, background: col.bg, padding: '8px 10px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-text)' }}>{name}</span>
+                              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontFamily: 'var(--theme-mono)', fontSize: 9, color: col.fg, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                                <span style={{ width: 6, height: 6, borderRadius: 6, background: col.fg }} />
+                                {d.status}
+                              </span>
+                            </div>
+                            <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 8, color: 'var(--theme-text-dim)', marginTop: 4 }}>
+                              {d.detail}{d.latency_ms != null && ` · ${d.latency_ms}ms`}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* AI provider usage */}
+                <div style={card}>
+                  <p style={label('AI providers (Groq → Cerebras failover)')}>AI providers (Groq → Cerebras failover)</p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, fontFamily: 'var(--theme-mono)', fontSize: 11 }}>
+                    {(['groq', 'cerebras'] as const).map(p => {
+                      const s = m.ai[p]
+                      return (
+                        <div key={p}>
+                          <span style={{ color: 'var(--theme-text)', textTransform: 'capitalize' }}>{p}</span>
+                          <span style={{ color: '#22c55e', marginLeft: 8 }}>{s.ok} ok</span>
+                          <span style={{ color: s.fail > 0 ? '#ef4444' : 'var(--theme-text-dim)', marginLeft: 8 }}>{s.fail} fail</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {m.ai.last_error && (
+                    <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: '#f59e0b', marginTop: 6 }}>
+                      last error → {m.ai.last_error}
+                    </div>
+                  )}
+                </div>
+
+                {/* Top endpoints */}
+                <div style={card}>
+                  <p style={label('Top endpoints by volume')}>Top endpoints by volume</p>
+                  <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 10 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 6, color: 'var(--theme-text-dim)', fontSize: 8, textTransform: 'uppercase', letterSpacing: '0.08em', paddingBottom: 5, borderBottom: `1px solid ${RED_BORDER}` }}>
+                      <span>Path</span><span style={{ textAlign: 'right' }}>Count</span><span style={{ textAlign: 'right' }}>5xx</span><span style={{ textAlign: 'right' }}>Avg ms</span><span style={{ textAlign: 'right' }}>Max ms</span>
+                    </div>
+                    {m.by_path.length === 0 && <div style={{ color: 'var(--theme-text-dim)', padding: '8px 0' }}>No API traffic recorded yet.</div>}
+                    {m.by_path.map(r => (
+                      <div key={r.path} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 6, padding: '4px 0', color: 'var(--theme-text)' }}>
+                        <span>{r.path}</span>
+                        <span style={{ textAlign: 'right' }}>{r.count.toLocaleString()}</span>
+                        <span style={{ textAlign: 'right', color: r.errors > 0 ? '#ef4444' : 'var(--theme-text-dim)' }}>{r.errors}</span>
+                        <span style={{ textAlign: 'right', color: r.avg_ms > 800 ? '#f59e0b' : 'var(--theme-text)' }}>{r.avg_ms}</span>
+                        <span style={{ textAlign: 'right', color: 'var(--theme-text-dim)' }}>{r.max_ms}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+              )
+            })()}
             {health && (
               <>
                 <div style={card}>
@@ -439,7 +620,7 @@ export default function AdminTester() {
                     ].map(([k, v]) => (
                       <div key={String(k)}>
                         <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-text-dim)' }}>{k}</span>
-                        <p style={{ fontFamily: 'var(--theme-mono)', fontSize: 12, color: 'var(--theme-negative)', margin: '2px 0 0' }}>{v}</p>
+                        <p style={{ fontFamily: 'var(--theme-mono)', fontSize: 12, color: 'var(--theme-text)', margin: '2px 0 0' }}>{v}</p>
                       </div>
                     ))}
                   </div>

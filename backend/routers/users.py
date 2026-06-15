@@ -480,15 +480,20 @@ def admin_health(x_admin_secret: str = Header(default="")):
     keys = {
         "FMP_API_KEY":      bool(os.getenv("FMP_API_KEY", "")),
         "FRED_API_KEY":     bool(os.getenv("FRED_API_KEY", "")),
-        "ANTHROPIC_API_KEY":bool(os.getenv("ANTHROPIC_API_KEY", "")),
+        "GROQ_API_KEY":     bool(os.getenv("GROQ_API_KEY", "")),
+        "CEREBRAS_API_KEY": bool(os.getenv("CEREBRAS_API_KEY", "")),
     }
 
+    import metrics
+    import health_probes
     return {
         "python":        sys.version.split()[0],
         "users_db":      str(_DB_PATH),
         "cache_entries": cache_entries,
         "cache_size_kb": cache_size_kb,
         "api_keys":      keys,
+        "metrics":       metrics.snapshot(),
+        "dependencies":  health_probes.probe_all(),
     }
 
 

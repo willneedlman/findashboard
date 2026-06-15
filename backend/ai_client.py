@@ -134,12 +134,16 @@ def groq_chat(messages: list[dict], *, model: str = MODEL_SMART,
     if not providers:
         raise HTTPException(503, "No LLM provider configured (set GROQ_API_KEY or CEREBRAS_API_KEY)")
 
+    import metrics
     last_exc: Exception | None = None
     for i, (name, call) in enumerate(providers):
         try:
-            return with_backoff(lambda c=call: c(model, messages, max_tokens, temperature))
+            resp = with_backoff(lambda c=call: c(model, messages, max_tokens, temperature))
+            metrics.record_ai(name, ok=True)
+            return resp
         except Exception as exc:  # noqa: BLE001 — re-raised below if chain exhausted
             last_exc = exc
+            metrics.record_ai(name, ok=False, error=_status_str(exc))
             if i == len(providers) - 1 or not _should_failover(exc):
                 raise
             logger.warning("LLM provider %s failed (%s); failing over to %s",

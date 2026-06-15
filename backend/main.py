@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 import os
+import time
 from dotenv import load_dotenv
 # backend/.env is authoritative when present; the repo-root .env fills any gaps
 # (e.g. GROQ_API_KEY) so every module sees the same keys sentiment.py already loads.
@@ -37,6 +38,7 @@ app = FastAPI(title="Alphatape Terminal API", lifespan=lifespan)
 # Alert on unhandled crashes so they're never silent (gated by ERROR_ALERTS=1).
 import logging as _logging
 import error_alert
+import metrics
 from fastapi import Request as _Request
 from fastapi.responses import JSONResponse as _JSONResponse
 
@@ -94,7 +96,8 @@ _PUBLIC_API_TTL = {
 
 @app.middleware("http")
 async def cache_control(request, call_next):
-    """Drive browser + Cloudflare-edge caching from one place.
+    """Drive browser + Cloudflare-edge caching from one place, and record
+    per-request telemetry for the admin health view.
 
     - /assets/*  content-hashed bundles never change → cache a year, immutable.
     - /api/*     no-store by default so authenticated/user responses never reach a
@@ -102,8 +105,20 @@ async def cache_control(request, call_next):
                  edge caching; non-GET and errors are never made public.
     - everything else is the SPA HTML shell → revalidate so deploys are picked up.
     """
-    response = await call_next(request)
+    _t0 = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        # An unhandled route error becomes a 500 in the outer error middleware;
+        # meter it here as a 500 before re-raising so the very failures the health
+        # view exists to surface aren't the ones silently dropped.
+        if request.url.path.startswith("/api/"):
+            metrics.record_request(request.url.path, 500, (time.perf_counter() - _t0) * 1000)
+        raise
     path = request.url.path
+    # Only meter API calls; static assets and the SPA shell are noise here.
+    if path.startswith("/api/"):
+        metrics.record_request(path, response.status_code, (time.perf_counter() - _t0) * 1000)
     if path.startswith("/assets/"):
         response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     elif path.startswith("/api/"):
