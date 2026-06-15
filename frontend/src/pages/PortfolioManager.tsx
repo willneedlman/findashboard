@@ -523,19 +523,14 @@ export default function PortfolioManager() {
   const lbl: React.CSSProperties = { fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.muted }
 
   return (
-    <PageWrapper title="Portfolio Manager">
+    <PageWrapper
+      title="Portfolio Manager"
+      subtitle="Track stocks, options, futures, and cash across multiple saved portfolios."
+    >
       <div style={{ maxWidth: 1050, margin: '0 auto' }}>
 
-        {/* Header */}
-        <div style={{ marginBottom: 24, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
-          <div>
-            <h1 style={{ fontFamily: T.mono, fontSize: 18, fontWeight: 700, color: T.gold, letterSpacing: '0.08em', margin: 0 }}>
-              PORTFOLIO MANAGER
-            </h1>
-            <p style={{ fontFamily: T.label, fontSize: 11, color: T.muted, marginTop: 6, marginBottom: 0 }}>
-              Track stocks, options, futures, and cash across multiple saved portfolios.
-            </p>
-          </div>
+        {/* Save control */}
+        <div style={{ marginBottom: 24, display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', gap: 16, minHeight: 1 }}>
           {(holdings.length > 0 || options.length > 0 || futures.length > 0 || cash.length > 0) && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
               <button
