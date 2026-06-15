@@ -52,6 +52,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Per-IP rate limiting (in-process). Added after CORS so it runs first; the 429
+# reflects the Origin itself so it stays readable cross-origin.
+from rate_limit import RateLimitMiddleware
+app.add_middleware(RateLimitMiddleware)
+
 
 # Public, read-only market data: identical for every user, safe to cache at the
 # Cloudflare edge. Maps URL-path prefix -> edge TTL (seconds). Anything NOT listed
