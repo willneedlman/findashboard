@@ -115,6 +115,7 @@ export default function MonteCarlo() {
   const [tpPct, setTpPct] = useState('')
   const [trailPct, setTrailPct] = useState('')
   const [posPct, setPosPct] = useState('100')
+  const [cashYield, setCashYield] = useState('4.5')   // % APY earned on the un-deployed cash portion
   const [leverage, setLeverage] = useState('1')
   const [borrowRate, setBorrowRate] = useState('0')
 
@@ -154,6 +155,7 @@ export default function MonteCarlo() {
     const tp    = tpPct    ? parseFloat(tpPct)    / 100 : null
     const trail = trailPct ? parseFloat(trailPct) / 100 : null
     const pos   = parseFloat(posPct || '100') / 100
+    const cy    = (parseFloat(cashYield) || 0) / 100   // cash sleeve APY
     const S0 = 1.0
     return paths.map(path => {
       let peak = S0
@@ -162,8 +164,8 @@ export default function MonteCarlo() {
       return path.map((v, day) => {
         if (day === 0) { peak = S0; exited = false; return v }
         if (exited) return exitVal
-        // Position sizing: blend with flat cash portion
-        const scaled = pos * v + (1 - pos) * S0
+        // Position sizing: the un-deployed cash portion compounds at the cash yield
+        const scaled = pos * v + (1 - pos) * S0 * Math.pow(1 + cy, day / 252)
         peak = Math.max(peak, v)
         if (sl   !== null && scaled <= S0 * (1 - sl))   { exited = true; exitVal = S0 * (1 - sl); return exitVal }
         if (tp   !== null && scaled >= S0 * (1 + tp))   { exited = true; exitVal = S0 * (1 + tp); return exitVal }
@@ -507,6 +509,11 @@ export default function MonteCarlo() {
                 <label style={LABEL}>Position Size %</label>
                 <input type="number" style={INPUT} value={posPct} min={1} max={100} step={5}
                   onChange={e => setPosPct(e.target.value)} onFocus={focus} onBlur={blur} />
+              </div>
+              <div>
+                <label style={LABEL}>Cash Yield % (idle cash)</label>
+                <input type="number" style={INPUT} value={cashYield} min={0} max={20} step={0.25}
+                  onChange={e => setCashYield(e.target.value)} onFocus={focus} onBlur={blur} />
               </div>
             </div>
           </div>

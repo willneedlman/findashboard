@@ -229,6 +229,7 @@ function PortfolioTab() {
   const [tpPct,    setTpPct]    = useState('')
   const [trailPct, setTrailPct] = useState('')
   const [posPct,   setPosPct]   = useState('100')
+  const [cashYield, setCashYield] = useState('4.5')   // % APY earned on the un-deployed / idle cash sleeve
   const [leverage,   setLeverage]   = useState('1')
   const [borrowRate, setBorrowRate] = useState('0')
 
@@ -260,7 +261,7 @@ function PortfolioTab() {
         }),
       ])
 
-      const rfDaily = 0.045 / 252
+      const rfDaily = (parseFloat(cashYield) || 0) / 100 / 252   // cash sleeve grows at the chosen yield
       const hasAnyStrategy = legSigs.some(s => s?.signal?.length > 0)
 
       let strategyResult = null
@@ -513,6 +514,7 @@ function PortfolioTab() {
               { label: 'Take-Profit %', val: tpPct,  set: setTpPct },
               { label: 'Trailing Stop %', val: trailPct, set: setTrailPct },
               { label: 'Position Size %', val: posPct,   set: setPosPct },
+              { label: 'Cash Yield %', val: cashYield, set: setCashYield },
             ].map(({ label, val, set }) => (
               <div key={label}>
                 <label style={{ ...PORT_LABEL, fontSize: 9, marginBottom: 2 }}>{label}</label>
