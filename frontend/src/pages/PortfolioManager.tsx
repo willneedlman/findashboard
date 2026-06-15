@@ -36,9 +36,6 @@ interface QuoteData {
 function loadHoldings(): Holding[] {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]') } catch { return [] }
 }
-function saveHoldings(h: Holding[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(h))
-}
 
 // ── Option positions (single + multi-leg) ──────────────────────────────────────
 type OptType = 'call' | 'put'
@@ -61,9 +58,6 @@ interface OptionPosition {
 const OPT_STORAGE_KEY = 'pm-options-v1'
 function loadOptions(): OptionPosition[] {
   try { return JSON.parse(localStorage.getItem(OPT_STORAGE_KEY) ?? '[]') } catch { return [] }
-}
-function saveOptions(p: OptionPosition[]) {
-  localStorage.setItem(OPT_STORAGE_KEY, JSON.stringify(p))
 }
 
 // Presets seed each leg's type/side; the user fills strike/expiry/premium.
@@ -100,8 +94,50 @@ const FUT_STORAGE_KEY = 'pm-futures-v1'
 function loadFutures(): FuturePosition[] {
   try { return JSON.parse(localStorage.getItem(FUT_STORAGE_KEY) ?? '[]') } catch { return [] }
 }
-function saveFutures(p: FuturePosition[]) {
-  localStorage.setItem(FUT_STORAGE_KEY, JSON.stringify(p))
+
+// ── Cash positions (interest-bearing) ───────────────────────────────────────────
+interface CashPosition {
+  id:     string
+  label:  string
+  amount: number   // principal
+  rate:   number   // annual % (APY)
+  since:  string   // YYYY-MM-DD the balance started accruing
+}
+
+// ── Multiple portfolios (saved in tabs) ─────────────────────────────────────────
+interface Portfolio {
+  id:       string
+  name:     string
+  holdings: Holding[]
+  options:  OptionPosition[]
+  futures:  FuturePosition[]
+  cash:     CashPosition[]
+}
+interface PMState { portfolios: Portfolio[]; activeId: string }
+const PORTFOLIOS_KEY = 'pm-portfolios-v2'
+const uid = () => (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now() + Math.random())
+
+function loadPortfolios(): PMState {
+  try {
+    const raw = localStorage.getItem(PORTFOLIOS_KEY)
+    if (raw) {
+      const d = JSON.parse(raw)
+      if (d?.portfolios?.length) {
+        d.portfolios = d.portfolios.map((p: Portfolio) => ({ ...p, cash: p.cash ?? [] }))  // backfill cash
+        return d
+      }
+    }
+  } catch { /* fall through to migration */ }
+  // Migrate the old single-portfolio keys into a Default tab so nothing is lost
+  const def: Portfolio = { id: 'default', name: 'Default', holdings: loadHoldings(), options: loadOptions(), futures: loadFutures(), cash: [] }
+  return { portfolios: [def], activeId: 'default' }
+}
+
+// Accrued value of a cash balance: principal × (1 + rate)^(years since `since`)
+function cashValue(c: CashPosition): number {
+  const start = new Date(c.since + 'T00:00:00').getTime()
+  const years = isNaN(start) ? 0 : Math.max(0, (Date.now() - start) / (365.25 * 864e5))
+  return c.amount * Math.pow(1 + c.rate / 100, years)
 }
 
 function fmt(v: number, pre = '', suf = '', d = 2) {
@@ -143,8 +179,27 @@ const editInp: React.CSSProperties = {
   fontSize: 10, padding: '3px 6px', width: 70, outline: 'none', boxSizing: 'border-box', textAlign: 'right',
 }
 
+type Upd<T> = T | ((prev: T) => T)
+
 export default function PortfolioManager() {
-  const [holdings, setHoldings] = useState<Holding[]>(loadHoldings)
+  // Multi-portfolio store — the active tab is the working set. The position
+  // setters below patch the active portfolio so the rest of the component (add/
+  // remove/edit handlers, marks queries) works unchanged.
+  const [pm, setPm] = useState<PMState>(loadPortfolios)
+  const portfolios = pm.portfolios
+  const active = portfolios.find(p => p.id === pm.activeId) ?? portfolios[0]
+  const holdings = active.holdings
+  const options  = active.options
+  const futures  = active.futures
+  const cash     = active.cash
+
+  const patchActive = useCallback((patch: (p: Portfolio) => Partial<Portfolio>) =>
+    setPm(s => ({ ...s, portfolios: s.portfolios.map(p => p.id === s.activeId ? { ...p, ...patch(p) } : p) })), [])
+  const setHoldings = useCallback((u: Upd<Holding[]>) => patchActive(p => ({ holdings: typeof u === 'function' ? u(p.holdings) : u })), [patchActive])
+  const setOptions  = useCallback((u: Upd<OptionPosition[]>) => patchActive(p => ({ options: typeof u === 'function' ? u(p.options) : u })), [patchActive])
+  const setFutures  = useCallback((u: Upd<FuturePosition[]>) => patchActive(p => ({ futures: typeof u === 'function' ? u(p.futures) : u })), [patchActive])
+  const setCash     = useCallback((u: Upd<CashPosition[]>) => patchActive(p => ({ cash: typeof u === 'function' ? u(p.cash) : u })), [patchActive])
+
   const [newTicker,  setNewTicker]  = useState('')
   const [newShares,  setNewShares]  = useState('')
   const [newCost,    setNewCost]    = useState('')
@@ -153,45 +208,44 @@ export default function PortfolioManager() {
   const [dirty,      setDirty]      = useState(false)
   const { setHoldings: syncToContext } = usePortfolio()
 
-  // Option positions + entry form state
-  const [options, setOptions] = useState<OptionPosition[]>(loadOptions)
-  const [entryMode, setEntryMode] = useState<'stock' | 'option' | 'future'>('stock')
+  // Option entry form state
+  const [entryMode, setEntryMode] = useState<'stock' | 'option' | 'future' | 'cash'>('stock')
   const [optUnderlying, setOptUnderlying] = useState('')
   const [optPreset, setOptPreset] = useState(OPT_PRESETS[0].name)
   const [optLegs, setOptLegs] = useState<LegDraft[]>([emptyLeg()])
 
-  // Futures positions + entry form state
-  const [futures, setFutures] = useState<FuturePosition[]>(loadFutures)
+  // Futures entry form state
   const [futSym, setFutSym] = useState(FUTURES[0].sym)
   const [futSide, setFutSide] = useState<Side>('long')
   const [futContracts, setFutContracts] = useState('1')
   const [futEntry, setFutEntry] = useState('')
 
-  // Inline edit state — edit shares/avgCost (stocks) or contracts/entry (futures)
-  // in place instead of deleting and re-adding.
+  // Cash entry form state
+  const todayISO = new Date().toISOString().split('T')[0]
+  const [cashLabel, setCashLabel] = useState('')
+  const [cashAmount, setCashAmount] = useState('')
+  const [cashRate, setCashRate] = useState('4.5')
+  const [cashSince, setCashSince] = useState(todayISO)
+
+  // Inline edit state
   const [editStock, setEditStock] = useState<{ i: number; shares: string; avgCost: string } | null>(null)
   const [editFut, setEditFut] = useState<{ id: string; contracts: string; entry: string } | null>(null)
+  const [editCash, setEditCash] = useState<{ id: string; amount: string; rate: string } | null>(null)
+
+  // Tab management
+  const clearEdits = () => { setEditStock(null); setEditFut(null); setEditCash(null) }
+  const addPortfolio = () => setPm(s => { const id = uid(); return { portfolios: [...s.portfolios, { id, name: `Portfolio ${s.portfolios.length + 1}`, holdings: [], options: [], futures: [], cash: [] }], activeId: id } })
+  const switchPortfolio = (id: string) => { clearEdits(); setPm(s => ({ ...s, activeId: id })) }
+  const renamePortfolio = (id: string, name: string) => setPm(s => ({ ...s, portfolios: s.portfolios.map(p => p.id === id ? { ...p, name } : p) }))
+  const deletePortfolio = (id: string) => { clearEdits(); setPm(s => { const rest = s.portfolios.filter(p => p.id !== id); if (!rest.length) return s; return { portfolios: rest, activeId: s.activeId === id ? rest[0].id : s.activeId } }) }
+  const [renaming, setRenaming] = useState<string | null>(null)
 
   const mountRef = useRef(false)
   useEffect(() => {
     if (!mountRef.current) { mountRef.current = true; return }
-    saveHoldings(holdings)
+    localStorage.setItem(PORTFOLIOS_KEY, JSON.stringify(pm))
     setDirty(true)
-  }, [holdings])
-
-  const optMountRef = useRef(false)
-  useEffect(() => {
-    if (!optMountRef.current) { optMountRef.current = true; return }
-    saveOptions(options)
-    setDirty(true)
-  }, [options])
-
-  const futMountRef = useRef(false)
-  useEffect(() => {
-    if (!futMountRef.current) { futMountRef.current = true; return }
-    saveFutures(futures)
-    setDirty(true)
-  }, [futures])
+  }, [pm])
 
   // Apply a preset: reseed the leg drafts with its type/side template
   const applyPreset = useCallback((name: string) => {
@@ -266,6 +320,21 @@ export default function PortfolioManager() {
     setFutures(prev => prev.map(f => f.id === editFut.id ? { ...f, contracts, entryPrice: entry } : f))
     setEditFut(null)
   }
+  const saveEditCash = () => {
+    if (!editCash) return
+    const amount = parseFloat(editCash.amount), rate = parseFloat(editCash.rate)
+    if (isNaN(amount) || amount < 0 || isNaN(rate)) return
+    setCash(prev => prev.map(c => c.id === editCash.id ? { ...c, amount, rate } : c))
+    setEditCash(null)
+  }
+
+  const addCash = useCallback(() => {
+    const amount = parseFloat(cashAmount), rate = parseFloat(cashRate)
+    if (isNaN(amount) || amount <= 0 || isNaN(rate)) return
+    setCash(prev => [...prev, { id: uid(), label: cashLabel.trim() || 'Cash', amount, rate, since: cashSince }])
+    setCashLabel(''); setCashAmount('')
+  }, [cashLabel, cashAmount, cashRate, cashSince, setCash])
+  const removeCash = (id: string) => setCash(prev => prev.filter(c => c.id !== id))
 
   const addHolding = useCallback(() => {
     const ticker  = newTicker.trim().toUpperCase()
@@ -381,18 +450,27 @@ export default function PortfolioManager() {
     return { ...f, label: spec?.label ?? f.symbol, mult, price: mk.price, pct1d: mk.pct1d, loading: mk.loading, notional, pnl, pnlPct }
   })
 
-  // Combined account equity (equities + options value + futures mark-to-market P&L).
+  // Cash rows — principal accruing interest at the chosen rate
+  let cashTotalValue = 0, cashTotalCost = 0
+  const cashRows = cash.map(c => {
+    const value = cashValue(c)
+    cashTotalValue += value
+    cashTotalCost += c.amount
+    return { ...c, value, accrued: value - c.amount }
+  })
+
+  // Combined account equity (equities + options value + futures P&L + cash value).
   // Futures contribute only their unrealized P&L — adding full notional would dwarf
   // the cash-funded book since you post margin, not the notional.
-  const combinedValue  = totalValue + optTotalValue + futTotalPnl
-  const combinedCost   = totalCost + optTotalCost
+  const combinedValue  = totalValue + optTotalValue + futTotalPnl + cashTotalValue
+  const combinedCost   = totalCost + optTotalCost + cashTotalCost
   const combinedPnl    = combinedValue - combinedCost
   const combinedPnlPct = combinedCost > 0 ? (combinedPnl / combinedCost) * 100 : null
 
   const handleSave = useCallback(() => {
-    saveHoldings(holdings)
-    saveOptions(options)
-    saveFutures(futures)
+    // The active portfolio already persists via the pm effect; Save just pushes
+    // the active tab's equity weights to the cross-tool portfolio context.
+    localStorage.setItem(PORTFOLIOS_KEY, JSON.stringify(pm))
     const priced = rows.filter(r => r.price > 0)
     if (priced.length > 0) {
       const total = priced.reduce((s, r) => s + r.value, 0) || 1
@@ -407,7 +485,7 @@ export default function PortfolioManager() {
     setSaveFlash(true)
     setDirty(false)
     setTimeout(() => setSaveFlash(false), 2000)
-  }, [holdings, options, futures, rows, syncToContext])
+  }, [pm, holdings, rows, syncToContext])
 
   const lbl: React.CSSProperties = { fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.muted }
 
@@ -422,10 +500,10 @@ export default function PortfolioManager() {
               PORTFOLIO MANAGER
             </h1>
             <p style={{ fontFamily: T.label, fontSize: 11, color: T.muted, marginTop: 6, marginBottom: 0 }}>
-              Track stocks and option positions (single or multi-leg) with live mark-to-market P&amp;L.
+              Track stocks, options, futures, and cash across multiple saved portfolios.
             </p>
           </div>
-          {(holdings.length > 0 || options.length > 0 || futures.length > 0) && (
+          {(holdings.length > 0 || options.length > 0 || futures.length > 0 || cash.length > 0) && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
               <button
                 onClick={handleSave}
@@ -455,6 +533,34 @@ export default function PortfolioManager() {
           )}
         </div>
 
+        {/* Portfolio tabs */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginBottom: 16, borderBottom: `1px solid ${T.border}`, flexWrap: 'wrap' }}>
+          {portfolios.map(p => {
+            const isActive = p.id === active.id
+            return (
+              <div key={p.id} onClick={() => switchPortfolio(p.id)} style={{
+                display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px', cursor: 'pointer', marginBottom: -1,
+                borderBottom: isActive ? `2px solid ${T.gold}` : '2px solid transparent',
+                background: isActive ? 'color-mix(in srgb, var(--theme-primary) 8%, transparent)' : 'transparent',
+              }}>
+                {renaming === p.id ? (
+                  <input autoFocus value={p.name} onChange={e => renamePortfolio(p.id, e.target.value)}
+                    onBlur={() => setRenaming(null)} onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') setRenaming(null) }}
+                    onClick={e => e.stopPropagation()} style={{ ...inp, width: 110, padding: '2px 6px', fontSize: 11 }} />
+                ) : (
+                  <span onDoubleClick={() => setRenaming(p.id)} title="Double-click to rename"
+                    style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: isActive ? T.gold : T.muted, whiteSpace: 'nowrap' }}>{p.name}</span>
+                )}
+                {portfolios.length > 1 && (
+                  <button onClick={e => { e.stopPropagation(); if (confirm(`Delete portfolio "${p.name}"?`)) deletePortfolio(p.id) }}
+                    style={{ background: 'none', border: 'none', color: T.muted, cursor: 'pointer', fontSize: 12, lineHeight: 1, padding: 0 }}>×</button>
+                )}
+              </div>
+            )
+          })}
+          <button onClick={addPortfolio} style={{ background: 'none', border: 'none', color: T.gold, cursor: 'pointer', fontFamily: T.label, fontSize: 11, fontWeight: 700, padding: '6px 10px', letterSpacing: '0.08em' }}>+ New</button>
+        </div>
+
         <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 24, alignItems: 'start' }}>
 
           {/* ── Left panel ── */}
@@ -463,14 +569,14 @@ export default function PortfolioManager() {
             {/* Add position */}
             <div>
               <div style={{ display: 'flex', marginBottom: 10, border: `1px solid ${T.border}` }}>
-                {(['stock', 'option', 'future'] as const).map(m => (
+                {(['stock', 'option', 'future', 'cash'] as const).map(m => (
                   <button key={m} onClick={() => setEntryMode(m)} style={{
                     flex: 1, padding: '6px 0', cursor: 'pointer', border: 'none',
                     background: entryMode === m ? T.gold : 'transparent',
                     color: entryMode === m ? 'var(--theme-bg)' : T.muted,
-                    fontFamily: T.label, fontSize: 9, fontWeight: 700,
-                    letterSpacing: '0.1em', textTransform: 'uppercase',
-                  }}>{m === 'stock' ? 'Stock' : m === 'option' ? 'Option' : 'Future'}</button>
+                    fontFamily: T.label, fontSize: 8.5, fontWeight: 700,
+                    letterSpacing: '0.06em', textTransform: 'uppercase',
+                  }}>{m}</button>
                 ))}
               </div>
 
@@ -519,7 +625,7 @@ export default function PortfolioManager() {
                   <button onClick={addLeg} style={ghostBtn}>+ Add leg</button>
                   <button onClick={addOption} style={addBtn}>Add Position</button>
                 </div>
-              ) : (
+              ) : entryMode === 'future' ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <select value={futSym} onChange={e => setFutSym(e.target.value)} style={inp}>
                     {FUTURES_BY_GROUP.map(g => (
@@ -540,6 +646,18 @@ export default function PortfolioManager() {
                     {(() => { const s = futuresSpec(futSym); return s ? `1.00 move = $${s.multiplier.toLocaleString()} per contract` : '' })()}
                   </div>
                   <button onClick={addFuture} style={addBtn}>Add Position</button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <input value={cashLabel} onChange={e => setCashLabel(e.target.value)} placeholder="Label (e.g. HYSA, T-Bills)" style={inp} />
+                  <input value={cashAmount} onChange={e => setCashAmount(e.target.value)} placeholder="Amount ($)" type="number" min="0" style={inp}
+                    onKeyDown={e => e.key === 'Enter' && addCash()} />
+                  <div style={{ display: 'flex', gap: 5 }}>
+                    <input value={cashRate} onChange={e => setCashRate(e.target.value)} placeholder="Rate % APY" type="number" step="0.1" style={{ ...inp, flex: 1 }} />
+                    <input value={cashSince} onChange={e => setCashSince(e.target.value)} type="date" style={{ ...inp, flex: 1.4 }} />
+                  </div>
+                  <div style={{ fontFamily: T.label, fontSize: 8, color: T.muted }}>Compounds at the rate from the start date.</div>
+                  <button onClick={addCash} style={addBtn}>Add Cash</button>
                 </div>
               )}
             </div>
@@ -572,6 +690,7 @@ export default function PortfolioManager() {
                   ['Stocks',         String(holdings.length)],
                   ['Options',        String(options.length)],
                   ['Futures',        String(futures.length)],
+                  ['Cash',           String(cash.length)],
                 ].map(([k, v]) => (
                   <div key={k} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                     <span style={{ fontFamily: T.label, fontSize: 10, color: T.muted }}>{k}</span>
@@ -584,9 +703,9 @@ export default function PortfolioManager() {
 
           {/* ── Holdings table ── */}
           <div>
-            {holdings.length === 0 && options.length === 0 && futures.length === 0 ? (
+            {holdings.length === 0 && options.length === 0 && futures.length === 0 && cash.length === 0 ? (
               <div style={{ height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${T.border}`, color: T.muted, fontFamily: T.mono, fontSize: 11 }}>
-                Add a stock, option, or future, or import a portfolio file
+                Add a stock, option, future, or cash balance — or import a portfolio file
               </div>
             ) : (<>
               {holdings.length > 0 && (
@@ -770,6 +889,55 @@ export default function PortfolioManager() {
                   </table>
                   <div style={{ padding: '4px 12px 6px', fontSize: 9, color: T.muted, fontFamily: T.mono }}>
                     Notional = mark × contract multiplier × contracts. P&L is mark-to-market on the continuous contract.
+                  </div>
+                </div>
+              )}
+
+              {/* ── Cash ── */}
+              {cash.length > 0 && (
+                <div style={{ background: T.surface, border: `1px solid ${T.border}`, overflow: 'hidden', marginTop: (holdings.length > 0 || options.length > 0 || futures.length > 0) ? 16 : 0 }}>
+                  <div style={{ ...lbl, padding: '8px 12px', borderBottom: `1px solid ${T.border}`, background: T.bg }}>Cash</div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: T.mono, fontSize: 10 }}>
+                    <thead>
+                      <tr style={{ borderBottom: `1px solid ${T.border}`, background: T.bg }}>
+                        {['Account', 'Principal', 'Rate', 'Since', 'Interest', 'Value', ''].map(h => (
+                          <th key={h} style={{ padding: '7px 12px', textAlign: h === 'Account' ? 'left' : 'right', fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.muted, whiteSpace: 'nowrap' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {cashRows.map((c, i) => (
+                        <tr key={c.id} style={{ borderBottom: `1px solid ${T.border}`, background: i % 2 === 0 ? 'transparent' : 'var(--theme-hover, rgba(255,255,255,0.01))' }}>
+                          <td style={{ padding: '8px 12px', color: T.gold, fontWeight: 700 }}>{c.label}</td>
+                          {editCash?.id === c.id ? (<>
+                            <td style={{ padding: '4px 8px', textAlign: 'right' }}>
+                              <input value={editCash.amount} onChange={e => setEditCash({ ...editCash, amount: e.target.value })} type="number" style={editInp} onKeyDown={e => { if (e.key === 'Enter') saveEditCash(); if (e.key === 'Escape') setEditCash(null) }} autoFocus />
+                            </td>
+                            <td style={{ padding: '4px 8px', textAlign: 'right' }}>
+                              <input value={editCash.rate} onChange={e => setEditCash({ ...editCash, rate: e.target.value })} type="number" step="0.1" style={{ ...editInp, width: 56 }} onKeyDown={e => { if (e.key === 'Enter') saveEditCash(); if (e.key === 'Escape') setEditCash(null) }} />
+                            </td>
+                          </>) : (<>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', color: T.text }}>{fmtMoney(c.amount)}</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', color: T.text }}>{c.rate.toFixed(2)}%</td>
+                          </>)}
+                          <td style={{ padding: '8px 12px', textAlign: 'right', color: T.muted }}>{fmtExp(c.since)}</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, color: c.accrued >= 0 ? T.pos : T.neg }}>{`${c.accrued >= 0 ? '+' : ''}${fmtMoney(c.accrued)}`}</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', color: T.text, fontWeight: 600 }}>{fmtMoney(c.value)}</td>
+                          <td style={{ padding: '8px 6px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                            {editCash?.id === c.id ? (<>
+                              <button onClick={saveEditCash} style={{ ...editBtn, color: T.gold }}>Save</button>
+                              <button onClick={() => setEditCash(null)} style={{ ...editBtn, color: T.muted }}>×</button>
+                            </>) : (<>
+                              <button onClick={() => setEditCash({ id: c.id, amount: String(c.amount), rate: String(c.rate) })} style={{ ...editBtn, color: T.muted }}>Edit</button>
+                              <button onClick={() => removeCash(c.id)} style={{ background: 'none', border: 'none', color: T.muted, cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '0 4px' }}>×</button>
+                            </>)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div style={{ padding: '4px 12px 6px', fontSize: 9, color: T.muted, fontFamily: T.mono }}>
+                    Value compounds at the APY from the start date. Interest is the accrued growth.
                   </div>
                 </div>
               )}
