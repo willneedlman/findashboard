@@ -11,6 +11,8 @@ import SidebarLayout from '../components/SidebarLayout'
 import axios from 'axios'
 import EmptyState from '../components/EmptyState'
 import PortfolioIO, { type PortfolioAsset } from '../components/PortfolioIO'
+import PMImportPicker from '../components/PMImportPicker'
+import { CASH_SYMBOL } from '../lib/pmImport'
 import { usePortfolio, type PortfolioHolding } from '../contexts/PortfolioContext'
 // ── GBM math ────────────────────────────────────────────────────────────────
 
@@ -127,6 +129,8 @@ export default function MonteCarlo() {
     setFetching(true)
     const updated = await Promise.all(
       legs.map(async (leg) => {
+        // The synthetic cash sleeve has no price history; keep its preset vol/drift.
+        if (leg.ticker === CASH_SYMBOL) return leg
         try {
           const { data } = await axios.get(`/api/market/history?ticker=${leg.ticker}&start=2022-01-01`)
           if (data?.metrics) {
@@ -519,6 +523,18 @@ export default function MonteCarlo() {
           </div>
 
           <div style={{ padding: 10, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <PMImportPicker
+              style={{ ...INPUT, cursor: 'pointer' }}
+              onImport={(r) => {
+                const newLegs: Leg[] = r.legs.map(l => makeLeg(l.ticker, l.weight))
+                // Cash sleeve: a zero-volatility leg drifting at the configured
+                // cash yield (the same APY the cash-yield control uses).
+                if (r.cashWeight > 0) newLegs.push({ ...makeLeg(CASH_SYMBOL, r.cashWeight), vol: 0, drift: parseFloat(cashYield) || 4.5, fetched: true })
+                if (newLegs.length === 0) return
+                setHoldings(newLegs.map(l => ({ ticker: l.ticker, weight: l.weight })))
+                setLegs(newLegs)
+              }}
+            />
             <PortfolioIO
               mode="portfolio"
               assets={legs.map(l => ({ ticker: l.ticker, weight: l.weight, strategy: l.strategy, stratParams: l.stratParams as Record<string, unknown> }))}

@@ -6,6 +6,8 @@ import { Plus, X } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
 import EmptyState from '../components/EmptyState'
+import PMImportPicker from '../components/PMImportPicker'
+import { CASH_SYMBOL, type ImportResult } from '../lib/pmImport'
 
 const C = {
   bg: 'var(--theme-bg)', surf: 'var(--theme-surface)', border: 'var(--theme-border)',
@@ -66,6 +68,16 @@ export default function PortfolioCompare() {
   const removeLeg = (i: number, li: number) => setPorts(p => p.map((x, j) => j === i && x.legs.length > 1 ? { ...x, legs: x.legs.filter((_, m) => m !== li) } : x))
   const addPort = () => ports.length < 4 && setPorts(p => [...p, { name: `Portfolio ${String.fromCharCode(65 + p.length)}`, legs: [{ ticker: '', weight: 100 }], leverage: '1', borrow: '0' }])
   const removePort = (i: number) => ports.length > 2 && setPorts(p => p.filter((_, j) => j !== i))
+
+  // Bring a Portfolio Manager portfolio in as a new comparison slot (equity legs
+  // by market value + a CASH sleeve). At the 4-portfolio cap, replace the last.
+  const importFromPM = (res: ImportResult, name: string) => {
+    const legs: Leg[] = res.legs.map(l => ({ ticker: l.ticker, weight: l.weight }))
+    if (res.cashWeight > 0) legs.push({ ticker: CASH_SYMBOL, weight: res.cashWeight })
+    if (legs.length === 0) return
+    const port: Port = { name, legs, leverage: '1', borrow: '0' }
+    setPorts(prev => (prev.length < 4 ? [...prev, port] : [...prev.slice(0, 3), port]))
+  }
 
   const r = m.data
   // Backend returns each series indexed to 100. % mode rebases to cumulative
@@ -139,6 +151,7 @@ export default function PortfolioCompare() {
               <Plus size={13} /> Add Portfolio
             </button>
           )}
+          <PMImportPicker style={{ ...inputStyle, cursor: 'pointer' }} onImport={importFromPM} />
           <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ display: 'flex', gap: 6 }}>
               <div style={{ flex: 1 }}><label style={labelStyle}>Start</label><input type="date" style={inputStyle} value={start} onChange={e => setStart(e.target.value)} /></div>
