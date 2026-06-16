@@ -69,17 +69,15 @@ export default function PMPortfoliosWidget({ config: _config }: { config: Widget
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: T.bg }}>
-      {portfolios.length > 1 && (
-        <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap', padding: '3px 8px', background: 'rgba(0,0,0,0.15)', borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
-          {portfolios.map(p => (
-            <button key={p.id} onClick={() => setSelId(p.id)} style={{
-              fontFamily: T.mono, fontSize: 8.5, fontWeight: 700, padding: '1px 7px',
-              border: sel?.id === p.id ? '1px solid rgba(201,168,76,0.55)' : `1px solid ${T.border}`,
-              background: sel?.id === p.id ? 'rgba(201,168,76,0.12)' : 'transparent',
-              color: sel?.id === p.id ? T.gold : 'rgba(255,255,255,0.3)',
-              cursor: 'pointer', letterSpacing: '0.04em',
-            }}>{p.name}</button>
-          ))}
+      {portfolios.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px', background: 'rgba(0,0,0,0.15)', borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
+          <span style={{ fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.muted, whiteSpace: 'nowrap' }}>Book</span>
+          <select value={sel?.id ?? ''} onChange={e => setSelId(e.target.value)} style={{
+            background: 'var(--theme-bg, #101c2e)', border: `1px solid ${T.border}`, color: T.text,
+            fontFamily: T.mono, fontSize: 10.5, padding: '2px 4px', outline: 'none', cursor: 'pointer', width: '100%',
+          }}>
+            {portfolios.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
         </div>
       )}
 

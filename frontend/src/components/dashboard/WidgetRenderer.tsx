@@ -21,6 +21,7 @@ import VolSkewWidget from './widgets/VolSkewWidget'
 import SentimentWidget from './widgets/SentimentWidget'
 import ScreenerWidget from './widgets/ScreenerWidget'
 import PMPortfoliosWidget from './widgets/PMPortfoliosWidget'
+import PaperTradeWidget from './widgets/PaperTradeWidget'
 
 export default function WidgetRenderer({ config }: { config: WidgetConfig }) {
   switch (config.type) {
@@ -46,6 +47,7 @@ export default function WidgetRenderer({ config }: { config: WidgetConfig }) {
     case 'sentiment-gauge':    return <SentimentWidget config={config} />
     case 'screener':           return <ScreenerWidget config={config} />
     case 'pm-portfolios':      return <PMPortfoliosWidget config={config} />
+    case 'paper-trade':        return <PaperTradeWidget config={config} />
     default:                   return null
   }
 }

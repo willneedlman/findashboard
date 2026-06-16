@@ -19,6 +19,7 @@ const ALL_TYPES: WidgetType[] = [
   'sentiment-gauge',
   'screener',
   'pm-portfolios',
+  'paper-trade',
 ]
 
 interface WidgetPaletteProps {

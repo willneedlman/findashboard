@@ -26,6 +26,7 @@ export type WidgetType =
   | 'sentiment-gauge'
   | 'screener'
   | 'pm-portfolios'
+  | 'paper-trade'
 
 export interface WidgetConfig {
   id: string
@@ -91,6 +92,7 @@ export const WIDGET_DEFAULT_SIZE: Record<WidgetType, { w: number; h: number }> =
   'sentiment-gauge':     { w: 3, h: 5 },
   'screener':            { w: 5, h: 6 },
   'pm-portfolios':       { w: 4, h: 6 },
+  'paper-trade':         { w: 6, h: 8 },
 }
 
 export const WIDGET_LABELS: Record<WidgetType, string> = {
@@ -116,6 +118,7 @@ export const WIDGET_LABELS: Record<WidgetType, string> = {
   'sentiment-gauge':     'Market Sentiment',
   'screener':            'Screener',
   'pm-portfolios':       'Portfolios',
+  'paper-trade':         'Paper Trade',
 }
 
 export const WIDGET_DESCRIPTIONS: Record<WidgetType, string> = {
@@ -141,6 +144,7 @@ export const WIDGET_DESCRIPTIONS: Record<WidgetType, string> = {
   'sentiment-gauge':     'Market-wide AI news sentiment: composite score, bull/neutral/bear split over the last 4 hours.',
   'screener':            'Quick stock screens — biggest names, top gainers/losers, and volume leaders.',
   'pm-portfolios':       'Your Portfolio Manager books with live value and unrealized P&L per holding.',
+  'paper-trade':         'Trade a ticker on your paper account from a chart — market, limit, and stop orders.',
 }
 
 export const WIDGET_ICONS: Record<WidgetType, string> = {
@@ -166,6 +170,7 @@ export const WIDGET_ICONS: Record<WidgetType, string> = {
   'sentiment-gauge':     'S',
   'screener':            'SCR',
   'pm-portfolios':       'PF',
+  'paper-trade':         'TR',
 }
 
 // ── Default layout — all 20 widget types, one each ───────────────────────────
@@ -203,6 +208,7 @@ export const DEFAULT_WIDGETS: WidgetConfig[] = [
   { id: 'w20', type: 'sentiment-gauge' },
   { id: 'w21', type: 'screener' },
   { id: 'w22', type: 'pm-portfolios' },
+  { id: 'w23', type: 'paper-trade', ticker: 'SPY' },
 ]
 
 export const DEFAULT_LAYOUTS: Layout[] = [
@@ -241,6 +247,7 @@ export const DEFAULT_LAYOUTS: Layout[] = [
   { i: 'w20', x: 0, y: 45, w: 3,  h: 5 },
   { i: 'w21', x: 3, y: 45, w: 5,  h: 6 },
   { i: 'w22', x: 8, y: 45, w: 4,  h: 6 },
+  { i: 'w23', x: 0, y: 51, w: 6,  h: 8 },
 ]
 
 // ── Size constraints ──────────────────────────────────────────────────────────
@@ -272,56 +279,59 @@ let _seq = 0
 const newId = () => `w${Date.now()}_${_seq++}`
 const newDashId = () => `d${Date.now()}_${_seq++}`
 
-// Place widgets left-to-right, wrapping at 12 cols, using each type's default size.
-function autoLayout(widgets: WidgetConfig[]): Layout[] {
-  let x = 0, y = 0, rowH = 0
-  return widgets.map(w => {
-    const { w: ww, h: hh } = WIDGET_DEFAULT_SIZE[w.type]
-    if (x + ww > 12) { x = 0; y += rowH; rowH = 0 }
-    const item: Layout = { i: w.id, x, y, w: ww, h: hh }
-    x += ww; rowH = Math.max(rowH, hh)
-    return item
-  })
-}
-
-const spec = (type: WidgetType, config: Partial<WidgetConfig> = {}): WidgetConfig => ({ id: newId(), type, ...config })
-
 export type PresetKey = 'main' | 'trader' | 'researcher' | 'screener'
 
 export const PRESET_LABELS: Record<PresetKey, string> = {
   main: 'Everything', trader: 'Trader', researcher: 'Researcher', screener: 'Screener',
 }
 
+// A preset is a hand-placed list of tiles (12-col grid, 60px rows) so each
+// layout reads as a deliberate workspace rather than an auto-packed grid.
+type PItem = { type: WidgetType; config?: Partial<WidgetConfig>; x: number; y: number; w: number; h: number }
+
+function fromItems(items: PItem[]): { widgets: WidgetConfig[]; layouts: Layout[] } {
+  const widgets = items.map(it => ({ id: newId(), type: it.type, ...it.config }))
+  const layouts: Layout[] = items.map((it, i) => ({ i: widgets[i].id, x: it.x, y: it.y, w: it.w, h: it.h }))
+  return { widgets, layouts: applyConstraints(widgets, layouts) }
+}
+
+const W_LIST = ['SPY', 'QQQ', 'NVDA', 'AAPL', 'TSLA', 'MSFT', 'AMZN', 'META']
+const EARN = ['NVDA', 'AAPL', 'MSFT', 'AMZN', 'META', 'GOOGL']
+
 function buildPreset(key: PresetKey): { widgets: WidgetConfig[]; layouts: Layout[] } {
   if (key === 'main') return { widgets: DEFAULT_WIDGETS, layouts: DEFAULT_LAYOUTS }
-  let widgets: WidgetConfig[]
-  if (key === 'trader') {
-    widgets = [
-      spec('tradingview-chart', { ticker: 'NVDA' }),
-      spec('watchlist', { tickers: ['SPY', 'QQQ', 'NVDA', 'AAPL', 'TSLA', 'MSFT'] }),
-      spec('options-snapshot', { ticker: 'SPY' }),
-      spec('dealer-gex', { ticker: 'SPY' }),
-      spec('vol-skew', { ticker: 'SPY' }),
-      spec('news-feed', { tickers: ['SPY', 'NVDA'] }),
-    ]
-  } else if (key === 'researcher') {
-    widgets = [
-      spec('screener'),
-      spec('pm-portfolios'),
-      spec('correlation-matrix', { tickers: ['SPY', 'QQQ', 'TLT', 'GLD', 'BTC-USD'] }),
-      spec('sector-rotation'),
-      spec('sentiment-gauge'),
-      spec('earnings-calendar', { tickers: ['NVDA', 'AAPL', 'MSFT', 'AMZN', 'META', 'GOOGL'] }),
-    ]
-  } else {
-    widgets = [
-      spec('screener'),
-      spec('watchlist', { tickers: ['SPY', 'QQQ', 'NVDA', 'AAPL', 'TSLA', 'MSFT', 'AMZN', 'META'] }),
-      spec('sector-rotation'),
-      spec('mini-chart', { ticker: 'SPY', period: '1y' }),
-    ]
-  }
-  return { widgets, layouts: applyConstraints(widgets, autoLayout(widgets)) }
+
+  if (key === 'trader') return fromItems([
+    // Hero chart + watchlist/news rail
+    { type: 'tradingview-chart', config: { ticker: 'NVDA' },          x: 0, y: 0,  w: 8, h: 9 },
+    { type: 'watchlist',         config: { tickers: W_LIST },          x: 8, y: 0,  w: 4, h: 5 },
+    { type: 'news-feed',         config: { tickers: ['SPY', 'NVDA'] }, x: 8, y: 5,  w: 4, h: 4 },
+    // Execute + read the chain
+    { type: 'paper-trade',       config: { ticker: 'SPY' },            x: 0, y: 9,  w: 6, h: 8 },
+    { type: 'options-snapshot',  config: { ticker: 'SPY' },            x: 6, y: 9,  w: 6, h: 8 },
+    // Dealer flow + skew
+    { type: 'dealer-gex',        config: { ticker: 'SPY' },            x: 0, y: 17, w: 6, h: 6 },
+    { type: 'vol-skew',          config: { ticker: 'SPY' },            x: 6, y: 17, w: 6, h: 6 },
+  ])
+
+  if (key === 'researcher') return fromItems([
+    { type: 'screener',                                                 x: 0, y: 0,  w: 5, h: 8 },
+    { type: 'pm-portfolios',                                            x: 5, y: 0,  w: 4, h: 6 },
+    { type: 'sentiment-gauge',                                          x: 9, y: 0,  w: 3, h: 6 },
+    { type: 'sector-rotation',                                          x: 0, y: 8,  w: 4, h: 7 },
+    { type: 'correlation-matrix', config: { tickers: ['SPY', 'QQQ', 'TLT', 'GLD', 'BTC-USD'] }, x: 4, y: 8, w: 4, h: 7 },
+    { type: 'earnings-calendar',  config: { tickers: EARN },           x: 8, y: 8,  w: 4, h: 7 },
+    { type: 'news-feed',          config: { tickers: ['SPY', 'AAPL', 'NVDA'] }, x: 0, y: 15, w: 12, h: 4 },
+  ])
+
+  // screener
+  return fromItems([
+    { type: 'screener',                                                 x: 0, y: 0,  w: 7, h: 9 },
+    { type: 'watchlist',         config: { tickers: W_LIST },           x: 7, y: 0,  w: 5, h: 6 },
+    { type: 'mini-chart',        config: { ticker: 'SPY', period: '1y' }, x: 7, y: 6, w: 5, h: 3 },
+    { type: 'sector-rotation',                                          x: 0, y: 9,  w: 6, h: 7 },
+    { type: 'earnings-calendar', config: { tickers: EARN },             x: 6, y: 9,  w: 6, h: 6 },
+  ])
 }
 
 // ── Storage (v2: multiple named dashboards, per-user when a userId is given) ─────
