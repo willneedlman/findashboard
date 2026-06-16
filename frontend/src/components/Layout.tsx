@@ -43,6 +43,7 @@ const NAV_SECTIONS = [
       { to: '/unusual-options', icon: Activity,  label: 'Options Flow' },
       { to: '/strategy',     icon: Shuffle,     label: 'Strategy Builder' },
       { to: '/gex',          icon: Zap,         label: 'Dealer GEX' },
+      { to: '/skew',         icon: TrendingUp,  label: 'Vol Skew' },
       { to: '/macro-hub',    icon: GitBranch,   label: 'Macro Hub' },
     ],
   },

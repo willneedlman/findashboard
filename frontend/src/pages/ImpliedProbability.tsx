@@ -162,7 +162,10 @@ export function ImpliedProbabilityContent() {
               <div style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', letterSpacing: '0.06em' }}>
                 Expiry: <span style={{ color: 'var(--theme-primary, #c9a84c)' }}>{dist.expiry}</span>
                 &nbsp;·&nbsp; Avg Call IV: <span style={{ color: 'var(--theme-text, #d7e3fc)' }}>{dist.avg_call_iv.toFixed(1)}%</span>
-                &nbsp;·&nbsp; Derived from live options chain — call delta ≈ risk-neutral P(S_T &gt; K)
+                &nbsp;·&nbsp; P(S_T &gt; K) = N(d2) from the live IV smile (skew-aware)
+              </div>
+              <div style={{ fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', letterSpacing: '0.04em', marginTop: 4, lineHeight: 1.5 }}>
+                This is the <span style={{ color: 'var(--theme-text, #d7e3fc)' }}>risk-neutral</span> distribution — what options price in, including a downside risk premium — not a real-world forecast. Realized jumps and gaps (earnings, macro) can exceed the smooth curve. For premium selling, the skew matters more than the peak.
               </div>
 
               <ChartPanel label={`Market-Implied Probability Density — ${ticker}`} height={348}>
@@ -181,8 +184,8 @@ export function ImpliedProbabilityContent() {
                 </ResponsiveContainer>
               </ChartPanel>
 
-              <ChartPanel label="Call Delta Curve — P(Finish Above Strike)" height={248}
-                note={`P50 strike = $${dist.p50} (delta ≈ 0.50)`}>
+              <ChartPanel label="Cumulative Probability — P(Finish Above Strike)" height={248}
+                note={`P50 strike = $${dist.p50} (50% above)`}>
                 <ResponsiveContainer width="100%" height={220}>
                   <LineChart data={dist.delta_curve}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.07)" />
@@ -193,7 +196,7 @@ export function ImpliedProbabilityContent() {
                     <ReferenceLine x={dist.p50} stroke="color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)" strokeDasharray="4 4" label={{ value: `P50 $${dist.p50}`, fill: 'var(--theme-primary, #c9a84c)', fontSize: 9, position: 'insideTopRight' }} />
                     <ReferenceLine x={dist.p10} stroke={cc.gainMuted} strokeDasharray="3 5" label={{ value: 'P10', fill: cc.gain, fontSize: 9 }} />
                     <ReferenceLine x={dist.p90} stroke={cc.lossMuted} strokeDasharray="3 5" label={{ value: 'P90', fill: cc.loss, fontSize: 9 }} />
-                    <Line type="monotone" dataKey="delta" stroke={cc.c2} strokeWidth={2} dot={false} name="Call Delta" />
+                    <Line type="monotone" dataKey="delta" stroke={cc.c2} strokeWidth={2} dot={false} name="P(S_T > K)" />
                   </LineChart>
                 </ResponsiveContainer>
               </ChartPanel>

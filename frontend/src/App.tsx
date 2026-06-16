@@ -28,6 +28,7 @@ const StockValuation     = lazy(() => import('./pages/StockValuation'))
 const OptionsChainScanner = lazy(() => import('./pages/OptionsChainScanner'))
 const RegressionAnalysis = lazy(() => import('./pages/RegressionAnalysis'))
 const PortfolioSkills    = lazy(() => import('./pages/PortfolioSkills'))
+const SkewTool           = lazy(() => import('./pages/SkewTool'))
 const StrategyBuilder    = lazy(() => import('./pages/StrategyBuilder'))
 const DealerGEX          = lazy(() => import('./pages/DealerGEX'))
 const CustomDashboard    = lazy(() => import('./pages/CustomDashboard'))
@@ -150,6 +151,7 @@ export default function App() {
               <Route path="/portfolio-manager" element={<PortfolioManager />} />
               <Route path="/montecarlo" element={<Navigate to="/portfolio-skills?tab=montecarlo" replace />} />
               <Route path="/probability" element={<ImpliedProbability />} />
+              <Route path="/skew"       element={<SkewTool />} />
               <Route path="/fed"        element={<FedRates />} />
               <Route path="/corporate"  element={<CorporateHub />} />
               <Route path="/valuation"  element={<StockValuation />} />
