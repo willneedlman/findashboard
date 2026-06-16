@@ -201,9 +201,11 @@ export default function DealerGEX() {
                       label={{ value: `Spot $${spot.toFixed(0)}`, fill: 'var(--theme-primary, #c9a84c)', fontSize: 9, position: 'insideTopLeft' }} />}
                     {flipLevel && <ReferenceLine x={flipLevel} stroke="rgba(217,119,54,0.7)" strokeDasharray="3 5"
                       label={({ viewBox }: any) => (
+                        // Sit one row below the Spot label so the two never overlap
+                        // when the flip and spot prices are close together.
                         <g>
-                          <rect x={viewBox.x + 3} y={viewBox.y + 2} width={62} height={14} fill="rgba(30,20,10,0.82)" rx={2} />
-                          <text x={viewBox.x + 6} y={viewBox.y + 12} fill="#d97736" fontSize={9} fontFamily="var(--theme-mono)">{`Flip $${flipLevel}`}</text>
+                          <rect x={viewBox.x + 3} y={viewBox.y + 18} width={62} height={14} fill="rgba(30,20,10,0.82)" rx={2} />
+                          <text x={viewBox.x + 6} y={viewBox.y + 28} fill="#d97736" fontSize={9} fontFamily="var(--theme-mono)">{`Flip $${flipLevel}`}</text>
                         </g>
                       )} />}
                     <Bar dataKey="net_gex" name="Net GEX" radius={[2,2,0,0]}>
