@@ -518,13 +518,23 @@ def dealer_gex(ticker: str, expiry: str | None = None):
     open_now = is_market_open()
     cache_key = f"gex:{sym}:{expiry or 'all'}"
 
-    # Market closed → the profile can't change; serve the last cached one instead
-    # of spending Tradier requests on stale, last-session data.
+    # Market closed → the profile can't change intraday, so serve the last cached
+    # one instead of refetching. BUT only if that cache reflects the most recent
+    # close: a cache built before the latest session closed (e.g. pre-market)
+    # carries a stale spot/profile. Validate against the latest close and recompute
+    # when a newer session has closed since.
     if not open_now:
         cached = disk_get(cache_key)
         if cached:
-            cached["delayed"] = True
-            return cached
+            stale = False
+            try:
+                latest_close = float(get_history(sym, period="5d")["Close"].dropna().iloc[-1])
+                stale = bool(cached.get("spot")) and abs(float(cached["spot"]) - latest_close) > 0.01
+            except Exception:
+                stale = False   # can't verify → cached profile beats failing
+            if not stale:
+                cached["delayed"] = True
+                return cached
 
     # ── Spot price (Tradier only while live; else yfinance) ─────────────────────
     spot = None
