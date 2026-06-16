@@ -6,25 +6,7 @@ import SidebarLayout from '../components/SidebarLayout'
 import { fetchGEX, fetchOptionsChain } from '../hooks/useApi'
 import EmptyState from '../components/EmptyState'
 import { useChartColors } from '../hooks/useChartColors'
-import { INPUT, LABEL, TOOLTIP_STYLE, TOOLTIP_LABEL, TOOLTIP_ITEM, TICK, RailSection } from './valuationShared'
-
-function MetricCard({ label, value, sub, help }: { label: string; value: string; sub?: string; help?: string }) {
-  const [show, setShow] = useState(false)
-  return (
-    <div style={{ background: 'var(--theme-surface, #142032)', border: '1px solid var(--theme-border, rgba(255,255,255,0.07))', borderTop: '3px solid var(--theme-primary, #c9a84c)', padding: 10, position: 'relative' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
-        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)' }}>{label}</span>
-        {help && <span style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', cursor: 'help' }}
-          onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>ⓘ</span>}
-        {show && help && (
-          <div style={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: 6, background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', padding: '6px 8px', width: 180, fontSize: 11, color: 'var(--theme-text, #d7e3fc)', lineHeight: '15px', zIndex: 50, pointerEvents: 'none' }}>{help}</div>
-        )}
-      </div>
-      <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 18, fontWeight: 700, color: 'var(--theme-text, #d7e3fc)' }}>{value}</div>
-      {sub && <div style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', marginTop: 2 }}>{sub}</div>}
-    </div>
-  )
-}
+import { INPUT, LABEL, TOOLTIP_STYLE, TOOLTIP_LABEL, TOOLTIP_ITEM, TICK, RailSection, MetricCard } from './valuationShared'
 
 function ChartPanel({ label, note, height, children }: { label: string; note?: string; height: number; children: React.ReactNode }) {
   const headerH = note ? 42 : 26

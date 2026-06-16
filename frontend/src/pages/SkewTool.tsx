@@ -7,7 +7,7 @@ import {
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
 import EmptyState from '../components/EmptyState'
-import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
+import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection, MetricCard } from './valuationShared'
 
 interface TermPoint { expiry: string; dte: number; atm_iv: number; rr_25: number; bf_25: number; smile: { moneyness: number; iv: number }[] }
 interface SkewData {
@@ -26,23 +26,6 @@ function expectedMove(ivPct: number, dte: number, spot: number) {
   const sigma = (ivPct / 100) * Math.sqrt(Math.max(dte, 0) / 365)
   const dollars = spot * sigma
   return { pct: sigma * 100, dollars, lo: spot - dollars, hi: spot + dollars }
-}
-
-function MetricCard({ label, value, help, sub, color }: { label: string; value: string; help?: string; sub?: string; color?: string }) {
-  const [show, setShow] = useState(false)
-  return (
-    <div style={{ background: 'var(--theme-surface, #142032)', border: '1px solid var(--theme-border, rgba(255,255,255,0.07))', borderTop: `3px solid ${color ?? GOLD}`, padding: 10, position: 'relative' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
-        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)' }}>{label}</span>
-        {help && <span style={{ fontSize: 10, color: FAINT, cursor: 'help' }} onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>ⓘ</span>}
-        {show && help && (
-          <div style={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: 6, background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', padding: '6px 8px', width: 190, fontSize: 11, color: 'var(--theme-text, #d7e3fc)', lineHeight: '15px', zIndex: 50, pointerEvents: 'none' }}>{help}</div>
-        )}
-      </div>
-      <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 18, fontWeight: 700, color: color ?? 'var(--theme-text, #d7e3fc)' }}>{value}</div>
-      {sub && <div style={{ fontSize: 10, color: FAINT, marginTop: 2 }}>{sub}</div>}
-    </div>
-  )
 }
 
 function ChartPanel({ label, height, note, children }: { label: string; height: number; note?: string; children: React.ReactNode }) {
