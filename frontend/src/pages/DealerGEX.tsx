@@ -189,7 +189,9 @@ export default function DealerGEX() {
               <ChartPanel label="Net Dealer GEX by Strike ($M per 1% move)" height={368}
                 note="Green = long γ (pin) · Red = short γ (amplify)">
                 <ResponsiveContainer width="100%" height={340}>
-                  <BarChart data={filtered} barCategoryGap="20%" barSize={18}>
+                  {/* Top margin reserves a clear band above the bars for the spot
+                      and flip labels, so neither overlaps the bars or each other. */}
+                  <BarChart data={filtered} barCategoryGap="20%" barSize={18} margin={{ top: 40, right: 5, left: 5, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.07)" />
                     <XAxis dataKey="strike" tick={TICK} tickFormatter={v => `$${v}`} interval="preserveStartEnd" />
                     <YAxis tick={TICK} tickFormatter={v => {
@@ -198,16 +200,21 @@ export default function DealerGEX() {
                     }} orientation="right" />
                     <Tooltip formatter={(v: number) => [`$${v.toFixed(1)}M`, 'Net GEX']} contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL} itemStyle={TOOLTIP_ITEM} cursor={{ fill: 'var(--theme-hover, rgba(255,255,255,0.04))' }} />
                     {spot && <ReferenceLine x={spot} stroke="rgba(201,168,76,0.7)" strokeDasharray="4 4"
-                      label={{ value: `Spot $${spot.toFixed(0)}`, fill: 'var(--theme-primary, #c9a84c)', fontSize: 9, position: 'insideTopLeft' }} />}
-                    {flipLevel && <ReferenceLine x={flipLevel} stroke="rgba(217,119,54,0.7)" strokeDasharray="3 5"
                       label={({ viewBox }: any) => (
-                        // Sit one row below the Spot label so the two never overlap
-                        // when the flip and spot prices are close together.
-                        <g>
-                          <rect x={viewBox.x + 3} y={viewBox.y + 18} width={62} height={14} fill="rgba(30,20,10,0.82)" rx={2} />
-                          <text x={viewBox.x + 6} y={viewBox.y + 28} fill="#d97736" fontSize={9} fontFamily="var(--theme-mono)">{`Flip $${flipLevel}`}</text>
-                        </g>
+                        // Row 1 of the top band — text to the left of the spot line.
+                        <text x={Math.max(2, viewBox.x - 50)} y={viewBox.y - 26} fill="var(--theme-primary, #c9a84c)" fontSize={9} fontFamily="var(--theme-mono)">{`Spot $${spot.toFixed(0)}`}</text>
                       )} />}
+                    {flipLevel && <ReferenceLine x={flipLevel} stroke="rgba(217,119,54,0.7)" strokeDasharray="3 5"
+                      label={({ viewBox }: any) => {
+                        // Row 2 of the top band — below the spot label, above the bars.
+                        const x = Math.max(2, viewBox.x + 3)
+                        return (
+                          <g>
+                            <rect x={x} y={viewBox.y - 20} width={62} height={14} fill="rgba(30,20,10,0.82)" rx={2} />
+                            <text x={x + 3} y={viewBox.y - 10} fill="#d97736" fontSize={9} fontFamily="var(--theme-mono)">{`Flip $${flipLevel}`}</text>
+                          </g>
+                        )
+                      }} />}
                     <Bar dataKey="net_gex" name="Net GEX" radius={[2,2,0,0]}>
                       {filtered.map((d: any, i: number) => (
                         <Cell key={i} fill={d.net_gex >= 0 ? cc.gain : cc.loss} fillOpacity={0.88} />
