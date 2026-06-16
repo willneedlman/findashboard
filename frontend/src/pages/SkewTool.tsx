@@ -79,7 +79,6 @@ function ChartPanel({ label, height, note, children }: { label: string; height: 
 export default function SkewTool() {
   const [ticker, setTicker] = useState('SPY')
   const [open, setOpen] = useState(true)
-  const [guideOpen, setGuideOpen] = useState(false)
   const [date, setDate] = useState('')   // target date for the implied-move readout
   const { mutate, data, isPending, error } = useMutation<SkewData, Error, void>({
     mutationFn: () => axios.get(`/api/prob/skew?ticker=${ticker.trim().toUpperCase()}`).then(r => r.data),
@@ -105,15 +104,8 @@ export default function SkewTool() {
                 <label style={LABEL}>Implied move by date</label>
                 <input type="date" value={date} min={new Date().toISOString().split('T')[0]}
                   onChange={e => setDate(e.target.value)} style={{ ...INPUT, cursor: 'pointer' }} />
-                <div style={{ fontSize: 9, color: FAINT, marginTop: 3 }}>Pick any date — IV is interpolated along the term structure.</div>
               </div>
             )}
-            <div style={{ fontSize: 10, color: FAINT, lineHeight: '14px', marginTop: 4 }}>
-              Reads the options market's view of {ticker || 'a stock'}: how much downside protection costs vs upside, and the expected swing by date.
-            </div>
-            <div style={{ fontSize: 9, color: FAINT, lineHeight: '13px', marginTop: 4 }}>
-              Trial · EOD chains via yfinance; intraday precision improves on live (Tradier) data.
-            </div>
           </div>
         </RailSection>
       }>
@@ -145,40 +137,9 @@ export default function SkewTool() {
                   <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 12, color: 'var(--theme-secondary, #99907e)' }}>
                     {targetDte} day{targetDte === 1 ? '' : 's'} · IV {iv.iv.toFixed(1)}% · ±{em.dollars.toFixed(2)}
                   </div>
-                  <div style={{ fontSize: 10, color: FAINT, lineHeight: 1.5, width: '100%', marginTop: 6 }}>
-                    The ±1σ range — {data.ticker} stays inside it roughly 68% of the time by {date}. Double it for a ~95% range.
-                  </div>
                 </div>
               )
             })()}
-
-            {/* Plain-language read of the current data */}
-            <div style={{ fontSize: 13, color: 'var(--theme-text, #d7e3fc)', lineHeight: 1.55, padding: '2px 2px' }}>
-              {data.read}
-            </div>
-
-            {/* Collapsible learn-it guide */}
-            <div style={{ border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-bg, #0a1628)' }}>
-              <button onClick={() => setGuideOpen(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', padding: '9px 12px', color: GOLD, fontFamily: 'var(--theme-sans)', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                <span style={{ transform: guideOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>▸</span>
-                New here? How to read this
-              </button>
-              {guideOpen && (
-                <div style={{ padding: '0 14px 14px', display: 'flex', flexDirection: 'column', gap: 12, fontSize: 12.5, color: 'var(--theme-text, #d7e3fc)', lineHeight: 1.6 }}>
-                  {[
-                    ['What this tool shows', 'Options on the same stock cost different amounts depending on the strike price and the expiry date. The "cost" is measured as implied volatility (IV) — the bigger move the option is pricing in. This tool maps that cost across strikes and dates, so you can see what the market is afraid of and where options look rich or cheap.'],
-                    ['The smile chart (top)', 'Each point is the IV at a price level relative to today (0% = where it trades now). It dips in the middle and rises on the sides. The LEFT side (downside puts) sitting higher than the right (upside calls) means people pay more to protect against a fall than to bet on a rise. The steeper that left climb, the more crash fear is priced in.'],
-                    ['The term-structure chart (bottom)', 'The gold line is the at-the-money IV for each expiry date; the dotted blue line is the downside premium at each date. Normally the gold line rises with time (more uncertainty further out). If the near-term (left) is higher, the market expects something soon — earnings, a Fed meeting — and that bump usually fades.'],
-                    ['How you might use it', 'Selling options collects premium; the richest premium is wherever IV is highest. Steep downside premium means out-of-the-money puts pay the most — but that is also exactly where your risk is if the stock drops. When near-term vol is elevated, shorter-dated options decay that extra premium fastest. This is a read on what is expensive, not a buy/sell signal.'],
-                  ].map(([h, body]) => (
-                    <div key={h}>
-                      <div style={{ color: GOLD, fontWeight: 700, fontSize: 11, letterSpacing: '0.06em', marginBottom: 3 }}>{h}</div>
-                      <div style={{ color: 'var(--theme-secondary, #99907e)' }}>{body}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
 
             <ChartPanel label={`IV Smile — ${data.ticker} ${data.front_expiry}`} height={300} note="IV vs % moneyness">
               <ResponsiveContainer width="100%" height={272}>
@@ -192,9 +153,6 @@ export default function SkewTool() {
                 </LineChart>
               </ResponsiveContainer>
             </ChartPanel>
-            <div style={{ fontSize: 11, color: 'var(--theme-secondary, #99907e)', lineHeight: 1.5, marginTop: -4, paddingLeft: 2 }}>
-              Reading it: the line climbs to the left, so downside protection (puts) costs more than upside (calls). The lowest point is roughly where the market expects the stock to trade.
-            </div>
 
             <ChartPanel label="ATM IV Term Structure" height={260} note="ATM IV vs days to expiry">
               <ResponsiveContainer width="100%" height={232}>
@@ -208,9 +166,6 @@ export default function SkewTool() {
                 </LineChart>
               </ResponsiveContainer>
             </ChartPanel>
-            <div style={{ fontSize: 11, color: 'var(--theme-secondary, #99907e)', lineHeight: 1.5, marginTop: -4, paddingLeft: 2 }}>
-              Reading it: <span style={{ color: GOLD }}>gold</span> = expected vol at each expiry date, <span style={{ color: 'var(--theme-tertiary, #60a5fa)' }}>blue dashed</span> = downside premium at each. A higher near-term (left) gold line hints at an expected near-term event that usually settles down.
-            </div>
           </div>
         )}
       </SidebarLayout>
