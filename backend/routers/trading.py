@@ -45,6 +45,7 @@ class EquityOrderRequest(BaseModel):
     quantity:   int
     order_type: str = "market"
     price:      float | None = None
+    stop:       float | None = None
     duration:   str = "day"
 
 
@@ -57,9 +58,12 @@ def place_equity_order(req: EquityOrderRequest):
             quantity=req.quantity,
             order_type=req.order_type,
             price=req.price,
+            stop=req.stop,
             duration=req.duration,
         )
         return result
+    except _tradier.TradierError as e:
+        raise HTTPException(400, str(e))
     except Exception:
         logger.exception("equity order error")
         raise HTTPException(500, "Internal server error")
@@ -88,6 +92,8 @@ def place_option_order(req: OptionOrderRequest):
             duration=req.duration,
         )
         return result
+    except _tradier.TradierError as e:
+        raise HTTPException(400, str(e))
     except Exception:
         logger.exception("option order error")
         raise HTTPException(500, "Internal server error")
@@ -121,9 +127,11 @@ def place_multileg_order(req: MultilegOrderRequest):
             duration=req.duration,
         )
         return result
-    except Exception as e:
+    except _tradier.TradierError as e:
+        raise HTTPException(400, str(e))
+    except Exception:
         logger.exception("multileg order error")
-        raise HTTPException(500, str(e))
+        raise HTTPException(500, "Internal server error")
 
 
 @router.delete("/order/{order_id}")

@@ -9,6 +9,31 @@ _BASE = "https://sandbox.tradier.com/v1" if _ENV == "sandbox" else "https://api.
 _HEADERS = {"Authorization": f"Bearer {_KEY}", "Accept": "application/json"}
 
 
+class TradierError(Exception):
+    """A rejection or error reported by Tradier, carrying its human message."""
+
+
+def _extract_error(r: httpx.Response) -> str:
+    """Pull Tradier's actual rejection reason out of an error response."""
+    try:
+        j = r.json()
+    except Exception:
+        return (r.text or f"HTTP {r.status_code}").strip()[:300]
+    if isinstance(j, dict):
+        errs = j.get("errors")
+        if isinstance(errs, dict):
+            e = errs.get("error")
+            return "; ".join(e) if isinstance(e, list) else str(e)
+        if errs:
+            return str(errs)
+        if j.get("error"):
+            return str(j["error"])
+        fault = j.get("fault")
+        if isinstance(fault, dict):
+            return str(fault.get("faultstring", "Tradier fault"))
+    return f"HTTP {r.status_code}"
+
+
 def _get(path: str, params: dict | None = None) -> dict:
     if params is None: params = {}
     r = httpx.get(f"{_BASE}{path}", headers=_HEADERS, params=params, timeout=10)
@@ -18,9 +43,16 @@ def _get(path: str, params: dict | None = None) -> dict:
 
 def _post(path: str, data: dict | None = None) -> dict:
     if data is None: data = {}
+    if not _KEY:
+        raise TradierError("Paper trading is not configured (no Tradier token).")
     r = httpx.post(f"{_BASE}{path}", headers=_HEADERS, data=data, timeout=10)
-    r.raise_for_status()
-    return r.json()
+    if r.status_code >= 400:
+        raise TradierError(_extract_error(r))
+    j = r.json()
+    # Tradier can return 200 with an error/rejection body.
+    if isinstance(j, dict) and (j.get("errors") or j.get("error")):
+        raise TradierError(_extract_error(r))
+    return j
 
 
 # ── Market data ───────────────────────────────────────────────────────────────
@@ -150,6 +182,7 @@ def place_equity_order(
     quantity: int,
     order_type: str = "market",   # "market" | "limit" | "stop" | "stop_limit"
     price: float | None = None,
+    stop: float | None = None,
     duration: str = "day",        # "day" | "gtc"
 ) -> dict:
     acct = get_account_id()
@@ -163,6 +196,8 @@ def place_equity_order(
     }
     if price is not None:
         payload["price"] = str(price)
+    if stop is not None:
+        payload["stop"] = str(stop)
     data = _post(f"/accounts/{acct}/orders", payload)
     return data.get("order", data)
 
