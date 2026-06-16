@@ -22,7 +22,7 @@ from routers import (
     strategy, probability, ai, alerts, algo,
     sentiment, trading,
     filings, lob, regression, screener,
-    paper_scheduler, paper_strategies,
+    paper_scheduler, paper_strategies, paper,
     iv_tracker, valuation, analytics,
 )
 
@@ -160,6 +160,7 @@ app.include_router(filings.router,           prefix="/api/filings",           ta
 app.include_router(lob.router,               prefix="/api/lob",               tags=["lob"])
 app.include_router(regression.router,        prefix="/api/regression",        tags=["regression"])
 app.include_router(screener.router,          prefix="/api/screener",          tags=["screener"])
+app.include_router(paper.router,             prefix="/api/paper",             tags=["paper-trading"])
 app.include_router(paper_scheduler.router,   prefix="/api/paper/scheduler",   tags=["paper-trading"])
 app.include_router(paper_strategies.router,  prefix="/api/paper/strategies",  tags=["paper-trading"])
 app.include_router(iv_tracker.router,        prefix="/api/iv",                tags=["iv-tracker"])

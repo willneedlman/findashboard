@@ -36,10 +36,12 @@ from pathlib import Path
 from typing import Any
 
 import yfinance as yf
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel
 
 from strategies.base import MarketDataPoint, SignalEvent, Strategy
+import paper_engine
+from routers.users import _require_owner
 
 _log = logging.getLogger(__name__)
 router = APIRouter()
@@ -93,6 +95,15 @@ def _init_db() -> None:
                 notes           TEXT
             );
         """)
+        # Per-user columns (idempotent for pre-existing installs).
+        for ddl in (
+            "ALTER TABLE paper_schedule_jobs ADD COLUMN user_id TEXT DEFAULT ''",
+            "ALTER TABLE paper_schedule_log  ADD COLUMN user_id TEXT DEFAULT ''",
+        ):
+            try:
+                conn.execute(ddl)
+            except Exception:
+                pass
 
 _init_db()
 
@@ -168,20 +179,19 @@ def _warmup(inst: Strategy, ticker: str, params: dict) -> None:
             pass
 
 
-def _place_order_sync(ticker: str, side: str, qty: int) -> str | None:
-    """Attempt to place a Tradier paper order. Returns order_id or None."""
+def _place_order_sync(user_id: str, ticker: str, side: str, qty: int) -> str | None:
+    """Place a market order into the user's own paper account. Returns the order
+    id when filled, else None (rejected/resting)."""
+    if not user_id:
+        return None
     try:
-        from routers.trading import tradier
-        result = tradier.place_equity_order(
-            symbol=ticker,
-            side=side,        # "buy" or "sell"
-            quantity=qty,
-            order_type="market",
-            duration="day",
-        )
-        return str(result.get("id", "")) or None
+        result = paper_engine.place_order(user_id, ticker, side, qty, "market")
+        if result.get("status") == "filled":
+            return str(result.get("id") or "") or None
+        _log.info("Scheduler order not filled (%s %s x%d): %s", side, ticker, qty, result.get("reason") or result.get("status"))
+        return None
     except Exception as e:
-        _log.warning("Tradier order failed (%s %s x%d): %s", side, ticker, qty, e)
+        _log.warning("Paper order failed (%s %s x%d): %s", side, ticker, qty, e)
         return None
 
 
@@ -299,18 +309,18 @@ async def _run_scheduler_loop() -> None:
                 order_id: str | None = None
                 notes = ""
 
-                # Execute if actionable
+                # Execute into the job owner's own paper account
                 if signal_str in ("BUY", "SELL"):
                     side = "buy" if signal_str == "BUY" else "sell"
                     order_id = await loop.run_in_executor(
-                        _executor, _place_order_sync, ticker, side, qty
+                        _executor, _place_order_sync, job.get("user_id", ""), ticker, side, qty
                     )
                     notes = f"order_id={order_id}" if order_id else "order_failed"
                     _log.info("Scheduler %s %s x%d @ %.2f → %s", signal_str, ticker, qty, price, notes)
 
                 log_rows.append((
                     str(uuid.uuid4()), job_id, ticker, strategy_name,
-                    signal_str, price, now_ts, order_id, notes
+                    signal_str, price, now_ts, order_id, notes, job.get("user_id", "")
                 ))
                 job_updates.append((signal_str, price, now_ts, job_id))
 
@@ -319,8 +329,8 @@ async def _run_scheduler_loop() -> None:
                     if log_rows:
                         conn.executemany(
                             "INSERT INTO paper_schedule_log "
-                            "(id,job_id,ticker,strategy_name,signal,price,timestamp,order_id,notes) "
-                            "VALUES (?,?,?,?,?,?,?,?,?)",
+                            "(id,job_id,ticker,strategy_name,signal,price,timestamp,order_id,notes,user_id) "
+                            "VALUES (?,?,?,?,?,?,?,?,?,?)",
                             log_rows
                         )
                     if job_updates:
@@ -363,6 +373,7 @@ def stop_scheduler() -> None:
 # ── Request / Response models ─────────────────────────────────────────────────
 
 class JobCreate(BaseModel):
+    user_id:       str
     ticker:        str
     strategy_name: str
     params:        dict[str, Any] = {}
@@ -406,13 +417,14 @@ def _row_to_job(r: dict) -> JobOut:
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.get("/status")
-def scheduler_status():
+def scheduler_status(user_id: str, authorization: str = Header(default=""), x_session_token: str = Header(default="")):
+    _require_owner(user_id, authorization, x_session_token)
     market_open = _is_market_open()
     running = _loop_task is not None and not _loop_task.done()
     with _db() as conn:
-        total  = conn.execute("SELECT COUNT(*) FROM paper_schedule_jobs").fetchone()[0]
-        active = conn.execute("SELECT COUNT(*) FROM paper_schedule_jobs WHERE enabled=1").fetchone()[0]
-        logs   = conn.execute("SELECT COUNT(*) FROM paper_schedule_log").fetchone()[0]
+        total  = conn.execute("SELECT COUNT(*) FROM paper_schedule_jobs WHERE user_id=?", (user_id,)).fetchone()[0]
+        active = conn.execute("SELECT COUNT(*) FROM paper_schedule_jobs WHERE user_id=? AND enabled=1", (user_id,)).fetchone()[0]
+        logs   = conn.execute("SELECT COUNT(*) FROM paper_schedule_log WHERE user_id=?", (user_id,)).fetchone()[0]
     return {
         "scheduler_running": running,
         "market_open": market_open,
@@ -426,16 +438,18 @@ def scheduler_status():
 
 
 @router.get("/jobs", response_model=list[JobOut])
-def list_jobs():
+def list_jobs(user_id: str, authorization: str = Header(default=""), x_session_token: str = Header(default="")):
+    _require_owner(user_id, authorization, x_session_token)
     with _db() as conn:
         rows = conn.execute(
-            "SELECT * FROM paper_schedule_jobs ORDER BY created_at DESC"
+            "SELECT * FROM paper_schedule_jobs WHERE user_id=? ORDER BY created_at DESC", (user_id,)
         ).fetchall()
     return [_row_to_job(dict(r)) for r in rows]
 
 
 @router.post("/jobs", response_model=JobOut)
-def create_job(body: JobCreate):
+def create_job(body: JobCreate, authorization: str = Header(default=""), x_session_token: str = Header(default="")):
+    _require_owner(body.user_id, authorization, x_session_token)
     from routers.paper_strategies import _active
     if body.strategy_name not in _active:
         raise HTTPException(400, f"Unknown strategy: {body.strategy_name}")
@@ -444,10 +458,10 @@ def create_job(body: JobCreate):
     with _db() as conn:
         conn.execute(
             "INSERT INTO paper_schedule_jobs "
-            "(id,ticker,strategy_name,params_json,qty,enabled,warmed_up,created_at) "
-            "VALUES (?,?,?,?,?,1,0,?)",
+            "(id,ticker,strategy_name,params_json,qty,enabled,warmed_up,created_at,user_id) "
+            "VALUES (?,?,?,?,?,1,0,?,?)",
             (job_id, body.ticker.upper(), body.strategy_name,
-             json.dumps(body.params), body.qty, now)
+             json.dumps(body.params), body.qty, now, body.user_id)
         )
     with _db() as conn:
         row = dict(conn.execute(
@@ -457,10 +471,11 @@ def create_job(body: JobCreate):
 
 
 @router.delete("/jobs/{job_id}")
-def delete_job(job_id: str):
+def delete_job(job_id: str, user_id: str, authorization: str = Header(default=""), x_session_token: str = Header(default="")):
+    _require_owner(user_id, authorization, x_session_token)
     with _db() as conn:
         deleted = conn.execute(
-            "DELETE FROM paper_schedule_jobs WHERE id=?", (job_id,)
+            "DELETE FROM paper_schedule_jobs WHERE id=? AND user_id=?", (job_id, user_id)
         ).rowcount
     _instances.pop(job_id, None)
     if not deleted:
@@ -469,12 +484,13 @@ def delete_job(job_id: str):
 
 
 @router.patch("/jobs/{job_id}/toggle")
-def toggle_job(job_id: str, body: dict):
+def toggle_job(job_id: str, body: dict, user_id: str, authorization: str = Header(default=""), x_session_token: str = Header(default="")):
+    _require_owner(user_id, authorization, x_session_token)
     enabled = int(bool(body.get("enabled", True)))
     with _db() as conn:
         updated = conn.execute(
-            "UPDATE paper_schedule_jobs SET enabled=? WHERE id=?",
-            (enabled, job_id)
+            "UPDATE paper_schedule_jobs SET enabled=? WHERE id=? AND user_id=?",
+            (enabled, job_id, user_id)
         ).rowcount
     if not updated:
         raise HTTPException(404, "Job not found")
@@ -484,9 +500,11 @@ def toggle_job(job_id: str, body: dict):
 
 
 @router.get("/log", response_model=list[LogEntry])
-def get_log(limit: int = 200, ticker: str | None = None, signal: str | None = None):
-    query = "SELECT * FROM paper_schedule_log WHERE 1=1"
-    params: list = []
+def get_log(user_id: str, limit: int = 200, ticker: str | None = None, signal: str | None = None,
+            authorization: str = Header(default=""), x_session_token: str = Header(default="")):
+    _require_owner(user_id, authorization, x_session_token)
+    query = "SELECT * FROM paper_schedule_log WHERE user_id=?"
+    params: list = [user_id]
     if ticker:
         query += " AND ticker=?"
         params.append(ticker.upper())
@@ -501,7 +519,8 @@ def get_log(limit: int = 200, ticker: str | None = None, signal: str | None = No
 
 
 @router.delete("/log")
-def clear_log():
+def clear_log(user_id: str, authorization: str = Header(default=""), x_session_token: str = Header(default="")):
+    _require_owner(user_id, authorization, x_session_token)
     with _db() as conn:
-        n = conn.execute("DELETE FROM paper_schedule_log").rowcount
+        n = conn.execute("DELETE FROM paper_schedule_log WHERE user_id=?", (user_id,)).rowcount
     return {"cleared": n}
