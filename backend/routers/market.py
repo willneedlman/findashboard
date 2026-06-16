@@ -275,13 +275,26 @@ def fundamental_series(ticker: str, metric: str = "pe", period: str = "quarter")
     return {"ticker": ticker.upper(), "metric": metric, "unit": unit, "points": pts}
 
 
+_INTRADAY_PERIOD = {"1m": "1d", "5m": "5d", "15m": "5d", "1h": "1mo"}
+
+
 @router.get("/ohlcv")
-def get_ohlcv(ticker: str, period: str = "1y"):
+def get_ohlcv(ticker: str, period: str = "1y", interval: str = "1d"):
     ticker = validate_ticker(ticker)
-    allowed = {"1mo", "3mo", "6mo", "1y", "2y", "5y"}
-    if period not in allowed:
-        period = "1y"
-    df = _cached_history(ticker, period=period)
+    intraday = interval in _INTRADAY_PERIOD
+    if intraday:
+        # Intraday bars come straight from yfinance with the requested interval;
+        # lightweight-charts needs a numeric UTC timestamp for sub-daily candles.
+        import yfinance as yf
+        try:
+            df = yf.Ticker(ticker).history(period=_INTRADAY_PERIOD[interval], interval=interval)
+        except Exception:
+            df = _pd_empty()
+    else:
+        allowed = {"1mo", "3mo", "6mo", "1y", "2y", "5y"}
+        if period not in allowed:
+            period = "1y"
+        df = _cached_history(ticker, period=period)
     if df.empty:
         raise HTTPException(404, "No data found for ticker")
     df = df[["Open", "High", "Low", "Close", "Volume"]].dropna()
@@ -289,7 +302,7 @@ def get_ohlcv(ticker: str, period: str = "1y"):
     for d, row in df.iterrows():
         try:
             candles.append({
-                "time":   str(d.date()),
+                "time":   int(d.timestamp()) if intraday else str(d.date()),
                 "open":   round(float(row["Open"]),  4),
                 "high":   round(float(row["High"]),  4),
                 "low":    round(float(row["Low"]),   4),
@@ -299,6 +312,11 @@ def get_ohlcv(ticker: str, period: str = "1y"):
         except Exception:
             pass
     return {"ticker": ticker.upper(), "candles": candles}
+
+
+def _pd_empty():
+    import pandas as pd
+    return pd.DataFrame()
 
 
 @router.get("/news")
