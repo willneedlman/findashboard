@@ -12,6 +12,7 @@ import yfinance as yf
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from cache import get_history
+import options_data
 
 router = APIRouter()
 
@@ -92,7 +93,7 @@ def chain_distribution(ticker: str, expiry: str = ""):
         if not S0:
             raise HTTPException(404, "No spot price")
 
-        expirations = tkr.options or []
+        expirations = options_data.get_expirations(ticker)
         if not expirations:
             raise HTTPException(404, "No options data")
 
@@ -105,7 +106,7 @@ def chain_distribution(ticker: str, expiry: str = ""):
         else:
             nearest = pool[0]
 
-        chain = tkr.option_chain(nearest)
+        chain = options_data.get_chain(ticker, nearest)
 
     except HTTPException:
         raise
@@ -308,12 +309,11 @@ def skew_surface(ticker: str):
     """
     sym = ticker.strip().upper()
     try:
-        tkr  = yf.Ticker(sym)
         hist = get_history(sym, period="5d")
         S0   = float(hist["Close"].dropna().iloc[-1]) if not hist.empty else None
         if not S0:
             raise HTTPException(404, "No spot price")
-        expirations = tkr.options or []
+        expirations = options_data.get_expirations(sym)
         if not expirations:
             raise HTTPException(404, "No options data")
     except HTTPException:
@@ -355,7 +355,7 @@ def skew_surface(ticker: str):
     for exp in future:
         T = max((pd.to_datetime(exp) - today).days / 365.25, 1 / 365)
         try:
-            ch = tkr.option_chain(exp)
+            ch = options_data.get_chain(sym, exp)
         except Exception:
             continue
 

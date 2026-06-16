@@ -19,12 +19,12 @@ from threading import Lock
 from typing import Optional
 
 import sys
-import yfinance as yf
 from fastapi import APIRouter, HTTPException, Query
 from scipy.optimize import brentq
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from cache import get_history
+import options_data
 from scipy.stats import norm
 
 logger = logging.getLogger(__name__)
@@ -226,8 +226,7 @@ def get_expirations(ticker: str = Query(..., description="e.g. AAPL")):
     """List all future expiration dates available for a ticker."""
     sym = ticker.strip().upper()
     try:
-        t     = yf.Ticker(sym)
-        exps  = t.options or []
+        exps  = options_data.get_expirations(sym)
         today = date.today().isoformat()
         future = [e for e in exps if e >= today]
         if not future:
@@ -248,8 +247,7 @@ def get_strikes(
     """Return all available strikes for a given expiry + type, plus the ATM strike."""
     sym = ticker.strip().upper()
     try:
-        t     = yf.Ticker(sym)
-        chain = t.option_chain(expiry)
+        chain = options_data.get_chain(sym, expiry)
         df    = chain.calls if option_type == "call" else chain.puts
         if df.empty:
             raise HTTPException(404, "No option chain data")
@@ -287,8 +285,7 @@ def get_iv_history(
     sym = ticker.strip().upper()
     try:
         # ── 1. Fetch current option chain ────────────────────────────────────
-        yticker = yf.Ticker(sym)
-        chain   = yticker.option_chain(expiry)
+        chain   = options_data.get_chain(sym, expiry)
         df      = chain.calls if option_type == "call" else chain.puts
 
         if df.empty:
@@ -430,8 +427,7 @@ def get_iv_surface(ticker: str = Query(...)):
     """
     sym = ticker.strip().upper()
     try:
-        t        = yf.Ticker(sym)
-        exps     = (t.options or [])
+        exps     = options_data.get_expirations(sym)
         today    = date.today().isoformat()
         future   = [e for e in exps if e >= today][:4]
         if not future:
@@ -444,7 +440,7 @@ def get_iv_surface(ticker: str = Query(...)):
 
         for exp in future:
             try:
-                chain = t.option_chain(exp)
+                chain = options_data.get_chain(sym, exp)
                 T = max((datetime.strptime(exp, "%Y-%m-%d").date()
                          - date.today()).days / 365.0, 1 / 365)
                 for opt_type, df in [("call", chain.calls), ("put", chain.puts)]:
