@@ -240,7 +240,7 @@ export function CompareContent() {
   return (
     <div style={{ maxWidth: 1320, margin: '0 auto' }}>
       <PageHeader
-        title="Asset Comparison"
+        title="Asset Overlay"
         subtitle="Overlay assets, technicals, valuation multiples & ratios, and macro on one chart. Left axis: normalized assets + technicals. Right axis: raw multiples/ratios & macro."
       />
 

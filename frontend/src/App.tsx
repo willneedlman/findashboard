@@ -41,7 +41,6 @@ const StockScreener      = lazy(() => import('./pages/StockScreener'))
 const EarningsSummarizer = lazy(() => import('./pages/EarningsSummarizer'))
 const PortfolioManager   = lazy(() => import('./pages/PortfolioManager'))
 const AdminTester        = lazy(() => import('./pages/AdminTester'))
-const SectorRotation     = lazy(() => import('./pages/SectorRotation'))
 const CreditSpreads      = lazy(() => import('./pages/CreditSpreads'))
 const RelativeValuation  = lazy(() => import('./pages/RelativeValuation'))
 const SupplyChain        = lazy(() => import('./pages/SupplyChain'))
@@ -168,7 +167,7 @@ export default function App() {
               <Route path="/earnings"        element={<EarningsSummarizer />} />
               <Route path="/admin"           element={<AdminTester />} />
               <Route path="/stress-test"     element={<Navigate to="/admin" replace />} />
-              <Route path="/sector-rotation" element={<SectorRotation />} />
+              <Route path="/sector-rotation" element={<Navigate to="/macro-hub?tab=sectors" replace />} />
               <Route path="/credit-spreads"      element={<CreditSpreads />} />
               <Route path="/relative-valuation"  element={<RelativeValuation />} />
               <Route path="/supply-chain"        element={<SupplyChain />} />

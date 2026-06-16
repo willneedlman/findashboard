@@ -1,21 +1,26 @@
-import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import PageWrapper from '../components/PageWrapper'
 import { FedRatesContent } from './FedRates'
 import { BondAnalyticsContent } from './BondAnalytics'
 import { CreditSpreadsContent } from './CreditSpreads'
 import { EconomyMonitorContent } from './EconomyMonitor'
+import { SectorRotationContent } from './SectorRotation'
 
 const TABS = [
   { key: 'rates',   label: 'Rate Engine' },
   { key: 'economy', label: 'Jobs & Inflation' },
   { key: 'bonds',   label: 'Bond Analytics' },
   { key: 'credit',  label: 'Credit Spreads' },
+  { key: 'sectors', label: 'Sector Rotation' },
 ] as const
 
 type TabKey = typeof TABS[number]['key']
 
 export default function MacroHub() {
-  const [tab, setTab] = useState<TabKey>('rates')
+  const [params, setParams] = useSearchParams()
+  const raw = params.get('tab')
+  const tab: TabKey = TABS.some(t => t.key === raw) ? (raw as TabKey) : 'rates'
+  const setTab = (key: TabKey) => { params.set('tab', key); setParams(params, { replace: true }) }
 
   return (
     <PageWrapper title="Macro Hub">
@@ -42,6 +47,7 @@ export default function MacroHub() {
         {tab === 'economy' && <EconomyMonitorContent />}
         {tab === 'bonds'   && <BondAnalyticsContent />}
         {tab === 'credit'  && <CreditSpreadsContent />}
+        {tab === 'sectors' && <SectorRotationContent />}
       </div>
     </PageWrapper>
   )

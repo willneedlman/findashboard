@@ -6,7 +6,7 @@ import {
   TrendingUp, LineChart, Bitcoin,
   BarChart2, Dices, GitBranch, Building2, Calculator,
   Shuffle, Zap, X, Menu, Settings,
-  Filter, FileText, ShieldAlert, PieChart,
+  Filter, FileText, ShieldAlert,
   BookOpen, Terminal, Brain, Bell, Star, Gauge, Activity, GitCompare, Scale,
 } from 'lucide-react'
 import Footer from './Footer'
@@ -26,13 +26,12 @@ const NAV_SECTIONS = [
     label: 'Data & Dashboards',
     items: [
       { to: '/market',         icon: TrendingUp,    label: 'Market Data' },
-      { to: '/sector-rotation',icon: PieChart,       label: 'Sector Rotation' },
       { to: '/research-hub',   icon: Building2,      label: 'Research Hub' },
-      { to: '/regression',     icon: Activity,       label: 'Regression & Correlation' },
-      { to: '/compare',        icon: GitCompare,     label: 'Asset Comparison' },
-      { to: '/screener',       icon: Filter,         label: 'Stock Screener' },
       { to: '/earnings',       icon: FileText,       label: 'Earnings AI' },
       { to: '/sentiment',      icon: Brain,          label: 'Sentiment Tracker' },
+      { to: '/regression',     icon: Activity,       label: 'Regression & Correlation' },
+      { to: '/compare',        icon: GitCompare,     label: 'Asset Overlay' },
+      { to: '/screener',       icon: Filter,         label: 'Stock Screener' },
     ],
   },
   {

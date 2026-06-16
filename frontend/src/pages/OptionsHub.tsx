@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import PageWrapper from '../components/PageWrapper'
 import { OptionsChainScannerContent } from './OptionsChainScanner'
 import { OptionsPricerContent } from './OptionsPricer'
@@ -13,7 +13,10 @@ const TABS = [
 type TabKey = typeof TABS[number]['key']
 
 export default function OptionsHub() {
-  const [tab, setTab] = useState<TabKey>('chain')
+  const [params, setParams] = useSearchParams()
+  const raw = params.get('tab')
+  const tab: TabKey = TABS.some(t => t.key === raw) ? (raw as TabKey) : 'chain'
+  const setTab = (key: TabKey) => { params.set('tab', key); setParams(params, { replace: true }) }
 
   return (
     <PageWrapper title="Options Hub">

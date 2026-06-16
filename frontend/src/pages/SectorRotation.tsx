@@ -56,7 +56,7 @@ function MomentumArrow({ val }: { val: number | null }) {
   return <span style={{ color: T.muted, fontSize: 14 }}>→</span>
 }
 
-export default function SectorRotation() {
+export function SectorRotationContent() {
   const [activePeriod, setActivePeriod] = useState<Period>('1M')
   const [sortBy, setSortBy] = useState<'return' | 'momentum'>('return')
   const [view, setView] = useState<'heatmap' | 'chart'>('heatmap')
@@ -102,7 +102,6 @@ export default function SectorRotation() {
   })
 
   return (
-    <PageWrapper>
       <div id="sector-rotation-content" style={{ maxWidth: 1100, margin: '0 auto' }}>
 
         <PageHeader
@@ -366,6 +365,9 @@ export default function SectorRotation() {
           </div>
         )}
       </div>
-    </PageWrapper>
   )
+}
+
+export default function SectorRotation() {
+  return <PageWrapper><SectorRotationContent /></PageWrapper>
 }

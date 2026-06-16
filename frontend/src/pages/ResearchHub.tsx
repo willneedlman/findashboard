@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import PageWrapper from '../components/PageWrapper'
 import { CorporateHubContent } from './CorporateHub'
 import { RelativeValuationContent } from './RelativeValuation'
@@ -13,7 +13,10 @@ const TABS = [
 type TabKey = typeof TABS[number]['key']
 
 export default function ResearchHub() {
-  const [tab, setTab] = useState<TabKey>('overview')
+  const [params, setParams] = useSearchParams()
+  const raw = params.get('tab')
+  const tab: TabKey = TABS.some(t => t.key === raw) ? (raw as TabKey) : 'overview'
+  const setTab = (key: TabKey) => { params.set('tab', key); setParams(params, { replace: true }) }
 
   return (
     <PageWrapper title="Research Hub">
