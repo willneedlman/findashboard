@@ -329,9 +329,20 @@ def skew_surface(ticker: str):
         pass
 
     today = pd.Timestamp.today().normalize()
-    future = [e for e in expirations if (pd.to_datetime(e) - today).days >= 5][:8]
-    if not future:
-        future = expirations[:6]
+    fut = sorted([e for e in expirations if (pd.to_datetime(e) - today).days >= 3],
+                 key=lambda e: pd.to_datetime(e))
+    if not fut:
+        fut = sorted(expirations, key=lambda e: pd.to_datetime(e))[:6]
+    # Span the whole term, not just the near-term cluster: keep the first 6 expiries
+    # (weekly granularity) and then evenly sample the rest out to the longest listed
+    # (monthlies / quarterlies / LEAPS), so the dropdown covers ~1 week to 1-2 years.
+    MAX_EXP = 16
+    if len(fut) <= MAX_EXP:
+        future = fut
+    else:
+        head, tail = fut[:6], fut[6:]
+        idx = sorted(set(np.linspace(0, len(tail) - 1, MAX_EXP - 6).astype(int).tolist()))
+        future = head + [tail[i] for i in idx]
 
     def _call_delta(K, iv, T):
         if iv <= 0 or T <= 0:
