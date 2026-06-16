@@ -40,9 +40,13 @@ CACHE_TTL_MARKET      = 240  # 4 min during market hours
 CACHE_TTL_OVERNIGHT   = 600  # 10 min overnight
 DEFAULT_SAMPLE_SIZE   = 500
 MAX_GROQ_ITEMS        = 40
-# llama-3.1-8b-instant: 500K TPD free (vs 100K for 70b-versatile) — adequate for structured JSON
-GROQ_SCORING_MODEL    = "llama-3.1-8b-instant"
-GROQ_MAX_TOKENS       = 3000   # prompt is longer with calibration examples
+# 70b-versatile, not 8b-instant: the 8b clusters scores near 50 (often collapsing a
+# whole batch to neutral) and truncates large batches. 70b scores decisively. Its
+# lower free daily token budget is covered by the Groq->Cerebras failover in
+# groq_chat (gpt-oss-120b), so a daily-limit 429 degrades to a strong model, not
+# to fabricated neutral scores.
+GROQ_SCORING_MODEL    = "llama-3.3-70b-versatile"
+GROQ_MAX_TOKENS       = 4500   # headroom for 40 structured objects (no truncation)
 GROQ_ARTICLE_CACHE_TTL = 4 * 3600  # scored articles cached 4h — same title = same score
 BASELINE_WINDOW       = 48
 
