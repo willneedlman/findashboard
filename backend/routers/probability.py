@@ -406,18 +406,21 @@ def skew_surface(ticker: str):
         iv_c10 = max(_fit(float(np.log(1.10))), 0.01)   # 10% OTM call
         rr = (iv_p10 - iv_c10) * 100                     # put-skew (>0 = downside richer)
         bf = ((iv_p10 + iv_c10) / 2 - atm_iv) * 100      # wing convexity
+        # The smoothed fit, sampled across ±15% moneyness — one smile per expiry so
+        # the UI can switch expiries instantly without refetching.
+        mm = np.linspace(np.log(0.85), np.log(1.15), 60)
+        smile_pts = [
+            {"moneyness": round(float(np.exp(x) - 1) * 100, 2), "iv": round(max(_fit(float(x)), 0.01) * 100, 2)}
+            for x in mm
+        ]
         term.append({
             "expiry": exp, "dte": int((pd.to_datetime(exp) - today).days),
             "atm_iv": round(atm_iv * 100, 2), "_atm_raw": atm_iv * 100,
             "rr_25": round(rr, 2), "bf_25": round(bf, 2),
+            "smile": smile_pts,
         })
         if front_smile is None:
-            # The smoothed fit, sampled across ±15% moneyness — clean to plot.
-            mm = np.linspace(np.log(0.85), np.log(1.15), 60)
-            front_smile = [
-                {"moneyness": round(float(np.exp(x) - 1) * 100, 2), "iv": round(max(_fit(float(x)), 0.01) * 100, 2)}
-                for x in mm
-            ]
+            front_smile = smile_pts
 
     if not term:
         raise HTTPException(404, "Insufficient options data for skew")

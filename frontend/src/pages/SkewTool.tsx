@@ -9,7 +9,7 @@ import SidebarLayout from '../components/SidebarLayout'
 import EmptyState from '../components/EmptyState'
 import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
 
-interface TermPoint { expiry: string; dte: number; atm_iv: number; rr_25: number; bf_25: number }
+interface TermPoint { expiry: string; dte: number; atm_iv: number; rr_25: number; bf_25: number; smile: { moneyness: number; iv: number }[] }
 interface SkewData {
   ticker: string; spot: number; front_expiry: string
   atm_iv: number; rr_25: number; bf_25: number; ts_slope: number
@@ -26,27 +26,6 @@ function expectedMove(ivPct: number, dte: number, spot: number) {
   const sigma = (ivPct / 100) * Math.sqrt(Math.max(dte, 0) / 365)
   const dollars = spot * sigma
   return { pct: sigma * 100, dollars, lo: spot - dollars, hi: spot + dollars }
-}
-
-// Interpolate ATM IV to an arbitrary horizon. Total variance (IV²·T) is what's
-// linear across maturities, so we interpolate that and back out IV — clamped flat
-// beyond the listed expiries. Returns { iv, interpolated }.
-function ivAtDate(term: { dte: number; atm_iv: number }[], dte: number): { iv: number; interpolated: boolean } | null {
-  if (!term.length || dte <= 0) return null
-  const s = [...term].sort((a, b) => a.dte - b.dte)
-  if (dte <= s[0].dte) return { iv: s[0].atm_iv, interpolated: dte < s[0].dte }
-  const last = s[s.length - 1]
-  if (dte >= last.dte) return { iv: last.atm_iv, interpolated: dte > last.dte }
-  for (let i = 0; i < s.length - 1; i++) {
-    const a = s[i], b = s[i + 1]
-    if (dte >= a.dte && dte <= b.dte) {
-      const Ta = a.dte / 365, Tb = b.dte / 365, Tt = dte / 365
-      const va = (a.atm_iv / 100) ** 2 * Ta, vb = (b.atm_iv / 100) ** 2 * Tb
-      const vt = va + (vb - va) * (Tt - Ta) / (Tb - Ta)
-      return { iv: Math.sqrt(Math.max(vt, 1e-9) / Tt) * 100, interpolated: true }
-    }
-  }
-  return { iv: last.atm_iv, interpolated: false }
 }
 
 function MetricCard({ label, value, help, sub, color }: { label: string; value: string; help?: string; sub?: string; color?: string }) {
@@ -79,10 +58,10 @@ function ChartPanel({ label, height, note, children }: { label: string; height: 
 export default function SkewTool() {
   const [ticker, setTicker] = useState('SPY')
   const [open, setOpen] = useState(true)
-  const [date, setDate] = useState('')   // target date for the implied-move readout
+  const [expiry, setExpiry] = useState('')   // selected expiry — drives the smile, metrics, and move
   const { mutate, data, isPending, error } = useMutation<SkewData, Error, void>({
     mutationFn: () => axios.get(`/api/prob/skew?ticker=${ticker.trim().toUpperCase()}`).then(r => r.data),
-    onSuccess: (d) => setDate(d.front_expiry),   // default to the nearest expiry
+    onSuccess: (d) => setExpiry(d.front_expiry),   // default to the nearest expiry
   })
   const skewColor = (v: number) => (v > 4 ? 'var(--theme-negative)' : v > 1.5 ? 'var(--theme-warn, #d97736)' : 'var(--theme-positive)')
 
@@ -101,9 +80,12 @@ export default function SkewTool() {
             </button>
             {data && (
               <div>
-                <label style={LABEL}>Implied move by date</label>
-                <input type="date" value={date} min={new Date().toISOString().split('T')[0]}
-                  onChange={e => setDate(e.target.value)} style={{ ...INPUT, cursor: 'pointer' }} />
+                <label style={LABEL}>Expiry</label>
+                <select value={expiry} onChange={e => setExpiry(e.target.value)} style={{ ...INPUT, cursor: 'pointer' }}>
+                  {data.term_structure.map(t => (
+                    <option key={t.expiry} value={t.expiry}>{t.expiry} · {t.dte}d</option>
+                  ))}
+                </select>
               </div>
             )}
           </div>
@@ -112,38 +94,33 @@ export default function SkewTool() {
         {!data && !isPending && <EmptyState title="Vol Skew" hint="Enter a ticker and press Generate." />}
         {isPending && <EmptyState title="Loading skew surface…" hint="Solving the IV smile across expiries." />}
         {error && !isPending && <EmptyState title="No skew data" hint="Insufficient options data for this ticker." />}
-        {data && (
+        {data && (() => {
+          const sel = data.term_structure.find(t => t.expiry === expiry) ?? data.term_structure[0]
+          const em = expectedMove(sel.atm_iv, sel.dte, data.spot)
+          return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
-              <MetricCard label="ATM IV (annualized)" value={`${data.atm_iv.toFixed(1)}%`} sub={`${data.front_expiry} · spot $${data.spot}`} help="The market's expected volatility, annualized. Roughly 15-20% is calm, 30%+ is nervous. Pick a date in the sidebar to turn this into an actual ± move." />
-              <MetricCard label="Downside Premium" value={`${data.rr_25 > 0 ? '+' : ''}${data.rr_25.toFixed(1)}`} color={skewColor(data.rr_25)} sub={data.rr_25 > 4 ? 'high crash fear' : data.rr_25 > 1.5 ? 'mild' : 'low'} help="How much more downside protection (puts) costs than upside (calls). Higher = more fear of a drop is priced in — and that's where put-selling premium is richest." />
-              <MetricCard label="Tail Premium" value={`${data.bf_25 > 0 ? '+' : ''}${data.bf_25.toFixed(1)}`} sub={data.bf_25 > 6 ? 'fat tails priced' : 'normal'} help="How expensive the far edges are vs the middle. Higher = the market is paying up for a big move in either direction." />
+              <MetricCard label="ATM IV (annualized)" value={`${sel.atm_iv.toFixed(1)}%`} sub={`${sel.expiry} · spot $${data.spot}`} help="The market's expected volatility for this expiry, annualized. Roughly 15-20% is calm, 30%+ is nervous." />
+              <MetricCard label="Downside Premium" value={`${sel.rr_25 > 0 ? '+' : ''}${sel.rr_25.toFixed(1)}`} color={skewColor(sel.rr_25)} sub={sel.rr_25 > 4 ? 'high crash fear' : sel.rr_25 > 1.5 ? 'mild' : 'low'} help="How much more downside protection (puts) costs than upside (calls). Higher = more fear of a drop is priced in — and that's where put-selling premium is richest." />
+              <MetricCard label="Tail Premium" value={`${sel.bf_25 > 0 ? '+' : ''}${sel.bf_25.toFixed(1)}`} sub={sel.bf_25 > 6 ? 'fat tails priced' : 'normal'} help="How expensive the far edges are vs the middle. Higher = the market is paying up for a big move in either direction." />
               <MetricCard label="Near vs Far Vol" value={`${data.ts_slope > 0 ? '+' : ''}${data.ts_slope.toFixed(1)}`} color={data.ts_slope < -0.5 ? 'var(--theme-negative)' : GOLD} sub={data.ts_slope < -0.5 ? 'near-term jitters' : data.ts_slope > 0.5 ? 'normal/calm' : 'flat'} help="Near-term expected vol minus longer-dated. Negative = the market expects something soon (an event) and that usually settles back down. Positive = the normal calm shape." />
             </div>
 
-            {/* Implied move to the user-chosen date (IV interpolated along the term). */}
-            {(() => {
-              const targetDte = date ? Math.round((new Date(date + 'T00:00:00').getTime() - new Date().setHours(0, 0, 0, 0)) / 864e5) : 0
-              const iv = ivAtDate(data.term_structure, targetDte)
-              if (!iv) return null
-              const em = expectedMove(iv.iv, targetDte, data.spot)
-              return (
-                <div style={{ background: 'var(--theme-surface, #142032)', border: `1px solid color-mix(in srgb, ${GOLD} 30%, transparent)`, padding: '14px 16px', display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '4px 22px' }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', width: '100%', marginBottom: 4 }}>
-                    Implied Move by {date}{iv.interpolated ? ' · IV interpolated' : ''}
-                  </div>
-                  <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 30, fontWeight: 700, color: GOLD }}>±{em.pct.toFixed(1)}%</div>
-                  <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 18, color: 'var(--theme-text, #d7e3fc)' }}>${em.lo.toFixed(0)} – ${em.hi.toFixed(0)}</div>
-                  <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 12, color: 'var(--theme-secondary, #99907e)' }}>
-                    {targetDte} day{targetDte === 1 ? '' : 's'} · IV {iv.iv.toFixed(1)}% · ±{em.dollars.toFixed(2)}
-                  </div>
-                </div>
-              )
-            })()}
+            {/* Implied move for the selected expiry. */}
+            <div style={{ background: 'var(--theme-surface, #142032)', border: `1px solid color-mix(in srgb, ${GOLD} 30%, transparent)`, padding: '14px 16px', display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '4px 22px' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', width: '100%', marginBottom: 4 }}>
+                Implied Move by {sel.expiry}
+              </div>
+              <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 30, fontWeight: 700, color: GOLD }}>±{em.pct.toFixed(1)}%</div>
+              <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 18, color: 'var(--theme-text, #d7e3fc)' }}>${em.lo.toFixed(0)} – ${em.hi.toFixed(0)}</div>
+              <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 12, color: 'var(--theme-secondary, #99907e)' }}>
+                {sel.dte} day{sel.dte === 1 ? '' : 's'} · IV {sel.atm_iv.toFixed(1)}% · ±{em.dollars.toFixed(2)}
+              </div>
+            </div>
 
-            <ChartPanel label={`IV Smile — ${data.ticker} ${data.front_expiry}`} height={300} note="IV vs % moneyness">
+            <ChartPanel label={`IV Smile — ${data.ticker} ${sel.expiry}`} height={300} note="IV vs % moneyness">
               <ResponsiveContainer width="100%" height={272}>
-                <LineChart data={data.front_smile} margin={{ top: 8, right: 16, left: 0, bottom: 4 }}>
+                <LineChart data={sel.smile} margin={{ top: 8, right: 16, left: 0, bottom: 4 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.08)" />
                   <XAxis dataKey="moneyness" tick={TICK} tickFormatter={(v: number) => `${v > 0 ? '+' : ''}${v}%`} type="number" domain={['dataMin', 'dataMax']} />
                   <YAxis tick={TICK} tickFormatter={(v: number) => `${v}%`} width={42} domain={['auto', 'auto']} />
@@ -167,7 +144,8 @@ export default function SkewTool() {
               </ResponsiveContainer>
             </ChartPanel>
           </div>
-        )}
+          )
+        })()}
       </SidebarLayout>
     </PageWrapper>
   )
