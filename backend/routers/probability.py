@@ -428,12 +428,21 @@ def skew_surface(ticker: str):
     for t_ in term:
         t_.pop("_atm_raw", None)
     rr = front["rr_25"]
+    skew_word = "a lot" if rr > 4 else "somewhat" if rr > 1.5 else "barely"
     read = (
-        f"Put skew is {'steep' if rr > 4 else 'moderate' if rr > 1.5 else 'flat'} "
-        f"({rr:+.1f} vol pts 25Δ RR) — {'downside hedges richly bid; selling put spreads / put ratios is where the edge sits' if rr > 4 else 'mild downside premium' if rr > 1.5 else 'little crash premium to harvest'}. "
-        f"Term structure is in {'contango' if ts_slope > 0.5 else 'backwardation' if ts_slope < -0.5 else 'flat'} "
-        f"({ts_slope:+.1f} vol pts front→back)"
-        f"{' — front-end vol elevated, often mean-reverts (favors selling near-dated)' if ts_slope < -0.5 else ''}."
+        f"Right now, downside protection on {sym} costs {skew_word} more than upside "
+        f"({rr:+.0f} vol points). "
+        + ("The market is paying up to hedge a drop — that fear premium is richest in out-of-the-money puts."
+           if rr > 4 else
+           "There's a mild premium for downside, but no strong crash fear priced in."
+           if rr > 1.5 else
+           "There's little extra cost for downside — the market isn't pricing much crash risk.")
+        + " "
+        + ("Near-term volatility is running higher than longer-dated, which usually means an event is expected soon and tends to settle back down."
+           if ts_slope < -0.5 else
+           "Longer-dated volatility is higher than near-term — the normal, calm pattern."
+           if ts_slope > 0.5 else
+           "Volatility is fairly even across expiries.")
     )
 
     return {

@@ -51,6 +51,7 @@ function ChartPanel({ label, height, note, children }: { label: string; height: 
 export default function SkewTool() {
   const [ticker, setTicker] = useState('SPY')
   const [open, setOpen] = useState(true)
+  const [guideOpen, setGuideOpen] = useState(false)
   const { mutate, data, isPending, error } = useMutation<SkewData, Error, void>({
     mutationFn: () => axios.get(`/api/prob/skew?ticker=${ticker.trim().toUpperCase()}`).then(r => r.data),
   })
@@ -84,14 +85,38 @@ export default function SkewTool() {
         {data && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
-              <MetricCard label="ATM IV" value={`${data.atm_iv.toFixed(1)}%`} sub={`${data.front_expiry} · spot $${data.spot}`} help="At-the-money implied vol for the front expiry." />
-              <MetricCard label="Put Skew (10%)" value={`${data.rr_25 > 0 ? '+' : ''}${data.rr_25.toFixed(1)}`} color={skewColor(data.rr_25)} sub="vol pts, 10% P−C" help="IV of the 10%-OTM put minus 10%-OTM call. Positive = downside richly bid; the put wing is where selling edge concentrates." />
-              <MetricCard label="Butterfly (10%)" value={`${data.bf_25 > 0 ? '+' : ''}${data.bf_25.toFixed(1)}`} sub="wing convexity" help="Average wing IV minus ATM IV. High = both tails bid (fat-tail premium)." />
-              <MetricCard label="Term Slope" value={`${data.ts_slope > 0 ? '+' : ''}${data.ts_slope.toFixed(1)}`} color={data.ts_slope < -0.5 ? 'var(--theme-negative)' : GOLD} sub="front→back ATM" help="Back-month ATM IV minus front. Positive = contango (normal). Negative = backwardation (front-end stress, often mean-reverts)." />
+              <MetricCard label="Expected Swing" value={`${data.atm_iv.toFixed(1)}%`} sub={`${data.front_expiry} · spot $${data.spot}`} help="How big a move the market expects, annualized. Roughly 15-20% is calm, 30%+ is nervous." />
+              <MetricCard label="Downside Premium" value={`${data.rr_25 > 0 ? '+' : ''}${data.rr_25.toFixed(1)}`} color={skewColor(data.rr_25)} sub={data.rr_25 > 4 ? 'high crash fear' : data.rr_25 > 1.5 ? 'mild' : 'low'} help="How much more downside protection (puts) costs than upside (calls). Higher = more fear of a drop is priced in — and that's where put-selling premium is richest." />
+              <MetricCard label="Tail Premium" value={`${data.bf_25 > 0 ? '+' : ''}${data.bf_25.toFixed(1)}`} sub={data.bf_25 > 6 ? 'fat tails priced' : 'normal'} help="How expensive the far edges are vs the middle. Higher = the market is paying up for a big move in either direction." />
+              <MetricCard label="Near vs Far Vol" value={`${data.ts_slope > 0 ? '+' : ''}${data.ts_slope.toFixed(1)}`} color={data.ts_slope < -0.5 ? 'var(--theme-negative)' : GOLD} sub={data.ts_slope < -0.5 ? 'near-term jitters' : data.ts_slope > 0.5 ? 'normal/calm' : 'flat'} help="Near-term expected vol minus longer-dated. Negative = the market expects something soon (an event) and that usually settles back down. Positive = the normal calm shape." />
             </div>
 
-            <div style={{ background: 'var(--theme-surface, #142032)', border: '1px solid var(--theme-border, rgba(255,255,255,0.07))', borderLeft: `3px solid ${skewColor(data.rr_25)}`, padding: '10px 12px', fontSize: 12, color: 'var(--theme-text, #d7e3fc)', lineHeight: 1.55 }}>
+            {/* Plain-language read of the current data */}
+            <div style={{ fontSize: 13, color: 'var(--theme-text, #d7e3fc)', lineHeight: 1.55, padding: '2px 2px' }}>
               {data.read}
+            </div>
+
+            {/* Collapsible learn-it guide */}
+            <div style={{ border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-bg, #0a1628)' }}>
+              <button onClick={() => setGuideOpen(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', padding: '9px 12px', color: GOLD, fontFamily: 'var(--theme-sans)', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                <span style={{ transform: guideOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>▸</span>
+                New here? How to read this
+              </button>
+              {guideOpen && (
+                <div style={{ padding: '0 14px 14px', display: 'flex', flexDirection: 'column', gap: 12, fontSize: 12.5, color: 'var(--theme-text, #d7e3fc)', lineHeight: 1.6 }}>
+                  {[
+                    ['What this tool shows', 'Options on the same stock cost different amounts depending on the strike price and the expiry date. The "cost" is measured as implied volatility (IV) — the bigger move the option is pricing in. This tool maps that cost across strikes and dates, so you can see what the market is afraid of and where options look rich or cheap.'],
+                    ['The smile chart (top)', 'Each point is the IV at a price level relative to today (0% = where it trades now). It dips in the middle and rises on the sides. The LEFT side (downside puts) sitting higher than the right (upside calls) means people pay more to protect against a fall than to bet on a rise. The steeper that left climb, the more crash fear is priced in.'],
+                    ['The term-structure chart (bottom)', 'The gold line is the at-the-money IV for each expiry date; the dotted blue line is the downside premium at each date. Normally the gold line rises with time (more uncertainty further out). If the near-term (left) is higher, the market expects something soon — earnings, a Fed meeting — and that bump usually fades.'],
+                    ['How you might use it', 'Selling options collects premium; the richest premium is wherever IV is highest. Steep downside premium means out-of-the-money puts pay the most — but that is also exactly where your risk is if the stock drops. When near-term vol is elevated, shorter-dated options decay that extra premium fastest. This is a read on what is expensive, not a buy/sell signal.'],
+                  ].map(([h, body]) => (
+                    <div key={h}>
+                      <div style={{ color: GOLD, fontWeight: 700, fontSize: 11, letterSpacing: '0.06em', marginBottom: 3 }}>{h}</div>
+                      <div style={{ color: 'var(--theme-secondary, #99907e)' }}>{body}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <ChartPanel label={`IV Smile — ${data.ticker} ${data.front_expiry}`} height={300} note="IV vs % moneyness">
@@ -106,6 +131,9 @@ export default function SkewTool() {
                 </LineChart>
               </ResponsiveContainer>
             </ChartPanel>
+            <div style={{ fontSize: 11, color: 'var(--theme-secondary, #99907e)', lineHeight: 1.5, marginTop: -4, paddingLeft: 2 }}>
+              Reading it: the line climbs to the left, so downside protection (puts) costs more than upside (calls). The lowest point is roughly where the market expects the stock to trade.
+            </div>
 
             <ChartPanel label="ATM IV Term Structure" height={260} note="ATM IV vs days to expiry">
               <ResponsiveContainer width="100%" height={232}>
@@ -119,6 +147,9 @@ export default function SkewTool() {
                 </LineChart>
               </ResponsiveContainer>
             </ChartPanel>
+            <div style={{ fontSize: 11, color: 'var(--theme-secondary, #99907e)', lineHeight: 1.5, marginTop: -4, paddingLeft: 2 }}>
+              Reading it: <span style={{ color: GOLD }}>gold</span> = expected vol at each expiry date, <span style={{ color: 'var(--theme-tertiary, #60a5fa)' }}>blue dashed</span> = downside premium at each. A higher near-term (left) gold line hints at an expected near-term event that usually settles down.
+            </div>
           </div>
         )}
       </SidebarLayout>
