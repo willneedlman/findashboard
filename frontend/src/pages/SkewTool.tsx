@@ -28,6 +28,27 @@ function expectedMove(ivPct: number, dte: number, spot: number) {
   return { pct: sigma * 100, dollars, lo: spot - dollars, hi: spot + dollars }
 }
 
+// Interpolate ATM IV to an arbitrary horizon. Total variance (IV²·T) is what's
+// linear across maturities, so we interpolate that and back out IV — clamped flat
+// beyond the listed expiries. Returns { iv, interpolated }.
+function ivAtDate(term: { dte: number; atm_iv: number }[], dte: number): { iv: number; interpolated: boolean } | null {
+  if (!term.length || dte <= 0) return null
+  const s = [...term].sort((a, b) => a.dte - b.dte)
+  if (dte <= s[0].dte) return { iv: s[0].atm_iv, interpolated: dte < s[0].dte }
+  const last = s[s.length - 1]
+  if (dte >= last.dte) return { iv: last.atm_iv, interpolated: dte > last.dte }
+  for (let i = 0; i < s.length - 1; i++) {
+    const a = s[i], b = s[i + 1]
+    if (dte >= a.dte && dte <= b.dte) {
+      const Ta = a.dte / 365, Tb = b.dte / 365, Tt = dte / 365
+      const va = (a.atm_iv / 100) ** 2 * Ta, vb = (b.atm_iv / 100) ** 2 * Tb
+      const vt = va + (vb - va) * (Tt - Ta) / (Tb - Ta)
+      return { iv: Math.sqrt(Math.max(vt, 1e-9) / Tt) * 100, interpolated: true }
+    }
+  }
+  return { iv: last.atm_iv, interpolated: false }
+}
+
 function MetricCard({ label, value, help, sub, color }: { label: string; value: string; help?: string; sub?: string; color?: string }) {
   const [show, setShow] = useState(false)
   return (
@@ -59,8 +80,10 @@ export default function SkewTool() {
   const [ticker, setTicker] = useState('SPY')
   const [open, setOpen] = useState(true)
   const [guideOpen, setGuideOpen] = useState(false)
+  const [date, setDate] = useState('')   // target date for the implied-move readout
   const { mutate, data, isPending, error } = useMutation<SkewData, Error, void>({
     mutationFn: () => axios.get(`/api/prob/skew?ticker=${ticker.trim().toUpperCase()}`).then(r => r.data),
+    onSuccess: (d) => setDate(d.front_expiry),   // default to the nearest expiry
   })
   const skewColor = (v: number) => (v > 4 ? 'var(--theme-negative)' : v > 1.5 ? 'var(--theme-warn, #d97736)' : 'var(--theme-positive)')
 
@@ -77,8 +100,16 @@ export default function SkewTool() {
               style={{ width: '100%', background: GOLD, border: `1px solid ${GOLD}`, color: 'var(--theme-bg)', fontFamily: 'inherit', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '8px 0', cursor: isPending ? 'default' : 'pointer', opacity: isPending ? 0.6 : 1 }}>
               {isPending ? 'Loading…' : 'Generate'}
             </button>
-            <div style={{ fontSize: 10, color: FAINT, lineHeight: '14px' }}>
-              25Δ-style skew read off a smoothed IV smile. Positive risk reversal = puts richer than calls (downside fear). Indices skew steeper than single names.
+            {data && (
+              <div>
+                <label style={LABEL}>Implied move by date</label>
+                <input type="date" value={date} min={new Date().toISOString().split('T')[0]}
+                  onChange={e => setDate(e.target.value)} style={{ ...INPUT, cursor: 'pointer' }} />
+                <div style={{ fontSize: 9, color: FAINT, marginTop: 3 }}>Pick any date — IV is interpolated along the term structure.</div>
+              </div>
+            )}
+            <div style={{ fontSize: 10, color: FAINT, lineHeight: '14px', marginTop: 4 }}>
+              Reads the options market's view of {ticker || 'a stock'}: how much downside protection costs vs upside, and the expected swing by date.
             </div>
             <div style={{ fontSize: 9, color: FAINT, lineHeight: '13px', marginTop: 4 }}>
               Trial · EOD chains via yfinance; intraday precision improves on live (Tradier) data.
@@ -92,47 +123,34 @@ export default function SkewTool() {
         {data && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
-              {(() => {
-                const em = expectedMove(data.atm_iv, data.term_structure[0]?.dte ?? 0, data.spot)
-                return <MetricCard label="Expected Move" value={`±${em.pct.toFixed(1)}%`} sub={`by ${data.front_expiry} · $${em.lo.toFixed(0)}–$${em.hi.toFixed(0)}`} help={`The ±1σ move the options market implies by ${data.front_expiry} — the stock stays in this range about 68% of the time. From ${data.atm_iv.toFixed(1)}% annualized IV scaled to this expiry. Annualized "expected swing" still shown in the table below.`} />
-              })()}
+              <MetricCard label="ATM IV (annualized)" value={`${data.atm_iv.toFixed(1)}%`} sub={`${data.front_expiry} · spot $${data.spot}`} help="The market's expected volatility, annualized. Roughly 15-20% is calm, 30%+ is nervous. Pick a date in the sidebar to turn this into an actual ± move." />
               <MetricCard label="Downside Premium" value={`${data.rr_25 > 0 ? '+' : ''}${data.rr_25.toFixed(1)}`} color={skewColor(data.rr_25)} sub={data.rr_25 > 4 ? 'high crash fear' : data.rr_25 > 1.5 ? 'mild' : 'low'} help="How much more downside protection (puts) costs than upside (calls). Higher = more fear of a drop is priced in — and that's where put-selling premium is richest." />
               <MetricCard label="Tail Premium" value={`${data.bf_25 > 0 ? '+' : ''}${data.bf_25.toFixed(1)}`} sub={data.bf_25 > 6 ? 'fat tails priced' : 'normal'} help="How expensive the far edges are vs the middle. Higher = the market is paying up for a big move in either direction." />
               <MetricCard label="Near vs Far Vol" value={`${data.ts_slope > 0 ? '+' : ''}${data.ts_slope.toFixed(1)}`} color={data.ts_slope < -0.5 ? 'var(--theme-negative)' : GOLD} sub={data.ts_slope < -0.5 ? 'near-term jitters' : data.ts_slope > 0.5 ? 'normal/calm' : 'flat'} help="Near-term expected vol minus longer-dated. Negative = the market expects something soon (an event) and that usually settles back down. Positive = the normal calm shape." />
             </div>
 
-            {/* Implied move by date — the annualized IV converted to an actual ±move per expiry. */}
-            <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
-              <div style={{ padding: '6px 10px', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
-                Implied Move by Date — {data.ticker} @ ${data.spot}
-              </div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--theme-mono)', fontSize: 11 }}>
-                <thead>
-                  <tr style={{ background: 'var(--theme-surface, #142032)' }}>
-                    {['Expiry', 'Days', '± Move', 'Expected Range', 'IV (annualized)'].map((h, i) => (
-                      <th key={h} style={{ padding: '6px 10px', textAlign: i === 0 ? 'left' : 'right', fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', whiteSpace: 'nowrap' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.term_structure.map((t, i) => {
-                    const em = expectedMove(t.atm_iv, t.dte, data.spot)
-                    return (
-                      <tr key={t.expiry} style={{ borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.06))', background: i % 2 ? 'var(--theme-hover, rgba(255,255,255,0.012))' : 'transparent' }}>
-                        <td style={{ padding: '6px 10px', color: GOLD }}>{t.expiry}</td>
-                        <td style={{ padding: '6px 10px', textAlign: 'right', color: 'var(--theme-secondary, #99907e)' }}>{t.dte}d</td>
-                        <td style={{ padding: '6px 10px', textAlign: 'right', color: 'var(--theme-text, #d7e3fc)', fontWeight: 700 }}>±{em.pct.toFixed(1)}%</td>
-                        <td style={{ padding: '6px 10px', textAlign: 'right', color: 'var(--theme-text, #d7e3fc)' }}>${em.lo.toFixed(0)} – ${em.hi.toFixed(0)}</td>
-                        <td style={{ padding: '6px 10px', textAlign: 'right', color: 'var(--theme-secondary, #99907e)' }}>{t.atm_iv.toFixed(1)}%</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-              <div style={{ padding: '6px 10px', fontSize: 10, color: FAINT, lineHeight: 1.5 }}>
-                ± Move is the 1-standard-deviation range (spot × IV × √(days÷365)) — the stock stays inside it roughly 68% of the time. Double it for a ~95% range.
-              </div>
-            </div>
+            {/* Implied move to the user-chosen date (IV interpolated along the term). */}
+            {(() => {
+              const targetDte = date ? Math.round((new Date(date + 'T00:00:00').getTime() - new Date().setHours(0, 0, 0, 0)) / 864e5) : 0
+              const iv = ivAtDate(data.term_structure, targetDte)
+              if (!iv) return null
+              const em = expectedMove(iv.iv, targetDte, data.spot)
+              return (
+                <div style={{ background: 'var(--theme-surface, #142032)', border: `1px solid color-mix(in srgb, ${GOLD} 30%, transparent)`, padding: '14px 16px', display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '4px 22px' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', width: '100%', marginBottom: 4 }}>
+                    Implied Move by {date}{iv.interpolated ? ' · IV interpolated' : ''}
+                  </div>
+                  <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 30, fontWeight: 700, color: GOLD }}>±{em.pct.toFixed(1)}%</div>
+                  <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 18, color: 'var(--theme-text, #d7e3fc)' }}>${em.lo.toFixed(0)} – ${em.hi.toFixed(0)}</div>
+                  <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 12, color: 'var(--theme-secondary, #99907e)' }}>
+                    {targetDte} day{targetDte === 1 ? '' : 's'} · IV {iv.iv.toFixed(1)}% · ±{em.dollars.toFixed(2)}
+                  </div>
+                  <div style={{ fontSize: 10, color: FAINT, lineHeight: 1.5, width: '100%', marginTop: 6 }}>
+                    The ±1σ range — {data.ticker} stays inside it roughly 68% of the time by {date}. Double it for a ~95% range.
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* Plain-language read of the current data */}
             <div style={{ fontSize: 13, color: 'var(--theme-text, #d7e3fc)', lineHeight: 1.55, padding: '2px 2px' }}>
