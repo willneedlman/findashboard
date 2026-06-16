@@ -15,6 +15,12 @@ import MacroCalendar from './widgets/MacroCalendar'
 import GlobalMacro from './widgets/GlobalMacro'
 import CreditSpreadsWidget from './widgets/CreditSpreadsWidget'
 import YieldCurveWidget from './widgets/YieldCurveWidget'
+import SectorRotationWidget from './widgets/SectorRotationWidget'
+import DealerGEXWidget from './widgets/DealerGEXWidget'
+import VolSkewWidget from './widgets/VolSkewWidget'
+import SentimentWidget from './widgets/SentimentWidget'
+import ScreenerWidget from './widgets/ScreenerWidget'
+import PMPortfoliosWidget from './widgets/PMPortfoliosWidget'
 
 export default function WidgetRenderer({ config }: { config: WidgetConfig }) {
   switch (config.type) {
@@ -34,6 +40,12 @@ export default function WidgetRenderer({ config }: { config: WidgetConfig }) {
     case 'global-macro':       return <GlobalMacro config={config} />
     case 'credit-spreads':     return <CreditSpreadsWidget config={config} />
     case 'yield-curve':        return <YieldCurveWidget config={config} />
+    case 'sector-rotation':    return <SectorRotationWidget config={config} />
+    case 'dealer-gex':         return <DealerGEXWidget config={config} />
+    case 'vol-skew':           return <VolSkewWidget config={config} />
+    case 'sentiment-gauge':    return <SentimentWidget config={config} />
+    case 'screener':           return <ScreenerWidget config={config} />
+    case 'pm-portfolios':      return <PMPortfoliosWidget config={config} />
     default:                   return null
   }
 }

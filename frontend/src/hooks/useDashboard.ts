@@ -20,6 +20,12 @@ export type WidgetType =
   | 'global-macro'
   | 'credit-spreads'
   | 'yield-curve'
+  | 'sector-rotation'
+  | 'dealer-gex'
+  | 'vol-skew'
+  | 'sentiment-gauge'
+  | 'screener'
+  | 'pm-portfolios'
 
 export interface WidgetConfig {
   id: string
@@ -42,12 +48,22 @@ export interface WidgetConfig {
   optionType?: 'call' | 'put'              // delta-target, options-pricer
   strike?: number                          // options-pricer
   vol?: number                             // options-pricer
+  expiry?: string                          // dealer-gex, vol-skew: option expiry YYYY-MM-DD
+  timeframeHours?: number                  // sentiment-gauge: lookback window
+  sectorPeriod?: string                    // sector-rotation: 1W | 1M | 3M | 6M | YTD | 1Y
 }
 
-export interface StoredDashboard {
-  version: 1
+export interface Dashboard {
+  id: string
+  name: string
   widgets: WidgetConfig[]
   layouts: Layout[]
+}
+
+export interface StoredWorkspace {
+  version: 2
+  dashboards: Dashboard[]
+  activeId: string
 }
 
 // ── Default sizes per widget type ────────────────────────────────────────────
@@ -69,6 +85,12 @@ export const WIDGET_DEFAULT_SIZE: Record<WidgetType, { w: number; h: number }> =
   'global-macro':        { w: 3, h: 9 },
   'credit-spreads':      { w: 4, h: 7 },
   'yield-curve':         { w: 4, h: 7 },
+  'sector-rotation':     { w: 4, h: 7 },
+  'dealer-gex':          { w: 4, h: 6 },
+  'vol-skew':            { w: 4, h: 6 },
+  'sentiment-gauge':     { w: 3, h: 5 },
+  'screener':            { w: 5, h: 6 },
+  'pm-portfolios':       { w: 4, h: 6 },
 }
 
 export const WIDGET_LABELS: Record<WidgetType, string> = {
@@ -88,6 +110,12 @@ export const WIDGET_LABELS: Record<WidgetType, string> = {
   'global-macro':        'Global Macro',
   'credit-spreads':      'Credit Spreads',
   'yield-curve':         'Yield Curve',
+  'sector-rotation':     'Sector Rotation',
+  'dealer-gex':          'Dealer GEX',
+  'vol-skew':            'Vol Skew',
+  'sentiment-gauge':     'Market Sentiment',
+  'screener':            'Screener',
+  'pm-portfolios':       'Portfolios',
 }
 
 export const WIDGET_DESCRIPTIONS: Record<WidgetType, string> = {
@@ -107,6 +135,12 @@ export const WIDGET_DESCRIPTIONS: Record<WidgetType, string> = {
   'global-macro':        'Live FX, commodities, bond yields, equity indices and VIX — refreshed every 5 minutes.',
   'credit-spreads':      'BofA ICE IG & HY OAS spreads vs VIX — 90-day sparkline with 1Y change.',
   'yield-curve':         'US Treasury yield curve with 1M/3M/1Y comparisons, key spreads, and 3M/10Y inversion history.',
+  'sector-rotation':     '11 GICS sectors ranked by relative strength — 1-month return heatmap, leaders to laggards.',
+  'dealer-gex':          'Net dealer gamma by strike for a ticker, with spot, total net GEX, and the gamma-flip level.',
+  'vol-skew':            'ATM IV, 25-delta put skew, term-structure slope, and the front-expiry IV smile for a ticker.',
+  'sentiment-gauge':     'Market-wide AI news sentiment: composite score, bull/neutral/bear split over the last 4 hours.',
+  'screener':            'Quick stock screens — biggest names, top gainers/losers, and volume leaders.',
+  'pm-portfolios':       'Your Portfolio Manager books with live value and unrealized P&L per holding.',
 }
 
 export const WIDGET_ICONS: Record<WidgetType, string> = {
@@ -126,9 +160,15 @@ export const WIDGET_ICONS: Record<WidgetType, string> = {
   'global-macro':        'FX',
   'credit-spreads':      'CR',
   'yield-curve':         'YC',
+  'sector-rotation':     'SR',
+  'dealer-gex':          'GEX',
+  'vol-skew':            'σ',
+  'sentiment-gauge':     'S',
+  'screener':            'SCR',
+  'pm-portfolios':       'PF',
 }
 
-// ── Default layout — all 16 widget types, one each ───────────────────────────
+// ── Default layout — all 20 widget types, one each ───────────────────────────
 //
 // 12-col grid, rowHeight=60px:
 //
@@ -157,6 +197,12 @@ export const DEFAULT_WIDGETS: WidgetConfig[] = [
   { id: 'w14', type: 'delta-target',       ticker: 'SPY' },
   { id: 'w15', type: 'price-card',         ticker: 'NVDA' },
   { id: 'w16', type: 'yield-curve' },
+  { id: 'w17', type: 'sector-rotation' },
+  { id: 'w18', type: 'dealer-gex',         ticker: 'SPY' },
+  { id: 'w19', type: 'vol-skew',           ticker: 'SPY' },
+  { id: 'w20', type: 'sentiment-gauge' },
+  { id: 'w21', type: 'screener' },
+  { id: 'w22', type: 'pm-portfolios' },
 ]
 
 export const DEFAULT_LAYOUTS: Layout[] = [
@@ -187,6 +233,14 @@ export const DEFAULT_LAYOUTS: Layout[] = [
   { i: 'w8',  x: 0, y: 33, w: 4,  h: 5 },
   { i: 'w13', x: 4, y: 33, w: 4,  h: 5 },
   { i: 'w14', x: 8, y: 33, w: 4,  h: 5 },
+
+  // Row G — vol surface + sector + sentiment
+  { i: 'w17', x: 0, y: 38, w: 4,  h: 7 },
+  { i: 'w18', x: 4, y: 38, w: 4,  h: 6 },
+  { i: 'w19', x: 8, y: 38, w: 4,  h: 6 },
+  { i: 'w20', x: 0, y: 45, w: 3,  h: 5 },
+  { i: 'w21', x: 3, y: 45, w: 5,  h: 6 },
+  { i: 'w22', x: 8, y: 45, w: 4,  h: 6 },
 ]
 
 // ── Size constraints ──────────────────────────────────────────────────────────
@@ -212,7 +266,65 @@ function applyConstraints(widgets: WidgetConfig[], layouts: Layout[]): Layout[] 
   })
 }
 
-// ── Storage — per-user when a userId is provided ──────────────────────────────
+// ── Presets ───────────────────────────────────────────────────────────────────
+
+let _seq = 0
+const newId = () => `w${Date.now()}_${_seq++}`
+const newDashId = () => `d${Date.now()}_${_seq++}`
+
+// Place widgets left-to-right, wrapping at 12 cols, using each type's default size.
+function autoLayout(widgets: WidgetConfig[]): Layout[] {
+  let x = 0, y = 0, rowH = 0
+  return widgets.map(w => {
+    const { w: ww, h: hh } = WIDGET_DEFAULT_SIZE[w.type]
+    if (x + ww > 12) { x = 0; y += rowH; rowH = 0 }
+    const item: Layout = { i: w.id, x, y, w: ww, h: hh }
+    x += ww; rowH = Math.max(rowH, hh)
+    return item
+  })
+}
+
+const spec = (type: WidgetType, config: Partial<WidgetConfig> = {}): WidgetConfig => ({ id: newId(), type, ...config })
+
+export type PresetKey = 'main' | 'trader' | 'researcher' | 'screener'
+
+export const PRESET_LABELS: Record<PresetKey, string> = {
+  main: 'Everything', trader: 'Trader', researcher: 'Researcher', screener: 'Screener',
+}
+
+function buildPreset(key: PresetKey): { widgets: WidgetConfig[]; layouts: Layout[] } {
+  if (key === 'main') return { widgets: DEFAULT_WIDGETS, layouts: DEFAULT_LAYOUTS }
+  let widgets: WidgetConfig[]
+  if (key === 'trader') {
+    widgets = [
+      spec('tradingview-chart', { ticker: 'NVDA' }),
+      spec('watchlist', { tickers: ['SPY', 'QQQ', 'NVDA', 'AAPL', 'TSLA', 'MSFT'] }),
+      spec('options-snapshot', { ticker: 'SPY' }),
+      spec('dealer-gex', { ticker: 'SPY' }),
+      spec('vol-skew', { ticker: 'SPY' }),
+      spec('news-feed', { tickers: ['SPY', 'NVDA'] }),
+    ]
+  } else if (key === 'researcher') {
+    widgets = [
+      spec('screener'),
+      spec('pm-portfolios'),
+      spec('correlation-matrix', { tickers: ['SPY', 'QQQ', 'TLT', 'GLD', 'BTC-USD'] }),
+      spec('sector-rotation'),
+      spec('sentiment-gauge'),
+      spec('earnings-calendar', { tickers: ['NVDA', 'AAPL', 'MSFT', 'AMZN', 'META', 'GOOGL'] }),
+    ]
+  } else {
+    widgets = [
+      spec('screener'),
+      spec('watchlist', { tickers: ['SPY', 'QQQ', 'NVDA', 'AAPL', 'TSLA', 'MSFT', 'AMZN', 'META'] }),
+      spec('sector-rotation'),
+      spec('mini-chart', { ticker: 'SPY', period: '1y' }),
+    ]
+  }
+  return { widgets, layouts: applyConstraints(widgets, autoLayout(widgets)) }
+}
+
+// ── Storage (v2: multiple named dashboards, per-user when a userId is given) ─────
 
 const BASE_KEY = 'finance-terminal-dashboard-v3'
 
@@ -220,62 +332,107 @@ function storageKey(userId?: string | null) {
   return userId ? `${BASE_KEY}-user-${userId}` : BASE_KEY
 }
 
-function load(userId?: string | null): StoredDashboard {
+function defaultWorkspace(): StoredWorkspace {
+  const id = newDashId()
+  return { version: 2, dashboards: [{ id, name: 'Main', widgets: DEFAULT_WIDGETS, layouts: DEFAULT_LAYOUTS }], activeId: id }
+}
+
+function load(userId?: string | null): StoredWorkspace {
   try {
     const raw = localStorage.getItem(storageKey(userId))
     if (raw) {
-      const parsed = JSON.parse(raw) as StoredDashboard
-      if (parsed.version === 1 && parsed.widgets && parsed.layouts) {
-        return { ...parsed, layouts: applyConstraints(parsed.widgets, parsed.layouts) }
+      const parsed = JSON.parse(raw)
+      if (parsed?.version === 2 && Array.isArray(parsed.dashboards) && parsed.dashboards.length) {
+        const dashboards: Dashboard[] = parsed.dashboards.map((d: Dashboard) => ({ ...d, layouts: applyConstraints(d.widgets, d.layouts) }))
+        const activeId = dashboards.some(d => d.id === parsed.activeId) ? parsed.activeId : dashboards[0].id
+        return { version: 2, dashboards, activeId }
+      }
+      // Migrate a v1 single dashboard into the new workspace shape.
+      if (parsed?.version === 1 && parsed.widgets && parsed.layouts) {
+        const id = newDashId()
+        return { version: 2, dashboards: [{ id, name: 'Main', widgets: parsed.widgets, layouts: applyConstraints(parsed.widgets, parsed.layouts) }], activeId: id }
       }
     }
   } catch { /* ignore */ }
-  return { version: 1, widgets: DEFAULT_WIDGETS, layouts: DEFAULT_LAYOUTS }
+  return defaultWorkspace()
 }
 
-function save(d: StoredDashboard, userId?: string | null) {
-  try { localStorage.setItem(storageKey(userId), JSON.stringify(d)) } catch { /* ignore */ }
+function save(w: StoredWorkspace, userId?: string | null) {
+  try { localStorage.setItem(storageKey(userId), JSON.stringify(w)) } catch { /* ignore */ }
 }
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
 export function useDashboard(userId?: string | null) {
-  const [state, setState] = useState<StoredDashboard>(() => load(userId))
+  const [ws, setWs] = useState<StoredWorkspace>(() => load(userId))
 
-  // When user changes (login / logout), reload that user's dashboard
-  useEffect(() => {
-    setState(load(userId))
-  }, [userId])
+  // When user changes (login / logout), reload that user's workspace
+  useEffect(() => { setWs(load(userId)) }, [userId])
 
-  const persist = useCallback((next: StoredDashboard) => {
-    setState(next)
+  const persist = useCallback((next: StoredWorkspace) => {
+    setWs(next)
     save(next, userId)
   }, [userId])
 
+  const active = ws.dashboards.find(d => d.id === ws.activeId) ?? ws.dashboards[0]
+
+  const patchActive = useCallback((fn: (d: Dashboard) => Dashboard) => {
+    persist({ ...ws, dashboards: ws.dashboards.map(d => d.id === ws.activeId ? fn(d) : d) })
+  }, [ws, persist])
+
   const addWidget = useCallback((type: WidgetType, config: Partial<WidgetConfig> = {}) => {
-    const id = `w${Date.now()}`
+    const id = newId()
     const def = WIDGET_DEFAULT_SIZE[type]
-    const newWidget: WidgetConfig = { id, type, ...config }
-    const newLayout: Layout = { i: id, x: 0, y: Infinity, w: def.w, h: def.h }
-    const nextWidgets = [...state.widgets, newWidget]
-    persist({ version: 1, widgets: nextWidgets, layouts: applyConstraints(nextWidgets, [...state.layouts, newLayout]) })
-  }, [state, persist])
+    const nw: WidgetConfig = { id, type, ...config }
+    const nl: Layout = { i: id, x: 0, y: Infinity, w: def.w, h: def.h }
+    patchActive(d => {
+      const widgets = [...d.widgets, nw]
+      return { ...d, widgets, layouts: applyConstraints(widgets, [...d.layouts, nl]) }
+    })
+  }, [patchActive])
 
   const removeWidget = useCallback((id: string) => {
-    persist({ version: 1, widgets: state.widgets.filter(w => w.id !== id), layouts: state.layouts.filter(l => l.i !== id) })
-  }, [state, persist])
+    patchActive(d => ({ ...d, widgets: d.widgets.filter(w => w.id !== id), layouts: d.layouts.filter(l => l.i !== id) }))
+  }, [patchActive])
 
   const updateWidget = useCallback((id: string, patch: Partial<WidgetConfig>) => {
-    persist({ version: 1, widgets: state.widgets.map(w => w.id === id ? { ...w, ...patch } : w), layouts: state.layouts })
-  }, [state, persist])
+    patchActive(d => ({ ...d, widgets: d.widgets.map(w => w.id === id ? { ...w, ...patch } : w) }))
+  }, [patchActive])
 
   const updateLayouts = useCallback((layouts: readonly Layout[]) => {
-    persist({ version: 1, widgets: state.widgets, layouts: applyConstraints(state.widgets, [...layouts]) })
-  }, [state, persist])
+    patchActive(d => ({ ...d, layouts: applyConstraints(d.widgets, [...layouts]) }))
+  }, [patchActive])
 
   const resetDashboard = useCallback(() => {
-    persist({ version: 1, widgets: DEFAULT_WIDGETS, layouts: DEFAULT_LAYOUTS })
-  }, [persist])
+    const p = buildPreset('main')
+    patchActive(d => ({ ...d, widgets: p.widgets, layouts: p.layouts }))
+  }, [patchActive])
 
-  return { widgets: state.widgets, layouts: state.layouts, addWidget, removeWidget, updateWidget, updateLayouts, resetDashboard }
+  const switchDashboard = useCallback((id: string) => {
+    if (ws.dashboards.some(d => d.id === id)) persist({ ...ws, activeId: id })
+  }, [ws, persist])
+
+  const createDashboard = useCallback((preset: PresetKey) => {
+    const p = buildPreset(preset)
+    const id = newDashId()
+    persist({ ...ws, dashboards: [...ws.dashboards, { id, name: PRESET_LABELS[preset], widgets: p.widgets, layouts: p.layouts }], activeId: id })
+  }, [ws, persist])
+
+  const renameDashboard = useCallback((id: string, name: string) => {
+    persist({ ...ws, dashboards: ws.dashboards.map(d => d.id === id ? { ...d, name } : d) })
+  }, [ws, persist])
+
+  const deleteDashboard = useCallback((id: string) => {
+    if (ws.dashboards.length <= 1) return
+    const dashboards = ws.dashboards.filter(d => d.id !== id)
+    persist({ ...ws, dashboards, activeId: ws.activeId === id ? dashboards[0].id : ws.activeId })
+  }, [ws, persist])
+
+  return {
+    widgets: active.widgets, layouts: active.layouts,
+    addWidget, removeWidget, updateWidget, updateLayouts, resetDashboard,
+    dashboards: ws.dashboards.map(d => ({ id: d.id, name: d.name })),
+    activeId: ws.activeId,
+    switchDashboard, createDashboard, renameDashboard, deleteDashboard,
+  }
 }

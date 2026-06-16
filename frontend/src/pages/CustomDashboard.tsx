@@ -9,12 +9,12 @@ const { Responsive, WidthProvider } = RGL as unknown as {
   Responsive: React.ComponentType<any>
   WidthProvider: (c: React.ComponentType<any>) => React.ComponentType<any>
 }
-import { Lock, Unlock, Plus, RotateCcw } from 'lucide-react'
+import { Lock, Unlock, Plus, RotateCcw, X } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import WidgetFrame from '../components/dashboard/WidgetFrame'
 import WidgetRenderer from '../components/dashboard/WidgetRenderer'
 import WidgetPalette from '../components/dashboard/WidgetPalette'
-import { useDashboard, type WidgetType, type WidgetConfig } from '../hooks/useDashboard'
+import { useDashboard, PRESET_LABELS, type WidgetType, type WidgetConfig, type PresetKey } from '../hooks/useDashboard'
 import useIsMobile from '../hooks/useIsMobile'
 
 const ResponsiveGridLayout = WidthProvider(Responsive)
@@ -25,10 +25,14 @@ const COLS        = { lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }
 export default function CustomDashboard() {
   const isMobile = useIsMobile()
   const { user } = useTheme()
-  const { widgets, layouts, addWidget, removeWidget, updateWidget, updateLayouts, resetDashboard } = useDashboard(user?.id)
+  const {
+    widgets, layouts, addWidget, removeWidget, updateWidget, updateLayouts, resetDashboard,
+    dashboards, activeId, switchDashboard, createDashboard, renameDashboard, deleteDashboard,
+  } = useDashboard(user?.id)
   const [editMode, setEditMode] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
+  const [presetMenuOpen, setPresetMenuOpen] = useState(false)
 
   const handleLayoutChange = (_: Layout[], allLayouts: Layouts) => {
     if (allLayouts.lg) updateLayouts(allLayouts.lg)
@@ -79,6 +83,57 @@ export default function CustomDashboard() {
           </button>
         </div>}
       </div>
+
+      {/* ── Dashboard switcher ── */}
+      {!isMobile && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14, flexWrap: 'wrap', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingBottom: 8 }}>
+          {dashboards.map(d => {
+            const isActive = d.id === activeId
+            return (
+              <div key={d.id} style={{ display: 'flex', alignItems: 'center' }}>
+                <button
+                  onClick={() => switchDashboard(d.id)}
+                  onDoubleClick={() => { if (editMode) { const n = window.prompt('Rename dashboard', d.name); if (n && n.trim()) renameDashboard(d.id, n.trim()) } }}
+                  title={editMode ? 'Double-click to rename' : undefined}
+                  style={{
+                    fontFamily: 'var(--theme-sans)', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
+                    padding: '4px 12px', cursor: 'pointer',
+                    border: isActive ? '1px solid var(--theme-primary, #c9a84c)' : '1px solid var(--theme-border, rgba(255,255,255,0.08))',
+                    background: isActive ? 'rgba(201,168,76,0.12)' : 'transparent',
+                    color: isActive ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #5e768f)',
+                  }}
+                >{d.name}</button>
+                {editMode && isActive && dashboards.length > 1 && (
+                  <button onClick={() => deleteDashboard(d.id)} title="Delete dashboard"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-negative)', padding: '2px 4px', display: 'flex' }}>
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+            )
+          })}
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setPresetMenuOpen(o => !o)}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '4px 10px', cursor: 'pointer', border: '1px dashed var(--theme-border, rgba(255,255,255,0.18))', background: 'transparent', color: 'var(--theme-secondary, #5e768f)' }}
+            >
+              <Plus size={11} /> New
+            </button>
+            {presetMenuOpen && (
+              <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 30, minWidth: 150, background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-primary, #c9a84c)', boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}>
+                <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', padding: '7px 10px 4px' }}>From preset</div>
+                {(['main', 'trader', 'researcher', 'screener'] as PresetKey[]).map(k => (
+                  <button key={k} onClick={() => { createDashboard(k); setPresetMenuOpen(false) }}
+                    style={{ display: 'block', width: '100%', textAlign: 'left', fontFamily: 'var(--theme-sans)', fontSize: 11, padding: '7px 10px', cursor: 'pointer', border: 'none', background: 'transparent', color: 'var(--theme-text, #d7e3fc)' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(201,168,76,0.1)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                  >{PRESET_LABELS[k]}</button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Mobile: not available ── */}
       {isMobile ? (

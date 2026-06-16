@@ -2,6 +2,7 @@ import { X, GripHorizontal, Settings } from 'lucide-react'
 import { useState } from 'react'
 import type { WidgetConfig, WidgetType } from '../../hooks/useDashboard'
 import TickerTagInput from '../TickerTagInput'
+import ExpirySelect from '../ExpirySelect'
 
 function makeEqualWeights(tickers: string[]): Record<string, string> {
   const w = tickers.length ? (100 / tickers.length).toFixed(1) : '0'
@@ -16,13 +17,17 @@ interface WidgetFrameProps {
   children: React.ReactNode
 }
 
-const TICKER_WIDGETS: WidgetType[]        = ['price-card', 'mini-chart', 'options-snapshot', 'options-pricer', 'delta-target', 'tradingview-chart']
+const TICKER_WIDGETS: WidgetType[]        = ['price-card', 'mini-chart', 'options-snapshot', 'options-pricer', 'delta-target', 'tradingview-chart', 'dealer-gex', 'vol-skew']
 const TICKERS_WIDGETS: WidgetType[]       = ['watchlist', 'earnings-calendar', 'news-feed', 'correlation-matrix']
 const PORTFOLIO_WIDGETS: WidgetType[]     = ['portfolio-summary']
 const YIELD_WIDGETS: WidgetType[]         = ['macro-strip']
 const GLOBAL_MACRO_WIDGETS: WidgetType[]    = ['global-macro']
 const CREDIT_SPREADS_WIDGETS: WidgetType[]  = ['credit-spreads']
 const MACRO_CALENDAR_WIDGETS: WidgetType[]  = ['macro-calendar']
+const EXPIRY_WIDGETS: WidgetType[]          = ['dealer-gex', 'vol-skew']
+// Frame supplies the title (no gear) for widgets that host their own inline
+// controls in the body, à la Price Card's period row.
+const HEADER_WIDGETS: WidgetType[]          = ['sector-rotation', 'sentiment-gauge', 'screener', 'pm-portfolios']
 
 const MACRO_CAT_OPTIONS: { key: string; label: string; color: string }[] = [
   { key: 'equity',    label: 'Equity', color: '#22c55e' },
@@ -96,6 +101,12 @@ const WIDGET_LABELS: Record<string, string> = {
   'credit-spreads':     'Credit Spreads',
   'macro-calendar':     'Macro Calendar',
   'yield-curve':        'Yield Curve',
+  'sector-rotation':    'Sector Rotation',
+  'dealer-gex':         'Dealer GEX',
+  'vol-skew':           'Vol Skew',
+  'sentiment-gauge':    'Market Sentiment',
+  'screener':           'Screener',
+  'pm-portfolios':      'Portfolios',
 }
 
 function widgetTitle(config: WidgetConfig): string {
@@ -282,6 +293,8 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
       : makeEqualWeights(config.tickers ?? [])
   )
 
+  const [expirySel, setExpirySel] = useState(config.expiry || '')
+
   const handlePortTickersChange = (next: string[]) => {
     setPortTickers(next)
     setPortWeights(prev => {
@@ -321,6 +334,8 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
       patch.categories = spreadSerSel
       patch.lookback   = spreadLookback
     }
+    if (EXPIRY_WIDGETS.includes(config.type))
+      patch.expiry = expirySel
     onUpdate(patch)
     setConfigOpen(false)
   }
@@ -337,7 +352,7 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
     CREDIT_SPREADS_WIDGETS.includes(config.type) ||
     MACRO_CALENDAR_WIDGETS.includes(config.type)
 
-  const hasHeader = hasSettings || SELF_CONFIGURED.includes(config.type as WidgetType)
+  const hasHeader = hasSettings || SELF_CONFIGURED.includes(config.type as WidgetType) || HEADER_WIDGETS.includes(config.type)
 
   return (
     <div
@@ -404,6 +419,19 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
                 style={{ flex: 1, background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.10)', color: S.text, fontFamily: S.mono, fontSize: 12, padding: '3px 6px', outline: 'none' }}
               />
               <button onClick={saveConfig} style={{ background: S.gold, border: 'none', color: 'var(--theme-bg, #0a1628)', fontSize: 9, fontWeight: 700, padding: '3px 8px', cursor: 'pointer', letterSpacing: '0.1em', fontFamily: S.label }}>SAVE</button>
+            </div>
+          )}
+
+          {EXPIRY_WIDGETS.includes(config.type) && (
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8 }}>
+              <span style={{ fontSize: 9, color: S.muted, fontFamily: S.label, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Expiry</span>
+              <ExpirySelect
+                ticker={config.ticker || ''}
+                value={expirySel}
+                autoSelect={false}
+                onChange={e => { setExpirySel(e); onUpdate({ expiry: e }) }}
+                style={{ flex: 1, background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.10)', color: S.text, fontFamily: S.mono, fontSize: 12, padding: '3px 6px', outline: 'none' }}
+              />
             </div>
           )}
 

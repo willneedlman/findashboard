@@ -13,6 +13,12 @@ const ALL_TYPES: WidgetType[] = [
   'global-macro',
   'credit-spreads',
   'yield-curve',
+  'sector-rotation',
+  'dealer-gex',
+  'vol-skew',
+  'sentiment-gauge',
+  'screener',
+  'pm-portfolios',
 ]
 
 interface WidgetPaletteProps {
@@ -65,15 +71,22 @@ export default function WidgetPalette({ open, onClose, onAdd }: WidgetPalettePro
                   key={type}
                   onClick={() => { onAdd(type); onClose() }}
                   style={{
-                    display: 'flex', alignItems: 'flex-start', gap: 12, width: '100%',
+                    display: 'flex', alignItems: 'flex-start', gap: 11, width: '100%',
                     background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.08)))', padding: '10px 12px',
                     cursor: 'pointer', textAlign: 'left', transition: 'border-color 0.15s',
                   }}
                   onMouseEnter={e => ((e.currentTarget as HTMLElement).style.borderColor = 'color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)')}
                   onMouseLeave={e => ((e.currentTarget as HTMLElement).style.borderColor = 'var(--theme-border, rgba(255,255,255,0.08))')}
                 >
-                  <span style={{ fontSize: 20, flexShrink: 0, lineHeight: 1 }}>{WIDGET_ICONS[type]}</span>
-                  <div>
+                  <span style={{
+                    width: 32, height: 32, flexShrink: 0,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 22%, transparent)',
+                    background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 7%, transparent)',
+                    fontFamily: 'var(--theme-mono)', fontSize: 12, fontWeight: 700, letterSpacing: '0.02em',
+                    color: 'var(--theme-primary, #c9a84c)', lineHeight: 1,
+                  }}>{WIDGET_ICONS[type]}</span>
+                  <div style={{ minWidth: 0 }}>
                     <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 12, fontWeight: 600, color: 'var(--theme-text, #d7e3fc)', marginBottom: 3 }}>
                       {WIDGET_LABELS[type]}
                     </div>
