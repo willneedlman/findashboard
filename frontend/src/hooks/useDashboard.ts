@@ -299,10 +299,10 @@ let _seq = 0
 const newId = () => `w${Date.now()}_${_seq++}`
 const newDashId = () => `d${Date.now()}_${_seq++}`
 
-export type PresetKey = 'main' | 'cockpit' | 'research' | 'screening' | 'market-overview'
+export type PresetKey = 'main' | 'cockpit' | 'research' | 'screening' | 'market-overview' | 'options'
 
 export const PRESET_LABELS: Record<PresetKey, string> = {
-  main: 'Everything', cockpit: 'Trading Portal', research: 'Research', screening: 'Screening', 'market-overview': 'Market Overview',
+  main: 'Everything', cockpit: 'Trading Portal', research: 'Research', screening: 'Screening', 'market-overview': 'Market Overview', options: 'Options Desk',
 }
 
 // A preset is a hand-placed list of tiles (12-col grid, 60px rows) so each
@@ -357,6 +357,16 @@ function buildPreset(key: PresetKey): { widgets: WidgetConfig[]; layouts: Layout
     { type: 'sentiment-gauge',                                          x: 9, y: 11, w: 3, h: 7 },
   ])
 
+  // Options Desk — snapshot + pricer + delta-target / dealer GEX + vol skew + sentiment.
+  if (key === 'options') return fromItems([
+    { type: 'options-snapshot', config: { ticker: 'AAPL' },             x: 0, y: 0,  w: 7, h: 9 },
+    { type: 'options-pricer',   config: { ticker: 'AAPL' },             x: 7, y: 0,  w: 5, h: 5 },
+    { type: 'delta-target',     config: { ticker: 'AAPL' },             x: 7, y: 5,  w: 5, h: 6 },
+    { type: 'dealer-gex',       config: { ticker: 'AAPL' },             x: 0, y: 9,  w: 4, h: 7 },
+    { type: 'vol-skew',         config: { ticker: 'AAPL' },             x: 4, y: 9,  w: 3, h: 7 },
+    { type: 'sentiment-gauge',                                          x: 7, y: 11, w: 5, h: 5 },
+  ])
+
   if (key === 'cockpit') return fromItems([
     // Trading Portal "cockpit" (Layout B): ticker-tape strip, watchlist rail,
     // chart + order ticket + positions cockpit, full-width positions ledger.
@@ -380,7 +390,9 @@ function storageKey(userId?: string | null) {
 
 function defaultWorkspace(): StoredWorkspace {
   const id = newDashId()
-  return { version: 2, dashboards: [{ id, name: 'Main', widgets: DEFAULT_WIDGETS, layouts: DEFAULT_LAYOUTS }], activeId: id }
+  // New users land on the Trading Portal cockpit as the default dashboard.
+  const p = buildPreset('cockpit')
+  return { version: 2, dashboards: [{ id, name: 'Trading Portal', widgets: p.widgets, layouts: p.layouts }], activeId: id }
 }
 
 function load(userId?: string | null): StoredWorkspace {
@@ -450,7 +462,7 @@ export function useDashboard(userId?: string | null) {
   }, [patchActive])
 
   const resetDashboard = useCallback(() => {
-    const p = buildPreset('main')
+    const p = buildPreset('cockpit')
     patchActive(d => ({ ...d, widgets: p.widgets, layouts: p.layouts }))
   }, [patchActive])
 
