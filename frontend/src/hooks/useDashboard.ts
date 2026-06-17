@@ -355,10 +355,10 @@ let _seq = 0
 const newId = () => `w${Date.now()}_${_seq++}`
 const newDashId = () => `d${Date.now()}_${_seq++}`
 
-export type PresetKey = 'main' | 'cockpit' | 'research' | 'screening' | 'market-overview' | 'options' | 'risk' | 'flow' | 'blank'
+export type PresetKey = 'main' | 'cockpit' | 'research' | 'screening' | 'market-overview' | 'options' | 'risk' | 'blank'
 
 export const PRESET_LABELS: Record<PresetKey, string> = {
-  main: 'Everything', cockpit: 'Trading Portal', research: 'Research', screening: 'Screening', 'market-overview': 'Market Overview', options: 'Options Desk', risk: 'Risk Desk', flow: 'Flow Desk', blank: 'Custom (blank)',
+  main: 'Everything', cockpit: 'Trading Portal', research: 'Research', screening: 'Screening', 'market-overview': 'Market Overview', options: 'Options Desk', risk: 'Risk Desk', blank: 'Custom (blank)',
 }
 
 // A preset is a hand-placed list of tiles (12-col grid, 60px rows) so each
@@ -427,14 +427,6 @@ function buildPreset(key: PresetKey): { widgets: WidgetConfig[]; layouts: Layout
     { type: 'correlation-matrix', config: { tickers: ['SPY', 'QQQ', 'TLT', 'GLD', 'BTC-USD'] }, x: 0, y: 15, w: 4, h: 7 },
     { type: 'pm-portfolios',                                           x: 4, y: 15, w: 4, h: 7 },
     { type: 'trade-blotter',                                           x: 8, y: 15, w: 4, h: 7 },
-  ])
-
-  // Flow Desk — tape + unusual options flow + heatmap + dealer gamma.
-  if (key === 'flow') return fromItems([
-    { type: 'time-and-sales', config: { ticker: 'AAPL' },              x: 0, y: 0,  w: 3, h: 9 },
-    { type: 'unusual-flow',                                            x: 3, y: 0,  w: 6, h: 9 },
-    { type: 'dealer-gex',    config: { ticker: 'SPY' },                x: 9, y: 0,  w: 3, h: 9 },
-    { type: 'heatmap',                                                 x: 0, y: 9,  w: 12, h: 8 },
   ])
 
   // Options Desk — snapshot + pricer + delta-target / dealer GEX + vol skew +
