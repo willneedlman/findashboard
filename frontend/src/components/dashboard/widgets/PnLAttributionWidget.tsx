@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
-import { loadActivePortfolio, useQuotes, priceHoldings } from './usePortfolio'
+import { loadActivePortfolio, useQuotes, priceHoldings, money } from './usePortfolio'
 
 const T = {
   bg: 'var(--theme-bg, #101c2e)', surface: 'var(--theme-surface, #0d1826)',
@@ -9,11 +9,10 @@ const T = {
   mono: 'var(--theme-mono)', label: 'var(--theme-sans)', pos: '#22c55e', neg: '#ef4444',
 }
 
-const money = (v: number) => `${v < 0 ? '-' : ''}$${Math.abs(Math.round(v)).toLocaleString()}`
 
 export default function PnLAttributionWidget({ config: _c }: { config: WidgetConfig }) {
   const [mode, setMode] = useState<'day' | 'open'>('day')
-  const { holdings } = loadActivePortfolio()
+  const { holdings } = useMemo(() => loadActivePortfolio(), [])
   const quotes = useQuotes(holdings.map(h => h.ticker))
   const priced = priceHoldings(holdings, quotes)
 

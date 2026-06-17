@@ -1,9 +1,7 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import axios from 'axios'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 import TickerLogo from '../../TickerLogo'
-import { useTheme } from '../../../contexts/ThemeContext'
+import { usePaperAccount, hhmmss } from './usePortfolio'
 
 const T = {
   bg: 'var(--theme-bg, #101c2e)', surface: 'var(--theme-surface, #0d1826)',
@@ -12,29 +10,12 @@ const T = {
   mono: 'var(--theme-mono)', label: 'var(--theme-sans)', pos: '#22c55e', neg: '#ef4444', blue: '#60a5fa',
 }
 
-interface Order {
-  id: string; symbol: string; option_symbol?: string; side: string; status: string
-  fill_price: number | null; quantity?: number; order_type?: string; created_at?: number; filled_at?: number
-}
-interface Account { orders?: Order[] }
-
 const STATUS_C: Record<string, string> = { filled: T.pos, partial: T.gold, working: T.blue, pending: T.blue, open: T.blue, canceled: T.muted, cancelled: T.muted, rejected: T.neg }
 const isWorking = (s: string) => ['working', 'pending', 'open', 'partial'].includes(s)
-const hhmmss = (epoch?: number) => epoch ? new Date(epoch * 1000).toTimeString().slice(0, 8) : '—'
 
 export default function TradeBlotterWidget({ config: _c }: { config: WidgetConfig }) {
-  const { user } = useTheme()
-  const token = typeof window !== 'undefined' ? (localStorage.getItem('ft-session-token') || '') : ''
-  const authHeaders = { Authorization: `Bearer ${token}`, 'x-session-token': token }
   const [filter, setFilter] = useState<'all' | 'filled' | 'working'>('all')
-
-  const { data, isLoading } = useQuery<Account>({
-    queryKey: ['blotter-account', user?.id],
-    enabled: !!user?.id && !!token,
-    staleTime: 20_000,
-    refetchInterval: 20_000,
-    queryFn: () => axios.get(`/api/paper/account?user_id=${user!.id}`, { headers: authHeaders }).then(r => r.data),
-  })
+  const { data, isLoading, user } = usePaperAccount()
 
   const orders = (data?.orders ?? []).slice().sort((a, b) => (b.filled_at ?? b.created_at ?? 0) - (a.filled_at ?? a.created_at ?? 0))
   const rows = orders.filter(o => {

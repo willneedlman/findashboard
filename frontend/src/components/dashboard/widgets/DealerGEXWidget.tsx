@@ -18,7 +18,7 @@ const T = {
 }
 
 interface GEXStrike { strike: number; net_gex: number }
-interface GEXResp { spot?: number; data?: GEXStrike[] }
+interface GEXResp { spot?: number; data?: GEXStrike[]; expiry?: string | null }
 
 const STRIKE_COUNTS = [10, 20, 30, 40, 0] // 0 = all
 const selStyle: React.CSSProperties = { background: 'var(--theme-bg, #101c2e)', border: `1px solid ${T.border}`, color: T.gold, fontFamily: T.mono, fontSize: 8.5, padding: '1px 3px', outline: 'none', cursor: 'pointer' }
@@ -84,7 +84,7 @@ export default function DealerGEXWidget({ config }: { config: WidgetConfig }) {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, padding: '3px 10px 0', flexShrink: 0 }}>
-            <span style={{ fontFamily: T.mono, fontSize: 8, color: T.muted, letterSpacing: '0.06em' }}>{expiry ? `exp ${expiry}` : 'all chains'}</span>
+            <span style={{ fontFamily: T.mono, fontSize: 8, color: T.muted, letterSpacing: '0.06em' }}>{data?.expiry ? `exp ${data.expiry}` : 'all chains'}</span>
             <select value={count} onChange={e => setCount(Number(e.target.value))} style={selStyle} title="Strikes shown (nearest spot)">
               {STRIKE_COUNTS.map(n => <option key={n} value={n}>{n === 0 ? 'All strikes' : `${n} strikes`}</option>)}
             </select>

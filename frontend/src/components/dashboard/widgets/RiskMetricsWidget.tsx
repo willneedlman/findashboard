@@ -1,7 +1,8 @@
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
-import { loadActivePortfolio, useQuotes, priceHoldings } from './usePortfolio'
+import { loadActivePortfolio, useQuotes, priceHoldings, money } from './usePortfolio'
 
 const T = {
   bg: 'var(--theme-bg, #101c2e)', surface: 'var(--theme-surface, #0d1826)',
@@ -12,7 +13,6 @@ const T = {
 const cap: React.CSSProperties = { fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.muted, marginBottom: 3 }
 
 interface Metrics { cagr: number; vol: number; sharpe: number; max_drawdown: number; sortino: number; calmar: number; beta: number }
-const money = (v: number) => `${v < 0 ? '-' : ''}$${Math.abs(Math.round(v)).toLocaleString()}`
 
 const BENCH = 'SPY'
 function windowDates(): { start: string; end: string } {
@@ -22,16 +22,22 @@ function windowDates(): { start: string; end: string } {
 }
 
 export default function RiskMetricsWidget({ config: _c }: { config: WidgetConfig }) {
-  const { holdings, cash } = loadActivePortfolio()
+  const { holdings, cash } = useMemo(() => loadActivePortfolio(), [])
   const quotes = useQuotes(holdings.map(h => h.ticker))
   const priced = priceHoldings(holdings, quotes).sort((a, b) => b.value - a.value)
   const nav = priced.reduce((s, p) => s + p.value, 0) + cash
 
   // Top 20 by value as market-value weights (compare caps tickers at 20).
+  // Drop symbols the backend's validator would reject (it 400s the whole
+  // request otherwise — one bad holding would blank every metric).
+  const VALID = /^[A-Z0-9\-^=]{1,12}$/
   const top = priced.slice(0, 20)
-  const wSum = top.reduce((s, p) => s + p.value, 0) || 1
-  const tickers = top.map(p => p.ticker.replace('.', '-'))
-  const weights = top.map(p => p.value / wSum)
+  const cleaned = top
+    .map(p => ({ p, t: p.ticker.toUpperCase().replace('.', '-') }))
+    .filter(({ t }) => VALID.test(t))
+  const invested = cleaned.reduce((s, c) => s + c.p.value, 0) || 1
+  const tickers = cleaned.map(c => c.t)
+  const weights = cleaned.map(c => c.p.value / invested)
   const sig = tickers.map((t, i) => `${t}:${weights[i].toFixed(3)}`).join(',')
 
   const { data, isLoading, isError } = useQuery<{ metrics: Metrics[] }>({
@@ -60,11 +66,14 @@ export default function RiskMetricsWidget({ config: _c }: { config: WidgetConfig
 
   const m = data?.metrics?.[0]
   const dailyVol = m ? (m.vol / 100) / Math.sqrt(252) : 0
-  const var95 = 1.645 * dailyVol * nav
+  // VaR describes the modelled basket (the priced top holdings, whose vol this
+  // is), so scale by that invested value — not full NAV, which folds in cash
+  // and any holdings past the 20-name cap that carry no vol here.
+  const var95 = 1.645 * dailyVol * invested
   const dash = (v: string) => (m ? v : '—')
 
   const stats: { l: string; v: string; sub?: string; c: string }[] = [
-    { l: 'VaR 95% · 1d', v: dash(money(-var95)), sub: m ? `-${(1.645 * dailyVol * 100).toFixed(1)}% NAV` : undefined, c: T.neg },
+    { l: 'VaR 95% · 1d', v: dash(money(-var95)), sub: m ? `-${(nav > 0 ? (var95 / nav) * 100 : 0).toFixed(1)}% NAV` : undefined, c: T.neg },
     { l: `Beta vs ${BENCH}`, v: dash(m ? m.beta.toFixed(2) : ''), c: T.text },
     { l: 'Sharpe', v: dash(m ? m.sharpe.toFixed(2) : ''), c: m && m.sharpe >= 0 ? T.pos : T.neg },
     { l: 'Ann. Vol', v: dash(m ? `${m.vol.toFixed(1)}%` : ''), c: T.gold },

@@ -1,5 +1,35 @@
-import { useQueries } from '@tanstack/react-query'
+import { useQueries, useQuery } from '@tanstack/react-query'
 import axios from 'axios'
+import { useTheme } from '../../../contexts/ThemeContext'
+
+// Shared formatters used across the portfolio/flow widgets.
+export const money = (v: number) => `${v < 0 ? '-' : ''}$${Math.abs(Math.round(v)).toLocaleString()}`
+export const hhmmss = (epoch?: number) => epoch ? new Date(epoch * 1000).toTimeString().slice(0, 8) : '—'
+
+export interface PaperOrder {
+  id: string; symbol: string; option_symbol?: string; side: string; status: string
+  fill_price: number | null; quantity?: number; order_type?: string; created_at?: number; filled_at?: number
+}
+export interface PaperAccount {
+  cash?: number; equity?: number; buying_power?: number; realized_pnl?: number; orders?: PaperOrder[]
+}
+
+// One shared, deduped paper-account query (auth headers + session token in one
+// place) for every widget that needs the user's account/orders/equity.
+export function usePaperAccount(enabled = true) {
+  const { user } = useTheme()
+  const token = typeof window !== 'undefined' ? (localStorage.getItem('ft-session-token') || '') : ''
+  const query = useQuery<PaperAccount>({
+    queryKey: ['paper-account-shared', user?.id],
+    enabled: enabled && !!user?.id && !!token,
+    staleTime: 20_000,
+    refetchInterval: 20_000,
+    queryFn: () => axios.get(`/api/paper/account?user_id=${user!.id}`, {
+      headers: { Authorization: `Bearer ${token}`, 'x-session-token': token },
+    }).then(r => r.data),
+  })
+  return { ...query, user }
+}
 
 // Shared read layer for the portfolio-driven dashboard widgets (risk, P/L,
 // exposure). Holdings come from the Portfolio Manager store (pm-portfolios-v2);

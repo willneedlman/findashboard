@@ -1,6 +1,7 @@
 import { X, GripHorizontal, Settings } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import type { WidgetConfig, WidgetType } from '../../hooks/useDashboard'
+import { TICKER_WIDGET_TYPES } from '../../hooks/useDashboard'
 import TickerTagInput from '../TickerTagInput'
 import ExpirySelect from '../ExpirySelect'
 
@@ -17,7 +18,8 @@ interface WidgetFrameProps {
   children: React.ReactNode
 }
 
-const TICKER_WIDGETS: WidgetType[]        = ['price-card', 'mini-chart', 'options-snapshot', 'options-pricer', 'delta-target', 'tradingview-chart', 'dealer-gex', 'vol-skew', 'analyst-ratings', 'valuation', 'insider-activity', 'time-and-sales']
+// Single source of truth shared with the dashboard-wide ticker broadcast.
+const TICKER_WIDGETS: WidgetType[]        = TICKER_WIDGET_TYPES
 const TICKERS_WIDGETS: WidgetType[]       = ['watchlist', 'earnings-calendar', 'news-feed', 'correlation-matrix', 'index-tape']
 // Tickers widgets that also accept "load from a Portfolio Manager book".
 const PORTFOLIO_LOADABLE: WidgetType[]    = ['watchlist', 'index-tape', 'earnings-calendar']
@@ -321,9 +323,10 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
 
   // Keep the gear fields in sync with the dashboard-wide ticker broadcast (and any
   // external config change) so they show the live value, not a stale mount snapshot.
-  // The field stays editable, so a per-widget override still works.
-  useEffect(() => { setTickerInput(config.ticker || '') }, [config.ticker])
-  useEffect(() => { setExpirySel(config.expiry || '') }, [config.expiry])
+  // Skip while the gear is open so a broadcast landing mid-edit doesn't clobber
+  // the user's unsaved keystrokes; it resyncs when they close the panel.
+  useEffect(() => { if (!configOpen) setTickerInput(config.ticker || '') }, [config.ticker, configOpen])
+  useEffect(() => { if (!configOpen) setExpirySel(config.expiry || '') }, [config.expiry, configOpen])
 
   const handlePortTickersChange = (next: string[]) => {
     setPortTickers(next)

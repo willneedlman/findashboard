@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
+import { hhmmss } from './usePortfolio'
 
 const T = {
   bg: 'var(--theme-bg, #101c2e)', surface: 'var(--theme-surface, #0d1826)',
@@ -10,7 +11,6 @@ const T = {
 }
 
 interface Candle { time: number; open: number; high: number; low: number; close: number; volume: number }
-const hhmmss = (epoch: number) => new Date(epoch * 1000).toTimeString().slice(0, 8)
 
 // Real intraday "prints" built from 1-minute bars. We don't license the OPRA/
 // consolidated trade tape, so each row is one 1-min bar (close = print price,
@@ -18,18 +18,26 @@ const hhmmss = (epoch: number) => new Date(epoch * 1000).toTimeString().slice(0,
 export default function TimeAndSalesWidget({ config }: { config: WidgetConfig }) {
   const ticker = (config.ticker || 'AAPL').toUpperCase()
 
-  const { data, isLoading, isError } = useQuery<{ candles: Candle[] }>({
+  const { data, isLoading } = useQuery<{ candles: Candle[] }>({
     queryKey: ['tns-ohlcv', ticker],
     queryFn: () => axios.get(`/api/market/ohlcv?ticker=${encodeURIComponent(ticker)}&interval=1m`).then(r => r.data),
     staleTime: 30_000,
     refetchInterval: 30_000,
   })
 
+  // Header last/1D from the quote endpoint — day change is vs the prior session
+  // close, which the intraday bars alone can't give.
+  const { data: quote } = useQuery<{ current_price: number; pct_change_1d: number | null }>({
+    queryKey: ['tns-quote', ticker],
+    queryFn: () => axios.get(`/api/market/quote/${encodeURIComponent(ticker)}`).then(r => r.data),
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+  })
+
   const candles = data?.candles ?? []
   const recent = candles.slice(-80).reverse()
-  const last = recent[0]?.close ?? 0
-  const first = candles[0]?.close ?? last
-  const dayChg = first > 0 ? ((last / first) - 1) * 100 : 0
+  const last = quote?.current_price ?? recent[0]?.close ?? 0
+  const dayChg = quote?.pct_change_1d ?? 0
   const maxVol = Math.max(...recent.map(c => c.volume), 1)
 
   const lbl: React.CSSProperties = { fontFamily: T.label, fontSize: 7.5, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.muted }
@@ -58,7 +66,7 @@ export default function TimeAndSalesWidget({ config }: { config: WidgetConfig })
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         {recent.length === 0 ? (
           <div style={{ padding: 16, textAlign: 'center', fontFamily: T.label, fontSize: 10, color: T.muted, lineHeight: 1.6 }}>
-            {isLoading ? 'Loading prints…' : isError ? 'No intraday data.' : 'No prints — market may be closed.'}
+            {isLoading ? 'Loading prints…' : 'Market closed — no data available.'}
           </div>
         ) : recent.map((p, i) => {
           const prev = recent[i + 1]?.close ?? p.open

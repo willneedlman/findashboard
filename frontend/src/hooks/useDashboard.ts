@@ -71,11 +71,15 @@ export interface WidgetConfig {
 }
 
 // Widget types that key off config.ticker — the dashboard-wide ticker control
-// broadcasts to all of these at once.
+// broadcasts to all of these at once, and WidgetFrame uses the same list to
+// decide which widgets get a ticker title + per-widget ticker gear.
+// position-sizer is intentionally absent: its ticker is a cosmetic label over a
+// manual entry/stop calculator, so broadcasting to it would mislabel without
+// changing its inputs.
 export const TICKER_WIDGET_TYPES: WidgetType[] = [
   'price-card', 'mini-chart', 'options-snapshot', 'options-pricer', 'delta-target',
   'tradingview-chart', 'dealer-gex', 'vol-skew', 'analyst-ratings', 'valuation',
-  'insider-activity', 'time-and-sales', 'unusual-flow', 'position-sizer',
+  'insider-activity', 'time-and-sales', 'unusual-flow',
 ]
 
 export interface Dashboard {
@@ -197,11 +201,11 @@ export const WIDGET_DESCRIPTIONS: Record<WidgetType, string> = {
   'analyst-ratings':     'Analyst consensus: rating, buy/hold/sell distribution, mean/high/low targets, implied upside.',
   'valuation':           'P/E, Fwd P/E, P/S, EV/EBITDA, PEG, Div Yield with rich/cheap vs sector peers.',
   'insider-activity':    'Institutional/retail/insider ownership split and the latest insider buy/sell transactions.',
-  'risk-metrics':        'Portfolio VaR, beta, Sharpe, vol, drawdown, plus factor exposure.',
-  'pnl-attribution':     "Waterfall of today's P/L by position with top contributors/detractors.",
-  'exposure-map':        'Gross/net/long/short and per-sector long-vs-short exposure.',
-  'time-and-sales':      'Live print tape — time, price, size, venue, uptick/downtick colored.',
-  'unusual-flow':        'Largest options sweeps & blocks — strike, expiry, premium, sentiment.',
+  'risk-metrics':        'Portfolio VaR, beta, Sharpe, vol, drawdown, and top-holding concentration.',
+  'pnl-attribution':     'Waterfall of P/L by position (day or open) from your portfolio.',
+  'exposure-map':        'Gross/net/long/short and per-position exposure as % of NAV.',
+  'time-and-sales':      'Intraday prints from 1-minute bars — time, price, size, uptick/downtick.',
+  'unusual-flow':        'Largest options flow by premium — strike, expiry, volume, vol/OI, IV.',
   'heatmap':             'S&P treemap by sector & market cap, colored by daily % change.',
   'trade-blotter':       'Order & fill history — side, qty, avg price, and fill status.',
   'position-sizer':      'Risk-based share sizing from account %, entry, and stop.',

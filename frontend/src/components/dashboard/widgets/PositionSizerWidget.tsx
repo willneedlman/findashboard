@@ -1,8 +1,6 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import axios from 'axios'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
-import { useTheme } from '../../../contexts/ThemeContext'
+import { usePaperAccount } from './usePortfolio'
 
 const T = {
   bg: 'var(--theme-bg, #101c2e)', surface: 'var(--theme-surface, #0d1826)',
@@ -27,14 +25,7 @@ function Stepper({ value, step, onChange }: { value: number; step: number; onCha
 
 export default function PositionSizerWidget({ config }: { config: WidgetConfig }) {
   const ticker = (config.ticker || 'AAPL').toUpperCase()
-  const { user } = useTheme()
-  const token = typeof window !== 'undefined' ? (localStorage.getItem('ft-session-token') || '') : ''
-  const { data: acct } = useQuery<{ equity: number }>({
-    queryKey: ['sizer-account', user?.id],
-    enabled: !!user?.id && !!token && config.accountValue == null,
-    staleTime: 60_000,
-    queryFn: () => axios.get(`/api/paper/account?user_id=${user!.id}`, { headers: { Authorization: `Bearer ${token}`, 'x-session-token': token } }).then(r => r.data),
-  })
+  const { data: acct } = usePaperAccount(config.accountValue == null)
   const account = config.accountValue ?? acct?.equity ?? 100000
   const [riskPct, setRiskPct] = useState(config.riskPct ?? 1)
   const [entry, setEntry] = useState(config.entry ?? 100)

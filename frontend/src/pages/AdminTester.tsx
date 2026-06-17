@@ -978,7 +978,8 @@ export default function AdminTester() {
           <div>
             <p style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: 'var(--theme-text-dim)', marginBottom: 16, lineHeight: 1.6 }}>
               Live preview of the new dashboard widgets at their default grid size.
-              Display widgets use deterministic mock data; the Position Sizer is interactive.
+              They pull real data (portfolio, market, options); the portfolio and blotter widgets
+              need a saved Portfolio Manager book or a signed-in paper account and otherwise show an empty state.
               Add any of these to a board from My Dashboard → +NEW, or via the Risk Desk / Flow Desk presets.
             </p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: 12 }}>

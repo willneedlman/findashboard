@@ -571,8 +571,13 @@ def dealer_gex(ticker: str, expiry: str | None = None):
 
     today = _dt.date.today()
     future_exps = [e for e in all_expirations if _dt.date.fromisoformat(e) > today]
-    exps_to_process = ([expiry] if (expiry and expiry in all_expirations)
-                       else future_exps[:18])  # aggregate up to 18 expirations for full strike coverage
+    # A requested expiry only narrows the scan if it actually exists for this
+    # symbol; otherwise we aggregate (and report expiry=None so the UI doesn't
+    # claim a single-expiry profile it didn't compute). Off-hours we cap the
+    # fan-out lower — gamma is near-term dominated and the data can't change.
+    used_expiry = expiry if (expiry and expiry in all_expirations) else None
+    exps_to_process = ([used_expiry] if used_expiry
+                       else future_exps[:(18 if open_now else 8)])
 
     r = 0.045
     rows = []
@@ -655,7 +660,7 @@ def dealer_gex(ticker: str, expiry: str | None = None):
     }
 
     if not rows:
-        return {"spot": spot, "data": [], "expirations": all_expirations, "expiry": expiry, **_meta}
+        return {"spot": spot, "data": [], "expirations": all_expirations, "expiry": used_expiry, **_meta}
 
     df = pd.DataFrame(rows)
     pivot = (df.groupby(["strike", "side"])["gex_m"].sum()
@@ -669,7 +674,7 @@ def dealer_gex(ticker: str, expiry: str | None = None):
         "spot": spot,
         "data": pivot.round(4).to_dict(orient="records"),
         "expirations": all_expirations,
-        "expiry": expiry,
+        "expiry": used_expiry,
         **_meta,
     }
     disk_set(cache_key, result, ttl=86400)   # reuse while the market is closed
