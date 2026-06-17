@@ -191,7 +191,15 @@ export default function PaperChart({ initialTicker = 'SPY', fills = [], storageK
     } catch { if (fit) { setChartErr(true); setCandles([]) } }
   }, [])
 
-  useEffect(() => { if (ticker && candleRef.current) fetchCandles(ticker, tfKey, true) }, [ticker, tfKey, fetchCandles])
+  // Re-frame (fit) only when the symbol changes or on first load; switching the
+  // candle interval keeps the current zoom/scroll instead of snapping to default.
+  const prevTickerRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!ticker || !candleRef.current) return
+    const fit = prevTickerRef.current !== ticker
+    prevTickerRef.current = ticker
+    fetchCandles(ticker, tfKey, fit)
+  }, [ticker, tfKey, fetchCandles])
   useEffect(() => {
     if (!ticker) return
     const id = window.setInterval(() => { if (candleRef.current) fetchCandles(ticker, tfKey, false) }, isIntraday(tfKey) ? 15_000 : 60_000)

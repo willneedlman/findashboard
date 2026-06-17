@@ -255,7 +255,15 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
   }, [])
 
   // Fresh load on ticker/timeframe change: frame the data.
-  useEffect(() => { if (ticker && candleRef.current) fetchCandles(ticker, tfKey, true) }, [ticker, tfKey, fetchCandles])
+  // Fit only on symbol change / first load; switching the candle interval keeps
+  // the current zoom and scroll position instead of snapping back to default.
+  const prevTickerRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!ticker || !candleRef.current) return
+    const fit = prevTickerRef.current !== ticker
+    prevTickerRef.current = ticker
+    fetchCandles(ticker, tfKey, fit)
+  }, [ticker, tfKey, fetchCandles])
 
   // Live refresh: intraday every 15s, daily+ every 60s, preserving zoom.
   useEffect(() => {
