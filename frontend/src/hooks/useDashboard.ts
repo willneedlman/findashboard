@@ -1,5 +1,12 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, createContext, useContext } from 'react'
 import type { Layout } from 'react-grid-layout'
+
+// Lets an in-grid widget (e.g. the Ticker Control tile) reach the active
+// dashboard's controls without prop drilling. CustomDashboard provides it;
+// widgets rendered outside a dashboard (e.g. the admin gallery) get null.
+export interface DashboardControls { setAllTickers: (ticker: string) => void }
+export const DashboardControlsContext = createContext<DashboardControls | null>(null)
+export const useDashboardControls = () => useContext(DashboardControlsContext)
 
 // ── Widget types ─────────────────────────────────────────────────────────────
 
@@ -39,6 +46,7 @@ export type WidgetType =
   | 'heatmap'
   | 'trade-blotter'
   | 'position-sizer'
+  | 'ticker-control'
 
 export interface WidgetConfig {
   id: string
@@ -133,6 +141,7 @@ export const WIDGET_DEFAULT_SIZE: Record<WidgetType, { w: number; h: number }> =
   'heatmap':             { w: 8, h: 8 },
   'trade-blotter':       { w: 6, h: 6 },
   'position-sizer':      { w: 4, h: 6 },
+  'ticker-control':      { w: 3, h: 2 },
 }
 
 export const WIDGET_LABELS: Record<WidgetType, string> = {
@@ -171,6 +180,7 @@ export const WIDGET_LABELS: Record<WidgetType, string> = {
   'heatmap':             'Market Heatmap',
   'trade-blotter':       'Trade Blotter',
   'position-sizer':      'Position Sizer',
+  'ticker-control':      'Ticker Control',
 }
 
 export const WIDGET_DESCRIPTIONS: Record<WidgetType, string> = {
@@ -209,6 +219,7 @@ export const WIDGET_DESCRIPTIONS: Record<WidgetType, string> = {
   'heatmap':             'S&P treemap by sector & market cap, colored by daily % change.',
   'trade-blotter':       'Order & fill history — side, qty, avg price, and fill status.',
   'position-sizer':      'Risk-based share sizing from account %, entry, and stop.',
+  'ticker-control':      'Set one ticker and broadcast it to every ticker widget on this dashboard.',
 }
 
 export const WIDGET_ICONS: Record<WidgetType, string> = {
@@ -247,6 +258,7 @@ export const WIDGET_ICONS: Record<WidgetType, string> = {
   'heatmap':             'HM',
   'trade-blotter':       'BLT',
   'position-sizer':      'SIZ',
+  'ticker-control':      'TKR',
 }
 
 // ── Default layout — all 20 widget types, one each ───────────────────────────

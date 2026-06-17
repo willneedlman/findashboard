@@ -34,6 +34,7 @@ import UnusualFlowWidget from './widgets/UnusualFlowWidget'
 import HeatmapWidget from './widgets/HeatmapWidget'
 import TradeBlotterWidget from './widgets/TradeBlotterWidget'
 import PositionSizerWidget from './widgets/PositionSizerWidget'
+import UniversalTickerWidget from './widgets/UniversalTickerWidget'
 
 export default function WidgetRenderer({ config }: { config: WidgetConfig }) {
   switch (config.type) {
@@ -72,6 +73,7 @@ export default function WidgetRenderer({ config }: { config: WidgetConfig }) {
     case 'heatmap':            return <HeatmapWidget config={config} />
     case 'trade-blotter':      return <TradeBlotterWidget config={config} />
     case 'position-sizer':     return <PositionSizerWidget config={config} />
+    case 'ticker-control':     return <UniversalTickerWidget config={config} />
     default:                   return null
   }
 }

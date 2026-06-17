@@ -11,6 +11,7 @@ const ALL_TYPES: WidgetType[] = [
   'analyst-ratings', 'valuation', 'insider-activity',
   'risk-metrics', 'pnl-attribution', 'exposure-map', 'position-sizer',
   'time-and-sales', 'unusual-flow', 'heatmap', 'trade-blotter',
+  'ticker-control',
   'index-tape',
   'macro-strip',
   'macro-calendar',

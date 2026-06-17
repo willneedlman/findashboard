@@ -31,7 +31,7 @@ const MACRO_CALENDAR_WIDGETS: WidgetType[]  = ['macro-calendar']
 const EXPIRY_WIDGETS: WidgetType[]          = ['dealer-gex', 'vol-skew']
 // Frame supplies the title (no gear) for widgets that host their own inline
 // controls in the body, à la Price Card's period row.
-const HEADER_WIDGETS: WidgetType[]          = ['sector-rotation', 'sentiment-gauge', 'screener', 'pm-portfolios', 'paper-trade', 'risk-metrics', 'pnl-attribution', 'exposure-map', 'unusual-flow', 'heatmap', 'trade-blotter', 'position-sizer']
+const HEADER_WIDGETS: WidgetType[]          = ['sector-rotation', 'sentiment-gauge', 'screener', 'pm-portfolios', 'paper-trade', 'risk-metrics', 'pnl-attribution', 'exposure-map', 'unusual-flow', 'heatmap', 'trade-blotter', 'position-sizer', 'ticker-control']
 
 const MACRO_CAT_OPTIONS: { key: string; label: string; color: string }[] = [
   { key: 'equity',    label: 'Equity', color: '#22c55e' },
@@ -124,6 +124,7 @@ const WIDGET_LABELS: Record<string, string> = {
   'heatmap':            'Market Heatmap',
   'trade-blotter':      'Trade Blotter',
   'position-sizer':     'Position Sizer',
+  'ticker-control':     'Ticker Control',
 }
 
 interface PmBook { id: string; name: string; holdings: { ticker: string }[] }
