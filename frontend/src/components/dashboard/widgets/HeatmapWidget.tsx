@@ -1,4 +1,5 @@
 import type { WidgetConfig } from '../../../hooks/useDashboard'
+import TickerLogo from '../../TickerLogo'
 
 const T = {
   bg: 'var(--theme-bg, #101c2e)', muted: 'var(--theme-secondary, #5e768f)',
@@ -30,7 +31,8 @@ export default function HeatmapWidget({ config: _c }: { config: WidgetConfig }) 
             <div style={{ fontFamily: T.label, fontSize: 7, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0, paddingLeft: 1 }}>{sec.name}</div>
             <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
               {sec.tiles.map(t => (
-                <div key={t.t} style={{ flexGrow: t.cap, flexBasis: 0, minHeight: 0, background: heat(t.chg), display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: 1 }}>
+                <div key={t.t} style={{ flexGrow: t.cap, flexBasis: 0, minHeight: 0, background: heat(t.chg), display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, overflow: 'hidden', padding: 1 }}>
+                  {t.cap >= 6 && <TickerLogo ticker={t.t} size={Math.round(Math.min(22, 9 + t.cap / 3))} />}
                   <span style={{ fontFamily: T.mono, fontSize: Math.min(11, 6 + t.cap / 6), fontWeight: 700, color: T.text, lineHeight: 1, whiteSpace: 'nowrap' }}>{t.t}</span>
                   {t.cap >= 9 && <span style={{ fontFamily: T.mono, fontSize: 8, color: 'rgba(255,255,255,0.75)', marginTop: 1 }}>{t.chg >= 0 ? '+' : ''}{t.chg.toFixed(1)}%</span>}
                 </div>
