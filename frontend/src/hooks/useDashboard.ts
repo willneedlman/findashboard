@@ -431,7 +431,8 @@ function buildPreset(key: PresetKey): { widgets: WidgetConfig[]; layouts: Layout
   if (key === 'risk') return fromItems([
     { type: 'risk-metrics',                                              x: 0, y: 0,  w: 4, h: 9 },
     { type: 'exposure-map',                                             x: 4, y: 0,  w: 4, h: 9 },
-    { type: 'position-sizer', config: { ticker: 'AAPL' },              x: 8, y: 0,  w: 4, h: 9 },
+    { type: 'global-macro',                                            x: 8, y: 0,  w: 2, h: 9 },
+    { type: 'news-feed',      config: { tickers: ['SPY', 'AAPL', 'NVDA'] }, x: 10, y: 0, w: 2, h: 9 },
     { type: 'pnl-attribution',                                         x: 0, y: 9,  w: 12, h: 6 },
     { type: 'correlation-matrix', config: { tickers: ['SPY', 'QQQ', 'TLT', 'GLD', 'BTC-USD'] }, x: 0, y: 15, w: 4, h: 7 },
     { type: 'pm-portfolios',                                           x: 4, y: 15, w: 4, h: 7 },

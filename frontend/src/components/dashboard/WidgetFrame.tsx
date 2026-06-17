@@ -22,7 +22,7 @@ interface WidgetFrameProps {
 const TICKER_WIDGETS: WidgetType[]        = TICKER_WIDGET_TYPES
 const TICKERS_WIDGETS: WidgetType[]       = ['watchlist', 'earnings-calendar', 'news-feed', 'correlation-matrix', 'index-tape']
 // Tickers widgets that also accept "load from a Portfolio Manager book".
-const PORTFOLIO_LOADABLE: WidgetType[]    = ['watchlist', 'index-tape', 'earnings-calendar']
+const PORTFOLIO_LOADABLE: WidgetType[]    = ['watchlist', 'index-tape', 'earnings-calendar', 'news-feed']
 const PORTFOLIO_WIDGETS: WidgetType[]     = ['portfolio-summary']
 const YIELD_WIDGETS: WidgetType[]         = ['macro-strip']
 const GLOBAL_MACRO_WIDGETS: WidgetType[]    = ['global-macro']
