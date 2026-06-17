@@ -491,13 +491,13 @@ export default function OptionsSnapshot({ config }: { config: WidgetConfig }) {
         </div>
       )}
 
-      {/* ── Charts — fixed 150px, visually separated ── */}
+      {/* ── Charts — grow to fill the cell (min 150px), visually separated ── */}
       {showCharts && (
         <div style={{
           borderTop: `1px solid ${T.border}`,
           display: 'flex',
-          flexShrink: 0,
-          height: 150,
+          flex: 1,
+          minHeight: 150,
           overflow: 'hidden',
           background: 'color-mix(in srgb, var(--theme-surface, #0d1826) 40%, var(--theme-bg, #101c2e))',
         }}>
