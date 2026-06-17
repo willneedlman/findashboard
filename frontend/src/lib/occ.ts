@@ -10,6 +10,16 @@ export function buildOCC(underlying: string, expDate: string, strike: string, ca
   return `${underlying.toUpperCase()}${yy}${mm}${dd}${callPut}${String(strikeInt).padStart(8, '0')}`
 }
 
+// True only for a full OCC contract symbol (e.g. SPY250620C00580000).
+export function isOCC(s: string): boolean {
+  return /^[A-Z.]+\d{6}[CP]\d{8}$/.test((s || '').trim().toUpperCase())
+}
+
+// Underlying ticker from an OCC symbol, else '' (avoids prefix-match leakage).
+export function occUnderlying(s: string): string {
+  return ((s || '').trim().toUpperCase().match(/^([A-Z.]+)\d{6}[CP]\d{8}$/)?.[1]) || ''
+}
+
 export function parseOCC(occ: string): { expDate: string; strike: string; callPut: 'C' | 'P' } | null {
   const m = occ.trim().toUpperCase().match(/[A-Z]+(\d{2})(\d{2})(\d{2})([CP])(\d{8})$/)
   if (!m) return null

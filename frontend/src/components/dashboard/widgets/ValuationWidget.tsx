@@ -29,16 +29,19 @@ function median(vals: (number | null | undefined)[]): number | null {
   return xs.length % 2 ? xs[m] : (xs[m - 1] + xs[m]) / 2
 }
 
-// Above the sector median reads rich (orange, up), below reads cheap (green,
-// down), within 8% reads in line. Uniform across all multiples (design rule).
-function cell(label: string, raw: number | null, med: number | null, fmt: (v: number) => string) {
+// For multiples, above the sector median reads rich (orange), below reads cheap
+// (green); within 8% is in line. `invert` flips the read for dividend yield,
+// where a higher yield is the attractive (cheap) signal, not the expensive one.
+function cell(label: string, raw: number | null, med: number | null, fmt: (v: number) => string, invert = false) {
   if (raw == null || !isFinite(raw) || raw <= 0) return { label, value: '—', rel: '', color: T.neutral, arrow: '' }
   const value = fmt(raw)
   if (med == null) return { label, value, rel: 'no sector data', color: T.neutral, arrow: '' }
   const deltaPct = (raw / med - 1) * 100
   const inLine = Math.abs(deltaPct) < 8
-  const color = inLine ? T.neutral : deltaPct > 0 ? T.rich : T.cheap
-  const arrow = inLine ? '' : deltaPct > 0 ? '↑' : '↓'
+  const isHigh = deltaPct > 0
+  const expensive = invert ? !isHigh : isHigh
+  const color = inLine ? T.neutral : expensive ? T.rich : T.cheap
+  const arrow = inLine ? '' : isHigh ? '↑' : '↓'
   const rel = inLine ? 'in line' : `${deltaPct >= 0 ? '+' : ''}${deltaPct.toFixed(0)}% vs sector`
   return { label, value, rel, color, arrow }
 }
@@ -63,7 +66,7 @@ export default function ValuationWidget({ config }: { config: WidgetConfig }) {
     cell('P / S', self?.ps ?? null, med('ps'), v => v.toFixed(1)),
     cell('EV / EBITDA', self?.ev_ebitda ?? null, med('ev_ebitda'), v => v.toFixed(1)),
     cell('PEG', self?.peg ?? null, med('peg'), v => v.toFixed(2)),
-    cell('Div Yield', self?.dividend_yield ?? null, med('dividend_yield'), v => `${v.toFixed(2)}%`),
+    cell('Div Yield', self?.dividend_yield ?? null, med('dividend_yield'), v => `${v.toFixed(2)}%`, true),
   ]
 
   return (

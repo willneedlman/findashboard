@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
+import { fmtMarketCap } from '../../../lib/format'
 
 const T = {
   bg:      'var(--theme-bg, #101c2e)',
@@ -38,13 +39,6 @@ const SCREENS: { key: string; label: string; filters: Filter[]; sort_by: string;
   { key: 'quality',  label: 'Quality',  filters: [{ field: 'roe', operator: 'gt', value: 15 }], sort_by: 'roe', sort_dir: 'desc' },
 ]
 
-function fmtCap(v?: number | null): string {
-  if (v == null) return '—'
-  if (v >= 1e12) return `$${(v / 1e12).toFixed(2)}T`
-  if (v >= 1e9)  return `$${(v / 1e9).toFixed(1)}B`
-  if (v >= 1e6)  return `$${(v / 1e6).toFixed(0)}M`
-  return `$${v.toLocaleString()}`
-}
 function fmtVol(v?: number | null): string {
   if (v == null) return '—'
   if (v >= 1e9) return `${(v / 1e9).toFixed(1)}B`
@@ -59,7 +53,7 @@ interface Col { id: string; label: string; w: number; render: (r: Row) => { text
 const COLUMNS: Col[] = [
   { id: 'last',   label: 'Last',     w: 64, render: r => ({ text: r.price != null ? `$${r.price.toFixed(2)}` : '—' }) },
   { id: 'chg1d',  label: '1D',       w: 60, render: r => pctCell(r.change1d, 2) },
-  { id: 'mktcap', label: 'Mkt Cap',  w: 74, render: r => ({ text: fmtCap(r.marketCap) }) },
+  { id: 'mktcap', label: 'Mkt Cap',  w: 74, render: r => ({ text: r.marketCap != null ? fmtMarketCap(r.marketCap * 1e9) : '—' }) },
   { id: 'pe',     label: 'P/E',      w: 52, render: r => ({ text: num(r.peRatio) }) },
   { id: 'fpe',    label: 'Fwd P/E',  w: 60, render: r => ({ text: num(r.forwardPE) }) },
   { id: 'ps',     label: 'P/S',      w: 50, render: r => ({ text: num(r.psRatio, 2) }) },

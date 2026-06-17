@@ -159,7 +159,7 @@ export const WIDGET_DESCRIPTIONS: Record<WidgetType, string> = {
   'paper-trade':         'Trade a ticker on your paper account from a chart — market, limit, and stop orders.',
   'index-tape':          'Scrolling price strip for any tickers or a loaded portfolio — live price and day change.',
   'analyst-ratings':     'Analyst consensus: rating, buy/hold/sell distribution, mean/high/low targets, implied upside.',
-  'valuation':           'P/E, Fwd P/E, P/S, EV/EBITDA, PEG, Div Yield with rich/cheap vs the broad market.',
+  'valuation':           'P/E, Fwd P/E, P/S, EV/EBITDA, PEG, Div Yield with rich/cheap vs sector peers.',
   'insider-activity':    'Institutional/retail/insider ownership split and the latest insider buy/sell transactions.',
 }
 
@@ -366,14 +366,8 @@ function buildPreset(key: PresetKey): { widgets: WidgetConfig[]; layouts: Layout
     { type: 'pm-portfolios',                                            x: 0, y: 11, w: 12, h: 6 },
   ])
 
-  // screener
-  return fromItems([
-    { type: 'screener',                                                 x: 0, y: 0,  w: 7, h: 9 },
-    { type: 'watchlist',         config: { tickers: W_LIST },           x: 7, y: 0,  w: 5, h: 6 },
-    { type: 'mini-chart',        config: { ticker: 'SPY', period: '1y' }, x: 7, y: 6, w: 5, h: 3 },
-    { type: 'sector-rotation',                                          x: 0, y: 9,  w: 6, h: 7 },
-    { type: 'earnings-calendar', config: { tickers: EARN },             x: 6, y: 9,  w: 6, h: 6 },
-  ])
+  // Every PresetKey is handled above; fall back to the default workspace.
+  return { widgets: DEFAULT_WIDGETS, layouts: DEFAULT_LAYOUTS }
 }
 
 // ── Storage (v2: multiple named dashboards, per-user when a userId is given) ─────

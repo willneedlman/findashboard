@@ -404,7 +404,7 @@ def seed_from_holdings(user_id: str, holdings: list[dict], cash: float = STARTIN
                 avg = float(h.get("avg_cost") or 0)
             except (TypeError, ValueError):
                 continue
-            if not sym or shares == 0:
+            if not sym or shares <= 0 or avg < 0:
                 continue
             acct["positions"][sym] = {"qty": shares, "avg_cost": avg}
         _save(user_id, acct)

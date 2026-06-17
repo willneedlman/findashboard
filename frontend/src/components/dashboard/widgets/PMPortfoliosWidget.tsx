@@ -5,6 +5,7 @@ import type { WidgetConfig } from '../../../hooks/useDashboard'
 import { normalizeTicker } from '../../../lib/pmImport'
 import TickerLogo from '../../TickerLogo'
 import { useTheme } from '../../../contexts/ThemeContext'
+import { fmtMarketCap } from '../../../lib/format'
 
 const T = {
   bg:      'var(--theme-bg, #101c2e)',
@@ -34,13 +35,6 @@ interface Row {
 const PAPER = '__paper__'
 
 const money = (v: number, d = 0) => v.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: d, minimumFractionDigits: d })
-function fmtMarketCap(val: number | null): string {
-  if (val == null) return '—'
-  if (val >= 1e12) return `$${(val / 1e12).toFixed(2)}T`
-  if (val >= 1e9)  return `$${(val / 1e9).toFixed(1)}B`
-  if (val >= 1e6)  return `$${(val / 1e6).toFixed(0)}M`
-  return `$${val.toLocaleString()}`
-}
 
 export default function PMPortfoliosWidget({ config: _config }: { config: WidgetConfig }) {
   const { user } = useTheme()

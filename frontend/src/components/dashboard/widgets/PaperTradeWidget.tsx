@@ -7,7 +7,7 @@ import type { WidgetConfig } from '../../../hooks/useDashboard'
 import { useTheme } from '../../../contexts/ThemeContext'
 import { Sliders } from 'lucide-react'
 import ExpirySelect from '../../ExpirySelect'
-import { buildOCC } from '../../../lib/occ'
+import { buildOCC, occUnderlying } from '../../../lib/occ'
 import { smaArr, emaArr, bollinger, vwapArr, type Candle } from '../../../lib/indicators'
 import { marketSession } from '../../../lib/marketSession'
 
@@ -304,10 +304,9 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
     const series = candleRef.current
     if (!series) return
     if (!candles.length) { series.setMarkers([]); return }
-    const numTime = (t: number | string) => (typeof t === 'number' ? t : Date.parse(t + 'T00:00:00Z') / 1000)
-    const ctimes = candles.map(c => numTime(c.time))
+    const ctimes = candles.map(c => _numTime(c.time))
     const fills = (account.data?.orders ?? []).filter(o =>
-      o.status === 'filled' && (o.symbol === ticker || (o.option_symbol || '').startsWith(ticker)))
+      o.status === 'filled' && (o.symbol === ticker || occUnderlying(o.option_symbol || '') === ticker))
     const markers: SeriesMarker<Time>[] = fills.map(o => {
       const ot = o.created_at || 0
       let bi = 0, bd = Infinity
@@ -320,7 +319,7 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
         shape: (isBuy ? 'arrowUp' : 'arrowDown') as SeriesMarker<Time>['shape'],
         text: isBuy ? 'B' : 'S',
       }
-    }).sort((a, b) => numTime(a.time as number | string) - numTime(b.time as number | string))
+    }).sort((a, b) => _numTime(a.time as number | string) - _numTime(b.time as number | string))
     series.setMarkers(markers)
   }, [candles, account.data, ticker])
 

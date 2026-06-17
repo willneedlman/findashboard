@@ -9,7 +9,7 @@ import { GammaScalpingContent } from './GammaScalping'
 import CustomStrategyModal, { type CustomStrategyDef } from '../components/CustomStrategyModal'
 import { loadCustomStrategies, saveCustomStrategy } from '../utils/customStrategies'
 import { useTheme } from '../contexts/ThemeContext'
-import { buildOCC, parseOCC } from '../lib/occ'
+import { buildOCC, parseOCC, isOCC } from '../lib/occ'
 import PaperChart, { type ChartFill } from '../components/PaperChart'
 
 // Per-user auth for the paper engine: the current account id + session-token
@@ -1361,7 +1361,10 @@ export default function PaperTrading() {
   // Filled orders → buy/sell markers on the chart for the matching ticker.
   const chartFills: ChartFill[] = orders
     .filter(o => (o.status ?? '').toLowerCase() === 'filled' && o.create_date)
-    .map(o => ({ time: Math.floor(new Date(o.create_date).getTime() / 1000), side: o.side, symbol: o.symbol, option_symbol: o.symbol }))
+    .map(o => {
+      const occ = isOCC(o.symbol)
+      return { time: Math.floor(new Date(o.create_date).getTime() / 1000), side: o.side, symbol: occ ? undefined : o.symbol, option_symbol: occ ? o.symbol : undefined }
+    })
   const chartInitTicker = positions.find(p => /^[A-Z.]{1,6}$/.test(p.symbol))?.symbol || 'SPY'
 
   const dayChangeColor = bal

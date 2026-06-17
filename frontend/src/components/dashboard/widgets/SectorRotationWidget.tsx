@@ -85,7 +85,7 @@ export default function SectorRotationWidget({ config }: { config: WidgetConfig 
                     <div style={{ width: up ? pct : '0%', height: 9, background: `rgba(34,197,94,${a})` }} />
                   </div>
                 </div>
-                <span style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: up ? POS : NEG, width: 46, textAlign: 'right', flexShrink: 0 }}>
+                <span style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: v == null ? T.muted : up ? POS : NEG, width: 46, textAlign: 'right', flexShrink: 0 }}>
                   {v == null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`}
                 </span>
               </div>

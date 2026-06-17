@@ -4,6 +4,7 @@ import type { IChartApi, ISeriesApi, Time, SeriesMarker } from 'lightweight-char
 import { Sliders } from 'lucide-react'
 import { smaArr, emaArr, bollinger, vwapArr, type Candle } from '../lib/indicators'
 import { marketSession } from '../lib/marketSession'
+import { occUnderlying } from '../lib/occ'
 
 const T = {
   bg:    'var(--theme-bg, #101c2e)',
@@ -229,9 +230,8 @@ export default function PaperChart({ initialTicker = 'SPY', fills = [], storageK
     const series = candleRef.current
     if (!series) return
     if (!candles.length) { series.setMarkers([]); return }
-    const numTime = (t: number | string) => (typeof t === 'number' ? t : Date.parse(t + 'T00:00:00Z') / 1000)
     const ctimes = candles.map(c => numTime(c.time))
-    const mine = fills.filter(o => o.symbol === ticker || (o.option_symbol || '').startsWith(ticker))
+    const mine = fills.filter(o => o.symbol === ticker || occUnderlying(o.option_symbol || '') === ticker)
     const markers: SeriesMarker<Time>[] = mine.map(o => {
       let bi = 0, bd = Infinity
       ctimes.forEach((t, i) => { const d = Math.abs(t - (o.time || 0)); if (d < bd) { bd = d; bi = i } })
