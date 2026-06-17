@@ -1,7 +1,7 @@
 import { T } from '../../../lib/theme'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
-import { usePaperAccount } from './usePortfolio'
+import { usePaperAccount, useQuotes } from './usePortfolio'
 
 const money = (v: number, d = 0) => v.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: d, minimumFractionDigits: d })
 const cap: React.CSSProperties = { fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.muted }
@@ -23,8 +23,21 @@ export default function PositionSizerWidget({ config }: { config: WidgetConfig }
   const { data: acct } = usePaperAccount(config.accountValue == null)
   const account = config.accountValue ?? acct?.equity ?? 100000
   const [riskPct, setRiskPct] = useState(config.riskPct ?? 1)
-  const [entry, setEntry] = useState(config.entry ?? 100)
-  const [stop, setStop] = useState(config.stop ?? 96)
+  const [entry, setEntry] = useState(config.entry ?? 0)
+  const [stop, setStop] = useState(config.stop ?? 0)
+
+  // Default entry to the live spot and the stop ~4% below it, refreshing when
+  // the ticker changes. Stops auto-defaulting once the user edits a field.
+  const spot = useQuotes([ticker])[ticker]?.current_price
+  const editedRef = useRef(false)
+  useEffect(() => { editedRef.current = false }, [ticker])
+  useEffect(() => {
+    if (config.entry != null || editedRef.current || !spot || spot <= 0) return
+    setEntry(+spot.toFixed(2))
+    setStop(+(spot * 0.96).toFixed(2))
+  }, [spot, ticker, config.entry])
+  const editEntry = (v: number) => { editedRef.current = true; setEntry(v) }
+  const editStop = (v: number) => { editedRef.current = true; setStop(v) }
 
   const riskDollar = account * riskPct / 100
   const dist = Math.abs(entry - stop)
@@ -59,8 +72,8 @@ export default function PositionSizerWidget({ config }: { config: WidgetConfig }
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(96px, 1fr))', gap: 8 }}>
-        <div style={{ minWidth: 0 }}><div style={{ ...cap, marginBottom: 3 }}>Entry</div><Stepper value={entry} step={0.25} onChange={setEntry} /></div>
-        <div style={{ minWidth: 0 }}><div style={{ ...cap, marginBottom: 3 }}>Stop</div><Stepper value={stop} step={0.25} onChange={setStop} /></div>
+        <div style={{ minWidth: 0 }}><div style={{ ...cap, marginBottom: 3 }}>Entry</div><Stepper value={entry} step={0.25} onChange={editEntry} /></div>
+        <div style={{ minWidth: 0 }}><div style={{ ...cap, marginBottom: 3 }}>Stop</div><Stepper value={stop} step={0.25} onChange={editStop} /></div>
       </div>
 
       <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 6, textAlign: 'center' }}>
