@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import RGL, { type Layout, type Layouts } from 'react-grid-layout'
 import { useTheme } from '../contexts/ThemeContext'
 import 'react-grid-layout/css/styles.css'
@@ -14,7 +14,7 @@ import PageWrapper from '../components/PageWrapper'
 import WidgetFrame from '../components/dashboard/WidgetFrame'
 import WidgetRenderer from '../components/dashboard/WidgetRenderer'
 import WidgetPalette from '../components/dashboard/WidgetPalette'
-import { useDashboard, PRESET_LABELS, TICKER_WIDGET_TYPES, DashboardControlsContext, type WidgetType, type WidgetConfig, type PresetKey } from '../hooks/useDashboard'
+import { useDashboard, PRESET_LABELS, TICKER_WIDGET_TYPES, type WidgetType, type WidgetConfig, type PresetKey } from '../hooks/useDashboard'
 import useIsMobile from '../hooks/useIsMobile'
 
 const ResponsiveGridLayout = WidthProvider(Responsive)
@@ -49,8 +49,6 @@ export default function CustomDashboard() {
     if (!sym) return
     setAllTickers(sym)
   }
-  // Exposed to in-grid widgets (the Ticker Control tile) via context.
-  const controls = useMemo(() => ({ setAllTickers }), [setAllTickers])
 
   const handleLayoutChange = (_: Layout[], allLayouts: Layouts) => {
     if (allLayouts.lg) updateLayouts(allLayouts.lg)
@@ -186,7 +184,6 @@ export default function CustomDashboard() {
         </div>
       ) : (
         /* ── Desktop: react-grid-layout ── */
-        <DashboardControlsContext.Provider value={controls}>
         <div className={editMode ? 'rgl-edit-mode' : ''}>
           <ResponsiveGridLayout
             layouts={rglLayouts}
@@ -217,7 +214,6 @@ export default function CustomDashboard() {
             ))}
           </ResponsiveGridLayout>
         </div>
-        </DashboardControlsContext.Provider>
       )}
 
       {/* ── Widget palette drawer ── */}
