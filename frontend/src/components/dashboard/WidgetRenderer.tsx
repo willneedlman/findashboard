@@ -26,6 +26,14 @@ import IndexTapeWidget from './widgets/IndexTapeWidget'
 import AnalystRatingsWidget from './widgets/AnalystRatingsWidget'
 import ValuationWidget from './widgets/ValuationWidget'
 import InsiderWidget from './widgets/InsiderWidget'
+import RiskMetricsWidget from './widgets/RiskMetricsWidget'
+import PnLAttributionWidget from './widgets/PnLAttributionWidget'
+import ExposureMapWidget from './widgets/ExposureMapWidget'
+import TimeAndSalesWidget from './widgets/TimeAndSalesWidget'
+import UnusualFlowWidget from './widgets/UnusualFlowWidget'
+import HeatmapWidget from './widgets/HeatmapWidget'
+import TradeBlotterWidget from './widgets/TradeBlotterWidget'
+import PositionSizerWidget from './widgets/PositionSizerWidget'
 
 export default function WidgetRenderer({ config }: { config: WidgetConfig }) {
   switch (config.type) {
@@ -56,6 +64,14 @@ export default function WidgetRenderer({ config }: { config: WidgetConfig }) {
     case 'analyst-ratings':    return <AnalystRatingsWidget config={config} />
     case 'valuation':          return <ValuationWidget config={config} />
     case 'insider-activity':   return <InsiderWidget config={config} />
+    case 'risk-metrics':       return <RiskMetricsWidget config={config} />
+    case 'pnl-attribution':    return <PnLAttributionWidget config={config} />
+    case 'exposure-map':       return <ExposureMapWidget config={config} />
+    case 'time-and-sales':     return <TimeAndSalesWidget config={config} />
+    case 'unusual-flow':       return <UnusualFlowWidget config={config} />
+    case 'heatmap':            return <HeatmapWidget config={config} />
+    case 'trade-blotter':      return <TradeBlotterWidget config={config} />
+    case 'position-sizer':     return <PositionSizerWidget config={config} />
     default:                   return null
   }
 }

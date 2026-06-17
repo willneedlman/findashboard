@@ -9,6 +9,8 @@ const ALL_TYPES: WidgetType[] = [
   'options-snapshot', 'options-pricer', 'delta-target',
   'portfolio-summary', 'correlation-matrix',
   'analyst-ratings', 'valuation', 'insider-activity',
+  'risk-metrics', 'pnl-attribution', 'exposure-map', 'position-sizer',
+  'time-and-sales', 'unusual-flow', 'heatmap', 'trade-blotter',
   'index-tape',
   'macro-strip',
   'macro-calendar',

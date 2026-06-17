@@ -17,7 +17,7 @@ interface WidgetFrameProps {
   children: React.ReactNode
 }
 
-const TICKER_WIDGETS: WidgetType[]        = ['price-card', 'mini-chart', 'options-snapshot', 'options-pricer', 'delta-target', 'tradingview-chart', 'dealer-gex', 'vol-skew', 'analyst-ratings', 'valuation', 'insider-activity']
+const TICKER_WIDGETS: WidgetType[]        = ['price-card', 'mini-chart', 'options-snapshot', 'options-pricer', 'delta-target', 'tradingview-chart', 'dealer-gex', 'vol-skew', 'analyst-ratings', 'valuation', 'insider-activity', 'time-and-sales']
 const TICKERS_WIDGETS: WidgetType[]       = ['watchlist', 'earnings-calendar', 'news-feed', 'correlation-matrix', 'index-tape']
 // Tickers widgets that also accept "load from a Portfolio Manager book".
 const PORTFOLIO_LOADABLE: WidgetType[]    = ['watchlist', 'index-tape', 'earnings-calendar']
@@ -29,7 +29,7 @@ const MACRO_CALENDAR_WIDGETS: WidgetType[]  = ['macro-calendar']
 const EXPIRY_WIDGETS: WidgetType[]          = ['dealer-gex', 'vol-skew']
 // Frame supplies the title (no gear) for widgets that host their own inline
 // controls in the body, à la Price Card's period row.
-const HEADER_WIDGETS: WidgetType[]          = ['sector-rotation', 'sentiment-gauge', 'screener', 'pm-portfolios', 'paper-trade']
+const HEADER_WIDGETS: WidgetType[]          = ['sector-rotation', 'sentiment-gauge', 'screener', 'pm-portfolios', 'paper-trade', 'risk-metrics', 'pnl-attribution', 'exposure-map', 'unusual-flow', 'heatmap', 'trade-blotter', 'position-sizer']
 
 const MACRO_CAT_OPTIONS: { key: string; label: string; color: string }[] = [
   { key: 'equity',    label: 'Equity', color: '#22c55e' },
@@ -114,6 +114,14 @@ const WIDGET_LABELS: Record<string, string> = {
   'analyst-ratings':    'Analyst Consensus',
   'valuation':          'Valuation',
   'insider-activity':   'Insider Activity',
+  'risk-metrics':       'Risk Metrics',
+  'pnl-attribution':    'P/L Attribution',
+  'exposure-map':       'Exposure',
+  'time-and-sales':     'Time & Sales',
+  'unusual-flow':       'Unusual Options Flow',
+  'heatmap':            'Market Heatmap',
+  'trade-blotter':      'Trade Blotter',
+  'position-sizer':     'Position Sizer',
 }
 
 interface PmBook { id: string; name: string; holdings: { ticker: string }[] }

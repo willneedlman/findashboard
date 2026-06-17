@@ -122,7 +122,7 @@ export default function CustomDashboard() {
             {presetMenuOpen && (
               <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 30, minWidth: 150, background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-primary, #c9a84c)', boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}>
                 <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', padding: '7px 10px 4px' }}>From preset</div>
-                {(['cockpit', 'research', 'screening', 'market-overview', 'options', 'main'] as PresetKey[]).map(k => (
+                {(['cockpit', 'research', 'screening', 'market-overview', 'options', 'risk', 'flow', 'main'] as PresetKey[]).map(k => (
                   <button key={k} onClick={() => { createDashboard(k); setPresetMenuOpen(false) }}
                     style={{ display: 'block', width: '100%', textAlign: 'left', fontFamily: 'var(--theme-sans)', fontSize: 11, padding: '7px 10px', cursor: 'pointer', border: 'none', background: 'transparent', color: 'var(--theme-text, #d7e3fc)' }}
                     onMouseEnter={e => (e.currentTarget.style.background = 'rgba(201,168,76,0.1)')}

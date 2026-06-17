@@ -31,6 +31,14 @@ export type WidgetType =
   | 'analyst-ratings'
   | 'valuation'
   | 'insider-activity'
+  | 'risk-metrics'
+  | 'pnl-attribution'
+  | 'exposure-map'
+  | 'time-and-sales'
+  | 'unusual-flow'
+  | 'heatmap'
+  | 'trade-blotter'
+  | 'position-sizer'
 
 export interface WidgetConfig {
   id: string
@@ -56,6 +64,10 @@ export interface WidgetConfig {
   expiry?: string                          // dealer-gex, vol-skew: option expiry YYYY-MM-DD
   timeframeHours?: number                  // sentiment-gauge: lookback window
   sectorPeriod?: string                    // sector-rotation: 1W | 1M | 3M | 6M | YTD | 1Y
+  riskPct?: number                         // position-sizer
+  entry?: number                           // position-sizer
+  stop?: number                            // position-sizer
+  accountValue?: number                    // position-sizer
 }
 
 export interface Dashboard {
@@ -101,6 +113,14 @@ export const WIDGET_DEFAULT_SIZE: Record<WidgetType, { w: number; h: number }> =
   'analyst-ratings':     { w: 4, h: 6 },
   'valuation':           { w: 5, h: 5 },
   'insider-activity':    { w: 3, h: 6 },
+  'risk-metrics':        { w: 4, h: 9 },
+  'pnl-attribution':     { w: 6, h: 6 },
+  'exposure-map':        { w: 4, h: 9 },
+  'time-and-sales':      { w: 3, h: 9 },
+  'unusual-flow':        { w: 6, h: 7 },
+  'heatmap':             { w: 8, h: 8 },
+  'trade-blotter':       { w: 6, h: 6 },
+  'position-sizer':      { w: 4, h: 6 },
 }
 
 export const WIDGET_LABELS: Record<WidgetType, string> = {
@@ -131,6 +151,14 @@ export const WIDGET_LABELS: Record<WidgetType, string> = {
   'analyst-ratings':     'Analyst Consensus',
   'valuation':           'Valuation',
   'insider-activity':    'Insider Activity',
+  'risk-metrics':        'Risk Metrics',
+  'pnl-attribution':     'P/L Attribution',
+  'exposure-map':        'Exposure',
+  'time-and-sales':      'Time & Sales',
+  'unusual-flow':        'Unusual Options Flow',
+  'heatmap':             'Market Heatmap',
+  'trade-blotter':       'Trade Blotter',
+  'position-sizer':      'Position Sizer',
 }
 
 export const WIDGET_DESCRIPTIONS: Record<WidgetType, string> = {
@@ -161,6 +189,14 @@ export const WIDGET_DESCRIPTIONS: Record<WidgetType, string> = {
   'analyst-ratings':     'Analyst consensus: rating, buy/hold/sell distribution, mean/high/low targets, implied upside.',
   'valuation':           'P/E, Fwd P/E, P/S, EV/EBITDA, PEG, Div Yield with rich/cheap vs sector peers.',
   'insider-activity':    'Institutional/retail/insider ownership split and the latest insider buy/sell transactions.',
+  'risk-metrics':        'Portfolio VaR, beta, Sharpe, vol, drawdown, plus factor exposure.',
+  'pnl-attribution':     "Waterfall of today's P/L by position with top contributors/detractors.",
+  'exposure-map':        'Gross/net/long/short and per-sector long-vs-short exposure.',
+  'time-and-sales':      'Live print tape — time, price, size, venue, uptick/downtick colored.',
+  'unusual-flow':        'Largest options sweeps & blocks — strike, expiry, premium, sentiment.',
+  'heatmap':             'S&P treemap by sector & market cap, colored by daily % change.',
+  'trade-blotter':       'Order & fill history — side, qty, avg price, and fill status.',
+  'position-sizer':      'Risk-based share sizing from account %, entry, and stop.',
 }
 
 export const WIDGET_ICONS: Record<WidgetType, string> = {
@@ -191,6 +227,14 @@ export const WIDGET_ICONS: Record<WidgetType, string> = {
   'analyst-ratings':     'AN',
   'valuation':           'VAL',
   'insider-activity':    'INS',
+  'risk-metrics':        'RSK',
+  'pnl-attribution':     'PNL',
+  'exposure-map':        'EXP',
+  'time-and-sales':      'T&S',
+  'unusual-flow':        'FLOW',
+  'heatmap':             'HM',
+  'trade-blotter':       'BLT',
+  'position-sizer':      'SIZ',
 }
 
 // ── Default layout — all 20 widget types, one each ───────────────────────────
@@ -299,10 +343,10 @@ let _seq = 0
 const newId = () => `w${Date.now()}_${_seq++}`
 const newDashId = () => `d${Date.now()}_${_seq++}`
 
-export type PresetKey = 'main' | 'cockpit' | 'research' | 'screening' | 'market-overview' | 'options' | 'blank'
+export type PresetKey = 'main' | 'cockpit' | 'research' | 'screening' | 'market-overview' | 'options' | 'risk' | 'flow' | 'blank'
 
 export const PRESET_LABELS: Record<PresetKey, string> = {
-  main: 'Everything', cockpit: 'Trading Portal', research: 'Research', screening: 'Screening', 'market-overview': 'Market Overview', options: 'Options Desk', blank: 'Custom (blank)',
+  main: 'Everything', cockpit: 'Trading Portal', research: 'Research', screening: 'Screening', 'market-overview': 'Market Overview', options: 'Options Desk', risk: 'Risk Desk', flow: 'Flow Desk', blank: 'Custom (blank)',
 }
 
 // A preset is a hand-placed list of tiles (12-col grid, 60px rows) so each
@@ -356,6 +400,26 @@ function buildPreset(key: PresetKey): { widgets: WidgetConfig[]; layouts: Layout
     { type: 'sector-rotation',                                          x: 0, y: 11, w: 4, h: 7 },
     { type: 'news-feed',          config: { tickers: ['SPY', 'AAPL', 'NVDA'] }, x: 4, y: 11, w: 5, h: 7 },
     { type: 'sentiment-gauge',                                          x: 9, y: 11, w: 3, h: 7 },
+  ])
+
+  // Risk Desk — risk metrics + exposure + position sizer / P/L attribution /
+  // correlation + portfolios + trade blotter.
+  if (key === 'risk') return fromItems([
+    { type: 'risk-metrics',                                              x: 0, y: 0,  w: 4, h: 9 },
+    { type: 'exposure-map',                                             x: 4, y: 0,  w: 4, h: 9 },
+    { type: 'position-sizer', config: { ticker: 'AAPL' },              x: 8, y: 0,  w: 4, h: 9 },
+    { type: 'pnl-attribution',                                         x: 0, y: 9,  w: 12, h: 6 },
+    { type: 'correlation-matrix', config: { tickers: ['SPY', 'QQQ', 'TLT', 'GLD', 'BTC-USD'] }, x: 0, y: 15, w: 4, h: 7 },
+    { type: 'pm-portfolios',                                           x: 4, y: 15, w: 4, h: 7 },
+    { type: 'trade-blotter',                                           x: 8, y: 15, w: 4, h: 7 },
+  ])
+
+  // Flow Desk — tape + unusual options flow + heatmap + dealer gamma.
+  if (key === 'flow') return fromItems([
+    { type: 'time-and-sales', config: { ticker: 'AAPL' },              x: 0, y: 0,  w: 3, h: 9 },
+    { type: 'unusual-flow',                                            x: 3, y: 0,  w: 6, h: 9 },
+    { type: 'dealer-gex',    config: { ticker: 'SPY' },                x: 9, y: 0,  w: 3, h: 9 },
+    { type: 'heatmap',                                                 x: 0, y: 9,  w: 12, h: 8 },
   ])
 
   // Options Desk — snapshot + pricer + delta-target / dealer GEX + vol skew + sentiment.
