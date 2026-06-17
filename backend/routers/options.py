@@ -516,7 +516,9 @@ def dealer_gex(ticker: str, expiry: str | None = None):
     import datetime as _dt
     sym = ticker.strip().upper()
     open_now = is_market_open()
-    cache_key = f"gex:{sym}:{expiry or 'all'}"
+    # v2: GEX now sources chains from Tradier 24/7 (reliable OI + greeks) rather
+    # than yfinance-only when closed; bump invalidates stale near-empty caches.
+    cache_key = f"gex:v2:{sym}:{expiry or 'all'}"
 
     # Market closed → the profile can't change intraday, so serve the last cached
     # one instead of refetching. BUT only if that cache reflects the most recent
@@ -555,13 +557,12 @@ def dealer_gex(ticker: str, expiry: str | None = None):
     if not spot:
         raise HTTPException(404, "Could not fetch spot price")
 
-    # ── Expirations (Tradier only while live; else yfinance) ────────────────────
+    # ── Expirations (Tradier first for chain-string parity; else yfinance) ──────
     all_expirations = []
-    if open_now:
-        try:
-            all_expirations = _tradier.get_expirations(sym)
-        except Exception:
-            pass
+    try:
+        all_expirations = _tradier.get_expirations(sym)
+    except Exception:
+        pass
     if not all_expirations:
         try:
             all_expirations = list(yf.Ticker(sym).options or [])
@@ -582,13 +583,12 @@ def dealer_gex(ticker: str, expiry: str | None = None):
         days_out = max((exp_dt - today).days, 1)
         T        = days_out / 365.25
 
-        # ── Fetch chain via Tradier (live only), else yfinance ──
+        # ── Fetch chain via Tradier (24/7 — reliable OI + greeks), else yfinance ──
         chain = None
-        if open_now:
-            try:
-                chain = _tradier.get_options_chain(sym, exp, greeks=True)
-            except Exception as e:
-                logger.warning("Tradier GEX chain %s %s: %s", sym, exp, e)
+        try:
+            chain = _tradier.get_options_chain(sym, exp, greeks=True)
+        except Exception as e:
+            logger.warning("Tradier GEX chain %s %s: %s", sym, exp, e)
 
         if not chain or (not chain.get("calls") and not chain.get("puts")):
             used_yf_fallback = True

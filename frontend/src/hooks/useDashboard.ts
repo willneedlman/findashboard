@@ -537,7 +537,10 @@ export function useDashboard(userId?: string | null) {
   // Retarget every ticker-driven widget in one pass — looping updateWidget would
   // race on the captured workspace snapshot (last write wins).
   const setAllTickers = useCallback((ticker: string) => {
-    patchActive(d => ({ ...d, widgets: d.widgets.map(w => TICKER_WIDGET_TYPES.includes(w.type) ? { ...w, ticker } : w) }))
+    // Clear any per-widget expiry too: expiries are ticker-specific, so a stale
+    // one (e.g. dealer-gex / vol-skew) would point at a chain the new ticker may
+    // not have. Empty expiry makes those widgets re-aggregate / auto-select.
+    patchActive(d => ({ ...d, widgets: d.widgets.map(w => TICKER_WIDGET_TYPES.includes(w.type) ? { ...w, ticker, expiry: '' } : w) }))
   }, [patchActive])
 
   const resetDashboard = useCallback(() => {

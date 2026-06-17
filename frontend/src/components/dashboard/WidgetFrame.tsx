@@ -1,5 +1,5 @@
 import { X, GripHorizontal, Settings } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { WidgetConfig, WidgetType } from '../../hooks/useDashboard'
 import TickerTagInput from '../TickerTagInput'
 import ExpirySelect from '../ExpirySelect'
@@ -318,6 +318,12 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
   )
 
   const [expirySel, setExpirySel] = useState(config.expiry || '')
+
+  // Keep the gear fields in sync with the dashboard-wide ticker broadcast (and any
+  // external config change) so they show the live value, not a stale mount snapshot.
+  // The field stays editable, so a per-widget override still works.
+  useEffect(() => { setTickerInput(config.ticker || '') }, [config.ticker])
+  useEffect(() => { setExpirySel(config.expiry || '') }, [config.expiry])
 
   const handlePortTickersChange = (next: string[]) => {
     setPortTickers(next)
