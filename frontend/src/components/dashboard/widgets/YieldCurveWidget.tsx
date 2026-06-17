@@ -16,8 +16,8 @@ const T = {
   muted:   'var(--theme-secondary, #5e768f)',
   mono:    'var(--theme-mono)',
   label:   'var(--theme-sans)',
-  pos:     '#22c55e',
-  neg:     '#ef4444',
+  pos:     'var(--theme-positive, #22c55e)',
+  neg:     'var(--theme-negative, #ef4444)',
   blue:    '#60a5fa',
   violet:  '#a78bfa',
 }

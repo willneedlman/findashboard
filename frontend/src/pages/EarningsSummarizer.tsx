@@ -10,7 +10,7 @@ const C = {
   // Dimmer than muted, but theme-aware: a faded secondary toward the bg so it
   // never renders as a fixed navy on light themes (Paper White).
   dim: 'color-mix(in srgb, var(--theme-secondary, #5e768f) 62%, var(--theme-bg, #101c2e))',
-  pos: '#22C55E', neg: '#EF4444', warn: '#f59e0b', blue: 'var(--theme-tertiary, #60a5fa)',
+  pos: 'var(--theme-positive, #22c55e)', neg: 'var(--theme-negative, #ef4444)', warn: '#f59e0b', blue: 'var(--theme-tertiary, #60a5fa)',
   mono: 'var(--theme-mono)', sans: 'var(--theme-sans)',
 }
 
@@ -353,7 +353,7 @@ export default function EarningsSummarizer() {
 
         {/* Error */}
         {error && (
-          <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', padding: 12, fontFamily: C.sans, fontSize: 11, color: C.neg }}>
+          <div style={{ background: 'color-mix(in srgb, var(--theme-negative) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-negative) 30%, transparent)', padding: 12, fontFamily: C.sans, fontSize: 11, color: C.neg }}>
             {error}
           </div>
         )}

@@ -19,8 +19,8 @@ const T = {
   dim:     'color-mix(in srgb, var(--theme-secondary, #5e768f) 55%, transparent)',
   mono:    'var(--theme-mono)',
   label:   'var(--theme-sans)',
-  pos:     '#22C55E',
-  neg:     '#EF4444',
+  pos:     'var(--theme-positive, #22c55e)',
+  neg:     'var(--theme-negative, #ef4444)',
   warn:    '#f59e0b',
   blue:    '#60a5fa',
 }
@@ -250,8 +250,8 @@ function VolCone({ spot, atmIv, hv30, expiry }: {
             <YAxis tick={{ fontSize: 8, fill: T.muted, fontFamily: T.mono }} tickLine={false} axisLine={false}
               tickFormatter={priceFmt} width={38} domain={yDomain} tickCount={4} />
             <Tooltip content={<CT />} />
-            <Area type="monotone" dataKey="iv1up" stroke="rgba(201,168,76,0.55)" strokeWidth={1.5} fill="color-mix(in srgb, var(--theme-primary, #c9a84c) 20%, transparent)" dot={false} legendType="none" />
-            <Area type="monotone" dataKey="iv1dn" stroke="rgba(201,168,76,0.55)" strokeWidth={1.5} fill={T.bg} dot={false} legendType="none" />
+            <Area type="monotone" dataKey="iv1up" stroke="color-mix(in srgb, var(--theme-primary) 55%, transparent)" strokeWidth={1.5} fill="color-mix(in srgb, var(--theme-primary, #c9a84c) 20%, transparent)" dot={false} legendType="none" />
+            <Area type="monotone" dataKey="iv1dn" stroke="color-mix(in srgb, var(--theme-primary) 55%, transparent)" strokeWidth={1.5} fill={T.bg} dot={false} legendType="none" />
             {hv30 != null && <>
               <Area type="monotone" dataKey="hv1up" stroke="rgba(96,165,250,0.4)" strokeWidth={1} strokeDasharray="3 2" fill="rgba(96,165,250,0.07)" dot={false} legendType="none" />
               <Area type="monotone" dataKey="hv1dn" stroke="rgba(96,165,250,0.4)" strokeWidth={1} strokeDasharray="3 2" fill={T.bg} dot={false} legendType="none" />
@@ -315,16 +315,16 @@ function ImpliedProb({ spot, atmIv, expiry }: { spot: number; atmIv: number; exp
               labelFormatter={v => `$${Number(v).toFixed(2)}`}
             />
             {/* ±1σ shaded region */}
-            <Area type="monotone" dataKey="sd1" stroke="none" fill="rgba(34,197,94,0.13)" />
+            <Area type="monotone" dataKey="sd1" stroke="none" fill="color-mix(in srgb, var(--theme-positive) 13%, transparent)" />
             <Area type="monotone" dataKey="prob" stroke={T.blue} strokeWidth={1.5} fill="rgba(96,165,250,0.07)" dot={false} />
             {/* Spot */}
             <ReferenceLine x={spot} stroke={T.gold} strokeWidth={1.5}
               label={{ value: `$${spot.toFixed(0)}`, position: 'insideTopRight', fontSize: 8, fill: T.gold, fontFamily: T.mono }} />
             {/* ±1σ bounds */}
-            <ReferenceLine x={sd1lo} stroke="rgba(34,197,94,0.5)" strokeWidth={1} strokeDasharray="3 3"
-              label={{ value: '−1σ', position: 'insideBottomLeft', fontSize: 7, fill: 'rgba(34,197,94,0.7)', fontFamily: T.mono }} />
-            <ReferenceLine x={sd1hi} stroke="rgba(34,197,94,0.5)" strokeWidth={1} strokeDasharray="3 3"
-              label={{ value: '+1σ', position: 'insideBottomRight', fontSize: 7, fill: 'rgba(34,197,94,0.7)', fontFamily: T.mono }} />
+            <ReferenceLine x={sd1lo} stroke="color-mix(in srgb, var(--theme-positive) 50%, transparent)" strokeWidth={1} strokeDasharray="3 3"
+              label={{ value: '−1σ', position: 'insideBottomLeft', fontSize: 7, fill: 'color-mix(in srgb, var(--theme-positive) 70%, transparent)', fontFamily: T.mono }} />
+            <ReferenceLine x={sd1hi} stroke="color-mix(in srgb, var(--theme-positive) 50%, transparent)" strokeWidth={1} strokeDasharray="3 3"
+              label={{ value: '+1σ', position: 'insideBottomRight', fontSize: 7, fill: 'color-mix(in srgb, var(--theme-positive) 70%, transparent)', fontFamily: T.mono }} />
           </AreaChart>
         </ResponsiveContainer>
       </div>

@@ -990,7 +990,7 @@ export default function SentimentTracker() {
   const content = (
     <div>
       {error && (
-        <div style={{ padding: 12, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: 'var(--theme-negative, #fca5a5)', fontSize: 11, fontFamily: T.mono, marginBottom: 12 }}>
+        <div style={{ padding: 12, background: 'color-mix(in srgb, var(--theme-negative) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-negative) 30%, transparent)', color: 'var(--theme-negative, #fca5a5)', fontSize: 11, fontFamily: T.mono, marginBottom: 12 }}>
           Failed to load sentiment data. Backend may be starting up.
         </div>
       )}

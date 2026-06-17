@@ -119,7 +119,7 @@ export function OptionsPricerContent() {
             }}>
               {pricePending ? 'Calculating…' : 'Calculate'}
             </button>
-            {priceError && <div style={{ fontSize: 9, color: '#ef4444', textAlign: 'center', fontFamily: 'var(--theme-sans)' }}>Server unavailable — is the backend running?</div>}
+            {priceError && <div style={{ fontSize: 9, color: 'var(--theme-negative, #ef4444)', textAlign: 'center', fontFamily: 'var(--theme-sans)' }}>Server unavailable — is the backend running?</div>}
           </div>
         </>}>
 

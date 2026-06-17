@@ -12,8 +12,8 @@ const T = {
   text:    'var(--theme-text, #d7e3fc)',
   mono:    'var(--theme-mono)',
   label:   'var(--theme-sans)',
-  pos:     '#22c55e',
-  neg:     '#ef4444',
+  pos:     'var(--theme-positive, #22c55e)',
+  neg:     'var(--theme-negative, #ef4444)',
 }
 
 const shimmer: React.CSSProperties = {
@@ -23,7 +23,7 @@ const shimmer: React.CSSProperties = {
 
 const SERIES_META: Record<string, { backendKey: string; label: string; color: string; isVix?: boolean }> = {
   ig:     { backendKey: 'ig_oas', label: 'IG OAS',  color: '#60a5fa' },
-  hy:     { backendKey: 'hy_oas', label: 'HY OAS',  color: '#ef4444' },
+  hy:     { backendKey: 'hy_oas', label: 'HY OAS',  color: 'var(--theme-negative, #ef4444)' },
   ig_3_5: { backendKey: 'ig_3_5', label: 'IG 3–5Y', color: '#818cf8' },
   hy_b:   { backendKey: 'hy_b',   label: 'HY B',    color: '#f97316' },
   hy_ccc: { backendKey: 'hy_ccc', label: 'HY CCC',  color: '#fb7185' },

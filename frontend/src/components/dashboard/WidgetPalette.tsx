@@ -51,7 +51,7 @@ export default function WidgetPalette({ open, onClose, onAdd }: WidgetPalettePro
             transition={{ duration: 0.25, ease: 'easeInOut' }}
             style={{
               position: 'fixed', top: 0, right: 0, bottom: 0, width: 300,
-              zIndex: 49, background: 'var(--theme-bg, #060e1c)', borderLeft: '1px solid rgba(201,168,76,0.2)',
+              zIndex: 49, background: 'var(--theme-bg, #060e1c)', borderLeft: '1px solid color-mix(in srgb, var(--theme-primary) 20%, transparent)',
               display: 'flex', flexDirection: 'column', overflowY: 'auto',
             }}
           >

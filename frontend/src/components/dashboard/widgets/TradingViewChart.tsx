@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { createChart, ColorType, CrosshairMode } from 'lightweight-charts'
 import type { IChartApi, ISeriesApi } from 'lightweight-charts'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
+import { readToken } from '../../../lib/theme'
 
 const PERIODS = [
   { label: '1M', value: '1mo' },
@@ -77,13 +78,14 @@ export default function TradingViewChart({ config }: { config: WidgetConfig }) {
       height: el.clientHeight,
     })
 
+    const cPos = readToken('--theme-positive', '#22c55e'), cNeg = readToken('--theme-negative', '#ef4444')
     const candle = chart.addCandlestickSeries({
-      upColor:         '#22c55e',
-      downColor:       '#ef4444',
-      borderUpColor:   '#22c55e',
-      borderDownColor: '#ef4444',
-      wickUpColor:     '#22c55e',
-      wickDownColor:   '#ef4444',
+      upColor:         cPos,
+      downColor:       cNeg,
+      borderUpColor:   cPos,
+      borderDownColor: cNeg,
+      wickUpColor:     cPos,
+      wickDownColor:   cNeg,
       priceLineColor:  gold,
       priceLineWidth:  1,
     })
@@ -151,7 +153,7 @@ export default function TradingViewChart({ config }: { config: WidgetConfig }) {
   }, [ticker, period, fetchData])
 
   const pos  = crosshair?.pct != null && crosshair.pct >= 0
-  const pctColor = pos ? '#22c55e' : '#ef4444'
+  const pctColor = pos ? 'var(--theme-positive, #22c55e)' : 'var(--theme-negative, #ef4444)'
 
   return (
     <div style={{ height: '100%', minHeight: 300, display: 'flex', flexDirection: 'column', background: 'var(--theme-bg, #101c2e)', overflow: 'hidden' }}>

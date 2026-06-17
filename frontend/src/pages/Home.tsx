@@ -181,7 +181,7 @@ const SECTIONS: Section[] = [
       { to: '/macro-hub?tab=rates',  icon: GitBranch, title: 'Fed Rates',             desc: 'Implied FOMC path',             accent: 'var(--theme-tertiary, #1f5673)' },
       { to: '/macro-hub',            icon: Compass,   title: 'Macro Hub',             desc: 'Growth, inflation, jobs',       accent: 'var(--theme-tertiary, #1f5673)' },
       { to: '/macro-hub?tab=bonds',  icon: Landmark,  title: 'Bond Analytics',        desc: 'YTM, duration, convexity',      accent: '#2f6b4b' },
-      { to: '/macro-hub?tab=credit', icon: Activity,  title: 'Credit Spread Monitor', desc: 'IG and HY spreads',             accent: '#ef4444' },
+      { to: '/macro-hub?tab=credit', icon: Activity,  title: 'Credit Spread Monitor', desc: 'IG and HY spreads',             accent: 'var(--theme-negative, #ef4444)' },
       { to: '/nav',            icon: Coins,     title: 'NAV Tracker',           desc: 'Premium/discount on proxies',   accent: 'var(--theme-primary, #c9a84c)' },
     ],
   },

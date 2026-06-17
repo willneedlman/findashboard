@@ -11,7 +11,7 @@ const T = {
   text:   'var(--theme-text, #d7e3fc)',
   muted:  'var(--theme-secondary, #5e768f)',
   mono:   'var(--theme-mono)',
-  pos:    '#22C55E', neg: '#EF4444',
+  pos:    'var(--theme-positive, #22c55e)', neg: 'var(--theme-negative, #ef4444)',
 }
 
 const inputStyle: React.CSSProperties = {
@@ -188,7 +188,7 @@ export default function OptionsPricerWidget({ config }: { config: WidgetConfig }
       <Field label={`Vol % · ${volLabel}`}>
         <input type="number" style={{
           ...inputStyle,
-          borderColor: justFilled && vol > 0 ? 'rgba(34,197,94,0.4)' : undefined,
+          borderColor: justFilled && vol > 0 ? 'color-mix(in srgb, var(--theme-positive) 40%, transparent)' : undefined,
         }}
           value={vol === 0 ? '' : vol}
           placeholder={impliedVol > 0 ? impliedVol.toFixed(1) : '—'}
@@ -202,9 +202,9 @@ export default function OptionsPricerWidget({ config }: { config: WidgetConfig }
         disabled={isLoading || spot === 0}
         style={{
           background: justFilled
-            ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 80%, #22C55E)'
+            ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 80%, var(--theme-positive, #22c55e))'
             : isLoading || spot === 0
-              ? 'rgba(201,168,76,0.3)'
+              ? 'color-mix(in srgb, var(--theme-primary) 30%, transparent)'
               : T.gold,
           border: 'none', color: 'var(--theme-bg, #0a1628)', fontFamily: T.mono, fontSize: 10,
           fontWeight: 700, letterSpacing: '0.12em', padding: '6px 0',

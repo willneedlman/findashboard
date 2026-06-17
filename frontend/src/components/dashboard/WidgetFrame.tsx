@@ -34,18 +34,18 @@ const EXPIRY_WIDGETS: WidgetType[]          = ['dealer-gex', 'vol-skew']
 const HEADER_WIDGETS: WidgetType[]          = ['sector-rotation', 'sentiment-gauge', 'screener', 'pm-portfolios', 'paper-trade', 'risk-metrics', 'pnl-attribution', 'exposure-map', 'unusual-flow', 'heatmap', 'trade-blotter', 'position-sizer']
 
 const MACRO_CAT_OPTIONS: { key: string; label: string; color: string }[] = [
-  { key: 'equity',    label: 'Equity', color: '#22c55e' },
+  { key: 'equity',    label: 'Equity', color: 'var(--theme-positive, #22c55e)' },
   { key: 'fx',        label: 'FX',     color: '#60a5fa' },
   { key: 'bond',      label: 'Rates',  color: '#a78bfa' },
   { key: 'commodity', label: 'Cmdty',  color: '#f97316' },
-  { key: 'vol',       label: 'Vol',    color: '#ef4444' },
+  { key: 'vol',       label: 'Vol',    color: 'var(--theme-negative, #ef4444)' },
 ]
 const DEFAULT_MACRO_CATS = ['equity', 'fx', 'bond', 'commodity', 'vol']
 
 const MACRO_CAL_CAT_OPTIONS: { key: string; label: string; color: string }[] = [
   { key: 'monetary',   label: 'Fed / Monetary', color: 'var(--theme-primary, #c9a84c)' },
-  { key: 'inflation',  label: 'Inflation',      color: '#ef4444' },
-  { key: 'employment', label: 'Employment',     color: '#22c55e' },
+  { key: 'inflation',  label: 'Inflation',      color: 'var(--theme-negative, #ef4444)' },
+  { key: 'employment', label: 'Employment',     color: 'var(--theme-positive, #22c55e)' },
   { key: 'growth',     label: 'Growth / GDP',   color: '#60a5fa' },
   { key: 'housing',    label: 'Housing',        color: '#f97316' },
   { key: 'sentiment',  label: 'Sentiment',      color: '#a78bfa' },
@@ -54,7 +54,7 @@ const DEFAULT_MACRO_CAL_CATS = ['monetary', 'inflation', 'employment', 'growth',
 
 const SPREAD_SERIES_OPTIONS: { key: string; label: string; color: string }[] = [
   { key: 'ig',     label: 'IG OAS',   color: '#60a5fa' },
-  { key: 'hy',     label: 'HY OAS',   color: '#ef4444' },
+  { key: 'hy',     label: 'HY OAS',   color: 'var(--theme-negative, #ef4444)' },
   { key: 'ig_3_5', label: 'IG 3–5Y',  color: '#818cf8' },
   { key: 'hy_b',   label: 'HY B',     color: '#f97316' },
   { key: 'hy_ccc', label: 'HY CCC',   color: '#fb7185' },
@@ -392,8 +392,8 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
       style={{
         position: 'relative', height: '100%', display: 'flex', flexDirection: 'column',
         background: 'var(--theme-bg, #101c2e)',
-        border: editMode ? '1px solid rgba(201,168,76,0.55)' : '1px solid var(--theme-border, rgba(255,255,255,0.08))',
-        boxShadow: editMode ? '0 0 0 1px rgba(201,168,76,0.08) inset' : 'none',
+        border: editMode ? '1px solid color-mix(in srgb, var(--theme-primary) 55%, transparent)' : '1px solid var(--theme-border, rgba(255,255,255,0.08))',
+        boxShadow: editMode ? '0 0 0 1px color-mix(in srgb, var(--theme-primary) 8%, transparent) inset' : 'none',
         transition: 'border-color 0.15s', overflow: 'hidden',
         cursor: editMode ? 'grab' : 'default',
       }}>
@@ -402,14 +402,14 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           // Trading Portal panel-header strip: darker recessed bar, gold uppercase label.
-          background: editMode ? 'rgba(201,168,76,0.12)' : 'rgba(0,0,0,0.16)',
-          borderBottom: editMode ? '1px solid rgba(201,168,76,0.25)' : '1px solid rgba(255,255,255,0.05)',
+          background: editMode ? 'color-mix(in srgb, var(--theme-primary) 12%, transparent)' : 'rgba(0,0,0,0.16)',
+          borderBottom: editMode ? '1px solid color-mix(in srgb, var(--theme-primary) 25%, transparent)' : '1px solid rgba(255,255,255,0.05)',
           padding: '6px 10px', flexShrink: 0,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
-            {editMode && <GripHorizontal size={13} style={{ color: 'rgba(201,168,76,0.7)', flexShrink: 0 }} />}
+            {editMode && <GripHorizontal size={13} style={{ color: 'color-mix(in srgb, var(--theme-primary) 70%, transparent)', flexShrink: 0 }} />}
             <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase',
-              color: editMode ? 'rgba(201,168,76,0.7)' : 'var(--theme-primary, #c9a84c)',
+              color: editMode ? 'color-mix(in srgb, var(--theme-primary) 70%, transparent)' : 'var(--theme-primary, #c9a84c)',
               fontFamily: S.label, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {widgetTitle(config)}
             </span>

@@ -7,7 +7,7 @@ const T = {
   bg: 'var(--theme-bg, #101c2e)', surface: 'var(--theme-surface, #0d1826)',
   border: 'var(--theme-border, rgba(255,255,255,0.08))', gold: 'var(--theme-primary, #c9a84c)',
   muted: 'var(--theme-secondary, #5e768f)', text: 'var(--theme-text, #d7e3fc)',
-  mono: 'var(--theme-mono)', label: 'var(--theme-sans)', pos: '#22c55e', neg: '#ef4444',
+  mono: 'var(--theme-mono)', label: 'var(--theme-sans)', pos: 'var(--theme-positive, #22c55e)', neg: 'var(--theme-negative, #ef4444)',
 }
 
 interface Candle { time: number; open: number; high: number; low: number; close: number; volume: number }
@@ -74,7 +74,7 @@ export default function TimeAndSalesWidget({ config }: { config: WidgetConfig })
           const c = dir === 1 ? T.pos : dir === -1 ? T.neg : T.muted
           const big = p.volume >= maxVol * 0.6
           return (
-            <div key={p.time} style={{ display: 'flex', gap: 8, padding: '2px 8px', borderBottom: `1px solid rgba(255,255,255,0.03)`, background: big ? 'rgba(201,168,76,0.06)' : 'transparent' }}>
+            <div key={p.time} style={{ display: 'flex', gap: 8, padding: '2px 8px', borderBottom: `1px solid rgba(255,255,255,0.03)`, background: big ? 'color-mix(in srgb, var(--theme-primary) 6%, transparent)' : 'transparent' }}>
               <span style={{ flex: '0 0 62px', fontFamily: T.mono, fontSize: 9, color: T.muted, fontVariantNumeric: 'tabular-nums' }}>{hhmmss(p.time)}</span>
               <span style={{ flex: 1, textAlign: 'right', fontFamily: T.mono, fontSize: 10, fontWeight: big ? 700 : 400, color: c, fontVariantNumeric: 'tabular-nums' }}>{p.close.toFixed(2)}</span>
               <span style={{ flex: 1, textAlign: 'right', fontFamily: T.mono, fontSize: 10, color: big ? T.text : T.muted, fontVariantNumeric: 'tabular-nums' }}>{p.volume.toLocaleString()}</span>

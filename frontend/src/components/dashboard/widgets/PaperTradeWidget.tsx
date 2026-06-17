@@ -10,6 +10,7 @@ import ExpirySelect from '../../ExpirySelect'
 import { buildOCC, occUnderlying } from '../../../lib/occ'
 import { smaArr, emaArr, bollinger, vwapArr, type Candle } from '../../../lib/indicators'
 import { marketSession } from '../../../lib/marketSession'
+import { readToken } from '../../../lib/theme'
 
 const T = {
   bg:      'var(--theme-bg, #101c2e)',
@@ -20,8 +21,8 @@ const T = {
   text:    'var(--theme-text, #d7e3fc)',
   mono:    'var(--theme-mono)',
   label:   'var(--theme-sans)',
-  pos:     '#22c55e',
-  neg:     '#ef4444',
+  pos:     'var(--theme-positive, #22c55e)',
+  neg:     'var(--theme-negative, #ef4444)',
 }
 
 interface Position { symbol: string; quantity: number; avg_cost: number; price: number; unrealized_pnl: number }
@@ -171,9 +172,10 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
       handleScale: { mouseWheel: false, pinch: true, axisPressedMouseMove: true },
       width: el.clientWidth, height: el.clientHeight,
     })
+    const cPos = readToken('--theme-positive', '#22c55e'), cNeg = readToken('--theme-negative', '#ef4444')
     const candle = chart.addCandlestickSeries({
-      upColor: '#22c55e', downColor: '#ef4444', borderUpColor: '#22c55e', borderDownColor: '#ef4444',
-      wickUpColor: '#22c55e', wickDownColor: '#ef4444', priceLineColor: gold, priceLineWidth: 1,
+      upColor: cPos, downColor: cNeg, borderUpColor: cPos, borderDownColor: cNeg,
+      wickUpColor: cPos, wickDownColor: cNeg, priceLineColor: gold, priceLineWidth: 1,
     })
     const vol = chart.addHistogramSeries({ priceScaleId: 'volume', priceFormat: { type: 'volume' }, priceLineVisible: false, lastValueVisible: false })
     chart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } })
@@ -304,6 +306,7 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
     const series = candleRef.current
     if (!series) return
     if (!candles.length) { series.setMarkers([]); return }
+    const mPos = readToken('--theme-positive', '#22c55e'), mNeg = readToken('--theme-negative', '#ef4444')
     const ctimes = candles.map(c => _numTime(c.time))
     const fills = (account.data?.orders ?? []).filter(o =>
       o.status === 'filled' && (o.symbol === ticker || occUnderlying(o.option_symbol || '') === ticker))
@@ -315,7 +318,7 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
       return {
         time: candles[bi].time as Time,
         position: (isBuy ? 'belowBar' : 'aboveBar') as SeriesMarker<Time>['position'],
-        color: isBuy ? T.pos : T.neg,
+        color: isBuy ? mPos : mNeg,
         shape: (isBuy ? 'arrowUp' : 'arrowDown') as SeriesMarker<Time>['shape'],
         text: isBuy ? 'B' : 'S',
       }
@@ -337,7 +340,7 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
     if (!(orderPx > 0)) return
     orderLineRef.current = series.createPriceLine({
       price: orderPx,
-      color: side === 'buy' ? T.pos : T.neg,
+      color: side === 'buy' ? readToken('--theme-positive', '#22c55e') : readToken('--theme-negative', '#ef4444'),
       lineWidth: 2,
       lineStyle: LineStyle.Dashed,
       axisLabelVisible: true,

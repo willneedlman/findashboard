@@ -14,8 +14,8 @@ const T = {
   text:    'var(--theme-text, #d7e3fc)',
   mono:    'var(--theme-mono)',
   label:   'var(--theme-sans)',
-  pos:     '#22c55e',
-  neg:     '#ef4444',
+  pos:     'var(--theme-positive, #22c55e)',
+  neg:     'var(--theme-negative, #ef4444)',
 }
 
 interface Row {
@@ -118,8 +118,8 @@ export default function ScreenerWidget({ config: _config }: { config: WidgetConf
           {SCREENS.map(s => (
             <button key={s.key} onClick={() => { setKey(s.key); setOpen('') }} style={{
               fontFamily: T.mono, fontSize: 9, fontWeight: 700, padding: '2px 8px', cursor: 'pointer', letterSpacing: '0.04em',
-              border: key === s.key ? '1px solid rgba(201,168,76,0.55)' : `1px solid ${T.border}`,
-              background: key === s.key ? 'rgba(201,168,76,0.12)' : 'transparent', color: key === s.key ? T.gold : T.muted,
+              border: key === s.key ? '1px solid color-mix(in srgb, var(--theme-primary) 55%, transparent)' : `1px solid ${T.border}`,
+              background: key === s.key ? 'color-mix(in srgb, var(--theme-primary) 12%, transparent)' : 'transparent', color: key === s.key ? T.gold : T.muted,
             }}>{s.label}</button>
           ))}
         </div>

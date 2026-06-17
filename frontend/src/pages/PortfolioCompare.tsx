@@ -14,7 +14,7 @@ const C = {
   gold: 'var(--theme-primary)', text: 'var(--theme-text, #d7e3fc)', muted: 'var(--theme-text-dim)',
   green: 'var(--theme-positive)', red: 'var(--theme-negative)',
 }
-const LINE_COLORS = ['#7aa2f7', '#c9a84c', '#2f9a62', '#bb9af7']
+const LINE_COLORS = ['#7aa2f7', 'var(--theme-primary, #c9a84c)', '#2f9a62', '#bb9af7']
 
 interface Leg { ticker: string; weight: number }
 interface Port { name: string; legs: Leg[]; leverage: string; borrow: string }

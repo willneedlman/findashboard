@@ -429,7 +429,7 @@ export default function StrategyBuilder() {
                             cursor: 'pointer', textAlign: 'left',
                           }}>
                             <div>{name}</div>
-                            <div style={{ fontSize: 9, fontWeight: 400, letterSpacing: '0.02em', textTransform: 'none', color: preset === name ? 'rgba(201,168,76,0.6)' : 'rgba(255,255,255,0.15)', marginTop: 2, lineHeight: '12px' }}>
+                            <div style={{ fontSize: 9, fontWeight: 400, letterSpacing: '0.02em', textTransform: 'none', color: preset === name ? 'color-mix(in srgb, var(--theme-primary) 60%, transparent)' : 'rgba(255,255,255,0.15)', marginTop: 2, lineHeight: '12px' }}>
                               {PRESET_DESC[name]}
                             </div>
                           </button>
@@ -447,8 +447,8 @@ export default function StrategyBuilder() {
                   marginTop: 8, width: '100%', padding: '7px 8px',
                   fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
                   cursor: 'pointer', border: '1px solid',
-                  borderColor: sentToPaperTrader ? 'var(--theme-positive)' : 'rgba(201,168,76,0.5)',
-                  background: sentToPaperTrader ? 'color-mix(in srgb, var(--theme-positive) 12%, transparent)' : 'rgba(201,168,76,0.07)',
+                  borderColor: sentToPaperTrader ? 'var(--theme-positive)' : 'color-mix(in srgb, var(--theme-primary) 50%, transparent)',
+                  background: sentToPaperTrader ? 'color-mix(in srgb, var(--theme-positive) 12%, transparent)' : 'color-mix(in srgb, var(--theme-primary) 7%, transparent)',
                   color: sentToPaperTrader ? 'var(--theme-positive)' : 'var(--theme-primary, #c9a84c)',
                   transition: 'all 0.2s',
                 }}
@@ -484,9 +484,9 @@ export default function StrategyBuilder() {
                             style={{
                               fontSize: 8, fontWeight: 700, padding: '1px 6px', cursor: 'pointer',
                               letterSpacing: '0.06em', textTransform: 'uppercase',
-                              background: activeChainLeg === i ? 'rgba(201,168,76,0.18)' : 'var(--theme-hover, rgba(255,255,255,0.04))',
-                              border: `1px solid ${activeChainLeg === i ? 'rgba(201,168,76,0.45)' : 'var(--theme-text-subtle, rgba(255,255,255,0.12))'}`,
-                              color: activeChainLeg === i ? '#c9a84c' : '#5e768f',
+                              background: activeChainLeg === i ? 'color-mix(in srgb, var(--theme-primary) 18%, transparent)' : 'var(--theme-hover, rgba(255,255,255,0.04))',
+                              border: `1px solid ${activeChainLeg === i ? 'color-mix(in srgb, var(--theme-primary) 45%, transparent)' : 'var(--theme-text-subtle, rgba(255,255,255,0.12))'}`,
+                              color: activeChainLeg === i ? 'var(--theme-primary, #c9a84c)' : '#5e768f',
                             }}
                           >
                             {activeChainLeg === i ? '× Chain' : 'Chain'}
@@ -641,9 +641,9 @@ export default function StrategyBuilder() {
                         <button key={e} onClick={() => { fetchExpiry(activeChainLeg, e); setDateInput(e) }}
                           style={{
                             fontSize: 8, padding: '2px 7px', cursor: 'pointer',
-                            background: exp === e ? 'rgba(201,168,76,0.15)' : 'transparent',
-                            border: `1px solid ${exp === e ? 'rgba(201,168,76,0.4)' : 'var(--theme-border, rgba(255,255,255,0.08))'}`,
-                            color: exp === e ? '#c9a84c' : '#5e768f',
+                            background: exp === e ? 'color-mix(in srgb, var(--theme-primary) 15%, transparent)' : 'transparent',
+                            border: `1px solid ${exp === e ? 'color-mix(in srgb, var(--theme-primary) 40%, transparent)' : 'var(--theme-border, rgba(255,255,255,0.08))'}`,
+                            color: exp === e ? 'var(--theme-primary, #c9a84c)' : '#5e768f',
                           }}>
                           {fmtExpiry(e)}
                         </button>
@@ -656,9 +656,9 @@ export default function StrategyBuilder() {
                       {[5, 10, 15, 20].map(n => (
                         <button key={n} onClick={() => setStrikeCount(n)} style={{
                           fontSize: 9, padding: '2px 7px', cursor: 'pointer',
-                          background: strikeCount === n ? 'rgba(201,168,76,0.15)' : 'transparent',
-                          border: `1px solid ${strikeCount === n ? 'rgba(201,168,76,0.4)' : 'var(--theme-border, rgba(255,255,255,0.08))'}`,
-                          color: strikeCount === n ? '#c9a84c' : '#5e768f',
+                          background: strikeCount === n ? 'color-mix(in srgb, var(--theme-primary) 15%, transparent)' : 'transparent',
+                          border: `1px solid ${strikeCount === n ? 'color-mix(in srgb, var(--theme-primary) 40%, transparent)' : 'var(--theme-border, rgba(255,255,255,0.08))'}`,
+                          color: strikeCount === n ? 'var(--theme-primary, #c9a84c)' : '#5e768f',
                         }}>{n}</button>
                       ))}
                     </div>
@@ -707,7 +707,7 @@ export default function StrategyBuilder() {
                             <th style={{ ...TH, textAlign: 'right' }}>Bid</th>
                             <th style={{ ...TH, textAlign: 'right', color: 'color-mix(in srgb, var(--theme-positive) 55%, transparent)' }}>Ask</th>
                             {/* Center */}
-                            <th style={{ ...TH, textAlign: 'center', color: 'color-mix(in srgb, var(--theme-primary) 55%, transparent)', background: 'rgba(201,168,76,0.05)', minWidth: 80 }}>CALLS · STRIKE · PUTS</th>
+                            <th style={{ ...TH, textAlign: 'center', color: 'color-mix(in srgb, var(--theme-primary) 55%, transparent)', background: 'color-mix(in srgb, var(--theme-primary) 5%, transparent)', minWidth: 80 }}>CALLS · STRIKE · PUTS</th>
                             {/* Puts side */}
                             <th style={{ ...TH, textAlign: 'left', color: 'color-mix(in srgb, var(--theme-negative) 55%, transparent)' }}>Bid</th>
                             <th style={{ ...TH, textAlign: 'left' }}>Ask</th>
@@ -724,7 +724,7 @@ export default function StrategyBuilder() {
                             const callSel = leg.option_type === 'call' && leg.K === K
                             const putSel  = leg.option_type === 'put'  && leg.K === K
 
-                            const rowBg = isATM ? 'rgba(201,168,76,0.06)' : 'transparent'
+                            const rowBg = isATM ? 'color-mix(in srgb, var(--theme-primary) 6%, transparent)' : 'transparent'
 
                             const callClick = () => c && (selectContract(activeChainLeg, c), updateLeg(activeChainLeg, 'option_type', 'call'))
                             const putClick  = () => p && (selectContract(activeChainLeg, p), updateLeg(activeChainLeg, 'option_type', 'put'))
@@ -736,24 +736,24 @@ export default function StrategyBuilder() {
                                 onMouseLeave={e => (e.currentTarget.style.background = rowBg)}>
 
                                 {/* Call cells */}
-                                <td onClick={callClick} style={{ ...TD_base, textAlign: 'right', cursor: 'pointer', color: 'var(--theme-positive)', background: callSel ? 'rgba(201,168,76,0.12)' : undefined }}>
+                                <td onClick={callClick} style={{ ...TD_base, textAlign: 'right', cursor: 'pointer', color: 'var(--theme-positive)', background: callSel ? 'color-mix(in srgb, var(--theme-primary) 12%, transparent)' : undefined }}>
                                   {c?.delta?.toFixed(2) ?? '—'}
                                 </td>
-                                <td onClick={callClick} style={{ ...TD_base, textAlign: 'right', cursor: 'pointer', color: 'var(--theme-text-dim)', background: callSel ? 'rgba(201,168,76,0.12)' : undefined }}>
+                                <td onClick={callClick} style={{ ...TD_base, textAlign: 'right', cursor: 'pointer', color: 'var(--theme-text-dim)', background: callSel ? 'color-mix(in srgb, var(--theme-primary) 12%, transparent)' : undefined }}>
                                   {c?.openInterest ? (c.openInterest >= 1000 ? `${(c.openInterest/1000).toFixed(1)}k` : c.openInterest) : '—'}
                                 </td>
-                                <td onClick={callClick} style={{ ...TD_base, textAlign: 'right', cursor: 'pointer', color: 'var(--theme-text-dim)', background: callSel ? 'rgba(201,168,76,0.12)' : undefined }}>
+                                <td onClick={callClick} style={{ ...TD_base, textAlign: 'right', cursor: 'pointer', color: 'var(--theme-text-dim)', background: callSel ? 'color-mix(in srgb, var(--theme-primary) 12%, transparent)' : undefined }}>
                                   {c?.volume ? (c.volume >= 1000 ? `${(c.volume/1000).toFixed(1)}k` : c.volume) : '—'}
                                 </td>
-                                <td onClick={callClick} style={{ ...TD_base, textAlign: 'right', cursor: 'pointer', color: 'var(--theme-text, #d7e3fc)', background: callSel ? 'rgba(201,168,76,0.12)' : undefined }}>
+                                <td onClick={callClick} style={{ ...TD_base, textAlign: 'right', cursor: 'pointer', color: 'var(--theme-text, #d7e3fc)', background: callSel ? 'color-mix(in srgb, var(--theme-primary) 12%, transparent)' : undefined }}>
                                   {c?.bid > 0 ? c.bid.toFixed(2) : '—'}
                                 </td>
-                                <td onClick={callClick} style={{ ...TD_base, textAlign: 'right', cursor: 'pointer', color: 'var(--theme-positive)', fontWeight: callSel ? 700 : 400, background: callSel ? 'rgba(201,168,76,0.18)' : undefined }}>
+                                <td onClick={callClick} style={{ ...TD_base, textAlign: 'right', cursor: 'pointer', color: 'var(--theme-positive)', fontWeight: callSel ? 700 : 400, background: callSel ? 'color-mix(in srgb, var(--theme-primary) 18%, transparent)' : undefined }}>
                                   {c?.ask > 0 ? c.ask.toFixed(2) : '—'}
                                 </td>
 
                                 {/* Strike */}
-                                <td style={{ ...TD_base, textAlign: 'center', background: 'rgba(201,168,76,0.05)', fontWeight: 700,
+                                <td style={{ ...TD_base, textAlign: 'center', background: 'color-mix(in srgb, var(--theme-primary) 5%, transparent)', fontWeight: 700,
                                   color: isATM ? 'var(--theme-primary, #c9a84c)' : spot && K < spot ? 'var(--theme-text, #d7e3fc)' : 'var(--theme-text-dim)' }}>
                                   {K}
                                   {isATM && <span style={{ fontSize: 8, color: 'var(--theme-primary, #c9a84c)', marginLeft: 4, letterSpacing: '0.08em' }}>ATM</span>}
@@ -821,7 +821,7 @@ export default function StrategyBuilder() {
 
                   {/* Strike reference lines */}
                   {[...new Set(primaryLegs.map(l => l.K))].map(K => (
-                    <ReferenceLine key={K} x={K} stroke="rgba(201,168,76,0.3)" strokeDasharray="3 4"
+                    <ReferenceLine key={K} x={K} stroke="color-mix(in srgb, var(--theme-primary) 30%, transparent)" strokeDasharray="3 4"
                       label={{ value: `$${K}`, fill: 'var(--theme-primary, #c9a84c)', fontSize: 8, position: 'insideTopRight' }} />
                   ))}
 
@@ -841,7 +841,7 @@ export default function StrategyBuilder() {
                   ))}
 
                   {/* Total P&L — main gold line */}
-                  <Line type="monotone" dataKey="total" stroke="#c9a84c" strokeWidth={2.5} dot={false} name="total" legendType="none" />
+                  <Line type="monotone" dataKey="total" stroke="var(--theme-primary, #c9a84c)" strokeWidth={2.5} dot={false} name="total" legendType="none" />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
@@ -899,7 +899,7 @@ export default function StrategyBuilder() {
                     <div key={tk}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                         <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--theme-primary, #c9a84c)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>{tk}</span>
-                        <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: pct >= 0 ? '#22C55E' : '#EF4444' }}>
+                        <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: pct >= 0 ? 'var(--theme-positive, #22c55e)' : 'var(--theme-negative, #ef4444)' }}>
                           ${spot.toFixed(2)} ({pct >= 0 ? '+' : ''}{pct.toFixed(1)}%)
                         </span>
                       </div>
@@ -934,13 +934,13 @@ export default function StrategyBuilder() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: 'var(--theme-surface, #142032)', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
               <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#ffffff' }}>Portfolio Greeks</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {greekError && <span style={{ fontSize: 9, color: '#ef4444', fontFamily: 'var(--theme-mono)' }}>{greekError}</span>}
+                {greekError && <span style={{ fontSize: 9, color: 'var(--theme-negative, #ef4444)', fontFamily: 'var(--theme-mono)' }}>{greekError}</span>}
                 <button
                   onClick={calculateGreeks}
                   disabled={greekLoading}
                   style={{
                     background: greekLoading ? 'transparent' : 'color-mix(in srgb, var(--theme-primary, #c9a84c) 15%, transparent)',
-                    border: '1px solid rgba(201,168,76,0.4)', color: greekLoading ? 'rgba(255,255,255,0.3)' : 'var(--theme-primary, #c9a84c)',
+                    border: '1px solid color-mix(in srgb, var(--theme-primary) 40%, transparent)', color: greekLoading ? 'rgba(255,255,255,0.3)' : 'var(--theme-primary, #c9a84c)',
                     fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
                     padding: '3px 12px', cursor: greekLoading ? 'default' : 'pointer',
                   }}
@@ -1011,8 +1011,8 @@ export default function StrategyBuilder() {
           </div>
 
           {/* ── AI Risk Narrative ──────────────────────────────────────────── */}
-          <div style={{ margin: '0 14px 14px', border: '1px solid rgba(201,168,76,0.2)', background: 'rgba(201,168,76,0.03)' }}>
-            <div style={{ padding: '6px 10px', borderBottom: '1px solid rgba(201,168,76,0.12)', background: 'rgba(201,168,76,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ margin: '0 14px 14px', border: '1px solid color-mix(in srgb, var(--theme-primary) 20%, transparent)', background: 'color-mix(in srgb, var(--theme-primary) 3%, transparent)' }}>
+            <div style={{ padding: '6px 10px', borderBottom: '1px solid color-mix(in srgb, var(--theme-primary) 12%, transparent)', background: 'color-mix(in srgb, var(--theme-primary) 6%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)' }}>AI Risk Analysis</span>
               <button
                 onClick={async () => {
@@ -1036,7 +1036,7 @@ export default function StrategyBuilder() {
                 disabled={aiNarrativePending || !greekResult}
                 style={{
                   background: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)',
-                  border: '1px solid rgba(201,168,76,0.4)', color: 'var(--theme-primary, #c9a84c)',
+                  border: '1px solid color-mix(in srgb, var(--theme-primary) 40%, transparent)', color: 'var(--theme-primary, #c9a84c)',
                   fontFamily: 'var(--theme-mono)', fontSize: 9,
                   padding: '2px 6px', cursor: (aiNarrativePending || !greekResult) ? 'default' : 'pointer',
                   opacity: (aiNarrativePending || !greekResult) ? 0.5 : 1,

@@ -11,7 +11,7 @@ const T = {
   text:  'var(--theme-text, #d7e3fc)',
   mono:  'var(--theme-mono)',
   label: 'var(--theme-sans)',
-  pos:   '#22c55e', neg: '#ef4444',
+  pos:   'var(--theme-positive, #22c55e)', neg: 'var(--theme-negative, #ef4444)',
 }
 
 interface Analyst {
@@ -26,11 +26,11 @@ interface Analyst {
 }
 
 const ROWS: { key: keyof Analyst['distribution']; label: string; color: string }[] = [
-  { key: 'strongBuy',  label: 'Strong Buy',  color: '#22c55e' },
+  { key: 'strongBuy',  label: 'Strong Buy',  color: 'var(--theme-positive, #22c55e)' },
   { key: 'buy',        label: 'Buy',         color: '#5fbf7e' },
-  { key: 'hold',       label: 'Hold',        color: '#c9a84c' },
+  { key: 'hold',       label: 'Hold',        color: 'var(--theme-primary, #c9a84c)' },
   { key: 'sell',       label: 'Sell',        color: '#e07a52' },
-  { key: 'strongSell', label: 'Strong Sell', color: '#ef4444' },
+  { key: 'strongSell', label: 'Strong Sell', color: 'var(--theme-negative, #ef4444)' },
 ]
 
 function ratingLabel(key: string | null, mean: number | null): { text: string; color: string } {

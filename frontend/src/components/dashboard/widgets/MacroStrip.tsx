@@ -6,7 +6,7 @@ const T = {
   bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))', headerBg: 'var(--theme-surface, #142032)',
   gold: 'var(--theme-primary, #c9a84c)', muted: 'var(--theme-secondary, #5e768f)',
   mono: 'var(--theme-mono)', label: 'var(--theme-sans)',
-  pos: '#22C55E', neg: '#EF4444',
+  pos: 'var(--theme-positive, #22c55e)', neg: 'var(--theme-negative, #ef4444)',
 }
 
 const shimmerStyle: React.CSSProperties = {

@@ -9,7 +9,7 @@ import EmptyState from '../components/EmptyState'
 const C = {
   bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))', header: 'var(--theme-surface, #0d1826)',
   gold: 'var(--theme-primary, #c9a84c)', text: 'var(--theme-text, #d7e3fc)', muted: 'var(--theme-secondary, #5e768f)', dim: 'var(--theme-text-dim, rgba(215,227,252,0.45))',
-  pos: '#22C55E', neg: '#EF4444', warn: '#f59e0b',
+  pos: 'var(--theme-positive, #22c55e)', neg: 'var(--theme-negative, #ef4444)', warn: '#f59e0b',
   mono: 'var(--theme-mono)', sans: 'var(--theme-sans)',
 }
 
@@ -340,7 +340,7 @@ export default function StockScreener() {
                 <tbody>
                   {displayRows.map((row: ScreenResult, i: number) => (
                     <tr key={row.ticker} style={{ background: i % 2 === 0 ? 'var(--theme-surface, #0d1826)' : 'var(--theme-bg, #101c2e)', borderBottom: `1px solid var(--theme-border-faint, rgba(255,255,255,0.05))` }}
-                      onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = 'rgba(201,168,76,0.05)')}
+                      onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = 'color-mix(in srgb, var(--theme-primary) 5%, transparent)')}
                       onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = i % 2 === 0 ? 'var(--theme-surface, #0d1826)' : 'var(--theme-bg, #101c2e)')}>
                       {activeCols.map(col => {
                         const raw = row[col.key]

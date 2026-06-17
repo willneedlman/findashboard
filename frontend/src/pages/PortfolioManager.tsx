@@ -831,7 +831,7 @@ export default function PortfolioManager() {
                   <div style={{ display: 'flex', height: 4, overflow: 'hidden' }}>
                     {rows.map((r, i) => {
                       const w = (r.value / totalValue) * 100
-                      const colors = ['#c9a84c','#60a5fa','#22c55e','#ef4444','#a78bfa','#f97316','#38bdf8','#fb923c','#4ade80','#f472b6','#facc15']
+                      const colors = ['var(--theme-primary, #c9a84c)','#60a5fa','var(--theme-positive, #22c55e)','var(--theme-negative, #ef4444)','#a78bfa','#f97316','#38bdf8','#fb923c','#4ade80','#f472b6','#facc15']
                       return <div key={r.ticker} style={{ width: `${w}%`, background: colors[i % colors.length], transition: 'width 0.3s' }} />
                     })}
                   </div>
@@ -1001,7 +1001,7 @@ export default function PortfolioManager() {
               <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {rows.map((r, i) => {
                   const w = (r.value / totalValue) * 100
-                  const colors = ['#c9a84c','#60a5fa','#22c55e','#ef4444','#a78bfa','#f97316','#38bdf8','#fb923c','#4ade80','#f472b6','#facc15']
+                  const colors = ['var(--theme-primary, #c9a84c)','#60a5fa','var(--theme-positive, #22c55e)','var(--theme-negative, #ef4444)','#a78bfa','#f97316','#38bdf8','#fb923c','#4ade80','#f472b6','#facc15']
                   return (
                     <div key={r.ticker} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                       <div style={{ width: 8, height: 8, borderRadius: '50%', background: colors[i % colors.length], flexShrink: 0 }} />

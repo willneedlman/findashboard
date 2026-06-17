@@ -8,7 +8,7 @@ const T = {
   bg: 'var(--theme-bg, #101c2e)', surface: 'var(--theme-surface, #0d1826)',
   border: 'var(--theme-border, rgba(255,255,255,0.08))', gold: 'var(--theme-primary, #c9a84c)',
   muted: 'var(--theme-secondary, #5e768f)', text: 'var(--theme-text, #d7e3fc)',
-  mono: 'var(--theme-mono)', label: 'var(--theme-sans)', pos: '#22c55e', neg: '#ef4444',
+  mono: 'var(--theme-mono)', label: 'var(--theme-sans)', pos: 'var(--theme-positive, #22c55e)', neg: 'var(--theme-negative, #ef4444)',
 }
 const cap: React.CSSProperties = { fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.muted, marginBottom: 3 }
 

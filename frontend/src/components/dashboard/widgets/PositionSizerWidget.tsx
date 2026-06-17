@@ -6,7 +6,7 @@ const T = {
   bg: 'var(--theme-bg, #101c2e)', surface: 'var(--theme-surface, #0d1826)',
   border: 'var(--theme-border, rgba(255,255,255,0.08))', gold: 'var(--theme-primary, #c9a84c)',
   muted: 'var(--theme-secondary, #5e768f)', text: 'var(--theme-text, #d7e3fc)',
-  mono: 'var(--theme-mono)', label: 'var(--theme-sans)', pos: '#22c55e', neg: '#ef4444',
+  mono: 'var(--theme-mono)', label: 'var(--theme-sans)', pos: 'var(--theme-positive, #22c55e)', neg: 'var(--theme-negative, #ef4444)',
 }
 const money = (v: number, d = 0) => v.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: d, minimumFractionDigits: d })
 const cap: React.CSSProperties = { fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.muted }
@@ -14,7 +14,7 @@ const cap: React.CSSProperties = { fontFamily: T.label, fontSize: 8, fontWeight:
 function Stepper({ value, step, onChange }: { value: number; step: number; onChange: (v: number) => void }) {
   const btn: React.CSSProperties = { fontFamily: T.mono, fontSize: 12, fontWeight: 700, width: 22, flexShrink: 0, cursor: 'pointer', border: `1px solid ${T.border}`, background: 'transparent', color: T.gold }
   return (
-    <div style={{ display: 'flex', alignItems: 'stretch', border: '1px solid rgba(201,168,76,0.4)', height: 26 }}>
+    <div style={{ display: 'flex', alignItems: 'stretch', border: '1px solid color-mix(in srgb, var(--theme-primary) 40%, transparent)', height: 26 }}>
       <button onClick={() => onChange(Math.max(0, +(value - step).toFixed(2)))} style={btn}>−</button>
       <input type="number" value={value} step={step} onChange={e => onChange(Math.max(0, Number(e.target.value)))}
         style={{ flex: 1, minWidth: 0, background: 'var(--theme-bg, #101c2e)', border: 'none', borderLeft: `1px solid ${T.border}`, borderRight: `1px solid ${T.border}`, color: T.text, fontFamily: T.mono, fontSize: 12, textAlign: 'center', outline: 'none' }} />
@@ -63,9 +63,9 @@ export default function PositionSizerWidget({ config }: { config: WidgetConfig }
           style={{ width: '100%', accentColor: 'var(--theme-primary, #c9a84c)', marginTop: 3 }} />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        <div><div style={{ ...cap, marginBottom: 3 }}>Entry</div><Stepper value={entry} step={0.25} onChange={setEntry} /></div>
-        <div><div style={{ ...cap, marginBottom: 3 }}>Stop</div><Stepper value={stop} step={0.25} onChange={setStop} /></div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(96px, 1fr))', gap: 8 }}>
+        <div style={{ minWidth: 0 }}><div style={{ ...cap, marginBottom: 3 }}>Entry</div><Stepper value={entry} step={0.25} onChange={setEntry} /></div>
+        <div style={{ minWidth: 0 }}><div style={{ ...cap, marginBottom: 3 }}>Stop</div><Stepper value={stop} step={0.25} onChange={setStop} /></div>
       </div>
 
       <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 6, textAlign: 'center' }}>

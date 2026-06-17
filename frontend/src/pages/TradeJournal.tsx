@@ -71,8 +71,8 @@ const C = {
   muted:   'var(--theme-secondary, #5e768f)',
   text:    'var(--theme-text, #d7e3fc)',
   mono:    'var(--theme-mono)',
-  pos:     '#22c55e',
-  neg:     '#ef4444',
+  pos:     'var(--theme-positive, #22c55e)',
+  neg:     'var(--theme-negative, #ef4444)',
   dim:     'var(--theme-text-muted, rgba(215,227,252,0.35))',
 }
 
@@ -101,7 +101,7 @@ function Tag({ name, active, onClick }: { name: string; active: boolean; onClick
         padding: '3px 8px',
         borderRadius: 3,
         border: `1px solid ${active ? C.gold : C.border}`,
-        background: active ? 'rgba(201,168,76,0.12)' : 'transparent',
+        background: active ? 'color-mix(in srgb, var(--theme-primary) 12%, transparent)' : 'transparent',
         color: active ? C.gold : C.muted,
         cursor: 'pointer',
         transition: 'all 0.15s',
@@ -328,7 +328,7 @@ function AddTradeForm({ onAdd }: { onAdd: (t: Trade) => void }) {
               letterSpacing: '0.16em',
               textTransform: 'uppercase',
               fontWeight: 700,
-              background: 'rgba(201,168,76,0.12)',
+              background: 'color-mix(in srgb, var(--theme-primary) 12%, transparent)',
               border: `1px solid ${C.gold}`,
               borderRadius: 4,
               color: C.gold,
@@ -337,8 +337,8 @@ function AddTradeForm({ onAdd }: { onAdd: (t: Trade) => void }) {
               width: '100%',
               transition: 'background 0.15s',
             }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(201,168,76,0.22)')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'rgba(201,168,76,0.12)')}
+            onMouseEnter={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--theme-primary) 22%, transparent)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--theme-primary) 12%, transparent)')}
           >
             Add Trade
           </button>
@@ -415,8 +415,8 @@ function CloseForm({ trade, onClose }: { trade: Trade; onClose: (exitDate: strin
 
   return (
     <div style={{
-      background: 'rgba(201,168,76,0.05)',
-      border: `1px solid rgba(201,168,76,0.2)`,
+      background: 'color-mix(in srgb, var(--theme-primary) 5%, transparent)',
+      border: `1px solid color-mix(in srgb, var(--theme-primary) 20%, transparent)`,
       borderRadius: 6,
       padding: '14px 16px',
       display: 'flex',
@@ -448,7 +448,7 @@ function CloseForm({ trade, onClose }: { trade: Trade; onClose: (exitDate: strin
           letterSpacing: '0.14em',
           textTransform: 'uppercase',
           fontWeight: 700,
-          background: 'rgba(201,168,76,0.12)',
+          background: 'color-mix(in srgb, var(--theme-primary) 12%, transparent)',
           border: `1px solid ${C.gold}`,
           borderRadius: 4,
           color: C.gold,
@@ -698,7 +698,7 @@ export default function TradeJournal() {
                       padding: '3px 9px',
                       borderRadius: 3,
                       border: `1px solid ${filterStatus === s ? C.gold : C.border}`,
-                      background: filterStatus === s ? 'rgba(201,168,76,0.1)' : 'transparent',
+                      background: filterStatus === s ? 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' : 'transparent',
                       color: filterStatus === s ? C.gold : C.muted,
                       cursor: 'pointer',
                     }}
@@ -841,7 +841,7 @@ export default function TradeJournal() {
                                     fontSize: 9,
                                     letterSpacing: '0.1em',
                                     textTransform: 'uppercase',
-                                    background: isClosing ? 'rgba(201,168,76,0.15)' : 'transparent',
+                                    background: isClosing ? 'color-mix(in srgb, var(--theme-primary) 15%, transparent)' : 'transparent',
                                     border: `1px solid ${isClosing ? C.gold : C.border}`,
                                     borderRadius: 3,
                                     color: isClosing ? C.gold : C.muted,

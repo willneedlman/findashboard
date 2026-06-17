@@ -181,7 +181,7 @@ export default function DealerGEX() {
                       return a >= 1000 ? `${(v/1000).toFixed(1)}B` : `${v.toFixed(0)}M`
                     }} orientation="right" />
                     <Tooltip formatter={(v: number) => [`$${v.toFixed(1)}M`, 'Net GEX']} contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL} itemStyle={TOOLTIP_ITEM} cursor={{ fill: 'var(--theme-hover, rgba(255,255,255,0.04))' }} />
-                    {spot && <ReferenceLine x={spot} stroke="rgba(201,168,76,0.7)" strokeDasharray="4 4"
+                    {spot && <ReferenceLine x={spot} stroke="color-mix(in srgb, var(--theme-primary) 70%, transparent)" strokeDasharray="4 4"
                       label={({ viewBox }: any) => (
                         // Row 1 of the top band — text to the left of the spot line.
                         <text x={Math.max(2, viewBox.x - 50)} y={viewBox.y - 26} fill="var(--theme-primary, #c9a84c)" fontSize={9} fontFamily="var(--theme-mono)">{`Spot $${spot.toFixed(0)}`}</text>
@@ -218,7 +218,7 @@ export default function DealerGEX() {
                     }} orientation="right" />
                     <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL} itemStyle={TOOLTIP_ITEM} cursor={{ fill: 'var(--theme-hover, rgba(255,255,255,0.04))' }} />
                     <Legend wrapperStyle={{ fontSize: 10 }} />
-                    {spot && <ReferenceLine x={spot} stroke="rgba(201,168,76,0.5)" strokeDasharray="4 4" />}
+                    {spot && <ReferenceLine x={spot} stroke="color-mix(in srgb, var(--theme-primary) 50%, transparent)" strokeDasharray="4 4" />}
                     <Bar dataKey="call_gex" name="Call GEX" fill={cc.gainMuted} stackId="s" radius={[2,2,0,0]} />
                     <Bar dataKey="put_gex"  name="Put GEX"  fill={cc.lossMuted}  stackId="s" />
                   </BarChart>
@@ -264,7 +264,7 @@ export default function DealerGEX() {
                           tickFormatter={v => Math.abs(v) >= 1000 ? `${(Math.abs(v)/1000).toFixed(0)}k` : Math.abs(v).toFixed(0)} />
                         <Tooltip formatter={(v: number) => [Math.abs(v).toLocaleString(), '']} contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL} itemStyle={TOOLTIP_ITEM} cursor={{ fill: 'var(--theme-hover, rgba(255,255,255,0.04))' }} />
                         <Legend wrapperStyle={{ fontSize: 10 }} />
-                        {spot && <ReferenceLine x={spot} stroke="rgba(201,168,76,0.7)" strokeDasharray="4 4"
+                        {spot && <ReferenceLine x={spot} stroke="color-mix(in srgb, var(--theme-primary) 70%, transparent)" strokeDasharray="4 4"
                           label={{ value: 'Spot', fill: 'var(--theme-primary, #c9a84c)', fontSize: 9 }} />}
                         <Bar dataKey="callOI" name="Call OI" fill={cc.gainMuted} />
                         <Bar dataKey="putOI"  name="Put OI"  fill={cc.lossMuted} />

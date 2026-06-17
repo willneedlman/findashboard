@@ -13,7 +13,7 @@ const T = {
   mono:  'var(--theme-mono)',
   label: 'var(--theme-sans)',
   blue:  '#60a5fa',
-  pos:   '#22c55e', neg: '#ef4444',
+  pos:   'var(--theme-positive, #22c55e)', neg: 'var(--theme-negative, #ef4444)',
 }
 
 interface Txn { date: string; insider: string; title: string; transaction: string; shares: number; value: number }

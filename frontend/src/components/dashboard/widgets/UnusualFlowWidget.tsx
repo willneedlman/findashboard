@@ -8,7 +8,7 @@ const T = {
   bg: 'var(--theme-bg, #101c2e)', surface: 'var(--theme-surface, #0d1826)',
   border: 'var(--theme-border, rgba(255,255,255,0.08))', gold: 'var(--theme-primary, #c9a84c)',
   muted: 'var(--theme-secondary, #5e768f)', text: 'var(--theme-text, #d7e3fc)',
-  mono: 'var(--theme-mono)', label: 'var(--theme-sans)', pos: '#22c55e', neg: '#ef4444',
+  mono: 'var(--theme-mono)', label: 'var(--theme-sans)', pos: 'var(--theme-positive, #22c55e)', neg: 'var(--theme-negative, #ef4444)',
 }
 
 interface Flow {
@@ -48,8 +48,8 @@ export default function UnusualFlowWidget({ config }: { config: WidgetConfig }) 
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: T.bg }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', background: 'rgba(0,0,0,0.15)', borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
         <div style={{ flex: 1, display: 'flex', height: 8, overflow: 'hidden', border: `1px solid ${T.border}` }}>
-          <div style={{ width: `${callPct}%`, background: 'rgba(34,197,94,0.6)' }} />
-          <div style={{ width: `${100 - callPct}%`, background: 'rgba(239,68,68,0.6)' }} />
+          <div style={{ width: `${callPct}%`, background: 'color-mix(in srgb, var(--theme-positive) 60%, transparent)' }} />
+          <div style={{ width: `${100 - callPct}%`, background: 'color-mix(in srgb, var(--theme-negative) 60%, transparent)' }} />
         </div>
         <span style={{ fontFamily: T.mono, fontSize: 8.5, color: T.muted, whiteSpace: 'nowrap' }}>{callPct.toFixed(0)}% calls</span>
         <div style={{ display: 'flex', gap: 3 }}>

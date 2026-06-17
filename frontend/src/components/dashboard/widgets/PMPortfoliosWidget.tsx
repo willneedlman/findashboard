@@ -16,8 +16,8 @@ const T = {
   text:    'var(--theme-text, #d7e3fc)',
   mono:    'var(--theme-mono)',
   label:   'var(--theme-sans)',
-  pos:     '#22c55e',
-  neg:     '#ef4444',
+  pos:     'var(--theme-positive, #22c55e)',
+  neg:     'var(--theme-negative, #ef4444)',
 }
 
 interface Holding { ticker: string; shares: number; avgCost: number }
@@ -161,7 +161,7 @@ export default function PMPortfoliosWidget({ config: _config }: { config: Widget
             disabled={seed.isPending}
             title="Replace your paper account with this book's holdings at cost, then trade it"
             style={{ fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', whiteSpace: 'nowrap',
-              border: `1px solid ${seedConfirm ? T.gold : T.border}`, background: seedConfirm ? 'rgba(201,168,76,0.14)' : 'transparent',
+              border: `1px solid ${seedConfirm ? T.gold : T.border}`, background: seedConfirm ? 'color-mix(in srgb, var(--theme-primary) 14%, transparent)' : 'transparent',
               color: seedConfirm ? T.gold : T.muted, padding: '3px 7px', cursor: 'pointer' }}>
             {seed.isPending ? '…' : seedConfirm ? 'Confirm' : 'Trade on paper'}
           </button>

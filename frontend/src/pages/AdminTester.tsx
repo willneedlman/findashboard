@@ -126,9 +126,9 @@ const SAMPLE_CSV = `timestamp,side,price,size,order_id
 2024-01-02 09:30:00.990,B,150.37,0,ORD040
 2024-01-02 09:30:01.000,A,150.35,400,ORD063`.trim()
 
-const RED = '#ef4444'
-const RED_DIM = 'rgba(239,68,68,0.12)'
-const RED_BORDER = 'rgba(239,68,68,0.25)'
+const RED = 'var(--theme-negative, #ef4444)'
+const RED_DIM = 'color-mix(in srgb, var(--theme-negative) 12%, transparent)'
+const RED_BORDER = 'color-mix(in srgb, var(--theme-negative) 25%, transparent)'
 
 const inp: React.CSSProperties = {
   background: 'var(--theme-bg)', border: `1px solid ${RED_BORDER}`,
@@ -166,15 +166,15 @@ function fmtUptime(secs: number): string {
 function depColor(status: string): { fg: string; bg: string; border: string } {
   switch (status) {
     case 'up':
-    case 'configured':   return { fg: '#22c55e', bg: 'rgba(34,197,94,0.12)',  border: 'rgba(34,197,94,0.3)' }
+    case 'configured':   return { fg: 'var(--theme-positive, #22c55e)', bg: 'color-mix(in srgb, var(--theme-positive) 12%, transparent)',  border: 'color-mix(in srgb, var(--theme-positive) 30%, transparent)' }
     case 'degraded':     return { fg: '#f59e0b', bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.3)' }
     case 'unconfigured': return { fg: '#8b98a8', bg: 'rgba(139,152,168,0.1)', border: 'rgba(139,152,168,0.25)' }
-    default:             return { fg: '#ef4444', bg: 'rgba(239,68,68,0.12)',  border: RED_BORDER }   // down
+    default:             return { fg: 'var(--theme-negative, #ef4444)', bg: 'color-mix(in srgb, var(--theme-negative) 12%, transparent)',  border: RED_BORDER }   // down
   }
 }
 
 // Inline request-per-minute sparkline (last 60 min).
-function Spark({ data, color = '#ef4444' }: { data: number[]; color?: string }) {
+function Spark({ data, color = 'var(--theme-negative, #ef4444)' }: { data: number[]; color?: string }) {
   const max = Math.max(1, ...data)
   return (
     <div style={{ display: 'flex', alignItems: 'flex-end', gap: 1, height: 34 }}>
@@ -403,7 +403,7 @@ export default function AdminTester() {
 
   const label = (text: string): React.CSSProperties => ({
     fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase',
-    color: 'rgba(239,68,68,0.55)', marginBottom: 6, fontFamily: 'var(--theme-mono)',
+    color: 'color-mix(in srgb, var(--theme-negative) 55%, transparent)', marginBottom: 6, fontFamily: 'var(--theme-mono)',
   })
 
   if (!unlocked) {
@@ -546,8 +546,8 @@ export default function AdminTester() {
               const kpis: [string, string, string?][] = [
                 ['Requests', m.total_requests.toLocaleString(), undefined],
                 ['Req / min', String(m.requests_per_min), undefined],
-                ['Error rate', `${m.error_rate}%`, m.error_rate > 2 ? '#ef4444' : '#22c55e'],
-                ['5xx errors', String(m.error_count), m.error_count > 0 ? '#ef4444' : undefined],
+                ['Error rate', `${m.error_rate}%`, m.error_rate > 2 ? 'var(--theme-negative, #ef4444)' : 'var(--theme-positive, #22c55e)'],
+                ['5xx errors', String(m.error_count), m.error_count > 0 ? 'var(--theme-negative, #ef4444)' : undefined],
                 ['Avg latency', `${m.avg_latency_ms} ms`, m.avg_latency_ms > 800 ? '#f59e0b' : undefined],
                 ['Max latency', `${m.max_latency_ms} ms`, undefined],
               ]
@@ -573,7 +573,7 @@ export default function AdminTester() {
                     <p style={label('Status codes')}>Status codes</p>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
                       {Object.entries(m.by_status).map(([cls, n]) => {
-                        const c = cls === '2xx' ? '#22c55e' : cls === '5xx' ? '#ef4444' : cls === '4xx' ? '#f59e0b' : '#8b98a8'
+                        const c = cls === '2xx' ? 'var(--theme-positive, #22c55e)' : cls === '5xx' ? 'var(--theme-negative, #ef4444)' : cls === '4xx' ? '#f59e0b' : '#8b98a8'
                         return (
                           <span key={cls} style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, padding: '3px 8px', color: c, border: `1px solid ${c}40`, background: `${c}18` }}>
                             {cls} {n}
@@ -619,8 +619,8 @@ export default function AdminTester() {
                       return (
                         <div key={p}>
                           <span style={{ color: 'var(--theme-text)', textTransform: 'capitalize' }}>{p}</span>
-                          <span style={{ color: '#22c55e', marginLeft: 8 }}>{s.ok} ok</span>
-                          <span style={{ color: s.fail > 0 ? '#ef4444' : 'var(--theme-text-dim)', marginLeft: 8 }}>{s.fail} fail</span>
+                          <span style={{ color: 'var(--theme-positive, #22c55e)', marginLeft: 8 }}>{s.ok} ok</span>
+                          <span style={{ color: s.fail > 0 ? 'var(--theme-negative, #ef4444)' : 'var(--theme-text-dim)', marginLeft: 8 }}>{s.fail} fail</span>
                         </div>
                       )
                     })}
@@ -644,7 +644,7 @@ export default function AdminTester() {
                       <div key={r.path} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 6, padding: '4px 0', color: 'var(--theme-text)' }}>
                         <span>{r.path}</span>
                         <span style={{ textAlign: 'right' }}>{r.count.toLocaleString()}</span>
-                        <span style={{ textAlign: 'right', color: r.errors > 0 ? '#ef4444' : 'var(--theme-text-dim)' }}>{r.errors}</span>
+                        <span style={{ textAlign: 'right', color: r.errors > 0 ? 'var(--theme-negative, #ef4444)' : 'var(--theme-text-dim)' }}>{r.errors}</span>
                         <span style={{ textAlign: 'right', color: r.avg_ms > 800 ? '#f59e0b' : 'var(--theme-text)' }}>{r.avg_ms}</span>
                         <span style={{ textAlign: 'right', color: 'var(--theme-text-dim)' }}>{r.max_ms}</span>
                       </div>
@@ -678,8 +678,8 @@ export default function AdminTester() {
                     {Object.entries(health.api_keys).map(([key, ok]) => (
                       <span key={key} style={{
                         fontFamily: 'var(--theme-mono)', fontSize: 9, padding: '3px 8px',
-                        background: ok ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.15)',
-                        border: `1px solid ${ok ? 'rgba(34,197,94,0.3)' : RED_BORDER}`,
+                        background: ok ? 'color-mix(in srgb, var(--theme-positive) 12%, transparent)' : 'color-mix(in srgb, var(--theme-negative) 15%, transparent)',
+                        border: `1px solid ${ok ? 'color-mix(in srgb, var(--theme-positive) 30%, transparent)' : RED_BORDER}`,
                         color: ok ? 'var(--theme-positive)' : 'var(--theme-negative)',
                       }}>
                         {key} {ok ? 'OK' : 'FAIL'}
@@ -733,13 +733,13 @@ export default function AdminTester() {
                     <thead>
                       <tr style={{ borderBottom: `1px solid ${RED_BORDER}` }}>
                         {['Username', 'Email', 'Display Name', 'Created', 'Last Login', 'Logins'].map(h => (
-                          <th key={h} style={{ textAlign: 'left', padding: '6px 8px', color: 'rgba(239,68,68,0.6)', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{h}</th>
+                          <th key={h} style={{ textAlign: 'left', padding: '6px 8px', color: 'color-mix(in srgb, var(--theme-negative) 60%, transparent)', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {stats.users.map(u => (
-                        <tr key={u.id} style={{ borderBottom: `1px solid rgba(239,68,68,0.07)` }}>
+                        <tr key={u.id} style={{ borderBottom: `1px solid color-mix(in srgb, var(--theme-negative) 7%, transparent)` }}>
                           <td style={{ padding: '6px 8px', color: 'var(--theme-negative)' }}>@{u.username}</td>
                           <td style={{ padding: '6px 8px', color: u.email ? 'var(--theme-text)' : 'var(--theme-text-dim)' }}>{u.email ?? '—'}</td>
                           <td style={{ padding: '6px 8px', color: 'var(--theme-text)' }}>{u.display_name}</td>
@@ -813,7 +813,7 @@ export default function AdminTester() {
                   onClick={() => { setEpUrl(p.url); setEpMethod(p.method) }}
                   style={{
                     fontFamily: 'var(--theme-mono)', fontSize: 9, padding: '3px 8px',
-                    background: 'rgba(239,68,68,0.07)', border: `1px solid ${RED_BORDER}`,
+                    background: 'color-mix(in srgb, var(--theme-negative) 7%, transparent)', border: `1px solid ${RED_BORDER}`,
                     color: 'var(--theme-negative)', cursor: 'pointer',
                   }}
                 >
@@ -845,11 +845,11 @@ export default function AdminTester() {
             <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
               <button
                 onClick={() => setLobCsv(SAMPLE_CSV)}
-                style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, padding: '4px 10px', background: 'rgba(239,68,68,0.1)', border: `1px solid ${RED_BORDER}`, color: 'var(--theme-negative)', cursor: 'pointer' }}
+                style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, padding: '4px 10px', background: 'color-mix(in srgb, var(--theme-negative) 10%, transparent)', border: `1px solid ${RED_BORDER}`, color: 'var(--theme-negative)', cursor: 'pointer' }}
               >
                 Load Sample Data
               </button>
-              <label style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, padding: '4px 10px', background: 'rgba(239,68,68,0.07)', border: `1px solid ${RED_BORDER}`, color: 'var(--theme-negative)', cursor: 'pointer' }}>
+              <label style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, padding: '4px 10px', background: 'color-mix(in srgb, var(--theme-negative) 7%, transparent)', border: `1px solid ${RED_BORDER}`, color: 'var(--theme-negative)', cursor: 'pointer' }}>
                 Upload CSV
                 <input type="file" accept=".csv" style={{ display: 'none' }} onChange={e => {
                   const file = e.target.files?.[0]
@@ -950,8 +950,8 @@ export default function AdminTester() {
                       {[...snap.asks].reverse().map(([price, size]) => (
                         <div key={price} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
                           <span style={{ color: 'var(--theme-negative)', width: 80, textAlign: 'right' }}>{price.toFixed(4)}</span>
-                          <div style={{ flex: 1, background: 'rgba(239,68,68,0.08)', height: 12, position: 'relative' }}>
-                            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${(size / maxSize) * 100}%`, background: 'rgba(239,68,68,0.4)' }} />
+                          <div style={{ flex: 1, background: 'color-mix(in srgb, var(--theme-negative) 8%, transparent)', height: 12, position: 'relative' }}>
+                            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${(size / maxSize) * 100}%`, background: 'color-mix(in srgb, var(--theme-negative) 40%, transparent)' }} />
                           </div>
                           <span style={{ color: 'var(--theme-text-dim)', width: 60 }}>{size.toFixed(0)}</span>
                         </div>
@@ -960,8 +960,8 @@ export default function AdminTester() {
                       {snap.bids.map(([price, size]) => (
                         <div key={price} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
                           <span style={{ color: 'var(--theme-positive)', width: 80, textAlign: 'right' }}>{price.toFixed(4)}</span>
-                          <div style={{ flex: 1, background: 'rgba(34,197,94,0.08)', height: 12, position: 'relative' }}>
-                            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${(size / maxSize) * 100}%`, background: 'rgba(34,197,94,0.35)' }} />
+                          <div style={{ flex: 1, background: 'color-mix(in srgb, var(--theme-positive) 8%, transparent)', height: 12, position: 'relative' }}>
+                            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${(size / maxSize) * 100}%`, background: 'color-mix(in srgb, var(--theme-positive) 35%, transparent)' }} />
                           </div>
                           <span style={{ color: 'var(--theme-text-dim)', width: 60 }}>{size.toFixed(0)}</span>
                         </div>
@@ -989,7 +989,7 @@ export default function AdminTester() {
                 return (
                   <div key={type} style={{ gridColumn: `span ${Math.min(w, 12)}`, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 5 }}>
-                      <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(239,68,68,0.6)' }}>
+                      <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'color-mix(in srgb, var(--theme-negative) 60%, transparent)' }}>
                         {WIDGET_LABELS[type]}
                       </span>
                       <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 8, color: 'var(--theme-text-dim)' }}>{type} · {w}×{h}</span>

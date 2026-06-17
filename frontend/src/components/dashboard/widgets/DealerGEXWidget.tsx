@@ -13,8 +13,8 @@ const T = {
   text:    'var(--theme-text, #d7e3fc)',
   mono:    'var(--theme-mono)',
   label:   'var(--theme-sans)',
-  pos:     '#22c55e',
-  neg:     '#ef4444',
+  pos:     'var(--theme-positive, #22c55e)',
+  neg:     'var(--theme-negative, #ef4444)',
 }
 
 interface GEXStrike { strike: number; net_gex: number }
@@ -100,7 +100,7 @@ export default function DealerGEXWidget({ config }: { config: WidgetConfig }) {
                   labelStyle={{ color: T.gold, fontSize: 8 }}
                   formatter={(v: number) => [`${v.toFixed(0)}M`, 'Net GEX']}
                 />
-                {spot && <ReferenceLine x={band.reduce((p, c) => Math.abs(c.strike - spot) < Math.abs(p - spot) ? c.strike : p, band[0]?.strike ?? spot)} stroke="rgba(201,168,76,0.6)" strokeDasharray="3 3" />}
+                {spot && <ReferenceLine x={band.reduce((p, c) => Math.abs(c.strike - spot) < Math.abs(p - spot) ? c.strike : p, band[0]?.strike ?? spot)} stroke="color-mix(in srgb, var(--theme-primary) 60%, transparent)" strokeDasharray="3 3" />}
                 <Bar dataKey="net_gex" radius={[1, 1, 0, 0]}>
                   {band.map((d, i) => <Cell key={i} fill={d.net_gex >= 0 ? T.pos : T.neg} fillOpacity={0.85} />)}
                 </Bar>

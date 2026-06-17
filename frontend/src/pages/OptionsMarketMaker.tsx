@@ -430,7 +430,7 @@ export default function OptionsMarketMaker() {
                         <Tooltip contentStyle={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 0, fontFamily: T.mono, fontSize: 11 }}
                           formatter={(v: number) => [`$${(+v).toFixed(2)}`, 'spot']} labelFormatter={() => ''} />
                         {STRIKES.map(k => (
-                          <ReferenceLine key={k} y={k} stroke="rgba(201,168,76,0.25)" strokeDasharray="3 4" />
+                          <ReferenceLine key={k} y={k} stroke="color-mix(in srgb, var(--theme-primary) 25%, transparent)" strokeDasharray="3 4" />
                         ))}
                         <Line type="monotone" dataKey="spot" stroke={T.gold} strokeWidth={2} dot={false} isAnimationActive={false} />
                       </LineChart>
@@ -505,13 +505,13 @@ function renderChain(f: Frame) {
             const money = f.spot > k ? 'ITM' : f.spot < k ? 'OTM' : 'ATM'
             const atm = Math.abs(k - f.spot) <= 5
             return (
-              <tr key={k} style={{ borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.04))', background: atm ? 'rgba(201,168,76,0.05)' : 'transparent' }}>
+              <tr key={k} style={{ borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.04))', background: atm ? 'color-mix(in srgb, var(--theme-primary) 5%, transparent)' : 'transparent' }}>
                 <td style={{ ...td, textAlign: 'left' }}>{posCell(cpos)}</td>
                 <td style={td}>{c.delta >= 0 ? '+' : ''}{c.delta.toFixed(2)}</td>
                 <td style={{ ...td, color: G }}>{c.bid.toFixed(2)}</td>
                 <td style={{ ...td, color: M }}>{c.theo.toFixed(2)}</td>
                 <td style={{ ...td, color: R }}>{c.ask.toFixed(2)}</td>
-                <td style={{ ...td, textAlign: 'center', fontWeight: 700, color: GD, background: 'rgba(201,168,76,0.05)' }}>
+                <td style={{ ...td, textAlign: 'center', fontWeight: 700, color: GD, background: 'color-mix(in srgb, var(--theme-primary) 5%, transparent)' }}>
                   {k}<span style={{ fontSize: 8, color: M, marginLeft: 4 }}>{money}</span>
                 </td>
                 <td style={{ ...td, textAlign: 'left', color: G }}>{p.bid.toFixed(2)}</td>

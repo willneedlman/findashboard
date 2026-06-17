@@ -517,7 +517,7 @@ export function GammaScalpingContent() {
         style={{
           marginTop: 4,
           background: mutation.isPending
-            ? 'rgba(201,168,76,0.12)'
+            ? 'color-mix(in srgb, var(--theme-primary) 12%, transparent)'
             : 'color-mix(in srgb, var(--theme-primary, #c9a84c) 22%, transparent)',
           border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 55%, transparent)',
           color: 'var(--theme-primary, #c9a84c)',

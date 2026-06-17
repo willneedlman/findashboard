@@ -47,7 +47,7 @@ export default function ResetPassword() {
         </div>
 
         {!token ? (
-          <p style={{ fontFamily: 'var(--theme-sans)', fontSize: 12, color: '#ef4444', lineHeight: '17px' }}>
+          <p style={{ fontFamily: 'var(--theme-sans)', fontSize: 12, color: 'var(--theme-negative, #ef4444)', lineHeight: '17px' }}>
             This link is missing its reset token. Request a new reset link from the sign-in page.
           </p>
         ) : done ? (
@@ -61,7 +61,7 @@ export default function ResetPassword() {
           <>
             <div><label style={lbl}>New password ({MIN_PW}+ characters)</label><input style={inp} type="password" autoComplete="new-password" value={pw} onChange={e => setPw(e.target.value)} autoFocus disabled={loading} /></div>
             <div><label style={lbl}>Confirm password</label><input style={inp} type="password" autoComplete="new-password" value={pw2} onChange={e => setPw2(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()} disabled={loading} /></div>
-            {err && <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, color: '#ef4444', lineHeight: '15px' }}>{err}</span>}
+            {err && <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, color: 'var(--theme-negative, #ef4444)', lineHeight: '15px' }}>{err}</span>}
             <button onClick={submit} disabled={loading} style={{ ...primaryBtn, background: loading ? 'rgba(255,255,255,0.08)' : primaryBtn.background, color: loading ? 'var(--theme-secondary, #8099b0)' : primaryBtn.color, cursor: loading ? 'default' : 'pointer' }}>
               {loading ? '…' : 'Reset Password'}
             </button>

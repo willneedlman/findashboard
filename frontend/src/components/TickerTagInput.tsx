@@ -15,7 +15,7 @@ const S = {
   gold:       'var(--theme-primary, #c9a84c)',
   text:       'var(--theme-text, #d7e3fc)',
   muted:      'var(--theme-secondary, #5e768f)',
-  neg:        '#EF4444',
+  neg:        'var(--theme-negative, #ef4444)',
   chip:       'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, var(--theme-surface, #0a1628))',
   chipBorder: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 25%, transparent)',
   mono:       'var(--theme-mono)',

@@ -6,7 +6,7 @@ const T = {
   bg: 'var(--theme-bg, #101c2e)', surface: 'var(--theme-surface, #0d1826)',
   border: 'var(--theme-border, rgba(255,255,255,0.08))', gold: 'var(--theme-primary, #c9a84c)',
   muted: 'var(--theme-secondary, #5e768f)', text: 'var(--theme-text, #d7e3fc)',
-  mono: 'var(--theme-mono)', label: 'var(--theme-sans)', pos: '#22c55e', neg: '#ef4444',
+  mono: 'var(--theme-mono)', label: 'var(--theme-sans)', pos: 'var(--theme-positive, #22c55e)', neg: 'var(--theme-negative, #ef4444)',
 }
 const cap: React.CSSProperties = { fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.muted, marginBottom: 3 }
 
@@ -62,11 +62,11 @@ export default function ExposureMapWidget({ config: _c }: { config: WidgetConfig
               <span style={{ fontFamily: T.mono, fontSize: 9.5, fontWeight: 700, color: T.text, width: 52, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.ticker}</span>
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', height: 10 }}>
                 <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
-                  {!long && <div style={{ width: `${(Math.abs(np) / maxAbs) * 100}%`, height: 8, background: 'rgba(239,68,68,0.55)' }} />}
+                  {!long && <div style={{ width: `${(Math.abs(np) / maxAbs) * 100}%`, height: 8, background: 'color-mix(in srgb, var(--theme-negative) 55%, transparent)' }} />}
                 </div>
                 <div style={{ width: 1, height: 12, background: 'rgba(255,255,255,0.16)', flexShrink: 0 }} />
                 <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-start' }}>
-                  {long && <div style={{ width: `${(np / maxAbs) * 100}%`, height: 8, background: 'rgba(34,197,94,0.55)' }} />}
+                  {long && <div style={{ width: `${(np / maxAbs) * 100}%`, height: 8, background: 'color-mix(in srgb, var(--theme-positive) 55%, transparent)' }} />}
                 </div>
               </div>
               <span style={{ fontFamily: T.mono, fontSize: 9.5, fontWeight: 700, color: long ? T.pos : T.neg, width: 38, textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{long ? '' : '-'}{Math.abs(np).toFixed(1)}%</span>
@@ -77,8 +77,8 @@ export default function ExposureMapWidget({ config: _c }: { config: WidgetConfig
 
       <div style={{ flexShrink: 0, padding: '8px 10px', borderTop: `1px solid ${T.border}` }}>
         <div style={{ display: 'flex', height: 12, overflow: 'hidden', border: `1px solid ${T.border}` }}>
-          <div style={{ width: `${longP}%`, background: 'rgba(34,197,94,0.7)' }} />
-          <div style={{ width: `${shortP}%`, background: 'rgba(239,68,68,0.7)' }} />
+          <div style={{ width: `${longP}%`, background: 'color-mix(in srgb, var(--theme-positive) 70%, transparent)' }} />
+          <div style={{ width: `${shortP}%`, background: 'color-mix(in srgb, var(--theme-negative) 70%, transparent)' }} />
           <div style={{ width: `${cashP}%`, background: 'rgba(255,255,255,0.12)' }} />
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5, fontFamily: T.mono, fontSize: 9 }}>

@@ -1012,9 +1012,9 @@ function StrategyTab() {
               type="button"
               onClick={() => { setStopLoss(p.sl); setTakeProfit(p.tp); setTrailingStop(p.trail); setPositionSize(p.pos) }}
               style={{
-                background: 'rgba(201,168,76,0.08)',
-                border: '1px solid rgba(201,168,76,0.3)',
-                color: 'rgba(201,168,76,0.85)',
+                background: 'color-mix(in srgb, var(--theme-primary) 8%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--theme-primary) 30%, transparent)',
+                color: 'color-mix(in srgb, var(--theme-primary) 85%, transparent)',
                 fontFamily: 'var(--theme-mono)',
                 fontSize: 9,
                 fontWeight: 700,
@@ -1024,8 +1024,8 @@ function StrategyTab() {
                 borderRadius: 2,
                 transition: 'background 0.15s',
               }}
-              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(201,168,76,0.18)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'rgba(201,168,76,0.08)')}
+              onMouseEnter={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--theme-primary) 18%, transparent)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--theme-primary) 8%, transparent)')}
             >
               {p.label.toUpperCase()}
             </button>
@@ -1120,10 +1120,10 @@ function StrategyTab() {
         style={{
           marginTop: 6,
           background: backtestMutation.isPending
-            ? 'rgba(201,168,76,0.15)'
+            ? 'color-mix(in srgb, var(--theme-primary) 15%, transparent)'
             : 'color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)',
           border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)',
-          color: backtestMutation.isPending ? 'rgba(201,168,76,0.45)' : 'var(--theme-primary, #c9a84c)',
+          color: backtestMutation.isPending ? 'color-mix(in srgb, var(--theme-primary) 45%, transparent)' : 'var(--theme-primary, #c9a84c)',
           fontFamily: 'var(--theme-mono)',
           fontSize: 11,
           fontWeight: 700,
@@ -1242,9 +1242,9 @@ function StrategyTab() {
           </div>
 
           {/* AI Backtest Commentary */}
-          <div style={{ border: '1px solid rgba(201,168,76,0.2)', background: 'rgba(201,168,76,0.03)' }}>
-            <div style={{ padding: '6px 10px', borderBottom: '1px solid rgba(201,168,76,0.12)', background: 'rgba(201,168,76,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#c9a84c' }}>AI Backtest Commentary</span>
+          <div style={{ border: '1px solid color-mix(in srgb, var(--theme-primary) 20%, transparent)', background: 'color-mix(in srgb, var(--theme-primary) 3%, transparent)' }}>
+            <div style={{ padding: '6px 10px', borderBottom: '1px solid color-mix(in srgb, var(--theme-primary) 12%, transparent)', background: 'color-mix(in srgb, var(--theme-primary) 6%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)' }}>AI Backtest Commentary</span>
               <button
                 onClick={async () => {
                   setAiCommentaryPending(true)
@@ -1265,8 +1265,8 @@ function StrategyTab() {
                 }}
                 disabled={aiCommentaryPending}
                 style={{
-                  background: 'color-mix(in srgb, #c9a84c 10%, transparent)',
-                  border: '1px solid rgba(201,168,76,0.4)', color: '#c9a84c',
+                  background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--theme-primary) 40%, transparent)', color: 'var(--theme-primary, #c9a84c)',
                   fontFamily: 'var(--theme-mono)', fontSize: 9,
                   padding: '2px 6px', cursor: aiCommentaryPending ? 'default' : 'pointer',
                   opacity: aiCommentaryPending ? 0.5 : 1,
@@ -1296,9 +1296,9 @@ function StrategyTab() {
                 </div>
                 {Array.isArray(aiCommentary.suggestions) && aiCommentary.suggestions.length > 0 && (
                   <div>
-                    <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', color: '#c9a84c', textTransform: 'uppercase', marginBottom: 4 }}>Suggestions</div>
+                    <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--theme-primary, #c9a84c)', textTransform: 'uppercase', marginBottom: 4 }}>Suggestions</div>
                     {aiCommentary.suggestions.map((s: string, i: number) => (
-                      <div key={i} style={{ fontSize: 10, color: 'var(--theme-text, #d7e3fc)', lineHeight: '14px', paddingLeft: 8, borderLeft: '2px solid rgba(201,168,76,0.3)', marginBottom: 3, fontFamily: 'var(--theme-sans)' }}>{s}</div>
+                      <div key={i} style={{ fontSize: 10, color: 'var(--theme-text, #d7e3fc)', lineHeight: '14px', paddingLeft: 8, borderLeft: '2px solid color-mix(in srgb, var(--theme-primary) 30%, transparent)', marginBottom: 3, fontFamily: 'var(--theme-sans)' }}>{s}</div>
                     ))}
                   </div>
                 )}

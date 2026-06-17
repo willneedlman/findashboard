@@ -11,8 +11,8 @@ const T = {
   text:    'var(--theme-text, #d7e3fc)',
   mono:    'var(--theme-mono)',
   label:   'var(--theme-sans)',
-  pos:     '#22c55e',
-  neg:     '#ef4444',
+  pos:     'var(--theme-positive, #22c55e)',
+  neg:     'var(--theme-negative, #ef4444)',
 }
 
 const CAT_LABEL: Record<string, string> = {
@@ -27,8 +27,8 @@ const CAT_COLOR: Record<string, string> = {
   fx:        '#60a5fa',
   commodity: '#f97316',
   bond:      '#a78bfa',
-  vol:       '#ef4444',
-  equity:    '#22c55e',
+  vol:       'var(--theme-negative, #ef4444)',
+  equity:    'var(--theme-positive, #22c55e)',
 }
 
 interface Asset {

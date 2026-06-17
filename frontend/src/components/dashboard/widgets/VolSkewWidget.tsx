@@ -12,8 +12,8 @@ const T = {
   text:    'var(--theme-text, #d7e3fc)',
   mono:    'var(--theme-mono)',
   label:   'var(--theme-sans)',
-  pos:     '#22c55e',
-  neg:     '#ef4444',
+  pos:     'var(--theme-positive, #22c55e)',
+  neg:     'var(--theme-negative, #ef4444)',
   warn:    '#d97736',
 }
 
@@ -93,7 +93,7 @@ export default function VolSkewWidget({ config }: { config: WidgetConfig }) {
                   formatter={(v: number) => [`${v.toFixed(1)}%`, 'IV']}
                   labelFormatter={(m) => `${Number(m) > 0 ? '+' : ''}${m}% moneyness`}
                 />
-                <ReferenceLine x={0} stroke="rgba(201,168,76,0.45)" strokeDasharray="4 4" />
+                <ReferenceLine x={0} stroke="color-mix(in srgb, var(--theme-primary) 45%, transparent)" strokeDasharray="4 4" />
                 <Line type="monotone" dataKey="iv" stroke={T.gold} strokeWidth={1.6} dot={{ r: 1.6, fill: T.gold, strokeWidth: 0 }} />
               </LineChart>
             </ResponsiveContainer>

@@ -15,8 +15,8 @@ const T = {
 
 const CAT_COLOR: Record<string, string> = {
   monetary:   'var(--theme-primary, #c9a84c)',
-  inflation:  '#ef4444',
-  employment: '#22c55e',
+  inflation:  'var(--theme-negative, #ef4444)',
+  employment: 'var(--theme-positive, #22c55e)',
   growth:     '#60a5fa',
   housing:    '#f97316',
   sentiment:  '#a78bfa',

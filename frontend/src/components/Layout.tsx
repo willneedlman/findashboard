@@ -178,7 +178,7 @@ export default function Layout({ children }: LayoutProps) {
               {/* Drawer header */}
               <div style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '14px 16px', borderBottom: '1px solid rgba(201,168,76,0.12)',
+                padding: '14px 16px', borderBottom: '1px solid color-mix(in srgb, var(--theme-primary) 12%, transparent)',
               }}>
                 <div style={{ fontFamily: 'Cinzel, Georgia, serif', color: 'var(--theme-primary, #c9a84c)', fontSize: 14, fontWeight: 700, letterSpacing: '0.08em' }}>
                   MODULES
@@ -480,7 +480,7 @@ function NavLink({ to, icon: Icon, label, collapsed, active, isBaseline, isFav, 
             flexShrink: 0, display: 'flex', alignItems: 'center',
             transition: 'color 0.15s',
           }}
-          onMouseEnter={e => { if (!isFav) (e.currentTarget as HTMLElement).style.color = 'rgba(201,168,76,0.6)' }}
+          onMouseEnter={e => { if (!isFav) (e.currentTarget as HTMLElement).style.color = 'color-mix(in srgb, var(--theme-primary) 60%, transparent)' }}
           onMouseLeave={e => { if (!isFav) (e.currentTarget as HTMLElement).style.color = 'var(--theme-text-faint, var(--theme-text-faint, rgba(255,255,255,0.22)))' }}
         >
           <Star size={10} fill={isFav ? 'currentColor' : 'none'} />
@@ -500,10 +500,10 @@ function MobileNavLink({ to, icon: Icon, label, active, isBaseline, isFav, onFav
           flex: 1, display: 'flex', alignItems: 'center', gap: 10,
           padding: '11px 10px', minHeight: 44, marginBottom: 2, textDecoration: 'none',
           background: active
-            ? (isBaseline ? 'color-mix(in srgb, var(--theme-bg, #0a1628) 80%, var(--theme-primary, #c9a84c) 5%)' : 'rgba(201,168,76,0.08)')
+            ? (isBaseline ? 'color-mix(in srgb, var(--theme-bg, #0a1628) 80%, var(--theme-primary, #c9a84c) 5%)' : 'color-mix(in srgb, var(--theme-primary) 8%, transparent)')
             : 'transparent',
           borderLeft: active
-            ? (isBaseline ? '2px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 15%, transparent)' : '2px solid #c9a84c')
+            ? (isBaseline ? '2px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 15%, transparent)' : '2px solid var(--theme-primary, #c9a84c)')
             : '2px solid transparent',
           color: active
             ? (isBaseline ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-primary, #c9a84c)')

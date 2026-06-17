@@ -225,7 +225,7 @@ export default function DeltaPriceTarget({ config }: { config: WidgetConfig }) {
         style={{
           background: justFilled
             ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 80%, var(--theme-positive))'
-            : isLoading || spot === 0 ? 'rgba(201,168,76,0.3)' : T.gold,
+            : isLoading || spot === 0 ? 'color-mix(in srgb, var(--theme-primary) 30%, transparent)' : T.gold,
           border: 'none', color: 'var(--theme-bg, #0a1628)', fontFamily: T.mono, fontSize: 10,
           fontWeight: 700, letterSpacing: '0.12em', padding: '6px 0',
           cursor: isLoading || spot === 0 ? 'not-allowed' : 'pointer',

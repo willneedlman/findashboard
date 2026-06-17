@@ -12,8 +12,8 @@ const T = {
   text:    'var(--theme-text, #d7e3fc)',
   mono:    'var(--theme-mono)',
   label:   'var(--theme-sans)',
-  pos:     '#22c55e',
-  neg:     '#ef4444',
+  pos:     'var(--theme-positive, #22c55e)',
+  neg:     'var(--theme-negative, #ef4444)',
 }
 
 const METRICS = [
@@ -69,18 +69,18 @@ function median(vals: number[]): number {
 
 function recColor(mean: number | null, key: string | null): string {
   if (mean !== null) {
-    if (mean <= 1.5) return '#22c55e'
+    if (mean <= 1.5) return 'var(--theme-positive, #22c55e)'
     if (mean <= 2.5) return '#4ade80'
-    if (mean <= 3.5) return '#c9a84c'
+    if (mean <= 3.5) return 'var(--theme-primary, #c9a84c)'
     if (mean <= 4.5) return '#f97316'
-    return '#ef4444'
+    return 'var(--theme-negative, #ef4444)'
   }
   switch (key) {
-    case 'strong_buy':                            return '#22c55e'
+    case 'strong_buy':                            return 'var(--theme-positive, #22c55e)'
     case 'buy': case 'outperform': case 'overweight': return '#4ade80'
-    case 'hold': case 'neutral':                  return '#c9a84c'
+    case 'hold': case 'neutral':                  return 'var(--theme-primary, #c9a84c)'
     case 'sell': case 'underperform': case 'underweight': return '#f97316'
-    case 'strong_sell':                           return '#ef4444'
+    case 'strong_sell':                           return 'var(--theme-negative, #ef4444)'
     default: return T.muted
   }
 }
@@ -109,7 +109,7 @@ function SentimentCard({ row, isTarget }: { row: PeerRow; isTarget: boolean }) {
       background: isTarget
         ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)'
         : 'var(--theme-hover, rgba(255,255,255,0.02))',
-      border: `1px solid ${isTarget ? 'rgba(201,168,76,0.35)' : T.border}`,
+      border: `1px solid ${isTarget ? 'color-mix(in srgb, var(--theme-primary) 35%, transparent)' : T.border}`,
       padding: '10px 12px',
       minWidth: 128,
       flexShrink: 0,
@@ -179,7 +179,7 @@ function MetricBars({
         const widthPct  = maxVal > 0 ? (val / maxVal) * 100 : 0
         const isTarget  = p.ticker === targetTicker
         const good      = lowerBetter ? val <= (med ?? Infinity) : val >= (med ?? 0)
-        const barColor  = isTarget ? '#c9a84c' : good ? '#22c55e' : '#ef4444'
+        const barColor  = isTarget ? 'var(--theme-primary, #c9a84c)' : good ? 'var(--theme-positive, #22c55e)' : 'var(--theme-negative, #ef4444)'
 
         return (
           <div key={p.ticker} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
@@ -218,7 +218,7 @@ function fmt(val: number | null, isPct = false): string {
 
 function cellColor(val: number | null, med: number | null, lowerBetter: boolean): string {
   if (val == null || med == null) return 'transparent'
-  return (lowerBetter ? val < med : val > med) ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)'
+  return (lowerBetter ? val < med : val > med) ? 'color-mix(in srgb, var(--theme-positive) 10%, transparent)' : 'color-mix(in srgb, var(--theme-negative) 10%, transparent)'
 }
 
 export function RelativeValuationContent() {
@@ -304,7 +304,7 @@ export function RelativeValuationContent() {
             disabled={loading}
             style={{
               background: loading ? T.surface : 'color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)',
-              border: `1px solid rgba(201,168,76,0.5)`, color: loading ? T.muted : T.gold,
+              border: `1px solid color-mix(in srgb, var(--theme-primary) 50%, transparent)`, color: loading ? T.muted : T.gold,
               fontFamily: T.mono, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
               padding: '6px 16px', cursor: loading ? 'not-allowed' : 'pointer', outline: 'none',
             }}
@@ -335,9 +335,9 @@ export function RelativeValuationContent() {
             <span style={{
               fontFamily: T.mono, fontSize: 8, fontWeight: 700, letterSpacing: '0.1em',
               textTransform: 'uppercase', padding: '2px 6px',
-              border: `1px solid ${data.comps_source === 'ai_generated' ? 'rgba(201,168,76,0.4)' : T.border}`,
+              border: `1px solid ${data.comps_source === 'ai_generated' ? 'color-mix(in srgb, var(--theme-primary) 40%, transparent)' : T.border}`,
               color: data.comps_source === 'ai_generated' ? T.gold : T.muted,
-              background: data.comps_source === 'ai_generated' ? 'rgba(201,168,76,0.07)' : 'transparent',
+              background: data.comps_source === 'ai_generated' ? 'color-mix(in srgb, var(--theme-primary) 7%, transparent)' : 'transparent',
             }}>
               {data.comps_source === 'ai_generated' ? 'AI Comps' : 'Sector Fallback'}
             </span>
@@ -448,11 +448,11 @@ export function RelativeValuationContent() {
               </div>
               <div style={{ padding: '8px 14px', display: 'flex', gap: 20, fontFamily: T.label, fontSize: 9, color: T.muted, borderTop: `1px solid ${T.border}` }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span style={{ width: 10, height: 10, background: 'rgba(34,197,94,0.25)', display: 'inline-block' }} />
+                  <span style={{ width: 10, height: 10, background: 'color-mix(in srgb, var(--theme-positive) 25%, transparent)', display: 'inline-block' }} />
                   Below median (favorable)
                 </span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span style={{ width: 10, height: 10, background: 'rgba(239,68,68,0.25)', display: 'inline-block' }} />
+                  <span style={{ width: 10, height: 10, background: 'color-mix(in srgb, var(--theme-negative) 25%, transparent)', display: 'inline-block' }} />
                   Above median (unfavorable)
                 </span>
                 <span>Gold row = searched ticker · Data from Yahoo Finance</span>

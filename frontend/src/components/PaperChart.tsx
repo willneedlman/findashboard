@@ -5,6 +5,7 @@ import { Sliders } from 'lucide-react'
 import { smaArr, emaArr, bollinger, vwapArr, type Candle } from '../lib/indicators'
 import { marketSession } from '../lib/marketSession'
 import { occUnderlying } from '../lib/occ'
+import { readToken } from '../lib/theme'
 
 const T = {
   bg:    'var(--theme-bg, #101c2e)',
@@ -15,7 +16,6 @@ const T = {
   text:  'var(--theme-text, #d7e3fc)',
   mono:  'var(--theme-mono)',
   label: 'var(--theme-sans)',
-  pos:   '#22c55e', neg: '#ef4444',
 }
 
 const TFS = [
@@ -122,9 +122,10 @@ export default function PaperChart({ initialTicker = 'SPY', fills = [], storageK
       handleScale: { mouseWheel: false, pinch: true, axisPressedMouseMove: true },
       width: el.clientWidth, height: el.clientHeight,
     })
+    const cPos = readToken('--theme-positive', '#22c55e'), cNeg = readToken('--theme-negative', '#ef4444')
     const candle = chart.addCandlestickSeries({
-      upColor: '#22c55e', downColor: '#ef4444', borderUpColor: '#22c55e', borderDownColor: '#ef4444',
-      wickUpColor: '#22c55e', wickDownColor: '#ef4444', priceLineColor: gold, priceLineWidth: 1,
+      upColor: cPos, downColor: cNeg, borderUpColor: cPos, borderDownColor: cNeg,
+      wickUpColor: cPos, wickDownColor: cNeg, priceLineColor: gold, priceLineWidth: 1,
     })
     const vol = chart.addHistogramSeries({ priceScaleId: 'volume', priceFormat: { type: 'volume' }, priceLineVisible: false, lastValueVisible: false })
     chart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } })
@@ -230,6 +231,7 @@ export default function PaperChart({ initialTicker = 'SPY', fills = [], storageK
     const series = candleRef.current
     if (!series) return
     if (!candles.length) { series.setMarkers([]); return }
+    const mPos = readToken('--theme-positive', '#22c55e'), mNeg = readToken('--theme-negative', '#ef4444')
     const ctimes = candles.map(c => numTime(c.time))
     const mine = fills.filter(o => o.symbol === ticker || occUnderlying(o.option_symbol || '') === ticker)
     const markers: SeriesMarker<Time>[] = mine.map(o => {
@@ -239,7 +241,7 @@ export default function PaperChart({ initialTicker = 'SPY', fills = [], storageK
       return {
         time: candles[bi].time as Time,
         position: (isBuy ? 'belowBar' : 'aboveBar') as SeriesMarker<Time>['position'],
-        color: isBuy ? T.pos : T.neg,
+        color: isBuy ? mPos : mNeg,
         shape: (isBuy ? 'arrowUp' : 'arrowDown') as SeriesMarker<Time>['shape'],
         text: isBuy ? 'B' : 'S',
       }

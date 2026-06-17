@@ -379,7 +379,7 @@ export function CorporateHubContent() {
                   onClick={() => { setTickers(portfolioTickers); runScan(portfolioTickers) }}
                   style={{
                     marginTop: 6, width: '100%', background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 12%, transparent)',
-                    border: '1px solid rgba(201,168,76,0.35)', color: 'var(--theme-primary, #c9a84c)',
+                    border: '1px solid color-mix(in srgb, var(--theme-primary) 35%, transparent)', color: 'var(--theme-primary, #c9a84c)',
                     fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700,
                     letterSpacing: '0.1em', textTransform: 'uppercase', padding: '5px 0', cursor: 'pointer',
                   }}
@@ -562,8 +562,8 @@ export function CorporateHubContent() {
         <div style={{ width: 240, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 0, maxHeight: 700 }}>
 
           {/* AI Brief section */}
-          <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(201,168,76,0.25)', marginBottom: 8 }}>
-            <div style={{ padding: '6px 10px', borderBottom: '1px solid rgba(201,168,76,0.15)', background: 'rgba(201,168,76,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid color-mix(in srgb, var(--theme-primary) 25%, transparent)', marginBottom: 8 }}>
+            <div style={{ padding: '6px 10px', borderBottom: '1px solid color-mix(in srgb, var(--theme-primary) 15%, transparent)', background: 'color-mix(in srgb, var(--theme-primary) 6%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)' }}>AI Intelligence</span>
               <button onClick={fetchAiBrief} disabled={aiBriefPending || rows.length === 0} style={{
                 background: aiBriefPending ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)' : 'color-mix(in srgb, var(--theme-primary, #c9a84c) 15%, transparent)',
@@ -591,10 +591,10 @@ export function CorporateHubContent() {
               {aiBrief && !aiBriefPending && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 9, padding: '1px 5px', border: '1px solid rgba(201,168,76,0.3)', color: aiBrief.tone === 'bullish' ? 'var(--theme-positive)' : aiBrief.tone === 'bearish' ? 'var(--theme-negative)' : 'var(--theme-primary, #c9a84c)', fontFamily: 'var(--theme-mono)', textTransform: 'uppercase' }}>{aiBrief.tone}</span>
+                    <span style={{ fontSize: 9, padding: '1px 5px', border: '1px solid color-mix(in srgb, var(--theme-primary) 30%, transparent)', color: aiBrief.tone === 'bullish' ? 'var(--theme-positive)' : aiBrief.tone === 'bearish' ? 'var(--theme-negative)' : 'var(--theme-primary, #c9a84c)', fontFamily: 'var(--theme-mono)', textTransform: 'uppercase' }}>{aiBrief.tone}</span>
                   </div>
                   {aiBrief.bullets.map((b, i) => (
-                    <div key={i} style={{ fontSize: 10, color: 'var(--theme-text, #d7e3fc)', lineHeight: '15px', paddingLeft: 8, borderLeft: '2px solid rgba(201,168,76,0.3)' }}>
+                    <div key={i} style={{ fontSize: 10, color: 'var(--theme-text, #d7e3fc)', lineHeight: '15px', paddingLeft: 8, borderLeft: '2px solid color-mix(in srgb, var(--theme-primary) 30%, transparent)' }}>
                       {b}
                     </div>
                   ))}

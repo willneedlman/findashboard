@@ -12,8 +12,8 @@ const T = {
   muted: 'var(--theme-secondary, #5e768f)',
   mono: 'var(--theme-mono)',
   label: 'var(--theme-sans)',
-  pos: '#22C55E',
-  neg: '#EF4444',
+  pos: 'var(--theme-positive, #22c55e)',
+  neg: 'var(--theme-negative, #ef4444)',
 }
 
 const DEFAULT_TICKERS = ['NVDA', 'AAPL', 'MSFT', 'AMZN', 'META', 'GOOGL']
@@ -30,10 +30,10 @@ function consensusStyle(consensus?: string): React.CSSProperties {
   if (!consensus) return { color: T.muted, background: 'transparent', border: `1px solid ${T.muted}` }
   const lower = consensus.toLowerCase()
   if (lower.includes('strong buy') || lower.includes('buy')) {
-    return { color: T.pos, background: 'rgba(34,197,94,0.1)', border: `1px solid ${T.pos}` }
+    return { color: T.pos, background: 'color-mix(in srgb, var(--theme-positive) 10%, transparent)', border: `1px solid ${T.pos}` }
   }
   if (lower.includes('underperform') || lower.includes('sell')) {
-    return { color: T.neg, background: 'rgba(239,68,68,0.1)', border: `1px solid ${T.neg}` }
+    return { color: T.neg, background: 'color-mix(in srgb, var(--theme-negative) 10%, transparent)', border: `1px solid ${T.neg}` }
   }
   return { color: T.muted, background: 'rgba(94,118,143,0.12)', border: `1px solid ${T.muted}` }
 }

@@ -7,7 +7,7 @@ const T = {
   bg: 'var(--theme-bg, #101c2e)', surface: 'var(--theme-surface, #0d1826)',
   border: 'var(--theme-border, rgba(255,255,255,0.08))', gold: 'var(--theme-primary, #c9a84c)',
   muted: 'var(--theme-secondary, #5e768f)', text: 'var(--theme-text, #d7e3fc)',
-  mono: 'var(--theme-mono)', label: 'var(--theme-sans)', pos: '#22c55e', neg: '#ef4444', blue: '#60a5fa',
+  mono: 'var(--theme-mono)', label: 'var(--theme-sans)', pos: 'var(--theme-positive, #22c55e)', neg: 'var(--theme-negative, #ef4444)', blue: '#60a5fa',
 }
 
 const STATUS_C: Record<string, string> = { filled: T.pos, partial: T.gold, working: T.blue, pending: T.blue, open: T.blue, canceled: T.muted, cancelled: T.muted, rejected: T.neg }
@@ -25,7 +25,7 @@ export default function TradeBlotterWidget({ config: _c }: { config: WidgetConfi
 
   const chip = (active: boolean): React.CSSProperties => ({
     fontFamily: T.mono, fontSize: 8.5, fontWeight: 700, padding: '1px 8px', cursor: 'pointer', letterSpacing: '0.04em', textTransform: 'uppercase',
-    border: active ? '1px solid rgba(201,168,76,0.55)' : `1px solid ${T.border}`, background: active ? 'rgba(201,168,76,0.12)' : 'transparent', color: active ? T.gold : 'rgba(255,255,255,0.4)',
+    border: active ? '1px solid color-mix(in srgb, var(--theme-primary) 55%, transparent)' : `1px solid ${T.border}`, background: active ? 'color-mix(in srgb, var(--theme-primary) 12%, transparent)' : 'transparent', color: active ? T.gold : 'rgba(255,255,255,0.4)',
   })
   const TH: React.CSSProperties = { fontFamily: T.label, fontSize: 7.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.muted, whiteSpace: 'nowrap' }
   const TD: React.CSSProperties = { fontFamily: T.mono, fontSize: 10, color: T.text, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }

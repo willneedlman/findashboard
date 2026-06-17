@@ -92,7 +92,7 @@ export function BondAnalyticsContent() {
             }}>
               {isPending ? 'Analyzing…' : 'Analyze Bond'}
             </button>
-            {isError && <div style={{ fontSize: 9, color: '#ef4444', textAlign: 'center', fontFamily: 'var(--theme-sans)' }}>Server unavailable — is the backend running?</div>}
+            {isError && <div style={{ fontSize: 9, color: 'var(--theme-negative, #ef4444)', textAlign: 'center', fontFamily: 'var(--theme-sans)' }}>Server unavailable — is the backend running?</div>}
           </div>
       </>}>
           {data && (
@@ -101,7 +101,7 @@ export function BondAnalyticsContent() {
               <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
                 <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)', display: 'flex', alignItems: 'baseline', gap: 10 }}>
                   <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)' }}>Bond Classification</span>
-                  <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 16, fontWeight: 700, color: liveBondType === 'Premium Bond' ? '#22C55E' : liveBondType === 'Discount Bond' ? '#EF4444' : 'var(--theme-primary, #c9a84c)' }}>{liveBondType}</span>
+                  <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 16, fontWeight: 700, color: liveBondType === 'Premium Bond' ? 'var(--theme-positive, #22c55e)' : liveBondType === 'Discount Bond' ? 'var(--theme-negative, #ef4444)' : 'var(--theme-primary, #c9a84c)' }}>{liveBondType}</span>
                 </div>
                 <div style={{ padding: 10, display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
                   <MetricCard label="Implied YTM"        value={`${data.ytm}%`} />
@@ -168,8 +168,8 @@ export function BondAnalyticsContent() {
             </>
           )}
           {(aiNarrativePending || aiNarrative) && (
-            <div style={{ border: '1px solid rgba(201,168,76,0.2)', background: 'rgba(201,168,76,0.03)' }}>
-              <div style={{ padding: '6px 12px', borderBottom: '1px solid rgba(201,168,76,0.12)', background: 'rgba(201,168,76,0.06)' }}>
+            <div style={{ border: '1px solid color-mix(in srgb, var(--theme-primary) 20%, transparent)', background: 'color-mix(in srgb, var(--theme-primary) 3%, transparent)' }}>
+              <div style={{ padding: '6px 12px', borderBottom: '1px solid color-mix(in srgb, var(--theme-primary) 12%, transparent)', background: 'color-mix(in srgb, var(--theme-primary) 6%, transparent)' }}>
                 <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)' }}>AI Bond Analysis</span>
               </div>
               {aiNarrativePending && !aiNarrative && (
@@ -183,7 +183,7 @@ export function BondAnalyticsContent() {
                     { label: 'Yield Context', text: aiNarrative.yield_context },
                     { label: 'Investor Fit', text: aiNarrative.investor_fit },
                   ].map(({ label, text }) => text ? (
-                    <div key={label} style={{ paddingLeft: 8, borderLeft: '2px solid rgba(201,168,76,0.3)' }}>
+                    <div key={label} style={{ paddingLeft: 8, borderLeft: '2px solid color-mix(in srgb, var(--theme-primary) 30%, transparent)' }}>
                       <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--theme-primary, #c9a84c)', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
                       <div style={{ fontSize: 10, color: 'var(--theme-text, #d7e3fc)', lineHeight: '14px', fontFamily: 'var(--theme-sans)' }}>{text}</div>
                     </div>

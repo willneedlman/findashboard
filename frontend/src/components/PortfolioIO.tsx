@@ -48,7 +48,7 @@ const btn = (primary = false): React.CSSProperties => ({
   letterSpacing: '0.1em', textTransform: 'uppercase',
   padding: '6px 0', cursor: 'pointer',
   border: `1px solid ${primary ? S.gold : S.border}`,
-  background: primary ? 'rgba(201,168,76,0.1)' : 'transparent',
+  background: primary ? 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' : 'transparent',
   color: primary ? S.gold : S.muted,
   transition: 'all 0.12s',
 })

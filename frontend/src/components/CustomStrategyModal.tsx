@@ -234,7 +234,7 @@ function ConditionRowEditor({ cond, onChange, onRemove, index }: {
             onClick={() => u({ rhs_type: cond.rhs_type === 'number' ? 'indicator' : 'number' })}
             style={{ ...btn, padding: '1px 5px', fontSize: 8,
               color: cond.rhs_type === 'indicator' ? T.blue : T.gold,
-              borderColor: cond.rhs_type === 'indicator' ? 'rgba(96,165,250,0.4)' : 'rgba(201,168,76,0.4)',
+              borderColor: cond.rhs_type === 'indicator' ? 'rgba(96,165,250,0.4)' : 'color-mix(in srgb, var(--theme-primary) 40%, transparent)',
             }}
           >{cond.rhs_type === 'number' ? '# literal' : '≈ indicator'}</button>
         </div>

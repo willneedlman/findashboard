@@ -282,7 +282,7 @@ export default function StrategySelector({ value, params, onChange, compact }: P
               ))}
               {savedCustoms.length > 0 && (
                 <>
-                  <div style={{ padding: '5px 9px 3px', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)', background: 'rgba(201,168,76,0.06)', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.06))', fontFamily: 'var(--theme-mono)' }}>
+                  <div style={{ padding: '5px 9px 3px', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)', background: 'color-mix(in srgb, var(--theme-primary) 6%, transparent)', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.06))', fontFamily: 'var(--theme-mono)' }}>
                     Saved Custom
                   </div>
                   {savedCustoms.map(def => {
@@ -312,7 +312,7 @@ export default function StrategySelector({ value, params, onChange, compact }: P
                         </div>
                         <button
                           onClick={e => handleDeleteSaved(def.name, e)}
-                          style={{ background: 'none', border: 'none', color: 'rgba(239,68,68,0.5)', cursor: 'pointer', fontSize: 13, padding: '0 2px', flexShrink: 0 }}
+                          style={{ background: 'none', border: 'none', color: 'color-mix(in srgb, var(--theme-negative) 50%, transparent)', cursor: 'pointer', fontSize: 13, padding: '0 2px', flexShrink: 0 }}
                           title="Remove from library"
                         >×</button>
                       </div>

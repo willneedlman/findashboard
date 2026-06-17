@@ -656,7 +656,7 @@ export function MonteCarloContent() {
                     <XAxis dataKey="price" tick={TICK} interval="preserveStartEnd" tickFormatter={v => `$${v}`} />
                     <YAxis tick={TICK} orientation="right" />
                     <Tooltip contentStyle={TOOLTIP_STYLE} cursor={BAR_CURSOR} />
-                    <ReferenceLine x={String(Math.round(data.S0))} stroke="#c9a84c" strokeDasharray="4 4"
+                    <ReferenceLine x={String(Math.round(data.S0))} stroke="var(--theme-primary, #c9a84c)" strokeDasharray="4 4"
                       label={{ value: 'Entry', fill: 'var(--theme-primary, #c9a84c)', fontSize: 9 }} />
                     <ReferenceLine x={String(Math.round(data.median))} stroke="#1f5673" strokeDasharray="4 4"
                       label={{ value: 'Median', fill: 'var(--theme-tertiary, #1f5673)', fontSize: 9 }} />

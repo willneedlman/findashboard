@@ -6,7 +6,7 @@ const T = {
   bg: 'var(--theme-bg, #101c2e)', surface: 'var(--theme-surface, #0d1826)',
   border: 'var(--theme-border, rgba(255,255,255,0.08))', gold: 'var(--theme-primary, #c9a84c)',
   muted: 'var(--theme-secondary, #5e768f)', text: 'var(--theme-text, #d7e3fc)',
-  mono: 'var(--theme-mono)', label: 'var(--theme-sans)', pos: '#22c55e', neg: '#ef4444',
+  mono: 'var(--theme-mono)', label: 'var(--theme-sans)', pos: 'var(--theme-positive, #22c55e)', neg: 'var(--theme-negative, #ef4444)',
 }
 
 
@@ -23,8 +23,8 @@ export default function PnLAttributionWidget({ config: _c }: { config: WidgetCon
 
   const btn = (active: boolean): React.CSSProperties => ({
     fontFamily: T.mono, fontSize: 8.5, fontWeight: 700, padding: '1px 7px', cursor: 'pointer', letterSpacing: '0.04em',
-    border: active ? '1px solid rgba(201,168,76,0.55)' : `1px solid ${T.border}`,
-    background: active ? 'rgba(201,168,76,0.12)' : 'transparent', color: active ? T.gold : 'rgba(255,255,255,0.4)',
+    border: active ? '1px solid color-mix(in srgb, var(--theme-primary) 55%, transparent)' : `1px solid ${T.border}`,
+    background: active ? 'color-mix(in srgb, var(--theme-primary) 12%, transparent)' : 'transparent', color: active ? T.gold : 'rgba(255,255,255,0.4)',
   })
 
   const header = (
@@ -69,7 +69,7 @@ export default function PnLAttributionWidget({ config: _c }: { config: WidgetCon
               const up = r.pnl >= 0
               return (
                 <div key={r.ticker} style={{ position: 'relative' }}>
-                  <div style={{ position: 'absolute', left: '22%', right: '22%', top: `${top}%`, height: `${Math.max(h, 0.6)}%`, background: up ? 'rgba(34,197,94,0.7)' : 'rgba(239,68,68,0.7)' }} title={`${r.ticker} ${up ? '+' : ''}${money(r.pnl)}`} />
+                  <div style={{ position: 'absolute', left: '22%', right: '22%', top: `${top}%`, height: `${Math.max(h, 0.6)}%`, background: up ? 'color-mix(in srgb, var(--theme-positive) 70%, transparent)' : 'color-mix(in srgb, var(--theme-negative) 70%, transparent)' }} title={`${r.ticker} ${up ? '+' : ''}${money(r.pnl)}`} />
                   <div style={{ position: 'absolute', bottom: -16, left: 0, right: 0, textAlign: 'center', fontFamily: T.mono, fontSize: 8, color: T.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.ticker}</div>
                 </div>
               )

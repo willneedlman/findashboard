@@ -4,12 +4,13 @@ import { useQuery } from '@tanstack/react-query'
 import { createChart, ColorType, CrosshairMode } from 'lightweight-charts'
 import type { IChartApi, ISeriesApi } from 'lightweight-charts'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
+import { readToken } from '../../../lib/theme'
 
 const T = {
   bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))', headerBg: 'var(--theme-surface, #0d1826)',
   gold: 'var(--theme-primary, #c9a84c)', text: 'var(--theme-text, #d7e3fc)', muted: 'var(--theme-secondary, #5e768f)',
   mono: 'var(--theme-mono)', label: 'var(--theme-sans)',
-  pos: '#22C55E', neg: '#EF4444',
+  pos: 'var(--theme-positive, #22c55e)', neg: 'var(--theme-negative, #ef4444)',
 }
 
 interface PriceData {
@@ -80,10 +81,11 @@ function CandleChart({ ticker }: { ticker: string }) {
       width:  el.clientWidth,
       height: el.clientHeight,
     })
+    const cPos = readToken('--theme-positive', '#22c55e'), cNeg = readToken('--theme-negative', '#ef4444')
     const candle = chart.addCandlestickSeries({
-      upColor: '#22c55e', downColor: '#ef4444',
-      borderUpColor: '#22c55e', borderDownColor: '#ef4444',
-      wickUpColor: '#22c55e', wickDownColor: '#ef4444',
+      upColor: cPos, downColor: cNeg,
+      borderUpColor: cPos, borderDownColor: cNeg,
+      wickUpColor: cPos, wickDownColor: cNeg,
       priceLineColor: gold,
       priceLineWidth: 1,
     })

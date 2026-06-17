@@ -21,7 +21,7 @@ const T = {
   neg:     'var(--theme-negative)',
 }
 
-const SERIES_COLORS  = ['#c9a84c', '#60a5fa', '#34d399', '#f97316', '#a78bfa', '#38bdf8', '#fb7185', '#fbbf24']
+const SERIES_COLORS  = ['var(--theme-primary, #c9a84c)', '#60a5fa', '#34d399', '#f97316', '#a78bfa', '#38bdf8', '#fb7185', '#fbbf24']
 const OVERLAY_COLORS = ['#94a3b8', '#5eead4', '#fca5a5', '#c4b5fd']
 const RATIO_COLORS   = ['#e879f9', '#22d3ee', '#facc15', '#a3e635']
 

@@ -14,8 +14,8 @@ const T = {
   text:    'var(--theme-text, #d7e3fc)',
   mono:    'var(--theme-mono)',
   label:   'var(--theme-sans)',
-  pos:     '#22c55e',
-  neg:     '#ef4444',
+  pos:     'var(--theme-positive, #22c55e)',
+  neg:     'var(--theme-negative, #ef4444)',
 }
 
 const PERIODS = ['1W', '1M', '3M', '6M', 'YTD', '1Y'] as const
@@ -227,7 +227,7 @@ export function SectorRotationContent() {
                 </thead>
                 <tbody>
                   {/* SPY benchmark row */}
-                  <tr style={{ borderBottom: `1px solid ${T.border}`, background: 'rgba(201,168,76,0.04)' }}>
+                  <tr style={{ borderBottom: `1px solid ${T.border}`, background: 'color-mix(in srgb, var(--theme-primary) 4%, transparent)' }}>
                     <td style={{ padding: '7px 14px' }}>
                       <span style={{ fontFamily: T.label, fontWeight: 700, fontSize: 10, color: T.gold }}>SPY</span>
                       <span style={{ fontFamily: T.label, fontSize: 9, color: T.muted, marginLeft: 6 }}>S&P 500 Benchmark</span>

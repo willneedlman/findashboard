@@ -17,7 +17,7 @@ const PRESETS: { name: string; theme: Partial<Theme> }[] = [
   { name: 'Crimson Night',  theme: { primaryColor: '#e11d48', secondaryColor: '#c99caa', tertiaryColor: '#fda4af', bgColor: '#2c0216', surfaceColor: '#160310', chartNeutralColor: '#7a4870', primaryFont: 'Space Mono',    secondaryFont: 'Barlow',        primaryFontUrl: '', secondaryFontUrl: '' } },
   { name: 'Mainstreet',     theme: { primaryColor: '#a97c50', secondaryColor: '#adadaf', tertiaryColor: '#73a579', bgColor: '#1a1410', surfaceColor: '#231d17', chartNeutralColor: '#8a7a55', primaryFont: 'IBM Plex Mono', secondaryFont: 'Barlow',        primaryFontUrl: '', secondaryFontUrl: '' } },
   { name: 'Stealth Mono',   theme: { primaryColor: '#e2e8f0', secondaryColor: '#475569', tertiaryColor: '#64748b', bgColor: '#000000', surfaceColor: '#0a0a0a', chartNeutralColor: '#5a7090', primaryFont: 'JetBrains Mono', secondaryFont: 'Inter',         primaryFontUrl: '', secondaryFontUrl: '' } },
-  { name: 'Dracula',        theme: { primaryColor: '#ac81ea', secondaryColor: '#6272a4', tertiaryColor: '#c7609b', bgColor: '#3f2a47', surfaceColor: '#231429', chartNeutralColor: '#6872a8', primaryFont: 'JetBrains Mono', secondaryFont: 'Space Grotesk', primaryFontUrl: '', secondaryFontUrl: '' } },
+  { name: 'Dracula',        theme: { primaryColor: '#ac81ea', secondaryColor: '#6272a4', tertiaryColor: '#c7609b', bgColor: '#29182f', surfaceColor: '#231429', chartNeutralColor: '#6872a8', primaryFont: 'JetBrains Mono', secondaryFont: 'Space Grotesk', primaryFontUrl: '', secondaryFontUrl: '' } },
   { name: 'Nord',           theme: { primaryColor: '#88c0d0', secondaryColor: '#4c566a', tertiaryColor: '#a3be8c', bgColor: '#1e2430', surfaceColor: '#19202c', chartNeutralColor: '#5a8099', primaryFont: 'JetBrains Mono', secondaryFont: 'Sora',          primaryFontUrl: '', secondaryFontUrl: '' } },
   { name: 'Linen',          theme: { primaryColor: '#7c2d12', secondaryColor: '#292524', tertiaryColor: '#c9a787', bgColor: '#faf7f2', surfaceColor: '#e8dfd0', chartNeutralColor: '#7a7060', primaryFont: 'JetBrains Mono', secondaryFont: 'Lora', primaryFontUrl: '', secondaryFontUrl: '' } },
   { name: 'Morning Mist',   theme: { primaryColor: '#1e3a8a', secondaryColor: '#1e293b', tertiaryColor: '#0f766e', bgColor: '#f1f5f9', surfaceColor: '#dbe4ef', chartNeutralColor: '#5a7590', primaryFont: 'JetBrains Mono', secondaryFont: 'Inter',         primaryFontUrl: '', secondaryFontUrl: '' } },
@@ -144,7 +144,7 @@ function FontSelector({ label, value, options, onChange, onUpload, isMono = true
                 <div
                   key={f}
                   onClick={() => { onChange(f); setOpen(false) }}
-                  style={{ padding: '7px 10px', borderBottom: '1px solid var(--theme-hover, rgba(255,255,255,0.04))', background: active ? 'rgba(201,168,76,0.10)' : 'transparent', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 2 }}
+                  style={{ padding: '7px 10px', borderBottom: '1px solid var(--theme-hover, rgba(255,255,255,0.04))', background: active ? 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' : 'transparent', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 2 }}
                   onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'var(--theme-border-faint, rgba(255,255,255,0.05))' }}
                   onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent' }}
                 >
@@ -260,8 +260,8 @@ function AdminPanel() {
           {loading ? '…' : 'Fetch'}
         </button>
       </div>
-      {err && <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, color: '#ef4444' }}>{err}</span>}
-      {actionMsg && <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, color: actionMsg.startsWith('Error') ? '#ef4444' : '#22C55E' }}>{actionMsg}</span>}
+      {err && <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, color: 'var(--theme-negative, #ef4444)' }}>{err}</span>}
+      {actionMsg && <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, color: actionMsg.startsWith('Error') ? 'var(--theme-negative, #ef4444)' : 'var(--theme-positive, #22c55e)' }}>{actionMsg}</span>}
 
       {data && health && (<>
         {/* Tabs */}
@@ -316,7 +316,7 @@ function AdminPanel() {
                     <button onClick={() => setPinReset({ username: u.username, pin: '' })}
                       style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)', color: 'var(--theme-tertiary, #60a5fa)', fontFamily: 'var(--theme-sans)', fontSize: 7, padding: '2px 5px', cursor: 'pointer' }}>PW</button>
                     <button onClick={() => deleteUser(u.username)}
-                      style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', fontFamily: 'var(--theme-sans)', fontSize: 7, padding: '2px 5px', cursor: 'pointer' }}>DEL</button>
+                      style={{ background: 'color-mix(in srgb, var(--theme-negative) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-negative) 30%, transparent)', color: 'var(--theme-negative, #ef4444)', fontFamily: 'var(--theme-sans)', fontSize: 7, padding: '2px 5px', cursor: 'pointer' }}>DEL</button>
                   </div>
                 </div>
               ))}
@@ -335,7 +335,7 @@ function AdminPanel() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {Object.entries(health.api_keys).map(([k, v]) => (
                   <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: v ? '#22C55E' : '#ef4444' }}>{v ? 'YES' : 'NO'}</span>
+                    <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: v ? 'var(--theme-positive, #22c55e)' : 'var(--theme-negative, #ef4444)' }}>{v ? 'YES' : 'NO'}</span>
                     <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-text, #d7e3fc)' }}>{k}</span>
                   </div>
                 ))}
@@ -394,7 +394,7 @@ function AuthPanel({ onDone }: { onDone: () => void }) {
       {loading ? '…' : label}
     </button>
   )
-  const errLine = err && <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, color: '#ef4444' }}>{err}</span>
+  const errLine = err && <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, color: 'var(--theme-negative, #ef4444)' }}>{err}</span>
   const infoLine = info && <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, color: 'var(--theme-positive, #4ea674)', lineHeight: '15px' }}>{info}</span>
   const wrap = { maxWidth: 340, display: 'flex', flexDirection: 'column' as const, gap: 14 }
 
@@ -628,7 +628,7 @@ export default function Settings() {
               {saved ? 'Saved' : 'Save'}
             </button>
             {user && (
-              <button onClick={logout} style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.35)', color: '#ef4444', fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '6px 14px', cursor: 'pointer' }}>
+              <button onClick={logout} style={{ background: 'color-mix(in srgb, var(--theme-negative) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-negative) 35%, transparent)', color: 'var(--theme-negative, #ef4444)', fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '6px 14px', cursor: 'pointer' }}>
                 Sign Out
               </button>
             )}
@@ -699,7 +699,7 @@ export default function Settings() {
                 <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>Options Snapshot · NVDA</div>
                 <div style={{ display: 'flex', gap: 16, marginTop: 4 }}>
                   <div><div style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, color: 'var(--theme-secondary)', marginBottom: 2 }}>ATM IV</div><div style={{ fontFamily: 'var(--theme-mono)', fontSize: 20, fontWeight: 700, color: 'var(--theme-primary)' }}>54.7%</div></div>
-                  <div><div style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, color: 'var(--theme-secondary)', marginBottom: 2 }}>1D %</div><div style={{ fontFamily: 'var(--theme-mono)', fontSize: 20, fontWeight: 700, color: '#22C55E' }}>+2.9%</div></div>
+                  <div><div style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, color: 'var(--theme-secondary)', marginBottom: 2 }}>1D %</div><div style={{ fontFamily: 'var(--theme-mono)', fontSize: 20, fontWeight: 700, color: 'var(--theme-positive, #22c55e)' }}>+2.9%</div></div>
                   <div><div style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, color: 'var(--theme-secondary)', marginBottom: 2 }}>BETA</div><div style={{ fontFamily: 'var(--theme-mono)', fontSize: 20, fontWeight: 700, color: 'var(--theme-tertiary)' }}>1.34</div></div>
                 </div>
                 <div style={{ height: 4, background: `linear-gradient(to right, ${draft.primaryColor}, ${draft.tertiaryColor})`, borderRadius: 2, marginTop: 4 }} />
@@ -724,8 +724,8 @@ export default function Settings() {
                     </button>
                   ) : (
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: '#ef4444' }}>Delete permanently?</span>
-                      <button onClick={() => deleteUser(user.id)} style={{ background: '#ef4444', border: 'none', color: '#fff', fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, padding: '3px 10px', cursor: 'pointer' }}>Yes, delete</button>
+                      <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-negative, #ef4444)' }}>Delete permanently?</span>
+                      <button onClick={() => deleteUser(user.id)} style={{ background: 'var(--theme-negative, #ef4444)', border: 'none', color: '#fff', fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, padding: '3px 10px', cursor: 'pointer' }}>Yes, delete</button>
                       <button onClick={() => setConfirmDel(false)} style={{ background: 'transparent', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', color: 'var(--theme-secondary)', fontFamily: 'var(--theme-sans)', fontSize: 9, padding: '3px 10px', cursor: 'pointer' }}>Cancel</button>
                     </div>
                   )}

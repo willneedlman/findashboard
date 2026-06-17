@@ -20,11 +20,11 @@ const T = {
 
 const SERIES_COLORS: Record<string, string> = {
   ig_oas:  '#60a5fa',
-  hy_oas:  '#ef4444',
+  hy_oas:  'var(--theme-negative, #ef4444)',
   ig_3_5:  '#38bdf8',
   hy_b:    '#f97316',
   hy_ccc:  '#a78bfa',
-  vix:     '#c9a84c',
+  vix:     'var(--theme-primary, #c9a84c)',
 }
 
 const LOOKBACKS = [
@@ -189,7 +189,7 @@ export function CreditSpreadsContent() {
                 <XAxis dataKey="date" tick={{ fontFamily: T.mono, fontSize: 8, fill: T.muted }} tickLine={false} axisLine={false} tickFormatter={v => v.slice(0, 7)} interval="preserveStartEnd" />
                 <YAxis yAxisId="spread" tickFormatter={v => `${v}`} tick={{ fontFamily: T.mono, fontSize: 8, fill: T.muted }} tickLine={false} axisLine={false} label={{ value: 'OAS (bps)', angle: -90, position: 'insideLeft', fill: T.muted, fontSize: 8, fontFamily: T.mono }} />
                 {showVix && <YAxis yAxisId="vix" orientation="right" tickFormatter={v => `${v}`} tick={{ fontFamily: T.mono, fontSize: 8, fill: T.gold }} tickLine={false} axisLine={false} />}
-                <Tooltip cursor={{ stroke: 'var(--theme-border, rgba(255,255,255,0.06))', strokeWidth: 1 }} contentStyle={{ background: T.surface, border: `1px solid rgba(201,168,76,0.25)`, fontFamily: T.mono, fontSize: 10, padding: '8px 10px' }} labelStyle={{ color: T.gold, fontFamily: T.label, fontWeight: 700 }} formatter={(v: number, name: string) => [`${v.toFixed(2)}${name === 'vix' ? '' : ' bps'}`, name.toUpperCase()]} />
+                <Tooltip cursor={{ stroke: 'var(--theme-border, rgba(255,255,255,0.06))', strokeWidth: 1 }} contentStyle={{ background: T.surface, border: `1px solid color-mix(in srgb, var(--theme-primary) 25%, transparent)`, fontFamily: T.mono, fontSize: 10, padding: '8px 10px' }} labelStyle={{ color: T.gold, fontFamily: T.label, fontWeight: 700 }} formatter={(v: number, name: string) => [`${v.toFixed(2)}${name === 'vix' ? '' : ' bps'}`, name.toUpperCase()]} />
                 {OVERLAY_KEYS.filter(k => activeKeys.has(k)).map(k => (
                   <Line key={k} yAxisId="spread" type="monotone" dataKey={k} stroke={SERIES_COLORS[k]} strokeWidth={1.5} dot={false} name={k} connectNulls />
                 ))}
@@ -208,9 +208,9 @@ export function CreditSpreadsContent() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
             {[
               { label: 'Investment Grade', color: '#60a5fa', text: 'AAA–BBB corps vs. matched-maturity Treasuries. <100 bps: benign. 100–200: caution. >200: stress. Rising = tightening conditions for IG issuers.' },
-              { label: 'High Yield', color: '#ef4444', text: 'BB–CCC corps vs. matched-maturity Treasuries. <350 bps: risk-on. 350–600: stress building. >600: distress. Leads equity drawdowns by days to weeks.' },
+              { label: 'High Yield', color: 'var(--theme-negative, #ef4444)', text: 'BB–CCC corps vs. matched-maturity Treasuries. <350 bps: risk-on. 350–600: stress building. >600: distress. Leads equity drawdowns by days to weeks.' },
               { label: 'High Yield CCC', color: '#a78bfa', text: 'Lowest-rated junk vs. Treasuries. Most recession-sensitive. Spikes signal weakest borrowers losing market access — a leading indicator of credit seizure.' },
-              { label: 'VIX vs Spreads', color: '#c9a84c', text: 'VIX = equity implied vol. Spreads = credit risk premium. Divergence matters: spreads widening while VIX is calm = credit market leading equities lower.' },
+              { label: 'VIX vs Spreads', color: 'var(--theme-primary, #c9a84c)', text: 'VIX = equity implied vol. Spreads = credit risk premium. Divergence matters: spreads widening while VIX is calm = credit market leading equities lower.' },
             ].map((item, i) => (
               <div key={item.label} style={{ padding: '12px 16px', borderLeft: `2px solid ${item.color}`, borderTop: i >= 2 ? `1px solid ${T.border}` : 'none', borderRight: i % 2 === 0 ? `1px solid ${T.border}` : 'none' }}>
                 <div style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: item.color, marginBottom: 5 }}>{item.label}</div>

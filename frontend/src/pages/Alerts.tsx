@@ -13,8 +13,8 @@ const T = {
   text:    'var(--theme-text, #d7e3fc)',
   mono:    'var(--theme-mono)',
   label:   'var(--theme-sans)',
-  pos:     '#22c55e',
-  neg:     '#ef4444',
+  pos:     'var(--theme-positive, #22c55e)',
+  neg:     'var(--theme-negative, #ef4444)',
 }
 
 const CONDITIONS = [
@@ -142,7 +142,7 @@ export default function Alerts() {
         {/* Notification permission banner */}
         {notifState === 'default' && (
           <div style={{
-            background: 'rgba(201,168,76,0.08)', border: `1px solid rgba(201,168,76,0.3)`,
+            background: 'color-mix(in srgb, var(--theme-primary) 8%, transparent)', border: `1px solid color-mix(in srgb, var(--theme-primary) 30%, transparent)`,
             padding: '10px 14px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
           }}>
             <span style={{ fontSize: 11, color: T.text, fontFamily: T.label }}>

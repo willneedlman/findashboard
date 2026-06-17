@@ -189,7 +189,7 @@ export function ImpliedProbabilityContent() {
           )}
 
           {mutError && (
-            <div style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.3)', padding: '12px 16px', fontSize: 12, color: 'var(--theme-text, #d7e3fc)' }}>
+            <div style={{ background: 'color-mix(in srgb, var(--theme-negative) 7%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-negative) 30%, transparent)', padding: '12px 16px', fontSize: 12, color: 'var(--theme-text, #d7e3fc)' }}>
               {(mutError as Error).message === 'backend_down'
                 ? 'Backend unreachable — start the API server (uvicorn main:app --reload --port 8000) and try again.'
                 : 'No data returned — check ticker and try again.'}

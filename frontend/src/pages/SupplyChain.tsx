@@ -15,7 +15,7 @@ const T = {
   label:   'var(--theme-sans)',
 }
 
-const SEGMENT_COLORS = ['#c9a84c', '#60a5fa', '#22c55e', '#f97316', '#a78bfa', '#38bdf8', '#fb7185', '#34d399', '#fbbf24', '#e879f9']
+const SEGMENT_COLORS = ['var(--theme-primary, #c9a84c)', '#60a5fa', 'var(--theme-positive, #22c55e)', '#f97316', '#a78bfa', '#38bdf8', '#fb7185', '#34d399', '#fbbf24', '#e879f9']
 
 interface SegItem { name: string; value: number; pct: number; yoy_pct: number | null }
 interface SegHistYear { year: number | string; total: number; segments: { name: string; value: number }[] }
@@ -285,7 +285,7 @@ export function SupplyChainContent() {
                     <span style={{ fontFamily: T.label, fontSize: 12, color: T.text }}>{data.name}</span>
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-                    {data.sector && <span style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.gold, background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.2)', padding: '2px 7px' }}>{data.sector}</span>}
+                    {data.sector && <span style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.gold, background: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-primary) 20%, transparent)', padding: '2px 7px' }}>{data.sector}</span>}
                     {data.industry && <span style={{ fontFamily: T.label, fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.muted, background: 'var(--theme-hover, rgba(255,255,255,0.04))', border: `1px solid ${T.border}`, padding: '2px 7px' }}>{data.industry}</span>}
                   </div>
 
@@ -326,7 +326,7 @@ export function SupplyChainContent() {
                           padding: '4px 9px', cursor: 'pointer', letterSpacing: '0.06em',
                           transition: 'all 0.12s',
                         }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = T.gold; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(201,168,76,0.35)' }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = T.gold; (e.currentTarget as HTMLElement).style.borderColor = 'color-mix(in srgb, var(--theme-primary) 35%, transparent)' }}
                         onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = T.text; (e.currentTarget as HTMLElement).style.borderColor = T.border }}
                       >
                         {p}

@@ -87,7 +87,7 @@ export default function CustomDashboard() {
                 style={{ width: 62, background: 'var(--theme-bg, #101c2e)', border: 'none', borderLeft: '1px solid var(--theme-border, rgba(255,255,255,0.12))', color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', padding: '6px 8px', outline: 'none' }}
               />
               <button onClick={applyTicker} title="Apply ticker to all widgets"
-                style={{ background: 'rgba(201,168,76,0.12)', border: 'none', borderLeft: '1px solid var(--theme-border, rgba(255,255,255,0.12))', color: 'var(--theme-primary, #c9a84c)', padding: '0 12px', cursor: 'pointer', fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}
+                style={{ background: 'color-mix(in srgb, var(--theme-primary) 12%, transparent)', border: 'none', borderLeft: '1px solid var(--theme-border, rgba(255,255,255,0.12))', color: 'var(--theme-primary, #c9a84c)', padding: '0 12px', cursor: 'pointer', fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}
               >Apply</button>
             </div>
           )}
@@ -101,7 +101,7 @@ export default function CustomDashboard() {
               </button>
               <button
                 onClick={handleReset}
-                style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: `1px solid ${confirmReset ? '#EF4444' : 'var(--theme-border, rgba(255,255,255,0.08))'}`, color: confirmReset ? '#EF4444' : 'var(--theme-secondary, #5e768f)', padding: '6px 12px', cursor: 'pointer', fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: `1px solid ${confirmReset ? 'var(--theme-negative, #ef4444)' : 'var(--theme-border, rgba(255,255,255,0.08))'}`, color: confirmReset ? 'var(--theme-negative, #ef4444)' : 'var(--theme-secondary, #5e768f)', padding: '6px 12px', cursor: 'pointer', fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}
               >
                 <RotateCcw size={12} /> {confirmReset ? 'Confirm Reset' : 'Reset'}
               </button>
@@ -109,7 +109,7 @@ export default function CustomDashboard() {
           )}
           <button
             onClick={() => { setEditMode(e => !e); setPaletteOpen(false) }}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, background: editMode ? 'rgba(201,168,76,0.12)' : 'var(--theme-surface, #1f2a3d)', border: `1px solid ${editMode ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.08))'}`, color: editMode ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #5e768f)', padding: '6px 12px', cursor: 'pointer', fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', transition: 'all 0.15s' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: editMode ? 'color-mix(in srgb, var(--theme-primary) 12%, transparent)' : 'var(--theme-surface, #1f2a3d)', border: `1px solid ${editMode ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.08))'}`, color: editMode ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #5e768f)', padding: '6px 12px', cursor: 'pointer', fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', transition: 'all 0.15s' }}
           >
             {editMode ? <><Unlock size={12} /> Done</> : <><Lock size={12} /> Edit</>}
           </button>
@@ -131,7 +131,7 @@ export default function CustomDashboard() {
                     fontFamily: 'var(--theme-sans)', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
                     padding: '4px 12px', cursor: 'pointer',
                     border: isActive ? '1px solid var(--theme-primary, #c9a84c)' : '1px solid var(--theme-border, rgba(255,255,255,0.08))',
-                    background: isActive ? 'rgba(201,168,76,0.12)' : 'transparent',
+                    background: isActive ? 'color-mix(in srgb, var(--theme-primary) 12%, transparent)' : 'transparent',
                     color: isActive ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #5e768f)',
                   }}
                 >{d.name}</button>
@@ -157,13 +157,13 @@ export default function CustomDashboard() {
                 {(['cockpit', 'research', 'screening', 'market-overview', 'options', 'risk', 'main'] as PresetKey[]).map(k => (
                   <button key={k} onClick={() => { createDashboard(k); setPresetMenuOpen(false) }}
                     style={{ display: 'block', width: '100%', textAlign: 'left', fontFamily: 'var(--theme-sans)', fontSize: 11, padding: '7px 10px', cursor: 'pointer', border: 'none', background: 'transparent', color: 'var(--theme-text, #d7e3fc)' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(201,168,76,0.1)')}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--theme-primary) 10%, transparent)')}
                     onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                   >{PRESET_LABELS[k]}</button>
                 ))}
                 <button onClick={() => { createDashboard('blank'); setPresetMenuOpen(false) }}
                   style={{ display: 'block', width: '100%', textAlign: 'left', fontFamily: 'var(--theme-sans)', fontSize: 11, padding: '7px 10px', cursor: 'pointer', border: 'none', borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'transparent', color: 'var(--theme-primary, #c9a84c)' }}
-                  onMouseEnter={e => (e.currentTarget.style.background = 'rgba(201,168,76,0.1)')}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--theme-primary) 10%, transparent)')}
                   onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                 >Custom — start blank</button>
               </div>

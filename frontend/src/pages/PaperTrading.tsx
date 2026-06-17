@@ -113,8 +113,8 @@ const sectionHeader = (label: string, badge?: string | number): React.ReactNode 
     {badge !== undefined && (
       <span style={{
         fontSize: 9, fontWeight: 700, padding: '1px 6px',
-        background: 'rgba(201,168,76,0.15)', color: T.gold,
-        border: `1px solid rgba(201,168,76,0.3)`,
+        background: 'color-mix(in srgb, var(--theme-primary) 15%, transparent)', color: T.gold,
+        border: `1px solid color-mix(in srgb, var(--theme-primary) 30%, transparent)`,
         fontFamily: T.mono,
       }}>
         {badge}
@@ -796,7 +796,7 @@ function OrderTicket({ onOrderPlaced, importTemplate, onTemplateConsumed, import
                       padding: '3px 8px', fontSize: 9, fontFamily: T.mono, cursor: 'pointer',
                       border: '1px solid',
                       borderColor: mlTemplate?.name === tpl.name ? T.gold : T.border,
-                      background: mlTemplate?.name === tpl.name ? 'rgba(201,168,76,0.15)' : 'transparent',
+                      background: mlTemplate?.name === tpl.name ? 'color-mix(in srgb, var(--theme-primary) 15%, transparent)' : 'transparent',
                       color: mlTemplate?.name === tpl.name ? T.gold : T.muted,
                       letterSpacing: '0.06em', fontWeight: mlTemplate?.name === tpl.name ? 700 : 400,
                       whiteSpace: 'nowrap',
@@ -915,8 +915,8 @@ function OrderTicket({ onOrderPlaced, importTemplate, onTemplateConsumed, import
         {feedback && (
           <div style={{
             padding: '8px 10px', fontFamily: T.mono, fontSize: 11,
-            background: feedback.ok ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
-            border: `1px solid ${feedback.ok ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)'}`,
+            background: feedback.ok ? 'color-mix(in srgb, var(--theme-positive) 10%, transparent)' : 'color-mix(in srgb, var(--theme-negative) 10%, transparent)',
+            border: `1px solid ${feedback.ok ? 'color-mix(in srgb, var(--theme-positive) 40%, transparent)' : 'color-mix(in srgb, var(--theme-negative) 40%, transparent)'}`,
             color: feedback.ok ? T.pos : T.neg,
           }}>
             {feedback.ok ? '' : '! '}{feedback.msg}
@@ -972,7 +972,7 @@ function TickerChartModal({ ticker, onClose }: { ticker: string; onClose: () => 
     >
       <div style={{
         width: 640, background: 'var(--theme-bg, #101c2e)',
-        border: '1px solid rgba(201,168,76,0.3)',
+        border: '1px solid color-mix(in srgb, var(--theme-primary) 30%, transparent)',
         display: 'flex', flexDirection: 'column',
       }}>
         <div style={{
@@ -1024,7 +1024,7 @@ function TickerChartModal({ ticker, onClose }: { ticker: string; onClose: () => 
                   width={52}
                 />
                 <Tooltip
-                  contentStyle={{ background: 'var(--theme-surface, #142032)', border: '1px solid rgba(201,168,76,0.3)', borderRadius: 0, fontFamily: T.mono, fontSize: 11 }}
+                  contentStyle={{ background: 'var(--theme-surface, #142032)', border: '1px solid color-mix(in srgb, var(--theme-primary) 30%, transparent)', borderRadius: 0, fontFamily: T.mono, fontSize: 11 }}
                   formatter={(v: number) => [fmt$(v), 'Close']}
                 />
                 <Area
@@ -1109,7 +1109,7 @@ function PositionsPanel({ positions }: { positions: Position[] }) {
                   return (
                     <tr key={i}
                       onClick={() => setChartTicker(p.symbol)}
-                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(201,168,76,0.06)'; (e.currentTarget as HTMLElement).style.cursor = 'pointer' }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'color-mix(in srgb, var(--theme-primary) 6%, transparent)'; (e.currentTarget as HTMLElement).style.cursor = 'pointer' }}
                       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.cursor = 'default' }}
                       style={{ transition: 'background 0.1s' }}
                     >
@@ -1205,7 +1205,7 @@ function OrdersPanel({ orders, onCancel, onCancelAll, cancelAllPending, cancelAl
             style={{
               margin: '0 10px 0 0', padding: '3px 8px', fontSize: 9, fontFamily: T.mono, fontWeight: 700,
               cursor: cancelAllPending ? 'wait' : 'pointer', letterSpacing: '0.08em',
-              background: cancelAllError ? 'rgba(239,68,68,0.2)' : 'rgba(239,68,68,0.1)',
+              background: cancelAllError ? 'color-mix(in srgb, var(--theme-negative) 20%, transparent)' : 'color-mix(in srgb, var(--theme-negative) 10%, transparent)',
               border: `1px solid rgba(239,68,68,${cancelAllError ? '0.7' : '0.4'})`, color: T.neg,
               opacity: cancelAllPending ? 0.6 : 1,
             }}
@@ -1275,7 +1275,7 @@ function OrdersPanel({ orders, onCancel, onCancelAll, cancelAllPending, cancelAl
                       onClick={() => onCancel(o.id)}
                       title="Cancel order"
                       style={{
-                        background: 'none', border: `1px solid rgba(239,68,68,0.35)`,
+                        background: 'none', border: `1px solid color-mix(in srgb, var(--theme-negative) 35%, transparent)`,
                         color: T.neg, cursor: 'pointer', fontSize: 11, lineHeight: 1,
                         padding: '2px 6px', fontFamily: T.mono, flexShrink: 0,
                       }}
@@ -1434,7 +1434,7 @@ export default function PaperTrading() {
         {isError && (
           <div style={{
             padding: '9px 14px', marginBottom: 8,
-            background: 'rgba(239,68,68,0.1)', border: `1px solid rgba(239,68,68,0.4)`,
+            background: 'color-mix(in srgb, var(--theme-negative) 10%, transparent)', border: `1px solid color-mix(in srgb, var(--theme-negative) 40%, transparent)`,
             color: T.neg, fontSize: 12, fontFamily: T.mono,
           }}>
             Tradier sandbox unavailable — check API key in .env
@@ -1791,8 +1791,8 @@ function StrategySignalChart({ data, ticker, mode, intervalMs = 15_000 }: {
 
 const btn: React.CSSProperties = {
   padding: '5px 10px', fontSize: 9, fontFamily: 'var(--theme-mono)', fontWeight: 700,
-  letterSpacing: '0.08em', cursor: 'pointer', background: 'rgba(201,168,76,0.08)',
-  border: '1px solid rgba(201,168,76,0.3)', color: 'var(--theme-primary, #c9a84c)',
+  letterSpacing: '0.08em', cursor: 'pointer', background: 'color-mix(in srgb, var(--theme-primary) 8%, transparent)',
+  border: '1px solid color-mix(in srgb, var(--theme-primary) 30%, transparent)', color: 'var(--theme-primary, #c9a84c)',
   transition: 'background 0.15s',
 }
 
@@ -2190,9 +2190,9 @@ function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy, onDis
           return (
             <span style={{
               fontSize: 8, padding: '1px 5px', fontFamily: T.mono, letterSpacing: '0.07em',
-              border: `1px solid ${enabledN > 0 ? 'rgba(201,168,76,0.4)' : T.border}`,
+              border: `1px solid ${enabledN > 0 ? 'color-mix(in srgb, var(--theme-primary) 40%, transparent)' : T.border}`,
               color: enabledN > 0 ? T.gold : T.muted,
-              background: enabledN > 0 ? 'rgba(201,168,76,0.06)' : 'transparent',
+              background: enabledN > 0 ? 'color-mix(in srgb, var(--theme-primary) 6%, transparent)' : 'transparent',
             }}>
               {enabledN} / {strategies.length} enabled
             </span>
@@ -2203,7 +2203,7 @@ function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy, onDis
         {schedulerStatus && schedulerStatus.active_jobs > 0 && (
           <span style={{
             fontSize: 8, padding: '1px 5px', fontFamily: T.mono, letterSpacing: '0.07em',
-            border: '1px solid rgba(34,197,94,0.4)', color: T.pos, background: 'rgba(34,197,94,0.06)',
+            border: '1px solid color-mix(in srgb, var(--theme-positive) 40%, transparent)', color: T.pos, background: 'color-mix(in srgb, var(--theme-positive) 6%, transparent)',
           }}>
             {schedulerStatus.active_jobs} scheduler job{schedulerStatus.active_jobs !== 1 ? 's' : ''} running
           </span>
@@ -2220,7 +2220,7 @@ function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy, onDis
 
       {/* Pending strategy from Strategy Builder */}
       {pendingBuilderStrategy && (
-        <div style={{ padding: '10px 14px', background: 'rgba(201,168,76,0.07)',
+        <div style={{ padding: '10px 14px', background: 'color-mix(in srgb, var(--theme-primary) 7%, transparent)',
           borderBottom: `1px solid ${T.border}`, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 200 }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: T.gold, fontFamily: T.mono, marginBottom: 3 }}>
@@ -2233,7 +2233,7 @@ function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy, onDis
             <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
               {pendingBuilderStrategy.legs.map((l, i) => (
                 <span key={i} style={{ fontSize: 8, fontFamily: T.mono, color: l.side === 'buy_to_open' ? T.pos : T.neg,
-                  padding: '1px 5px', border: `1px solid ${l.side === 'buy_to_open' ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}` }}>
+                  padding: '1px 5px', border: `1px solid ${l.side === 'buy_to_open' ? 'color-mix(in srgb, var(--theme-positive) 30%, transparent)' : 'color-mix(in srgb, var(--theme-negative) 30%, transparent)'}` }}>
                   {l.side === 'buy_to_open' ? '▲' : '▼'} {l.occ}
                 </span>
               ))}
@@ -2326,8 +2326,8 @@ function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy, onDis
                 setRiskParams(prev => ({ ...prev, [s.name]: { ...(prev[s.name] ?? RISK_DEFAULTS), [k]: v } }))
               return (
                 <div key={s.name} style={{ marginBottom: 4,
-                  border: `1px solid ${s.enabled ? 'rgba(201,168,76,0.25)' : T.border}`,
-                  background: s.enabled ? 'rgba(201,168,76,0.03)' : 'var(--theme-hover, rgba(255,255,255,0.01))' }}>
+                  border: `1px solid ${s.enabled ? 'color-mix(in srgb, var(--theme-primary) 25%, transparent)' : T.border}`,
+                  background: s.enabled ? 'color-mix(in srgb, var(--theme-primary) 3%, transparent)' : 'var(--theme-hover, rgba(255,255,255,0.01))' }}>
 
                   {/* ── Collapsed header row (always visible) ── */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
@@ -2371,8 +2371,8 @@ function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy, onDis
                       onClick={(e) => { e.stopPropagation(); toggleMut.mutate({ name: s.name, enabled: !s.enabled }) }}
                       style={{
                         padding: '3px 8px', fontSize: 9, fontFamily: T.mono, fontWeight: 700, cursor: 'pointer', border: '1px solid',
-                        borderColor: s.enabled ? 'rgba(34,197,94,0.5)' : T.border,
-                        background: s.enabled ? 'rgba(34,197,94,0.1)' : 'transparent',
+                        borderColor: s.enabled ? 'color-mix(in srgb, var(--theme-positive) 50%, transparent)' : T.border,
+                        background: s.enabled ? 'color-mix(in srgb, var(--theme-positive) 10%, transparent)' : 'transparent',
                         color: s.enabled ? T.pos : T.muted, letterSpacing: '0.08em',
                         margin: '0 4px', flexShrink: 0,
                       }}
@@ -2407,7 +2407,7 @@ function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy, onDis
                             <span style={{ fontSize: 8 }}>{pOpen ? '▼' : '▶'}</span> Parameters
                             {hasCustomParams && (
                               <span style={{ fontSize: 7, color: T.gold, fontFamily: T.mono, padding: '0 3px',
-                                border: '1px solid rgba(201,168,76,0.4)', marginLeft: 2 }}>customised</span>
+                                border: '1px solid color-mix(in srgb, var(--theme-primary) 40%, transparent)', marginLeft: 2 }}>customised</span>
                             )}
                           </button>
                           {pOpen && (
@@ -2529,7 +2529,7 @@ function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy, onDis
                 </button>
                 <button
                   onClick={() => setCustomModalOpen(true)}
-                  style={{ ...btn, flex: 1, borderColor: 'rgba(201,168,76,0.5)', color: T.gold }}
+                  style={{ ...btn, flex: 1, borderColor: 'color-mix(in srgb, var(--theme-primary) 50%, transparent)', color: T.gold }}
                 >Build Custom</button>
               </div>
             )}
@@ -2550,7 +2550,7 @@ function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy, onDis
               const unregistered = loadCustomStrategies().filter(d => !registeredNames.has(d.name))
               if (unregistered.length === 0) return null
               return (
-                <div style={{ marginTop: 10, padding: '8px 10px', border: `1px solid rgba(201,168,76,0.2)`, background: 'rgba(201,168,76,0.04)' }}>
+                <div style={{ marginTop: 10, padding: '8px 10px', border: `1px solid color-mix(in srgb, var(--theme-primary) 20%, transparent)`, background: 'color-mix(in srgb, var(--theme-primary) 4%, transparent)' }}>
                   <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.gold, marginBottom: 6, fontFamily: T.mono }}>
                     Strategy Library
                   </div>
@@ -2578,7 +2578,7 @@ function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy, onDis
                             bear_drift: def.bear_drift ?? 0,
                           })}
                           disabled={createCustomMut.isPending}
-                          style={{ ...btn, fontSize: 8, padding: '3px 8px', borderColor: 'rgba(201,168,76,0.4)', color: T.gold, flexShrink: 0 }}
+                          style={{ ...btn, fontSize: 8, padding: '3px 8px', borderColor: 'color-mix(in srgb, var(--theme-primary) 40%, transparent)', color: T.gold, flexShrink: 0 }}
                         >
                           + Register
                         </button>
@@ -2640,7 +2640,7 @@ function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy, onDis
                   <button
                     onClick={executeSignals}
                     style={{ ...btn, width: '100%', marginBottom: 4,
-                      borderColor: 'rgba(201,168,76,0.6)', background: 'rgba(201,168,76,0.14)' }}
+                      borderColor: 'color-mix(in srgb, var(--theme-primary) 60%, transparent)', background: 'color-mix(in srgb, var(--theme-primary) 14%, transparent)' }}
                   >
                     Execute {replayResult.events.filter(e => e.signal !== 'HOLD').length} Signal Orders
                   </button>
@@ -2662,11 +2662,11 @@ function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy, onDis
                   <button
                     onClick={startLive}
                     disabled={strategies.filter(s => s.enabled).length === 0}
-                    style={{ ...btn, flex: 1, borderColor: 'rgba(34,197,94,0.4)', color: T.pos }}
+                    style={{ ...btn, flex: 1, borderColor: 'color-mix(in srgb, var(--theme-positive) 40%, transparent)', color: T.pos }}
                   >● Start Live</button>
                 ) : (
                   <button onClick={stopLive}
-                    style={{ ...btn, flex: 1, borderColor: 'rgba(239,68,68,0.4)', color: T.neg }}>■ Stop Live</button>
+                    style={{ ...btn, flex: 1, borderColor: 'color-mix(in srgb, var(--theme-negative) 40%, transparent)', color: T.neg }}>■ Stop Live</button>
                 )}
                 <button
                   onClick={runOffline}
@@ -2691,15 +2691,15 @@ function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy, onDis
                 <div style={{ display: 'flex', gap: 4, marginBottom: 6, flexWrap: 'wrap' }}>
                   <span style={{
                     fontSize: 8, padding: '1px 5px', fontFamily: T.mono,
-                    border: `1px solid ${schedulerStatus.scheduler_running ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)'}`,
+                    border: `1px solid ${schedulerStatus.scheduler_running ? 'color-mix(in srgb, var(--theme-positive) 40%, transparent)' : 'color-mix(in srgb, var(--theme-negative) 40%, transparent)'}`,
                     color: schedulerStatus.scheduler_running ? T.pos : T.neg,
-                    background: schedulerStatus.scheduler_running ? 'rgba(34,197,94,0.06)' : 'rgba(239,68,68,0.06)',
+                    background: schedulerStatus.scheduler_running ? 'color-mix(in srgb, var(--theme-positive) 6%, transparent)' : 'color-mix(in srgb, var(--theme-negative) 6%, transparent)',
                   }}>
                     {schedulerStatus.scheduler_running ? '● RUNNING' : '○ STOPPED'}
                   </span>
                   <span style={{
                     fontSize: 8, padding: '1px 5px', fontFamily: T.mono,
-                    border: `1px solid ${schedulerStatus.market_open ? 'rgba(201,168,76,0.4)' : T.border}`,
+                    border: `1px solid ${schedulerStatus.market_open ? 'color-mix(in srgb, var(--theme-primary) 40%, transparent)' : T.border}`,
                     color: schedulerStatus.market_open ? T.gold : T.muted,
                   }}>
                     {schedulerStatus.market_open ? 'MARKET OPEN' : 'CLOSED'}
@@ -2736,8 +2736,8 @@ function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy, onDis
                           <div key={job.id} style={{
                             display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2,
                             padding: '4px 7px',
-                            border: `1px solid ${job.enabled ? 'rgba(201,168,76,0.2)' : T.border}`,
-                            background: job.enabled ? 'rgba(201,168,76,0.03)' : 'transparent',
+                            border: `1px solid ${job.enabled ? 'color-mix(in srgb, var(--theme-primary) 20%, transparent)' : T.border}`,
+                            background: job.enabled ? 'color-mix(in srgb, var(--theme-primary) 3%, transparent)' : 'transparent',
                           }}>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontSize: 10, fontFamily: T.mono, color: T.text, fontWeight: 600 }}>
@@ -2761,8 +2761,8 @@ function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy, onDis
                               onClick={() => toggleJobMut.mutate({ id: job.id, enabled: !job.enabled })}
                               style={{
                                 padding: '1px 6px', fontSize: 8, fontFamily: T.mono, fontWeight: 700, cursor: 'pointer', border: '1px solid',
-                                borderColor: job.enabled ? 'rgba(34,197,94,0.5)' : T.border,
-                                background: job.enabled ? 'rgba(34,197,94,0.1)' : 'transparent',
+                                borderColor: job.enabled ? 'color-mix(in srgb, var(--theme-positive) 50%, transparent)' : T.border,
+                                background: job.enabled ? 'color-mix(in srgb, var(--theme-positive) 10%, transparent)' : 'transparent',
                                 color: job.enabled ? T.pos : T.muted, flexShrink: 0,
                               }}
                             >{job.enabled ? 'ON' : 'OFF'}</button>

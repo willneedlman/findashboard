@@ -271,7 +271,7 @@ export function DCFValuationContent() {
                 }
                 const changes = Object.entries(aiSuggested) as [keyof typeof p, number][]
                 return (
-                  <div style={{ marginTop: 6, background: 'rgba(201,168,76,0.05)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', padding: '8px' }}>
+                  <div style={{ marginTop: 6, background: 'color-mix(in srgb, var(--theme-primary) 5%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', padding: '8px' }}>
                     <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)', marginBottom: 6 }}>
                       AI Suggestions
                     </div>
@@ -316,7 +316,7 @@ export function DCFValuationContent() {
                 )
               })()}
               {!aiSuggested && aiRationale && (
-                <div style={{ marginTop: 6, background: 'rgba(201,168,76,0.05)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 25%, transparent)', padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ marginTop: 6, background: 'color-mix(in srgb, var(--theme-primary) 5%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 25%, transparent)', padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {Object.entries(aiRationale).map(([k, v]) => (
                     <div key={k} style={{ fontSize: 9, color: 'var(--theme-secondary, #99907e)', lineHeight: '13px' }}>
                       <span style={{ color: 'var(--theme-primary, #c9a84c)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{k}: </span>{v as string}
@@ -373,7 +373,7 @@ export function DCFValuationContent() {
             }}>
               {isPending ? 'Running…' : 'Run DCF Model'}
             </button>
-            {isError && <div style={{ fontSize: 9, color: '#ef4444', textAlign: 'center', fontFamily: 'var(--theme-sans)' }}>Server unavailable — is the backend running?</div>}
+            {isError && <div style={{ fontSize: 9, color: 'var(--theme-negative, #ef4444)', textAlign: 'center', fontFamily: 'var(--theme-sans)' }}>Server unavailable — is the backend running?</div>}
           </div>
 
       {/* Right panel */}
@@ -387,7 +387,7 @@ export function DCFValuationContent() {
             <>
               {/* Pre-profit warning */}
               {data.isPreProfit && (
-                <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', borderLeft: '4px solid #c9a84c', padding: '8px 14px' }}>
+                <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', borderLeft: '4px solid var(--theme-primary, #c9a84c)', padding: '8px 14px' }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--theme-primary, #c9a84c)', marginBottom: 3 }}>
                     Pre-Profit Company — Margin Model Active
                   </div>

@@ -11,8 +11,8 @@ const T = {
   text:    'var(--theme-text, #d7e3fc)',
   mono:    'var(--theme-mono)',
   label:   'var(--theme-sans)',
-  pos:     '#22c55e',
-  neg:     '#ef4444',
+  pos:     'var(--theme-positive, #22c55e)',
+  neg:     'var(--theme-negative, #ef4444)',
 }
 
 interface SentimentSnap {
@@ -53,8 +53,8 @@ export default function SentimentWidget({ config }: { config: WidgetConfig }) {
         {TF_OPTIONS.map(({ h, l }) => (
           <button key={h} onClick={() => setHours(h)} style={{
             fontFamily: T.mono, fontSize: 8.5, fontWeight: 700, padding: '1px 7px',
-            border: hours === h ? '1px solid rgba(201,168,76,0.55)' : `1px solid ${T.border}`,
-            background: hours === h ? 'rgba(201,168,76,0.12)' : 'transparent',
+            border: hours === h ? '1px solid color-mix(in srgb, var(--theme-primary) 55%, transparent)' : `1px solid ${T.border}`,
+            background: hours === h ? 'color-mix(in srgb, var(--theme-primary) 12%, transparent)' : 'transparent',
             color: hours === h ? T.gold : 'rgba(255,255,255,0.3)',
             cursor: 'pointer', letterSpacing: '0.06em',
           }}>{l}</button>

@@ -11,7 +11,7 @@ interface Props {
 }
 
 /** AlphaTape brand mark — the gold serif alpha (α). Vector path, no font dependency. */
-export default function AlphaMark({ size = 32, tile = false, color = '#C9A84C', title = 'AlphaTape', className, style }: Props) {
+export default function AlphaMark({ size = 32, tile = false, color = 'var(--theme-primary, #c9a84c)', title = 'AlphaTape', className, style }: Props) {
   return (
     <svg width={size} height={size} viewBox="0 0 100 100" role="img" aria-label={title} className={className} style={style}>
       {tile && (
@@ -22,7 +22,7 @@ export default function AlphaMark({ size = 32, tile = false, color = '#C9A84C', 
               <stop offset="1" stopColor="#0A1628" />
             </linearGradient>
           </defs>
-          <rect x="0.5" y="0.5" width="99" height="99" rx="22" fill="url(#alphatile)" stroke="rgba(201,168,76,0.16)" />
+          <rect x="0.5" y="0.5" width="99" height="99" rx="22" fill="url(#alphatile)" stroke="color-mix(in srgb, var(--theme-primary) 16%, transparent)" />
         </>
       )}
       {/* color set via CSS `fill` so it can resolve a CSS var (theme preset) */}

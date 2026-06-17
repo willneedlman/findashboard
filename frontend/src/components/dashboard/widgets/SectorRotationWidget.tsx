@@ -12,7 +12,7 @@ const T = {
   text:    'var(--theme-text, #d7e3fc)',
   mono:    'var(--theme-mono)',
   label:   'var(--theme-sans)',
-  neg:     '#ef4444',
+  neg:     'var(--theme-negative, #ef4444)',
 }
 
 interface SectorRow {
@@ -23,7 +23,7 @@ interface SectorRow {
 }
 interface RotationResp { sectors: SectorRow[]; as_of: string }
 
-const POS = '#22c55e', NEG = '#ef4444'
+const POS = 'var(--theme-positive, #22c55e)', NEG = 'var(--theme-negative, #ef4444)'
 const PERIODS = ['1W', '1M', '3M', '6M', 'YTD', '1Y']
 
 export default function SectorRotationWidget({ config }: { config: WidgetConfig }) {
@@ -46,8 +46,8 @@ export default function SectorRotationWidget({ config }: { config: WidgetConfig 
 
   const periodBtn = (active: boolean): React.CSSProperties => ({
     fontFamily: T.mono, fontSize: 8.5, fontWeight: 700, padding: '1px 7px', cursor: 'pointer', letterSpacing: '0.06em',
-    border: active ? '1px solid rgba(201,168,76,0.55)' : `1px solid ${T.border}`,
-    background: active ? 'rgba(201,168,76,0.12)' : 'transparent',
+    border: active ? '1px solid color-mix(in srgb, var(--theme-primary) 55%, transparent)' : `1px solid ${T.border}`,
+    background: active ? 'color-mix(in srgb, var(--theme-primary) 12%, transparent)' : 'transparent',
     color: active ? T.gold : 'rgba(255,255,255,0.3)',
   })
 
@@ -74,7 +74,7 @@ export default function SectorRotationWidget({ config }: { config: WidgetConfig 
             return (
               <div key={s.ticker} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', borderBottom: `1px solid ${T.border}` }}>
                 <span style={{ fontFamily: T.mono, fontSize: 9, color: '#4a5d72', width: 14, flexShrink: 0 }}>{String(i + 1).padStart(2, '0')}</span>
-                <span style={{ fontFamily: T.mono, fontSize: 9, fontWeight: 700, color: T.gold, border: '1px solid rgba(201,168,76,0.3)', padding: '1px 5px', flexShrink: 0, width: 42, textAlign: 'center' }}>{s.ticker}</span>
+                <span style={{ fontFamily: T.mono, fontSize: 9, fontWeight: 700, color: T.gold, border: '1px solid color-mix(in srgb, var(--theme-primary) 30%, transparent)', padding: '1px 5px', flexShrink: 0, width: 42, textAlign: 'center' }}>{s.ticker}</span>
                 <span style={{ fontFamily: T.label, fontSize: 10, color: T.text, width: 92, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
                 <div style={{ flex: 1, display: 'flex', alignItems: 'center', minWidth: 40 }}>
                   <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end', paddingRight: 1 }}>

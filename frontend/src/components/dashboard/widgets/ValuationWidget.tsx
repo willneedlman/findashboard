@@ -11,7 +11,7 @@ const T = {
   mono:  'var(--theme-mono)',
   label: 'var(--theme-sans)',
   rich:  '#e07a52',
-  cheap: '#22c55e',
+  cheap: 'var(--theme-positive, #22c55e)',
   neutral: 'var(--theme-secondary, #8a9ab0)',
 }
 
