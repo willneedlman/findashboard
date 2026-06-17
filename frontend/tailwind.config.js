@@ -4,25 +4,31 @@ export default {
   theme: {
     extend: {
       colors: {
+        // Utility-class palette repointed at the --theme-* tokens so the few
+        // remaining text-gold / bg-navy / text-slate-* classes follow the active
+        // theme instead of fixed hex. Raw navy 950-500 ramp kept for the rare
+        // fixed gradient stop.
         navy: {
           950: '#050d1a',
-          900: '#0a1628',
-          800: '#0d1b30',
+          900: 'var(--theme-bg, #101c2e)',
+          800: 'var(--theme-surface, #0d1826)',
           700: '#0f1d31',
           600: '#132238',
           500: '#1a2d45',
         },
         gold: {
-          DEFAULT: '#c9a84c',
+          DEFAULT: 'var(--theme-primary, #c9a84c)',
           light: '#d4b86a',
-          dim: 'rgba(201,168,76,0.45)',
-          faint: 'rgba(201,168,76,0.12)',
+          dim: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)',
+          faint: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 12%, transparent)',
         },
         slate: {
-          terminal: '#5e768f',
-          light: '#8a9ab0',
-          bright: '#dce3ed',
+          terminal: 'var(--theme-secondary, #5e768f)',
+          light: 'var(--theme-text-dim, #8a9ab0)',
+          bright: 'var(--theme-text, #dce3ed)',
         },
+        positive: 'var(--theme-positive, #22c55e)',
+        negative: 'var(--theme-negative, #ef4444)',
         accent: {
           blue: '#1f5673',
           purple: '#7b5ea7',

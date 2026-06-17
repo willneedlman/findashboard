@@ -257,19 +257,24 @@
 
   /* ── Buttons ──────────────────────────────────────────────────────────── */
   .btn-gold {
-    @apply border border-gold/40 text-gold text-xs tracking-widest font-medium px-4 py-2
-           transition-all duration-200 hover:bg-gold/10 hover:border-gold active:bg-gold/20;
+    @apply text-xs tracking-widest font-medium px-4 py-2 transition-all duration-200;
+    border: 1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent);
+    color: var(--theme-primary, #c9a84c);
     font-family: 'IBM Plex Sans', sans-serif;
   }
+  .btn-gold:hover   { background: color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent); border-color: var(--theme-primary, #c9a84c); }
+  .btn-gold:active  { background: color-mix(in srgb, var(--theme-primary, #c9a84c) 20%, transparent); }
 
   .tab-active   { border-bottom: 2px solid var(--theme-primary, #c9a84c); color: var(--theme-primary, #c9a84c); font-weight: 600; }
   .tab-inactive { color: var(--theme-secondary, #5e768f); border-bottom: 2px solid transparent; transition: color 0.15s; }
   .tab-inactive:hover { color: #d7e3fc; }
 
   .input-field {
-    @apply bg-navy-900 border border-white/9 text-slate-bright px-3 py-2 text-sm w-full
-           focus:outline-none focus:border-gold/45 font-serif;
+    @apply border border-white/9 px-3 py-2 text-sm w-full focus:outline-none font-serif;
+    background: var(--theme-bg, #101c2e);
+    color: var(--theme-text, #d7e3fc);
   }
+  .input-field:focus { border-color: color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent); }
 }
 
 @layer utilities {

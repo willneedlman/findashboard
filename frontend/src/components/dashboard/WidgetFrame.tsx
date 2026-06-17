@@ -401,9 +401,9 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
       {(hasHeader || editMode) && (
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          // Trading Portal panel-header strip: darker recessed bar, gold uppercase label.
-          background: editMode ? 'color-mix(in srgb, var(--theme-primary) 12%, transparent)' : 'rgba(0,0,0,0.16)',
-          borderBottom: editMode ? '1px solid color-mix(in srgb, var(--theme-primary) 25%, transparent)' : '1px solid rgba(255,255,255,0.05)',
+          // Trading Portal panel-header strip — same tokens as .ft-panel-header.
+          background: editMode ? 'color-mix(in srgb, var(--theme-primary) 12%, transparent)' : 'var(--theme-hover, rgba(0,0,0,0.12))',
+          borderBottom: editMode ? '1px solid color-mix(in srgb, var(--theme-primary) 25%, transparent)' : '1px solid var(--theme-border-faint, rgba(255,255,255,0.05))',
           padding: '6px 10px', flexShrink: 0,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
