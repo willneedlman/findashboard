@@ -5,6 +5,8 @@ import Layout from './components/Layout'
 import { ThemeProvider, useTheme } from './contexts/ThemeContext'
 import { PortfolioProvider } from './contexts/PortfolioContext'
 import AccountSync from './components/AccountSync'
+import { findToolByLocation } from './lib/hubs'
+import { recordRecent } from './lib/recents'
 
 // Marketing launchpad — chrome-free, lives at / and /product/*
 const Landing        = lazy(() => import('./marketing/Marketing').then(m => ({ default: m.Landing })))
@@ -24,10 +26,16 @@ const NAVTracker         = lazy(() => import('./pages/NAVTracker'))
 const ImpliedProbability = lazy(() => import('./pages/ImpliedProbability'))
 const FedRates           = lazy(() => import('./pages/FedRates'))
 const CorporateHub       = lazy(() => import('./pages/CorporateHub'))
-const StockValuation     = lazy(() => import('./pages/StockValuation'))
+const DCFValuation       = lazy(() => import('./pages/DCFValuation'))
+const DividendDiscount   = lazy(() => import('./pages/DividendDiscount'))
+const SOTP               = lazy(() => import('./pages/SOTP'))
+const Multiples          = lazy(() => import('./pages/Multiples'))
+const ReverseDCF         = lazy(() => import('./pages/ReverseDCF'))
 const OptionsChainScanner = lazy(() => import('./pages/OptionsChainScanner'))
 const RegressionAnalysis = lazy(() => import('./pages/RegressionAnalysis'))
-const PortfolioSkills    = lazy(() => import('./pages/PortfolioSkills'))
+const PortfolioBacktester = lazy(() => import('./pages/PortfolioBacktester'))
+const MonteCarlo         = lazy(() => import('./pages/MonteCarlo'))
+const PortfolioCompare   = lazy(() => import('./pages/PortfolioCompare'))
 const SkewTool           = lazy(() => import('./pages/SkewTool'))
 const StrategyBuilder    = lazy(() => import('./pages/StrategyBuilder'))
 const DealerGEX          = lazy(() => import('./pages/DealerGEX'))
@@ -48,14 +56,15 @@ const TradeJournal       = lazy(() => import('./pages/TradeJournal'))
 const PaperTrading       = lazy(() => import('./pages/PaperTrading'))
 const SentimentTracker   = lazy(() => import('./pages/SentimentTracker'))
 const AlertsPage         = lazy(() => import('./pages/Alerts'))
-const OptionsHub         = lazy(() => import('./pages/OptionsHub'))
-const MacroHub           = lazy(() => import('./pages/MacroHub'))
+const EconomyMonitor     = lazy(() => import('./pages/EconomyMonitor'))
+const SectorRotation     = lazy(() => import('./pages/SectorRotation'))
 const ResearchHub        = lazy(() => import('./pages/ResearchHub'))
 const IVTracker          = lazy(() => import('./pages/IVTracker'))
 const OptionsMarketMaker = lazy(() => import('./pages/OptionsMarketMaker'))
 const UnusualOptions     = lazy(() => import('./pages/UnusualOptions'))
 const Compare            = lazy(() => import('./pages/Compare'))
 const ResetPassword      = lazy(() => import('./pages/ResetPassword'))
+const HubLanding         = lazy(() => import('./pages/HubLanding'))
 
 function PageLoader() {
   return (
@@ -86,6 +95,11 @@ function PageviewTracker() {
 
 function TerminalChrome() {
   const location = useLocation()
+  // Record tool visits for the Home "Jump Back In" row.
+  useEffect(() => {
+    const tool = findToolByLocation(location.pathname, location.search)
+    if (tool) recordRecent(tool.route)
+  }, [location.pathname, location.search])
   return (
     <Layout>
       <AnimatePresence mode="wait">
@@ -142,23 +156,31 @@ export default function App() {
             {/* Terminal — wrapped in the sidebar Layout */}
             <Route element={<TerminalChrome />}>
               <Route path="/app"        element={<Home />} />
+              <Route path="/hub/:slug"  element={<HubLanding />} />
               <Route path="/market"     element={<MarketData />} />
               <Route path="/options"    element={<OptionsPricer />} />
               <Route path="/bond"       element={<BondAnalytics />} />
               <Route path="/nav"        element={<NAVTracker />} />
-              <Route path="/portfolio"  element={<Navigate to="/portfolio-skills?tab=backtest" replace />} />
               <Route path="/portfolio-manager" element={<PortfolioManager />} />
-              <Route path="/montecarlo" element={<Navigate to="/portfolio-skills?tab=montecarlo" replace />} />
+              {/* Portfolio tools — now standalone (legacy /portfolio-skills hub dismantled) */}
+              <Route path="/backtest"         element={<PortfolioBacktester />} />
+              <Route path="/montecarlo"       element={<MonteCarlo />} />
+              <Route path="/portfolio-compare" element={<PortfolioCompare />} />
+              <Route path="/portfolio"        element={<Navigate to="/backtest" replace />} />
+              <Route path="/portfolio-skills" element={<Navigate to="/backtest" replace />} />
+              {/* Valuation tools — now standalone (legacy /valuation hub dismantled) */}
+              <Route path="/dcf"         element={<DCFValuation />} />
+              <Route path="/ddm"         element={<DividendDiscount />} />
+              <Route path="/sotp"        element={<SOTP />} />
+              <Route path="/multiples"   element={<Multiples />} />
+              <Route path="/reverse-dcf" element={<ReverseDCF />} />
+              <Route path="/valuation"   element={<Navigate to="/dcf" replace />} />
               <Route path="/probability" element={<ImpliedProbability />} />
               <Route path="/skew"       element={<SkewTool />} />
               <Route path="/fed"        element={<FedRates />} />
               <Route path="/corporate"  element={<CorporateHub />} />
-              <Route path="/valuation"  element={<StockValuation />} />
-              <Route path="/dcf"        element={<Navigate to="/valuation" replace />} />
               <Route path="/chain"      element={<OptionsChainScanner />} />
               <Route path="/correlation" element={<Navigate to="/regression" replace />} />
-              <Route path="/portfolio-compare" element={<Navigate to="/portfolio-skills?tab=compare" replace />} />
-              <Route path="/portfolio-skills" element={<PortfolioSkills />} />
               <Route path="/strategy"   element={<StrategyBuilder />} />
               <Route path="/gex"        element={<DealerGEX />} />
               <Route path="/dashboard"       element={<CustomDashboard />} />
@@ -167,7 +189,8 @@ export default function App() {
               <Route path="/earnings"        element={<EarningsSummarizer />} />
               <Route path="/admin"           element={<AdminTester />} />
               <Route path="/stress-test"     element={<Navigate to="/admin" replace />} />
-              <Route path="/sector-rotation" element={<Navigate to="/macro-hub?tab=sectors" replace />} />
+              <Route path="/sector-rotation" element={<SectorRotation />} />
+              <Route path="/economy"             element={<EconomyMonitor />} />
               <Route path="/credit-spreads"      element={<CreditSpreads />} />
               <Route path="/relative-valuation"  element={<RelativeValuation />} />
               <Route path="/supply-chain"        element={<SupplyChain />} />
@@ -178,8 +201,8 @@ export default function App() {
               <Route path="/sentiment"           element={<SentimentTracker />} />
               <Route path="/alerts"             element={<AlertsPage />} />
               <Route path="/regression"         element={<RegressionAnalysis />} />
-              <Route path="/options-hub"        element={<OptionsHub />} />
-              <Route path="/macro-hub"          element={<MacroHub />} />
+              <Route path="/options-hub"        element={<Navigate to="/options" replace />} />
+              <Route path="/macro-hub"          element={<Navigate to="/fed" replace />} />
               <Route path="/research-hub"       element={<ResearchHub />} />
               <Route path="/iv-tracker"         element={<IVTracker />} />
               <Route path="/market-maker"       element={<OptionsMarketMaker />} />

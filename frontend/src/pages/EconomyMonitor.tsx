@@ -6,6 +6,7 @@ import {
   Tooltip, ResponsiveContainer, CartesianGrid, Legend, ReferenceLine, Cell,
 } from 'recharts'
 import { TOOLTIP_STYLE, CROSSHAIR_CURSOR, BAR_CURSOR } from '../components/ChartTooltip'
+import PageWrapper from '../components/PageWrapper'
 
 const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #5e768f)', fontFamily: 'var(--theme-mono)' }
 const FED_TARGET = 2.0
@@ -142,4 +143,8 @@ export function EconomyMonitorContent() {
       </div>
     </div>
   )
+}
+
+export default function EconomyMonitor() {
+  return <PageWrapper title="Macro Monitor"><EconomyMonitorContent /></PageWrapper>
 }

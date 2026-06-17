@@ -7,6 +7,7 @@ import {
 } from 'recharts'
 import { TrendingUp, Download, Plus, X, BarChart2, LayoutGrid, GitCompare } from 'lucide-react'
 import HelpTip from '../components/HelpTip'
+import PageWrapper from '../components/PageWrapper'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -724,28 +725,24 @@ function CorrelationMode() {
 export default function RegressionAnalysis() {
   const [mode, setMode] = useState<'regression' | 'correlation'>('correlation')
   return (
-    <div style={{ padding: '24px 28px', color: C.text, fontFamily: 'var(--theme-mono)', minHeight: '100vh' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-        <TrendingUp size={20} color={C.gold} />
-        <span style={{ fontSize: 18, fontWeight: 700, color: C.gold, letterSpacing: 1 }}>REGRESSION &amp; CORRELATION</span>
-      </div>
+    <PageWrapper title="Regression & Correlation" subtitle="OLS regression, correlation matrices, and rolling beta across any assets.">
+      <div style={{ color: C.text, fontFamily: 'var(--theme-mono)' }}>
+        {/* Mode switch */}
+        <div style={{ display: 'flex', gap: 0, marginBottom: 20, borderBottom: `1px solid ${C.border}` }}>
+          {([['correlation', 'Correlation', GitCompare], ['regression', 'Regression', BarChart2]] as const).map(([m, label, Icon]) => (
+            <button key={m} onClick={() => setMode(m)} style={{
+              padding: '8px 18px', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer',
+              fontFamily: 'inherit', display: 'flex', gap: 7, alignItems: 'center',
+              color: mode === m ? C.gold : C.muted,
+              borderBottom: mode === m ? `2px solid ${C.gold}` : '2px solid transparent',
+              textTransform: 'uppercase', letterSpacing: 1,
+            }}><Icon size={14} /> {label}</button>
+          ))}
+        </div>
 
-      {/* Mode switch */}
-      <div style={{ display: 'flex', gap: 0, marginBottom: 20, borderBottom: `1px solid ${C.border}` }}>
-        {([['correlation', 'Correlation', GitCompare], ['regression', 'Regression', BarChart2]] as const).map(([m, label, Icon]) => (
-          <button key={m} onClick={() => setMode(m)} style={{
-            padding: '8px 18px', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer',
-            fontFamily: 'inherit', display: 'flex', gap: 7, alignItems: 'center',
-            color: mode === m ? C.gold : C.muted,
-            borderBottom: mode === m ? `2px solid ${C.gold}` : '2px solid transparent',
-            textTransform: 'uppercase', letterSpacing: 1,
-          }}><Icon size={14} /> {label}</button>
-        ))}
+        {mode === 'correlation' ? <CorrelationMode /> : <RegressionMode />}
       </div>
-
-      {mode === 'correlation' ? <CorrelationMode /> : <RegressionMode />}
-    </div>
+    </PageWrapper>
   )
 }
 

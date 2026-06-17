@@ -1,21 +1,186 @@
 import { useRef, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion, useReducedMotion } from 'framer-motion'
-import {
-  TrendingUp, LineChart, Landmark, Coins, BarChart2, Dices,
-  GitBranch, Activity, Building2, Calculator, Shuffle, Zap,
-  ArrowUpRight, LayoutGrid, Filter, FileText, Upload, X,
-  PieChart, Scale, Globe, BookOpen, Terminal, Brain, Bell,
-  Briefcase, Layers, Compass, Search, Waves, Gauge, GitCompare,
-} from 'lucide-react'
+import axios from 'axios'
+import { useQuery } from '@tanstack/react-query'
+import { AreaChart, Area, XAxis, YAxis, ReferenceLine, ResponsiveContainer } from 'recharts'
+import { Search, LayoutGrid, ArrowUpRight, Clock, X, Upload, Briefcase } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
+import TickerLogo from '../components/TickerLogo'
 import useIsMobile from '../hooks/useIsMobile'
 import { usePortfolio, type PortfolioHolding } from '../contexts/PortfolioContext'
+import { loadActivePortfolio, useQuotes, priceHoldings } from '../components/dashboard/widgets/usePortfolio'
+import { HUBS, ALL_TOOLS } from '../lib/hubs'
+import { getRecents } from '../lib/recents'
 
-// ── Portfolio import strip ────────────────────────────────────────────────────
+const F = {
+  gold: 'var(--theme-primary, #c9a84c)',
+  text: 'var(--theme-text, #d7e3fc)',
+  bright: '#dce3ed',
+  sec: '#8099b0',
+  muted: 'var(--theme-secondary, #5e768f)',
+  surface: 'var(--theme-surface, #101c2e)',
+  panel: 'var(--theme-bg, #0d1826)',
+  topbar: 'color-mix(in srgb, var(--theme-bg, #0d1826) 70%, #000)',
+  border: 'var(--theme-border, rgba(255,255,255,0.08))',
+  borderFaint: 'rgba(255,255,255,0.06)',
+  pos: 'var(--theme-positive, #22c55e)',
+  neg: 'var(--theme-negative, #ef4444)',
+  amber: '#f59e0b',
+  sans: 'var(--theme-sans)',
+  mono: 'var(--theme-mono)',
+}
+
+const INDEX_TICKERS = ['SPY', 'QQQ', 'DIA', 'IWM', '^VIX', 'BTC-USD', 'GLD', 'TLT']
+const money = (v: number) => `${v < 0 ? '-' : ''}$${Math.abs(Math.round(v)).toLocaleString()}`
+const tapeLabel = (s: string) => s.replace(/^\^/, '').replace(/-USD$/, '')
+
+function marketSession(): { label: string; color: string } {
+  const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }))
+  const day = et.getDay()
+  const mins = et.getHours() * 60 + et.getMinutes()
+  if (day === 0 || day === 6) return { label: 'Market closed', color: F.muted }
+  if (mins >= 570 && mins < 960) return { label: 'Market open', color: F.pos }
+  if (mins >= 240 && mins < 570) return { label: 'Pre-market', color: F.amber }
+  return { label: 'Market closed', color: F.muted }
+}
+
+// One 1Y fetch powers every range; each range slices the tail (in trading days)
+// and re-bases the %-change off the first visible point. Infinity = full year.
+const RANGES = [
+  { label: '1D', points: 2 },
+  { label: '1W', points: 6 },
+  { label: '1M', points: 23 },
+  { label: '1Y', points: Infinity },
+]
+
+const cap: React.CSSProperties = { fontFamily: F.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: F.muted }
+
+// ── Holdings / index marquee tape ──────────────────────────────────────────
+const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+
+type TapeSource = 'holdings' | 'indices'
+
+function TapeToggle({ source, onSource }: { source: TapeSource; onSource: (s: TapeSource) => void }) {
+  const opt = (key: TapeSource, label: string) => (
+    <button
+      onClick={() => onSource(key)}
+      aria-pressed={source === key}
+      style={{
+        fontFamily: F.mono, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
+        padding: '2px 8px', cursor: 'pointer', background: 'none',
+        color: source === key ? F.gold : F.muted,
+        border: `1px solid ${source === key ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)' : 'transparent'}`,
+      }}
+    >{label}</button>
+  )
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0, height: '100%', padding: '0 12px 0 14px', borderLeft: `1px solid ${F.border}` }}>
+      <span style={{ ...cap, fontSize: 8, letterSpacing: '0.12em', marginRight: 4 }}>Tape</span>
+      {opt('holdings', 'Holdings')}
+      {opt('indices', 'Indices')}
+    </div>
+  )
+}
+
+function Tape({ segments, source, onSource }: { segments: { sym: string; price: string; pct: number | null }[]; source: TapeSource; onSource: (s: TapeSource) => void }) {
+  const Seg = ({ s, k }: { s: typeof segments[number]; k: string }) => {
+    const color = s.pct == null ? F.muted : s.pct >= 0 ? F.pos : F.neg
+    return (
+      <span key={k} style={{ display: 'inline-flex', alignItems: 'baseline', gap: 7, flexShrink: 0 }}>
+        <span style={{ color: F.muted, letterSpacing: '0.04em' }}>{s.sym}</span>
+        <span style={{ color }}>{s.price}{s.pct != null && ` ${s.pct >= 0 ? '+' : ''}${s.pct.toFixed(2)}%`}</span>
+      </span>
+    )
+  }
+  const Run = ({ p }: { p: string }) => (
+    <div style={{ display: 'inline-flex', gap: 26, paddingRight: 26 }}>
+      {segments.map((s, i) => <Seg key={`${p}-${i}`} s={s} k={`${p}-${i}`} />)}
+    </div>
+  )
+  return (
+    <div style={{ borderBottom: `1px solid ${F.borderFaint}`, background: F.topbar, height: 30, display: 'flex', alignItems: 'center' }}>
+      <style>{`@keyframes home-tape{from{transform:translateX(0)}to{transform:translateX(-50%)}}`}</style>
+      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', height: '100%' }}>
+        {segments.length === 0 ? (
+          <span style={{ paddingLeft: 14, fontFamily: F.mono, fontSize: 11, color: F.muted }}>—</span>
+        ) : prefersReducedMotion ? (
+          <div style={{ display: 'flex', gap: 26, overflowX: 'auto', padding: '0 14px', fontFamily: F.mono, fontSize: 11, fontVariantNumeric: 'tabular-nums' }}>
+            {segments.map((s, i) => <Seg key={i} s={s} k={`s-${i}`} />)}
+          </div>
+        ) : (
+          <div
+            onMouseEnter={e => (e.currentTarget.style.animationPlayState = 'paused')}
+            onMouseLeave={e => (e.currentTarget.style.animationPlayState = 'running')}
+            style={{ display: 'inline-flex', whiteSpace: 'nowrap', willChange: 'transform', animation: 'home-tape 46s linear infinite', fontFamily: F.mono, fontSize: 11, fontVariantNumeric: 'tabular-nums', paddingLeft: 14 }}
+          >
+            <Run p="a" /><Run p="b" />
+          </div>
+        )}
+      </div>
+      <TapeToggle source={source} onSource={onSource} />
+    </div>
+  )
+}
+
+// ── Performance chart (%-change vs time, ranged 1D/1W/1M/1Y) ─────────────────
+interface CumPoint { date: string; portfolio: number }
+function fmtAxisDate(d: string, rangeIdx: number): string {
+  const dt = new Date(d + 'T00:00:00')
+  if (isNaN(dt.getTime())) return d
+  if (rangeIdx <= 1) return dt.toLocaleDateString('en-US', { weekday: 'short' })           // 1D / 1W → Mon
+  if (rangeIdx === 2) return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) // 1M → Jun 3
+  return dt.toLocaleDateString('en-US', { month: 'short' })                                  // 1Y → Jun
+}
+function PerformanceSpark({ tickers, weights, rangeIdx }: { tickers: string[]; weights: number[]; rangeIdx: number }) {
+  const start = useMemo(() => { const d = new Date(); d.setFullYear(d.getFullYear() - 1); return d.toISOString().split('T')[0] }, [])
+  const end = useMemo(() => new Date().toISOString().split('T')[0], [])
+  const { data } = useQuery<{ cumulative: CumPoint[] }>({
+    queryKey: ['home-perf', tickers.join(',')],
+    queryFn: () => axios.post('/api/portfolio/backtest', { tickers, weights, benchmark: 'SPY', start, end }).then(r => r.data),
+    staleTime: 300_000,
+    enabled: tickers.length >= 1,
+    retry: 1,
+  })
+  const full = data?.cumulative ?? []
+  const pts = useMemo(() => {
+    const pointsWanted = RANGES[rangeIdx].points
+    const sliced = pointsWanted === Infinity ? full : full.slice(-pointsWanted)
+    if (sliced.length < 2) return []
+    const base = sliced[0].portfolio
+    const rebased = sliced.map(p => ({ date: p.date, pct: base > 0 ? (p.portfolio / base - 1) * 100 : 0 }))
+    // Thin the 1Y series so the SVG stays light.
+    return rebased.length > 180 ? rebased.filter((_, i, a) => i === 0 || i === a.length - 1 || i % Math.floor(a.length / 160) === 0) : rebased
+  }, [full, rangeIdx])
+
+  if (pts.length < 2) {
+    return <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: F.sans, fontSize: 10, color: F.muted }}>No performance data</div>
+  }
+  const up = pts[pts.length - 1].pct >= 0
+  const stroke = up ? 'var(--theme-positive, #22c55e)' : 'var(--theme-negative, #ef4444)'
+
+  return (
+    <div style={{ height: 120 }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={pts} margin={{ top: 6, right: 4, left: -4, bottom: 0 }}>
+          <defs>
+            <linearGradient id="homePerf" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={stroke} stopOpacity={0.22} />
+              <stop offset="100%" stopColor={stroke} stopOpacity={0.02} />
+            </linearGradient>
+          </defs>
+          <ReferenceLine y={0} stroke="rgba(255,255,255,0.1)" strokeDasharray="3 4" />
+          <XAxis dataKey="date" tickFormatter={d => fmtAxisDate(d, rangeIdx)} tick={{ fontSize: 8, fill: F.muted, fontFamily: 'var(--theme-mono)' }} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={28} />
+          <YAxis orientation="right" width={34} tickFormatter={v => `${v >= 0 ? '+' : ''}${v.toFixed(v >= 10 || v <= -10 ? 0 : 1)}%`} tick={{ fontSize: 8, fill: F.muted, fontFamily: 'var(--theme-mono)' }} tickLine={false} axisLine={false} tickCount={3} />
+          <Area type="monotone" dataKey="pct" stroke={stroke} strokeWidth={1.5} fill="url(#homePerf)" dot={false} isAnimationActive={false} />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+// ── Portfolio import strip (preserved global PortfolioContext feature) ───────
 function parsePortfolioText(text: string, filename: string): PortfolioHolding[] | null {
   const lower = filename.toLowerCase()
-
   if (lower.endsWith('.json')) {
     try {
       const obj = JSON.parse(text)
@@ -24,13 +189,10 @@ function parsePortfolioText(text: string, filename: string): PortfolioHolding[] 
       if (typeof arr[0] === 'string')
         return (arr as string[]).map(t => ({ ticker: t.trim().toUpperCase(), weight: Math.round(100 / arr.length) }))
       return (arr as { ticker: string; weight?: number; strategy?: string }[]).map(a => ({
-        ticker: String(a.ticker).toUpperCase().trim(),
-        weight: Number(a.weight ?? 0),
-        strategy: a.strategy,
+        ticker: String(a.ticker).toUpperCase().trim(), weight: Number(a.weight ?? 0), strategy: a.strategy,
       }))
     } catch { return null }
   }
-
   if (lower.endsWith('.csv') || lower.endsWith('.txt')) {
     const HEADER_WORDS = new Set(['ticker', 'symbol', 'weight', 'allocation', 'pct', 'percent', 'name', 'stock'])
     const lines = text.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'))
@@ -38,7 +200,6 @@ function parsePortfolioText(text: string, filename: string): PortfolioHolding[] 
     for (const line of lines) {
       const parts = line.split(',')
       const col1 = parts[0].trim()
-      // Skip header rows: col1 is a known header word or col2 is non-numeric text
       if (HEADER_WORDS.has(col1.toLowerCase())) continue
       const ticker = col1.toUpperCase()
       if (!ticker) continue
@@ -46,19 +207,15 @@ function parsePortfolioText(text: string, filename: string): PortfolioHolding[] 
       holdings.push({ ticker, weight: isNaN(weight) ? 0 : weight, strategy: parts[2]?.trim() })
     }
     if (holdings.length === 0) return null
-    // If weights are all 0 (ticker-only list), distribute evenly
-    if (holdings.every(h => h.weight === 0))
-      holdings.forEach(h => { h.weight = Math.round(100 / holdings.length) })
+    if (holdings.every(h => h.weight === 0)) holdings.forEach(h => { h.weight = Math.round(100 / holdings.length) })
     return holdings
   }
-
   return null
 }
 
 function PortfolioImportStrip() {
   const { holdings, tickers, setHoldings, clearPortfolio } = usePortfolio()
   const fileRef = useRef<HTMLInputElement>(null)
-
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -71,378 +228,335 @@ function PortfolioImportStrip() {
     reader.readAsText(file)
     e.target.value = ''
   }
-
-  const S = {
-    wrap: {
-      background: 'var(--theme-bg, #080f1d)',
-      border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 15%, transparent)',
-      borderLeft: '2px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)',
-      padding: '10px 14px',
-      marginBottom: 18,
-      display: 'flex',
-      alignItems: 'center',
-      gap: 12,
-      flexWrap: 'wrap' as const,
-    } as React.CSSProperties,
-    label: { fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)' } as React.CSSProperties,
-    btn: { background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 30%, transparent)', color: 'var(--theme-primary, #c9a84c)', fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '5px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 } as React.CSSProperties,
-    chip: { display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 7px', background: 'var(--theme-hover, rgba(255,255,255,0.04))', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-primary, #c9a84c)' } as React.CSSProperties,
-    hint: { fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary, #5e768f)', lineHeight: 1.4 } as React.CSSProperties,
-  }
-
+  const btn: React.CSSProperties = { background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 30%, transparent)', color: F.gold, fontFamily: F.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '5px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }
   return (
-    <div style={S.wrap}>
+    <div style={{ background: F.panel, border: `1px solid ${F.border}`, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
       <input ref={fileRef} type="file" accept=".json,.csv,.txt" style={{ display: 'none' }} onChange={handleFile} />
-      <span style={S.label}>Portfolio</span>
-
+      <span style={{ ...cap, letterSpacing: '0.14em' }}>Context Portfolio</span>
       {tickers.length === 0 ? (
         <>
-          <button style={S.btn} onClick={() => fileRef.current?.click()}>
-            <Upload size={10} /> Import
-          </button>
-          <span style={S.hint}>
-            CSV col 1: <span style={{ color: 'var(--theme-secondary, #7a9ab8)', fontFamily: 'var(--theme-mono)' }}>TICKER</span> · col 2: <span style={{ color: 'var(--theme-secondary, #7a9ab8)', fontFamily: 'var(--theme-mono)' }}>WEIGHT</span> · header rows auto-skipped · JSON: array of {'{ticker, weight}'}
-          </span>
+          <button style={btn} onClick={() => fileRef.current?.click()}><Upload size={10} /> Import</button>
+          <span style={{ fontFamily: F.sans, fontSize: 9, color: F.muted, lineHeight: 1.4 }}>CSV col 1 TICKER, col 2 WEIGHT, or JSON array. Feeds tools that follow your watchlist.</span>
         </>
       ) : (
         <>
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', flex: 1 }}>
             {holdings.map(h => (
-              <span key={h.ticker} style={S.chip}>
-                {h.ticker}{h.weight > 0 ? <span style={{ color: 'var(--theme-secondary, #5e768f)', fontSize: 8 }}> {h.weight}%</span> : null}
+              <span key={h.ticker} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 7px', background: 'rgba(255,255,255,0.04)', border: `1px solid ${F.border}`, fontFamily: F.mono, fontSize: 10, color: F.gold }}>
+                {h.ticker}{h.weight > 0 ? <span style={{ color: F.muted, fontSize: 8 }}> {h.weight}%</span> : null}
               </span>
             ))}
           </div>
-          <button style={S.btn} onClick={() => fileRef.current?.click()}><Upload size={10} /> Replace</button>
-          <button
-            onClick={clearPortfolio}
-            style={{ ...S.btn, background: 'color-mix(in srgb, var(--theme-negative) 6%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-negative) 20%, transparent)', color: 'var(--theme-negative)' }}
-          >
-            <X size={10} /> Clear
-          </button>
+          <button style={btn} onClick={() => fileRef.current?.click()}><Upload size={10} /> Replace</button>
+          <button onClick={clearPortfolio} style={{ ...btn, background: 'color-mix(in srgb, var(--theme-negative) 6%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-negative) 20%, transparent)', color: F.neg }}><X size={10} /> Clear</button>
         </>
       )}
     </div>
   )
 }
 
-// ── Module catalog ────────────────────────────────────────────────────────────
-// Grouped to match the sidebar taxonomy. Descriptors are terse on purpose: this
-// is a launcher for a user who knows the tools, not a marketing page.
-interface Mod { to: string; icon: React.ElementType; title: string; desc: string; accent: string }
-interface Section { label: string; mods: Mod[] }
-
-const FEATURED: Mod = {
-  to: '/dashboard', icon: LayoutGrid, accent: 'var(--theme-primary, #c9a84c)',
-  title: 'My Dashboard',
-  desc: 'Build your own terminal. Drag price cards, charts, news, options snapshots, and macro strips into a layout that persists per account.',
-}
-
-const SECTIONS: Section[] = [
-  {
-    label: 'Research & Data',
-    mods: [
-      { to: '/screener',     icon: Filter,     title: 'Stock Screener',          desc: '25+ fundamental filters',        accent: '#2f6b4b' },
-      { to: '/market',       icon: TrendingUp, title: 'Market Data',             desc: 'Price, volatility, drawdown',    accent: 'var(--theme-tertiary, #1f5673)' },
-      { to: '/sentiment',    icon: Brain,      title: 'Sentiment Tracker',       desc: 'AI news across 7 sources',       accent: '#7aa2f7' },
-      { to: '/research-hub', icon: Search,     title: 'Research Hub',            desc: 'Filings, fundamentals, news, AI', accent: '#7b5ea7' },
-      { to: '/earnings',     icon: FileText,   title: 'Earnings AI',             desc: 'AI call and filing summaries',   accent: '#7b5ea7' },
-      { to: '/regression',   icon: Activity,   title: 'Regression & Correlation', desc: 'OLS, correlation, beta',        accent: '#7aa2f7' },
-      { to: '/compare',      icon: GitCompare, title: 'Asset Overlay',           desc: 'Overlay assets on one chart',    accent: '#60a5fa' },
-      { to: '/macro-hub?tab=sectors', icon: PieChart, title: 'Sector Rotation',        desc: 'GICS performance heatmap',       accent: '#d97736' },
-    ],
-  },
-  {
-    label: 'Valuation & Company',
-    mods: [
-      { to: '/valuation',          icon: Calculator, title: 'Stock Valuation',  desc: 'DCF, DDM, SOTP, multiples',      accent: '#7b5ea7' },
-      { to: '/research-hub?tab=peers',    icon: Scale,      title: 'Peer Comparison',  desc: 'Multiples vs sector peers',      accent: '#d97736' },
-      { to: '/research-hub?tab=profile',  icon: Globe,      title: 'Company Profile',  desc: 'Revenue, supply chain, geo',     accent: '#2f6b4b' },
-      { to: '/research-hub?tab=overview', icon: Building2,  title: 'Corporate Hub',    desc: 'Earnings, insiders, short interest', accent: 'var(--theme-primary, #c9a84c)' },
-    ],
-  },
-  {
-    label: 'Options & Derivatives',
-    mods: [
-      { to: '/options-hub',     icon: Layers,    title: 'Options Hub',           desc: 'Pricing, chains, IV, flow',     accent: 'var(--theme-tertiary, #1f5673)' },
-      { to: '/options-hub?tab=pricer', icon: LineChart, title: 'Options Pricer',        desc: 'Black-Scholes greeks, payoff',  accent: 'var(--theme-tertiary, #1f5673)' },
-      { to: '/options-hub?tab=chain',  icon: BarChart2, title: 'Options Chain Scanner', desc: 'Live chains, IV rank, skew',    accent: '#7b5ea7' },
-      { to: '/iv-tracker',      icon: Waves,     title: 'IV Tracker',            desc: 'IV rank, term structure',       accent: '#7aa2f7' },
-      { to: '/unusual-options', icon: Activity,  title: 'Options Flow',          desc: 'Volume and OI surges',          accent: '#d97736' },
-      { to: '/options-hub?tab=probability', icon: Activity,  title: 'Implied Probability',   desc: 'Risk-neutral distributions',    accent: '#7b5ea7' },
-      { to: '/strategy',        icon: Shuffle,   title: 'Strategy Builder',      desc: 'Multi-leg P&L profiles',        accent: '#d97736' },
-      { to: '/gex',             icon: Zap,       title: 'Dealer GEX',            desc: 'Gamma exposure by strike',      accent: 'var(--theme-primary, #c9a84c)' },
-      { to: '/market-maker',    icon: Gauge,     title: 'Options MM Simulator',  desc: 'Two-sided quoting, hedging',    accent: '#2f6b4b' },
-    ],
-  },
-  {
-    label: 'Macro & Rates',
-    mods: [
-      { to: '/macro-hub?tab=rates',  icon: GitBranch, title: 'Fed Rates',             desc: 'Implied FOMC path',             accent: 'var(--theme-tertiary, #1f5673)' },
-      { to: '/macro-hub',            icon: Compass,   title: 'Macro Hub',             desc: 'Growth, inflation, jobs',       accent: 'var(--theme-tertiary, #1f5673)' },
-      { to: '/macro-hub?tab=bonds',  icon: Landmark,  title: 'Bond Analytics',        desc: 'YTM, duration, convexity',      accent: '#2f6b4b' },
-      { to: '/macro-hub?tab=credit', icon: Activity,  title: 'Credit Spread Monitor', desc: 'IG and HY spreads',             accent: 'var(--theme-negative, #ef4444)' },
-      { to: '/nav',            icon: Coins,     title: 'NAV Tracker',           desc: 'Premium/discount on proxies',   accent: 'var(--theme-primary, #c9a84c)' },
-    ],
-  },
-  {
-    label: 'Portfolio & Simulation',
-    mods: [
-      { to: '/portfolio-skills?tab=backtest',   icon: BarChart2, title: 'Portfolio Backtester', desc: 'Sharpe, Sortino, Calmar',    accent: '#2f6b4b' },
-      { to: '/portfolio-skills?tab=montecarlo', icon: Dices,     title: 'Monte Carlo',          desc: 'GBM paths, VaR, CVaR',       accent: '#2f6b4b' },
-      { to: '/portfolio-skills?tab=compare',    icon: Scale,     title: 'Compare Portfolios',   desc: '2-4 books side by side',     accent: '#7aa2f7' },
-      { to: '/portfolio-manager', icon: Briefcase, title: 'Portfolio Manager',    desc: 'Holdings, P&L, greeks',      accent: 'var(--theme-primary, #c9a84c)' },
-    ],
-  },
-  {
-    label: 'Trading & Journal',
-    mods: [
-      { to: '/paper-trading', icon: Terminal, title: 'Paper Trading', desc: 'Simulated live execution',    accent: '#2f6b4b' },
-      { to: '/trade-journal', icon: BookOpen, title: 'Trade Journal', desc: 'Entry/exit, P&L, win rate',   accent: '#7b5ea7' },
-      { to: '/alerts',        icon: Bell,     title: 'Price Alerts',  desc: 'Price and % change alerts',   accent: 'var(--theme-primary, #c9a84c)' },
-    ],
-  },
-]
-
-const TILE_EASE: [number, number, number, number] = [0.23, 1, 0.32, 1]
-const gridStagger = {
-  hidden: {},
-  show: { transition: { staggerChildren: 0.02, delayChildren: 0.03 } },
-}
-const tileReveal = {
-  hidden: { opacity: 0, y: 8 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.3, ease: TILE_EASE } },
-}
-
-function ModTile({ mod, reduce, featured = false }: { mod: Mod; reduce: boolean; featured?: boolean }) {
+// ── Hub card ────────────────────────────────────────────────────────────────
+function HubCard({ slug }: { slug: string }) {
   const navigate = useNavigate()
   const [hover, setHover] = useState(false)
-  const [focus, setFocus] = useState(false)
-  const active = hover || focus
-  const Icon = mod.icon
-
+  const hub = HUBS.find(h => h.slug === slug)!
+  const Icon = hub.icon
   return (
-    <motion.div
-      variants={reduce ? undefined : tileReveal}
-      whileHover={reduce ? undefined : { y: -2 }}
-      whileTap={reduce ? undefined : { scale: 0.995 }}
-      transition={{ duration: 0.16, ease: TILE_EASE }}
-      onClick={() => navigate(mod.to)}
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => navigate(`/hub/${hub.slug}`)}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/hub/${hub.slug}`) } }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      onFocus={() => setFocus(true)}
-      onBlur={() => setFocus(false)}
-      role="button"
-      aria-label={`${mod.title}. ${mod.desc}`}
-      tabIndex={0}
-      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(mod.to) } }}
       style={{
-        gridColumn: featured ? '1 / -1' : undefined,
-        background: featured
-          ? (active
-              ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, var(--theme-surface, #0d1826))'
-              : 'color-mix(in srgb, var(--theme-primary, #c9a84c) 6%, var(--theme-surface, #0d1826))')
-          : (active
-              ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 5%, var(--theme-surface, #0d1826))'
-              : 'var(--theme-surface, #0d1826)'),
-        border: '1px solid ' + (
-          active
-            ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 42%, transparent)'
-            : featured
-              ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 30%, transparent)'
-              : 'var(--theme-border, rgba(255,255,255,0.08))'
-        ),
-        boxShadow: focus ? '0 0 0 2px color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)' : 'none',
-        padding: featured ? '14px 16px' : '11px 13px',
-        cursor: 'pointer',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: featured ? 6 : 4,
-        position: 'relative',
-        outline: 'none',
-        transition: 'background 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease',
+        display: 'flex', flexDirection: 'column', gap: 12, padding: '17px 18px',
+        background: hover ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 4%, var(--theme-bg, #0d1826))' : F.panel,
+        border: `1px solid ${hover ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)' : F.border}`,
+        cursor: 'pointer', outline: 'none', transition: 'border-color 0.14s ease, background 0.14s ease',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-        <Icon size={featured ? 16 : 14} style={{ color: 'var(--theme-primary, #c9a84c)', flexShrink: 0 }} />
-        <h3 style={{
-          fontSize: featured ? 14 : 12.5,
-          fontWeight: 700,
-          color: 'var(--theme-text, #d7e3fc)',
-          letterSpacing: '0.01em',
-          fontFamily: 'var(--theme-sans)',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          minWidth: 0,
-        }}>
-          {mod.title}
-        </h3>
-        <ArrowUpRight
-          size={13}
-          style={{
-            marginLeft: 'auto',
-            flexShrink: 0,
-            color: 'var(--theme-primary, #c9a84c)',
-            opacity: active ? 0.9 : 0,
-            transform: active ? 'translate(1px, -1px)' : 'none',
-            transition: 'opacity 0.14s ease, transform 0.14s ease',
-          }}
-        />
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 13 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 38, flexShrink: 0, background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 22%, transparent)', color: F.gold }}>
+          <Icon size={18} />
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontFamily: F.sans, fontSize: 15, fontWeight: 700, color: F.text }}>{hub.label}</span>
+            <span style={{ fontFamily: F.mono, fontSize: 9, color: F.muted, border: '1px solid rgba(255,255,255,0.1)', padding: '1px 5px' }}>{hub.tools.length}</span>
+            <ArrowUpRight size={13} style={{ marginLeft: 'auto', color: F.gold, opacity: hover ? 0.9 : 0.5, transform: hover ? 'translate(1px,-1px)' : 'none', transition: 'opacity 0.14s ease, transform 0.14s ease' }} />
+          </div>
+          <div style={{ fontFamily: F.sans, fontSize: 11, color: F.sec, lineHeight: 1.45, marginTop: 4 }}>{hub.tagline}</div>
+        </div>
       </div>
-      <p style={{
-        fontSize: featured ? 11.5 : 11,
-        color: 'var(--theme-secondary, #8099b0)',
-        lineHeight: 1.45,
-        fontFamily: 'var(--theme-sans)',
-        margin: 0,
-        maxWidth: featured ? 460 : '100%',
-      }}>
-        {mod.desc}
-      </p>
-    </motion.div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, paddingTop: 11, borderTop: `1px solid ${F.borderFaint}` }}>
+        {hub.tools.map(t => (
+          <span key={t.route} style={{ fontFamily: F.sans, fontSize: 10.5, color: '#9fb0c6', padding: '3px 8px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', whiteSpace: 'nowrap' }}>{t.chip}</span>
+        ))}
+      </div>
+    </div>
   )
 }
 
-function SectionBlock({ section, reduce }: { section: Section; reduce: boolean }) {
+// ── Section header (gold tick + label + rule) ────────────────────────────────
+function SectionLabel({ icon: Icon, label, count }: { icon: React.ElementType; label: string; count?: number }) {
   return (
-    <div style={{ marginTop: 22 }}>
-      {/* Section header: tiny gold tick (the scalpel), label, count, hairline rule */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-        <span style={{ width: 5, height: 5, background: 'var(--theme-primary, #c9a84c)', flexShrink: 0 }} />
-        <span style={{
-          fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700,
-          letterSpacing: '0.16em', textTransform: 'uppercase',
-          color: 'var(--theme-secondary, #8099b0)', whiteSpace: 'nowrap',
-        }}>
-          {section.label}
-        </span>
-        <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-secondary, #5e768f)', opacity: 0.7 }}>
-          {section.mods.length}
-        </span>
-        <div style={{ flex: 1, height: 1, background: 'var(--theme-border, rgba(255,255,255,0.07))' }} />
-      </div>
-
-      <motion.div
-        variants={reduce ? undefined : gridStagger}
-        initial={reduce ? undefined : 'hidden'}
-        animate={reduce ? undefined : 'show'}
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(212px, 1fr))',
-          gap: 10,
-        }}
-      >
-        {section.mods.map(m => <ModTile key={m.to} mod={m} reduce={reduce} />)}
-      </motion.div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+      <Icon size={11} style={{ color: F.muted, flexShrink: 0 }} />
+      <span style={{ fontFamily: F.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: F.sec, whiteSpace: 'nowrap' }}>{label}</span>
+      {count != null && <span style={{ fontFamily: F.mono, fontSize: 10, color: F.muted }}>{count}</span>}
+      <div style={{ flex: 1, height: 1, background: F.borderFaint }} />
     </div>
   )
 }
 
 export default function Home() {
   const isMobile = useIsMobile()
-  const reduce = !!useReducedMotion()
+  const navigate = useNavigate()
+  const [rangeIdx, setRangeIdx] = useState(2) // 1M
+  const [tapeSource, setTapeSource] = useState<TapeSource>('holdings')
+  const [searchFocus, setSearchFocus] = useState(false)
   const [q, setQ] = useState('')
-  const [focused, setFocused] = useState(false)
 
+  const session = useMemo(marketSession, [])
+  const dateLabel = useMemo(() => new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }), [])
+
+  // Holdings come from the Portfolio Manager store (shares → real dollar value).
+  const pm = useMemo(loadActivePortfolio, [])
+  const ctx = usePortfolio()
+  const hasPM = pm.holdings.length > 0
+  const holdingTickers = hasPM ? pm.holdings.map(h => h.ticker) : ctx.tickers
+  const hasHoldings = holdingTickers.length > 0
+  // Always keep the cockpit alive: fall back to the major indices for a brand-new account.
+  const dataTickers = hasHoldings ? holdingTickers : ['SPY', 'QQQ', 'DIA', 'IWM', 'NVDA']
+
+  // Holdings power the cockpit; the index set is only fetched when the tape is
+  // switched to Indices (cached thereafter).
+  const quoteTickers = useMemo(
+    () => Array.from(new Set(tapeSource === 'indices' ? [...dataTickers, ...INDEX_TICKERS] : dataTickers)),
+    [dataTickers.join(','), tapeSource], // eslint-disable-line react-hooks/exhaustive-deps
+  )
+  const quotes = useQuotes(quoteTickers)
+
+  // Portfolio value + day P&L + total return (only meaningful with PM shares).
+  const priced = useMemo(() => priceHoldings(pm.holdings, quotes), [pm.holdings, quotes])
+  const totalValue = priced.reduce((s, p) => s + p.value, 0) + pm.cash
+  const totalCost = priced.reduce((s, p) => s + p.cost, 0) + pm.cash
+  const dayPnl = priced.reduce((s, p) => s + p.dayPnl, 0)
+  const totalPnl = totalValue - totalCost
+  const dayPct = (totalValue - dayPnl) > 0 ? (dayPnl / (totalValue - dayPnl)) * 100 : 0
+  const totalPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0
+
+  // Top holdings list for the right cockpit cell.
+  const topHoldings = useMemo(() => {
+    if (hasPM) {
+      return [...priced].sort((a, b) => b.value - a.value).slice(0, 5)
+        .map(p => ({ sym: p.ticker, secondary: `${p.shares.toLocaleString()} sh`, price: quotes[p.ticker]?.current_price ?? p.price, pct: quotes[p.ticker]?.pct_change_1d ?? null }))
+    }
+    const src = hasHoldings ? ctx.holdings.map(h => h.ticker) : dataTickers
+    return src.slice(0, 5).map((t, i) => ({ sym: t, secondary: hasHoldings && ctx.holdings[i]?.weight ? `${ctx.holdings[i].weight}%` : 'Market', price: quotes[t]?.current_price ?? null, pct: quotes[t]?.pct_change_1d ?? null }))
+  }, [hasPM, priced, ctx.holdings, dataTickers, hasHoldings, quotes])
+
+  // Tape segments — holdings by default, switchable to the index set.
+  const tapeSegments = useMemo(() => {
+    const syms = tapeSource === 'indices' ? INDEX_TICKERS : dataTickers
+    return syms.map(s => {
+      const q = quotes[s]
+      return { sym: tapeLabel(s), price: q?.current_price != null ? q.current_price.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '—', pct: q?.pct_change_1d ?? null }
+    })
+  }, [tapeSource, dataTickers, quotes])
+
+  // Performance weights (value-weighted for PM, else equal).
+  const perfWeights = useMemo(() => {
+    if (hasPM && totalValue > pm.cash) return priced.map(p => p.value / (totalValue - pm.cash))
+    return dataTickers.map(() => 1 / dataTickers.length)
+  }, [hasPM, priced, totalValue, pm.cash, dataTickers])
+  const perfTickers = hasPM ? pm.holdings.map(h => h.ticker) : dataTickers
+
+  // Recents → resolve to tools (max 4 shown).
+  const recents = useMemo(() => getRecents().map(r => ALL_TOOLS.find(t => t.route === r)).filter(Boolean).slice(0, 4) as typeof ALL_TOOLS, [])
+
+  // Global tool filter (drives the hubs section into a flat result list).
   const ql = q.trim().toLowerCase()
-  const totalCount = useMemo(() => SECTIONS.reduce((n, s) => n + s.mods.length, 0) + 1, [])
+  const filtered = useMemo(() => !ql ? [] : ALL_TOOLS.filter(t => `${t.title} ${t.desc}`.toLowerCase().includes(ql)), [ql])
 
-  const sections = useMemo(() => {
-    if (!ql) return SECTIONS
-    return SECTIONS
-      .map(s => ({ ...s, mods: s.mods.filter(m => `${m.title} ${m.desc} ${s.label}`.toLowerCase().includes(ql)) }))
-      .filter(s => s.mods.length > 0)
-  }, [ql])
-
-  const matchCount = sections.reduce((n, s) => n + s.mods.length, 0)
-  const featuredMatches = !isMobile && (!ql || `${FEATURED.title} ${FEATURED.desc}`.toLowerCase().includes(ql))
+  const cockpitCols = isMobile ? '1fr' : '1fr 1.5fr 1.25fr'
 
   return (
     <PageWrapper>
-      {/* Hero: wordmark + filter */}
-      <div style={{
-        display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
-        gap: 16, flexWrap: 'wrap',
-        marginBottom: 14, paddingBottom: 14,
-        borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 15%, transparent)',
-      }}>
-        <div>
-          <h1 style={{
-            fontFamily: 'Cinzel, Georgia, serif',
-            fontSize: 22, fontWeight: 700, letterSpacing: '0.08em',
-            color: 'var(--theme-primary, #c9a84c)', marginBottom: 4,
-          }}>
-            Alphatape Terminal
-          </h1>
-          <p style={{ fontFamily: 'var(--theme-sans)', fontSize: 12, color: 'var(--theme-secondary, #8099b0)', letterSpacing: '0.04em' }}>
-            {ql ? `${matchCount} of ${totalCount} modules` : `${totalCount} modules · ${SECTIONS.length} categories`}
-          </p>
-        </div>
+      <div style={{ maxWidth: 1180, margin: '0 auto', background: F.surface, border: `1px solid ${F.border}` }}>
+        <Tape segments={tapeSegments} source={tapeSource} onSource={setTapeSource} />
 
-        {/* Filter */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          background: 'var(--theme-bg, #101c2e)',
-          border: `1px solid ${focused ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 55%, transparent)' : 'var(--theme-border, rgba(255,255,255,0.09))'}`,
-          padding: '7px 11px', minWidth: 240, transition: 'border-color 0.15s ease',
-        }}>
-          <Search size={13} style={{ color: 'var(--theme-secondary, #5e768f)', flexShrink: 0 }} />
-          <input
-            value={q}
-            onChange={e => setQ(e.target.value)}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            aria-label="Filter modules"
-            placeholder="Filter modules…"
-            style={{
-              background: 'transparent', border: 'none', outline: 'none',
-              color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-sans)', fontSize: 12,
-              width: '100%', letterSpacing: '0.02em',
-            }}
-          />
-          {q && (
-            <button
-              onClick={() => setQ('')}
-              aria-label="Clear filter"
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-secondary, #5e768f)', display: 'flex', padding: 0 }}
-            >
-              <X size={12} />
-            </button>
+        <div style={{ padding: isMobile ? '18px 16px 22px' : '24px 28px 30px' }}>
+          {/* hero */}
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap', paddingBottom: 18, borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 15%, transparent)' }}>
+            <div>
+              <div style={{ fontFamily: 'Cinzel, Georgia, serif', fontSize: 24, fontWeight: 700, letterSpacing: '0.1em', color: F.gold, lineHeight: 1 }}>ALPHATAPE</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 10 }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: session.color, flexShrink: 0 }} />
+                <span style={{ fontFamily: F.sans, fontSize: 11.5, color: F.sec, letterSpacing: '0.02em' }}>{dateLabel} · {session.label}</span>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: F.topbar, border: `1px solid ${searchFocus ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 55%, transparent)' : F.border}`, padding: '9px 12px', width: isMobile ? 200 : 280, transition: 'border-color 0.15s ease' }}>
+                <Search size={13} style={{ color: F.muted, flexShrink: 0 }} />
+                <input value={q} onChange={e => setQ(e.target.value)} onFocus={() => setSearchFocus(true)} onBlur={() => setSearchFocus(false)} aria-label="Search tools" placeholder="Search tools, tickers, actions" style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none', color: F.text, fontFamily: F.sans, fontSize: 12 }} />
+                {q
+                  ? <button onClick={() => setQ('')} aria-label="Clear" style={{ background: 'none', border: 'none', cursor: 'pointer', color: F.muted, display: 'flex', padding: 0 }}><X size={12} /></button>
+                  : <kbd style={{ fontFamily: F.mono, fontSize: 9, color: F.muted, border: '1px solid rgba(255,255,255,0.12)', padding: '1px 5px' }}>⌘K</kbd>}
+              </div>
+              <button onClick={() => navigate('/dashboard')} style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, background: F.gold, border: 'none', padding: '9px 14px', cursor: 'pointer' }}>
+                <LayoutGrid size={14} style={{ color: '#101c2e' }} />
+                <span style={{ fontFamily: F.sans, fontSize: 12, fontWeight: 700, color: '#101c2e', letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>My Dashboard</span>
+              </button>
+            </div>
+          </div>
+
+          {/* search results override the hubs grid */}
+          {ql ? (
+            <div style={{ marginTop: 22 }}>
+              <SectionLabel icon={Search} label={`${filtered.length} ${filtered.length === 1 ? 'match' : 'matches'}`} />
+              {filtered.length === 0 ? (
+                <div style={{ padding: '32px 0', textAlign: 'center', fontFamily: F.sans, fontSize: 12, color: F.sec }}>
+                  No tools match <span style={{ color: F.text, fontFamily: F.mono }}>{q}</span>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>
+                  {filtered.map(t => {
+                    const Icon = t.icon
+                    return (
+                      <div key={t.route} role="button" tabIndex={0} onClick={() => navigate(t.route)} onKeyDown={e => { if (e.key === 'Enter') navigate(t.route) }}
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 13px', background: F.panel, border: `1px solid ${F.border}`, cursor: 'pointer' }}>
+                        <Icon size={15} style={{ color: F.gold, flexShrink: 0 }} />
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontFamily: F.sans, fontSize: 12.5, fontWeight: 700, color: F.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</div>
+                          <div style={{ fontFamily: F.sans, fontSize: 10, color: F.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.desc}</div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
+              {/* cockpit band */}
+              <div style={{ marginTop: 18, border: `1px solid ${F.border}`, borderTop: `2px solid ${F.gold}`, background: F.panel, display: 'grid', gridTemplateColumns: cockpitCols }}>
+                {/* portfolio value */}
+                <div style={{ padding: '16px 18px', borderRight: isMobile ? 'none' : `1px solid ${F.borderFaint}`, borderBottom: isMobile ? `1px solid ${F.borderFaint}` : 'none' }}>
+                  <div style={cap}>Portfolio Value</div>
+                  {hasPM ? (
+                    <>
+                      <div style={{ fontFamily: F.mono, fontSize: 31, fontWeight: 700, color: F.text, fontVariantNumeric: 'tabular-nums', marginTop: 10, letterSpacing: '-0.01em' }}>{money(totalValue)}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                        <ArrowUpRight size={13} style={{ color: dayPnl >= 0 ? F.pos : F.neg, transform: dayPnl >= 0 ? 'none' : 'scaleY(-1)' }} />
+                        <span style={{ fontFamily: F.mono, fontSize: 14, fontWeight: 700, color: dayPnl >= 0 ? F.pos : F.neg, fontVariantNumeric: 'tabular-nums' }}>{dayPnl >= 0 ? '+' : ''}{money(dayPnl)}</span>
+                        <span style={{ fontFamily: F.mono, fontSize: 12, color: dayPnl >= 0 ? F.pos : F.neg }}>{dayPct >= 0 ? '+' : ''}{dayPct.toFixed(2)}%</span>
+                      </div>
+                      <div style={{ fontFamily: F.sans, fontSize: 10.5, color: F.muted, marginTop: 14, lineHeight: 1.5 }}>
+                        Day P&amp;L · total return <span style={{ fontFamily: F.mono, color: totalPnl >= 0 ? F.pos : F.neg }}>{totalPct >= 0 ? '+' : ''}{totalPct.toFixed(1)}%</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-start' }}>
+                      <div style={{ fontFamily: F.sans, fontSize: 11.5, color: F.sec, lineHeight: 1.5, maxWidth: 220 }}>Track live value, day P&amp;L, and return. Add holdings in the Portfolio Manager.</div>
+                      <button onClick={() => navigate('/portfolio-manager')} style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 30%, transparent)', color: F.gold, fontFamily: F.sans, fontSize: 11, fontWeight: 700, padding: '7px 12px', cursor: 'pointer' }}>
+                        <Briefcase size={13} /> Open Portfolio Manager
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* performance */}
+                <div style={{ padding: '16px 18px', borderRight: isMobile ? 'none' : `1px solid ${F.borderFaint}`, borderBottom: isMobile ? `1px solid ${F.borderFaint}` : 'none', display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={cap}>Performance</div>
+                    <div style={{ display: 'flex', gap: 3 }}>
+                      {RANGES.map((r, i) => (
+                        <button key={r.label} onClick={() => setRangeIdx(i)} style={{ fontFamily: F.mono, fontSize: 9, padding: '2px 6px', cursor: 'pointer', background: 'none', color: i === rangeIdx ? F.gold : F.muted, border: `1px solid ${i === rangeIdx ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)' : 'transparent'}` }}>{r.label}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{ flex: 1, marginTop: 12, minHeight: 120 }}>
+                    <PerformanceSpark tickers={perfTickers} weights={perfWeights} rangeIdx={rangeIdx} />
+                  </div>
+                </div>
+
+                {/* top holdings */}
+                <div style={{ padding: '14px 16px' }}>
+                  <div style={{ ...cap, marginBottom: 9 }}>{hasHoldings ? 'Top Holdings' : 'Markets'}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    {topHoldings.map(h => (
+                      <div key={h.sym} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '5px 0', borderBottom: `1px solid ${F.borderFaint}` }}>
+                        <TickerLogo ticker={h.sym} size={24} />
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontFamily: F.sans, fontSize: 12, fontWeight: 600, color: F.bright, lineHeight: 1.2 }}>{h.sym}</div>
+                          <div style={{ fontFamily: F.sans, fontSize: 9, color: F.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{h.secondary}</div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontFamily: F.mono, fontSize: 12, color: F.text, fontVariantNumeric: 'tabular-nums', lineHeight: 1.2 }}>{h.price != null ? h.price.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '—'}</div>
+                          <div style={{ fontFamily: F.mono, fontSize: 10, color: h.pct == null ? F.muted : h.pct >= 0 ? F.pos : F.neg }}>{h.pct != null ? `${h.pct >= 0 ? '+' : ''}${h.pct.toFixed(1)}%` : '—'}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* jump back in */}
+              {recents.length > 0 && (
+                <div style={{ marginTop: 22 }}>
+                  <SectionLabel icon={Clock} label="Jump Back In" />
+                  <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 10 }}>
+                    {recents.map(r => {
+                      const Icon = r.icon
+                      return (
+                        <RecentChip key={r.route} icon={Icon} title={r.title} onClick={() => navigate(r.route)} />
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* hubs */}
+              <div style={{ marginTop: 26 }}>
+                <SectionLabel icon={LayoutGrid} label="Hubs" count={HUBS.length} />
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)', gap: 12 }}>
+                  {HUBS.map(h => <HubCard key={h.slug} slug={h.slug} />)}
+                </div>
+              </div>
+
+              {/* context portfolio importer */}
+              <div style={{ marginTop: 26 }}>
+                <PortfolioImportStrip />
+              </div>
+            </>
           )}
         </div>
       </div>
-
-      {/* Featured workspace */}
-      {featuredMatches && (
-        <motion.div
-          variants={reduce ? undefined : gridStagger}
-          initial={reduce ? undefined : 'hidden'}
-          animate={reduce ? undefined : 'show'}
-          style={{ display: 'grid', gridTemplateColumns: '1fr' }}
-        >
-          <ModTile mod={FEATURED} reduce={reduce} featured />
-        </motion.div>
-      )}
-
-      {/* Sections */}
-      {sections.map(s => <SectionBlock key={s.label} section={s} reduce={reduce} />)}
-
-      {/* Empty state */}
-      {ql && matchCount === 0 && !featuredMatches && (
-        <div style={{
-          marginTop: 40, textAlign: 'center',
-          fontFamily: 'var(--theme-sans)', fontSize: 12,
-          color: 'var(--theme-secondary, #8099b0)',
-        }}>
-          No modules match <span style={{ color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-mono)' }}>{q}</span>
-        </div>
-      )}
-
-      {/* Portfolio import — page footer */}
-      <div style={{ marginTop: 26 }}>
-        <PortfolioImportStrip />
-      </div>
     </PageWrapper>
+  )
+}
+
+function RecentChip({ icon: Icon, title, onClick }: { icon: React.ElementType; title: string; onClick: () => void }) {
+  const [hover, setHover] = useState(false)
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10, padding: '11px 13px',
+        background: hover ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 5%, var(--theme-bg, #0d1826))' : F.panel,
+        border: `1px solid ${hover ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 42%, transparent)' : F.border}`,
+        cursor: 'pointer', outline: 'none', transition: 'border-color 0.14s ease, background 0.14s ease',
+      }}
+    >
+      <Icon size={15} style={{ color: F.gold, flexShrink: 0 }} />
+      <span style={{ fontFamily: F.sans, fontSize: 12, fontWeight: 600, color: F.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</span>
+    </div>
   )
 }

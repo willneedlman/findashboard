@@ -1,80 +1,39 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Home, LayoutGrid, Briefcase,
-  TrendingUp, LineChart, Coins,
-  BarChart2, Dices, GitBranch, Building2, Calculator,
-  Shuffle, Zap, X, Menu, Settings,
-  Filter, FileText, ShieldAlert,
-  BookOpen, Terminal, Brain, Bell, Star, Gauge, Activity, GitCompare, Scale,
+  Home, LayoutGrid, Briefcase, X, Menu, Settings,
+  ShieldAlert, Star, ChevronRight,
 } from 'lucide-react'
 import Footer from './Footer'
 import AlphaMark from './AlphaMark'
 import AlertToastQueue from './AlertToastQueue'
 import { useAlertSocket, type AlertPayload } from '../hooks/useAlertSocket'
-import clsx from 'clsx'
 import useIsMobile from '../hooks/useIsMobile'
 import { useTheme } from '../contexts/ThemeContext'
+import { HUBS, ALL_TOOLS, hubForLocation, type Hub, type HubTool } from '../lib/hubs'
 
 const ADMIN_USERS = ['wneedlman']
-const BASELINE_ACCENT_COLOR = '#3498db'
-const BASELINE_BG_MIX = '20%'
-
-const NAV_SECTIONS = [
-  {
-    label: 'Data & Dashboards',
-    items: [
-      { to: '/market',         icon: TrendingUp,    label: 'Market Data' },
-      { to: '/research-hub',   icon: Building2,      label: 'Research Hub' },
-      { to: '/earnings',       icon: FileText,       label: 'Earnings AI' },
-      { to: '/sentiment',      icon: Brain,          label: 'Sentiment Tracker' },
-      { to: '/regression',     icon: Activity,       label: 'Regression & Correlation' },
-      { to: '/compare',        icon: GitCompare,     label: 'Asset Overlay' },
-      { to: '/screener',       icon: Filter,         label: 'Stock Screener' },
-    ],
-  },
-  {
-    label: 'Derivatives & Rates',
-    items: [
-      { to: '/options-hub',  icon: LineChart,   label: 'Options Hub' },
-      { to: '/iv-tracker',   icon: TrendingUp,  label: 'IV Tracker' },
-      { to: '/unusual-options', icon: Activity,  label: 'Options Flow' },
-      { to: '/strategy',     icon: Shuffle,     label: 'Strategy Builder' },
-      { to: '/gex',          icon: Zap,         label: 'Dealer GEX' },
-      { to: '/skew',         icon: TrendingUp,  label: 'Vol Skew' },
-      { to: '/macro-hub',    icon: GitBranch,   label: 'Macro Hub' },
-    ],
-  },
-  {
-    label: 'Portfolio & Valuation',
-    items: [
-      { to: '/portfolio-skills', icon: Scale,    label: 'Portfolio Skills' },
-      { to: '/valuation',   icon: Calculator,    label: 'Stock Valuation' },
-      { to: '/nav',         icon: Coins,         label: 'NAV Tracker' },
-    ],
-  },
-  {
-    label: 'Trading & Simulation',
-    items: [
-      { to: '/paper-trading',  icon: Terminal,  label: 'Paper Trading' },
-      { to: '/market-maker',   icon: Gauge,     label: 'Options MM Simulator' },
-      { to: '/trade-journal',  icon: BookOpen,  label: 'Trade Journal' },
-      { to: '/alerts',         icon: Bell,      label: 'Price Alerts' },
-    ],
-  },
-]
 
 interface LayoutProps { children: React.ReactNode }
 
 export default function Layout({ children }: LayoutProps) {
   const location = useLocation()
+  const navigate = useNavigate()
   const isMobile = useIsMobile()
   const { user } = useTheme()
   const [collapsed, setCollapsed] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const isAdmin = !!user && ADMIN_USERS.includes(user.username?.toLowerCase())
 
+  const hubLanding = location.pathname.match(/^\/hub\/([^/]+)/)
+  const activeHub = hubLanding
+    ? HUBS.find(h => h.slug === hubLanding[1])
+    : hubForLocation(location.pathname, location.search)
+  const isToolActive = (route: string) =>
+    route.includes('?') ? route === location.pathname + location.search : route === location.pathname
+
+  // Favorites are persisted by route path under ft_nav_favorites (unchanged store).
   const [favorites, setFavorites] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('ft_nav_favorites') ?? '[]') } catch { return [] }
   })
@@ -85,13 +44,17 @@ export default function Layout({ children }: LayoutProps) {
       return next
     })
   }
-  const allNavItems = NAV_SECTIONS.flatMap(s => s.items)
-  const favItems = favorites.map(p => allNavItems.find(i => i.to === p)).filter((x): x is typeof allNavItems[number] => x != null)
+  const favItems = favorites.map(p => ALL_TOOLS.find(t => t.route === p)).filter((x): x is HubTool => x != null)
+
+  // Independent open/close per hub; the current hub defaults open.
+  const [open, setOpen] = useState<Record<string, boolean>>(() => ({ [activeHub?.slug ?? 'research']: true }))
+  useEffect(() => {
+    if (activeHub) setOpen(o => (o[activeHub.slug] ? o : { ...o, [activeHub.slug]: true }))
+  }, [activeHub?.slug]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [pendingAlerts, setPendingAlerts] = useState<AlertPayload[]>([])
   const onAlert = useCallback((a: AlertPayload) => {
     setPendingAlerts([a])
-    // Browser notification when tab is hidden
     if (document.hidden && Notification.permission === 'granted') {
       new Notification(`Alert: ${a.ticker}`, {
         body: `${a.condition.replace(/_/g, ' ')} ${a.threshold}${a.current_price > 0 ? ` → $${a.current_price.toFixed(2)}` : ''}`,
@@ -101,39 +64,28 @@ export default function Layout({ children }: LayoutProps) {
   }, [])
   useAlertSocket(user?.id ?? null, onAlert)
 
-  // Close drawer on route change
   useEffect(() => { setDrawerOpen(false) }, [location.pathname])
-  // Prevent body scroll when drawer open
   useEffect(() => {
     document.body.style.overflow = drawerOpen ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
   }, [drawerOpen])
 
+  // ── Mobile ──
   if (isMobile) {
     return (
       <div className="flex flex-col h-screen overflow-hidden">
-        {/* ── Mobile top bar ── */}
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '0 16px', height: 52, flexShrink: 0,
-          background: 'var(--theme-bg, #060e1c)', borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)',
-          position: 'sticky', top: 0, zIndex: 40,
-        }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', height: 52, flexShrink: 0, background: 'var(--theme-bg, #060e1c)', borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)', position: 'sticky', top: 0, zIndex: 40 }}>
           <Link to="/app" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 8 }}>
             <AlphaMark size={22} color="var(--theme-primary, #c9a84c)" />
             <div style={{ fontFamily: 'Cinzel, Georgia, serif', color: 'var(--theme-primary, #c9a84c)', fontSize: 15, fontWeight: 700, letterSpacing: '0.08em' }}>
               ALPHATAPE <span style={{ color: 'var(--theme-secondary, #5e768f)', fontSize: 10, letterSpacing: '0.2em', fontFamily: 'var(--theme-sans)', fontWeight: 600 }}>TERMINAL</span>
             </div>
           </Link>
-          <button
-            onClick={() => setDrawerOpen(true)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-primary, #c9a84c)', padding: 0, minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-          >
+          <button onClick={() => setDrawerOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-primary, #c9a84c)', padding: 0, minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Menu size={22} />
           </button>
         </div>
 
-        {/* ── Mobile content ── */}
         <main style={{ flex: 1, overflowY: 'auto', background: 'var(--theme-bg, #0a1628)' }}>
           <div style={{ padding: location.pathname === '/dashboard' ? '16px 14px 200px' : '16px 14px', display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
             <div style={{ flex: 1 }}>{children}</div>
@@ -141,117 +93,50 @@ export default function Layout({ children }: LayoutProps) {
           </div>
         </main>
 
-        {/* ── Overlay backdrop ── */}
         <AnimatePresence>
           {drawerOpen && (
-            <motion.div
-              key="backdrop"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              onClick={() => setDrawerOpen(false)}
-              style={{
-                position: 'fixed', inset: 0, zIndex: 49,
-                background: 'rgba(0,0,0,0.65)',
-              }}
-            />
+            <motion.div key="backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} onClick={() => setDrawerOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 49, background: 'rgba(0,0,0,0.65)' }} />
           )}
         </AnimatePresence>
 
-        {/* ── Slide-in drawer ── */}
         <AnimatePresence>
           {drawerOpen && (
-            <motion.div
-              key="drawer"
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ duration: 0.25, ease: 'easeInOut' }}
-              style={{
-                position: 'fixed', top: 0, right: 0, bottom: 0, width: 260,
-                zIndex: 50, background: 'var(--theme-bg, #060e1c)',
-                borderLeft: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)',
-                display: 'flex', flexDirection: 'column', overflowY: 'auto',
-              }}
-            >
-              {/* Drawer header */}
-              <div style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '14px 16px', borderBottom: '1px solid color-mix(in srgb, var(--theme-primary) 12%, transparent)',
-              }}>
-                <div style={{ fontFamily: 'Cinzel, Georgia, serif', color: 'var(--theme-primary, #c9a84c)', fontSize: 14, fontWeight: 700, letterSpacing: '0.08em' }}>
-                  MODULES
-                </div>
-                <button onClick={() => setDrawerOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-secondary, #99907e)', minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <X size={18} />
-                </button>
+            <motion.div key="drawer" initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ duration: 0.25, ease: 'easeInOut' }} style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 264, zIndex: 50, background: 'var(--theme-bg, #060e1c)', borderLeft: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid color-mix(in srgb, var(--theme-primary) 12%, transparent)' }}>
+                <div style={{ fontFamily: 'Cinzel, Georgia, serif', color: 'var(--theme-primary, #c9a84c)', fontSize: 14, fontWeight: 700, letterSpacing: '0.08em' }}>MENU</div>
+                <button onClick={() => setDrawerOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-secondary, #99907e)', minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={18} /></button>
               </div>
 
-              {/* Home + My Dashboard */}
-              <div style={{
-                margin: '8px 12px 4px',
-                padding: '6px 0 8px',
-                background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 5%, var(--theme-surface, #0d1826))',
-                border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)',
-              }}>
-                <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)', marginBottom: 2, paddingLeft: 14, fontFamily: 'var(--theme-sans)' }}>
-                  Workspaces
-                </p>
-                <MobileNavLink to="/app" icon={Home} label="Home" active={location.pathname === '/app'} isBaseline />
-                <MobileNavLink to="/dashboard" icon={LayoutGrid} label="My Dashboard" active={location.pathname === '/dashboard'} isBaseline />
-                <MobileNavLink to="/portfolio-manager" icon={Briefcase} label="Portfolio Manager" active={location.pathname === '/portfolio-manager'} isBaseline />
+              <div style={{ margin: '8px 12px 4px', padding: '6px 0 8px', background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 5%, var(--theme-surface, #0d1826))', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)' }}>
+                <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)', marginBottom: 2, paddingLeft: 14, fontFamily: 'var(--theme-sans)' }}>Workspaces</p>
+                <MobileLink to="/app" icon={Home} label="Home" active={location.pathname === '/app'} />
+                <MobileLink to="/dashboard" icon={LayoutGrid} label="My Dashboard" active={location.pathname === '/dashboard'} />
+                <MobileLink to="/portfolio-manager" icon={Briefcase} label="Portfolio Manager" active={location.pathname === '/portfolio-manager'} />
               </div>
+
               <div style={{ padding: '4px 12px 0' }}>
                 {isAdmin && (
-                  <>
-                    <Link
-                      to="/admin"
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 10,
-                        padding: '11px 10px', minHeight: 44, marginBottom: 2, textDecoration: 'none',
-                        background: location.pathname === '/admin' ? 'color-mix(in srgb, var(--theme-negative) 10%, transparent)' : 'transparent',
-                        borderLeft: location.pathname === '/admin' ? '2px solid var(--theme-negative)' : '2px solid transparent',
-                        color: location.pathname === '/admin' ? 'var(--theme-negative)' : 'color-mix(in srgb, var(--theme-negative) 55%, transparent)',
-                        fontSize: 13, fontFamily: 'var(--theme-sans)', transition: 'all 0.15s',
-                      }}
-                    >
-                      <ShieldAlert size={15} style={{ flexShrink: 0 }} />
-                      <span>Admin Hub</span>
-                    </Link>
-                  </>
+                  <Link to="/admin" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 10px', minHeight: 44, marginBottom: 2, textDecoration: 'none', background: location.pathname === '/admin' ? 'color-mix(in srgb, var(--theme-negative) 10%, transparent)' : 'transparent', borderLeft: location.pathname === '/admin' ? '2px solid var(--theme-negative)' : '2px solid transparent', color: location.pathname === '/admin' ? 'var(--theme-negative)' : 'color-mix(in srgb, var(--theme-negative) 55%, transparent)', fontSize: 13, fontFamily: 'var(--theme-sans)' }}>
+                    <ShieldAlert size={15} style={{ flexShrink: 0 }} /><span>Admin Hub</span>
+                  </Link>
                 )}
-                <MobileNavLink to="/settings" icon={Settings} label="Settings" active={location.pathname === '/settings'} />
+                <MobileLink to="/settings" icon={Settings} label="Settings" active={location.pathname === '/settings'} />
               </div>
 
-              {/* Sections */}
               <nav style={{ flex: 1, padding: '4px 12px 24px' }}>
                 {favItems.length > 0 && (
                   <div>
                     <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 55%, transparent)', marginTop: 18, marginBottom: 4, paddingLeft: 8, display: 'flex', alignItems: 'center', gap: 5, fontFamily: 'var(--theme-sans)' }}>
-                      <Star size={9} fill="currentColor" />
-                      Favorites
+                      <Star size={9} fill="currentColor" /> Favorites
                     </p>
-                    {favItems.map(item => (
-                      <MobileNavLink key={item.to} to={item.to} icon={item.icon} label={item.label} active={location.pathname === item.to} isFav onFavToggle={toggleFav} />
-                    ))}
+                    {favItems.map(t => <MobileLink key={t.route} to={t.route} icon={t.icon} label={t.title} active={isToolActive(t.route)} isFav onFavToggle={toggleFav} favKey={t.route} />)}
                   </div>
                 )}
-                {NAV_SECTIONS.map(section => (
-                  <div key={section.label}>
-                    <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.20)', marginTop: 18, marginBottom: 4, paddingLeft: 8, fontFamily: 'var(--theme-sans)' }}>
-                      {section.label}
-                    </p>
-                    {section.items.map(item => (
-                      <MobileNavLink
-                        key={item.to}
-                        to={item.to}
-                        icon={item.icon}
-                        label={item.label}
-                        active={location.pathname === item.to}
-                        isFav={favorites.includes(item.to)}
-                        onFavToggle={toggleFav}
-                      />
+                {HUBS.map(hub => (
+                  <div key={hub.slug}>
+                    <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.22)', marginTop: 18, marginBottom: 4, paddingLeft: 8, fontFamily: 'var(--theme-sans)' }}>{hub.label}</p>
+                    {hub.tools.map(t => (
+                      <MobileLink key={t.route} to={t.route} icon={t.icon} label={t.title} active={isToolActive(t.route)} isFav={favorites.includes(t.route)} onFavToggle={toggleFav} favKey={t.route} />
                     ))}
                   </div>
                 ))}
@@ -263,135 +148,81 @@ export default function Layout({ children }: LayoutProps) {
     )
   }
 
-  // ── Desktop layout ──
+  // ── Desktop ──
   return (
     <div className="flex h-screen overflow-hidden" id="ft-root">
       <AlertToastQueue alerts={pendingAlerts} />
       <motion.aside
-        animate={{ width: collapsed ? 56 : 220 }}
-        transition={{ duration: 0.25, ease: 'easeInOut' }}
-        className="ft-sidebar flex-shrink-0 flex flex-col overflow-hidden"
-        style={{ background: 'var(--theme-bg, #060e1c)', borderRightWidth: 1, borderRightStyle: 'solid', borderRightColor: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 19%, transparent)' }}
+        animate={{ width: collapsed ? 64 : 248 }}
+        transition={{ duration: 0.22, ease: 'easeInOut' }}
+        className="flex-shrink-0 flex flex-col overflow-hidden"
+        style={{ minWidth: 0, background: 'var(--theme-bg, #060e1c)', borderRightWidth: 1, borderRightStyle: 'solid', borderRightColor: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 19%, transparent)' }}
       >
-        <div className={`flex px-3 py-4 border-b border-gold/10 min-h-[64px] ${collapsed ? 'justify-center' : 'items-center'}`}>
-          {/* The mark itself toggles the sidebar open/closed — no separate arrow. */}
-          <button
-            onClick={() => setCollapsed(c => !c)}
-            aria-label={collapsed ? 'Open sidebar' : 'Close sidebar'}
-            title={collapsed ? 'Open sidebar' : 'Close sidebar'}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 9 }}
-          >
-            <AlphaMark size={22} color="var(--theme-primary, #c9a84c)" />
+        {/* brand / collapse toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9, justifyContent: collapsed ? 'center' : 'flex-start', padding: '0 14px', minHeight: 64, borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 12%, transparent)' }}>
+          <button onClick={() => setCollapsed(c => !c)} aria-label={collapsed ? 'Open sidebar' : 'Close sidebar'} title={collapsed ? 'Open sidebar' : 'Close sidebar'} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 9 }}>
+            <AlphaMark size={24} color="var(--theme-primary, #c9a84c)" />
             {!collapsed && (
               <span style={{ display: 'block', paddingLeft: 9, borderLeft: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 28%, transparent)', textAlign: 'left' }}>
-                <span className="font-display text-base font-bold tracking-[0.08em]" style={{ color: 'var(--theme-primary, #c9a84c)', display: 'block', lineHeight: 1.05 }}>ALPHATAPE</span>
-                <span className="ft-logo-sub text-[9px] tracking-[0.22em] uppercase font-bold" style={{ color: 'var(--theme-secondary, #5e768f)', display: 'block' }}>TERMINAL</span>
+                <span style={{ fontFamily: 'Cinzel, Georgia, serif', fontSize: 16, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--theme-primary, #c9a84c)', display: 'block', lineHeight: 1.05 }}>ALPHATAPE</span>
+                <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', display: 'block' }}>Terminal</span>
               </span>
             )}
           </button>
         </div>
 
-        <div style={{
-          margin: '10px 8px 6px',
-          padding: collapsed ? '6px 4px 8px' : '6px 8px 8px',
-          background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 5%, var(--theme-surface, #0d1826))',
-          border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)',
-        }}>
-          {!collapsed && (
-            <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)', marginBottom: 6, paddingLeft: 10, fontFamily: 'var(--theme-sans)' }}>
-              Workspaces
-            </p>
-          )}
-          <WorkspaceNavLink to="/app" icon={Home} label="Home" collapsed={collapsed} active={location.pathname === '/app'} />
-          <WorkspaceNavLink to="/dashboard" icon={LayoutGrid} label="My Dashboard" collapsed={collapsed} active={location.pathname === '/dashboard'} />
-          <WorkspaceNavLink to="/portfolio-manager" icon={Briefcase} label="Portfolio Manager" collapsed={collapsed} active={location.pathname === '/portfolio-manager'} />
+        {/* workspaces */}
+        <div style={{ margin: '10px 8px 4px', padding: collapsed ? '6px 4px' : 6, background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 5%, var(--theme-surface, #0d1826))', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)' }}>
+          {!collapsed && <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)', margin: '0 0 5px', paddingLeft: 8, fontFamily: 'var(--theme-sans)' }}>Workspaces</p>}
+          <Row icon={Home} label="Home" collapsed={collapsed} active={location.pathname === '/app'} onClick={() => navigate('/app')} />
+          <Row icon={LayoutGrid} label="My Dashboard" collapsed={collapsed} active={location.pathname === '/dashboard'} onClick={() => navigate('/dashboard')} />
+          <Row icon={Briefcase} label="Portfolio Manager" collapsed={collapsed} active={location.pathname === '/portfolio-manager'} onClick={() => navigate('/portfolio-manager')} />
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-2 pb-4 mt-1">
+        <nav className="flex-1 overflow-y-auto" style={{ padding: '4px 8px 10px' }}>
+          {/* favorites */}
           {favItems.length > 0 && (
-            <div>
-              {!collapsed && (
-                <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 55%, transparent)', marginTop: 16, marginBottom: 6, paddingLeft: 8, display: 'flex', alignItems: 'center', gap: 5, fontFamily: 'var(--theme-sans)' }}>
-                  <Star size={9} fill="currentColor" />
-                  Favorites
-                </p>
-              )}
-              {collapsed && <div className="border-t border-white/5 my-2" />}
-              {favItems.map(item => (
-                <NavLink key={item.to} to={item.to} icon={item.icon} label={item.label} collapsed={collapsed} active={location.pathname === item.to} isFav onFavToggle={toggleFav} />
+            <>
+              {collapsed
+                ? <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '10px 6px' }} />
+                : <p style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 55%, transparent)', margin: '16px 0 5px', paddingLeft: 8, fontFamily: 'var(--theme-sans)' }}><Star size={9} fill="currentColor" /> Favorites</p>}
+              {favItems.map(t => (
+                <Row key={t.route} icon={t.icon} label={t.title} collapsed={collapsed} active={isToolActive(t.route)} onClick={() => navigate(t.route)} star="on" onStar={() => toggleFav(t.route)} />
               ))}
-            </div>
+            </>
           )}
-          {NAV_SECTIONS.map(section => (
-            <div key={section.label}>
-              {!collapsed && (
-                <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--theme-text-faint, var(--theme-text-faint, rgba(255,255,255,0.22)))', marginTop: 20, marginBottom: 6, paddingLeft: 8, fontFamily: 'var(--theme-sans)' }}>
-                  {section.label}
-                </p>
-              )}
-              {collapsed && <div className="border-t border-white/5 my-2" />}
-              {section.items.map(item => (
-                <NavLink key={item.to} to={item.to} icon={item.icon} label={item.label} collapsed={collapsed} active={location.pathname === item.to} isFav={favorites.includes(item.to)} onFavToggle={toggleFav} />
-              ))}
-            </div>
+
+          {/* hubs */}
+          {!collapsed && <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.22)', margin: '20px 0 5px', paddingLeft: 8, fontFamily: 'var(--theme-sans)' }}>Hubs</p>}
+          {collapsed && <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '10px 6px' }} />}
+          {HUBS.map(hub => (
+            <HubBlock
+              key={hub.slug}
+              hub={hub}
+              collapsed={collapsed}
+              isOpen={!!open[hub.slug]}
+              isActive={activeHub?.slug === hub.slug}
+              onToggle={() => collapsed ? navigate(`/hub/${hub.slug}`) : setOpen(o => ({ ...o, [hub.slug]: !o[hub.slug] }))}
+              navigate={navigate}
+              isToolActive={isToolActive}
+              favorites={favorites}
+              toggleFav={toggleFav}
+            />
           ))}
         </nav>
 
-        {/* Settings / user strip at bottom */}
-        <div className="px-2 pb-3 pt-2 border-t border-white/5 flex-shrink-0">
+        {/* bottom strip */}
+        <div style={{ padding: '8px', borderTop: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
           {isAdmin && (
-            <Link
-              to="/admin"
-              title={collapsed ? 'Admin Hub' : undefined}
-              className="ft-nav-link flex items-center gap-2.5 py-1.5 transition-all duration-150 my-0.5"
-              style={{
-                color: location.pathname === '/admin' ? 'var(--theme-negative)' : 'color-mix(in srgb, var(--theme-negative) 55%, transparent)',
-                background: location.pathname === '/admin' ? 'color-mix(in srgb, var(--theme-negative) 10%, transparent)' : 'transparent',
-                borderLeft: location.pathname === '/admin' ? '2px solid var(--theme-negative)' : '2px solid transparent',
-                paddingLeft: collapsed ? undefined : location.pathname === '/admin' ? 10 : 12,
-                justifyContent: collapsed ? 'center' : undefined,
-                fontSize: '0.82rem',
-                textDecoration: 'none',
-              }}
-            >
-              <ShieldAlert size={14} style={{ flexShrink: 0 }} />
-              {!collapsed && (
-                <span style={{ fontFamily: 'var(--theme-sans)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  Admin Hub
-                </span>
-              )}
-            </Link>
+            <Row icon={ShieldAlert} label="Admin Hub" collapsed={collapsed} active={location.pathname === '/admin'} danger onClick={() => navigate('/admin')} />
           )}
-          <Link
-            to="/settings"
-            title={collapsed ? 'Settings' : undefined}
-            className="ft-nav-link flex items-center gap-2.5 py-1.5 transition-all duration-150 my-0.5"
-            style={{
-              color: location.pathname === '/settings' ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #5e768f)',
-              background: location.pathname === '/settings' ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)' : 'transparent',
-              borderLeft: location.pathname === '/settings' ? '2px solid var(--theme-primary, #c9a84c)' : '2px solid transparent',
-              paddingLeft: collapsed ? undefined : location.pathname === '/settings' ? 10 : 12,
-              justifyContent: collapsed ? 'center' : undefined,
-              fontSize: '0.82rem',
-              textDecoration: 'none',
-            }}
-          >
-            <Settings size={14} style={{ flexShrink: 0 }} />
-            {!collapsed && (
-              <span style={{ fontFamily: 'var(--theme-sans)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {user ? user.displayName : 'Settings'}
-              </span>
-            )}
-          </Link>
+          <Row icon={Settings} label={user ? user.displayName : 'Settings'} collapsed={collapsed} active={location.pathname === '/settings'} onClick={() => navigate('/settings')} />
         </div>
       </motion.aside>
 
       <main className="flex-1 overflow-y-auto" style={{ background: 'var(--theme-bg, #0a1628)' }}>
         {location.pathname === '/dashboard' ? (
-          /* Dashboard: full width, generous bottom padding so widgets can be dragged/resized freely */
-          <div style={{ padding: '24px 24px 300px' }}>
-            {children}
-          </div>
+          <div style={{ padding: '24px 24px 300px' }}>{children}</div>
         ) : (
           <div className="max-w-7xl mx-auto px-6 py-6" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
             <div style={{ flex: 1 }}>{children}</div>
@@ -403,87 +234,90 @@ export default function Layout({ children }: LayoutProps) {
   )
 }
 
-// ── Workspace nav link (distinct icons, left-aligned) ──
-function WorkspaceNavLink({ to, icon: Icon, label, collapsed, active }: { to: string; icon: React.ElementType; label: string; collapsed: boolean; active: boolean }) {
+// ── A hub: collapsible row + indented tool tree ──
+function HubBlock({ hub, collapsed, isOpen, isActive, onToggle, navigate, isToolActive, favorites, toggleFav }: {
+  hub: Hub; collapsed: boolean; isOpen: boolean; isActive: boolean; onToggle: () => void
+  navigate: (to: string) => void; isToolActive: (route: string) => boolean
+  favorites: string[]; toggleFav: (path: string) => void
+}) {
+  const Icon = hub.icon
   return (
-    <Link
-      to={to}
-      title={collapsed ? label : undefined}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: collapsed ? 'center' : 'flex-start',
-        gap: 7,
-        padding: collapsed ? '7px 0' : '7px 10px',
-        margin: '2px 0',
-        textDecoration: 'none',
-        color: active ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #5e768f)',
-        background: active ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)' : 'transparent',
-        borderLeft: active ? '2px solid var(--theme-primary, #c9a84c)' : '2px solid transparent',
-        paddingLeft: active && !collapsed ? 8 : undefined,
-        fontSize: '0.82rem',
-        fontFamily: 'var(--theme-sans)',
-        fontWeight: active ? 600 : undefined,
-        transition: 'color 0.15s, background 0.15s',
-      }}
-    >
-      <Icon size={14} style={{ flexShrink: 0 }} />
-      {!collapsed && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>}
-    </Link>
+    <div>
+      <Row
+        icon={Icon}
+        label={hub.label}
+        collapsed={collapsed}
+        active={isActive}
+        onClick={onToggle}
+        title={collapsed ? hub.label : undefined}
+        chevron={collapsed ? undefined : (isOpen ? 'open' : 'closed')}
+      />
+      {isOpen && !collapsed && (
+        <div style={{ display: 'flex', flexDirection: 'column', margin: '0 0 6px 18px', paddingLeft: 13, borderLeft: '1px solid rgba(255,255,255,0.09)' }}>
+          {hub.tools.map(t => (
+            <ToolRow key={t.route} label={t.title} active={isToolActive(t.route)} fav={favorites.includes(t.route)} onClick={() => navigate(t.route)} onStar={() => toggleFav(t.route)} />
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
-// ── Desktop nav link ──
-interface NavLinkProps { to: string; icon: React.ElementType; label: string; collapsed: boolean; active: boolean; isBaseline?: boolean; isFav?: boolean; onFavToggle?: (path: string) => void }
-
-function NavLink({ to, icon: Icon, label, collapsed, active, isBaseline, isFav, onFavToggle }: NavLinkProps) {
-  const [hovered, setHovered] = useState(false)
+// ── Indented tool row (text + star) ──
+function ToolRow({ label, active, fav, onClick, onStar }: { label: string; active: boolean; fav: boolean; onClick: () => void; onStar: () => void }) {
+  const [hover, setHover] = useState(false)
   return (
     <div
-      style={{ position: 'relative', display: 'flex', alignItems: 'center' }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 9px', cursor: 'pointer', color: active ? 'var(--theme-primary, #c9a84c)' : (hover ? '#dce3ed' : '#7e93a8'), background: hover || active ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 7%, transparent)' : 'transparent', fontFamily: 'var(--theme-sans)', fontSize: 11.5, fontWeight: active ? 600 : 400, transition: 'color 0.12s ease, background 0.12s ease' }}
     >
-      <Link
-        to={to}
-        title={collapsed ? label : undefined}
-        className={clsx(
-          'flex items-center gap-2.5 py-1.5 text-[0.82rem] transition-all duration-150 my-0.5',
-          collapsed ? 'justify-center px-2' : 'pl-3 pr-2',
-        )}
-        style={{
-          flex: 1, minWidth: 0,
-          color: active
-            ? (isBaseline ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-primary, #c9a84c)')
-            : 'var(--theme-secondary, #5e768f)',
-          background: active
-            ? (isBaseline ? 'color-mix(in srgb, var(--theme-bg, #0a1628) 80%, var(--theme-primary, #c9a84c) 5%)' : 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)')
-            : 'transparent',
-          borderLeft: active
-            ? (isBaseline ? '2px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 15%, transparent)' : '2px solid var(--theme-primary, #c9a84c)')
-            : '2px solid transparent',
-          paddingLeft: active && !collapsed ? 10 : undefined,
-          fontWeight: active ? 600 : undefined,
-          textDecoration: 'none',
-        }}
-      >
-        <Icon size={14} style={{ flexShrink: 0 }} />
-        {!collapsed && <span style={{ fontFamily: 'var(--theme-sans)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{label}</span>}
-      </Link>
-      {!collapsed && onFavToggle && (hovered || isFav) && (
-        <button
-          onClick={e => { e.preventDefault(); onFavToggle(to) }}
-          title={isFav ? 'Remove from favorites' : 'Add to favorites'}
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer', padding: '0 6px',
-            color: isFav ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-text-faint, var(--theme-text-faint, rgba(255,255,255,0.22)))',
-            flexShrink: 0, display: 'flex', alignItems: 'center',
-            transition: 'color 0.15s',
-          }}
-          onMouseEnter={e => { if (!isFav) (e.currentTarget as HTMLElement).style.color = 'color-mix(in srgb, var(--theme-primary) 60%, transparent)' }}
-          onMouseLeave={e => { if (!isFav) (e.currentTarget as HTMLElement).style.color = 'var(--theme-text-faint, var(--theme-text-faint, rgba(255,255,255,0.22)))' }}
-        >
-          <Star size={10} fill={isFav ? 'currentColor' : 'none'} />
+      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+      {(hover || fav) && (
+        <button onClick={e => { e.stopPropagation(); onStar() }} title={fav ? 'Remove from favorites' : 'Add to favorites'} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', color: fav ? 'var(--theme-primary, #c9a84c)' : 'rgba(255,255,255,0.25)', flexShrink: 0 }}>
+          <Star size={11} fill={fav ? 'currentColor' : 'none'} />
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ── Generic sidebar row (workspaces, hub headers, favorites, bottom) ──
+function Row({ icon: Icon, label, collapsed, active, onClick, chevron, star, onStar, danger, title }: {
+  icon: React.ElementType; label: string; collapsed: boolean; active: boolean; onClick: () => void
+  chevron?: 'open' | 'closed'; star?: 'on'; onStar?: () => void; danger?: boolean; title?: string
+}) {
+  const [hover, setHover] = useState(false)
+  const accent = danger ? 'var(--theme-negative)' : 'var(--theme-primary, #c9a84c)'
+  const color = active ? accent : danger ? 'color-mix(in srgb, var(--theme-negative) 55%, transparent)' : (hover ? '#cdd9ef' : 'var(--theme-secondary, #5e768f)')
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      title={title ?? (collapsed ? label : undefined)}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10, justifyContent: collapsed ? 'center' : 'flex-start',
+        padding: '7px 9px', margin: '2px 0', cursor: 'pointer',
+        color, background: active ? `color-mix(in srgb, ${accent} 10%, transparent)` : (hover ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 7%, transparent)' : 'transparent'),
+        borderLeft: `2px solid ${active ? accent : 'transparent'}`,
+        fontFamily: 'var(--theme-sans)', fontSize: 12.5, fontWeight: active ? 600 : 400,
+        transition: 'color 0.13s ease, background 0.13s ease',
+      }}
+    >
+      <Icon size={15} style={{ flexShrink: 0 }} />
+      {!collapsed && <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>}
+      {!collapsed && chevron && <ChevronRight size={13} style={{ flexShrink: 0, color: 'var(--theme-secondary, #5e768f)', transform: chevron === 'open' ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.16s ease' }} />}
+      {!collapsed && star === 'on' && (
+        <button onClick={e => { e.stopPropagation(); onStar?.() }} title="Remove from favorites" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', color: 'var(--theme-primary, #c9a84c)', flexShrink: 0 }}>
+          <Star size={11} fill="currentColor" />
         </button>
       )}
     </div>
@@ -491,77 +325,17 @@ function NavLink({ to, icon: Icon, label, collapsed, active, isBaseline, isFav, 
 }
 
 // ── Mobile nav link ──
-function MobileNavLink({ to, icon: Icon, label, active, isBaseline, isFav, onFavToggle }: { to: string; icon: React.ElementType; label: string; active: boolean; isBaseline?: boolean; isFav?: boolean; onFavToggle?: (path: string) => void }) {
+function MobileLink({ to, icon: Icon, label, active, isFav, onFavToggle, favKey }: { to: string; icon: React.ElementType; label: string; active: boolean; isFav?: boolean; onFavToggle?: (path: string) => void; favKey?: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center' }}>
-      <Link
-        to={to}
-        style={{
-          flex: 1, display: 'flex', alignItems: 'center', gap: 10,
-          padding: '11px 10px', minHeight: 44, marginBottom: 2, textDecoration: 'none',
-          background: active
-            ? (isBaseline ? 'color-mix(in srgb, var(--theme-bg, #0a1628) 80%, var(--theme-primary, #c9a84c) 5%)' : 'color-mix(in srgb, var(--theme-primary) 8%, transparent)')
-            : 'transparent',
-          borderLeft: active
-            ? (isBaseline ? '2px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 15%, transparent)' : '2px solid var(--theme-primary, #c9a84c)')
-            : '2px solid transparent',
-          color: active
-            ? (isBaseline ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-primary, #c9a84c)')
-            : 'var(--theme-secondary, #5e768f)',
-          fontSize: 13, fontFamily: 'var(--theme-sans)',
-          transition: 'all 0.15s',
-        }}
-      >
-        <Icon size={15} style={{ flexShrink: 0 }} />
-        <span style={{ flex: 1 }}>{label}</span>
+      <Link to={to} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, padding: '11px 10px', minHeight: 44, marginBottom: 2, textDecoration: 'none', background: active ? 'color-mix(in srgb, var(--theme-primary) 8%, transparent)' : 'transparent', borderLeft: active ? '2px solid var(--theme-primary, #c9a84c)' : '2px solid transparent', color: active ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #5e768f)', fontSize: 13, fontFamily: 'var(--theme-sans)' }}>
+        <Icon size={15} style={{ flexShrink: 0 }} /><span style={{ flex: 1 }}>{label}</span>
       </Link>
-      {onFavToggle && (
-        <button
-          onClick={() => onFavToggle(to)}
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            padding: '11px 10px', color: isFav ? 'var(--theme-primary, #c9a84c)' : 'rgba(255,255,255,0.2)',
-            flexShrink: 0, display: 'flex', alignItems: 'center',
-          }}
-        >
+      {onFavToggle && favKey && (
+        <button onClick={() => onFavToggle(favKey)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '11px 10px', color: isFav ? 'var(--theme-primary, #c9a84c)' : 'rgba(255,255,255,0.2)', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
           <Star size={12} fill={isFav ? 'currentColor' : 'none'} />
         </button>
       )}
     </div>
-  )
-}
-
-// ── My Dashboard featured link ──
-function DashboardNavLink({ to, collapsed, active, isBaseline }: { to: string; collapsed: boolean; active: boolean; isBaseline?: boolean }) {
-  return (
-    <Link
-      to={to}
-      title={collapsed ? 'My Dashboard' : undefined}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: collapsed ? 'center' : 'flex-start',
-        gap: 8,
-        padding: collapsed ? '6px 0' : '6px 10px',
-        textDecoration: 'none',
-        background: active
-          ? (isBaseline ? `color-mix(in srgb, ${BASELINE_ACCENT_COLOR} ${BASELINE_BG_MIX}, transparent)` : 'color-mix(in srgb, var(--theme-primary, #c9a84c) 12%, transparent)')
-          : 'color-mix(in srgb, var(--theme-primary, #c9a84c) 4%, transparent)',
-        border: active
-          ? (isBaseline ? `1px solid ${BASELINE_ACCENT_COLOR}` : '1px solid var(--theme-primary, #c9a84c)')
-          : '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 20%, transparent)',
-        color: active
-          ? (isBaseline ? BASELINE_ACCENT_COLOR : 'var(--theme-primary, #c9a84c)')
-          : 'color-mix(in srgb, var(--theme-primary, #c9a84c) 60%, transparent)',
-        fontSize: '0.82rem',
-        fontFamily: 'var(--theme-sans)',
-        transition: 'all 0.15s',
-      }}
-    >
-      <LayoutGrid size={13} style={{ flexShrink: 0 }} />
-      {!collapsed && (
-        <span style={{ fontWeight: 600, letterSpacing: '0.02em' }}>My Dashboard</span>
-      )}
-    </Link>
   )
 }
