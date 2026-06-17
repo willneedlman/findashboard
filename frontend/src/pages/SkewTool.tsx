@@ -49,7 +49,7 @@ export default function SkewTool() {
   const skewColor = (v: number) => (v > 4 ? 'var(--theme-negative)' : v > 1.5 ? 'var(--theme-warn, #d97736)' : 'var(--theme-positive)')
 
   return (
-    <PageWrapper title="Vol Skew & Term Structure" subtitle="Where premium-selling edge lives: put/call skew, wing convexity, and the IV term structure across expiries.">
+    <PageWrapper title="Vol Skew & Term Structure">
       <SidebarLayout sidebarWidth={210} sidebarTitle="" sidebar={
         <RailSection title="Parameters" open={open} onToggle={() => setOpen(o => !o)}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

@@ -138,7 +138,6 @@ export function UnusualOptionsContent() {
     <div style={{ maxWidth: 1200, margin: '0 auto' }}>
       <PageHeader
         title="Options Flow"
-        subtitle="Scan option chains for volume spikes and volume/open-interest surges. Click a column header to sort."
       />
 
       {/* Controls */}

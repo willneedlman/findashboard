@@ -95,7 +95,6 @@ export function SectorRotationContent() {
 
         <PageHeader
           title="Sector Rotation"
-          subtitle="S&P 500 sector relative strength and momentum across rolling windows. SPY benchmark included."
         />
 
         {/* Controls */}

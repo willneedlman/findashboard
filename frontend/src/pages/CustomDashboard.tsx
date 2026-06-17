@@ -67,7 +67,7 @@ export default function CustomDashboard() {
       {/* ── Top bar ── */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
         <div>
-          <h1 style={{ fontFamily: 'Cinzel, Georgia, serif', fontSize: 18, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--theme-primary, #c9a84c)', marginBottom: 2 }}>
+          <h1 className="ft-page-title" style={{ marginBottom: 2 }}>
             My Dashboard
           </h1>
           <p style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: 'var(--theme-secondary, #5e768f)' }}>

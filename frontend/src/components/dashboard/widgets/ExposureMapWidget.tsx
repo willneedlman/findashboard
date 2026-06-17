@@ -5,8 +5,8 @@ import { loadActivePortfolio, useQuotes, priceHoldings } from './usePortfolio'
 
 const cap: React.CSSProperties = { fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.muted, marginBottom: 3 }
 
-export default function ExposureMapWidget({ config: _c }: { config: WidgetConfig }) {
-  const { holdings, cash } = useMemo(() => loadActivePortfolio(), [])
+export default function ExposureMapWidget({ config }: { config: WidgetConfig }) {
+  const { holdings, cash } = useMemo(() => loadActivePortfolio(config.portfolioId), [config.portfolioId])
   const quotes = useQuotes(holdings.map(h => h.ticker))
   const priced = priceHoldings(holdings, quotes)
 

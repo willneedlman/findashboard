@@ -7,14 +7,14 @@ import { HUBS, hubBySlug, type HubTool } from '../lib/hubs'
 const F = {
   gold: 'var(--theme-primary, #c9a84c)',
   text: 'var(--theme-text, #d7e3fc)',
-  bright: '#eef3fb',
-  sec: '#8099b0',
+  bright: 'var(--theme-text, #eef3fb)',
+  sec: 'var(--theme-secondary, #8099b0)',
   muted: 'var(--theme-secondary, #5e768f)',
   surface: 'var(--theme-surface, #101c2e)',
   panel: 'var(--theme-bg, #0d1826)',
-  topbar: 'color-mix(in srgb, var(--theme-bg, #0d1826) 70%, #000)',
+  topbar: 'color-mix(in srgb, var(--theme-bg, #0d1826) 88%, #000)',
   border: 'var(--theme-border, rgba(255,255,255,0.08))',
-  borderFaint: 'rgba(255,255,255,0.06)',
+  borderFaint: 'var(--theme-border-faint, rgba(255,255,255,0.05))',
   sans: 'var(--theme-sans)',
   mono: 'var(--theme-mono)',
 }
@@ -81,7 +81,7 @@ export default function HubLanding() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: F.sans, fontSize: 11, color: F.muted }}>
             <span style={{ fontFamily: 'Cinzel, Georgia, serif', fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', color: F.gold }}>ALPHATAPE</span>
             <span style={{ opacity: 0.5 }}>/</span>
-            <span style={{ color: '#9fb0c6', fontWeight: 600 }}>{hub.label}</span>
+            <span style={{ color: 'var(--theme-text, #9fb0c6)', fontWeight: 600 }}>{hub.label}</span>
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{
@@ -99,9 +99,7 @@ export default function HubLanding() {
                 placeholder="Search tools, tickers"
                 style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none', color: F.text, fontFamily: F.sans, fontSize: 11.5 }}
               />
-              {q
-                ? <button onClick={() => setQ('')} aria-label="Clear" style={{ background: 'none', border: 'none', cursor: 'pointer', color: F.muted, display: 'flex', padding: 0 }}><X size={12} /></button>
-                : <kbd style={{ fontFamily: F.mono, fontSize: 9, color: F.muted, border: '1px solid rgba(255,255,255,0.12)', padding: '1px 5px' }}>⌘K</kbd>}
+              {q && <button onClick={() => setQ('')} aria-label="Clear" style={{ background: 'none', border: 'none', cursor: 'pointer', color: F.muted, display: 'flex', padding: 0 }}><X size={12} /></button>}
             </div>
             <button
               onClick={() => navigate('/dashboard')}
@@ -141,13 +139,12 @@ export default function HubLanding() {
         <div style={{ position: 'relative', overflow: 'hidden', padding: '30px 26px 26px', borderBottom: `1px solid ${F.border}`, background: 'linear-gradient(180deg, var(--theme-bg, #0d1826) 0%, var(--theme-surface, #101c2e) 100%)' }}>
           <Watermark size={230} strokeWidth={1.25} style={{ position: 'absolute', top: -46, right: -30, color: F.gold, opacity: 0.06, pointerEvents: 'none' }} />
           <div style={{ position: 'relative' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ width: 18, height: 2, background: F.gold }} />
-              <span style={{ fontFamily: F.mono, fontSize: 11, fontWeight: 700, letterSpacing: '0.22em', textTransform: 'uppercase', color: F.gold }}>{hub.label} Hub</span>
-              <span style={{ fontFamily: F.mono, fontSize: 11, color: F.muted, letterSpacing: '0.1em' }}>{String(hubIndex).padStart(2, '0')} / 06</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+              <span style={{ width: 22, height: 2, background: F.gold }} />
+              <span style={{ fontFamily: F.mono, fontSize: 15, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: F.gold }}>{hub.label} Hub</span>
+              <span style={{ fontFamily: F.mono, fontSize: 12, color: F.muted, letterSpacing: '0.1em' }}>{String(hubIndex).padStart(2, '0')} / 06</span>
             </div>
-            <h1 style={{ margin: '14px 0 0', fontFamily: F.sans, fontSize: 38, fontWeight: 700, color: F.bright, letterSpacing: '-0.01em', lineHeight: 1 }}>{hub.label}</h1>
-            <p style={{ margin: '13px 0 0', fontFamily: F.sans, fontSize: 13.5, color: F.sec, lineHeight: 1.55, maxWidth: 560 }}>{hub.masthead}</p>
+            <p style={{ margin: '14px 0 0', fontFamily: F.sans, fontSize: 13.5, color: F.sec, lineHeight: 1.55, maxWidth: 560 }}>{hub.masthead}</p>
           </div>
         </div>
 

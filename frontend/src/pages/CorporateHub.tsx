@@ -4,6 +4,7 @@ import { usePortfolio } from '../contexts/PortfolioContext'
 import PageWrapper from '../components/PageWrapper'
 import axios from 'axios'
 import TickerTagInput from '../components/TickerTagInput'
+import { tickerLogoUrl } from '../lib/tickerLogos'
 import PortfolioIO from '../components/PortfolioIO'
 
 interface TickerRow {
@@ -82,7 +83,7 @@ function TickerLogo({ ticker }: { ticker: string }) {
 
   return (
     <img
-      src={`https://assets.parqet.com/logos/symbol/${ticker}?format=png`}
+      src={tickerLogoUrl(ticker, 'png')}
       alt={ticker}
       onError={() => setFailed(true)}
       style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0, objectFit: 'contain', background: 'var(--theme-surface, #1f2a3d)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
@@ -641,5 +642,5 @@ export function CorporateHubContent() {
 }
 
 export default function CorporateHub() {
-  return <PageWrapper title="Corporate Hub"><CorporateHubContent /></PageWrapper>
+  return <PageWrapper title="Corporate Calendar"><CorporateHubContent /></PageWrapper>
 }

@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Home, LayoutGrid, Briefcase, X, Menu, Settings,
-  ShieldAlert, Star, ChevronRight,
+  ShieldAlert, Star, ChevronRight, ChevronLeft,
 } from 'lucide-react'
 import Footer from './Footer'
 import AlphaMark from './AlphaMark'
@@ -134,7 +134,7 @@ export default function Layout({ children }: LayoutProps) {
                 )}
                 {HUBS.map(hub => (
                   <div key={hub.slug}>
-                    <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.22)', marginTop: 18, marginBottom: 4, paddingLeft: 8, fontFamily: 'var(--theme-sans)' }}>{hub.label}</p>
+                    <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--theme-text-dim, rgba(255,255,255,0.4))', marginTop: 18, marginBottom: 4, paddingLeft: 8, fontFamily: 'var(--theme-sans)' }}>{hub.label}</p>
                     {hub.tools.map(t => (
                       <MobileLink key={t.route} to={t.route} icon={t.icon} label={t.title} active={isToolActive(t.route)} isFav={favorites.includes(t.route)} onFavToggle={toggleFav} favKey={t.route} />
                     ))}
@@ -158,9 +158,9 @@ export default function Layout({ children }: LayoutProps) {
         className="flex-shrink-0 flex flex-col overflow-hidden"
         style={{ minWidth: 0, background: 'var(--theme-bg, #060e1c)', borderRightWidth: 1, borderRightStyle: 'solid', borderRightColor: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 19%, transparent)' }}
       >
-        {/* brand / collapse toggle */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 9, justifyContent: collapsed ? 'center' : 'flex-start', padding: '0 14px', minHeight: 64, borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 12%, transparent)' }}>
-          <button onClick={() => setCollapsed(c => !c)} aria-label={collapsed ? 'Open sidebar' : 'Close sidebar'} title={collapsed ? 'Open sidebar' : 'Close sidebar'} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 9 }}>
+        {/* brand (→ home) + collapse chevron */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: collapsed ? 2 : 9, justifyContent: 'flex-start', padding: collapsed ? '0 4px 0 16px' : '0 14px', minHeight: 64, borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 12%, transparent)' }}>
+          <button onClick={() => navigate('/app')} aria-label="Home" title="Home" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 9 }}>
             <AlphaMark size={24} color="var(--theme-primary, #c9a84c)" />
             {!collapsed && (
               <span style={{ display: 'block', paddingLeft: 9, borderLeft: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 28%, transparent)', textAlign: 'left' }}>
@@ -168,6 +168,14 @@ export default function Layout({ children }: LayoutProps) {
                 <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', display: 'block' }}>Terminal</span>
               </span>
             )}
+          </button>
+          <button
+            onClick={() => setCollapsed(c => !c)}
+            aria-label={collapsed ? 'Open sidebar' : 'Close sidebar'}
+            title={collapsed ? 'Open sidebar' : 'Close sidebar'}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: collapsed ? 0 : 4, marginLeft: 'auto', display: 'flex', alignItems: 'center', color: 'var(--theme-secondary, #5e768f)' }}
+          >
+            {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={16} />}
           </button>
         </div>
 
@@ -193,7 +201,7 @@ export default function Layout({ children }: LayoutProps) {
           )}
 
           {/* hubs */}
-          {!collapsed && <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.22)', margin: '20px 0 5px', paddingLeft: 8, fontFamily: 'var(--theme-sans)' }}>Hubs</p>}
+          {!collapsed && <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--theme-text-dim, rgba(255,255,255,0.4))', margin: '10px 0 5px', paddingLeft: 8, fontFamily: 'var(--theme-sans)' }}>Hubs</p>}
           {collapsed && <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '10px 6px' }} />}
           {HUBS.map(hub => (
             <HubBlock
@@ -202,7 +210,7 @@ export default function Layout({ children }: LayoutProps) {
               collapsed={collapsed}
               isOpen={!!open[hub.slug]}
               isActive={activeHub?.slug === hub.slug}
-              onToggle={() => collapsed ? navigate(`/hub/${hub.slug}`) : setOpen(o => ({ ...o, [hub.slug]: !o[hub.slug] }))}
+              onToggle={() => setOpen(o => ({ ...o, [hub.slug]: !o[hub.slug] }))}
               navigate={navigate}
               isToolActive={isToolActive}
               favorites={favorites}
@@ -248,9 +256,10 @@ function HubBlock({ hub, collapsed, isOpen, isActive, onToggle, navigate, isTool
         label={hub.label}
         collapsed={collapsed}
         active={isActive}
-        onClick={onToggle}
+        onClick={() => navigate(`/hub/${hub.slug}`)}
         title={collapsed ? hub.label : undefined}
         chevron={collapsed ? undefined : (isOpen ? 'open' : 'closed')}
+        onChevron={onToggle}
       />
       {isOpen && !collapsed && (
         <div style={{ display: 'flex', flexDirection: 'column', margin: '0 0 6px 18px', paddingLeft: 13, borderLeft: '1px solid rgba(255,255,255,0.09)' }}>
@@ -274,11 +283,11 @@ function ToolRow({ label, active, fav, onClick, onStar }: { label: string; activ
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 9px', cursor: 'pointer', color: active ? 'var(--theme-primary, #c9a84c)' : (hover ? '#dce3ed' : '#7e93a8'), background: hover || active ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 7%, transparent)' : 'transparent', fontFamily: 'var(--theme-sans)', fontSize: 11.5, fontWeight: active ? 600 : 400, transition: 'color 0.12s ease, background 0.12s ease' }}
+      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 9px', cursor: 'pointer', color: active ? 'var(--theme-primary, #c9a84c)' : (hover ? 'var(--theme-text, #dce3ed)' : 'var(--theme-secondary, #7e93a8)'), background: hover || active ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 7%, transparent)' : 'transparent', fontFamily: 'var(--theme-sans)', fontSize: 11.5, fontWeight: active ? 600 : 400, transition: 'color 0.12s ease, background 0.12s ease' }}
     >
       <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
       {(hover || fav) && (
-        <button onClick={e => { e.stopPropagation(); onStar() }} title={fav ? 'Remove from favorites' : 'Add to favorites'} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', color: fav ? 'var(--theme-primary, #c9a84c)' : 'rgba(255,255,255,0.25)', flexShrink: 0 }}>
+        <button onClick={e => { e.stopPropagation(); onStar() }} title={fav ? 'Remove from favorites' : 'Add to favorites'} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', color: fav ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-text-dim, rgba(255,255,255,0.35))', flexShrink: 0 }}>
           <Star size={11} fill={fav ? 'currentColor' : 'none'} />
         </button>
       )}
@@ -287,13 +296,13 @@ function ToolRow({ label, active, fav, onClick, onStar }: { label: string; activ
 }
 
 // ── Generic sidebar row (workspaces, hub headers, favorites, bottom) ──
-function Row({ icon: Icon, label, collapsed, active, onClick, chevron, star, onStar, danger, title }: {
+function Row({ icon: Icon, label, collapsed, active, onClick, chevron, onChevron, star, onStar, danger, title }: {
   icon: React.ElementType; label: string; collapsed: boolean; active: boolean; onClick: () => void
-  chevron?: 'open' | 'closed'; star?: 'on'; onStar?: () => void; danger?: boolean; title?: string
+  chevron?: 'open' | 'closed'; onChevron?: () => void; star?: 'on'; onStar?: () => void; danger?: boolean; title?: string
 }) {
   const [hover, setHover] = useState(false)
   const accent = danger ? 'var(--theme-negative)' : 'var(--theme-primary, #c9a84c)'
-  const color = active ? accent : danger ? 'color-mix(in srgb, var(--theme-negative) 55%, transparent)' : (hover ? '#cdd9ef' : 'var(--theme-secondary, #5e768f)')
+  const color = active ? accent : danger ? 'color-mix(in srgb, var(--theme-negative) 55%, transparent)' : (hover ? 'var(--theme-text, #cdd9ef)' : 'var(--theme-secondary, #5e768f)')
   return (
     <div
       role="button"
@@ -314,7 +323,15 @@ function Row({ icon: Icon, label, collapsed, active, onClick, chevron, star, onS
     >
       <Icon size={15} style={{ flexShrink: 0 }} />
       {!collapsed && <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>}
-      {!collapsed && chevron && <ChevronRight size={13} style={{ flexShrink: 0, color: 'var(--theme-secondary, #5e768f)', transform: chevron === 'open' ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.16s ease' }} />}
+      {!collapsed && chevron && (
+        <button
+          onClick={e => { e.stopPropagation(); onChevron?.() }}
+          aria-label={chevron === 'open' ? 'Collapse' : 'Expand'}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0 2px 6px', display: 'flex', alignItems: 'center', color: 'var(--theme-secondary, #5e768f)', flexShrink: 0 }}
+        >
+          <ChevronRight size={13} style={{ transform: chevron === 'open' ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.16s ease' }} />
+        </button>
+      )}
       {!collapsed && star === 'on' && (
         <button onClick={e => { e.stopPropagation(); onStar?.() }} title="Remove from favorites" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', color: 'var(--theme-primary, #c9a84c)', flexShrink: 0 }}>
           <Star size={11} fill="currentColor" />
@@ -332,7 +349,7 @@ function MobileLink({ to, icon: Icon, label, active, isFav, onFavToggle, favKey 
         <Icon size={15} style={{ flexShrink: 0 }} /><span style={{ flex: 1 }}>{label}</span>
       </Link>
       {onFavToggle && favKey && (
-        <button onClick={() => onFavToggle(favKey)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '11px 10px', color: isFav ? 'var(--theme-primary, #c9a84c)' : 'rgba(255,255,255,0.2)', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+        <button onClick={() => onFavToggle(favKey)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '11px 10px', color: isFav ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-text-dim, rgba(255,255,255,0.35))', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
           <Star size={12} fill={isFav ? 'currentColor' : 'none'} />
         </button>
       )}

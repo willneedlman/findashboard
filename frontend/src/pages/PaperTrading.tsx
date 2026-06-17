@@ -11,6 +11,7 @@ import { loadCustomStrategies, saveCustomStrategy } from '../utils/customStrateg
 import { useTheme } from '../contexts/ThemeContext'
 import { buildOCC, parseOCC, isOCC } from '../lib/occ'
 import PaperChart, { type ChartFill } from '../components/PaperChart'
+import { loadActivePortfolio } from '../components/dashboard/widgets/usePortfolio'
 
 // Per-user auth for the paper engine: the current account id + session-token
 // headers. Paper trading is now each user's own book, so every call is owner-gated.
@@ -473,6 +474,26 @@ function OrderTicket({ onOrderPlaced, importTemplate, onTemplateConsumed, import
     },
   })
 
+  // Import the active Portfolio Manager book: place a market buy for every
+  // holding's share count so the paper account mirrors the real portfolio.
+  const importMutation = useMutation({
+    mutationFn: async () => {
+      const { holdings } = loadActivePortfolio()
+      const buyable = holdings.filter(h => h.shares > 0)
+      if (buyable.length === 0) throw new Error('No holdings in your active Portfolio Manager book to import.')
+      const results = await Promise.allSettled(buyable.map(h => axios.post('/api/paper/order', {
+        user_id: uid, symbol: h.ticker.toUpperCase(), side: 'buy', quantity: Math.round(h.shares),
+        order_type: 'market', limit_price: null, stop_price: null,
+      }, headers)))
+      return { ok: results.filter(r => r.status === 'fulfilled').length, failed: results.filter(r => r.status === 'rejected').length }
+    },
+    onSuccess: ({ ok, failed }) => {
+      showFeedback(failed === 0, `Imported ${ok} position${ok === 1 ? '' : 's'}${failed ? ` · ${failed} failed` : ''}`)
+      onOrderPlaced()
+    },
+    onError: (err: unknown) => showFeedback(false, (err as Error)?.message ?? 'Import failed'),
+  })
+
   const opMutation = useMutation({
     mutationFn: (body: object) => axios.post('/api/paper/order/option', body, headers).then(r => r.data),
     onSuccess: () => {
@@ -589,6 +610,24 @@ function OrderTicket({ onOrderPlaced, importTemplate, onTemplateConsumed, import
       <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12, overflowY: 'auto', flex: 1 }}>
         {tab === 'equity' && (
           <>
+            <div>
+              <button
+                onClick={() => importMutation.mutate()}
+                disabled={importMutation.isPending}
+                style={{
+                  width: '100%', padding: '8px 0', fontFamily: T.mono, fontSize: 10, fontWeight: 700, letterSpacing: '0.12em',
+                  cursor: importMutation.isPending ? 'wait' : 'pointer',
+                  background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: T.gold,
+                }}
+              >
+                {importMutation.isPending ? 'IMPORTING…' : 'IMPORT PORTFOLIO'}
+              </button>
+              <span style={{ ...lbl, display: 'block', marginTop: 5, textTransform: 'none', letterSpacing: 0 }}>
+                Places market buys for every holding in your active Portfolio Manager book.
+              </span>
+            </div>
+
             <div>
               <span style={lbl}>Symbol — stock or ETF</span>
               <input

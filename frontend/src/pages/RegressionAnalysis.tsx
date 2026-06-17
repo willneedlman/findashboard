@@ -725,7 +725,7 @@ function CorrelationMode() {
 export default function RegressionAnalysis() {
   const [mode, setMode] = useState<'regression' | 'correlation'>('correlation')
   return (
-    <PageWrapper title="Regression & Correlation" subtitle="OLS regression, correlation matrices, and rolling beta across any assets.">
+    <PageWrapper title="Regression & Correlation">
       <div style={{ color: C.text, fontFamily: 'var(--theme-mono)' }}>
         {/* Mode switch */}
         <div style={{ display: 'flex', gap: 0, marginBottom: 20, borderBottom: `1px solid ${C.border}` }}>

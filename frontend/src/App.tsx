@@ -58,7 +58,6 @@ const SentimentTracker   = lazy(() => import('./pages/SentimentTracker'))
 const AlertsPage         = lazy(() => import('./pages/Alerts'))
 const EconomyMonitor     = lazy(() => import('./pages/EconomyMonitor'))
 const SectorRotation     = lazy(() => import('./pages/SectorRotation'))
-const ResearchHub        = lazy(() => import('./pages/ResearchHub'))
 const IVTracker          = lazy(() => import('./pages/IVTracker'))
 const OptionsMarketMaker = lazy(() => import('./pages/OptionsMarketMaker'))
 const UnusualOptions     = lazy(() => import('./pages/UnusualOptions'))
@@ -203,7 +202,7 @@ export default function App() {
               <Route path="/regression"         element={<RegressionAnalysis />} />
               <Route path="/options-hub"        element={<Navigate to="/options" replace />} />
               <Route path="/macro-hub"          element={<Navigate to="/fed" replace />} />
-              <Route path="/research-hub"       element={<ResearchHub />} />
+              <Route path="/research-hub"       element={<Navigate to="/corporate" replace />} />
               <Route path="/iv-tracker"         element={<IVTracker />} />
               <Route path="/market-maker"       element={<OptionsMarketMaker />} />
               <Route path="/unusual-options"    element={<UnusualOptions />} />

@@ -9,6 +9,20 @@
     height: 100%;
   }
 
+  /* Theme-aware text selection so highlighted text keeps contrast in every
+     preset (light presets were getting near-white text on a pale highlight). */
+  ::selection {
+    background: color-mix(in srgb, var(--theme-primary, #c9a84c) 30%, transparent);
+    color: var(--theme-text, #d7e3fc);
+  }
+
+  /* Placeholders follow the theme's muted colour so they stay legible on light
+     presets (the UA default washed out against tinted backgrounds). */
+  input::placeholder, textarea::placeholder {
+    color: var(--theme-secondary, #5e768f);
+    opacity: 0.8;
+  }
+
   /* Force all native form/interactive elements to inherit theme color
      instead of falling back to the UA stylesheet black */
   button, input, select, textarea, optgroup, option,
@@ -60,8 +74,8 @@
   /* ── Page header ──────────────────────────────────────────────────────── */
   .ft-page-header {
     margin-bottom: 24px;
-    padding-bottom: 16px;
-    border-bottom: 1px solid var(--theme-border-faint, rgba(255,255,255,0.05));
+    padding-bottom: 14px;
+    border-bottom: 1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent);
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
@@ -69,13 +83,14 @@
   }
 
   .ft-page-title {
-    font-family: 'Cinzel', 'Georgia', serif;
-    font-size: 18px;
+    font-family: var(--theme-mono, 'JetBrains Mono', monospace);
+    font-size: 14px;
     font-weight: 700;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
     color: var(--theme-primary, #c9a84c);
-    margin: 0 0 5px;
-    line-height: 1.2;
+    margin: 0;
+    line-height: 1.3;
   }
 
   .ft-page-subtitle {

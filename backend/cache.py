@@ -120,13 +120,13 @@ def get_news(ticker: str) -> list:
     return news
 
 
-def get_download(tickers: tuple, start: str, end: str) -> pd.DataFrame:
-    key = (tickers, start, end)
+def get_download(tickers: tuple, start: str, end: str, interval: str = "1d") -> pd.DataFrame:
+    key = (tickers, start, end, interval)
     with _lock:
         if key in _download_cache:
             return _download_cache[key]
     try:
-        df = yf.download(list(tickers), start=start, end=end, auto_adjust=True, progress=False)
+        df = yf.download(list(tickers), start=start, end=end, interval=interval, auto_adjust=True, progress=False)
         if df.index.tz is not None:
             df.index = df.index.tz_localize(None)
     except Exception:

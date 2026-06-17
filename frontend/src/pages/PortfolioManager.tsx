@@ -1,5 +1,6 @@
 import { T } from '../lib/theme'
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import PageWrapper from '../components/PageWrapper'
@@ -113,7 +114,11 @@ function loadPortfolios(): PMState {
     if (raw) {
       const d = JSON.parse(raw)
       if (d?.portfolios?.length) {
-        d.portfolios = d.portfolios.map((p: Portfolio) => ({ ...p, cash: p.cash ?? [] }))  // backfill cash
+        // Backfill every position array so portfolios saved before a field
+        // existed (e.g. options/futures) don't crash downstream consumers.
+        d.portfolios = d.portfolios.map((p: Portfolio) => ({
+          ...p, holdings: p.holdings ?? [], options: p.options ?? [], futures: p.futures ?? [], cash: p.cash ?? [],
+        }))
         return d
       }
     }
@@ -172,6 +177,7 @@ const editInp: React.CSSProperties = {
 type Upd<T> = T | ((prev: T) => T)
 
 export default function PortfolioManager() {
+  const navigate = useNavigate()
   // Multi-portfolio store — the active tab is the working set. The position
   // setters below patch the active portfolio so the rest of the component (add/
   // remove/edit handlers, marks queries) works unchanged.
@@ -474,7 +480,7 @@ export default function PortfolioManager() {
 
   // Cash rows — principal accruing interest at the chosen rate
   let cashTotalValue = 0, cashTotalCost = 0
-  const cashRows = cash.map(c => {
+  const cashRows = cash.filter((c): c is CashPosition => c != null).map(c => {
     const value = cashValue(c)
     cashTotalValue += value
     cashTotalCost += c.amount
@@ -514,41 +520,8 @@ export default function PortfolioManager() {
   return (
     <PageWrapper
       title="Portfolio Manager"
-      subtitle="Track stocks, options, futures, and cash across multiple saved portfolios."
     >
       <div style={{ maxWidth: 1050, margin: '0 auto' }}>
-
-        {/* Save control */}
-        <div style={{ marginBottom: 24, display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', gap: 16, minHeight: 1 }}>
-          {(holdings.length > 0 || options.length > 0 || futures.length > 0 || cash.length > 0) && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
-              <button
-                onClick={handleSave}
-                style={{
-                  background: saveFlash ? T.gold : dirty ? 'color-mix(in srgb, var(--theme-primary) 15%, transparent)' : 'transparent',
-                  border: `1px solid ${saveFlash ? T.gold : dirty ? T.gold : T.border}`,
-                  color: saveFlash ? 'var(--theme-bg)' : T.gold,
-                  fontFamily: T.label, fontSize: 10, fontWeight: 700,
-                  letterSpacing: '0.12em', textTransform: 'uppercase',
-                  padding: '8px 20px', cursor: 'pointer',
-                  transition: 'all 0.2s', whiteSpace: 'nowrap',
-                }}
-              >
-                {saveFlash ? 'Saved' : 'Save Portfolio'}
-              </button>
-              {dirty && !saveFlash && (
-                <span style={{ fontFamily: T.mono, fontSize: 8, color: T.muted, letterSpacing: '0.08em' }}>
-                  unsaved changes
-                </span>
-              )}
-              {saveFlash && (
-                <span style={{ fontFamily: T.mono, fontSize: 8, color: 'var(--theme-positive)', letterSpacing: '0.08em' }}>
-                  synced to all tools
-                </span>
-              )}
-            </div>
-          )}
-        </div>
 
         {/* Portfolio tabs */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginBottom: 16, borderBottom: `1px solid ${T.border}`, flexWrap: 'wrap' }}>
@@ -1002,6 +975,53 @@ export default function PortfolioManager() {
             )}
           </div>
         </div>
+
+        {/* Actions — save + paper trade, anchored at the bottom */}
+        {(holdings.length > 0 || options.length > 0 || futures.length > 0 || cash.length > 0) && (
+          <div style={{ marginTop: 24, paddingTop: 16, borderTop: `1px solid ${T.border}`, display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', gap: 16 }}>
+            {holdings.length > 0 && (
+              <button
+                onClick={() => navigate('/paper-trading')}
+                title="Open Paper Trading, then Import Portfolio to mirror this book"
+                style={{
+                  background: 'transparent', border: `1px solid ${T.border}`, color: T.muted,
+                  fontFamily: T.label, fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
+                  padding: '8px 20px', cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all 0.2s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = T.gold; e.currentTarget.style.color = T.gold }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.color = T.muted }}
+              >
+                Trade on Paper
+              </button>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
+              <button
+                onClick={handleSave}
+                style={{
+                  background: saveFlash ? T.gold : dirty ? 'color-mix(in srgb, var(--theme-primary) 15%, transparent)' : 'transparent',
+                  border: `1px solid ${saveFlash ? T.gold : dirty ? T.gold : T.border}`,
+                  color: saveFlash ? 'var(--theme-bg)' : T.gold,
+                  fontFamily: T.label, fontSize: 10, fontWeight: 700,
+                  letterSpacing: '0.12em', textTransform: 'uppercase',
+                  padding: '8px 20px', cursor: 'pointer',
+                  transition: 'all 0.2s', whiteSpace: 'nowrap',
+                }}
+              >
+                {saveFlash ? 'Saved' : 'Save Portfolio'}
+              </button>
+              {dirty && !saveFlash && (
+                <span style={{ fontFamily: T.mono, fontSize: 8, color: T.muted, letterSpacing: '0.08em' }}>
+                  unsaved changes
+                </span>
+              )}
+              {saveFlash && (
+                <span style={{ fontFamily: T.mono, fontSize: 8, color: 'var(--theme-positive)', letterSpacing: '0.08em' }}>
+                  synced to all tools
+                </span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </PageWrapper>
   )

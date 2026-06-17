@@ -118,16 +118,6 @@ export default function Alerts() {
     <PageWrapper title="Price Alerts">
       <div style={{ maxWidth: 820, margin: '0 auto' }}>
 
-        {/* Header */}
-        <div style={{ marginBottom: 24 }}>
-          <h1 style={{ fontFamily: T.mono, fontSize: 18, fontWeight: 700, color: T.gold, letterSpacing: '0.08em', margin: 0 }}>
-            PRICE ALERTS
-          </h1>
-          <p style={{ fontFamily: T.label, fontSize: 11, color: T.muted, marginTop: 6 }}>
-            Alerts evaluate every 60 seconds. Triggered alerts silence for 1 hour (rearm manually).
-          </p>
-        </div>
-
         {/* Notification permission banner */}
         {notifState === 'default' && (
           <div style={{

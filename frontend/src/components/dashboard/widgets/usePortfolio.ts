@@ -51,12 +51,16 @@ function cashValue(c: CashPos): number {
 
 export interface ActivePortfolio { name: string; holdings: Holding[]; cash: number }
 
-export function loadActivePortfolio(): ActivePortfolio {
+// Load a saved portfolio. With no id (or an id that no longer exists) it falls
+// back to the globally active portfolio so widgets keep working after a rename.
+export function loadActivePortfolio(portfolioId?: string): ActivePortfolio {
   try {
     const raw = localStorage.getItem('pm-portfolios-v2')
     if (raw) {
       const d: PMState = JSON.parse(raw)
-      const p = d.portfolios?.find(x => x.id === d.activeId) ?? d.portfolios?.[0]
+      const p = (portfolioId && d.portfolios?.find(x => x.id === portfolioId))
+        || d.portfolios?.find(x => x.id === d.activeId)
+        || d.portfolios?.[0]
       if (p) {
         const cash = (p.cash ?? []).reduce((s, c) => s + cashValue(c), 0)
         const holdings = (p.holdings ?? []).filter(h => h.shares > 0)
@@ -65,6 +69,18 @@ export function loadActivePortfolio(): ActivePortfolio {
     }
   } catch { /* fall through to empty */ }
   return { name: '', holdings: [], cash: 0 }
+}
+
+// Saved portfolios for a picker, plus which one is currently active.
+export function listPortfolios(): { portfolios: { id: string; name: string }[]; activeId: string } {
+  try {
+    const raw = localStorage.getItem('pm-portfolios-v2')
+    if (raw) {
+      const d: PMState = JSON.parse(raw)
+      return { portfolios: (d.portfolios ?? []).map(p => ({ id: p.id, name: p.name || 'Portfolio' })), activeId: d.activeId }
+    }
+  } catch { /* none */ }
+  return { portfolios: [], activeId: '' }
 }
 
 export function useQuotes(tickers: string[]): Record<string, Quote | undefined> {

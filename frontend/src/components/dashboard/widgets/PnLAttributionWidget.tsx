@@ -5,9 +5,9 @@ import { loadActivePortfolio, useQuotes, priceHoldings, money } from './usePortf
 
 
 
-export default function PnLAttributionWidget({ config: _c }: { config: WidgetConfig }) {
+export default function PnLAttributionWidget({ config }: { config: WidgetConfig }) {
   const [mode, setMode] = useState<'day' | 'open'>('day')
-  const { holdings } = useMemo(() => loadActivePortfolio(), [])
+  const { holdings } = useMemo(() => loadActivePortfolio(config.portfolioId), [config.portfolioId])
   const quotes = useQuotes(holdings.map(h => h.ticker))
   const priced = priceHoldings(holdings, quotes)
 

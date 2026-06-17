@@ -230,7 +230,6 @@ export function SupplyChainContent() {
 
         <PageHeader
           title="Company Profile"
-          subtitle="Revenue breakdown by product segment and geography, with sector peers."
         />
 
         {/* Search bar */}

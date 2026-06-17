@@ -259,5 +259,5 @@ export function FedRatesContent() {
 }
 
 export default function FedRates() {
-  return <PageWrapper title="Fed Rates"><FedRatesContent /></PageWrapper>
+  return <PageWrapper title="Rate Engine"><FedRatesContent /></PageWrapper>
 }

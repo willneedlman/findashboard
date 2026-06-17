@@ -178,7 +178,6 @@ export default function StressTester() {
 
         <PageHeader
           title="Portfolio Stress Tester"
-          subtitle="Simulate how your portfolio would have performed during major historical market shocks."
         />
 
         <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 24, alignItems: 'start' }}>

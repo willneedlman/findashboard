@@ -16,8 +16,8 @@ function windowDates(): { start: string; end: string } {
   return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) }
 }
 
-export default function RiskMetricsWidget({ config: _c }: { config: WidgetConfig }) {
-  const { holdings, cash } = useMemo(() => loadActivePortfolio(), [])
+export default function RiskMetricsWidget({ config }: { config: WidgetConfig }) {
+  const { holdings, cash } = useMemo(() => loadActivePortfolio(config.portfolioId), [config.portfolioId])
   const quotes = useQuotes(holdings.map(h => h.ticker))
   const priced = priceHoldings(holdings, quotes).sort((a, b) => b.value - a.value)
   const nav = priced.reduce((s, p) => s + p.value, 0) + cash

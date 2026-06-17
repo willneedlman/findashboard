@@ -15,14 +15,14 @@ import { getRecents } from '../lib/recents'
 const F = {
   gold: 'var(--theme-primary, #c9a84c)',
   text: 'var(--theme-text, #d7e3fc)',
-  bright: '#dce3ed',
-  sec: '#8099b0',
+  bright: 'var(--theme-text, #dce3ed)',
+  sec: 'var(--theme-secondary, #8099b0)',
   muted: 'var(--theme-secondary, #5e768f)',
   surface: 'var(--theme-surface, #101c2e)',
   panel: 'var(--theme-bg, #0d1826)',
-  topbar: 'color-mix(in srgb, var(--theme-bg, #0d1826) 70%, #000)',
+  topbar: 'color-mix(in srgb, var(--theme-bg, #0d1826) 88%, #000)',
   border: 'var(--theme-border, rgba(255,255,255,0.08))',
-  borderFaint: 'rgba(255,255,255,0.06)',
+  borderFaint: 'var(--theme-border-faint, rgba(255,255,255,0.05))',
   pos: 'var(--theme-positive, #22c55e)',
   neg: 'var(--theme-negative, #ef4444)',
   amber: '#f59e0b',
@@ -122,27 +122,57 @@ function Tape({ segments, source, onSource }: { segments: { sym: string; price: 
   )
 }
 
+function Spinner() {
+  return (
+    <>
+      <style>{`@keyframes home-spin{to{transform:rotate(360deg)}}`}</style>
+      <div aria-label="Loading" role="status" style={{ width: 18, height: 18, borderRadius: '50%', border: '2px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 22%, transparent)', borderTopColor: 'var(--theme-primary, #c9a84c)', animation: 'home-spin 0.7s linear infinite' }} />
+    </>
+  )
+}
+
 // ── Performance chart (%-change vs time, ranged 1D/1W/1M/1Y) ─────────────────
 interface CumPoint { date: string; portfolio: number }
 function fmtAxisDate(d: string, rangeIdx: number): string {
-  const dt = new Date(d + 'T00:00:00')
+  const dt = d.includes('T') ? new Date(d) : new Date(d + 'T00:00:00')
   if (isNaN(dt.getTime())) return d
-  if (rangeIdx <= 1) return dt.toLocaleDateString('en-US', { weekday: 'short' })           // 1D / 1W → Mon
-  if (rangeIdx === 2) return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) // 1M → Jun 3
-  return dt.toLocaleDateString('en-US', { month: 'short' })                                  // 1Y → Jun
+  if (rangeIdx === 0) return dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) // 1D → 10:30
+  if (rangeIdx === 1) return dt.toLocaleDateString('en-US', { weekday: 'short' })                  // 1W → Mon
+  if (rangeIdx === 2) return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })    // 1M → Jun 3
+  return dt.toLocaleDateString('en-US', { month: 'short' })                                        // 1Y → Jun
 }
 function PerformanceSpark({ tickers, weights, rangeIdx }: { tickers: string[]; weights: number[]; rangeIdx: number }) {
-  const start = useMemo(() => { const d = new Date(); d.setFullYear(d.getFullYear() - 1); return d.toISOString().split('T')[0] }, [])
-  const end = useMemo(() => new Date().toISOString().split('T')[0], [])
-  const { data } = useQuery<{ cumulative: CumPoint[] }>({
-    queryKey: ['home-perf', tickers.join(',')],
-    queryFn: () => axios.post('/api/portfolio/backtest', { tickers, weights, benchmark: 'SPY', start, end }).then(r => r.data),
-    staleTime: 300_000,
+  // 1D pulls an intraday series (last few sessions) and shows just the latest
+  // session; the longer ranges share one daily 1Y fetch sliced client-side.
+  const isIntraday = rangeIdx === 0
+  const { start, end, interval } = useMemo(() => {
+    const now = new Date()
+    if (isIntraday) {
+      const s = new Date(now); s.setDate(s.getDate() - 5)
+      const e = new Date(now); e.setDate(e.getDate() + 1)
+      return { start: s.toISOString().split('T')[0], end: e.toISOString().split('T')[0], interval: '15m' }
+    }
+    const s = new Date(now); s.setFullYear(s.getFullYear() - 1)
+    return { start: s.toISOString().split('T')[0], end: now.toISOString().split('T')[0], interval: '1d' }
+  }, [isIntraday])
+
+  const { data, isLoading } = useQuery<{ cumulative: CumPoint[] }>({
+    queryKey: ['home-perf', tickers.join(','), interval],
+    queryFn: () => axios.post('/api/portfolio/backtest', { tickers, weights, benchmark: 'SPY', start, end, interval }).then(r => r.data),
+    staleTime: isIntraday ? 60_000 : 300_000,
     enabled: tickers.length >= 1,
     retry: 1,
   })
   const full = data?.cumulative ?? []
   const pts = useMemo(() => {
+    if (isIntraday) {
+      if (full.length < 2) return []
+      const lastDay = full[full.length - 1].date.slice(0, 10)
+      const session = full.filter(p => p.date.slice(0, 10) === lastDay)
+      const src = session.length >= 2 ? session : full.slice(-2)
+      const base = src[0].portfolio
+      return src.map(p => ({ date: p.date, pct: base > 0 ? (p.portfolio / base - 1) * 100 : 0 }))
+    }
     const pointsWanted = RANGES[rangeIdx].points
     const sliced = pointsWanted === Infinity ? full : full.slice(-pointsWanted)
     if (sliced.length < 2) return []
@@ -150,18 +180,22 @@ function PerformanceSpark({ tickers, weights, rangeIdx }: { tickers: string[]; w
     const rebased = sliced.map(p => ({ date: p.date, pct: base > 0 ? (p.portfolio / base - 1) * 100 : 0 }))
     // Thin the 1Y series so the SVG stays light.
     return rebased.length > 180 ? rebased.filter((_, i, a) => i === 0 || i === a.length - 1 || i % Math.floor(a.length / 160) === 0) : rebased
-  }, [full, rangeIdx])
+  }, [full, rangeIdx, isIntraday])
 
   if (pts.length < 2) {
-    return <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: F.sans, fontSize: 10, color: F.muted }}>No performance data</div>
+    return (
+      <div style={{ height: '100%', minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: F.sans, fontSize: 10, color: F.muted }}>
+        {isLoading ? <Spinner /> : 'No performance data'}
+      </div>
+    )
   }
   const up = pts[pts.length - 1].pct >= 0
   const stroke = up ? 'var(--theme-positive, #22c55e)' : 'var(--theme-negative, #ef4444)'
 
   return (
-    <div style={{ height: 120 }}>
+    <div style={{ height: '100%', minHeight: 120 }}>
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={pts} margin={{ top: 6, right: 4, left: -4, bottom: 0 }}>
+        <AreaChart data={pts} margin={{ top: 6, right: 6, left: 6, bottom: 0 }}>
           <defs>
             <linearGradient id="homePerf" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={stroke} stopOpacity={0.22} />
@@ -169,7 +203,7 @@ function PerformanceSpark({ tickers, weights, rangeIdx }: { tickers: string[]; w
             </linearGradient>
           </defs>
           <ReferenceLine y={0} stroke="rgba(255,255,255,0.1)" strokeDasharray="3 4" />
-          <XAxis dataKey="date" tickFormatter={d => fmtAxisDate(d, rangeIdx)} tick={{ fontSize: 8, fill: F.muted, fontFamily: 'var(--theme-mono)' }} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={28} />
+          <XAxis dataKey="date" tickFormatter={d => fmtAxisDate(d, rangeIdx)} tick={{ fontSize: 8, fill: F.muted, fontFamily: 'var(--theme-mono)' }} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={44} tickMargin={8} padding={{ left: 14, right: 14 }} />
           <YAxis orientation="right" width={34} tickFormatter={v => `${v >= 0 ? '+' : ''}${v.toFixed(v >= 10 || v <= -10 ? 0 : 1)}%`} tick={{ fontSize: 8, fill: F.muted, fontFamily: 'var(--theme-mono)' }} tickLine={false} axisLine={false} tickCount={3} />
           <Area type="monotone" dataKey="pct" stroke={stroke} strokeWidth={1.5} fill="url(#homePerf)" dot={false} isAnimationActive={false} />
         </AreaChart>
@@ -291,9 +325,18 @@ function HubCard({ slug }: { slug: string }) {
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, paddingTop: 11, borderTop: `1px solid ${F.borderFaint}` }}>
         {hub.tools.map(t => (
-          <span key={t.route} style={{ fontFamily: F.sans, fontSize: 10.5, color: '#9fb0c6', padding: '3px 8px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', whiteSpace: 'nowrap' }}>{t.chip}</span>
+          <span key={t.route} style={{ fontFamily: F.sans, fontSize: 10.5, color: 'var(--theme-secondary, #9fb0c6)', padding: '3px 8px', background: 'color-mix(in srgb, var(--theme-text, #fff) 4%, transparent)', border: `1px solid ${F.border}`, whiteSpace: 'nowrap' }}>{t.chip}</span>
         ))}
       </div>
+    </div>
+  )
+}
+
+function MiniStat({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <div style={{ minWidth: 0 }}>
+      <div style={{ ...cap, fontSize: 8.5 }}>{label}</div>
+      <div style={{ fontFamily: F.mono, fontSize: 12, fontWeight: 700, color: color ?? F.text, marginTop: 3, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
     </div>
   )
 }
@@ -357,6 +400,11 @@ export default function Home() {
     return src.slice(0, 5).map((t, i) => ({ sym: t, secondary: hasHoldings && ctx.holdings[i]?.weight ? `${ctx.holdings[i].weight}%` : 'Market', price: quotes[t]?.current_price ?? null, pct: quotes[t]?.pct_change_1d ?? null }))
   }, [hasPM, priced, ctx.holdings, dataTickers, hasHoldings, quotes])
 
+  // Best / worst day movers for the value-cell stat strip.
+  const movers = useMemo(() => [...priced].filter(p => quotes[p.ticker]).sort((a, b) => b.pct1d - a.pct1d), [priced, quotes])
+  const best = movers[0]
+  const worst = movers.length > 1 ? movers[movers.length - 1] : undefined
+
   // Tape segments — holdings by default, switchable to the index set.
   const tapeSegments = useMemo(() => {
     const syms = tapeSource === 'indices' ? INDEX_TICKERS : dataTickers
@@ -401,9 +449,7 @@ export default function Home() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: F.topbar, border: `1px solid ${searchFocus ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 55%, transparent)' : F.border}`, padding: '9px 12px', width: isMobile ? 200 : 280, transition: 'border-color 0.15s ease' }}>
                 <Search size={13} style={{ color: F.muted, flexShrink: 0 }} />
                 <input value={q} onChange={e => setQ(e.target.value)} onFocus={() => setSearchFocus(true)} onBlur={() => setSearchFocus(false)} aria-label="Search tools" placeholder="Search tools, tickers, actions" style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none', color: F.text, fontFamily: F.sans, fontSize: 12 }} />
-                {q
-                  ? <button onClick={() => setQ('')} aria-label="Clear" style={{ background: 'none', border: 'none', cursor: 'pointer', color: F.muted, display: 'flex', padding: 0 }}><X size={12} /></button>
-                  : <kbd style={{ fontFamily: F.mono, fontSize: 9, color: F.muted, border: '1px solid rgba(255,255,255,0.12)', padding: '1px 5px' }}>⌘K</kbd>}
+                {q && <button onClick={() => setQ('')} aria-label="Clear" style={{ background: 'none', border: 'none', cursor: 'pointer', color: F.muted, display: 'flex', padding: 0 }}><X size={12} /></button>}
               </div>
               <button onClick={() => navigate('/dashboard')} style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, background: F.gold, border: 'none', padding: '9px 14px', cursor: 'pointer' }}>
                 <LayoutGrid size={14} style={{ color: '#101c2e' }} />
@@ -453,8 +499,13 @@ export default function Home() {
                         <span style={{ fontFamily: F.mono, fontSize: 14, fontWeight: 700, color: dayPnl >= 0 ? F.pos : F.neg, fontVariantNumeric: 'tabular-nums' }}>{dayPnl >= 0 ? '+' : ''}{money(dayPnl)}</span>
                         <span style={{ fontFamily: F.mono, fontSize: 12, color: dayPnl >= 0 ? F.pos : F.neg }}>{dayPct >= 0 ? '+' : ''}{dayPct.toFixed(2)}%</span>
                       </div>
-                      <div style={{ fontFamily: F.sans, fontSize: 10.5, color: F.muted, marginTop: 14, lineHeight: 1.5 }}>
-                        Day P&amp;L · total return <span style={{ fontFamily: F.mono, color: totalPnl >= 0 ? F.pos : F.neg }}>{totalPct >= 0 ? '+' : ''}{totalPct.toFixed(1)}%</span>
+                      <div style={{ marginTop: 16, paddingTop: 12, borderTop: `1px solid ${F.borderFaint}`, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '11px 16px' }}>
+                        <MiniStat label="Total Return" value={`${totalPct >= 0 ? '+' : ''}${totalPct.toFixed(1)}%`} color={totalPnl >= 0 ? F.pos : F.neg} />
+                        <MiniStat label="Positions" value={String(priced.length)} />
+                        <MiniStat label="Invested" value={money(totalValue - pm.cash)} />
+                        <MiniStat label="Cash" value={money(pm.cash)} />
+                        {best && <MiniStat label="Top Today" value={`${best.ticker} ${best.pct1d >= 0 ? '+' : ''}${best.pct1d.toFixed(1)}%`} color={best.pct1d >= 0 ? F.pos : F.neg} />}
+                        {worst && <MiniStat label="Lag Today" value={`${worst.ticker} ${worst.pct1d >= 0 ? '+' : ''}${worst.pct1d.toFixed(1)}%`} color={worst.pct1d >= 0 ? F.pos : F.neg} />}
                       </div>
                     </>
                   ) : (

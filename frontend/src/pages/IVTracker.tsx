@@ -373,7 +373,6 @@ export default function IVTracker() {
   return (
     <PageWrapper
       title="IV Tracker"
-      subtitle="Track and analyze implied volatility for a specific option over time. Historical IV is built from actual snapshots plus a 30d HV proxy."
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 

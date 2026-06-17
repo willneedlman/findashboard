@@ -90,6 +90,7 @@ class BacktestRequest(BaseModel):
     leverage: float = Field(default=1.0, ge=1.0)
     borrow_rate: float = Field(default=0.0, ge=0.0, le=30.0)
     cash_weight: float = 0.0   # filled from any CASH legs (see CASH_SYMBOL)
+    interval: str = "1d"       # "1d" (daily) or intraday e.g. "15m" for a 1-day curve
 
     @model_validator(mode='after')
     def _validate(self):
@@ -118,7 +119,7 @@ def backtest(req: BacktestRequest):
 
     all_tickers = list(dict.fromkeys(req.tickers + [req.benchmark]))
     try:
-        dl = get_download(tuple(sorted(all_tickers)), req.start, req.end)
+        dl = get_download(tuple(sorted(all_tickers)), req.start, req.end, req.interval)
         raw = dl["Close"] if isinstance(dl.columns, pd.MultiIndex) and "Close" in dl.columns.get_level_values(0) else dl
         if isinstance(raw, pd.Series):
             raw = raw.to_frame(all_tickers[0])
@@ -169,7 +170,8 @@ def backtest(req: BacktestRequest):
         "borrow_rate": req.borrow_rate,
         "liquidated": liquidated,
         "cumulative": [
-            {"date": str(d.date()), "portfolio": round(float(p), 2), "benchmark": round(float(b), 2)}
+            # Intraday needs the full timestamp so bars don't collapse onto one date.
+            {"date": str(d.date()) if req.interval == "1d" else d.isoformat(), "portfolio": round(float(p), 2), "benchmark": round(float(b), 2)}
             for d, p, b in zip(cum_port.index, cum_port, cum_bench)
         ],
         "daily_returns": [{"date": str(d.date()), "value": round(float(v) * 100, 4)} for d, v in lev_ret.items()],

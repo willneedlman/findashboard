@@ -275,7 +275,6 @@ export function RelativeValuationContent() {
 
         <PageHeader
           title="Peer Comparison"
-          subtitle="Valuation multiples and analyst consensus across the closest comparable companies. Green = better than median, red = worse."
         />
 
         {/* Search */}

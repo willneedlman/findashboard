@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { tickerLogoUrl } from '../lib/tickerLogos'
 
 function tickerColor(ticker: string): string {
   const code = ticker.charCodeAt(0)
@@ -16,7 +17,7 @@ export default function TickerLogo({ ticker, size = 28 }: TickerLogoProps) {
   if (!failed) {
     return (
       <img
-        src={`https://assets.parqet.com/logos/symbol/${ticker}?format=svg`}
+        src={tickerLogoUrl(ticker, 'svg')}
         alt={ticker}
         width={size}
         height={size}

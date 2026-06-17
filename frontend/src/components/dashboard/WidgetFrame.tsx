@@ -4,6 +4,7 @@ import type { WidgetConfig, WidgetType } from '../../hooks/useDashboard'
 import { TICKER_WIDGET_TYPES } from '../../hooks/useDashboard'
 import TickerTagInput from '../TickerTagInput'
 import ExpirySelect from '../ExpirySelect'
+import { listPortfolios } from './widgets/usePortfolio'
 
 function makeEqualWeights(tickers: string[]): Record<string, string> {
   const w = tickers.length ? (100 / tickers.length).toFixed(1) : '0'
@@ -29,6 +30,8 @@ const GLOBAL_MACRO_WIDGETS: WidgetType[]    = ['global-macro']
 const CREDIT_SPREADS_WIDGETS: WidgetType[]  = ['credit-spreads']
 const MACRO_CALENDAR_WIDGETS: WidgetType[]  = ['macro-calendar']
 const EXPIRY_WIDGETS: WidgetType[]          = ['dealer-gex', 'vol-skew']
+// Widgets that read a Portfolio Manager book and let you pick which one.
+const PORTFOLIO_PICK_WIDGETS: WidgetType[]  = ['risk-metrics', 'pnl-attribution', 'exposure-map']
 // Frame supplies the title (no gear) for widgets that host their own inline
 // controls in the body, à la Price Card's period row.
 const HEADER_WIDGETS: WidgetType[]          = ['sector-rotation', 'sentiment-gauge', 'screener', 'pm-portfolios', 'paper-trade', 'risk-metrics', 'pnl-attribution', 'exposure-map', 'unusual-flow', 'heatmap', 'trade-blotter', 'position-sizer']
@@ -320,6 +323,7 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
   )
 
   const [expirySel, setExpirySel] = useState(config.expiry || '')
+  const [portfolioIdSel, setPortfolioIdSel] = useState(config.portfolioId ?? '')
 
   // Keep the gear fields in sync with the dashboard-wide ticker broadcast (and any
   // external config change) so they show the live value, not a stale mount snapshot.
@@ -369,6 +373,8 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
     }
     if (EXPIRY_WIDGETS.includes(config.type))
       patch.expiry = expirySel
+    if (PORTFOLIO_PICK_WIDGETS.includes(config.type))
+      patch.portfolioId = portfolioIdSel
     onUpdate(patch)
     setConfigOpen(false)
   }
@@ -383,7 +389,8 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
     YIELD_WIDGETS.includes(config.type) ||
     GLOBAL_MACRO_WIDGETS.includes(config.type) ||
     CREDIT_SPREADS_WIDGETS.includes(config.type) ||
-    MACRO_CALENDAR_WIDGETS.includes(config.type)
+    MACRO_CALENDAR_WIDGETS.includes(config.type) ||
+    PORTFOLIO_PICK_WIDGETS.includes(config.type)
 
   const hasHeader = hasSettings || SELF_CONFIGURED.includes(config.type as WidgetType) || HEADER_WIDGETS.includes(config.type)
 
@@ -468,6 +475,25 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
               />
             </div>
           )}
+
+          {PORTFOLIO_PICK_WIDGETS.includes(config.type) && (() => {
+            const { portfolios, activeId } = listPortfolios()
+            return (
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <span style={{ fontSize: 9, color: S.muted, fontFamily: S.label, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Portfolio</span>
+                <select
+                  value={portfolioIdSel}
+                  onChange={e => { setPortfolioIdSel(e.target.value); onUpdate({ portfolioId: e.target.value }) }}
+                  style={{ flex: 1, background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.10)', color: S.text, fontFamily: S.mono, fontSize: 12, padding: '3px 6px', outline: 'none' }}
+                >
+                  <option value="">Active portfolio</option>
+                  {portfolios.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}{p.id === activeId ? ' (active)' : ''}</option>
+                  ))}
+                </select>
+              </div>
+            )
+          })()}
 
           {TICKERS_WIDGETS.includes(config.type) && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>

@@ -110,7 +110,6 @@ export function CreditSpreadsContent() {
       <div id="credit-spreads-content" style={{ maxWidth: 1100, margin: '0 auto' }}>
         <PageHeader
           title="Credit Spread Monitor"
-          subtitle="BofA ICE IG & HY option-adjusted spreads (OAS) vs. equity volatility. Widening spreads signal credit stress."
         />
 
         {/* Stat row — single panel, stats separated by dividers */}

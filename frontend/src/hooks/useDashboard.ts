@@ -72,6 +72,7 @@ export interface WidgetConfig {
   entry?: number                           // position-sizer
   stop?: number                            // position-sizer
   accountValue?: number                    // position-sizer
+  portfolioId?: string                     // risk-metrics, pnl-attribution, exposure-map: which saved portfolio
 }
 
 // Widget types that key off config.ticker — the dashboard-wide ticker control
