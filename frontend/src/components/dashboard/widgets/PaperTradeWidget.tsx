@@ -236,7 +236,9 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
         else applyWindow(ts, cs, windowRef.current)
       }
       else if (follow) ts?.scrollToRealTime()
-      else if (prevRange) ts?.setVisibleLogicalRange(prevRange)
+      // Keep the scrolled view across interval switches, but snap to latest if the
+      // old bar-index range now exceeds a much shorter series (e.g. 1m → 1mo).
+      else if (prevRange) { if (prevRange.from >= cs.length - 1) ts?.scrollToRealTime(); else ts?.setVisibleLogicalRange(prevRange) }
       lenRef.current = cs.length
       setCandles(cs)
       setSpot(cs[cs.length - 1].close)

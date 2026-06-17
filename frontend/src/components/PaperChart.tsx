@@ -176,7 +176,10 @@ export default function PaperChart({ initialTicker = 'SPY', fills = [], storageK
         else applyWindow(ts, cs, windowRef.current)
       }
       else if (follow) ts?.scrollToRealTime()
-      else if (prevRange) ts?.setVisibleLogicalRange(prevRange)
+      // Preserve the scrolled view on interval switches, but if the old bar-index
+      // range now sits past a much shorter series (e.g. 1m → 1mo), snap to the
+      // latest bars instead of leaving blank whitespace.
+      else if (prevRange) { if (prevRange.from >= cs.length - 1) ts?.scrollToRealTime(); else ts?.setVisibleLogicalRange(prevRange) }
       lenRef.current = cs.length
       setCandles(cs); setSpot(cs[cs.length - 1].close)
     } catch { if (fit) { setChartErr(true); setCandles([]) } }

@@ -17,7 +17,11 @@ export default {
           500: '#1a2d45',
         },
         gold: {
-          DEFAULT: 'var(--theme-primary, #c9a84c)',
+          // Function form so /N opacity modifiers (e.g. border-gold/40) still
+          // work against a CSS-var color — Tailwind can't alpha-blend a bare var().
+          DEFAULT: ({ opacityValue }) => opacityValue === undefined || opacityValue === '1'
+            ? 'var(--theme-primary, #c9a84c)'
+            : `color-mix(in srgb, var(--theme-primary, #c9a84c) ${Math.round(Number(opacityValue) * 100)}%, transparent)`,
           light: '#d4b86a',
           dim: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)',
           faint: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 12%, transparent)',
