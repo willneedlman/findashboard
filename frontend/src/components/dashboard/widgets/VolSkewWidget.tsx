@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, CartesianGrid } from 'recharts'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 
 const T = {
@@ -78,13 +78,14 @@ export default function VolSkewWidget({ config }: { config: WidgetConfig }) {
           </div>
 
           <div style={{ padding: '4px 10px 0', fontFamily: T.mono, fontSize: 8, color: T.muted, letterSpacing: '0.06em', flexShrink: 0 }}>
-            Smile · {smileExpiry}
+            Smile · {smileExpiry} · IV by moneyness
           </div>
           <div style={{ flex: 1, minHeight: 0, padding: '2px 4px 4px' }}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={smile} margin={{ left: 2, right: 6, top: 4, bottom: 0 }}>
+                <CartesianGrid horizontal vertical={false} stroke="rgba(100,120,150,0.12)" />
                 <XAxis dataKey="moneyness" tick={{ fontSize: 8, fill: T.muted, fontFamily: T.mono }} tickFormatter={(v: number) => `${v > 0 ? '+' : ''}${v}%`} type="number" domain={['dataMin', 'dataMax']} />
-                <YAxis hide domain={['auto', 'auto']} />
+                <YAxis width={28} tick={{ fontSize: 8, fill: T.muted, fontFamily: T.mono }} tickFormatter={(v: number) => `${Math.round(v)}%`} domain={['auto', 'auto']} />
                 <Tooltip
                   cursor={{ stroke: T.border }}
                   contentStyle={{ background: T.surface, border: `1px solid ${T.border}`, fontFamily: T.mono, fontSize: 9, padding: '4px 8px' }}
@@ -93,7 +94,7 @@ export default function VolSkewWidget({ config }: { config: WidgetConfig }) {
                   labelFormatter={(m) => `${Number(m) > 0 ? '+' : ''}${m}% moneyness`}
                 />
                 <ReferenceLine x={0} stroke="rgba(201,168,76,0.45)" strokeDasharray="4 4" />
-                <Line type="monotone" dataKey="iv" stroke={T.gold} strokeWidth={1.5} dot={false} />
+                <Line type="monotone" dataKey="iv" stroke={T.gold} strokeWidth={1.6} dot={{ r: 1.6, fill: T.gold, strokeWidth: 0 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
