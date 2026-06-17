@@ -71,6 +71,12 @@ export default function OptionsPricerWidget({ config }: { config: WidgetConfig }
   const [justFilled, setJustFilled]   = useState(false)
   const { ref, width, height } = useContainerSize<HTMLDivElement>()
 
+  // Follow the dashboard-wide ticker broadcast.
+  useEffect(() => {
+    if (config.ticker && config.ticker !== ticker) { setTicker(config.ticker); setTickerInput(config.ticker) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config.ticker])
+
   const wide = width  >= 440
   const tall = height >= 320
 

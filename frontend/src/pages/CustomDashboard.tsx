@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import RGL, { type Layout, type Layouts } from 'react-grid-layout'
 import { useTheme } from '../contexts/ThemeContext'
 import 'react-grid-layout/css/styles.css'
@@ -14,7 +14,7 @@ import PageWrapper from '../components/PageWrapper'
 import WidgetFrame from '../components/dashboard/WidgetFrame'
 import WidgetRenderer from '../components/dashboard/WidgetRenderer'
 import WidgetPalette from '../components/dashboard/WidgetPalette'
-import { useDashboard, PRESET_LABELS, type WidgetType, type WidgetConfig, type PresetKey } from '../hooks/useDashboard'
+import { useDashboard, PRESET_LABELS, TICKER_WIDGET_TYPES, type WidgetType, type WidgetConfig, type PresetKey } from '../hooks/useDashboard'
 import useIsMobile from '../hooks/useIsMobile'
 
 const ResponsiveGridLayout = WidthProvider(Responsive)
@@ -26,13 +26,29 @@ export default function CustomDashboard() {
   const isMobile = useIsMobile()
   const { user } = useTheme()
   const {
-    widgets, layouts, addWidget, removeWidget, updateWidget, updateLayouts, resetDashboard,
+    widgets, layouts, addWidget, removeWidget, updateWidget, updateLayouts, resetDashboard, setAllTickers,
     dashboards, activeId, switchDashboard, createDashboard, renameDashboard, deleteDashboard,
   } = useDashboard(user?.id)
   const [editMode, setEditMode] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
   const [presetMenuOpen, setPresetMenuOpen] = useState(false)
+
+  // Dashboard-wide ticker: one input that retargets every ticker-driven widget
+  // so you don't set them one by one.
+  const tickerWidgets = widgets.filter(w => TICKER_WIDGET_TYPES.includes(w.type))
+  const [tickerInput, setTickerInput] = useState('')
+  useEffect(() => {
+    const cur = widgets.find(w => TICKER_WIDGET_TYPES.includes(w.type) && w.ticker)?.ticker
+    setTickerInput(cur ? cur.toUpperCase() : '')
+    // re-seed from the active dashboard when switching tabs
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId])
+  const applyTicker = () => {
+    const sym = tickerInput.trim().toUpperCase()
+    if (!sym) return
+    setAllTickers(sym)
+  }
 
   const handleLayoutChange = (_: Layout[], allLayouts: Layouts) => {
     if (allLayouts.lg) updateLayouts(allLayouts.lg)
@@ -59,6 +75,21 @@ export default function CustomDashboard() {
         </div>
 
         {!isMobile && <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {tickerWidgets.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'stretch', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))' }} title={`Applies to ${tickerWidgets.length} ticker widget${tickerWidgets.length !== 1 ? 's' : ''} on this dashboard`}>
+              <span style={{ display: 'flex', alignItems: 'center', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', padding: '0 8px', background: 'var(--theme-surface, #0d1826)' }}>Ticker</span>
+              <input
+                value={tickerInput}
+                onChange={e => setTickerInput(e.target.value.toUpperCase())}
+                onKeyDown={e => { if (e.key === 'Enter') applyTicker() }}
+                placeholder="AAPL"
+                style={{ width: 62, background: 'var(--theme-bg, #101c2e)', border: 'none', borderLeft: '1px solid var(--theme-border, rgba(255,255,255,0.12))', color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', padding: '6px 8px', outline: 'none' }}
+              />
+              <button onClick={applyTicker} title="Apply ticker to all widgets"
+                style={{ background: 'rgba(201,168,76,0.12)', border: 'none', borderLeft: '1px solid var(--theme-border, rgba(255,255,255,0.12))', color: 'var(--theme-primary, #c9a84c)', padding: '0 12px', cursor: 'pointer', fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}
+              >Apply</button>
+            </div>
+          )}
           {editMode && (
             <>
               <button

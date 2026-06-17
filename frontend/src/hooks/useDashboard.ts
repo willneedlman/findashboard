@@ -70,6 +70,14 @@ export interface WidgetConfig {
   accountValue?: number                    // position-sizer
 }
 
+// Widget types that key off config.ticker — the dashboard-wide ticker control
+// broadcasts to all of these at once.
+export const TICKER_WIDGET_TYPES: WidgetType[] = [
+  'price-card', 'mini-chart', 'options-snapshot', 'options-pricer', 'delta-target',
+  'tradingview-chart', 'dealer-gex', 'vol-skew', 'analyst-ratings', 'valuation',
+  'insider-activity', 'time-and-sales', 'unusual-flow', 'position-sizer',
+]
+
 export interface Dashboard {
   id: string
   name: string
@@ -526,6 +534,12 @@ export function useDashboard(userId?: string | null) {
     patchActive(d => ({ ...d, layouts: applyConstraints(d.widgets, [...layouts]) }))
   }, [patchActive])
 
+  // Retarget every ticker-driven widget in one pass — looping updateWidget would
+  // race on the captured workspace snapshot (last write wins).
+  const setAllTickers = useCallback((ticker: string) => {
+    patchActive(d => ({ ...d, widgets: d.widgets.map(w => TICKER_WIDGET_TYPES.includes(w.type) ? { ...w, ticker } : w) }))
+  }, [patchActive])
+
   const resetDashboard = useCallback(() => {
     const p = buildPreset('cockpit')
     patchActive(d => ({ ...d, widgets: p.widgets, layouts: p.layouts }))
@@ -553,7 +567,7 @@ export function useDashboard(userId?: string | null) {
 
   return {
     widgets: active.widgets, layouts: active.layouts,
-    addWidget, removeWidget, updateWidget, updateLayouts, resetDashboard,
+    addWidget, removeWidget, updateWidget, updateLayouts, resetDashboard, setAllTickers,
     dashboards: ws.dashboards.map(d => ({ id: d.id, name: d.name })),
     activeId: ws.activeId,
     switchDashboard, createDashboard, renameDashboard, deleteDashboard,
