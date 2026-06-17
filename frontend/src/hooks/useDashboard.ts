@@ -446,9 +446,9 @@ function buildPreset(key: PresetKey): { widgets: WidgetConfig[]; layouts: Layout
     // left watchlist rail, the central chart + order ticket, a live time & sales
     // tape on the right, and a full-width positions ledger underneath.
     { type: 'index-tape',    config: { tickers: ['SPY', 'QQQ', 'DIA', 'IWM', '^VIX', 'BTC-USD'] }, x: 0, y: 0, w: 12, h: 2 },
-    { type: 'watchlist',     config: { tickers: ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'SPY', 'AMD', 'META'] }, x: 0, y: 2, w: 3, h: 9 },
-    { type: 'paper-trade',   config: { ticker: 'AAPL' },                x: 3, y: 2,  w: 6,  h: 9 },
-    { type: 'time-and-sales', config: { ticker: 'AAPL' },              x: 9, y: 2,  w: 3,  h: 9 },
+    { type: 'watchlist',     config: { tickers: ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'SPY', 'AMD', 'META'] }, x: 0, y: 2, w: 2, h: 9 },
+    { type: 'paper-trade',   config: { ticker: 'AAPL' },                x: 2, y: 2,  w: 8,  h: 9 },
+    { type: 'time-and-sales', config: { ticker: 'AAPL' },              x: 10, y: 2, w: 2,  h: 9 },
     { type: 'pm-portfolios',                                            x: 0, y: 11, w: 12, h: 6 },
   ])
 

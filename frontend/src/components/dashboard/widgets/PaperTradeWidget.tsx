@@ -573,7 +573,7 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
           )}
         </div>
 
-        <div style={{ width: 212, flexShrink: 0, borderLeft: `1px solid ${T.border}`, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ width: 178, flexShrink: 0, borderLeft: `1px solid ${T.border}`, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 7, borderBottom: `1px solid ${T.border}`, overflowY: 'auto', flexShrink: 0 }}>
             <div style={{ display: 'flex', gap: 0 }}>
               {(['equity', 'option'] as const).map(m => (
