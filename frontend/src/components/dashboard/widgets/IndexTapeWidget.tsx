@@ -5,7 +5,7 @@ import type { WidgetConfig } from '../../../hooks/useDashboard'
 
 const T = {
   bg:    'var(--theme-bg, #101c2e)',
-  muted: '#8a9ab0',
+  muted: 'var(--theme-secondary, #8a9ab0)',
   pos:   '#22C55E',
   neg:   '#EF4444',
   mono:  'var(--theme-mono)',

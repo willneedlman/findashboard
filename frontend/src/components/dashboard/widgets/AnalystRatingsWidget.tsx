@@ -7,7 +7,7 @@ const T = {
   border: 'rgba(255,255,255,0.06)',
   gold:  'var(--theme-primary, #c9a84c)',
   muted: 'var(--theme-secondary, #5e768f)',
-  sub:   '#8a9ab0',
+  sub:   'var(--theme-secondary, #8a9ab0)',
   text:  'var(--theme-text, #d7e3fc)',
   mono:  'var(--theme-mono)',
   label: 'var(--theme-sans)',

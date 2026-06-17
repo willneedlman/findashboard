@@ -80,6 +80,10 @@ export default function SkewTool() {
         {data && (() => {
           const sel = data.term_structure.find(t => t.expiry === expiry) ?? data.term_structure[0]
           const em = expectedMove(sel.atm_iv, sel.dte, data.spot)
+          // Default the term-structure x-axis to a realistic window around the
+          // selected expiry instead of the full LEAPS range (which dwarfs it).
+          const maxDte = Math.max(...data.term_structure.map(t => t.dte))
+          const termXMax = Math.min(maxDte, Math.max(Math.round(sel.dte * 4), 120))
           return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
@@ -118,7 +122,7 @@ export default function SkewTool() {
               <ResponsiveContainer width="100%" height={232}>
                 <LineChart data={data.term_structure} margin={{ top: 8, right: 16, left: 0, bottom: 4 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.08)" />
-                  <XAxis dataKey="dte" tick={TICK} tickFormatter={(v: number) => `${v}d`} type="number" domain={['dataMin', 'dataMax']} />
+                  <XAxis dataKey="dte" tick={TICK} tickFormatter={(v: number) => `${v}d`} type="number" domain={[0, termXMax]} allowDataOverflow />
                   <YAxis tick={TICK} tickFormatter={(v: number) => `${v}%`} width={42} domain={['auto', 'auto']} />
                   <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number, n: string) => [`${v.toFixed(1)}${n === 'atm_iv' ? '%' : ''}`, n === 'atm_iv' ? 'ATM IV' : 'Put Skew']} labelFormatter={(d) => `${d} DTE`} />
                   <Line type="monotone" dataKey="atm_iv" name="atm_iv" stroke={GOLD} strokeWidth={2} dot={{ r: 2 }} />

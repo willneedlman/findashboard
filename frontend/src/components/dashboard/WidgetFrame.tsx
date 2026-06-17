@@ -20,7 +20,7 @@ interface WidgetFrameProps {
 const TICKER_WIDGETS: WidgetType[]        = ['price-card', 'mini-chart', 'options-snapshot', 'options-pricer', 'delta-target', 'tradingview-chart', 'dealer-gex', 'vol-skew', 'analyst-ratings', 'valuation', 'insider-activity']
 const TICKERS_WIDGETS: WidgetType[]       = ['watchlist', 'earnings-calendar', 'news-feed', 'correlation-matrix', 'index-tape']
 // Tickers widgets that also accept "load from a Portfolio Manager book".
-const PORTFOLIO_LOADABLE: WidgetType[]    = ['watchlist', 'index-tape']
+const PORTFOLIO_LOADABLE: WidgetType[]    = ['watchlist', 'index-tape', 'earnings-calendar']
 const PORTFOLIO_WIDGETS: WidgetType[]     = ['portfolio-summary']
 const YIELD_WIDGETS: WidgetType[]         = ['macro-strip']
 const GLOBAL_MACRO_WIDGETS: WidgetType[]    = ['global-macro']

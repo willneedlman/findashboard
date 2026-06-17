@@ -47,19 +47,34 @@ interface OverlayParams { smaPeriod: number; emaPeriod: number; bbPeriod: number
 const DEFAULT_PARAMS: OverlayParams = { smaPeriod: 20, emaPeriod: 20, bbPeriod: 20, bbMult: 2 }
 const DEFAULT_OVERLAYS: Record<OverlayKey, boolean> = { sma: false, ema: false, bb: false, vwap: false, vol: true }
 
-interface OverlayState { on: Record<OverlayKey, boolean>; params: OverlayParams }
+interface OverlayState { on: Record<OverlayKey, boolean>; params: OverlayParams; windowKey: string; barSpacing: number }
 function loadOverlayState(id: string): OverlayState {
   try {
     const raw = JSON.parse(localStorage.getItem(`paper-overlays-${id}`) || 'null')
-    if (raw) return { on: { ...DEFAULT_OVERLAYS, ...raw.on }, params: { ...DEFAULT_PARAMS, ...raw.params } }
+    if (raw) return { on: { ...DEFAULT_OVERLAYS, ...raw.on }, params: { ...DEFAULT_PARAMS, ...raw.params }, windowKey: raw.windowKey || '1D', barSpacing: raw.barSpacing || 0 }
   } catch { /* ignore */ }
-  return { on: { ...DEFAULT_OVERLAYS }, params: { ...DEFAULT_PARAMS } }
+  return { on: { ...DEFAULT_OVERLAYS }, params: { ...DEFAULT_PARAMS }, windowKey: '1D', barSpacing: 0 }
 }
 
 // Intraday timeframes carry pre/after-hours bars and refresh fast; daily+ are
 // session-aggregated. The chart always requests full hours on intraday.
 const DAILY_TFS = ['1d', '1wk', '1mo']
 const isIntraday = (tf: string) => !DAILY_TFS.includes(tf)
+
+// Graph width: how much time is visible at once. Default 1 trading day.
+const WINDOWS = [{ key: '1D', label: '1D' }, { key: '1W', label: '1W' }, { key: '1M', label: '1M' }, { key: '3M', label: '3M' }, { key: 'all', label: 'All' }] as const
+const WINDOW_SEC: Record<string, number> = { '1D': 86400, '1W': 604800, '1M': 2592000, '3M': 7776000 }
+const _numTime = (t: number | string) => (typeof t === 'number' ? t : Date.parse(t + 'T00:00:00Z') / 1000)
+function applyWindow(ts: ReturnType<IChartApi['timeScale']> | undefined, candles: Candle[], win: string) {
+  if (!ts || !candles.length) return
+  const lastIdx = candles.length - 1
+  if (win === 'all' || !WINDOW_SEC[win]) { ts.fitContent(); return }
+  const cutoff = _numTime(candles[lastIdx].time) - WINDOW_SEC[win]
+  let from = 0
+  for (let i = lastIdx; i >= 0; i--) { if (_numTime(candles[i].time) < cutoff) { from = i + 1; break } }
+  from = Math.min(from, Math.max(0, lastIdx - 14))
+  ts.setVisibleLogicalRange({ from, to: lastIdx + 3 })
+}
 
 interface ChainRow { strike: number; lastPrice: number; bid: number; ask: number }
 interface OptionChain { calls: ChainRow[]; puts: ChainRow[]; spot: number | null }
@@ -84,17 +99,19 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
   const qc = useQueryClient()
   const [ticker, setTicker] = useState((config.ticker || 'SPY').toUpperCase())
   const [tickerInput, setTickerInput] = useState(ticker)
-  const [tfKey, setTfKey] = useState('1d')
+  const [tfKey, setTfKey] = useState('10m')
   const initialOverlays = loadOverlayState(config.id)
   const [overlays, setOverlays] = useState<Record<OverlayKey, boolean>>(initialOverlays.on)
   const [params, setParams] = useState<OverlayParams>(initialOverlays.params)
+  const [windowKey, setWindowKey] = useState(initialOverlays.windowKey)
+  const [barSpacing, setBarSpacing] = useState(initialOverlays.barSpacing)
   const [overlayCfgOpen, setOverlayCfgOpen] = useState(false)
   const [candles, setCandles] = useState<Candle[]>([])
 
-  // Persist overlay toggles + params per widget so a customized chart survives reload.
+  // Persist overlay toggles + params + zoom per widget so a customized chart survives reload.
   useEffect(() => {
-    try { localStorage.setItem(`paper-overlays-${config.id}`, JSON.stringify({ on: overlays, params })) } catch { /* ignore */ }
-  }, [overlays, params, config.id])
+    try { localStorage.setItem(`paper-overlays-${config.id}`, JSON.stringify({ on: overlays, params, windowKey, barSpacing })) } catch { /* ignore */ }
+  }, [overlays, params, windowKey, barSpacing, config.id])
 
   const containerRef = useRef<HTMLDivElement | null>(null)
   const chartRef = useRef<IChartApi | null>(null)
@@ -102,13 +119,23 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
   const overlayRefs = useRef<ISeriesApi<'Line'>[]>([])
   const volumeRef = useRef<ISeriesApi<'Histogram'> | null>(null)
   const lenRef = useRef(0)
+  const windowRef = useRef(windowKey); useEffect(() => { windowRef.current = windowKey }, [windowKey])
+  const barSpacingRef = useRef(barSpacing); useEffect(() => { barSpacingRef.current = barSpacing }, [barSpacing])
+  const candlesRef = useRef<Candle[]>([]); useEffect(() => { candlesRef.current = candles }, [candles])
+  const pickWindow = (w: string) => { setWindowKey(w); setBarSpacing(0); applyWindow(chartRef.current?.timeScale(), candlesRef.current, w) }
+  const pickBarSpacing = (n: number) => {
+    setBarSpacing(n)
+    const ts = chartRef.current?.timeScale()
+    if (n > 0) { ts?.applyOptions({ barSpacing: n }); ts?.scrollToRealTime() }
+    else applyWindow(ts, candlesRef.current, windowRef.current)
+  }
   const orderLineRef = useRef<IPriceLine | null>(null)
   const draggingRef = useRef(false)
   const [spot, setSpot] = useState<number | null>(null)
   const [chartErr, setChartErr] = useState(false)
   const [, setTick] = useState(0)
   useEffect(() => { const id = window.setInterval(() => setTick(t => t + 1), 30_000); return () => window.clearInterval(id) }, [])
-  const session = marketSession()
+  const session = marketSession(new Date(), ticker)
 
   const [side, setSide] = useState<'buy' | 'sell'>('buy')
   const [qty, setQty] = useState('1')
@@ -213,7 +240,10 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
       // hold the scrolled-back position. Either way the zoom level is preserved.
       const follow = !fit && !!prevRange && prevRange.to >= lenRef.current - 2
       candleRef.current?.setData(cs.map(c => ({ time: c.time as Time, open: c.open, high: c.high, low: c.low, close: c.close })))
-      if (fit) ts?.fitContent()
+      if (fit) {
+        if (barSpacingRef.current > 0) { ts?.applyOptions({ barSpacing: barSpacingRef.current }); ts?.scrollToRealTime() }
+        else applyWindow(ts, cs, windowRef.current)
+      }
       else if (follow) ts?.scrollToRealTime()
       else if (prevRange) ts?.setVisibleLogicalRange(prevRange)
       lenRef.current = cs.length
@@ -242,26 +272,31 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
   })
 
   // ── Indicator overlays ──
+  // setData on the volume/overlay series resets the time scale to its default
+  // view; capture and restore the visible range so live polls keep the zoom.
   useEffect(() => {
     const chart = chartRef.current
     if (!chart) return
+    const keep = chart.timeScale().getVisibleLogicalRange()
     overlayRefs.current.forEach(s => { try { chart.removeSeries(s) } catch { /* gone */ } })
     overlayRefs.current = []
     if (volumeRef.current) volumeRef.current.setData(overlays.vol && candles.length
       ? candles.map(c => ({ time: c.time as Time, value: c.volume, color: c.close >= c.open ? 'rgba(34,197,94,0.45)' : 'rgba(239,68,68,0.45)' }))
       : [])
-    if (!candles.length) return
-    const close = candles.map(c => c.close)
-    const times = candles.map(c => c.time as Time)
-    const add = (vals: (number | null)[], color: string) => {
-      const s = chart.addLineSeries({ color, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false })
-      s.setData(vals.map((v, i) => (v == null ? null : { time: times[i], value: v })).filter(Boolean) as { time: Time; value: number }[])
-      overlayRefs.current.push(s)
+    if (candles.length) {
+      const close = candles.map(c => c.close)
+      const times = candles.map(c => c.time as Time)
+      const add = (vals: (number | null)[], color: string) => {
+        const s = chart.addLineSeries({ color, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false })
+        s.setData(vals.map((v, i) => (v == null ? null : { time: times[i], value: v })).filter(Boolean) as { time: Time; value: number }[])
+        overlayRefs.current.push(s)
+      }
+      if (overlays.sma) add(smaArr(close, params.smaPeriod), '#60a5fa')
+      if (overlays.ema) add(emaArr(close, params.emaPeriod), '#f59e0b')
+      if (overlays.bb) { const b = bollinger(close, params.bbPeriod, params.bbMult); add(b.upper, '#a78bfa'); add(b.lower, '#a78bfa') }
+      if (overlays.vwap) add(vwapArr(candles), '#22d3ee')
     }
-    if (overlays.sma) add(smaArr(close, params.smaPeriod), '#60a5fa')
-    if (overlays.ema) add(emaArr(close, params.emaPeriod), '#f59e0b')
-    if (overlays.bb) { const b = bollinger(close, params.bbPeriod, params.bbMult); add(b.upper, '#a78bfa'); add(b.lower, '#a78bfa') }
-    if (overlays.vwap) add(vwapArr(candles), '#22d3ee')
+    if (keep) chart.timeScale().setVisibleLogicalRange(keep)
   }, [candles, overlays, params])
 
   // ── Buy/sell markers from the user's fills on this ticker ──
@@ -472,6 +507,10 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', padding: '4px 8px', background: 'rgba(0,0,0,0.15)', borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
         <input value={tickerInput} onChange={e => setTickerInput(e.target.value.toUpperCase())} onKeyDown={e => e.key === 'Enter' && commitTicker()} onBlur={commitTicker} style={{ ...inputStyle, width: 64, fontWeight: 700, color: T.gold }} />
         {spot != null && <span style={{ fontFamily: T.mono, fontSize: 11, color: T.text }}>${spot.toFixed(2)}</span>}
+        <span title="US market session (ET)" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: session.color, whiteSpace: 'nowrap' }}>
+          <span style={{ width: 5, height: 5, borderRadius: '50%', background: session.color, boxShadow: `0 0 5px ${session.color}` }} />
+          {session.label}
+        </span>
         <div style={{ display: 'flex', gap: 2, marginLeft: 'auto', position: 'relative' }}>
           {OVERLAYS.map(o => (
             <button key={o.key} onClick={() => setOverlays(s => ({ ...s, [o.key]: !s[o.key] }))} style={{
@@ -487,7 +526,11 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
             background: overlayCfgOpen ? 'rgba(201,168,76,0.12)' : 'transparent',
             color: overlayCfgOpen ? T.gold : 'rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center',
           }}><Sliders size={10} /></button>
-          <select value={tfKey} onChange={e => setTfKey(e.target.value)} style={selStyle}>
+          <select value={barSpacing > 0 ? 'custom' : windowKey} onChange={e => pickWindow(e.target.value)} style={selStyle} title="Graph width (visible span)">
+            {WINDOWS.map(w => <option key={w.key} value={w.key}>{w.label}</option>)}
+            {barSpacing > 0 && <option value="custom" disabled>Custom</option>}
+          </select>
+          <select value={tfKey} onChange={e => setTfKey(e.target.value)} style={selStyle} title="Candle interval">
             {TFS.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
           </select>
 
@@ -507,7 +550,13 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
                     style={{ ...inputStyle, width: 56 }} />
                 </label>
               ))}
-              <button onClick={() => setParams({ ...DEFAULT_PARAMS })} style={{ alignSelf: 'flex-end', background: 'transparent', border: `1px solid ${T.border}`, color: T.muted, fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '2px 8px', cursor: 'pointer' }}>Reset</button>
+              <span style={{ ...numLbl, color: T.gold, marginTop: 4 }}>Candle width</span>
+              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                <span style={numLbl}>Bar spacing</span>
+                <input type="number" min={0} max={40} step={1} value={barSpacing} onChange={e => pickBarSpacing(Math.max(0, Math.min(40, Number(e.target.value))))} style={{ ...inputStyle, width: 56 }} />
+              </label>
+              <span style={{ fontFamily: T.mono, fontSize: 8, color: T.muted }}>0 = auto (fit to graph width)</span>
+              <button onClick={() => { setParams({ ...DEFAULT_PARAMS }); pickBarSpacing(0); pickWindow('1D') }} style={{ alignSelf: 'flex-end', background: 'transparent', border: `1px solid ${T.border}`, color: T.muted, fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '2px 8px', cursor: 'pointer' }}>Reset</button>
             </div>
           )}
         </div>
@@ -517,10 +566,6 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
       <div style={{ display: 'flex', flexDirection: 'row', flex: 1, minHeight: 0, overflow: 'hidden' }}>
         <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
           <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
-          <span title="US market session (ET)" style={{ position: 'absolute', top: 5, left: '50%', transform: 'translateX(-50%)', display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: session.color, background: 'rgba(0,0,0,0.35)', padding: '1px 7px', pointerEvents: 'none', whiteSpace: 'nowrap' }}>
-            <span style={{ width: 5, height: 5, borderRadius: '50%', background: session.color, boxShadow: `0 0 5px ${session.color}` }} />
-            {session.label}
-          </span>
           {chartErr && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: T.mono, fontSize: 10, color: T.muted }}>No chart data</div>}
           {!isOption && otype !== 'market' && !chartErr && (
             <div style={{ position: 'absolute', top: 6, left: 8, fontFamily: T.mono, fontSize: 8.5, color: T.text, background: 'rgba(0,0,0,0.4)', border: `1px solid ${T.border}`, padding: '2px 6px', pointerEvents: 'none', letterSpacing: '0.03em' }}>

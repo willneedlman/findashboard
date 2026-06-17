@@ -75,7 +75,7 @@ export default function SectorRotationWidget({ config }: { config: WidgetConfig 
               <div key={s.ticker} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', borderBottom: `1px solid ${T.border}` }}>
                 <span style={{ fontFamily: T.mono, fontSize: 9, color: '#4a5d72', width: 14, flexShrink: 0 }}>{String(i + 1).padStart(2, '0')}</span>
                 <span style={{ fontFamily: T.mono, fontSize: 9, fontWeight: 700, color: T.gold, border: '1px solid rgba(201,168,76,0.3)', padding: '1px 5px', flexShrink: 0, width: 42, textAlign: 'center' }}>{s.ticker}</span>
-                <span style={{ fontFamily: T.label, fontSize: 10, color: '#c8d4e6', width: 92, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+                <span style={{ fontFamily: T.label, fontSize: 10, color: T.text, width: 92, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
                 <div style={{ flex: 1, display: 'flex', alignItems: 'center', minWidth: 40 }}>
                   <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end', paddingRight: 1 }}>
                     <div style={{ width: up ? '0%' : pct, height: 9, background: `rgba(239,68,68,${a})` }} />

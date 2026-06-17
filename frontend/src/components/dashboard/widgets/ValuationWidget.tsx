@@ -12,53 +12,58 @@ const T = {
   label: 'var(--theme-sans)',
   rich:  '#e07a52',
   cheap: '#22c55e',
-  neutral: '#8a9ab0',
+  neutral: 'var(--theme-secondary, #8a9ab0)',
 }
 
-interface HubData {
-  pe_ratio: number | null
-  forward_pe: number | null
-  price_to_sales: number | null
-  ev_ebitda: number | null
-  peg_ratio: number | null
-  dividend_yield: number | null
+interface PeerRow {
+  ticker: string; is_target: boolean
+  pe: number | null; forward_pe: number | null; ps: number | null
+  ev_ebitda: number | null; peg: number | null; dividend_yield: number | null
+}
+interface PeerResp { ticker: string; sector: string; peers: PeerRow[] }
+
+function median(vals: (number | null | undefined)[]): number | null {
+  const xs = vals.filter((v): v is number => v != null && isFinite(v) && v > 0).sort((a, b) => a - b)
+  if (!xs.length) return null
+  const m = Math.floor(xs.length / 2)
+  return xs.length % 2 ? xs[m] : (xs[m - 1] + xs[m]) / 2
 }
 
-// Broad large-cap reference levels. The sub-line compares each metric to these
-// ("vs market") rather than a fabricated per-sector number.
-const REF: Record<string, number> = { pe: 22, fpe: 19, ps: 2.8, ev: 14, peg: 1.6, dy: 1.5 }
-
-// Uniform rule (matches the design): above the market reference reads rich
-// (orange, up), below reads cheap (green, down), within 8% reads in line.
-function cell(label: string, raw: number | null, ref: number, fmt: (v: number) => string) {
+// Above the sector median reads rich (orange, up), below reads cheap (green,
+// down), within 8% reads in line. Uniform across all multiples (design rule).
+function cell(label: string, raw: number | null, med: number | null, fmt: (v: number) => string) {
   if (raw == null || !isFinite(raw) || raw <= 0) return { label, value: '—', rel: '', color: T.neutral, arrow: '' }
-  const deltaPct = (raw / ref - 1) * 100
+  const value = fmt(raw)
+  if (med == null) return { label, value, rel: 'no sector data', color: T.neutral, arrow: '' }
+  const deltaPct = (raw / med - 1) * 100
   const inLine = Math.abs(deltaPct) < 8
-  const isHigh = deltaPct > 0
-  const color = inLine ? T.neutral : isHigh ? T.rich : T.cheap
-  const arrow = inLine ? '' : isHigh ? '↑' : '↓'
-  const rel = inLine ? 'in line' : `${deltaPct >= 0 ? '+' : ''}${deltaPct.toFixed(0)}% vs mkt`
-  return { label, value: fmt(raw), rel, color, arrow }
+  const color = inLine ? T.neutral : deltaPct > 0 ? T.rich : T.cheap
+  const arrow = inLine ? '' : deltaPct > 0 ? '↑' : '↓'
+  const rel = inLine ? 'in line' : `${deltaPct >= 0 ? '+' : ''}${deltaPct.toFixed(0)}% vs sector`
+  return { label, value, rel, color, arrow }
 }
 
 export default function ValuationWidget({ config }: { config: WidgetConfig }) {
   const ticker = (config.ticker || 'AAPL').toUpperCase()
-  const { data, isLoading } = useQuery<HubData>({
+  const { data, isLoading } = useQuery<PeerResp>({
     queryKey: ['valuation-widget', ticker],
-    queryFn: () => axios.get(`/api/corporate/hub?ticker=${encodeURIComponent(ticker)}`).then(r => r.data),
-    staleTime: 600_000,
+    queryFn: () => axios.get(`/api/corporate/peer-valuation?ticker=${encodeURIComponent(ticker)}`).then(r => r.data),
+    staleTime: 1_800_000,
     retry: 1,
   })
 
-  // yfinance returns dividendYield already as a percent (0.36 = 0.36%).
-  const dy = data?.dividend_yield ?? null
+  const peers = data?.peers ?? []
+  const self = peers.find(p => p.is_target) ?? null
+  const others = peers.filter(p => !p.is_target)
+  const med = (k: keyof PeerRow) => median(others.map(p => p[k] as number | null))
+
   const cells = [
-    cell('P / E', data?.pe_ratio ?? null, REF.pe, v => v.toFixed(1)),
-    cell('Fwd P / E', data?.forward_pe ?? null, REF.fpe, v => v.toFixed(1)),
-    cell('P / S', data?.price_to_sales ?? null, REF.ps, v => v.toFixed(1)),
-    cell('EV / EBITDA', data?.ev_ebitda ?? null, REF.ev, v => v.toFixed(1)),
-    cell('PEG', data?.peg_ratio ?? null, REF.peg, v => v.toFixed(2)),
-    cell('Div Yield', dy, REF.dy, v => `${v.toFixed(2)}%`),
+    cell('P / E', self?.pe ?? null, med('pe'), v => v.toFixed(1)),
+    cell('Fwd P / E', self?.forward_pe ?? null, med('forward_pe'), v => v.toFixed(1)),
+    cell('P / S', self?.ps ?? null, med('ps'), v => v.toFixed(1)),
+    cell('EV / EBITDA', self?.ev_ebitda ?? null, med('ev_ebitda'), v => v.toFixed(1)),
+    cell('PEG', self?.peg ?? null, med('peg'), v => v.toFixed(2)),
+    cell('Div Yield', self?.dividend_yield ?? null, med('dividend_yield'), v => `${v.toFixed(2)}%`),
   ]
 
   return (
@@ -68,8 +73,8 @@ export default function ValuationWidget({ config }: { config: WidgetConfig }) {
           <div key={i} style={{ padding: '10px 12px', borderRight: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 3, minWidth: 0 }}>
             <div style={{ fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.muted, whiteSpace: 'nowrap' }}>{m.label}</div>
             <div style={{ fontFamily: T.mono, fontSize: 18, fontWeight: 700, color: T.text, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{isLoading ? '·' : m.value}</div>
-            <div style={{ fontFamily: T.mono, fontSize: 9, color: m.color, display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
-              {m.arrow && <span>{m.arrow}</span>}{m.rel}
+            <div style={{ fontFamily: T.mono, fontSize: 9, color: m.color, display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {m.arrow && <span>{m.arrow}</span>}{isLoading ? '' : m.rel}
             </div>
           </div>
         ))}
