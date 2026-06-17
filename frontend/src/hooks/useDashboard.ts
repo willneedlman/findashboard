@@ -452,15 +452,15 @@ function buildPreset(key: PresetKey): { widgets: WidgetConfig[]; layouts: Layout
   ])
 
   if (key === 'cockpit') return fromItems([
-    // Trading Portal "cockpit": ticker-tape strip, a left watchlist rail, the
-    // central chart + order ticket, the position sizer + time & sales to the
-    // right of the chart, and a full-width positions ledger underneath.
+    // Trading Portal "cockpit": ticker-tape strip; a wide chart + order ticket
+    // with the position sizer and time & sales to its right; the watchlist and
+    // positions ledger side by side underneath.
     { type: 'index-tape',    config: { tickers: ['SPY', 'QQQ', 'DIA', 'IWM', '^VIX', 'BTC-USD'] }, x: 0, y: 0, w: 12, h: 1 },
-    { type: 'watchlist',     config: { tickers: ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'SPY', 'AMD', 'META'] }, x: 0, y: 1, w: 2, h: 9 },
-    { type: 'paper-trade',   config: { ticker: 'AAPL' },                x: 2, y: 1,  w: 6,  h: 9 },
+    { type: 'paper-trade',   config: { ticker: 'AAPL' },                x: 0, y: 1,  w: 8,  h: 9 },
     { type: 'position-sizer', config: { ticker: 'AAPL' },              x: 8, y: 1,  w: 2,  h: 9 },
     { type: 'time-and-sales', config: { ticker: 'AAPL' },              x: 10, y: 1, w: 2,  h: 9 },
-    { type: 'pm-portfolios',                                            x: 0, y: 10, w: 12, h: 6 },
+    { type: 'watchlist',     config: { tickers: ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'SPY', 'AMD', 'META'] }, x: 0, y: 10, w: 4, h: 6 },
+    { type: 'pm-portfolios',                                            x: 4, y: 10, w: 8, h: 6 },
   ])
 
   // Every PresetKey is handled above; fall back to the default workspace.
