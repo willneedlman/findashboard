@@ -389,17 +389,19 @@ function buildPreset(key: PresetKey): { widgets: WidgetConfig[]; layouts: Layout
     { type: 'news-feed',          config: { tickers: ['SPY', 'AAPL', 'NVDA'] }, x: 0, y: 20, w: 12, h: 4 },
   ])
 
-  // Screening — large screener + watchlist + mini chart / sector + earnings.
+  // Screening — large screener + watchlist + mini chart / sector + earnings /
+  // full-width market heatmap (Trading Portal design).
   if (key === 'screening') return fromItems([
     { type: 'screener',                                                 x: 0, y: 0,  w: 7, h: 9 },
     { type: 'watchlist',          config: { tickers: W_LIST },          x: 7, y: 0,  w: 5, h: 6 },
     { type: 'mini-chart',         config: { ticker: 'SPY', period: '1y' }, x: 7, y: 6, w: 5, h: 3 },
     { type: 'sector-rotation',                                          x: 0, y: 9,  w: 6, h: 7 },
     { type: 'earnings-calendar',  config: { tickers: EARN },           x: 6, y: 9,  w: 6, h: 7 },
+    { type: 'heatmap',                                                 x: 0, y: 16, w: 12, h: 8 },
   ])
 
   // Market Overview — index tape / global macro + yield curve + credit spreads /
-  // sector + news + sentiment.
+  // sector + news + sentiment / full-width market heatmap (Trading Portal design).
   if (key === 'market-overview') return fromItems([
     { type: 'index-tape',   config: { tickers: ['SPY', 'QQQ', 'DIA', 'IWM', '^VIX', 'BTC-USD'] }, x: 0, y: 0, w: 12, h: 2 },
     { type: 'global-macro',                                             x: 0, y: 2,  w: 3, h: 9 },
@@ -408,6 +410,7 @@ function buildPreset(key: PresetKey): { widgets: WidgetConfig[]; layouts: Layout
     { type: 'sector-rotation',                                          x: 0, y: 11, w: 4, h: 7 },
     { type: 'news-feed',          config: { tickers: ['SPY', 'AAPL', 'NVDA'] }, x: 4, y: 11, w: 5, h: 7 },
     { type: 'sentiment-gauge',                                          x: 9, y: 11, w: 3, h: 7 },
+    { type: 'heatmap',                                                 x: 0, y: 18, w: 12, h: 8 },
   ])
 
   // Risk Desk — risk metrics + exposure + position sizer / P/L attribution /
@@ -430,7 +433,8 @@ function buildPreset(key: PresetKey): { widgets: WidgetConfig[]; layouts: Layout
     { type: 'heatmap',                                                 x: 0, y: 9,  w: 12, h: 8 },
   ])
 
-  // Options Desk — snapshot + pricer + delta-target / dealer GEX + vol skew + sentiment.
+  // Options Desk — snapshot + pricer + delta-target / dealer GEX + vol skew +
+  // sentiment / full-width unusual options flow (Trading Portal design).
   if (key === 'options') return fromItems([
     { type: 'options-snapshot', config: { ticker: 'AAPL' },             x: 0, y: 0,  w: 7, h: 9 },
     { type: 'options-pricer',   config: { ticker: 'AAPL' },             x: 7, y: 0,  w: 5, h: 5 },
@@ -438,14 +442,17 @@ function buildPreset(key: PresetKey): { widgets: WidgetConfig[]; layouts: Layout
     { type: 'dealer-gex',       config: { ticker: 'AAPL' },             x: 0, y: 9,  w: 4, h: 7 },
     { type: 'vol-skew',         config: { ticker: 'AAPL' },             x: 4, y: 9,  w: 3, h: 7 },
     { type: 'sentiment-gauge',                                          x: 7, y: 11, w: 5, h: 5 },
+    { type: 'unusual-flow',     config: { ticker: 'AAPL' },             x: 0, y: 16, w: 12, h: 6 },
   ])
 
   if (key === 'cockpit') return fromItems([
-    // Trading Portal "cockpit" (Layout B): ticker-tape strip, watchlist rail,
-    // chart + order ticket + positions cockpit, full-width positions ledger.
-    { type: 'index-tape',   config: { tickers: ['SPY', 'QQQ', 'DIA', 'IWM', '^VIX', 'BTC-USD'] }, x: 0, y: 0, w: 12, h: 2 },
-    { type: 'watchlist',    config: { tickers: ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'SPY', 'AMD', 'META'] }, x: 0, y: 2, w: 3, h: 9 },
-    { type: 'paper-trade',  config: { ticker: 'AAPL' },                 x: 3, y: 2,  w: 9,  h: 9 },
+    // Trading Portal "cockpit" (Trading Portal design): ticker-tape strip, a
+    // left watchlist rail, the central chart + order ticket, a live time & sales
+    // tape on the right, and a full-width positions ledger underneath.
+    { type: 'index-tape',    config: { tickers: ['SPY', 'QQQ', 'DIA', 'IWM', '^VIX', 'BTC-USD'] }, x: 0, y: 0, w: 12, h: 2 },
+    { type: 'watchlist',     config: { tickers: ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'SPY', 'AMD', 'META'] }, x: 0, y: 2, w: 3, h: 9 },
+    { type: 'paper-trade',   config: { ticker: 'AAPL' },                x: 3, y: 2,  w: 6,  h: 9 },
+    { type: 'time-and-sales', config: { ticker: 'AAPL' },              x: 9, y: 2,  w: 3,  h: 9 },
     { type: 'pm-portfolios',                                            x: 0, y: 11, w: 12, h: 6 },
   ])
 
