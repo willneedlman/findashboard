@@ -126,7 +126,7 @@ export const WIDGET_DEFAULT_SIZE: Record<WidgetType, { w: number; h: number }> =
   'screener':            { w: 5, h: 6 },
   'pm-portfolios':       { w: 4, h: 6 },
   'paper-trade':         { w: 6, h: 8 },
-  'index-tape':          { w: 12, h: 2 },
+  'index-tape':          { w: 12, h: 1 },
   'analyst-ratings':     { w: 4, h: 6 },
   'valuation':           { w: 5, h: 5 },
   'insider-activity':    { w: 3, h: 6 },
@@ -416,14 +416,14 @@ function buildPreset(key: PresetKey): { widgets: WidgetConfig[]; layouts: Layout
   // Market Overview — index tape / global macro + yield curve + credit spreads /
   // sector + news + sentiment / full-width market heatmap (Trading Portal design).
   if (key === 'market-overview') return fromItems([
-    { type: 'index-tape',   config: { tickers: ['SPY', 'QQQ', 'DIA', 'IWM', '^VIX', 'BTC-USD'] }, x: 0, y: 0, w: 12, h: 2 },
-    { type: 'global-macro',                                             x: 0, y: 2,  w: 3, h: 9 },
-    { type: 'yield-curve',                                              x: 3, y: 2,  w: 5, h: 9 },
-    { type: 'credit-spreads',                                           x: 8, y: 2,  w: 4, h: 9 },
-    { type: 'sector-rotation',                                          x: 0, y: 11, w: 4, h: 7 },
-    { type: 'news-feed',          config: { tickers: ['SPY', 'AAPL', 'NVDA'] }, x: 4, y: 11, w: 5, h: 7 },
-    { type: 'sentiment-gauge',                                          x: 9, y: 11, w: 3, h: 7 },
-    { type: 'heatmap',                                                 x: 0, y: 18, w: 12, h: 8 },
+    { type: 'index-tape',   config: { tickers: ['SPY', 'QQQ', 'DIA', 'IWM', '^VIX', 'BTC-USD'] }, x: 0, y: 0, w: 12, h: 1 },
+    { type: 'global-macro',                                             x: 0, y: 1,  w: 3, h: 9 },
+    { type: 'yield-curve',                                              x: 3, y: 1,  w: 5, h: 9 },
+    { type: 'credit-spreads',                                           x: 8, y: 1,  w: 4, h: 9 },
+    { type: 'sector-rotation',                                          x: 0, y: 10, w: 4, h: 7 },
+    { type: 'news-feed',          config: { tickers: ['SPY', 'AAPL', 'NVDA'] }, x: 4, y: 10, w: 5, h: 7 },
+    { type: 'sentiment-gauge',                                          x: 9, y: 10, w: 3, h: 7 },
+    { type: 'heatmap',                                                 x: 0, y: 17, w: 12, h: 8 },
   ])
 
   // Risk Desk — risk metrics + exposure + position sizer / P/L attribution /
@@ -454,11 +454,11 @@ function buildPreset(key: PresetKey): { widgets: WidgetConfig[]; layouts: Layout
     // Trading Portal "cockpit" (Trading Portal design): ticker-tape strip, a
     // left watchlist rail, the central chart + order ticket, a live time & sales
     // tape on the right, and a full-width positions ledger underneath.
-    { type: 'index-tape',    config: { tickers: ['SPY', 'QQQ', 'DIA', 'IWM', '^VIX', 'BTC-USD'] }, x: 0, y: 0, w: 12, h: 2 },
-    { type: 'watchlist',     config: { tickers: ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'SPY', 'AMD', 'META'] }, x: 0, y: 2, w: 2, h: 9 },
-    { type: 'paper-trade',   config: { ticker: 'AAPL' },                x: 2, y: 2,  w: 8,  h: 9 },
-    { type: 'time-and-sales', config: { ticker: 'AAPL' },              x: 10, y: 2, w: 2,  h: 9 },
-    { type: 'pm-portfolios',                                            x: 0, y: 11, w: 12, h: 6 },
+    { type: 'index-tape',    config: { tickers: ['SPY', 'QQQ', 'DIA', 'IWM', '^VIX', 'BTC-USD'] }, x: 0, y: 0, w: 12, h: 1 },
+    { type: 'watchlist',     config: { tickers: ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'SPY', 'AMD', 'META'] }, x: 0, y: 1, w: 2, h: 9 },
+    { type: 'paper-trade',   config: { ticker: 'AAPL' },                x: 2, y: 1,  w: 8,  h: 9 },
+    { type: 'time-and-sales', config: { ticker: 'AAPL' },              x: 10, y: 1, w: 2,  h: 9 },
+    { type: 'pm-portfolios',                                            x: 0, y: 10, w: 12, h: 6 },
   ])
 
   // Every PresetKey is handled above; fall back to the default workspace.
