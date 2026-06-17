@@ -39,6 +39,10 @@ export type WidgetType =
   | 'heatmap'
   | 'trade-blotter'
   | 'position-sizer'
+  // Not a real tile: selecting it in the palette surfaces the top-bar ticker
+  // selector instead of inserting a widget. Present here only so it can carry a
+  // palette label/icon/description.
+  | 'ticker-control'
 
 export interface WidgetConfig {
   id: string
@@ -87,6 +91,7 @@ export interface Dashboard {
   name: string
   widgets: WidgetConfig[]
   layouts: Layout[]
+  showTicker?: boolean   // surface the top-bar ticker selector on this dashboard
 }
 
 export interface StoredWorkspace {
@@ -133,6 +138,7 @@ export const WIDGET_DEFAULT_SIZE: Record<WidgetType, { w: number; h: number }> =
   'heatmap':             { w: 8, h: 8 },
   'trade-blotter':       { w: 6, h: 6 },
   'position-sizer':      { w: 4, h: 6 },
+  'ticker-control':      { w: 3, h: 2 },   // unused — never placed as a tile
 }
 
 export const WIDGET_LABELS: Record<WidgetType, string> = {
@@ -171,6 +177,7 @@ export const WIDGET_LABELS: Record<WidgetType, string> = {
   'heatmap':             'Market Heatmap',
   'trade-blotter':       'Trade Blotter',
   'position-sizer':      'Position Sizer',
+  'ticker-control':      'Ticker Control',
 }
 
 export const WIDGET_DESCRIPTIONS: Record<WidgetType, string> = {
@@ -209,6 +216,7 @@ export const WIDGET_DESCRIPTIONS: Record<WidgetType, string> = {
   'heatmap':             'S&P treemap by sector & market cap, colored by daily % change.',
   'trade-blotter':       'Order & fill history — side, qty, avg price, and fill status.',
   'position-sizer':      'Risk-based share sizing from account %, entry, and stop.',
+  'ticker-control':      'Shows the dashboard-wide ticker selector in the top bar (not a tile).',
 }
 
 export const WIDGET_ICONS: Record<WidgetType, string> = {
@@ -247,6 +255,7 @@ export const WIDGET_ICONS: Record<WidgetType, string> = {
   'heatmap':             'HM',
   'trade-blotter':       'BLT',
   'position-sizer':      'SIZ',
+  'ticker-control':      'TKR',
 }
 
 // ── Default layout — all 20 widget types, one each ───────────────────────────
@@ -539,6 +548,10 @@ export function useDashboard(userId?: string | null) {
 
   // Retarget every ticker-driven widget in one pass — looping updateWidget would
   // race on the captured workspace snapshot (last write wins).
+  const setShowTicker = useCallback((show: boolean) => {
+    patchActive(d => ({ ...d, showTicker: show }))
+  }, [patchActive])
+
   const setAllTickers = useCallback((ticker: string) => {
     // Clear any per-widget expiry too: expiries are ticker-specific, so a stale
     // one (e.g. dealer-gex / vol-skew) would point at a chain the new ticker may
@@ -574,6 +587,7 @@ export function useDashboard(userId?: string | null) {
   return {
     widgets: active.widgets, layouts: active.layouts,
     addWidget, removeWidget, updateWidget, updateLayouts, resetDashboard, setAllTickers,
+    showTicker: active.showTicker ?? false, setShowTicker,
     dashboards: ws.dashboards.map(d => ({ id: d.id, name: d.name })),
     activeId: ws.activeId,
     switchDashboard, createDashboard, renameDashboard, deleteDashboard,

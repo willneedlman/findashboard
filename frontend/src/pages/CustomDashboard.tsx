@@ -27,6 +27,7 @@ export default function CustomDashboard() {
   const { user } = useTheme()
   const {
     widgets, layouts, addWidget, removeWidget, updateWidget, updateLayouts, resetDashboard, setAllTickers,
+    showTicker, setShowTicker,
     dashboards, activeId, switchDashboard, createDashboard, renameDashboard, deleteDashboard,
   } = useDashboard(user?.id)
   const [editMode, setEditMode] = useState(false)
@@ -75,7 +76,7 @@ export default function CustomDashboard() {
         </div>
 
         {!isMobile && <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {tickerWidgets.length > 0 && (
+          {(showTicker || tickerWidgets.length > 0) && (
             <div style={{ display: 'flex', alignItems: 'stretch', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))' }} title={`Applies to ${tickerWidgets.length} ticker widget${tickerWidgets.length !== 1 ? 's' : ''} on this dashboard`}>
               <span style={{ display: 'flex', alignItems: 'center', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', padding: '0 8px', background: 'var(--theme-surface, #0d1826)' }}>Ticker</span>
               <input
@@ -220,7 +221,7 @@ export default function CustomDashboard() {
       <WidgetPalette
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
-        onAdd={(type: WidgetType) => addWidget(type)}
+        onAdd={(type: WidgetType) => { if (type === 'ticker-control') setShowTicker(true); else addWidget(type) }}
       />
     </PageWrapper>
   )
