@@ -271,7 +271,7 @@ export default function Layout({ children }: LayoutProps) {
         animate={{ width: collapsed ? 56 : 220 }}
         transition={{ duration: 0.25, ease: 'easeInOut' }}
         className="ft-sidebar flex-shrink-0 flex flex-col overflow-hidden"
-        style={{ background: 'var(--theme-bg, #060e1c)', borderRight: '1px solid var(--theme-primary, #c9a84c)30' }}
+        style={{ background: 'var(--theme-bg, #060e1c)', borderRightWidth: 1, borderRightStyle: 'solid', borderRightColor: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 19%, transparent)' }}
       >
         <div className={`flex px-3 py-4 border-b border-gold/10 min-h-[64px] ${collapsed ? 'justify-center' : 'items-center'}`}>
           {/* The mark itself toggles the sidebar open/closed — no separate arrow. */}

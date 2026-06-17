@@ -129,6 +129,11 @@ export default function CustomDashboard() {
                     onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                   >{PRESET_LABELS[k]}</button>
                 ))}
+                <button onClick={() => { createDashboard('blank'); setPresetMenuOpen(false) }}
+                  style={{ display: 'block', width: '100%', textAlign: 'left', fontFamily: 'var(--theme-sans)', fontSize: 11, padding: '7px 10px', cursor: 'pointer', border: 'none', borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'transparent', color: 'var(--theme-primary, #c9a84c)' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'rgba(201,168,76,0.1)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                >Custom — start blank</button>
               </div>
             )}
           </div>

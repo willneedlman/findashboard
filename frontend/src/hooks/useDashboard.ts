@@ -299,10 +299,10 @@ let _seq = 0
 const newId = () => `w${Date.now()}_${_seq++}`
 const newDashId = () => `d${Date.now()}_${_seq++}`
 
-export type PresetKey = 'main' | 'cockpit' | 'research' | 'screening' | 'market-overview' | 'options'
+export type PresetKey = 'main' | 'cockpit' | 'research' | 'screening' | 'market-overview' | 'options' | 'blank'
 
 export const PRESET_LABELS: Record<PresetKey, string> = {
-  main: 'Everything', cockpit: 'Trading Portal', research: 'Research', screening: 'Screening', 'market-overview': 'Market Overview', options: 'Options Desk',
+  main: 'Everything', cockpit: 'Trading Portal', research: 'Research', screening: 'Screening', 'market-overview': 'Market Overview', options: 'Options Desk', blank: 'Custom (blank)',
 }
 
 // A preset is a hand-placed list of tiles (12-col grid, 60px rows) so each
@@ -320,6 +320,7 @@ const EARN = ['NVDA', 'AAPL', 'MSFT', 'AMZN', 'META', 'GOOGL']
 
 function buildPreset(key: PresetKey): { widgets: WidgetConfig[]; layouts: Layout[] } {
   if (key === 'main') return { widgets: DEFAULT_WIDGETS, layouts: DEFAULT_LAYOUTS }
+  if (key === 'blank') return { widgets: [], layouts: [] }
 
   // Research — screener + analyst + sentiment / valuation + portfolios + insider /
   // sector + correlation + earnings / full-width news (Trading Portal design).
