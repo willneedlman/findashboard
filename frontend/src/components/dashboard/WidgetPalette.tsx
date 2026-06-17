@@ -8,6 +8,8 @@ const ALL_TYPES: WidgetType[] = [
   'watchlist', 'news-feed', 'earnings-calendar',
   'options-snapshot', 'options-pricer', 'delta-target',
   'portfolio-summary', 'correlation-matrix',
+  'analyst-ratings', 'valuation', 'insider-activity',
+  'index-tape',
   'macro-strip',
   'macro-calendar',
   'global-macro',

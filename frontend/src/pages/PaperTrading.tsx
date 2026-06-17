@@ -8,6 +8,39 @@ import ExpirySelect from '../components/ExpirySelect'
 import { GammaScalpingContent } from './GammaScalping'
 import CustomStrategyModal, { type CustomStrategyDef } from '../components/CustomStrategyModal'
 import { loadCustomStrategies, saveCustomStrategy } from '../utils/customStrategies'
+import { useTheme } from '../contexts/ThemeContext'
+import { buildOCC, parseOCC } from '../lib/occ'
+import PaperChart, { type ChartFill } from '../components/PaperChart'
+
+// Per-user auth for the paper engine: the current account id + session-token
+// headers. Paper trading is now each user's own book, so every call is owner-gated.
+function useAuth() {
+  const { user } = useTheme()
+  const token = typeof window !== 'undefined' ? (localStorage.getItem('ft-session-token') || '') : ''
+  return {
+    uid: user?.id || '',
+    authed: !!user?.id && !!token,
+    headers: { headers: { Authorization: `Bearer ${token}`, 'x-session-token': token } },
+  }
+}
+
+// Adapt the per-user engine's account response to the shape this page renders.
+function adaptAccount(d: any): AccountData {
+  const positions = [
+    ...(d?.positions ?? []).map((p: any) => ({ symbol: p.symbol, quantity: p.quantity, cost_basis: p.avg_cost * p.quantity, date_acquired: '' })),
+    ...(d?.option_positions ?? []).map((p: any) => ({ symbol: p.option_symbol, quantity: p.quantity, cost_basis: p.avg_cost * p.quantity, date_acquired: '' })),
+  ]
+  const orders = (d?.orders ?? []).map((o: any) => ({
+    id: o.id, type: o.order_type, symbol: o.option_symbol || o.symbol, side: o.side,
+    quantity: o.quantity, status: o.status, price: o.limit_price ?? o.stop_price ?? undefined,
+    avg_fill_price: o.fill_price ?? undefined, create_date: o.created_at ? new Date(o.created_at * 1000).toISOString() : '',
+  }))
+  return {
+    balances: { cash: d?.cash ?? 0, market_value: (d?.equity ?? 0) - (d?.cash ?? 0), equity: d?.equity ?? 0,
+                buying_power: d?.buying_power ?? 0, total_equity: d?.equity ?? 0, day_change: 0 },
+    positions, orders,
+  }
+}
 
 // ─── Theme tokens ────────────────────────────────────────────────────────────
 const T = {
@@ -151,23 +184,7 @@ function statusColor(status: string) {
   }
 }
 
-// ─── OCC option symbol helpers ────────────────────────────────────────────────
-function buildOCC(underlying: string, expDate: string, strike: string, callPut: 'C' | 'P'): string {
-  if (!underlying || !expDate || !strike || isNaN(parseFloat(strike))) return ''
-  const d = new Date(expDate + 'T00:00:00')
-  const yy = String(d.getFullYear()).slice(2)
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  const strikeInt = Math.round(parseFloat(strike) * 1000)
-  return `${underlying.toUpperCase()}${yy}${mm}${dd}${callPut}${String(strikeInt).padStart(8, '0')}`
-}
-
-function parseOCC(occ: string): { expDate: string; strike: string; callPut: 'C' | 'P' } | null {
-  const m = occ.trim().toUpperCase().match(/[A-Z]+(\d{2})(\d{2})(\d{2})([CP])(\d{8})$/)
-  if (!m) return null
-  const [, yy, mm, dd, cp, strike] = m
-  return { expDate: `20${yy}-${mm}-${dd}`, strike: String(parseInt(strike, 10) / 1000), callPut: cp as 'C' | 'P' }
-}
+// OCC option symbol helpers live in lib/occ (shared with the paper-trade widget).
 
 // ─── Multi-leg leg row ────────────────────────────────────────────────────────
 interface LegState { expDate: string; strike: string; callPut: 'C' | 'P'; side: string; qty: string }
@@ -441,8 +458,10 @@ function OrderTicket({ onOrderPlaced, importTemplate, onTemplateConsumed, import
     setTimeout(() => setFeedback(null), 3500)
   }
 
+  const { uid, headers } = useAuth()
+
   const eqMutation = useMutation({
-    mutationFn: (body: object) => axios.post('/api/trading/order/equity', body).then(r => r.data),
+    mutationFn: (body: object) => axios.post('/api/paper/order', body, headers).then(r => r.data),
     onSuccess: () => {
       showFeedback(true, 'Order placed successfully')
       setEqSymbol(''); setEqQty(''); setEqPrice('')
@@ -455,7 +474,7 @@ function OrderTicket({ onOrderPlaced, importTemplate, onTemplateConsumed, import
   })
 
   const opMutation = useMutation({
-    mutationFn: (body: object) => axios.post('/api/trading/order/option', body).then(r => r.data),
+    mutationFn: (body: object) => axios.post('/api/paper/order/option', body, headers).then(r => r.data),
     onSuccess: () => {
       showFeedback(true, 'Option order placed')
       setOpUnderlying(''); setOpExpDate(''); setOpStrike(''); setOpQty(''); setOpPrice('')
@@ -468,7 +487,7 @@ function OrderTicket({ onOrderPlaced, importTemplate, onTemplateConsumed, import
   })
 
   const mlMutation = useMutation({
-    mutationFn: (body: object) => axios.post('/api/trading/order/multileg', body).then(r => r.data),
+    mutationFn: (body: object) => axios.post('/api/paper/order/multileg', body, headers).then(r => r.data),
     onSuccess: () => {
       showFeedback(true, 'Multi-leg order placed')
       setMlUnderlying(''); setMlLegs([{ ...EMPTY_LEG }, { ...EMPTY_LEG }]); setMlPrice('')
@@ -483,25 +502,25 @@ function OrderTicket({ onOrderPlaced, importTemplate, onTemplateConsumed, import
   function handleEquitySubmit() {
     if (!eqSymbol || !eqQty) return
     eqMutation.mutate({
+      user_id: uid,
       symbol: eqSymbol.toUpperCase(),
       side: eqSide,
       quantity: parseInt(eqQty),
       order_type: eqType,
-      price: (eqType !== 'market' && eqPrice) ? parseFloat(eqPrice) : null,
-      duration: eqDur,
+      limit_price: (eqType === 'limit' && eqPrice) ? parseFloat(eqPrice) : null,
+      stop_price: (eqType === 'stop' && eqPrice) ? parseFloat(eqPrice) : null,
     })
   }
 
   function handleOptionSubmit() {
     if (!opUnderlying || !opSymbol || !opQty) return
     opMutation.mutate({
-      symbol: opUnderlying.toUpperCase(),
+      user_id: uid,
       option_symbol: opSymbol,
       side: opSide,
       quantity: parseInt(opQty),
       order_type: opType,
       price: (opType === 'limit' && opPrice) ? parseFloat(opPrice) : null,
-      duration: opDur,
     })
   }
 
@@ -511,15 +530,14 @@ function OrderTicket({ onOrderPlaced, importTemplate, onTemplateConsumed, import
       .filter(l => l.occ && l.qty)
     if (!mlUnderlying || validLegs.length < 2) return
     mlMutation.mutate({
-      symbol: mlUnderlying.toUpperCase(),
+      user_id: uid,
       legs: validLegs.map(l => ({
         option_symbol: l.occ,
         side: l.side,
         quantity: parseInt(l.qty),
       })),
       order_type: mlType,
-      price: (mlType !== 'market' && mlPrice) ? parseFloat(mlPrice) : null,
-      duration: mlDur,
+      net_price: (mlType !== 'market' && mlPrice) ? parseFloat(mlPrice) : null,
     })
   }
 
@@ -1301,17 +1319,19 @@ function OrdersPanel({ orders, onCancel, onCancelAll, cancelAllPending, cancelAl
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function PaperTrading() {
   const queryClient = useQueryClient()
+  const { uid, authed, headers } = useAuth()
 
   const { data, isError, isLoading, refetch } = useQuery<AccountData>({
-    queryKey: ['trading-account'],
-    queryFn: () => axios.get('/api/trading/account').then(r => r.data),
+    queryKey: ['trading-account', uid],
+    queryFn: () => axios.get(`/api/paper/account?user_id=${uid}`, headers).then(r => adaptAccount(r.data)),
+    enabled: authed,
     staleTime: 10_000,
     refetchOnWindowFocus: true,
     refetchInterval: 15_000,
   })
 
   const cancelMutation = useMutation({
-    mutationFn: (id: string) => axios.delete(`/api/trading/order/${id}`).then(r => r.data),
+    mutationFn: (id: string) => axios.delete(`/api/paper/order/${id}?user_id=${uid}`, headers).then(r => r.data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['trading-account'] }),
   })
 
@@ -1320,7 +1340,7 @@ export default function PaperTrading() {
       const pending = (orders ?? []).filter(o =>
         ['pending', 'open', 'partially_filled'].includes((o.status ?? '').toLowerCase()))
       if (pending.length === 0) return
-      const results = await Promise.allSettled(pending.map(o => axios.delete(`/api/trading/order/${o.id}`)))
+      const results = await Promise.allSettled(pending.map(o => axios.delete(`/api/paper/order/${o.id}?user_id=${uid}`, headers)))
       const failed = results.filter(r => r.status === 'rejected').length
       if (failed > 0) throw new Error(`${failed} of ${pending.length} cancellations failed`)
     },
@@ -1337,6 +1357,12 @@ export default function PaperTrading() {
   const orders = [...(data?.orders ?? [])].sort((a, b) =>
     new Date(b.create_date).getTime() - new Date(a.create_date).getTime()
   )
+
+  // Filled orders → buy/sell markers on the chart for the matching ticker.
+  const chartFills: ChartFill[] = orders
+    .filter(o => (o.status ?? '').toLowerCase() === 'filled' && o.create_date)
+    .map(o => ({ time: Math.floor(new Date(o.create_date).getTime() / 1000), side: o.side, symbol: o.symbol, option_symbol: o.symbol }))
+  const chartInitTicker = positions.find(p => /^[A-Z.]{1,6}$/.test(p.symbol))?.symbol || 'SPY'
 
   const dayChangeColor = bal
     ? bal.day_change >= 0 ? T.pos : T.neg
@@ -1385,6 +1411,17 @@ export default function PaperTrading() {
     window.addEventListener('resize', updateHeight)
     return () => window.removeEventListener('resize', updateHeight)
   }, [])
+
+  if (!authed) return (
+    <PageWrapper title="Paper Trading">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', textAlign: 'center' }}>
+        <div style={{ fontFamily: T.mono, color: T.muted, fontSize: 13, lineHeight: 1.6 }}>
+          Sign in to paper-trade your own account.<br />
+          <span style={{ fontSize: 11, color: T.dim }}>Each account gets its own $100k book, positions, and strategies.</span>
+        </div>
+      </div>
+    </PageWrapper>
+  )
 
   return (
     <PageWrapper title="Paper Trading">
@@ -1479,16 +1516,14 @@ export default function PaperTrading() {
             />
           </div>
 
-          {/* Middle: Positions — flex */}
-          <div style={{
-            flex: 1, minWidth: 0,
-            background: T.surface,
-            border: `1px solid ${T.border}`,
-            display: 'flex', flexDirection: 'column',
-            height: '100%',
-            overflow: 'hidden',
-          }}>
-            <PositionsPanel positions={positions} />
+          {/* Middle: Chart over Positions — flex */}
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 10, height: '100%', overflow: 'hidden' }}>
+            <div style={{ flex: '3 1 0', minHeight: 0, background: T.surface, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
+              <PaperChart initialTicker={chartInitTicker} fills={chartFills} storageKey={uid || 'page'} />
+            </div>
+            <div style={{ flex: '2 1 0', minHeight: 0, background: T.surface, border: `1px solid ${T.border}`, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <PositionsPanel positions={positions} />
+            </div>
           </div>
 
           {/* Right: Orders — 280px */}
@@ -1861,6 +1896,7 @@ function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy, onDis
   onAutomatedOrder?: (id: string, strategyName: string) => void
 }) {
   const qc = useQueryClient()
+  const { uid, authed, headers } = useAuth()
   const [open, setOpen] = useState(false)
   const [replayTicker, setReplayTicker] = useState('SPY')
   const [replayStart, setReplayStart] = useState('2024-01-01')
@@ -1899,27 +1935,28 @@ function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy, onDis
   // ── Scheduler queries (scoped to this panel, enabled when open) ──────────────
   const { data: schedulerStatus } = useQuery<SchedulerStatus>({
     queryKey: ['paper/scheduler/status'],
-    queryFn: () => axios.get('/api/paper/scheduler/status').then(r => r.data),
+    queryFn: () => axios.get(`/api/paper/scheduler/status?user_id=${uid}`, headers).then(r => r.data),
+    enabled: authed,
     refetchInterval: 15_000,
   })
 
   const { data: schedulerJobs = [] } = useQuery<SchedulerJob[]>({
     queryKey: ['paper/scheduler/jobs'],
-    queryFn: () => axios.get('/api/paper/scheduler/jobs').then(r => r.data),
-    enabled: open,
+    queryFn: () => axios.get(`/api/paper/scheduler/jobs?user_id=${uid}`, headers).then(r => r.data),
+    enabled: open && authed,
     refetchInterval: open ? 15_000 : false,
   })
 
   const { data: schedulerLog = [] } = useQuery<SchedulerLogEntry[]>({
     queryKey: ['paper/scheduler/log'],
-    queryFn: () => axios.get('/api/paper/scheduler/log?limit=50').then(r => r.data),
-    enabled: open,
+    queryFn: () => axios.get(`/api/paper/scheduler/log?limit=50&user_id=${uid}`, headers).then(r => r.data),
+    enabled: open && authed,
     refetchInterval: open ? 30_000 : false,
   })
 
   const createJobMut = useMutation({
     mutationFn: (body: { ticker: string; strategy_name: string; qty: number; params: Record<string, number> }) =>
-      axios.post('/api/paper/scheduler/jobs', body).then(r => r.data),
+      axios.post('/api/paper/scheduler/jobs', { ...body, user_id: uid }, headers).then(r => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['paper/scheduler/jobs'] })
       qc.invalidateQueries({ queryKey: ['paper/scheduler/status'] })
@@ -1927,7 +1964,7 @@ function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy, onDis
   })
 
   const deleteJobMut = useMutation({
-    mutationFn: (id: string) => axios.delete(`/api/paper/scheduler/jobs/${id}`).then(r => r.data),
+    mutationFn: (id: string) => axios.delete(`/api/paper/scheduler/jobs/${id}?user_id=${uid}`, headers).then(r => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['paper/scheduler/jobs'] })
       qc.invalidateQueries({ queryKey: ['paper/scheduler/status'] })
@@ -1936,7 +1973,7 @@ function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy, onDis
 
   const toggleJobMut = useMutation({
     mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
-      axios.patch(`/api/paper/scheduler/jobs/${id}/toggle`, { enabled }).then(r => r.data),
+      axios.patch(`/api/paper/scheduler/jobs/${id}/toggle?user_id=${uid}`, { enabled }, headers).then(r => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['paper/scheduler/jobs'] }),
   })
 
@@ -1993,9 +2030,9 @@ function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy, onDis
   })
 
   const placeOrder = (symbol: string, side: 'buy' | 'sell', qty: number) =>
-    axios.post('/api/trading/order/equity', {
-      symbol, side, quantity: qty, order_type: 'market', duration: 'day',
-    })
+    axios.post('/api/paper/order', {
+      user_id: uid, symbol, side, quantity: qty, order_type: 'market',
+    }, headers)
 
   const executeSignals = async () => {
     if (!replayResult) return

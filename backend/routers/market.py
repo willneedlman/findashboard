@@ -277,20 +277,47 @@ def fundamental_series(ticker: str, metric: str = "pe", period: str = "quarter")
 
 _INTRADAY_PERIOD = {"1m": "1d", "5m": "5d", "15m": "5d", "1h": "1mo"}
 
+# Full timeframe set. Each maps to (yfinance interval, fetch period, resample rule
+# or None, intraday). yfinance has no 3m/10m/2h/6h/12h, so those are resampled
+# from the finest native base (1m for sub-hour, 60m for multi-hour).
+_TF = {
+    "1m":  ("1m",  "5d",  None,    True),
+    "3m":  ("1m",  "5d",  "3min",  True),
+    "5m":  ("5m",  "1mo", None,    True),
+    "10m": ("1m",  "5d",  "10min", True),
+    "1h":  ("60m", "3mo", None,    True),
+    "2h":  ("60m", "6mo", "2h",    True),
+    "6h":  ("60m", "1y",  "6h",    True),
+    "12h": ("60m", "2y",  "12h",   True),
+    "1d":  ("1d",  "1y",  None,    False),
+    "1wk": ("1wk", "5y",  None,    False),
+    "1mo": ("1mo", "10y", None,    False),
+}
+
 
 @router.get("/ohlcv")
-def get_ohlcv(ticker: str, period: str = "1y", interval: str = "1d"):
+def get_ohlcv(ticker: str, period: str = "1y", interval: str = "1d", tf: str | None = None, prepost: bool = False):
     ticker = validate_ticker(ticker)
-    intraday = interval in _INTRADAY_PERIOD
-    if intraday:
-        # Intraday bars come straight from yfinance with the requested interval;
-        # lightweight-charts needs a numeric UTC timestamp for sub-daily candles.
+    if tf and tf in _TF:
+        import yfinance as yf
+        yf_int, yf_per, rule, intraday = _TF[tf]
+        try:
+            df = yf.Ticker(ticker).history(period=yf_per, interval=yf_int, prepost=prepost and intraday)
+        except Exception:
+            df = _pd_empty()
+        if not df.empty and rule:
+            df = df.resample(rule, label="left", closed="left").agg(
+                {"Open": "first", "High": "max", "Low": "min", "Close": "last", "Volume": "sum"}
+            ).dropna(subset=["Close"])
+    elif interval in _INTRADAY_PERIOD:
+        intraday = True
         import yfinance as yf
         try:
-            df = yf.Ticker(ticker).history(period=_INTRADAY_PERIOD[interval], interval=interval)
+            df = yf.Ticker(ticker).history(period=_INTRADAY_PERIOD[interval], interval=interval, prepost=prepost)
         except Exception:
             df = _pd_empty()
     else:
+        intraday = False
         allowed = {"1mo", "3mo", "6mo", "1y", "2y", "5y"}
         if period not in allowed:
             period = "1y"

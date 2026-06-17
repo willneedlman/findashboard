@@ -81,6 +81,42 @@ Some banners/callouts use a colored `border-left` accent stripe, an established
 in-app convention for status banners (pre-profit warning, terminal-dominated
 warning). Charts are `recharts`, themed to the palette, with value-bearing tooltips.
 
+## Dashboard widgets
+
+The custom dashboard (`pages/CustomDashboard.tsx`) composes draggable widgets via
+`WidgetFrame` + `WidgetRenderer`; the **Trading Portal** preset is the reference
+layout (ticker-tape strip, watchlist rail, chart + order ticket + positions cockpit,
+full-width positions ledger). Every widget is a sharp-cornered navy panel; visual
+consistency comes from one shared chrome:
+
+- **Panel:** `--theme-surface` (`#0d1826`) fill, 1px hairline border, no radius, no
+  shadow. Panels separate by borders, never elevation.
+- **Header strip:** a recessed bar (`rgba(0,0,0,0.16)`, bottom hairline
+  `rgba(255,255,255,0.05)`) with the title in gold (`--theme-primary`), IBM Plex Sans,
+  `9px`, weight `700`, uppercase, `letter-spacing 0.16em`. Inline controls (timeframe,
+  overlays, ticker box) sit on the same strip, right-aligned. `WidgetFrame` renders
+  this strip for every widget.
+- **Numbers:** JetBrains Mono with `font-variant-numeric: tabular-nums`. Gains green,
+  losses red, the value always printed alongside color.
+- **Tickers:** a transparent-PNG logo (`assets.parqet.com/logos/symbol/<SYM>?format=png`,
+  the shared `TickerLogo` component) next to the symbol in watchlists, positions
+  ledgers, and order tickets.
+- **Watchlist row:** logo (22px) + symbol (IBM Plex Sans, 12px, weight 600,
+  `#dce3ed`) over a truncated company name (9px, `--theme-secondary`) on the left;
+  right-aligned price (JetBrains Mono, 12px) over day-change % (10px, green/red).
+  Rows separate by a faint `rgba(255,255,255,0.04)` hairline, no columns.
+- **Index tape:** a thin full-width strip of `SYM price ±chg%` segments (JetBrains
+  Mono, 11px, tabular-nums; symbol muted, value green/red). Scrolls as a seamless
+  marquee, pauses on hover, and freezes under `prefers-reduced-motion`. Tickers are
+  configurable or loaded from a Portfolio Manager book.
+- **Trading tone:** buy/up green `#22C55E`, sell/down red `#EF4444`, labels in
+  `--theme-secondary`.
+
+Presets (`buildPreset` in `hooks/useDashboard.ts`): Everything, Trading Portal,
+Research, Screening, Market Overview. Research-specific widgets: Analyst Consensus
+(rating distribution + targets), Valuation (multiples vs the broad market), Insider
+Activity (ownership split + transaction log).
+
 ## Motion
 
 `framer-motion`. Entrance reveals (tile grids, panels) use a small `y` offset plus

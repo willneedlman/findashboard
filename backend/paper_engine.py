@@ -388,3 +388,24 @@ def reset_account(user_id: str) -> dict:
     with _lock:
         _save(user_id, _new_account())
     return get_account(user_id)
+
+
+def seed_from_holdings(user_id: str, holdings: list[dict], cash: float = STARTING_CASH) -> dict:
+    """Replace the paper account with positions imported from a Portfolio Manager
+    book: each holding becomes an owned equity position at its average cost, with a
+    fresh cash balance to trade alongside. Overwrites the existing account."""
+    with _lock:
+        acct = _new_account()
+        acct["cash"] = cash
+        for h in holdings:
+            sym = (h.get("ticker") or "").strip().upper()
+            try:
+                shares = float(h.get("shares") or 0)
+                avg = float(h.get("avg_cost") or 0)
+            except (TypeError, ValueError):
+                continue
+            if not sym or shares == 0:
+                continue
+            acct["positions"][sym] = {"qty": shares, "avg_cost": avg}
+        _save(user_id, acct)
+    return get_account(user_id)

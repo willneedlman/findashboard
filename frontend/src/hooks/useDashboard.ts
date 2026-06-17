@@ -27,6 +27,10 @@ export type WidgetType =
   | 'screener'
   | 'pm-portfolios'
   | 'paper-trade'
+  | 'index-tape'
+  | 'analyst-ratings'
+  | 'valuation'
+  | 'insider-activity'
 
 export interface WidgetConfig {
   id: string
@@ -93,6 +97,10 @@ export const WIDGET_DEFAULT_SIZE: Record<WidgetType, { w: number; h: number }> =
   'screener':            { w: 5, h: 6 },
   'pm-portfolios':       { w: 4, h: 6 },
   'paper-trade':         { w: 6, h: 8 },
+  'index-tape':          { w: 12, h: 2 },
+  'analyst-ratings':     { w: 4, h: 6 },
+  'valuation':           { w: 5, h: 5 },
+  'insider-activity':    { w: 3, h: 6 },
 }
 
 export const WIDGET_LABELS: Record<WidgetType, string> = {
@@ -119,6 +127,10 @@ export const WIDGET_LABELS: Record<WidgetType, string> = {
   'screener':            'Screener',
   'pm-portfolios':       'Portfolios',
   'paper-trade':         'Paper Trade',
+  'index-tape':          'Index Tape',
+  'analyst-ratings':     'Analyst Consensus',
+  'valuation':           'Valuation',
+  'insider-activity':    'Insider Activity',
 }
 
 export const WIDGET_DESCRIPTIONS: Record<WidgetType, string> = {
@@ -145,6 +157,10 @@ export const WIDGET_DESCRIPTIONS: Record<WidgetType, string> = {
   'screener':            'Quick stock screens — biggest names, top gainers/losers, and volume leaders.',
   'pm-portfolios':       'Your Portfolio Manager books with live value and unrealized P&L per holding.',
   'paper-trade':         'Trade a ticker on your paper account from a chart — market, limit, and stop orders.',
+  'index-tape':          'Scrolling price strip for any tickers or a loaded portfolio — live price and day change.',
+  'analyst-ratings':     'Analyst consensus: rating, buy/hold/sell distribution, mean/high/low targets, implied upside.',
+  'valuation':           'P/E, Fwd P/E, P/S, EV/EBITDA, PEG, Div Yield with rich/cheap vs the broad market.',
+  'insider-activity':    'Institutional/retail/insider ownership split and the latest insider buy/sell transactions.',
 }
 
 export const WIDGET_ICONS: Record<WidgetType, string> = {
@@ -171,6 +187,10 @@ export const WIDGET_ICONS: Record<WidgetType, string> = {
   'screener':            'SCR',
   'pm-portfolios':       'PF',
   'paper-trade':         'TR',
+  'index-tape':          'IDX',
+  'analyst-ratings':     'AN',
+  'valuation':           'VAL',
+  'insider-activity':    'INS',
 }
 
 // ── Default layout — all 20 widget types, one each ───────────────────────────
@@ -279,10 +299,10 @@ let _seq = 0
 const newId = () => `w${Date.now()}_${_seq++}`
 const newDashId = () => `d${Date.now()}_${_seq++}`
 
-export type PresetKey = 'main' | 'trader' | 'researcher' | 'screener'
+export type PresetKey = 'main' | 'cockpit' | 'research' | 'screening' | 'market-overview'
 
 export const PRESET_LABELS: Record<PresetKey, string> = {
-  main: 'Everything', trader: 'Trader', researcher: 'Researcher', screener: 'Screener',
+  main: 'Everything', cockpit: 'Trading Portal', research: 'Research', screening: 'Screening', 'market-overview': 'Market Overview',
 }
 
 // A preset is a hand-placed list of tiles (12-col grid, 60px rows) so each
@@ -301,27 +321,49 @@ const EARN = ['NVDA', 'AAPL', 'MSFT', 'AMZN', 'META', 'GOOGL']
 function buildPreset(key: PresetKey): { widgets: WidgetConfig[]; layouts: Layout[] } {
   if (key === 'main') return { widgets: DEFAULT_WIDGETS, layouts: DEFAULT_LAYOUTS }
 
-  if (key === 'trader') return fromItems([
-    // Hero chart + watchlist/news rail
-    { type: 'tradingview-chart', config: { ticker: 'NVDA' },          x: 0, y: 0,  w: 8, h: 9 },
-    { type: 'watchlist',         config: { tickers: W_LIST },          x: 8, y: 0,  w: 4, h: 5 },
-    { type: 'news-feed',         config: { tickers: ['SPY', 'NVDA'] }, x: 8, y: 5,  w: 4, h: 4 },
-    // Execute + read the chain
-    { type: 'paper-trade',       config: { ticker: 'SPY' },            x: 0, y: 9,  w: 6, h: 8 },
-    { type: 'options-snapshot',  config: { ticker: 'SPY' },            x: 6, y: 9,  w: 6, h: 8 },
-    // Dealer flow + skew
-    { type: 'dealer-gex',        config: { ticker: 'SPY' },            x: 0, y: 17, w: 6, h: 6 },
-    { type: 'vol-skew',          config: { ticker: 'SPY' },            x: 6, y: 17, w: 6, h: 6 },
+  // Research — screener + analyst + sentiment / valuation + portfolios + insider /
+  // sector + correlation + earnings / full-width news (Trading Portal design).
+  if (key === 'research') return fromItems([
+    { type: 'screener',                                                 x: 0, y: 0,  w: 5, h: 7 },
+    { type: 'analyst-ratings',    config: { ticker: 'AAPL' },           x: 5, y: 0,  w: 4, h: 7 },
+    { type: 'sentiment-gauge',                                          x: 9, y: 0,  w: 3, h: 7 },
+    { type: 'valuation',          config: { ticker: 'AAPL' },           x: 0, y: 7,  w: 5, h: 6 },
+    { type: 'pm-portfolios',                                            x: 5, y: 7,  w: 4, h: 6 },
+    { type: 'insider-activity',   config: { ticker: 'AAPL' },           x: 9, y: 7,  w: 3, h: 6 },
+    { type: 'sector-rotation',                                          x: 0, y: 13, w: 4, h: 7 },
+    { type: 'correlation-matrix', config: { tickers: ['SPY', 'QQQ', 'TLT', 'GLD', 'BTC-USD'] }, x: 4, y: 13, w: 4, h: 7 },
+    { type: 'earnings-calendar',  config: { tickers: EARN },           x: 8, y: 13, w: 4, h: 7 },
+    { type: 'news-feed',          config: { tickers: ['SPY', 'AAPL', 'NVDA'] }, x: 0, y: 20, w: 12, h: 4 },
   ])
 
-  if (key === 'researcher') return fromItems([
-    { type: 'screener',                                                 x: 0, y: 0,  w: 5, h: 8 },
-    { type: 'pm-portfolios',                                            x: 5, y: 0,  w: 4, h: 6 },
-    { type: 'sentiment-gauge',                                          x: 9, y: 0,  w: 3, h: 6 },
-    { type: 'sector-rotation',                                          x: 0, y: 8,  w: 4, h: 7 },
-    { type: 'correlation-matrix', config: { tickers: ['SPY', 'QQQ', 'TLT', 'GLD', 'BTC-USD'] }, x: 4, y: 8, w: 4, h: 7 },
-    { type: 'earnings-calendar',  config: { tickers: EARN },           x: 8, y: 8,  w: 4, h: 7 },
-    { type: 'news-feed',          config: { tickers: ['SPY', 'AAPL', 'NVDA'] }, x: 0, y: 15, w: 12, h: 4 },
+  // Screening — large screener + watchlist + mini chart / sector + earnings.
+  if (key === 'screening') return fromItems([
+    { type: 'screener',                                                 x: 0, y: 0,  w: 7, h: 9 },
+    { type: 'watchlist',          config: { tickers: W_LIST },          x: 7, y: 0,  w: 5, h: 6 },
+    { type: 'mini-chart',         config: { ticker: 'SPY', period: '1y' }, x: 7, y: 6, w: 5, h: 3 },
+    { type: 'sector-rotation',                                          x: 0, y: 9,  w: 6, h: 7 },
+    { type: 'earnings-calendar',  config: { tickers: EARN },           x: 6, y: 9,  w: 6, h: 7 },
+  ])
+
+  // Market Overview — index tape / global macro + yield curve + credit spreads /
+  // sector + news + sentiment.
+  if (key === 'market-overview') return fromItems([
+    { type: 'index-tape',   config: { tickers: ['SPY', 'QQQ', 'DIA', 'IWM', '^VIX', 'BTC-USD'] }, x: 0, y: 0, w: 12, h: 2 },
+    { type: 'global-macro',                                             x: 0, y: 2,  w: 3, h: 9 },
+    { type: 'yield-curve',                                              x: 3, y: 2,  w: 5, h: 9 },
+    { type: 'credit-spreads',                                           x: 8, y: 2,  w: 4, h: 9 },
+    { type: 'sector-rotation',                                          x: 0, y: 11, w: 4, h: 7 },
+    { type: 'news-feed',          config: { tickers: ['SPY', 'AAPL', 'NVDA'] }, x: 4, y: 11, w: 5, h: 7 },
+    { type: 'sentiment-gauge',                                          x: 9, y: 11, w: 3, h: 7 },
+  ])
+
+  if (key === 'cockpit') return fromItems([
+    // Trading Portal "cockpit" (Layout B): ticker-tape strip, watchlist rail,
+    // chart + order ticket + positions cockpit, full-width positions ledger.
+    { type: 'index-tape',   config: { tickers: ['SPY', 'QQQ', 'DIA', 'IWM', '^VIX', 'BTC-USD'] }, x: 0, y: 0, w: 12, h: 2 },
+    { type: 'watchlist',    config: { tickers: ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'SPY', 'AMD', 'META'] }, x: 0, y: 2, w: 3, h: 9 },
+    { type: 'paper-trade',  config: { ticker: 'AAPL' },                 x: 3, y: 2,  w: 9,  h: 9 },
+    { type: 'pm-portfolios',                                            x: 0, y: 11, w: 12, h: 6 },
   ])
 
   // screener

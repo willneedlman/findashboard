@@ -133,6 +133,7 @@ async def get_corporate_hub(ticker: str):
         t_pe = safe_float(info, ["trailingPE", "forwardPE"])
         t_fpe = safe_float(info, ["forwardPE", "forwardPe"]) or t_pe
         t_ev_rev = safe_float(info, ["enterpriseToRevenue"])
+        t_ev_ebitda = safe_float(info, ["enterpriseToEbitda"])
         t_price = safe_float(info, ["currentPrice", "navPrice", "previousClose"])
         t_ps = safe_float(info, ["priceToSalesTrailing12Months", "priceToSales"])
         t_pb = safe_float(info, ["priceToBook"])
@@ -179,6 +180,10 @@ async def get_corporate_hub(ticker: str):
             "fifty_two_week_low": safe_float(info, ["fiftyTwoWeekLow"]),
             "current_price": t_price,
             "spot": t_price,
+            "price_to_sales": t_ps,
+            "ev_to_revenue": t_ev_rev,
+            "ev_ebitda": t_ev_ebitda,
+            "peg_ratio": t_peg,
             "pct_change_1d": t_pct_1d,
             "implied_move": None,
             "consensus": None,
@@ -265,9 +270,74 @@ async def get_corporate_hub_insider(ticker: str):
         except Exception as e:
             logger.warning(f"Could not fetch insider transactions for {symbol}: {e}")
 
-        return {"ticker": symbol, "transactions": transactions}
+        inst_pct = insider_pct = None
+        try:
+            info = get_info(symbol)
+            if isinstance(info, dict):
+                inst_pct = info.get("heldPercentInstitutions")
+                insider_pct = info.get("heldPercentInsiders")
+        except Exception:
+            pass
+
+        return {
+            "ticker": symbol,
+            "transactions": transactions,
+            "held_pct_institutions": round(float(inst_pct), 4) if isinstance(inst_pct, (int, float)) else None,
+            "held_pct_insiders": round(float(insider_pct), 4) if isinstance(insider_pct, (int, float)) else None,
+        }
     except Exception as e:
         logger.error(f"Error fetching insider data for {ticker}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/hub/analyst")
+async def get_corporate_hub_analyst(ticker: str):
+    """Analyst consensus: rating distribution, mean/high/low targets, implied upside."""
+    try:
+        symbol = ticker.strip().upper()
+        stock = yf.Ticker(symbol)
+        dist = {"strongBuy": 0, "buy": 0, "hold": 0, "sell": 0, "strongSell": 0}
+        try:
+            summary = stock.recommendations_summary
+            if summary is not None and not summary.empty:
+                row = summary.iloc[0]
+                for k in dist:
+                    dist[k] = int(row.get(k, 0) or 0)
+        except Exception as e:
+            logger.warning(f"recommendations_summary failed for {symbol}: {e}")
+
+        info = {}
+        try:
+            info = get_info(symbol) or {}
+        except Exception:
+            pass
+
+        def _f(v):
+            try:
+                return round(float(v), 2) if v is not None else None
+            except (TypeError, ValueError):
+                return None
+
+        total = sum(dist.values())
+        mean_target = _f(info.get("targetMeanPrice"))
+        price = _f(info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose"))
+        implied_upside = round((mean_target / price - 1) * 100, 1) if mean_target and price and price > 0 else None
+        rec_mean = _f(info.get("recommendationMean"))
+
+        return {
+            "ticker": symbol,
+            "distribution": dist,
+            "total_analysts": info.get("numberOfAnalystOpinions") or (total or None),
+            "recommendation_key": info.get("recommendationKey"),
+            "recommendation_mean": rec_mean,
+            "target_mean": mean_target,
+            "target_high": _f(info.get("targetHighPrice")),
+            "target_low": _f(info.get("targetLowPrice")),
+            "price": price,
+            "implied_upside": implied_upside,
+        }
+    except Exception as e:
+        logger.error(f"Error fetching analyst data for {ticker}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -22,6 +22,10 @@ import SentimentWidget from './widgets/SentimentWidget'
 import ScreenerWidget from './widgets/ScreenerWidget'
 import PMPortfoliosWidget from './widgets/PMPortfoliosWidget'
 import PaperTradeWidget from './widgets/PaperTradeWidget'
+import IndexTapeWidget from './widgets/IndexTapeWidget'
+import AnalystRatingsWidget from './widgets/AnalystRatingsWidget'
+import ValuationWidget from './widgets/ValuationWidget'
+import InsiderWidget from './widgets/InsiderWidget'
 
 export default function WidgetRenderer({ config }: { config: WidgetConfig }) {
   switch (config.type) {
@@ -48,6 +52,10 @@ export default function WidgetRenderer({ config }: { config: WidgetConfig }) {
     case 'screener':           return <ScreenerWidget config={config} />
     case 'pm-portfolios':      return <PMPortfoliosWidget config={config} />
     case 'paper-trade':        return <PaperTradeWidget config={config} />
+    case 'index-tape':         return <IndexTapeWidget config={config} />
+    case 'analyst-ratings':    return <AnalystRatingsWidget config={config} />
+    case 'valuation':          return <ValuationWidget config={config} />
+    case 'insider-activity':   return <InsiderWidget config={config} />
     default:                   return null
   }
 }

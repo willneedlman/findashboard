@@ -66,8 +66,7 @@ def _register_builtins() -> None:
         meta = inst.metadata()
         _active[meta.name] = {"cls": cls, "params": {}, "enabled": False}
         _loader._registry[meta.name] = cls
-    # enable RSI by default only
-    _active["rsi_mean_reversion"]["enabled"] = True
+    # No strategy is enabled by default — the user opts in explicitly.
 
 _register_builtins()
 

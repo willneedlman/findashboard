@@ -1,0 +1,262 @@
+import { useEffect, useRef, useState, useCallback } from 'react'
+import { createChart, ColorType, CrosshairMode } from 'lightweight-charts'
+import type { IChartApi, ISeriesApi, Time, SeriesMarker } from 'lightweight-charts'
+import { Sliders } from 'lucide-react'
+import { smaArr, emaArr, bollinger, vwapArr, type Candle } from '../lib/indicators'
+import { marketSession } from '../lib/marketSession'
+
+const T = {
+  bg:    'var(--theme-bg, #101c2e)',
+  surface: 'var(--theme-surface, #0d1826)',
+  border: 'var(--theme-border, rgba(255,255,255,0.08))',
+  gold:  'var(--theme-primary, #c9a84c)',
+  muted: 'var(--theme-secondary, #5e768f)',
+  text:  'var(--theme-text, #d7e3fc)',
+  mono:  'var(--theme-mono)',
+  label: 'var(--theme-sans)',
+  pos:   '#22c55e', neg: '#ef4444',
+}
+
+const TFS = [
+  { key: '1m', label: '1m' }, { key: '3m', label: '3m' }, { key: '5m', label: '5m' }, { key: '10m', label: '10m' },
+  { key: '1h', label: '1H' }, { key: '2h', label: '2H' }, { key: '6h', label: '6H' }, { key: '12h', label: '12H' },
+  { key: '1d', label: '1D' }, { key: '1wk', label: '1W' }, { key: '1mo', label: '1Mo' },
+]
+const DAILY_TFS = ['1d', '1wk', '1mo']
+const isIntraday = (tf: string) => !DAILY_TFS.includes(tf)
+
+const OVERLAYS = [{ key: 'sma', label: 'SMA' }, { key: 'ema', label: 'EMA' }, { key: 'bb', label: 'BB' }, { key: 'vwap', label: 'VWAP' }, { key: 'vol', label: 'VOL' }] as const
+type OverlayKey = typeof OVERLAYS[number]['key']
+interface OverlayParams { smaPeriod: number; emaPeriod: number; bbPeriod: number; bbMult: number }
+const DEFAULT_PARAMS: OverlayParams = { smaPeriod: 20, emaPeriod: 20, bbPeriod: 20, bbMult: 2 }
+const DEFAULT_OVERLAYS: Record<OverlayKey, boolean> = { sma: false, ema: false, bb: false, vwap: false, vol: true }
+
+function loadState(key: string): { on: Record<OverlayKey, boolean>; params: OverlayParams } {
+  try {
+    const raw = JSON.parse(localStorage.getItem(`paper-chart-overlays-${key}`) || 'null')
+    if (raw) return { on: { ...DEFAULT_OVERLAYS, ...raw.on }, params: { ...DEFAULT_PARAMS, ...raw.params } }
+  } catch { /* ignore */ }
+  return { on: { ...DEFAULT_OVERLAYS }, params: { ...DEFAULT_PARAMS } }
+}
+
+export interface ChartFill { time: number; side: string; symbol?: string; option_symbol?: string }
+
+const inputStyle: React.CSSProperties = {
+  background: 'var(--theme-bg, #101c2e)', border: `1px solid ${T.border}`, color: T.text,
+  fontFamily: T.mono, fontSize: 12, padding: '4px 6px', outline: 'none', boxSizing: 'border-box',
+}
+const selStyle: React.CSSProperties = { background: 'var(--theme-bg, #101c2e)', border: `1px solid ${T.border}`, color: T.gold, fontFamily: T.mono, fontSize: 9, padding: '2px 4px', outline: 'none', cursor: 'pointer' }
+
+export default function PaperChart({ initialTicker = 'SPY', fills = [], storageKey = 'page' }: { initialTicker?: string; fills?: ChartFill[]; storageKey?: string }) {
+  const init = loadState(storageKey)
+  const [ticker, setTicker] = useState(initialTicker.toUpperCase())
+  const [tickerInput, setTickerInput] = useState(initialTicker.toUpperCase())
+  const [tfKey, setTfKey] = useState('1d')
+  const [overlays, setOverlays] = useState<Record<OverlayKey, boolean>>(init.on)
+  const [params, setParams] = useState<OverlayParams>(init.params)
+  const [cfgOpen, setCfgOpen] = useState(false)
+  const [candles, setCandles] = useState<Candle[]>([])
+  const [spot, setSpot] = useState<number | null>(null)
+  const [chartErr, setChartErr] = useState(false)
+  const [, setTick] = useState(0)
+  useEffect(() => { const id = window.setInterval(() => setTick(t => t + 1), 30_000); return () => window.clearInterval(id) }, [])
+  const session = marketSession()
+
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const chartRef = useRef<IChartApi | null>(null)
+  const candleRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
+  const overlayRefs = useRef<ISeriesApi<'Line'>[]>([])
+  const volumeRef = useRef<ISeriesApi<'Histogram'> | null>(null)
+  const lenRef = useRef(0)
+
+  useEffect(() => { try { localStorage.setItem(`paper-chart-overlays-${storageKey}`, JSON.stringify({ on: overlays, params })) } catch { /* ignore */ } }, [overlays, params, storageKey])
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const cs = getComputedStyle(document.documentElement)
+    const bg = cs.getPropertyValue('--theme-bg').trim() || '#101c2e'
+    const txt = cs.getPropertyValue('--theme-secondary').trim() || '#5e768f'
+    const gold = cs.getPropertyValue('--theme-primary').trim() || '#c9a84c'
+    const chart = createChart(el, {
+      layout: { background: { type: ColorType.Solid, color: bg }, textColor: txt, fontFamily: "'JetBrains Mono', monospace", fontSize: 10 },
+      grid: { vertLines: { color: 'rgba(255,255,255,0.03)' }, horzLines: { color: 'rgba(255,255,255,0.03)' } },
+      crosshair: { mode: CrosshairMode.Normal, vertLine: { color: `${gold}66` }, horzLine: { color: `${gold}66` } },
+      rightPriceScale: { borderColor: 'rgba(255,255,255,0.06)', textColor: txt },
+      timeScale: { borderColor: 'rgba(255,255,255,0.06)', timeVisible: true, fixLeftEdge: true, rightOffset: 6 },
+      handleScale: { mouseWheel: false, pinch: true, axisPressedMouseMove: true },
+      width: el.clientWidth, height: el.clientHeight,
+    })
+    const candle = chart.addCandlestickSeries({
+      upColor: '#22c55e', downColor: '#ef4444', borderUpColor: '#22c55e', borderDownColor: '#ef4444',
+      wickUpColor: '#22c55e', wickDownColor: '#ef4444', priceLineColor: gold, priceLineWidth: 1,
+    })
+    const vol = chart.addHistogramSeries({ priceScaleId: 'volume', priceFormat: { type: 'volume' }, priceLineVisible: false, lastValueVisible: false })
+    chart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } })
+    chartRef.current = chart; candleRef.current = candle; volumeRef.current = vol
+    // Amplified zoom: trackpad pinch (ctrl+wheel) and plain wheel zoom around the cursor.
+    const onWheel = (e: WheelEvent) => {
+      const ts = chart.timeScale(); const range = ts.getVisibleLogicalRange(); if (!range) return
+      e.preventDefault()
+      const rect = el.getBoundingClientRect()
+      const pivot = ts.coordinateToLogical(e.clientX - rect.left)
+      const width = range.to - range.from
+      const factor = Math.exp(e.deltaY * (e.ctrlKey ? 0.02 : 0.0015))
+      const newWidth = Math.max(8, width * factor)
+      const p = pivot == null ? range.from + width / 2 : pivot
+      const newFrom = p - (p - range.from) * (newWidth / width)
+      ts.setVisibleLogicalRange({ from: newFrom, to: newFrom + newWidth })
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    // Keep some right-side whitespace but stop the last candle scrolling past the
+    // horizontal center: clamp the right offset to at most half the visible width.
+    const tscale = chart.timeScale()
+    let clamping = false
+    const onRange = (range: { from: number; to: number } | null) => {
+      if (!range || clamping) return
+      const n = lenRef.current
+      if (n < 2) return
+      const width = range.to - range.from
+      const maxOffset = width / 2
+      if (range.to - (n - 1) > maxOffset + 0.5) {
+        clamping = true
+        const to = (n - 1) + maxOffset
+        tscale.setVisibleLogicalRange({ from: to - width, to })
+        requestAnimationFrame(() => { clamping = false })
+      }
+    }
+    tscale.subscribeVisibleLogicalRangeChange(onRange)
+    const ro = new ResizeObserver(() => { if (el) chart.resize(el.clientWidth, el.clientHeight) })
+    ro.observe(el)
+    return () => { el.removeEventListener('wheel', onWheel); tscale.unsubscribeVisibleLogicalRangeChange(onRange); ro.disconnect(); chart.remove(); chartRef.current = null; candleRef.current = null; volumeRef.current = null; overlayRefs.current = [] }
+  }, [])
+
+  const fetchCandles = useCallback(async (sym: string, tf: string, fit: boolean) => {
+    setChartErr(false)
+    try {
+      const res = await fetch(`/api/market/ohlcv?ticker=${encodeURIComponent(sym)}&tf=${tf}${isIntraday(tf) ? '&prepost=true' : ''}`)
+      if (!res.ok) throw new Error(`${res.status}`)
+      const cs: Candle[] = (await res.json()).candles
+      if (!cs?.length) throw new Error('no data')
+      const ts = chartRef.current?.timeScale()
+      const prevRange = !fit ? ts?.getVisibleLogicalRange() : null
+      // Follow the right edge when already viewing the latest bars; otherwise
+      // hold the scrolled-back position. Either way the zoom level is preserved.
+      const follow = !fit && !!prevRange && prevRange.to >= lenRef.current - 2
+      candleRef.current?.setData(cs.map(c => ({ time: c.time as Time, open: c.open, high: c.high, low: c.low, close: c.close })))
+      if (fit) ts?.fitContent()
+      else if (follow) ts?.scrollToRealTime()
+      else if (prevRange) ts?.setVisibleLogicalRange(prevRange)
+      lenRef.current = cs.length
+      setCandles(cs); setSpot(cs[cs.length - 1].close)
+    } catch { if (fit) { setChartErr(true); setCandles([]) } }
+  }, [])
+
+  useEffect(() => { if (ticker && candleRef.current) fetchCandles(ticker, tfKey, true) }, [ticker, tfKey, fetchCandles])
+  useEffect(() => {
+    if (!ticker) return
+    const id = window.setInterval(() => { if (candleRef.current) fetchCandles(ticker, tfKey, false) }, isIntraday(tfKey) ? 15_000 : 60_000)
+    return () => window.clearInterval(id)
+  }, [ticker, tfKey, fetchCandles])
+
+  // Overlays
+  useEffect(() => {
+    const chart = chartRef.current
+    if (!chart) return
+    overlayRefs.current.forEach(s => { try { chart.removeSeries(s) } catch { /* gone */ } })
+    overlayRefs.current = []
+    if (volumeRef.current) volumeRef.current.setData(overlays.vol && candles.length
+      ? candles.map(c => ({ time: c.time as Time, value: c.volume, color: c.close >= c.open ? 'rgba(34,197,94,0.45)' : 'rgba(239,68,68,0.45)' }))
+      : [])
+    if (!candles.length) return
+    const close = candles.map(c => c.close)
+    const times = candles.map(c => c.time as Time)
+    const add = (vals: (number | null)[], color: string) => {
+      const s = chart.addLineSeries({ color, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false })
+      s.setData(vals.map((v, i) => (v == null ? null : { time: times[i], value: v })).filter(Boolean) as { time: Time; value: number }[])
+      overlayRefs.current.push(s)
+    }
+    if (overlays.sma) add(smaArr(close, params.smaPeriod), '#60a5fa')
+    if (overlays.ema) add(emaArr(close, params.emaPeriod), '#f59e0b')
+    if (overlays.bb) { const b = bollinger(close, params.bbPeriod, params.bbMult); add(b.upper, '#a78bfa'); add(b.lower, '#a78bfa') }
+    if (overlays.vwap) add(vwapArr(candles), '#22d3ee')
+  }, [candles, overlays, params])
+
+  // Buy/sell markers from this ticker's fills
+  useEffect(() => {
+    const series = candleRef.current
+    if (!series) return
+    if (!candles.length) { series.setMarkers([]); return }
+    const numTime = (t: number | string) => (typeof t === 'number' ? t : Date.parse(t + 'T00:00:00Z') / 1000)
+    const ctimes = candles.map(c => numTime(c.time))
+    const mine = fills.filter(o => o.symbol === ticker || (o.option_symbol || '').startsWith(ticker))
+    const markers: SeriesMarker<Time>[] = mine.map(o => {
+      let bi = 0, bd = Infinity
+      ctimes.forEach((t, i) => { const d = Math.abs(t - (o.time || 0)); if (d < bd) { bd = d; bi = i } })
+      const isBuy = String(o.side).startsWith('buy')
+      return {
+        time: candles[bi].time as Time,
+        position: (isBuy ? 'belowBar' : 'aboveBar') as SeriesMarker<Time>['position'],
+        color: isBuy ? T.pos : T.neg,
+        shape: (isBuy ? 'arrowUp' : 'arrowDown') as SeriesMarker<Time>['shape'],
+        text: isBuy ? 'B' : 'S',
+      }
+    }).sort((a, b) => numTime(a.time as number | string) - numTime(b.time as number | string))
+    series.setMarkers(markers)
+  }, [candles, fills, ticker])
+
+  const commitTicker = () => { const t = tickerInput.trim().toUpperCase(); if (t) setTicker(t) }
+  const numLbl: React.CSSProperties = { fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: T.muted }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: T.bg }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', padding: '5px 8px', background: 'rgba(0,0,0,0.15)', borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
+        <input value={tickerInput} onChange={e => setTickerInput(e.target.value.toUpperCase())} onKeyDown={e => e.key === 'Enter' && commitTicker()} onBlur={commitTicker} style={{ ...inputStyle, width: 72, fontWeight: 700, color: T.gold }} />
+        {spot != null && <span style={{ fontFamily: T.mono, fontSize: 12, color: T.text }}>${spot.toFixed(2)}</span>}
+        <div style={{ display: 'flex', gap: 2, marginLeft: 'auto', position: 'relative' }}>
+          {OVERLAYS.map(o => (
+            <button key={o.key} onClick={() => setOverlays(s => ({ ...s, [o.key]: !s[o.key] }))} style={{
+              fontFamily: T.mono, fontSize: 8, fontWeight: 700, padding: '2px 6px', cursor: 'pointer', letterSpacing: '0.04em',
+              border: overlays[o.key] ? '1px solid rgba(201,168,76,0.55)' : `1px solid ${T.border}`,
+              background: overlays[o.key] ? 'rgba(201,168,76,0.12)' : 'transparent',
+              color: overlays[o.key] ? T.gold : 'rgba(255,255,255,0.3)',
+            }}>{o.label}</button>
+          ))}
+          <button onClick={() => setCfgOpen(o => !o)} title="Overlay settings" style={{
+            fontFamily: T.mono, fontSize: 9, fontWeight: 700, padding: '2px 5px', cursor: 'pointer', display: 'flex', alignItems: 'center',
+            border: cfgOpen ? '1px solid rgba(201,168,76,0.55)' : `1px solid ${T.border}`,
+            background: cfgOpen ? 'rgba(201,168,76,0.12)' : 'transparent', color: cfgOpen ? T.gold : 'rgba(255,255,255,0.3)',
+          }}><Sliders size={11} /></button>
+          <select value={tfKey} onChange={e => setTfKey(e.target.value)} style={selStyle}>
+            {TFS.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+          </select>
+          {cfgOpen && (
+            <div style={{ position: 'absolute', top: '120%', right: 0, zIndex: 30, width: 196, background: T.surface, border: `1px solid ${T.gold}`, boxShadow: '0 8px 24px rgba(0,0,0,0.45)', padding: 10, display: 'flex', flexDirection: 'column', gap: 7 }}>
+              <span style={{ ...numLbl, color: T.gold, marginBottom: 1 }}>Overlay settings</span>
+              {([
+                { lbl: 'SMA period', key: 'smaPeriod', step: 1, min: 1 },
+                { lbl: 'EMA period', key: 'emaPeriod', step: 1, min: 1 },
+                { lbl: 'BB period', key: 'bbPeriod', step: 1, min: 1 },
+                { lbl: 'BB std-dev', key: 'bbMult', step: 0.5, min: 0.5 },
+              ] as { lbl: string; key: keyof OverlayParams; step: number; min: number }[]).map(f => (
+                <label key={f.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                  <span style={numLbl}>{f.lbl}</span>
+                  <input type="number" min={f.min} step={f.step} value={params[f.key]} onChange={e => { const n = Number(e.target.value); if (n >= f.min) setParams(p => ({ ...p, [f.key]: n })) }} style={{ ...inputStyle, width: 60 }} />
+                </label>
+              ))}
+              <button onClick={() => setParams({ ...DEFAULT_PARAMS })} style={{ alignSelf: 'flex-end', background: 'transparent', border: `1px solid ${T.border}`, color: T.muted, fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '2px 8px', cursor: 'pointer' }}>Reset</button>
+            </div>
+          )}
+        </div>
+      </div>
+      <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+        <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+        <span title="US market session (ET)" style={{ position: 'absolute', top: 6, left: '50%', transform: 'translateX(-50%)', display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: session.color, background: 'rgba(0,0,0,0.35)', padding: '2px 8px', pointerEvents: 'none', whiteSpace: 'nowrap' }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: session.color, boxShadow: `0 0 6px ${session.color}` }} />
+          {session.label}
+        </span>
+        {chartErr && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: T.mono, fontSize: 11, color: T.muted }}>No chart data</div>}
+      </div>
+    </div>
+  )
+}

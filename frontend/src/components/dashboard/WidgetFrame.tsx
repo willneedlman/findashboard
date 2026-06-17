@@ -17,8 +17,10 @@ interface WidgetFrameProps {
   children: React.ReactNode
 }
 
-const TICKER_WIDGETS: WidgetType[]        = ['price-card', 'mini-chart', 'options-snapshot', 'options-pricer', 'delta-target', 'tradingview-chart', 'dealer-gex', 'vol-skew']
-const TICKERS_WIDGETS: WidgetType[]       = ['watchlist', 'earnings-calendar', 'news-feed', 'correlation-matrix']
+const TICKER_WIDGETS: WidgetType[]        = ['price-card', 'mini-chart', 'options-snapshot', 'options-pricer', 'delta-target', 'tradingview-chart', 'dealer-gex', 'vol-skew', 'analyst-ratings', 'valuation', 'insider-activity']
+const TICKERS_WIDGETS: WidgetType[]       = ['watchlist', 'earnings-calendar', 'news-feed', 'correlation-matrix', 'index-tape']
+// Tickers widgets that also accept "load from a Portfolio Manager book".
+const PORTFOLIO_LOADABLE: WidgetType[]    = ['watchlist', 'index-tape']
 const PORTFOLIO_WIDGETS: WidgetType[]     = ['portfolio-summary']
 const YIELD_WIDGETS: WidgetType[]         = ['macro-strip']
 const GLOBAL_MACRO_WIDGETS: WidgetType[]    = ['global-macro']
@@ -108,6 +110,19 @@ const WIDGET_LABELS: Record<string, string> = {
   'screener':           'Screener',
   'pm-portfolios':      'Portfolios',
   'paper-trade':        'Paper Trade',
+  'index-tape':         'Index Tape',
+  'analyst-ratings':    'Analyst Consensus',
+  'valuation':          'Valuation',
+  'insider-activity':   'Insider Activity',
+}
+
+interface PmBook { id: string; name: string; holdings: { ticker: string }[] }
+
+function loadPmBooks(): PmBook[] {
+  try {
+    const pm = JSON.parse(localStorage.getItem('pm-portfolios-v2') || 'null')
+    return Array.isArray(pm?.portfolios) ? pm.portfolios : []
+  } catch { return [] }
 }
 
 function widgetTitle(config: WidgetConfig): string {
@@ -369,14 +384,15 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
       {(hasHeader || editMode) && (
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          background: editMode ? 'rgba(201,168,76,0.12)' : 'var(--theme-surface, #0d1826)',
-          borderBottom: editMode ? '1px solid rgba(201,168,76,0.25)' : '1px solid var(--theme-border, rgba(255,255,255,0.08))',
-          padding: '4px 8px', flexShrink: 0,
+          // Trading Portal panel-header strip: darker recessed bar, gold uppercase label.
+          background: editMode ? 'rgba(201,168,76,0.12)' : 'rgba(0,0,0,0.16)',
+          borderBottom: editMode ? '1px solid rgba(201,168,76,0.25)' : '1px solid rgba(255,255,255,0.05)',
+          padding: '6px 10px', flexShrink: 0,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
             {editMode && <GripHorizontal size={13} style={{ color: 'rgba(201,168,76,0.7)', flexShrink: 0 }} />}
-            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
-              color: editMode ? 'rgba(201,168,76,0.7)' : 'var(--theme-text, #d7e3fc)',
+            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase',
+              color: editMode ? 'rgba(201,168,76,0.7)' : 'var(--theme-primary, #c9a84c)',
               fontFamily: S.label, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {widgetTitle(config)}
             </span>
@@ -440,6 +456,23 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
               <span style={{ fontSize: 9, color: S.muted, fontFamily: S.label, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Tickers</span>
               <TickerTagInput tickers={tagTickers} onChange={setTagTickers} />
+              {PORTFOLIO_LOADABLE.includes(config.type) && (() => {
+                const books = loadPmBooks()
+                if (!books.length) return null
+                return (
+                  <select
+                    value=""
+                    onChange={e => {
+                      const book = books.find(b => b.id === e.target.value)
+                      if (book) setTagTickers([...new Set(book.holdings.map(h => h.ticker.trim().toUpperCase()).filter(Boolean))])
+                    }}
+                    style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.10)', color: S.muted, fontFamily: S.label, fontSize: 10, padding: '3px 6px', outline: 'none', cursor: 'pointer' }}
+                  >
+                    <option value="">Load from portfolio…</option>
+                    {books.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                  </select>
+                )
+              })()}
               <button onClick={saveConfig} style={{ alignSelf: 'flex-end', background: S.gold, border: 'none', color: 'var(--theme-bg, #0a1628)', fontSize: 9, fontWeight: 700, padding: '3px 10px', cursor: 'pointer', letterSpacing: '0.1em', fontFamily: S.label }}>APPLY</button>
             </div>
           )}

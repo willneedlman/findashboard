@@ -91,6 +91,25 @@ def reset(req: IdRequest, authorization: str = Header(default=""), x_session_tok
     return paper_engine.reset_account(req.user_id)
 
 
+class SeedHolding(BaseModel):
+    ticker:   str
+    shares:   float
+    avg_cost: float = 0.0
+
+
+class SeedRequest(BaseModel):
+    user_id:  str
+    holdings: list[SeedHolding]
+
+
+@router.post("/seed")
+def seed(req: SeedRequest, authorization: str = Header(default=""), x_session_token: str = Header(default="")):
+    _require_owner(req.user_id, authorization, x_session_token)
+    return paper_engine.seed_from_holdings(
+        req.user_id, [{"ticker": h.ticker, "shares": h.shares, "avg_cost": h.avg_cost} for h in req.holdings],
+    )
+
+
 @router.delete("/order/{order_id}")
 def cancel(order_id: str, user_id: str, authorization: str = Header(default=""), x_session_token: str = Header(default="")):
     _require_owner(user_id, authorization, x_session_token)
