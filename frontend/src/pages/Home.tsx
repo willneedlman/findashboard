@@ -2,7 +2,7 @@ import { useRef, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 import {
-  TrendingUp, LineChart, Landmark, Bitcoin, BarChart2, Dices,
+  TrendingUp, LineChart, Landmark, Coins, BarChart2, Dices,
   GitBranch, Activity, Building2, Calculator, Shuffle, Zap,
   ArrowUpRight, LayoutGrid, Filter, FileText, Upload, X,
   PieChart, Scale, Globe, BookOpen, Terminal, Brain, Bell,
@@ -182,7 +182,7 @@ const SECTIONS: Section[] = [
       { to: '/macro-hub',            icon: Compass,   title: 'Macro Hub',             desc: 'Growth, inflation, jobs',       accent: 'var(--theme-tertiary, #1f5673)' },
       { to: '/macro-hub?tab=bonds',  icon: Landmark,  title: 'Bond Analytics',        desc: 'YTM, duration, convexity',      accent: '#2f6b4b' },
       { to: '/macro-hub?tab=credit', icon: Activity,  title: 'Credit Spread Monitor', desc: 'IG and HY spreads',             accent: '#ef4444' },
-      { to: '/nav',            icon: Bitcoin,   title: 'NAV Tracker',           desc: 'Premium/discount on proxies',   accent: 'var(--theme-primary, #c9a84c)' },
+      { to: '/nav',            icon: Coins,     title: 'NAV Tracker',           desc: 'Premium/discount on proxies',   accent: 'var(--theme-primary, #c9a84c)' },
     ],
   },
   {

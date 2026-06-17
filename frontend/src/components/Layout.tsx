@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Home, LayoutGrid, Briefcase,
-  TrendingUp, LineChart, Bitcoin,
+  TrendingUp, LineChart, Coins,
   BarChart2, Dices, GitBranch, Building2, Calculator,
   Shuffle, Zap, X, Menu, Settings,
   Filter, FileText, ShieldAlert,
@@ -51,7 +51,7 @@ const NAV_SECTIONS = [
     items: [
       { to: '/portfolio-skills', icon: Scale,    label: 'Portfolio Skills' },
       { to: '/valuation',   icon: Calculator,    label: 'Stock Valuation' },
-      { to: '/nav',         icon: Bitcoin,       label: 'NAV Tracker' },
+      { to: '/nav',         icon: Coins,         label: 'NAV Tracker' },
     ],
   },
   {
