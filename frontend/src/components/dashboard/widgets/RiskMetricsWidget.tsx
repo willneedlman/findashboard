@@ -1,4 +1,7 @@
+import { useQuery } from '@tanstack/react-query'
+import axios from 'axios'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
+import { loadActivePortfolio, useQuotes, priceHoldings } from './usePortfolio'
 
 const T = {
   bg: 'var(--theme-bg, #101c2e)', surface: 'var(--theme-surface, #0d1826)',
@@ -6,32 +9,76 @@ const T = {
   muted: 'var(--theme-secondary, #5e768f)', text: 'var(--theme-text, #d7e3fc)',
   mono: 'var(--theme-mono)', label: 'var(--theme-sans)', pos: '#22c55e', neg: '#ef4444',
 }
-
-const STATS: { l: string; v: string; sub?: string; c: string }[] = [
-  { l: 'VaR 95% · 1d', v: '-$8,420', sub: '-3.4% NAV', c: T.neg },
-  { l: 'Beta vs SPY', v: '1.12', c: T.text },
-  { l: 'Sharpe', v: '1.84', c: T.pos },
-  { l: 'Ann. Vol', v: '18.6%', c: T.gold },
-  { l: 'Max Drawdown', v: '-12.3%', c: T.neg },
-  { l: 'Sortino', v: '2.41', c: T.pos },
-]
-// Factor betas, roughly -1..1 from a center zero.
-const FACTORS = [
-  { name: 'Market', beta: 0.92 },
-  { name: 'Size', beta: -0.34 },
-  { name: 'Value', beta: 0.18 },
-  { name: 'Momentum', beta: 0.56 },
-  { name: 'Quality', beta: -0.12 },
-]
-const RISK_BUDGET = 0.68
-
 const cap: React.CSSProperties = { fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.muted, marginBottom: 3 }
 
+interface Metrics { cagr: number; vol: number; sharpe: number; max_drawdown: number; sortino: number; calmar: number; beta: number }
+const money = (v: number) => `${v < 0 ? '-' : ''}$${Math.abs(Math.round(v)).toLocaleString()}`
+
+const BENCH = 'SPY'
+function windowDates(): { start: string; end: string } {
+  const end = new Date()
+  const start = new Date(); start.setFullYear(start.getFullYear() - 2)
+  return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) }
+}
+
 export default function RiskMetricsWidget({ config: _c }: { config: WidgetConfig }) {
+  const { holdings, cash } = loadActivePortfolio()
+  const quotes = useQuotes(holdings.map(h => h.ticker))
+  const priced = priceHoldings(holdings, quotes).sort((a, b) => b.value - a.value)
+  const nav = priced.reduce((s, p) => s + p.value, 0) + cash
+
+  // Top 20 by value as market-value weights (compare caps tickers at 20).
+  const top = priced.slice(0, 20)
+  const wSum = top.reduce((s, p) => s + p.value, 0) || 1
+  const tickers = top.map(p => p.ticker.replace('.', '-'))
+  const weights = top.map(p => p.value / wSum)
+  const sig = tickers.map((t, i) => `${t}:${weights[i].toFixed(3)}`).join(',')
+
+  const { data, isLoading, isError } = useQuery<{ metrics: Metrics[] }>({
+    queryKey: ['risk-metrics', sig],
+    enabled: tickers.length > 0,
+    staleTime: 5 * 60_000,
+    queryFn: () => {
+      const { start, end } = windowDates()
+      return axios.post('/api/portfolio/compare', {
+        portfolios: [
+          { name: 'Portfolio', tickers, weights },
+          { name: BENCH, tickers: [BENCH], weights: [1] },
+        ],
+        benchmark: BENCH, start, end,
+      }).then(r => r.data)
+    },
+  })
+
+  if (tickers.length === 0) {
+    return (
+      <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 16, background: T.bg, fontFamily: T.label, fontSize: 11, color: T.muted, lineHeight: 1.6 }}>
+        No holdings yet. Add positions in the Portfolio Manager to compute risk metrics.
+      </div>
+    )
+  }
+
+  const m = data?.metrics?.[0]
+  const dailyVol = m ? (m.vol / 100) / Math.sqrt(252) : 0
+  const var95 = 1.645 * dailyVol * nav
+  const dash = (v: string) => (m ? v : '—')
+
+  const stats: { l: string; v: string; sub?: string; c: string }[] = [
+    { l: 'VaR 95% · 1d', v: dash(money(-var95)), sub: m ? `-${(1.645 * dailyVol * 100).toFixed(1)}% NAV` : undefined, c: T.neg },
+    { l: `Beta vs ${BENCH}`, v: dash(m ? m.beta.toFixed(2) : ''), c: T.text },
+    { l: 'Sharpe', v: dash(m ? m.sharpe.toFixed(2) : ''), c: m && m.sharpe >= 0 ? T.pos : T.neg },
+    { l: 'Ann. Vol', v: dash(m ? `${m.vol.toFixed(1)}%` : ''), c: T.gold },
+    { l: 'Max Drawdown', v: dash(m ? `${m.max_drawdown.toFixed(1)}%` : ''), c: T.neg },
+    { l: 'Sortino', v: dash(m ? m.sortino.toFixed(2) : ''), c: m && m.sortino >= 0 ? T.pos : T.neg },
+  ]
+
+  const topW = top.slice(0, 5).map(p => ({ ticker: p.ticker, pct: nav > 0 ? (p.value / nav) * 100 : 0 }))
+  const maxW = Math.max(...topW.map(t => t.pct), 1)
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: T.bg }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', flexShrink: 0 }}>
-        {STATS.map((s, i) => (
+        {stats.map((s, i) => (
           <div key={s.l} style={{ padding: '8px 10px', borderRight: i % 3 !== 2 ? `1px solid ${T.border}` : 'none', borderBottom: `1px solid ${T.border}` }}>
             <div style={cap}>{s.l}</div>
             <div style={{ fontFamily: T.mono, fontSize: 14, fontWeight: 700, color: s.c, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{s.v}</div>
@@ -41,37 +88,23 @@ export default function RiskMetricsWidget({ config: _c }: { config: WidgetConfig
       </div>
 
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '9px 10px' }}>
-        <div style={{ ...cap, color: T.gold, letterSpacing: '0.16em', marginBottom: 8 }}>Factor Exposure</div>
+        <div style={{ ...cap, color: T.gold, letterSpacing: '0.16em', marginBottom: 8 }}>Top Concentration (% NAV)</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-          {FACTORS.map(f => {
-            const pct = Math.min(Math.abs(f.beta), 1) * 50
-            const up = f.beta >= 0
-            return (
-              <div key={f.name} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontFamily: T.label, fontSize: 9, color: T.muted, width: 64, flexShrink: 0 }}>{f.name}</span>
-                <div style={{ flex: 1, display: 'flex', alignItems: 'center', height: 10 }}>
-                  <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
-                    <div style={{ width: `${up ? 0 : pct}%`, height: 8, background: 'rgba(239,68,68,0.55)' }} />
-                  </div>
-                  <div style={{ width: 1, height: 12, background: 'rgba(255,255,255,0.16)', flexShrink: 0 }} />
-                  <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-start' }}>
-                    <div style={{ width: `${up ? pct : 0}%`, height: 8, background: 'rgba(34,197,94,0.55)' }} />
-                  </div>
-                </div>
-                <span style={{ fontFamily: T.mono, fontSize: 9.5, fontWeight: 700, color: up ? T.pos : T.neg, width: 36, textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
-                  {up ? '+' : ''}{f.beta.toFixed(2)}
-                </span>
+          {topW.map(t => (
+            <div key={t.ticker} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontFamily: T.mono, fontSize: 9.5, fontWeight: 700, color: T.text, width: 52, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.ticker}</span>
+              <div style={{ flex: 1, height: 8, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+                <div style={{ width: `${(t.pct / maxW) * 100}%`, height: '100%', background: T.gold }} />
               </div>
-            )
-          })}
+              <span style={{ fontFamily: T.mono, fontSize: 9.5, fontWeight: 700, color: T.gold, width: 38, textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{t.pct.toFixed(1)}%</span>
+            </div>
+          ))}
         </div>
 
-        <div style={{ ...cap, color: T.gold, letterSpacing: '0.16em', margin: '14px 0 6px' }}>Risk Budget Used</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ flex: 1, height: 8, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
-            <div style={{ width: `${RISK_BUDGET * 100}%`, height: '100%', background: T.gold }} />
-          </div>
-          <span style={{ fontFamily: T.mono, fontSize: 10, fontWeight: 700, color: T.gold, fontVariantNumeric: 'tabular-nums' }}>{(RISK_BUDGET * 100).toFixed(0)}%</span>
+        <div style={{ marginTop: 12, paddingTop: 8, borderTop: `1px solid ${T.border}`, display: 'flex', justifyContent: 'space-between', fontFamily: T.mono, fontSize: 9, color: T.muted }}>
+          <span>CAGR <span style={{ color: m && m.cagr >= 0 ? T.pos : T.neg, fontWeight: 700 }}>{m ? `${m.cagr.toFixed(1)}%` : '—'}</span></span>
+          <span>Calmar <span style={{ color: T.text, fontWeight: 700 }}>{m ? m.calmar.toFixed(2) : '—'}</span></span>
+          <span>{isLoading ? 'loading…' : isError ? 'data error' : `2y · vs ${BENCH}`}</span>
         </div>
       </div>
     </div>

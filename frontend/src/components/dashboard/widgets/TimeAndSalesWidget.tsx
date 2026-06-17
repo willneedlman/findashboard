@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import axios from 'axios'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 
 const T = {
@@ -8,69 +9,67 @@ const T = {
   mono: 'var(--theme-mono)', label: 'var(--theme-sans)', pos: '#22c55e', neg: '#ef4444',
 }
 
-interface Print { id: number; time: string; price: number; size: number; venue: string; dir: 1 | -1 | 0; dark: boolean }
-const VENUES = ['ARCA', 'NSDQ', 'EDGX', 'BATS', 'IEX']
-const baseSpot = (t: string) => 80 + ([...t].reduce((s, c) => s + c.charCodeAt(0), 0) % 240)
-const hhmmss = (d: Date) => d.toTimeString().slice(0, 8)
+interface Candle { time: number; open: number; high: number; low: number; close: number; volume: number }
+const hhmmss = (epoch: number) => new Date(epoch * 1000).toTimeString().slice(0, 8)
 
+// Real intraday "prints" built from 1-minute bars. We don't license the OPRA/
+// consolidated trade tape, so each row is one 1-min bar (close = print price,
+// volume = print size); uptick/downtick is bar-over-bar.
 export default function TimeAndSalesWidget({ config }: { config: WidgetConfig }) {
   const ticker = (config.ticker || 'AAPL').toUpperCase()
-  const spotRef = useRef(baseSpot(ticker))
-  const idRef = useRef(0)
-  const lastRef = useRef(spotRef.current)
-  const [prints, setPrints] = useState<Print[]>([])
 
-  useEffect(() => {
-    spotRef.current = baseSpot(ticker)
-    lastRef.current = spotRef.current
-    idRef.current = 0
-    setPrints([])
-    const tick = () => {
-      const drift = (Math.random() - 0.5) * 0.12
-      const price = Math.max(0.5, spotRef.current + drift)
-      spotRef.current = price
-      const dir: 1 | -1 | 0 = price > lastRef.current ? 1 : price < lastRef.current ? -1 : 0
-      lastRef.current = price
-      const big = Math.random() < 0.12
-      const dark = Math.random() < 0.18
-      const size = big ? 200 + Math.floor(Math.random() * 1800) : 1 + Math.floor(Math.random() * 200)
-      const p: Print = { id: idRef.current++, time: hhmmss(new Date()), price, size, venue: dark ? 'DARK' : VENUES[Math.floor(Math.random() * VENUES.length)], dir, dark }
-      setPrints(prev => [p, ...prev].slice(0, 60))
-    }
-    tick()
-    const interval = window.setInterval(tick, 1500)
-    return () => window.clearInterval(interval)
-  }, [ticker])
+  const { data, isLoading, isError } = useQuery<{ candles: Candle[] }>({
+    queryKey: ['tns-ohlcv', ticker],
+    queryFn: () => axios.get(`/api/market/ohlcv?ticker=${encodeURIComponent(ticker)}&interval=1m`).then(r => r.data),
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+  })
 
-  const last = prints[0]?.price ?? spotRef.current
-  const bid = last - 0.02, ask = last + 0.02
+  const candles = data?.candles ?? []
+  const recent = candles.slice(-80).reverse()
+  const last = recent[0]?.close ?? 0
+  const first = candles[0]?.close ?? last
+  const dayChg = first > 0 ? ((last / first) - 1) * 100 : 0
+  const maxVol = Math.max(...recent.map(c => c.volume), 1)
+
   const lbl: React.CSSProperties = { fontFamily: T.label, fontSize: 7.5, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.muted }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: T.bg }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
-        {[{ l: 'Bid', v: bid, c: T.neg }, { l: 'Last', v: last, c: T.text }, { l: 'Ask', v: ask, c: T.pos }].map((s, i) => (
-          <div key={s.l} style={{ padding: '5px 8px', borderRight: i < 2 ? `1px solid ${T.border}` : 'none' }}>
-            <div style={lbl}>{s.l}</div>
-            <div style={{ fontFamily: T.mono, fontSize: 12, fontWeight: 700, color: s.c, fontVariantNumeric: 'tabular-nums' }}>{s.v.toFixed(2)}</div>
-          </div>
-        ))}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
+        <div style={{ padding: '5px 8px', borderRight: `1px solid ${T.border}` }}>
+          <div style={lbl}>{ticker}</div>
+          <div style={{ fontFamily: T.mono, fontSize: 12, fontWeight: 700, color: T.text, fontVariantNumeric: 'tabular-nums' }}>{last ? last.toFixed(2) : '—'}</div>
+        </div>
+        <div style={{ padding: '5px 8px', borderRight: `1px solid ${T.border}` }}>
+          <div style={lbl}>1D</div>
+          <div style={{ fontFamily: T.mono, fontSize: 12, fontWeight: 700, color: dayChg >= 0 ? T.pos : T.neg, fontVariantNumeric: 'tabular-nums' }}>{last ? `${dayChg >= 0 ? '+' : ''}${dayChg.toFixed(2)}%` : '—'}</div>
+        </div>
+        <div style={{ padding: '5px 8px' }}>
+          <div style={lbl}>Prints</div>
+          <div style={{ fontFamily: T.mono, fontSize: 12, fontWeight: 700, color: T.muted, fontVariantNumeric: 'tabular-nums' }}>{recent.length}</div>
+        </div>
       </div>
       <div style={{ display: 'flex', gap: 8, padding: '3px 8px', borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
-        {['Time', 'Price', 'Size', 'Ven'].map((h, i) => (
-          <span key={h} style={{ ...lbl, flex: i === 0 ? '0 0 58px' : i === 3 ? '0 0 40px' : 1, textAlign: i === 0 ? 'left' : 'right' }}>{h}</span>
+        {['Time', 'Price', 'Size'].map((h, i) => (
+          <span key={h} style={{ ...lbl, flex: i === 0 ? '0 0 62px' : 1, textAlign: i === 0 ? 'left' : 'right' }}>{h}</span>
         ))}
       </div>
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-        {prints.map(p => {
-          const c = p.dir === 1 ? T.pos : p.dir === -1 ? T.neg : T.muted
-          const big = p.size >= 200
+        {recent.length === 0 ? (
+          <div style={{ padding: 16, textAlign: 'center', fontFamily: T.label, fontSize: 10, color: T.muted, lineHeight: 1.6 }}>
+            {isLoading ? 'Loading prints…' : isError ? 'No intraday data.' : 'No prints — market may be closed.'}
+          </div>
+        ) : recent.map((p, i) => {
+          const prev = recent[i + 1]?.close ?? p.open
+          const dir = p.close > prev ? 1 : p.close < prev ? -1 : 0
+          const c = dir === 1 ? T.pos : dir === -1 ? T.neg : T.muted
+          const big = p.volume >= maxVol * 0.6
           return (
-            <div key={p.id} style={{ display: 'flex', gap: 8, padding: '2px 8px', borderBottom: `1px solid rgba(255,255,255,0.03)`, opacity: p.dark ? 0.6 : 1, background: big ? 'rgba(201,168,76,0.06)' : 'transparent' }}>
-              <span style={{ flex: '0 0 58px', fontFamily: T.mono, fontSize: 9, color: T.muted, fontVariantNumeric: 'tabular-nums' }}>{p.time}</span>
-              <span style={{ flex: 1, textAlign: 'right', fontFamily: T.mono, fontSize: 10, fontWeight: big ? 700 : 400, color: c, fontVariantNumeric: 'tabular-nums' }}>{p.price.toFixed(2)}</span>
-              <span style={{ flex: 1, textAlign: 'right', fontFamily: T.mono, fontSize: 10, color: big ? T.text : T.muted, fontVariantNumeric: 'tabular-nums' }}>{p.size.toLocaleString()}</span>
-              <span style={{ flex: '0 0 40px', textAlign: 'right', fontFamily: T.mono, fontSize: 8, color: p.dark ? T.gold : T.muted }}>{p.dark ? 'D' : p.venue.slice(0, 4)}</span>
+            <div key={p.time} style={{ display: 'flex', gap: 8, padding: '2px 8px', borderBottom: `1px solid rgba(255,255,255,0.03)`, background: big ? 'rgba(201,168,76,0.06)' : 'transparent' }}>
+              <span style={{ flex: '0 0 62px', fontFamily: T.mono, fontSize: 9, color: T.muted, fontVariantNumeric: 'tabular-nums' }}>{hhmmss(p.time)}</span>
+              <span style={{ flex: 1, textAlign: 'right', fontFamily: T.mono, fontSize: 10, fontWeight: big ? 700 : 400, color: c, fontVariantNumeric: 'tabular-nums' }}>{p.close.toFixed(2)}</span>
+              <span style={{ flex: 1, textAlign: 'right', fontFamily: T.mono, fontSize: 10, color: big ? T.text : T.muted, fontVariantNumeric: 'tabular-nums' }}>{p.volume.toLocaleString()}</span>
             </div>
           )
         })}

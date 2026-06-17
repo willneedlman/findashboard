@@ -1,6 +1,9 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import axios from 'axios'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 import TickerLogo from '../../TickerLogo'
+import { useTheme } from '../../../contexts/ThemeContext'
 
 const T = {
   bg: 'var(--theme-bg, #101c2e)', surface: 'var(--theme-surface, #0d1826)',
@@ -9,24 +12,35 @@ const T = {
   mono: 'var(--theme-mono)', label: 'var(--theme-sans)', pos: '#22c55e', neg: '#ef4444', blue: '#60a5fa',
 }
 
-type Status = 'FILLED' | 'PARTIAL' | 'WORKING' | 'CANCELED' | 'REJECTED'
-interface Order { time: string; sym: string; side: 'BUY' | 'SELL'; qty: number; type: 'MKT' | 'LMT'; avg: number | null; status: Status; fillPct?: number }
-const ORDERS: Order[] = [
-  { time: '15:59:02', sym: 'NVDA', side: 'BUY', qty: 200, type: 'LMT', avg: 207.38, status: 'FILLED' },
-  { time: '15:57:41', sym: 'AAPL', side: 'SELL', qty: 500, type: 'MKT', avg: 299.21, status: 'FILLED' },
-  { time: '15:55:10', sym: 'TSLA', side: 'BUY', qty: 300, type: 'LMT', avg: 404.10, status: 'PARTIAL', fillPct: 60 },
-  { time: '15:52:33', sym: 'SPY', side: 'BUY', qty: 1000, type: 'LMT', avg: null, status: 'WORKING', fillPct: 0 },
-  { time: '15:49:58', sym: 'META', side: 'SELL', qty: 150, type: 'LMT', avg: null, status: 'WORKING', fillPct: 0 },
-  { time: '15:46:20', sym: 'AMD', side: 'BUY', qty: 400, type: 'MKT', avg: 179.84, status: 'FILLED' },
-  { time: '15:43:05', sym: 'QQQ', side: 'SELL', qty: 250, type: 'LMT', avg: null, status: 'CANCELED' },
-  { time: '15:40:11', sym: 'AMZN', side: 'BUY', qty: 120, type: 'LMT', avg: null, status: 'REJECTED' },
-]
-const STATUS_C: Record<Status, string> = { FILLED: T.pos, PARTIAL: T.gold, WORKING: T.blue, CANCELED: T.muted, REJECTED: T.neg }
+interface Order {
+  id: string; symbol: string; option_symbol?: string; side: string; status: string
+  fill_price: number | null; quantity?: number; order_type?: string; created_at?: number; filled_at?: number
+}
+interface Account { orders?: Order[] }
+
+const STATUS_C: Record<string, string> = { filled: T.pos, partial: T.gold, working: T.blue, pending: T.blue, open: T.blue, canceled: T.muted, cancelled: T.muted, rejected: T.neg }
+const isWorking = (s: string) => ['working', 'pending', 'open', 'partial'].includes(s)
+const hhmmss = (epoch?: number) => epoch ? new Date(epoch * 1000).toTimeString().slice(0, 8) : '—'
 
 export default function TradeBlotterWidget({ config: _c }: { config: WidgetConfig }) {
+  const { user } = useTheme()
+  const token = typeof window !== 'undefined' ? (localStorage.getItem('ft-session-token') || '') : ''
+  const authHeaders = { Authorization: `Bearer ${token}`, 'x-session-token': token }
   const [filter, setFilter] = useState<'all' | 'filled' | 'working'>('all')
-  const rows = ORDERS.filter(o =>
-    filter === 'all' ? true : filter === 'filled' ? o.status === 'FILLED' : (o.status === 'WORKING' || o.status === 'PARTIAL'))
+
+  const { data, isLoading } = useQuery<Account>({
+    queryKey: ['blotter-account', user?.id],
+    enabled: !!user?.id && !!token,
+    staleTime: 20_000,
+    refetchInterval: 20_000,
+    queryFn: () => axios.get(`/api/paper/account?user_id=${user!.id}`, { headers: authHeaders }).then(r => r.data),
+  })
+
+  const orders = (data?.orders ?? []).slice().sort((a, b) => (b.filled_at ?? b.created_at ?? 0) - (a.filled_at ?? a.created_at ?? 0))
+  const rows = orders.filter(o => {
+    const s = (o.status || '').toLowerCase()
+    return filter === 'all' ? true : filter === 'filled' ? s === 'filled' : isWorking(s)
+  })
 
   const chip = (active: boolean): React.CSSProperties => ({
     fontFamily: T.mono, fontSize: 8.5, fontWeight: 700, padding: '1px 8px', cursor: 'pointer', letterSpacing: '0.04em', textTransform: 'uppercase',
@@ -47,27 +61,38 @@ export default function TradeBlotterWidget({ config: _c }: { config: WidgetConfi
         <span style={{ ...TH, flex: '0 0 56px' }}>Time</span>
         <span style={{ ...TH, flex: 1 }}>Symbol</span>
         <span style={{ ...TH, flex: '0 0 36px', textAlign: 'right' }}>Qty</span>
-        <span style={{ ...TH, flex: '0 0 56px', textAlign: 'right' }}>Avg</span>
+        <span style={{ ...TH, flex: '0 0 56px', textAlign: 'right' }}>Fill</span>
         <span style={{ ...TH, flex: '0 0 76px', textAlign: 'right' }}>Status</span>
       </div>
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-        {rows.map((o, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', borderBottom: `1px solid rgba(255,255,255,0.04)` }}>
-            <span style={{ ...TD, fontSize: 8.5, color: T.muted, flex: '0 0 56px' }}>{o.time}</span>
-            <span style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-              <TickerLogo ticker={o.sym} size={15} />
-              <span style={{ fontFamily: T.mono, fontSize: 10.5, fontWeight: 700, color: T.gold }}>{o.sym}</span>
-              <span style={{ fontFamily: T.label, fontSize: 7.5, fontWeight: 700, color: o.side === 'BUY' ? T.pos : T.neg, border: `1px solid ${o.side === 'BUY' ? T.pos : T.neg}`, padding: '0 4px', flexShrink: 0 }}>{o.side}</span>
-              <span style={{ fontFamily: T.mono, fontSize: 7.5, color: T.muted, flexShrink: 0 }}>{o.type}</span>
-            </span>
-            <span style={{ ...TD, flex: '0 0 36px', textAlign: 'right' }}>{o.qty}</span>
-            <span style={{ ...TD, flex: '0 0 56px', textAlign: 'right' }}>{o.avg != null ? o.avg.toFixed(2) : '—'}</span>
-            <span style={{ flex: '0 0 76px', display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
-              <span style={{ width: 5, height: 5, borderRadius: '50%', background: STATUS_C[o.status], flexShrink: 0 }} />
-              <span style={{ fontFamily: T.mono, fontSize: 8, fontWeight: 700, color: STATUS_C[o.status] }}>{o.status}{o.fillPct != null && o.status === 'PARTIAL' ? ` ${o.fillPct}%` : ''}</span>
-            </span>
+        {rows.length === 0 ? (
+          <div style={{ padding: 16, textAlign: 'center', fontFamily: T.label, fontSize: 10, color: T.muted, lineHeight: 1.6 }}>
+            {!user?.id ? 'Sign in and paper-trade to populate the blotter.' : isLoading ? 'Loading orders…' : 'No orders yet. Place a paper trade to see fills here.'}
           </div>
-        ))}
+        ) : rows.map((o, i) => {
+          const s = (o.status || '').toLowerCase()
+          const sc = STATUS_C[s] ?? T.muted
+          const sym = o.symbol || o.option_symbol || '—'
+          const side = (o.side || '').split('_')[0].toUpperCase()
+          const buy = side === 'BUY'
+          return (
+            <div key={o.id || i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', borderBottom: `1px solid rgba(255,255,255,0.04)` }}>
+              <span style={{ ...TD, fontSize: 8.5, color: T.muted, flex: '0 0 56px' }}>{hhmmss(o.filled_at ?? o.created_at)}</span>
+              <span style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                <TickerLogo ticker={sym} size={15} />
+                <span style={{ fontFamily: T.mono, fontSize: 10.5, fontWeight: 700, color: T.gold }}>{sym}</span>
+                {side && <span style={{ fontFamily: T.label, fontSize: 7.5, fontWeight: 700, color: buy ? T.pos : T.neg, border: `1px solid ${buy ? T.pos : T.neg}`, padding: '0 4px', flexShrink: 0 }}>{side}</span>}
+                {o.order_type && <span style={{ fontFamily: T.mono, fontSize: 7.5, color: T.muted, flexShrink: 0, textTransform: 'uppercase' }}>{o.order_type.slice(0, 3)}</span>}
+              </span>
+              <span style={{ ...TD, flex: '0 0 36px', textAlign: 'right' }}>{o.quantity ?? '—'}</span>
+              <span style={{ ...TD, flex: '0 0 56px', textAlign: 'right' }}>{o.fill_price != null ? o.fill_price.toFixed(2) : '—'}</span>
+              <span style={{ flex: '0 0 76px', display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                <span style={{ width: 5, height: 5, borderRadius: '50%', background: sc, flexShrink: 0 }} />
+                <span style={{ fontFamily: T.mono, fontSize: 8, fontWeight: 700, color: sc, textTransform: 'uppercase' }}>{s || 'unknown'}</span>
+              </span>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
