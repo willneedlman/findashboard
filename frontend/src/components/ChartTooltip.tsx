@@ -14,7 +14,7 @@ interface ChartTooltipProps {
 }
 
 export const TOOLTIP_STYLE = {
-  background: 'var(--theme-surface, #0d1b30)',
+  background: 'var(--theme-surface, #0d1826)',
   border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)',
   borderRadius: 0,
   fontFamily: 'var(--theme-mono)',

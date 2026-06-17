@@ -35,9 +35,9 @@ const HEADER_WIDGETS: WidgetType[]          = ['sector-rotation', 'sentiment-gau
 
 const MACRO_CAT_OPTIONS: { key: string; label: string; color: string }[] = [
   { key: 'equity',    label: 'Equity', color: 'var(--theme-positive, #22c55e)' },
-  { key: 'fx',        label: 'FX',     color: '#60a5fa' },
-  { key: 'bond',      label: 'Rates',  color: '#a78bfa' },
-  { key: 'commodity', label: 'Cmdty',  color: '#f97316' },
+  { key: 'fx',        label: 'FX',     color: 'var(--theme-tertiary, #60a5fa)' },
+  { key: 'bond',      label: 'Rates',  color: 'var(--theme-accent-violet, #a78bfa)' },
+  { key: 'commodity', label: 'Cmdty',  color: 'var(--theme-accent-orange, #f97316)' },
   { key: 'vol',       label: 'Vol',    color: 'var(--theme-negative, #ef4444)' },
 ]
 const DEFAULT_MACRO_CATS = ['equity', 'fx', 'bond', 'commodity', 'vol']
@@ -46,17 +46,17 @@ const MACRO_CAL_CAT_OPTIONS: { key: string; label: string; color: string }[] = [
   { key: 'monetary',   label: 'Fed / Monetary', color: 'var(--theme-primary, #c9a84c)' },
   { key: 'inflation',  label: 'Inflation',      color: 'var(--theme-negative, #ef4444)' },
   { key: 'employment', label: 'Employment',     color: 'var(--theme-positive, #22c55e)' },
-  { key: 'growth',     label: 'Growth / GDP',   color: '#60a5fa' },
-  { key: 'housing',    label: 'Housing',        color: '#f97316' },
-  { key: 'sentiment',  label: 'Sentiment',      color: '#a78bfa' },
+  { key: 'growth',     label: 'Growth / GDP',   color: 'var(--theme-tertiary, #60a5fa)' },
+  { key: 'housing',    label: 'Housing',        color: 'var(--theme-accent-orange, #f97316)' },
+  { key: 'sentiment',  label: 'Sentiment',      color: 'var(--theme-accent-violet, #a78bfa)' },
 ]
 const DEFAULT_MACRO_CAL_CATS = ['monetary', 'inflation', 'employment', 'growth', 'housing', 'sentiment']
 
 const SPREAD_SERIES_OPTIONS: { key: string; label: string; color: string }[] = [
-  { key: 'ig',     label: 'IG OAS',   color: '#60a5fa' },
+  { key: 'ig',     label: 'IG OAS',   color: 'var(--theme-tertiary, #60a5fa)' },
   { key: 'hy',     label: 'HY OAS',   color: 'var(--theme-negative, #ef4444)' },
   { key: 'ig_3_5', label: 'IG 3–5Y',  color: '#818cf8' },
-  { key: 'hy_b',   label: 'HY B',     color: '#f97316' },
+  { key: 'hy_b',   label: 'HY B',     color: 'var(--theme-accent-orange, #f97316)' },
   { key: 'hy_ccc', label: 'HY CCC',   color: '#fb7185' },
   { key: 'vix',    label: 'VIX',      color: 'var(--theme-primary)' },
 ]
@@ -144,7 +144,7 @@ function widgetTitle(config: WidgetConfig): string {
 }
 
 const S = {
-  bg:     'var(--theme-surface, #0d1b30)',
+  bg:     'var(--theme-surface, #0d1826)',
   border: 'rgba(255,255,255,0.08)',
   gold:   'var(--theme-primary, #c9a84c)',
   muted:  'var(--theme-secondary, #5e768f)',
@@ -441,7 +441,7 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
 
       {/* Config panel */}
       {configOpen && (
-        <div className="widget-no-drag" style={{ position: 'absolute', top: 26, left: 0, right: 0, bottom: 0, zIndex: 20, background: 'var(--theme-surface, #0d1b30)', borderTop: '1px solid rgba(255,255,255,0.08)', padding: 10, overflowY: 'auto' }}>
+        <div className="widget-no-drag" style={{ position: 'absolute', top: 26, left: 0, right: 0, bottom: 0, zIndex: 20, background: 'var(--theme-surface, #0d1826)', borderTop: '1px solid rgba(255,255,255,0.08)', padding: 10, overflowY: 'auto' }}>
 
           {TICKER_WIDGETS.includes(config.type) && (
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>

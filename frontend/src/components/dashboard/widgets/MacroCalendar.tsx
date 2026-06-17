@@ -17,9 +17,9 @@ const CAT_COLOR: Record<string, string> = {
   monetary:   'var(--theme-primary, #c9a84c)',
   inflation:  'var(--theme-negative, #ef4444)',
   employment: 'var(--theme-positive, #22c55e)',
-  growth:     '#60a5fa',
-  housing:    '#f97316',
-  sentiment:  '#a78bfa',
+  growth:     'var(--theme-tertiary, #60a5fa)',
+  housing:    'var(--theme-accent-orange, #f97316)',
+  sentiment:  'var(--theme-accent-violet, #a78bfa)',
 }
 
 const CAT_TAG: Record<string, string> = {

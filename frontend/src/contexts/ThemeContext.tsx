@@ -183,6 +183,8 @@ export function applyTheme(t: Theme) {
       --theme-negative-strong: ${negStrong};
       --theme-warn:            ${warnSoft};
       --theme-warn-strong:     ${warnStrong};
+      --theme-accent-violet:   ${isLight ? '#7c5cd6' : '#a78bfa'};
+      --theme-accent-orange:   ${isLight ? '#c2570f' : '#f97316'};
     }
 
     /* ── Layout / Navigation overrides ──────────────────────────────── */
@@ -219,6 +221,8 @@ export function applyTheme(t: Theme) {
   root.style.setProperty('--theme-negative-strong',  negStrong)
   root.style.setProperty('--theme-warn',             warnSoft)
   root.style.setProperty('--theme-warn-strong',      warnStrong)
+  root.style.setProperty('--theme-accent-violet',    isLight ? '#7c5cd6' : '#a78bfa')
+  root.style.setProperty('--theme-accent-orange',    isLight ? '#c2570f' : '#f97316')
 }
 
 // ── Persistence helpers ───────────────────────────────────────────────────────

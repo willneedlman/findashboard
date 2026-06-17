@@ -24,9 +24,9 @@ const CAT_LABEL: Record<string, string> = {
 }
 
 const CAT_COLOR: Record<string, string> = {
-  fx:        '#60a5fa',
-  commodity: '#f97316',
-  bond:      '#a78bfa',
+  fx:        'var(--theme-tertiary, #60a5fa)',
+  commodity: 'var(--theme-accent-orange, #f97316)',
+  bond:      'var(--theme-accent-violet, #a78bfa)',
   vol:       'var(--theme-negative, #ef4444)',
   equity:    'var(--theme-positive, #22c55e)',
 }

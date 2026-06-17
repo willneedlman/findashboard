@@ -22,10 +22,10 @@ const shimmer: React.CSSProperties = {
 }
 
 const SERIES_META: Record<string, { backendKey: string; label: string; color: string; isVix?: boolean }> = {
-  ig:     { backendKey: 'ig_oas', label: 'IG OAS',  color: '#60a5fa' },
+  ig:     { backendKey: 'ig_oas', label: 'IG OAS',  color: 'var(--theme-tertiary, #60a5fa)' },
   hy:     { backendKey: 'hy_oas', label: 'HY OAS',  color: 'var(--theme-negative, #ef4444)' },
   ig_3_5: { backendKey: 'ig_3_5', label: 'IG 3–5Y', color: '#818cf8' },
-  hy_b:   { backendKey: 'hy_b',   label: 'HY B',    color: '#f97316' },
+  hy_b:   { backendKey: 'hy_b',   label: 'HY B',    color: 'var(--theme-accent-orange, #f97316)' },
   hy_ccc: { backendKey: 'hy_ccc', label: 'HY CCC',  color: '#fb7185' },
   vix:    { backendKey: 'vix',    label: 'VIX',     color: 'var(--theme-primary, #c9a84c)', isVix: true },
 }

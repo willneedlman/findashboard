@@ -331,7 +331,7 @@ export default function StressTester() {
                       <Tooltip
                         cursor={{ fill: 'var(--theme-hover, rgba(255,255,255,0.04))' }}
                         formatter={(v: number, name: string) => [`${v?.toFixed(2)}%`, name === 'portfolio' ? 'Portfolio' : 'SPY']}
-                        contentStyle={{ background: 'var(--theme-surface, #0d1b30)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', fontFamily: 'var(--theme-mono)', fontSize: 10, padding: '8px 10px', boxShadow: '0 4px 20px rgba(0,0,0,0.5)' }}
+                        contentStyle={{ background: 'var(--theme-surface, #0d1826)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', fontFamily: 'var(--theme-mono)', fontSize: 10, padding: '8px 10px', boxShadow: '0 4px 20px rgba(0,0,0,0.5)' }}
                         labelStyle={{ color: 'var(--theme-primary, #c9a84c)', fontFamily: 'var(--theme-sans)', fontWeight: 700, marginBottom: 4 }}
                       />
                       <Bar dataKey="portfolio" name="portfolio" radius={[2, 2, 0, 0]}>
