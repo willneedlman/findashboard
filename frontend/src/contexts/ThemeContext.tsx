@@ -119,11 +119,13 @@ export function applyTheme(t: Theme) {
   const borderColor  = isLight ? 'rgba(0,0,0,0.10)'  : 'rgba(255,255,255,0.08)'
   const borderFaint  = isLight ? 'rgba(0,0,0,0.06)'  : 'rgba(255,255,255,0.05)'
   const surfaceHover = isLight ? 'rgba(0,0,0,0.04)'  : 'rgba(255,255,255,0.04)'
-  // Semantic positive/negative/warn: dark on light bg, soft on dark bg — WCAG AA on both
-  const posStrong    = isLight ? '#15803d' : '#52c48a'
-  const posSoft      = isLight ? '#16a34a' : '#86efac'
-  const negStrong    = isLight ? '#991b1b' : '#e07878'
-  const negSoft      = isLight ? '#dc2626' : '#fca5a5'
+  // Semantic positive/negative: the terminal's standard vivid green/red on dark
+  // (matches the original hardcoded #22c55e/#ef4444), darker high-contrast
+  // variants on light backgrounds — WCAG AA on both.
+  const posStrong    = isLight ? '#15803d' : '#16a34a'
+  const posSoft      = isLight ? '#16a34a' : '#22c55e'
+  const negStrong    = isLight ? '#991b1b' : '#dc2626'
+  const negSoft      = isLight ? '#dc2626' : '#ef4444'
   // Warn (amber): b45309 on light (5.7:1 on white), e8c04a on dark
   const warnSoft     = isLight ? '#b45309' : '#e8c04a'
   const warnStrong   = isLight ? '#92400e' : '#d97706'
