@@ -1,10 +1,27 @@
 import { useState, useCallback, useEffect, lazy, Suspense } from 'react'
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
+import WidgetRenderer from '../components/dashboard/WidgetRenderer'
+import { WIDGET_DEFAULT_SIZE, WIDGET_LABELS } from '../hooks/useDashboard'
+import type { WidgetType, WidgetConfig } from '../hooks/useDashboard'
 
 const RegressionAnalysis = lazy(() => import('./RegressionAnalysis'))
 const StressTester       = lazy(() => import('./StressTester'))
 const AlgoRunner         = lazy(() => import('./AlgoRunner'))
+
+// New dashboard widgets surfaced here as a live preview gallery so they can be
+// inspected in isolation without building a dashboard. Configs mirror the
+// Risk/Flow Desk presets.
+const PREVIEW_WIDGETS: { type: WidgetType; config: Partial<WidgetConfig> }[] = [
+  { type: 'risk-metrics',    config: {} },
+  { type: 'exposure-map',    config: {} },
+  { type: 'position-sizer',  config: { ticker: 'AAPL' } },
+  { type: 'pnl-attribution', config: {} },
+  { type: 'unusual-flow',    config: {} },
+  { type: 'trade-blotter',   config: {} },
+  { type: 'time-and-sales',  config: { ticker: 'AAPL' } },
+  { type: 'heatmap',         config: {} },
+]
 
 const SAMPLE_CSV = `timestamp,side,price,size,order_id
 2024-01-02 09:30:00.000,A,150.30,200,ORD001
@@ -203,7 +220,7 @@ interface UserStats {
   users: { id: string; username: string; display_name: string; email: string | null; created_at: string; last_login_at: string | null; login_count: number }[]
 }
 
-type Tab = 'traffic' | 'health' | 'users' | 'cache' | 'endpoints' | 'lob' | 'regression' | 'stress' | 'algo'
+type Tab = 'traffic' | 'health' | 'users' | 'cache' | 'endpoints' | 'lob' | 'widgets' | 'regression' | 'stress' | 'algo'
 
 interface LOBSnapshot {
   msg: number
@@ -437,7 +454,7 @@ export default function AdminTester() {
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 0, borderBottom: `1px solid ${RED_BORDER}`, marginBottom: 20 }}>
-          {(['traffic', 'health', 'users', 'cache', 'endpoints', 'lob', 'regression', 'stress', 'algo'] as Tab[]).map(t => (
+          {(['traffic', 'health', 'users', 'cache', 'endpoints', 'lob', 'widgets', 'regression', 'stress', 'algo'] as Tab[]).map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
               background: 'none', border: 'none', borderBottom: tab === t ? `2px solid ${RED}` : '2px solid transparent',
               color: tab === t ? RED : 'var(--theme-text-dim)', fontFamily: 'var(--theme-mono)', fontSize: 10,
@@ -954,6 +971,35 @@ export default function AdminTester() {
                 })()}
               </>
             )}
+          </div>
+        )}
+        {/* ── Widget preview gallery ── */}
+        {tab === 'widgets' && (
+          <div>
+            <p style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: 'var(--theme-text-dim)', marginBottom: 16, lineHeight: 1.6 }}>
+              Live preview of the new dashboard widgets at their default grid size.
+              Display widgets use deterministic mock data; the Position Sizer is interactive.
+              Add any of these to a board from My Dashboard → +NEW, or via the Risk Desk / Flow Desk presets.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: 12 }}>
+              {PREVIEW_WIDGETS.map(({ type, config }) => {
+                const { w, h } = WIDGET_DEFAULT_SIZE[type]
+                const cfg: WidgetConfig = { id: `preview-${type}`, type, ...config }
+                return (
+                  <div key={type} style={{ gridColumn: `span ${Math.min(w, 12)}`, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 5 }}>
+                      <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(239,68,68,0.6)' }}>
+                        {WIDGET_LABELS[type]}
+                      </span>
+                      <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 8, color: 'var(--theme-text-dim)' }}>{type} · {w}×{h}</span>
+                    </div>
+                    <div style={{ height: h * 52, border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', overflow: 'hidden', background: 'var(--theme-surface, #0d1826)' }}>
+                      <WidgetRenderer config={cfg} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           </div>
         )}
         {tab === 'regression' && (
