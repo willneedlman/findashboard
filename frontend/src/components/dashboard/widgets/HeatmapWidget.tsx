@@ -1,12 +1,9 @@
+import { T } from '../../../lib/theme'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 import TickerLogo from '../../TickerLogo'
 
-const T = {
-  bg: 'var(--theme-bg, #101c2e)', muted: 'var(--theme-secondary, #5e768f)',
-  text: 'var(--theme-text, #d7e3fc)', mono: 'var(--theme-mono)', label: 'var(--theme-sans)',
-}
 
 interface Row { ticker: string; marketCap: number | null; sector: string; change1d: number | null }
 interface Tile { t: string; cap: number; chg: number }

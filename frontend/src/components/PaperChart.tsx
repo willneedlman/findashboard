@@ -1,3 +1,4 @@
+import { T } from '../lib/theme'
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { createChart, ColorType, CrosshairMode } from 'lightweight-charts'
 import type { IChartApi, ISeriesApi, Time, SeriesMarker } from 'lightweight-charts'
@@ -7,16 +8,6 @@ import { marketSession } from '../lib/marketSession'
 import { occUnderlying } from '../lib/occ'
 import { readToken } from '../lib/theme'
 
-const T = {
-  bg:    'var(--theme-bg, #101c2e)',
-  surface: 'var(--theme-surface, #0d1826)',
-  border: 'var(--theme-border, rgba(255,255,255,0.08))',
-  gold:  'var(--theme-primary, #c9a84c)',
-  muted: 'var(--theme-secondary, #5e768f)',
-  text:  'var(--theme-text, #d7e3fc)',
-  mono:  'var(--theme-mono)',
-  label: 'var(--theme-sans)',
-}
 
 const TFS = [
   { key: '1m', label: '1m' }, { key: '3m', label: '3m' }, { key: '5m', label: '5m' }, { key: '10m', label: '10m' },

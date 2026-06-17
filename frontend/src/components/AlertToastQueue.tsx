@@ -1,3 +1,4 @@
+import { T } from '../lib/theme'
 import { useState, useEffect, useCallback } from 'react'
 import type { AlertPayload } from '../hooks/useAlertSocket'
 
@@ -5,11 +6,6 @@ const STORAGE_KEY = 'ft-alert-toasts'
 const MAX_TOASTS  = 5
 const DISMISS_MS  = 8000
 
-const T = {
-  gold:  'var(--theme-primary, #c9a84c)',
-  mono:  'var(--theme-mono)',
-  label: 'var(--theme-sans)',
-}
 
 function conditionLabel(condition: string, threshold: number): string {
   switch (condition) {

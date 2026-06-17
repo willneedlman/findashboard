@@ -1,19 +1,10 @@
+import { T } from '../lib/theme'
 import { useState } from 'react'
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
 import useIsMobile from '../hooks/useIsMobile'
 
-const T = {
-  bg:      'var(--theme-bg, #060e1c)',
-  surface: 'var(--theme-surface, #0d1826)',
-  border:  'var(--theme-border, rgba(255,255,255,0.06))',
-  gold:    'var(--theme-primary, #c9a84c)',
-  muted:   'var(--theme-secondary, #5e768f)',
-  text:    'var(--theme-text, #d7e3fc)',
-  mono:    'var(--theme-mono)',
-  label:   'var(--theme-sans)',
-}
 
 const SEGMENT_COLORS = ['var(--theme-primary, #c9a84c)', '#60a5fa', 'var(--theme-positive, #22c55e)', '#f97316', '#a78bfa', '#38bdf8', '#fb7185', '#34d399', '#fbbf24', '#e879f9']
 

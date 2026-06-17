@@ -1,3 +1,4 @@
+import { T } from '../lib/theme'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
@@ -9,18 +10,6 @@ const FED_WEIGHTS = [1.0, 0.9, 0.7, 0.5, 0.3, 0.1]
 const YC_WEIGHTS  = [1.0, 0.98, 0.85, 0.40, 0.1, -0.19, -0.325]
 const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #5e768f)', fontFamily: 'var(--theme-mono)' }
 
-const T = {
-  bg:      'var(--theme-bg, #060e1c)',
-  surface: 'var(--theme-surface, #0d1826)',
-  border:  'var(--theme-border, rgba(255,255,255,0.06))',
-  gold:    'var(--theme-primary, #c9a84c)',
-  muted:   'var(--theme-secondary, #5e768f)',
-  text:    'var(--theme-text, #d7e3fc)',
-  mono:    'var(--theme-mono)',
-  label:   'var(--theme-sans)',
-  pos:     'var(--theme-positive, #22c55e)',
-  neg:     'var(--theme-negative, #ef4444)',
-}
 
 // ── Inline stat row — replaces isolated metric tiles ──────────────────────
 function StatRow({ items }: { items: { label: string; value: string; sub?: string; delta?: string; positive?: boolean }[] }) {

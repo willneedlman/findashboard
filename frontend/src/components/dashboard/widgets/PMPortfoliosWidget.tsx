@@ -1,3 +1,4 @@
+import { T } from '../../../lib/theme'
 import { useMemo, useState } from 'react'
 import { useQueries, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
@@ -7,18 +8,6 @@ import TickerLogo from '../../TickerLogo'
 import { useTheme } from '../../../contexts/ThemeContext'
 import { fmtMarketCap } from '../../../lib/format'
 
-const T = {
-  bg:      'var(--theme-bg, #101c2e)',
-  surface: 'var(--theme-surface, #0d1826)',
-  border:  'var(--theme-border, rgba(255,255,255,0.08))',
-  gold:    'var(--theme-primary, #c9a84c)',
-  muted:   'var(--theme-secondary, #5e768f)',
-  text:    'var(--theme-text, #d7e3fc)',
-  mono:    'var(--theme-mono)',
-  label:   'var(--theme-sans)',
-  pos:     'var(--theme-positive, #22c55e)',
-  neg:     'var(--theme-negative, #ef4444)',
-}
 
 interface Holding { ticker: string; shares: number; avgCost: number }
 interface Portfolio { id: string; name: string; holdings: Holding[] }

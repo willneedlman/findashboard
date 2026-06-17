@@ -1,20 +1,9 @@
+import { T } from '../../../lib/theme'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 
-const T = {
-  bg:      'var(--theme-bg, #101c2e)',
-  surface: 'var(--theme-surface, #0d1826)',
-  border:  'var(--theme-border, rgba(255,255,255,0.08))',
-  gold:    'var(--theme-primary, #c9a84c)',
-  muted:   'var(--theme-secondary, #5e768f)',
-  text:    'var(--theme-text, #d7e3fc)',
-  mono:    'var(--theme-mono)',
-  label:   'var(--theme-sans)',
-  pos:     'var(--theme-positive, #22c55e)',
-  neg:     'var(--theme-negative, #ef4444)',
-}
 
 const shimmer: React.CSSProperties = {
   background: 'linear-gradient(90deg, var(--theme-surface, #0d0d0d) 25%, rgba(255,255,255,0.05) 50%, var(--theme-surface, #0d0d0d) 75%)',

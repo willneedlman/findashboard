@@ -1,19 +1,9 @@
+import { T } from '../../../lib/theme'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 
-const T = {
-  bg:      'var(--theme-bg, #101c2e)',
-  surface: 'var(--theme-surface, #0d1826)',
-  border:  'var(--theme-border, rgba(255,255,255,0.08))',
-  gold:    'var(--theme-primary, #c9a84c)',
-  muted:   'var(--theme-secondary, #5e768f)',
-  text:    'var(--theme-text, #d7e3fc)',
-  mono:    'var(--theme-mono)',
-  label:   'var(--theme-sans)',
-  neg:     'var(--theme-negative, #ef4444)',
-}
 
 interface SectorRow {
   ticker: string

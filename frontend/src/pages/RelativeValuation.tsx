@@ -1,20 +1,9 @@
+import { T } from '../lib/theme'
 import { useState } from 'react'
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
 
-const T = {
-  bg:      'var(--theme-bg, #101c2e)',
-  surface: 'var(--theme-surface, #0d1826)',
-  border:  'var(--theme-border, rgba(255,255,255,0.06))',
-  gold:    'var(--theme-primary, #c9a84c)',
-  muted:   'var(--theme-secondary, #5e768f)',
-  text:    'var(--theme-text, #d7e3fc)',
-  mono:    'var(--theme-mono)',
-  label:   'var(--theme-sans)',
-  pos:     'var(--theme-positive, #22c55e)',
-  neg:     'var(--theme-negative, #ef4444)',
-}
 
 const METRICS = [
   { key: 'pe',             label: 'P/E',        lowerBetter: true,  isPct: false },

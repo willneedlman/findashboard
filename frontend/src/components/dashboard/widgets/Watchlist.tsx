@@ -1,19 +1,9 @@
+import { T } from '../../../lib/theme'
 import axios from 'axios'
 import { useQueries } from '@tanstack/react-query'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 import TickerLogo from '../../TickerLogo'
 
-const T = {
-  bg:    'var(--theme-bg, #101c2e)',
-  surface: 'var(--theme-surface, #0d1826)',
-  border: 'rgba(255,255,255,0.04)',
-  text:  'var(--theme-text, #dce3ed)',
-  muted: 'var(--theme-secondary, #5e768f)',
-  mono:  'var(--theme-mono)',
-  label: 'var(--theme-sans)',
-  pos:   'var(--theme-positive, #22c55e)',
-  neg:   'var(--theme-negative, #ef4444)',
-}
 
 interface HubData {
   ticker: string

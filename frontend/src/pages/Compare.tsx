@@ -1,3 +1,4 @@
+import { T } from '../lib/theme'
 import { useState, useMemo } from 'react'
 import axios from 'axios'
 import { useQuery, useQueries } from '@tanstack/react-query'
@@ -8,18 +9,6 @@ import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
 import useIsMobile from '../hooks/useIsMobile'
 
-const T = {
-  bg:      'var(--theme-bg, #101c2e)',
-  surface: 'var(--theme-surface, #0d1826)',
-  border:  'var(--theme-border, rgba(255,255,255,0.08))',
-  gold:    'var(--theme-primary, #c9a84c)',
-  muted:   'var(--theme-secondary, #5e768f)',
-  text:    'var(--theme-text, #d7e3fc)',
-  mono:    'var(--theme-mono)',
-  label:   'var(--theme-sans)',
-  pos:     'var(--theme-positive)',
-  neg:     'var(--theme-negative)',
-}
 
 const SERIES_COLORS  = ['var(--theme-primary, #c9a84c)', '#60a5fa', '#34d399', '#f97316', '#a78bfa', '#38bdf8', '#fb7185', '#fbbf24']
 const OVERLAY_COLORS = ['#94a3b8', '#5eead4', '#fca5a5', '#c4b5fd']

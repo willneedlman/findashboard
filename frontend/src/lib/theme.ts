@@ -23,7 +23,7 @@ export const T = {
   goldTint:  (pct: number) => `color-mix(in srgb, var(--theme-primary) ${pct}%, transparent)`,
   posTint:   (pct: number) => `color-mix(in srgb, var(--theme-positive) ${pct}%, transparent)`,
   negTint:   (pct: number) => `color-mix(in srgb, var(--theme-negative) ${pct}%, transparent)`,
-} as const
+}
 
 // Resolve a --theme-* token to a concrete value where a string is required at
 // call time (e.g. lightweight-charts series options). Re-read on theme change.

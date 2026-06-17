@@ -1,14 +1,9 @@
+import { T } from '../../../lib/theme'
 import { useState } from 'react'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 import TickerLogo from '../../TickerLogo'
 import { usePaperAccount, hhmmss } from './usePortfolio'
 
-const T = {
-  bg: 'var(--theme-bg, #101c2e)', surface: 'var(--theme-surface, #0d1826)',
-  border: 'var(--theme-border, rgba(255,255,255,0.08))', gold: 'var(--theme-primary, #c9a84c)',
-  muted: 'var(--theme-secondary, #5e768f)', text: 'var(--theme-text, #d7e3fc)',
-  mono: 'var(--theme-mono)', label: 'var(--theme-sans)', pos: 'var(--theme-positive, #22c55e)', neg: 'var(--theme-negative, #ef4444)', blue: '#60a5fa',
-}
 
 const STATUS_C: Record<string, string> = { filled: T.pos, partial: T.gold, working: T.blue, pending: T.blue, open: T.blue, canceled: T.muted, cancelled: T.muted, rejected: T.neg }
 const isWorking = (s: string) => ['working', 'pending', 'open', 'partial'].includes(s)

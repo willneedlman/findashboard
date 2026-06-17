@@ -1,18 +1,10 @@
+import { T } from '../../../lib/theme'
 import axios from 'axios'
 import { useQuery } from '@tanstack/react-query'
 import { useState, useEffect, useRef } from 'react'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 import useContainerSize from '../../../hooks/useContainerSize'
 
-const T = {
-  bg:     'var(--theme-bg, #101c2e)',
-  border: 'var(--theme-border, rgba(255,255,255,0.08))',
-  gold:   'var(--theme-primary, #c9a84c)',
-  text:   'var(--theme-text, #d7e3fc)',
-  muted:  'var(--theme-secondary, #5e768f)',
-  mono:   'var(--theme-mono)',
-  pos:    'var(--theme-positive, #22c55e)', neg: 'var(--theme-negative, #ef4444)',
-}
 
 const inputStyle: React.CSSProperties = {
   background: 'var(--theme-bg, #0a1628)', border: `1px solid ${T.border}`,
