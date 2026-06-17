@@ -50,13 +50,11 @@ export default function PnLAttributionWidget({ config: _c }: { config: WidgetCon
     )
   }
 
-  // Cumulative waterfall bars + a final Net bar.
-  let run = 0
-  const bars = rows.map(r => { const from = run; run += r.pnl; return { ticker: r.ticker, from, to: run, pnl: r.pnl } })
-  const cum = [0, ...bars.map(b => b.to)]
-  const lo = Math.min(0, ...cum, net), hi = Math.max(0, ...cum, net)
-  const yPct = (v: number) => (1 - (v - lo) / (hi - lo || 1)) * 100
-  const cols = bars.length + 1
+  // Per-position bars anchored at a centered zero line: gains rise above 0,
+  // losses drop below it (no cumulative waterfall).
+  const maxAbs = Math.max(...rows.map(r => Math.abs(r.pnl)), Math.abs(net), 1)
+  const yPct = (v: number) => (1 - (v + maxAbs) / (2 * maxAbs)) * 100
+  const cols = rows.length + 1
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: T.bg }}>
@@ -65,14 +63,14 @@ export default function PnLAttributionWidget({ config: _c }: { config: WidgetCon
         <div style={{ position: 'relative', height: '100%' }}>
           <div style={{ position: 'absolute', left: 0, right: 0, top: `${yPct(0)}%`, height: 1, background: 'rgba(255,255,255,0.14)' }} />
           <div style={{ position: 'absolute', inset: 0, display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
-            {bars.map(b => {
-              const top = Math.min(yPct(b.from), yPct(b.to))
-              const h = Math.abs(yPct(b.from) - yPct(b.to))
-              const up = b.pnl >= 0
+            {rows.map(r => {
+              const top = Math.min(yPct(0), yPct(r.pnl))
+              const h = Math.abs(yPct(0) - yPct(r.pnl))
+              const up = r.pnl >= 0
               return (
-                <div key={b.ticker} style={{ position: 'relative' }}>
-                  <div style={{ position: 'absolute', left: '22%', right: '22%', top: `${top}%`, height: `${Math.max(h, 0.6)}%`, background: up ? 'rgba(34,197,94,0.7)' : 'rgba(239,68,68,0.7)' }} title={`${b.ticker} ${up ? '+' : ''}${money(b.pnl)}`} />
-                  <div style={{ position: 'absolute', bottom: -16, left: 0, right: 0, textAlign: 'center', fontFamily: T.mono, fontSize: 8, color: T.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.ticker}</div>
+                <div key={r.ticker} style={{ position: 'relative' }}>
+                  <div style={{ position: 'absolute', left: '22%', right: '22%', top: `${top}%`, height: `${Math.max(h, 0.6)}%`, background: up ? 'rgba(34,197,94,0.7)' : 'rgba(239,68,68,0.7)' }} title={`${r.ticker} ${up ? '+' : ''}${money(r.pnl)}`} />
+                  <div style={{ position: 'absolute', bottom: -16, left: 0, right: 0, textAlign: 'center', fontFamily: T.mono, fontSize: 8, color: T.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.ticker}</div>
                 </div>
               )
             })}
