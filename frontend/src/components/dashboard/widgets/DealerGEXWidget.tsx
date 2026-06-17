@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { fetchGEX } from '../../../hooks/useApi'
@@ -19,9 +20,13 @@ const T = {
 interface GEXStrike { strike: number; net_gex: number }
 interface GEXResp { spot?: number; data?: GEXStrike[] }
 
+const STRIKE_COUNTS = [10, 20, 30, 40, 0] // 0 = all
+const selStyle: React.CSSProperties = { background: 'var(--theme-bg, #101c2e)', border: `1px solid ${T.border}`, color: T.gold, fontFamily: T.mono, fontSize: 8.5, padding: '1px 3px', outline: 'none', cursor: 'pointer' }
+
 export default function DealerGEXWidget({ config }: { config: WidgetConfig }) {
   const ticker = config.ticker
   const expiry = config.expiry
+  const [count, setCount] = useState(20) // strikes shown around spot; 0 = all
 
   const { data, isLoading, isError } = useQuery<GEXResp>({
     queryKey: ['gex-widget', ticker, expiry],
@@ -39,8 +44,10 @@ export default function DealerGEXWidget({ config }: { config: WidgetConfig }) {
 
   const spot = data?.spot ?? null
   const raw = [...(data?.data ?? [])].sort((a, b) => a.strike - b.strike)
-  // Window to a readable band around spot so the bars don't compress to slivers.
-  const band = raw.filter(d => spot ? Math.abs(d.strike - spot) <= spot * 0.08 : true)
+  // Show the `count` strikes nearest spot (0 = all) so the bars stay readable.
+  const band = count > 0 && spot
+    ? [...raw].sort((a, b) => Math.abs(a.strike - spot) - Math.abs(b.strike - spot)).slice(0, count).sort((a, b) => a.strike - b.strike)
+    : raw
   const totalNet = raw.reduce((s, d) => s + d.net_gex, 0)
 
   // Gamma flip: per-strike net_gex sign change nearest spot.
@@ -76,8 +83,11 @@ export default function DealerGEXWidget({ config }: { config: WidgetConfig }) {
             ))}
           </div>
 
-          <div style={{ padding: '3px 10px 0', fontFamily: T.mono, fontSize: 8, color: T.muted, letterSpacing: '0.06em', flexShrink: 0 }}>
-            {expiry ? `exp ${expiry}` : 'all chains'}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, padding: '3px 10px 0', flexShrink: 0 }}>
+            <span style={{ fontFamily: T.mono, fontSize: 8, color: T.muted, letterSpacing: '0.06em' }}>{expiry ? `exp ${expiry}` : 'all chains'}</span>
+            <select value={count} onChange={e => setCount(Number(e.target.value))} style={selStyle} title="Strikes shown (nearest spot)">
+              {STRIKE_COUNTS.map(n => <option key={n} value={n}>{n === 0 ? 'All strikes' : `${n} strikes`}</option>)}
+            </select>
           </div>
           <div style={{ flex: 1, minHeight: 0, padding: '4px 4px 4px' }}>
             <ResponsiveContainer width="100%" height="100%">
