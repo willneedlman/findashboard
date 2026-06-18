@@ -205,7 +205,10 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
       const n = lenRef.current
       if (n < 2) return
       const width = range.to - range.from
-      const maxOffset = width / 2
+      // Never clamp tighter than the chart's fixed right offset (6): otherwise
+      // zooming in (small width → small width/2) fights rightOffset and yanks the
+      // view back near the right edge.
+      const maxOffset = Math.max(6, width / 2)
       if (range.to - (n - 1) > maxOffset + 0.5) {
         clamping = true
         const to = (n - 1) + maxOffset
@@ -238,6 +241,10 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
       const follow = !fit && !!prevRange && prevRange.to >= lenRef.current - 2
       candleRef.current?.setData(cs.map(c => ({ time: c.time as Time, open: c.open, high: c.high, low: c.low, close: c.close })))
       if (fit) {
+        // Re-fit the price (Y) axis to the new symbol's range — a prior price-axis
+        // drag turns autoScale off, which would otherwise keep e.g. a $30k futures
+        // scale when switching to a $300 stock.
+        try { candleRef.current?.priceScale().applyOptions({ autoScale: true }) } catch { /* series gone */ }
         if (barSpacingRef.current > 0) { ts?.applyOptions({ barSpacing: barSpacingRef.current }); ts?.scrollToRealTime() }
         else applyWindow(ts, cs, windowRef.current)
       }
