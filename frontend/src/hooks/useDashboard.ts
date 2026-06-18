@@ -78,13 +78,12 @@ export interface WidgetConfig {
 // Widget types that key off config.ticker — the dashboard-wide ticker control
 // broadcasts to all of these at once, and WidgetFrame uses the same list to
 // decide which widgets get a ticker title + per-widget ticker gear.
-// position-sizer is intentionally absent: its ticker is a cosmetic label over a
-// manual entry/stop calculator, so broadcasting to it would mislabel without
-// changing its inputs.
+// position-sizer follows the broadcast too: its ticker drives the live spot that
+// auto-defaults entry/stop, so changing the master ticker re-prices the sizer.
 export const TICKER_WIDGET_TYPES: WidgetType[] = [
   'price-card', 'mini-chart', 'options-snapshot', 'options-pricer', 'delta-target',
   'tradingview-chart', 'dealer-gex', 'vol-skew', 'analyst-ratings', 'valuation',
-  'insider-activity', 'time-and-sales', 'unusual-flow',
+  'insider-activity', 'time-and-sales', 'unusual-flow', 'position-sizer', 'paper-trade',
 ]
 
 export interface Dashboard {
@@ -422,9 +421,10 @@ function buildPreset(key: PresetKey): { widgets: WidgetConfig[]; layouts: Layout
     { type: 'yield-curve',                                              x: 3, y: 1,  w: 5, h: 9 },
     { type: 'credit-spreads',                                           x: 8, y: 1,  w: 4, h: 9 },
     { type: 'sector-rotation',                                          x: 0, y: 10, w: 4, h: 7 },
-    { type: 'news-feed',          config: { tickers: ['SPY', 'AAPL', 'NVDA'] }, x: 4, y: 10, w: 5, h: 7 },
-    { type: 'sentiment-gauge',                                          x: 9, y: 10, w: 3, h: 7 },
-    { type: 'heatmap',                                                 x: 0, y: 17, w: 12, h: 8 },
+    { type: 'macro-calendar',                                           x: 4, y: 10, w: 4, h: 7 },
+    { type: 'news-feed',          config: { tickers: ['SPY', 'AAPL', 'NVDA'] }, x: 8, y: 10, w: 4, h: 7 },
+    { type: 'sentiment-gauge',                                          x: 0, y: 17, w: 3, h: 7 },
+    { type: 'heatmap',                                                 x: 3, y: 17, w: 9, h: 7 },
   ])
 
   // Risk Desk — risk metrics + exposure + position sizer / P/L attribution /
@@ -462,6 +462,7 @@ function buildPreset(key: PresetKey): { widgets: WidgetConfig[]; layouts: Layout
     { type: 'time-and-sales', config: { ticker: 'AAPL' },              x: 10, y: 1, w: 2,  h: 9 },
     { type: 'watchlist',     config: { tickers: ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'SPY', 'AMD', 'META'] }, x: 0, y: 10, w: 4, h: 6 },
     { type: 'pm-portfolios',                                            x: 4, y: 10, w: 8, h: 6 },
+    { type: 'trade-blotter',                                            x: 0, y: 16, w: 12, h: 6 },
   ])
 
   // Every PresetKey is handled above; fall back to the default workspace.

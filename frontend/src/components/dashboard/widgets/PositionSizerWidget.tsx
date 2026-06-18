@@ -57,8 +57,8 @@ export default function PositionSizerWidget({ config }: { config: WidgetConfig }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'auto', background: T.bg, padding: '8px 10px', gap: 7 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-        <span style={{ ...cap, color: T.gold, letterSpacing: '0.16em' }}>{ticker} · Sizer</span>
+      {/* Ticker is shown in the widget frame header, so just the account here. */}
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'flex-end' }}>
         <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted }}>Acct {money(account)}</span>
       </div>
 

@@ -113,7 +113,7 @@ function SentimentCard({ row, isTarget }: { row: PeerRow; isTarget: boolean }) {
       <div style={{
         display: 'inline-block', fontFamily: T.label, fontSize: 8, fontWeight: 700,
         letterSpacing: '0.1em', textTransform: 'uppercase', color,
-        background: color + '18', border: `1px solid ${color}40`,
+        background: `color-mix(in srgb, ${color} 14%, transparent)`, border: `1px solid color-mix(in srgb, ${color} 40%, transparent)`,
         padding: '2px 6px', marginBottom: 6,
       }}>
         {label}
@@ -178,7 +178,7 @@ function MetricBars({
             <div style={{ flex: 1, height: 14, background: 'var(--theme-hover, rgba(255,255,255,0.04))', position: 'relative', overflow: 'visible' }}>
               <div style={{
                 width: `${widthPct}%`, height: '100%',
-                background: barColor + '30',
+                background: `color-mix(in srgb, ${barColor} 42%, transparent)`,
                 borderRight: `2px solid ${barColor}`,
               }} />
               {medLinePct !== null && (

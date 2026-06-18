@@ -603,7 +603,7 @@ export default function StrategyBuilder() {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 12px', background: 'var(--theme-surface, #142032)', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', flexWrap: 'wrap', gap: 8 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     {/* Leg tabs */}
-                    <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)' }}>Chain</span>
+                    <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)' }}>Chain</span>
                     {legs.map((l, idx) => legChains[idx]?.expiries?.length > 0 && (
                       <button key={idx} onClick={() => { setActiveChainLeg(idx); setDateInput(legChains[idx].selectedExpiry) }}
                         style={{
@@ -886,7 +886,7 @@ export default function StrategyBuilder() {
           {secondaryTickers.length > 0 && (
             <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
               <div style={{ padding: '6px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)' }}>
-                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#ffffff' }}>
+                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>
                   Secondary Ticker Prices at Expiry
                 </span>
               </div>
@@ -932,7 +932,7 @@ export default function StrategyBuilder() {
           {/* ── Greeks Panel ─────────────────────────────────────────────── */}
           <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: 'var(--theme-surface, #142032)', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
-              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#ffffff' }}>Portfolio Greeks</span>
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>Portfolio Greeks</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {greekError && <span style={{ fontSize: 9, color: 'var(--theme-negative, #ef4444)', fontFamily: 'var(--theme-mono)' }}>{greekError}</span>}
                 <button

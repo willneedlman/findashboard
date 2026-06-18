@@ -4,7 +4,9 @@ import type { WidgetConfig } from '../../../hooks/useDashboard'
 
 const T = {
   bg:    'var(--theme-bg, #101c2e)',
-  border: 'rgba(255,255,255,0.05)',
+  // Adaptive divider — derived from the text colour so cell boundaries are
+  // visible on both dark and light presets (a fixed white tint was invisible).
+  border: 'color-mix(in srgb, var(--theme-text, #d7e3fc) 16%, transparent)',
   gold:  'var(--theme-primary, #c9a84c)',
   muted: 'var(--theme-secondary, #5e768f)',
   text:  'var(--theme-text, #d7e3fc)',

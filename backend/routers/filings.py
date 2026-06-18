@@ -31,7 +31,7 @@ _filing_cache:     TTLCache = TTLCache(maxsize=200, ttl=3600)
 _lock = threading.Lock()
 # Bump to invalidate cached EDGAR context + summaries after a fetch-logic change
 # (e.g. the annual-10-K/annual-financials fix).
-_CACHE_VER = "v2"
+_CACHE_VER = "v3"
 
 
 # ── SEC EDGAR helpers ─────────────────────────────────────────────────────────
@@ -165,14 +165,13 @@ def _fetch_edgar_filing_text(url: str, max_chars: int = 15000) -> str:
         return ""
 
 
-def _get_edgar_filing_context(ticker: str, form_types: list[str]) -> str:
-    """Fetch actual text of the most recent filing of EACH requested form type.
-
-    Picking the latest of every form first guarantees an annual 10-K is included
-    when requested — taking the 2 most-recent filings overall would lose it,
-    since 10-Qs are filed three times as often and dominate the recent list.
+def _get_edgar_filing_context(ticker: str, form_types: list[str], primary: str | None = None, count: int = 2) -> str:
+    """Fetch SEC filing text. With a `primary` form (e.g. '10-K') it pulls the
+    `count` most-recent filings of that form — so 'include annual, 4 reports'
+    actually returns four 10-Ks — plus the latest of each other requested form.
     """
-    cache_key = f"{ticker}:edgar:{_CACHE_VER}:{'_'.join(form_types)}"
+    n = max(1, min(count, 4))
+    cache_key = f"{ticker}:edgar:{_CACHE_VER}:{'_'.join(form_types)}:{primary}:{n}"
     disk_val = disk_get(f"edgar:{cache_key}")
     if disk_val:
         return disk_val
@@ -181,24 +180,35 @@ def _get_edgar_filing_context(ticker: str, form_types: list[str]) -> str:
     if not filings:
         return ""
 
-    # Latest of each form type (in the order requested), then top up with the
-    # next most-recent filings, capped at 3 total.
     picked: list[dict] = []
-    seen_forms: set[str] = set()
-    for form in form_types:
-        match = next((f for f in filings if f["form"] == form), None)
-        if match:
-            picked.append(match)
-            seen_forms.add(form)
-    for f in filings:
-        if len(picked) >= 3:
-            break
-        if f not in picked:
-            picked.append(f)
+    if primary:
+        # The N most-recent filings of the primary form (e.g. annual 10-Ks)…
+        picked = [f for f in filings if f["form"] == primary][:n]
+        # …plus the latest of every other requested form for extra context.
+        for form in form_types:
+            if form == primary:
+                continue
+            match = next((f for f in filings if f["form"] == form), None)
+            if match and match not in picked:
+                picked.append(match)
+    else:
+        seen: set[str] = set()
+        for f in filings:
+            if f["form"] not in seen:
+                picked.append(f)
+                seen.add(f["form"])
+        for f in filings:
+            if len(picked) >= max(n, 2):
+                break
+            if f not in picked:
+                picked.append(f)
 
-    per_chars = 12000 if len(picked) <= 1 else 9000
+    if not picked:
+        return ""
+    # Share the text budget across however many filings we pull.
+    per_chars = 12000 if len(picked) <= 1 else max(4500, 30000 // len(picked))
     parts = []
-    for filing in picked[:3]:
+    for filing in picked:
         text = _fetch_edgar_filing_text(filing["url"], max_chars=per_chars)
         if text and len(text) > 500:
             parts.append(
@@ -211,21 +221,22 @@ def _get_edgar_filing_context(ticker: str, form_types: list[str]) -> str:
     return result
 
 
-def _get_annual_financials(ticker: str) -> dict:
+def _get_annual_financials(ticker: str, count: int = 3) -> dict:
     """Annual (10-K) income, balance sheet, and cash-flow statements from FMP."""
-    cache_key = f"{ticker}:afin"
+    n = max(1, min(count, 5))
+    cache_key = f"{ticker}:afin:{n}"
     with _lock:
         if cache_key in _filing_cache:
             return _filing_cache[cache_key]
     result = {}
     try:
-        inc = fmp._get("/income-statement", {"symbol": ticker, "period": "annual", "limit": 3})
-        bal = fmp._get("/balance-sheet-statement", {"symbol": ticker, "period": "annual", "limit": 2})
-        cf  = fmp._get("/cash-flow-statement", {"symbol": ticker, "period": "annual", "limit": 2})
+        inc = fmp._get("/income-statement", {"symbol": ticker, "period": "annual", "limit": n})
+        bal = fmp._get("/balance-sheet-statement", {"symbol": ticker, "period": "annual", "limit": n})
+        cf  = fmp._get("/cash-flow-statement", {"symbol": ticker, "period": "annual", "limit": n})
         result = {
-            "income":   inc[:3] if isinstance(inc, list) else [],
-            "balance":  bal[:2] if isinstance(bal, list) else [],
-            "cashflow": cf[:2]  if isinstance(cf, list) else [],
+            "income":   inc[:n] if isinstance(inc, list) else [],
+            "balance":  bal[:n] if isinstance(bal, list) else [],
+            "cashflow": cf[:n]  if isinstance(cf, list) else [],
         }
     except Exception as e:
         logger.warning("annual fin %s: %s", ticker, e)
@@ -234,18 +245,44 @@ def _get_annual_financials(ticker: str) -> dict:
     return result
 
 
-def _get_finnhub_financials(ticker: str) -> str:
-    """Fetch reported financials from Finnhub as an additional context source."""
+def _annual_period_label(ticker: str) -> str | None:
+    """Fiscal-year label for an annual (10-K) summary, e.g. 'FY2025'."""
+    try:
+        for row in _get_annual_financials(ticker, 1).get("income") or []:
+            r = row or {}
+            fy = str(r.get("fiscalYear") or r.get("calendarYear") or "").strip()
+            d = str(r.get("date") or "")[:10]
+            if not fy and d:
+                fy = d[:4]
+            if fy:
+                return f"FY{fy}"
+    except Exception:
+        pass
+    # Fallback: the year of the most recent 10-K filing.
+    try:
+        ks = _get_recent_filings(ticker, ["10-K"])
+        if ks:
+            return f"FY{ks[0]['date'][:4]}"
+    except Exception:
+        pass
+    return None
+
+
+def _get_finnhub_financials(ticker: str, freq: str = "quarterly", count: int = 2) -> str:
+    """Reported financials from Finnhub — free, and the annual feed is the
+    fallback annual-report source when FMP is unavailable."""
     try:
         import finnhub as fh
         if not fh.available():
             return ""
-        data = fh._get("/stock/financials-reported", {"symbol": ticker, "freq": "quarterly"})
+        data = fh._get("/stock/financials-reported", {"symbol": ticker, "freq": freq})
         if not isinstance(data, dict) or not data.get("data"):
             return ""
-        reports = data["data"][:2]
+        n = max(1, min(count, 5))
+        reports = data["data"][:n]
         import json
-        return f"=== REPORTED FINANCIALS (Finnhub, last 2 quarters) ===\n{json.dumps(reports, indent=2)[:6000]}"
+        unit = "fiscal years (10-K)" if freq == "annual" else "quarters"
+        return f"=== REPORTED FINANCIALS (Finnhub, last {len(reports)} {unit}) ===\n{json.dumps(reports, indent=2)[:8000]}"
     except Exception:
         return ""
 
@@ -311,7 +348,24 @@ def _finalise_quarter(result: dict, ticker: str, cur_year: int) -> None:
         _sanitise_quarter(result, cur_year)
 
 
-def _summarise_with_claude(ticker: str, context: str) -> dict:
+def _finalise_period(result: dict, ticker: str, annual: bool, cur_year: int) -> None:
+    """Label the period — a fiscal year (FY2025) for an annual 10-K summary,
+    otherwise the quarterly label."""
+    if not annual:
+        _finalise_quarter(result, ticker, cur_year)
+        return
+    label = _annual_period_label(ticker)
+    if label:
+        result["quarter"] = label
+        return
+    # No statement/filing data — coerce any quarterly guess into a fiscal year.
+    q = str(result.get("quarter", "")).strip()
+    m = re.match(r"^Q[1-4]\s+(?:FY)?(\d{4})$", q)
+    if m:
+        result["quarter"] = f"FY{m.group(1)}"
+
+
+def _summarise_with_claude(ticker: str, context: str, annual: bool = False) -> dict:
     from ai_client import groq_chat, MODEL_SMART
     import datetime as _dt
     _today = _dt.date.today().strftime("%B %d, %Y")
@@ -354,7 +408,7 @@ Respond ONLY with valid JSON matching this exact schema (no markdown, no extra t
     # Attempt direct parse first
     try:
         parsed = json.loads(raw)
-        _finalise_quarter(parsed, ticker, _cur_year)
+        _finalise_period(parsed, ticker, annual, _cur_year)
         return parsed
     except json.JSONDecodeError:
         pass
@@ -370,7 +424,7 @@ Respond ONLY with valid JSON matching this exact schema (no markdown, no extra t
         repaired += ']' * max(open_brackets, 0)
         repaired += '}' * max(open_braces, 0)
         parsed = json.loads(repaired)
-        _finalise_quarter(parsed, ticker, _cur_year)
+        _finalise_period(parsed, ticker, annual, _cur_year)
         return parsed
     except Exception:
         raise HTTPException(500, "Claude returned malformed JSON — try again")
@@ -496,36 +550,41 @@ def summarise(req: SummariseRequest):
                     f"=== CASH FLOW (latest 2 quarters) ===\n{_json.dumps(fin['cashflow'], indent=2)[:2000]}"
                 )
 
-        # 2b. Annual (10-K) financial statements when annual data is requested
+        annual = req.include_10k and not req.include_10q
+        count = req.transcript_limit
+
+        # 2b. Annual (10-K) financial statements when annual data is requested —
+        # `count` fiscal years so "4 reports" pulls four years.
         if fmp.available() and req.include_10k:
-            afin = _get_annual_financials(ticker)
+            afin = _get_annual_financials(ticker, count)
             import json as _json2
             if afin.get("income"):
                 context_parts.append(
-                    f"=== ANNUAL INCOME STATEMENTS (latest 3 fiscal years, 10-K) ===\n{_json2.dumps(afin['income'], indent=2)[:6000]}"
+                    f"=== ANNUAL INCOME STATEMENTS (latest {len(afin['income'])} fiscal years, 10-K) ===\n{_json2.dumps(afin['income'], indent=2)[:7000]}"
                 )
             if afin.get("balance"):
                 context_parts.append(
-                    f"=== ANNUAL BALANCE SHEET (latest 2 fiscal years, 10-K) ===\n{_json2.dumps(afin['balance'], indent=2)[:3500]}"
+                    f"=== ANNUAL BALANCE SHEET ({len(afin['balance'])} fiscal years, 10-K) ===\n{_json2.dumps(afin['balance'], indent=2)[:4000]}"
                 )
             if afin.get("cashflow"):
                 context_parts.append(
-                    f"=== ANNUAL CASH FLOW (latest 2 fiscal years, 10-K) ===\n{_json2.dumps(afin['cashflow'], indent=2)[:2500]}"
+                    f"=== ANNUAL CASH FLOW ({len(afin['cashflow'])} fiscal years, 10-K) ===\n{_json2.dumps(afin['cashflow'], indent=2)[:3000]}"
                 )
 
-        # 3. SEC EDGAR 10-K / 10-Q actual filing text (always free, no API key)
+        # 3. SEC EDGAR filing text (always free) — `count` 10-Ks when annual.
         if req.include_10k:
-            edgar_text = _get_edgar_filing_context(ticker, ["10-K", "10-Q"])
+            edgar_text = _get_edgar_filing_context(ticker, ["10-K", "10-Q"] if req.include_10q else ["10-K"], primary="10-K", count=count)
             if edgar_text:
                 context_parts.append(edgar_text)
         elif req.include_10q:
-            edgar_text = _get_edgar_filing_context(ticker, ["10-Q"])
+            edgar_text = _get_edgar_filing_context(ticker, ["10-Q"], primary="10-Q", count=count)
             if edgar_text:
                 context_parts.append(edgar_text)
 
-        # 4. Finnhub reported financials (free backup)
+        # 4. Finnhub reported financials (free) — the annual feed is the fallback
+        # annual-report source when FMP is unavailable.
         if not any("INCOME" in p or "BALANCE" in p for p in context_parts):
-            fh_fin = _get_finnhub_financials(ticker)
+            fh_fin = _get_finnhub_financials(ticker, "annual" if annual else "quarterly", count)
             if fh_fin:
                 context_parts.append(fh_fin)
 
@@ -547,7 +606,7 @@ def summarise(req: SummariseRequest):
 
         context = "\n\n".join(context_parts)
         try:
-            summary = _summarise_with_claude(ticker, context)
+            summary = _summarise_with_claude(ticker, context, annual=annual)
             entry = {"ticker": ticker, "summary": summary, "sources": len(context_parts)}
             with _lock:
                 _summary_cache[cache_key] = entry
@@ -609,27 +668,30 @@ def _summarise_one_streaming(ticker: str, req: SummariseRequest, queue: list):
         if fin.get("cashflow"):
             context_parts.append(f"=== CASH FLOW ===\n{json.dumps(fin['cashflow'], indent=2)[:2000]}")
 
+    annual = req.include_10k and not req.include_10q
+    count = req.transcript_limit
+
     if fmp.available() and req.include_10k:
-        afin = _get_annual_financials(ticker)
+        afin = _get_annual_financials(ticker, count)
         if afin.get("income"):
-            context_parts.append(f"=== ANNUAL INCOME STATEMENTS (latest 3 fiscal years, 10-K) ===\n{json.dumps(afin['income'], indent=2)[:6000]}")
+            context_parts.append(f"=== ANNUAL INCOME STATEMENTS (latest {len(afin['income'])} fiscal years, 10-K) ===\n{json.dumps(afin['income'], indent=2)[:7000]}")
         if afin.get("balance"):
-            context_parts.append(f"=== ANNUAL BALANCE SHEET (latest 2 fiscal years, 10-K) ===\n{json.dumps(afin['balance'], indent=2)[:3500]}")
+            context_parts.append(f"=== ANNUAL BALANCE SHEET ({len(afin['balance'])} fiscal years, 10-K) ===\n{json.dumps(afin['balance'], indent=2)[:4000]}")
         if afin.get("cashflow"):
-            context_parts.append(f"=== ANNUAL CASH FLOW (latest 2 fiscal years, 10-K) ===\n{json.dumps(afin['cashflow'], indent=2)[:2500]}")
+            context_parts.append(f"=== ANNUAL CASH FLOW ({len(afin['cashflow'])} fiscal years, 10-K) ===\n{json.dumps(afin['cashflow'], indent=2)[:3000]}")
 
     queue.append(_sse({"type": "progress", "ticker": ticker, "stage": "Fetching SEC filings…", "pct": 55}))
     if req.include_10k:
-        edgar_text = _get_edgar_filing_context(ticker, ["10-K", "10-Q"])
+        edgar_text = _get_edgar_filing_context(ticker, ["10-K", "10-Q"] if req.include_10q else ["10-K"], primary="10-K", count=count)
         if edgar_text:
             context_parts.append(edgar_text)
     elif req.include_10q:
-        edgar_text = _get_edgar_filing_context(ticker, ["10-Q"])
+        edgar_text = _get_edgar_filing_context(ticker, ["10-Q"], primary="10-Q", count=count)
         if edgar_text:
             context_parts.append(edgar_text)
 
     if not any("INCOME" in p or "BALANCE" in p for p in context_parts):
-        fh_fin = _get_finnhub_financials(ticker)
+        fh_fin = _get_finnhub_financials(ticker, "annual" if annual else "quarterly", count)
         if fh_fin:
             context_parts.append(fh_fin)
 
@@ -640,7 +702,7 @@ def _summarise_one_streaming(ticker: str, req: SummariseRequest, queue: list):
     queue.append(_sse({"type": "progress", "ticker": ticker, "stage": "Analyzing with Claude…", "pct": 75}))
     context = "\n\n".join(context_parts)
     try:
-        summary = _summarise_with_claude(ticker, context)
+        summary = _summarise_with_claude(ticker, context, annual=annual)
         entry = {"ticker": ticker, "summary": summary, "sources": len(context_parts)}
         with _lock:
             _summary_cache[cache_key] = entry

@@ -89,6 +89,12 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
   const qc = useQueryClient()
   const [ticker, setTicker] = useState((config.ticker || 'SPY').toUpperCase())
   const [tickerInput, setTickerInput] = useState(ticker)
+  // Follow the dashboard-wide master ticker broadcast (and any external config
+  // change) so the chart stays on the selected symbol.
+  useEffect(() => {
+    const t = (config.ticker || '').toUpperCase()
+    if (t && t !== ticker) { setTicker(t); setTickerInput(t) }
+  }, [config.ticker]) // eslint-disable-line react-hooks/exhaustive-deps
   const [tfKey, setTfKey] = useState('10m')
   const initialOverlays = loadOverlayState(config.id)
   const [overlays, setOverlays] = useState<Record<OverlayKey, boolean>>(initialOverlays.on)
@@ -518,14 +524,14 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
               fontFamily: T.mono, fontSize: 8, fontWeight: 700, padding: '2px 5px', cursor: 'pointer',
               border: overlays[o.key] ? '1px solid rgba(201,168,76,0.55)' : `1px solid ${T.border}`,
               background: overlays[o.key] ? 'rgba(201,168,76,0.12)' : 'transparent',
-              color: overlays[o.key] ? T.gold : 'rgba(255,255,255,0.3)', letterSpacing: '0.04em',
+              color: overlays[o.key] ? T.gold : 'var(--theme-secondary, #5e768f)', letterSpacing: '0.04em',
             }}>{o.label}</button>
           ))}
           <button onClick={() => setOverlayCfgOpen(o => !o)} title="Overlay settings" style={{
             fontFamily: T.mono, fontSize: 9, fontWeight: 700, padding: '2px 5px', cursor: 'pointer',
             border: overlayCfgOpen ? '1px solid rgba(201,168,76,0.55)' : `1px solid ${T.border}`,
             background: overlayCfgOpen ? 'rgba(201,168,76,0.12)' : 'transparent',
-            color: overlayCfgOpen ? T.gold : 'rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center',
+            color: overlayCfgOpen ? T.gold : 'var(--theme-secondary, #5e768f)', display: 'flex', alignItems: 'center',
           }}><Sliders size={10} /></button>
           <select value={barSpacing > 0 ? 'custom' : windowKey} onChange={e => pickWindow(e.target.value)} style={selStyle} title="Graph width (visible span)">
             {WINDOWS.map(w => <option key={w.key} value={w.key}>{w.label}</option>)}
