@@ -3,6 +3,7 @@ import { useState } from 'react'
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
+import useIsMobile from '../hooks/useIsMobile'
 
 
 const METRICS = [
@@ -211,6 +212,7 @@ function cellColor(val: number | null, med: number | null, lowerBetter: boolean)
 }
 
 export function RelativeValuationContent() {
+  const isMobile = useIsMobile()
   const [input,   setInput]   = useState('')
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState<string | null>(null)
@@ -355,7 +357,7 @@ export function RelativeValuationContent() {
                   — dashed line = sector median
                 </span>
               </div>
-              <div style={{ padding: '16px 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(300px, 100%), 1fr))', gap: '20px 32px' }}>
+              <div style={{ padding: '16px 20px', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: '20px 32px' }}>
                 {VISUAL_METRICS.map(m => (
                   <MetricBars
                     key={m.key}
