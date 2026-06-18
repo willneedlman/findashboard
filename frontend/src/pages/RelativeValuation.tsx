@@ -355,7 +355,7 @@ export function RelativeValuationContent() {
                   — dashed line = sector median
                 </span>
               </div>
-              <div style={{ padding: '16px 20px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px 32px' }}>
+              <div style={{ padding: '16px 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(300px, 100%), 1fr))', gap: '20px 32px' }}>
                 {VISUAL_METRICS.map(m => (
                   <MetricBars
                     key={m.key}

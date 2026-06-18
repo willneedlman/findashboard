@@ -5,6 +5,7 @@ import PageWrapper from '../components/PageWrapper'
 import axios from 'axios'
 import TickerTagInput from '../components/TickerTagInput'
 import { tickerLogoUrl } from '../lib/tickerLogos'
+import useIsMobile from '../hooks/useIsMobile'
 import PortfolioIO from '../components/PortfolioIO'
 
 interface TickerRow {
@@ -251,6 +252,7 @@ const TD: React.CSSProperties = { padding: '7px 10px', borderBottom: '1px solid 
 const DEFAULT_TICKERS = ['NVDA', 'AAPL', 'SLS', 'MSTR', 'TOST', 'VST', 'OWL', 'AMZN']
 
 export function CorporateHubContent() {
+  const isMobile = useIsMobile()
   const [searchParams, setSearchParams] = useSearchParams()
   const { tickers: portfolioTickers } = usePortfolio()
   const [tickers, setTickersRaw] = useState<string[]>(() => {
@@ -364,10 +366,10 @@ export function CorporateHubContent() {
   )
 
   return (
-    <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 12, alignItems: 'stretch' }}>
 
         {/* Left sidebar */}
-        <div style={{ width: 190, flexShrink: 0, background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ width: isMobile ? '100%' : 190, flexShrink: 0, background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)' }}>
             <div style={{ ...LABEL, color: 'var(--theme-text, #d7e3fc)' }}>Scan Parameters</div>
           </div>
@@ -560,7 +562,7 @@ export function CorporateHubContent() {
         </div>
 
         {/* Right: news panel */}
-        <div style={{ width: 240, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 0, maxHeight: 700 }}>
+        <div style={{ width: isMobile ? '100%' : 240, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 0, maxHeight: isMobile ? undefined : 700 }}>
 
           {/* AI Brief section */}
           <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid color-mix(in srgb, var(--theme-primary) 25%, transparent)', marginBottom: 8 }}>

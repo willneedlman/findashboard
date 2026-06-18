@@ -14,12 +14,13 @@ const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #5e768f)', fontFamily:
 // ── Inline stat row — replaces isolated metric tiles ──────────────────────
 function StatRow({ items }: { items: { label: string; value: string; sub?: string; delta?: string; positive?: boolean }[] }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'stretch' }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'stretch' }}>
       {items.map((item, i) => (
         <div
           key={i}
           style={{
-            flex: 1,
+            flex: '1 1 130px',
+            minWidth: 130,
             padding: '14px 18px',
             borderRight: i < items.length - 1 ? `1px solid ${T.border}` : 'none',
           }}
@@ -145,7 +146,9 @@ export function FedRatesContent() {
 
   const fomc = fedData?.meetings[0]
 
-  const gridTwo: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(440px, 1fr))', gap: 12 }
+  // min(440px, 100%) so the column never forces a width wider than the screen
+  // (a bare minmax(440px,…) overflows the viewport on mobile).
+  const gridTwo: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(440px, 100%), 1fr))', gap: 12 }
 
   return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

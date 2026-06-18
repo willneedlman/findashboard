@@ -83,11 +83,11 @@ export default function HubLanding() {
             <span style={{ opacity: 0.5 }}>/</span>
             <span style={{ color: 'var(--theme-text, #9fb0c6)', fontWeight: 600 }}>{hub.label}</span>
           </div>
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10, flex: '1 1 260px', minWidth: 0, justifyContent: 'flex-end' }}>
             <div style={{
               display: 'flex', alignItems: 'center', gap: 8, background: F.surface,
               border: `1px solid ${focused ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 55%, transparent)' : F.border}`,
-              padding: '7px 11px', width: 240, transition: 'border-color 0.15s ease',
+              padding: '7px 11px', flex: 1, minWidth: 0, maxWidth: 240, transition: 'border-color 0.15s ease',
             }}>
               <Search size={12} style={{ color: F.muted, flexShrink: 0 }} />
               <input
