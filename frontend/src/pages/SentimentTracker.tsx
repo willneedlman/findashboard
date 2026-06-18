@@ -996,7 +996,7 @@ export default function SentimentTracker() {
       )}
       {isLoading && !data && (
         <div style={{ textAlign: 'center', padding: 48, color: T.muted, fontSize: 12, fontFamily: T.mono }}>
-          Fetching financial news and scoring with AI…<br />
+          Fetching and scoring financial news…<br />
           <span style={{ fontSize: 10, opacity: 0.6 }}>First load ~10–15 seconds</span>
         </div>
       )}
@@ -1035,7 +1035,7 @@ export default function SentimentTracker() {
     <PageWrapper title="Sentiment Tracker">
       <SidebarLayout sidebar={sidebar} sidebarWidth={260}>
         <div style={{ fontSize: 10, color: T.muted, fontFamily: T.mono, marginBottom: 12 }}>
-          AI-Scored Financial News ·{' '}
+          Lexicon-scored Financial News ·{' '}
           <span style={{ color: T.gold }}>{tf.label} window</span>
           {' · '}time-decay weighted · momentum tracked
         </div>
