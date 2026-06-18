@@ -1,0 +1,4 @@
+# Dev / CI tooling only — NOT installed in the production image.
+# Run: pip install -r requirements-dev.txt
+mypy==2.1.0
+pytest==9.1.0
