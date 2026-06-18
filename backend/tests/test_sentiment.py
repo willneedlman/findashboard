@@ -174,3 +174,20 @@ def test_engine_llm_off_real_composite(monkeypatch):
     assert s1.composite_score > 55                # an all-bullish tape reads bullish
     assert s1.sources_used > 0 and s1.source_health
     assert s1.audit and s1.confidence_interval and s1.verification
+
+
+def _fetch_with_future(spec, limit):
+    return FetchOutcome(spec.key, spec.label, [
+        RawArticle(title=f"{spec.label}: Stocks rally on strong data", published_at=NOW - 600),
+        RawArticle(title=f"{spec.label}: Markets jump after Fed cuts rates",
+                   published_at=NOW + 5 * 86400),  # 5 days in the future (malformed feed)
+    ], latency_ms=100.0, attempted=2, parse_errors=0, ok=True)
+
+
+def test_future_timestamp_recency_capped(monkeypatch):
+    import sentiment.engine as engine
+    monkeypatch.setattr(engine, "fetch_source", _fetch_with_future)
+    monkeypatch.setattr(engine, "fetch_market_context", lambda: {})
+    snap = engine.build_snapshot(refresh=True, now=NOW)
+    weights = [it.recency_weight for s in snap.sources for it in s.items]
+    assert weights and all(w <= 1.0 for w in weights)  # no future item dominates
