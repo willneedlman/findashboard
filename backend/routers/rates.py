@@ -21,7 +21,7 @@ router = APIRouter()
 BACKSTOP = {"FF": 4.33, "1Y": 3.78, "2Y": 4.03, "5Y": 4.16, "10Y": 4.46, "20Y": 4.72, "30Y": 4.98}
 
 _CURVE_DISK_TTL = 3600   # 1 hour
-_CACHE_VERSION = "v9"     # bump to invalidate stale caches (treasury curve + history)
+_CACHE_VERSION = "v10"    # bump to invalidate stale caches (FRED curve + history)
 _rates_cache: TTLCache = TTLCache(maxsize=10, ttl=3600)
 _rates_lock = threading.Lock()
 
@@ -37,12 +37,77 @@ _META = "{http://schemas.microsoft.com/ado/2007/08/dataservices/metadata}"
 _DSVC = "{http://schemas.microsoft.com/ado/2007/08/dataservices}"
 
 
+# FRED Treasury constant-maturity series — reliable from datacenter IPs (unlike
+# Treasury.gov, which blocks them), with full history for the overlays.
+_FRED_CURVE = [
+    ("1M", "DGS1MO"), ("3M", "DGS3MO"), ("6M", "DGS6MO"), ("1Y", "DGS1"),
+    ("2Y", "DGS2"), ("3Y", "DGS3"), ("5Y", "DGS5"), ("7Y", "DGS7"),
+    ("10Y", "DGS10"), ("20Y", "DGS20"), ("30Y", "DGS30"), ("FF", "DFF"),
+]
+
+
+def _obs_at_or_before(obs: list, target: str):
+    """Value from the latest observation on or before `target` (obs ascending)."""
+    chosen = None
+    for d, v in obs:
+        if d <= target:
+            chosen = v
+        else:
+            break
+    return chosen
+
+
+def _fred_curves():
+    """Today's curve plus ~1M and ~6M ago, from FRED. None if no key/data."""
+    if not _FRED_KEY:
+        return None
+    start = (date.today() - timedelta(days=210)).isoformat()
+    today_c, m1, m6 = {}, {}, {}
+    asof = ""
+    tenors_got = 0
+    for label, sid in _FRED_CURVE:
+        try:
+            r = requests.get(
+                "https://api.stlouisfed.org/fred/series/observations",
+                params={"series_id": sid, "observation_start": start,
+                        "api_key": _FRED_KEY, "file_type": "json", "sort_order": "asc"},
+                timeout=8,
+            )
+            obs = [(o["date"], float(o["value"])) for o in r.json().get("observations", [])
+                   if o.get("value") not in (".", "", None)]
+        except Exception:
+            obs = []
+        if not obs:
+            continue
+        if label != "FF":
+            tenors_got += 1
+        ld, lv = obs[-1]
+        today_c[label] = round(lv, 4)
+        if ld > asof:
+            asof = ld
+        ref = date.fromisoformat(ld)
+        v1 = _obs_at_or_before(obs, (ref - timedelta(days=30)).isoformat())
+        v6 = _obs_at_or_before(obs, (ref - timedelta(days=182)).isoformat())
+        if v1 is not None:
+            m1[label] = round(v1, 4)
+        if v6 is not None:
+            m6[label] = round(v6, 4)
+    if tenors_got < 5:
+        return None
+    ref = date.fromisoformat(asof)
+    return {
+        "today": today_c, "m1": m1, "m6": m6, "asof": asof,
+        "asof_1m": (ref - timedelta(days=30)).isoformat(),
+        "asof_6m": (ref - timedelta(days=182)).isoformat(),
+    }
+
+
 def _treasury_year(year: int) -> dict:
     """All daily par-yield curves for a calendar year: {date -> {tenor: yield}}."""
     import xml.etree.ElementTree as ET
     url = ("https://home.treasury.gov/resource-center/data-chart-center/interest-rates/"
            f"pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value={year}")
-    resp = requests.get(url, timeout=10)
+    resp = requests.get(url, timeout=10, headers={"User-Agent": "FinanceTerminal research@finterm.io"})
     root = ET.fromstring(resp.content)
     days: dict[str, dict] = {}
     for entry in root.iter(f"{_ATOM}entry"):
@@ -122,8 +187,9 @@ def yield_curve():
 
     curve = {}
 
-    # Primary: authoritative Treasury par-yield curve (every real tenor + history).
-    treasury = _treasury_curves()
+    # Full accurate curve + history: FRED first (works from datacenter IPs), then
+    # the Treasury.gov par-yield XML as a keyless fallback.
+    treasury = _fred_curves() or _treasury_curves()
     curve_1m: dict = {}
     curve_6m: dict = {}
     asof = asof_1m = asof_6m = None
