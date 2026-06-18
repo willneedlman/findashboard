@@ -232,7 +232,7 @@ export default function Layout({ children }: LayoutProps) {
         {location.pathname === '/dashboard' ? (
           <div style={{ padding: '24px 24px 300px' }}>{children}</div>
         ) : (
-          <div className="max-w-7xl mx-auto px-6 py-6" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
+          <div className="max-w-7xl 2xl:max-w-[1700px] mx-auto px-6 2xl:px-10 py-6" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
             <div style={{ flex: 1 }}>{children}</div>
             <Footer />
           </div>

@@ -521,7 +521,7 @@ export default function PortfolioManager() {
     <PageWrapper
       title="Portfolio Manager"
     >
-      <div style={{ maxWidth: 1050, margin: '0 auto' }}>
+      <div className="mx-auto w-full max-w-[1050px] 2xl:max-w-[1320px]">
 
         {/* Portfolio tabs */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginBottom: 16, borderBottom: `1px solid ${T.border}`, flexWrap: 'wrap' }}>

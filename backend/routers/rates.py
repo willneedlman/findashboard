@@ -21,9 +21,90 @@ router = APIRouter()
 BACKSTOP = {"FF": 4.33, "1Y": 3.78, "2Y": 4.03, "5Y": 4.16, "10Y": 4.46, "20Y": 4.72, "30Y": 4.98}
 
 _CURVE_DISK_TTL = 3600   # 1 hour
-_CACHE_VERSION = "v8"     # bump to invalidate stale caches
+_CACHE_VERSION = "v9"     # bump to invalidate stale caches (treasury curve + history)
 _rates_cache: TTLCache = TTLCache(maxsize=10, ttl=3600)
 _rates_lock = threading.Lock()
+
+# Authoritative U.S. Treasury daily par yield curve — every standard tenor, no
+# interpolation, no API key. Used for the live curve and the 1M/6M overlays.
+_TREASURY_TENORS = [
+    ("1M", "BC_1MONTH"), ("3M", "BC_3MONTH"), ("6M", "BC_6MONTH"), ("1Y", "BC_1YEAR"),
+    ("2Y", "BC_2YEAR"), ("3Y", "BC_3YEAR"), ("5Y", "BC_5YEAR"), ("7Y", "BC_7YEAR"),
+    ("10Y", "BC_10YEAR"), ("20Y", "BC_20YEAR"), ("30Y", "BC_30YEAR"),
+]
+_ATOM = "{http://www.w3.org/2005/Atom}"
+_META = "{http://schemas.microsoft.com/ado/2007/08/dataservices/metadata}"
+_DSVC = "{http://schemas.microsoft.com/ado/2007/08/dataservices}"
+
+
+def _treasury_year(year: int) -> dict:
+    """All daily par-yield curves for a calendar year: {date -> {tenor: yield}}."""
+    import xml.etree.ElementTree as ET
+    url = ("https://home.treasury.gov/resource-center/data-chart-center/interest-rates/"
+           f"pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value={year}")
+    resp = requests.get(url, timeout=10)
+    root = ET.fromstring(resp.content)
+    days: dict[str, dict] = {}
+    for entry in root.iter(f"{_ATOM}entry"):
+        content = entry.find(f"{_ATOM}content")
+        props = content.find(f"{_META}properties") if content is not None else None
+        if props is None:
+            continue
+        d_el = props.find(f"{_DSVC}NEW_DATE")
+        if d_el is None or not d_el.text:
+            continue
+        row = {}
+        for label, field in _TREASURY_TENORS:
+            el = props.find(f"{_DSVC}{field}")
+            if el is not None and el.text:
+                try:
+                    row[label] = round(float(el.text), 4)
+                except ValueError:
+                    pass
+        if row:
+            days[d_el.text[:10]] = row
+    return days
+
+
+def _curve_at_or_before(days: dict, target: str) -> dict:
+    """The curve from the latest trading day on or before `target` (ISO date)."""
+    eligible = [d for d in days if d <= target]
+    return days[max(eligible)] if eligible else {}
+
+
+def _treasury_curves():
+    """Today's live curve plus the curves ~1 month and ~6 months ago.
+
+    Returns {today, m1, m6, asof, asof_1m, asof_6m} or None if Treasury is down.
+    """
+    try:
+        today = date.today()
+        days = _treasury_year(today.year)
+        # 6 months back can land in the prior calendar year — pull it too.
+        if (today - timedelta(days=182)).year < today.year:
+            try:
+                days = {**_treasury_year(today.year - 1), **days}
+            except Exception:
+                pass
+        if not days:
+            return None
+        latest = max(days)
+        ref = date.fromisoformat(latest)
+        c_today = days[latest]
+        if len(c_today) < 5:
+            return None
+        d1 = (ref - timedelta(days=30)).isoformat()
+        d6 = (ref - timedelta(days=182)).isoformat()
+        c1 = _curve_at_or_before(days, d1)
+        c6 = _curve_at_or_before(days, d6)
+        return {
+            "today": c_today, "m1": c1, "m6": c6,
+            "asof": latest,
+            "asof_1m": max([d for d in days if d <= d1], default=None),
+            "asof_6m": max([d for d in days if d <= d6], default=None),
+        }
+    except Exception:
+        return None
 
 
 @router.get("/yield-curve")
@@ -41,9 +122,20 @@ def yield_curve():
 
     curve = {}
 
-    # yfinance T-bill / Treasury symbols (all return yield in %)
+    # Primary: authoritative Treasury par-yield curve (every real tenor + history).
+    treasury = _treasury_curves()
+    curve_1m: dict = {}
+    curve_6m: dict = {}
+    asof = asof_1m = asof_6m = None
+    if treasury:
+        curve.update(treasury["today"])
+        curve_1m = treasury["m1"]
+        curve_6m = treasury["m6"]
+        asof, asof_1m, asof_6m = treasury["asof"], treasury["asof_1m"], treasury["asof_6m"]
+
+    # yfinance T-bill / Treasury symbols (all return yield in %) — fallback that
+    # fills any tenor Treasury didn't supply (e.g. Treasury unreachable).
     # ^IRX = 13-week (3M), ^FVX = 5Y, ^TNX = 10Y, ^TYX = 30Y
-    # These 4 are the only reliable direct yfinance symbols
     bill_mapping = [
         ("3M", "^IRX"),
         ("5Y", "^FVX"),
@@ -53,6 +145,8 @@ def yield_curve():
 
     # First pass: yfinance for available symbols (the 4 reliable ones)
     for label, sym in bill_mapping:
+        if label in curve:
+            continue
         try:
             hist = get_history(sym, period="5d")
             if not hist.empty:
@@ -180,8 +274,16 @@ def yield_curve():
 
     for k, v in BACKSTOP.items():
         curve.setdefault(k, v)
-    ordered = {k: round(curve[k], 4) for k in ["FF", "1M", "3M", "6M", "1Y", "2Y", "3Y", "5Y", "7Y", "10Y", "20Y", "30Y"] if k in curve}
-    result = {"curve": ordered, "points": [{"tenor": k, "rate": v} for k, v in ordered.items()]}
+    TENOR_ORDER = ["FF", "1M", "3M", "6M", "1Y", "2Y", "3Y", "5Y", "7Y", "10Y", "20Y", "30Y"]
+    order = lambda c: {k: round(c[k], 4) for k in TENOR_ORDER if k in c}
+    ordered = order(curve)
+    result = {
+        "curve": ordered,
+        "points": [{"tenor": k, "rate": v} for k, v in ordered.items()],
+        "curve_1m": order(curve_1m),   # ~1 month ago (empty if Treasury unavailable)
+        "curve_6m": order(curve_6m),   # ~6 months ago
+        "asof": asof, "asof_1m": asof_1m, "asof_6m": asof_6m,
+    }
 
     cache_key = f"rates:curve:{_CACHE_VERSION}"
     with _rates_lock:

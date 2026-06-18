@@ -335,19 +335,23 @@ export default function AdminTester() {
     } finally { setLoading(false) }
   }, [secret])
 
-  const loadTraffic = useCallback(async () => {
-    setLoading(true)
+  const loadTraffic = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true)
     try {
       const res = await axios.get('/api/analytics/summary?days=30', { headers: hdrs })
       setTraffic(res.data)
-    } finally { setLoading(false) }
+    } catch { /* keep the last good snapshot on a transient poll failure */ }
+    finally { if (!silent) setLoading(false) }
   }, [secret])
 
-  // Auto-load traffic when the tab opens (it's the default tab and the thing
-  // you most want to glance at).
+  // Live-refresh while the traffic tab is open so today's numbers stay current
+  // (load on open, then poll quietly every 30s).
   useEffect(() => {
-    if (unlocked && tab === 'traffic' && !traffic) loadTraffic()
-  }, [unlocked, tab, traffic, loadTraffic])
+    if (!unlocked || tab !== 'traffic') return
+    loadTraffic()
+    const id = setInterval(() => loadTraffic(true), 30_000)
+    return () => clearInterval(id)
+  }, [unlocked, tab, loadTraffic])
 
   // Health tab is a live view: load on open, then refresh every 10s while it's
   // the active tab (dependency probes are server-cached so this is cheap).
@@ -469,9 +473,17 @@ export default function AdminTester() {
         {/* ── Health tab ── */}
         {tab === 'traffic' && (
           <div>
-            <button onClick={loadTraffic} disabled={loading} style={{ ...btn(), marginBottom: 16 }}>
-              {loading ? '…' : 'Refresh Traffic'}
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+              <button onClick={() => loadTraffic()} disabled={loading} style={btn()}>
+                {loading ? '…' : 'Refresh Traffic'}
+              </button>
+              {traffic?.as_of && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-text-dim)' }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--theme-positive)', flexShrink: 0 }} />
+                  live · today = {traffic.tz?.split('/').pop()?.replace('_', ' ')} · updated {new Date(traffic.as_of).toLocaleTimeString()}
+                </span>
+              )}
+            </div>
             {traffic && (
               <>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 12 }}>

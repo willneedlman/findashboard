@@ -75,7 +75,7 @@ export default function HubLanding() {
 
   return (
     <PageWrapper>
-      <div style={{ maxWidth: 1180, margin: '0 auto', background: F.surface, border: `1px solid ${F.border}` }}>
+      <div className="mx-auto w-full max-w-[1180px] 2xl:max-w-[1440px]" style={{ background: F.surface, border: `1px solid ${F.border}` }}>
         {/* top chrome — breadcrumb + search + my dashboard */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '13px 22px', borderBottom: `1px solid ${F.border}`, background: F.topbar, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: F.sans, fontSize: 11, color: F.muted }}>

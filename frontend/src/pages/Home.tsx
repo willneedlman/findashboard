@@ -432,7 +432,7 @@ export default function Home() {
 
   return (
     <PageWrapper>
-      <div style={{ maxWidth: 1180, margin: '0 auto', background: F.surface, border: `1px solid ${F.border}` }}>
+      <div className="mx-auto w-full max-w-[1180px] 2xl:max-w-[1440px]" style={{ background: F.surface, border: `1px solid ${F.border}` }}>
         <Tape segments={tapeSegments} source={tapeSource} onSource={setTapeSource} />
 
         <div style={{ padding: isMobile ? '18px 16px 22px' : '24px 28px 30px' }}>

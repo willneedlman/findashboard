@@ -14,6 +14,7 @@ import datetime
 import sqlite3
 import threading
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Request, Depends, Header
 from pydantic import BaseModel
@@ -21,6 +22,38 @@ from pydantic import BaseModel
 from admin_auth import require_admin
 
 router = APIRouter()
+
+# "Today" is anchored to the market timezone, not the server's UTC clock, so the
+# admin's "today" matches the trading day instead of rolling over at ~7-8pm ET.
+# Guarded: if the tz database is unavailable on the host, fall back to UTC so the
+# router never fails to import (the `tzdata` package provides the data on slim).
+try:
+    _TZ = ZoneInfo(os.getenv("ANALYTICS_TZ", "America/New_York"))
+except Exception:
+    _TZ = datetime.timezone.utc
+
+
+def _now():
+    return datetime.datetime.now(_TZ)
+
+
+def _today_str() -> str:
+    return _now().date().isoformat()
+
+
+# Obvious automation that executes the JS beacon (rendering crawlers, headless
+# browsers, monitors, scripts) — kept out so "visitors" reflects real people.
+_BOT_UA = (
+    "bot", "crawler", "spider", "slurp", "bingpreview", "headlesschrome",
+    "lighthouse", "pingdom", "uptimerobot", "statuscake", "curl/", "wget/",
+    "python-requests", "go-http-client", "axios/", "node-fetch", "okhttp",
+    "java/", "scrapy", "phantomjs", "puppeteer", "playwright",
+)
+
+
+def _is_bot(ua: str) -> bool:
+    u = ua.lower()
+    return any(s in u for s in _BOT_UA)
 
 # Live alongside users.db (same Fly /data volume) so it persists across deploys.
 _users = os.getenv("USERS_DB_PATH")
@@ -69,9 +102,12 @@ class PageView(BaseModel):
 
 @router.post("/pageview")
 def pageview(pv: PageView, request: Request, user_agent: str = Header(default="")):
+    # Skip obvious automation so it never inflates today's visitor/user counts.
+    if _is_bot(user_agent):
+        return {"ok": True}
     # Fly forwards the real client IP in fly-client-ip; fall back to the socket peer.
     ip = request.headers.get("fly-client-ip") or (request.client.host if request.client else "") or ""
-    day = datetime.date.today().isoformat()
+    day = _today_str()
     path = (pv.path or "/")[:120]
     ref = _referrer_domain(pv.referrer)[:120]
     visitor = _visitor_hash(ip, user_agent[:200], day)
@@ -86,13 +122,16 @@ def pageview(pv: PageView, request: Request, user_agent: str = Header(default=""
 
 @router.get("/summary", dependencies=[Depends(require_admin)])
 def summary(days: int = 30):
-    today = datetime.date.today()
+    now = _now()
+    today = now.date()
     cutoff = (today - datetime.timedelta(days=days)).isoformat()
     today_s = today.isoformat()
     with _conn() as c:
         rows = lambda sql, *a: [dict(r) for r in c.execute(sql, a).fetchall()]
         one = lambda sql, *a: c.execute(sql, a).fetchone()[0]
         return {
+            "as_of":           now.isoformat(timespec="seconds"),
+            "tz":              str(_TZ),
             "total_views":     one("SELECT COUNT(*) FROM pageviews"),
             "today_views":     one("SELECT COUNT(*) FROM pageviews WHERE day=?", today_s),
             "today_visitors":  one("SELECT COUNT(DISTINCT visitor) FROM pageviews WHERE day=?", today_s),

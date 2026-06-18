@@ -117,6 +117,17 @@ export function FedRatesContent() {
     adjusted: +Math.max(0.1, (curveData.curve[t] ?? 0) + (twist / 100) * YC_WEIGHTS[i]).toFixed(3),
   })) : []
 
+  // Full-tenor curve for the chart overlay: today vs ~1mo ago vs ~6mo ago.
+  const CURVE_TENORS = ['FF', '1M', '3M', '6M', '1Y', '2Y', '3Y', '5Y', '7Y', '10Y', '20Y', '30Y']
+  const TWIST_W: Record<string, number> = { FF: 1.0, '1M': 1.0, '3M': 0.99, '6M': 0.98, '1Y': 0.98, '2Y': 0.85, '3Y': 0.65, '5Y': 0.40, '7Y': 0.25, '10Y': 0.1, '20Y': -0.19, '30Y': -0.325 }
+  const curveChart = curveData ? CURVE_TENORS.filter(t => curveData.curve[t] != null).map(t => ({
+    tenor:    t,
+    today:    curveData.curve[t] ?? null,
+    m1:       curveData.curve_1m?.[t] ?? null,
+    m6:       curveData.curve_6m?.[t] ?? null,
+    adjusted: twist !== 0 ? +Math.max(0.1, (curveData.curve[t] ?? 0) + (twist / 100) * (TWIST_W[t] ?? 0.1)).toFixed(3) : null,
+  })) : []
+
   const nextRate  = adjustedMeetings[0]?.adjusted_rate
   const yearEnd   = adjustedMeetings[4]?.adjusted_rate
   const totalMove = adjustedMeetings.length >= 2
@@ -238,14 +249,16 @@ export function FedRatesContent() {
             <YieldTable curve={curveData?.curve ?? {}} adjusted={adjustedCurve} twist={twist} />
             <div style={{ height: 200 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={adjustedCurve} margin={{ left: 0, right: 24, top: 12, bottom: 4 }}>
+                <LineChart data={curveChart} margin={{ left: 0, right: 24, top: 12, bottom: 4 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--theme-hover, rgba(255,255,255,0.04))" />
                   <XAxis dataKey="tenor" tick={TICK} axisLine={false} tickLine={false} />
                   <YAxis tick={TICK} tickFormatter={v => `${v}%`} domain={['auto','auto']} axisLine={false} tickLine={false} width={44} />
-                  <Tooltip formatter={(v: number) => [`${v.toFixed(3)}%`, '']} contentStyle={TOOLTIP_STYLE} cursor={CROSSHAIR_CURSOR} />
+                  <Tooltip formatter={(v: number) => [`${v.toFixed(2)}%`, '']} contentStyle={TOOLTIP_STYLE} cursor={CROSSHAIR_CURSOR} />
                   <Legend wrapperStyle={{ fontFamily: T.label, fontSize: 9, paddingBottom: 6 }} />
-                  <Line type="monotone" dataKey="current"  stroke="var(--theme-text-faint, rgba(255,255,255,0.2))" strokeWidth={1.5} strokeDasharray="5 3" dot={false} name="Current" />
-                  <Line type="monotone" dataKey="adjusted" stroke="var(--theme-tertiary, #60a5fa)" strokeWidth={2} dot={{ fill: 'var(--theme-primary, #c9a84c)', r: 3 }} name="Adjusted" />
+                  <Line type="monotone" dataKey="m6"    stroke="var(--theme-text-faint, rgba(255,255,255,0.28))" strokeWidth={1.25} strokeDasharray="2 3" dot={false} name="6M ago" connectNulls />
+                  <Line type="monotone" dataKey="m1"    stroke="var(--theme-secondary, #5e768f)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} name="1M ago" connectNulls />
+                  <Line type="monotone" dataKey="today" stroke="var(--theme-primary, #c9a84c)" strokeWidth={2.25} dot={{ fill: 'var(--theme-primary, #c9a84c)', r: 2.5 }} name="Today" connectNulls />
+                  {twist !== 0 && <Line type="monotone" dataKey="adjusted" stroke="var(--theme-tertiary, #60a5fa)" strokeWidth={2} strokeDasharray="4 2" dot={false} name="Scenario" connectNulls />}
                 </LineChart>
               </ResponsiveContainer>
             </div>

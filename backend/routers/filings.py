@@ -29,6 +29,9 @@ _transcript_cache: TTLCache = TTLCache(maxsize=200, ttl=86400)   # 24h — trans
 _summary_cache:    TTLCache = TTLCache(maxsize=200, ttl=86400)
 _filing_cache:     TTLCache = TTLCache(maxsize=200, ttl=3600)
 _lock = threading.Lock()
+# Bump to invalidate cached EDGAR context + summaries after a fetch-logic change
+# (e.g. the annual-10-K/annual-financials fix).
+_CACHE_VER = "v2"
 
 
 # ── SEC EDGAR helpers ─────────────────────────────────────────────────────────
@@ -86,7 +89,9 @@ def _get_recent_filings(ticker: str, form_types: list[str]) -> list[dict]:
                 acc_clean = acc.replace("-", "")
                 url = f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{acc_clean}/{doc}"
                 results.append({"form": form, "date": date, "url": url, "accession": acc})
-                if len(results) >= 4:
+                # Scan deep enough to capture a 10-K even amid the more frequent
+                # 10-Qs (a 10-K can be 3+ filings back).
+                if len(results) >= 12:
                     break
         return results
     except Exception as e:
@@ -161,8 +166,13 @@ def _fetch_edgar_filing_text(url: str, max_chars: int = 15000) -> str:
 
 
 def _get_edgar_filing_context(ticker: str, form_types: list[str]) -> str:
-    """Fetch actual text of most recent 10-K or 10-Q from SEC EDGAR."""
-    cache_key = f"{ticker}:edgar:{'_'.join(form_types)}"
+    """Fetch actual text of the most recent filing of EACH requested form type.
+
+    Picking the latest of every form first guarantees an annual 10-K is included
+    when requested — taking the 2 most-recent filings overall would lose it,
+    since 10-Qs are filed three times as often and dominate the recent list.
+    """
+    cache_key = f"{ticker}:edgar:{_CACHE_VER}:{'_'.join(form_types)}"
     disk_val = disk_get(f"edgar:{cache_key}")
     if disk_val:
         return disk_val
@@ -171,9 +181,25 @@ def _get_edgar_filing_context(ticker: str, form_types: list[str]) -> str:
     if not filings:
         return ""
 
+    # Latest of each form type (in the order requested), then top up with the
+    # next most-recent filings, capped at 3 total.
+    picked: list[dict] = []
+    seen_forms: set[str] = set()
+    for form in form_types:
+        match = next((f for f in filings if f["form"] == form), None)
+        if match:
+            picked.append(match)
+            seen_forms.add(form)
+    for f in filings:
+        if len(picked) >= 3:
+            break
+        if f not in picked:
+            picked.append(f)
+
+    per_chars = 12000 if len(picked) <= 1 else 9000
     parts = []
-    for filing in filings[:2]:  # at most 2 filings
-        text = _fetch_edgar_filing_text(filing["url"], max_chars=12000)
+    for filing in picked[:3]:
+        text = _fetch_edgar_filing_text(filing["url"], max_chars=per_chars)
         if text and len(text) > 500:
             parts.append(
                 f"=== SEC {filing['form']} FILING ({filing['date']}) ===\n{text}"
@@ -182,6 +208,29 @@ def _get_edgar_filing_context(ticker: str, form_types: list[str]) -> str:
     result = "\n\n".join(parts)
     if result:
         disk_set(f"edgar:{cache_key}", result, ttl=7 * 86400)  # 7 days
+    return result
+
+
+def _get_annual_financials(ticker: str) -> dict:
+    """Annual (10-K) income, balance sheet, and cash-flow statements from FMP."""
+    cache_key = f"{ticker}:afin"
+    with _lock:
+        if cache_key in _filing_cache:
+            return _filing_cache[cache_key]
+    result = {}
+    try:
+        inc = fmp._get("/income-statement", {"symbol": ticker, "period": "annual", "limit": 3})
+        bal = fmp._get("/balance-sheet-statement", {"symbol": ticker, "period": "annual", "limit": 2})
+        cf  = fmp._get("/cash-flow-statement", {"symbol": ticker, "period": "annual", "limit": 2})
+        result = {
+            "income":   inc[:3] if isinstance(inc, list) else [],
+            "balance":  bal[:2] if isinstance(bal, list) else [],
+            "cashflow": cf[:2]  if isinstance(cf, list) else [],
+        }
+    except Exception as e:
+        logger.warning("annual fin %s: %s", ticker, e)
+    with _lock:
+        _filing_cache[cache_key] = result
     return result
 
 
@@ -406,7 +455,7 @@ def summarise(req: SummariseRequest):
     results = []
 
     for ticker in tickers:
-        cache_key = f"{ticker}:summary:{req.include_10q}:{req.include_10k}:{req.transcript_limit}"
+        cache_key = f"{ticker}:summary:{_CACHE_VER}:{req.include_10q}:{req.include_10k}:{req.transcript_limit}"
         with _lock:
             if cache_key in _summary_cache:
                 results.append(_summary_cache[cache_key])
@@ -445,6 +494,23 @@ def summarise(req: SummariseRequest):
             if fin.get("cashflow"):
                 context_parts.append(
                     f"=== CASH FLOW (latest 2 quarters) ===\n{_json.dumps(fin['cashflow'], indent=2)[:2000]}"
+                )
+
+        # 2b. Annual (10-K) financial statements when annual data is requested
+        if fmp.available() and req.include_10k:
+            afin = _get_annual_financials(ticker)
+            import json as _json2
+            if afin.get("income"):
+                context_parts.append(
+                    f"=== ANNUAL INCOME STATEMENTS (latest 3 fiscal years, 10-K) ===\n{_json2.dumps(afin['income'], indent=2)[:6000]}"
+                )
+            if afin.get("balance"):
+                context_parts.append(
+                    f"=== ANNUAL BALANCE SHEET (latest 2 fiscal years, 10-K) ===\n{_json2.dumps(afin['balance'], indent=2)[:3500]}"
+                )
+            if afin.get("cashflow"):
+                context_parts.append(
+                    f"=== ANNUAL CASH FLOW (latest 2 fiscal years, 10-K) ===\n{_json2.dumps(afin['cashflow'], indent=2)[:2500]}"
                 )
 
         # 3. SEC EDGAR 10-K / 10-Q actual filing text (always free, no API key)
@@ -504,7 +570,7 @@ def _sse(data: dict) -> str:
 
 def _summarise_one_streaming(ticker: str, req: SummariseRequest, queue: list):
     """Run the full summarise pipeline for one ticker, appending SSE strings to queue."""
-    cache_key = f"{ticker}:summary:{req.include_10q}:{req.include_10k}:{req.transcript_limit}"
+    cache_key = f"{ticker}:summary:{_CACHE_VER}:{req.include_10q}:{req.include_10k}:{req.transcript_limit}"
 
     queue.append(_sse({"type": "progress", "ticker": ticker, "stage": "Checking cache…", "pct": 5}))
 
@@ -542,6 +608,15 @@ def _summarise_one_streaming(ticker: str, req: SummariseRequest, queue: list):
             context_parts.append(f"=== BALANCE SHEET ===\n{json.dumps(fin['balance'], indent=2)[:3000]}")
         if fin.get("cashflow"):
             context_parts.append(f"=== CASH FLOW ===\n{json.dumps(fin['cashflow'], indent=2)[:2000]}")
+
+    if fmp.available() and req.include_10k:
+        afin = _get_annual_financials(ticker)
+        if afin.get("income"):
+            context_parts.append(f"=== ANNUAL INCOME STATEMENTS (latest 3 fiscal years, 10-K) ===\n{json.dumps(afin['income'], indent=2)[:6000]}")
+        if afin.get("balance"):
+            context_parts.append(f"=== ANNUAL BALANCE SHEET (latest 2 fiscal years, 10-K) ===\n{json.dumps(afin['balance'], indent=2)[:3500]}")
+        if afin.get("cashflow"):
+            context_parts.append(f"=== ANNUAL CASH FLOW (latest 2 fiscal years, 10-K) ===\n{json.dumps(afin['cashflow'], indent=2)[:2500]}")
 
     queue.append(_sse({"type": "progress", "ticker": ticker, "stage": "Fetching SEC filings…", "pct": 55}))
     if req.include_10k:

@@ -43,6 +43,7 @@ pytz==2026.2
 referencing==0.37.0
 requests==2.34.2
 rich==15.0.0
+tzdata==2026.2
 rpds-py==0.30.0
 scipy==1.17.1
 setuptools==82.0.1
