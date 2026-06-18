@@ -21,7 +21,7 @@ router = APIRouter()
 BACKSTOP = {"FF": 4.33, "1Y": 3.78, "2Y": 4.03, "5Y": 4.16, "10Y": 4.46, "20Y": 4.72, "30Y": 4.98}
 
 _CURVE_DISK_TTL = 3600   # 1 hour
-_CACHE_VERSION = "v10"    # bump to invalidate stale caches (FRED curve + history)
+_CACHE_VERSION = "v11"    # bump to invalidate stale caches (FRED curve + history)
 _rates_cache: TTLCache = TTLCache(maxsize=10, ttl=3600)
 _rates_lock = threading.Lock()
 
@@ -352,9 +352,15 @@ def yield_curve():
     }
 
     cache_key = f"rates:curve:{_CACHE_VERSION}"
-    with _rates_lock:
-        _rates_cache[cache_key] = result
-    disk_set(cache_key, result, ttl=_CURVE_DISK_TTL)
+    if asof:
+        # Real curve + overlays — cache for the full hour.
+        with _rates_lock:
+            _rates_cache[cache_key] = result
+        disk_set(cache_key, result, ttl=_CURVE_DISK_TTL)
+    else:
+        # FRED/Treasury were unreachable on this call (e.g. a cold start) — cache
+        # only briefly so the overlays self-heal instead of sticking for an hour.
+        disk_set(cache_key, result, ttl=90)
     return result
 
 
