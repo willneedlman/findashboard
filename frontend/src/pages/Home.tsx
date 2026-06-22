@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useQuery } from '@tanstack/react-query'
 import { AreaChart, Area, XAxis, YAxis, ReferenceLine, ResponsiveContainer } from 'recharts'
-import { Search, LayoutGrid, ArrowUpRight, Clock, X, Upload, Briefcase, TrendingUp, Zap, Calculator, Globe, Scale } from 'lucide-react'
+import { Search, LayoutGrid, ArrowUpRight, Clock, X, Upload, Briefcase, TrendingUp, Zap, Calculator, Globe, Scale, Building2 } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import TickerLogo from '../components/TickerLogo'
 import useIsMobile from '../hooks/useIsMobile'
@@ -664,7 +664,18 @@ export default function Home() {
     return actions.filter(a => wordMatch(`${a.title} ${a.kw}`, ql))
   }, [ql])
 
-  const noResults = filtered.length === 0 && tickerResults.length === 0 && actionResults.length === 0
+  // Company-name search: resolve "blackrock" -> BLK via the SEC index. Only when
+  // the query isn't already a bare ticker (which renders the dashboard directly).
+  const companyQuery = useQuery<{ results: { ticker: string; name: string }[] }>({
+    queryKey: ['company-search', ql],
+    queryFn: () => axios.get(`/api/corporate/search?q=${encodeURIComponent(q.trim())}`).then(r => r.data),
+    enabled: !sym && ql.length >= 2,
+    staleTime: 300_000,
+    retry: 1,
+  })
+  const companyResults = (sym ? [] : companyQuery.data?.results) ?? []
+
+  const noResults = filtered.length === 0 && tickerResults.length === 0 && actionResults.length === 0 && companyResults.length === 0
 
   // Arrow-key navigation over the flat tool+action result list; Enter opens the
   // selection, or jumps to the ticker's market data when a symbol is typed.
@@ -677,6 +688,7 @@ export default function Home() {
     else if (e.key === 'Enter') {
       if (selIdx >= 0 && navRoutes[selIdx]) navigate(navRoutes[selIdx])
       else if (sym) navigate(`/market?ticker=${sym}`)
+      else if (companyResults.length) setQ(companyResults[0].ticker)
     }
   }
   const recentTickers = useMemo(() => getRecentTickers(), [])
@@ -719,6 +731,14 @@ export default function Home() {
                   <SectionLabel icon={TrendingUp} label={`Ticker · ${sym}`} />
                   <TickerDashboard sym={sym} />
                   <TickerJumpTiles sym={sym} isMobile={isMobile} />
+                </div>
+              )}
+              {companyResults.length > 0 && (
+                <div>
+                  <SectionLabel icon={Building2} label="Companies" count={companyResults.length} />
+                  <ResultGrid>
+                    {companyResults.map(c => <ResultTile key={c.ticker} icon={Building2} title={`${c.ticker} · ${c.name}`} sub="View ticker dashboard" onClick={() => setQ(c.ticker)} />)}
+                  </ResultGrid>
                 </div>
               )}
               {filtered.length > 0 && (

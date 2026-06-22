@@ -1,5 +1,6 @@
 import logging
 import os, sys
+import requests
 from fastapi import APIRouter, HTTPException
 import yfinance as yf
 
@@ -8,6 +9,51 @@ from cache import get_history, get_info
 
 router = APIRouter()
 logger = logging.getLogger("backend.routers.corporate")
+
+_SEC_UA = {"User-Agent": "Alphatape Research admin@alphatape.app"}
+_COMPANY_INDEX: "list[tuple[str, str]] | None" = None
+
+
+def _company_index() -> "list[tuple[str, str]]":
+    """SEC's full ticker -> company-name index, fetched once and cached in-process."""
+    global _COMPANY_INDEX
+    if _COMPANY_INDEX is None:
+        try:
+            data = requests.get("https://www.sec.gov/files/company_tickers.json",
+                                headers=_SEC_UA, timeout=15).json()
+            _COMPANY_INDEX = [(str(r["ticker"]).upper(), str(r["title"])) for r in data.values()]
+        except Exception as e:
+            logger.warning("company index load failed: %s", e)
+            _COMPANY_INDEX = []
+    return _COMPANY_INDEX
+
+
+def _pretty_company(name: str) -> str:
+    return name.title().replace("'S", "'s")
+
+
+@router.get("/search")
+async def company_search(q: str):
+    """Resolve a company name or ticker prefix to candidate tickers (free SEC index)."""
+    ql = q.strip().lower()
+    if len(ql) < 2:
+        return {"results": []}
+    scored = []
+    for ticker, title in _company_index():
+        tl, nl = ticker.lower(), title.lower()
+        if tl == ql:
+            score = 0
+        elif nl.startswith(ql):
+            score = 1
+        elif tl.startswith(ql):
+            score = 2
+        elif ql in nl:
+            score = 3
+        else:
+            continue
+        scored.append((score, len(title), ticker, title))
+    scored.sort()
+    return {"results": [{"ticker": tk, "name": _pretty_company(title)} for _, _, tk, title in scored[:8]]}
 
 # Hardcoded institutional peer groups for relative valuation fallbacks
 PEER_GROUPS = {
