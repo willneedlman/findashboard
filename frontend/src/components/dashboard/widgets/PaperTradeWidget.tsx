@@ -6,7 +6,7 @@ import { createChart, ColorType, CrosshairMode, LineStyle } from 'lightweight-ch
 import type { IChartApi, ISeriesApi, Time, SeriesMarker, IPriceLine, MouseEventParams } from 'lightweight-charts'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 import { useTheme } from '../../../contexts/ThemeContext'
-import { Sliders } from 'lucide-react'
+import { Sliders, ChevronsRight } from 'lucide-react'
 import ExpirySelect from '../../ExpirySelect'
 import { buildOCC, occUnderlying } from '../../../lib/occ'
 import { smaArr, emaArr, bollinger, vwapArr, type Candle } from '../../../lib/indicators'
@@ -65,6 +65,7 @@ function applyWindow(ts: ReturnType<IChartApi['timeScale']> | undefined, candles
   from = Math.min(from, Math.max(0, lastIdx - 14))
   ts.setVisibleLogicalRange({ from, to: lastIdx + 3 })
 }
+
 
 interface ChainRow { strike: number; lastPrice: number; bid: number; ask: number }
 interface OptionChain { calls: ChainRow[]; puts: ChainRow[]; spot: number | null }
@@ -125,10 +126,20 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
     if (n > 0) { ts?.applyOptions({ barSpacing: n }); ts?.scrollToRealTime() }
     else applyWindow(ts, candlesRef.current, windowRef.current)
   }
+  // Snap the view back to the latest data at the current framing.
+  const snapBack = () => {
+    const ts = chartRef.current?.timeScale()
+    if (!ts) return
+    if (barSpacingRef.current > 0) { ts.applyOptions({ barSpacing: barSpacingRef.current }); ts.scrollToRealTime() }
+    else applyWindow(ts, candlesRef.current, windowRef.current)
+  }
   const orderLineRef = useRef<IPriceLine | null>(null)
   const draggingRef = useRef(false)
   const [spot, setSpot] = useState<number | null>(null)
   const [chartErr, setChartErr] = useState(false)
+  // True when the view is scrolled/zoomed far from the latest data → show snap-back.
+  const [isAway, setIsAway] = useState(false)
+  const awayRef = useRef(false)
   const [, setTick] = useState(0)
   useEffect(() => { const id = window.setInterval(() => setTick(t => t + 1), 30_000); return () => window.clearInterval(id) }, [])
   const session = marketSession(new Date(), ticker)
@@ -215,6 +226,10 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
         tscale.setVisibleLogicalRange({ from: to - width, to })
         requestAnimationFrame(() => { clamping = false })
       }
+      // Show snap-back only while the latest candle is out of view (scrolled into
+      // the past); hide it as soon as the present candle is back in sight.
+      const away = (n - 1) - range.to > 3
+      if (away !== awayRef.current) { awayRef.current = away; setIsAway(away) }
     }
     tscale.subscribeVisibleLogicalRangeChange(onRange)
 
@@ -581,6 +596,21 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
         <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
           <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
           {chartErr && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: T.mono, fontSize: 10, color: T.muted }}>No chart data</div>}
+          {isAway && !chartErr && (
+            <button onClick={snapBack} title="Snap back to latest" aria-label="Snap back to latest"
+              style={{
+                position: 'absolute', right: 52, bottom: 14, zIndex: 5,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34,
+                background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 12%, var(--theme-surface, #1f2a3d))',
+                border: '1.5px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 55%, transparent)',
+                borderRadius: 8, cursor: 'pointer', color: 'var(--theme-primary, #c9a84c)',
+                boxShadow: '0 2px 10px rgba(0,0,0,0.28)', transition: 'background 0.15s ease',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'color-mix(in srgb, var(--theme-primary, #c9a84c) 24%, var(--theme-surface, #1f2a3d))' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'color-mix(in srgb, var(--theme-primary, #c9a84c) 12%, var(--theme-surface, #1f2a3d))' }}>
+              <ChevronsRight size={18} strokeWidth={2.5} />
+            </button>
+          )}
           {!isOption && otype !== 'market' && !chartErr && (
             <div style={{ position: 'absolute', top: 6, left: 8, fontFamily: T.mono, fontSize: 8.5, color: T.text, background: 'rgba(0,0,0,0.4)', border: `1px solid ${T.border}`, padding: '2px 6px', pointerEvents: 'none', letterSpacing: '0.03em' }}>
               Drag or click the chart to set {otype} price

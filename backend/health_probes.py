@@ -72,11 +72,23 @@ def _cerebras() -> dict:
     return {"status": "up", "latency_ms": round(ms, 0), "detail": "fallback ready"}
 
 
-# Config-only: live-probing these would burn metered quota or needs no probe.
+# Config-only key check, BUT we surface real throttling passively: fmp records
+# 429s seen on actual app calls, so a live rate-limit shows as "degraded" here
+# without us spending any quota on a probe.
 def _fmp() -> dict:
     ok = bool(os.getenv("FMP_API_KEY", "").strip())
-    return {"status": "configured" if ok else "unconfigured", "latency_ms": None,
-            "detail": "key present (not live-probed: quota)" if ok else "no FMP_API_KEY"}
+    if not ok:
+        return {"status": "unconfigured", "latency_ms": None, "detail": "no FMP_API_KEY"}
+    try:
+        import fmp
+        rl = fmp.rate_limit_status()
+        if rl.get("rate_limited"):
+            mins = max(1, round(rl["window_sec"] / 60))
+            return {"status": "degraded", "latency_ms": None,
+                    "detail": f"rate-limited — {rl['recent_count']}× 429 in last {mins}m (passive)"}
+    except Exception:
+        pass
+    return {"status": "configured", "latency_ms": None, "detail": "key present (not live-probed: quota)"}
 
 
 def _tradier() -> dict:

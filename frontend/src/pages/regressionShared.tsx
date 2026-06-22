@@ -1,0 +1,106 @@
+import React from 'react'
+import HelpTip from '../components/HelpTip'
+import PageWrapper from '../components/PageWrapper'
+import useIsMobile from '../hooks/useIsMobile'
+
+// Shared tokens, controls, and the side-rail shell for the Regression and
+// Correlation tools so the two split pages read as one consistent system.
+
+export const PERIODS = ['1mo', '3mo', '6mo', '1y', '2y', '3y', '5y']
+
+export const C = {
+  bg:     'var(--theme-bg)',
+  surf:   'var(--theme-surface)',
+  border: 'var(--theme-border)',
+  gold:   'var(--theme-primary)',
+  text:   'var(--theme-text, #d7e3fc)',
+  muted:  'var(--theme-text-dim)',
+  blue:   'var(--theme-tertiary)',
+  green:  'var(--theme-positive)',
+  red:    'var(--theme-negative)',
+  purple: '#bb9af7',
+}
+
+export const inputStyle: React.CSSProperties = {
+  background: 'var(--theme-bg)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)',
+  color: 'var(--theme-text, #d7e3fc)', padding: '6px 10px', fontSize: 12,
+  fontFamily: 'var(--theme-mono)', width: '100%', outline: 'none', boxSizing: 'border-box',
+}
+
+export const selectStyle: React.CSSProperties = { ...inputStyle, cursor: 'pointer' }
+
+export const btnStyle: React.CSSProperties = {
+  background: 'var(--theme-bg)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)',
+  color: 'var(--theme-text, #d7e3fc)', padding: '6px 14px', fontSize: 12,
+  fontFamily: 'var(--theme-mono)', cursor: 'pointer',
+}
+
+export const railLabel: React.CSSProperties = {
+  fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.14em',
+  textTransform: 'uppercase', color: C.muted, marginBottom: 8, display: 'block',
+}
+
+export function StatCard({ label, value, sub, tip }: { label: string; value: string | number; sub?: string; tip?: string }) {
+  return (
+    <div style={{ background: C.surf, border: `1px solid ${C.border}`, borderRadius: 6, padding: '10px 14px', minWidth: 120 }}>
+      <div style={{ display: 'flex', alignItems: 'center', color: C.muted, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>
+        {label}{tip && <HelpTip text={tip} width={240} />}
+      </div>
+      <div style={{ color: C.gold, fontSize: 18, fontWeight: 700, marginTop: 2 }}>{value}</div>
+      {sub && <div style={{ color: C.muted, fontSize: 10, marginTop: 2 }}>{sub}</div>}
+    </div>
+  )
+}
+
+// One labelled group inside the rail.
+export function RailGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ padding: '14px 16px', borderBottom: `1px solid ${C.border}` }}>
+      <label style={railLabel}>{label}</label>
+      {children}
+    </div>
+  )
+}
+
+export function RunButton({ onClick, disabled, busy, label }: { onClick: () => void; disabled: boolean; busy: boolean; label: string }) {
+  const can = !disabled && !busy
+  return (
+    <div style={{ padding: '14px 16px' }}>
+      <button onClick={onClick} disabled={!can}
+        style={{ width: '100%', background: 'var(--theme-surface, #1f2a3d)', border: `1px solid ${C.gold}`, color: C.gold, fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', padding: '10px 0', cursor: can ? 'pointer' : 'default', opacity: can ? 1 : 0.5 }}>
+        {busy ? 'Running…' : label}
+      </button>
+    </div>
+  )
+}
+
+// Tag-style multi-ticker input used by both rails.
+export function TickerTags({ tickers, onRemove, color }: { tickers: string[]; onRemove: (t: string) => void; color: string }) {
+  if (!tickers.length) return null
+  return (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+      {tickers.map(t => (
+        <span key={t} style={{ background: `${color}22`, border: `1px solid ${color}55`, padding: '2px 8px', fontSize: 11, fontFamily: 'var(--theme-mono)', color: C.text, display: 'flex', gap: 4, alignItems: 'center' }}>
+          {t}<span onClick={() => onRemove(t)} style={{ cursor: 'pointer', color: C.muted }}>×</span>
+        </span>
+      ))}
+    </div>
+  )
+}
+
+// Page shell: title, left rail (inputs), right content.
+export function ToolShell({ title, rail, children }: { title: string; rail: React.ReactNode; children: React.ReactNode }) {
+  const isMobile = useIsMobile()
+  return (
+    <PageWrapper title={title}>
+      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexDirection: isMobile ? 'column' : 'row', color: C.text }}>
+        <aside style={{ width: isMobile ? '100%' : 230, flexShrink: 0, background: C.surf, border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column' }}>
+          {rail}
+        </aside>
+        <div style={{ flex: 1, minWidth: 0, width: isMobile ? '100%' : 'auto' }}>
+          {children}
+        </div>
+      </div>
+    </PageWrapper>
+  )
+}

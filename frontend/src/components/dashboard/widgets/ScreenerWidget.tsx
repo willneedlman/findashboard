@@ -142,7 +142,36 @@ export default function ScreenerWidget({ config: _config }: { config: WidgetConf
         </div>
       )}
 
-      {isLoading && <div style={{ padding: 12, fontFamily: T.mono, fontSize: 10, color: T.muted }}>Running screen…</div>}
+      {isLoading && (() => {
+        const bar = (w: string): React.CSSProperties => ({
+          height: 9, width: w, borderRadius: 3,
+          background: 'linear-gradient(90deg, color-mix(in srgb, var(--theme-text, #d7e3fc) 6%, transparent) 25%, color-mix(in srgb, var(--theme-text, #d7e3fc) 18%, transparent) 50%, color-mix(in srgb, var(--theme-text, #d7e3fc) 6%, transparent) 75%)',
+          backgroundSize: '200% 100%', animation: 'ft-shimmer 1.4s linear infinite',
+        })
+        return (
+          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }} aria-busy="true" aria-label="Running screen">
+            <table style={{ minWidth: minW, width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ position: 'sticky', top: 0, background: T.surface, zIndex: 1 }}>
+                  <th style={{ ...TH, textAlign: 'left', width: TICKER_W }}>Ticker</th>
+                  {cols.map(c => <th key={c.id} style={{ ...TH, width: c.w }}>{c.label}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: 9 }).map((_, i) => (
+                  <tr key={i} style={{ borderBottom: `1px solid ${T.faint}` }}>
+                    <td style={{ ...TD, textAlign: 'left' }}><div style={{ ...bar('46px'), animationDelay: `${i * 0.05}s` }} /></td>
+                    {cols.map(c => (
+                      <td key={c.id} style={{ ...TD }}><div style={{ ...bar('70%'), marginLeft: 'auto', animationDelay: `${i * 0.05}s` }} /></td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div style={{ padding: '8px 12px', fontFamily: T.mono, fontSize: 9, letterSpacing: '0.06em', color: T.muted, textTransform: 'uppercase' }}>Running screen…</div>
+          </div>
+        )
+      })()}
       {isError && <div style={{ padding: 12, fontFamily: T.mono, fontSize: 10, color: T.neg }}>Screen failed — check FMP key</div>}
 
       {data && (rows.length === 0 ? (

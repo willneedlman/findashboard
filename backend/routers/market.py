@@ -280,18 +280,20 @@ _INTRADAY_PERIOD = {"1m": "1d", "5m": "5d", "15m": "5d", "1h": "1mo"}
 # Full timeframe set. Each maps to (yfinance interval, fetch period, resample rule
 # or None, intraday). yfinance has no 3m/10m/2h/6h/12h, so those are resampled
 # from the finest native base (1m for sub-hour, 60m for multi-hour).
+# Fetch period is maxed to each interval's provider cap so the chart can scroll
+# back as far as the data allows (yfinance limits: 1m ≈ 7d, 5m ≈ 60d, 60m ≈ 730d).
 _TF = {
     "1m":  ("1m",  "5d",  None,    True),
     "3m":  ("1m",  "5d",  "3min",  True),
     "5m":  ("5m",  "1mo", None,    True),
-    "10m": ("1m",  "5d",  "10min", True),
-    "1h":  ("60m", "3mo", None,    True),
-    "2h":  ("60m", "6mo", "2h",    True),
-    "6h":  ("60m", "1y",  "6h",    True),
+    "10m": ("5m",  "1mo", "10min", True),   # was 1m/5d → 5m/1mo: ~5 days → ~30 days
+    "1h":  ("60m", "2y",  None,    True),    # was 3mo → 2y
+    "2h":  ("60m", "2y",  "2h",    True),    # was 6mo → 2y
+    "6h":  ("60m", "2y",  "6h",    True),    # was 1y → 2y
     "12h": ("60m", "2y",  "12h",   True),
-    "1d":  ("1d",  "1y",  None,    False),
-    "1wk": ("1wk", "5y",  None,    False),
-    "1mo": ("1mo", "10y", None,    False),
+    "1d":  ("1d",  "max", None,    False),   # full daily history back to inception
+    "1wk": ("1wk", "10y", None,    False),   # was 5y → 10y
+    "1mo": ("1mo", "max", None,    False),   # was 10y → max
 }
 
 

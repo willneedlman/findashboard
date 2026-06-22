@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
 import TickerTagInput from '../components/TickerTagInput'
+import useIsMobile from '../hooks/useIsMobile'
 import { useAnalysis } from '../context/AnalysisContext'
 
 const C = {
@@ -27,14 +28,76 @@ interface Summary {
   guidance: string; management_tone: string; key_themes: string[]
   risks: string[]; analyst_questions_focus: string
 }
-// Result interface is now defined in AnalysisContext.tsx
+interface MetricVal { value: string; yoy?: string | null; prior?: string | null; delta_bps?: number | null; basis?: string }
+interface Metrics { eps?: MetricVal; revenue?: MetricVal; rev_yoy?: MetricVal; gross_margin?: MetricVal }
+interface Segment { name: string; value: number }
 interface Filing { form: string; date: string; url: string }
 
-// Move ResultCard outside to keep it clean (or define Result type here)
-// For now, assume Result is correctly typed via context or local definition.
-// If moving to context, ensure its definition is also robust.
+interface Reaction { date: string; pct: number }
+interface Result {
+  ticker: string; id?: string; company?: string; period?: string; form?: string; filed?: string; url?: string
+  metrics?: Metrics | null; segments?: Segment[] | null; reaction?: Reaction | null
+  summary?: Summary; error?: string; sources?: number
+}
 
-interface Result { ticker: string; summary?: Summary; error?: string; sources?: number }
+// Green for a positive change, red for a negative one, muted otherwise.
+function signColor(s?: string | null): string {
+  if (!s) return C.muted
+  if (/^\+/.test(s) && !/^\+0(\.0+)?%?$/.test(s)) return C.pos
+  if (/^[-−]/.test(s)) return C.neg
+  return C.muted
+}
+
+function fmtB(v: number): string {
+  const a = Math.abs(v)
+  if (a >= 1e9) return `$${(v / 1e9).toFixed(1)}B`
+  if (a >= 1e6) return `$${(v / 1e6).toFixed(1)}M`
+  return `$${v.toFixed(0)}`
+}
+
+function MetricTile({ label, value, sub, subColor }: { label: string; value: string; sub?: string; subColor?: string }) {
+  return (
+    <div style={{ flex: 1, minWidth: 0, padding: '12px 16px', borderLeft: `1px solid ${C.border}` }}>
+      <div style={{ fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.muted, marginBottom: 7 }}>{label}</div>
+      <div style={{ fontFamily: C.mono, fontSize: 24, fontWeight: 700, color: C.text, lineHeight: 1 }}>{value}</div>
+      {sub && <div style={{ fontFamily: C.mono, fontSize: 10, color: subColor ?? C.muted, marginTop: 6 }}>{sub}</div>}
+    </div>
+  )
+}
+
+function MetricStrip({ m }: { m: Metrics }) {
+  const tiles: React.ReactNode[] = []
+  if (m.eps) tiles.push(<MetricTile key="eps" label="EPS" value={m.eps.value} sub={m.eps.yoy ? `${m.eps.yoy} YoY` : undefined} subColor={signColor(m.eps.yoy)} />)
+  if (m.revenue) tiles.push(<MetricTile key="rev" label="Revenue" value={m.revenue.value} sub={m.revenue.yoy ? `${m.revenue.yoy} YoY` : undefined} subColor={signColor(m.revenue.yoy)} />)
+  if (m.rev_yoy) tiles.push(<MetricTile key="ry" label="Rev YoY" value={m.rev_yoy.value} sub={m.rev_yoy.prior ? `vs ${m.rev_yoy.prior} prior` : undefined} subColor={signColor(m.rev_yoy.value)} />)
+  if (m.gross_margin) {
+    const d = m.gross_margin.delta_bps
+    const sub = d != null ? `${d >= 0 ? '+' : ''}${d}bps ${m.gross_margin.basis ?? ''}`.trim() : undefined
+    tiles.push(<MetricTile key="gm" label="Gross Margin" value={m.gross_margin.value} sub={sub} subColor={d == null ? C.muted : d >= 0 ? C.pos : C.neg} />)
+  }
+  if (!tiles.length) return null
+  return <div style={{ display: 'flex', borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`, background: 'var(--theme-bg, #101c2e)' }}>{tiles}</div>
+}
+
+function SegmentBars({ segments }: { segments: Segment[] }) {
+  const max = Math.max(...segments.map(s => s.value), 1)
+  return (
+    <div>
+      <div style={{ fontFamily: C.sans, fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 10 }}>Segment Revenue</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+        {segments.map(s => (
+          <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontFamily: C.mono, fontSize: 10, color: C.muted, width: 96, flexShrink: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={s.name}>{s.name}</span>
+            <div style={{ flex: 1, height: 9, background: 'var(--theme-surface, #0d1826)', border: `1px solid ${C.border}` }}>
+              <div style={{ width: `${Math.max(2, (s.value / max) * 100)}%`, height: '100%', background: C.blue }} />
+            </div>
+            <span style={{ fontFamily: C.mono, fontSize: 10, color: C.text, width: 56, flexShrink: 0, textAlign: 'right' }}>{fmtB(s.value)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 function ToneChip({ tone }: { tone: string }) {
   const color = TONE_COLOR[tone?.toLowerCase()] ?? C.muted
@@ -81,87 +144,85 @@ function ResultCard({ result }: { result: Result }) {
   }
 
   const s = result.summary!
+  const subline = [result.period, result.form && result.filed ? `${result.form} · filed ${result.filed}` : null].filter(Boolean).join(' · ')
   return (
     <div style={{ border: `1px solid ${C.border}`, background: C.surface, overflow: 'hidden' }}>
       {/* Header */}
-      <div style={{ background: C.header, borderBottom: `1px solid ${C.border}`, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <span style={{ fontFamily: C.mono, fontSize: 14, fontWeight: 700, color: C.gold }}>{result.ticker}</span>
-        <span style={{ fontFamily: C.sans, fontSize: 10, color: C.muted }}>{s.quarter}</span>
-        <ToneChip tone={s.management_tone} />
-        <span style={{ marginLeft: 'auto', fontFamily: C.sans, fontSize: 9, color: C.dim }}>{result.sources} source{result.sources !== 1 ? 's' : ''}</span>
+      <div style={{ background: C.header, borderBottom: `1px solid ${C.border}`, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <span style={{ fontFamily: C.mono, fontSize: 11, fontWeight: 700, color: C.gold, border: `1px solid ${C.gold}55`, padding: '4px 6px', flexShrink: 0, letterSpacing: '0.04em' }}>{result.ticker.slice(0, 2)}</span>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontFamily: C.mono, fontSize: 15, fontWeight: 700, color: C.text }}>{result.ticker}</span>
+            {result.company && <span style={{ fontFamily: C.sans, fontSize: 12, color: C.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{result.company}</span>}
+          </div>
+          <div style={{ fontFamily: C.mono, fontSize: 9.5, color: C.dim, marginTop: 3 }}>{subline}</div>
+        </div>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
+          <ToneChip tone={s.management_tone} />
+          {result.reaction && (
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontFamily: C.sans, fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: C.muted, marginBottom: 3 }}>Reaction</div>
+              <div style={{ fontFamily: C.mono, fontSize: 16, fontWeight: 700, color: result.reaction.pct >= 0 ? C.pos : C.neg, lineHeight: 1 }}>
+                {result.reaction.pct >= 0 ? '+' : ''}{result.reaction.pct.toFixed(1)}%
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {/* Verdict */}
-        <div style={{ fontFamily: C.sans, fontSize: 12, color: C.text, lineHeight: 1.55, fontStyle: 'italic', borderLeft: `3px solid ${C.gold}`, paddingLeft: 12 }}>
-          {s.verdict}
-        </div>
+      {/* Metric strip */}
+      {result.metrics && <MetricStrip m={result.metrics} />}
 
-        {/* Key metrics */}
-        {s.key_metrics?.length > 0 && (
-          <div>
-            <div style={{ fontFamily: C.sans, fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 8 }}>Key Metrics</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {s.key_metrics.map((m, i) => (
-                <div key={i} style={{ background: 'var(--theme-surface, #0d1826)', border: `1px solid ${C.border}`, padding: '7px 12px', display: 'flex', flexDirection: 'column', gap: 2, minWidth: 110 }}>
-                  <span style={{ fontFamily: C.sans, fontSize: 8, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{m.name}</span>
-                  <span style={{ fontFamily: C.mono, fontSize: 14, fontWeight: 700, color: C.text }}>{m.value}</span>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    {m.vs_est && <span style={{ fontFamily: C.sans, fontSize: 9, color: m.vs_est.startsWith('+') ? C.pos : m.vs_est.startsWith('-') ? C.neg : C.muted }}>vs est {m.vs_est}</span>}
-                    {m.yoy && <span style={{ fontFamily: C.sans, fontSize: 9, color: m.yoy.startsWith('+') ? C.pos : m.yoy.startsWith('-') ? C.neg : C.muted }}>YoY {m.yoy}</span>}
+      <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+          {/* Left: AI summary + bull/bear */}
+          <div style={{ flex: '1.5 1 300px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <div style={{ fontFamily: C.sans, fontSize: 9, fontWeight: 700, color: C.gold, textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 8 }}>AI Summary</div>
+              <div style={{ fontFamily: C.sans, fontSize: 12.5, color: C.text, lineHeight: 1.6 }}>{s.verdict}</div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div>
+                <div style={{ fontFamily: C.sans, fontSize: 9, color: C.pos, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 6 }}>▲ Bull Case</div>
+                <ul style={{ margin: 0, paddingLeft: 14, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {s.bull_points?.map((p, i) => <li key={i} style={{ fontFamily: C.sans, fontSize: 11, color: C.text, lineHeight: 1.5 }}>{p}</li>)}
+                </ul>
+              </div>
+              <div>
+                <div style={{ fontFamily: C.sans, fontSize: 9, color: C.neg, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 6 }}>▼ Bear Case</div>
+                <ul style={{ margin: 0, paddingLeft: 14, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {s.bear_points?.map((p, i) => <li key={i} style={{ fontFamily: C.sans, fontSize: 11, color: C.text, lineHeight: 1.5 }}>{p}</li>)}
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          {/* Right: segment revenue + guidance + themes/risks */}
+          <div style={{ flex: '1 1 240px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {result.segments && result.segments.length > 0 && <SegmentBars segments={result.segments} />}
+            {s.guidance && s.guidance !== 'N/A' && (
+              <div style={{ background: 'var(--theme-bg, #101c2e)', border: `1px solid ${C.gold}40`, padding: '10px 12px' }}>
+                <div style={{ fontFamily: C.sans, fontSize: 9, color: C.gold, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 5 }}>Management Guidance</div>
+                <div style={{ fontFamily: C.sans, fontSize: 11, color: C.text, lineHeight: 1.5 }}>{s.guidance}</div>
+              </div>
+            )}
+            {(s.key_themes?.length > 0 || s.risks?.length > 0) && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {s.key_themes?.length > 0 && (
+                  <div>
+                    <div style={{ fontFamily: C.sans, fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Key Themes</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>{s.key_themes.map((t, i) => <Pill key={i} label={t} color={C.blue} />)}</div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Bull / Bear */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div>
-            <div style={{ fontFamily: C.sans, fontSize: 9, color: C.pos, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 6 }}>▲ Bull Case</div>
-            <ul style={{ margin: 0, paddingLeft: 14, display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {s.bull_points?.map((p, i) => (
-                <li key={i} style={{ fontFamily: C.sans, fontSize: 11, color: C.text, lineHeight: 1.5 }}>{p}</li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <div style={{ fontFamily: C.sans, fontSize: 9, color: C.neg, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 6 }}>▼ Bear Case</div>
-            <ul style={{ margin: 0, paddingLeft: 14, display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {s.bear_points?.map((p, i) => (
-                <li key={i} style={{ fontFamily: C.sans, fontSize: 11, color: C.text, lineHeight: 1.5 }}>{p}</li>
-              ))}
-            </ul>
-          </div>
-        </div>
-
-        {/* Guidance */}
-        {s.guidance && s.guidance !== 'N/A' && (
-          <div style={{ background: 'var(--theme-surface, #0d1826)', border: `1px solid ${C.border}`, padding: '8px 12px' }}>
-            <div style={{ fontFamily: C.sans, fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 4 }}>Management Guidance</div>
-            <div style={{ fontFamily: C.sans, fontSize: 11, color: C.text, lineHeight: 1.55 }}>{s.guidance}</div>
-          </div>
-        )}
-
-        {/* Themes + Risks + Q&A focus */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-          {s.key_themes?.length > 0 && (
-            <div>
-              <div style={{ fontFamily: C.sans, fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Key Themes</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                {s.key_themes.map((t, i) => <Pill key={i} label={t} color={C.blue} />)}
+                )}
+                {s.risks?.length > 0 && (
+                  <div>
+                    <div style={{ fontFamily: C.sans, fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Risks</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>{s.risks.map((r, i) => <Pill key={i} label={r} color={C.warn} />)}</div>
+                  </div>
+                )}
               </div>
-            </div>
-          )}
-          {s.risks?.length > 0 && (
-            <div>
-              <div style={{ fontFamily: C.sans, fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Risks</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                {s.risks.map((r, i) => <Pill key={i} label={r} color={C.warn} />)}
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {s.analyst_questions_focus && (
@@ -171,11 +232,17 @@ function ResultCard({ result }: { result: Result }) {
           </div>
         )}
 
-        {/* SEC filings */}
-        <div>
+        {/* SEC filings — this card's own filing links directly; the button pulls the rest */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {result.url && (
+            <a href={result.url} target="_blank" rel="noopener noreferrer"
+              style={{ fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.gold, border: `1px solid ${C.gold}40`, padding: '4px 12px', textDecoration: 'none' }}>
+              View {result.form ?? 'filing'} on SEC ↗
+            </a>
+          )}
           <button onClick={fetchFilings} disabled={loadingFilings}
             style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.muted, fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '4px 12px', cursor: loadingFilings ? 'default' : 'pointer', opacity: loadingFilings ? 0.6 : 1 }}>
-            {loadingFilings ? 'Loading…' : filings && filings.length > 0 ? '↺ Refresh SEC Filings' : 'Fetch SEC Filings'}
+            {loadingFilings ? 'Loading…' : filings && filings.length > 0 ? '↺ Refresh SEC Filings' : 'All SEC Filings'}
           </button>
           {filings && filings.length > 0 && (
             <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -197,7 +264,8 @@ function ResultCard({ result }: { result: Result }) {
 }
 
 export default function EarningsSummarizer() {
-  const [tickers,    setTickers]    = useState<string[]>(['NVDA', 'AAPL'])
+  const isMobile = useIsMobile()
+  const [tickers,    setTickers]    = useState<string[]>([])
   const [include10q, setInclude10q] = useState(true)
   const [include10k, setInclude10k] = useState(false)
   const [txLimit,    setTxLimit]    = useState(1)
@@ -306,89 +374,94 @@ export default function EarningsSummarizer() {
   }, [tickerProgress, tickers.length, inProgress])
 
   const check: React.CSSProperties = { width: 12, height: 12, flexShrink: 0, cursor: 'pointer' }
+  const railLabel: React.CSSProperties = { ...LABEL, marginBottom: 8 }
+  const canRun = !isPending && tickers.length > 0
 
   return (
-    <PageWrapper title="Earnings Summarizer">
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <PageWrapper title="Earnings AI">
+      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexDirection: isMobile ? 'column' : 'row' }}>
 
-        {/* Control bar */}
-        <div style={{ background: C.surface, border: `1px solid ${C.border}`, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div>
-            <label style={LABEL}>Tickers</label>
+        {/* Side entry bar */}
+        <aside style={{ width: isMobile ? '100%' : 210, flexShrink: 0, background: C.surface, border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '14px 16px', borderBottom: `1px solid ${C.border}` }}>
+            <label style={railLabel}>Tickers</label>
             <TickerTagInput tickers={tickers} onChange={setTickers} />
           </div>
 
-          <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center' }}>
-            {/* Options */}
-            <div style={{ display: 'flex', gap: 16 }}>
+          <div style={{ padding: '14px 16px', borderBottom: `1px solid ${C.border}` }}>
+            <label style={railLabel}>Source filings</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {[
-                { label: 'Include quarterly financials (10-Q)', val: include10q, set: setInclude10q },
-                { label: 'Include annual data (10-K)',          val: include10k, set: setInclude10k },
+                { label: 'Quarterly reports (10-Q)', val: include10q, set: setInclude10q },
+                { label: 'Annual reports (10-K)',    val: include10k, set: setInclude10k },
               ].map(opt => (
-                <label key={opt.label} onClick={() => opt.set(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', userSelect: 'none' }}>
+                <label key={opt.label} onClick={() => opt.set(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}>
                   <div style={{ ...check, border: `1px solid ${opt.val ? C.gold : C.dim}`, background: opt.val ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {opt.val && <div style={{ width: 5, height: 5, background: C.gold }} />}
                   </div>
-                  <span style={{ fontFamily: C.sans, fontSize: 10, color: opt.val ? C.text : C.dim }}>{opt.label}</span>
+                  <span style={{ fontFamily: C.sans, fontSize: 11, color: opt.val ? C.text : C.dim }}>{opt.label}</span>
                 </label>
               ))}
             </div>
+          </div>
 
-            {/* Transcript count */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontFamily: C.sans, fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Calls to include</span>
+          <div style={{ padding: '14px 16px', borderBottom: `1px solid ${C.border}` }}>
+            <label style={railLabel}>Filings per ticker</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {[1, 2, 4].map(n => (
-                <button key={n} onClick={() => setTxLimit(n)} style={{ background: txLimit === n ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 15%, transparent)' : 'transparent', border: `1px solid ${txLimit === n ? C.gold : C.border}`, color: txLimit === n ? C.gold : C.muted, fontFamily: C.mono, fontSize: 10, padding: '3px 9px', cursor: 'pointer' }}>{n}</button>
+                <button key={n} onClick={() => setTxLimit(n)} style={{ width: '100%', textAlign: 'left', background: txLimit === n ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 15%, transparent)' : 'transparent', border: `1px solid ${txLimit === n ? C.gold : C.border}`, color: txLimit === n ? C.gold : C.muted, fontFamily: C.mono, fontSize: 11, padding: '6px 10px', cursor: 'pointer' }}>{n} {n === 1 ? 'filing' : 'filings'}</button>
               ))}
             </div>
+            <div style={{ fontFamily: C.sans, fontSize: 9, color: C.dim, marginTop: 8, lineHeight: 1.5 }}>
+              Each ticker returns one note per recent {include10k && !include10q ? '10-K' : '10-Q'} filing.
+            </div>
+          </div>
 
-            {/* Run button */}
-            <button onClick={startAnalysis} disabled={isPending || tickers.length === 0}
-              style={{ marginLeft: 'auto', background: 'var(--theme-surface, #1f2a3d)', border: `1px solid ${C.gold}`, color: C.gold, fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', padding: '8px 20px', cursor: isPending || tickers.length === 0 ? 'default' : 'pointer', opacity: isPending || tickers.length === 0 ? 0.6 : 1 }}>
+          <div style={{ padding: '14px 16px' }}>
+            <button onClick={startAnalysis} disabled={!canRun}
+              style={{ width: '100%', background: 'var(--theme-surface, #1f2a3d)', border: `1px solid ${C.gold}`, color: C.gold, fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', padding: '10px 0', cursor: canRun ? 'pointer' : 'default', opacity: canRun ? 1 : 0.5 }}>
               {isPending ? `Analyzing… (${overallProgress}%)` : 'Analyze'}
             </button>
           </div>
+        </aside>
+
+        {/* Content */}
+        <div style={{ flex: 1, minWidth: 0, width: isMobile ? '100%' : 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {error && (
+            <div style={{ background: 'color-mix(in srgb, var(--theme-negative) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-negative) 30%, transparent)', padding: 12, fontFamily: C.sans, fontSize: 11, color: C.neg }}>
+              {error}
+            </div>
+          )}
+
+          {inProgress && (
+            <div style={{ width: '100%', height: 8, background: C.dim, borderRadius: 4, overflow: 'hidden' }}>
+              <div style={{ width: `${overallProgress}%`, height: '100%', background: C.gold, transition: 'width 0.3s ease-out' }} />
+            </div>
+          )}
+
+          {inProgress && Object.keys(tickerProgress).length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {Object.entries(tickerProgress).map(([ticker, progress]) => (
+                <div key={ticker} style={{ display: 'flex', alignItems: 'center', gap: 4, border: `1px solid ${C.border}`, padding: '4px 8px', borderRadius: 4, background: C.surface }}>
+                  <span style={{ fontFamily: C.mono, fontSize: 10, fontWeight: 700, color: C.gold }}>{ticker}</span>
+                  <span style={{ fontFamily: C.sans, fontSize: 10, color: C.muted }}>{progress.stage} ({progress.pct}%)</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {streamedResults.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {streamedResults.map((r: Result) => <ResultCard key={r.id ?? r.ticker} result={r} />)}
+            </div>
+          )}
+
+          {!inProgress && streamedResults.length === 0 && !error && (
+            <div style={{ textAlign: 'center', padding: '64px 24px', fontFamily: C.sans, fontSize: 12, color: C.dim, border: `1px dashed ${C.border}` }}>
+              Add tickers in the panel, then press Analyze to generate AI-powered earnings notes.
+            </div>
+          )}
         </div>
-
-
-        {/* Error */}
-        {error && (
-          <div style={{ background: 'color-mix(in srgb, var(--theme-negative) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-negative) 30%, transparent)', padding: 12, fontFamily: C.sans, fontSize: 11, color: C.neg }}>
-            {error}
-          </div>
-        )}
-
-        {/* Overall Progress Bar */}
-        {inProgress && (
-          <div style={{ width: '100%', height: 8, background: C.dim, borderRadius: 4, overflow: 'hidden' }}>
-            <div style={{ width: `${overallProgress}%`, height: '100%', background: C.gold, transition: 'width 0.3s ease-out' }} />
-          </div>
-        )}
-
-        {/* Ticker-level Progress */}
-        {inProgress && Object.keys(tickerProgress).length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
-            {Object.entries(tickerProgress).map(([ticker, progress]) => (
-              <div key={ticker} style={{ display: 'flex', alignItems: 'center', gap: 4, border: `1px solid ${C.border}`, padding: '4px 8px', borderRadius: 4, background: C.surface }}>
-                <span style={{ fontFamily: C.mono, fontSize: 10, fontWeight: 700, color: C.gold }}>{ticker}</span>
-                <span style={{ fontFamily: C.sans, fontSize: 10, color: C.muted }}>{progress.stage} ({progress.pct}%)</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Results */}
-        {streamedResults.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {streamedResults.map((r: Result) => <ResultCard key={r.ticker} result={r} />)}
-          </div>
-        )}
-
-        {!inProgress && streamedResults.length === 0 && !error && (
-          <div style={{ textAlign: 'center', padding: '48px 0', fontFamily: C.sans, fontSize: 12, color: C.dim }}>
-            Add tickers above and press Analyze to generate AI-powered earnings summaries
-          </div>
-        )}
       </div>
     </PageWrapper>
   )

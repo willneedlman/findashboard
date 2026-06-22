@@ -79,7 +79,37 @@ def _parse_number(text: str, attrs: dict) -> float | None:
     return val
 
 
-def _segments_from_instance(html: str) -> dict:
+def _segment_member(members: dict) -> tuple[str, str] | None:
+    """(group, member) for a revenue fact, or None for a cross/total. A company
+    can disclose several different cuts of the same revenue (Apple: product detail,
+    Product/Service, AND geographic operating segments); each cut is tagged to its
+    own group so they're never merged — the caller picks one coherent breakdown.
+
+      • single ProductOrService axis (iPhone, Mac…)         -> 'product'
+      • business-segments axis, alone or as OperatingSegments -> 'segment'
+    """
+    if len(members) == 1:
+        ax = next(iter(members))
+        if ax in ("productorserviceaxis", "productsandservicesaxis"):
+            return ("product", members[ax])
+        if ax == "statementbusinesssegmentsaxis":
+            return ("segment", members[ax])
+        return None
+    if (len(members) == 2 and "statementbusinesssegmentsaxis" in members
+            and members.get("consolidationitemsaxis", "").lower() == "operatingsegmentsmember"):
+        return ("segment", members["statementbusinesssegmentsaxis"])
+    return None
+
+
+def _geo_member(members: dict) -> tuple[str, str] | None:
+    """Geographic member for a revenue fact dimensioned solely by geography."""
+    if len(members) == 1 and "statementgeographicalaxis" in members:
+        return ("geo", members["statementgeographicalaxis"])
+    return None
+
+
+def _segments_from_instance(html: str, member_fn=_segment_member,
+                            priority: tuple = ("product", "segment")) -> dict:
     # 1) contexts -> {id: {members: {axis_lower: member}, end: date, duration: bool}}
     ctx: dict[str, dict] = {}
     for cid, body in _CTX_RE.findall(html):
@@ -88,8 +118,9 @@ def _segments_from_instance(html: str) -> dict:
         start = _START_RE.search(body)
         ctx[cid] = {"members": members, "end": end.group(1) if end else None, "duration": bool(start)}
 
-    # 2) revenue facts dimensioned ONLY by a product/segment axis, latest annual period
-    by_end: dict[str, dict[str, float]] = {}
+    # 2) revenue facts, kept separate per disclosure group so different cuts of the
+    #    same revenue (product detail vs geographic segments) are never summed.
+    groups: dict[str, dict[str, dict[str, float]]] = {}   # group -> end -> {member: val}
     for attrstr, inner in _TAG_RE.findall(html):
         attrs = dict(_ATTR_RE.findall(attrstr))
         name = attrs.get("name", "").split(":")[-1].lower()
@@ -98,20 +129,26 @@ def _segments_from_instance(html: str) -> dict:
         c = ctx.get(attrs.get("contextRef", ""))
         if not c or not c["duration"] or not c["end"]:
             continue
-        prod = [(ax, m) for ax, m in c["members"].items() if ax in _PRODUCT_AXES]
-        # Require exactly one dimension and it is the product axis (skip geography crosses, totals)
-        if len(c["members"]) != 1 or not prod:
+        cls = member_fn(c["members"])
+        if cls is None:
             continue
+        grp, member = cls
         val = _parse_number(inner, attrs)
         if val is None or val <= 0:
             continue
-        member = prod[0][1]
-        by_end.setdefault(c["end"], {})[member] = val
+        groups.setdefault(grp, {}).setdefault(c["end"], {}).setdefault(member, val)
 
-    if not by_end:
-        return {}
-    latest_end = max(by_end.keys())
-    return {"end": latest_end, "segments": _drop_rollups(by_end[latest_end])}
+    # Return the first priority group that yields a real breakdown (≥2 members
+    # after rollups), at its latest period.
+    for grp in priority:
+        d = groups.get(grp)
+        if not d:
+            continue
+        latest_end = max(d.keys())
+        segs = _drop_rollups(d[latest_end])
+        if len(segs) >= 2:
+            return {"end": latest_end, "segments": segs}
+    return {}
 
 
 def _is_rollup(target: float, others: list[float], tol: float) -> bool:
@@ -139,8 +176,23 @@ def _drop_rollups(segs: dict) -> dict:
     return keep
 
 
+_COUNTRY = {
+    "US": "United States", "USA": "United States", "U": "United States",
+    "CN": "China", "TW": "Taiwan", "SG": "Singapore", "JP": "Japan", "KR": "South Korea",
+    "DE": "Germany", "GB": "United Kingdom", "UK": "United Kingdom", "FR": "France",
+    "CA": "Canada", "IN": "India", "HK": "Hong Kong", "MX": "Mexico", "IE": "Ireland",
+    "NL": "Netherlands", "MY": "Malaysia", "TH": "Thailand", "VN": "Vietnam", "ID": "Indonesia",
+    "BR": "Brazil", "IL": "Israel", "CH": "Switzerland", "AU": "Australia", "PH": "Philippines",
+    "NONUS": "Non-US", "NONU": "Non-US",
+}
+
+
 def _humanize(member: str) -> str:
     s = re.sub(r"Member$", "", member)
+    # Geographic facts use ISO country codes (US, CN, TW…) — map to readable names.
+    code = re.sub(r"[^A-Za-z]", "", s).upper()
+    if code in _COUNTRY:
+        return _COUNTRY[code]
     s = re.sub(r"([a-z])and([A-Z])", r"\1 and \2", s)   # WearablesHomeandAccessories -> ...Home and Acc...
     s = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", s)
     s = re.sub(r"(?<=[A-Z])(?=[A-Z][a-z])", " ", s)
@@ -150,13 +202,11 @@ def _humanize(member: str) -> str:
     return s
 
 
-def get_segment_revenue(ticker: str) -> dict:
-    """Latest-year product-segment revenue from the most recent 10-K.
-
-    Returns {fiscalYear, currency, latest: [{name, value, pct}]} matching the
-    fmp.get_revenue_segments shape, or an empty 'latest' on failure."""
-    sym = ticker.strip().upper()
-    cache_key = f"sec_seg:{sym}"
+def _extract_from_10k(sym: str, member_fn, cache_key: str, priority: tuple) -> dict:
+    """Shared 10-K revenue-breakdown extractor. `member_fn` selects which facts to
+    keep (product segments or geography) and `priority` picks one disclosure group.
+    Returns {fiscalYear, currency, latest: [{name, value, pct}], source} matching
+    the fmp shape, or {'latest': []}."""
     cached = disk_get(cache_key)
     if isinstance(cached, dict) and cached.get("latest"):
         return cached
@@ -175,7 +225,7 @@ def get_segment_revenue(ticker: str) -> dict:
         logger.warning("SEC 10-K fetch failed %s: %s", url, e)
         return {"latest": []}
 
-    parsed = _segments_from_instance(html)
+    parsed = _segments_from_instance(html, member_fn, priority)
     segs = parsed.get("segments") or {}
     if not segs:
         return {"latest": []}
@@ -189,3 +239,15 @@ def get_segment_revenue(ticker: str) -> dict:
     except Exception:
         pass
     return result
+
+
+def get_segment_revenue(ticker: str) -> dict:
+    """Latest-year product-segment revenue from the most recent 10-K (fmp shape)."""
+    sym = ticker.strip().upper()
+    return _extract_from_10k(sym, _segment_member, f"sec_seg:v2:{sym}", ("product", "segment"))
+
+
+def get_geo_revenue(ticker: str) -> dict:
+    """Latest-year geographic revenue from the most recent 10-K (fmp shape)."""
+    sym = ticker.strip().upper()
+    return _extract_from_10k(sym, _geo_member, f"sec_geo:v2:{sym}", ("geo",))

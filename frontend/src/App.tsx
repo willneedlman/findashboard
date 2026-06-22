@@ -33,6 +33,7 @@ const Multiples          = lazy(() => import('./pages/Multiples'))
 const ReverseDCF         = lazy(() => import('./pages/ReverseDCF'))
 const OptionsChainScanner = lazy(() => import('./pages/OptionsChainScanner'))
 const RegressionAnalysis = lazy(() => import('./pages/RegressionAnalysis'))
+const CorrelationAnalysis = lazy(() => import('./pages/CorrelationAnalysis'))
 const PortfolioBacktester = lazy(() => import('./pages/PortfolioBacktester'))
 const MonteCarlo         = lazy(() => import('./pages/MonteCarlo'))
 const PortfolioCompare   = lazy(() => import('./pages/PortfolioCompare'))
@@ -64,6 +65,7 @@ const UnusualOptions     = lazy(() => import('./pages/UnusualOptions'))
 const Compare            = lazy(() => import('./pages/Compare'))
 const ResetPassword      = lazy(() => import('./pages/ResetPassword'))
 const HubLanding         = lazy(() => import('./pages/HubLanding'))
+const ToolsRedesignDemo  = lazy(() => import('./pages/redesign/ToolsRedesignDemo'))
 
 function PageLoader() {
   return (
@@ -144,6 +146,9 @@ export default function App() {
             {/* Password reset — chrome-free, reached from the email link */}
             <Route path="/reset-password"    element={<ResetPassword />} />
 
+            {/* Tools redesign preview — chrome-free, sample data, not in nav */}
+            <Route path="/redesign"          element={<ToolsRedesignDemo />} />
+
             {/* Legal — marketing chrome (no terminal sidebar) */}
             <Route element={<MktShell />}>
               <Route path="/privacy"         element={<PrivacyPolicy />} />
@@ -179,7 +184,7 @@ export default function App() {
               <Route path="/fed"        element={<FedRates />} />
               <Route path="/corporate"  element={<CorporateHub />} />
               <Route path="/chain"      element={<OptionsChainScanner />} />
-              <Route path="/correlation" element={<Navigate to="/regression" replace />} />
+              <Route path="/correlation" element={<CorrelationAnalysis />} />
               <Route path="/strategy"   element={<StrategyBuilder />} />
               <Route path="/gex"        element={<DealerGEX />} />
               <Route path="/dashboard"       element={<CustomDashboard />} />

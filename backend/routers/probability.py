@@ -13,6 +13,7 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from cache import get_history
 import options_data
+from validation import validate_ticker
 
 router = APIRouter()
 
@@ -38,6 +39,7 @@ class ProbRequest(BaseModel):
 
 @router.post("/cone")
 def probability_cone(req: ProbRequest):
+    req.ticker = validate_ticker(req.ticker)
     try:
         hist = get_history(req.ticker, period="1y")
         if hist.empty:
@@ -86,8 +88,9 @@ def probability_cone(req: ProbRequest):
 
 @router.get("/chain-distribution")
 def chain_distribution(ticker: str, expiry: str = ""):
+    ticker = validate_ticker(ticker)
     try:
-        tkr = yf.Ticker(ticker.strip().upper())
+        tkr = yf.Ticker(ticker)
         hist = get_history(ticker, period="5d")
         S0 = float(hist["Close"].dropna().iloc[-1]) if not hist.empty else None
         if not S0:
@@ -307,7 +310,7 @@ def skew_surface(ticker: str):
     the directional/crash-fear gauge), and the 25-delta butterfly (wing richness).
     Plus the front-expiry smile (IV vs % moneyness) and a rich/cheap read.
     """
-    sym = ticker.strip().upper()
+    sym = validate_ticker(ticker)
     try:
         hist = get_history(sym, period="5d")
         S0   = float(hist["Close"].dropna().iloc[-1]) if not hist.empty else None

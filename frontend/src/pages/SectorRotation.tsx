@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer, Cell } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
+import { VerdictStrip } from './valuationShared'
 
 
 const PERIODS = ['1W', '1M', '3M', '6M', 'YTD', '1Y'] as const
@@ -91,11 +92,38 @@ export function SectorRotationContent() {
   })
 
   return (
-      <div id="sector-rotation-content" style={{ maxWidth: 1100, margin: '0 auto' }}>
+      <div id="sector-rotation-content" style={{ width: '100%' }}>
 
         <PageHeader
           title="Sector Rotation"
         />
+
+        {/* Verdict strip — breadth vs SPY */}
+        {data && (() => {
+          const per = activePeriod
+          const spyRet = data.spy_returns[per]
+          const valid = data.sectors.filter(s => s.returns[per] != null)
+          const beating = spyRet != null ? valid.filter(s => (s.returns[per] as number) > spyRet).length : 0
+          const total = valid.length
+          const byRet = [...valid].sort((a, b) => (b.returns[per] as number) - (a.returns[per] as number))
+          const top = byRet[0], bottom = byRet[byRet.length - 1]
+          const broad = total > 0 && beating >= total / 2
+          const fmtP = (v: number | null) => v == null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`
+          return (
+            <div style={{ marginBottom: 16 }}>
+              <VerdictStrip
+                primary={{ label: `Breadth · ${per}`, value: `${beating}/${total}`, tone: broad ? 'pos' : 'neg',
+                  context: broad ? 'sectors beating SPY · risk-on' : 'sectors beating SPY · defensive', contextTone: broad ? 'pos' : 'neg' }}
+                cells={[
+                  { label: `SPY ${per}`, value: fmtP(spyRet) },
+                  ...(top ? [{ label: 'Leader', value: `${top.ticker} ${fmtP(top.returns[per])}`, tone: 'pos' as const, labelTone: 'pos' as const }] : []),
+                  ...(bottom ? [{ label: 'Laggard', value: `${bottom.ticker} ${fmtP(bottom.returns[per])}`, tone: 'neg' as const, labelTone: 'neg' as const }] : []),
+                  ...(top && bottom ? [{ label: 'Dispersion', value: `${((top.returns[per] as number) - (bottom.returns[per] as number)).toFixed(1)}%`, sub: 'leader − laggard' }] : []),
+                ]}
+              />
+            </div>
+          )
+        })()}
 
         {/* Controls */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>

@@ -101,6 +101,16 @@ HIGH_IMPACT_TIER: int = 4                 # tier >= this counts toward high_impa
 SPIKE_TIER: int = 5
 SPIKE_DIRECTION: float = 0.6
 
+# ── Relevance / scope ─────────────────────────────────────────────────────────
+# A broad-market sentiment gauge only counts articles that touch the market:
+# every scored article must carry a recognized financial entity or a broad-market
+# keyword, else it is dropped as noise before it can be weighted, counted, or shown.
+REQUIRE_MARKET_RELEVANCE: bool = True
+# Articles scoped to a single company (no index/macro/rates context) are capped
+# below the lowest macro/index impact so an individual stock — even a megacap —
+# never out-weights a broader macro or index story of the same tier.
+SINGLE_STOCK_IMPACT_CAP: float = 0.45
+
 # ── Window / qualification thresholds ─────────────────────────────────────────
 MIN_SIGNAL_HEADLINES: int = 10      # in-window articles for full session confidence
 MIN_SOURCE_HEADLINES: int = 2       # unique headlines for a source to "qualify"

@@ -74,6 +74,7 @@ export default function Layout({ children }: LayoutProps) {
   if (isMobile) {
     return (
       <div className="flex flex-col h-screen overflow-hidden">
+        <a href="#main-content" className="skip-link">Skip to content</a>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', height: 52, flexShrink: 0, background: 'var(--theme-bg, #060e1c)', borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)', position: 'sticky', top: 0, zIndex: 40 }}>
           <Link to="/app" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 8 }}>
             <AlphaMark size={22} color="var(--theme-primary, #c9a84c)" />
@@ -81,12 +82,12 @@ export default function Layout({ children }: LayoutProps) {
               ALPHATAPE <span style={{ color: 'var(--theme-secondary, #5e768f)', fontSize: 10, letterSpacing: '0.2em', fontFamily: 'var(--theme-sans)', fontWeight: 600 }}>TERMINAL</span>
             </div>
           </Link>
-          <button onClick={() => setDrawerOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-primary, #c9a84c)', padding: 0, minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <button onClick={() => setDrawerOpen(true)} aria-label="Open menu" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-primary, #c9a84c)', padding: 0, minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Menu size={22} />
           </button>
         </div>
 
-        <main style={{ flex: 1, overflowY: 'auto', background: 'var(--theme-bg, #0a1628)' }}>
+        <main id="main-content" style={{ flex: 1, overflowY: 'auto', background: 'var(--theme-bg, #0a1628)' }}>
           <div style={{ padding: location.pathname === '/dashboard' ? '16px 14px 200px' : '16px 14px', display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
             <div style={{ flex: 1 }}>{children}</div>
             {location.pathname !== '/dashboard' && <Footer />}
@@ -104,7 +105,7 @@ export default function Layout({ children }: LayoutProps) {
             <motion.div key="drawer" initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ duration: 0.25, ease: 'easeInOut' }} style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 264, zIndex: 50, background: 'var(--theme-bg, #060e1c)', borderLeft: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid color-mix(in srgb, var(--theme-primary) 12%, transparent)' }}>
                 <div style={{ fontFamily: 'Cinzel, Georgia, serif', color: 'var(--theme-primary, #c9a84c)', fontSize: 14, fontWeight: 700, letterSpacing: '0.08em' }}>MENU</div>
-                <button onClick={() => setDrawerOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-secondary, #99907e)', minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={18} /></button>
+                <button onClick={() => setDrawerOpen(false)} aria-label="Close menu" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-secondary, #99907e)', minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={18} /></button>
               </div>
 
               <div style={{ margin: '8px 12px 4px', padding: '6px 0 8px', background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 5%, var(--theme-surface, #0d1826))', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)' }}>
@@ -151,6 +152,7 @@ export default function Layout({ children }: LayoutProps) {
   // ── Desktop ──
   return (
     <div className="flex h-screen overflow-hidden" id="ft-root">
+      <a href="#main-content" className="skip-link">Skip to content</a>
       <AlertToastQueue alerts={pendingAlerts} />
       <motion.aside
         animate={{ width: collapsed ? 64 : 248 }}
@@ -228,7 +230,7 @@ export default function Layout({ children }: LayoutProps) {
         </div>
       </motion.aside>
 
-      <main className="flex-1 overflow-y-auto" style={{ background: 'var(--theme-bg, #0a1628)' }}>
+      <main id="main-content" className="flex-1 overflow-y-auto" style={{ background: 'var(--theme-bg, #0a1628)' }}>
         {location.pathname === '/dashboard' ? (
           <div style={{ padding: '24px 24px 300px' }}>{children}</div>
         ) : (

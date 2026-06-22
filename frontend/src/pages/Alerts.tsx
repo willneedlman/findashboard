@@ -116,7 +116,7 @@ export default function Alerts() {
 
   return (
     <PageWrapper title="Price Alerts">
-      <div style={{ maxWidth: 820, margin: '0 auto' }}>
+      <div style={{ width: '100%' }}>
 
         {/* Notification permission banner */}
         {notifState === 'default' && (

@@ -2,7 +2,7 @@ import { T } from '../lib/theme'
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { createChart, ColorType, CrosshairMode } from 'lightweight-charts'
 import type { IChartApi, ISeriesApi, Time, SeriesMarker } from 'lightweight-charts'
-import { Sliders } from 'lucide-react'
+import { Sliders, ChevronsRight } from 'lucide-react'
 import { smaArr, emaArr, bollinger, vwapArr, type Candle } from '../lib/indicators'
 import { marketSession } from '../lib/marketSession'
 import { occUnderlying } from '../lib/occ'
@@ -71,6 +71,10 @@ export default function PaperChart({ initialTicker = 'SPY', fills = [], storageK
   const [candles, setCandles] = useState<Candle[]>([])
   const [spot, setSpot] = useState<number | null>(null)
   const [chartErr, setChartErr] = useState(false)
+  // True when the view is scrolled away from the latest candle, so the snap-back
+  // ("auto fit") button is shown — like Robinhood's chevrons that jump to now.
+  const [isAway, setIsAway] = useState(false)
+  const awayRef = useRef(false)
   const [, setTick] = useState(0)
   useEffect(() => { const id = window.setInterval(() => setTick(t => t + 1), 30_000); return () => window.clearInterval(id) }, [])
   const session = marketSession(new Date(), ticker)
@@ -94,6 +98,14 @@ export default function PaperChart({ initialTicker = 'SPY', fills = [], storageK
     setBarSpacing(n)
     const ts = chartRef.current?.timeScale()
     if (n > 0) { ts?.applyOptions({ barSpacing: n }); ts?.scrollToRealTime() }
+    else applyWindow(ts, candlesRef.current, windowRef.current)
+  }
+
+  // Snap the view back to the latest data at the current framing.
+  const snapBack = () => {
+    const ts = chartRef.current?.timeScale()
+    if (!ts) return
+    if (barSpacingRef.current > 0) { ts.applyOptions({ barSpacing: barSpacingRef.current }); ts.scrollToRealTime() }
     else applyWindow(ts, candlesRef.current, windowRef.current)
   }
 
@@ -151,6 +163,10 @@ export default function PaperChart({ initialTicker = 'SPY', fills = [], storageK
         tscale.setVisibleLogicalRange({ from: to - width, to })
         requestAnimationFrame(() => { clamping = false })
       }
+      // Show snap-back only while the latest candle is out of view (scrolled into
+      // the past); hide it as soon as the present candle is back in sight.
+      const away = (n - 1) - range.to > 3
+      if (away !== awayRef.current) { awayRef.current = away; setIsAway(away) }
     }
     tscale.subscribeVisibleLogicalRangeChange(onRange)
     const ro = new ResizeObserver(() => { if (el) chart.resize(el.clientWidth, el.clientHeight) })
@@ -312,6 +328,24 @@ export default function PaperChart({ initialTicker = 'SPY', fills = [], storageK
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
         {chartErr && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: T.mono, fontSize: 11, color: T.muted }}>No chart data</div>}
+        {isAway && !chartErr && (
+          <button onClick={snapBack} title="Snap back to latest" aria-label="Snap back to latest"
+            style={{
+              position: 'absolute', right: 56, bottom: 16, zIndex: 5,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36,
+              // Drive off --theme-primary (always a strong accent: gold on dark,
+              // near-black on Paper White) so the control is high-contrast on every preset.
+              background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 12%, var(--theme-surface, #1f2a3d))',
+              border: '1.5px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 55%, transparent)',
+              borderRadius: 8, cursor: 'pointer', color: 'var(--theme-primary, #c9a84c)',
+              boxShadow: '0 2px 10px rgba(0,0,0,0.28)',
+              transition: 'background 0.15s ease',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'color-mix(in srgb, var(--theme-primary, #c9a84c) 24%, var(--theme-surface, #1f2a3d))' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'color-mix(in srgb, var(--theme-primary, #c9a84c) 12%, var(--theme-surface, #1f2a3d))' }}>
+            <ChevronsRight size={19} strokeWidth={2.5} />
+          </button>
+        )}
       </div>
     </div>
   )

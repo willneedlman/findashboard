@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useQuery } from '@tanstack/react-query'
 import { AreaChart, Area, XAxis, YAxis, ReferenceLine, ResponsiveContainer } from 'recharts'
-import { Search, LayoutGrid, ArrowUpRight, Clock, X, Upload, Briefcase } from 'lucide-react'
+import { Search, LayoutGrid, ArrowUpRight, Clock, X, Upload, Briefcase, TrendingUp, Zap } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import TickerLogo from '../components/TickerLogo'
 import useIsMobile from '../hooks/useIsMobile'
@@ -353,6 +353,23 @@ function SectionLabel({ icon: Icon, label, count }: { icon: React.ElementType; l
   )
 }
 
+function ResultGrid({ children }: { children: React.ReactNode }) {
+  return <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>{children}</div>
+}
+
+function ResultTile({ icon: Icon, title, sub, onClick }: { icon: React.ElementType; title: string; sub: string; onClick: () => void }) {
+  return (
+    <div role="button" tabIndex={0} onClick={onClick} onKeyDown={e => { if (e.key === 'Enter') onClick() }}
+      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 13px', background: F.panel, border: `1px solid ${F.border}`, cursor: 'pointer' }}>
+      <Icon size={15} style={{ color: F.gold, flexShrink: 0 }} />
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontFamily: F.sans, fontSize: 12.5, fontWeight: 700, color: F.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
+        <div style={{ fontFamily: F.sans, fontSize: 10, color: F.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</div>
+      </div>
+    </div>
+  )
+}
+
 export default function Home() {
   const isMobile = useIsMobile()
   const navigate = useNavigate()
@@ -424,9 +441,35 @@ export default function Home() {
   // Recents → resolve to tools (max 4 shown).
   const recents = useMemo(() => getRecents().map(r => ALL_TOOLS.find(t => t.route === r)).filter(Boolean).slice(0, 4) as typeof ALL_TOOLS, [])
 
-  // Global tool filter (drives the hubs section into a flat result list).
+  // Global search: tools (by name/desc), a ticker (when the query looks like a
+  // symbol), and quick actions. Tickers route to the two pages that read ?ticker.
   const ql = q.trim().toLowerCase()
   const filtered = useMemo(() => !ql ? [] : ALL_TOOLS.filter(t => `${t.title} ${t.desc}`.toLowerCase().includes(ql)), [ql])
+
+  const sym = useMemo(() => {
+    const raw = q.trim()
+    return /^[A-Za-z]{1,5}(\.[A-Za-z])?$/.test(raw) ? raw.toUpperCase() : null
+  }, [q])
+  const tickerResults = useMemo(() => {
+    if (!sym) return []
+    const mkt = ALL_TOOLS.find(t => t.route === '/market')
+    const dcf = ALL_TOOLS.find(t => t.route === '/dcf')
+    return [
+      { key: 'tk-market', icon: mkt?.icon ?? TrendingUp, title: `${sym} · Market data`, sub: 'Price history, returns, and chart', route: `/market?ticker=${sym}` },
+      { key: 'tk-dcf', icon: dcf?.icon ?? TrendingUp, title: `${sym} · DCF valuation`, sub: 'Intrinsic value and upside', route: `/dcf?ticker=${sym}` },
+    ]
+  }, [sym])
+
+  const actionResults = useMemo(() => {
+    if (!ql) return []
+    const actions = [
+      { key: 'ac-dash', icon: LayoutGrid, title: 'Open My Dashboard', sub: 'Your saved cockpit', route: '/dashboard', kw: 'dashboard home cockpit overview saved' },
+      { key: 'ac-pm', icon: Briefcase, title: 'Open Portfolio Manager', sub: 'Add and manage holdings', route: '/portfolio-manager', kw: 'portfolio manager holdings positions add import cash' },
+    ]
+    return actions.filter(a => `${a.title} ${a.kw}`.toLowerCase().includes(ql))
+  }, [ql])
+
+  const noResults = filtered.length === 0 && tickerResults.length === 0 && actionResults.length === 0
 
   const cockpitCols = isMobile ? '1fr' : '1fr 1.5fr 1.25fr'
 
@@ -448,7 +491,7 @@ export default function Home() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: F.topbar, border: `1px solid ${searchFocus ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 55%, transparent)' : F.border}`, padding: '9px 12px', width: isMobile ? 200 : 280, transition: 'border-color 0.15s ease' }}>
                 <Search size={13} style={{ color: F.muted, flexShrink: 0 }} />
-                <input value={q} onChange={e => setQ(e.target.value)} onFocus={() => setSearchFocus(true)} onBlur={() => setSearchFocus(false)} aria-label="Search tools" placeholder="Search tools, tickers, actions" style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none', color: F.text, fontFamily: F.sans, fontSize: 12 }} />
+                <input value={q} onChange={e => setQ(e.target.value)} onFocus={() => setSearchFocus(true)} onBlur={() => setSearchFocus(false)} aria-label="Search tools, tickers, and actions" placeholder="Search tools, tickers, actions" style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none', color: F.text, fontFamily: F.sans, fontSize: 12 }} />
                 {q && <button onClick={() => setQ('')} aria-label="Clear" style={{ background: 'none', border: 'none', cursor: 'pointer', color: F.muted, display: 'flex', padding: 0 }}><X size={12} /></button>}
               </div>
               <button onClick={() => navigate('/dashboard')} style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, background: F.gold, border: 'none', padding: '9px 14px', cursor: 'pointer' }}>
@@ -460,27 +503,34 @@ export default function Home() {
 
           {/* search results override the hubs grid */}
           {ql ? (
-            <div style={{ marginTop: 22 }}>
-              <SectionLabel icon={Search} label={`${filtered.length} ${filtered.length === 1 ? 'match' : 'matches'}`} />
-              {filtered.length === 0 ? (
-                <div style={{ padding: '32px 0', textAlign: 'center', fontFamily: F.sans, fontSize: 12, color: F.sec }}>
-                  No tools match <span style={{ color: F.text, fontFamily: F.mono }}>{q}</span>
+            <div style={{ marginTop: 22, display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {tickerResults.length > 0 && (
+                <div>
+                  <SectionLabel icon={TrendingUp} label={`Ticker · ${sym}`} />
+                  <ResultGrid>
+                    {tickerResults.map(r => <ResultTile key={r.key} icon={r.icon} title={r.title} sub={r.sub} onClick={() => navigate(r.route)} />)}
+                  </ResultGrid>
                 </div>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>
-                  {filtered.map(t => {
-                    const Icon = t.icon
-                    return (
-                      <div key={t.route} role="button" tabIndex={0} onClick={() => navigate(t.route)} onKeyDown={e => { if (e.key === 'Enter') navigate(t.route) }}
-                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 13px', background: F.panel, border: `1px solid ${F.border}`, cursor: 'pointer' }}>
-                        <Icon size={15} style={{ color: F.gold, flexShrink: 0 }} />
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontFamily: F.sans, fontSize: 12.5, fontWeight: 700, color: F.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</div>
-                          <div style={{ fontFamily: F.sans, fontSize: 10, color: F.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.desc}</div>
-                        </div>
-                      </div>
-                    )
-                  })}
+              )}
+              {filtered.length > 0 && (
+                <div>
+                  <SectionLabel icon={Search} label="Tools" count={filtered.length} />
+                  <ResultGrid>
+                    {filtered.map(t => <ResultTile key={t.route} icon={t.icon} title={t.title} sub={t.desc} onClick={() => navigate(t.route)} />)}
+                  </ResultGrid>
+                </div>
+              )}
+              {actionResults.length > 0 && (
+                <div>
+                  <SectionLabel icon={Zap} label="Actions" />
+                  <ResultGrid>
+                    {actionResults.map(r => <ResultTile key={r.key} icon={r.icon} title={r.title} sub={r.sub} onClick={() => navigate(r.route)} />)}
+                  </ResultGrid>
+                </div>
+              )}
+              {noResults && (
+                <div style={{ padding: '32px 0', textAlign: 'center', fontFamily: F.sans, fontSize: 12, color: F.sec }}>
+                  Nothing matches <span style={{ color: F.text, fontFamily: F.mono }}>{q}</span>
                 </div>
               )}
             </div>

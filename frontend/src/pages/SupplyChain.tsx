@@ -18,6 +18,22 @@ interface SegBlock {
   history:       SegHistYear[]
   concentration: SegConcentration | null
   error?:        boolean
+  source?:       string
+}
+
+// Where the breakdown came from — shown as a small provenance chip.
+function SourceChip({ source }: { source?: string }) {
+  if (!source) return null
+  const sec = source === 'sec'
+  const label = sec ? 'SEC EDGAR' : 'FMP'
+  const c = sec ? 'var(--theme-tertiary, #60a5fa)' : 'var(--theme-primary, #c9a84c)'
+  return (
+    <span title={sec ? 'Sourced from SEC EDGAR 10-K (FMP fallback)' : 'Sourced from Financial Modeling Prep'}
+      style={{ fontFamily: T.mono, fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+        color: c, border: `1px solid color-mix(in srgb, ${c} 45%, transparent)`, borderRadius: 3, padding: '1px 5px', whiteSpace: 'nowrap' }}>
+      via {label}
+    </span>
+  )
 }
 
 const labelStyle: React.CSSProperties = {
@@ -105,7 +121,10 @@ function SegmentBreakdown({ title, block }: { title: string; block: SegBlock }) 
   return (
     <div style={{ marginBottom: 28 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
-        <div style={{ ...labelStyle, marginBottom: 0 }}>{title}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ ...labelStyle, marginBottom: 0 }}>{title}</div>
+          <SourceChip source={block.source} />
+        </div>
         {block.fiscalYear != null && (
           <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted }}>
             FY{block.fiscalYear}{block.currency ? ` · ${block.currency}` : ''}
@@ -226,7 +245,7 @@ export function SupplyChainContent() {
   }
 
   return (
-    <div id="supply-chain-content" style={{ width: '100%', maxWidth: 1340, margin: '0 auto' }}>
+    <div id="supply-chain-content" style={{ width: '100%' }}>
 
         <PageHeader
           title="Company Profile"

@@ -227,7 +227,7 @@ export function CompareContent() {
   const axisLabelStyle = { fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', fill: '#5e768f' as const }
 
   return (
-    <div style={{ maxWidth: 1320, margin: '0 auto' }}>
+    <div style={{ width: '100%' }}>
       <PageHeader
         title="Asset Overlay"
       />

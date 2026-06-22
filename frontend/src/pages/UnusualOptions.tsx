@@ -4,6 +4,7 @@ import axios from 'axios'
 import { useQuery } from '@tanstack/react-query'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
+import { VerdictStrip } from './valuationShared'
 
 
 interface Row {
@@ -135,7 +136,7 @@ export function UnusualOptionsContent() {
   }, [rows, sort])
 
   return (
-    <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+    <div style={{ width: '100%' }}>
       <PageHeader
         title="Options Flow"
       />
@@ -204,6 +205,30 @@ export function UnusualOptionsContent() {
           {isFetching ? 'Scanning…' : 'Scan'}
         </button>
       </div>
+
+      {/* Verdict strip — total premium + call/put split */}
+      {data && rows.length > 0 && (() => {
+        const total = rows.reduce((s, r) => s + r.premium, 0)
+        const callPrem = rows.filter(r => r.type === 'call').reduce((s, r) => s + r.premium, 0)
+        const callPct = total > 0 ? Math.round(callPrem / total * 100) : 0
+        const fmt = (v: number) => v >= 1e9 ? `$${(v / 1e9).toFixed(2)}B` : v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : `$${(v / 1e3).toFixed(0)}K`
+        const k = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}K` : `${n}`
+        const topVO = [...rows].sort((a, b) => b.volOiRatio - a.volOiRatio)[0]
+        const mostA = [...rows].sort((a, b) => b.volume - a.volume)[0]
+        return (
+          <div style={{ marginBottom: 12 }}>
+            <VerdictStrip
+              primary={{ label: 'Total premium', value: fmt(total), tone: 'gold', context: `${data.count} contracts` }}
+              cells={[
+                { label: 'Calls', value: `${callPct}%`, tone: 'pos', labelTone: 'pos', sub: fmt(callPrem) },
+                { label: 'Puts', value: `${100 - callPct}%`, tone: 'neg', labelTone: 'neg', sub: fmt(total - callPrem) },
+                { label: 'Top vol/OI', value: `${topVO.ticker} ${topVO.volOiRatio.toFixed(1)}`, tone: 'gold' },
+                { label: 'Most active', value: `${mostA.ticker} ${k(mostA.volume)}` },
+              ]}
+            />
+          </div>
+        )
+      })()}
 
       {/* Meta line */}
       {data && !isFetching && (

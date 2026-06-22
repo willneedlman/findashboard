@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useLayoutEffect } from 'react'
 
 // Shared design tokens for the Stock Valuation tabs so every tool reads as one
 // consistent, well-spaced system. Matches the DCF tab's density.
@@ -145,6 +145,220 @@ export function MetricCard({ label, value, sub, help, color }:
       </div>
       <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 18, fontWeight: 700, color: color ?? 'var(--theme-text, #d7e3fc)' }}>{value}</div>
       {sub && <div style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', marginTop: 2 }}>{sub}</div>}
+    </div>
+  )
+}
+
+// ── Tool-redesign system ──────────────────────────────────────────────────────
+// The shared chrome for the redesigned tool pages: a tracked title bar, an
+// answer-first "verdict strip" (a big headline figure + supporting metric cells,
+// optionally a gradient range track), and the recessed-strip label style. All
+// token-driven so they adapt to the active theme and can later back the live
+// pages (each takes plain props; the demo passes sample data, the real page
+// passes its result object).
+
+export type VerdictTone = 'gold' | 'pos' | 'neg' | 'blue' | 'text' | 'muted'
+
+const TONE: Record<VerdictTone, string> = {
+  gold:  'var(--theme-primary, #c9a84c)',
+  pos:   'var(--theme-positive, #22c55e)',
+  neg:   'var(--theme-negative, #ef4444)',
+  blue:  'var(--theme-tertiary, #60a5fa)',
+  text:  'var(--theme-text, #d7e3fc)',
+  muted: 'var(--theme-secondary, #8099b0)',
+}
+export const toneColor = (t: VerdictTone = 'text') => TONE[t]
+
+// Zero-anchored heatmap scale — forest-green above 0, maroon below — used by the
+// sensitivity grid and the sector table. These are deliberate data-viz heat
+// colors (not theme tokens); matches the existing heatColor() in DCFValuation.
+export function heatColor(v: number, min: number, max: number): string {
+  if (max === min) return 'rgba(94,118,143,0.3)'
+  const t = (v - min) / (max - min)
+  if (v < 0) {
+    const intensity = max <= 0 ? 1 - t : Math.min(Math.abs(v) / Math.max(Math.abs(min), 1), 1)
+    return `rgba(140,46,54,${0.2 + intensity * 0.7})`
+  }
+  const intensity = min >= 0 ? t : Math.min(v / Math.max(max, 1), 1)
+  return `rgba(47,107,75,${0.2 + intensity * 0.7})`
+}
+
+// 9px uppercase eyebrow used by the verdict strip + recessed panel headers.
+export const EYEBROW: React.CSSProperties = {
+  fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.14em',
+  textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)',
+}
+
+// 54px tool title bar: mono gold name + sans muted subtitle, right actions slot.
+export function TitleBar({ name, subtitle, right }:
+  { name: string; subtitle?: string; right?: React.ReactNode }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '0 22px', height: 54,
+      borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, minWidth: 0 }}>
+        <span style={{
+          fontFamily: 'var(--theme-mono)', fontSize: 15, fontWeight: 700,
+          letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)',
+          whiteSpace: 'nowrap',
+        }}>{name}</span>
+        {subtitle && <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: 'var(--theme-secondary, #8099b0)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{subtitle}</span>}
+      </div>
+      {right && <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>{right}</div>}
+    </div>
+  )
+}
+
+// Small title-bar action chip: ghost (default) or gold (primary).
+export function TitleAction({ label, primary }: { label: string; primary?: boolean }) {
+  return (
+    <span style={{
+      fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em',
+      textTransform: 'uppercase', padding: '6px 12px', whiteSpace: 'nowrap',
+      color: primary ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #8099b0)',
+      border: `1px solid ${primary ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.12))'}`,
+      background: primary ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)' : 'transparent',
+    }}>{label}</span>
+  )
+}
+
+export interface RangeTick { pct: number; tone: VerdictTone }
+export interface RangeLabel { text: string; pct: number; tone?: VerdictTone; anchor?: 'start' | 'center' | 'end' }
+
+// Gradient range track (bear→fair→bull, floor→now→peak, …) with positioned
+// ticks and a labels row. `gradient` is a token-built CSS string supplied by the
+// caller so colors stay on-theme.
+export function RangeTrack({ title, chip, gradient, ticks, labels }:
+  { title: string; chip?: { text: string; tone: VerdictTone };
+    gradient: string; ticks: RangeTick[]; labels: RangeLabel[] }) {
+  return (
+    <>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 9 }}>
+        <span style={EYEBROW}>{title}</span>
+        {chip && <span style={{ ...EYEBROW, letterSpacing: '0.12em', color: TONE[chip.tone] }}>{chip.text}</span>}
+      </div>
+      <div style={{ position: 'relative', height: 8, background: gradient, border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+        {ticks.map((t, i) => (
+          <div key={i} style={{ position: 'absolute', left: `${t.pct}%`, top: -4, bottom: -4, width: 2, background: TONE[t.tone] }} />
+        ))}
+      </div>
+      <RangeLabels labels={labels} />
+    </>
+  )
+}
+
+// Labels row for RangeTrack. Each label wants to sit centered on its `pct`, but
+// when values cluster the text collides. After layout we measure each label's
+// real width and nudge neighbours apart (left-to-right, then clamp the right
+// edge and push back), so positions stay close to the data without overlapping.
+function RangeLabels({ labels }: { labels: RangeLabel[] }) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const spanRefs = useRef<(HTMLSpanElement | null)[]>([])
+  const [lefts, setLefts] = useState<number[] | null>(null)
+
+  useLayoutEffect(() => {
+    const compute = () => {
+      const cont = containerRef.current
+      const W = cont?.clientWidth ?? 0
+      if (!W) return
+      const GAP = 8
+      const items = labels.map((l, i) => {
+        const w = spanRefs.current[i]?.offsetWidth ?? 0
+        const anchor = l.anchor ?? (l.pct <= 3 ? 'start' : l.pct >= 97 ? 'end' : 'center')
+        const left = anchor === 'start' ? 0
+          : anchor === 'end' ? W - w
+          : (l.pct / 100) * W - w / 2
+        return { left, w }
+      })
+      const order = items.map((_, i) => i).sort((a, b) => items[a].left - items[b].left)
+      // Forward: each label starts no earlier than the previous one's right edge.
+      for (let k = 1; k < order.length; k++) {
+        const prev = items[order[k - 1]], cur = items[order[k]]
+        cur.left = Math.max(cur.left, prev.left + prev.w + GAP)
+      }
+      // Backward: keep the last label inside the track, then push earlier ones left.
+      const last = items[order[order.length - 1]]
+      if (last.left + last.w > W) last.left = W - last.w
+      for (let k = order.length - 2; k >= 0; k--) {
+        const next = items[order[k + 1]], cur = items[order[k]]
+        cur.left = Math.min(cur.left, next.left - GAP - cur.w)
+      }
+      for (const it of items) it.left = Math.max(0, it.left)
+      setLefts(items.map(it => it.left))
+    }
+    compute()
+    const ro = new ResizeObserver(compute)
+    if (containerRef.current) ro.observe(containerRef.current)
+    return () => ro.disconnect()
+  }, [labels])
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative', height: 13, marginTop: 7 }}>
+      {labels.map((l, i) => {
+        const anchor = l.anchor ?? (l.pct <= 3 ? 'start' : l.pct >= 97 ? 'end' : 'center')
+        const fallback: React.CSSProperties = anchor === 'start' ? { left: 0 }
+          : anchor === 'end' ? { right: 0 } : { left: `${l.pct}%`, transform: 'translateX(-50%)' }
+        const pos: React.CSSProperties = lefts ? { left: lefts[i] } : fallback
+        return (
+          <span key={i} ref={el => { spanRefs.current[i] = el }}
+            style={{ position: 'absolute', top: 0, whiteSpace: 'nowrap', fontFamily: 'var(--theme-mono)', fontSize: 9, color: TONE[l.tone ?? 'muted'], ...pos }}>{l.text}</span>
+        )
+      })}
+    </div>
+  )
+}
+
+export interface VerdictCell { label: string; value: string; tone?: VerdictTone; labelTone?: VerdictTone; sub?: string }
+
+// Answer-first verdict strip: a headline figure, an optional center range track,
+// and supporting metric cells divided by vertical hairlines.
+export function VerdictStrip({ primary, range, cells }:
+  { primary: { label: string; value: string; tone?: VerdictTone; context?: string; contextTone?: VerdictTone };
+    range?: React.ReactNode; cells?: VerdictCell[] }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'stretch', flexWrap: 'wrap',
+      borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
+      background: 'var(--theme-hover, rgba(0,0,0,0.12))',
+    }}>
+      <div style={{ padding: '11px 22px', borderRight: '1px solid var(--theme-border-faint, rgba(255,255,255,0.06))', minWidth: 230 }}>
+        <div style={{ ...EYEBROW, marginBottom: 5 }}>{primary.label}</div>
+        <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 28, fontWeight: 700, lineHeight: 1, color: TONE[primary.tone ?? 'gold'] }}>{primary.value}</div>
+        {primary.context && <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: TONE[primary.contextTone ?? 'muted'], marginTop: 4 }}>{primary.context}</div>}
+      </div>
+      {range && <div style={{ flex: 1, minWidth: 280, padding: '11px 22px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>{range}</div>}
+      {cells && cells.length > 0 && (
+        range
+          // With a range track, cells are a compact group on the right.
+          ? (
+            <div style={{ flex: 'none', padding: '11px 22px', borderLeft: '1px solid var(--theme-border-faint, rgba(255,255,255,0.06))', display: 'flex', gap: 26, alignItems: 'center', flexWrap: 'wrap' }}>
+              {cells.map((c, i) => <VerdictCellView key={i} c={c} />)}
+            </div>
+          )
+          // No range: cells fill the band as even, hairline-divided stat columns
+          // so the space reads as an intentional stat bar, not empty gaps.
+          : (
+            <div style={{ flex: 1, display: 'flex', minWidth: 0 }}>
+              {cells.map((c, i) => (
+                <div key={i} style={{ flex: 1, minWidth: 0, padding: '11px 22px', borderLeft: '1px solid var(--theme-border-faint, rgba(255,255,255,0.06))', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                  <VerdictCellView c={c} />
+                </div>
+              ))}
+            </div>
+          )
+      )}
+    </div>
+  )
+}
+
+function VerdictCellView({ c }: { c: VerdictCell }) {
+  return (
+    <div>
+      <div style={{ ...EYEBROW, marginBottom: 5, color: TONE[c.labelTone ?? 'muted'] }}>{c.label}</div>
+      <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 16, fontWeight: 600, color: TONE[c.tone ?? 'text'] }}>{c.value}</div>
+      {c.sub && <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-text-dim, #5e768f)', marginTop: 2 }}>{c.sub}</div>}
     </div>
   )
 }

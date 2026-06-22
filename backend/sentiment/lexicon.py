@@ -47,6 +47,12 @@ _ENTITY_MAP: dict[str, tuple[str, str]] = {
     "MSFT": ("MSFT", "Equities"), "NVDA": ("NVDA", "Equities"), "TSLA": ("TSLA", "Equities"),
     "AMZN": ("AMZN", "Equities"), "GOOGL": ("GOOGL", "Equities"), "META": ("META", "Equities"),
     "JPM": ("JPM", "Equities"), "GS": ("GS", "Equities"), "BAC": ("BAC", "Equities"),
+    # Company names — real headlines name the company, not the ticker.
+    "APPLE": ("AAPL", "Equities"), "MICROSOFT": ("MSFT", "Equities"), "NVIDIA": ("NVDA", "Equities"),
+    "AMAZON": ("AMZN", "Equities"), "TESLA": ("TSLA", "Equities"), "META": ("META", "Equities"),
+    "FACEBOOK": ("META", "Equities"), "GOOGLE": ("GOOGL", "Equities"), "ALPHABET": ("GOOGL", "Equities"),
+    "JPMORGAN": ("JPM", "Equities"), "GOLDMAN": ("GS", "Equities"), "GOLDMAN SACHS": ("GS", "Equities"),
+    "BANK OF AMERICA": ("BAC", "Equities"),
     "XLF": ("XLF", "Equities"), "XLE": ("XLE", "Equities"), "XLK": ("XLK", "Equities"),
     "TREASURY": ("UST", "Fixed Income"), "TREASURIES": ("UST", "Fixed Income"),
     "10-YEAR": ("UST10Y", "Fixed Income"), "10Y": ("UST10Y", "Fixed Income"),
@@ -105,7 +111,10 @@ _CROSS_IMPACT_RULES: list[tuple[re.Pattern[str], list[tuple[str, str]]]] = [
      [("SPX", "Equities"), ("Trade", "Macro"), ("USD/CNY", "FX")]),
     (re.compile(r'\bSEMICONDUCTORS?\b|\bCHIP\s+(SHORTAGE|BAN|EXPORT|WAR)\b|\bAI\s+(BUBBLE|CRASH|REGULATION|BAN)\b|\bBIG\s+TECH\s+(SELL|ROUT|ANTITRUST|REGULATION)\b'),
      [("QQQ", "Equities"), ("XLK", "Equities"), ("NVDA", "Equities")]),
-    (re.compile(r'\b(EARNINGS\s+(SEASON|MISS|BEAT|DISAPPOINT|GUIDANCE|OUTLOOK)|CORPORATE\s+(PROFIT|RESULT|REVENUE|EARNINGS))\b'),
+    # Only market-wide earnings phrasing maps to the index. A single company's
+    # "earnings beat/miss" stays scoped to that company so it doesn't inherit
+    # broad-market weight.
+    (re.compile(r'\b(EARNINGS\s+SEASON|CORPORATE\s+(PROFIT|EARNINGS|RESULTS|REVENUE)|S&P\s*\d*\s*EARNINGS|MARKET\s+EARNINGS|EARNINGS\s+RECESSION)\b'),
      [("SPX", "Equities")]),
 ]
 
@@ -132,7 +141,9 @@ _PRIVATE_CO_RE = re.compile(
 _BROAD_MARKET_KW = re.compile(
     r'\b(market|stocks|equities|wall\s+street|s&p|dow\s+jones|nasdaq|'
     r'fed\b|fomc|rate\s+(cut|hike)|inflation|recession|gdp|'
-    r'treasury|yield|tariff|economy|economic|unemployment|payroll)\b',
+    r'treasury|yield|tariff|economy|economic|unemployment|payroll|'
+    r'jobless|retail\s+sales|consumer\s+(confidence|spending|sentiment)|'
+    r'\bpmi\b|\bism\b|housing|manufacturing|sector|index|indices)\b',
     re.IGNORECASE,
 )
 
@@ -147,6 +158,154 @@ _TIER4_KW = re.compile(
     r'market\s+(crash|rout|meltdown)|sanctions?|debt\s+ceiling)\b', re.IGNORECASE,
 )
 _MEGACAP = frozenset({"AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "TSLA"})
+
+# Individual companies in the entity map. An article whose only entities are these
+# — with no index, macro, rates, commodity, or FX context — is single-stock scoped
+# and gets capped below any macro/index story.
+_SINGLE_STOCK_ENTITIES = frozenset({
+    "AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "TSLA", "JPM", "GS", "BAC", "COIN",
+})
+
+# Top ~100 US companies by market cap + major banks/insurers. Each entry is
+# (canonical_ticker, pre-cap S&P impact, alias keys matched in headlines). Keys
+# are unambiguous company names / safe tickers — short or word-like tickers
+# (T, F, C, V, MA, GM, GE, SO, MO, PM, ALL, ICE, LOW, CAT, BA, DE, KEY, RF, 3M…)
+# are matched ONLY by name so everyday words don't false-match. All are
+# single-stock scoped, so each is capped below any macro/index story.
+_US_LARGECAPS: tuple[tuple[str, float, tuple[str, ...]], ...] = (
+    ("BRK.B", 0.42, ("BERKSHIRE", "BERKSHIRE HATHAWAY", "BRK.B")),
+    ("LLY",   0.42, ("ELI LILLY", "LILLY", "LLY")),
+    ("AVGO",  0.42, ("BROADCOM", "AVGO")),
+    ("V",     0.40, ("VISA",)),
+    ("WMT",   0.40, ("WALMART", "WMT")),
+    ("MA",    0.38, ("MASTERCARD",)),
+    ("XOM",   0.40, ("EXXON", "EXXON MOBIL", "EXXONMOBIL", "XOM")),
+    ("UNH",   0.40, ("UNITEDHEALTH", "UNITED HEALTH", "UNH")),
+    ("ORCL",  0.40, ("ORACLE", "ORCL")),
+    ("HD",    0.36, ("HOME DEPOT",)),
+    ("PG",    0.38, ("PROCTER & GAMBLE", "PROCTER AND GAMBLE")),
+    ("COST",  0.40, ("COSTCO", "COST")),
+    ("JNJ",   0.40, ("JOHNSON & JOHNSON", "JOHNSON AND JOHNSON", "JNJ")),
+    ("ABBV",  0.34, ("ABBVIE", "ABBV")),
+    ("NFLX",  0.38, ("NETFLIX", "NFLX")),
+    ("KO",    0.36, ("COCA-COLA", "COCA COLA", "COKE")),
+    ("CRM",   0.36, ("SALESFORCE", "CRM")),
+    ("CVX",   0.38, ("CHEVRON", "CVX")),
+    ("MRK",   0.36, ("MERCK", "MRK")),
+    ("AMD",   0.40, ("ADVANCED MICRO", "AMD")),
+    ("PEP",   0.36, ("PEPSI", "PEPSICO", "PEP")),
+    ("TMO",   0.30, ("THERMO FISHER", "TMO")),
+    ("LIN",   0.30, ("LINDE",)),
+    ("ADBE",  0.36, ("ADOBE", "ADBE")),
+    ("WFC",   0.34, ("WELLS FARGO", "WFC")),
+    ("ACN",   0.32, ("ACCENTURE", "ACN")),
+    ("MCD",   0.34, ("MCDONALD", "MCDONALDS", "MCD")),
+    ("CSCO",  0.34, ("CISCO", "CSCO")),
+    ("ABT",   0.32, ("ABBOTT", "ABT")),
+    ("GE",    0.32, ("GENERAL ELECTRIC", "GE AEROSPACE")),
+    ("DHR",   0.28, ("DANAHER", "DHR")),
+    ("IBM",   0.32, ("IBM",)),
+    ("NOW",   0.32, ("SERVICENOW",)),
+    ("TXN",   0.32, ("TEXAS INSTRUMENTS", "TXN")),
+    ("DIS",   0.34, ("DISNEY", "DIS")),
+    ("INTC",  0.34, ("INTEL", "INTC")),
+    ("INTU",  0.30, ("INTUIT", "INTU")),
+    ("CAT",   0.30, ("CATERPILLAR",)),
+    ("QCOM",  0.32, ("QUALCOMM", "QCOM")),
+    ("VZ",    0.30, ("VERIZON", "VZ")),
+    ("AMGN",  0.30, ("AMGEN", "AMGN")),
+    ("PFE",   0.32, ("PFIZER", "PFE")),
+    ("CMCSA", 0.32, ("COMCAST", "CMCSA")),
+    ("SPGI",  0.30, ("SPGI",)),
+    ("RTX",   0.30, ("RAYTHEON", "RTX")),
+    ("ISRG",  0.28, ("INTUITIVE SURGICAL", "ISRG")),
+    ("UBER",  0.32, ("UBER",)),
+    ("NEE",   0.26, ("NEXTERA", "NEXTERA ENERGY", "NEE")),
+    ("HON",   0.30, ("HONEYWELL", "HON")),
+    ("LOW",   0.30, ("LOWE'S", "LOWES")),
+    ("PM",    0.28, ("PHILIP MORRIS",)),
+    ("T",     0.30, ("AT&T",)),
+    ("BA",    0.32, ("BOEING",)),
+    ("UNP",   0.28, ("UNION PACIFIC", "UNP")),
+    ("AMAT",  0.30, ("APPLIED MATERIALS", "AMAT")),
+    ("GILD",  0.26, ("GILEAD", "GILD")),
+    ("BKNG",  0.30, ("BOOKING HOLDINGS", "BOOKING", "BKNG")),
+    ("SYK",   0.26, ("STRYKER", "SYK")),
+    ("TJX",   0.26, ("TJX", "TJ MAXX")),
+    ("VRTX",  0.26, ("VERTEX PHARMACEUTICALS", "VRTX")),
+    ("MU",    0.30, ("MICRON", "MU")),
+    ("ADP",   0.26, ("AUTOMATIC DATA", "ADP")),
+    ("MDT",   0.26, ("MEDTRONIC", "MDT")),
+    ("LRCX",  0.28, ("LAM RESEARCH", "LRCX")),
+    ("PANW",  0.28, ("PALO ALTO NETWORKS", "PANW")),
+    ("REGN",  0.26, ("REGENERON", "REGN")),
+    ("KLAC",  0.26, ("KLA CORP", "KLAC")),
+    ("SBUX",  0.30, ("STARBUCKS", "SBUX")),
+    ("NKE",   0.30, ("NIKE", "NKE")),
+    ("PLTR",  0.30, ("PALANTIR", "PLTR")),
+    ("MMM",   0.28, ("MMM",)),
+    ("CB",    0.24, ("CHUBB",)),
+    ("CVS",   0.28, ("CVS HEALTH", "CVS")),
+    ("ELV",   0.26, ("ELEVANCE", "ELEVANCE HEALTH")),
+    ("CI",    0.24, ("CIGNA",)),
+    ("HUM",   0.22, ("HUMANA",)),
+    ("MO",    0.24, ("ALTRIA",)),
+    ("SO",    0.22, ("SOUTHERN COMPANY",)),
+    ("DUK",   0.22, ("DUKE ENERGY",)),
+    ("ZTS",   0.24, ("ZOETIS", "ZTS")),
+    ("BMY",   0.26, ("BRISTOL MYERS", "BRISTOL-MYERS", "BMY")),
+    ("SHW",   0.24, ("SHERWIN-WILLIAMS", "SHERWIN WILLIAMS", "SHW")),
+    ("ICE",   0.24, ("INTERCONTINENTAL EXCHANGE",)),
+    ("CME",   0.24, ("CME GROUP",)),
+    ("DE",    0.28, ("DEERE", "JOHN DEERE")),
+    ("GD",    0.24, ("GENERAL DYNAMICS",)),
+    ("LMT",   0.28, ("LOCKHEED", "LOCKHEED MARTIN", "LMT")),
+    ("NOC",   0.24, ("NORTHROP", "NORTHROP GRUMMAN", "NOC")),
+    ("MMC",   0.24, ("MARSH MCLENNAN", "MARSH & MCLENNAN", "MMC")),
+    ("BX",    0.28, ("BLACKSTONE",)),
+    ("BLK",   0.30, ("BLACKROCK", "BLK")),
+    ("F",     0.26, ("FORD",)),
+    ("GM",    0.26, ("GENERAL MOTORS",)),
+    ("TGT",   0.26, ("TGT", "TARGET CORP")),
+    ("PYPL",  0.26, ("PAYPAL", "PYPL")),
+)
+
+_US_BANKS: tuple[tuple[str, float, tuple[str, ...]], ...] = (
+    ("C",    0.30, ("CITIGROUP", "CITIBANK", "CITI")),
+    ("MS",   0.30, ("MORGAN STANLEY",)),
+    ("USB",  0.24, ("U.S. BANCORP", "US BANCORP", "USB")),
+    ("PNC",  0.24, ("PNC FINANCIAL", "PNC BANK", "PNC")),
+    ("TFC",  0.22, ("TRUIST", "TFC")),
+    ("COF",  0.24, ("CAPITAL ONE", "COF")),
+    ("SCHW", 0.26, ("CHARLES SCHWAB", "SCHWAB", "SCHW")),
+    ("BK",   0.22, ("BNY MELLON", "BANK OF NEW YORK", "BNY")),
+    ("STT",  0.20, ("STATE STREET", "STT")),
+    ("NTRS", 0.18, ("NORTHERN TRUST", "NTRS")),
+    ("AXP",  0.28, ("AMERICAN EXPRESS", "AMEX", "AXP")),
+    ("FITB", 0.16, ("FIFTH THIRD", "FITB")),
+    ("MTB",  0.16, ("M&T BANK", "MTB")),
+    ("HBAN", 0.16, ("HUNTINGTON BANCSHARES", "HBAN")),
+    ("RF",   0.16, ("REGIONS FINANCIAL",)),
+    ("CFG",  0.16, ("CITIZENS FINANCIAL", "CFG")),
+    ("KEY",  0.16, ("KEYCORP",)),
+    ("CMA",  0.16, ("COMERICA",)),
+    ("ZION", 0.14, ("ZIONS BANCORP", "ZIONS", "ZION")),
+    ("DFS",  0.20, ("DISCOVER FINANCIAL", "DFS")),
+    ("SYF",  0.18, ("SYNCHRONY", "SYF")),
+    ("ALLY", 0.18, ("ALLY FINANCIAL",)),
+    ("AIG",  0.22, ("AMERICAN INTERNATIONAL", "AIG")),
+    ("MET",  0.22, ("METLIFE",)),
+    ("PRU",  0.20, ("PRUDENTIAL FINANCIAL",)),
+    ("TRV",  0.22, ("TRAVELERS COMPANIES", "TRV")),
+    ("PGR",  0.24, ("PROGRESSIVE CORP", "PGR")),
+    ("ALL",  0.20, ("ALLSTATE",)),
+)
+
+for _tkr, _imp, _aliases in _US_LARGECAPS + _US_BANKS:
+    for _alias in _aliases:
+        _ENTITY_MAP.setdefault(_alias.upper(), (_tkr, "Equities"))
+    _SPX_ENTITY_IMPACT.setdefault(_tkr, _imp)
+_SINGLE_STOCK_ENTITIES = _SINGLE_STOCK_ENTITIES | {c[0] for c in _US_LARGECAPS + _US_BANKS}
 
 # ── Finance lexicon: term -> (polarity ∈ [-1,1], salience > 0) ─────────────────
 # Multi-word phrases are matched first; ambiguous movement verbs are scoped to a
@@ -315,13 +474,39 @@ def extract_entities(text: str) -> list[Entity]:
     return [{"name": k, "asset_class": v} for k, v in found.items()]
 
 
+def is_relevant(title: str, entities: list[Entity]) -> bool:
+    """True when the article touches the broad market: it names a recognized
+    financial entity (direct or cross-impact) or a broad-market keyword. Articles
+    with neither are off-topic noise and are dropped before scoring."""
+    return bool(entities) or bool(_BROAD_MARKET_KW.search(title))
+
+
+def is_single_stock_scoped(title: str, entities: list[Entity]) -> bool:
+    """True when the article is about individual companies only — at least one
+    single-stock entity, no index/macro/rates/commodity/FX entity, and no
+    broad-market keyword."""
+    if not entities:
+        return False
+    names = {e["name"] for e in entities}
+    if not (names & _SINGLE_STOCK_ENTITIES):
+        return False
+    if names - _SINGLE_STOCK_ENTITIES:          # any broader entity present
+        return False
+    return not _BROAD_MARKET_KW.search(title)
+
+
 def market_impact_weight(title: str, entities: list[Entity]) -> float:
-    """0..1 relevance of this article to broad S&P 500 direction."""
+    """0..1 relevance of this article to broad S&P 500 direction. Single-stock
+    stories are capped so an individual name never out-weights a macro/index
+    story of the same tier."""
     if _PRIVATE_CO_RE.search(title):
         return 0.05
     if not entities:
         return 0.65 if _BROAD_MARKET_KW.search(title) else 0.15
-    return max((_SPX_ENTITY_IMPACT.get(e["name"], 0.15) for e in entities), default=0.15)
+    impact = max((_SPX_ENTITY_IMPACT.get(e["name"], 0.15) for e in entities), default=0.15)
+    if is_single_stock_scoped(title, entities):
+        impact = min(impact, config.SINGLE_STOCK_IMPACT_CAP)
+    return impact
 
 
 def derive_tier(title: str, entities: list[Entity]) -> int:

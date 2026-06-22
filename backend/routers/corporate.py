@@ -492,6 +492,33 @@ async def get_supply_chain(ticker: str):
                 geo_segments     = _fmp.get_geo_segments(symbol)
         except Exception:
             pass
+        if product_segments.get("latest"):
+            product_segments["source"] = "fmp"
+        if geo_segments.get("latest"):
+            geo_segments["source"] = "fmp"
+
+        # Backup: when FMP segments are empty (e.g. rate-limited), fall back to the
+        # free SEC EDGAR 10-K breakdown (product and geography) so the page still
+        # shows data, tagged source=sec.
+        def _edgar_backup(block, fetch):
+            if block.get("latest"):
+                return block
+            try:
+                sec = fetch(symbol)
+                if sec.get("latest"):
+                    return {
+                        **dict(_fmp.EMPTY_SEGMENTS),
+                        "fiscalYear": sec.get("fiscalYear"),
+                        "currency":   sec.get("currency") or "USD",
+                        "latest":     sec["latest"],
+                        "source":     "sec",
+                    }
+            except Exception:
+                pass
+            return block
+        import sec_segments
+        product_segments = _edgar_backup(product_segments, sec_segments.get_segment_revenue)
+        geo_segments     = _edgar_backup(geo_segments, sec_segments.get_geo_revenue)
 
         peers = _get_peers_for_ticker(symbol, info.get("sector", ""))
 

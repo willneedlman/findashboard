@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Skeleton shimmer for loading placeholders (disabled under reduced-motion below). */
+@keyframes ft-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 @layer base {
   html, body, #root {
     @apply bg-navy-900 font-serif;
@@ -418,6 +424,27 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus
   outline: none;
   box-shadow: 0 0 0 2px var(--theme-bg, #101c2e), 0 0 0 4px color-mix(in srgb, var(--theme-primary) 55%, transparent);
 }
+
+/* Skip-to-content: off-screen until a keyboard user focuses it, then pinned
+   top-left so they can jump past the 30+ item sidebar on every page. */
+.skip-link {
+  position: absolute;
+  left: 8px;
+  top: -56px;
+  z-index: 100;
+  padding: 8px 14px;
+  background: var(--theme-surface, #142032);
+  color: var(--theme-primary, #c9a84c);
+  border: 1px solid color-mix(in srgb, var(--theme-primary) 45%, transparent);
+  font-family: var(--theme-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: top 150ms var(--ease-out);
+}
+.skip-link:focus { top: 8px; }
 
 /* Smooth in-page scrolling (anchor jumps, scrollIntoView). */
 html { scroll-behavior: smooth; }

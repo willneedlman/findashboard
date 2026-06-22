@@ -95,17 +95,23 @@ def _score_window(
     in_window = 0
     for spec in specs:
         windowed = [a for a in raw_by_label.get(spec.label, []) if a.published_at >= cutoff]
-        in_window += len(windowed)
+        # Drop off-topic noise up front: only market-relevant articles (a financial
+        # entity or a broad-market keyword) are scored, counted, or shown.
+        relevant: list[tuple[Any, list]] = []
+        for a in windowed:
+            ents = lexicon.extract_entities(a.title)
+            if not config.REQUIRE_MARKET_RELEVANCE or lexicon.is_relevant(a.title, ents):
+                relevant.append((a, ents))
+        in_window += len(relevant)
         # max(0, age): a future-dated / malformed timestamp must not produce a
         # recency_weight > 1 that lets one bad item dominate the composite.
-        windowed.sort(
-            key=lambda a: math.exp(-max(0.0, (now - a.published_at) / 3600.0) / decay_half) * a.engagement_weight,
+        relevant.sort(
+            key=lambda ae: math.exp(-max(0.0, (now - ae[0].published_at) / 3600.0) / decay_half) * ae[0].engagement_weight,
             reverse=True,
         )
-        for art in windowed[:config.PER_SOURCE_SCORE_CAP]:
+        for art, entities in relevant[:config.PER_SOURCE_SCORE_CAP]:
             age_h = max(0.0, (now - art.published_at) / 3600.0)
             recency = round(math.exp(-age_h / decay_half), 4)
-            entities = lexicon.extract_entities(art.title)
             lex = lexicon.score_text(art.title, entities)
             conf = min(lex.confidence, spec.confidence_cap)
             scored.append(ScoredArticle(

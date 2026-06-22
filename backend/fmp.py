@@ -11,6 +11,7 @@ Set FMP_API_KEY in backend/.env or as an environment variable.
 
 import os
 import re
+import time
 import threading
 import concurrent.futures
 import requests
@@ -53,21 +54,71 @@ def available() -> bool:
     return bool(_API_KEY and _API_KEY not in ("", "your_key_here"))
 
 
+# ── Passive rate-limit tracking ───────────────────────────────────────────────
+# We don't live-probe FMP (it burns metered quota), so the health monitor can't
+# otherwise see a 429. Instead, record 429s observed on real app calls and expose
+# a rolling status the /health probe reads — so throttling shows up automatically.
+_RL_WINDOW = 300.0                       # seconds a 429 is considered "recent"
+_rl_lock = threading.Lock()
+_rl_hits: list[float] = []               # timestamps of recent 429s
+
+
+def _is_rate_limit(exc: Exception) -> bool:
+    if isinstance(exc, requests.HTTPError) and exc.response is not None:
+        return exc.response.status_code == 429
+    return "429" in str(exc) or "too many" in str(exc).lower()
+
+
+def _note_rate_limit() -> None:
+    now = time.time()
+    with _rl_lock:
+        _rl_hits.append(now)
+        # keep only the rolling window
+        cutoff = now - _RL_WINDOW
+        while _rl_hits and _rl_hits[0] < cutoff:
+            _rl_hits.pop(0)
+
+
+def rate_limit_status() -> dict:
+    """Rolling FMP rate-limit health from observed 429s on real calls."""
+    now = time.time()
+    cutoff = now - _RL_WINDOW
+    with _rl_lock:
+        recent = [t for t in _rl_hits if t >= cutoff]
+        last = _rl_hits[-1] if _rl_hits else None
+    return {
+        "rate_limited": bool(recent),
+        "recent_count": len(recent),
+        "window_sec": int(_RL_WINDOW),
+        "last_seconds_ago": round(now - last, 1) if last else None,
+    }
+
+
 def _get(path: str, params: dict | None = None) -> list | dict:
     p = dict(params or {})
     p["apikey"] = _API_KEY
-    r = _session.get(f"{_BASE}{path}", params=p, timeout=_TIMEOUT)
-    r.raise_for_status()
-    return r.json()
+    try:
+        r = _session.get(f"{_BASE}{path}", params=p, timeout=_TIMEOUT)
+        r.raise_for_status()
+        return r.json()
+    except requests.exceptions.RequestException as e:
+        if _is_rate_limit(e):
+            _note_rate_limit()
+        raise
 
 
 def _get_v4(path: str, params: dict | None = None) -> list | dict:
     """FMP v4 API — broader coverage for segment data and other endpoints."""
     p = dict(params or {})
     p["apikey"] = _API_KEY
-    r = _session.get(f"https://financialmodelingprep.com/api/v4{path}", params=p, timeout=_TIMEOUT)
-    r.raise_for_status()
-    return r.json()
+    try:
+        r = _session.get(f"https://financialmodelingprep.com/api/v4{path}", params=p, timeout=_TIMEOUT)
+        r.raise_for_status()
+        return r.json()
+    except requests.exceptions.RequestException as e:
+        if _is_rate_limit(e):
+            _note_rate_limit()
+        raise
 
 
 def _cached(cache: TTLCache, key: str, fetch_fn):

@@ -3,6 +3,7 @@ import { createChart, ColorType, CrosshairMode } from 'lightweight-charts'
 import type { IChartApi, ISeriesApi } from 'lightweight-charts'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 import { readToken } from '../../../lib/theme'
+import { ChevronsRight } from 'lucide-react'
 
 const PERIODS = [
   { label: '1M', value: '1mo' },
@@ -29,10 +30,14 @@ export default function TradingViewChart({ config }: { config: WidgetConfig }) {
   const chartRef      = useRef<IChartApi | null>(null)
   const candleRef     = useRef<ISeriesApi<'Candlestick'> | null>(null)
   const volumeRef     = useRef<ISeriesApi<'Histogram'> | null>(null)
+  const lenRef        = useRef(0)
+  const awayRef       = useRef(false)
 
   const [period, setPeriod]   = useState('1y')
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState<string | null>(null)
+  // True when zoomed/panned away from the full fit → show the snap-back button.
+  const [isAway, setIsAway]   = useState(false)
   const [crosshair, setCrosshair] = useState<{ date: string; open: number; high: number; low: number; close: number; pct: number } | null>(null)
 
   // Create chart once
@@ -115,12 +120,25 @@ export default function TradingViewChart({ config }: { config: WidgetConfig }) {
     candleRef.current = candle
     volumeRef.current = volume
 
+    // The default view is fitContent (the full series). Offer snap-back when the
+    // view is zoomed in or panned so it no longer covers the whole range.
+    const tscale = chart.timeScale()
+    const onRange = (range: { from: number; to: number } | null) => {
+      const n = lenRef.current
+      if (!range || n < 2) return
+      // Only when the latest candle is out of view; hides once it's back in sight.
+      const away = (n - 1) - range.to > 2
+      if (away !== awayRef.current) { awayRef.current = away; setIsAway(away) }
+    }
+    tscale.subscribeVisibleLogicalRangeChange(onRange)
+
     const ro = new ResizeObserver(() => {
       if (el) chart.resize(el.clientWidth, el.clientHeight)
     })
     ro.observe(el)
 
     return () => {
+      tscale.unsubscribeVisibleLogicalRangeChange(onRange)
       ro.disconnect()
       chart.remove()
       chartRef.current  = null
@@ -140,6 +158,7 @@ export default function TradingViewChart({ config }: { config: WidgetConfig }) {
       if (!candles?.length) throw new Error('no data')
       candleRef.current?.setData(candles.map(c => ({ time: c.time as `${number}-${number}-${number}`, open: c.open, high: c.high, low: c.low, close: c.close })))
       volumeRef.current?.setData(candles.map(c => ({ time: c.time as `${number}-${number}-${number}`, value: c.volume, color: c.close >= c.open ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)' })))
+      lenRef.current = candles.length
       chartRef.current?.timeScale().fitContent()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load')
@@ -154,6 +173,7 @@ export default function TradingViewChart({ config }: { config: WidgetConfig }) {
 
   const pos  = crosshair?.pct != null && crosshair.pct >= 0
   const pctColor = pos ? 'var(--theme-positive, #22c55e)' : 'var(--theme-negative, #ef4444)'
+  const snapBack = () => chartRef.current?.timeScale().fitContent()
 
   return (
     <div style={{ height: '100%', minHeight: 300, display: 'flex', flexDirection: 'column', background: 'var(--theme-bg, #101c2e)', overflow: 'hidden' }}>
@@ -171,6 +191,21 @@ export default function TradingViewChart({ config }: { config: WidgetConfig }) {
             <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: 'var(--theme-secondary, #5e768f)' }}>Chart unavailable</div>
             <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.18))' }}>{error}</div>
           </div>
+        )}
+        {isAway && !loading && !error && (
+          <button onClick={snapBack} title="Snap back to latest" aria-label="Snap back to latest"
+            style={{
+              position: 'absolute', right: 52, bottom: 14, zIndex: 5,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34,
+              background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 12%, var(--theme-surface, #1f2a3d))',
+              border: '1.5px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 55%, transparent)',
+              borderRadius: 8, cursor: 'pointer', color: 'var(--theme-primary, #c9a84c)',
+              boxShadow: '0 2px 10px rgba(0,0,0,0.28)', transition: 'background 0.15s ease',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'color-mix(in srgb, var(--theme-primary, #c9a84c) 24%, var(--theme-surface, #1f2a3d))' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'color-mix(in srgb, var(--theme-primary, #c9a84c) 12%, var(--theme-surface, #1f2a3d))' }}>
+            <ChevronsRight size={18} strokeWidth={2.5} />
+          </button>
         )}
       </div>
     </div>

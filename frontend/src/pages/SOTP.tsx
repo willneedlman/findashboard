@@ -7,7 +7,7 @@ import MetricCard from '../components/MetricCard'
 import EmptyState from '../components/EmptyState'
 import { useChartColors } from '../hooks/useChartColors'
 import {
-  INPUT, LABEL, HINT, SIDEBAR, SECTION, RailSection, PRIMARY_BTN, GHOST_BTN, READOUT_ROW, TOOLTIP_STYLE, TOOLTIP_LABEL,
+  INPUT, LABEL, SIDEBAR, SECTION, RailSection, PRIMARY_BTN, GHOST_BTN, READOUT_ROW, TOOLTIP_STYLE, TOOLTIP_LABEL,
   TOOLTIP_ITEM, TOOLTIP_CURSOR, TICK, TH, TD, PANEL, METRIC_GRID, STACK, fmtM, ChartPanel,
 } from './valuationShared'
 
@@ -27,9 +27,19 @@ export function SOTPContent() {
   const [sector, setSector] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // How far to pull each tagged segment toward its pure-play peer multiple. 0 =
+  // keep the company's own blended multiple; 1 = full peer comp. Blending avoids
+  // the SOTP collapsing when a premium franchise is valued at commodity comps.
+  const [peerWeight, setPeerWeight] = useState(0.5)
 
   const blended = data?.suggested_multiple ?? null
   const sectorPS = data?.sector_ps ?? {}
+
+  // Segment multiple = peerWeight·peer + (1−peerWeight)·blended.
+  const weightedMult = (peer: number, w: number) => {
+    const b = blended ?? peer
+    return Math.round((w * peer + (1 - w) * b) * 100) / 100
+  }
 
   async function load() {
     setLoading(true); setError(null)
@@ -56,19 +66,31 @@ export function SOTPContent() {
     }
   }
 
-  // Tag a segment to a peer group and apply that group's P/S immediately. An empty
-  // selection clears the tag and falls back to the blended multiple.
+  // Tag a segment to a peer group and apply the peer-weighted P/S immediately. An
+  // empty selection clears the tag and falls back to the blended multiple.
   function applySector(segName: string, sec: string) {
     setSector(s => ({ ...s, [segName]: sec }))
     const ps = sectorPS[sec]
-    setMult(m => ({ ...m, [segName]: ps != null ? ps : (blended ?? m[segName]) }))
+    setMult(m => ({ ...m, [segName]: ps != null ? weightedMult(ps, peerWeight) : (blended ?? m[segName]) }))
   }
   function applyPeerAll() {
     setMult(m => {
       const next = { ...m }
       for (const s of data?.segments ?? []) {
         const ps = sectorPS[sector[s.name]]
-        if (ps != null) next[s.name] = ps
+        if (ps != null) next[s.name] = weightedMult(ps, peerWeight)
+      }
+      return next
+    })
+  }
+  // Live: moving the weight re-blends every tagged segment.
+  function changeWeight(w: number) {
+    setPeerWeight(w)
+    setMult(m => {
+      const next = { ...m }
+      for (const s of data?.segments ?? []) {
+        const ps = sectorPS[sector[s.name]]
+        if (ps != null) next[s.name] = weightedMult(ps, w)
       }
       return next
     })
@@ -115,9 +137,17 @@ export function SOTPContent() {
               </div>
             )}
             {blended != null && (
-              <div style={{ ...HINT, marginTop: -6 }}>
-                Seeded at the blended {blended.toFixed(2)}x (current price). Tag a segment to its
-                peer group to value it on pure-play comps instead.
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+                  <label style={{ ...LABEL, marginBottom: 0 }}>Peer weight</label>
+                  <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-primary, #c9a84c)' }}>{Math.round(peerWeight * 100)}%</span>
+                </div>
+                <input type="range" min={0} max={1} step={0.05} value={peerWeight}
+                  onChange={e => changeWeight(Number(e.target.value))}
+                  style={{ width: '100%', accentColor: 'var(--theme-primary, #c9a84c)' }} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--theme-mono)', fontSize: 8.5, color: 'var(--theme-secondary, #99907e)' }}>
+                  <span>company blended</span><span>pure peer</span>
+                </div>
               </div>
             )}
             {calc.rows.map(r => (
@@ -192,9 +222,10 @@ export function SOTPContent() {
                 {calc.rows.map(r => {
                   const sel = sector[r.name]
                   const peer = sectorPS[sel]
-                  const onBlended = blended != null && Math.abs(r.mult - blended) < 0.001
-                  const onPeer = peer != null && Math.abs(r.mult - peer) < 0.001
-                  const basis = onBlended ? 'Blended' : onPeer ? sel : 'Custom'
+                  const weighted = peer != null ? weightedMult(peer, peerWeight) : null
+                  const onBlended = blended != null && Math.abs(r.mult - blended) < 0.01
+                  const onPeer = weighted != null && Math.abs(r.mult - weighted) < 0.01
+                  const basis = onBlended ? 'Blended' : onPeer ? `${sel} · ${Math.round(peerWeight * 100)}% peer` : 'Custom'
                   return (
                     <tr key={r.name}>
                       <td style={{ ...TD, textAlign: 'left', fontWeight: 700 }}>

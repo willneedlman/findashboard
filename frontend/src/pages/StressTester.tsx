@@ -174,7 +174,7 @@ export default function StressTester() {
 
   return (
     <PageWrapper>
-      <div id="stress-tester-content" style={{ maxWidth: 1100, margin: '0 auto' }}>
+      <div id="stress-tester-content" style={{ width: '100%' }}>
 
         <PageHeader
           title="Portfolio Stress Tester"

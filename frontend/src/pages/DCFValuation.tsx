@@ -77,7 +77,8 @@ function computeDCF(
   return { fcfs, pvFcfs, terminalValue, ev, equity, ips }
 }
 
-import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
+import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection, RangeTrack } from './valuationShared'
+import { T } from '../lib/theme'
 
 function ChartPanel({ label, height, children }: { label: string; height: number; children: React.ReactNode }) {
   return (
@@ -385,6 +386,32 @@ export function DCFValuationContent() {
 
           {data && (
             <>
+              {/* Valuation range bar */}
+              {data.market_price != null && (() => {
+                const intrinsic = data.intrinsic_per_share
+                const price = data.market_price
+                const bear = Math.min(sensiMin, intrinsic, price)
+                const bull = Math.max(sensiMax, intrinsic, price)
+                if (bull <= bear) return null
+                const up = upside ?? 0
+                const verdict = up > 10 ? 'Undervalued' : up > 2 ? 'Modestly undervalued'
+                  : up >= -2 ? 'Fairly valued' : up >= -10 ? 'Modestly overvalued' : 'Overvalued'
+                const clamp = (x: number) => Math.max(0, Math.min(100, x))
+                return (
+                  <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '12px 16px' }}>
+                    <RangeTrack title="Valuation range"
+                      chip={{ text: `${verdict} · ${up >= 0 ? '+' : '−'}${Math.abs(up).toFixed(1)}%`, tone: up >= 0 ? 'pos' : 'neg' }}
+                      gradient={`linear-gradient(90deg, ${T.posTint(35)}, color-mix(in srgb, var(--theme-secondary) 22%, transparent), ${T.negTint(35)})`}
+                      ticks={[{ pct: clamp((intrinsic - bear) / (bull - bear) * 100), tone: 'gold' }, { pct: clamp((price - bear) / (bull - bear) * 100), tone: 'text' }]}
+                      labels={[
+                        { text: `$${sensiMin.toFixed(0)} bear`, pct: clamp((sensiMin - bear) / (bull - bear) * 100), tone: 'muted' },
+                        { text: `fair $${intrinsic.toFixed(2)}`, pct: clamp((intrinsic - bear) / (bull - bear) * 100), tone: 'gold' },
+                        { text: `price $${price.toFixed(2)}`, pct: clamp((price - bear) / (bull - bear) * 100), tone: 'text' },
+                        { text: `$${sensiMax.toFixed(0)} bull`, pct: clamp((sensiMax - bear) / (bull - bear) * 100), tone: 'muted' },
+                      ]} />
+                  </div>
+                )
+              })()}
               {/* Pre-profit warning */}
               {data.isPreProfit && (
                 <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', borderLeft: '4px solid var(--theme-primary, #c9a84c)', padding: '8px 14px' }}>
@@ -445,15 +472,24 @@ export function DCFValuationContent() {
               {/* FCF chart — Revenue bars (left axis) + FCF/PV lines (right axis) */}
               <ChartPanel label="10-Year Free Cash Flow Projections ($M)" height={268}>
                 <ResponsiveContainer width="100%" height={240}>
-                  <ComposedChart data={data.fcfs}>
+                  <ComposedChart data={[...data.fcfs, { year: 'TV', revenue: data.terminal_value }]}>
                     <CartesianGrid strokeDasharray="3 3" stroke={cc.gridLine} />
-                    <XAxis dataKey="year" tick={TICK} tickFormatter={y => `Y${y}`} />
+                    <XAxis dataKey="year" tick={TICK} tickFormatter={(y: number | string) => y === 'TV' ? 'TV' : `Y${y}`} />
                     <YAxis yAxisId="rev" orientation="left"  tick={TICK} tickFormatter={v => `$${(v / 1000).toFixed(0)}B`} width={44} />
                     <YAxis yAxisId="fcf" orientation="right" tick={TICK} tickFormatter={v => fmtM(v)} width={56} />
                     <Tooltip formatter={(v: number, name: string) => [fmtM(v), name]} contentStyle={cc.tooltipStyle} cursor={{ fill: 'var(--theme-hover, rgba(255,255,255,0.04))' }} />
-                    <Legend wrapperStyle={{ fontSize: 10 }} />
+                    <Legend wrapperStyle={{ fontSize: 10 }} payload={[
+                      { value: 'Revenue', type: 'rect', id: 'rev', color: cc.c2 },
+                      { value: 'Terminal Value', type: 'rect', id: 'tv', color: cc.primary },
+                      { value: 'Free Cash Flow', type: 'line', id: 'fcf', color: cc.gain },
+                      { value: 'PV of FCF', type: 'line', id: 'pv', color: cc.primary },
+                    ]} />
                     <ReferenceLine yAxisId="fcf" y={0} stroke="var(--theme-text-faint, rgba(255,255,255,0.15))" />
-                    <Bar yAxisId="rev" dataKey="revenue" name="Revenue" fill={cc.c2} opacity={0.55} />
+                    <Bar yAxisId="rev" dataKey="revenue" name="Revenue / Terminal Value" fill={cc.c2}>
+                      {[...data.fcfs, { year: 'TV' }].map((d: { year: number | string }, i: number) => (
+                        <Cell key={i} fill={d.year === 'TV' ? cc.primary : cc.c2} fillOpacity={d.year === 'TV' ? 0.85 : 0.55} />
+                      ))}
+                    </Bar>
                     <Line yAxisId="fcf" type="monotone" dataKey="fcf"    name="Free Cash Flow" stroke={cc.gain}    strokeWidth={2} dot={{ r: 3, fill: cc.gain }}    activeDot={{ r: 5 }} />
                     <Line yAxisId="fcf" type="monotone" dataKey="pv_fcf" name="PV of FCF"      stroke={cc.primary} strokeWidth={2} dot={{ r: 3, fill: cc.primary }} activeDot={{ r: 5 }} strokeDasharray="4 2" />
                   </ComposedChart>

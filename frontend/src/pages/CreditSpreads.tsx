@@ -107,7 +107,7 @@ export function CreditSpreadsContent() {
   })
 
   return (
-      <div id="credit-spreads-content" style={{ maxWidth: 1100, margin: '0 auto' }}>
+      <div id="credit-spreads-content" style={{ width: '100%' }}>
         <PageHeader
           title="Credit Spread Monitor"
         />

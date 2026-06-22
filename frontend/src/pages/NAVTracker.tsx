@@ -6,7 +6,8 @@ import MetricCard from '../components/MetricCard'
 import SidebarLayout from '../components/SidebarLayout'
 import { fetchNAVProxy, fetchNAVRegistry } from '../hooks/useApi'
 import EmptyState from '../components/EmptyState'
-import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
+import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection, VerdictStrip, RangeTrack } from './valuationShared'
+import { T } from '../lib/theme'
 
 function ChartPanel({ label, height, children }: { label: string; height: number; children: React.ReactNode }) {
   return (
@@ -174,6 +175,41 @@ export default function NAVTracker() {
 
           {data && (
             <>
+              {/* Verdict strip — Market/NAV multiple + premium range */}
+              {(() => {
+                const c = data.current
+                const nav = c.nav_per_share
+                const mult = nav > 0 ? c.target_price / nav : 0
+                const prem = c.premium
+                const mults = ((data.series ?? []) as { premium: number }[])
+                  .map(s => 1 + s.premium / 100).filter(m => isFinite(m)).sort((a, b) => a - b)
+                const floor = mults.length ? mults[0] : mult
+                const peak = mults.length ? mults[mults.length - 1] : mult
+                const median = mults.length ? mults[Math.floor(mults.length / 2)] : mult
+                const clamp = (x: number) => Math.max(0, Math.min(100, x))
+                const pct = (v: number) => peak > floor ? clamp((v - floor) / (peak - floor) * 100) : 50
+                return (
+                  <VerdictStrip
+                    primary={{ label: 'Market / NAV', value: `${mult.toFixed(2)}×`, tone: 'gold',
+                      context: `${prem >= 0 ? '+' : ''}${prem}% premium to NAV`, contextTone: prem >= 0 ? 'pos' : 'neg' }}
+                    range={mults.length >= 3 ? (
+                      <RangeTrack title="Premium range"
+                        chip={{ text: `now ${mult.toFixed(2)}× · median ${median.toFixed(2)}×`, tone: 'muted' }}
+                        gradient={`linear-gradient(90deg, ${T.posTint(32)}, color-mix(in srgb, var(--theme-secondary) 22%, transparent), ${T.negTint(32)})`}
+                        ticks={[{ pct: pct(median), tone: 'muted' }, { pct: pct(mult), tone: 'gold' }]}
+                        labels={[
+                          { text: `${floor.toFixed(2)}× floor`, pct: 0, tone: 'muted' },
+                          { text: `now ${mult.toFixed(2)}×`, pct: pct(mult), tone: 'gold' },
+                          { text: `${peak.toFixed(2)}× peak`, pct: 100, tone: 'muted' },
+                        ]} />
+                    ) : undefined}
+                    cells={[
+                      { label: `${p.target} price`, value: `$${c.target_price.toLocaleString()}` },
+                      { label: 'NAV / share', value: `$${nav.toLocaleString()}`, tone: 'blue' },
+                    ]}
+                  />
+                )
+              })()}
               <div className="metric-grid">
                 <MetricCard label={`${p.target} Price`} value={`$${data.current.target_price.toLocaleString()}`}
                   help={`Live market price of ${p.target}. Compared against net NAV floor to determine premium or discount.`} />

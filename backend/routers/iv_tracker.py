@@ -25,6 +25,7 @@ from scipy.optimize import brentq
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from cache import get_history
 import options_data
+from validation import validate_ticker
 from scipy.stats import norm
 
 logger = logging.getLogger(__name__)
@@ -224,7 +225,7 @@ def iv_rank_percentile(iv_series: list[float],
 @router.get("/expirations")
 def get_expirations(ticker: str = Query(..., description="e.g. AAPL")):
     """List all future expiration dates available for a ticker."""
-    sym = ticker.strip().upper()
+    sym = validate_ticker(ticker)
     try:
         exps  = options_data.get_expirations(sym)
         today = date.today().isoformat()
@@ -245,7 +246,7 @@ def get_strikes(
     option_type: str = Query("call", pattern="^(call|put)$"),
 ):
     """Return all available strikes for a given expiry + type, plus the ATM strike."""
-    sym = ticker.strip().upper()
+    sym = validate_ticker(ticker)
     try:
         chain = options_data.get_chain(sym, expiry)
         df    = chain.calls if option_type == "call" else chain.puts

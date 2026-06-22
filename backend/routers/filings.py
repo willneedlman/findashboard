@@ -31,7 +31,7 @@ _filing_cache:     TTLCache = TTLCache(maxsize=200, ttl=3600)
 _lock = threading.Lock()
 # Bump to invalidate cached EDGAR context + summaries after a fetch-logic change
 # (e.g. the annual-10-K/annual-financials fix).
-_CACHE_VER = "v3"
+_CACHE_VER = "v5"
 
 
 # ── SEC EDGAR helpers ─────────────────────────────────────────────────────────
@@ -40,6 +40,7 @@ _EDGAR_HEADERS = {"User-Agent": "FinanceTerminal research@finterm.io"}
 
 # Module-level cache so we only download the 5 MB company_tickers.json once per process
 _cik_by_ticker: dict[str, str] = {}
+_name_by_ticker: dict[str, str] = {}
 _company_tickers_loaded = False
 
 def _ensure_company_tickers():
@@ -55,6 +56,9 @@ def _ensure_company_tickers():
             t = entry.get("ticker", "")
             if t:
                 _cik_by_ticker[t.upper()] = str(entry["cik_str"]).zfill(10)
+                title = entry.get("title", "")
+                if title:
+                    _name_by_ticker[t.upper()] = title.title()
         _company_tickers_loaded = True
     except Exception as e:
         logger.warning("company_tickers.json load failed: %s", e)
@@ -83,12 +87,14 @@ def _get_recent_filings(ticker: str, form_types: list[str]) -> list[dict]:
         dates   = filings.get("filingDate", [])
         accessions = filings.get("accessionNumber", [])
         primary_docs = filings.get("primaryDocument", [])
+        items_col = filings.get("items", [])
         results = []
-        for form, date, acc, doc in zip(forms, dates, accessions, primary_docs):
+        for idx, (form, date, acc, doc) in enumerate(zip(forms, dates, accessions, primary_docs)):
             if form in form_types:
                 acc_clean = acc.replace("-", "")
                 url = f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{acc_clean}/{doc}"
-                results.append({"form": form, "date": date, "url": url, "accession": acc})
+                items = items_col[idx] if idx < len(items_col) else ""
+                results.append({"form": form, "date": date, "url": url, "accession": acc, "items": items})
                 # Scan deep enough to capture a 10-K even amid the more frequent
                 # 10-Qs (a 10-K can be 3+ filings back).
                 if len(results) >= 12:
@@ -365,7 +371,25 @@ def _finalise_period(result: dict, ticker: str, annual: bool, cur_year: int) -> 
         result["quarter"] = f"FY{m.group(1)}"
 
 
-def _summarise_with_claude(ticker: str, context: str, annual: bool = False) -> dict:
+def _income_period_label(row: dict | None) -> str | None:
+    """Fiscal-period label for one income-statement row, e.g. 'Q1 FY2027',
+    'Q3 2025', or 'FY2025'. Used to label each per-filing card with its own
+    period rather than the latest one."""
+    row = row or {}
+    period = str(row.get("period") or "").upper()
+    fiscal = str(row.get("fiscalYear") or "").strip()
+    date_str = str(row.get("date") or "")[:10]
+    calendar = str(row.get("calendarYear") or (date_str[:4] if date_str else "")).strip()
+    if re.match(r"^Q[1-4]$", period):
+        if fiscal and calendar and fiscal != calendar:
+            return f"{period} FY{fiscal}"
+        yr = fiscal or calendar
+        return f"{period} {yr}" if yr else None
+    yr = fiscal or calendar
+    return f"FY{yr}" if yr else None
+
+
+def _summarise_with_claude(ticker: str, context: str, annual: bool = False, finalise: bool = True) -> dict:
     from ai_client import groq_chat, MODEL_SMART
     import datetime as _dt
     _today = _dt.date.today().strftime("%B %d, %Y")
@@ -408,7 +432,8 @@ Respond ONLY with valid JSON matching this exact schema (no markdown, no extra t
     # Attempt direct parse first
     try:
         parsed = json.loads(raw)
-        _finalise_period(parsed, ticker, annual, _cur_year)
+        if finalise:
+            _finalise_period(parsed, ticker, annual, _cur_year)
         return parsed
     except json.JSONDecodeError:
         pass
@@ -424,7 +449,8 @@ Respond ONLY with valid JSON matching this exact schema (no markdown, no extra t
         repaired += ']' * max(open_brackets, 0)
         repaired += '}' * max(open_braces, 0)
         parsed = json.loads(repaired)
-        _finalise_period(parsed, ticker, annual, _cur_year)
+        if finalise:
+            _finalise_period(parsed, ticker, annual, _cur_year)
         return parsed
     except Exception:
         raise HTTPException(500, "Claude returned malformed JSON — try again")
@@ -627,90 +653,280 @@ def _sse(data: dict) -> str:
     return f"data: {json.dumps(data)}\n\n"
 
 
-def _summarise_one_streaming(ticker: str, req: SummariseRequest, queue: list):
-    """Run the full summarise pipeline for one ticker, appending SSE strings to queue."""
-    cache_key = f"{ticker}:summary:{_CACHE_VER}:{req.include_10q}:{req.include_10k}:{req.transcript_limit}"
+def _income_statements(ticker: str, period: str, limit: int) -> list:
+    """Income statements from FMP (period='quarter'|'annual'), cached. Used both
+    for the per-filing context and for computing key metrics deterministically."""
+    cache_key = f"{ticker}:inc:{period}:{limit}"
+    with _lock:
+        if cache_key in _filing_cache:
+            return _filing_cache[cache_key]
+    try:
+        data = fmp._get("/income-statement", {"symbol": ticker, "period": period, "limit": limit})
+        result = data if isinstance(data, list) else []
+    except Exception as e:
+        logger.warning("income %s: %s", ticker, e)
+        result = []
+    with _lock:
+        _filing_cache[cache_key] = result
+    return result
 
-    queue.append(_sse({"type": "progress", "ticker": ticker, "stage": "Checking cache…", "pct": 5}))
 
-    # Cache hit
+def _fmt_money(v: float) -> str:
+    a = abs(v)
+    if a >= 1e9:
+        return f"${v / 1e9:.2f}B"
+    if a >= 1e6:
+        return f"${v / 1e6:.1f}M"
+    return f"${v:,.0f}"
+
+
+def _num(row: dict | None, *keys: str) -> float | None:
+    for k in keys:
+        v = (row or {}).get(k)
+        if isinstance(v, (int, float)):
+            return float(v)
+    return None
+
+
+def _yoy(cur: float | None, prev: float | None) -> str | None:
+    if cur is None or prev is None or prev == 0:
+        return None
+    return f"{(cur - prev) / abs(prev) * 100:+.0f}%"
+
+
+def _gross_margin(row: dict | None) -> float | None:
+    rev = _num(row, "revenue")
+    gp = _num(row, "grossProfit")
+    return (gp / rev * 100) if (rev and gp is not None) else None
+
+
+def _eps_of(row: dict | None) -> float | None:
+    return _num(row, "epsdiluted", "epsDiluted", "eps")
+
+
+def _compute_metrics_block(hist: list, i: int, annual: bool) -> dict | None:
+    """Headline metrics computed straight from the income statements (real
+    numbers, never an LLM guess): EPS, Revenue, revenue YoY (vs the same period a
+    year earlier) with the prior period's YoY for context, and gross margin with
+    its change vs the previous period. `hist` is reverse-chronological; `i` is the
+    filing's index within it. Returns None when there's no usable statement."""
+    cur = hist[i] if i < len(hist) else None
+    if not cur:
+        return None
+    step = 1 if annual else 4                      # periods back for a YoY comparison
+    yb    = hist[i + step]     if i + step < len(hist)     else None   # year-ago
+    prior = hist[i + 1]        if i + 1 < len(hist)        else None   # previous period
+    pyb   = hist[i + 1 + step] if i + 1 + step < len(hist) else None   # prior period's year-ago
+
+    rev, eps, gm = _num(cur, "revenue"), _eps_of(cur), _gross_margin(cur)
+    block: dict = {}
+    if eps is not None:
+        block["eps"] = {"value": f"${eps:.2f}", "yoy": _yoy(eps, _eps_of(yb))}
+    if rev is not None:
+        block["revenue"] = {"value": _fmt_money(rev), "yoy": _yoy(rev, _num(yb, "revenue"))}
+    rev_yoy = _yoy(rev, _num(yb, "revenue"))
+    if rev_yoy:
+        prior_yoy = _yoy(_num(prior, "revenue"), _num(pyb, "revenue")) if prior else None
+        block["rev_yoy"] = {"value": rev_yoy, "prior": prior_yoy}
+    if gm is not None:
+        gm_prior = _gross_margin(prior)
+        block["gross_margin"] = {
+            "value": f"{gm:.1f}%",
+            "delta_bps": round((gm - gm_prior) * 100) if gm_prior is not None else None,
+            "basis": "YoY" if annual else "QoQ",
+        }
+    return block or None
+
+
+def _company_name(ticker: str) -> str | None:
+    try:
+        name = (fmp.get_profile(ticker) or {}).get("companyName")
+        if name:
+            return name
+    except Exception:
+        pass
+    _ensure_company_tickers()                      # free EDGAR fallback
+    return _name_by_ticker.get(ticker.upper())
+
+
+def _earnings_reactions(ticker: str) -> list[dict]:
+    """One-day price reaction for each recent earnings release, using the 8-K
+    (Results of Operations) filing date as the announcement date and free
+    yfinance daily closes for the move. After-close convention: the reaction is
+    the next session's close vs the prior close (the norm for large caps).
+    Returns [{date, pct}], cached for a day."""
+    cache_key = f"reactions:8k2:{ticker}"
+    cached = disk_get(cache_key)
+    if cached is not None:
+        return cached
+    import datetime as _dt
+    out: list[dict] = []
+    try:
+        import sys as _sys, os as _os
+        _sys.path.insert(0, _os.path.dirname(_os.path.dirname(__file__)))
+        import cache as _price_cache
+        eights = _get_recent_filings(ticker, ["8-K"])
+        # Earnings releases carry SEC item 2.02 (Results of Operations). Filter to
+        # those so the reaction is the genuine earnings move, not an unrelated 8-K.
+        earnings_8k = [f for f in eights if "2.02" in (f.get("items") or "")]
+        eights = earnings_8k or eights
+        hist = _price_cache.get_history(ticker, period="2y")
+        if not eights or hist.empty or "Close" not in hist:
+            disk_set(cache_key, [], ttl=86400)
+            return []
+        closes = hist["Close"].dropna()
+        pdates = [d.date() for d in closes.index]
+        vals = [float(v) for v in closes.values]
+        seen: set = set()
+        for f in eights:
+            try:
+                ann_date = _dt.date.fromisoformat(f["date"][:10])
+            except ValueError:
+                continue
+            if ann_date in seen:
+                continue
+            seen.add(ann_date)
+            day_i = next((i for i, d in enumerate(pdates) if d > ann_date), None)
+            if day_i is None or day_i < 1 or day_i >= len(vals):
+                continue
+            c1, c0 = vals[day_i], vals[day_i - 1]
+            if c0:
+                out.append({"date": ann_date.isoformat(), "pct": round((c1 / c0 - 1) * 100, 1)})
+    except Exception as e:
+        logger.warning("reactions %s: %s", ticker, e)
+    disk_set(cache_key, out, ttl=86400)
+    return out
+
+
+def _match_reaction(reactions: list[dict], filing_date: str) -> dict | None:
+    """The earnings reaction for a filing's quarter: the most recent earnings
+    release on or before the filing date (earnings always precede the 10-Q/10-K).
+    A release after the filing belongs to the next quarter, so it's never matched.
+    None when nothing lands within ~90 days before the filing."""
+    if not reactions:
+        return None
+    import datetime as _dt
+    try:
+        fd = _dt.date.fromisoformat(filing_date[:10])
+    except ValueError:
+        return None
+    before = []
+    for r in reactions:
+        try:
+            rd = _dt.date.fromisoformat(r["date"])
+        except ValueError:
+            continue
+        delta = (fd - rd).days
+        if 0 <= delta <= 90:
+            before.append((delta, r))
+    if not before:
+        return None
+    before.sort(key=lambda x: x[0])
+    return before[0][1]
+
+
+def _summarise_one_filing(ticker: str, filing: dict, fin_rows: dict, annual: bool,
+                          metrics: dict | None = None, company: str | None = None,
+                          segments: list | None = None, reaction: dict | None = None) -> dict:
+    """Summarise a single SEC filing into one research-note card. Context is that
+    filing's own EDGAR text plus its matching period of financial statements, so
+    each card reflects a distinct period rather than a synthesis of all of them."""
+    cache_key = f"{ticker}:filing:{_CACHE_VER}:{filing['form']}:{filing['date']}"
     with _lock:
         cached = _summary_cache.get(cache_key)
     if cached:
-        queue.append(_sse({"type": "result", "ticker": ticker, "data": cached, "cached": True}))
-        return
+        return cached
     disk_val = disk_get(f"summary:{cache_key}")
     if disk_val:
         with _lock:
             _summary_cache[cache_key] = disk_val
-        queue.append(_sse({"type": "result", "ticker": ticker, "data": disk_val, "cached": True}))
-        return
+        return disk_val
 
-    context_parts = []
+    parts = []
+    text = _fetch_edgar_filing_text(filing["url"], max_chars=15000)
+    if text and len(text) > 500:
+        parts.append(f"=== SEC {filing['form']} FILING ({filing['date']}) ===\n{text}")
+    inc_row = fin_rows.get("income")
+    if inc_row:
+        parts.append(f"=== INCOME STATEMENT ===\n{json.dumps(inc_row, indent=2)[:4000]}")
+    if fin_rows.get("balance"):
+        parts.append(f"=== BALANCE SHEET ===\n{json.dumps(fin_rows['balance'], indent=2)[:3000]}")
+    if fin_rows.get("cashflow"):
+        parts.append(f"=== CASH FLOW ===\n{json.dumps(fin_rows['cashflow'], indent=2)[:2000]}")
 
-    queue.append(_sse({"type": "progress", "ticker": ticker, "stage": "Fetching transcripts…", "pct": 15}))
-    if fmp.available():
-        txs = _get_transcripts(ticker, req.transcript_limit)
-        for tx in txs:
-            content = tx.get("content", "")[:12000]
-            if content:
-                context_parts.append(
-                    f"=== EARNINGS CALL TRANSCRIPT {tx.get('date','')[:10]} Q{tx.get('quarter','')} {tx.get('year','')} ===\n{content}"
-                )
+    if not parts:
+        return {"ticker": ticker, "id": cache_key, "filed": filing["date"], "url": filing["url"],
+                "error": f"Could not read the {filing['form']} filed {filing['date']} from SEC EDGAR."}
 
-    queue.append(_sse({"type": "progress", "ticker": ticker, "stage": "Fetching financials…", "pct": 35}))
-    if fmp.available() and (req.include_10q or req.include_10k):
-        fin = _get_quarterly_financials(ticker)
-        if fin.get("income"):
-            context_parts.append(f"=== QUARTERLY INCOME STATEMENTS ===\n{json.dumps(fin['income'], indent=2)[:5000]}")
-        if fin.get("balance"):
-            context_parts.append(f"=== BALANCE SHEET ===\n{json.dumps(fin['balance'], indent=2)[:3000]}")
-        if fin.get("cashflow"):
-            context_parts.append(f"=== CASH FLOW ===\n{json.dumps(fin['cashflow'], indent=2)[:2000]}")
+    context = "\n\n".join(parts)
+    summary = _summarise_with_claude(ticker, context, annual=annual, finalise=False)
+    # Label this card with its own period (from its statement row, else the LLM
+    # guess, else the filing date), never the latest overall period.
+    summary["quarter"] = _income_period_label(inc_row) or summary.get("quarter") or f"Filed {filing['date']}"
+    entry = {"ticker": ticker, "id": cache_key, "company": company, "period": summary["quarter"],
+             "form": filing["form"], "filed": filing["date"], "url": filing["url"],
+             "metrics": metrics, "segments": segments or None, "reaction": reaction,
+             "summary": summary, "sources": len(parts)}
+    with _lock:
+        _summary_cache[cache_key] = entry
+    disk_set(f"summary:{cache_key}", entry, ttl=86400)
+    return entry
 
+
+def _summarise_one_streaming(ticker: str, req: SummariseRequest, queue: list):
+    """Analyse the N most-recent filings for one ticker, emitting one card per
+    filing. N is the requested filing count; form is 10-K when only annual data
+    is requested, otherwise 10-Q."""
     annual = req.include_10k and not req.include_10q
-    count = req.transcript_limit
+    form = "10-K" if annual else "10-Q"
+    n = max(1, min(req.transcript_limit, 4))
 
-    if fmp.available() and req.include_10k:
-        afin = _get_annual_financials(ticker, count)
-        if afin.get("income"):
-            context_parts.append(f"=== ANNUAL INCOME STATEMENTS (latest {len(afin['income'])} fiscal years, 10-K) ===\n{json.dumps(afin['income'], indent=2)[:7000]}")
-        if afin.get("balance"):
-            context_parts.append(f"=== ANNUAL BALANCE SHEET ({len(afin['balance'])} fiscal years, 10-K) ===\n{json.dumps(afin['balance'], indent=2)[:4000]}")
-        if afin.get("cashflow"):
-            context_parts.append(f"=== ANNUAL CASH FLOW ({len(afin['cashflow'])} fiscal years, 10-K) ===\n{json.dumps(afin['cashflow'], indent=2)[:3000]}")
-
-    queue.append(_sse({"type": "progress", "ticker": ticker, "stage": "Fetching SEC filings…", "pct": 55}))
-    if req.include_10k:
-        edgar_text = _get_edgar_filing_context(ticker, ["10-K", "10-Q"] if req.include_10q else ["10-K"], primary="10-K", count=count)
-        if edgar_text:
-            context_parts.append(edgar_text)
-    elif req.include_10q:
-        edgar_text = _get_edgar_filing_context(ticker, ["10-Q"], primary="10-Q", count=count)
-        if edgar_text:
-            context_parts.append(edgar_text)
-
-    if not any("INCOME" in p or "BALANCE" in p for p in context_parts):
-        fh_fin = _get_finnhub_financials(ticker, "annual" if annual else "quarterly", count)
-        if fh_fin:
-            context_parts.append(fh_fin)
-
-    if not context_parts:
-        queue.append(_sse({"type": "result", "ticker": ticker, "data": {"ticker": ticker, "error": "No financial data found. Enable 10-Q or 10-K."}}))
+    queue.append(_sse({"type": "progress", "ticker": ticker, "stage": "Finding filings…", "pct": 8}))
+    filings = _get_recent_filings(ticker, [form])[:n]
+    if not filings:
+        queue.append(_sse({"type": "result", "ticker": ticker, "data": {
+            "ticker": ticker, "error": f"No {form} filings found on SEC EDGAR for {ticker}."}}))
         return
 
-    queue.append(_sse({"type": "progress", "ticker": ticker, "stage": "Analyzing with Claude…", "pct": 75}))
-    context = "\n\n".join(context_parts)
+    # Income history goes one full year + one period past the requested count so
+    # YoY and prior-period comparisons resolve for every card.
+    hist = _income_statements(ticker, "annual" if annual else "quarter", n + (2 if annual else 6))
+    fin = _get_annual_financials(ticker, n) if annual else _get_quarterly_financials(ticker)
+    bal, cf = fin.get("balance") or [], fin.get("cashflow") or []
+    company = _company_name(ticker)
+    reactions = _earnings_reactions(ticker)
+    # Product-segment revenue (latest 10-K, free via SEC EDGAR) — attached to the
+    # most recent card only since it reflects one annual breakdown.
+    seg_latest = None
     try:
-        summary = _summarise_with_claude(ticker, context, annual=annual)
-        entry = {"ticker": ticker, "summary": summary, "sources": len(context_parts)}
-        with _lock:
-            _summary_cache[cache_key] = entry
-        disk_set(f"summary:{cache_key}", entry, ttl=86400)
+        import sec_segments
+        seg = sec_segments.get_segment_revenue(ticker).get("latest") or []
+        seg_latest = [{"name": s["name"], "value": s["value"]} for s in seg[:6]] or None
+    except Exception:
+        seg_latest = None
+
+    total = len(filings)
+    for i, filing in enumerate(filings):
+        queue.append(_sse({"type": "progress", "ticker": ticker,
+                           "stage": f"Analyzing {form} {i + 1} of {total}…",
+                           "pct": int(15 + (i / total) * 80)}))
+        rows = {
+            "income":   hist[i] if i < len(hist) else None,
+            "balance":  bal[i]  if i < len(bal)  else None,
+            "cashflow": cf[i]   if i < len(cf)   else None,
+        }
+        try:
+            entry = _summarise_one_filing(
+                ticker, filing, rows, annual,
+                metrics=_compute_metrics_block(hist, i, annual),
+                company=company,
+                segments=seg_latest if i == 0 else None,
+                reaction=_match_reaction(reactions, filing["date"]),
+            )
+        except Exception as e:
+            logger.exception("summarise-stream %s %s", ticker, filing.get("date"))
+            entry = {"ticker": ticker, "id": f"{ticker}:{filing['date']}", "filed": filing["date"], "error": str(e)}
         queue.append(_sse({"type": "result", "ticker": ticker, "data": entry}))
-    except Exception as e:
-        logger.exception("summarise-stream %s", ticker)
-        queue.append(_sse({"type": "result", "ticker": ticker, "data": {"ticker": ticker, "error": str(e)}}))
 
 
 @router.post("/summarise-stream")
