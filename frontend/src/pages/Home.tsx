@@ -32,6 +32,10 @@ const F = {
 
 const INDEX_TICKERS = ['SPY', 'QQQ', 'DIA', 'IWM', '^VIX', 'BTC-USD', 'GLD', 'TLT']
 const money = (v: number) => `${v < 0 ? '-' : ''}$${Math.abs(Math.round(v)).toLocaleString()}`
+// Word-prefix search: each query term must match the start of a word, so a
+// 2-letter ticker like "GS" no longer matches inside "earnings"/"holdings".
+const wordMatch = (text: string, query: string) =>
+  query.toLowerCase().split(/\s+/).filter(Boolean).every(term => text.toLowerCase().split(/[^a-z0-9]+/).some(w => w.startsWith(term)))
 const tapeLabel = (s: string) => s.replace(/^\^/, '').replace(/-USD$/, '')
 
 function marketSession(): { label: string; color: string } {
@@ -638,7 +642,7 @@ export default function Home() {
   // Global search: tools (by name/desc), a ticker (when the query looks like a
   // symbol), and quick actions. Tickers route to the two pages that read ?ticker.
   const ql = q.trim().toLowerCase()
-  const filtered = useMemo(() => !ql ? [] : ALL_TOOLS.filter(t => `${t.title} ${t.desc}`.toLowerCase().includes(ql)), [ql])
+  const filtered = useMemo(() => !ql ? [] : ALL_TOOLS.filter(t => wordMatch(`${t.title} ${t.desc}`, ql)), [ql])
 
   const sym = useMemo(() => {
     const raw = q.trim()
@@ -660,7 +664,7 @@ export default function Home() {
       { key: 'ac-dash', icon: LayoutGrid, title: 'Open My Dashboard', sub: 'Your saved cockpit', route: '/dashboard', kw: 'dashboard home cockpit overview saved' },
       { key: 'ac-pm', icon: Briefcase, title: 'Open Portfolio Manager', sub: 'Add and manage holdings', route: '/portfolio-manager', kw: 'portfolio manager holdings positions add import cash' },
     ]
-    return actions.filter(a => `${a.title} ${a.kw}`.toLowerCase().includes(ql))
+    return actions.filter(a => wordMatch(`${a.title} ${a.kw}`, ql))
   }, [ql])
 
   const noResults = filtered.length === 0 && tickerResults.length === 0 && actionResults.length === 0
