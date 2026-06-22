@@ -38,6 +38,7 @@ async def company_search(q: str):
     ql = q.strip().lower()
     if len(ql) < 2:
         return {"results": []}
+    fund_words = ("trust", "fund", " etf", "portfolio", "muni")
     scored = []
     for ticker, title in _company_index():
         tl, nl = ticker.lower(), title.lower()
@@ -51,9 +52,11 @@ async def company_search(q: str):
             score = 3
         else:
             continue
-        scored.append((score, len(title), ticker, title))
+        # Within a match tier, surface the operating company above same-named funds/CEFs.
+        is_fund = 1 if any(w in nl for w in fund_words) else 0
+        scored.append((score, is_fund, len(title), ticker, title))
     scored.sort()
-    return {"results": [{"ticker": tk, "name": _pretty_company(title)} for _, _, tk, title in scored[:8]]}
+    return {"results": [{"ticker": tk, "name": _pretty_company(title)} for _, _, _, tk, title in scored[:8]]}
 
 # Hardcoded institutional peer groups for relative valuation fallbacks
 PEER_GROUPS = {

@@ -473,7 +473,9 @@ function TickerDashboard({ sym }: { sym: string }) {
     retry: 1,
   })
 
-  useEffect(() => { if (hub) recordRecentTicker(sym) }, [hub, sym])
+  useEffect(() => {
+    if (quotes[sym]?.current_price ?? hub?.current_price) recordRecentTicker(sym)
+  }, [hub, quotes, sym])
 
   const q = quotes[sym]
   const price = q?.current_price ?? hub?.current_price ?? null
@@ -493,6 +495,16 @@ function TickerDashboard({ sym }: { sym: string }) {
 
   if (isLoading && !hub) {
     return <div style={{ ...panel, height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spinner /></div>
+  }
+
+  // No quote data => not a real / listed symbol. Show a clean miss, not a zeros shell.
+  if (price == null || price === 0) {
+    return (
+      <div style={{ ...panel, padding: '26px 22px', textAlign: 'center' }}>
+        <div style={{ fontFamily: F.sans, fontSize: 13, fontWeight: 700, color: F.text }}>No market data for {sym}</div>
+        <div style={{ fontFamily: F.sans, fontSize: 11, color: F.muted, marginTop: 6 }}>Not a recognized US-listed security, or no quote available.</div>
+      </div>
+    )
   }
 
   return (
