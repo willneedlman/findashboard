@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useQuery } from '@tanstack/react-query'
 import { AreaChart, Area, XAxis, YAxis, ReferenceLine, ResponsiveContainer } from 'recharts'
-import { Search, LayoutGrid, ArrowUpRight, Clock, X, Upload, Briefcase, TrendingUp, Zap } from 'lucide-react'
+import { Search, LayoutGrid, ArrowUpRight, Clock, X, Upload, Briefcase, TrendingUp, Zap, Calculator, Layers, Newspaper } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import TickerLogo from '../components/TickerLogo'
 import useIsMobile from '../hooks/useIsMobile'
@@ -370,6 +370,200 @@ function ResultTile({ icon: Icon, title, sub, onClick }: { icon: React.ElementTy
   )
 }
 
+// ── Ticker mini-dashboard (global-search ticker branch) ─────────────────────
+interface HubResp {
+  company_name?: string; sector?: string; exchange?: string
+  market_cap?: number | null; pe_ratio?: number | null; dividend_yield?: number | null; beta?: number | null
+  fifty_two_week_high?: number | null; fifty_two_week_low?: number | null
+  current_price?: number | null; pct_change_1d?: number | null
+  open?: number | null; previous_close?: number | null; day_high?: number | null; day_low?: number | null
+  volume?: number | null; avg_volume?: number | null
+  sparkline?: number[]
+}
+const dash = (s: string | number | null | undefined) => (s === null || s === undefined || s === '' ? '—' : String(s))
+const EXCHANGE_NAMES: Record<string, string> = {
+  NMS: 'NASDAQ', NGM: 'NASDAQ', NCM: 'NASDAQ', NASDAQ: 'NASDAQ', NasdaqGS: 'NASDAQ', NasdaqGM: 'NASDAQ', NasdaqCM: 'NASDAQ',
+  NYQ: 'NYSE', NYSE: 'NYSE', NYE: 'NYSE',
+  ASE: 'NYSE American', AMEX: 'NYSE American',
+  PCX: 'NYSE Arca', ARCA: 'NYSE Arca', BATS: 'Cboe', CBOE: 'Cboe',
+}
+const exchangeLabel = (e?: string | null) => (!e ? null : EXCHANGE_NAMES[e] ?? e)
+const fmtPrice = (v?: number | null) => (v == null ? '—' : v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+const fmtCompact = (v?: number | null) => (v == null || v === 0 ? '—' : new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 2 }).format(v))
+const fmtRatio = (v?: number | null) => (v == null || v === 0 ? '—' : v.toFixed(2))
+const fmtYield = (v?: number | null) => (v == null || v === 0 ? '—' : `${v.toFixed(2)}%`)
+const rangePct = (price?: number | null, lo?: number | null, hi?: number | null) => {
+  if (price == null || lo == null || hi == null || hi <= lo) return null
+  return Math.min(98, Math.max(2, ((price - lo) / (hi - lo)) * 100))
+}
+
+function StatCell({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ padding: '13px 22px', borderRight: '1px solid rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+      <div style={{ fontFamily: F.sans, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: F.muted }}>{label}</div>
+      <div style={{ fontFamily: F.mono, fontSize: 13.5, fontWeight: 600, color: F.text, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+    </div>
+  )
+}
+
+function RangeBar({ label, lo, hi, price, color, divider }: { label: string; lo?: number | null; hi?: number | null; price?: number | null; color: string; divider: boolean }) {
+  const pct = rangePct(price, lo, hi)
+  return (
+    <div style={{ padding: '16px 22px', borderRight: divider ? `1px solid ${F.borderFaint}` : undefined }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11 }}>
+        <span style={{ fontFamily: F.sans, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: F.muted }}>{label}</span>
+        <span style={{ fontFamily: F.mono, fontSize: 10, color: F.sec }}>{fmtPrice(lo)} – {fmtPrice(hi)}</span>
+      </div>
+      <div style={{ position: 'relative', height: 4, background: 'rgba(255,255,255,0.07)' }}>
+        {pct != null && (
+          <>
+            <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${pct}%`, background: color }} />
+            <div style={{ position: 'absolute', left: `${pct}%`, top: '50%', width: 9, height: 9, borderRadius: '50%', background: color, border: '2px solid #0d1826', transform: 'translate(-50%,-50%)' }} />
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function TickerSpark({ data, color }: { data: number[]; color: string }) {
+  const pts = useMemo(() => data.map((v, i) => ({ i, v })), [data])
+  if (pts.length < 2) return <div style={{ height: 84, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: F.sans, fontSize: 10, color: F.muted }}>No trend data</div>
+  return (
+    <div style={{ height: 84 }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={pts} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id="tickerSpark" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity={0.22} />
+              <stop offset="100%" stopColor={color} stopOpacity={0.01} />
+            </linearGradient>
+          </defs>
+          <Area type="monotone" dataKey="v" stroke={color} strokeWidth={1.5} fill="url(#tickerSpark)" dot={false} isAnimationActive={false} />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+function JumpTile({ icon: Icon, title, sub, onClick }: { icon: React.ElementType; title: string; sub: string; onClick: () => void }) {
+  const [hover, setHover] = useState(false)
+  return (
+    <div role="button" tabIndex={0} onClick={onClick} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } }}
+      onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+      style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '13px 15px', background: hover ? '#101e30' : F.panel, border: `1px solid ${hover ? 'rgba(201,168,76,0.45)' : F.border}`, cursor: 'pointer', transition: 'border-color 0.15s ease, background 0.15s ease' }}>
+      <Icon size={16} style={{ color: F.gold, flexShrink: 0 }} />
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontFamily: F.sans, fontSize: 12.5, fontWeight: 700, color: F.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
+        <div style={{ fontFamily: F.sans, fontSize: 10, color: F.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</div>
+      </div>
+    </div>
+  )
+}
+
+function TickerDashboard({ sym }: { sym: string }) {
+  const isMobile = useIsMobile()
+  const quotes = useQuotes([sym])
+  const { data: hub, isLoading } = useQuery<HubResp>({
+    queryKey: ['ticker-hub', sym],
+    queryFn: () => axios.get(`/api/corporate/hub?ticker=${encodeURIComponent(sym)}`).then(r => r.data),
+    staleTime: 300_000,
+    retry: 1,
+  })
+
+  const q = quotes[sym]
+  const price = q?.current_price ?? hub?.current_price ?? null
+  const pct = q?.pct_change_1d ?? hub?.pct_change_1d ?? null
+  const up = (pct ?? 0) >= 0
+  const chg = up ? F.pos : F.neg
+  const prev = hub?.previous_close ?? null
+  const chgAbs = price != null && prev != null ? price - prev
+    : price != null && pct != null ? price - price / (1 + pct / 100) : null
+
+  const spark = hub?.sparkline ?? []
+  const monthUp = spark.length >= 2 ? spark[spark.length - 1] >= spark[0] : up
+  const monthColor = monthUp ? F.pos : F.neg
+  const monthPct = spark.length >= 2 && spark[0] !== 0 ? (spark[spark.length - 1] / spark[0] - 1) * 100 : null
+
+  const panel: React.CSSProperties = { border: `1px solid ${F.border}`, borderTop: `2px solid ${F.gold}`, background: F.panel }
+
+  if (isLoading && !hub) {
+    return <div style={{ ...panel, height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spinner /></div>
+  }
+
+  return (
+    <>
+      <style>{`@keyframes home-tkr-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}`}</style>
+      <div style={{ ...panel, animation: 'home-tkr-in 0.25s ease' }}>
+        {/* 1. Identity + price */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap', padding: '18px 22px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <TickerLogo ticker={sym} size={50} />
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                <span style={{ fontFamily: F.sans, fontSize: 21, fontWeight: 700, color: F.bright, lineHeight: 1 }}>{dash(hub?.company_name ?? sym)}</span>
+                {exchangeLabel(hub?.exchange) && <span style={{ fontFamily: F.mono, fontSize: 9, color: F.sec, border: '1px solid rgba(255,255,255,0.12)', padding: '2px 6px' }}>{exchangeLabel(hub?.exchange)}</span>}
+              </div>
+              <div style={{ fontFamily: F.sans, fontSize: 11.5, color: F.muted, marginTop: 7 }}>{dash(hub?.sector)}</div>
+            </div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontFamily: F.mono, fontSize: 34, fontWeight: 700, color: F.bright, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{fmtPrice(price)}</div>
+            {pct != null && (
+              <div style={{ display: 'inline-flex', alignItems: 'center', marginTop: 8, fontFamily: F.mono, fontSize: 13, fontWeight: 700, color: chg, background: up ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)', border: `1px solid ${up ? 'rgba(34,197,94,0.32)' : 'rgba(239,68,68,0.32)'}`, padding: '4px 10px' }}>
+                {up ? '↑' : '↓'}&nbsp;{chgAbs != null ? `${up ? '+' : '-'}${Math.abs(chgAbs).toFixed(2)}` : '—'}&nbsp;&nbsp;{up ? '+' : '-'}{Math.abs(pct).toFixed(2)}%
+              </div>
+            )}
+            <div style={{ fontFamily: F.sans, fontSize: 10.5, color: F.muted, marginTop: 8 }}>As of {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} · Prev close {fmtPrice(prev)}</div>
+          </div>
+        </div>
+
+        {/* 2. Stats grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${isMobile ? 2 : 4}, 1fr)`, borderTop: `1px solid ${F.borderFaint}` }}>
+          <StatCell label="Open" value={fmtPrice(hub?.open)} />
+          <StatCell label="Prev Close" value={fmtPrice(prev)} />
+          <StatCell label="Volume" value={fmtCompact(hub?.volume)} />
+          <StatCell label="Avg Volume" value={fmtCompact(hub?.avg_volume)} />
+          <StatCell label="Market Cap" value={fmtCompact(hub?.market_cap)} />
+          <StatCell label="P/E Ratio" value={fmtRatio(hub?.pe_ratio)} />
+          <StatCell label="Div Yield" value={fmtYield(hub?.dividend_yield)} />
+          <StatCell label="Beta" value={fmtRatio(hub?.beta)} />
+        </div>
+
+        {/* 3. Range bars */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderTop: `1px solid ${F.borderFaint}` }}>
+          <RangeBar label="Day's Range" lo={hub?.day_low} hi={hub?.day_high} price={price} color={chg} divider />
+          <RangeBar label="52-Week Range" lo={hub?.fifty_two_week_low} hi={hub?.fifty_two_week_high} price={price} color={F.gold} divider={false} />
+        </div>
+
+        {/* 4. 1-month sparkline */}
+        <div style={{ padding: '16px 22px', borderTop: `1px solid ${F.borderFaint}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <span style={{ fontFamily: F.sans, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: F.muted }}>1-Month Trend</span>
+            {monthPct != null && <span style={{ fontFamily: F.mono, fontSize: 10, fontWeight: 700, color: monthColor }}>{monthUp ? '+' : '-'}{Math.abs(monthPct).toFixed(2)}%</span>}
+          </div>
+          <TickerSpark data={spark} color={monthColor} />
+        </div>
+      </div>
+    </>
+  )
+}
+
+function TickerJumpTiles({ sym, isMobile }: { sym: string; isMobile: boolean }) {
+  const navigate = useNavigate()
+  const tiles = [
+    { icon: TrendingUp, title: 'Market data', sub: 'Price history & chart', route: `/market?ticker=${sym}` },
+    { icon: Calculator, title: 'DCF valuation', sub: 'Intrinsic value & upside', route: `/dcf?ticker=${sym}` },
+    { icon: Layers, title: 'Options chain', sub: 'Greeks, IV & open interest', route: `/chain?ticker=${sym}` },
+    { icon: Newspaper, title: 'News & filings', sub: 'Headlines & SEC filings', route: `/corporate?ticker=${sym}` },
+  ]
+  return (
+    <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: `repeat(${isMobile ? 2 : 4}, 1fr)`, gap: 10 }}>
+      {tiles.map(t => <JumpTile key={t.route} icon={t.icon} title={t.title} sub={t.sub} onClick={() => navigate(t.route)} />)}
+    </div>
+  )
+}
+
 export default function Home() {
   const isMobile = useIsMobile()
   const navigate = useNavigate()
@@ -504,12 +698,11 @@ export default function Home() {
           {/* search results override the hubs grid */}
           {ql ? (
             <div style={{ marginTop: 22, display: 'flex', flexDirection: 'column', gap: 20 }}>
-              {tickerResults.length > 0 && (
+              {sym && (
                 <div>
                   <SectionLabel icon={TrendingUp} label={`Ticker · ${sym}`} />
-                  <ResultGrid>
-                    {tickerResults.map(r => <ResultTile key={r.key} icon={r.icon} title={r.title} sub={r.sub} onClick={() => navigate(r.route)} />)}
-                  </ResultGrid>
+                  <TickerDashboard sym={sym} />
+                  <TickerJumpTiles sym={sym} isMobile={isMobile} />
                 </div>
               )}
               {filtered.length > 0 && (
