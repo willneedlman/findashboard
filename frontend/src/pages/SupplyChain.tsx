@@ -66,7 +66,7 @@ function YoYChip({ v }: { v: number | null }) {
   return (
     <span style={{ fontFamily: T.mono, fontSize: 10, fontWeight: 700, minWidth: 52, textAlign: 'right',
       color: up ? 'var(--theme-positive)' : 'var(--theme-negative)' }}>
-      {up ? '▲' : '▼'} {Math.abs(v).toFixed(1)}%
+      {up ? '↑' : '↓'} {Math.abs(v).toFixed(1)}%
     </span>
   )
 }

@@ -72,24 +72,10 @@ def _annual_by_year(cik: str, concept: str) -> dict[int, float]:
         return {}
 
 
-def get_bank_revenue_activity(ticker: str, years: int = 6) -> dict:
-    """SegBlock-shaped revenue-by-activity for banks; empty block otherwise."""
-    cik = _cik_for(ticker)
-    if not cik or not _is_bank(cik):
-        return dict(_EMPTY)
-
-    key = f"bankrev:{cik}"
-    cached = disk_get(key)
-    if cached is not None:
-        return cached
-
-    nii_net = _annual_by_year(cik, "InterestIncomeExpenseNet")
-    int_inc = _annual_by_year(cik, "InterestAndDividendIncomeOperating")
-    int_exp = _annual_by_year(cik, "InterestExpense")
-    ib      = _annual_by_year(cik, "InvestmentBankingRevenue")
-    noni    = _annual_by_year(cik, "NoninterestIncome")
-    comm    = _annual_by_year(cik, "BrokerageCommissionsRevenue")
-    trade   = _annual_by_year(cik, "PrincipalTransactionsRevenue") or _annual_by_year(cik, "TradingGainsLosses")
+def _assemble(m: dict, years: int = 6) -> dict:
+    """Pure: turn per-year concept maps into a SegBlock. Network-free, tested."""
+    nii_net, int_inc, int_exp = m["nii_net"], m["int_inc"], m["int_exp"]
+    ib, noni, comm, trade = m["ib"], m["noni"], m["comm"], m["trade"]
 
     by_year: dict[int, dict[str, float]] = {}
     for fy, ni in noni.items():
@@ -141,7 +127,31 @@ def get_bank_revenue_activity(ticker: str, years: int = 6) -> dict:
                              for n, v in sorted(by_year[fy].items(), key=lambda x: -x[1])]}
                for fy in sorted(fys)]
 
-    result = {"fiscalYear": latest_fy, "currency": "USD", "latest": latest_list,
-              "history": history, "concentration": concentration, "source": "sec"}
-    disk_set(key, result, ttl=86400)
+    return {"fiscalYear": latest_fy, "currency": "USD", "latest": latest_list,
+            "history": history, "concentration": concentration, "source": "sec"}
+
+
+def get_bank_revenue_activity(ticker: str, years: int = 6) -> dict:
+    """SegBlock-shaped revenue-by-activity for banks; empty block otherwise."""
+    cik = _cik_for(ticker)
+    if not cik or not _is_bank(cik):
+        return dict(_EMPTY)
+
+    key = f"bankrev:{cik}"
+    cached = disk_get(key)
+    if cached is not None:
+        return cached
+
+    m = {
+        "nii_net": _annual_by_year(cik, "InterestIncomeExpenseNet"),
+        "int_inc": _annual_by_year(cik, "InterestAndDividendIncomeOperating"),
+        "int_exp": _annual_by_year(cik, "InterestExpense"),
+        "ib":      _annual_by_year(cik, "InvestmentBankingRevenue"),
+        "noni":    _annual_by_year(cik, "NoninterestIncome"),
+        "comm":    _annual_by_year(cik, "BrokerageCommissionsRevenue"),
+        "trade":   _annual_by_year(cik, "PrincipalTransactionsRevenue") or _annual_by_year(cik, "TradingGainsLosses"),
+    }
+    result = _assemble(m, years)
+    if result.get("latest"):
+        disk_set(key, result, ttl=86400)
     return result

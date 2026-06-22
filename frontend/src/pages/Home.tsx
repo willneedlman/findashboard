@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo } from 'react'
+import { useRef, useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useQuery } from '@tanstack/react-query'
@@ -11,6 +11,8 @@ import { usePortfolio, type PortfolioHolding } from '../contexts/PortfolioContex
 import { loadActivePortfolio, useQuotes, priceHoldings } from '../components/dashboard/widgets/usePortfolio'
 import { HUBS, ALL_TOOLS } from '../lib/hubs'
 import { getRecents } from '../lib/recents'
+import { wordMatch, tickerFromQuery } from '../lib/search'
+import { getRecentTickers, recordRecentTicker } from '../lib/recentTickers'
 
 const F = {
   gold: 'var(--theme-primary, #c9a84c)',
@@ -32,10 +34,6 @@ const F = {
 
 const INDEX_TICKERS = ['SPY', 'QQQ', 'DIA', 'IWM', '^VIX', 'BTC-USD', 'GLD', 'TLT']
 const money = (v: number) => `${v < 0 ? '-' : ''}$${Math.abs(Math.round(v)).toLocaleString()}`
-// Word-prefix search: each query term must match the start of a word, so a
-// 2-letter ticker like "GS" no longer matches inside "earnings"/"holdings".
-const wordMatch = (text: string, query: string) =>
-  query.toLowerCase().split(/\s+/).filter(Boolean).every(term => text.toLowerCase().split(/[^a-z0-9]+/).some(w => w.startsWith(term)))
 const tapeLabel = (s: string) => s.replace(/^\^/, '').replace(/-USD$/, '')
 
 function marketSession(): { label: string; color: string } {
@@ -361,10 +359,10 @@ function ResultGrid({ children }: { children: React.ReactNode }) {
   return <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>{children}</div>
 }
 
-function ResultTile({ icon: Icon, title, sub, onClick }: { icon: React.ElementType; title: string; sub: string; onClick: () => void }) {
+function ResultTile({ icon: Icon, title, sub, onClick, selected }: { icon: React.ElementType; title: string; sub: string; onClick: () => void; selected?: boolean }) {
   return (
     <div role="button" tabIndex={0} onClick={onClick} onKeyDown={e => { if (e.key === 'Enter') onClick() }}
-      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 13px', background: F.panel, border: `1px solid ${F.border}`, cursor: 'pointer' }}>
+      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 13px', background: selected ? '#101e30' : F.panel, border: `1px solid ${selected ? 'rgba(201,168,76,0.55)' : F.border}`, cursor: 'pointer' }}>
       <Icon size={15} style={{ color: F.gold, flexShrink: 0 }} />
       <div style={{ minWidth: 0 }}>
         <div style={{ fontFamily: F.sans, fontSize: 12.5, fontWeight: 700, color: F.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
@@ -474,6 +472,8 @@ function TickerDashboard({ sym }: { sym: string }) {
     staleTime: 300_000,
     retry: 1,
   })
+
+  useEffect(() => { if (hub) recordRecentTicker(sym) }, [hub, sym])
 
   const q = quotes[sym]
   const price = q?.current_price ?? hub?.current_price ?? null
@@ -644,10 +644,7 @@ export default function Home() {
   const ql = q.trim().toLowerCase()
   const filtered = useMemo(() => !ql ? [] : ALL_TOOLS.filter(t => wordMatch(`${t.title} ${t.desc}`, ql)), [ql])
 
-  const sym = useMemo(() => {
-    const raw = q.trim()
-    return /^[A-Za-z]{1,5}(\.[A-Za-z])?$/.test(raw) ? raw.toUpperCase() : null
-  }, [q])
+  const sym = useMemo(() => tickerFromQuery(q), [q])
   const tickerResults = useMemo(() => {
     if (!sym) return []
     const mkt = ALL_TOOLS.find(t => t.route === '/market')
@@ -669,6 +666,21 @@ export default function Home() {
 
   const noResults = filtered.length === 0 && tickerResults.length === 0 && actionResults.length === 0
 
+  // Arrow-key navigation over the flat tool+action result list; Enter opens the
+  // selection, or jumps to the ticker's market data when a symbol is typed.
+  const navRoutes = useMemo(() => [...filtered.map(t => t.route), ...actionResults.map(r => r.route)], [filtered, actionResults])
+  const [selIdx, setSelIdx] = useState(-1)
+  useEffect(() => setSelIdx(-1), [ql])
+  const onSearchKey = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setSelIdx(i => Math.min(navRoutes.length - 1, i + 1)) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setSelIdx(i => Math.max(-1, i - 1)) }
+    else if (e.key === 'Enter') {
+      if (selIdx >= 0 && navRoutes[selIdx]) navigate(navRoutes[selIdx])
+      else if (sym) navigate(`/market?ticker=${sym}`)
+    }
+  }
+  const recentTickers = useMemo(() => getRecentTickers(), [])
+
   const cockpitCols = isMobile ? '1fr' : '1fr 1.5fr 1.25fr'
 
   return (
@@ -689,7 +701,7 @@ export default function Home() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: F.topbar, border: `1px solid ${searchFocus ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 55%, transparent)' : F.border}`, padding: '9px 12px', width: isMobile ? 200 : 280, transition: 'border-color 0.15s ease' }}>
                 <Search size={13} style={{ color: F.muted, flexShrink: 0 }} />
-                <input value={q} onChange={e => setQ(e.target.value)} onFocus={() => setSearchFocus(true)} onBlur={() => setSearchFocus(false)} aria-label="Search tools, tickers, and actions" placeholder="Search tools, tickers, actions" style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none', color: F.text, fontFamily: F.sans, fontSize: 12 }} />
+                <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={onSearchKey} onFocus={() => setSearchFocus(true)} onBlur={() => setSearchFocus(false)} aria-label="Search tools, tickers, and actions" placeholder="Search tools, tickers, actions" style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none', color: F.text, fontFamily: F.sans, fontSize: 12 }} />
                 {q && <button onClick={() => setQ('')} aria-label="Clear" style={{ background: 'none', border: 'none', cursor: 'pointer', color: F.muted, display: 'flex', padding: 0 }}><X size={12} /></button>}
               </div>
               <button onClick={() => navigate('/dashboard')} style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, background: F.gold, border: 'none', padding: '9px 14px', cursor: 'pointer' }}>
@@ -713,7 +725,7 @@ export default function Home() {
                 <div>
                   <SectionLabel icon={Search} label="Tools" count={filtered.length} />
                   <ResultGrid>
-                    {filtered.map(t => <ResultTile key={t.route} icon={t.icon} title={t.title} sub={t.desc} onClick={() => navigate(t.route)} />)}
+                    {filtered.map((t, i) => <ResultTile key={t.route} icon={t.icon} title={t.title} sub={t.desc} selected={selIdx === i} onClick={() => navigate(t.route)} />)}
                   </ResultGrid>
                 </div>
               )}
@@ -721,7 +733,7 @@ export default function Home() {
                 <div>
                   <SectionLabel icon={Zap} label="Actions" />
                   <ResultGrid>
-                    {actionResults.map(r => <ResultTile key={r.key} icon={r.icon} title={r.title} sub={r.sub} onClick={() => navigate(r.route)} />)}
+                    {actionResults.map((r, j) => <ResultTile key={r.key} icon={r.icon} title={r.title} sub={r.sub} selected={selIdx === filtered.length + j} onClick={() => navigate(r.route)} />)}
                   </ResultGrid>
                 </div>
               )}
@@ -733,6 +745,14 @@ export default function Home() {
             </div>
           ) : (
             <>
+              {recentTickers.length > 0 && (
+                <div style={{ marginTop: 18, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontFamily: F.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: F.muted }}>Recent</span>
+                  {recentTickers.map(t => (
+                    <button key={t} onClick={() => setQ(t)} style={{ fontFamily: F.mono, fontSize: 11, fontWeight: 700, color: F.text, background: F.panel, border: `1px solid ${F.border}`, padding: '4px 10px', cursor: 'pointer', letterSpacing: '0.06em' }}>{t}</button>
+                  ))}
+                </div>
+              )}
               {/* cockpit band */}
               <div style={{ marginTop: 18, border: `1px solid ${F.border}`, borderTop: `2px solid ${F.gold}`, background: F.panel, display: 'grid', gridTemplateColumns: cockpitCols }}>
                 {/* portfolio value */}
