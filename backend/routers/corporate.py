@@ -17,15 +17,18 @@ _COMPANY_INDEX: "list[tuple[str, str]] | None" = None
 def _company_index() -> "list[tuple[str, str]]":
     """SEC's full ticker -> company-name index, fetched once and cached in-process."""
     global _COMPANY_INDEX
-    if _COMPANY_INDEX is None:
-        try:
-            data = requests.get("https://www.sec.gov/files/company_tickers.json",
-                                headers=_SEC_UA, timeout=15).json()
-            _COMPANY_INDEX = [(str(r["ticker"]).upper(), str(r["title"])) for r in data.values()]
-        except Exception as e:
-            logger.warning("company index load failed: %s", e)
-            _COMPANY_INDEX = []
-    return _COMPANY_INDEX
+    if _COMPANY_INDEX:
+        return _COMPANY_INDEX
+    try:
+        data = requests.get("https://www.sec.gov/files/company_tickers.json",
+                            headers=_SEC_UA, timeout=15).json()
+        idx = [(str(r["ticker"]).upper(), str(r["title"])) for r in data.values()]
+        if idx:                       # only cache a good fetch; retry next call otherwise
+            _COMPANY_INDEX = idx
+        return idx
+    except Exception as e:
+        logger.warning("company index load failed: %s", e)
+        return []
 
 
 def _pretty_company(name: str) -> str:

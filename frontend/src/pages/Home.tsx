@@ -769,7 +769,12 @@ export default function Home() {
                   </ResultGrid>
                 </div>
               )}
-              {noResults && (
+              {!sym && companyQuery.isFetching && companyResults.length === 0 && filtered.length === 0 && actionResults.length === 0 && (
+                <div style={{ padding: '32px 0', textAlign: 'center', fontFamily: F.sans, fontSize: 12, color: F.muted }}>
+                  Searching…
+                </div>
+              )}
+              {noResults && !companyQuery.isFetching && (
                 <div style={{ padding: '32px 0', textAlign: 'center', fontFamily: F.sans, fontSize: 12, color: F.sec }}>
                   Nothing matches <span style={{ color: F.text, fontFamily: F.mono }}>{q}</span>
                 </div>
