@@ -6,6 +6,11 @@ import yfinance as yf
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from cache import get_history, get_info
+try:
+    from disk_cache import disk_get, disk_set
+except ImportError:                                   # pragma: no cover
+    def disk_get(_k): return None
+    def disk_set(_k, _v, ttl=0): pass
 
 router = APIRouter()
 logger = logging.getLogger("backend.routers.corporate")
@@ -59,7 +64,29 @@ async def company_search(q: str):
         is_fund = 1 if any(w in nl for w in fund_words) else 0
         scored.append((score, is_fund, len(title), ticker, title))
     scored.sort()
-    return {"results": [{"ticker": tk, "name": _pretty_company(title)} for _, _, _, tk, title in scored[:8]]}
+    results = [{"ticker": tk, "name": _pretty_company(title)} for _, _, _, tk, title in scored[:8]]
+
+    # ADR / OTC coverage: the SEC index misses unsponsored ADRs (e.g. SMPNY ->
+    # Sompo). When SEC coverage is thin, supplement with FMP's broader search,
+    # cached so the metered FMP quota is barely touched.
+    if len(results) < 5 and len(ql) >= 3:
+        try:
+            import fmp as _fmp
+            if _fmp.available():
+                ck = f"fmpsearch:v2:{ql}"
+                hits = disk_get(ck)
+                if hits is None:
+                    hits = _fmp.search_symbols(q.strip(), limit=8)
+                    disk_set(ck, hits, ttl=21600)        # 6 h
+                have = {r["ticker"] for r in results}
+                for h in hits:
+                    if h["ticker"] not in have:
+                        results.append(h)
+                        have.add(h["ticker"])
+        except Exception as e:
+            logger.warning("fmp search supplement failed: %s", e)
+
+    return {"results": results[:8]}
 
 # Hardcoded institutional peer groups for relative valuation fallbacks
 PEER_GROUPS = {

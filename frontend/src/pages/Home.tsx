@@ -654,6 +654,9 @@ export default function Home() {
   // Global search: tools (by name/desc), a ticker (when the query looks like a
   // symbol), and quick actions. Tickers route to the two pages that read ?ticker.
   const ql = q.trim().toLowerCase()
+  const [debouncedQ, setDebouncedQ] = useState('')
+  useEffect(() => { const t = setTimeout(() => setDebouncedQ(q.trim()), 250); return () => clearTimeout(t) }, [q])
+  const dql = debouncedQ.toLowerCase()
   const filtered = useMemo(() => !ql ? [] : ALL_TOOLS.filter(t => wordMatch(`${t.title} ${t.desc}`, ql)), [ql])
 
   const sym = useMemo(() => tickerFromQuery(q), [q])
@@ -670,20 +673,23 @@ export default function Home() {
   // Company-name search: resolve "blackrock" -> BLK via the SEC index. Only when
   // the query isn't already a bare ticker (which renders the dashboard directly).
   const companyQuery = useQuery<{ results: { ticker: string; name: string }[] }>({
-    queryKey: ['company-search', ql],
-    queryFn: () => axios.get(`/api/corporate/search?q=${encodeURIComponent(q.trim())}`).then(r => r.data),
-    enabled: !sym && ql.length >= 2,
+    queryKey: ['company-search', dql],
+    queryFn: () => axios.get(`/api/corporate/search?q=${encodeURIComponent(debouncedQ)}`).then(r => r.data),
+    enabled: dql.length >= 2,
     staleTime: 300_000,
     retry: 1,
   })
-  const companyResults = (sym ? [] : companyQuery.data?.results) ?? []
-  // A confident company-name match with no competing tool/action hits resolves
-  // straight to that company's overview (e.g. "blackstone" -> BX); the rest are
-  // offered as alternatives. Tool-ish words (e.g. "market") keep the list.
-  const autoTicker = !sym && filtered.length === 0 && actionResults.length === 0
+  const companyResults = companyQuery.data?.results ?? []
+  // A confident company-name match wins over a bare ticker guess, so 5-letter
+  // company names ("sompo", "apple") resolve to the real ticker (SMPNY, AAPL)
+  // instead of a dead symbol — but a query that IS a listed ticker keeps it.
+  // Tool-ish words keep the list; remaining matches are offered as alternatives.
+  const autoTicker = filtered.length === 0 && actionResults.length === 0
     && companyResults[0]?.name.toLowerCase().startsWith(ql) ? companyResults[0].ticker : null
-  const dashSym = sym ?? autoTicker
-  const otherCompanies = companyResults.filter(c => c.ticker !== dashSym)
+  const symIsListed = !!sym && companyResults.some(c => c.ticker === sym)
+  const dashSym = symIsListed ? sym : (autoTicker ?? sym)
+  const otherCompanies = (sym && dashSym === sym) ? [] : companyResults.filter(c => c.ticker !== dashSym)
+  const searching = ql.length >= 2 && (debouncedQ !== q.trim() || companyQuery.isFetching)
 
   const noResults = !dashSym && filtered.length === 0 && actionResults.length === 0 && companyResults.length === 0
 
@@ -766,12 +772,12 @@ export default function Home() {
                   </ResultGrid>
                 </div>
               )}
-              {!sym && companyQuery.isFetching && companyResults.length === 0 && filtered.length === 0 && actionResults.length === 0 && (
+              {searching && companyResults.length === 0 && filtered.length === 0 && actionResults.length === 0 && (
                 <div style={{ padding: '32px 0', textAlign: 'center', fontFamily: F.sans, fontSize: 12, color: F.muted }}>
                   Searching…
                 </div>
               )}
-              {noResults && !companyQuery.isFetching && (
+              {noResults && !searching && (
                 <div style={{ padding: '32px 0', textAlign: 'center', fontFamily: F.sans, fontSize: 12, color: F.sec }}>
                   Nothing matches <span style={{ color: F.text, fontFamily: F.mono }}>{q}</span>
                 </div>

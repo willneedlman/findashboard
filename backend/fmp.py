@@ -107,6 +107,34 @@ def _get(path: str, params: dict | None = None) -> list | dict:
         raise
 
 
+_US_EXCHANGES = {"NASDAQ", "NYSE", "AMEX", "NYSE AMERICAN", "NYSEARCA", "BATS", "OTC", "PNK", "OTCMKTS"}
+
+
+def search_symbols(query: str, limit: int = 8) -> list:
+    """FMP symbol search — covers US listings plus ADRs / OTC names the SEC index
+    misses (e.g. SMPNY -> Sompo). Returns [{"ticker","name"}], US-listed only."""
+    if not available():
+        return []
+    try:
+        rows = _get("/search-name", {"query": query, "limit": limit * 3})
+    except Exception:
+        return []
+    out: list = []
+    if isinstance(rows, list):
+        for r in rows:
+            sym = str(r.get("symbol") or "").upper()
+            name = str(r.get("name") or "")
+            ex = str(r.get("exchange") or r.get("exchangeShortName") or "").upper()
+            if not sym or not name or "." in sym:        # skip foreign-suffixed dupes (e.g. 8630.T)
+                continue
+            if ex and ex not in _US_EXCHANGES:
+                continue
+            out.append({"ticker": sym, "name": name})
+            if len(out) >= limit:
+                break
+    return out
+
+
 def _get_v4(path: str, params: dict | None = None) -> list | dict:
     """FMP v4 API — broader coverage for segment data and other endpoints."""
     p = dict(params or {})
