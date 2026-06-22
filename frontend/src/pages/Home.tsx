@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useQuery } from '@tanstack/react-query'
 import { AreaChart, Area, XAxis, YAxis, ReferenceLine, ResponsiveContainer } from 'recharts'
-import { Search, LayoutGrid, ArrowUpRight, Clock, X, Upload, Briefcase, TrendingUp, Zap, Calculator, Layers, Newspaper } from 'lucide-react'
+import { Search, LayoutGrid, ArrowUpRight, Clock, X, Upload, Briefcase, TrendingUp, Zap, Calculator, Globe, Scale } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import TickerLogo from '../components/TickerLogo'
 import useIsMobile from '../hooks/useIsMobile'
@@ -554,8 +554,8 @@ function TickerJumpTiles({ sym, isMobile }: { sym: string; isMobile: boolean }) 
   const tiles = [
     { icon: TrendingUp, title: 'Market data', sub: 'Price history & chart', route: `/market?ticker=${sym}` },
     { icon: Calculator, title: 'DCF valuation', sub: 'Intrinsic value & upside', route: `/dcf?ticker=${sym}` },
-    { icon: Layers, title: 'Options chain', sub: 'Greeks, IV & open interest', route: `/chain?ticker=${sym}` },
-    { icon: Newspaper, title: 'News & filings', sub: 'Headlines & SEC filings', route: `/corporate?ticker=${sym}` },
+    { icon: Globe, title: 'Company profile', sub: 'Revenue mix & geography', route: `/supply-chain?ticker=${sym}` },
+    { icon: Scale, title: 'Peer comparison', sub: 'Multiples vs sector peers', route: `/relative-valuation?ticker=${sym}` },
   ]
   return (
     <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: `repeat(${isMobile ? 2 : 4}, 1fr)`, gap: 10 }}>
