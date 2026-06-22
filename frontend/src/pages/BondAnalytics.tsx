@@ -33,6 +33,11 @@ export function BondAnalyticsContent() {
   const [paramsOpen, setParamsOpen] = useState(true)
   const [aiNarrative, setAiNarrative] = useState<any>(null)
   const [aiNarrativePending, setAiNarrativePending] = useState(false)
+  const [cusip, setCusip] = useState('')
+  const [cusipOpen, setCusipOpen] = useState(true)
+  const [lookup, setLookup] = useState<any>(null)
+  const [lookupPending, setLookupPending] = useState(false)
+  const [lookupErr, setLookupErr] = useState<string | null>(null)
 
   const { mutate, data, isPending, isError } = useMutation({
     mutationFn: () => fetchBondAnalytics(p),
@@ -53,6 +58,28 @@ export function BondAnalyticsContent() {
   const set = (k: keyof typeof p) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setP(prev => ({ ...prev, [k]: +e.target.value }))
 
+  const doLookup = async () => {
+    const cu = cusip.trim().toUpperCase()
+    if (!/^[A-Z0-9]{9}$/.test(cu)) { setLookupErr('Enter a 9-character CUSIP'); setLookup(null); return }
+    setLookupPending(true); setLookupErr(null); setLookup(null)
+    try {
+      const { data: r } = await axios.get(`/api/bond/cusip/${cu}`)
+      if (!r.found) { setLookupErr(`No security found for ${cu}`); return }
+      setLookup(r)
+      if (r.source === 'treasury') {
+        setP(prev => ({
+          ...prev,
+          coupon_rate: r.coupon_rate ?? prev.coupon_rate,
+          maturity: r.years_to_maturity ? Math.max(1, Math.min(100, Math.round(r.years_to_maturity))) : prev.maturity,
+        }))
+      }
+    } catch {
+      setLookupErr('Lookup failed — try again')
+    } finally {
+      setLookupPending(false)
+    }
+  }
+
   const shiftedPoint = data?.sensitivity.find((s: any) => s.shift === shift)
 
   const liveBondType = (() => {
@@ -66,6 +93,35 @@ export function BondAnalyticsContent() {
 
   return (
       <SidebarLayout sidebarWidth={210} sidebarTitle="" sidebar={<>
+          <RailSection title="CUSIP Lookup" open={cusipOpen} onToggle={() => setCusipOpen(o => !o)}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <input value={cusip} onChange={e => setCusip(e.target.value.toUpperCase())} onKeyDown={e => e.key === 'Enter' && doLookup()}
+                placeholder="9-char CUSIP" maxLength={9} style={INPUT}
+                onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')} onBlur={e => (e.target.style.borderColor = 'var(--theme-border, rgba(255,255,255,0.10))')} />
+              <button onClick={doLookup} disabled={lookupPending} style={{
+                width: '100%', background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)',
+                border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)',
+                fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
+                padding: '7px 0', cursor: lookupPending ? 'default' : 'pointer', opacity: lookupPending ? 0.6 : 1,
+              }}>{lookupPending ? 'Looking up…' : 'Look up'}</button>
+              {lookupErr && <div style={{ fontSize: 9, color: 'var(--theme-negative, #ef4444)', fontFamily: 'var(--theme-sans)' }}>{lookupErr}</div>}
+              {lookup && (
+                <div style={{ background: 'var(--theme-surface, #142032)', border: '1px solid var(--theme-border, rgba(255,255,255,0.10))', padding: '8px 9px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-sans)' }}>{lookup.name}</div>
+                  <div style={{ fontSize: 9, color: 'var(--theme-secondary, #99907e)', fontFamily: 'var(--theme-mono)' }}>{lookup.type}{lookup.ticker ? ` · ${lookup.ticker}` : ''}</div>
+                  {lookup.source === 'treasury' ? (
+                    <div style={{ fontSize: 9, color: 'var(--theme-primary, #c9a84c)', fontFamily: 'var(--theme-sans)' }}>
+                      Coupon {lookup.coupon_rate}% · matures {lookup.maturity_date} — prefilled below
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 9, color: 'var(--theme-secondary, #99907e)', fontFamily: 'var(--theme-sans)', lineHeight: 1.4 }}>
+                      Identity only. Enter coupon &amp; price manually — priced corporate-bond data needs a licensed feed.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </RailSection>
           <RailSection title="Bond Parameters" open={paramsOpen} onToggle={() => setParamsOpen(o => !o)}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {([
