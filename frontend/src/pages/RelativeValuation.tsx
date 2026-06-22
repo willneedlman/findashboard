@@ -1,5 +1,6 @@
 import { T } from '../lib/theme'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
@@ -213,7 +214,8 @@ function cellColor(val: number | null, med: number | null, lowerBetter: boolean)
 
 export function RelativeValuationContent() {
   const isMobile = useIsMobile()
-  const [input,   setInput]   = useState('')
+  const [searchParams] = useSearchParams()
+  const [input,   setInput]   = useState(searchParams.get('ticker') || '')
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState<string | null>(null)
   const [data,    setData]    = useState<ValuationResponse | null>(null)
@@ -258,6 +260,10 @@ export function RelativeValuationContent() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (searchParams.get('ticker')) doFetch()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const medians: Record<MetricKey, number | null> = {} as Record<MetricKey, number | null>
   if (data) {

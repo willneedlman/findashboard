@@ -1,5 +1,6 @@
 import { T } from '../lib/theme'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
@@ -223,7 +224,8 @@ function SegmentBreakdown({ title, block }: { title: string; block: SegBlock }) 
 
 export function SupplyChainContent() {
   const isMobileLayout = useIsMobile()
-  const [input,   setInput]   = useState('')
+  const [searchParams] = useSearchParams()
+  const [input,   setInput]   = useState(searchParams.get('ticker') || '')
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState<string | null>(null)
   const [data,    setData]    = useState<SupplyChainData | null>(null)
@@ -243,6 +245,11 @@ export function SupplyChainContent() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    const t = searchParams.get('ticker')
+    if (t) doFetch(t)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div id="supply-chain-content" style={{ width: '100%' }}>
