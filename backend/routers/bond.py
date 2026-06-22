@@ -57,8 +57,23 @@ def _lookup_treasury(cusip: str):
         return None
 
 
+def _parse_bond_desc(desc: str):
+    """Pull (coupon, maturity_date) from an OpenFIGI bond description such as
+    'AAPL 3.85 05/04/43'. Returns (None, None) for floaters/non-standard lines."""
+    m = re.search(r"\s([\d.]+)\s+(\d{2})/(\d{2})/(\d{2})\s*$", desc or "")
+    if not m:
+        return None, None
+    try:
+        coupon = round(float(m.group(1)), 4)
+    except ValueError:
+        return None, None
+    return coupon, f"20{m.group(4)}-{m.group(2)}-{m.group(3)}"
+
+
 def _lookup_openfigi(cusip: str):
-    """Security identity by CUSIP (free, rate-limited OpenFIGI). No priced data."""
+    """Identity by CUSIP via OpenFIGI (free, rate-limited). For corporate/muni
+    bonds the description encodes coupon + maturity, which we parse and return;
+    live price/yield still needs a licensed feed (TRACE/Bloomberg)."""
     try:
         r = requests.post("https://api.openfigi.com/v3/mapping",
                           json=[{"idType": "ID_CUSIP", "idValue": cusip}],
@@ -70,13 +85,27 @@ def _lookup_openfigi(cusip: str):
         if not recs:
             return None
         d = recs[0]
+        sector = d.get("marketSector") or ""
+        desc = d.get("securityDescription") or d.get("ticker") or ""
+        coupon = mat = years = None
+        if sector in ("Corp", "Muni", "Govt", "Mtge"):
+            coupon, mat = _parse_bond_desc(desc)
+            if mat:
+                try:
+                    years = round((date.fromisoformat(mat) - date.today()).days / 365.25, 2)
+                except ValueError:
+                    mat = None
+        type_label = {"Corp": "Corporate Bond", "Muni": "Municipal Bond",
+                      "Govt": "Government Bond", "Mtge": "Mortgage Security"}.get(
+                          sector, d.get("securityType2") or d.get("securityType") or "Security")
         return {
             "found": True, "source": "openfigi", "cusip": cusip,
             "name": d.get("name") or cusip,
             "ticker": d.get("ticker"),
-            "type": d.get("securityType2") or d.get("securityType") or "Security",
-            "market_sector": d.get("marketSector"),
-            "coupon_rate": None, "maturity_date": None, "years_to_maturity": None,
+            "description": desc or None,
+            "type": type_label,
+            "market_sector": sector or None,
+            "coupon_rate": coupon, "maturity_date": mat, "years_to_maturity": years,
         }
     except Exception:
         return None

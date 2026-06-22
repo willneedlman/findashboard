@@ -66,7 +66,7 @@ export function BondAnalyticsContent() {
       const { data: r } = await axios.get(`/api/bond/cusip/${cu}`)
       if (!r.found) { setLookupErr(`No security found for ${cu}`); return }
       setLookup(r)
-      if (r.source === 'treasury') {
+      if (r.coupon_rate != null) {
         setP(prev => ({
           ...prev,
           coupon_rate: r.coupon_rate ?? prev.coupon_rate,
@@ -109,13 +109,13 @@ export function BondAnalyticsContent() {
                 <div style={{ background: 'var(--theme-surface, #142032)', border: '1px solid var(--theme-border, rgba(255,255,255,0.10))', padding: '8px 9px', display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-sans)' }}>{lookup.name}</div>
                   <div style={{ fontSize: 9, color: 'var(--theme-secondary, #99907e)', fontFamily: 'var(--theme-mono)' }}>{lookup.type}{lookup.ticker ? ` · ${lookup.ticker}` : ''}</div>
-                  {lookup.source === 'treasury' ? (
-                    <div style={{ fontSize: 9, color: 'var(--theme-primary, #c9a84c)', fontFamily: 'var(--theme-sans)' }}>
-                      Coupon {lookup.coupon_rate}% · matures {lookup.maturity_date} — prefilled below
+                  {lookup.coupon_rate != null ? (
+                    <div style={{ fontSize: 9, color: 'var(--theme-primary, #c9a84c)', fontFamily: 'var(--theme-sans)', lineHeight: 1.4 }}>
+                      Coupon {lookup.coupon_rate}% · matures {lookup.maturity_date} — prefilled.{lookup.source === 'treasury' ? '' : ' Enter market price (live price needs a licensed feed).'}
                     </div>
                   ) : (
                     <div style={{ fontSize: 9, color: 'var(--theme-secondary, #99907e)', fontFamily: 'var(--theme-sans)', lineHeight: 1.4 }}>
-                      Identity only. Enter coupon &amp; price manually — priced corporate-bond data needs a licensed feed.
+                      Identity only. Enter coupon &amp; price manually — priced data needs a licensed feed.
                     </div>
                   )}
                 </div>
