@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { tickerLogoUrl } from '../lib/tickerLogos'
+import { tickerLogoSources } from '../lib/tickerLogos'
 
 function tickerColor(ticker: string): string {
   const code = ticker.charCodeAt(0)
@@ -12,16 +12,24 @@ interface TickerLogoProps {
 }
 
 export default function TickerLogo({ ticker, size = 28 }: TickerLogoProps) {
-  const [failed, setFailed] = useState(false)
+  const sources = tickerLogoSources(ticker)
+  const [idx, setIdx] = useState(0)
+  // Reset to the first provider when the symbol changes (component is reused).
+  const [prevTicker, setPrevTicker] = useState(ticker)
+  if (ticker !== prevTicker) {
+    setPrevTicker(ticker)
+    setIdx(0)
+  }
 
-  if (!failed) {
+  if (idx < sources.length) {
     return (
       <img
-        src={tickerLogoUrl(ticker, 'svg')}
+        key={`${ticker}-${idx}`}
+        src={sources[idx]}
         alt={ticker}
         width={size}
         height={size}
-        onError={() => setFailed(true)}
+        onError={() => setIdx(i => i + 1)}
         style={{
           width: size,
           height: size,

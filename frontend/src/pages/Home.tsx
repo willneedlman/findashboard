@@ -388,8 +388,9 @@ const EXCHANGE_NAMES: Record<string, string> = {
   NYQ: 'NYSE', NYSE: 'NYSE', NYE: 'NYSE',
   ASE: 'NYSE American', AMEX: 'NYSE American',
   PCX: 'NYSE Arca', ARCA: 'NYSE Arca', BATS: 'Cboe', CBOE: 'Cboe',
+  PNK: 'OTC', PINX: 'OTC', OTC: 'OTC', OTCMKTS: 'OTC', OTCQB: 'OTC', OTCQX: 'OTC', OQB: 'OTC', OQX: 'OTC',
 }
-const exchangeLabel = (e?: string | null) => (!e ? null : EXCHANGE_NAMES[e] ?? e)
+const exchangeLabel = (e?: string | null) => (!e ? null : EXCHANGE_NAMES[e.toUpperCase()] ?? EXCHANGE_NAMES[e] ?? e)
 const fmtPrice = (v?: number | null) => (v == null ? '—' : v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
 const fmtCompact = (v?: number | null) => (v == null || v === 0 ? '—' : new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 2 }).format(v))
 const fmtRatio = (v?: number | null) => (v == null || v === 0 ? '—' : v.toFixed(2))
