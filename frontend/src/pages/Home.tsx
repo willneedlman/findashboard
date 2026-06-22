@@ -657,15 +657,6 @@ export default function Home() {
   const filtered = useMemo(() => !ql ? [] : ALL_TOOLS.filter(t => wordMatch(`${t.title} ${t.desc}`, ql)), [ql])
 
   const sym = useMemo(() => tickerFromQuery(q), [q])
-  const tickerResults = useMemo(() => {
-    if (!sym) return []
-    const mkt = ALL_TOOLS.find(t => t.route === '/market')
-    const dcf = ALL_TOOLS.find(t => t.route === '/dcf')
-    return [
-      { key: 'tk-market', icon: mkt?.icon ?? TrendingUp, title: `${sym} · Market data`, sub: 'Price history, returns, and chart', route: `/market?ticker=${sym}` },
-      { key: 'tk-dcf', icon: dcf?.icon ?? TrendingUp, title: `${sym} · DCF valuation`, sub: 'Intrinsic value and upside', route: `/dcf?ticker=${sym}` },
-    ]
-  }, [sym])
 
   const actionResults = useMemo(() => {
     if (!ql) return []
@@ -686,8 +677,15 @@ export default function Home() {
     retry: 1,
   })
   const companyResults = (sym ? [] : companyQuery.data?.results) ?? []
+  // A confident company-name match with no competing tool/action hits resolves
+  // straight to that company's overview (e.g. "blackstone" -> BX); the rest are
+  // offered as alternatives. Tool-ish words (e.g. "market") keep the list.
+  const autoTicker = !sym && filtered.length === 0 && actionResults.length === 0
+    && companyResults[0]?.name.toLowerCase().startsWith(ql) ? companyResults[0].ticker : null
+  const dashSym = sym ?? autoTicker
+  const otherCompanies = companyResults.filter(c => c.ticker !== dashSym)
 
-  const noResults = filtered.length === 0 && tickerResults.length === 0 && actionResults.length === 0 && companyResults.length === 0
+  const noResults = !dashSym && filtered.length === 0 && actionResults.length === 0 && companyResults.length === 0
 
   // Arrow-key navigation over the flat tool+action result list; Enter opens the
   // selection, or jumps to the ticker's market data when a symbol is typed.
@@ -699,8 +697,7 @@ export default function Home() {
     else if (e.key === 'ArrowUp') { e.preventDefault(); setSelIdx(i => Math.max(-1, i - 1)) }
     else if (e.key === 'Enter') {
       if (selIdx >= 0 && navRoutes[selIdx]) navigate(navRoutes[selIdx])
-      else if (sym) navigate(`/market?ticker=${sym}`)
-      else if (companyResults.length) setQ(companyResults[0].ticker)
+      else if (dashSym) navigate(`/market?ticker=${dashSym}`)
     }
   }
   const recentTickers = useMemo(() => getRecentTickers(), [])
@@ -738,18 +735,18 @@ export default function Home() {
           {/* search results override the hubs grid */}
           {ql ? (
             <div style={{ marginTop: 22, display: 'flex', flexDirection: 'column', gap: 20 }}>
-              {sym && (
+              {dashSym && (
                 <div>
-                  <SectionLabel icon={TrendingUp} label={`Ticker · ${sym}`} />
-                  <TickerDashboard sym={sym} />
-                  <TickerJumpTiles sym={sym} isMobile={isMobile} />
+                  <SectionLabel icon={TrendingUp} label={`Ticker · ${dashSym}`} />
+                  <TickerDashboard sym={dashSym} />
+                  <TickerJumpTiles sym={dashSym} isMobile={isMobile} />
                 </div>
               )}
-              {companyResults.length > 0 && (
+              {otherCompanies.length > 0 && (
                 <div>
-                  <SectionLabel icon={Building2} label="Companies" count={companyResults.length} />
+                  <SectionLabel icon={Building2} label={dashSym ? 'Other companies' : 'Companies'} count={otherCompanies.length} />
                   <ResultGrid>
-                    {companyResults.map(c => <ResultTile key={c.ticker} icon={Building2} title={`${c.ticker} · ${c.name}`} sub="View ticker dashboard" onClick={() => setQ(c.ticker)} />)}
+                    {otherCompanies.map(c => <ResultTile key={c.ticker} icon={Building2} title={`${c.ticker} · ${c.name}`} sub="View ticker dashboard" onClick={() => setQ(c.ticker)} />)}
                   </ResultGrid>
                 </div>
               )}
