@@ -528,6 +528,12 @@ async def get_supply_chain(ticker: str):
         product_segments = _edgar_backup(product_segments, sec_segments.get_segment_revenue)
         geo_segments     = _edgar_backup(geo_segments, sec_segments.get_geo_revenue)
 
+        import sec_bank_revenue
+        try:
+            revenue_activity = sec_bank_revenue.get_bank_revenue_activity(symbol)
+        except Exception:
+            revenue_activity = {"fiscalYear": None, "currency": "USD", "latest": [], "history": [], "concentration": None}
+
         peers = _get_peers_for_ticker(symbol, info.get("sector", ""))
 
         return {
@@ -541,6 +547,7 @@ async def get_supply_chain(ticker: str):
             "employees":        int(emp) if emp else None,
             "product_segments": product_segments,
             "geo_segments":     geo_segments,
+            "revenue_activity": revenue_activity,
             "peers":            peers,
         }
     except Exception as e:

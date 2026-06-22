@@ -82,6 +82,7 @@ interface SupplyChainData {
   employees:        number | null
   product_segments: SegBlock
   geo_segments:     SegBlock
+  revenue_activity?: SegBlock
   peers:            string[]
 }
 
@@ -360,8 +361,11 @@ export function SupplyChainContent() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '8px 40px', alignItems: 'start' }}>
                   <SegmentBreakdown title="By Product / Segment" block={data.product_segments} />
                   <SegmentBreakdown title="By Geography" block={data.geo_segments} />
+                  {data.revenue_activity && data.revenue_activity.latest.length > 0 && (
+                    <SegmentBreakdown title="By Activity · Fees vs Trading" block={data.revenue_activity} />
+                  )}
                 </div>
-                {!data.product_segments.latest.length && !data.geo_segments.latest.length && (
+                {!data.product_segments.latest.length && !data.geo_segments.latest.length && !data.revenue_activity?.latest.length && (
                   <div style={{ padding: '40px 0', textAlign: 'center', color: T.muted, fontFamily: T.label, fontSize: 11 }}>
                     {(data.product_segments.error || data.geo_segments.error) ? (
                       <>
