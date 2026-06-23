@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
+import TickerInput from '../components/TickerInput'
 import useIsMobile from '../hooks/useIsMobile'
 
 
@@ -287,13 +288,12 @@ export function RelativeValuationContent() {
 
         {/* Search */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 28, alignItems: 'center', flexWrap: 'wrap' }}>
-          <input
+          <TickerInput
             value={input}
-            onChange={e => setInput(e.target.value.toUpperCase())}
-            onKeyDown={e => e.key === 'Enter' && doFetch()}
-            placeholder="TICKER"
-            maxLength={6}
-            style={{ ...inp, width: 120, textTransform: 'uppercase', fontSize: 14, fontWeight: 700 }}
+            onChange={setInput}
+            onEnter={() => doFetch()}
+            placeholder="Ticker or company"
+            style={{ ...inp, width: 200, fontSize: 14, fontWeight: 700 }}
           />
           <button
             onClick={() => doFetch()}

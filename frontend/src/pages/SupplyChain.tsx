@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
+import TickerInput from '../components/TickerInput'
 import useIsMobile from '../hooks/useIsMobile'
 
 
@@ -352,16 +353,15 @@ export function SupplyChainContent() {
 
         {/* Search bar */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 28, alignItems: 'center' }}>
-          <input
+          <TickerInput
             value={input}
-            onChange={e => setInput(e.target.value.toUpperCase())}
-            onKeyDown={e => e.key === 'Enter' && doFetch()}
-            placeholder="TICKER"
-            maxLength={6}
+            onChange={setInput}
+            onEnter={() => doFetch()}
+            placeholder="Ticker or company"
             style={{
               background: T.surface, border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: T.text,
               fontFamily: T.mono, fontSize: 13, fontWeight: 700, padding: '8px 12px',
-              outline: 'none', width: 120, textTransform: 'uppercase', letterSpacing: '0.06em',
+              outline: 'none', width: 200, letterSpacing: '0.06em',
             }}
           />
           <button
