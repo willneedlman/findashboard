@@ -53,6 +53,12 @@ const MEAN_REVERT     = 0.02             // gentle pull of the curve factors bac
 // it (level moves dominate curve variance, slope is the second factor).
 const RATE_VOL_BP     = 3
 const CURVE_TWIST     = 0.45
+// Flow responds to your marks, like a real desk. Richening a bond (marking its
+// yield below fair) pulls in sellers; cheapening it (yield above fair) pulls in
+// buyers; and a wider half-spread wins less flow overall.
+const FLOW_SIDE_SENS  = 0.10           // per bp of yield mark vs fair: tilts BUY/SELL
+const FLOW_PICK_SENS  = 0.04           // per bp: how much a mispriced bond pulls extra flow
+const SPREAD_FLOW_SENS = 3             // per price point of half-spread: clients balk at wide quotes
 const SPEED_MIN       = 0.1
 const SPEED_MAX       = 3.0
 
@@ -121,6 +127,13 @@ function bondYield(id: string, maturity: number, s: SimState, c: Ctrl): number {
   return Math.max(0.01, CURVE0[id] + s.level + s.slope * slopeKey(maturity) + manual)
 }
 
+// The market's fair yield (level + twist, without your manual lean) — the value
+// your quotes are judged against for flow direction and mark-to-market P&L.
+function fairYield(id: string, maturity: number, s: SimState): number {
+  return Math.max(0.01, CURVE0[id] + s.level + s.slope * slopeKey(maturity))
+}
+const fairMath = (b: BondDef, s: SimState) => bondMath(b.coupon, b.maturity, fairYield(b.id, b.maturity, s))
+
 function advanceCurve(s: SimState, c: Ctrl): void {
   // Two mean-reverting factors: a parallel level move and an independent slope
   // twist. With twist > 0 the curve moves non-parallel, so net DV01 alone does
@@ -154,18 +167,41 @@ function buildBook(s: SimState, c: Ctrl): Book {
 
 function maybeGenerateOrder(s: SimState, book: Book, running: boolean): void {
   if (!running || s.tick < s.nextOrderTick) return
-  const b = BONDS[(Math.random() * BONDS.length) | 0]
+
+  // yldEdge (bp) = your quoted yield minus fair. Positive means you mark the
+  // bond at a higher yield (cheaper price) than the market — that pulls buyers.
+  const yldEdge: Record<string, number> = {}
+  for (const b of BONDS) yldEdge[b.id] = (book[b.id].yieldPct - fairYield(b.id, b.maturity, s)) * 100
+
+  // A mispriced bond attracts more interest — weight selection by |yldEdge|.
+  const weights = BONDS.map(b => 1 + Math.abs(yldEdge[b.id]) * FLOW_PICK_SENS)
+  const totalW = weights.reduce((a, w) => a + w, 0)
+  let roll = Math.random() * totalW, idx = 0
+  while (idx < BONDS.length - 1 && (roll -= weights[idx]) > 0) idx++
+  const b = BONDS[idx]
   const q = book[b.id]
-  const clientSide = Math.random() < 0.5 ? 'BUY' : 'SELL'
+
+  // Half-spread gates volume: a wider quote balks more clients, no print.
+  if (Math.random() > Math.exp(-(q.ask - q.price) * SPREAD_FLOW_SENS)) {
+    s.nextOrderTick = s.tick + randIntInclusive(ORDER_MIN_TICKS, ORDER_MAX_TICKS)
+    return
+  }
+
+  // Side tilts with the mark: cheap (yldEdge > 0) -> they BUY (lift offer);
+  // rich (yldEdge < 0) -> they SELL (hit bid).
+  const pBuy = 1 / (1 + Math.exp(-yldEdge[b.id] * FLOW_SIDE_SENS))
+  const clientSide = Math.random() < pBuy ? 'BUY' : 'SELL'
   const size = ORDER_SIZES[(Math.random() * ORDER_SIZES.length) | 0]
+
+  // Edge is realized against fair value — sell a bond you marked cheap and you
+  // book a loss the instant it trades.
+  const fairPrice = fairMath(b, s).price
   let fill: number, edge: number
   if (clientSide === 'BUY') {
-    // Client lifts our ASK -> we go short the bond. Edge = ask - theo.
-    fill = q.ask; edge = (fill - q.price) * size * DOLLARS_PER_PT
+    fill = q.ask; edge = (fill - fairPrice) * size * DOLLARS_PER_PT
     s.positions[b.id] -= size; s.cash += fill * size * DOLLARS_PER_PT
   } else {
-    // Client hits our BID -> we go long the bond. Edge = theo - bid.
-    fill = q.bid; edge = (q.price - fill) * size * DOLLARS_PER_PT
+    fill = q.bid; edge = (fairPrice - fill) * size * DOLLARS_PER_PT
     s.positions[b.id] += size; s.cash -= fill * size * DOLLARS_PER_PT
   }
   s.edgeTotal += edge
@@ -180,18 +216,20 @@ interface Risk {
   netDV01: number; curveDV01: number; convexity: number; grossNotional: number; netPnl: number
   worstId: string; worstDV01: number
 }
-function portfolioRisk(s: SimState, book: Book): Risk {
+function portfolioRisk(s: SimState): Risk {
+  // Risk and P&L are marked at the market (fair) surface, not your own quotes,
+  // so leaning a bond's yield doesn't fake your book — it shows up as edge.
   const buckets: Record<string, number> = {}
   let netDV01 = 0, curveDV01 = 0, convexity = 0, grossNotional = 0, value = 0
   for (const b of BONDS) {
-    const q = book[b.id]
+    const fm = fairMath(b, s)
     const net = (s.positions[b.id] || 0) + (s.hedge[b.id] || 0)   // client inventory + your hedge
-    const dv01 = net * q.dv01
+    const dv01 = net * perUnitDV01(fm)
     buckets[b.id]  = dv01
     netDV01       += dv01
     curveDV01     += dv01 * slopeKey(b.maturity)                  // exposure to a 1bp steepening
-    const mv = net * q.price * DOLLARS_PER_PT
-    convexity     += 0.5 * q.convexity * mv * 0.01 * 0.01         // P&L from curvature on a 100bp move
+    const mv = net * fm.price * DOLLARS_PER_PT
+    convexity     += 0.5 * fm.convexity * mv * 0.01 * 0.01        // P&L from curvature on a 100bp move
     grossNotional += Math.abs(net) * FACE_UNIT
     value         += mv
   }
@@ -200,12 +238,14 @@ function portfolioRisk(s: SimState, book: Book): Risk {
   return { buckets, netDV01, curveDV01, convexity, grossNotional, netPnl: s.cash + value, worstId, worstDV01 }
 }
 
-function tradeHedge(s: SimState, book: Book, id: string, qty: number): void {
-  // Manual rate hedge: buy (qty > 0) / sell (qty < 0) the matched-maturity note.
-  // Long the note adds positive DV01 (gains as yields fall), offsetting a short
-  // bucket. Hedging only the net leaves the other buckets exposed to a twist.
+function tradeHedge(s: SimState, id: string, qty: number): void {
+  // Manual rate hedge: buy (qty > 0) / sell (qty < 0) the matched-maturity note
+  // at the market (fair) price. Long the note adds positive DV01 (gains as
+  // yields fall), offsetting a short bucket. Hedging only the net leaves the
+  // other buckets exposed to a twist.
   if (!qty) return
-  const px = book[id].price
+  const def = BONDS.find(x => x.id === id)!
+  const px = fairMath(def, s).price
   s.cash -= qty * px * DOLLARS_PER_PT
   s.hedge[id] = (s.hedge[id] || 0) + qty
   s.ledger.push({
@@ -247,7 +287,7 @@ export default function FixedIncomeMarketMaker() {
     const yldHistory: Record<string, number[]> = {}
     for (const b of BONDS) yldHistory[b.id] = [...s.yldHistory[b.id]]
     return {
-      book, risk: portfolioRisk(s, book), yldHistory,
+      book, risk: portfolioRisk(s), yldHistory,
       positions: { ...s.positions }, hedge: { ...s.hedge }, edge: s.edgeTotal,
       ledger: s.ledger.slice(-18), lastOrder: s.lastOrder, lastOrderAt: s.lastOrderAt, running: c.running,
     }
@@ -273,7 +313,7 @@ export default function FixedIncomeMarketMaker() {
 
   const onTradeHedge = (qty: number) => {
     const s = sim.current
-    tradeHedge(s, buildBook(s, ctrl.current), selected, qty)
+    tradeHedge(s, selected, qty)
     setFrame(snapshot(s, ctrl.current))
   }
   const onReset = () => {

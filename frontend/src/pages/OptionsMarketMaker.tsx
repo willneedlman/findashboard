@@ -40,6 +40,17 @@ const DELTA_LIMIT    = 200             // |net delta shares| above this flashes 
 const SPEED_MIN      = 0.1             // ticks/sec multiplier; interval = 1000 / speed ms
 const SPEED_MAX      = 3.0
 
+// The "true" market vol surface your quotes are measured against. You don't set
+// this — it's where the rest of the Street values the options. Quote a strike
+// below it (cheap) and clients lift your offers; quote it above (rich) and they
+// hit your bids. Mismarking shows up as adverse fills and a hit to fair-value P&L.
+const MKT_BASE_IV    = 0.25
+const MKT_SKEW       = 0.06
+const FLOW_SIDE_SENS = 45              // how hard a vol mispricing tilts the BUY/SELL side
+const FLOW_PICK_SENS = 10              // how much a mispriced strike pulls extra flow
+const SPREAD_FLOW_SENS = 5             // wider quotes win less flow — clients balk at the price
+const TAPE_COLORS    = ['#c9a84c', '#60a5fa', '#22c55e', '#ef4444', '#a78bfa', '#f97316']
+
 const randIntInclusive = (lo: number, hi: number) => lo + Math.floor(Math.random() * (hi - lo + 1))
 
 // ── Black-Scholes (pure TS; normCdf via Zelen-Severo, error < 8e-8) ─────────────
@@ -82,6 +93,16 @@ function strikeIv(strike: number, baseIv: number, skew: number, manual: Record<n
   const atm = STRIKES[(STRIKES.length / 2) | 0]
   const tilt = skew * ((atm - strike) / atm)    // +skew => lower strike, higher IV (equity skew)
   return Math.max(0.02, baseIv + tilt + (manual[strike] ?? 0))
+}
+
+// The market's fair IV per strike — the surface your quotes are judged against.
+function marketIv(strike: number): number {
+  const atm = STRIKES[(STRIKES.length / 2) | 0]
+  return Math.max(0.02, MKT_BASE_IV + MKT_SKEW * ((atm - strike) / atm))
+}
+// Fair value + true greeks of a contract at the market surface, for P&L and risk.
+function marketLeg(spot: number, strike: number, kind: 'C' | 'P'): Greeks {
+  return priceOption(spot, strike, TIME_TO_EXPIRY, RISK_FREE, marketIv(strike), kind)
 }
 
 // ── Simulation state ────────────────────────────────────────────────────────────
@@ -140,18 +161,44 @@ function buildChain(s: SimState, baseIv: number, skew: number, halfSpread: numbe
 function maybeGenerateOrder(s: SimState, chain: Chain, running: boolean): void {
   if (!running || s.tick < s.nextOrderTick) return
   const keys = Object.keys(s.positions)
-  const key = keys[(Math.random() * keys.length) | 0]
+
+  // Flow follows mispricing. For each contract, ivEdge = your IV minus the
+  // market's: negative means you're quoting it cheap, positive means rich.
+  const ivEdge: Record<string, number> = {}
+  for (const k of keys) ivEdge[k] = chain[k].iv - marketIv(chain[k].strike)
+
+  // A mispriced strike attracts more interest (clients shop the cheapest offers
+  // and the richest bids), so weight contract selection by |ivEdge|.
+  const weights = keys.map(k => 1 + Math.abs(ivEdge[k]) * FLOW_PICK_SENS)
+  const total = weights.reduce((a, b) => a + b, 0)
+  let roll = Math.random() * total, idx = 0
+  while (idx < keys.length - 1 && (roll -= weights[idx]) > 0) idx++
+  const key = keys[idx]
   const leg = chain[key]
-  const clientSide = Math.random() < 0.5 ? 'BUY' : 'SELL'
+
+  // Spread sets how much flow you win: the wider you quote relative to value,
+  // the more often the client balks and no trade prints this slot.
+  const relSpread = leg.theo > 0 ? (leg.ask - leg.theo) / leg.theo : 0
+  if (Math.random() > Math.exp(-relSpread * SPREAD_FLOW_SENS)) {
+    s.nextOrderTick = s.tick + randIntInclusive(ORDER_MIN_TICKS, ORDER_MAX_TICKS)
+    return
+  }
+
+  // Side tilts with the mispricing: quote cheap (ivEdge < 0) and they BUY (lift
+  // your offer); quote rich (ivEdge > 0) and they SELL (hit your bid).
+  const pBuy = 1 / (1 + Math.exp(ivEdge[key] * FLOW_SIDE_SENS))
+  const clientSide = Math.random() < pBuy ? 'BUY' : 'SELL'
   const size = ORDER_SIZES[(Math.random() * ORDER_SIZES.length) | 0]
+
+  // Edge is realized against fair value, not your own mark — so selling a
+  // contract you marked below the market books a loss the moment it trades.
+  const fair = marketLeg(s.spot, leg.strike, leg.kind).theo
   let fill: number, edge: number
   if (clientSide === 'BUY') {
-    // Client lifts our ASK -> we go short. Edge = ask - theo.
-    fill = leg.ask; edge = (fill - leg.theo) * size * MULT
+    fill = leg.ask; edge = (fill - fair) * size * MULT
     s.positions[key] -= size; s.cash += fill * size * MULT
   } else {
-    // Client hits our BID -> we go long. Edge = theo - bid.
-    fill = leg.bid; edge = (leg.theo - fill) * size * MULT
+    fill = leg.bid; edge = (fair - fill) * size * MULT
     s.positions[key] += size; s.cash -= fill * size * MULT
   }
   s.edgeTotal += edge
@@ -163,15 +210,18 @@ function maybeGenerateOrder(s: SimState, chain: Chain, running: boolean): void {
 
 interface Portfolio { optDeltaSh: number; totalDeltaSh: number; gamma: number; vega1pct: number; netPnl: number }
 function portfolioGreeks(s: SimState, chain: Chain): Portfolio {
+  // Risk and P&L are marked at the market surface (true value), not your own
+  // quotes — otherwise mismarking would never show up as a loss.
   let optDeltaSh = 0, gamma = 0, vega1pct = 0, optValue = 0
   for (const key of Object.keys(s.positions)) {
     const pos = s.positions[key]
     if (!pos) continue
     const leg = chain[key]
-    optDeltaSh += pos * leg.delta * MULT
-    gamma      += pos * leg.gamma * MULT
-    vega1pct   += pos * leg.vega          // vega*100 shares *1% = vega
-    optValue   += pos * leg.theo * MULT
+    const m = marketLeg(s.spot, leg.strike, leg.kind)
+    optDeltaSh += pos * m.delta * MULT
+    gamma      += pos * m.gamma * MULT
+    vega1pct   += pos * m.vega            // vega*100 shares *1% = vega
+    optValue   += pos * m.theo * MULT
   }
   const totalDeltaSh = optDeltaSh + s.stock
   const netPnl = s.cash + optValue + s.stock * s.spot
@@ -213,7 +263,11 @@ export default function OptionsMarketMaker() {
   const [speed, setSpeed]           = useState(0.5)
   const [hedgeQty, setHedgeQty]     = useState(100)
   const [rulesOpen, setRulesOpen]   = useState(false)
+  const [tapeSel, setTapeSel]       = useState<string[]>([])   // contracts overlaid on the tape
   const [frame, setFrame]           = useState<Frame | null>(null)
+
+  const toggleTape = (key: string) =>
+    setTapeSel(sel => sel.includes(key) ? sel.filter(k => k !== key) : [...sel, key])
 
   // Latest controls available to the (single, stable) game-loop.
   const ctrl = useRef({ baseIv, skew, halfSpread, manual, running, speed })
@@ -261,6 +315,23 @@ export default function OptionsMarketMaker() {
   const overLimit = g ? Math.abs(g.totalDeltaSh) > DELTA_LIMIT : false
   const nowSec = Date.now() / 1000
   const showAlert = f?.lastOrder && (nowSec - f.lastOrderAt) < 4
+
+  // Tape series: with no selection it plots the underlying; selecting contracts
+  // in the chain overlays each one's premium, repriced across the spot history
+  // at the current quoted IV so you can watch your options move with the tape.
+  const tapeOptions = tapeSel.length > 0
+  const tapeData = (f ? f.spotHistory : []).map((spot, i) => {
+    const row: Record<string, number> = { i }
+    if (tapeOptions) {
+      for (const key of tapeSel) {
+        const kind = key[0] as 'C' | 'P'; const strike = +key.slice(1)
+        row[key] = +priceOption(spot, strike, TIME_TO_EXPIRY, RISK_FREE, strikeIv(strike, baseIv, skew, manual), kind).theo.toFixed(3)
+      }
+    } else {
+      row.spot = +spot.toFixed(2)
+    }
+    return row
+  })
 
   // ── Sidebar: controls + rules ────────────────────────────────────────────
   const labelStyle: React.CSSProperties = { fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.muted, marginBottom: 3, fontFamily: T.sans }
@@ -416,23 +487,42 @@ export default function OptionsMarketMaker() {
               {/* Chain + tape */}
               <div style={{ flex: '1 1 560px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ background: T.bg, border: `1px solid ${T.border}` }}>
-                  <div style={panelHeader}>OPTIONS CHAIN — YOUR LIVE QUOTES</div>
-                  {renderChain(f)}
+                  <div style={{ ...panelHeader, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>OPTIONS CHAIN — YOUR LIVE QUOTES</span>
+                    <span style={{ fontSize: 8, fontWeight: 400, letterSpacing: '0.04em', textTransform: 'none', color: T.muted }}>click a Theo to plot it</span>
+                  </div>
+                  {renderChain(f, tapeSel, toggleTape)}
                 </div>
                 <div style={{ background: T.bg, border: `1px solid ${T.border}` }}>
-                  <div style={panelHeader}>UNDERLYING TAPE</div>
+                  <div style={{ ...panelHeader, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>{tapeOptions ? 'OPTION PREMIUMS' : 'UNDERLYING TAPE'}</span>
+                    {tapeOptions && (
+                      <span style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                        {tapeSel.map((k, idx) => (
+                          <span key={k} style={{ fontSize: 9, color: TAPE_COLORS[idx % TAPE_COLORS.length] }}>{k}</span>
+                        ))}
+                        <button onClick={() => setTapeSel([])} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.muted, fontFamily: T.sans }}>clear</button>
+                      </span>
+                    )}
+                  </div>
                   <div style={{ height: 180, padding: '6px 4px 4px' }}>
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={f.spotHistory.map((p, i) => ({ i, spot: +p.toFixed(2) }))} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
+                      <LineChart data={tapeData} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.07)" />
                         <XAxis dataKey="i" hide />
-                        <YAxis tick={{ fontSize: 9, fill: T.muted, fontFamily: T.mono }} orientation="right" domain={['auto', 'auto']} tickFormatter={v => `$${(+v).toFixed(0)}`} width={42} />
+                        <YAxis tick={{ fontSize: 9, fill: T.muted, fontFamily: T.mono }} orientation="right" domain={['auto', 'auto']} tickFormatter={v => tapeOptions ? `$${(+v).toFixed(1)}` : `$${(+v).toFixed(0)}`} width={42} />
                         <Tooltip contentStyle={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 0, fontFamily: T.mono, fontSize: 11 }}
-                          formatter={(v: number) => [`$${(+v).toFixed(2)}`, 'spot']} labelFormatter={() => ''} />
-                        {STRIKES.map(k => (
-                          <ReferenceLine key={k} y={k} stroke="color-mix(in srgb, var(--theme-primary) 25%, transparent)" strokeDasharray="3 4" />
-                        ))}
-                        <Line type="monotone" dataKey="spot" stroke={T.gold} strokeWidth={2} dot={false} isAnimationActive={false} />
+                          formatter={(v: number, name: string) => [`$${(+v).toFixed(tapeOptions ? 3 : 2)}`, tapeOptions ? name : 'spot']} labelFormatter={() => ''} />
+                        {tapeOptions
+                          ? tapeSel.map((k, idx) => (
+                              <Line key={k} type="monotone" dataKey={k} stroke={TAPE_COLORS[idx % TAPE_COLORS.length]} strokeWidth={2} dot={false} isAnimationActive={false} />
+                            ))
+                          : <>
+                              {STRIKES.map(k => (
+                                <ReferenceLine key={k} y={k} stroke="color-mix(in srgb, var(--theme-primary) 25%, transparent)" strokeDasharray="3 4" />
+                              ))}
+                              <Line type="monotone" dataKey="spot" stroke={T.gold} strokeWidth={2} dot={false} isAnimationActive={false} />
+                            </>}
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
@@ -477,13 +567,27 @@ function scoreCard(label: string, value: string, color: string, sub: string) {
   )
 }
 
-function renderChain(f: Frame) {
+function renderChain(f: Frame, tapeSel: string[], onToggle: (key: string) => void) {
   const th: React.CSSProperties = { fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', padding: '6px 8px', textAlign: 'right' }
   const td: React.CSSProperties = { fontFamily: 'var(--theme-mono)', fontSize: 12, padding: '5px 8px', textAlign: 'right', color: 'var(--theme-text, #d7e3fc)' }
   const posCell = (pos: number) => pos === 0
     ? <span style={{ color: 'var(--theme-secondary, #5e768f)' }}>0</span>
     : <span style={{ color: pos > 0 ? 'var(--theme-positive, #22c55e)' : 'var(--theme-negative, #ef4444)', fontWeight: 700 }}>{pos > 0 ? '+' : ''}{pos}</span>
   const G = 'var(--theme-positive, #22c55e)', R = 'var(--theme-negative, #ef4444)', M = 'var(--theme-secondary, #5e768f)', GD = 'var(--theme-primary, #c9a84c)'
+  // The Theo cell doubles as the tape toggle: click it to overlay that
+  // contract's premium on the tape; selected cells carry the line's colour.
+  const theoCell = (key: string, value: number, align: 'left' | 'right') => {
+    const i = tapeSel.indexOf(key)
+    const on = i >= 0
+    const col = on ? TAPE_COLORS[i % TAPE_COLORS.length] : M
+    return (
+      <td onClick={() => onToggle(key)} title="Plot on tape"
+        style={{ ...td, textAlign: align, color: col, cursor: 'pointer',
+          background: on ? `color-mix(in srgb, ${col} 16%, transparent)` : 'transparent' }}>
+        {value.toFixed(2)}
+      </td>
+    )
+  }
 
   return (
     <div style={{ overflowX: 'auto' }}>
@@ -509,13 +613,13 @@ function renderChain(f: Frame) {
                 <td style={{ ...td, textAlign: 'left' }}>{posCell(cpos)}</td>
                 <td style={td}>{c.delta >= 0 ? '+' : ''}{c.delta.toFixed(2)}</td>
                 <td style={{ ...td, color: G }}>{c.bid.toFixed(2)}</td>
-                <td style={{ ...td, color: M }}>{c.theo.toFixed(2)}</td>
+                {theoCell(`C${k}`, c.theo, 'right')}
                 <td style={{ ...td, color: R }}>{c.ask.toFixed(2)}</td>
                 <td style={{ ...td, textAlign: 'center', fontWeight: 700, color: GD, background: 'color-mix(in srgb, var(--theme-primary) 5%, transparent)' }}>
                   {k}<span style={{ fontSize: 8, color: M, marginLeft: 4 }}>{money}</span>
                 </td>
                 <td style={{ ...td, textAlign: 'left', color: G }}>{p.bid.toFixed(2)}</td>
-                <td style={{ ...td, textAlign: 'left', color: M }}>{p.theo.toFixed(2)}</td>
+                {theoCell(`P${k}`, p.theo, 'left')}
                 <td style={{ ...td, textAlign: 'left', color: R }}>{p.ask.toFixed(2)}</td>
                 <td style={{ ...td, textAlign: 'left' }}>{p.delta >= 0 ? '+' : ''}{p.delta.toFixed(2)}</td>
                 <td style={{ ...td, textAlign: 'right' }}>{posCell(ppos)}</td>
