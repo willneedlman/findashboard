@@ -190,8 +190,18 @@ def _resolve_cusip(cu: str) -> dict:
                 for k in ("market_price", "price_source", "price_as_of"):
                     if px.get(k) is not None:
                         result[k] = px[k]
+                # Backfill terms from the ETF holding when the identity lookup
+                # missed them, so a priced bond always has the coupon + maturity
+                # needed to solve a yield.
                 if result.get("coupon_rate") is None and px.get("coupon_rate") is not None:
                     result["coupon_rate"] = px["coupon_rate"]
+                if result.get("maturity_date") is None and px.get("maturity_date"):
+                    result["maturity_date"] = px["maturity_date"]
+                    try:
+                        result["years_to_maturity"] = round(
+                            (date.fromisoformat(px["maturity_date"]) - date.today()).days / 365.25, 2)
+                    except ValueError:
+                        pass
         except Exception:
             pass
     return result
