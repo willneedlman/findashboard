@@ -90,7 +90,7 @@ export const HUBS: Hub[] = [
       { title: 'Rate Engine',    chip: 'Rate Engine',    desc: 'Implied FOMC path and the full yield curve',     route: '/fed',            icon: GitBranch },
       { title: 'Macro Monitor',  chip: 'Macro',          desc: 'Growth, inflation, and labor-market dashboards', route: '/economy',        icon: Compass },
       { title: 'Bond Analytics', chip: 'Bonds',          desc: 'Yield-to-maturity, duration, and convexity',     route: '/bond',           icon: Landmark },
-      { title: 'CUSIP Lookup',   chip: 'CUSIP',          desc: 'Resolve a CUSIP or issuer to bond reference data', route: '/cusip',          icon: BookOpen },
+      { title: 'Bond Lookup',    chip: 'Lookup',         desc: 'Resolve a CUSIP or issuer to bond reference data', route: '/cusip',          icon: BookOpen },
       { title: 'Credit Spreads', chip: 'Credit Spreads', desc: 'Investment-grade and high-yield spread monitor', route: '/credit-spreads', icon: Activity },
     ],
   },

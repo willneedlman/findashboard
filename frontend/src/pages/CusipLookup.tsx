@@ -48,7 +48,9 @@ interface BatchRow {
 const RECENTS_KEY = 'ft_cusip_recents'
 const SEED_RECENTS = ['037833AL4', '06051GGR4', '91282CQQ7']
 
-const isCusip = (s: string) => /^[A-Z0-9]{9}$/.test(s.toUpperCase().replace(/\s+/g, ''))
+// A CUSIP is 8 alphanumeric chars + a numeric check digit; the trailing-digit
+// anchor keeps 9-letter issuer names (e.g. "microsoft") out of the CUSIP path.
+const isCusip = (s: string) => /^[A-Z0-9]{8}[0-9]$/.test(s.toUpperCase().replace(/\s+/g, ''))
 
 // Derive YTM/duration/convexity for a resolved bond. Requires a real price mark:
 // without one there is no yield to solve, so we return null rather than invent an
@@ -240,7 +242,7 @@ export default function CusipLookup() {
         {/* header */}
         <div style={{ padding: '18px 22px 12px', borderBottom: `1px solid rgba(201,168,76,0.4)` }}>
           <div style={{ ...EYEBROW, letterSpacing: '0.22em' }}>FIXED INCOME · REFERENCE</div>
-          <div style={{ fontFamily: MONO, fontSize: 19, fontWeight: 700, letterSpacing: '0.2em', color: G, marginTop: 4 }}>CUSIP LOOKUP</div>
+          <div style={{ fontFamily: MONO, fontSize: 19, fontWeight: 700, letterSpacing: '0.2em', color: G, marginTop: 4 }}>BOND LOOKUP</div>
         </div>
 
         {/* mode tabs */}
@@ -295,7 +297,7 @@ export default function CusipLookup() {
             <div>
               <div style={{ ...EYEBROW, letterSpacing: '0.18em', color: G, marginBottom: 4 }}>{candidates[0]?.name || 'Issuer'} · Outstanding bonds</div>
               <div style={{ fontFamily: SANS, fontSize: 10.5, color: SEC, marginBottom: 12, lineHeight: 1.5 }}>
-                Reference terms by issuer. CUSIP and live price are licensed and not shown here; select a bond to analyze it at par or import it.
+                Reference terms by issuer. CUSIP and live price are licensed and not shown here; select a bond to view its terms or import it.
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>
                 {candidates.map((c, i) => <CandidateCard key={c.figi || i} b={c} onClick={() => pickMut.mutate(c)} />)}

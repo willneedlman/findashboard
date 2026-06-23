@@ -114,7 +114,7 @@ def _lookup_openfigi(cusip: str):
 def _search_openfigi_issuer(q: str):
     """Issuer-name -> list of that issuer's corporate bonds via OpenFIGI search
     (free). Results carry coupon + maturity in the description but no CUSIP (it is
-    licensed), so they price at par and resolve to reference terms only."""
+    licensed), so they have no price mark and resolve to reference terms only."""
     try:
         r = requests.post("https://api.openfigi.com/v3/search",
                           json={"query": q, "marketSecDes": "Corp"},
@@ -159,7 +159,7 @@ def _search_openfigi_issuer(q: str):
 def bond_search(q: str):
     """Resolve an issuer name to its outstanding corporate bonds. Identity-only
     (no CUSIP, no price) because that data is licensed; returns parseable
-    coupon/maturity so each candidate can be analyzed at par or imported."""
+    coupon/maturity so each candidate can be inspected or imported."""
     qn = (q or "").strip()
     if len(qn) < 2:
         return {"query": qn, "results": []}
