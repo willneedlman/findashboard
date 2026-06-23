@@ -17,6 +17,8 @@ interface Props {
   style?: React.CSSProperties
   autoFocus?: boolean
   disabled?: boolean
+  onFocus?: (e: React.FocusEvent<HTMLInputElement>) => void
+  onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void
   'aria-label'?: string
 }
 
@@ -24,7 +26,7 @@ const TICKER_RE = /^[A-Za-z]{1,5}(\.[A-Za-z])?$/
 
 export default function TickerInput({
   value, onChange, onEnter, placeholder = 'Ticker or company',
-  style, autoFocus, disabled, 'aria-label': ariaLabel,
+  style, autoFocus, disabled, onFocus, onBlur, 'aria-label': ariaLabel,
 }: Props) {
   const [text, setText] = useState(value)
   const [matches, setMatches] = useState<Match[]>([])
@@ -48,10 +50,14 @@ export default function TickerInput({
     return () => clearTimeout(t)
   }, [text])
 
+  // Picking a company resolves the symbol into the field, exactly as if the user
+  // had typed the ticker. We deliberately do NOT auto-run onEnter here: the page's
+  // run handlers read the symbol from their own state, which has not committed yet
+  // inside this click, so firing now would act on the previous symbol. The user
+  // runs it with the existing button or a second Enter, once state has settled.
   const pick = (m: Match) => {
     setText(m.ticker); onChange(m.ticker)
     setOpen(false); setMatches([])
-    onEnter?.()
   }
 
   const onType = (v: string) => {
@@ -79,8 +85,8 @@ export default function TickerInput({
         value={text}
         onChange={e => onType(e.target.value)}
         onKeyDown={onKeyDown}
-        onFocus={() => setOpen(true)}
-        onBlur={() => { blurTimer.current = setTimeout(() => setOpen(false), 120) }}
+        onFocus={e => { setOpen(true); onFocus?.(e) }}
+        onBlur={e => { blurTimer.current = setTimeout(() => setOpen(false), 120); onBlur?.(e) }}
         placeholder={placeholder}
         style={style}
         autoFocus={autoFocus}

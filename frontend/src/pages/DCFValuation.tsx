@@ -7,6 +7,7 @@ import MetricCard from '../components/MetricCard'
 import SidebarLayout from '../components/SidebarLayout'
 import axios from 'axios'
 import EmptyState from '../components/EmptyState'
+import TickerInput from '../components/TickerInput'
 import { useChartColors } from '../hooks/useChartColors'
 import useIsMobile from '../hooks/useIsMobile'
 function fmtM(v: number) {
@@ -245,8 +246,8 @@ export function DCFValuationContent() {
             {/* Ticker + fetch */}
             <div>
               <label style={LABEL}>Ticker</label>
-              <input style={INPUT} value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())}
-                onFocus={focus} onBlur={blur} placeholder="AAPL" />
+              <TickerInput style={INPUT} value={ticker} onChange={setTicker} onEnter={autoFill}
+                onFocus={focus} onBlur={blur} placeholder="Ticker or company" />
               <button onClick={autoFill} disabled={fetching} style={{
                 marginTop: 6, width: '100%', background: 'var(--theme-surface, #1f2a3d)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', color: 'var(--theme-secondary, #99907e)',
                 fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em',
