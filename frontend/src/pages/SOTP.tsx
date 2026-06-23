@@ -5,6 +5,7 @@ import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
 import MetricCard from '../components/MetricCard'
 import EmptyState from '../components/EmptyState'
+import TickerInput from '../components/TickerInput'
 import { useChartColors } from '../hooks/useChartColors'
 import {
   INPUT, LABEL, SIDEBAR, SECTION, RailSection, PRIMARY_BTN, GHOST_BTN, READOUT_ROW, TOOLTIP_STYLE, TOOLTIP_LABEL,
@@ -116,8 +117,7 @@ export function SOTPContent() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div>
           <label style={LABEL}>Ticker</label>
-          <input style={INPUT} value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())}
-            onKeyDown={e => e.key === 'Enter' && load()} placeholder="AAPL" />
+          <TickerInput style={INPUT} value={ticker} onChange={setTicker} onEnter={load} placeholder="Ticker or company" />
           <button onClick={load} disabled={loading} style={{ ...PRIMARY_BTN, marginTop: 8 }}>
             {loading ? 'Loading…' : 'Load segments'}
           </button>

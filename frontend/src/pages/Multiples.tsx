@@ -4,6 +4,7 @@ import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
 import MetricCard from '../components/MetricCard'
 import EmptyState from '../components/EmptyState'
+import TickerInput from '../components/TickerInput'
 import { INPUT, LABEL, SIDEBAR, RailSection, PRIMARY_BTN, READOUT_ROW, TH, TD, PANEL, METRIC_GRID, STACK } from './valuationShared'
 
 type Metric = { key: string; label: string; per_share: number; current_mult: number | null; ev_based: boolean }
@@ -57,8 +58,7 @@ export function MultiplesContent() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div>
           <label style={LABEL}>Ticker</label>
-          <input style={INPUT} value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())}
-            onKeyDown={e => e.key === 'Enter' && load()} placeholder="AAPL" />
+          <TickerInput style={INPUT} value={ticker} onChange={setTicker} onEnter={load} placeholder="Ticker or company" />
           <button onClick={load} disabled={loading} style={{ ...PRIMARY_BTN, marginTop: 8 }}>
             {loading ? 'Loading…' : 'Load multiples'}
           </button>
