@@ -60,6 +60,17 @@ export default function MarketData() {
   const m = data?.metrics
   const returnColor = m ? (m.total_return >= 0 ? 'var(--theme-positive)' : 'var(--theme-negative)') : 'var(--theme-text, #d7e3fc)'
 
+  // Short ranges return intraday bars (date = UNIX seconds); long ranges return
+  // daily bars (date = YYYY-MM-DD). Format axis/tooltip labels for either.
+  const intraday: boolean = !!data?.meta?.intraday
+  const interval: string = data?.meta?.interval ?? '1d'
+  const fmtAxis = (d: string | number) =>
+    typeof d === 'number'
+      ? new Date(d * 1000).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
+      : d.slice(0, 7)
+  const priceLabel = intraday ? `Price (${interval} intraday)` : 'Price (EOD Close)'
+  const volLabel   = intraday ? `Rolling Volatility (Annualised · ${interval})` : '30D Rolling Volatility (Annualised)'
+
   const inputStyle = {
     background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: 'var(--theme-text, #d7e3fc)',
     fontFamily: 'var(--theme-mono)', fontSize: 12, padding: '5px 8px',
@@ -139,11 +150,11 @@ export default function MarketData() {
                 </div>
               </div>
 
-              <ChartPanel label="Price (EOD Close)" height={268}>
+              <ChartPanel label={priceLabel} height={268}>
                 <TVChart data={data.price} color="#1f5673" height={240} fillArea />
               </ChartPanel>
 
-              <ChartPanel label="30D Rolling Volatility (Annualised)" height={188}>
+              <ChartPanel label={volLabel} height={188}>
                 <TVChart data={data.volatility} color="#d97736" height={160} formatValue={v => `${(v * 100).toFixed(1)}%`} />
               </ChartPanel>
 
@@ -157,9 +168,9 @@ export default function MarketData() {
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.07)" />
-                    <XAxis dataKey="date" tick={TICK_STYLE} tickFormatter={d => d.slice(0, 7)} interval="preserveStartEnd" />
+                    <XAxis dataKey="date" tick={TICK_STYLE} tickFormatter={fmtAxis} interval="preserveStartEnd" />
                     <YAxis tick={TICK_STYLE} tickFormatter={v => `${v}%`} orientation="right" />
-                    <Tooltip formatter={(v: number) => [`${v}%`, 'Drawdown']} contentStyle={TOOLTIP_STYLE} cursor={CROSSHAIR_CURSOR} />
+                    <Tooltip formatter={(v: number) => [`${v}%`, 'Drawdown']} labelFormatter={fmtAxis} contentStyle={TOOLTIP_STYLE} cursor={CROSSHAIR_CURSOR} />
                     <Area type="monotone" dataKey="value" stroke="#8c2e36" fill="url(#ddGrad)" strokeWidth={1.5} />
                   </AreaChart>
                 </ResponsiveContainer>

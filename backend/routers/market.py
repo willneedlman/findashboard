@@ -78,31 +78,80 @@ def _get_history(ticker: str) -> pd.DataFrame:
     return df[["close"]].dropna()
 
 
+# Resolution chosen from the requested span so short windows get intraday bars
+# instead of a handful of daily points. Returns (yfinance interval, bars-per-year
+# for annualising vol, bars-per-trading-day, is_intraday). yfinance intraday caps:
+# 5m ~60d, 30m ~60d, 60m ~730d — every branch stays inside its cap.
+_TRADING_DAYS = 252
+def _history_resolution(span_days: "int | None"):
+    if span_days is None or span_days > 90:
+        return ("1d", _TRADING_DAYS, 1, False)
+    if span_days <= 5:
+        return ("5m", 78 * _TRADING_DAYS, 78, True)
+    if span_days <= 30:
+        return ("30m", 13 * _TRADING_DAYS, 13, True)
+    return ("60m", round(6.5 * _TRADING_DAYS), 7, True)
+
+
 @router.get("/history")
 def get_history(ticker: str, start: str | None = None, end: str | None = None):
+    import datetime as _dt
     ticker = validate_ticker(ticker)
     if start: validate_date(start)
     if end:   validate_date(end)
-    df = _get_history(ticker)
-    if df.empty:
-        raise HTTPException(404, "No data found for ticker")
-    if start:
-        df = df[df.index >= pd.to_datetime(start)]
-    if end:
-        df = df[df.index <= pd.to_datetime(end)]
+
+    span_days = None
+    if start and end:
+        try:
+            span_days = (_dt.date.fromisoformat(end) - _dt.date.fromisoformat(start)).days
+        except Exception:
+            span_days = None
+    yf_int, bars_per_year, bars_per_day, intraday = _history_resolution(span_days)
+
+    df = None
+    if intraday and start and end:
+        import yfinance as yf
+        try:
+            end_excl = (_dt.date.fromisoformat(end) + _dt.timedelta(days=1)).isoformat()
+            raw = yf.Ticker(ticker).history(start=start, end=end_excl, interval=yf_int)
+            if not raw.empty:
+                df = raw.rename(columns={"Close": "close"})[["close"]].dropna()
+        except Exception:
+            df = None
+
+    # Daily path — also the fallback when intraday is unavailable for the window
+    # (e.g. a short range older than the provider's intraday cap).
+    if df is None or df.empty:
+        intraday, bars_per_year = False, _TRADING_DAYS
+        df = _get_history(ticker)
+        if df.empty:
+            raise HTTPException(404, "No data found for ticker")
+        if start:
+            df = df[df.index >= pd.to_datetime(start)]
+        if end:
+            df = df[df.index <= pd.to_datetime(end)]
     if df.empty:
         raise HTTPException(404, "No data in date range")
 
     prices = df["close"]
     returns = np.log(prices / prices.shift(1)).dropna()
-    rolling_vol = returns.rolling(30).std() * np.sqrt(252)
+    ann = np.sqrt(bars_per_year)
+    # Rolling window: 30 sessions for daily; ~a quarter of the intraday series
+    # (capped at one trading day of bars) so the line is smooth at any zoom.
+    win = 30 if not intraday else max(10, min(len(returns) // 4, bars_per_day))
+    rolling_vol = returns.rolling(win).std() * ann
     wealth_idx = (1 + prices.pct_change().fillna(0)).cumprod()
     drawdown = (wealth_idx - wealth_idx.cummax()) / wealth_idx.cummax()
 
     total_return = (prices.iloc[-1] / prices.iloc[0] - 1) * 100
     max_dd = float(drawdown.min()) * 100
-    ann_vol = float(returns.std() * np.sqrt(252)) * 100
+    ann_vol = float(returns.std() * ann) * 100 if len(returns) > 1 else 0.0
     current_price = float(prices.iloc[-1])
+
+    # Intraday points carry a UNIX timestamp (seconds) so lightweight-charts shows
+    # the time of day; daily points keep the YYYY-MM-DD string.
+    def _lbl(d):
+        return int(d.timestamp()) if intraday else str(d.date())
 
     return {
         "ticker": ticker.upper(),
@@ -112,9 +161,10 @@ def get_history(ticker: str, start: str | None = None, end: str | None = None):
             "ann_volatility": round(ann_vol, 2),
             "current_price": round(current_price, 2),
         },
-        "price": [{"date": str(d.date()), "value": round(float(v), 4)} for d, v in prices.items()],
-        "volatility": [{"date": str(d.date()), "value": round(float(v), 4)} for d, v in rolling_vol.dropna().items()],
-        "drawdown": [{"date": str(d.date()), "value": round(float(v), 4)} for d, v in drawdown.items()],
+        "price": [{"date": _lbl(d), "value": round(float(v), 4)} for d, v in prices.items()],
+        "volatility": [{"date": _lbl(d), "value": round(float(v), 4)} for d, v in rolling_vol.dropna().items()],
+        "drawdown": [{"date": _lbl(d), "value": round(float(v), 4)} for d, v in drawdown.items()],
+        "meta": {"interval": yf_int, "intraday": intraday, "vol_window": int(win)},
     }
 
 
