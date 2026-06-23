@@ -115,7 +115,8 @@ export const HUBS: Hub[] = [
     icon: Terminal,
     tools: [
       { title: 'Paper Trading',            chip: 'Paper Trading',            desc: 'Simulated live execution across asset classes', route: '/paper-trading', icon: Terminal },
-      { title: 'Market-Making Simulator',  chip: 'Market-Making Simulator',  desc: 'Two-sided quoting and inventory hedging',       route: '/market-maker',  icon: Gauge },
+      { title: 'Options MM Simulator',       chip: 'Options MM',       desc: 'Two-sided option quoting and delta hedging',    route: '/market-maker',     icon: Gauge },
+      { title: 'Fixed Income MM Simulator',  chip: 'Fixed Income MM',  desc: 'Quote a Treasury book and hedge DV01',          route: '/fixed-income-mm',  icon: Landmark },
       { title: 'Trade Journal',            chip: 'Trade Journal',            desc: 'Entry/exit, P&L, and win-rate analytics',       route: '/trade-journal', icon: BookOpen },
       { title: 'Price Alerts',             chip: 'Price Alerts',             desc: 'Price and percent-change notifications',        route: '/alerts',        icon: Bell },
     ],

@@ -62,6 +62,7 @@ const EconomyMonitor     = lazy(() => import('./pages/EconomyMonitor'))
 const SectorRotation     = lazy(() => import('./pages/SectorRotation'))
 const IVTracker          = lazy(() => import('./pages/IVTracker'))
 const OptionsMarketMaker = lazy(() => import('./pages/OptionsMarketMaker'))
+const FixedIncomeMarketMaker = lazy(() => import('./pages/FixedIncomeMarketMaker'))
 const UnusualOptions     = lazy(() => import('./pages/UnusualOptions'))
 const Compare            = lazy(() => import('./pages/Compare'))
 const ResetPassword      = lazy(() => import('./pages/ResetPassword'))
@@ -212,6 +213,7 @@ export default function App() {
               <Route path="/research-hub"       element={<Navigate to="/corporate" replace />} />
               <Route path="/iv-tracker"         element={<IVTracker />} />
               <Route path="/market-maker"       element={<OptionsMarketMaker />} />
+              <Route path="/fixed-income-mm"    element={<FixedIncomeMarketMaker />} />
               <Route path="/unusual-options"    element={<UnusualOptions />} />
               <Route path="/compare"            element={<Compare />} />
               <Route path="*"                   element={<Navigate to="/app" replace />} />
