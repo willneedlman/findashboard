@@ -3,23 +3,36 @@ import { useMutation } from '@tanstack/react-query'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
-import { priceOption, optionPayoff, optionSurface } from '../hooks/useApi'
+import TickerInput from '../components/TickerInput'
+import { priceOption, optionPayoff, optionSurface, fetchOptionsChain } from '../hooks/useApi'
 import useIsMobile from '../hooks/useIsMobile'
 
 const GREEK_HELP: Record<string, string> = {
-  delta: 'Rate of change of option price per $1 move in the underlying.',
-  gamma: 'Rate of change of Delta per $1 move in the underlying.',
-  theta: 'Option value lost per calendar day as time passes.',
-  vega:  'Sensitivity of option price to a 1% change in implied volatility.',
-  vanna: 'Second-order: Delta sensitivity to changes in volatility.',
-  charm: 'Second-order: Delta sensitivity to the passage of time.',
+  delta:  'Rate of change of option price per $1 move in the underlying.',
+  gamma:  'Rate of change of Delta per $1 move in the underlying.',
+  theta:  'Option value lost per calendar day as time passes.',
+  vega:   'Sensitivity of option price to a 1% change in implied volatility.',
+  vanna:  'Second-order: Delta sensitivity to changes in volatility.',
+  charm:  'Second-order: Delta sensitivity to the passage of time.',
+  lambda: 'Lambda (omega): percent change in option value per 1% move in the underlying — the option\'s leverage.',
 }
 
 const GREEK_COLOR: Record<string, string> = {
   delta: 'var(--theme-tertiary, #1f5673)', gamma: '#7b5ea7', theta: '#8c2e36', vega: '#2f6b4b',
 }
 
-import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
+import { INPUT, SELECT, LABEL, TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
+
+interface ChainRow {
+  strike: number; lastPrice: number; bid: number; ask: number
+  impliedVolatility: number; volume: number; openInterest: number
+}
+interface ChainData {
+  expiry: string; expirations: string[]; spot: number | null; dte: number
+  calls: ChainRow[]; puts: ChainRow[]
+}
+const rowMark = (r: ChainRow) =>
+  r.bid > 0 && r.ask > 0 ? (r.bid + r.ask) / 2 : (r.ask > 0 ? r.ask : r.lastPrice)
 
 function GreekCard({ label, value, help }: { label: string; value: number; help?: string }) {
   const [show, setShow] = useState(false)
@@ -62,26 +75,105 @@ function ChartPanel({ label, height, children }: { label: string; height: number
   )
 }
 
+type Params = { S: number; K: number; T: number; sigma: number; r: number; option_type: string }
+
 export function OptionsPricerContent() {
   const isMobile = useIsMobile()
-  const [params, setParams] = useState({ S: 100, K: 100, T: 30, sigma: 20, r: 5, option_type: 'call' })
+  const [params, setParams] = useState<Params>({ S: 100, K: 100, T: 30, sigma: 20, r: 5, option_type: 'call' })
   const [view, setView] = useState<'2d' | 'payoff'>('2d')
   const [paramsOpen, setParamsOpen] = useState(true)
 
-  const { mutate: calcPrice,   data: priceData,   isPending: pricePending,   isError: priceError }   = useMutation({ mutationFn: () => priceOption(params) })
-  const { mutate: calcPayoff,  data: payoffData }  = useMutation({ mutationFn: () => optionPayoff(params) })
-  const { mutate: calcSurface, data: surfaceData } = useMutation({ mutationFn: () => optionSurface(params) })
+  // Live-chain loader state
+  const [chainOpen, setChainOpen] = useState(false)
+  const [chainSym, setChainSym] = useState('')
+  const [chainExpiry, setChainExpiry] = useState('')
+  const [loadedMark, setLoadedMark] = useState<{ mark: number; label: string } | null>(null)
 
-  useEffect(() => { calcPrice(); calcPayoff(); calcSurface() }, [])
+  const { mutate: calcPrice,   data: priceData,   isPending: pricePending,   isError: priceError }   = useMutation({ mutationFn: (p: Params) => priceOption(p) })
+  const { mutate: calcPayoff,  data: payoffData }  = useMutation({ mutationFn: (p: Params) => optionPayoff(p) })
+  const { mutate: calcSurface, data: surfaceData } = useMutation({ mutationFn: (p: Params) => optionSurface(p) })
+  const chainMut = useMutation<ChainData, unknown, { ticker: string; expiry?: string }>({
+    mutationFn: ({ ticker, expiry }) => fetchOptionsChain(ticker, expiry),
+    onSuccess: d => setChainExpiry(d.expiry),
+  })
 
-  const recalc = () => { calcPrice(); calcPayoff(); calcSurface() }
-  const set = (k: keyof typeof params) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+  const runAll = (p: Params) => { calcPrice(p); calcPayoff(p); calcSurface(p) }
+  useEffect(() => { runAll(params) }, [])
+
+  const recalc = () => runAll(params)
+  const set = (k: keyof Params) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setParams(p => ({ ...p, [k]: k === 'option_type' ? e.target.value : +e.target.value }))
 
-  const isCall = params.option_type === 'call'
+  const chain = chainMut.data
+  const chainRows = chain ? (params.option_type === 'call' ? chain.calls : chain.puts) : []
+
+  // Pull a real listed contract into the analyzer: spot, strike, days-to-expiry
+  // and implied vol all come straight from the live chain, then we re-price.
+  const applyContract = (r: ChainRow) => {
+    if (!chain || !chain.spot) return
+    const next: Params = {
+      ...params,
+      S: chain.spot,
+      K: r.strike,
+      T: Math.max(chain.dte, 1),
+      sigma: Math.round(r.impliedVolatility * 1000) / 10,
+    }
+    setParams(next)
+    runAll(next)
+    setLoadedMark({ mark: rowMark(r), label: `${chainSym.toUpperCase()} ${chain.expiry} ${r.strike}${params.option_type === 'call' ? 'C' : 'P'}` })
+  }
 
   return (
       <SidebarLayout sidebarWidth={210} sidebarTitle="" sidebar={<>
+          <RailSection title="Live Chain" open={chainOpen} onToggle={() => setChainOpen(o => !o)}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div>
+              <label style={LABEL}>Underlying</label>
+              <TickerInput
+                value={chainSym}
+                onChange={setChainSym}
+                onEnter={() => chainSym && chainMut.mutate({ ticker: chainSym })}
+                placeholder="Ticker or company"
+                style={INPUT}
+                aria-label="Underlying ticker for live options chain"
+              />
+            </div>
+            <button onClick={() => chainSym && chainMut.mutate({ ticker: chainSym })} disabled={!chainSym || chainMut.isPending} style={{
+              width: '100%', background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)',
+              border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)',
+              fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
+              textTransform: 'uppercase', padding: '7px 0', cursor: (!chainSym || chainMut.isPending) ? 'default' : 'pointer',
+              opacity: (!chainSym || chainMut.isPending) ? 0.6 : 1,
+            }}>
+              {chainMut.isPending ? 'Loading…' : 'Load Chain'}
+            </button>
+            {chainMut.isError && <div style={{ fontSize: 9, color: 'var(--theme-negative, #ef4444)', fontFamily: 'var(--theme-sans)' }}>No chain found for that symbol.</div>}
+            {chain && (
+              <>
+                <div>
+                  <label style={LABEL}>Expiry</label>
+                  <select value={chainExpiry} style={{ ...SELECT, cursor: 'pointer' }}
+                    onChange={e => { setChainExpiry(e.target.value); chainMut.mutate({ ticker: chainSym, expiry: e.target.value }) }}>
+                    {chain.expirations.map(e => <option key={e} value={e}>{e}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={LABEL}>Contract ({params.option_type === 'call' ? 'Calls' : 'Puts'})</label>
+                  <select value="" style={{ ...SELECT, cursor: 'pointer' }}
+                    onChange={e => { const r = chainRows[+e.target.value]; if (r) applyContract(r) }}>
+                    <option value="" disabled>Select strike…</option>
+                    {chainRows.map((r, i) => (
+                      <option key={r.strike} value={i}>
+                        {r.strike} · ${rowMark(r).toFixed(2)} · IV {(r.impliedVolatility * 100).toFixed(0)}%
+                      </option>
+                    ))}
+                  </select>
+                  {chain.spot != null && <div style={{ fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', fontFamily: 'var(--theme-mono)', marginTop: 5 }}>Spot ${chain.spot.toFixed(2)} · {chain.dte}d to expiry</div>}
+                </div>
+              </>
+            )}
+          </div>
+          </RailSection>
           <RailSection title="Pricing Parameters" open={paramsOpen} onToggle={() => setParamsOpen(o => !o)}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {([
@@ -134,6 +226,11 @@ export function OptionsPricerContent() {
                 <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 28, fontWeight: 700, color: 'var(--theme-primary, #c9a84c)' }}>
                   ${priceData.price}
                 </span>
+                {loadedMark && (
+                  <span style={{ fontSize: 10, fontFamily: 'var(--theme-mono)', color: 'var(--theme-tertiary, #60a5fa)', letterSpacing: '0.04em' }}>
+                    Mkt ${loadedMark.mark.toFixed(2)} · {loadedMark.label}
+                  </span>
+                )}
                 {!isMobile && (
                   <span style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', letterSpacing: '0.08em' }}>
                     {params.option_type.toUpperCase()} · S={params.S} · K={params.K} · T={params.T}d · σ={params.sigma}% · r={params.r}%
@@ -141,13 +238,14 @@ export function OptionsPricerContent() {
                 )}
               </div>
               {/* Greeks grid */}
-              <div style={{ padding: 10, display: 'grid', gridTemplateColumns: isMobile ? 'repeat(3,1fr)' : 'repeat(6,1fr)', gap: 8 }}>
-                <GreekCard label="Delta" value={priceData.greeks.delta} help={GREEK_HELP.delta} />
-                <GreekCard label="Gamma" value={priceData.greeks.gamma} help={GREEK_HELP.gamma} />
-                <GreekCard label="Theta" value={priceData.greeks.theta} help={GREEK_HELP.theta} />
-                <GreekCard label="Vega"  value={priceData.greeks.vega}  help={GREEK_HELP.vega}  />
-                <GreekCard label="Vanna" value={priceData.vanna}        help={GREEK_HELP.vanna} />
-                <GreekCard label="Charm" value={priceData.charm}        help={GREEK_HELP.charm} />
+              <div style={{ padding: 10, display: 'grid', gridTemplateColumns: isMobile ? 'repeat(3,1fr)' : 'repeat(7,1fr)', gap: 8 }}>
+                <GreekCard label="Delta"  value={priceData.greeks.delta} help={GREEK_HELP.delta} />
+                <GreekCard label="Gamma"  value={priceData.greeks.gamma} help={GREEK_HELP.gamma} />
+                <GreekCard label="Theta"  value={priceData.greeks.theta} help={GREEK_HELP.theta} />
+                <GreekCard label="Vega"   value={priceData.greeks.vega}  help={GREEK_HELP.vega}  />
+                <GreekCard label="Vanna"  value={priceData.vanna}        help={GREEK_HELP.vanna} />
+                <GreekCard label="Charm"  value={priceData.charm}        help={GREEK_HELP.charm} />
+                <GreekCard label="Lambda" value={priceData.lambda}       help={GREEK_HELP.lambda} />
               </div>
             </div>
           )}

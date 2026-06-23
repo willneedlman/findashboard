@@ -301,11 +301,16 @@ def price_option(req: PriceRequest):
     vanna = -norm.pdf(d1) * (d2 / sig_d)
     charm = -norm.pdf(d1) * ((r_d / (sig_d * np.sqrt(T_y))) - (d2 / (2 * T_y)))
 
+    # Lambda (a.k.a. omega / elasticity): percent change in option value per
+    # percent change in the underlying — the option's effective leverage.
+    lam = float(greeks["delta"]) * req.S / price if price > 0 else 0.0
+
     return {
         "price": round(float(price), 4),
         "greeks": {k: round(float(v), 4) for k, v in greeks.items()},
         "vanna": round(float(vanna), 4),
         "charm": round(float(charm), 4),
+        "lambda": round(lam, 4),
     }
 
 
