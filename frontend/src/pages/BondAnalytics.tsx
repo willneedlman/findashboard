@@ -66,13 +66,12 @@ export function BondAnalyticsContent() {
       const { data: r } = await axios.get(`/api/bond/cusip/${cu}`)
       if (!r.found) { setLookupErr(`No security found for ${cu}`); return }
       setLookup(r)
-      if (r.coupon_rate != null) {
-        setP(prev => ({
-          ...prev,
-          coupon_rate: r.coupon_rate ?? prev.coupon_rate,
-          maturity: r.years_to_maturity ? Math.max(1, Math.min(100, Math.round(r.years_to_maturity))) : prev.maturity,
-        }))
-      }
+      setP(prev => ({
+        ...prev,
+        ...(r.coupon_rate != null ? { coupon_rate: r.coupon_rate } : {}),
+        ...(r.years_to_maturity ? { maturity: Math.max(1, Math.min(100, Math.round(r.years_to_maturity))) } : {}),
+        ...(r.market_price != null ? { market_price: Math.round((r.market_price / 100) * prev.face) } : {}),
+      }))
     } catch {
       setLookupErr('Lookup failed — try again')
     } finally {
@@ -109,13 +108,18 @@ export function BondAnalyticsContent() {
                 <div style={{ background: 'var(--theme-surface, #142032)', border: '1px solid var(--theme-border, rgba(255,255,255,0.10))', padding: '8px 9px', display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-sans)' }}>{lookup.name}</div>
                   <div style={{ fontSize: 9, color: 'var(--theme-secondary, #99907e)', fontFamily: 'var(--theme-mono)' }}>{lookup.type}{lookup.ticker ? ` · ${lookup.ticker}` : ''}</div>
-                  {lookup.coupon_rate != null ? (
-                    <div style={{ fontSize: 9, color: 'var(--theme-primary, #c9a84c)', fontFamily: 'var(--theme-sans)', lineHeight: 1.4 }}>
-                      Coupon {lookup.coupon_rate}% · matures {lookup.maturity_date} — prefilled.{lookup.source === 'treasury' ? '' : ' Enter market price (live price needs a licensed feed).'}
+                  {lookup.coupon_rate != null && (
+                    <div style={{ fontSize: 9, color: 'var(--theme-primary, #c9a84c)', fontFamily: 'var(--theme-sans)' }}>
+                      Coupon {lookup.coupon_rate}% · matures {lookup.maturity_date} — prefilled
+                    </div>
+                  )}
+                  {lookup.market_price != null ? (
+                    <div style={{ fontSize: 9, color: 'var(--theme-positive, #22c55e)', fontFamily: 'var(--theme-sans)', lineHeight: 1.4 }}>
+                      Price {lookup.market_price}/100 · {lookup.price_source}{lookup.price_as_of ? ` · as of ${lookup.price_as_of}` : ''} — prefilled (a mark, not a live quote)
                     </div>
                   ) : (
                     <div style={{ fontSize: 9, color: 'var(--theme-secondary, #99907e)', fontFamily: 'var(--theme-sans)', lineHeight: 1.4 }}>
-                      Identity only. Enter coupon &amp; price manually — priced data needs a licensed feed.
+                      {lookup.coupon_rate != null ? 'No free price found — enter market price manually.' : 'Identity only — enter coupon & price manually.'} Live prices need a licensed feed.
                     </div>
                   )}
                 </div>

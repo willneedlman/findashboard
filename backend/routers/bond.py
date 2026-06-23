@@ -119,12 +119,26 @@ def bond_by_cusip(cusip: str):
     cu = cusip.strip().upper()
     if not re.fullmatch(r"[A-Z0-9]{9}", cu):
         raise HTTPException(400, "CUSIP must be 9 alphanumeric characters")
-    cached = disk_get(f"cusip:{cu}")
-    if cached is not None:
-        return cached
-    result = _lookup_treasury(cu) or _lookup_openfigi(cu) or {"found": False, "cusip": cu}
+    # Identity (issuer/coupon/maturity) is static -> cache 7d, separate from the
+    # daily price so the price stays fresh.
+    ident = disk_get(f"cusipid:{cu}")
+    if ident is None:
+        ident = _lookup_treasury(cu) or _lookup_openfigi(cu) or {"found": False, "cusip": cu}
+        if ident.get("found"):
+            disk_set(f"cusipid:{cu}", ident, ttl=604800)
+    result = dict(ident)
     if result.get("found"):
-        disk_set(f"cusip:{cu}", result, ttl=604800)   # 7 days; CUSIP facts are static
+        try:
+            import bond_prices
+            px = bond_prices.price_for_cusip(cu)
+            if px:
+                for k in ("market_price", "price_source", "price_as_of"):
+                    if px.get(k) is not None:
+                        result[k] = px[k]
+                if result.get("coupon_rate") is None and px.get("coupon_rate") is not None:
+                    result["coupon_rate"] = px["coupon_rate"]
+        except Exception:
+            pass
     return result
 
 
