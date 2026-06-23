@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import PageWrapper from '../components/PageWrapper'
-import { fetchBondByCusip, fetchBondAnalytics } from '../hooks/useApi'
+import { fetchBondByCusip, fetchBondAnalytics, searchBondsByIssuer, resolveCusipBatch } from '../hooks/useApi'
 import {
   INPUT, EYEBROW, PANEL, PRIMARY_BTN, TitleBar, TitleAction, VerdictStrip, MetricCard,
   toneColor, type VerdictTone,
@@ -22,6 +22,7 @@ interface ResolvedBond {
   found: boolean
   cusip: string
   source?: string
+  figi?: string
   name?: string
   ticker?: string
   description?: string
@@ -36,9 +37,34 @@ interface ResolvedBond {
   price_as_of?: string | null
 }
 interface Derived { ytm: number; mod_duration: number; convexity: number; atPar: boolean }
+interface BatchRow {
+  cusip: string; found: boolean; error?: string
+  name?: string; type?: string; coupon_rate?: number | null
+  maturity_date?: string | null; market_price?: number | null
+  price_source?: string | null; price_as_of?: string | null; ytm?: number | null
+}
 
 const RECENTS_KEY = 'ft_cusip_recents'
 const SEED_RECENTS = ['037833AL4', '06051GGR4', '91282CQQ7']
+
+const isCusip = (s: string) => /^[A-Z0-9]{9}$/.test(s.toUpperCase().replace(/\s+/g, ''))
+
+// Derive YTM/duration/convexity for a resolved bond. Uses the real price mark
+// when present, otherwise prices at par. Degrades to null if the model fails.
+async function deriveFor(r: ResolvedBond): Promise<Derived | null> {
+  if (r.coupon_rate == null || !r.years_to_maturity) return null
+  const atPar = r.market_price == null
+  const market_price = atPar ? 1000 : Math.round((r.market_price! / 100) * 1000)
+  try {
+    const a = await fetchBondAnalytics({
+      face: 1000, coupon_rate: r.coupon_rate,
+      market_price, maturity: Math.max(1, Math.round(r.years_to_maturity)),
+    })
+    return { ytm: a.ytm, mod_duration: a.mod_duration, convexity: a.convexity, atPar }
+  } catch {
+    return null
+  }
+}
 
 const scaleOf = (b: ResolvedBond): { label: string; tone: VerdictTone } => {
   const sec = (b.market_sector || '').toLowerCase()
@@ -83,17 +109,54 @@ const Strip = ({ children }: { children: React.ReactNode }) => (
   <div style={{ background: '#0d1826', padding: '8px 14px', ...EYEBROW }}>{children}</div>
 )
 
+function LayoutToggle({ layout, setView }: { layout: 'A' | 'B'; setView: (l: 'A' | 'B') => void }) {
+  return (
+    <div style={{ display: 'flex', border: `1px solid ${BORDER}` }}>
+      {(['A', 'B'] as const).map(l => (
+        <button key={l} onClick={() => setView(l)} style={{
+          fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
+          padding: '6px 12px', cursor: 'pointer', border: 'none',
+          color: layout === l ? G : SEC,
+          background: layout === l ? 'rgba(201,168,76,0.1)' : 'transparent',
+          borderRight: l === 'A' ? `1px solid ${BORDER}` : 'none',
+        }}>{l === 'A' ? 'A · Cockpit' : 'B · Ledger'}</button>
+      ))}
+    </div>
+  )
+}
+
+function CandidateCard({ b, onClick }: { b: ResolvedBond; onClick: () => void }) {
+  return (
+    <div role="button" tabIndex={0} onClick={onClick}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } }}
+      style={{ background: SURFACE, border: `1px solid ${BORDER}`, padding: '13px 14px', cursor: 'pointer',
+        display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <span style={{ fontFamily: MONO, fontSize: 16, fontWeight: 600, color: G }}>{num(b.coupon_rate, '%')}</span>
+        <ScaleBadge s={scaleOf(b)} />
+      </div>
+      <div style={{ fontFamily: SANS, fontSize: 12, fontWeight: 600, color: TEXT }}>Due {b.maturity_date || '—'}</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: `1px solid ${HAIR}`, paddingTop: 6, fontFamily: MONO, fontSize: 10, color: SEC }}>
+        <span>{b.years_to_maturity != null ? `${b.years_to_maturity} yrs` : '—'}</span>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 130 }}>{b.description || ''}</span>
+      </div>
+    </div>
+  )
+}
+
 export default function CusipLookup() {
   const nav = useNavigate()
   const [query, setQuery] = useState('')
   const [layout, setLayout] = useState<'A' | 'B'>(() => (localStorage.getItem('ft_cusip_layout') as 'A' | 'B') || 'A')
   const [result, setResult] = useState<ResolvedBond | null>(null)
   const [derived, setDerived] = useState<Derived | null>(null)
+  const [candidates, setCandidates] = useState<ResolvedBond[] | null>(null)
   const [badQuery, setBadQuery] = useState<string | null>(null)
   const [recents, setRecents] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem(RECENTS_KEY) || 'null') || SEED_RECENTS } catch { return SEED_RECENTS }
   })
   const [cache, setCache] = useState<Record<string, ResolvedBond>>({})
+  const [tab, setTab] = useState<'single' | 'batch'>('single')
 
   const setView = (l: 'A' | 'B') => { setLayout(l); localStorage.setItem('ft_cusip_layout', l) }
   const pushRecent = (cu: string) => setRecents(prev => {
@@ -102,36 +165,50 @@ export default function CusipLookup() {
     return next
   })
 
-  const { mutate, isPending, isError, reset } = useMutation({
+  // CUSIP path: resolve identity + price, then derive analytics.
+  const cusipMut = useMutation({
     mutationFn: async (raw: string) => {
-      const q = raw.toUpperCase().replace(/\s+/g, '')
-      const r: ResolvedBond = await fetchBondByCusip(q || raw.trim())
-      if (!r.found) return { r }
-      let d: Derived | null = null
-      if (r.coupon_rate != null && r.years_to_maturity) {
-        const atPar = r.market_price == null
-        const market_price = atPar ? 1000 : Math.round((r.market_price! / 100) * 1000)
-        try {
-          const a = await fetchBondAnalytics({
-            face: 1000, coupon_rate: r.coupon_rate,
-            market_price, maturity: Math.max(1, Math.round(r.years_to_maturity)),
-          })
-          d = { ytm: a.ytm, mod_duration: a.mod_duration, convexity: a.convexity, atPar }
-        } catch { /* derived block degrades to — */ }
-      }
-      return { r, d }
+      const r: ResolvedBond = await fetchBondByCusip(raw.toUpperCase().replace(/\s+/g, ''))
+      return { r, d: r.found ? await deriveFor(r) : null }
     },
     onSuccess: ({ r, d }, raw) => {
       if (!r.found) { setResult(null); setDerived(null); setBadQuery(raw); return }
-      setBadQuery(null); setResult(r); setDerived(d ?? null)
+      setBadQuery(null); setCandidates(null); setResult(r); setDerived(d)
       setCache(c => ({ ...c, [r.cusip]: r }))
       pushRecent(r.cusip)
     },
   })
 
-  const run = (raw: string) => { if (raw.trim()) { setBadQuery(null); mutate(raw) } }
+  // Issuer path: list the issuer's outstanding bonds (no CUSIP, terms only).
+  const searchMut = useMutation({
+    mutationFn: (raw: string) => searchBondsByIssuer(raw.trim()),
+    onSuccess: (res: { results: ResolvedBond[] }, raw) => {
+      const list = res.results || []
+      if (!list.length) { setCandidates(null); setResult(null); setDerived(null); setBadQuery(raw); return }
+      setBadQuery(null); setResult(null); setDerived(null); setCandidates(list)
+    },
+  })
+
+  // Pick a listed candidate: promote to the full result view + derive at par.
+  const pickMut = useMutation({
+    mutationFn: async (b: ResolvedBond) => ({ r: b, d: await deriveFor(b) }),
+    onSuccess: ({ r, d }) => { setCandidates(null); setResult(r); setDerived(d) },
+  })
+
+  const isPending = cusipMut.isPending || searchMut.isPending || pickMut.isPending
+  const isError = cusipMut.isError || searchMut.isError || pickMut.isError
+
+  const run = (raw: string) => {
+    if (!raw.trim()) return
+    setBadQuery(null); setCandidates(null)
+    if (isCusip(raw)) cusipMut.mutate(raw)
+    else searchMut.mutate(raw)
+  }
   const onSubmit = () => run(query)
-  const clear = () => { setQuery(''); setResult(null); setDerived(null); setBadQuery(null); reset() }
+  const clear = () => {
+    setQuery(''); setResult(null); setDerived(null); setCandidates(null); setBadQuery(null)
+    cusipMut.reset(); searchMut.reset(); pickMut.reset()
+  }
 
   const seedImport = result && result.coupon_rate != null && result.years_to_maturity
   const doImport = () => {
@@ -144,31 +221,31 @@ export default function CusipLookup() {
     } } })
   }
 
-  const mode: 'empty' | 'loading' | 'result' | 'notfound' =
-    isPending ? 'loading' : badQuery ? 'notfound' : result ? 'result' : 'empty'
+  const mode: 'empty' | 'loading' | 'result' | 'candidates' | 'notfound' =
+    isPending ? 'loading' : badQuery ? 'notfound'
+      : result ? 'result' : candidates ? 'candidates' : 'empty'
 
   return (
     <PageWrapper>
       <div className="mx-auto w-full max-w-[1180px] 2xl:max-w-[1440px]" style={{ background: 'var(--theme-bg, #0a1422)', border: `1px solid ${BORDER}` }}>
         {/* header */}
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap',
-          padding: '18px 22px 12px', borderBottom: `1px solid rgba(201,168,76,0.4)` }}>
-          <div>
-            <div style={{ ...EYEBROW, letterSpacing: '0.22em' }}>FIXED INCOME · REFERENCE</div>
-            <div style={{ fontFamily: MONO, fontSize: 19, fontWeight: 700, letterSpacing: '0.2em', color: G, marginTop: 4 }}>CUSIP LOOKUP</div>
-          </div>
-          <div style={{ display: 'flex', border: `1px solid ${BORDER}` }}>
-            {(['A', 'B'] as const).map(l => (
-              <button key={l} onClick={() => setView(l)} style={{
-                fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
-                padding: '6px 12px', cursor: 'pointer', border: 'none',
-                color: layout === l ? G : SEC,
-                background: layout === l ? 'rgba(201,168,76,0.1)' : 'transparent',
-                borderRight: l === 'A' ? `1px solid ${BORDER}` : 'none',
-              }}>{l === 'A' ? 'A · Cockpit' : 'B · Ledger'}</button>
-            ))}
-          </div>
+        <div style={{ padding: '18px 22px 12px', borderBottom: `1px solid rgba(201,168,76,0.4)` }}>
+          <div style={{ ...EYEBROW, letterSpacing: '0.22em' }}>FIXED INCOME · REFERENCE</div>
+          <div style={{ fontFamily: MONO, fontSize: 19, fontWeight: 700, letterSpacing: '0.2em', color: G, marginTop: 4 }}>CUSIP LOOKUP</div>
         </div>
+
+        {/* mode tabs */}
+        <div style={{ display: 'flex', gap: 0, padding: '14px 22px 0' }}>
+          {([['single', 'Single lookup'], ['batch', 'Batch import']] as const).map(([id, label]) => (
+            <button key={id} onClick={() => setTab(id)} style={{
+              fontFamily: SANS, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
+              padding: '8px 16px', cursor: 'pointer', background: 'transparent', border: 'none',
+              color: tab === id ? G : SEC, borderBottom: `2px solid ${tab === id ? G : 'transparent'}`,
+            }}>{label}</button>
+          ))}
+        </div>
+
+        {tab === 'batch' ? <BatchView /> : <>
 
         {/* search bar */}
         <div style={{ padding: '16px 22px', display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -205,14 +282,135 @@ export default function CusipLookup() {
             </div>
           )}
 
+          {mode === 'candidates' && candidates && (
+            <div>
+              <div style={{ ...EYEBROW, letterSpacing: '0.18em', color: G, marginBottom: 4 }}>{candidates[0]?.name || 'Issuer'} · Outstanding bonds</div>
+              <div style={{ fontFamily: SANS, fontSize: 10.5, color: SEC, marginBottom: 12, lineHeight: 1.5 }}>
+                Reference terms by issuer. CUSIP and live price are licensed and not shown here; select a bond to analyze it at par or import it.
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>
+                {candidates.map((c, i) => <CandidateCard key={c.figi || i} b={c} onClick={() => pickMut.mutate(c)} />)}
+              </div>
+            </div>
+          )}
+
           {isError && <div style={{ fontFamily: SANS, fontSize: 11, color: 'var(--theme-negative, #ef4444)', padding: '12px 0' }}>Server unavailable. Try again.</div>}
 
-          {mode === 'result' && result && (layout === 'A'
-            ? <CockpitView b={result} d={derived} canImport={!!seedImport} onImport={doImport} />
-            : <LedgerView b={result} d={derived} canImport={!!seedImport} onImport={doImport} />)}
+          {mode === 'result' && result && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <LayoutToggle layout={layout} setView={setView} />
+              </div>
+              {layout === 'A'
+                ? <CockpitView b={result} d={derived} canImport={!!seedImport} onImport={doImport} />
+                : <LedgerView b={result} d={derived} canImport={!!seedImport} onImport={doImport} />}
+            </div>
+          )}
         </div>
+        </>}
       </div>
     </PageWrapper>
+  )
+}
+
+function parseCusips(text: string): string[] {
+  return Array.from(new Set(text.split(/[\s,;]+/).map(s => s.trim().toUpperCase()).filter(Boolean)))
+}
+
+function BatchView() {
+  const [text, setText] = useState('')
+  const [rows, setRows] = useState<BatchRow[] | null>(null)
+  const parsed = parseCusips(text)
+
+  const mut = useMutation({
+    mutationFn: (list: string[]) => resolveCusipBatch(list),
+    onSuccess: (res: { rows: BatchRow[] }) => setRows(res.rows || []),
+  })
+
+  const onFile = (f: File | undefined) => {
+    if (!f) return
+    f.text().then(t => setText(prev => (prev ? prev + '\n' : '') + t))
+  }
+
+  const exportCsv = () => {
+    if (!rows) return
+    const head = ['CUSIP', 'Issuer', 'Type', 'Coupon', 'Maturity', 'Price', 'Yield', 'Price Source', 'As Of']
+    const lines = rows.map(r => [
+      r.cusip, r.name || '', r.type || '', r.coupon_rate ?? '', r.maturity_date || '',
+      r.market_price ?? '', r.ytm ?? '', r.price_source || '', r.price_as_of || '',
+    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+    const blob = new Blob([[head.join(','), ...lines].join('\n')], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = 'cusip-batch.csv'; a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const found = rows?.filter(r => r.found).length ?? 0
+  return (
+    <div style={{ padding: '16px 22px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ fontFamily: SANS, fontSize: 11, color: SEC, lineHeight: 1.5 }}>
+        Paste or upload up to 100 CUSIPs (separated by commas, spaces, or new lines). Each resolves to issuer, price mark, yield, and the price date. Yield is solved from the mark when available, otherwise at par.
+      </div>
+      <textarea value={text} onChange={e => setText(e.target.value)} rows={5}
+        placeholder={'037833AL4\n91282CQQ7\n06051GGR4'}
+        style={{ width: '100%', background: BG, border: '1px solid rgba(201,168,76,0.45)', color: TEXT,
+          fontFamily: MONO, fontSize: 13, padding: '12px 14px', outline: 'none', resize: 'vertical' }} />
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button onClick={() => parsed.length && mut.mutate(parsed)} disabled={!parsed.length || mut.isPending}
+          style={{ ...PRIMARY_BTN, padding: '0 22px', height: 42, width: 'auto', opacity: !parsed.length || mut.isPending ? 0.5 : 1 }}>
+          {mut.isPending ? 'Resolving…' : `Resolve ${parsed.length || ''} CUSIP${parsed.length === 1 ? '' : 's'}`.trim()}
+        </button>
+        <label style={{ fontFamily: SANS, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
+          color: SEC, cursor: 'pointer', border: `1px solid ${BORDER}`, padding: '12px 16px' }}>
+          Upload .csv / .txt
+          <input type="file" accept=".csv,.txt,text/plain,text/csv" style={{ display: 'none' }}
+            onChange={e => onFile(e.target.files?.[0])} />
+        </label>
+        {text && <button onClick={() => { setText(''); setRows(null) }} style={{ fontFamily: SANS, fontSize: 10, fontWeight: 700,
+          letterSpacing: '0.1em', textTransform: 'uppercase', color: SEC, background: 'none', border: 'none', cursor: 'pointer' }}>Clear</button>}
+        {rows && <button onClick={exportCsv} style={{ marginLeft: 'auto', fontFamily: SANS, fontSize: 10, fontWeight: 700,
+          letterSpacing: '0.1em', textTransform: 'uppercase', color: G, background: 'none', border: `1px solid color-mix(in srgb, ${G} 40%, transparent)`,
+          padding: '10px 14px', cursor: 'pointer' }}>Export CSV</button>}
+      </div>
+
+      {mut.isError && <div style={{ fontFamily: SANS, fontSize: 11, color: 'var(--theme-negative, #ef4444)' }}>Server unavailable. Try again.</div>}
+
+      {rows && (
+        <div style={{ ...PANEL, padding: 0 }}>
+          <Strip>Resolved · {found} of {rows.length} found</Strip>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: MONO, fontSize: 11.5 }}>
+              <thead>
+                <tr>{['CUSIP', 'Issuer', 'Coupon', 'Maturity', 'Price', 'Yield', 'As Of'].map((h, i) => (
+                  <th key={h} style={{ textAlign: i < 2 ? 'left' : 'right', fontFamily: SANS, fontSize: 9, fontWeight: 700,
+                    letterSpacing: '0.1em', textTransform: 'uppercase', color: SEC, padding: '9px 14px',
+                    borderBottom: `1px solid ${BORDER}`, whiteSpace: 'nowrap' }}>{h}</th>
+                ))}</tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={i} style={{ borderBottom: `1px solid rgba(255,255,255,0.04)` }}>
+                    <td style={{ padding: '8px 14px', color: G }}>{r.cusip}</td>
+                    <td style={{ padding: '8px 14px', fontFamily: SANS, color: r.found ? TEXT : 'var(--theme-text-dim, #5e768f)' }}>
+                      {r.found ? (r.name || '—') : (r.error === 'invalid' ? 'Invalid CUSIP' : 'Not found')}
+                    </td>
+                    <td style={{ padding: '8px 14px', textAlign: 'right', color: TEXT }}>{r.coupon_rate != null ? `${r.coupon_rate}%` : '—'}</td>
+                    <td style={{ padding: '8px 14px', textAlign: 'right', color: TEXT }}>{r.maturity_date || '—'}</td>
+                    <td style={{ padding: '8px 14px', textAlign: 'right', color: TEXT }}>{r.market_price != null ? r.market_price : '—'}</td>
+                    <td style={{ padding: '8px 14px', textAlign: 'right', color: r.ytm != null ? G : SEC }}>{r.ytm != null ? `${r.ytm}%` : '—'}</td>
+                    <td style={{ padding: '8px 14px', textAlign: 'right', color: SEC, whiteSpace: 'nowrap' }}>{r.price_as_of || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ padding: '9px 15px', borderTop: `1px solid ${HAIR}`, fontFamily: SANS, fontSize: 9.5, color: 'var(--theme-text-dim, #5e768f)' }}>
+            Price marks are ETF/N-PORT holdings, not live quotes. Yield without a price mark is computed at par. Informational only.
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -264,7 +462,7 @@ function CockpitView({ b, d, canImport, onImport }: { b: ResolvedBond; d: Derive
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
                 <span style={{ fontFamily: SANS, fontSize: 11.5, color: SEC }}>{dash(b.type)}</span>
-                <span style={{ fontFamily: MONO, fontSize: 9, color: G, border: `1px solid color-mix(in srgb, ${G} 30%, transparent)`, padding: '2px 6px' }}>{b.cusip}</span>
+                {(b.cusip || b.figi) && <span style={{ fontFamily: MONO, fontSize: 9, color: G, border: `1px solid color-mix(in srgb, ${G} 30%, transparent)`, padding: '2px 6px' }}>{b.cusip || `FIGI ${b.figi}`}</span>}
                 {b.description && <span style={{ fontFamily: MONO, fontSize: 10, color: 'var(--theme-text-dim, #5e768f)' }}>{b.description}</span>}
               </div>
             </div>
@@ -286,7 +484,7 @@ function CockpitView({ b, d, canImport, onImport }: { b: ResolvedBond; d: Derive
 
 function LedgerView({ b, d, canImport, onImport }: { b: ResolvedBond; d: Derived | null; canImport: boolean; onImport: () => void }) {
   const ref: [string, string][] = [
-    ['Issuer', dash(b.name)], ['CUSIP', b.cusip], ['Security Type', dash(b.type)],
+    ['Issuer', dash(b.name)], ['CUSIP', b.cusip || (b.figi ? `FIGI ${b.figi}` : '—')], ['Security Type', dash(b.type)],
     ['Coupon', num(b.coupon_rate, '%')], ['Maturity', b.maturity_date || '—'],
     ['Years to Maturity', b.years_to_maturity != null ? `${b.years_to_maturity}` : '—'],
     ['Issue Date', b.issue_date || '—'], ['Market Sector', b.market_sector || '—'],
@@ -300,7 +498,7 @@ function LedgerView({ b, d, canImport, onImport }: { b: ResolvedBond; d: Derived
   ]
   return (
     <div style={{ ...PANEL, padding: 0 }}>
-      <TitleBar name={b.cusip} subtitle={b.name} right={canImport
+      <TitleBar name={b.cusip || b.name || '—'} subtitle={b.cusip ? b.name : b.description} right={canImport
         ? <span onClick={onImport} style={{ cursor: 'pointer' }}><TitleAction label="Import to Bond Analytics →" primary /></span>
         : <TitleAction label={(b.type || 'BOND')} />} />
       <VerdictStrip

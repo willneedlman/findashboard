@@ -111,16 +111,71 @@ def _lookup_openfigi(cusip: str):
         return None
 
 
-@router.get("/cusip/{cusip}")
-def bond_by_cusip(cusip: str):
-    """Resolve a CUSIP to a security: Treasuries get full coupon/maturity (free
-    TreasuryDirect); other securities get identity only (OpenFIGI). Priced
-    corporate-bond data needs a licensed feed and is intentionally not fetched."""
-    cu = cusip.strip().upper()
-    if not re.fullmatch(r"[A-Z0-9]{9}", cu):
-        raise HTTPException(400, "CUSIP must be 9 alphanumeric characters")
-    # Identity (issuer/coupon/maturity) is static -> cache 7d, separate from the
-    # daily price so the price stays fresh.
+def _search_openfigi_issuer(q: str):
+    """Issuer-name -> list of that issuer's corporate bonds via OpenFIGI search
+    (free). Results carry coupon + maturity in the description but no CUSIP (it is
+    licensed), so they price at par and resolve to reference terms only."""
+    try:
+        r = requests.post("https://api.openfigi.com/v3/search",
+                          json={"query": q, "marketSecDes": "Corp"},
+                          headers={"Content-Type": "application/json"}, timeout=12)
+        if r.status_code != 200:
+            return []
+        recs = r.json().get("data") or []
+    except Exception:
+        return []
+    out, seen = [], set()
+    today = date.today()
+    for d in recs:
+        desc = d.get("securityDescription") or d.get("ticker") or ""
+        coupon, mat = _parse_bond_desc(desc)
+        if coupon is None or not mat:
+            continue
+        try:
+            mdate = date.fromisoformat(mat)
+        except ValueError:
+            continue
+        if mdate <= today:
+            continue
+        key = (round(coupon, 3), mat)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({
+            "found": True, "source": "openfigi-search", "cusip": "",
+            "figi": d.get("figi"),
+            "name": d.get("name") or q.upper(),
+            "ticker": d.get("ticker"),
+            "description": desc or None,
+            "type": "Corporate Bond", "market_sector": "Corp",
+            "coupon_rate": coupon, "maturity_date": mat,
+            "years_to_maturity": round((mdate - today).days / 365.25, 2),
+        })
+    out.sort(key=lambda b: b["maturity_date"])
+    return out[:15]
+
+
+@router.get("/search")
+def bond_search(q: str):
+    """Resolve an issuer name to its outstanding corporate bonds. Identity-only
+    (no CUSIP, no price) because that data is licensed; returns parseable
+    coupon/maturity so each candidate can be analyzed at par or imported."""
+    qn = (q or "").strip()
+    if len(qn) < 2:
+        return {"query": qn, "results": []}
+    key = f"bondsearch:{qn.lower()}"
+    cached = disk_get(key)
+    if cached is not None:
+        return cached
+    results = _search_openfigi_issuer(qn)
+    payload = {"query": qn, "results": results}
+    if results:
+        disk_set(key, payload, ttl=86400)
+    return payload
+
+
+def _resolve_cusip(cu: str) -> dict:
+    """Identity (Treasury or OpenFIGI, cached 7d) plus the latest free price mark."""
     ident = disk_get(f"cusipid:{cu}")
     if ident is None:
         ident = _lookup_treasury(cu) or _lookup_openfigi(cu) or {"found": False, "cusip": cu}
@@ -140,6 +195,54 @@ def bond_by_cusip(cusip: str):
         except Exception:
             pass
     return result
+
+
+@router.get("/cusip/{cusip}")
+def bond_by_cusip(cusip: str):
+    """Resolve a CUSIP to a security: Treasuries get full coupon/maturity (free
+    TreasuryDirect); other securities get identity only (OpenFIGI). Priced
+    corporate-bond data needs a licensed feed and is intentionally not fetched."""
+    cu = cusip.strip().upper()
+    if not re.fullmatch(r"[A-Z0-9]{9}", cu):
+        raise HTTPException(400, "CUSIP must be 9 alphanumeric characters")
+    return _resolve_cusip(cu)
+
+
+class CusipBatch(BaseModel):
+    cusips: list[str] = Field(default_factory=list, max_length=100)
+
+
+@router.post("/cusip/batch")
+def bond_cusip_batch(req: CusipBatch):
+    """Resolve a pasted list of CUSIPs into a flat table: issuer, coupon,
+    maturity, price mark, computed yield, and the price as-of date. Yield is
+    solved from the mark when present, otherwise at par."""
+    rows, seen = [], set()
+    for raw in req.cusips[:100]:
+        cu = (raw or "").strip().upper()
+        if not cu or cu in seen:
+            continue
+        seen.add(cu)
+        if not re.fullmatch(r"[A-Z0-9]{9}", cu):
+            rows.append({"cusip": cu, "found": False, "error": "invalid"})
+            continue
+        r = _resolve_cusip(cu)
+        if not r.get("found"):
+            rows.append({"cusip": cu, "found": False})
+            continue
+        ytm = None
+        coupon, yrs = r.get("coupon_rate"), r.get("years_to_maturity")
+        if coupon is not None and yrs:
+            price = round((r["market_price"] / 100) * 1000) if r.get("market_price") is not None else 1000
+            ytm = round(solve_ytm(1000, coupon, price, max(1, round(yrs))) * 100, 4)
+        rows.append({
+            "cusip": cu, "found": True,
+            "name": r.get("name"), "type": r.get("type"),
+            "coupon_rate": coupon, "maturity_date": r.get("maturity_date"),
+            "market_price": r.get("market_price"), "price_source": r.get("price_source"),
+            "price_as_of": r.get("price_as_of"), "ytm": ytm,
+        })
+    return {"rows": rows}
 
 
 def solve_ytm(face: float, coupon_rate: float, market_price: float, maturity: int) -> float:

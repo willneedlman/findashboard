@@ -26,6 +26,12 @@ export const fetchBondAnalytics = (body: object) =>
 export const fetchBondByCusip = (cusip: string) =>
   api.get(`/bond/cusip/${encodeURIComponent(cusip)}`).then(r => r.data)
 
+export const searchBondsByIssuer = (q: string) =>
+  api.get('/bond/search', { params: { q } }).then(r => r.data)
+
+export const resolveCusipBatch = (cusips: string[]) =>
+  api.post('/bond/cusip/batch', { cusips }).then(r => r.data)
+
 export const fetchNAVProxy = (body: object) =>
   api.post('/nav/proxy', body).then(r => r.data)
 
