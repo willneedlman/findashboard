@@ -190,10 +190,12 @@ export default function CusipLookup() {
   })
 
   // Pick a listed candidate: promote to the full result view + derive at par.
+  // Keep the candidate list in state so the result can return to it.
   const pickMut = useMutation({
     mutationFn: async (b: ResolvedBond) => ({ r: b, d: await deriveFor(b) }),
-    onSuccess: ({ r, d }) => { setCandidates(null); setResult(r); setDerived(d) },
+    onSuccess: ({ r, d }) => { setResult(r); setDerived(d) },
   })
+  const backToList = () => { setResult(null); setDerived(null) }
 
   const isPending = cusipMut.isPending || searchMut.isPending || pickMut.isPending
   const isError = cusipMut.isError || searchMut.isError || pickMut.isError
@@ -298,7 +300,14 @@ export default function CusipLookup() {
 
           {mode === 'result' && result && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                {candidates && candidates.length ? (
+                  <button onClick={backToList} style={{ display: 'flex', alignItems: 'center', gap: 7,
+                    fontFamily: SANS, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+                    color: SEC, background: 'none', border: `1px solid ${BORDER}`, padding: '6px 12px', cursor: 'pointer' }}>
+                    <span style={{ fontSize: 13, lineHeight: 1 }}>←</span> {candidates[0]?.name || 'Issuer'} bonds
+                  </button>
+                ) : <span />}
                 <LayoutToggle layout={layout} setView={setView} />
               </div>
               {layout === 'A'
