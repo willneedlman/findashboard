@@ -101,7 +101,7 @@ function Tape({ segments, source, onSource }: { segments: { sym: string; price: 
   )
   return (
     <div style={{ borderBottom: `1px solid ${F.borderFaint}`, background: F.topbar, height: 30, display: 'flex', alignItems: 'center' }}>
-      <style>{`@keyframes home-tape{from{transform:translateX(0)}to{transform:translateX(-50%)}}`}</style>
+      <style>{`@keyframes home-tape{from{transform:translate3d(0,0,0)}to{transform:translate3d(-50%,0,0)}}`}</style>
       <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', height: '100%' }}>
         {segments.length === 0 ? (
           <span style={{ paddingLeft: 14, fontFamily: F.mono, fontSize: 11, color: F.muted }}>—</span>
@@ -113,7 +113,7 @@ function Tape({ segments, source, onSource }: { segments: { sym: string; price: 
           <div
             onMouseEnter={e => (e.currentTarget.style.animationPlayState = 'paused')}
             onMouseLeave={e => (e.currentTarget.style.animationPlayState = 'running')}
-            style={{ display: 'inline-flex', whiteSpace: 'nowrap', willChange: 'transform', animation: 'home-tape 46s linear infinite', fontFamily: F.mono, fontSize: 11, fontVariantNumeric: 'tabular-nums', paddingLeft: 14 }}
+            style={{ display: 'inline-flex', whiteSpace: 'nowrap', willChange: 'transform', backfaceVisibility: 'hidden', background: F.topbar, animation: 'home-tape 46s linear infinite', fontFamily: F.mono, fontSize: 11, fontVariantNumeric: 'tabular-nums', paddingLeft: 14 }}
           >
             <Run p="a" /><Run p="b" />
           </div>
