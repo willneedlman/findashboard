@@ -134,15 +134,63 @@ def _holding_to_bond(h: dict, issuer: str) -> dict:
     }
 
 
+def _figi_issuers(q: str) -> list:
+    """OpenFIGI supplement: issuers (and entities) the ETF index misses, e.g.
+    foreign names like Sompo or subsidiaries like JPMorgan Chase London. One
+    search call (no pagination, to stay under the unauthenticated rate limit),
+    grouped by entity, filtered to future coupon-bearing bonds so the matured
+    zero-coupon structured notes that dominate some slices are dropped. No price
+    mark (CUSIP is licensed), so these resolve to reference terms only."""
+    try:
+        r = requests.post("https://api.openfigi.com/v3/search",
+                          json={"query": q, "marketSecDes": "Corp"},
+                          headers={"Content-Type": "application/json"}, timeout=10)
+        if r.status_code != 200:
+            return []
+        recs = r.json().get("data") or []
+    except Exception:
+        return []
+    today = date.today()
+    groups: dict = {}
+    for d in recs:
+        name = re.sub(r"\s+", " ", (d.get("name") or "").strip().upper()).replace(" + ", " & ")
+        desc = d.get("securityDescription") or d.get("ticker") or ""
+        coupon, mat = _parse_bond_desc(desc)
+        if not name or coupon is None or coupon <= 0 or not mat:
+            continue
+        try:
+            mdate = date.fromisoformat(mat)
+        except ValueError:
+            continue
+        if mdate <= today:
+            continue
+        g = groups.setdefault(name, {})
+        key = (round(coupon, 3), mat)
+        if key in g:
+            continue
+        g[key] = {
+            "found": True, "source": "openfigi-search", "cusip": "", "figi": d.get("figi"),
+            "name": name, "ticker": d.get("ticker"), "description": desc or None,
+            "type": "Corporate Bond", "market_sector": "Corp",
+            "coupon_rate": coupon, "maturity_date": mat,
+            "years_to_maturity": round((mdate - today).days / 365.25, 2),
+        }
+    out = [{"name": n, "bonds": sorted(b.values(), key=lambda x: x["maturity_date"])[:40]}
+           for n, b in groups.items()]
+    out.sort(key=lambda e: -len(e["bonds"]))
+    return out[:12]
+
+
 @router.get("/search")
 def bond_search(q: str):
     """Resolve an issuer name to its outstanding bonds, grouped by legal issuing
-    entity (e.g. JPMorgan Chase & Co vs JPMorgan Chase Bank NA). Sourced from the
-    local ETF-holdings index, so every bond has a real CUSIP and price mark."""
+    entity (e.g. JPMorgan Chase & Co vs JPMorgan Chase London). The local ETF
+    index is primary (real CUSIP + price mark); an OpenFIGI search supplements it
+    with entities the ETFs miss (foreign names, subsidiaries) as terms-only rows."""
     qn = (q or "").strip()
     if len(qn) < 2:
         return {"query": qn, "issuers": []}
-    key = f"bondsearch:v2:{qn.lower()}"
+    key = f"bondsearch:v3:{qn.lower()}"
     cached = disk_get(key)
     if cached is not None:
         return cached
@@ -151,6 +199,11 @@ def bond_search(q: str):
         {"name": grp["name"], "bonds": [_holding_to_bond(h, grp["name"]) for h in grp["bonds"]]}
         for grp in bond_prices.search_issuers(qn)
     ]
+    have = {e["name"] for e in issuers}
+    for e in _figi_issuers(qn):
+        if e["name"] not in have:
+            issuers.append(e)
+            have.add(e["name"])
     payload = {"query": qn, "issuers": issuers}
     if issuers:
         disk_set(key, payload, ttl=43200)
