@@ -22,7 +22,9 @@ interface Props {
   'aria-label'?: string
 }
 
-const TICKER_RE = /^[A-Za-z]{1,5}(\.[A-Za-z])?$/
+// A bare symbol the page can use directly: an equity (AAPL, BRK.B), an index
+// (^GSPC), or a future (ES=F, 6E=F). Anything else is treated as a name search.
+const TICKER_RE = /^(\^?[A-Za-z]{1,5}(\.[A-Za-z])?|[A-Za-z0-9]{1,4}=F)$/
 
 export default function TickerInput({
   value, onChange, onEnter, placeholder = 'Ticker or company',

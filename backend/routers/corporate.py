@@ -1,5 +1,5 @@
 import logging
-import os, sys
+import os, re, sys
 import requests
 from fastapi import APIRouter, HTTPException
 import yfinance as yf
@@ -44,6 +44,16 @@ def _pretty_company(name: str) -> str:
 # ADR above the foreign primary so e.g. "nestle" resolves to NSRGY, not NESN.SW.
 _YH_US_EX = {"NYQ", "NMS", "NGM", "NCM", "NYE", "ASE", "PCX", "BTS", "BATS",
              "PNK", "OID", "OEM", "OQB", "OQX", "OBB", "OTC"}
+# Instrument types we surface as alertable symbols: stocks, futures, indices.
+_YH_TYPES = {"EQUITY", "FUTURE", "INDEX"}
+
+_CO_SUFFIX = re.compile(r"\b(incorporated|inc|corporation|corp|company|co|ltd|limited|plc|sa|nv|ag|se|holdings?|group|the|adr)\b")
+def _norm_company(name: str) -> str:
+    """Collapse a company name to a comparison key so a US line and its foreign
+    listings (NVIDIA Corp / NVIDIA) dedupe to one entry."""
+    n = re.sub(r"[^a-z0-9 ]", " ", name.lower())
+    n = _CO_SUFFIX.sub(" ", n)
+    return re.sub(r"\s+", " ", n).strip()
 
 def _yahoo_search(q: str) -> list:
     """Free Yahoo Finance symbol search — global coverage (foreign primaries and
@@ -64,7 +74,7 @@ def _yahoo_search(q: str) -> list:
             timeout=8,
         )
         r.raise_for_status()
-        quotes = [x for x in r.json().get("quotes", []) if x.get("quoteType") == "EQUITY" and x.get("symbol")]
+        quotes = [x for x in r.json().get("quotes", []) if x.get("quoteType") in _YH_TYPES and x.get("symbol")]
         quotes.sort(key=lambda x: 0 if str(x.get("exchange", "")).upper() in _YH_US_EX else 1)
         out, seen = [], set()
         for x in quotes:
@@ -134,7 +144,22 @@ async def company_search(q: str):
             except Exception as e:
                 logger.warning("fmp search supplement failed: %s", e)
 
-    return {"results": results[:8]}
+    # One listing per company: when a primary US (non-suffixed) symbol is present,
+    # drop the foreign-exchange duplicates (e.g. NVDA keeps NVDA, not NVDA.TO /
+    # NVD.DE); then dedupe whatever remains by normalized company name. Futures
+    # (ES=F) and indices carry no "." suffix, so they're never dropped here.
+    if any("." not in r["ticker"] for r in results):
+        results = [r for r in results if "." not in r["ticker"]]
+    seen: set = set()
+    deduped = []
+    for r in results:
+        key = _norm_company(r["name"])
+        if key and key in seen:
+            continue
+        seen.add(key)
+        deduped.append(r)
+
+    return {"results": deduped[:8]}
 
 # Hardcoded institutional peer groups for relative valuation fallbacks
 PEER_GROUPS = {
