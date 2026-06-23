@@ -556,6 +556,79 @@ async def get_peer_valuation(ticker: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _holder_num(v) -> bool:
+    return isinstance(v, (int, float)) and not (isinstance(v, float) and v != v)
+
+def _holder_rows(df, limit: int = 12) -> list:
+    """Shape a yfinance holders DataFrame into rows, tolerant of column-name
+    drift across yfinance versions (pctHeld vs '% Out', etc.)."""
+    out = []
+    if df is None or getattr(df, "empty", True):
+        return out
+    for _, row in df.head(limit).iterrows():
+        holder = row.get("Holder") or row.get("holder") or "—"
+        shares = row.get("Shares") or row.get("shares")
+        value  = row.get("Value") or row.get("value")
+        pct    = row.get("pctHeld") or row.get("% Out") or row.get("pctOut")
+        date   = row.get("Date Reported") or row.get("dateReported") or row.get("Date")
+        # pctHeld is a fraction (0.071); older columns may already be a percent.
+        pct_out = None
+        if _holder_num(pct):
+            pct_out = round(float(pct) * 100, 2) if float(pct) <= 1 else round(float(pct), 2)
+        out.append({
+            "holder": str(holder),
+            "shares": int(shares) if _holder_num(shares) else 0,
+            "value":  float(value) if _holder_num(value) else 0,
+            "pct_out": pct_out,
+            "date":   str(date)[:10] if date is not None else None,
+        })
+    return out
+
+
+@router.get("/institutional")
+async def get_institutional_ownership(ticker: str):
+    """Institutional ownership: % held by institutions/insiders plus the top
+    13F holders and mutual-fund holders (yfinance, sourced from quarterly 13Fs)."""
+    symbol = ticker.strip().upper()
+    cache_key = f"instown:v1:{symbol}"
+    cached = disk_get(cache_key)
+    if cached:
+        return cached
+    try:
+        stock = yf.Ticker(symbol)
+        holders = funds = []
+        try: holders = _holder_rows(stock.institutional_holders)
+        except Exception as e: logger.warning(f"institutional_holders {symbol}: {e}")
+        try: funds = _holder_rows(stock.mutualfund_holders)
+        except Exception as e: logger.warning(f"mutualfund_holders {symbol}: {e}")
+
+        inst_pct = insider_pct = float_pct = None
+        try:
+            info = get_info(symbol)
+            if isinstance(info, dict):
+                inst_pct    = info.get("heldPercentInstitutions")
+                insider_pct = info.get("heldPercentInsiders")
+                float_pct   = info.get("floatShares")
+        except Exception:
+            pass
+
+        result = {
+            "ticker":          symbol,
+            "pct_institutions": round(float(inst_pct), 4) if _holder_num(inst_pct) else None,
+            "pct_insiders":     round(float(insider_pct), 4) if _holder_num(insider_pct) else None,
+            "float_shares":     int(float_pct) if _holder_num(float_pct) else None,
+            "holders":          holders,
+            "funds":            funds,
+            "source":           "yfinance",
+        }
+        # 13F data is quarterly — cache hard so we don't re-hit yfinance per view.
+        disk_set(cache_key, result, ttl=43200)   # 12h
+        return result
+    except Exception as e:
+        logger.error(f"Error fetching institutional ownership for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/supply-chain")
 async def get_supply_chain(ticker: str):
     """Company profile: basic info + product/geo revenue segments + peer list."""

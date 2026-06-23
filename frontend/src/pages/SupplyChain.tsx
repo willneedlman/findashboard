@@ -86,6 +86,16 @@ interface SupplyChainData {
   peers:            string[]
 }
 
+interface Holder { holder: string; shares: number; value: number; pct_out: number | null; date: string | null }
+interface InstData {
+  ticker: string
+  pct_institutions: number | null
+  pct_insiders: number | null
+  holders: Holder[]
+  funds: Holder[]
+  source: string
+}
+
 function fmtCap(v: number | null): string {
   if (v == null) return '—'
   if (v >= 1e12) return `$${(v / 1e12).toFixed(2)}T`
@@ -223,6 +233,79 @@ function SegmentBreakdown({ title, block }: { title: string; block: SegBlock }) 
   )
 }
 
+function pctHeld(v: number | null): string {
+  return v == null ? '—' : `${(v * 100).toFixed(1)}%`
+}
+
+// Top 13F institutional / mutual-fund holders plus the headline ownership split.
+function InstitutionalPanel({ inst, loading, tab, onTab }:
+  { inst: InstData | null; loading: boolean; tab: 'holders' | 'funds'; onTab: (t: 'holders' | 'funds') => void }) {
+  const hasData = inst && (inst.holders.length > 0 || inst.funds.length > 0)
+  const rows = inst ? (tab === 'holders' ? inst.holders : inst.funds) : []
+  const maxPct = Math.max(1, ...rows.map(r => r.pct_out ?? 0))
+  const asOf = rows.find(r => r.date)?.date
+
+  return (
+    <div className="ft-panel">
+      <div className="ft-panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span>Institutional Ownership</span>
+        {hasData && (
+          <span style={{ display: 'flex', gap: 2 }}>
+            {(['holders', 'funds'] as const).map(t => (
+              <button key={t} onClick={() => onTab(t)} style={{
+                fontFamily: T.mono, fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+                padding: '2px 7px', cursor: 'pointer', border: 'none',
+                color: tab === t ? T.gold : T.muted,
+                background: tab === t ? 'color-mix(in srgb, var(--theme-primary) 14%, transparent)' : 'transparent',
+              }}>{t === 'holders' ? 'Institutions' : 'Funds'}</button>
+            ))}
+          </span>
+        )}
+      </div>
+      <div style={{ padding: '12px 14px' }}>
+        {loading ? (
+          <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11, fontStyle: 'italic' }}>Loading 13F data…</div>
+        ) : !hasData ? (
+          <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11, fontStyle: 'italic' }}>No institutional ownership reported.</div>
+        ) : (
+          <>
+            <div style={{ display: 'flex', gap: 0, marginBottom: 14, borderBottom: `1px solid ${T.border}`, paddingBottom: 12 }}>
+              {[
+                { label: '% Institutions', value: pctHeld(inst!.pct_institutions) },
+                { label: '% Insiders', value: pctHeld(inst!.pct_insiders) },
+              ].map((m, i) => (
+                <div key={m.label} style={{ flex: 1, paddingLeft: i > 0 ? 12 : 0, borderLeft: i > 0 ? `1px solid ${T.border}` : 'none' }}>
+                  <div style={{ fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, marginBottom: 3 }}>{m.label}</div>
+                  <div style={{ fontFamily: T.mono, fontSize: 15, fontWeight: 700, color: T.text }}>{m.value}</div>
+                </div>
+              ))}
+            </div>
+
+            {rows.map((h, i) => (
+              <div key={i} style={{ padding: '6px 0', borderBottom: i < rows.length - 1 ? `1px solid var(--theme-hover, rgba(255,255,255,0.04))` : 'none' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+                  <span style={{ fontFamily: T.label, fontSize: 11, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{h.holder}</span>
+                  <span style={{ display: 'flex', gap: 10, alignItems: 'baseline', flexShrink: 0 }}>
+                    {h.value > 0 && <span style={{ fontFamily: T.mono, fontSize: 10, color: T.muted }}>{fmtCap(h.value)}</span>}
+                    <span style={{ fontFamily: T.mono, fontSize: 12, fontWeight: 700, color: T.gold, minWidth: 46, textAlign: 'right' }}>{h.pct_out != null ? `${h.pct_out.toFixed(2)}%` : '—'}</span>
+                  </span>
+                </div>
+                <div style={{ height: 4, background: 'var(--theme-hover, rgba(255,255,255,0.06))', borderRadius: 2, overflow: 'hidden' }}>
+                  <div style={{ width: `${((h.pct_out ?? 0) / maxPct) * 100}%`, height: '100%', background: T.gold, borderRadius: 2 }} />
+                </div>
+              </div>
+            ))}
+
+            <div style={{ marginTop: 10, fontFamily: T.mono, fontSize: 9, color: T.muted }}>
+              Top {rows.length} {tab === 'holders' ? 'institutional holders' : 'fund holders'} · 13F via yfinance{asOf ? ` · as of ${asOf}` : ''}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function SupplyChainContent() {
   const isMobileLayout = useIsMobile()
   const [searchParams] = useSearchParams()
@@ -230,6 +313,9 @@ export function SupplyChainContent() {
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState<string | null>(null)
   const [data,    setData]    = useState<SupplyChainData | null>(null)
+  const [inst,    setInst]    = useState<InstData | null>(null)
+  const [instLoading, setInstLoading] = useState(false)
+  const [instTab, setInstTab] = useState<'holders' | 'funds'>('holders')
 
   const doFetch = async (sym?: string) => {
     const ticker = (sym ?? input).trim().toUpperCase()
@@ -237,6 +323,11 @@ export function SupplyChainContent() {
     setInput(ticker)
     setLoading(true)
     setError(null)
+    setData(null)
+    // Institutional ownership loads in parallel so it never blocks the profile.
+    setInst(null); setInstLoading(true)
+    axios.get(`/api/corporate/institutional?ticker=${ticker}`)
+      .then(r => setInst(r.data)).catch(() => setInst(null)).finally(() => setInstLoading(false))
     try {
       const res = await axios.get(`/api/corporate/supply-chain?ticker=${ticker}`)
       setData(res.data)
@@ -352,6 +443,9 @@ export function SupplyChainContent() {
                   </div>
                 </div>
               )}
+
+              {/* Institutional ownership panel — loads in parallel */}
+              <InstitutionalPanel inst={inst} loading={instLoading} tab={instTab} onTab={setInstTab} />
             </div>
 
             {/* ── Right: segment breakdowns ──────────────────────────── */}
