@@ -81,6 +81,10 @@ interface SupplyChainData {
   price:            number | null
   market_cap:       number | null
   employees:        number | null
+  pe_ratio?:        number | null
+  eps_ttm?:         number | null
+  rev_growth?:      number | null
+  div_yield?:       number | null
   product_segments: SegBlock
   geo_segments:     SegBlock
   revenue_activity?: SegBlock
@@ -107,19 +111,20 @@ function fmtCap(v: number | null): string {
 
 function fmtEmp(v: number | null): string {
   if (v == null) return '—'
-  if (v >= 1000) return `${(v / 1000).toFixed(0)}K`
+  if (v >= 1000) return `${Math.round(v / 1000).toLocaleString('en-US')}K`
   return `${v}`
 }
 
-// Latest breakdown + YoY + concentration + multi-year mix trend
-function SegmentBreakdown({ title, block }: { title: string; block: SegBlock }) {
+// Latest breakdown + YoY + concentration + multi-year mix trend. `hideHeader`
+// suppresses the internal title row when an enclosing panel header carries it.
+function SegmentBreakdown({ title, block, hideHeader = false }: { title: string; block: SegBlock; hideHeader?: boolean }) {
   const [hovered, setHovered] = useState<number | null>(null)
   const isMobile = useIsMobile()
 
   if (!block.latest.length) {
     return (
-      <div style={{ marginBottom: 24 }}>
-        <div style={labelStyle}>{title}</div>
+      <div style={{ marginBottom: hideHeader ? 0 : 24 }}>
+        {!hideHeader && <div style={labelStyle}>{title}</div>}
         <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11, fontStyle: 'italic' }}>
           {block.error ? 'Temporarily unavailable — retry shortly.' : 'Not reported by this issuer.'}
         </div>
@@ -132,7 +137,8 @@ function SegmentBreakdown({ title, block }: { title: string; block: SegBlock }) 
   const maxPct = Math.max(...data.map(d => d.pct))
 
   return (
-    <div style={{ marginBottom: 28 }}>
+    <div style={{ marginBottom: hideHeader ? 0 : 28 }}>
+      {!hideHeader && (
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <div style={{ ...labelStyle, marginBottom: 0 }}>{title}</div>
@@ -144,6 +150,7 @@ function SegmentBreakdown({ title, block }: { title: string; block: SegBlock }) 
           </span>
         )}
       </div>
+      )}
 
       {/* Stacked color bar (latest year) */}
       <div style={{ display: 'flex', height: 10, borderRadius: 2, overflow: 'hidden', marginBottom: 16, gap: 1 }}>
@@ -234,17 +241,57 @@ function SegmentBreakdown({ title, block }: { title: string; block: SegBlock }) 
   )
 }
 
+// One revenue panel: ft-panel with a header that carries the title + source chip
+// + fiscal-year meta, and the existing SegmentBreakdown (header suppressed) below.
+function RevenuePanel({ title, block }: { title: string; block: SegBlock }) {
+  return (
+    <div className="ft-panel">
+      <div className="ft-panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>{title}<SourceChip source={block.source} /></span>
+        {block.fiscalYear != null && (
+          <span style={{ fontFamily: T.mono, fontSize: 9, fontWeight: 400, letterSpacing: 0, color: T.muted }}>
+            FY{block.fiscalYear}{block.currency ? ` · ${block.currency}` : ''}
+          </span>
+        )}
+      </div>
+      <div style={{ padding: '16px 18px' }}>
+        <SegmentBreakdown title={title} block={block} hideHeader />
+      </div>
+    </div>
+  )
+}
+
 function pctHeld(v: number | null): string {
   return v == null ? '—' : `${(v * 100).toFixed(1)}%`
 }
 
-// Top 13F institutional / mutual-fund holders plus the headline ownership split.
+function HolderRow({ h, last, maxPct }: { h: Holder; last: boolean; maxPct: number }) {
+  return (
+    <div style={{ padding: '6px 0', borderBottom: last ? 'none' : `1px solid var(--theme-hover, rgba(255,255,255,0.04))` }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+        <span style={{ fontFamily: T.label, fontSize: 11, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{h.holder}</span>
+        <span style={{ display: 'flex', gap: 10, alignItems: 'baseline', flexShrink: 0 }}>
+          {h.value > 0 && <span style={{ fontFamily: T.mono, fontSize: 10, color: T.muted }}>{fmtCap(h.value)}</span>}
+          <span style={{ fontFamily: T.mono, fontSize: 12, fontWeight: 700, color: T.gold, minWidth: 46, textAlign: 'right' }}>{h.pct_out != null ? `${h.pct_out.toFixed(2)}%` : '—'}</span>
+        </span>
+      </div>
+      <div style={{ height: 4, background: 'var(--theme-hover, rgba(255,255,255,0.06))', borderRadius: 2, overflow: 'hidden' }}>
+        <div style={{ width: `${((h.pct_out ?? 0) / maxPct) * 100}%`, height: '100%', background: T.gold, borderRadius: 2 }} />
+      </div>
+    </div>
+  )
+}
+
+// Full-width institutional ownership: summary stats in a narrow first column,
+// then the top holders split across two columns so the list never feels cramped.
 function InstitutionalPanel({ inst, loading, tab, onTab }:
   { inst: InstData | null; loading: boolean; tab: 'holders' | 'funds'; onTab: (t: 'holders' | 'funds') => void }) {
+  const isMobile = useIsMobile()
   const hasData = inst && (inst.holders.length > 0 || inst.funds.length > 0)
   const rows = inst ? (tab === 'holders' ? inst.holders : inst.funds) : []
-  const maxPct = Math.max(1, ...rows.map(r => r.pct_out ?? 0))
   const asOf = rows.find(r => r.date)?.date
+  const half = Math.ceil(rows.length / 2)
+  const cols = [rows.slice(0, half), rows.slice(half)]
 
   return (
     <div className="ft-panel">
@@ -263,44 +310,39 @@ function InstitutionalPanel({ inst, loading, tab, onTab }:
           </span>
         )}
       </div>
-      <div style={{ padding: '12px 14px' }}>
+      <div style={{ padding: '18px 20px' }}>
         {loading ? (
           <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11, fontStyle: 'italic' }}>Loading 13F data…</div>
         ) : !hasData ? (
           <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11, fontStyle: 'italic' }}>No institutional ownership reported.</div>
         ) : (
-          <>
-            <div style={{ display: 'flex', gap: 0, marginBottom: 14, borderBottom: `1px solid ${T.border}`, paddingBottom: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '200px 1fr 1fr', gap: 32, alignItems: 'start' }}>
+            {/* Summary stats + provenance */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               {[
                 { label: '% Institutions', value: pctHeld(inst!.pct_institutions) },
                 { label: '% Insiders', value: pctHeld(inst!.pct_insiders) },
-              ].map((m, i) => (
-                <div key={m.label} style={{ flex: 1, paddingLeft: i > 0 ? 12 : 0, borderLeft: i > 0 ? `1px solid ${T.border}` : 'none' }}>
-                  <div style={{ fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, marginBottom: 3 }}>{m.label}</div>
-                  <div style={{ fontFamily: T.mono, fontSize: 15, fontWeight: 700, color: T.text }}>{m.value}</div>
+              ].map(m => (
+                <div key={m.label}>
+                  <div style={{ fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, marginBottom: 4 }}>{m.label}</div>
+                  <div style={{ fontFamily: T.mono, fontSize: 22, fontWeight: 700, color: T.text }}>{m.value}</div>
                 </div>
               ))}
-            </div>
-
-            {rows.map((h, i) => (
-              <div key={i} style={{ padding: '6px 0', borderBottom: i < rows.length - 1 ? `1px solid var(--theme-hover, rgba(255,255,255,0.04))` : 'none' }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
-                  <span style={{ fontFamily: T.label, fontSize: 11, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{h.holder}</span>
-                  <span style={{ display: 'flex', gap: 10, alignItems: 'baseline', flexShrink: 0 }}>
-                    {h.value > 0 && <span style={{ fontFamily: T.mono, fontSize: 10, color: T.muted }}>{fmtCap(h.value)}</span>}
-                    <span style={{ fontFamily: T.mono, fontSize: 12, fontWeight: 700, color: T.gold, minWidth: 46, textAlign: 'right' }}>{h.pct_out != null ? `${h.pct_out.toFixed(2)}%` : '—'}</span>
-                  </span>
-                </div>
-                <div style={{ height: 4, background: 'var(--theme-hover, rgba(255,255,255,0.06))', borderRadius: 2, overflow: 'hidden' }}>
-                  <div style={{ width: `${((h.pct_out ?? 0) / maxPct) * 100}%`, height: '100%', background: T.gold, borderRadius: 2 }} />
-                </div>
+              <div style={{ marginTop: 2, paddingTop: 12, borderTop: `1px solid ${T.border}`, fontFamily: T.mono, fontSize: 9, color: T.muted, lineHeight: 1.5 }}>
+                Top {rows.length} {tab === 'holders' ? 'institutional holders' : 'fund holders'} · 13F via yfinance{asOf ? ` · as of ${asOf}` : ''}
               </div>
-            ))}
-
-            <div style={{ marginTop: 10, fontFamily: T.mono, fontSize: 9, color: T.muted }}>
-              Top {rows.length} {tab === 'holders' ? 'institutional holders' : 'fund holders'} · 13F via yfinance{asOf ? ` · as of ${asOf}` : ''}
             </div>
-          </>
+
+            {/* Holder rows, split across two columns */}
+            {cols.map((list, ci) => {
+              const m = Math.max(1, ...list.map(r => r.pct_out ?? 0))
+              return (
+                <div key={ci}>
+                  {list.map((h, i) => <HolderRow key={i} h={h} last={i === list.length - 1} maxPct={m} />)}
+                </div>
+              )
+            })}
+          </div>
         )}
       </div>
     </div>
@@ -379,105 +421,82 @@ export function SupplyChainContent() {
           {error && <span style={{ fontFamily: T.mono, fontSize: 10, color: 'var(--theme-negative)' }}>{error}</span>}
         </div>
 
-        {data && (
-          <div style={{ display: 'grid', gridTemplateColumns: isMobileLayout ? '1fr' : '340px 1fr', gap: 20, alignItems: 'start' }}>
+        {data && (() => {
+          const metrics: { label: string; value: string; color?: string }[] = [
+            { label: 'Price',      value: data.price != null ? `$${data.price.toFixed(2)}` : '—' },
+            { label: 'Market Cap', value: fmtCap(data.market_cap) },
+            { label: 'P/E Ratio',  value: data.pe_ratio != null ? data.pe_ratio.toFixed(1) : '—' },
+            { label: 'EPS (TTM)',  value: data.eps_ttm != null ? `$${data.eps_ttm.toFixed(2)}` : '—' },
+            { label: 'Rev Growth', value: data.rev_growth != null ? `${data.rev_growth >= 0 ? '↑' : '↓'} ${Math.abs(data.rev_growth * 100).toFixed(1)}%` : '—',
+              color: data.rev_growth != null ? (data.rev_growth >= 0 ? 'var(--theme-positive)' : 'var(--theme-negative)') : undefined },
+            { label: 'Div Yield',  value: data.div_yield != null ? `${data.div_yield.toFixed(2)}%` : '—' },
+            { label: 'Employees',  value: fmtEmp(data.employees) },
+          ]
+          return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
 
-            {/* ── Left: company card ─────────────────────────────────── */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-
-              {/* Identity panel */}
-              <div className="ft-panel">
-                <div style={{ padding: '16px 16px 14px' }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 4 }}>
-                    <span style={{ fontFamily: T.mono, fontSize: 18, fontWeight: 700, color: T.gold }}>{data.ticker}</span>
-                    <span style={{ fontFamily: T.label, fontSize: 12, color: T.text }}>{data.name}</span>
-                  </div>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-                    {data.sector && <span style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.gold, background: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-primary) 20%, transparent)', padding: '2px 7px' }}>{data.sector}</span>}
-                    {data.industry && <span style={{ fontFamily: T.label, fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.muted, background: 'var(--theme-hover, rgba(255,255,255,0.04))', border: `1px solid ${T.border}`, padding: '2px 7px' }}>{data.industry}</span>}
-                  </div>
-
-                  {/* Key metrics row */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 0, borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>
-                    {[
-                      { label: 'Price',      value: data.price != null ? `$${data.price.toFixed(2)}` : '—' },
-                      { label: 'Market Cap', value: fmtCap(data.market_cap) },
-                      { label: 'Employees',  value: fmtEmp(data.employees) },
-                    ].map((m, i) => (
-                      <div key={m.label} style={{ paddingRight: i < 2 ? 12 : 0, borderRight: i < 2 ? `1px solid ${T.border}` : 'none', paddingLeft: i > 0 ? 12 : 0 }}>
-                        <div style={{ fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, marginBottom: 3 }}>{m.label}</div>
-                        <div style={{ fontFamily: T.mono, fontSize: 13, fontWeight: 700, color: T.text }}>{m.value}</div>
-                      </div>
-                    ))}
-                  </div>
+            {/* ── Identity strip: title row + 7-metric grid ──────────── */}
+            <div className="ft-panel">
+              <div style={{ padding: '18px 24px', display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                  <span style={{ fontFamily: T.mono, fontSize: 24, fontWeight: 700, color: T.gold }}>{data.ticker}</span>
+                  <span style={{ fontFamily: T.label, fontSize: 15, color: T.text }}>{data.name}</span>
                 </div>
-
-                {data.description && (
-                  <div style={{ padding: '12px 16px', borderTop: `1px solid ${T.border}`, fontFamily: T.label, fontSize: 11, color: T.muted, lineHeight: 1.6, maxHeight: 160, overflowY: 'auto' }}>
-                    {data.description}
-                  </div>
-                )}
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {data.sector && <span style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.gold, background: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-primary) 20%, transparent)', padding: '2px 7px' }}>{data.sector}</span>}
+                  {data.industry && <span style={{ fontFamily: T.label, fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.muted, background: 'var(--theme-hover, rgba(255,255,255,0.04))', border: `1px solid ${T.border}`, padding: '2px 7px' }}>{data.industry}</span>}
+                </div>
               </div>
-
-              {/* Peers panel */}
-              {data.peers.length > 0 && (
-                <div className="ft-panel">
-                  <div className="ft-panel-header">Sector Peers</div>
-                  <div style={{ padding: '12px 14px', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {data.peers.map(p => (
-                      <button
-                        key={p}
-                        onClick={() => doFetch(p)}
-                        style={{
-                          fontFamily: T.mono, fontSize: 10, fontWeight: 700, color: T.text,
-                          background: 'var(--theme-hover, rgba(255,255,255,0.04))', border: `1px solid ${T.border}`,
-                          padding: '4px 9px', cursor: 'pointer', letterSpacing: '0.06em',
-                          transition: 'all 0.12s',
-                        }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = T.gold; (e.currentTarget as HTMLElement).style.borderColor = 'color-mix(in srgb, var(--theme-primary) 35%, transparent)' }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = T.text; (e.currentTarget as HTMLElement).style.borderColor = T.border }}
-                      >
-                        {p}
-                      </button>
-                    ))}
+              <div style={{ display: 'grid', gridTemplateColumns: isMobileLayout ? 'repeat(2,1fr)' : 'repeat(7,1fr)', borderTop: `1px solid ${T.border}` }}>
+                {metrics.map((m, i) => (
+                  <div key={m.label} style={{ padding: '14px 18px', borderRight: !isMobileLayout && i < metrics.length - 1 ? `1px solid ${T.border}` : 'none', borderTop: isMobileLayout && i >= 2 ? `1px solid ${T.border}` : 'none' }}>
+                    <div style={{ fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, marginBottom: 4 }}>{m.label}</div>
+                    <div style={{ fontFamily: T.mono, fontSize: 18, fontWeight: 700, color: m.color ?? T.text }}>{m.value}</div>
                   </div>
-                </div>
-              )}
-
-              {/* Institutional ownership panel — loads in parallel */}
-              <InstitutionalPanel inst={inst} loading={instLoading} tab={instTab} onTab={setInstTab} />
+                ))}
+              </div>
             </div>
 
-            {/* ── Right: segment breakdowns ──────────────────────────── */}
-            <div className="ft-panel">
-              <div className="ft-panel-header">Revenue Breakdown</div>
-              <div style={{ padding: '20px 22px 10px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '8px 40px', alignItems: 'start' }}>
-                  <SegmentBreakdown title="By Product / Segment" block={data.product_segments} />
-                  <SegmentBreakdown title="By Geography" block={data.geo_segments} />
-                  {data.revenue_activity && data.revenue_activity.latest.length > 0 && (
-                    <SegmentBreakdown title="By Activity · Fees vs Trading" block={data.revenue_activity} />
+            {/* ── Row 1: About + Peers · Revenue by Segment · by Geography ── */}
+            <div style={{ display: 'grid', gridTemplateColumns: isMobileLayout ? '1fr' : '1fr 1fr 1fr', gap: 18, alignItems: 'stretch' }}>
+              <div className="ft-panel" style={{ display: 'flex', flexDirection: 'column' }}>
+                <div className="ft-panel-header">About</div>
+                <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', flex: 1 }}>
+                  <div style={{ flex: 1, fontFamily: T.label, fontSize: 12, color: T.muted, lineHeight: 1.7, overflowY: 'auto', maxHeight: 340 }}>
+                    {data.description || 'No description available.'}
+                  </div>
+                  {data.peers.length > 0 && (
+                    <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
+                      <div style={{ ...labelStyle, marginBottom: 8 }}>Sector Peers</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {data.peers.map(p => (
+                          <button key={p} onClick={() => doFetch(p)}
+                            style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: T.text, background: 'var(--theme-hover, rgba(255,255,255,0.04))', border: `1px solid ${T.border}`, padding: '6px 12px', cursor: 'pointer', letterSpacing: '0.06em', transition: 'all 0.12s' }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = T.gold; (e.currentTarget as HTMLElement).style.borderColor = 'color-mix(in srgb, var(--theme-primary) 35%, transparent)' }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = T.text; (e.currentTarget as HTMLElement).style.borderColor = T.border }}>
+                            {p}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
-                {!data.product_segments.latest.length && !data.geo_segments.latest.length && !data.revenue_activity?.latest.length && (
-                  <div style={{ padding: '40px 0', textAlign: 'center', color: T.muted, fontFamily: T.label, fontSize: 11 }}>
-                    {(data.product_segments.error || data.geo_segments.error) ? (
-                      <>
-                        Segment data is temporarily unavailable for {data.ticker}.<br />
-                        <span style={{ fontSize: 10, opacity: 0.7 }}>The data provider is rate-limited right now — try again in a little while. Once fetched, results are cached.</span>
-                      </>
-                    ) : (
-                      <>
-                        No segment breakdown reported for {data.ticker}.<br />
-                        <span style={{ fontSize: 10, opacity: 0.7 }}>Most issuers that file segmented revenue are covered; some (funds, holding companies, certain foreign filers) don't report it.</span>
-                      </>
-                    )}
-                  </div>
-                )}
               </div>
+
+              <RevenuePanel title="Revenue · By Segment" block={data.product_segments} />
+              <RevenuePanel title="Revenue · By Geography" block={data.geo_segments} />
             </div>
+
+            {/* Bank fees-vs-trading mix, only when reported */}
+            {data.revenue_activity && data.revenue_activity.latest.length > 0 && (
+              <RevenuePanel title="Revenue · By Activity (Fees vs Trading)" block={data.revenue_activity} />
+            )}
+
+            {/* ── Row 2: Institutional ownership (full width) ────────── */}
+            <InstitutionalPanel inst={inst} loading={instLoading} tab={instTab} onTab={setInstTab} />
           </div>
-        )}
+          )
+        })()}
 
         {!data && !loading && (
           <div style={{ textAlign: 'center', padding: '80px 0', color: T.muted, fontFamily: T.label, fontSize: 11 }}>

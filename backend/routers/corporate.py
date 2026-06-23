@@ -690,6 +690,15 @@ async def get_supply_chain(ticker: str):
         price = safe_float(info, ["currentPrice", "previousClose", "navPrice"]) or None
         mcap  = safe_float(info, ["marketCap", "totalAssets"]) or None
         emp   = info.get("fullTimeEmployees")
+        pe      = info.get("trailingPE")
+        eps     = info.get("trailingEps")
+        rev_g   = info.get("revenueGrowth")            # fraction, e.g. 0.051
+        # yfinance reports dividendYield as a fraction in older versions and a
+        # percent in newer ones; normalise to a percent number (0.92 == 0.92%).
+        div_raw = info.get("dividendYield")
+        div_y   = None
+        if isinstance(div_raw, (int, float)) and div_raw == div_raw and div_raw > 0:
+            div_y = round(div_raw * 100, 2) if div_raw < 0.25 else round(div_raw, 2)
 
         import fmp as _fmp
         product_segments = dict(_fmp.EMPTY_SEGMENTS)
@@ -745,6 +754,10 @@ async def get_supply_chain(ticker: str):
             "price":            float(price) if price else None,
             "market_cap":       float(mcap) if mcap else None,
             "employees":        int(emp) if emp else None,
+            "pe_ratio":         round(float(pe), 1) if _holder_num(pe) and pe > 0 else None,
+            "eps_ttm":          round(float(eps), 2) if _holder_num(eps) else None,
+            "rev_growth":       round(float(rev_g), 4) if _holder_num(rev_g) else None,
+            "div_yield":        div_y,
             "product_segments": product_segments,
             "geo_segments":     geo_segments,
             "revenue_activity": revenue_activity,
