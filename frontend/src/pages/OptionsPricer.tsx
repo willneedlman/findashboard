@@ -29,7 +29,7 @@ interface ChainRow {
   impliedVolatility: number; volume: number; openInterest: number
 }
 interface ChainData {
-  expiry: string; expirations: string[]; spot: number | null; dte: number
+  expiry: string; expirations: string[]; spot: number | null; dte: number; t_days: number
   calls: ChainRow[]; puts: ChainRow[]
 }
 const rowMark = (r: ChainRow) =>
@@ -125,7 +125,9 @@ export function OptionsPricerContent() {
       ...params,
       S: chain.spot,
       K: r.strike,
-      T: Math.max(chain.dte, 0),
+      // t_days carries the precise time to expiry (intraday hours for 0-DTE);
+      // round to 3 dp so the Days-to-Expiry field stays legible.
+      T: Math.round((chain.t_days ?? chain.dte) * 1000) / 1000,
       sigma: Math.round(r.impliedVolatility * 1000) / 10,
     }
     setParams(next)
@@ -177,7 +179,7 @@ export function OptionsPricerContent() {
                       </option>
                     ))}
                   </select>
-                  {chain.spot != null && <div style={{ fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', fontFamily: 'var(--theme-mono)', marginTop: 5 }}>Spot ${chain.spot.toFixed(2)} · {chain.dte}d to expiry</div>}
+                  {chain.spot != null && <div style={{ fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', fontFamily: 'var(--theme-mono)', marginTop: 5 }}>Spot ${chain.spot.toFixed(2)} · {chain.dte === 0 ? `${(chain.t_days * 24).toFixed(1)}h to expiry` : `${chain.dte}d to expiry`}</div>}
                 </div>
               </>
             )}

@@ -416,9 +416,24 @@ def options_chain(ticker: str, expiry: str | None = None):
         exp_dt = _dt.date.fromisoformat(target)
         dte    = max((exp_dt - today).days, 0)   # 0 = expires today
 
+        # Precise time to expiry in days. For 0-DTE the calendar-day count is 0,
+        # which prices the option at pure intrinsic; instead measure the hours
+        # left until the 4:00 PM ET close so the model still reflects the
+        # remaining intraday time value. Multi-day contracts keep whole days.
+        t_days = float(dte)
+        if dte == 0:
+            try:
+                from zoneinfo import ZoneInfo
+                ny = ZoneInfo("America/New_York")
+                close = _dt.datetime.combine(exp_dt, _dt.time(16, 0), tzinfo=ny)
+                secs_left = (close - _dt.datetime.now(ny)).total_seconds()
+                t_days = max(secs_left / 86400.0, 1.0 / 1440)   # floor at ~1 minute
+            except Exception:
+                t_days = 1.0 / 24   # ~1 hour if the tz lookup fails
+
         # Tradier returns IV as a decimal (smv_vol); convert to pct and compute missing greeks
         r_pct = 5.0
-        g_dte = max(float(dte), 1.0)   # floor greeks math off T=0 (0-DTE) to avoid NaN
+        g_dte = max(t_days, 1.0 / 1440)   # keep greeks math off T=0
         def _enrich(rows: list[dict], flag: str) -> list[dict]:
             for row in rows:
                 iv_dec = float(row.get("impliedVolatility") or 0)
@@ -442,6 +457,7 @@ def options_chain(ticker: str, expiry: str | None = None):
             "expirations": valid_exps[:12],
             "spot":        round(spot, 2) if spot else None,
             "dte":         dte,
+            "t_days":      round(t_days, 4),
             "calls":       _enrich(calls, "call"),
             "puts":        _enrich(puts,  "put"),
         }
