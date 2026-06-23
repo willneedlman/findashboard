@@ -4,7 +4,8 @@ Two complementary sources, both end-of-period marks (not live quotes):
 
   A. SPDR bond-ETF daily holdings (State Street / SSGA). An ungated daily .xlsx
      listing each holding's ISIN (-> CUSIP), par + market value (-> price per
-     100), coupon and maturity. Fresh (T-1) but limited to ETF holdings.
+     100), coupon and maturity. Fresh (T-1). Six funds span the IG and HY curve
+     (~10k CUSIPs), fetched concurrently and cached per fund.
   B. SEC N-PORT fund filings via EDGAR full-text search. Any bond a registered
      fund holds, priced at the fund's last report date. Broad but month-lagged.
 
@@ -49,8 +50,9 @@ def _date(v):
 
 
 # ── Option A: SPDR bond-ETF daily holdings (SSGA) ─────────────────────────────
-# Broadest liquid corporate coverage with the fewest files: IG + high yield.
-_SSGA_FUNDS = ("SPBO", "JNK")
+# Span the corporate curve to maximize free coverage: broad + short + intermediate
+# + long investment grade, plus broad and short high yield. ~10k unique CUSIPs.
+_SSGA_FUNDS = ("SPBO", "SPIB", "SPSB", "SPLB", "JNK", "SPHY")
 
 
 def _ssga_holdings(fund: str) -> dict:
@@ -103,17 +105,35 @@ def _ssga_holdings(fund: str) -> dict:
     return out
 
 
-def _etf_price_map() -> dict:
-    cached = disk_get("etf_px_map")
+def _ssga_holdings_cached(fund: str) -> dict:
+    """One fund's holdings, cached 24h on its own key so a single slow or failed
+    download never discards the others' coverage."""
+    ck = f"ssga:{fund}"
+    cached = disk_get(ck)
     if cached is not None:
         return cached
+    try:
+        h = _ssga_holdings(fund)
+    except Exception as e:
+        logger.warning("ssga %s holdings failed: %s", fund, e)
+        h = {}
+    if h:
+        disk_set(ck, h, ttl=86400)
+    return h
+
+
+def _etf_price_map() -> dict:
+    cached = disk_get("etf_px_map:v2")
+    if cached is not None:
+        return cached
+    # Fetch funds concurrently: total build time is the slowest single download,
+    # not the sum, so the combined map stays well inside the request timeout.
+    from concurrent.futures import ThreadPoolExecutor
     m: dict = {}
-    for fund in _SSGA_FUNDS:
-        try:
-            m.update(_ssga_holdings(fund))
-        except Exception as e:
-            logger.warning("ssga %s holdings failed: %s", fund, e)
-    disk_set("etf_px_map", m, ttl=43200)              # 12 h
+    with ThreadPoolExecutor(max_workers=len(_SSGA_FUNDS)) as pool:
+        for h in pool.map(_ssga_holdings_cached, _SSGA_FUNDS):
+            m.update(h)
+    disk_set("etf_px_map:v2", m, ttl=43200)           # 12 h
     return m
 
 
@@ -162,7 +182,7 @@ def price_for_cusip(cusip: str):
     """Daily ETF mark first (fresher), else N-PORT monthly mark. Cached 12h,
     including misses, so a CUSIP with no free price isn't re-fetched repeatedly."""
     cu = cusip.strip().upper()
-    ck = f"bondpx:{cu}"
+    ck = f"bondpx:v2:{cu}"
     cached = disk_get(ck)
     if cached is not None:
         return cached or None
