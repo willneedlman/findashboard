@@ -99,20 +99,28 @@ export function OptionsPricerContent() {
     onSuccess: d => { setChainExpiry(d.expiry); setSelectedIdx('') },
   })
 
-  // Live 3-month T-bill — the conventional risk-free proxy. Returned as a decimal.
-  const rfQuery = useQuery({ queryKey: ['risk-free'], queryFn: fetchRiskFreeRate, staleTime: 10 * 60_000 })
+  // Term-matched risk-free rate: interpolate the Treasury curve at the option's
+  // tenor (days to expiry) so the rate tracks the contract instead of a fixed
+  // 3M bill. Keyed on the rounded tenor so React Query caches per maturity.
+  const tenorDays = Math.max(Math.round(params.T), 1)
+  const rfQuery = useQuery({
+    queryKey: ['risk-free', tenorDays],
+    queryFn: () => fetchRiskFreeRate(tenorDays),
+    staleTime: 10 * 60_000,
+  })
 
   const runAll = (p: Params) => { calcPrice(p); calcPayoff(p); calcSurface(p) }
   useEffect(() => { runAll(params) }, [])
 
-  // Auto-populate the risk-free rate from the live T-bill once it loads, so the
-  // analyzer defaults to the real benchmark rather than a stale hardcoded guess.
-  const rfApplied = useRef(false)
+  // Apply the term-matched rate whenever it changes, unless the user has pinned
+  // the rate by editing it themselves. Skip when it already matches to avoid a
+  // redundant re-price.
+  const rUserEdited = useRef(false)
   useEffect(() => {
     const rate = rfQuery.data?.rate
-    if (rate == null || rfApplied.current) return
-    rfApplied.current = true
+    if (rate == null || rUserEdited.current) return
     const rPct = Math.round(rate * 1000) / 10
+    if (rPct === params.r) return
     setParams(p => { const next = { ...p, r: rPct }; runAll(next); return next })
   }, [rfQuery.data])
 
@@ -123,6 +131,8 @@ export function OptionsPricerContent() {
     // price tied to a strike the user has since changed.
     setLoadedMark(null)
     setSelectedIdx('')
+    // A manual rate edit pins it; stop auto-tracking the curve from there on.
+    if (k === 'r') rUserEdited.current = true
     setParams(p => ({ ...p, [k]: k === 'option_type' ? e.target.value : +e.target.value }))
   }
 
@@ -206,7 +216,7 @@ export function OptionsPricerContent() {
               { label: 'Strike Price ($)',   key: 'K',     step: 1 },
               { label: 'Days to Expiry',     key: 'T',     step: 1 },
               { label: 'Volatility (%)',     key: 'sigma', step: 0.5 },
-              { label: 'Risk-Free Rate (%)', key: 'r',     step: 0.25, hint: '3-month T-bill' },
+              { label: 'Risk-Free Rate (%)', key: 'r',     step: 0.25, hint: 'Treasury curve, matched to expiry' },
             ] as const).map(f => (
               <div key={f.key}>
                 <label style={LABEL}>{f.label}</label>

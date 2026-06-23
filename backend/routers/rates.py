@@ -365,7 +365,22 @@ def yield_curve():
 
 
 @router.get("/risk-free")
-def risk_free_rate():
+def risk_free_rate(days: int | None = None):
+    # Term-matched rate: interpolate the Treasury curve at the option's tenor so
+    # a 2Y LEAP discounts at the 2Y yield and a weekly at the front of the curve,
+    # rather than everything using the 3M bill. Falls through to the 3M default
+    # if a tenor isn't requested or the curve is unavailable.
+    if days and days > 0:
+        try:
+            curve = yield_curve().get("curve", {})
+            anchors = {_FULL_TENOR_YEARS[k]: curve[k] for k in _FULL_TENOR_YEARS if k in curve}
+            if len(anchors) >= 2:
+                yrs = max(days / 365.0, 1.0 / 365.0)
+                return {"rate": round(_interp_point(anchors, yrs) / 100.0, 4),
+                        "tenor_years": round(yrs, 4), "source": "treasury-curve"}
+        except Exception:
+            pass
+
     with _rates_lock:
         if "rf" in _rates_cache:
             return _rates_cache["rf"]
@@ -1039,19 +1054,22 @@ _YF_ANCHOR_TICKERS = {"3M": ("^IRX", 0.25), "5Y": ("^FVX", 5.0), "10Y": ("^TNX",
 _FULL_TENOR_YEARS  = {"1M": 1/12, "3M": 0.25, "6M": 0.5, "1Y": 1.0, "2Y": 2.0,
                       "3Y": 3.0,  "5Y": 5.0,  "7Y": 7.0, "10Y": 10.0, "20Y": 20.0, "30Y": 30.0}
 
-def _interp_curve(anchors: dict) -> dict:
-    """Build full 11-tenor curve from {years: rate} anchors via linear interp."""
+def _interp_point(anchors: dict, t: float) -> float:
+    """Linear interpolation in yield space at tenor t (years) from {years: rate}.
+    Flat extrapolation beyond the shortest/longest anchor."""
     pts = sorted(anchors.items())
     yrs = [p[0] for p in pts]; ylds = [p[1] for p in pts]
-    def _i(t: float) -> float:
-        if t <= yrs[0]:  return ylds[0]
-        if t >= yrs[-1]: return ylds[-1]
-        for i in range(len(yrs) - 1):
-            if yrs[i] <= t <= yrs[i + 1]:
-                f = (t - yrs[i]) / (yrs[i + 1] - yrs[i])
-                return ylds[i] + f * (ylds[i + 1] - ylds[i])
-        return ylds[-1]
-    return {label: round(_i(t), 4) for label, t in _FULL_TENOR_YEARS.items()}
+    if t <= yrs[0]:  return ylds[0]
+    if t >= yrs[-1]: return ylds[-1]
+    for i in range(len(yrs) - 1):
+        if yrs[i] <= t <= yrs[i + 1]:
+            f = (t - yrs[i]) / (yrs[i + 1] - yrs[i])
+            return ylds[i] + f * (ylds[i + 1] - ylds[i])
+    return ylds[-1]
+
+def _interp_curve(anchors: dict) -> dict:
+    """Build full 11-tenor curve from {years: rate} anchors via linear interp."""
+    return {label: round(_interp_point(anchors, t), 4) for label, t in _FULL_TENOR_YEARS.items()}
 
 def _curve_at(close: pd.DataFrame, target_date) -> dict:
     """Interpolate full yield curve at/before target_date from anchor closes."""

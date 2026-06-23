@@ -17,9 +17,10 @@ export const optionPayoff = (body: object) =>
 export const fetchOptionsChain = (ticker: string, expiry?: string) =>
   api.get('/options/chain', { params: { ticker, ...(expiry ? { expiry } : {}) } }).then(r => r.data)
 
-// 3-month T-bill, the standard risk-free proxy. Returns { rate } as a decimal.
-export const fetchRiskFreeRate = (): Promise<{ rate: number }> =>
-  api.get('/rates/risk-free').then(r => r.data)
+// Risk-free rate as a decimal. With `days`, returns the Treasury curve
+// interpolated at that tenor; without it, the 3-month T-bill default.
+export const fetchRiskFreeRate = (days?: number): Promise<{ rate: number; tenor_years?: number }> =>
+  api.get('/rates/risk-free', { params: days ? { days } : {} }).then(r => r.data)
 
 export const fetchGEX = (ticker: string, expiry?: string) =>
   api.get('/options/gex', { params: { ticker, ...(expiry ? { expiry } : {}) } }).then(r => r.data)
