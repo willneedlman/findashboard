@@ -85,6 +85,7 @@ export default function Alerts() {
     queryFn:   () => axios.get(`/api/alerts/${user!.id}`).then(r => r.data),
     enabled:   !!user,
     staleTime: 10_000,
+    refetchInterval: 20_000,   // surface server-side fires (cooldown flips) without a manual reload
   })
 
   const createMut = useMutation({
@@ -121,6 +122,7 @@ export default function Alerts() {
     },
     enabled: tickers.length > 0,
     staleTime: 30_000,
+    refetchInterval: 30_000,   // keep the Last / 1D readouts ticking
   })
 
   const isCooldown = (a: Alert) => a.cooldown_until > now

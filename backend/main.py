@@ -29,7 +29,9 @@ from routers import (
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     paper_scheduler.start_scheduler()
+    alerts.start_evaluation_loop()   # price-alert monitor — previously never started
     yield
+    alerts.stop_evaluation_loop()
     paper_scheduler.stop_scheduler()
 
 app = FastAPI(title="Alphatape Terminal API", lifespan=lifespan)
