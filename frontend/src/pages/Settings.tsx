@@ -23,6 +23,7 @@ const PRESETS: { name: string; theme: Partial<Theme> }[] = [
   { name: 'Morning Mist',   theme: { primaryColor: '#1e3a8a', secondaryColor: '#1e293b', tertiaryColor: '#0f766e', bgColor: '#f1f5f9', surfaceColor: '#dbe4ef', chartNeutralColor: '#5a7590', primaryFont: 'JetBrains Mono', secondaryFont: 'Inter',         primaryFontUrl: '', secondaryFontUrl: '' } },
   { name: 'Rosewood',       theme: { primaryColor: '#881337', secondaryColor: '#5a1c1c', tertiaryColor: '#c47878', bgColor: '#fdf4f4', surfaceColor: '#e8d5d5', chartNeutralColor: '#ff9494', primaryFont: 'DM Mono',      secondaryFont: 'Sora',          primaryFontUrl: '', secondaryFontUrl: '' } },
   { name: 'Paper White',    theme: { primaryColor: '#171717', secondaryColor: '#64748b', tertiaryColor: '#404040', bgColor: '#ffffff', surfaceColor: '#f4f4f5', chartNeutralColor: '#9ca3af', primaryFont: 'JetBrains Mono', secondaryFont: 'Inter',         primaryFontUrl: '', secondaryFontUrl: '' } },
+  { name: 'Test',           theme: { primaryColor: '#c9a84c', secondaryColor: '#5e768f', tertiaryColor: '#60a5fa', bgColor: '#101c2e', surfaceColor: '#0d1826', chartNeutralColor: '#4a7fa5', primaryFont: 'San Francisco', secondaryFont: 'Yahoo Sans', primaryFontUrl: '', secondaryFontUrl: '' } },
 ]
 
 // ── Small UI helpers ──────────────────────────────────────────────────────────

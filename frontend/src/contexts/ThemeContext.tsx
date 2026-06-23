@@ -66,6 +66,7 @@ export const MONO_FONTS = [
   'Space Mono',       // retro, wide character
   'DM Mono',          // light, editorial
   'Martian Mono',     // ultra-wide condensed blocks
+  'San Francisco',    // Apple system font (local) — used as a data face in test preset
 ]
 // Interface typeface — a deliberately varied set so the choices look distinct:
 // grotesque · humanist · geometric · rounded · futuristic · serif · display.
@@ -81,6 +82,7 @@ export const SANS_FONTS = [
   'Fraunces',            // expressive display serif
   'Bricolage Grotesque', // characterful display grotesque
   'Barlow',              // slightly condensed grotesque
+  'Yahoo Sans',          // proprietary (local) — used in the test preset
 ]
 
 const STORAGE_USERS   = 'ft-users'
@@ -138,6 +140,9 @@ export function applyTheme(t: Theme) {
     'DM Mono', 'Martian Mono', 'Cinzel', 'Lora', 'IBM Plex Sans', 'Inter',
     'DM Sans', 'Space Grotesk', 'Sora', 'Barlow', 'Manrope', 'Geist',
     'Fraunces', 'Bricolage Grotesque',
+    // System/local fonts — not on Google Fonts, so skip the web-font fetch and
+    // resolve them from the user's machine (falling back if not installed).
+    'San Francisco', 'Yahoo Sans',
   ]
 
   // Only inject <link> for Google-Fonts-style URLs
