@@ -92,6 +92,7 @@ export interface Dashboard {
   widgets: WidgetConfig[]
   layouts: Layout[]
   showTicker?: boolean   // surface the top-bar ticker selector on this dashboard
+  icon?: string          // icon key (see DASH_ICON_KEYS in CustomDashboard); shown when the tab is collapsed
 }
 
 export interface StoredWorkspace {
@@ -370,6 +371,12 @@ export const PRESET_LABELS: Record<PresetKey, string> = {
   main: 'Everything', cockpit: 'Trading Portal', research: 'Research', screening: 'Screening', 'market-overview': 'Market Overview', options: 'Options Desk', risk: 'Risk Desk', blank: 'Custom (blank)',
 }
 
+// Default icon key per preset (keys resolve to lucide icons in CustomDashboard).
+export const PRESET_ICONS: Record<PresetKey, string> = {
+  main: 'grid', cockpit: 'gauge', research: 'search', screening: 'filter',
+  'market-overview': 'globe', options: 'layers', risk: 'shield', blank: 'grid',
+}
+
 // A preset is a hand-placed list of tiles (12-col grid, 60px rows) so each
 // layout reads as a deliberate workspace rather than an auto-packed grid.
 type PItem = { type: WidgetType; config?: Partial<WidgetConfig>; x: number; y: number; w: number; h: number }
@@ -575,11 +582,15 @@ export function useDashboard(userId?: string | null) {
   const createDashboard = useCallback((preset: PresetKey) => {
     const p = buildPreset(preset)
     const id = newDashId()
-    persist({ ...ws, dashboards: [...ws.dashboards, { id, name: PRESET_LABELS[preset], widgets: p.widgets, layouts: p.layouts }], activeId: id })
+    persist({ ...ws, dashboards: [...ws.dashboards, { id, name: PRESET_LABELS[preset], icon: PRESET_ICONS[preset], widgets: p.widgets, layouts: p.layouts }], activeId: id })
   }, [ws, persist])
 
   const renameDashboard = useCallback((id: string, name: string) => {
     persist({ ...ws, dashboards: ws.dashboards.map(d => d.id === id ? { ...d, name } : d) })
+  }, [ws, persist])
+
+  const setDashboardIcon = useCallback((id: string, icon: string) => {
+    persist({ ...ws, dashboards: ws.dashboards.map(d => d.id === id ? { ...d, icon } : d) })
   }, [ws, persist])
 
   const deleteDashboard = useCallback((id: string) => {
@@ -592,8 +603,8 @@ export function useDashboard(userId?: string | null) {
     widgets: active.widgets, layouts: active.layouts,
     addWidget, removeWidget, updateWidget, updateLayouts, resetDashboard, setAllTickers,
     showTicker: active.showTicker ?? false, setShowTicker,
-    dashboards: ws.dashboards.map(d => ({ id: d.id, name: d.name })),
+    dashboards: ws.dashboards.map(d => ({ id: d.id, name: d.name, icon: d.icon })),
     activeId: ws.activeId,
-    switchDashboard, createDashboard, renameDashboard, deleteDashboard,
+    switchDashboard, createDashboard, renameDashboard, deleteDashboard, setDashboardIcon,
   }
 }

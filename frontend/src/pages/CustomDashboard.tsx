@@ -9,12 +9,14 @@ const { Responsive, WidthProvider } = RGL as unknown as {
   Responsive: React.ComponentType<any>
   WidthProvider: (c: React.ComponentType<any>) => React.ComponentType<any>
 }
-import { Lock, Unlock, Plus, RotateCcw, X } from 'lucide-react'
+import { Lock, Unlock, Plus, RotateCcw, X, ChevronDown,
+  LayoutGrid, Gauge, Search, Filter, Globe, Layers, Shield, BarChart3, LineChart,
+  Briefcase, Activity, Eye, PieChart, Newspaper, TrendingUp, DollarSign, type LucideIcon } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import WidgetFrame from '../components/dashboard/WidgetFrame'
 import WidgetRenderer from '../components/dashboard/WidgetRenderer'
 import WidgetPalette from '../components/dashboard/WidgetPalette'
-import { useDashboard, PRESET_LABELS, TICKER_WIDGET_TYPES, type WidgetType, type WidgetConfig, type PresetKey } from '../hooks/useDashboard'
+import { useDashboard, PRESET_LABELS, PRESET_ICONS, TICKER_WIDGET_TYPES, type WidgetType, type WidgetConfig, type PresetKey } from '../hooks/useDashboard'
 import useIsMobile from '../hooks/useIsMobile'
 
 const ResponsiveGridLayout = WidthProvider(Responsive)
@@ -22,18 +24,37 @@ const ResponsiveGridLayout = WidthProvider(Responsive)
 const BREAKPOINTS = { lg: 1080, md: 900, sm: 720, xs: 480, xxs: 0 }
 const COLS        = { lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }
 
+// Pickable dashboard icons (string key persisted per dashboard, resolved here).
+const DASH_ICONS: Record<string, LucideIcon> = {
+  grid: LayoutGrid, gauge: Gauge, search: Search, filter: Filter, globe: Globe,
+  layers: Layers, shield: Shield, bar: BarChart3, line: LineChart, briefcase: Briefcase,
+  activity: Activity, eye: Eye, pie: PieChart, news: Newspaper, trending: TrendingUp, dollar: DollarSign,
+}
+const DASH_ICON_KEYS = Object.keys(DASH_ICONS)
+function DashIcon({ k, size = 13 }: { k?: string; size?: number }) {
+  const Ic = DASH_ICONS[k ?? 'grid'] ?? LayoutGrid
+  return <Ic size={size} />
+}
+// Default icon for a dashboard: its explicit icon, else one inferred from a
+// preset name (so existing preset dashboards look distinct without setup).
+const NAME_ICON: Record<string, string> = Object.fromEntries(
+  (Object.keys(PRESET_LABELS) as PresetKey[]).map(k => [PRESET_LABELS[k], PRESET_ICONS[k]])
+)
+const iconForDash = (d: { name: string; icon?: string }) => d.icon ?? NAME_ICON[d.name] ?? 'grid'
+
 export default function CustomDashboard() {
   const isMobile = useIsMobile()
   const { user } = useTheme()
   const {
     widgets, layouts, addWidget, removeWidget, updateWidget, updateLayouts, resetDashboard, setAllTickers,
     showTicker, setShowTicker,
-    dashboards, activeId, switchDashboard, createDashboard, renameDashboard, deleteDashboard,
+    dashboards, activeId, switchDashboard, createDashboard, renameDashboard, deleteDashboard, setDashboardIcon,
   } = useDashboard(user?.id)
   const [editMode, setEditMode] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
   const [presetMenuOpen, setPresetMenuOpen] = useState(false)
+  const [iconPickerOpen, setIconPickerOpen] = useState(false)
 
   // Dashboard-wide ticker: one input that retargets every ticker-driven widget
   // so you don't set them one by one.
@@ -64,18 +85,94 @@ export default function CustomDashboard() {
 
   return (
     <PageWrapper>
-      {/* ── Top bar ── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
-        <div>
-          <h1 className="ft-page-title" style={{ marginBottom: 2 }}>
-            My Dashboard
-          </h1>
-          <p style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: 'var(--theme-secondary, #5e768f)' }}>
-            {editMode ? 'Drag to rearrange · resize from corners · click + to add widgets' : `${widgets.length} widget${widgets.length !== 1 ? 's' : ''} · click the lock to customise`}
-          </p>
+      {/* ── Consolidated top bar: one line — icon-collapsed dashboard tabs + controls ── */}
+      {isMobile ? (
+        <h1 className="ft-page-title" style={{ marginBottom: 12 }}>My Dashboard</h1>
+      ) : (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingBottom: 8 }}>
+        {/* Dashboards — the active one shows its name, the rest collapse to their icon (name on hover) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0, overflowX: 'auto' }}>
+          {dashboards.map(d => {
+            const isActive = d.id === activeId
+            return (
+              <div key={d.id} style={{ display: 'flex', alignItems: 'center', flexShrink: 0, position: 'relative' }}>
+                <button
+                  onClick={() => switchDashboard(d.id)}
+                  onDoubleClick={() => { if (editMode) { const n = window.prompt('Rename dashboard', d.name); if (n && n.trim()) renameDashboard(d.id, n.trim()) } }}
+                  title={isActive ? (editMode ? 'Double-click to rename' : d.name) : d.name}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: isActive ? 7 : 0,
+                    padding: isActive ? '5px 12px' : '6px', cursor: 'pointer',
+                    border: `1px solid ${isActive ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.08))'}`,
+                    background: isActive ? 'color-mix(in srgb, var(--theme-primary) 12%, transparent)' : 'transparent',
+                    color: isActive ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #5e768f)',
+                  }}
+                >
+                  <DashIcon k={iconForDash(d)} />
+                  {isActive && <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>{d.name}</span>}
+                </button>
+                {editMode && isActive && (
+                  <>
+                    <button onClick={() => setIconPickerOpen(o => !o)} title="Choose icon"
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-secondary, #5e768f)', padding: '2px', display: 'flex' }}>
+                      <ChevronDown size={12} />
+                    </button>
+                    {dashboards.length > 1 && (
+                      <button onClick={() => deleteDashboard(d.id)} title="Delete dashboard"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-negative)', padding: '2px', display: 'flex' }}>
+                        <X size={12} />
+                      </button>
+                    )}
+                    {iconPickerOpen && (
+                      <div style={{ position: 'absolute', top: '120%', left: 0, zIndex: 40, background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-primary, #c9a84c)', boxShadow: '0 8px 24px rgba(0,0,0,0.4)', padding: 8, display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 4 }}>
+                        {DASH_ICON_KEYS.map(k => {
+                          const sel = iconForDash(d) === k
+                          return (
+                            <button key={k} onClick={() => { setDashboardIcon(d.id, k); setIconPickerOpen(false) }} title={k}
+                              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, cursor: 'pointer', border: `1px solid ${sel ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.08))'}`, background: sel ? 'color-mix(in srgb, var(--theme-primary) 12%, transparent)' : 'transparent', color: sel ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-text, #d7e3fc)' }}>
+                              <DashIcon k={k} size={14} />
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )
+          })}
+          {/* New dashboard (preset menu) */}
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <button onClick={() => setPresetMenuOpen(o => !o)} title="New dashboard"
+              style={{ display: 'flex', alignItems: 'center', padding: '6px 8px', cursor: 'pointer', border: '1px dashed var(--theme-border, rgba(255,255,255,0.18))', background: 'transparent', color: 'var(--theme-secondary, #5e768f)' }}>
+              <Plus size={13} />
+            </button>
+            {presetMenuOpen && (
+              <div style={{ position: 'absolute', top: '120%', left: 0, zIndex: 30, minWidth: 150, background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-primary, #c9a84c)', boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}>
+                <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', padding: '7px 10px 4px' }}>From preset</div>
+                {(['cockpit', 'research', 'screening', 'market-overview', 'options', 'risk', 'main'] as PresetKey[]).map(k => (
+                  <button key={k} onClick={() => { createDashboard(k); setPresetMenuOpen(false) }}
+                    style={{ display: 'block', width: '100%', textAlign: 'left', fontFamily: 'var(--theme-sans)', fontSize: 11, padding: '7px 10px', cursor: 'pointer', border: 'none', background: 'transparent', color: 'var(--theme-text, #d7e3fc)' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--theme-primary) 10%, transparent)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                  >{PRESET_LABELS[k]}</button>
+                ))}
+                <button onClick={() => { createDashboard('blank'); setPresetMenuOpen(false) }}
+                  style={{ display: 'block', width: '100%', textAlign: 'left', fontFamily: 'var(--theme-sans)', fontSize: 11, padding: '7px 10px', cursor: 'pointer', border: 'none', borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'transparent', color: 'var(--theme-primary, #c9a84c)' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--theme-primary) 10%, transparent)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                >Custom — start blank</button>
+              </div>
+            )}
+          </div>
         </div>
 
-        {!isMobile && <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        {/* Controls */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+          <span title={editMode ? 'Drag to rearrange · resize from corners · click + to add widgets' : `${widgets.length} widget${widgets.length !== 1 ? 's' : ''} · click the lock to customise`}
+            style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, color: 'var(--theme-secondary, #5e768f)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 150 }}>
+            {editMode ? 'Drag · resize · + add' : `${widgets.length} widget${widgets.length !== 1 ? 's' : ''}`}
+          </span>
           {(showTicker || tickerWidgets.length > 0) && (
             <div style={{ display: 'flex', alignItems: 'stretch', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))' }} title={`Applies to ${tickerWidgets.length} ticker widget${tickerWidgets.length !== 1 ? 's' : ''} on this dashboard`}>
               <span style={{ display: 'flex', alignItems: 'center', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', padding: '0 8px', background: 'var(--theme-surface, #0d1826)' }}>Ticker</span>
@@ -113,63 +210,8 @@ export default function CustomDashboard() {
           >
             {editMode ? <><Unlock size={12} /> Done</> : <><Lock size={12} /> Edit</>}
           </button>
-        </div>}
-      </div>
-
-      {/* ── Dashboard switcher ── */}
-      {!isMobile && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14, flexWrap: 'wrap', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingBottom: 8 }}>
-          {dashboards.map(d => {
-            const isActive = d.id === activeId
-            return (
-              <div key={d.id} style={{ display: 'flex', alignItems: 'center' }}>
-                <button
-                  onClick={() => switchDashboard(d.id)}
-                  onDoubleClick={() => { if (editMode) { const n = window.prompt('Rename dashboard', d.name); if (n && n.trim()) renameDashboard(d.id, n.trim()) } }}
-                  title={editMode ? 'Double-click to rename' : undefined}
-                  style={{
-                    fontFamily: 'var(--theme-sans)', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
-                    padding: '4px 12px', cursor: 'pointer',
-                    border: isActive ? '1px solid var(--theme-primary, #c9a84c)' : '1px solid var(--theme-border, rgba(255,255,255,0.08))',
-                    background: isActive ? 'color-mix(in srgb, var(--theme-primary) 12%, transparent)' : 'transparent',
-                    color: isActive ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #5e768f)',
-                  }}
-                >{d.name}</button>
-                {editMode && isActive && dashboards.length > 1 && (
-                  <button onClick={() => deleteDashboard(d.id)} title="Delete dashboard"
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-negative)', padding: '2px 4px', display: 'flex' }}>
-                    <X size={12} />
-                  </button>
-                )}
-              </div>
-            )
-          })}
-          <div style={{ position: 'relative' }}>
-            <button
-              onClick={() => setPresetMenuOpen(o => !o)}
-              style={{ display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '4px 10px', cursor: 'pointer', border: '1px dashed var(--theme-border, rgba(255,255,255,0.18))', background: 'transparent', color: 'var(--theme-secondary, #5e768f)' }}
-            >
-              <Plus size={11} /> New
-            </button>
-            {presetMenuOpen && (
-              <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 30, minWidth: 150, background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-primary, #c9a84c)', boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}>
-                <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', padding: '7px 10px 4px' }}>From preset</div>
-                {(['cockpit', 'research', 'screening', 'market-overview', 'options', 'risk', 'main'] as PresetKey[]).map(k => (
-                  <button key={k} onClick={() => { createDashboard(k); setPresetMenuOpen(false) }}
-                    style={{ display: 'block', width: '100%', textAlign: 'left', fontFamily: 'var(--theme-sans)', fontSize: 11, padding: '7px 10px', cursor: 'pointer', border: 'none', background: 'transparent', color: 'var(--theme-text, #d7e3fc)' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--theme-primary) 10%, transparent)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                  >{PRESET_LABELS[k]}</button>
-                ))}
-                <button onClick={() => { createDashboard('blank'); setPresetMenuOpen(false) }}
-                  style={{ display: 'block', width: '100%', textAlign: 'left', fontFamily: 'var(--theme-sans)', fontSize: 11, padding: '7px 10px', cursor: 'pointer', border: 'none', borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'transparent', color: 'var(--theme-primary, #c9a84c)' }}
-                  onMouseEnter={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--theme-primary) 10%, transparent)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                >Custom — start blank</button>
-              </div>
-            )}
-          </div>
         </div>
+      </div>
       )}
 
       {/* ── Mobile: not available ── */}
