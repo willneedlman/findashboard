@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Legend } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
@@ -28,7 +29,11 @@ function ChartPanel({ label, height, children }: { label: string; height: number
 }
 
 export function BondAnalyticsContent() {
-  const [p, setP]     = useState({ face: 1000, coupon_rate: 5, market_price: 1000, maturity: 10 })
+  const seed = (useLocation().state as { seed?: any } | null)?.seed
+  const [imported] = useState<{ cusip?: string; name?: string } | null>(seed?.meta ?? null)
+  const [p, setP]     = useState(seed
+    ? { face: seed.face ?? 1000, coupon_rate: seed.coupon_rate ?? 5, market_price: seed.market_price ?? 1000, maturity: seed.maturity ?? 10 }
+    : { face: 1000, coupon_rate: 5, market_price: 1000, maturity: 10 })
   const [shift, setShift] = useState(0)
   const [paramsOpen, setParamsOpen] = useState(true)
   const [aiNarrative, setAiNarrative] = useState<any>(null)
@@ -55,6 +60,8 @@ export function BondAnalyticsContent() {
       setAiNarrativePending(false)
     },
   })
+  useEffect(() => { if (seed) mutate() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   const set = (k: keyof typeof p) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setP(prev => ({ ...prev, [k]: +e.target.value }))
 
@@ -155,6 +162,11 @@ export function BondAnalyticsContent() {
             {isError && <div style={{ fontSize: 9, color: 'var(--theme-negative, #ef4444)', textAlign: 'center', fontFamily: 'var(--theme-sans)' }}>Server unavailable — is the backend running?</div>}
           </div>
       </>}>
+          {imported && (
+            <div style={{ marginBottom: 12, padding: '8px 12px', background: 'var(--theme-surface, #142032)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 30%, transparent)', fontFamily: 'var(--theme-sans)', fontSize: 11, color: 'var(--theme-secondary, #99907e)' }}>
+              Imported from CUSIP <span style={{ fontFamily: 'var(--theme-mono)', color: 'var(--theme-primary, #c9a84c)' }}>{imported.cusip}</span>{imported.name ? ` · ${imported.name}` : ''}
+            </div>
+          )}
           {data && (
             <>
               {/* Bond type + metrics */}

@@ -23,6 +23,9 @@ export const fetchGEX = (ticker: string, expiry?: string) =>
 export const fetchBondAnalytics = (body: object) =>
   api.post('/bond/analytics', body).then(r => r.data)
 
+export const fetchBondByCusip = (cusip: string) =>
+  api.get(`/bond/cusip/${encodeURIComponent(cusip)}`).then(r => r.data)
+
 export const fetchNAVProxy = (body: object) =>
   api.post('/nav/proxy', body).then(r => r.data)
 

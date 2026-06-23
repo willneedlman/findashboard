@@ -22,6 +22,7 @@ const Home               = lazy(() => import('./pages/Home'))
 const MarketData         = lazy(() => import('./pages/MarketData'))
 const OptionsPricer      = lazy(() => import('./pages/OptionsPricer'))
 const BondAnalytics      = lazy(() => import('./pages/BondAnalytics'))
+const CusipLookup        = lazy(() => import('./pages/CusipLookup'))
 const NAVTracker         = lazy(() => import('./pages/NAVTracker'))
 const ImpliedProbability = lazy(() => import('./pages/ImpliedProbability'))
 const FedRates           = lazy(() => import('./pages/FedRates'))
@@ -164,6 +165,7 @@ export default function App() {
               <Route path="/market"     element={<MarketData />} />
               <Route path="/options"    element={<OptionsPricer />} />
               <Route path="/bond"       element={<BondAnalytics />} />
+              <Route path="/cusip"      element={<CusipLookup />} />
               <Route path="/nav"        element={<NAVTracker />} />
               <Route path="/portfolio-manager" element={<PortfolioManager />} />
               {/* Portfolio tools — now standalone (legacy /portfolio-skills hub dismantled) */}
