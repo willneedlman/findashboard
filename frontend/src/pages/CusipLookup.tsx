@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import PageWrapper from '../components/PageWrapper'
+import TickerLogo from '../components/TickerLogo'
 import { fetchBondByCusip, fetchBondAnalytics, searchBondsByIssuer, resolveCusipBatch } from '../hooks/useApi'
 import {
   INPUT, EYEBROW, PANEL, PRIMARY_BTN, TitleBar, TitleAction, VerdictStrip, MetricCard,
@@ -36,7 +37,7 @@ interface ResolvedBond {
   price_source?: string | null
   price_as_of?: string | null
 }
-interface Derived { ytm: number; mod_duration: number; convexity: number; atPar: boolean }
+interface Derived { ytm: number; mod_duration: number; convexity: number }
 interface BatchRow {
   cusip: string; found: boolean; error?: string
   name?: string; type?: string; coupon_rate?: number | null
@@ -49,18 +50,18 @@ const SEED_RECENTS = ['037833AL4', '06051GGR4', '91282CQQ7']
 
 const isCusip = (s: string) => /^[A-Z0-9]{9}$/.test(s.toUpperCase().replace(/\s+/g, ''))
 
-// Derive YTM/duration/convexity for a resolved bond. Uses the real price mark
-// when present, otherwise prices at par. Degrades to null if the model fails.
+// Derive YTM/duration/convexity for a resolved bond. Requires a real price mark:
+// without one there is no yield to solve, so we return null rather than invent an
+// at-par figure that just echoes the coupon. Degrades to null if the model fails.
 async function deriveFor(r: ResolvedBond): Promise<Derived | null> {
-  if (r.coupon_rate == null || !r.years_to_maturity) return null
-  const atPar = r.market_price == null
-  const market_price = atPar ? 1000 : Math.round((r.market_price! / 100) * 1000)
+  if (r.coupon_rate == null || !r.years_to_maturity || r.market_price == null) return null
   try {
     const a = await fetchBondAnalytics({
       face: 1000, coupon_rate: r.coupon_rate,
-      market_price, maturity: Math.max(1, Math.round(r.years_to_maturity)),
+      market_price: Math.round((r.market_price / 100) * 1000),
+      maturity: Math.max(1, Math.round(r.years_to_maturity)),
     })
-    return { ytm: a.ytm, mod_duration: a.mod_duration, convexity: a.convexity, atPar }
+    return { ytm: a.ytm, mod_duration: a.mod_duration, convexity: a.convexity }
   } catch {
     return null
   }
@@ -74,6 +75,12 @@ const scaleOf = (b: ResolvedBond): { label: string; tone: VerdictTone } => {
   return { label: (b.type || 'BOND').slice(0, 4).toUpperCase(), tone: 'muted' }
 }
 const monogram = (name?: string) => (name || '??').replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase() || '??'
+// The issuer's equity ticker is the leading token of the bond ticker/description
+// (e.g. "AAPL 3.85 05/04/43" -> "AAPL"), used to fetch the company logo.
+const equityTickerOf = (b: ResolvedBond): string | null => {
+  const first = (b.ticker || b.description || '').trim().split(/\s+/)[0] || ''
+  return /^[A-Za-z]{1,5}$/.test(first) ? first.toUpperCase() : null
+}
 const dash = (v: unknown) => (v === null || v === undefined || v === '' ? '—' : String(v))
 const num = (v: number | null | undefined, suffix = '') => (v == null ? '—' : `${v}${suffix}`)
 
@@ -359,7 +366,7 @@ function BatchView() {
   return (
     <div style={{ padding: '16px 22px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ fontFamily: SANS, fontSize: 11, color: SEC, lineHeight: 1.5 }}>
-        Paste or upload up to 100 CUSIPs (separated by commas, spaces, or new lines). Each resolves to issuer, price mark, yield, and the price date. Yield is solved from the mark when available, otherwise at par.
+        Paste or upload up to 100 CUSIPs (separated by commas, spaces, or new lines). Each resolves to issuer, price mark, yield, and the price date. Yield is shown only where a price mark exists.
       </div>
       <textarea value={text} onChange={e => setText(e.target.value)} rows={5}
         placeholder={'037833AL4\n91282CQQ7\n06051GGR4'}
@@ -415,7 +422,7 @@ function BatchView() {
             </table>
           </div>
           <div style={{ padding: '9px 15px', borderTop: `1px solid ${HAIR}`, fontFamily: SANS, fontSize: 9.5, color: 'var(--theme-text-dim, #5e768f)' }}>
-            Price marks are ETF/N-PORT holdings, not live quotes. Yield without a price mark is computed at par. Informational only.
+            Price marks are ETF/N-PORT holdings, not live quotes. Yield is shown only where a price mark exists. Informational only.
           </div>
         </div>
       )}
@@ -431,11 +438,12 @@ function PriceNote({ b }: { b: ResolvedBond }) {
 }
 
 function KeyTermsGrid({ b, d }: { b: ResolvedBond; d: Derived | null }) {
-  const px = b.market_price != null ? `${b.market_price}` : '—'
+  const noPrice = b.market_price == null
+  const px = noPrice ? '—' : `${b.market_price}`
   const cells: { label: string; value: string; color?: string; sub?: string }[] = [
     { label: 'Coupon', value: num(b.coupon_rate, '%'), color: G },
     { label: 'Maturity', value: b.maturity_date || '—', sub: b.years_to_maturity ? `${b.years_to_maturity} yrs` : undefined },
-    { label: d?.atPar ? 'YTM (at par)' : 'Yield to Maturity', value: d ? `${d.ytm}%` : '—', color: G },
+    { label: 'Yield to Maturity', value: noPrice ? 'Price required' : (d ? `${d.ytm}%` : '—'), color: noPrice ? SEC : G },
     { label: 'Last Price', value: px, sub: b.price_source || undefined },
     { label: 'Mod. Duration', value: d ? `${d.mod_duration}` : '—' },
     { label: 'Convexity', value: d ? `${d.convexity}` : '—' },
@@ -462,8 +470,10 @@ function CockpitView({ b, d, canImport, onImport }: { b: ResolvedBond; d: Derive
       <div style={{ ...PANEL, padding: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '18px 20px', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ width: 52, height: 52, border: `1px solid rgba(201,168,76,0.5)`, background: 'rgba(201,168,76,0.07)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: MONO, fontSize: 15, fontWeight: 700, color: G }}>{monogram(b.name)}</div>
+            {equityTickerOf(b)
+              ? <TickerLogo ticker={equityTickerOf(b)!} size={52} />
+              : <div style={{ width: 52, height: 52, border: `1px solid rgba(201,168,76,0.5)`, background: 'rgba(201,168,76,0.07)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: MONO, fontSize: 15, fontWeight: 700, color: G }}>{monogram(b.name)}</div>}
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
                 <span style={{ fontFamily: SANS, fontSize: 21, fontWeight: 700, color: '#f1f5ff', lineHeight: 1 }}>{dash(b.name)}</span>
@@ -498,10 +508,12 @@ function LedgerView({ b, d, canImport, onImport }: { b: ResolvedBond; d: Derived
     ['Years to Maturity', b.years_to_maturity != null ? `${b.years_to_maturity}` : '—'],
     ['Issue Date', b.issue_date || '—'], ['Market Sector', b.market_sector || '—'],
   ]
+  const noPrice = b.market_price == null
+  const ytmVal = noPrice ? 'Price required' : (d ? `${d.ytm}%` : '—')
   const risk: [string, string][] = [
-    ['Last Price', b.market_price != null ? `${b.market_price}` : '—'],
+    ['Last Price', noPrice ? '—' : `${b.market_price}`],
     ['Price Source', b.price_source || '—'], ['As Of', b.price_as_of || '—'],
-    [d?.atPar ? 'YTM (at par)' : 'Yield to Maturity', d ? `${d.ytm}%` : '—'],
+    ['Yield to Maturity', ytmVal],
     ['Modified Duration', d ? `${d.mod_duration}` : '—'], ['Convexity', d ? `${d.convexity}` : '—'],
     ['Spread to Benchmark', '—'], ['OAS', '—'],
   ]
@@ -511,8 +523,8 @@ function LedgerView({ b, d, canImport, onImport }: { b: ResolvedBond; d: Derived
         ? <span onClick={onImport} style={{ cursor: 'pointer' }}><TitleAction label="Import to Bond Analytics →" primary /></span>
         : <TitleAction label={(b.type || 'BOND')} />} />
       <VerdictStrip
-        primary={{ label: d?.atPar ? 'Yield to Maturity (at par)' : 'Yield to Maturity', value: d ? `${d.ytm}%` : '—',
-          tone: 'gold', context: b.coupon_rate != null ? `Coupon ${b.coupon_rate}%` : undefined }}
+        primary={{ label: 'Yield to Maturity', value: ytmVal,
+          tone: noPrice ? 'muted' : 'gold', context: b.coupon_rate != null ? `Coupon ${b.coupon_rate}%` : undefined }}
         cells={[
           { label: 'Last Price', value: b.market_price != null ? `${b.market_price}` : '—' },
           { label: 'Mod. Duration', value: d ? `${d.mod_duration}` : '—' },

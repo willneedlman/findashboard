@@ -226,7 +226,8 @@ class CusipBatch(BaseModel):
 def bond_cusip_batch(req: CusipBatch):
     """Resolve a pasted list of CUSIPs into a flat table: issuer, coupon,
     maturity, price mark, computed yield, and the price as-of date. Yield is
-    solved from the mark when present, otherwise at par."""
+    solved only when a price mark exists; without one it is left blank rather
+    than echoing the coupon as an at-par figure."""
     rows, seen = [], set()
     for raw in req.cusips[:100]:
         cu = (raw or "").strip().upper()
@@ -241,10 +242,9 @@ def bond_cusip_batch(req: CusipBatch):
             rows.append({"cusip": cu, "found": False})
             continue
         ytm = None
-        coupon, yrs = r.get("coupon_rate"), r.get("years_to_maturity")
-        if coupon is not None and yrs:
-            price = round((r["market_price"] / 100) * 1000) if r.get("market_price") is not None else 1000
-            ytm = round(solve_ytm(1000, coupon, price, max(1, round(yrs))) * 100, 4)
+        coupon, yrs, mp = r.get("coupon_rate"), r.get("years_to_maturity"), r.get("market_price")
+        if coupon is not None and yrs and mp is not None:
+            ytm = round(solve_ytm(1000, coupon, round((mp / 100) * 1000), max(1, round(yrs))) * 100, 4)
         rows.append({
             "cusip": cu, "found": True,
             "name": r.get("name"), "type": r.get("type"),
