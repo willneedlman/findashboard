@@ -61,9 +61,10 @@ export default function TickerInput({
   }
 
   const onType = (v: string) => {
-    setText(v); setOpen(true)
-    // A direct ticker keeps the old live-update behavior so nothing regresses.
-    if (TICKER_RE.test(v.trim())) onChange(v.trim().toUpperCase())
+    const isTicker = TICKER_RE.test(v.trim())
+    // A direct ticker uppercases live and updates the page, exactly as before.
+    setText(isTicker ? v.toUpperCase() : v); setOpen(true)
+    if (isTicker) onChange(v.trim().toUpperCase())
   }
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -73,7 +74,11 @@ export default function TickerInput({
       if (e.key === 'Escape') { setOpen(false); return }
     }
     if (e.key === 'Enter') {
-      if (open && matches.length && !TICKER_RE.test(text.trim())) { e.preventDefault(); pick(matches[hi]); return }
+      // Resolve to the highlighted match unless the text already IS that ticker
+      // (so a bare 5-letter name like "tesla" resolves to TSLA, while "AAPL" runs
+      // immediately). A second Enter then runs the now-resolved symbol.
+      const top = open && matches.length ? matches[hi] : undefined
+      if (top && top.ticker.toUpperCase() !== text.trim().toUpperCase()) { e.preventDefault(); pick(top); return }
       setOpen(false); onEnter?.()
     }
   }
