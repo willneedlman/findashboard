@@ -154,7 +154,7 @@ export default function Alerts() {
     <PageWrapper>
       <PageHeader title="Price Alerts" actions={
         <span style={{ fontFamily: T.mono, fontSize: 10, color: T.muted, letterSpacing: '0.04em' }}>
-          Server-side monitor · checks every 1-5m
+          Server-side monitor · live price · checks every ~30s
         </span>
       } />
 
@@ -216,7 +216,7 @@ export default function Alerts() {
                   {createMut.isPending ? 'Creating…' : '+ Add Alert'}
                 </button>
                 <div style={{ fontFamily: T.label, fontSize: 9, color: T.muted, lineHeight: 1.6, marginTop: 2 }}>
-                  Alerts are checked server-side every 1-5 minutes. After firing, an alert enters a short cooldown before it can trigger again; rearm it manually or wait for the cooldown to clear.
+                  Alerts are checked server-side about every 30 seconds against the live intraday price. After firing, an alert enters a 1-hour cooldown before it can trigger again; rearm it manually or wait for the cooldown to clear.
                 </div>
               </div>
             </div>

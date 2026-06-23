@@ -107,33 +107,60 @@ def _valid_token(user_id: str, token: str) -> bool:
 
 _EXECUTOR = ThreadPoolExecutor(max_workers=4)
 _eval_task: asyncio.Task | None = None
-_EVAL_INTERVAL = 60   # seconds
+_EVAL_INTERVAL = 30   # seconds
+
+
+def _closes_for(data, t: str, single: bool):
+    """Pull a ticker's close series out of a yf.download frame (single- or
+    multi-ticker shaped), tolerant of missing columns."""
+    try:
+        s = data["Close"] if single else data[t]["Close"]
+        return s.dropna()
+    except Exception:
+        return None
 
 
 def _fetch_quotes_sync(tickers: list[str]) -> dict[str, dict]:
-    """Blocking yfinance call — runs in thread pool."""
+    """Blocking yfinance call — runs in thread pool. Evaluates against the live
+    intraday (1m) price so an intraday touch of the threshold fires, not just a
+    daily close; daily bars supply the prior close (1D % baseline) and a fallback
+    price when intraday is unavailable (after hours / thin names). Both fetches
+    are single batched requests regardless of ticker count."""
     import yfinance as yf
     out: dict[str, dict] = {}
     if not tickers:
         return out
+    single = len(tickers) == 1
+
+    daily: dict[str, dict] = {}
     try:
-        data = yf.download(tickers, period="2d", interval="1d",
-                           auto_adjust=True, progress=False, group_by="ticker")
+        d = yf.download(tickers, period="2d", interval="1d", auto_adjust=True, progress=False, group_by="ticker")
         for t in tickers:
-            try:
-                if len(tickers) == 1:
-                    closes = data["Close"].dropna()
-                else:
-                    closes = data[t]["Close"].dropna()
-                if len(closes) < 1:
-                    continue
-                price = float(closes.iloc[-1])
-                pct_1d = float((closes.iloc[-1] / closes.iloc[-2] - 1) * 100) if len(closes) >= 2 else 0.0
-                out[t] = {"price": price, "pct_1d": pct_1d}
-            except Exception:
-                pass
+            closes = _closes_for(d, t, single)
+            if closes is not None and len(closes) >= 1:
+                daily[t] = {"last": float(closes.iloc[-1]),
+                            "prev": float(closes.iloc[-2]) if len(closes) >= 2 else float(closes.iloc[-1])}
     except Exception as e:
-        _log.error("yfinance batch fetch error: %s", e)
+        _log.error("alerts daily fetch error: %s", e)
+
+    intraday: dict[str, float] = {}
+    try:
+        m = yf.download(tickers, period="1d", interval="1m", auto_adjust=True, progress=False, group_by="ticker", prepost=True)
+        for t in tickers:
+            closes = _closes_for(m, t, single)
+            if closes is not None and len(closes) >= 1:
+                intraday[t] = float(closes.iloc[-1])
+    except Exception as e:
+        _log.warning("alerts intraday fetch error: %s", e)
+
+    for t in tickers:
+        dd = daily.get(t)
+        price = intraday.get(t) or (dd["last"] if dd else None)
+        if price is None:
+            continue
+        prev = dd["prev"] if dd else price
+        pct_1d = float((price / prev - 1) * 100) if prev else 0.0
+        out[t] = {"price": price, "pct_1d": pct_1d}
     return out
 
 
