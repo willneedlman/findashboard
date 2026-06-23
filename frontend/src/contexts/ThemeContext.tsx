@@ -66,7 +66,7 @@ export const MONO_FONTS = [
   'Space Mono',       // retro, wide character
   'DM Mono',          // light, editorial
   'Martian Mono',     // ultra-wide condensed blocks
-  'San Francisco',    // Apple system font (local) — used as a data face in test preset
+  'San Francisco',    // Apple system monospace — resolves via ui-monospace in CSS
 ]
 // Interface typeface — a deliberately varied set so the choices look distinct:
 // grotesque · humanist · geometric · rounded · futuristic · serif · display.
@@ -82,7 +82,6 @@ export const SANS_FONTS = [
   'Fraunces',            // expressive display serif
   'Bricolage Grotesque', // characterful display grotesque
   'Barlow',              // slightly condensed grotesque
-  'Yahoo Sans',          // proprietary (local) — used in the test preset
 ]
 
 const STORAGE_USERS   = 'ft-users'
@@ -132,6 +131,12 @@ export function applyTheme(t: Theme) {
   const warnSoft     = isLight ? '#b45309' : '#e8c04a'
   const warnStrong   = isLight ? '#92400e' : '#d97706'
 
+  // 'San Francisco' is the display label for Apple's system monospace.
+  // In CSS it must be emitted as the generic keyword ui-monospace (no quotes).
+  const monoFamily = t.primaryFont === 'San Francisco'
+    ? 'ui-monospace, monospace'
+    : `'${t.primaryFont}', monospace`
+
   // Load Google Fonts if no custom URL provided
   const monoSrc   = t.primaryFontUrl   || `https://fonts.googleapis.com/css2?family=${encodeURIComponent(t.primaryFont)}:wght@400;700&display=swap`
   const sansSrc   = t.secondaryFontUrl || `https://fonts.googleapis.com/css2?family=${encodeURIComponent(t.secondaryFont)}:wght@400;600;700&display=swap`
@@ -140,9 +145,9 @@ export function applyTheme(t: Theme) {
     'DM Mono', 'Martian Mono', 'Cinzel', 'Lora', 'IBM Plex Sans', 'Inter',
     'DM Sans', 'Space Grotesk', 'Sora', 'Barlow', 'Manrope', 'Geist',
     'Fraunces', 'Bricolage Grotesque',
-    // System/local fonts — not on Google Fonts, so skip the web-font fetch and
-    // resolve them from the user's machine (falling back if not installed).
-    'San Francisco', 'Yahoo Sans',
+    // System/local fonts — not on Google Fonts, skip the web-font fetch.
+    // 'San Francisco' emits as ui-monospace in CSS so it resolves correctly.
+    'San Francisco',
   ]
 
   // Only inject <link> for Google-Fonts-style URLs
@@ -172,7 +177,7 @@ export function applyTheme(t: Theme) {
       --theme-bg:             ${t.bgColor};
       --theme-surface:        ${t.surfaceColor};
       --theme-chart-neutral:  ${t.chartNeutralColor ?? '#4a7fa5'};
-      --theme-mono:      '${t.primaryFont}', monospace;
+      --theme-mono:      ${monoFamily};
       --theme-sans:      '${t.secondaryFont}', sans-serif;
       --theme-text:        ${textColor};
       --theme-text-muted:  ${textMuted};
@@ -206,6 +211,8 @@ export function applyTheme(t: Theme) {
 
   // Also push as real CSS custom props onto :root so var() works everywhere
   const root = document.documentElement
+  root.style.setProperty('--theme-mono', monoFamily)
+  root.style.setProperty('--theme-sans', `'${t.secondaryFont}', sans-serif`)
   root.style.setProperty('--theme-primary',         t.primaryColor)
   root.style.setProperty('--theme-secondary',       t.secondaryColor)
   root.style.setProperty('--theme-tertiary',        t.tertiaryColor)

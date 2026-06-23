@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useTheme, DEFAULT_THEME, MONO_FONTS, SANS_FONTS, applyTheme, type Theme } from '../contexts/ThemeContext'
+
+const PREVIEW_SKIP = new Set(['San Francisco'])
 import PageWrapper from '../components/PageWrapper'
 import useIsMobile from '../hooks/useIsMobile'
 import axios from 'axios'
@@ -74,6 +76,7 @@ function FontSelector({ label, value, options, onChange, onUpload, isMono = true
   useEffect(() => {
     if (!open || fontsInjected) return
     options.forEach(font => {
+      if (PREVIEW_SKIP.has(font)) return
       const id = `ft-preview-${font.replace(/\s+/g, '-').toLowerCase()}`
       if (!document.getElementById(id)) {
         const link = document.createElement('link')
