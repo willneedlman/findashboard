@@ -90,8 +90,9 @@ export default function CustomDashboard() {
         <h1 className="ft-page-title" style={{ marginBottom: 12 }}>My Dashboard</h1>
       ) : (
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingBottom: 8 }}>
-        {/* Dashboards — the active one shows its name, the rest collapse to their icon (name on hover) */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0, overflowX: 'auto' }}>
+        {/* Dashboards — the active one shows its name, the rest collapse to their icon (name on hover).
+            flex-wrap (not overflow) so the New-preset menu and icon picker popovers aren't clipped. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0, flexWrap: 'wrap' }}>
           {dashboards.map(d => {
             const isActive = d.id === activeId
             return (
