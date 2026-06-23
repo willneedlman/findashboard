@@ -50,9 +50,15 @@ def _date(v):
 
 
 # ── Option A: SPDR bond-ETF daily holdings (SSGA) ─────────────────────────────
-# Span the corporate curve to maximize free coverage: broad + short + intermediate
-# + long investment grade, plus broad and short high yield. ~10k unique CUSIPs.
-_SSGA_FUNDS = ("SPBO", "SPIB", "SPSB", "SPLB", "JNK", "SPHY")
+# Maximize free coverage across the SSGA bond lineup, ~15k unique CUSIPs. Broad
+# aggregate/total-return funds come first so the cleaner corp/HY-specific marks
+# win on overlap (last write wins in the merge):
+#   aggregate + total return: SPAB, TOTL, STOT
+#   investment-grade corp curve: SPBO, SPIB, SPSB, SPLB
+#   high yield: JNK, SPHY, SJNK, HYBL
+_SSGA_FUNDS = ("SPAB", "TOTL", "STOT",
+               "SPBO", "SPIB", "SPSB", "SPLB",
+               "JNK", "SPHY", "SJNK", "HYBL")
 
 
 def _ssga_holdings(fund: str) -> dict:
@@ -123,17 +129,17 @@ def _ssga_holdings_cached(fund: str) -> dict:
 
 
 def _etf_price_map() -> dict:
-    cached = disk_get("etf_px_map:v2")
+    cached = disk_get("etf_px_map:v3")
     if cached is not None:
         return cached
     # Fetch funds concurrently: total build time is the slowest single download,
     # not the sum, so the combined map stays well inside the request timeout.
     from concurrent.futures import ThreadPoolExecutor
     m: dict = {}
-    with ThreadPoolExecutor(max_workers=len(_SSGA_FUNDS)) as pool:
+    with ThreadPoolExecutor(max_workers=6) as pool:
         for h in pool.map(_ssga_holdings_cached, _SSGA_FUNDS):
             m.update(h)
-    disk_set("etf_px_map:v2", m, ttl=43200)           # 12 h
+    disk_set("etf_px_map:v3", m, ttl=43200)           # 12 h
     return m
 
 
@@ -182,7 +188,7 @@ def price_for_cusip(cusip: str):
     """Daily ETF mark first (fresher), else N-PORT monthly mark. Cached 12h,
     including misses, so a CUSIP with no free price isn't re-fetched repeatedly."""
     cu = cusip.strip().upper()
-    ck = f"bondpx:v2:{cu}"
+    ck = f"bondpx:v3:{cu}"
     cached = disk_get(ck)
     if cached is not None:
         return cached or None
