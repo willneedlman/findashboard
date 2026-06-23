@@ -114,12 +114,10 @@ export default function Alerts() {
   // Live quote per watched ticker — surfaces the metric each alert tracks.
   const tickers = useMemo(() => [...new Set(alerts.map(a => a.ticker))], [alerts])
   const { data: quotes } = useQuery<Record<string, Quote>>({
+    // One request to the alerts quote endpoint, which returns the same
+    // extended-hours prices the eval loop fires on (so Last matches the alert).
     queryKey: ['alert-quotes', tickers.join(',')],
-    queryFn: async () => {
-      const entries = await Promise.all(tickers.map(t =>
-        axios.get(`/api/market/quote/${t}`).then(r => [t, r.data as Quote] as const).catch(() => [t, null] as const)))
-      return Object.fromEntries(entries.filter(([, v]) => v)) as Record<string, Quote>
-    },
+    queryFn: () => axios.get(`/api/alerts/quotes?tickers=${tickers.join(',')}`).then(r => r.data),
     enabled: tickers.length > 0,
     staleTime: 30_000,
     refetchInterval: 30_000,   // keep the Last / 1D readouts ticking

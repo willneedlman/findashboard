@@ -55,7 +55,9 @@ export default function Layout({ children }: LayoutProps) {
   const [pendingAlerts, setPendingAlerts] = useState<AlertPayload[]>([])
   const onAlert = useCallback((a: AlertPayload) => {
     setPendingAlerts([a])
-    if (document.hidden && Notification.permission === 'granted') {
+    // Fire the OS notification whenever permission is granted — not only when the
+    // tab is hidden — so the user actually sees it. The in-app toast still shows.
+    if ('Notification' in window && Notification.permission === 'granted') {
       new Notification(`Alert: ${a.ticker}`, {
         body: `${a.condition.replace(/_/g, ' ')} ${a.threshold}${a.current_price > 0 ? ` → $${a.current_price.toFixed(2)}` : ''}`,
         icon: '/favicon.svg',

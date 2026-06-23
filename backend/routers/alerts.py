@@ -108,6 +108,9 @@ def _valid_token(user_id: str, token: str) -> bool:
 _EXECUTOR = ThreadPoolExecutor(max_workers=4)
 _eval_task: asyncio.Task | None = None
 _EVAL_INTERVAL = 30   # seconds
+# Latest extended-hours quote per ticker, refreshed by the loop and served to the
+# alerts page so its "Last" readout matches exactly what the loop evaluates.
+_LAST_QUOTES: dict[str, dict] = {}
 
 
 def _fetch_quotes_sync(tickers: list[str]) -> dict[str, dict]:
@@ -169,16 +172,18 @@ async def _run_evaluation_loop():
     while True:
         try:
             now = int(time.time())
-            alerts = await _db_fetchall(
-                "SELECT * FROM alerts WHERE active=1 AND cooldown_until < ?", (now,)
-            )
+            # Fetch quotes for every active alert's ticker (incl. those in
+            # cooldown) so the cached prices the UI reads cover all rows; only
+            # armed alerts (cooldown elapsed) are evaluated for firing.
+            alerts = await _db_fetchall("SELECT * FROM alerts WHERE active=1")
             if alerts:
                 tickers = list({a["ticker"].upper() for a in alerts})
                 loop = asyncio.get_event_loop()
                 quotes = await loop.run_in_executor(_EXECUTOR, _fetch_quotes_sync, tickers)
+                _LAST_QUOTES.update(quotes)   # serve these (extended-hours) prices to the page
 
                 for alert in alerts:
-                    if _evaluate(alert, quotes):
+                    if alert["cooldown_until"] < now and _evaluate(alert, quotes):
                         q = quotes[alert["ticker"].upper()]
                         cooldown = now + 3600
                         await _db_execute(
@@ -247,6 +252,25 @@ async def create_alert(req: AlertCreate):
         (alert_id, req.user_id, ticker, req.condition, req.threshold, now),
     )
     return {"id": alert_id, "ticker": ticker, "condition": req.condition, "threshold": req.threshold, "active": True, "cooldown_until": 0, "created_at": now}
+
+
+# Declared before /{user_id} so "quotes" isn't captured as a user id.
+@router.get("/quotes")
+async def alert_quotes(tickers: str):
+    """Latest extended-hours price per ticker — the same values the eval loop
+    uses — so the page's Last readout matches what alerts fire on."""
+    syms = [t.strip().upper() for t in tickers.split(",") if t.strip()][:50]
+    missing = [t for t in syms if t not in _LAST_QUOTES]
+    if missing:
+        loop = asyncio.get_event_loop()
+        fetched = await loop.run_in_executor(_EXECUTOR, _fetch_quotes_sync, missing)
+        _LAST_QUOTES.update(fetched)
+    out: dict[str, dict] = {}
+    for t in syms:
+        q = _LAST_QUOTES.get(t)
+        if q:
+            out[t] = {"current_price": round(q["price"], 2), "pct_change_1d": round(q["pct_1d"], 3)}
+    return out
 
 
 @router.get("/{user_id}")
