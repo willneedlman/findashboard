@@ -40,6 +40,48 @@ def _pretty_company(name: str) -> str:
     return name.title().replace("'S", "'s")
 
 
+# Yahoo exchange codes that are US-listed (incl. OTC ADRs) — used to rank a US
+# ADR above the foreign primary so e.g. "nestle" resolves to NSRGY, not NESN.SW.
+_YH_US_EX = {"NYQ", "NMS", "NGM", "NCM", "NYE", "ASE", "PCX", "BTS", "BATS",
+             "PNK", "OID", "OEM", "OQB", "OQX", "OBB", "OTC"}
+
+def _yahoo_search(q: str) -> list:
+    """Free Yahoo Finance symbol search — global coverage (foreign primaries and
+    ADRs), and exactly the tickers yfinance can load on the profile. US listings
+    are ranked first so an ADR wins over the foreign line. Cached on disk."""
+    ql = q.strip()
+    if len(ql) < 2:
+        return []
+    ck = f"yahsearch:v1:{ql.lower()}"
+    cached = disk_get(ck)
+    if cached is not None:
+        return cached
+    try:
+        r = requests.get(
+            "https://query2.finance.yahoo.com/v1/finance/search",
+            params={"q": ql, "quotesCount": 10, "newsCount": 0, "enableFuzzyQuery": "false"},
+            headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"},
+            timeout=8,
+        )
+        r.raise_for_status()
+        quotes = [x for x in r.json().get("quotes", []) if x.get("quoteType") == "EQUITY" and x.get("symbol")]
+        quotes.sort(key=lambda x: 0 if str(x.get("exchange", "")).upper() in _YH_US_EX else 1)
+        out, seen = [], set()
+        for x in quotes:
+            sym = str(x["symbol"]).upper()
+            if sym in seen:
+                continue
+            seen.add(sym)
+            out.append({"ticker": sym, "name": str(x.get("longname") or x.get("shortname") or sym)})
+            if len(out) >= 8:
+                break
+    except Exception as e:
+        logger.warning("yahoo search failed for %s: %s", ql, e)
+        return []          # don't cache transient failures
+    disk_set(ck, out, ttl=21600)   # 6 h
+    return out
+
+
 @router.get("/search")
 async def company_search(q: str):
     """Resolve a company name or ticker prefix to candidate tickers (free SEC index)."""
@@ -66,25 +108,31 @@ async def company_search(q: str):
     scored.sort()
     results = [{"ticker": tk, "name": _pretty_company(title)} for _, _, _, tk, title in scored[:8]]
 
-    # ADR / OTC coverage: the SEC index misses unsponsored ADRs (e.g. SMPNY ->
-    # Sompo). When SEC coverage is thin, supplement with FMP's broader search,
-    # cached so the metered FMP quota is barely touched.
-    if len(results) < 5 and len(ql) >= 3:
-        try:
-            import fmp as _fmp
-            if _fmp.available():
-                ck = f"fmpsearch:v2:{ql}"
-                hits = disk_get(ck)
-                if hits is None:
-                    hits = _fmp.search_symbols(q.strip(), limit=8)
-                    disk_set(ck, hits, ttl=21600)        # 6 h
-                have = {r["ticker"] for r in results}
-                for h in hits:
-                    if h["ticker"] not in have:
-                        results.append(h)
-                        have.add(h["ticker"])
-        except Exception as e:
-            logger.warning("fmp search supplement failed: %s", e)
+    # International + ADR/OTC coverage: the SEC index is US-only. Supplement with
+    # Yahoo's free global search (also exactly what yfinance can load on the
+    # profile), then FMP for any OTC ADRs still missing. Both cached so quotas /
+    # rate limits are barely touched.
+    if len(results) < 6 and len(ql) >= 2:
+        have = {r["ticker"] for r in results}
+        for h in _yahoo_search(q.strip()):
+            if h["ticker"] not in have:
+                results.append(h)
+                have.add(h["ticker"])
+        if len(results) < 5 and len(ql) >= 3:
+            try:
+                import fmp as _fmp
+                if _fmp.available():
+                    ck = f"fmpsearch:v2:{ql}"
+                    hits = disk_get(ck)
+                    if hits is None:
+                        hits = _fmp.search_symbols(q.strip(), limit=8)
+                        disk_set(ck, hits, ttl=21600)        # 6 h
+                    for h in hits:
+                        if h["ticker"] not in have:
+                            results.append(h)
+                            have.add(h["ticker"])
+            except Exception as e:
+                logger.warning("fmp search supplement failed: %s", e)
 
     return {"results": results[:8]}
 
