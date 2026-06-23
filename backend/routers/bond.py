@@ -111,66 +111,49 @@ def _lookup_openfigi(cusip: str):
         return None
 
 
-def _search_openfigi_issuer(q: str):
-    """Issuer-name -> list of that issuer's corporate bonds via OpenFIGI search
-    (free). Results carry coupon + maturity in the description but no CUSIP (it is
-    licensed), so they have no price mark and resolve to reference terms only."""
-    try:
-        r = requests.post("https://api.openfigi.com/v3/search",
-                          json={"query": q, "marketSecDes": "Corp"},
-                          headers={"Content-Type": "application/json"}, timeout=12)
-        if r.status_code != 200:
-            return []
-        recs = r.json().get("data") or []
-    except Exception:
-        return []
-    out, seen = [], set()
-    today = date.today()
-    for d in recs:
-        desc = d.get("securityDescription") or d.get("ticker") or ""
-        coupon, mat = _parse_bond_desc(desc)
-        if coupon is None or not mat:
-            continue
+def _holding_to_bond(h: dict, issuer: str) -> dict:
+    """Shape an ETF-holdings record into a resolved-bond row. Each carries a real
+    CUSIP and price mark, so the picked bond yields a real YTM (not at par)."""
+    mat = h.get("maturity_date")
+    years = None
+    if mat:
         try:
-            mdate = date.fromisoformat(mat)
+            years = round((date.fromisoformat(mat) - date.today()).days / 365.25, 2)
         except ValueError:
-            continue
-        if mdate <= today:
-            continue
-        key = (round(coupon, 3), mat)
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append({
-            "found": True, "source": "openfigi-search", "cusip": "",
-            "figi": d.get("figi"),
-            "name": d.get("name") or q.upper(),
-            "ticker": d.get("ticker"),
-            "description": desc or None,
-            "type": "Corporate Bond", "market_sector": "Corp",
-            "coupon_rate": coupon, "maturity_date": mat,
-            "years_to_maturity": round((mdate - today).days / 365.25, 2),
-        })
-    out.sort(key=lambda b: b["maturity_date"])
-    return out[:15]
+            pass
+    return {
+        "found": True, "source": "etf-holding",
+        "cusip": h.get("cusip", ""),
+        "name": issuer,
+        "description": h.get("name") or None,
+        "type": "Corporate Bond", "market_sector": "Corp",
+        "coupon_rate": h.get("coupon_rate"),
+        "maturity_date": mat, "years_to_maturity": years,
+        "market_price": h.get("market_price"),
+        "price_source": h.get("price_source"), "price_as_of": h.get("price_as_of"),
+    }
 
 
 @router.get("/search")
 def bond_search(q: str):
-    """Resolve an issuer name to its outstanding corporate bonds. Identity-only
-    (no CUSIP, no price) because that data is licensed; returns parseable
-    coupon/maturity so each candidate can be inspected or imported."""
+    """Resolve an issuer name to its outstanding bonds, grouped by legal issuing
+    entity (e.g. JPMorgan Chase & Co vs JPMorgan Chase Bank NA). Sourced from the
+    local ETF-holdings index, so every bond has a real CUSIP and price mark."""
     qn = (q or "").strip()
     if len(qn) < 2:
-        return {"query": qn, "results": []}
-    key = f"bondsearch:{qn.lower()}"
+        return {"query": qn, "issuers": []}
+    key = f"bondsearch:v2:{qn.lower()}"
     cached = disk_get(key)
     if cached is not None:
         return cached
-    results = _search_openfigi_issuer(qn)
-    payload = {"query": qn, "results": results}
-    if results:
-        disk_set(key, payload, ttl=86400)
+    import bond_prices
+    issuers = [
+        {"name": grp["name"], "bonds": [_holding_to_bond(h, grp["name"]) for h in grp["bonds"]]}
+        for grp in bond_prices.search_issuers(qn)
+    ]
+    payload = {"query": qn, "issuers": issuers}
+    if issuers:
+        disk_set(key, payload, ttl=43200)
     return payload
 
 

@@ -49,6 +49,23 @@ def _date(v):
     return m.group(0) if m else None
 
 
+# SSGA holding names read "<ISSUER> <SENIORITY> <MM/YY> <RATE>" e.g.
+# "GOLDMAN SACHS GROUP INC SR UNSECURED 04/30 VAR". The issuer is the prefix
+# before the seniority/structure descriptor, used to group an issuer's bonds.
+_SENIORITY = re.compile(
+    r"\b(SR\b|SENIOR|SUBORDINATED|JR\b|UNSECURED|SECURED|COMPANY GUAR|"
+    r"COMP GUAR|GUARANTEED|GTD|GLOBAL|MTN|DEB\b|NOTES?\b|BOND)\b")
+
+
+def _issuer_of(name) -> str:
+    s = re.sub(r"\s+", " ", str(name).upper()).strip().replace(" + ", " & ")
+    m = _SENIORITY.search(s)
+    issuer = s[:m.start()].strip() if m else s
+    # Fall back to trimming a trailing "MM/YY ..." when no seniority token matched.
+    issuer = re.sub(r"\s+\d{1,2}/\d{2}\b.*$", "", issuer).strip()
+    return issuer or s
+
+
 # ── Option A: SPDR bond-ETF daily holdings (SSGA) ─────────────────────────────
 # Maximize free coverage across the SSGA bond lineup, ~15k unique CUSIPs. Broad
 # aggregate/total-return funds come first so the cleaner corp/HY-specific marks
@@ -101,7 +118,11 @@ def _ssga_holdings(fund: str) -> dict:
             continue
         if par <= 0:
             continue
+        nm = row[hdr["Name"]] if "Name" in hdr else None
         out[cusip] = {
+            "cusip": cusip,
+            "name": str(nm).strip() if nm else None,
+            "issuer": _issuer_of(nm) if nm else None,
             "market_price": round(mv / par * 100, 3),
             "coupon_rate": _num(row[hdr["Coupon"]]) if "Coupon" in hdr else None,
             "maturity_date": _date(row[hdr["Maturity"]]) if "Maturity" in hdr else None,
@@ -114,7 +135,7 @@ def _ssga_holdings(fund: str) -> dict:
 def _ssga_holdings_cached(fund: str) -> dict:
     """One fund's holdings, cached 24h on its own key so a single slow or failed
     download never discards the others' coverage."""
-    ck = f"ssga:{fund}"
+    ck = f"ssga:v2:{fund}"
     cached = disk_get(ck)
     if cached is not None:
         return cached
@@ -129,7 +150,7 @@ def _ssga_holdings_cached(fund: str) -> dict:
 
 
 def _etf_price_map() -> dict:
-    cached = disk_get("etf_px_map:v3")
+    cached = disk_get("etf_px_map:v4")
     if cached is not None:
         return cached
     # Fetch funds concurrently: total build time is the slowest single download,
@@ -139,8 +160,31 @@ def _etf_price_map() -> dict:
     with ThreadPoolExecutor(max_workers=6) as pool:
         for h in pool.map(_ssga_holdings_cached, _SSGA_FUNDS):
             m.update(h)
-    disk_set("etf_px_map:v3", m, ttl=43200)           # 12 h
+    disk_set("etf_px_map:v4", m, ttl=43200)           # 12 h
     return m
+
+
+def search_issuers(q: str, max_entities: int = 12, max_bonds: int = 40) -> list:
+    """Issuer-name -> that issuer's bonds, grouped by legal entity, sourced from
+    the ETF holdings index (local, no rate limits, and each bond carries a real
+    price mark). A query matches when every token appears in the holding name, so
+    'goldman sachs' finds GOLDMAN SACHS GROUP INC and its subsidiaries."""
+    toks = [t for t in re.split(r"\s+", q.strip().upper()) if t]
+    if not toks:
+        return []
+    groups: dict = {}
+    for h in _etf_price_map().values():
+        nm = (h.get("name") or "").upper()
+        issuer = h.get("issuer")
+        if not nm or not issuer or not all(t in nm for t in toks):
+            continue
+        groups.setdefault(issuer, {})[h["cusip"]] = h        # dedup by cusip
+    issuers = []
+    for issuer, bonds in groups.items():
+        rows = sorted(bonds.values(), key=lambda x: x.get("maturity_date") or "")
+        issuers.append({"name": issuer, "bonds": rows[:max_bonds]})
+    issuers.sort(key=lambda e: -len(e["bonds"]))
+    return issuers[:max_entities]
 
 
 # ── Option B: SEC N-PORT fund filings (EDGAR) ─────────────────────────────────

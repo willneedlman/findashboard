@@ -38,6 +38,7 @@ interface ResolvedBond {
   price_as_of?: string | null
 }
 interface Derived { ytm: number; mod_duration: number; convexity: number }
+interface Issuer { name: string; bonds: ResolvedBond[] }
 interface BatchRow {
   cusip: string; found: boolean; error?: string
   name?: string; type?: string; coupon_rate?: number | null
@@ -147,7 +148,25 @@ function CandidateCard({ b, onClick }: { b: ResolvedBond; onClick: () => void })
       <div style={{ fontFamily: SANS, fontSize: 12, fontWeight: 600, color: TEXT }}>Due {b.maturity_date || '—'}</div>
       <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: `1px solid ${HAIR}`, paddingTop: 6, fontFamily: MONO, fontSize: 10, color: SEC }}>
         <span>{b.years_to_maturity != null ? `${b.years_to_maturity} yrs` : '—'}</span>
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 130 }}>{b.description || ''}</span>
+        <span style={{ color: b.market_price != null ? TEXT : SEC }}>{b.market_price != null ? `@ ${b.market_price}` : '—'}</span>
+      </div>
+    </div>
+  )
+}
+
+function IssuerCard({ e, onClick }: { e: Issuer; onClick: () => void }) {
+  const near = e.bonds[0]?.maturity_date
+  const far = e.bonds[e.bonds.length - 1]?.maturity_date
+  const span = near && far ? (near === far ? near : `${near.slice(0, 4)}–${far.slice(0, 4)}`) : '—'
+  return (
+    <div role="button" tabIndex={0} onClick={onClick}
+      onKeyDown={ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); onClick() } }}
+      style={{ background: SURFACE, border: `1px solid ${BORDER}`, padding: '13px 14px', cursor: 'pointer',
+        display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ fontFamily: SANS, fontSize: 13, fontWeight: 600, color: TEXT, lineHeight: 1.3 }}>{e.name}</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: `1px solid ${HAIR}`, paddingTop: 6, fontFamily: MONO, fontSize: 10, color: SEC }}>
+        <span style={{ color: G }}>{e.bonds.length} bond{e.bonds.length === 1 ? '' : 's'}</span>
+        <span>maturities {span}</span>
       </div>
     </div>
   )
@@ -160,6 +179,7 @@ export default function CusipLookup() {
   const [result, setResult] = useState<ResolvedBond | null>(null)
   const [derived, setDerived] = useState<Derived | null>(null)
   const [candidates, setCandidates] = useState<ResolvedBond[] | null>(null)
+  const [issuers, setIssuers] = useState<Issuer[] | null>(null)
   const [badQuery, setBadQuery] = useState<string | null>(null)
   const [recents, setRecents] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem(RECENTS_KEY) || 'null') || SEED_RECENTS } catch { return SEED_RECENTS }
@@ -182,24 +202,29 @@ export default function CusipLookup() {
     },
     onSuccess: ({ r, d }, raw) => {
       if (!r.found) { setResult(null); setDerived(null); setBadQuery(raw); return }
-      setBadQuery(null); setCandidates(null); setResult(r); setDerived(d)
+      setBadQuery(null); setCandidates(null); setIssuers(null); setResult(r); setDerived(d)
       setCache(c => ({ ...c, [r.cusip]: r }))
       pushRecent(r.cusip)
     },
   })
 
-  // Issuer path: list the issuer's outstanding bonds (no CUSIP, terms only).
+  // Issuer path: bonds grouped by legal issuing entity. One entity drops straight
+  // to its bond list; several show an entity picker first.
   const searchMut = useMutation({
     mutationFn: (raw: string) => searchBondsByIssuer(raw.trim()),
-    onSuccess: (res: { results: ResolvedBond[] }, raw) => {
-      const list = res.results || []
-      if (!list.length) { setCandidates(null); setResult(null); setDerived(null); setBadQuery(raw); return }
-      setBadQuery(null); setResult(null); setDerived(null); setCandidates(list)
+    onSuccess: (res: { issuers: Issuer[] }, raw) => {
+      const list = res.issuers || []
+      setResult(null); setDerived(null)
+      if (!list.length) { setIssuers(null); setCandidates(null); setBadQuery(raw); return }
+      setBadQuery(null); setIssuers(list)
+      setCandidates(list.length === 1 ? list[0].bonds : null)
     },
   })
+  const pickIssuer = (e: Issuer) => setCandidates(e.bonds)
+  const backToIssuers = () => { setResult(null); setDerived(null); setCandidates(null) }
 
-  // Pick a listed candidate: promote to the full result view + derive at par.
-  // Keep the candidate list in state so the result can return to it.
+  // Pick a listed bond: promote to the full result view + derive its analytics.
+  // Keep candidates/issuers in state so the result can step back to either.
   const pickMut = useMutation({
     mutationFn: async (b: ResolvedBond) => ({ r: b, d: await deriveFor(b) }),
     onSuccess: ({ r, d }) => { setResult(r); setDerived(d) },
@@ -211,13 +236,13 @@ export default function CusipLookup() {
 
   const run = (raw: string) => {
     if (!raw.trim()) return
-    setBadQuery(null); setCandidates(null)
+    setBadQuery(null); setCandidates(null); setIssuers(null)
     if (isCusip(raw)) cusipMut.mutate(raw)
     else searchMut.mutate(raw)
   }
   const onSubmit = () => run(query)
   const clear = () => {
-    setQuery(''); setResult(null); setDerived(null); setCandidates(null); setBadQuery(null)
+    setQuery(''); setResult(null); setDerived(null); setCandidates(null); setIssuers(null); setBadQuery(null)
     cusipMut.reset(); searchMut.reset(); pickMut.reset()
   }
 
@@ -232,9 +257,10 @@ export default function CusipLookup() {
     } } })
   }
 
-  const mode: 'empty' | 'loading' | 'result' | 'candidates' | 'notfound' =
+  const mode: 'empty' | 'loading' | 'result' | 'candidates' | 'issuers' | 'notfound' =
     isPending ? 'loading' : badQuery ? 'notfound'
-      : result ? 'result' : candidates ? 'candidates' : 'empty'
+      : result ? 'result' : candidates ? 'candidates' : issuers ? 'issuers' : 'empty'
+  const multiEntity = !!(issuers && issuers.length > 1)
 
   return (
     <PageWrapper>
@@ -293,14 +319,33 @@ export default function CusipLookup() {
             </div>
           )}
 
+          {mode === 'issuers' && issuers && (
+            <div>
+              <div style={{ ...EYEBROW, letterSpacing: '0.18em', color: G, marginBottom: 4 }}>{issuers.length} issuing entities</div>
+              <div style={{ fontFamily: SANS, fontSize: 10.5, color: SEC, marginBottom: 12, lineHeight: 1.5 }}>
+                This name maps to several legal issuers. Pick one to see its outstanding bonds.
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
+                {issuers.map((e, i) => <IssuerCard key={e.name || i} e={e} onClick={() => pickIssuer(e)} />)}
+              </div>
+            </div>
+          )}
+
           {mode === 'candidates' && candidates && (
             <div>
-              <div style={{ ...EYEBROW, letterSpacing: '0.18em', color: G, marginBottom: 4 }}>{candidates[0]?.name || 'Issuer'} · Outstanding bonds</div>
+              {multiEntity && (
+                <button onClick={backToIssuers} style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 12,
+                  fontFamily: SANS, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+                  color: SEC, background: 'none', border: `1px solid ${BORDER}`, padding: '6px 12px', cursor: 'pointer' }}>
+                  <span style={{ fontSize: 13, lineHeight: 1 }}>←</span> All issuers
+                </button>
+              )}
+              <div style={{ ...EYEBROW, letterSpacing: '0.18em', color: G, marginBottom: 4 }}>{candidates[0]?.name || 'Issuer'} · {candidates.length} bonds</div>
               <div style={{ fontFamily: SANS, fontSize: 10.5, color: SEC, marginBottom: 12, lineHeight: 1.5 }}>
-                Reference terms by issuer. CUSIP and live price are licensed and not shown here; select a bond to view its terms or import it.
+                Select a bond to see its price mark, yield, and full terms, or import it into Bond Analytics.
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>
-                {candidates.map((c, i) => <CandidateCard key={c.figi || i} b={c} onClick={() => pickMut.mutate(c)} />)}
+                {candidates.map((c, i) => <CandidateCard key={c.cusip || c.figi || i} b={c} onClick={() => pickMut.mutate(c)} />)}
               </div>
             </div>
           )}
