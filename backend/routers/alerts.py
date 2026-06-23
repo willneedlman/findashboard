@@ -120,16 +120,30 @@ def _fetch_quotes_sync(tickers: list[str]) -> dict[str, dict]:
     import yfinance as yf
     out: dict[str, dict] = {}
     for t in tickers:
+        price = prev = None
+        # Daily 5d: reliable, and supplies the prior close (1D% baseline).
         try:
-            df = yf.Ticker(t).history(period="5d")
-            closes = df["Close"].dropna() if "Close" in df else None
-            if closes is None or len(closes) < 1:
-                continue
-            price = float(closes.iloc[-1])
-            prev = float(closes.iloc[-2]) if len(closes) >= 2 else price
-            out[t.upper()] = {"price": price, "pct_1d": float((price / prev - 1) * 100) if prev else 0.0}
+            d = yf.Ticker(t).history(period="5d")
+            c = d["Close"].dropna() if "Close" in d else None
+            if c is not None and len(c) >= 1:
+                price = float(c.iloc[-1])
+                prev = float(c.iloc[-2]) if len(c) >= 2 else price
         except Exception as e:
-            _log.warning("alerts quote fetch %s: %s", t, e)
+            _log.warning("alerts daily quote %s: %s", t, e)
+        # 1m bars incl. pre/post — catches extended-hours moves the daily close
+        # misses. Best-effort: if it's empty/throttled, the daily close stands.
+        try:
+            m = yf.Ticker(t).history(period="1d", interval="1m", prepost=True)
+            c = m["Close"].dropna() if "Close" in m else None
+            if c is not None and len(c) >= 1:
+                price = float(c.iloc[-1])
+        except Exception:
+            pass
+        if price is None:
+            continue
+        if prev is None:
+            prev = price
+        out[t.upper()] = {"price": price, "pct_1d": float((price / prev - 1) * 100) if prev else 0.0}
     return out
 
 
