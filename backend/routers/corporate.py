@@ -693,12 +693,17 @@ async def get_supply_chain(ticker: str):
         pe      = info.get("trailingPE")
         eps     = info.get("trailingEps")
         rev_g   = info.get("revenueGrowth")            # fraction, e.g. 0.051
-        # yfinance reports dividendYield as a fraction in older versions and a
-        # percent in newer ones; normalise to a percent number (0.92 == 0.92%).
-        div_raw = info.get("dividendYield")
-        div_y   = None
-        if isinstance(div_raw, (int, float)) and div_raw == div_raw and div_raw > 0:
-            div_y = round(div_raw * 100, 2) if div_raw < 0.25 else round(div_raw, 2)
+        # Dividend yield as a percent. yfinance's dividendYield field flips
+        # between a fraction and a percent across versions, so derive it from the
+        # unambiguous annual dividend rate over price when available; fall back to
+        # the field only when the rate is missing.
+        div_rate = info.get("dividendRate")
+        div_raw  = info.get("dividendYield")
+        div_y    = None
+        if _holder_num(div_rate) and div_rate > 0 and price and price > 0:
+            div_y = round(div_rate / price * 100, 2)
+        elif _holder_num(div_raw) and div_raw > 0:
+            div_y = round(div_raw * 100, 2) if div_raw < 1 else round(div_raw, 2)
 
         import fmp as _fmp
         product_segments = dict(_fmp.EMPTY_SEGMENTS)
