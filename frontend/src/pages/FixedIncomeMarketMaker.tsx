@@ -47,9 +47,11 @@ const ORDER_SIZES     = [10, 25, 50, 100, 250]   // units of $1k face
 const DV01_LIMIT      = 250              // |net DV01| ($/bp) above this flags risk
 const BUCKET_LIMIT    = 120              // |per-maturity DV01| ($/bp) above this flags risk
 const MEAN_REVERT     = 0.02             // gentle pull of the curve factors back toward start
-// The curve always twists as well as shifts — it is not a trader-facing dial.
-// The slope factor's volatility is a fixed fraction of the level volatility:
-// level moves dominate curve variance, slope is the second factor (~half the vol).
+// How volatile rates are is a property of the market, not a trader dial, so the
+// curve's vol is intrinsic to the model. RATE_VOL_BP is the parallel level move
+// per tick; the curve also twists, with the slope factor at a fixed fraction of
+// it (level moves dominate curve variance, slope is the second factor).
+const RATE_VOL_BP     = 3
 const CURVE_TWIST     = 0.45
 const SPEED_MIN       = 0.1
 const SPEED_MAX       = 3.0
@@ -111,7 +113,7 @@ function freshState(): SimState {
   }
 }
 
-interface Ctrl { rateVolBp: number; halfSpread: number; manual: Record<string, number>; running: boolean; speed: number }
+interface Ctrl { halfSpread: number; manual: Record<string, number>; running: boolean; speed: number }
 
 // Yield for a bond: starting curve + parallel level + slope twist + manual nudge.
 function bondYield(id: string, maturity: number, s: SimState, c: Ctrl): number {
@@ -123,8 +125,8 @@ function advanceCurve(s: SimState, c: Ctrl): void {
   // Two mean-reverting factors: a parallel level move and an independent slope
   // twist. With twist > 0 the curve moves non-parallel, so net DV01 alone does
   // not capture the risk — each maturity bucket must be hedged.
-  s.level = s.level * (1 - MEAN_REVERT) + (c.rateVolBp / 100) * normal()
-  s.slope = s.slope * (1 - MEAN_REVERT) + (c.rateVolBp / 100) * CURVE_TWIST * normal()
+  s.level = s.level * (1 - MEAN_REVERT) + (RATE_VOL_BP / 100) * normal()
+  s.slope = s.slope * (1 - MEAN_REVERT) + (RATE_VOL_BP / 100) * CURVE_TWIST * normal()
   for (const b of BONDS) {
     const h = s.yldHistory[b.id]
     h.push(bondYield(b.id, b.maturity, s, c))
@@ -227,7 +229,6 @@ interface Frame {
 export default function FixedIncomeMarketMaker() {
   const sim = useRef<SimState>(freshState())
   const [paramsOpen, setParamsOpen] = useState(true)
-  const [rateVolBp, setRateVolBp]   = useState(3)
   const [halfSpread, setHalfSpread] = useState(0.06)
   const [manual, setManual]         = useState<Record<string, number>>(() => Object.fromEntries(BONDS.map(b => [b.id, 0])))
   const [running, setRunning]       = useState(false)
@@ -238,8 +239,8 @@ export default function FixedIncomeMarketMaker() {
   const [frame, setFrame]           = useState<Frame | null>(null)
 
   // Latest controls available to the (single, stable) game-loop.
-  const ctrl = useRef<Ctrl>({ rateVolBp, halfSpread, manual, running, speed })
-  ctrl.current = { rateVolBp, halfSpread, manual, running, speed }
+  const ctrl = useRef<Ctrl>({ halfSpread, manual, running, speed })
+  ctrl.current = { halfSpread, manual, running, speed }
 
   const snapshot = (s: SimState, c: Ctrl): Frame => {
     const book = buildBook(s, c)
@@ -317,7 +318,6 @@ export default function FixedIncomeMarketMaker() {
     <RailSection title="MM Controls" open={paramsOpen} onToggle={() => setParamsOpen(o => !o)}>
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontFamily: T.mono }}>
       {sliderRow('Sim Speed', `${speed.toFixed(1)}x`, range(speed, SPEED_MIN, SPEED_MAX, 0.1, setSpeed))}
-      {sliderRow('Rate Volatility', `${rateVolBp.toFixed(1)} bp/tick`, range(rateVolBp, 0.5, 10, 0.5, setRateVolBp))}
       {sliderRow('Half-Spread', `${halfSpread.toFixed(2)} pts`, range(halfSpread, 0.01, 0.5, 0.01, setHalfSpread))}
 
       <div style={{ ...labelStyle, marginTop: 6 }}>Manual per-bond yield nudge (bp)</div>
