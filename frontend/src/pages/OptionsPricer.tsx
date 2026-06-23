@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useState, useEffect, useRef } from 'react'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
 import TickerInput from '../components/TickerInput'
 import ExpirySelect from '../components/ExpirySelect'
-import { priceOption, optionPayoff, optionSurface, fetchOptionsChain } from '../hooks/useApi'
+import { priceOption, optionPayoff, optionSurface, fetchOptionsChain, fetchRiskFreeRate } from '../hooks/useApi'
 import useIsMobile from '../hooks/useIsMobile'
 
 const GREEK_HELP: Record<string, string> = {
@@ -22,7 +22,7 @@ const GREEK_COLOR: Record<string, string> = {
   delta: 'var(--theme-tertiary, #1f5673)', gamma: '#7b5ea7', theta: '#8c2e36', vega: '#2f6b4b',
 }
 
-import { INPUT, SELECT, LABEL, TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
+import { INPUT, SELECT, LABEL, HINT, TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
 
 interface ChainRow {
   strike: number; lastPrice: number; bid: number; ask: number
@@ -99,8 +99,22 @@ export function OptionsPricerContent() {
     onSuccess: d => { setChainExpiry(d.expiry); setSelectedIdx('') },
   })
 
+  // Live 3-month T-bill — the conventional risk-free proxy. Returned as a decimal.
+  const rfQuery = useQuery({ queryKey: ['risk-free'], queryFn: fetchRiskFreeRate, staleTime: 10 * 60_000 })
+
   const runAll = (p: Params) => { calcPrice(p); calcPayoff(p); calcSurface(p) }
   useEffect(() => { runAll(params) }, [])
+
+  // Auto-populate the risk-free rate from the live T-bill once it loads, so the
+  // analyzer defaults to the real benchmark rather than a stale hardcoded guess.
+  const rfApplied = useRef(false)
+  useEffect(() => {
+    const rate = rfQuery.data?.rate
+    if (rate == null || rfApplied.current) return
+    rfApplied.current = true
+    const rPct = Math.round(rate * 1000) / 10
+    setParams(p => { const next = { ...p, r: rPct }; runAll(next); return next })
+  }, [rfQuery.data])
 
   const recalc = () => runAll(params)
   const set = (k: keyof Params) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -192,7 +206,7 @@ export function OptionsPricerContent() {
               { label: 'Strike Price ($)',   key: 'K',     step: 1 },
               { label: 'Days to Expiry',     key: 'T',     step: 1 },
               { label: 'Volatility (%)',     key: 'sigma', step: 0.5 },
-              { label: 'Risk-Free Rate (%)', key: 'r',     step: 0.25 },
+              { label: 'Risk-Free Rate (%)', key: 'r',     step: 0.25, hint: '3-month T-bill' },
             ] as const).map(f => (
               <div key={f.key}>
                 <label style={LABEL}>{f.label}</label>
@@ -201,6 +215,7 @@ export function OptionsPricerContent() {
                   onFocus={e => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')}
                   onBlur={e => (e.target.style.borderColor = 'var(--theme-border, rgba(255,255,255,0.10))')}
                 />
+                {'hint' in f && f.hint && <div style={HINT}>{f.hint}</div>}
               </div>
             ))}
             <div>
