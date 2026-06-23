@@ -4,6 +4,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
 import TickerInput from '../components/TickerInput'
+import ExpirySelect from '../components/ExpirySelect'
 import { priceOption, optionPayoff, optionSurface, fetchOptionsChain } from '../hooks/useApi'
 import useIsMobile from '../hooks/useIsMobile'
 
@@ -87,6 +88,7 @@ export function OptionsPricerContent() {
   const [chainOpen, setChainOpen] = useState(false)
   const [chainSym, setChainSym] = useState('')
   const [chainExpiry, setChainExpiry] = useState('')
+  const [selectedIdx, setSelectedIdx] = useState('')   // index of the chosen contract row
   const [loadedMark, setLoadedMark] = useState<{ mark: number; label: string } | null>(null)
 
   const { mutate: calcPrice,   data: priceData,   isPending: pricePending,   isError: priceError }   = useMutation({ mutationFn: (p: Params) => priceOption(p) })
@@ -94,28 +96,36 @@ export function OptionsPricerContent() {
   const { mutate: calcSurface, data: surfaceData } = useMutation({ mutationFn: (p: Params) => optionSurface(p) })
   const chainMut = useMutation<ChainData, unknown, { ticker: string; expiry?: string }>({
     mutationFn: ({ ticker, expiry }) => fetchOptionsChain(ticker, expiry),
-    onSuccess: d => setChainExpiry(d.expiry),
+    onSuccess: d => { setChainExpiry(d.expiry); setSelectedIdx('') },
   })
 
   const runAll = (p: Params) => { calcPrice(p); calcPayoff(p); calcSurface(p) }
   useEffect(() => { runAll(params) }, [])
 
   const recalc = () => runAll(params)
-  const set = (k: keyof Params) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+  const set = (k: keyof Params) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    // Hand-editing a parameter detaches the analysis from the loaded contract,
+    // so drop the market-mark chip and the contract selection rather than show a
+    // price tied to a strike the user has since changed.
+    setLoadedMark(null)
+    setSelectedIdx('')
     setParams(p => ({ ...p, [k]: k === 'option_type' ? e.target.value : +e.target.value }))
+  }
 
   const chain = chainMut.data
   const chainRows = chain ? (params.option_type === 'call' ? chain.calls : chain.puts) : []
 
   // Pull a real listed contract into the analyzer: spot, strike, days-to-expiry
   // and implied vol all come straight from the live chain, then we re-price.
-  const applyContract = (r: ChainRow) => {
-    if (!chain || !chain.spot) return
+  const applyContract = (idx: string) => {
+    const r = chainRows[+idx]
+    if (!r || !chain || !chain.spot) return
+    setSelectedIdx(idx)
     const next: Params = {
       ...params,
       S: chain.spot,
       K: r.strike,
-      T: Math.max(chain.dte, 1),
+      T: Math.max(chain.dte, 0),
       sigma: Math.round(r.impliedVolatility * 1000) / 10,
     }
     setParams(next)
@@ -152,18 +162,17 @@ export function OptionsPricerContent() {
               <>
                 <div>
                   <label style={LABEL}>Expiry</label>
-                  <select value={chainExpiry} style={{ ...SELECT, cursor: 'pointer' }}
-                    onChange={e => { setChainExpiry(e.target.value); chainMut.mutate({ ticker: chainSym, expiry: e.target.value }) }}>
-                    {chain.expirations.map(e => <option key={e} value={e}>{e}</option>)}
-                  </select>
+                  <ExpirySelect ticker={chainSym} value={chainExpiry} expirations={chain.expirations}
+                    autoSelect={false} style={{ ...SELECT, cursor: 'pointer' }}
+                    onChange={exp => { setChainExpiry(exp); chainMut.mutate({ ticker: chainSym, expiry: exp }) }} />
                 </div>
                 <div>
                   <label style={LABEL}>Contract ({params.option_type === 'call' ? 'Calls' : 'Puts'})</label>
-                  <select value="" style={{ ...SELECT, cursor: 'pointer' }}
-                    onChange={e => { const r = chainRows[+e.target.value]; if (r) applyContract(r) }}>
+                  <select value={selectedIdx} style={{ ...SELECT, cursor: 'pointer' }}
+                    onChange={e => applyContract(e.target.value)}>
                     <option value="" disabled>Select strike…</option>
                     {chainRows.map((r, i) => (
-                      <option key={r.strike} value={i}>
+                      <option key={`${r.strike}-${i}`} value={i}>
                         {r.strike} · ${rowMark(r).toFixed(2)} · IV {(r.impliedVolatility * 100).toFixed(0)}%
                       </option>
                     ))}

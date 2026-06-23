@@ -290,12 +290,15 @@ class PriceRequest(BaseModel):
 @router.post("/price")
 def price_option(req: PriceRequest):
     T = max(req.T, 0.001)
-    price = bs_price(req.S, req.K, T, req.r, req.sigma, req.option_type)
-    greeks = bs_greeks(req.S, req.K, T, req.r, req.sigma, req.option_type)
+    # Floor sigma off zero: at sigma=0 the Black-Scholes d1 divides by zero,
+    # giving NaN greeks that serialize to invalid JSON and break the panel.
+    sigma = max(req.sigma, 1e-6)
+    price = bs_price(req.S, req.K, T, req.r, sigma, req.option_type)
+    greeks = bs_greeks(req.S, req.K, T, req.r, sigma, req.option_type)
 
     T_y = T / 365
     r_d = req.r / 100
-    sig_d = req.sigma / 100
+    sig_d = sigma / 100
     d1 = (np.log(req.S / req.K) + (r_d + 0.5 * sig_d**2) * T_y) / (sig_d * np.sqrt(T_y))
     d2 = d1 - sig_d * np.sqrt(T_y)
     vanna = -norm.pdf(d1) * (d2 / sig_d)
@@ -316,10 +319,14 @@ def price_option(req: PriceRequest):
 
 @router.post("/surface")
 def greek_surface(req: PriceRequest):
+    # Floor T and sigma off zero so a 0-DTE / zero-vol contract yields finite
+    # greeks instead of NaN (which serializes to invalid JSON).
+    T = max(req.T, 0.001)
+    sigma = max(req.sigma, 1e-6)
     spot_range = np.linspace(req.S * 0.6, req.S * 1.4, 80)
     result = {"spot": list(spot_range.round(2))}
     for key in ["delta", "gamma", "theta", "vega"]:
-        vals = [bs_greeks(s, req.K, req.T, req.r, req.sigma, req.option_type)[key] for s in spot_range]
+        vals = [bs_greeks(s, req.K, T, req.r, sigma, req.option_type)[key] for s in spot_range]
         result[key] = [round(float(v), 4) for v in vals]
     return result
 
@@ -371,7 +378,8 @@ def options_chain(ticker: str, expiry: str | None = None):
             return {"calls": [], "puts": [], "expiry": None, "expirations": [], "spot": None}
 
         today = _dt.date.today()
-        future_exps = [e for e in expirations if _dt.date.fromisoformat(e) > today]
+        # Include today's expiry so 0-DTE contracts are tradeable in the chain.
+        future_exps = [e for e in expirations if _dt.date.fromisoformat(e) >= today]
         valid_exps  = future_exps if future_exps else list(expirations)
         target = expiry if (expiry and expiry in valid_exps) else valid_exps[0]
 
@@ -406,10 +414,11 @@ def options_chain(ticker: str, expiry: str | None = None):
                 logger.warning("yfinance chain fallback failed: %s", e2)
 
         exp_dt = _dt.date.fromisoformat(target)
-        dte    = max((exp_dt - today).days, 1)
+        dte    = max((exp_dt - today).days, 0)   # 0 = expires today
 
         # Tradier returns IV as a decimal (smv_vol); convert to pct and compute missing greeks
         r_pct = 5.0
+        g_dte = max(float(dte), 1.0)   # floor greeks math off T=0 (0-DTE) to avoid NaN
         def _enrich(rows: list[dict], flag: str) -> list[dict]:
             for row in rows:
                 iv_dec = float(row.get("impliedVolatility") or 0)
@@ -419,7 +428,7 @@ def options_chain(ticker: str, expiry: str | None = None):
                 row["impliedVolatility"] = round(iv_pct / 100, 4)  # keep as decimal for UI compat
                 if not row.get("gamma") and spot and spot > 0:
                     try:
-                        g = bs_greeks(spot, float(row["strike"]), float(dte), r_pct, iv_pct, flag)
+                        g = bs_greeks(spot, float(row["strike"]), g_dte, r_pct, iv_pct, flag)
                         row.setdefault("delta", round(g["delta"], 4))
                         row.setdefault("gamma", round(g["gamma"], 4))
                         row["theta"] = round(g["theta"], 4)
