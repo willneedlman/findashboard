@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import PageWrapper from '../components/PageWrapper'
+import TickerInput from '../components/TickerInput'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -245,11 +246,11 @@ function AddTradeForm({ onAdd }: { onAdd: (t: Trade) => void }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 14 }}>
           <div>
             <span style={label('Ticker')}>Ticker</span>
-            <input
+            <TickerInput
               style={inp}
               value={form.ticker}
-              onChange={e => set('ticker', e.target.value.toUpperCase())}
-              placeholder="AAPL"
+              onChange={v => set('ticker', v)}
+              placeholder="Ticker or company"
             />
           </div>
 

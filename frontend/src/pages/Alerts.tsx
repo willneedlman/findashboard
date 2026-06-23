@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
+import TickerInput from '../components/TickerInput'
 import { useTheme } from '../contexts/ThemeContext'
 
 
@@ -155,9 +156,8 @@ export default function Alerts() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div>
                   <label style={lbl}>Ticker</label>
-                  <input value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())}
-                    placeholder="AAPL" style={inp}
-                    onKeyDown={e => e.key === 'Enter' && submit()} />
+                  <TickerInput value={ticker} onChange={setTicker}
+                    placeholder="Ticker or company" style={inp} onEnter={submit} />
                 </div>
 
                 <div>

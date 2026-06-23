@@ -6,6 +6,7 @@ import { Plus, X } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
 import EmptyState from '../components/EmptyState'
+import TickerInput from '../components/TickerInput'
 import PMImportPicker from '../components/PMImportPicker'
 import { CASH_SYMBOL, type ImportResult } from '../lib/pmImport'
 
@@ -119,8 +120,8 @@ export function PortfolioCompareContent() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {p.legs.map((leg, li) => (
                     <div key={li} style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                      <input style={{ ...inputStyle, flex: 1 }} placeholder="AAPL" value={leg.ticker}
-                        onChange={e => updateLeg(i, li, 'ticker', e.target.value)} />
+                      <TickerInput style={{ ...inputStyle, flex: 1 }} placeholder="Ticker or company" value={leg.ticker}
+                        onChange={v => updateLeg(i, li, 'ticker', v)} />
                       <input type="number" min={0} step={1} style={{ ...inputStyle, width: 52, textAlign: 'right' }} value={leg.weight}
                         onChange={e => updateLeg(i, li, 'weight', e.target.value)} />
                       <X size={13} style={{ cursor: 'pointer', color: p.legs.length > 1 ? C.muted : 'transparent', flexShrink: 0 }}

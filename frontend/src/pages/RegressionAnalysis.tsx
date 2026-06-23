@@ -6,6 +6,7 @@ import {
   CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
 import { Download, Plus, BarChart2 } from 'lucide-react'
+import TickerInput from '../components/TickerInput'
 import {
   C, PERIODS, StatCard, inputStyle, selectStyle, btnStyle,
   RailGroup, RunButton, TickerTags, ToolShell,
@@ -167,7 +168,7 @@ export default function RegressionAnalysis() {
       <RailGroup label="X variables">
         <TickerTags tickers={xTickers} onRemove={t => setXTickers(p => p.filter(x => x !== t))} color={C.blue} />
         <div style={{ display: 'flex', gap: 6 }}>
-          <input value={xInput} onChange={e => setXInput(e.target.value.toUpperCase())} onKeyDown={e => e.key === 'Enter' && addX()} style={inputStyle} placeholder="Add ticker" />
+          <TickerInput value={xInput} onChange={setXInput} onEnter={addX} style={inputStyle} placeholder="Add ticker or company" />
           <button onClick={addX} style={{ ...btnStyle, padding: '6px 10px', flexShrink: 0 }}><Plus size={14} /></button>
         </div>
       </RailGroup>
