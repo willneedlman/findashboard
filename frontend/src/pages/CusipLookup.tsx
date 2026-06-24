@@ -14,7 +14,7 @@ const G = 'var(--theme-primary, #c9a84c)'
 const SURFACE = 'var(--theme-surface, #0d1826)'
 const BG = 'var(--theme-bg, #101c2e)'
 const BORDER = 'var(--theme-border, rgba(255,255,255,0.08))'
-const HAIR = 'rgba(255,255,255,0.05)'
+const HAIR = 'var(--theme-border-faint, rgba(255,255,255,0.05))'
 const SEC = 'var(--theme-secondary, #8099b0)'
 const TEXT = 'var(--theme-text, #d7e3fc)'
 const MONO = 'var(--theme-mono)'
@@ -117,7 +117,7 @@ function BondCard({ cusip, bond, onClick, saved }: { cusip: string; bond?: Resol
 }
 
 const Strip = ({ children }: { children: React.ReactNode }) => (
-  <div style={{ background: '#0d1826', padding: '8px 14px', ...EYEBROW }}>{children}</div>
+  <div style={{ background: SURFACE, padding: '8px 14px', ...EYEBROW }}>{children}</div>
 )
 
 function LayoutToggle({ layout, setView }: { layout: 'A' | 'B'; setView: (l: 'A' | 'B') => void }) {
@@ -128,7 +128,7 @@ function LayoutToggle({ layout, setView }: { layout: 'A' | 'B'; setView: (l: 'A'
           fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
           padding: '6px 12px', cursor: 'pointer', border: 'none',
           color: layout === l ? G : SEC,
-          background: layout === l ? 'rgba(201,168,76,0.1)' : 'transparent',
+          background: layout === l ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)' : 'transparent',
           borderRight: l === 'A' ? `1px solid ${BORDER}` : 'none',
         }}>{l === 'A' ? 'A · Cockpit' : 'B · Ledger'}</button>
       ))}
@@ -271,7 +271,7 @@ export default function CusipLookup() {
     <PageWrapper>
       <div className="mx-auto w-full max-w-[1180px] 2xl:max-w-[1440px]" style={{ background: 'var(--theme-bg, #0a1422)', border: `1px solid ${BORDER}` }}>
         {/* header */}
-        <div style={{ padding: '18px 22px 12px', borderBottom: `1px solid rgba(201,168,76,0.4)` }}>
+        <div style={{ padding: '18px 22px 12px', borderBottom: `1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)` }}>
           <div style={{ ...EYEBROW, letterSpacing: '0.22em' }}>FIXED INCOME · REFERENCE</div>
           <div style={{ fontFamily: MONO, fontSize: 19, fontWeight: 700, letterSpacing: '0.2em', color: G, marginTop: 4 }}>BOND LOOKUP</div>
         </div>
@@ -292,7 +292,7 @@ export default function CusipLookup() {
         {/* search bar */}
         <div style={{ padding: '16px 22px', display: 'flex', gap: 10, alignItems: 'center' }}>
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, height: 46, background: BG,
-            border: '1px solid rgba(201,168,76,0.45)', padding: '0 14px' }}>
+            border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)', padding: '0 14px' }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={SEC} strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
             <input value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && onSubmit()}
               placeholder="Enter CUSIP or issuer  (e.g. 037833AL4, Apple, 91282CQQ7)"
@@ -422,7 +422,7 @@ function BatchView() {
       </div>
       <textarea value={text} onChange={e => setText(e.target.value)} rows={5}
         placeholder={'037833AL4\n91282CQQ7\n06051GGR4'}
-        style={{ width: '100%', background: BG, border: '1px solid rgba(201,168,76,0.45)', color: TEXT,
+        style={{ width: '100%', background: BG, border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)', color: TEXT,
           fontFamily: MONO, fontSize: 13, padding: '12px 14px', outline: 'none', resize: 'vertical' }} />
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
         <button onClick={() => parsed.length && mut.mutate(parsed)} disabled={!parsed.length || mut.isPending}
@@ -458,7 +458,7 @@ function BatchView() {
               </thead>
               <tbody>
                 {rows.map((r, i) => (
-                  <tr key={i} style={{ borderBottom: `1px solid rgba(255,255,255,0.04)` }}>
+                  <tr key={i} style={{ borderBottom: `1px solid ${HAIR}` }}>
                     <td style={{ padding: '8px 14px', color: G }}>{r.cusip}</td>
                     <td style={{ padding: '8px 14px', fontFamily: SANS, color: r.found ? TEXT : 'var(--theme-text-dim, #5e768f)' }}>
                       {r.found ? (r.name || '—') : (r.error === 'invalid' ? 'Invalid CUSIP' : 'Not found')}
@@ -503,7 +503,7 @@ function KeyTermsGrid({ b, d }: { b: ResolvedBond; d: Derived | null }) {
     { label: 'Sector', value: b.market_sector || b.type || '—' },
   ]
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: 'rgba(255,255,255,0.06)' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: BORDER }}>
       {cells.map((c, i) => (
         <div key={i} style={{ background: BG, padding: '13px 15px' }}>
           <div style={{ fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: SEC, marginBottom: 5 }}>{c.label}</div>
@@ -526,12 +526,12 @@ function CockpitView({ b, d, canImport, onImport }: { b: ResolvedBond; d: Derive
               const logoTk = issuerTicker(b.name) ?? equityTickerOf(b)
               return logoTk
                 ? <TickerLogo ticker={logoTk} size={52} />
-                : <div style={{ width: 52, height: 52, border: `1px solid rgba(201,168,76,0.5)`, background: 'rgba(201,168,76,0.07)',
+                : <div style={{ width: 52, height: 52, border: `1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 50%, transparent)`, background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 7%, transparent)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: MONO, fontSize: 15, fontWeight: 700, color: G }}>{monogram(b.name)}</div>
             })()}
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
-                <span style={{ fontFamily: SANS, fontSize: 21, fontWeight: 700, color: '#f1f5ff', lineHeight: 1 }}>{dash(b.name)}</span>
+                <span style={{ fontFamily: SANS, fontSize: 21, fontWeight: 700, color: TEXT, lineHeight: 1 }}>{dash(b.name)}</span>
                 <ScaleBadge s={s} />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
@@ -604,7 +604,7 @@ function LedgerTable({ title, rows, divider }: { title: string; rows: [string, s
       <Strip>{title}</Strip>
       {rows.map(([k, v], i) => (
         <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10,
-          padding: '7px 15px', borderBottom: i < rows.length - 1 ? `1px solid rgba(255,255,255,0.04)` : 'none' }}>
+          padding: '7px 15px', borderBottom: i < rows.length - 1 ? `1px solid ${HAIR}` : 'none' }}>
           <span style={{ fontFamily: SANS, fontSize: 10, fontWeight: 600, color: SEC }}>{k}</span>
           <span style={{ fontFamily: MONO, fontSize: 11.5, color: TEXT, textAlign: 'right' }}>{v}</span>
         </div>
