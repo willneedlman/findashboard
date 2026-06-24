@@ -11,7 +11,6 @@ interface RiskField { val: string; set: (v: string) => void }
 
 interface Props {
   mode: ConfigMode
-  onModeChange: (m: ConfigMode) => void
   collapsed: boolean
   onToggleCollapse: () => void
 
@@ -180,22 +179,10 @@ export default function ConfigHeader(p: Props) {
     { label: 'Cash Yield %', f: p.cash, ph: '4.5' },
   ]
 
-  const segBtn = (m: ConfigMode, label: string): React.CSSProperties => ({
-    fontFamily: T.mono, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
-    whiteSpace: 'nowrap', padding: '6px 13px', cursor: 'pointer', border: 'none',
-    background: p.mode === m ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 12%, transparent)' : 'transparent',
-    color: p.mode === m ? T.primary : T.sec,
-  })
-
   return (
     <div style={{ border: `1px solid ${T.border}`, background: T.surface }}>
       {/* Header bar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', padding: '10px 16px', borderBottom: `1px solid ${T.border}` }}>
-        <div style={{ display: 'flex', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 30%, transparent)' }}>
-          <button style={segBtn('backtester', 'Backtester')} onClick={() => p.onModeChange('backtester')}>Backtester</button>
-          <button style={segBtn('montecarlo', 'Monte Carlo')} onClick={() => p.onModeChange('montecarlo')}>Monte Carlo</button>
-        </div>
-        <div style={{ width: 1, height: 24, background: T.border }} />
         <span style={SECTION}>{eyebrow}</span>
         {total === 100 ? (
           <span style={{ fontFamily: T.mono, fontSize: 10, fontWeight: 700, color: T.pos }}>100%</span>

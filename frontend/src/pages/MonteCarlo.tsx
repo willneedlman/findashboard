@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Legend } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
@@ -108,7 +107,6 @@ export function MonteCarloContent() {
     }
     return [makeLeg('SPY', 100)]
   })
-  const navigate = useNavigate()
   const [collapsed, setCollapsed] = useState(false)
   const [horizon, setHorizon] = useState(252)
   const [nSims, setNSims] = useState(500)
@@ -328,7 +326,6 @@ export function MonteCarloContent() {
     <>
       <ConfigHeader
         mode="montecarlo"
-        onModeChange={m => { if (m === 'backtester') navigate('/backtest') }}
         collapsed={collapsed}
         onToggleCollapse={() => setCollapsed(c => !c)}
         holdings={legs}

@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, ComposedChart,
@@ -75,7 +74,6 @@ export function PortfolioTab() {
     const total = holdings.reduce((s, h) => s + h.weight, 0) || holdings.length
     return holdings.map(h => makeAsset(h.ticker, Math.round(h.weight / total * 100)))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
-  const navigate = useNavigate()
   const [assets, setAssets] = useState<Asset[]>(initialAssets)
   const [benchmark, setBenchmark] = useState('SPY')
   const [collapsed, setCollapsed] = useState(false)
@@ -263,7 +261,6 @@ export function PortfolioTab() {
     <>
       <ConfigHeader
         mode="backtester"
-        onModeChange={m => { if (m === 'montecarlo') navigate('/montecarlo') }}
         collapsed={collapsed}
         onToggleCollapse={() => setCollapsed(c => !c)}
         holdings={assets}
