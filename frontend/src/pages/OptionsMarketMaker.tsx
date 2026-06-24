@@ -116,6 +116,7 @@ interface Fill { tLabel: string; clientSide: string; contract: string; size: num
 interface SimState {
   spot: number; cash: number; stock: number
   positions: Record<string, number>
+  sold: Record<string, number>          // cumulative contracts sold to clients, per contract
   edgeTotal: number; ledger: Fill[]
   tick: number; nextOrderTick: number
   lastOrder: Fill | null; lastOrderAt: number; lastOrderTick: number
@@ -124,9 +125,10 @@ interface SimState {
 
 function freshState(): SimState {
   const positions: Record<string, number> = {}
-  for (const k of STRIKES) { positions[ck('C', k)] = 0; positions[ck('P', k)] = 0 }
+  const sold: Record<string, number> = {}
+  for (const k of STRIKES) { positions[ck('C', k)] = 0; positions[ck('P', k)] = 0; sold[ck('C', k)] = 0; sold[ck('P', k)] = 0 }
   return {
-    spot: SPOT_START, cash: 0, stock: 0, positions, edgeTotal: 0, ledger: [],
+    spot: SPOT_START, cash: 0, stock: 0, positions, sold, edgeTotal: 0, ledger: [],
     tick: 0, nextOrderTick: randIntInclusive(ORDER_MIN_TICKS, ORDER_MAX_TICKS),
     lastOrder: null, lastOrderAt: 0, lastOrderTick: -999, spotHistory: [SPOT_START],
   }
@@ -195,8 +197,9 @@ function maybeGenerateOrder(s: SimState, chain: Chain, running: boolean): void {
   const fair = marketLeg(s.spot, leg.strike, leg.kind).theo
   let fill: number, edge: number
   if (clientSide === 'BUY') {
+    // Client lifts the offer, so you sell: track the cumulative contracts sold.
     fill = leg.ask; edge = (fill - fair) * size * MULT
-    s.positions[key] -= size; s.cash += fill * size * MULT
+    s.positions[key] -= size; s.sold[key] += size; s.cash += fill * size * MULT
   } else {
     fill = leg.bid; edge = (fair - fill) * size * MULT
     s.positions[key] += size; s.cash -= fill * size * MULT
@@ -248,7 +251,7 @@ function fmtMoney(x: number): string {
 // ── Component ─────────────────────────────────────────────────────────────────
 interface Frame {
   chain: Chain; greeks: Portfolio; spot: number; spotHistory: number[]
-  positions: Record<string, number>; stock: number; edge: number
+  positions: Record<string, number>; sold: Record<string, number>; stock: number; edge: number
   ledger: Fill[]; lastOrder: Fill | null; lastOrderAt: number; running: boolean
 }
 
@@ -277,7 +280,7 @@ export default function OptionsMarketMaker() {
     const chain = buildChain(s, c.baseIv, c.skew, c.halfSpread, c.manual)
     return {
       chain, greeks: portfolioGreeks(s, chain), spot: s.spot, spotHistory: [...s.spotHistory],
-      positions: { ...s.positions }, stock: s.stock, edge: s.edgeTotal,
+      positions: { ...s.positions }, sold: { ...s.sold }, stock: s.stock, edge: s.edgeTotal,
       ledger: s.ledger.slice(-18), lastOrder: s.lastOrder, lastOrderAt: s.lastOrderAt, running: c.running,
     }
   }
@@ -570,9 +573,14 @@ function scoreCard(label: string, value: string, color: string, sub: string) {
 function renderChain(f: Frame, tapeSel: string[], onToggle: (key: string) => void) {
   const th: React.CSSProperties = { fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', padding: '6px 8px', textAlign: 'right' }
   const td: React.CSSProperties = { fontFamily: 'var(--theme-mono)', fontSize: 12, padding: '5px 8px', textAlign: 'right', color: 'var(--theme-text, #d7e3fc)' }
-  const posCell = (pos: number) => pos === 0
-    ? <span style={{ color: 'var(--theme-secondary, #5e768f)' }}>0</span>
-    : <span style={{ color: pos > 0 ? 'var(--theme-positive, #22c55e)' : 'var(--theme-negative, #ef4444)', fontWeight: 700 }}>{pos > 0 ? '+' : ''}{pos}</span>
+  const posCell = (pos: number, sold: number) => (
+    <span>
+      {pos === 0
+        ? <span style={{ color: 'var(--theme-secondary, #5e768f)' }}>0</span>
+        : <span style={{ color: pos > 0 ? 'var(--theme-positive, #22c55e)' : 'var(--theme-negative, #ef4444)', fontWeight: 700 }}>{pos > 0 ? '+' : ''}{pos}</span>}
+      {sold > 0 && <span style={{ color: 'var(--theme-secondary, #5e768f)', fontSize: 9, marginLeft: 5 }}>· sold {sold}</span>}
+    </span>
+  )
   const G = 'var(--theme-positive, #22c55e)', R = 'var(--theme-negative, #ef4444)', M = 'var(--theme-secondary, #5e768f)', GD = 'var(--theme-primary, #c9a84c)'
   // The Theo cell doubles as the tape toggle: click it to overlay that
   // contract's premium on the tape; selected cells carry the line's colour.
@@ -610,7 +618,7 @@ function renderChain(f: Frame, tapeSel: string[], onToggle: (key: string) => voi
             const atm = Math.abs(k - f.spot) <= 5
             return (
               <tr key={k} style={{ borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.04))', background: atm ? 'color-mix(in srgb, var(--theme-primary) 5%, transparent)' : 'transparent' }}>
-                <td style={{ ...td, textAlign: 'left' }}>{posCell(cpos)}</td>
+                <td style={{ ...td, textAlign: 'left' }}>{posCell(cpos, f.sold[`C${k}`] || 0)}</td>
                 <td style={td}>{c.delta >= 0 ? '+' : ''}{c.delta.toFixed(2)}</td>
                 <td style={{ ...td, color: G }}>{c.bid.toFixed(2)}</td>
                 {theoCell(`C${k}`, c.theo, 'right')}
@@ -622,7 +630,7 @@ function renderChain(f: Frame, tapeSel: string[], onToggle: (key: string) => voi
                 {theoCell(`P${k}`, p.theo, 'left')}
                 <td style={{ ...td, textAlign: 'left', color: R }}>{p.ask.toFixed(2)}</td>
                 <td style={{ ...td, textAlign: 'left' }}>{p.delta >= 0 ? '+' : ''}{p.delta.toFixed(2)}</td>
-                <td style={{ ...td, textAlign: 'right' }}>{posCell(ppos)}</td>
+                <td style={{ ...td, textAlign: 'right' }}>{posCell(ppos, f.sold[`P${k}`] || 0)}</td>
               </tr>
             )
           })}

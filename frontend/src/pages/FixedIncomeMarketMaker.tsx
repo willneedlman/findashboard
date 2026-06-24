@@ -100,6 +100,7 @@ interface SimState {
   level: number; slope: number          // two curve factors: parallel shift + twist (%)
   cash: number
   positions: Record<string, number>     // client-driven inventory, per bond
+  sold: Record<string, number>          // cumulative quantity sold to clients, per bond
   hedge: Record<string, number>         // your hedges, per bond (matched-maturity notes)
   edgeTotal: number; ledger: Fill[]
   tick: number; nextOrderTick: number
@@ -109,11 +110,12 @@ interface SimState {
 
 function freshState(): SimState {
   const positions: Record<string, number> = {}
+  const sold: Record<string, number> = {}
   const hedge: Record<string, number> = {}
   const yldHistory: Record<string, number[]> = {}
-  for (const b of BONDS) { positions[b.id] = 0; hedge[b.id] = 0; yldHistory[b.id] = [CURVE0[b.id]] }
+  for (const b of BONDS) { positions[b.id] = 0; sold[b.id] = 0; hedge[b.id] = 0; yldHistory[b.id] = [CURVE0[b.id]] }
   return {
-    level: 0, slope: 0, cash: 0, positions, hedge, edgeTotal: 0, ledger: [],
+    level: 0, slope: 0, cash: 0, positions, sold, hedge, edgeTotal: 0, ledger: [],
     tick: 0, nextOrderTick: randIntInclusive(ORDER_MIN_TICKS, ORDER_MAX_TICKS),
     lastOrder: null, lastOrderAt: 0, yldHistory,
   }
@@ -198,8 +200,9 @@ function maybeGenerateOrder(s: SimState, book: Book, running: boolean): void {
   const fairPrice = fairMath(b, s).price
   let fill: number, edge: number
   if (clientSide === 'BUY') {
+    // Client lifts the offer, so you sell: track the cumulative quantity sold.
     fill = q.ask; edge = (fill - fairPrice) * size * DOLLARS_PER_PT
-    s.positions[b.id] -= size; s.cash += fill * size * DOLLARS_PER_PT
+    s.positions[b.id] -= size; s.sold[b.id] += size; s.cash += fill * size * DOLLARS_PER_PT
   } else {
     fill = q.bid; edge = (fairPrice - fill) * size * DOLLARS_PER_PT
     s.positions[b.id] += size; s.cash -= fill * size * DOLLARS_PER_PT
@@ -262,7 +265,7 @@ function fmtMoney(x: number): string {
 // ── Component ─────────────────────────────────────────────────────────────────
 interface Frame {
   book: Book; risk: Risk; yldHistory: Record<string, number[]>
-  positions: Record<string, number>; hedge: Record<string, number>; edge: number
+  positions: Record<string, number>; sold: Record<string, number>; hedge: Record<string, number>; edge: number
   ledger: Fill[]; lastOrder: Fill | null; lastOrderAt: number; running: boolean
 }
 
@@ -288,7 +291,7 @@ export default function FixedIncomeMarketMaker() {
     for (const b of BONDS) yldHistory[b.id] = [...s.yldHistory[b.id]]
     return {
       book, risk: portfolioRisk(s), yldHistory,
-      positions: { ...s.positions }, hedge: { ...s.hedge }, edge: s.edgeTotal,
+      positions: { ...s.positions }, sold: { ...s.sold }, hedge: { ...s.hedge }, edge: s.edgeTotal,
       ledger: s.ledger.slice(-18), lastOrder: s.lastOrder, lastOrderAt: s.lastOrderAt, running: c.running,
     }
   }
@@ -559,7 +562,7 @@ function renderBook(f: Frame, selected: string, onSelect: (id: string) => void) 
             <th style={{ ...th, textAlign: 'left', color: GD }}>BOND</th>
             <th style={th}>Yield</th>
             <th style={{ ...th, color: G }}>Bid</th><th style={th}>Theo</th><th style={{ ...th, color: R }}>Ask</th>
-            <th style={th}>Pos</th><th style={th}>Hedge</th><th style={th}>Bucket DV01</th>
+            <th style={th}>Pos</th><th style={th}>Sold</th><th style={th}>Hedge</th><th style={th}>Bucket DV01</th>
           </tr>
         </thead>
         <tbody>
@@ -580,6 +583,7 @@ function renderBook(f: Frame, selected: string, onSelect: (id: string) => void) 
                 <td style={{ ...td, color: M }}>{q.price.toFixed(3)}</td>
                 <td style={{ ...td, color: R }}>{q.ask.toFixed(3)}</td>
                 <td style={td}>{signed(pos, n => `${n}`)}</td>
+                <td style={{ ...td, color: R }}>{f.sold[b.id] || 0}</td>
                 <td style={td}>{signed(hedge, n => `${n}`)}</td>
                 <td style={td}>{signed(bucket, n => `$${Math.round(n)}`)}</td>
               </tr>
