@@ -239,8 +239,11 @@ def _nport_price(cusip: str):
 # credentials are configured, so an unconfigured deploy pays zero cost. Register
 # free at https://developer.finra.org and set FINRA_API_CLIENT_ID / _SECRET.
 _FINRA_TOKEN_URL = "https://ews.fip.finra.org/fip/rest/ews/oauth2/access_token?grant_type=client_credentials"
-_FINRA_GROUP   = os.getenv("FINRA_TRACE_GROUP", "otcMarket")
-_FINRA_DATASET = os.getenv("FINRA_TRACE_DATASET", "corporateBondTradeHistory")
+# Real catalog names (verified against the live API): the corporate/agency TRACE
+# trade history is fixedIncomeMarket/corporateAndAgencyTradeHistory. Reading it
+# needs a dataset entitlement on the account beyond plain authentication.
+_FINRA_GROUP   = os.getenv("FINRA_TRACE_GROUP", "fixedIncomeMarket")
+_FINRA_DATASET = os.getenv("FINRA_TRACE_DATASET", "corporateAndAgencyTradeHistory")
 _finra_token: dict = {"value": None, "exp": 0.0}
 
 
