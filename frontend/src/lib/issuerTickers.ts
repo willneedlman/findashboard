@@ -1,0 +1,125 @@
+// Bond issuers carry legal names ("JPMORGAN CHASE & CO"), not equity tickers, so
+// the logo lookup needs a name->ticker map. Free name-search APIs mis-rank bond
+// issuers (e.g. "JPMORGAN CHASE & CO" -> AMJB, a note, not JPM), and a wrong logo
+// is worse than a monogram, so this is a curated map of the large issuers that
+// dominate the corporate/HY bond ETFs. Financing arms map to the parent equity
+// (the brand a user recognizes): GM Financial -> GM, Ford Credit -> F.
+
+const SUFFIX = new Set([
+  'INC', 'CORP', 'CORPORATION', 'CO', 'COS', 'COMPANY', 'PLC', 'LLC', 'LP',
+  'LTD', 'NA', 'NV', 'SA', 'AG', 'THE', 'HOLDINGS', 'HLDGS', 'HOLDING', 'GROUP',
+  'GRP', 'COMPANIES', 'TRUST',
+])
+
+// Uppercase, drop punctuation (keep & for AT&T / S&P), collapse spaces, then peel
+// trailing corporate-form tokens so "BANK OF AMERICA CORP" matches "BANK OF AMERICA".
+export function normIssuer(name: string | undefined): string {
+  if (!name) return ''
+  const toks = name.toUpperCase().replace(/[^A-Z0-9& ]+/g, ' ').replace(/\s+/g, ' ').trim().split(' ')
+  while (toks.length > 1 && (SUFFIX.has(toks[toks.length - 1]) || toks[toks.length - 1] === '&')) toks.pop()
+  return toks.join(' ')
+}
+
+const ISSUER_TICKERS: Record<string, string> = {
+  // Banks & financials
+  'JPMORGAN CHASE': 'JPM', 'JPMORGAN': 'JPM', 'BANK OF AMERICA': 'BAC',
+  'WELLS FARGO': 'WFC', 'CITIGROUP': 'C', 'CITIBANK': 'C', 'GOLDMAN SACHS': 'GS',
+  'MORGAN STANLEY': 'MS', 'US BANCORP': 'USB', 'PNC FINANCIAL SERVICES': 'PNC',
+  'PNC FINANCIAL': 'PNC', 'TRUIST FINANCIAL': 'TFC', 'CAPITAL ONE FINANCIAL': 'COF',
+  'CAPITAL ONE': 'COF', 'AMERICAN EXPRESS': 'AXP', 'CHARLES SCHWAB': 'SCHW',
+  'BANK OF NEW YORK MELLON': 'BK', 'STATE STREET': 'STT', 'BLACKROCK': 'BLK',
+  'BLACKSTONE': 'BX', 'KKR': 'KKR', 'APOLLO MANAGEMENT': 'APO', 'ARES CAPITAL': 'ARCC',
+  'FIFTH THIRD BANCORP': 'FITB', 'FIFTH THIRD': 'FITB', 'M&T BANK': 'MTB',
+  'HUNTINGTON BANCSHARES': 'HBAN', 'REGIONS FINANCIAL': 'RF', 'KEYCORP': 'KEY',
+  'CITIZENS FINANCIAL': 'CFG', 'ALLY FINANCIAL': 'ALLY', 'SYNCHRONY FINANCIAL': 'SYF',
+  'DISCOVER FINANCIAL SERVICES': 'DFS', 'DISCOVER FINANCIAL': 'DFS',
+  'BERKSHIRE HATHAWAY': 'BRK-B', 'VISA': 'V', 'MASTERCARD': 'MA', 'PAYPAL': 'PYPL',
+  'S&P GLOBAL': 'SPGI', 'MOODY': 'MCO', 'INTERCONTINENTAL EXCHANGE': 'ICE',
+  'CME': 'CME', 'AON': 'AON', 'MARSH & MCLENNAN': 'MMC', 'PROGRESSIVE': 'PGR',
+  'METLIFE': 'MET', 'PRUDENTIAL FINANCIAL': 'PRU', 'PRUDENTIAL': 'PRU',
+  'AMERICAN INTERNATIONAL': 'AIG', 'AIG': 'AIG', 'CHUBB': 'CB', 'TRAVELERS': 'TRV',
+  'ALLSTATE': 'ALL', 'AFLAC': 'AFL', 'HARTFORD FINANCIAL SERVICES': 'HIG',
+
+  // Tech & communications
+  'APPLE': 'AAPL', 'MICROSOFT': 'MSFT', 'ALPHABET': 'GOOGL', 'GOOGLE': 'GOOGL',
+  'AMAZON': 'AMZN', 'AMAZON COM': 'AMZN', 'META PLATFORMS': 'META', 'NVIDIA': 'NVDA',
+  'ORACLE': 'ORCL', 'INTEL': 'INTC', 'CISCO SYSTEMS': 'CSCO', 'CISCO': 'CSCO',
+  'IBM': 'IBM', 'INTERNATIONAL BUSINESS MACHINES': 'IBM', 'BROADCOM': 'AVGO',
+  'QUALCOMM': 'QCOM', 'TEXAS INSTRUMENTS': 'TXN', 'ADOBE': 'ADBE', 'SALESFORCE': 'CRM',
+  'ADVANCED MICRO DEVICES': 'AMD', 'DELL TECHNOLOGIES': 'DELL', 'DELL': 'DELL',
+  'HEWLETT PACKARD ENTERPRISE': 'HPE', 'HP': 'HPQ', 'MICRON TECHNOLOGY': 'MU',
+  'APPLIED MATERIALS': 'AMAT', 'ANALOG DEVICES': 'ADI', 'PAYPAL HOLDINGS': 'PYPL',
+  'WORKDAY': 'WDAY', 'VMWARE': 'VMW', 'NETFLIX': 'NFLX',
+
+  // Telecom & media
+  'AT&T': 'T', 'VERIZON COMMUNICATIONS': 'VZ', 'VERIZON': 'VZ', 'T MOBILE US': 'TMUS',
+  'T MOBILE': 'TMUS', 'COMCAST': 'CMCSA', 'CHARTER COMMUNICATIONS': 'CHTR',
+  'WALT DISNEY': 'DIS', 'DISNEY': 'DIS', 'WARNER BROS DISCOVERY': 'WBD',
+  'WARNER MEDIA': 'WBD', 'PARAMOUNT GLOBAL': 'PARA', 'FOX': 'FOXA',
+  'OMNICOM': 'OMC', 'INTERPUBLIC': 'IPG', 'AMERICAN TOWER': 'AMT',
+  'CROWN CASTLE': 'CCI', 'SBA COMMUNICATIONS': 'SBAC',
+
+  // Autos & financing arms (-> parent equity)
+  'GENERAL MOTORS': 'GM', 'GENERAL MOTORS FINANCIAL': 'GM', 'GM FINANCIAL': 'GM',
+  'FORD MOTOR': 'F', 'FORD MOTOR CREDIT': 'F', 'FORD MOTOR CR': 'F',
+  'TOYOTA MOTOR': 'TM', 'TOYOTA MOTOR CREDIT': 'TM', 'AMERICAN HONDA FINANCE': 'HMC',
+  'PACCAR': 'PCAR', 'PACCAR FINANCIAL': 'PCAR', 'TESLA': 'TSLA', 'CUMMINS': 'CMI',
+  'BORGWARNER': 'BWA', 'APTIV': 'APTV',
+
+  // Energy
+  'EXXON MOBIL': 'XOM', 'EXXONMOBIL': 'XOM', 'CHEVRON': 'CVX', 'CONOCOPHILLIPS': 'COP',
+  'OCCIDENTAL PETROLEUM': 'OXY', 'MARATHON PETROLEUM': 'MPC', 'PHILLIPS 66': 'PSX',
+  'VALERO ENERGY': 'VLO', 'SCHLUMBERGER': 'SLB', 'HALLIBURTON': 'HAL',
+  'KINDER MORGAN': 'KMI', 'WILLIAMS': 'WMB', 'ONEOK': 'OKE', 'ENTERPRISE PRODUCTS': 'EPD',
+  'ENERGY TRANSFER': 'ET', 'DEVON ENERGY': 'DVN', 'EOG RESOURCES': 'EOG',
+  'PIONEER NATURAL RESOURCES': 'PXD', 'DUKE ENERGY': 'DUK', 'SOUTHERN': 'SO',
+  'DOMINION ENERGY': 'D', 'NEXTERA ENERGY': 'NEE', 'EXELON': 'EXC',
+  'AMERICAN ELECTRIC POWER': 'AEP', 'SEMPRA': 'SRE', 'PUBLIC SERVICE ENTERPRISE': 'PEG',
+  'XCEL ENERGY': 'XEL', 'CONSOLIDATED EDISON': 'ED', 'EDISON INTERNATIONAL': 'EIX',
+  'PG&E': 'PCG', 'PACIFIC GAS & ELECTRIC': 'PCG',
+
+  // Healthcare & pharma
+  'JOHNSON & JOHNSON': 'JNJ', 'UNITEDHEALTH': 'UNH', 'PFIZER': 'PFE',
+  'ELI LILLY': 'LLY', 'MERCK': 'MRK', 'ABBVIE': 'ABBV', 'BRISTOL MYERS SQUIBB': 'BMY',
+  'BRISTOL MYERS': 'BMY', 'AMGEN': 'AMGN', 'GILEAD SCIENCES': 'GILD', 'GILEAD': 'GILD',
+  'THERMO FISHER SCIENTIFIC': 'TMO', 'ABBOTT LABORATORIES': 'ABT', 'DANAHER': 'DHR',
+  'MEDTRONIC': 'MDT', 'CVS HEALTH': 'CVS', 'CIGNA': 'CI', 'ELEVANCE HEALTH': 'ELV',
+  'HUMANA': 'HUM', 'CENTENE': 'CNC', 'HCA HEALTHCARE': 'HCA', 'BECTON DICKINSON': 'BDX',
+  'STRYKER': 'SYK', 'BOSTON SCIENTIFIC': 'BSX', 'ZOETIS': 'ZTS', 'MCKESSON': 'MCK',
+  'CARDINAL HEALTH': 'CAH', 'CENCORA': 'COR', 'AMERISOURCEBERGEN': 'COR',
+
+  // Consumer
+  'WALMART': 'WMT', 'COSTCO WHOLESALE': 'COST', 'COSTCO': 'COST', 'HOME DEPOT': 'HD',
+  'LOWE': 'LOW', 'TARGET': 'TGT', 'PROCTER & GAMBLE': 'PG', 'COCA COLA': 'KO',
+  'PEPSICO': 'PEP', 'MONDELEZ INTERNATIONAL': 'MDLZ', 'MONDELEZ': 'MDLZ',
+  'PHILIP MORRIS INTERNATIONAL': 'PM', 'PHILIP MORRIS': 'PM', 'ALTRIA': 'MO',
+  'MCDONALD': 'MCD', 'STARBUCKS': 'SBUX', 'NIKE': 'NKE', 'COLGATE PALMOLIVE': 'CL',
+  'KIMBERLY CLARK': 'KMB', 'GENERAL MILLS': 'GIS', 'KRAFT HEINZ': 'KHC',
+  'MARRIOTT INTERNATIONAL': 'MAR', 'MARRIOTT': 'MAR', 'BOOKING': 'BKNG',
+  'ESTEE LAUDER': 'EL', 'TJX': 'TJX', 'DOLLAR GENERAL': 'DG', 'KROGER': 'KR',
+  'CONSTELLATION BRANDS': 'STZ', 'KEURIG DR PEPPER': 'KDP',
+
+  // Industrials & materials
+  'BOEING': 'BA', 'CATERPILLAR': 'CAT', 'CATERPILLAR FINANCIAL': 'CAT',
+  'GENERAL ELECTRIC': 'GE', 'GE': 'GE', 'HONEYWELL INTERNATIONAL': 'HON',
+  'HONEYWELL': 'HON', 'RAYTHEON': 'RTX', 'RTX': 'RTX', 'LOCKHEED MARTIN': 'LMT',
+  'GENERAL DYNAMICS': 'GD', 'NORTHROP GRUMMAN': 'NOC', '3M': 'MMM', 'DEERE': 'DE',
+  'JOHN DEERE': 'DE', 'JOHN DEERE CAPITAL': 'DE', 'UNION PACIFIC': 'UNP',
+  'UNITED PARCEL SERVICE': 'UPS', 'FEDEX': 'FDX', 'EMERSON ELECTRIC': 'EMR',
+  'ILLINOIS TOOL WORKS': 'ITW', 'EATON': 'ETN', 'PARKER HANNIFIN': 'PH',
+  'DOW': 'DOW', 'DUPONT': 'DD', 'LINDE': 'LIN', 'AIR PRODUCTS': 'APD',
+  'SHERWIN WILLIAMS': 'SHW', 'NUCOR': 'NUE', 'FREEPORT MCMORAN': 'FCX',
+  'WASTE MANAGEMENT': 'WM', 'NORFOLK SOUTHERN': 'NSC', 'CSX': 'CSX',
+  'LOCKHEED': 'LMT', 'L3HARRIS': 'LHX',
+
+  // REITs
+  'PROLOGIS': 'PLD', 'SIMON PROPERTY': 'SPG', 'REALTY INCOME': 'O',
+  'PUBLIC STORAGE': 'PSA', 'WELLTOWER': 'WELL', 'DIGITAL REALTY': 'DLR',
+  'EQUINIX': 'EQIX', 'AVALONBAY COMMUNITIES': 'AVB', 'EQUITY RESIDENTIAL': 'EQR',
+  'VENTAS': 'VTR', 'BOSTON PROPERTIES': 'BXP', 'VICI PROPERTIES': 'VICI',
+}
+
+// Resolve a bond issuer's legal name to its equity ticker for the logo, or null.
+export function issuerTicker(name: string | undefined): string | null {
+  return ISSUER_TICKERS[normIssuer(name)] ?? null
+}

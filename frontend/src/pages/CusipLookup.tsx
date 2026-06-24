@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import PageWrapper from '../components/PageWrapper'
 import TickerLogo from '../components/TickerLogo'
+import { issuerTicker } from '../lib/issuerTickers'
 import { fetchBondByCusip, fetchBondAnalytics, searchBondsByIssuer, resolveCusipBatch } from '../hooks/useApi'
 import {
   INPUT, EYEBROW, PANEL, PRIMARY_BTN, TitleBar, TitleAction, VerdictStrip, MetricCard,
@@ -158,12 +159,16 @@ function IssuerCard({ e, onClick }: { e: Issuer; onClick: () => void }) {
   const near = e.bonds[0]?.maturity_date
   const far = e.bonds[e.bonds.length - 1]?.maturity_date
   const span = near && far ? (near === far ? near : `${near.slice(0, 4)}–${far.slice(0, 4)}`) : '—'
+  const logoTk = issuerTicker(e.name) ?? (e.bonds[0] ? equityTickerOf(e.bonds[0]) : null)
   return (
     <div role="button" tabIndex={0} onClick={onClick}
       onKeyDown={ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); onClick() } }}
       style={{ background: SURFACE, border: `1px solid ${BORDER}`, padding: '13px 14px', cursor: 'pointer',
         display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ fontFamily: SANS, fontSize: 13, fontWeight: 600, color: TEXT, lineHeight: 1.3 }}>{e.name}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        {logoTk && <TickerLogo ticker={logoTk} size={26} />}
+        <div style={{ fontFamily: SANS, fontSize: 13, fontWeight: 600, color: TEXT, lineHeight: 1.3 }}>{e.name}</div>
+      </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: `1px solid ${HAIR}`, paddingTop: 6, fontFamily: MONO, fontSize: 10, color: SEC }}>
         <span style={{ color: G }}>{e.bonds.length} bond{e.bonds.length === 1 ? '' : 's'}</span>
         <span>maturities {span}</span>
@@ -517,10 +522,13 @@ function CockpitView({ b, d, canImport, onImport }: { b: ResolvedBond; d: Derive
       <div style={{ ...PANEL, padding: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '18px 20px', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            {equityTickerOf(b)
-              ? <TickerLogo ticker={equityTickerOf(b)!} size={52} />
-              : <div style={{ width: 52, height: 52, border: `1px solid rgba(201,168,76,0.5)`, background: 'rgba(201,168,76,0.07)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: MONO, fontSize: 15, fontWeight: 700, color: G }}>{monogram(b.name)}</div>}
+            {(() => {
+              const logoTk = issuerTicker(b.name) ?? equityTickerOf(b)
+              return logoTk
+                ? <TickerLogo ticker={logoTk} size={52} />
+                : <div style={{ width: 52, height: 52, border: `1px solid rgba(201,168,76,0.5)`, background: 'rgba(201,168,76,0.07)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: MONO, fontSize: 15, fontWeight: 700, color: G }}>{monogram(b.name)}</div>
+            })()}
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
                 <span style={{ fontFamily: SANS, fontSize: 21, fontWeight: 700, color: '#f1f5ff', lineHeight: 1 }}>{dash(b.name)}</span>
