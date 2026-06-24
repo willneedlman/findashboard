@@ -14,7 +14,14 @@ import sqlite3
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, time as _dtime
 from pathlib import Path
+
+try:
+    from zoneinfo import ZoneInfo
+    _ET = ZoneInfo("America/New_York")
+except Exception:                                    # pragma: no cover
+    _ET = None
 
 import aiosqlite
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
@@ -107,19 +114,39 @@ def _valid_token(user_id: str, token: str) -> bool:
 
 _EXECUTOR = ThreadPoolExecutor(max_workers=4)
 _eval_task: asyncio.Task | None = None
-_EVAL_INTERVAL = 30   # seconds
+_EVAL_INTERVAL = 30    # seconds, while a US session is open
+_CLOSED_INTERVAL = 300 # seconds, when markets are closed — just re-checks the clock
 # Latest extended-hours quote per ticker, refreshed by the loop and served to the
 # alerts page so its "Last" readout matches exactly what the loop evaluates.
 _LAST_QUOTES: dict[str, dict] = {}
 
 
-def _fetch_quotes_sync(tickers: list[str]) -> dict[str, dict]:
+def _market_session() -> str:
+    """'regular' (09:30-16:00 ET), 'extended' (04:00-09:30 & 16:00-20:00 ET), or
+    'closed' (overnight/weekends). Prices don't move while closed, so the loop
+    skips all yfinance calls then. Holidays are not special-cased (a handful of
+    over-polled days a year)."""
+    if _ET is None:
+        return "regular"
+    now = datetime.now(_ET)
+    if now.weekday() >= 5:                            # Sat/Sun
+        return "closed"
+    t = now.time()
+    if _dtime(9, 30) <= t < _dtime(16, 0):
+        return "regular"
+    if _dtime(4, 0) <= t < _dtime(20, 0):
+        return "extended"
+    return "closed"
+
+
+def _fetch_quotes_sync(tickers: list[str], extended: bool = True) -> dict[str, dict]:
     """Blocking yfinance call — runs in the thread pool. Uses Ticker().history —
     the same method the (working) /market/quote endpoint uses, so it's reliable
     from the datacenter IP where the batch yf.download / 1m intraday endpoints get
-    throttled. Reads are uncached so the price is fresh each 30s cycle; the
-    current-day daily close tracks the live price during market hours, and the
-    prior close gives the 1D% baseline."""
+    throttled. Reads are uncached so the price is fresh each cycle; the current-day
+    daily close tracks the live price during regular hours, and the prior close
+    gives the 1D% baseline. The 1m pre/post call is made only when `extended`, so
+    regular-hours cycles cost one yfinance call per ticker instead of two."""
     import yfinance as yf
     out: dict[str, dict] = {}
     for t in tickers:
@@ -134,14 +161,16 @@ def _fetch_quotes_sync(tickers: list[str]) -> dict[str, dict]:
         except Exception as e:
             _log.warning("alerts daily quote %s: %s", t, e)
         # 1m bars incl. pre/post — catches extended-hours moves the daily close
-        # misses. Best-effort: if it's empty/throttled, the daily close stands.
-        try:
-            m = yf.Ticker(t).history(period="1d", interval="1m", prepost=True)
-            c = m["Close"].dropna() if "Close" in m else None
-            if c is not None and len(c) >= 1:
-                price = float(c.iloc[-1])
-        except Exception:
-            pass
+        # misses. Only needed in pre/post sessions; skipped during regular hours
+        # where the daily close already tracks the live price.
+        if extended:
+            try:
+                m = yf.Ticker(t).history(period="1d", interval="1m", prepost=True)
+                c = m["Close"].dropna() if "Close" in m else None
+                if c is not None and len(c) >= 1:
+                    price = float(c.iloc[-1])
+            except Exception:
+                pass
         if price is None:
             continue
         if prev is None:
@@ -171,6 +200,12 @@ async def _run_evaluation_loop():
     _log.info("Alert evaluation loop started (interval=%ds)", _EVAL_INTERVAL)
     while True:
         try:
+            session = _market_session()
+            if session == "closed":
+                # Prices are static; skip all upstream calls and just re-check the
+                # clock. _LAST_QUOTES is retained so the page still shows last marks.
+                await asyncio.sleep(_CLOSED_INTERVAL)
+                continue
             now = int(time.time())
             # Fetch quotes for every active alert's ticker (incl. those in
             # cooldown) so the cached prices the UI reads cover all rows; only
@@ -179,8 +214,9 @@ async def _run_evaluation_loop():
             if alerts:
                 tickers = list({a["ticker"].upper() for a in alerts})
                 loop = asyncio.get_event_loop()
-                quotes = await loop.run_in_executor(_EXECUTOR, _fetch_quotes_sync, tickers)
-                _LAST_QUOTES.update(quotes)   # serve these (extended-hours) prices to the page
+                quotes = await loop.run_in_executor(
+                    _EXECUTOR, _fetch_quotes_sync, tickers, session == "extended")
+                _LAST_QUOTES.update(quotes)   # serve these prices to the page
 
                 for alert in alerts:
                     if alert["cooldown_until"] < now and _evaluate(alert, quotes):
