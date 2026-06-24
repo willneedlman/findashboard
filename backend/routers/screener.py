@@ -81,7 +81,6 @@ def _backfill_once(daily: int) -> int:
         return 0
     if disk_get("screener:backfill:ran") is not None:
         return -1
-    disk_set("screener:backfill:ran", 1, ttl=72000)
     fetched = 0
     for sym in _BACKFILL_ORDER:
         if fetched >= daily:
@@ -90,6 +89,10 @@ def _backfill_once(daily: int) -> int:
             continue
         if fmp.get_fundamentals(sym):
             fetched += 1
+    # Hold the redeploy-stacking guard for ~20h after real progress; if nothing
+    # was fetched (free daily cap exhausted / throttled), keep a short window so
+    # the next run retries once the quota resets instead of idling a full day.
+    disk_set("screener:backfill:ran", 1, ttl=72000 if fetched else 7200)
     return fetched
 
 
@@ -101,11 +104,13 @@ async def _backfill_loop():
             n = await asyncio.to_thread(_backfill_once, daily)
             if n >= 0:
                 logger.info("screener backfill: warmed %d new tickers", n)
+            next_delay = 86400 if (n and n > 0) else 7200   # retry sooner on a capped day
         except asyncio.CancelledError:
             return
         except Exception as e:
             logger.warning("screener backfill error: %s", e)
-        await asyncio.sleep(86400)                     # daily
+            next_delay = 7200
+        await asyncio.sleep(next_delay)
 
 
 def start_backfill_loop():
