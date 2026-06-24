@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, ComposedChart,
@@ -20,7 +21,7 @@ import PortfolioIO, { type PortfolioAsset } from '../../components/PortfolioIO'
 import PMImportPicker from '../../components/PMImportPicker'
 import { CASH_SYMBOL, type ImportResult } from '../../lib/pmImport'
 import { usePortfolio } from '../../contexts/PortfolioContext'
-import { weightTotal, normalizeTo100 } from '../../components/portfolio/weights'
+import ConfigHeader from '../../components/portfolio/ConfigHeader'
 import HelpTip from '../../components/HelpTip'
 import { TAB_BAR, TAB_BASE, type Tab, type Asset, makeAsset, PORT_DEFAULTS, PORT_INPUT, PORT_LABEL, PORT_TICK, ALGO_STRATEGIES, ALGO_DEFAULT_PARAMS, ALGO_PARAM_LABELS, ALGO_INPUT, ALGO_LABEL, ALGO_TICK, ALGO_SECTION_DIVIDER, type BacktestResult, type SignalResult } from './shared'
 
@@ -74,9 +75,10 @@ export function PortfolioTab() {
     const total = holdings.reduce((s, h) => s + h.weight, 0) || holdings.length
     return holdings.map(h => makeAsset(h.ticker, Math.round(h.weight / total * 100)))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  const navigate = useNavigate()
   const [assets, setAssets] = useState<Asset[]>(initialAssets)
   const [benchmark, setBenchmark] = useState('SPY')
-  const [portOpen, setPortOpen] = useState(true)
+  const [collapsed, setCollapsed] = useState(false)
   const [start, setStart] = useState('2020-01-01')
   const [end, setEnd] = useState(() => new Date().toISOString().split('T')[0])
   const [portSignalData, setPortSignalData] = useState<{ ticker: string; data: SignalChartPoint[]; trades: { date: string; action: string; price: number }[] }[]>([])
@@ -257,184 +259,56 @@ export function PortfolioTab() {
   const updateAsset = (i: number, patch: Partial<Asset>) =>
     setAssets(prev => prev.map((a, idx) => idx === i ? { ...a, ...patch } : a))
 
-  const focus = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')
-  const blur  = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = 'var(--theme-border, rgba(255,255,255,0.10))')
-
   return (
-    <SidebarLayout sidebarWidth={240} sidebarTitle="" sidebar={<>
-        <RailSection title="Portfolio Controls" open={portOpen} onToggle={() => setPortOpen(o => !o)}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <label style={PORT_LABEL}>Allocation</label>
-              {(() => {
-                const total = weightTotal(assets.map(a => a.weight))
-                return total === 100 ? (
-                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--theme-positive)', marginBottom: 4 }}>100%</span>
-                ) : (
-                  <button onClick={() => { const w = normalizeTo100(assets.map(a => a.weight)); setAssets(p => p.map((a, i) => ({ ...a, weight: w[i] }))) }}
-                    title="Rescale weights to total 100%"
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit', marginBottom: 4,
-                      fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--theme-negative)' }}>
-                    {total}% → 100%
-                  </button>
-                )
-              })()}
-            </div>
-            <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
-              <span style={{ flex: 7, fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Holdings</span>
-              <span style={{ flex: 4, fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Weight</span>
-              <span style={{ width: 16 }} />
-            </div>
-
-            {assets.map((a, i) => (
-              <div key={i} style={{ marginBottom: 10 }}>
-                <div style={{ display: 'flex', gap: 4, marginBottom: 4, alignItems: 'center' }}>
-                  <input style={{ ...PORT_INPUT, flex: 7, padding: '4px 6px' }} value={a.ticker}
-                    list="ft-futures" placeholder="e.g. AAPL or ES=F"
-                    onChange={e => updateAsset(i, { ticker: e.target.value.toUpperCase() })}
-                    onFocus={focus} onBlur={blur} />
-                  {i === 0 && <datalist id="ft-futures">{FUTURES.map(f => <option key={f.sym} value={f.sym}>{f.label}</option>)}</datalist>}
-                  <input type="number" style={{ ...PORT_INPUT, flex: 4, padding: '4px 6px' }} value={a.weight} step={1}
-                    onChange={e => updateAsset(i, { weight: +e.target.value })}
-                    onFocus={focus} onBlur={blur} />
-                  <button
-                    style={{ width: 16, background: 'none', border: 'none', color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0, flexShrink: 0 }}
-                    onMouseEnter={e => ((e.target as HTMLElement).style.color = '#8c2e36')}
-                    onMouseLeave={e => ((e.target as HTMLElement).style.color = '#4d4637')}
-                    onClick={() => setAssets(p => p.filter((_, j) => j !== i))}>×</button>
-                </div>
-
-                <div style={{ paddingLeft: 2 }}>
-                  <label style={{ ...PORT_LABEL, fontSize: 9, marginBottom: 3 }}>Strategy</label>
-                  <StrategySelector
-                    value={a.strategy}
-                    params={a.stratParams}
-                    onChange={(s, p) => updateAsset(i, { strategy: s, stratParams: p })}
-                    compact
-                  />
-                </div>
-
-                {i < assets.length - 1 && (
-                  <div style={{ borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.06))', marginTop: 10 }} />
-                )}
-              </div>
-            ))}
-
-            <button
-              style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', background: 'none', border: 'none', cursor: 'pointer', padding: 0, letterSpacing: '0.1em', marginTop: 2 }}
-              onMouseEnter={e => ((e.target as HTMLElement).style.color = 'var(--theme-primary, #c9a84c)')}
-              onMouseLeave={e => ((e.target as HTMLElement).style.color = '#4d4637')}
-              onClick={() => setAssets(p => [...p, makeAsset('', 0)])}>+ Add Asset</button>
-          </div>
-
-          <div style={{ borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div>
-              <label style={PORT_LABEL}>Start</label>
-              <input type="date" style={PORT_INPUT} value={start} onChange={e => setStart(e.target.value)} onFocus={focus} onBlur={blur} />
-            </div>
-            <div>
-              <label style={PORT_LABEL}>End</label>
-              <input type="date" style={PORT_INPUT} value={end} onChange={e => setEnd(e.target.value)} onFocus={focus} onBlur={blur} />
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-              <div>
-                <label style={PORT_LABEL}>Leverage (x)</label>
-                <input type="number" style={PORT_INPUT} value={leverage} min={1} step={0.25}
-                  onChange={e => setLeverage(e.target.value)} onFocus={focus} onBlur={blur} />
-              </div>
-              {(Number(leverage) || 1) > 1 && (
-                <div>
-                  <label style={PORT_LABEL}>Borrow Rate %</label>
-                  <input type="number" style={PORT_INPUT} value={borrowRate} min={0} max={30} step={0.5}
-                    onChange={e => setBorrowRate(e.target.value)} onFocus={focus} onBlur={blur} />
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Risk Controls */}
-        <div style={{ padding: '10px 10px 0', borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <label style={{ ...PORT_LABEL, marginBottom: 0, color: 'var(--theme-primary, #c9a84c)' }}>Risk Controls</label>
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-            {([
-              { label: 'Conservative', sl: '8',  tp: '20', trail: '6',  pos: '25' },
-              { label: 'Moderate',     sl: '15', tp: '35', trail: '10', pos: '50' },
-              { label: 'Aggressive',   sl: '25', tp: '80', trail: '15', pos: '100' },
-              { label: 'Uncapped',     sl: '',   tp: '',   trail: '',   pos: '100' },
-            ] as const).map(p => (
-              <button key={p.label} type="button"
-                onClick={() => { setSlPct(p.sl); setTpPct(p.tp); setTrailPct(p.trail); setPosPct(p.pos) }}
-                style={{
-                  background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)',
-                  border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)',
-                  color: 'var(--theme-primary, #c9a84c)',
-                  fontFamily: 'var(--theme-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
-                  padding: '3px 7px', cursor: 'pointer', borderRadius: 2,
-                }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)')}
-              >{p.label.toUpperCase()}</button>
-            ))}
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-            {[
-              { label: 'Stop-Loss %', val: slPct,    set: setSlPct },
-              { label: 'Take-Profit %', val: tpPct,  set: setTpPct },
-              { label: 'Trailing Stop %', val: trailPct, set: setTrailPct },
-              { label: 'Position Size %', val: posPct,   set: setPosPct },
-              { label: 'Cash Yield %', val: cashYield, set: setCashYield },
-            ].map(({ label, val, set }) => (
-              <div key={label}>
-                <label style={{ ...PORT_LABEL, fontSize: 9, marginBottom: 2 }}>{label}</label>
-                <input type="number" style={{ ...PORT_INPUT, padding: '3px 6px', fontSize: 10 }}
-                  value={val} placeholder={label.includes('Position') ? '100' : 'off'}
-                  onChange={e => set(e.target.value)} min={0.1} step={1}
-                  onFocus={focus} onBlur={blur} />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div style={{ padding: 10, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div>
-            <label style={PORT_LABEL}>Benchmark</label>
-            <input style={PORT_INPUT} value={benchmark} onChange={e => setBenchmark(e.target.value.toUpperCase())} onFocus={focus} onBlur={blur} />
-          </div>
-          <PMImportPicker
-            style={{ ...PORT_INPUT, cursor: 'pointer' }}
-            onImport={(r: ImportResult) => {
-              const next: Asset[] = r.legs.map(l => makeAsset(l.ticker, l.weight))
-              if (r.cashWeight > 0) next.push(makeAsset(CASH_SYMBOL, r.cashWeight))
-              if (next.length) setAssets(next)
-            }}
-          />
-          <PortfolioIO
-            mode="portfolio"
-            assets={assets.map(a => ({ ticker: a.ticker, weight: a.weight, strategy: a.strategy, stratParams: a.stratParams as Record<string, unknown> }))}
-            onImportAssets={(imported: PortfolioAsset[]) =>
-              setAssets(imported.map(a => ({
-                ticker: a.ticker,
-                weight: a.weight,
-                strategy: a.strategy ?? STRATEGIES[0],
-                stratParams: (a.stratParams ?? {}) as StrategyParams,
-              })))
-            }
-            name="portfolio"
-          />
-          <button onClick={() => mutate()} disabled={isPending} style={{
-            width: '100%', background: 'var(--theme-primary, #c9a84c)', border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-bg)',
-            fontFamily: 'inherit', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em',
-            textTransform: 'uppercase', padding: '8px 0', cursor: isPending ? 'default' : 'pointer',
-            opacity: isPending ? 0.6 : 1,
-          }}>
-            {isPending ? 'Running…' : 'Run Portfolio Engine'}
-          </button>
-        </div>
-        </RailSection>
-    </>}>
-
+    <>
+      <ConfigHeader
+        mode="backtester"
+        onModeChange={m => { if (m === 'montecarlo') navigate('/montecarlo') }}
+        collapsed={collapsed}
+        onToggleCollapse={() => setCollapsed(c => !c)}
+        holdings={assets}
+        onHoldingsChange={setAssets}
+        benchmark={benchmark} setBenchmark={setBenchmark}
+        leverage={leverage} setLeverage={setLeverage}
+        borrowRate={borrowRate} setBorrowRate={setBorrowRate}
+        sl={{ val: slPct, set: setSlPct }}
+        tp={{ val: tpPct, set: setTpPct }}
+        trail={{ val: trailPct, set: setTrailPct }}
+        pos={{ val: posPct, set: setPosPct }}
+        cash={{ val: cashYield, set: setCashYield }}
+        start={start} setStart={setStart}
+        end={end} setEnd={setEnd}
+        onRun={() => mutate()}
+        isRunning={isPending}
+        tickerListId="ft-futures"
+        tickerList={<datalist id="ft-futures">{FUTURES.map(f => <option key={f.sym} value={f.sym}>{f.label}</option>)}</datalist>}
+        overflow={
+          <>
+            <PMImportPicker
+              style={{ ...PORT_INPUT, cursor: 'pointer' }}
+              onImport={(r: ImportResult) => {
+                const next: Asset[] = r.legs.map(l => makeAsset(l.ticker, l.weight))
+                if (r.cashWeight > 0) next.push(makeAsset(CASH_SYMBOL, r.cashWeight))
+                if (next.length) setAssets(next)
+              }}
+            />
+            <PortfolioIO
+              mode="portfolio"
+              assets={assets.map(a => ({ ticker: a.ticker, weight: a.weight, strategy: a.strategy, stratParams: a.stratParams as Record<string, unknown> }))}
+              onImportAssets={(imported: PortfolioAsset[]) =>
+                setAssets(imported.map(a => ({
+                  ticker: a.ticker,
+                  weight: a.weight,
+                  strategy: a.strategy ?? STRATEGIES[0],
+                  stratParams: (a.stratParams ?? {}) as StrategyParams,
+                })))
+              }
+              name="portfolio"
+            />
+          </>
+        }
+      />
+      <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
         {!data && !isPending && (
           <EmptyState title="Portfolio Backtester" hint="Set your tickers, weights, and date range, then press Run Backtest." />
         )}
@@ -576,7 +450,8 @@ export function PortfolioTab() {
             ))}
           </>
         )}
-    </SidebarLayout>
+      </div>
+    </>
   )
 }
 

@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Legend } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
@@ -7,13 +8,12 @@ import { useChartColors } from '../hooks/useChartColors'
 import StrategySelector, { STRATEGIES, CUSTOM_STRATEGY_KEY, type StrategyParams } from '../components/StrategySelector'
 import { TOOLTIP_STYLE, CROSSHAIR_CURSOR, BAR_CURSOR } from '../components/ChartTooltip'
 import { FUTURES } from '../lib/futures'
-import SidebarLayout from '../components/SidebarLayout'
 import axios from 'axios'
 import EmptyState from '../components/EmptyState'
 import PortfolioIO, { type PortfolioAsset } from '../components/PortfolioIO'
 import PMImportPicker from '../components/PMImportPicker'
 import { CASH_SYMBOL } from '../lib/pmImport'
-import { weightTotal, normalizeTo100 } from '../components/portfolio/weights'
+import ConfigHeader from '../components/portfolio/ConfigHeader'
 import { usePortfolio, type PortfolioHolding } from '../contexts/PortfolioContext'
 // ── GBM math ────────────────────────────────────────────────────────────────
 
@@ -73,7 +73,7 @@ const makeLeg = (ticker: string, weight: number): Leg => ({
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 
-import { INPUT, LABEL, TICK, RailSection } from './valuationShared'
+import { INPUT, TICK } from './valuationShared'
 
 function ChartPanel({ label, height, children }: { label: React.ReactNode; height: number; children: React.ReactNode }) {
   return (
@@ -108,8 +108,9 @@ export function MonteCarloContent() {
     }
     return [makeLeg('SPY', 100)]
   })
+  const navigate = useNavigate()
+  const [collapsed, setCollapsed] = useState(false)
   const [horizon, setHorizon] = useState(252)
-  const [paramsOpen, setParamsOpen] = useState(true)
   const [nSims, setNSims] = useState(500)
   const [benchmark, setBenchmark] = useState('SPY')
   const [targetPrice, setTargetPrice] = useState(0)
@@ -323,221 +324,49 @@ export function MonteCarloContent() {
     },
   })
 
-  const focus = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')
-  const blur  = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = 'var(--theme-border, rgba(255,255,255,0.10))')
-  // Clean total (no 99.99999999% float noise) + a one-click rescale to 100%.
-  const totalWeight = weightTotal(legs.map(l => l.weight))
-  const normalizeWeights = () => {
-    const w = normalizeTo100(legs.map(l => l.weight))
-    setLegs(prev => prev.map((l, i) => ({ ...l, weight: w[i] })))
-  }
-
   return (
     <>
-      <SidebarLayout sidebarWidth={210} sidebarTitle="" sidebar={<>
-          <RailSection title="Simulation Parameters" open={paramsOpen} onToggle={() => setParamsOpen(o => !o)}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-
-            {/* Per-leg inputs */}
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                <label style={{ ...LABEL, marginBottom: 0 }}>Portfolio Legs</label>
-                {totalWeight === 100 ? (
-                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--theme-positive)' }}>100%</span>
-                ) : (
-                  <button onClick={normalizeWeights} title="Rescale weights to total 100%"
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit',
-                      fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--theme-negative)' }}>
-                    {totalWeight}% → 100%
-                  </button>
-                )}
-              </div>
-
-              {/* Column headers */}
-              <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
-                <span style={{ flex: 7, fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Holdings</span>
-                <span style={{ flex: 4, fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Weight</span>
-                <span style={{ width: 16 }} />
-              </div>
-
-              {legs.map((leg, i) => (
-                <div key={i} style={{ marginBottom: 8 }}>
-                  {/* Ticker + weight row */}
-                  <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 4 }}>
-                    <input
-                      style={{ ...INPUT, flex: 7, padding: '4px 6px', fontSize: 11 }}
-                      value={leg.ticker} list="mc-futures" placeholder="e.g. AAPL or CL=F"
-                      onChange={e => updateLeg(i, { ticker: e.target.value.toUpperCase(), fetched: false })}
-                      onFocus={focus} onBlur={blur}
-                    />
-                    {i === 0 && <datalist id="mc-futures">{FUTURES.map(f => <option key={f.sym} value={f.sym}>{f.label}</option>)}</datalist>}
-                    <input
-                      type="number" min={0} max={100} step={5}
-                      style={{ ...INPUT, flex: 4, padding: '4px 6px', fontSize: 11 }}
-                      value={leg.weight}
-                      onChange={e => updateLeg(i, { weight: +e.target.value })}
-                      onFocus={focus} onBlur={blur}
-                    />
-                    <button
-                      style={{ width: 16, background: 'none', border: 'none', color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0, flexShrink: 0 }}
-                      onMouseEnter={e => ((e.target as HTMLElement).style.color = '#8c2e36')}
-                      onMouseLeave={e => ((e.target as HTMLElement).style.color = '#4d4637')}
-                      onClick={() => setLegs(p => p.filter((_, j) => j !== i))}
-                    >×</button>
-                  </div>
-
-                  {/* Fetched stats pill */}
-                  {leg.fetched && (
-                    <div style={{ fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', letterSpacing: '0.08em', marginBottom: 4, paddingLeft: 2 }}>
-                      ${leg.spot.toLocaleString()} · σ {leg.vol}% · μ {leg.drift}%/yr
-                    </div>
-                  )}
-
-                  {/* Per-leg strategy */}
-                  <div style={{ paddingLeft: 2 }}>
-                    <label style={{ ...LABEL, fontSize: 9, marginBottom: 3 }}>Strategy</label>
-                    <StrategySelector
-                      value={leg.strategy}
-                      params={leg.stratParams}
-                      onChange={(s, p) => updateLeg(i, { strategy: s, stratParams: p })}
-                      compact
-                    />
-                  </div>
-
-                  {/* Leg divider */}
-                  {i < legs.length - 1 && (
-                    <div style={{ borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.06))', marginTop: 8 }} />
-                  )}
-                </div>
-              ))}
-
-              {/* Add leg + Fetch All */}
-              <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
-                <button
-                  style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', background: 'none', border: 'none', cursor: 'pointer', padding: 0, letterSpacing: '0.1em' }}
-                  onMouseEnter={e => ((e.target as HTMLElement).style.color = 'var(--theme-primary, #c9a84c)')}
-                  onMouseLeave={e => ((e.target as HTMLElement).style.color = '#4d4637')}
-                  onClick={() => setLegs(p => [...p, makeLeg('', Math.max(0, 100 - totalWeight))])}
-                >+ Add Leg</button>
-                <span style={{ color: 'var(--theme-text-subtle, rgba(255,255,255,0.08))', fontSize: 10 }}>·</span>
-                <button
-                  style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', background: 'none', border: 'none', cursor: 'pointer', padding: 0, letterSpacing: '0.1em' }}
-                  onMouseEnter={e => ((e.target as HTMLElement).style.color = 'var(--theme-primary, #c9a84c)')}
-                  onMouseLeave={e => ((e.target as HTMLElement).style.color = '#4d4637')}
-                  disabled={fetching}
-                  onClick={fetchAll}
-                >{fetching ? 'Fetching…' : 'Fetch All'}</button>
-              </div>
-            </div>
-
-            {/* Shared simulation params */}
-            <div style={{ borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div>
-                <label style={LABEL}>Horizon (trading days)</label>
-                <input type="number" style={INPUT} value={horizon} step={21} min={5} max={504}
-                  onChange={e => setHorizon(+e.target.value)} onFocus={focus} onBlur={blur} />
-              </div>
-              <div>
-                <label style={LABEL}>Simulations</label>
-                <input type="number" style={INPUT} value={nSims} step={100} min={100} max={2000}
-                  onChange={e => setNSims(+e.target.value)} onFocus={focus} onBlur={blur} />
-              </div>
-              <div>
-                <label style={LABEL}>Benchmark Ticker</label>
-                <input style={INPUT} value={benchmark}
-                  onChange={e => setBenchmark(e.target.value.toUpperCase())}
-                  onFocus={focus} onBlur={blur} />
-              </div>
-              <div>
-                <label style={LABEL}>Leverage (x)</label>
-                <input type="number" style={INPUT} value={leverage} step={0.25} min={1}
-                  onChange={e => setLeverage(e.target.value)} onFocus={focus} onBlur={blur} />
-              </div>
-              {(Number(leverage) || 1) > 1 && (
-                <div>
-                  <label style={LABEL}>Borrow Rate %</label>
-                  <input type="number" style={INPUT} value={borrowRate} step={0.5} min={0} max={30}
-                    onChange={e => setBorrowRate(e.target.value)} onFocus={focus} onBlur={blur} />
-                </div>
-              )}
-              <div>
-                <label style={LABEL}>Target Endpoint ($)</label>
-                <input type="number" style={INPUT} value={targetPrice || ''} step={5} min={0}
-                  placeholder="e.g. 120 = +20%"
-                  onChange={e => setTargetPrice(e.target.value === '' ? 0 : +e.target.value)}
-                  onFocus={focus} onBlur={blur} />
-              </div>
-            </div>
-
-            {/* Risk Management */}
-            <div style={{ borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <label style={{ ...LABEL, marginBottom: 0, color: 'var(--theme-primary, #c9a84c)' }}>Risk Controls</label>
-
-              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                {([
-                  { label: 'Conservative', sl: '8',  tp: '20', trail: '6',  pos: '25' },
-                  { label: 'Moderate',     sl: '15', tp: '35', trail: '10', pos: '50' },
-                  { label: 'Aggressive',   sl: '25', tp: '80', trail: '15', pos: '100' },
-                  { label: 'Uncapped',     sl: '',   tp: '',   trail: '',   pos: '100' },
-                ] as const).map(p => (
-                  <button
-                    key={p.label}
-                    type="button"
-                    onClick={() => { setSlPct(p.sl); setTpPct(p.tp); setTrailPct(p.trail); setPosPct(p.pos) }}
-                    style={{
-                      background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)',
-                      border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)',
-                      color: 'var(--theme-primary, #c9a84c)',
-                      fontFamily: 'var(--theme-mono)',
-                      fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
-                      padding: '3px 7px', cursor: 'pointer', borderRadius: 2,
-                    }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)')}
-                  >
-                    {p.label.toUpperCase()}
-                  </button>
-                ))}
-              </div>
-
-              <div>
-                <label style={LABEL}>Stop-Loss %</label>
-                <input type="number" style={INPUT} value={slPct} min={0.1} max={99} step={1}
-                  placeholder="off if blank"
-                  onChange={e => setSlPct(e.target.value)} onFocus={focus} onBlur={blur} />
-              </div>
-              <div>
-                <label style={LABEL}>Take-Profit %</label>
-                <input type="number" style={INPUT} value={tpPct} min={0.1} step={1}
-                  placeholder="off if blank"
-                  onChange={e => setTpPct(e.target.value)} onFocus={focus} onBlur={blur} />
-              </div>
-              <div>
-                <label style={LABEL}>Trailing Stop %</label>
-                <input type="number" style={INPUT} value={trailPct} min={0.1} step={1}
-                  placeholder="off if blank"
-                  onChange={e => setTrailPct(e.target.value)} onFocus={focus} onBlur={blur} />
-              </div>
-              <div>
-                <label style={LABEL}>Position Size %</label>
-                <input type="number" style={INPUT} value={posPct} min={1} max={100} step={5}
-                  onChange={e => setPosPct(e.target.value)} onFocus={focus} onBlur={blur} />
-              </div>
-              <div>
-                <label style={LABEL}>Cash Yield % (idle cash)</label>
-                <input type="number" style={INPUT} value={cashYield} min={0} max={20} step={0.25}
-                  onChange={e => setCashYield(e.target.value)} onFocus={focus} onBlur={blur} />
-              </div>
-            </div>
-          </div>
-
-          <div style={{ padding: 10, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <ConfigHeader
+        mode="montecarlo"
+        onModeChange={m => { if (m === 'backtester') navigate('/backtest') }}
+        collapsed={collapsed}
+        onToggleCollapse={() => setCollapsed(c => !c)}
+        holdings={legs}
+        onHoldingsChange={next => setLegs(next.map((h, i) => {
+          // Equal length means an in-place edit (add/remove change the length). A
+          // ticker change there invalidates the fetched spot/vol/drift, so rebuild
+          // that leg from defaults and keep only its weight/strategy.
+          const prev = legs[i]
+          if (next.length === legs.length && prev && prev.ticker !== h.ticker) {
+            return { ...makeLeg(h.ticker, h.weight), strategy: h.strategy, stratParams: h.stratParams }
+          }
+          return { ...makeLeg(h.ticker, h.weight), ...h } as Leg
+        }))}
+        benchmark={benchmark} setBenchmark={setBenchmark}
+        leverage={leverage} setLeverage={setLeverage}
+        borrowRate={borrowRate} setBorrowRate={setBorrowRate}
+        sl={{ val: slPct, set: setSlPct }}
+        tp={{ val: tpPct, set: setTpPct }}
+        trail={{ val: trailPct, set: setTrailPct }}
+        pos={{ val: posPct, set: setPosPct }}
+        cash={{ val: cashYield, set: setCashYield }}
+        horizon={horizon} setHorizon={setHorizon}
+        nSims={nSims} setNSims={setNSims}
+        targetPrice={targetPrice} setTargetPrice={setTargetPrice}
+        onRun={() => mutate()}
+        isRunning={isPending}
+        tickerListId="mc-futures"
+        tickerList={<datalist id="mc-futures">{FUTURES.map(f => <option key={f.sym} value={f.sym}>{f.label}</option>)}</datalist>}
+        overflow={
+          <>
+            <button onClick={fetchAll} disabled={fetching}
+              style={{ ...INPUT, cursor: fetching ? 'default' : 'pointer', textAlign: 'left', opacity: fetching ? 0.6 : 1 }}>
+              {fetching ? 'Fetching…' : 'Fetch Live Vol / Drift'}
+            </button>
             <PMImportPicker
               style={{ ...INPUT, cursor: 'pointer' }}
               onImport={(r) => {
                 const newLegs: Leg[] = r.legs.map(l => makeLeg(l.ticker, l.weight))
-                // Cash sleeve: a zero-volatility leg drifting at the configured
-                // cash yield (the same APY the cash-yield control uses).
                 if (r.cashWeight > 0) newLegs.push({ ...makeLeg(CASH_SYMBOL, r.cashWeight), vol: 0, drift: parseFloat(cashYield) || 4.5, fetched: true })
                 if (newLegs.length === 0) return
                 setHoldings(newLegs.map(l => ({ ticker: l.ticker, weight: l.weight })))
@@ -558,19 +387,10 @@ export function MonteCarloContent() {
               }}
               name="montecarlo"
             />
-            <button onClick={() => mutate()} disabled={isPending || legs.length === 0} style={{
-              width: '100%', background: 'var(--theme-primary, #c9a84c)', border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-bg)',
-              fontFamily: 'inherit', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em',
-              textTransform: 'uppercase', padding: '8px 0', cursor: (isPending || legs.length === 0) ? 'default' : 'pointer',
-              opacity: (isPending || legs.length === 0) ? 0.6 : 1,
-            }}>
-              {isPending ? 'Simulating…' : 'Run Simulation'}
-            </button>
-          </div>
-          </RailSection>
-
-      {/* ── Right panel ──────────────────────────────────────────────── */}
-      </>}>
+          </>
+        }
+      />
+      <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
 
           {!data && !isPending && (
             <EmptyState title="Monte Carlo Simulator" hint="Add legs, set parameters, then press Run Simulation." />
@@ -738,7 +558,7 @@ export function MonteCarloContent() {
               )}
             </>
           )}
-      </SidebarLayout>
+      </div>
     </>
   )
 }
