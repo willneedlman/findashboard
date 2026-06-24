@@ -96,6 +96,7 @@ export default function StockScreener() {
   const [paramsOpen, setParamsOpen] = useState(true)
   const [sector,   setSector]   = useState('')
   const [exchange, setExchange] = useState('')
+  const [universe, setUniverse] = useState('')   // '' = all indices, else sp500 | sp400 | nasdaq100
   const [sortBy,   setSortBy]   = useState('marketCap')
   const [sortDir,  setSortDir]  = useState<'desc' | 'asc'>('desc')
   const [visibleCols, setVisibleCols] = useState<Set<string>>(
@@ -125,6 +126,7 @@ export default function StockScreener() {
       })),
       sector:   sector || null,
       exchange: exchange || null,
+      universe: universe || null,
       sort_by:  sortBy,
       sort_dir: sortDir,
       limit:    100,
@@ -187,8 +189,17 @@ export default function StockScreener() {
           <RailSection title="Screen Controls" open={paramsOpen} onToggle={() => setParamsOpen(o => !o)}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
 
-          {/* Sector + Exchange */}
+          {/* Index universe + Sector + Exchange */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div>
+              <label style={LABEL}>Index Universe</label>
+              <select value={universe} onChange={e => setUniverse(e.target.value)} style={SELECT} onFocus={focus} onBlur={blur}>
+                <option value="">All (S&P 500 + 400 + Nasdaq 100)</option>
+                <option value="sp500">S&P 500</option>
+                <option value="sp400">S&P 400 Midcap</option>
+                <option value="nasdaq100">Nasdaq 100</option>
+              </select>
+            </div>
             <div>
               <label style={LABEL}>Sector</label>
               <select value={sector} onChange={e => setSector(e.target.value)} style={SELECT} onFocus={focus} onBlur={blur}>

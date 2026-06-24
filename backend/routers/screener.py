@@ -24,6 +24,27 @@ except ImportError:
     def disk_get(_k): return None  # type: ignore
     def disk_set(_k, _v, ttl=0): pass  # type: ignore
 
+# Screener universe: bundled S&P 500 + S&P 400 (midcap) + Nasdaq 100 constituents
+# (~915 names). Refresh data/index_constituents.json periodically; the index
+# membership changes only quarterly.
+def _load_universe() -> "tuple[set, list, dict]":
+    import json
+    try:
+        path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "index_constituents.json")
+        d = json.load(open(path))
+        sets = {
+            k: {str(t).strip().upper() for t in d.get(k, []) if t}
+            for k in ("sp500", "sp400", "nasdaq100")
+        }
+        uni = set().union(*sets.values())
+        if uni:
+            return uni, sorted(uni), sets
+    except Exception as e:
+        logger.warning("index constituents load failed: %s", e)
+    return set(), [], {}
+
+_UNIVERSE, _UNIVERSE_LIST, _INDEX_SETS = _load_universe()
+
 # ── Request schema ────────────────────────────────────────────────────────────
 
 class FilterRule(BaseModel):
@@ -39,7 +60,8 @@ class ScreenRequest(BaseModel):
     exchange:   str | None = None
     sort_by:    str = "marketCap"
     sort_dir:   str = "desc"
-    limit:      int = Field(default=50, ge=1, le=200)
+    limit:      int = Field(default=50, ge=1, le=500)
+    universe:   str | None = None   # 'sp500' | 'sp400' | 'nasdaq100' | None (all three)
 
 # ── Field definitions visible to the frontend ─────────────────────────────────
 
@@ -90,7 +112,9 @@ def get_fields():
 # ── FMP screener params builder ───────────────────────────────────────────────
 
 def _fmp_params_from_filters(filters: list[FilterRule], sector, exchange, limit) -> dict:
-    p: dict = {"limit": min(limit * 4, 500)}  # over-fetch; we filter more precisely client-side
+    # Over-fetch broadly so the full index universe (~915 names) is covered before
+    # we intersect/curate client-side; FMP returns by descending market cap.
+    p: dict = {"limit": min(max(limit * 5, 2000), 3000)}
     if sector:
         p["sector"] = sector
     if exchange:
@@ -301,7 +325,7 @@ def _passes(row: dict, filters: list[FilterRule]) -> bool:
 def run_screen(req: ScreenRequest):
     import json, hashlib
     # Bump CACHE_VER whenever screener logic changes to invalidate stale disk-cached results
-    CACHE_VER = "v3"
+    CACHE_VER = "v4"
     cache_key = CACHE_VER + hashlib.md5(json.dumps(req.model_dump(), sort_keys=True).encode()).hexdigest()
     with _lock:
         if cache_key in _screen_cache:
@@ -338,6 +362,18 @@ def run_screen(req: ScreenRequest):
         except Exception as e:
             logger.warning("FMP screener error: %s", e)
 
+    # Curate to the chosen index universe (S&P 500 / S&P 400 midcap / Nasdaq 100).
+    # req.universe picks one index; otherwise all three. Soft — if the intersection
+    # is empty (e.g. FMP returned an unexpected set) keep the broad result.
+    if _UNIVERSE and candidates:
+        if req.universe in _INDEX_SETS:
+            uni = _INDEX_SETS[req.universe]
+        else:
+            uni = _UNIVERSE
+        in_uni = [c for c in candidates if c["ticker"].upper() in uni]
+        if in_uni:
+            candidates = in_uni
+
     # Fallback: sector-aware liquid tickers via yfinance
     SECTOR_TICKERS: dict[str, list[str]] = {
         "technology":            ["AAPL","MSFT","NVDA","GOOGL","META","ORCL","AMD","CSCO","ADBE","CRM","INTC","QCOM","TXN","AMAT","LRCX","MU","KLAC","SNPS","CDNS","ACN","IBM","INTU","NOW","PANW","CRWD"],
@@ -369,6 +405,11 @@ def run_screen(req: ScreenRequest):
         # Use sector-specific tickers when sector is requested; otherwise use broad list
         if filter_sector and filter_sector in SECTOR_TICKERS:
             tickers_to_fetch = SECTOR_TICKERS[filter_sector]
+        elif _UNIVERSE_LIST:
+            # Broad fallback over the index universe; capped because each name is a
+            # separate yfinance fast_info call (this path only runs when FMP is down).
+            sel = _INDEX_SETS.get(req.universe) if req.universe in _INDEX_SETS else None
+            tickers_to_fetch = (sorted(sel) if sel else _UNIVERSE_LIST)[:300]
         else:
             tickers_to_fetch = LIQUID_TICKERS
 
