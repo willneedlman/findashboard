@@ -25,6 +25,7 @@ interface Enriched {
   symbol: string; companyName?: string | null; marketCap?: number | null; sector?: string | null
   priorReportDate?: string | null; surprisePct?: number | null
   reactionPct?: number | null; runSincePct?: number | null
+  impliedMove?: number | null; impliedMoveExpiry?: string | null
 }
 
 const WINDOWS = [{ label: 'Day', days: 1 }, { label: '3 Days', days: 3 }, { label: 'Week', days: 7 }]
@@ -165,8 +166,8 @@ export default function EarningsCalendar() {
   }, [sorted])
 
   const cols = isMobile
-    ? ['Symbol', 'Time', 'EPS Est', 'React', 'Since']
-    : ['Symbol', 'Mkt Cap', 'Time', 'EPS Est', 'Rev Est', 'Surprise', 'React', 'Since']
+    ? ['Symbol', 'Time', 'EPS Est', 'Impl', 'React']
+    : ['Symbol', 'Mkt Cap', 'Time', 'EPS Est', 'Rev Est', 'Impl Move', 'Surprise', 'React', 'Since']
 
   return (
     <PageWrapper title="Earnings Calendar">
@@ -256,6 +257,7 @@ export default function EarningsCalendar() {
 
       {!loading && !error && filtered.length > 0 && (
         <div style={{ fontFamily: C.sans, fontSize: 10, color: C.muted, marginTop: 10, lineHeight: 1.7 }}>
+          Impl Move = expected move priced into the ATM straddle of the expiry spanning this report.
           Surprise = last EPS vs estimate. React = stock's one-day move on its last report.
           Since = move from that report to now. Estimates from finnhub, reactions from prior-quarter prices.
         </div>
@@ -313,6 +315,9 @@ function GroupBody({ gdate, grows, enriched, cols, isMobile, showHeader, watch }
             {!isMobile && (
               <td style={{ ...cell, color: C.text }}>{fmtMoney(r.revenueEstimate)}</td>
             )}
+            <td style={{ ...cell, color: C.gold }} title={e?.impliedMoveExpiry ? `Expected move by ${e.impliedMoveExpiry}` : undefined}>
+              {pending ? <span style={shimmer} /> : (e?.impliedMove != null ? `${e.impliedMove.toFixed(1)}%` : '—')}
+            </td>
             {!isMobile && (
               <td style={{ ...cell, color: pctColor(e?.surprisePct) }}>
                 {pending ? <span style={shimmer} /> : fmtPct(e?.surprisePct)}
@@ -321,9 +326,11 @@ function GroupBody({ gdate, grows, enriched, cols, isMobile, showHeader, watch }
             <td style={{ ...cell, color: pctColor(e?.reactionPct) }}>
               {pending ? <span style={shimmer} /> : fmtPct(e?.reactionPct)}
             </td>
-            <td style={{ ...cell, color: pctColor(e?.runSincePct) }}>
-              {pending ? <span style={shimmer} /> : fmtPct(e?.runSincePct)}
-            </td>
+            {!isMobile && (
+              <td style={{ ...cell, color: pctColor(e?.runSincePct) }}>
+                {pending ? <span style={shimmer} /> : fmtPct(e?.runSincePct)}
+              </td>
+            )}
           </tr>
         )
       })}

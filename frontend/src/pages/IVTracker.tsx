@@ -63,6 +63,8 @@ interface IVData {
   option_type:     string
   strike:          number
   spot:            number
+  implied_move:    number | null
+  straddle:        number | null
   current_iv:      number
   bid:             number
   ask:             number
@@ -526,6 +528,13 @@ export default function IVTracker() {
                 value={`${data.current_iv.toFixed(1)}%`}
                 sub={`HV 30d: ${fmtPct(data.current_hv_30d)} · Premium: ${data.iv_premium != null ? (data.iv_premium >= 0 ? '+' : '') + data.iv_premium.toFixed(1) + '%' : '—'}`}
                 color={ivColor}
+              />
+              <MetricCard
+                label="Implied Move"
+                value={data.implied_move != null ? `${data.implied_move.toFixed(1)}%` : '—'}
+                sub={data.implied_move != null
+                  ? `${(data.spot * data.implied_move / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} by ${data.expiry}${data.straddle != null ? ` · straddle $${data.straddle.toFixed(2)}` : ''}`
+                  : 'No straddle data'}
               />
               <MetricCard
                 label="Underlying"

@@ -386,12 +386,17 @@ def get_iv_history(
             if current_hv and current_iv else None
         )
 
+        # Expected (implied) move through this expiry, from the ATM straddle.
+        im = options_data.implied_move(sym, spot=spot, expiry=expiry)
+
         return {
             "ticker":       sym,
             "expiry":       expiry,
             "option_type":  option_type,
             "strike":       actual_strike,
             "spot":         round(spot, 2),
+            "implied_move": im["move_pct"] if im else None,
+            "straddle":     im["straddle"] if im else None,
             # Current option data
             "current_iv":   round(current_iv * 100, 2),
             "bid":          round(bid, 2),

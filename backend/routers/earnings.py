@@ -17,6 +17,7 @@ import yfinance as yf
 from fastapi import APIRouter, HTTPException, Query
 
 import finnhub
+import options_data
 from disk_cache import disk_get, disk_set
 
 router = APIRouter()
@@ -73,6 +74,9 @@ def _prior_report(sym: str) -> dict:
                     "date": past.index[0].date().isoformat(),
                     "surprisePct": None if pd.isna(surp) else round(float(surp), 2),
                 }
+            future = df[df.index >= now]
+            if not future.empty:
+                out["nextDate"] = future.index.min().date().isoformat()
     except Exception:
         out = {}
 
@@ -80,9 +84,23 @@ def _prior_report(sym: str) -> dict:
     return out
 
 
+def _implied_move(sym: str, on_or_after: str | None) -> dict:
+    """Expected move into the upcoming report, from the ATM straddle of the expiry
+    spanning the earnings date. Cached 1h so the calendar does not refetch chains."""
+    ck = f"earn:im:{sym}"
+    cached = disk_get(ck)
+    if cached is not None:
+        return cached
+    im = options_data.implied_move(sym, on_or_after=on_or_after)
+    out = {"pct": im["move_pct"], "expiry": im["expiry"]} if im else {}
+    disk_set(ck, out, ttl=3600)
+    return out
+
+
 def _enrich_one(sym: str) -> dict:
     prof = finnhub.get_profile(sym) or {}
     prior = _prior_report(sym)
+    im = _implied_move(sym, prior.get("nextDate"))
     return {
         "symbol": sym,
         "companyName": prof.get("companyName"),
@@ -90,6 +108,8 @@ def _enrich_one(sym: str) -> dict:
         "sector": prof.get("sector"),
         "priorReportDate": prior.get("date"),
         "surprisePct": prior.get("surprisePct"),
+        "impliedMove": im.get("pct"),
+        "impliedMoveExpiry": im.get("expiry"),
     }
 
 
