@@ -27,13 +27,19 @@ except ImportError:
 # Screener universe: bundled S&P 500 + S&P 400 (midcap) + Nasdaq 100 constituents
 # (~915 names). Refresh data/index_constituents.json periodically; the index
 # membership changes only quarterly.
+def _norm_tk(t) -> str:
+    # FMP uses dashes for share classes (BRK-B); Wikipedia/our list uses dots
+    # (BRK.B). Normalize both to a dash so the intersection matches.
+    return str(t).strip().upper().replace(".", "-")
+
+
 def _load_universe() -> "tuple[set, list, dict]":
     import json
     try:
         path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "index_constituents.json")
         d = json.load(open(path))
         sets = {
-            k: {str(t).strip().upper() for t in d.get(k, []) if t}
+            k: {_norm_tk(t) for t in d.get(k, []) if t}
             for k in ("sp500", "sp400", "nasdaq100")
         }
         uni = set().union(*sets.values())
@@ -112,9 +118,10 @@ def get_fields():
 # ── FMP screener params builder ───────────────────────────────────────────────
 
 def _fmp_params_from_filters(filters: list[FilterRule], sector, exchange, limit) -> dict:
-    # Over-fetch broadly so the full index universe (~915 names) is covered before
-    # we intersect/curate client-side; FMP returns by descending market cap.
-    p: dict = {"limit": min(max(limit * 5, 2000), 3000)}
+    # FMP returns by descending market cap, so to reliably include the smallest
+    # index members (S&P 400 midcaps sit well below the mega caps) we pull the
+    # full top band before intersecting/curating client-side.
+    p: dict = {"limit": 3000}
     if sector:
         p["sector"] = sector
     if exchange:
@@ -363,16 +370,12 @@ def run_screen(req: ScreenRequest):
             logger.warning("FMP screener error: %s", e)
 
     # Curate to the chosen index universe (S&P 500 / S&P 400 midcap / Nasdaq 100).
-    # req.universe picks one index; otherwise all three. Soft — if the intersection
-    # is empty (e.g. FMP returned an unexpected set) keep the broad result.
+    # req.universe picks one index; otherwise all three. Strict: the user asked to
+    # screen within an index, so we never fall back to non-index names — an empty
+    # result honestly means nothing in that index passed the filters.
     if _UNIVERSE and candidates:
-        if req.universe in _INDEX_SETS:
-            uni = _INDEX_SETS[req.universe]
-        else:
-            uni = _UNIVERSE
-        in_uni = [c for c in candidates if c["ticker"].upper() in uni]
-        if in_uni:
-            candidates = in_uni
+        uni = _INDEX_SETS.get(req.universe, _UNIVERSE)
+        candidates = [c for c in candidates if _norm_tk(c["ticker"]) in uni]
 
     # Fallback: sector-aware liquid tickers via yfinance
     SECTOR_TICKERS: dict[str, list[str]] = {

@@ -244,7 +244,7 @@ _FINRA_TOKEN_URL = "https://ews.fip.finra.org/fip/rest/ews/oauth2/access_token?g
 # needs a dataset entitlement on the account beyond plain authentication.
 _FINRA_GROUP   = os.getenv("FINRA_TRACE_GROUP", "fixedIncomeMarket")
 _FINRA_DATASET = os.getenv("FINRA_TRACE_DATASET", "corporateAndAgencyTradeHistory")
-_finra_token: dict = {"value": None, "exp": 0.0}
+_finra_token: dict = {"value": None, "exp": 0.0, "cooldown": 0.0}
 
 
 def _finra_creds():
@@ -255,16 +255,22 @@ def _finra_creds():
 def _finra_access_token() -> str | None:
     if _finra_token["value"] and time.time() < _finra_token["exp"] - 30:
         return _finra_token["value"]
+    if time.time() < _finra_token["cooldown"]:       # recent auth failure — don't hammer
+        return None
     creds = _finra_creds()
     if not creds:
         return None
-    basic = base64.b64encode(f"{creds[0]}:{creds[1]}".encode()).decode()
-    r = requests.post(_FINRA_TOKEN_URL, headers={"Authorization": f"Basic {basic}"}, timeout=15)
-    r.raise_for_status()
-    j = r.json()
-    _finra_token["value"] = j.get("access_token")
-    _finra_token["exp"] = time.time() + float(j.get("expires_in", 1800))
-    return _finra_token["value"]
+    try:
+        basic = base64.b64encode(f"{creds[0]}:{creds[1]}".encode()).decode()
+        r = requests.post(_FINRA_TOKEN_URL, headers={"Authorization": f"Basic {basic}"}, timeout=15)
+        r.raise_for_status()
+        j = r.json()
+        _finra_token["value"] = j.get("access_token")
+        _finra_token["exp"] = time.time() + float(j.get("expires_in", 1800))
+        return _finra_token["value"]
+    except Exception:
+        _finra_token["cooldown"] = time.time() + 300
+        raise
 
 
 def _pick(rec: dict, names) -> object:
@@ -328,6 +334,13 @@ def price_for_cusip(cusip: str):
         return cached or None
     trace = _trace_price(cu)
     if trace:
+        # TRACE carries only a price; backfill coupon/maturity/name from the ETF
+        # holding so downstream YTM still solves (bond.py needs both to compute it).
+        ref = _etf_price_map().get(cu)
+        if ref:
+            for k in ("coupon_rate", "maturity_date", "name", "issuer"):
+                if trace.get(k) is None and ref.get(k) is not None:
+                    trace[k] = ref[k]
         disk_set(ck, trace, ttl=900)                  # 15 min — it's a live-ish print
         return trace
     px = _etf_price_map().get(cu) or _nport_price(cu)
