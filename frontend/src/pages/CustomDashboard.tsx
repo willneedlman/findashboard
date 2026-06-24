@@ -182,7 +182,8 @@ export default function CustomDashboard() {
                 onChange={e => setTickerInput(e.target.value.toUpperCase())}
                 onKeyDown={e => { if (e.key === 'Enter') applyTicker() }}
                 placeholder="AAPL"
-                style={{ width: 62, background: 'var(--theme-bg, #101c2e)', border: 'none', borderLeft: '1px solid var(--theme-border, rgba(255,255,255,0.12))', color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', padding: '6px 8px', outline: 'none' }}
+                size={Math.max(8, tickerInput.length + 1)}
+                style={{ background: 'var(--theme-bg, #101c2e)', border: 'none', borderLeft: '1px solid var(--theme-border, rgba(255,255,255,0.12))', color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', padding: '6px 8px', outline: 'none' }}
               />
               <button onClick={applyTicker} title="Apply ticker to all widgets"
                 style={{ background: 'color-mix(in srgb, var(--theme-primary) 12%, transparent)', border: 'none', borderLeft: '1px solid var(--theme-border, rgba(255,255,255,0.12))', color: 'var(--theme-primary, #c9a84c)', padding: '0 12px', cursor: 'pointer', fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}
