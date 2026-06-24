@@ -189,6 +189,39 @@ def get_balance(ticker: str) -> dict:
     return _cached(_balance_cache, sym, fetch)
 
 
+_FUND_TTL = 30 * 86400                                    # statements change quarterly
+_fund_cache: TTLCache = TTLCache(maxsize=2000, ttl=86400)
+
+
+def get_fundamentals(ticker: str, cached_only: bool = False) -> dict | None:
+    """Bundle of {profile, income(2y), balance} for the screener, persisted to disk
+    for 30 days so the free-tier daily call budget is spent at most once per ticker
+    per month. cached_only=True returns the cached bundle or None without spending a
+    network call (and the caller's per-screen fetch budget)."""
+    sym = ticker.strip().upper()
+    with _lock:
+        if sym in _fund_cache:
+            return _fund_cache[sym]
+    dk = f"fmp:fund:v1:{sym}"
+    dv = disk_get(dk)
+    if dv is not None:
+        with _lock:
+            _fund_cache[sym] = dv
+        return dv
+    if cached_only or not available():
+        return None
+    try:
+        bundle = {"profile": get_profile(sym), "income": get_income(sym, 2), "balance": get_balance(sym)}
+    except Exception:
+        return None
+    if not (bundle["income"] or bundle["balance"]):
+        return None                                       # nothing useful — don't cache a dud
+    with _lock:
+        _fund_cache[sym] = bundle
+    disk_set(dk, bundle, ttl=_FUND_TTL)
+    return bundle
+
+
 def get_cashflow(ticker: str) -> dict:
     """Latest annual cash flow: capitalExpenditure (negative), depreciationAndAmortization, freeCashFlow."""
     sym = ticker.strip().upper()

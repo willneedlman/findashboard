@@ -51,6 +51,11 @@ def _load_universe() -> "tuple[set, list, dict]":
 
 _UNIVERSE, _UNIVERSE_LIST, _INDEX_SETS = _load_universe()
 
+# Max NEW (uncached) tickers a single screen may deep-fetch. Cached fundamentals
+# (30d disk cache, filled by scripts/backfill_screener.py) enrich for free, so a
+# cold screen stays well under the free-tier FMP daily cap. Tune via env.
+_LIVE_ENRICH_BUDGET = int(os.getenv("SCREENER_LIVE_ENRICH", "25"))
+
 # ── Request schema ────────────────────────────────────────────────────────────
 
 class FilterRule(BaseModel):
@@ -152,7 +157,7 @@ def _fmp_params_from_filters(filters: list[FilterRule], sector, exchange, limit)
 
 # ── Detail enrichment per ticker ──────────────────────────────────────────────
 
-def _enrich(ticker: str, base: dict) -> dict:
+def _enrich(ticker: str, base: dict, claim) -> dict:
     cache_key = ticker
     with _lock:
         if cache_key in _detail_cache:
@@ -181,12 +186,20 @@ def _enrich(ticker: str, base: dict) -> dict:
             "change1d":       change1d,
         }
 
+        # Deep fundamentals: free when cached (30d disk, filled by the backfill job
+        # and prior screens); otherwise one budget unit, so a single cold screen
+        # can't blow the free-tier daily FMP cap. Uncached + no budget -> the
+        # yfinance .info fallback below fills what it can.
         fmp_ok = False
-        if fmp.available():
+        fund = fmp.get_fundamentals(ticker, cached_only=True) if fmp.available() else None
+        granted = fund is not None or claim()
+        if granted and fund is None and fmp.available():
+            fund = fmp.get_fundamentals(ticker)
+        if fund:
             try:
-                prof = fmp.get_profile(ticker)
-                inc  = fmp.get_income(ticker, 2)
-                bal  = fmp.get_balance(ticker)
+                prof = fund.get("profile") or {}
+                inc  = fund.get("income") or []
+                bal  = fund.get("balance") or {}
                 income       = inc[0] if inc else {}
                 income_prior = inc[1] if len(inc) > 1 else {}
 
@@ -197,8 +210,10 @@ def _enrich(ticker: str, base: dict) -> dict:
                 gross     = income.get("grossProfit") or 0
                 op_inc    = income.get("operatingIncome") or 0
                 net_inc   = income.get("netIncome") or 0
-                price_val = prof.get("price") or price
-                mktcap    = prof.get("marketCap") or 0
+                # Price/market cap from base (fresh from the screener call) so the
+                # 30d-cached statements never make price-derived ratios stale.
+                price_val = price or prof.get("price")
+                mktcap    = (base.get("marketCap") or 0) * 1e9 or (prof.get("marketCap") or 0)
                 ebitda    = income.get("ebitda") or 0
                 total_debt      = bal.get("totalDebt") or 0
                 equity          = bal.get("totalStockholdersEquity") or 1
@@ -250,7 +265,7 @@ def _enrich(ticker: str, base: dict) -> dict:
         }
 
         # Populate exchange from yfinance whenever it's not already set (from base or FMP profile)
-        if not detail.get("exchange") and not base.get("exchange"):
+        if granted and not detail.get("exchange") and not base.get("exchange"):
             try:
                 info_dict = tkr.info
                 yf_exch = (info_dict.get("exchange") or "").upper()
@@ -260,7 +275,7 @@ def _enrich(ticker: str, base: dict) -> dict:
             except Exception:
                 pass
 
-        if not fmp_ok or needs_name:
+        if granted and (not fmp_ok or needs_name):
             try:
                 info_dict = tkr.info
                 cn = info_dict.get("longName") or info_dict.get("shortName")
@@ -478,10 +493,20 @@ def run_screen(req: ScreenRequest):
     if not candidates:
         raise HTTPException(503, "No data source available. Configure FMP_API_KEY for best results.")
 
-    # Enrich top candidates in parallel (cap at 150 to leave room for sector/exchange filtering)
+    # Enrich top candidates in parallel (cap at 150 to leave room for sector/exchange
+    # filtering). Cached tickers enrich for free; new ones draw on a small per-screen
+    # budget so a cold screen can't exhaust the free-tier daily FMP cap.
     to_enrich = candidates[:150]
+    _budget = {"n": _LIVE_ENRICH_BUDGET}
+    _budget_lock = threading.Lock()
+    def _claim() -> bool:
+        with _budget_lock:
+            if _budget["n"] > 0:
+                _budget["n"] -= 1
+                return True
+            return False
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
-        enriched = list(ex.map(lambda c: _enrich(c["ticker"], c), to_enrich))
+        enriched = list(ex.map(lambda c: _enrich(c["ticker"], c, _claim), to_enrich))
 
     # Apply sector / exchange filters (post-enrichment so sector data is populated).
     # Skip for FMP-screened candidates — FMP already filtered them at the source,
