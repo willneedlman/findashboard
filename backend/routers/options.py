@@ -295,14 +295,7 @@ def price_option(req: PriceRequest):
     sigma = max(req.sigma, 1e-6)
     price = bs_price(req.S, req.K, T, req.r, sigma, req.option_type)
     greeks = bs_greeks(req.S, req.K, T, req.r, sigma, req.option_type)
-
-    T_y = T / 365
-    r_d = req.r / 100
-    sig_d = sigma / 100
-    d1 = (np.log(req.S / req.K) + (r_d + 0.5 * sig_d**2) * T_y) / (sig_d * np.sqrt(T_y))
-    d2 = d1 - sig_d * np.sqrt(T_y)
-    vanna = -norm.pdf(d1) * (d2 / sig_d)
-    charm = -norm.pdf(d1) * ((r_d / (sig_d * np.sqrt(T_y))) - (d2 / (2 * T_y)))
+    vanna, charm = _vanna_charm(req.S, req.K, T, req.r, sigma)
 
     # Lambda (a.k.a. omega / elasticity): percent change in option value per
     # percent change in the underlying — the option's effective leverage.
@@ -344,6 +337,131 @@ def payoff(req: PriceRequest):
         "payoff": list(payoffs.round(4)),
         "strike": req.K,
         "current_spot": req.S,
+    }
+
+
+def _vanna_charm(S, K, T_days, r_pct, sigma_pct):
+    """Second-order greeks in the same units bs_greeks uses (T in days, r/sigma in %)."""
+    T_y = max(T_days, 0.001) / 365
+    r_d = r_pct / 100
+    sig_d = max(sigma_pct, 1e-6) / 100
+    sqrtT = np.sqrt(T_y)
+    d1 = (np.log(S / K) + (r_d + 0.5 * sig_d**2) * T_y) / (sig_d * sqrtT)
+    d2 = d1 - sig_d * sqrtT
+    vanna = -norm.pdf(d1) * (d2 / sig_d)
+    charm = -norm.pdf(d1) * ((r_d / (sig_d * sqrtT)) - (d2 / (2 * T_y)))
+    return float(vanna), float(charm)
+
+
+class BSLeg(BaseModel):
+    option_type: str = "call"
+    side: int = 1          # +1 long (buy), -1 short (sell)
+    qty: float = Field(1.0, gt=0)
+    K: float = Field(gt=0)
+    T: float               # days to expiry
+    sigma: float           # implied vol, percent
+
+
+class BSStrategyRequest(BaseModel):
+    S: float = Field(gt=0)
+    r: float
+    legs: list[BSLeg] = Field(min_length=1, max_length=20)
+
+
+@router.post("/multi-leg")
+def price_multi_leg(req: BSStrategyRequest):
+    """Net premium, greeks, expiry payoff, and greek surfaces for a multi-leg
+    position. Each leg is priced with the same Black-Scholes primitives as the
+    single-leg endpoints, then weighted by side (+1 long / -1 short) and quantity
+    and summed. net_price > 0 is a net debit paid, < 0 a net credit received."""
+    S = req.S
+    strikes = [leg.K for leg in req.legs]
+    lo = min([S] + strikes)
+    hi = max([S] + strikes)
+    # Start the grid near zero so a put leg's max profit (long) or max loss
+    # (short), which sits at S -> 0, is sampled rather than read off a truncated
+    # floor. Snap the strikes and current spot in too, so the payoff kinks (where
+    # the extremes and breakevens actually sit) land exactly on grid points.
+    base = np.linspace(0.01, hi * 1.5, 200)
+    spot_range = np.unique(np.concatenate([base, strikes, [S]]))
+    surf_spot = np.linspace(max(lo * 0.6, 0.01), hi * 1.4, 80)
+
+    net = {"delta": 0.0, "gamma": 0.0, "theta": 0.0, "vega": 0.0}
+    net_vanna = net_charm = net_price = 0.0
+    payoff_curve = np.zeros_like(spot_range)
+    surface = {k: np.zeros_like(surf_spot) for k in net}
+    legs_out = []
+
+    for leg in req.legs:
+        T = max(leg.T, 0.001)
+        sigma = max(leg.sigma, 1e-6)
+        w = leg.side * leg.qty
+        price = bs_price(S, leg.K, T, req.r, sigma, leg.option_type)
+        g = bs_greeks(S, leg.K, T, req.r, sigma, leg.option_type)
+        vanna, charm = _vanna_charm(S, leg.K, T, req.r, sigma)
+
+        net_price += w * price
+        for k in net:
+            net[k] += w * float(g[k])
+        net_vanna += w * vanna
+        net_charm += w * charm
+
+        if leg.option_type == "call":
+            intrinsic = np.maximum(spot_range - leg.K, 0)
+        else:
+            intrinsic = np.maximum(leg.K - spot_range, 0)
+        payoff_curve += w * (intrinsic - price)
+
+        for k in surface:
+            surface[k] += w * np.array(
+                [bs_greeks(s, leg.K, T, req.r, sigma, leg.option_type)[k] for s in surf_spot]
+            )
+
+        legs_out.append({
+            "option_type": leg.option_type, "side": leg.side, "qty": leg.qty,
+            "K": leg.K, "T": leg.T, "sigma": leg.sigma,
+            "price": round(float(price), 4),
+            "greeks": {k: round(float(v), 4) for k, v in g.items()},
+        })
+
+    lam = net["delta"] * S / abs(net_price) if abs(net_price) > 1e-9 else 0.0
+
+    breakevens = []
+    for i in range(1, len(spot_range)):
+        y0, y1 = payoff_curve[i - 1], payoff_curve[i]
+        if y0 == 0:
+            breakevens.append(round(float(spot_range[i - 1]), 2))
+        elif y0 * y1 < 0:
+            x = spot_range[i - 1] + (spot_range[i] - spot_range[i - 1]) * (-y0) / (y1 - y0)
+            breakevens.append(round(float(x), 2))
+    # A breakeven that coincides with a snapped strike can be caught by both the
+    # exact-zero node and the adjacent crossing; dedup so the chip lists each once.
+    breakevens = sorted(set(breakevens))
+
+    imax, imin = int(np.argmax(payoff_curve)), int(np.argmin(payoff_curve))
+    # Standard options only run away at the high-spot tail (S -> inf): a long call
+    # has unbounded profit, a short call unbounded loss. A flat plateau at the
+    # sample edge is bounded, so test the slope there, not just the extreme index.
+    right_slope = float(payoff_curve[-1] - payoff_curve[-2])
+    eps = 1e-3
+
+    return {
+        "net_price": round(float(net_price), 4),
+        "greeks": {k: round(float(v), 4) for k, v in net.items()},
+        "vanna": round(net_vanna, 4),
+        "charm": round(net_charm, 4),
+        "lambda": round(float(lam), 4),
+        "spot": list(spot_range.round(2)),
+        "payoff": list(payoff_curve.round(4)),
+        "surface": {"spot": list(surf_spot.round(2)),
+                    **{k: [round(float(v), 4) for v in surface[k]] for k in surface}},
+        "legs": legs_out,
+        "breakevens": breakevens,
+        "max_profit": round(float(payoff_curve[imax]), 4),
+        "max_loss": round(float(payoff_curve[imin]), 4),
+        "max_profit_unbounded": right_slope > eps,
+        "max_loss_unbounded": right_slope < -eps,
+        "current_spot": S,
     }
 
 

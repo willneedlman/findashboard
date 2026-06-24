@@ -37,6 +37,7 @@ _quote_cache:   TTLCache = TTLCache(maxsize=300, ttl=1800)   # 30 min
 _ratings_cache: TTLCache = TTLCache(maxsize=300, ttl=86400)  # 24 hr
 _profile_cache: TTLCache = TTLCache(maxsize=300, ttl=86400)  # 24 hr
 _peers_cache:   TTLCache = TTLCache(maxsize=300, ttl=86400)  # 24 hr
+_earncal_cache: TTLCache = TTLCache(maxsize=64,  ttl=3600)   # 1 hr
 
 
 def available() -> bool:
@@ -190,3 +191,35 @@ def get_profile(ticker: str) -> dict:
             return {}
 
     return _cached(_profile_cache, sym, fetch)
+
+
+def get_earnings_calendar(date_from: str, date_to: str) -> list:
+    """
+    Upcoming earnings between two ISO dates (inclusive). Finnhub's free tier
+    serves forward-looking dates only, which is exactly what the calendar needs.
+
+    Each row: symbol, date, hour (bmo/amc/dmh/""), quarter, year,
+    epsEstimate, revenueEstimate. Actuals are null for future reports.
+    """
+    key = f"{date_from}:{date_to}"
+
+    def fetch():
+        try:
+            d = _get("/calendar/earnings", {"from": date_from, "to": date_to})
+            rows = d.get("earningsCalendar", []) if isinstance(d, dict) else []
+            return [
+                {
+                    "symbol":           r.get("symbol"),
+                    "date":             r.get("date"),
+                    "hour":             r.get("hour") or "",
+                    "quarter":          r.get("quarter"),
+                    "year":             r.get("year"),
+                    "epsEstimate":      r.get("epsEstimate"),
+                    "revenueEstimate":  r.get("revenueEstimate"),
+                }
+                for r in rows if r.get("symbol")
+            ]
+        except Exception:
+            return []
+
+    return _cached(_earncal_cache, key, fetch)

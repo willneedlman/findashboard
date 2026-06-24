@@ -14,6 +14,9 @@ export const optionSurface = (body: object) =>
 export const optionPayoff = (body: object) =>
   api.post('/options/payoff', body).then(r => r.data)
 
+export const optionMultiLeg = (body: object) =>
+  api.post('/options/multi-leg', body).then(r => r.data)
+
 export const fetchOptionsChain = (ticker: string, expiry?: string) =>
   api.get('/options/chain', { params: { ticker, ...(expiry ? { expiry } : {}) } }).then(r => r.data)
 

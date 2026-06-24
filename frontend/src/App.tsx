@@ -49,6 +49,7 @@ const DataSources        = lazy(() => import('./pages/legal/DataSources'))
 const SettingsPage       = lazy(() => import('./pages/Settings'))
 const StockScreener      = lazy(() => import('./pages/StockScreener'))
 const EarningsSummarizer = lazy(() => import('./pages/EarningsSummarizer'))
+const EarningsCalendar   = lazy(() => import('./pages/EarningsCalendar'))
 const PortfolioManager   = lazy(() => import('./pages/PortfolioManager'))
 const AdminTester        = lazy(() => import('./pages/AdminTester'))
 const CreditSpreads      = lazy(() => import('./pages/CreditSpreads'))
@@ -194,6 +195,7 @@ export default function App() {
               <Route path="/settings"        element={<SettingsPage />} />
               <Route path="/screener"        element={<StockScreener />} />
               <Route path="/earnings"        element={<EarningsSummarizer />} />
+              <Route path="/earnings-calendar" element={<EarningsCalendar />} />
               <Route path="/admin"           element={<AdminTester />} />
               <Route path="/stress-test"     element={<Navigate to="/admin" replace />} />
               <Route path="/sector-rotation" element={<SectorRotation />} />

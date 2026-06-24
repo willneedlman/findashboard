@@ -1,6 +1,6 @@
 import {
   Search, Calculator, Layers, Compass, Briefcase, Terminal,
-  Filter, TrendingUp, Brain, CalendarClock, FileText, Activity,
+  Filter, TrendingUp, Brain, CalendarClock, CalendarDays, FileText, Activity,
   GitCompare, PieChart, Globe, Scale, Coins, Boxes, RotateCcw, Gem,
   LineChart, BarChart2, Waves, Zap, Shuffle, Percent,
   GitBranch, Landmark, Dices, Gauge, BookOpen, Bell,
@@ -41,6 +41,7 @@ export const HUBS: Hub[] = [
       { title: 'Sentiment Tracker',     chip: 'Sentiment',       desc: 'AI-scored news sentiment across 7 sources',                route: '/sentiment',                icon: Brain },
       { title: 'Corporate Calendar',    chip: 'Calendar',        desc: 'Upcoming catalysts, earnings dates, and valuation',        route: '/corporate',          icon: CalendarClock },
       { title: 'Earnings AI',           chip: 'Earnings AI',     desc: 'Call transcripts and filing summaries on demand',          route: '/earnings',           icon: FileText },
+      { title: 'Earnings Calendar',     chip: 'Earnings Cal',    desc: 'Who reports on a date, with estimates and prior-report moves', route: '/earnings-calendar',  icon: CalendarDays },
       { title: 'Regression',            chip: 'Regression',      desc: 'OLS and polynomial fits with diagnostics',                 route: '/regression',         icon: Activity },
       { title: 'Correlation',           chip: 'Correlation',     desc: 'Correlation matrix, rolling drift, and beta',              route: '/correlation',        icon: Waves },
       { title: 'Asset Overlay',         chip: 'Asset Overlay',   desc: 'Overlay any set of assets on a single chart',              route: '/compare',            icon: GitCompare },
