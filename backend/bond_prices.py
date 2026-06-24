@@ -14,7 +14,10 @@ the price with its source + as-of date — it is not a live quote.
 """
 from __future__ import annotations
 import io
+import os
 import re
+import time
+import base64
 import logging
 import requests
 
@@ -74,8 +77,11 @@ def _issuer_of(name) -> str:
 #   investment-grade corp curve: SPBO, SPIB, SPSB, SPLB
 #   high yield: JNK, SPHY, SJNK, HYBL
 _SSGA_FUNDS = ("SPAB", "TOTL", "STOT",
-               "SPBO", "SPIB", "SPSB", "SPLB",
-               "JNK", "SPHY", "SJNK", "HYBL")
+               "SPBO", "SPIB", "SPSB", "SPLB",            # corporate IG
+               "JNK", "SPHY", "SJNK", "HYBL",             # high yield
+               "SPTL", "SPTI", "SPTS", "BIL",             # treasuries / bills
+               "SPMB", "SPIP", "FLRN",                    # mortgage / TIPS / floating
+               "TFI", "SHM", "HYMB")                      # municipals
 
 
 def _ssga_holdings(fund: str) -> dict:
@@ -150,17 +156,17 @@ def _ssga_holdings_cached(fund: str) -> dict:
 
 
 def _etf_price_map() -> dict:
-    cached = disk_get("etf_px_map:v4")
+    cached = disk_get("etf_px_map:v5")
     if cached is not None:
         return cached
     # Fetch funds concurrently: total build time is the slowest single download,
     # not the sum, so the combined map stays well inside the request timeout.
     from concurrent.futures import ThreadPoolExecutor
     m: dict = {}
-    with ThreadPoolExecutor(max_workers=6) as pool:
+    with ThreadPoolExecutor(max_workers=8) as pool:
         for h in pool.map(_ssga_holdings_cached, _SSGA_FUNDS):
             m.update(h)
-    disk_set("etf_px_map:v4", m, ttl=43200)           # 12 h
+    disk_set("etf_px_map:v5", m, ttl=43200)           # 12 h
     return m
 
 
@@ -228,14 +234,99 @@ def _nport_price(cusip: str):
     return None
 
 
+# ── FINRA TRACE (real executed prints, ~15-min delayed) ──────────────────────
+# Uses the FINRA API Platform (api.finra.org). Dormant unless the OAuth2 client
+# credentials are configured, so an unconfigured deploy pays zero cost. Register
+# free at https://developer.finra.org and set FINRA_API_CLIENT_ID / _SECRET.
+_FINRA_TOKEN_URL = "https://ews.fip.finra.org/fip/rest/ews/oauth2/access_token?grant_type=client_credentials"
+_FINRA_GROUP   = os.getenv("FINRA_TRACE_GROUP", "otcMarket")
+_FINRA_DATASET = os.getenv("FINRA_TRACE_DATASET", "corporateBondTradeHistory")
+_finra_token: dict = {"value": None, "exp": 0.0}
+
+
+def _finra_creds():
+    cid, sec = os.getenv("FINRA_API_CLIENT_ID"), os.getenv("FINRA_API_CLIENT_SECRET")
+    return (cid, sec) if cid and sec else None
+
+
+def _finra_access_token() -> str | None:
+    if _finra_token["value"] and time.time() < _finra_token["exp"] - 30:
+        return _finra_token["value"]
+    creds = _finra_creds()
+    if not creds:
+        return None
+    basic = base64.b64encode(f"{creds[0]}:{creds[1]}".encode()).decode()
+    r = requests.post(_FINRA_TOKEN_URL, headers={"Authorization": f"Basic {basic}"}, timeout=15)
+    r.raise_for_status()
+    j = r.json()
+    _finra_token["value"] = j.get("access_token")
+    _finra_token["exp"] = time.time() + float(j.get("expires_in", 1800))
+    return _finra_token["value"]
+
+
+def _pick(rec: dict, names) -> object:
+    """First present, non-empty value among candidate field names (case-insensitive)."""
+    low = {k.lower(): v for k, v in rec.items()}
+    for n in names:
+        v = low.get(n.lower())
+        if v not in (None, "", "null"):
+            return v
+    return None
+
+
+def _trace_price(cusip: str):
+    """Latest TRACE last-sale print for a CUSIP, or None when unconfigured/unavailable."""
+    if not _finra_creds():
+        return None
+    try:
+        tok = _finra_access_token()
+        if not tok:
+            return None
+        body = {
+            "limit": 1,
+            "compareFilters": [{"fieldName": "cusip", "compareType": "equal", "fieldValue": cusip}],
+            "sortFields": ["-tradeReportDate"],
+        }
+        r = requests.post(
+            f"https://api.finra.org/data/group/{_FINRA_GROUP}/name/{_FINRA_DATASET}",
+            headers={"Authorization": f"Bearer {tok}", "Content-Type": "application/json",
+                     "Accept": "application/json"},
+            json=body, timeout=20)
+        if r.status_code != 200:
+            logger.warning("FINRA TRACE %s: HTTP %s %s", cusip, r.status_code, r.text[:160])
+            return None
+        data = r.json()
+        recs = data if isinstance(data, list) else data.get("data") or data.get("records") or []
+        if not recs:
+            return None
+        rec = recs[0]
+        price = _pick(rec, ("lastSalePrice", "tradePrice", "price", "reportedPrice", "dollarPrice"))
+        asof  = _pick(rec, ("tradeReportDate", "executionDate", "tradeDate", "lastUpdateDate"))
+        if price is None:
+            return None
+        return {
+            "market_price": round(float(price), 3),
+            "price_source": "FINRA TRACE (last trade, ~15-min delayed)",
+            "price_as_of": str(asof) if asof else None,
+        }
+    except Exception as e:
+        logger.warning("FINRA TRACE %s failed: %s", cusip, e)
+        return None
+
+
 def price_for_cusip(cusip: str):
-    """Daily ETF mark first (fresher), else N-PORT monthly mark. Cached 12h,
-    including misses, so a CUSIP with no free price isn't re-fetched repeatedly."""
+    """Real TRACE last trade first (when FINRA creds are set), then daily ETF mark,
+    then N-PORT monthly mark. Cached 12h including misses so a CUSIP with no free
+    price isn't re-fetched repeatedly. TRACE prints carry a short TTL of their own."""
     cu = cusip.strip().upper()
-    ck = f"bondpx:v3:{cu}"
+    ck = f"bondpx:v4:{cu}"
     cached = disk_get(ck)
     if cached is not None:
         return cached or None
+    trace = _trace_price(cu)
+    if trace:
+        disk_set(ck, trace, ttl=900)                  # 15 min — it's a live-ish print
+        return trace
     px = _etf_price_map().get(cu) or _nport_price(cu)
     disk_set(ck, px or {}, ttl=43200)
     return px
