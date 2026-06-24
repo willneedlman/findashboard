@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import concurrent.futures
 from fastapi import APIRouter, HTTPException
@@ -52,9 +53,74 @@ def _load_universe() -> "tuple[set, list, dict]":
 _UNIVERSE, _UNIVERSE_LIST, _INDEX_SETS = _load_universe()
 
 # Max NEW (uncached) tickers a single screen may deep-fetch. Cached fundamentals
-# (30d disk cache, filled by scripts/backfill_screener.py) enrich for free, so a
-# cold screen stays well under the free-tier FMP daily cap. Tune via env.
+# (30d disk cache, filled by the backfill loop below) enrich for free, so a cold
+# screen stays well under the free-tier FMP daily cap. Tune via env.
 _LIVE_ENRICH_BUDGET = int(os.getenv("SCREENER_LIVE_ENRICH", "25"))
+
+
+def _backfill_order() -> list:
+    seen: set = set()
+    out: list = []
+    for k in ("nasdaq100", "sp500", "sp400"):         # most-screened indices first
+        for t in sorted(_INDEX_SETS.get(k, ())):
+            if t not in seen:
+                seen.add(t)
+                out.append(t)
+    return out
+
+
+_BACKFILL_ORDER = _backfill_order()
+_backfill_task = None
+
+
+def _backfill_once(daily: int) -> int:
+    """Warm up to `daily` new tickers' fundamentals into the 30d cache. A disk flag
+    with a 20h TTL makes this idempotent across restarts/redeploys so repeated
+    deploys can't stack multiple runs and blow the free-tier daily FMP cap."""
+    if not fmp.available():
+        return 0
+    if disk_get("screener:backfill:ran") is not None:
+        return -1
+    disk_set("screener:backfill:ran", 1, ttl=72000)
+    fetched = 0
+    for sym in _BACKFILL_ORDER:
+        if fetched >= daily:
+            break
+        if fmp.get_fundamentals(sym, cached_only=True) is not None:
+            continue
+        if fmp.get_fundamentals(sym):
+            fetched += 1
+    return fetched
+
+
+async def _backfill_loop():
+    await asyncio.sleep(180)                           # let startup settle
+    daily = int(os.getenv("SCREENER_BACKFILL_DAILY", "80"))
+    while True:
+        try:
+            n = await asyncio.to_thread(_backfill_once, daily)
+            if n >= 0:
+                logger.info("screener backfill: warmed %d new tickers", n)
+        except asyncio.CancelledError:
+            return
+        except Exception as e:
+            logger.warning("screener backfill error: %s", e)
+        await asyncio.sleep(86400)                     # daily
+
+
+def start_backfill_loop():
+    global _backfill_task
+    try:
+        _backfill_task = asyncio.get_event_loop().create_task(_backfill_loop())
+    except Exception as e:
+        logger.warning("backfill loop start failed: %s", e)
+
+
+def stop_backfill_loop():
+    global _backfill_task
+    if _backfill_task:
+        _backfill_task.cancel()
+        _backfill_task = None
 
 # ── Request schema ────────────────────────────────────────────────────────────
 

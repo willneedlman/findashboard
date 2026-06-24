@@ -30,7 +30,9 @@ from routers import (
 async def lifespan(app: FastAPI):
     paper_scheduler.start_scheduler()
     alerts.start_evaluation_loop()   # price-alert monitor — previously never started
+    screener.start_backfill_loop()   # warm fundamentals cache within the free-tier daily cap
     yield
+    screener.stop_backfill_loop()
     alerts.stop_evaluation_loop()
     paper_scheduler.stop_scheduler()
 
