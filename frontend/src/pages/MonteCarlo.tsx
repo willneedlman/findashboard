@@ -478,7 +478,7 @@ export function MonteCarloContent() {
                     <Tooltip contentStyle={TOOLTIP_STYLE} cursor={BAR_CURSOR} />
                     <ReferenceLine x={String(Math.round(data.S0))} stroke="var(--theme-primary, #c9a84c)" strokeDasharray="4 4"
                       label={{ value: 'Entry', fill: 'var(--theme-primary, #c9a84c)', fontSize: 9 }} />
-                    <ReferenceLine x={String(Math.round(data.median))} stroke="#1f5673" strokeDasharray="4 4"
+                    <ReferenceLine x={String(Math.round(data.median))} stroke="var(--theme-tertiary, #1f5673)" strokeDasharray="4 4"
                       label={{ value: 'Median', fill: 'var(--theme-tertiary, #1f5673)', fontSize: 9 }} />
                     {data.targetPrice > 0 && (
                       <ReferenceLine x={String(Math.round(data.targetPrice))} stroke="var(--theme-primary, #c9a84c)" strokeDasharray="4 4"
@@ -499,7 +499,7 @@ export function MonteCarloContent() {
                       padding: '8px 14px',
                     }}>
                       <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 700, color: l.stratAdj >= 0 ? 'var(--theme-positive)' : 'var(--theme-negative)', marginBottom: 3 }}>
-                        {l.ticker} · {l.strategy} — {l.stratLabel}
+                        {l.ticker} · {l.strategy} · {l.stratLabel}
                         <span style={{ marginLeft: 10, fontSize: 10, color: 'var(--theme-secondary, #99907e)', fontWeight: 400 }}>
                           Drift adj: {l.stratAdj > 0 ? '+' : ''}{l.stratAdj}% · Eff. drift: {+(l.drift + l.stratAdj).toFixed(1)}%/yr
                         </span>
@@ -510,7 +510,7 @@ export function MonteCarloContent() {
                 </div>
               )}
 
-              {/* Buy/Sell signal chart — price line with ▲ BUY / ▼ SELL markers */}
+              {/* Buy/Sell signal chart: price line with up/down BUY/SELL markers */}
               {data.legs.some((l: any) => l.strategy !== STRATEGIES[0] && l.stratChartData?.length > 0) && (
                 <>
                   {data.legs
@@ -526,12 +526,12 @@ export function MonteCarloContent() {
                       }
                       const header = (
                         <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-                          <span style={{ color: 'var(--theme-text, #d7e3fc)' }}>▶ {l.ticker}</span>
+                          <span style={{ color: 'var(--theme-text, #d7e3fc)' }}>{l.ticker}</span>
                           <span style={{ color: 'var(--theme-text-faint, rgba(255,255,255,0.3))' }}>·</span>
-                          <span style={{ color: 'var(--theme-positive)' }}>▲ {l.stratBuyCount} BUY</span>
+                          <span style={{ color: 'var(--theme-positive)' }}>↑ {l.stratBuyCount} BUY</span>
                           <span style={{ color: 'var(--theme-text-faint, rgba(255,255,255,0.3))' }}>·</span>
-                          <span style={{ color: 'var(--theme-negative)' }}>▼ {l.stratSellCount} SELL</span>
-                          <span style={{ color: 'var(--theme-text-faint, rgba(255,255,255,0.3))', fontWeight: 400 }}>— {l.strategy}</span>
+                          <span style={{ color: 'var(--theme-negative)' }}>↓ {l.stratSellCount} SELL</span>
+                          <span style={{ color: 'var(--theme-text-faint, rgba(255,255,255,0.3))', fontWeight: 400 }}>· {l.strategy}</span>
                         </span>
                       )
                       return (
@@ -543,7 +543,7 @@ export function MonteCarloContent() {
                               <YAxis tick={TICK} tickFormatter={(v: number) => `$${v.toFixed(0)}`} orientation="right" />
                               <Tooltip contentStyle={TOOLTIP_STYLE}
                                 formatter={(v: number, _: string, p: any) => [
-                                  `$${v.toFixed(2)}${p.payload.action === 'buy' ? '  ▲ BUY' : p.payload.action === 'sell' ? '  ▼ SELL' : ''}`,
+                                  `$${v.toFixed(2)}${p.payload.action === 'buy' ? '  ↑ BUY' : p.payload.action === 'sell' ? '  ↓ SELL' : ''}`,
                                   l.ticker,
                                 ]}
                                 labelFormatter={(d: string) => d}

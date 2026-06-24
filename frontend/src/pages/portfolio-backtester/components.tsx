@@ -337,11 +337,11 @@ export function PortfolioTab() {
                 {data.strategyResult.legs.map((l: any, i: number) => (
                   <div key={i} style={{
                     background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
-                    borderLeft: `4px solid ${l.drift_adj >= 0 ? '#2f6b4b' : '#8c2e36'}`,
+                    borderLeft: `4px solid ${l.drift_adj >= 0 ? 'var(--theme-positive)' : 'var(--theme-negative)'}`,
                     padding: '8px 14px',
                   }}>
-                    <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 700, color: l.drift_adj >= 0 ? '#4caf7d' : '#e05c6e', marginBottom: 3 }}>
-                      {l.ticker} · {l.strategy} — {l.label}
+                    <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 700, color: l.drift_adj >= 0 ? 'var(--theme-positive)' : 'var(--theme-negative)', marginBottom: 3 }}>
+                      {l.ticker} · {l.strategy} · {l.label}
                       <span style={{ marginLeft: 10, fontSize: 10, color: 'var(--theme-secondary, #99907e)', fontWeight: 400 }}>
                         Drift adj: {l.drift_adj > 0 ? '+' : ''}{l.drift_adj}%
                       </span>
@@ -495,9 +495,9 @@ function BacktestSignalChart({ data, ticker, trades }: {
         borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.06))',
         fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase',
       }}>
-        <span style={{ color: 'var(--theme-text, #d7e3fc)' }}>▶ REPLAY · {ticker}</span>
-        <span style={{ color: 'var(--theme-positive)' }}>▲ {buyCount} BUY</span>
-        <span style={{ color: 'var(--theme-negative)' }}>▼ {sellCount} SELL</span>
+        <span style={{ color: 'var(--theme-text, #d7e3fc)' }}>REPLAY · {ticker}</span>
+        <span style={{ color: 'var(--theme-positive)' }}>↑ {buyCount} BUY</span>
+        <span style={{ color: 'var(--theme-negative)' }}>↓ {sellCount} SELL</span>
       </div>
       <div style={{ padding: '4px 8px 8px 8px', height: 260 }}>
         {data.length === 0 ? (
