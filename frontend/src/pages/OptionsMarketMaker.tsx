@@ -143,13 +143,15 @@ function advanceSpot(s: SimState): void {
   if (s.spotHistory.length > 120) s.spotHistory = s.spotHistory.slice(-120)
 }
 
-function buildChain(s: SimState, baseIv: number, skew: number, halfSpread: number, manual: Record<number, number>): Chain {
+function buildChain(s: SimState, baseIv: number, skew: number, halfSpread: number, manual: Record<number, number>, spreadAdj: Record<string, number>): Chain {
   const chain: Chain = {}
   for (const kind of ['C', 'P'] as const) {
     for (const k of STRIKES) {
       const iv = strikeIv(k, baseIv, skew, manual)
       const q = priceOption(s.spot, k, TIME_TO_EXPIRY, RISK_FREE, iv, kind)
-      const hs = Math.max(q.theo * halfSpread, 0.03)
+      // Per-contract widen adds to the global half-spread, so you can quote a
+      // single contract wider to discourage flow without touching the rest.
+      const hs = Math.max(q.theo * (halfSpread + (spreadAdj[ck(kind, k)] ?? 0)), 0.03)
       chain[ck(kind, k)] = {
         kind, strike: k, iv, theo: q.theo,
         bid: Math.max(0.01, q.theo - hs), ask: q.theo + hs,
@@ -262,6 +264,7 @@ export default function OptionsMarketMaker() {
   const [skew, setSkew]             = useState(0.06)
   const [halfSpread, setHalfSpread] = useState(0.04)
   const [manual, setManual]         = useState<Record<number, number>>(() => Object.fromEntries(STRIKES.map(k => [k, 0])))
+  const [spreadAdj, setSpreadAdj]   = useState<Record<string, number>>(() => Object.fromEntries(STRIKES.flatMap(k => [[`C${k}`, 0], [`P${k}`, 0]])))
   const [running, setRunning]       = useState(false)
   const [speed, setSpeed]           = useState(0.5)
   const [hedgeQty, setHedgeQty]     = useState(100)
@@ -273,11 +276,11 @@ export default function OptionsMarketMaker() {
     setTapeSel(sel => sel.includes(key) ? sel.filter(k => k !== key) : [...sel, key])
 
   // Latest controls available to the (single, stable) game-loop.
-  const ctrl = useRef({ baseIv, skew, halfSpread, manual, running, speed })
-  ctrl.current = { baseIv, skew, halfSpread, manual, running, speed }
+  const ctrl = useRef({ baseIv, skew, halfSpread, manual, spreadAdj, running, speed })
+  ctrl.current = { baseIv, skew, halfSpread, manual, spreadAdj, running, speed }
 
   const snapshot = (s: SimState, c: typeof ctrl.current): Frame => {
-    const chain = buildChain(s, c.baseIv, c.skew, c.halfSpread, c.manual)
+    const chain = buildChain(s, c.baseIv, c.skew, c.halfSpread, c.manual, c.spreadAdj)
     return {
       chain, greeks: portfolioGreeks(s, chain), spot: s.spot, spotHistory: [...s.spotHistory],
       positions: { ...s.positions }, sold: { ...s.sold }, stock: s.stock, edge: s.edgeTotal,
@@ -293,7 +296,7 @@ export default function OptionsMarketMaker() {
       if (c.running) {
         s.tick += 1
         advanceSpot(s)
-        maybeGenerateOrder(s, buildChain(s, c.baseIv, c.skew, c.halfSpread, c.manual), c.running)
+        maybeGenerateOrder(s, buildChain(s, c.baseIv, c.skew, c.halfSpread, c.manual, c.spreadAdj), c.running)
       }
       setFrame(snapshot(s, c))
       timer = setTimeout(loop, Math.round(1000 / c.speed))
@@ -377,6 +380,21 @@ export default function OptionsMarketMaker() {
           </span>
         </div>
       ))}
+
+      <div style={{ ...labelStyle, marginTop: 6 }}>Per-contract spread widen (+% of theo)</div>
+      {(['C', 'P'] as const).flatMap(kind => STRIKES.map(k => {
+        const key = `${kind}${k}`
+        const v = spreadAdj[key] ?? 0
+        return (
+          <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+            <span style={{ fontSize: 10, fontFamily: T.mono, color: kind === 'C' ? T.green : T.red, width: 28 }}>{kind} {k}</span>
+            {range(v, 0, 0.20, 0.005, nv => setSpreadAdj(m => ({ ...m, [key]: nv })))}
+            <span style={{ fontSize: 9, fontFamily: T.mono, color: T.muted, width: 34, textAlign: 'right' }}>
+              +{(v * 100).toFixed(1)}
+            </span>
+          </div>
+        )
+      }))}
 
       {/* Manual hedge — trade the underlying yourself, like a real maker */}
       <div style={{ ...labelStyle, marginTop: 10 }}>Hedge — Trade Underlying</div>
