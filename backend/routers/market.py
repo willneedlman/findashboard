@@ -5,9 +5,63 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from cache import get_history as _cached_history, get_news as _cached_news, get_download, cached, get_info
 from validation import validate_ticker, validate_tickers, validate_date
+import serpapi_finance
 
 
 router = APIRouter()
+
+
+# Cross-asset board for the global overview. Google Finance is the primary source
+# (its strength is breadth across indices/FX/crypto/commodities); each row falls
+# back to its yfinance symbol when the SerpAPI budget is spent or a query misses.
+# (label, asset_class, google_finance_query, yfinance_symbol)
+GLOBAL_BOARD = [
+    ("S&P 500",     "Index",     ".INX:INDEXSP",       "^GSPC"),
+    ("Dow Jones",   "Index",     ".DJI:INDEXDJX",      "^DJI"),
+    ("Nasdaq",      "Index",     ".IXIC:INDEXNASDAQ",  "^IXIC"),
+    ("VIX",         "Index",     "VIX:INDEXCBOE",      "^VIX"),
+    ("FTSE 100",    "Intl",      ".FTSE:INDEXFTSE",    "^FTSE"),
+    ("Nikkei 225",  "Intl",      ".N225:INDEXNIKKEI",  "^N225"),
+    ("EUR / USD",   "FX",        "EUR-USD",            "EURUSD=X"),
+    ("USD / JPY",   "FX",        "USD-JPY",            "JPY=X"),
+    ("Bitcoin",     "Crypto",    "BTC-USD",            "BTC-USD"),
+    ("Ethereum",    "Crypto",    "ETH-USD",            "ETH-USD"),
+    ("Gold (GLD)",  "Commodity", "GLD:NYSEARCA",       "GLD"),
+    ("Crude (USO)", "Commodity", "USO:NYSEARCA",       "USO"),
+]
+
+
+def _yf_quote(sym: str) -> dict | None:
+    """Price + 1-day percent change from cached yfinance history."""
+    try:
+        hist = _cached_history(sym, period="5d")
+        closes = hist["Close"].dropna()
+        if closes.empty:
+            return None
+        price = float(closes.iloc[-1])
+        pct = float((closes.iloc[-1] / closes.iloc[-2] - 1) * 100) if len(closes) >= 2 else None
+        return {"price": round(price, 4), "change_pct": round(pct, 2) if pct is not None else None, "currency": None}
+    except Exception:
+        return None
+
+
+@router.get("/global")
+def global_markets():
+    """Cross-asset overview board. Google-Finance-first, yfinance fallback."""
+    rows = []
+    for label, cls, gf_query, yf_sym in GLOBAL_BOARD:
+        q = serpapi_finance.quote(gf_query, ttl=86400) if serpapi_finance.available() else None
+        source = "google_finance"
+        if not q:
+            q = _yf_quote(yf_sym)
+            source = "yfinance"
+        if q:
+            rows.append({
+                "label": label, "asset_class": cls,
+                "price": q["price"], "change_pct": q.get("change_pct"),
+                "currency": q.get("currency"), "source": source,
+            })
+    return {"rows": rows, "budget": serpapi_finance.budget_status()}
 
 
 @router.get("/quote/{ticker}")
@@ -15,19 +69,27 @@ def get_quote(ticker: str):
     sym = validate_ticker(ticker)
     try:
         hist = _cached_history(sym, period="5d")
-        if hist.empty:
-            raise HTTPException(404, "No data")
-        closes = hist["Close"].dropna()
-        price = float(closes.iloc[-1])
-        pct_1d = float((closes.iloc[-1] / closes.iloc[-2] - 1) * 100) if len(closes) >= 2 else None
-        return {
-            "current_price": round(price, 2),
-            "pct_change_1d": round(pct_1d, 3) if pct_1d is not None else None,
-        }
-    except HTTPException:
-        raise
+        closes = hist["Close"].dropna() if not hist.empty else None
+        if closes is not None and not closes.empty:
+            price = float(closes.iloc[-1])
+            pct_1d = float((closes.iloc[-1] / closes.iloc[-2] - 1) * 100) if len(closes) >= 2 else None
+            return {
+                "current_price": round(price, 2),
+                "pct_change_1d": round(pct_1d, 3) if pct_1d is not None else None,
+            }
     except Exception:
-        raise HTTPException(404, "Could not fetch quote")
+        pass
+
+    # Fallback: Google Finance resolves instruments yfinance cannot (some
+    # international tickers, FX, funds). Budget-gated and cached in the client.
+    gf = serpapi_finance.resolve(sym)
+    if gf:
+        return {
+            "current_price": round(gf["price"], 2),
+            "pct_change_1d": gf.get("change_pct"),
+            "source": "google_finance",
+        }
+    raise HTTPException(404, "Could not fetch quote")
 
 
 @router.get("/dividends")
