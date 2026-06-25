@@ -269,7 +269,7 @@ export default function StrategySelector({ value, params, onChange, compact }: P
                     border: 'none', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.06))',
                     padding: '7px 9px', cursor: 'pointer',
                   }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#0f1e30' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--theme-hover, #0f1e30)' }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'none' }}
                 >
                   <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: s === value && !(s === CUSTOM_STRATEGY_KEY && activeSavedName) ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-text, #d7e3fc)', marginBottom: 2 }}>
@@ -299,7 +299,7 @@ export default function StrategySelector({ value, params, onChange, compact }: P
                           background: isActive ? 'var(--theme-surface, #142032)' : 'none',
                           borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.06))',
                         }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#0f1e30' }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--theme-hover, #0f1e30)' }}
                         onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = isActive ? 'var(--theme-surface, #142032)' : 'none' }}
                       >
                         <div style={{ flex: 1, minWidth: 0 }}>
