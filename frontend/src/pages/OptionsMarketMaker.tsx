@@ -388,6 +388,22 @@ export default function OptionsMarketMaker() {
     setSpreadAdj(m => ({ ...m, [key]: adj }))
   }
 
+  // Per-strike widen: steps the call+put spread add-on for one strike together,
+  // on top of the base Half-Spread. Refreshes the frame at once so the bid/ask
+  // columns react instantly even while the sim is paused.
+  const WIDEN_STEP = 0.01
+  const onWiden = (k: number, dir: 1 | -1) => {
+    setSpreadAdj(prev => {
+      const cur = Math.max(0, prev[ck('C', k)] ?? 0)
+      const next = Math.max(0, Math.min(0.5, +(cur + dir * WIDEN_STEP).toFixed(4)))
+      return { ...prev, [ck('C', k)]: next, [ck('P', k)]: next }
+    })
+  }
+  // Repaint the chain the moment any spread override changes (widen stepper or a
+  // bid/ask requote) so the bid/ask columns react at once even while paused,
+  // instead of waiting for the next sim tick.
+  useEffect(() => { setFrame(snapshot(sim.current, ctrl.current)) }, [spreadAdj]) // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <PageWrapper>
       {!f || !g ? (
@@ -493,7 +509,7 @@ export default function OptionsMarketMaker() {
 
           {/* Options chain: wide table with editable quotes */}
           <Widget title="Options Chain" right={<span style={{ fontFamily: T.sans, fontSize: 8, color: T.muted, letterSpacing: '0.04em' }}>edit bid / ask to requote · click Theo to plot · click strike for underlying</span>}>
-            {renderChainTable(f, tapeSel, toggleTape, onQuote, () => setTapeSel([]), flash)}
+            {renderChainTable(f, tapeSel, toggleTape, onQuote, () => setTapeSel([]), flash, spreadAdj, onWiden)}
           </Widget>
 
           {/* Ledger strip */}
@@ -523,7 +539,31 @@ function bigBtn(color: string): React.CSSProperties {
 
 // Option chain as a compact wide table. Bid/Ask are editable quote cells; Theo
 // is clickable to overlay that contract's premium on the tape.
-function renderChainTable(f: Frame, tapeSel: string[], onToggle: (key: string) => void, onQuote: (key: string, side: 'bid' | 'ask', price: number) => void, onPlotUnderlying: () => void, flash: { k: number; side: string } | null) {
+// Compact per-strike spread-widen stepper, stacked under the strike. Adds to the
+// base Half-Spread for that strike's call and put together. Buttons stop click
+// propagation so they don't also plot the underlying on the tape.
+function WidenControl({ value, onStep }: { value: number; onStep: (dir: 1 | -1) => void }) {
+  const M = 'var(--theme-secondary, #5e768f)', GD = 'var(--theme-primary, #c9a84c)'
+  const on = value > 0.0001
+  const btn: React.CSSProperties = {
+    width: 15, height: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+    background: 'transparent', border: '1px solid var(--theme-border, rgba(255,255,255,0.14))',
+    color: M, cursor: 'pointer', fontFamily: 'var(--theme-mono)', fontSize: 12, lineHeight: 1,
+  }
+  const step = (e: React.MouseEvent, dir: 1 | -1) => { e.stopPropagation(); onStep(dir) }
+  return (
+    <div title="Widen this strike's spread (adds to base half-spread)"
+      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, marginTop: 3 }}>
+      <button style={btn} onClick={e => step(e, -1)} aria-label="Tighten strike spread">-</button>
+      <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, fontWeight: 700, color: on ? GD : M, minWidth: 30, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+        {on ? `+${(value * 100).toFixed(1)}%` : '0%'}
+      </span>
+      <button style={btn} onClick={e => step(e, 1)} aria-label="Widen strike spread">+</button>
+    </div>
+  )
+}
+
+function renderChainTable(f: Frame, tapeSel: string[], onToggle: (key: string) => void, onQuote: (key: string, side: 'bid' | 'ask', price: number) => void, onPlotUnderlying: () => void, flash: { k: number; side: string } | null, spreadAdj: Record<string, number>, onWiden: (k: number, dir: 1 | -1) => void) {
   const G = 'var(--theme-positive, #22c55e)', R = 'var(--theme-negative, #ef4444)', M = 'var(--theme-secondary, #5e768f)', GD = 'var(--theme-primary, #c9a84c)', B = 'var(--theme-tertiary, #60a5fa)'
   const th: React.CSSProperties = { fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: M, padding: '6px 10px', textAlign: 'right', whiteSpace: 'nowrap' }
   const td: React.CSSProperties = { fontFamily: 'var(--theme-mono)', fontSize: 13, padding: '5px 10px', textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }
@@ -563,7 +603,10 @@ function renderChainTable(f: Frame, tapeSel: string[], onToggle: (key: string) =
                 <td style={td}><QuoteCell value={f.chain[cKey].bid} side="bid" step={0.01} decimals={2} onCommit={v => onQuote(cKey, 'bid', v)} /></td>
                 <td style={td}>{theoCell(cKey)}</td>
                 <td style={td}><QuoteCell value={f.chain[cKey].ask} side="ask" step={0.01} decimals={2} onCommit={v => onQuote(cKey, 'ask', v)} /></td>
-                <td onClick={onPlotUnderlying} title="Plot underlying on tape" style={{ ...td, textAlign: 'center', fontSize: 16, fontWeight: 700, color: GD, cursor: 'pointer' }}>{k}</td>
+                <td style={{ ...td, textAlign: 'center', padding: '3px 6px' }}>
+                  <div onClick={onPlotUnderlying} title="Plot underlying on tape" style={{ fontSize: 16, fontWeight: 700, color: GD, cursor: 'pointer', lineHeight: 1 }}>{k}</div>
+                  <WidenControl value={spreadAdj[ck('C', k)] ?? 0} onStep={dir => onWiden(k, dir)} />
+                </td>
                 <td style={td}><QuoteCell value={f.chain[pKey].bid} side="bid" step={0.01} decimals={2} onCommit={v => onQuote(pKey, 'bid', v)} /></td>
                 <td style={td}>{theoCell(pKey)}</td>
                 <td style={td}><QuoteCell value={f.chain[pKey].ask} side="ask" step={0.01} decimals={2} onCommit={v => onQuote(pKey, 'ask', v)} /></td>
