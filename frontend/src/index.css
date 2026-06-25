@@ -511,3 +511,10 @@ textarea:focus:not(:focus-visible) {
 .mm-chev:hover {
   color: var(--theme-primary, #c9a84c);
 }
+
+/* Screener Screen Library rail collapse/expand */
+.ft-rail { transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1); }
+.ft-screen-row:hover { background: rgba(201, 168, 76, 0.05) !important; }
+@media (prefers-reduced-motion: reduce) {
+  .ft-rail { transition: none !important; }
+}
