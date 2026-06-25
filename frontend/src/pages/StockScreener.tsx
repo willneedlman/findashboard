@@ -34,16 +34,21 @@ const LABEL: React.CSSProperties = {
 const SELECT: React.CSSProperties = { ...INPUT, cursor: 'pointer' }
 
 interface FieldMeta { id: string; label: string; group: string }
-interface FilterRow { id: number; field: string; operator: string; value: string; value2: string }
+interface FilterRow { id: number; field: string; operator: string; value: string; value2: string; param?: string }
+
+// Lookback periods for the parameterized Price Change filter/sort.
+const PRICE_PERIODS = ['1D', '1W', '1M', '3M', '6M', 'YTD', '1Y']
 interface ScreenResult {
   ticker: string; companyName: string; price: number | null; marketCap: number | null
   beta: number | null; volume: number | null; sector: string; exchange: string
-  change1d: number | null; peRatio: number | null; forwardPE: number | null
+  peRatio: number | null; forwardPE: number | null
   pbRatio: number | null; psRatio: number | null; evEbitda: number | null
   grossMargin: number | null; operatingMargin: number | null; netMargin: number | null
   roe: number | null; debtEquity: number | null; currentRatio: number | null
   revenueGrowth: number | null; epsGrowth: number | null; dividendYield: number | null
   change52wHiPct: number | null; avgVolume: number | null
+  rsi14: number | null; smaDist50: number | null; smaDist200: number | null; vol30: number | null
+  priceChange: number | null
 }
 
 // ── Columns shown in the results table ───────────────────────────────────────
@@ -51,7 +56,7 @@ const TABLE_COLS: { key: keyof ScreenResult; label: string; fmt: (v: unknown) =>
   { key: 'ticker',          label: 'Ticker',       fmt: v => String(v) },
   { key: 'companyName',     label: 'Name',         fmt: v => String(v ?? '—') },
   { key: 'price',           label: 'Price',        fmt: v => v != null ? `$${Number(v).toFixed(2)}` : '—' },
-  { key: 'change1d',        label: '1D %',         fmt: v => v != null ? `${Number(v) >= 0 ? '+' : ''}${Number(v).toFixed(2)}%` : '—', colorFn: v => v >= 0 ? C.pos : C.neg },
+  { key: 'priceChange',     label: 'Chg %',        fmt: v => v != null ? `${Number(v) >= 0 ? '+' : ''}${Number(v).toFixed(2)}%` : '—', colorFn: v => v >= 0 ? C.pos : C.neg },
   { key: 'marketCap',       label: 'Mkt Cap',      fmt: v => v != null ? `$${Number(v).toFixed(1)}B` : '—' },
   { key: 'volume',          label: 'Volume',       fmt: v => v != null ? Intl.NumberFormat('en',{notation:'compact'}).format(Number(v)) : '—' },
   { key: 'beta',            label: 'Beta',         fmt: v => v != null ? Number(v).toFixed(2) : '—', colorFn: v => v > 1.5 ? C.warn : v < 0 ? C.neg : C.text },
@@ -70,6 +75,10 @@ const TABLE_COLS: { key: keyof ScreenResult; label: string; fmt: (v: unknown) =>
   { key: 'epsGrowth',       label: 'EPS Growth',   fmt: v => v != null ? `${Number(v).toFixed(1)}%` : '—', colorFn: v => v > 10 ? C.pos : v > 0 ? C.text : C.neg },
   { key: 'dividendYield',   label: 'Div Yield',    fmt: v => v != null ? `${Number(v).toFixed(2)}%` : '—' },
   { key: 'change52wHiPct',  label: '52W Hi%',      fmt: v => v != null ? `${Number(v).toFixed(1)}%` : '—', colorFn: v => v > -5 ? C.pos : v > -20 ? C.warn : C.neg },
+  { key: 'rsi14',           label: 'RSI',          fmt: v => v != null ? Number(v).toFixed(0) : '—', colorFn: v => v >= 70 ? C.neg : v <= 30 ? C.pos : C.text },
+  { key: 'smaDist50',       label: 'vs 50D MA',    fmt: v => v != null ? `${Number(v) >= 0 ? '+' : ''}${Number(v).toFixed(1)}%` : '—', colorFn: v => v >= 0 ? C.pos : C.neg },
+  { key: 'smaDist200',      label: 'vs 200D MA',   fmt: v => v != null ? `${Number(v) >= 0 ? '+' : ''}${Number(v).toFixed(1)}%` : '—', colorFn: v => v >= 0 ? C.pos : C.neg },
+  { key: 'vol30',           label: '30D Vol',      fmt: v => v != null ? `${Number(v).toFixed(1)}%` : '—', colorFn: v => v > 50 ? C.neg : v > 30 ? C.warn : C.text },
   { key: 'sector',          label: 'Sector',       fmt: v => String(v ?? '—') },
 ]
 
@@ -99,8 +108,9 @@ export default function StockScreener() {
   const [universe, setUniverse] = useState('')   // '' = all indices, else sp500 | sp400 | nasdaq100
   const [sortBy,   setSortBy]   = useState('marketCap')
   const [sortDir,  setSortDir]  = useState<'desc' | 'asc'>('desc')
+  const [sortParam, setSortParam] = useState('1M')   // period when sorting by Price Change
   const [visibleCols, setVisibleCols] = useState<Set<string>>(
-    new Set(['ticker','companyName','price','change1d','marketCap','peRatio','operatingMargin','revenueGrowth','sector'])
+    new Set(['ticker','companyName','price','priceChange','marketCap','peRatio','operatingMargin','revenueGrowth','sector'])
   )
   const [colPanelOpen, setColPanelOpen] = useState(false)
   const [localSort, setLocalSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: 'marketCap', dir: 'desc' })
@@ -116,6 +126,13 @@ export default function StockScreener() {
   const fields: FieldMeta[] = meta?.fields ?? []
   const sectors: string[]   = meta?.sectors ?? []
   const exchanges: string[] = meta?.exchanges ?? []
+  const universes: { value: string; label: string; group: string }[] = meta?.universes ?? [
+    { value: '', label: 'All (S&P 500 + 400 + Nasdaq 100)', group: 'Indexes' },
+    { value: 'sp500', label: 'S&P 500', group: 'Indexes' },
+    { value: 'sp400', label: 'S&P 400 Midcap', group: 'Indexes' },
+    { value: 'nasdaq100', label: 'Nasdaq 100', group: 'Indexes' },
+  ]
+  const universeGroups = [...new Set(universes.map(u => u.group))]
 
   const { mutate, data, isPending, error } = useMutation({
     mutationFn: () => axios.post('/api/screener/run', {
@@ -123,12 +140,14 @@ export default function StockScreener() {
         field: f.field, operator: f.operator,
         value: parseFloat(f.value),
         value2: f.value2 ? parseFloat(f.value2) : null,
+        param: f.field === 'priceChange' ? (f.param || '1M') : null,
       })),
       sector:   sector || null,
       exchange: exchange || null,
       universe: universe || null,
       sort_by:  sortBy,
       sort_dir: sortDir,
+      sort_param: sortBy === 'priceChange' ? sortParam : null,
       limit:    100,
     }).then(r => r.data),
   })
@@ -192,12 +211,15 @@ export default function StockScreener() {
           {/* Index universe + Sector + Exchange */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div>
-              <label style={LABEL}>Index Universe</label>
+              <label style={LABEL}>Universe</label>
               <select value={universe} onChange={e => setUniverse(e.target.value)} style={SELECT} onFocus={focus} onBlur={blur}>
-                <option value="">All (S&P 500 + 400 + Nasdaq 100)</option>
-                <option value="sp500">S&P 500</option>
-                <option value="sp400">S&P 400 Midcap</option>
-                <option value="nasdaq100">Nasdaq 100</option>
+                {universeGroups.map(g => (
+                  <optgroup key={g} label={g}>
+                    {universes.filter(u => u.group === g).map(u => (
+                      <option key={u.value || 'all'} value={u.value}>{u.label}</option>
+                    ))}
+                  </optgroup>
+                ))}
               </select>
             </div>
             <div>
@@ -223,7 +245,12 @@ export default function StockScreener() {
               {filters.map(f => (
                 <div key={f.id} style={{ display: 'flex', flexDirection: 'column', gap: 3, background: 'var(--theme-bg, #0a1220)', border: `1px solid ${C.border}`, padding: 6 }}>
                   <div style={{ display: 'flex', gap: 4 }}>
-                    <FieldSelect value={f.field} fields={fields} onChange={v => patchFilter(f.id, { field: v })} />
+                    <FieldSelect value={f.field} fields={fields} onChange={v => patchFilter(f.id, { field: v, param: v === 'priceChange' ? (f.param || '1M') : undefined })} />
+                    {f.field === 'priceChange' && (
+                      <select value={f.param || '1M'} onChange={e => patchFilter(f.id, { param: e.target.value })} style={{ ...SELECT, width: 56, flexShrink: 0, padding: '4px 3px' }} title="Lookback period">
+                        {PRICE_PERIODS.map(p => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                    )}
                     <select value={f.operator} onChange={e => patchFilter(f.id, { operator: e.target.value })} style={{ ...SELECT, width: 44, flexShrink: 0, padding: '4px 3px' }}>
                       {OPERATORS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
@@ -255,11 +282,18 @@ export default function StockScreener() {
           <div style={{ display: 'flex', gap: 6 }}>
             <div style={{ flex: 1 }}>
               <label style={LABEL}>Sort by</label>
-              <select value={sortBy} onChange={e => { setSortBy(e.target.value); setLocalSort(prev => ({ ...prev, key: e.target.value })) }} style={SELECT} onFocus={focus} onBlur={blur}>
-                {TABLE_COLS.filter(c => !['ticker','companyName','sector'].includes(c.key as string)).map(c => (
-                  <option key={c.key as string} value={c.key as string}>{c.label}</option>
-                ))}
-              </select>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <select value={sortBy} onChange={e => { setSortBy(e.target.value); setLocalSort(prev => ({ ...prev, key: e.target.value })) }} style={{ ...SELECT, flex: 1 }} onFocus={focus} onBlur={blur}>
+                  {TABLE_COLS.filter(c => !['ticker','companyName','sector'].includes(c.key as string)).map(c => (
+                    <option key={c.key as string} value={c.key as string}>{c.label === 'Chg %' ? 'Price Change' : c.label}</option>
+                  ))}
+                </select>
+                {sortBy === 'priceChange' && (
+                  <select value={sortParam} onChange={e => setSortParam(e.target.value)} style={{ ...SELECT, width: 56, flexShrink: 0, padding: '4px 3px' }} title="Lookback period">
+                    {PRICE_PERIODS.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                )}
+              </div>
             </div>
             <div>
               <label style={LABEL}>Dir</label>
@@ -343,7 +377,7 @@ export default function StockScreener() {
                     {activeCols.map(col => (
                       <th key={col.key as string} onClick={() => handleSort(col.key as string)}
                         style={{ padding: '7px 10px', textAlign: col.key === 'ticker' || col.key === 'companyName' || col.key === 'sector' ? 'left' : 'right', fontFamily: C.sans, fontSize: 9, color: localSort.key === col.key ? C.gold : C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', cursor: 'pointer', whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border}`, userSelect: 'none' }}>
-                        {col.label}{localSort.key === col.key ? (localSort.dir === 'desc' ? ' ↓' : ' ↑') : ''}
+                        {col.key === 'priceChange' && data?.changePeriod ? `${data.changePeriod} Chg` : col.label}{localSort.key === col.key ? (localSort.dir === 'desc' ? ' ↓' : ' ↑') : ''}
                       </th>
                     ))}
                   </tr>

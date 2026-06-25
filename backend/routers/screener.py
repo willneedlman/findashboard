@@ -52,6 +52,63 @@ def _load_universe() -> "tuple[set, list, dict]":
 
 _UNIVERSE, _UNIVERSE_LIST, _INDEX_SETS = _load_universe()
 
+# Selectable universes beyond the three raw index sets. Index ETFs reuse the
+# bundled set of the index they track; Sector SPDRs are the S&P 500 members in
+# one GICS sector, which is exactly what the Select Sector SPDR funds hold. Both
+# resolve entirely against bundled data, so picking an ETF needs no holdings API.
+_ETF_ALIAS = {
+    "spy": "sp500", "voo": "sp500", "ivv": "sp500",
+    "qqq": "nasdaq100",
+    "mdy": "sp400", "ijh": "sp400",
+}
+_SECTOR_SPDR = {
+    "xlk": "Technology", "xlv": "Healthcare", "xlf": "Financial Services",
+    "xly": "Consumer Cyclical", "xlc": "Communication Services",
+    "xli": "Industrials", "xlp": "Consumer Defensive", "xle": "Energy",
+    "xlu": "Utilities", "xlre": "Real Estate", "xlb": "Basic Materials",
+}
+
+# Picker options for the frontend (value, label, group). "" screens all indexes.
+UNIVERSE_OPTIONS = [
+    {"value": "",          "label": "All (S&P 500 + 400 + Nasdaq 100)", "group": "Indexes"},
+    {"value": "sp500",     "label": "S&P 500",         "group": "Indexes"},
+    {"value": "sp400",     "label": "S&P 400 Midcap",  "group": "Indexes"},
+    {"value": "nasdaq100", "label": "Nasdaq 100",      "group": "Indexes"},
+    {"value": "spy", "label": "SPY · S&P 500",        "group": "Index ETFs"},
+    {"value": "voo", "label": "VOO · S&P 500",        "group": "Index ETFs"},
+    {"value": "ivv", "label": "IVV · S&P 500",        "group": "Index ETFs"},
+    {"value": "qqq", "label": "QQQ · Nasdaq 100",     "group": "Index ETFs"},
+    {"value": "mdy", "label": "MDY · S&P 400 Midcap", "group": "Index ETFs"},
+    {"value": "ijh", "label": "IJH · S&P 400 Midcap", "group": "Index ETFs"},
+    {"value": "xlk",  "label": "XLK · Technology",          "group": "Sector SPDRs"},
+    {"value": "xlf",  "label": "XLF · Financials",          "group": "Sector SPDRs"},
+    {"value": "xlv",  "label": "XLV · Health Care",         "group": "Sector SPDRs"},
+    {"value": "xly",  "label": "XLY · Consumer Cyclical",   "group": "Sector SPDRs"},
+    {"value": "xlc",  "label": "XLC · Communication Svcs",  "group": "Sector SPDRs"},
+    {"value": "xli",  "label": "XLI · Industrials",         "group": "Sector SPDRs"},
+    {"value": "xlp",  "label": "XLP · Consumer Defensive",  "group": "Sector SPDRs"},
+    {"value": "xle",  "label": "XLE · Energy",              "group": "Sector SPDRs"},
+    {"value": "xlu",  "label": "XLU · Utilities",           "group": "Sector SPDRs"},
+    {"value": "xlre", "label": "XLRE · Real Estate",        "group": "Sector SPDRs"},
+    {"value": "xlb",  "label": "XLB · Materials",           "group": "Sector SPDRs"},
+]
+
+
+def _resolve_universe(u) -> "tuple[set, str | None]":
+    """Map a universe key to (allowed ticker set, optional sector lens). Index
+    ETFs reuse the tracked index's bundled set; Sector SPDRs are the S&P 500
+    members in that GICS sector. Unknown/empty -> the full bundled universe."""
+    if not u:
+        return _UNIVERSE, None
+    key = str(u).lower()
+    if key in _INDEX_SETS:
+        return _INDEX_SETS[key], None
+    if key in _ETF_ALIAS:
+        return _INDEX_SETS.get(_ETF_ALIAS[key], _UNIVERSE), None
+    if key in _SECTOR_SPDR:
+        return _INDEX_SETS.get("sp500", _UNIVERSE), _SECTOR_SPDR[key]
+    return _UNIVERSE, None
+
 # Max NEW (uncached) tickers a single screen may deep-fetch. Cached fundamentals
 # (30d disk cache, filled by the backfill loop below) enrich for free, so a cold
 # screen stays well under the free-tier FMP daily cap. Tune via env.
@@ -134,6 +191,7 @@ class FilterRule(BaseModel):
     operator: str   # gt | lt | gte | lte | eq | between
     value:    float
     value2:   float | None = None  # for 'between'
+    param:    str | None = None    # period for parameterized fields (priceChange): 1D|1W|1M|3M|6M|YTD|1Y
 
 class ScreenRequest(BaseModel):
     filters:    list[FilterRule] = []
@@ -142,6 +200,7 @@ class ScreenRequest(BaseModel):
     exchange:   str | None = None
     sort_by:    str = "marketCap"
     sort_dir:   str = "desc"
+    sort_param: str | None = None   # period when sorting by priceChange
     limit:      int = Field(default=50, ge=1, le=500)
     universe:   str | None = None   # 'sp500' | 'sp400' | 'nasdaq100' | None (all three)
 
@@ -154,7 +213,7 @@ SCREENER_FIELDS = [
     {"id": "volume",         "label": "Volume",               "group": "Price & Market"},
     {"id": "avgVolume",      "label": "Avg Volume",           "group": "Price & Market"},
     {"id": "beta",           "label": "Beta",                 "group": "Price & Market"},
-    {"id": "change1d",       "label": "1D Change (%)",        "group": "Price & Market"},
+    {"id": "priceChange",    "label": "Price Change (%)",     "group": "Price & Market", "param": "period"},
     {"id": "change52wHiPct", "label": "% Below 52W High",    "group": "Price & Market"},
     # Valuation
     {"id": "peRatio",        "label": "P/E Ratio",            "group": "Valuation"},
@@ -179,7 +238,22 @@ SCREENER_FIELDS = [
     # Dividends
     {"id": "dividendYield",  "label": "Dividend Yield (%)",   "group": "Dividends"},
     {"id": "payoutRatio",    "label": "Payout Ratio (%)",     "group": "Dividends"},
+    # Technical (computed from 1y daily history; only when a technical filter/sort is used)
+    {"id": "rsi14",          "label": "RSI (14)",             "group": "Technical"},
+    {"id": "smaDist50",      "label": "Price vs 50D MA (%)",  "group": "Technical"},
+    {"id": "smaDist200",     "label": "Price vs 200D MA (%)", "group": "Technical"},
+    {"id": "vol30",          "label": "30D Volatility (%)",   "group": "Technical"},
 ]
+
+# Selectable lookback periods for the parameterized Price Change filter, mapped to
+# trading-day offsets (YTD is date-based and handled separately).
+PRICE_CHANGE_PERIODS = ["1D", "1W", "1M", "3M", "6M", "YTD", "1Y"]
+_PERIOD_DAYS = {"1D": 1, "1W": 5, "1M": 21, "3M": 63, "6M": 126, "1Y": 252}
+
+# Fields requiring price-history computation (gated so a fundamentals-only screen
+# never pays the history-download cost). priceChange is parameterized by period.
+TECH_FIELDS = {"rsi14", "smaDist50", "smaDist200", "vol30"}
+HISTORY_FIELDS = TECH_FIELDS | {"priceChange"}
 
 SECTORS = ["Technology","Healthcare","Financial Services","Consumer Cyclical",
            "Industrials","Communication Services","Consumer Defensive",
@@ -189,7 +263,7 @@ EXCHANGES = ["NASDAQ", "NYSE", "AMEX"]
 
 @router.get("/fields")
 def get_fields():
-    return {"fields": SCREENER_FIELDS, "sectors": SECTORS, "exchanges": EXCHANGES}
+    return {"fields": SCREENER_FIELDS, "sectors": SECTORS, "exchanges": EXCHANGES, "universes": UNIVERSE_OPTIONS}
 
 # ── FMP screener params builder ───────────────────────────────────────────────
 
@@ -391,7 +465,11 @@ def _enrich(ticker: str, base: dict, claim) -> dict:
 
 def _passes(row: dict, filters: list[FilterRule]) -> bool:
     for f in filters:
-        val = row.get(f.field)
+        # priceChange is parameterized: resolve to the chosen period's value.
+        if f.field == "priceChange":
+            val = row.get(f"chg:{f.param if f.param in PRICE_CHANGE_PERIODS else '1D'}")
+        else:
+            val = row.get(f.field)
         if val is None:
             return False
         try:
@@ -412,13 +490,98 @@ def _passes(row: dict, filters: list[FilterRule]) -> bool:
             return False
     return True
 
+# ── Technical indicators (computed from daily closes) ─────────────────────────
+
+def _history_metrics(series) -> dict:
+    """From a daily-close pandas Series (DatetimeIndex, oldest first): RSI(14,
+    Wilder), price-vs-SMA distances, 30D vol, and price change for each lookback
+    period (stored as chg:<period>, including a date-based YTD)."""
+    import numpy as np
+    out: dict = {}
+    s = series.dropna()
+    c = s.values.astype(float)
+    if c.size < 30:
+        return out
+    price = float(c[-1])
+    if c.size >= 50:
+        out["smaDist50"] = round((price / c[-50:].mean() - 1) * 100, 1)
+    if c.size >= 200:
+        out["smaDist200"] = round((price / c[-200:].mean() - 1) * 100, 1)
+
+    delta = np.diff(c)
+    if delta.size >= 14:
+        gain = np.where(delta > 0, delta, 0.0)
+        loss = np.where(delta < 0, -delta, 0.0)
+        # Wilder smoothing: seed with the first 14-period average, then EMA.
+        ag = gain[:14].mean(); al = loss[:14].mean()
+        for i in range(14, delta.size):
+            ag = (ag * 13 + gain[i]) / 14
+            al = (al * 13 + loss[i]) / 14
+        out["rsi14"] = 100.0 if al == 0 else round(100 - 100 / (1 + ag / al), 1)
+
+    if c.size >= 31:
+        rets = np.diff(np.log(c[-31:]))
+        out["vol30"] = round(float(rets.std(ddof=1)) * (252 ** 0.5) * 100, 1)
+
+    for p, d in _PERIOD_DAYS.items():
+        # Clamp the offset to the available span so 1Y (≈252d, often just over the
+        # ~251 trading days in a 1y pull) falls back to the earliest close instead
+        # of going None.
+        idx = d if c.size > d else c.size - 1
+        out[f"chg:{p}"] = round((c[-1] / c[-1 - idx] - 1) * 100, 1) if idx > 0 else None
+    try:
+        import datetime
+        mask = s.index >= f"{datetime.date.today().year}-01-01"
+        if mask.any():
+            base = float(s[mask].iloc[0])
+            out["chg:YTD"] = round((price / base - 1) * 100, 1) if base else None
+    except Exception:
+        pass
+    return out
+
+
+def _compute_history_batch(tickers: list[str]) -> dict:
+    """Map ticker -> history-metrics dict. Disk-cached per ticker (daily TTL);
+    uncached names are pulled in one batched yfinance download (no N HTTP calls)."""
+    out: dict = {}
+    need: list[str] = []
+    for t in tickers:
+        cached = disk_get(f"histv2:{t}")
+        if cached is not None:
+            out[t] = cached
+        else:
+            need.append(t)
+    if not need:
+        return out
+    try:
+        data = yf.download(need, period="1y", interval="1d", group_by="ticker",
+                           threads=True, progress=False, auto_adjust=True)
+    except Exception as e:
+        logger.warning("history batch download failed: %s", e)
+        data = None
+    for t in need:
+        metrics: dict = {}
+        try:
+            if data is not None:
+                closes = (data[t]["Close"] if len(need) > 1 else data["Close"])
+                metrics = _history_metrics(closes)
+        except Exception:
+            metrics = {}
+        # Only cache real results; caching {} on a transient download failure would
+        # blank the whole universe's history for the full 24h TTL.
+        if metrics:
+            disk_set(f"histv2:{t}", metrics, ttl=86400)
+        out[t] = metrics
+    return out
+
+
 # ── Main screen endpoint ──────────────────────────────────────────────────────
 
 @router.post("/run")
 def run_screen(req: ScreenRequest):
     import json, hashlib
     # Bump CACHE_VER whenever screener logic changes to invalidate stale disk-cached results
-    CACHE_VER = "v4"
+    CACHE_VER = "v8"
     cache_key = CACHE_VER + hashlib.md5(json.dumps(req.model_dump(), sort_keys=True).encode()).hexdigest()
     with _lock:
         if cache_key in _screen_cache:
@@ -431,10 +594,20 @@ def run_screen(req: ScreenRequest):
 
     candidates: list[dict] = []
 
+    # Resolve the chosen universe to an allowed ticker set + optional sector lens.
+    # A Sector SPDR pick (e.g. XLK) screens the S&P 500 members in that sector, so
+    # its sector flows through the same path the Sector dropdown uses.
+    uni_set, spdr_sector = _resolve_universe(req.universe)
+    effective_sector = req.sector or spdr_sector
+    # Technical indicators and price-change periods need price history, so only
+    # compute them when a filter or the sort references one (keeps fundamentals-
+    # only screens fast).
+    need_history = req.sort_by in HISTORY_FIELDS or any(f.field in HISTORY_FIELDS for f in req.filters)
+
     fmp_screened = False  # tracks whether FMP already applied sector/exchange filtering
     if fmp.available():
         try:
-            params = _fmp_params_from_filters(req.filters, req.sector, req.exchange, req.limit)
+            params = _fmp_params_from_filters(req.filters, effective_sector, req.exchange, req.limit)
             raw = fmp._get("/stock-screener", params)
             if isinstance(raw, list) and raw:
                 fmp_screened = True
@@ -460,8 +633,7 @@ def run_screen(req: ScreenRequest):
     # screen within an index, so we never fall back to non-index names — an empty
     # result honestly means nothing in that index passed the filters.
     if _UNIVERSE and candidates:
-        uni = _INDEX_SETS.get(req.universe, _UNIVERSE)
-        candidates = [c for c in candidates if _norm_tk(c["ticker"]) in uni]
+        candidates = [c for c in candidates if _norm_tk(c["ticker"]) in uni_set]
 
     # Fallback: sector-aware liquid tickers via yfinance
     SECTOR_TICKERS: dict[str, list[str]] = {
@@ -490,14 +662,14 @@ def run_screen(req: ScreenRequest):
     ]
 
     if not candidates:
-        filter_sector = req.sector.lower() if req.sector else None
+        filter_sector = effective_sector.lower() if effective_sector else None
         # Use sector-specific tickers when sector is requested; otherwise use broad list
         if filter_sector and filter_sector in SECTOR_TICKERS:
             tickers_to_fetch = SECTOR_TICKERS[filter_sector]
         elif _UNIVERSE_LIST:
             # Broad fallback over the index universe; capped because each name is a
             # separate yfinance fast_info call (this path only runs when FMP is down).
-            sel = _INDEX_SETS.get(req.universe) if req.universe in _INDEX_SETS else None
+            sel = uni_set if req.universe else None
             tickers_to_fetch = (sorted(sel) if sel else _UNIVERSE_LIST)[:300]
         else:
             tickers_to_fetch = LIQUID_TICKERS
@@ -518,10 +690,10 @@ def run_screen(req: ScreenRequest):
             results = list(ex.map(_quick, tickers_to_fetch))
         candidates = [r for r in results if r and r.get("price")]
         # Pre-fill sector so post-enrichment filter doesn't strip them if yfinance/FMP fails
-        if filter_sector and req.sector:
+        if filter_sector and effective_sector:
             for c in candidates:
                 if not c.get("sector"):
-                    c["sector"] = req.sector
+                    c["sector"] = effective_sector
 
     if not candidates:
         try:
@@ -583,12 +755,34 @@ def run_screen(req: ScreenRequest):
     # Skip for FMP-screened candidates — FMP already filtered them at the source,
     # and its profile endpoint may use different sector naming (e.g. "Consumer Discretionary"
     # vs "Consumer Cyclical") which would incorrectly eliminate valid results.
-    if req.sector and not fmp_screened:
-        fs = req.sector.lower()
+    if effective_sector and not fmp_screened:
+        fs = effective_sector.lower()
         enriched = [r for r in enriched if (r.get("sector") or "").lower() == fs]
     if req.exchange and not fmp_screened:
         fe = req.exchange.lower()
         enriched = [r for r in enriched if (r.get("exchange") or "").lower() == fe]
+
+    # Merge history metrics (technicals + price-change periods) only when
+    # requested, after sector/exchange filtering so history is fetched for the
+    # smallest candidate set.
+    display_period = None
+    if need_history and enriched:
+        hist = _compute_history_batch([r["ticker"] for r in enriched])
+        for r in enriched:
+            r.update(hist.get(r["ticker"], {}))
+        # The Price Change column tracks the period the user is sorting/filtering
+        # by, so the displayed value matches the active control.
+        if req.sort_by == "priceChange":
+            display_period = req.sort_param
+        else:
+            display_period = next((f.param for f in req.filters if f.field == "priceChange" and f.param), None)
+        display_period = display_period if display_period in PRICE_CHANGE_PERIODS else "1D"
+        for r in enriched:
+            r["priceChange"] = r.get(f"chg:{display_period}")
+    else:
+        # No history needed: the Price Change column shows the free 1D move.
+        for r in enriched:
+            r["priceChange"] = r.get("change1d")
 
     # Apply precise client-side filters
     filtered = [r for r in enriched if _passes(r, req.filters)]
@@ -608,11 +802,14 @@ def run_screen(req: ScreenRequest):
             return float("-inf") if reverse else float("inf")
     filtered.sort(key=sort_key, reverse=reverse)
 
-    # Strip internal bookkeeping keys before returning
+    # Strip internal bookkeeping keys before returning (per-period change values
+    # are collapsed into the single priceChange field above).
     for r in filtered:
         r.pop("_fmp_screened", None)
+        for k in [k for k in r if k.startswith("chg:")]:
+            r.pop(k, None)
 
-    result = {"results": filtered[:req.limit], "total": len(filtered)}
+    result = {"results": filtered[:req.limit], "total": len(filtered), "changePeriod": display_period or "1D"}
     with _lock:
         _screen_cache[cache_key] = result
     disk_set(f"screen:{cache_key}", result, ttl=3600)
