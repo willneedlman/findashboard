@@ -119,7 +119,7 @@ function freshState(): SimState {
   }
 }
 
-interface Ctrl { halfSpread: number; manual: Record<string, number>; running: boolean; speed: number }
+interface Ctrl { halfSpread: number; manual: Record<string, number>; bidAdj: Record<string, number>; askAdj: Record<string, number>; running: boolean; speed: number }
 
 // Yield for a bond: starting curve + parallel level + slope twist + manual nudge.
 function bondYield(id: string, maturity: number, s: SimState, c: Ctrl): number {
@@ -155,11 +155,15 @@ function buildBook(s: SimState, c: Ctrl): Book {
   for (const b of BONDS) {
     const yld = bondYield(b.id, b.maturity, s, c)
     const m   = bondMath(b.coupon, b.maturity, yld)
-    const hs  = c.halfSpread
+    // Bid and ask are quoted independently off the mid (model price): each side's
+    // distance = global half-spread + that side's own edit. Lets you skew a bond's
+    // market without the other side moving in lockstep.
+    const bidHs = Math.max(c.halfSpread + (c.bidAdj[b.id] ?? 0), 0.001)
+    const askHs = Math.max(c.halfSpread + (c.askAdj[b.id] ?? 0), 0.001)
     book[b.id] = {
       id: b.id, maturity: b.maturity, coupon: b.coupon, yieldPct: yld,
       price: m.price, modDur: m.modDur, convexity: m.convexity, dv01: perUnitDV01(m),
-      bid: m.price - hs, ask: m.price + hs,
+      bid: m.price - bidHs, ask: m.price + askHs,
     }
   }
   return book
@@ -270,6 +274,9 @@ export default function FixedIncomeMarketMaker() {
   const sim = useRef<SimState>(freshState())
   const [halfSpread, setHalfSpread] = useState(0.06)
   const [manual, setManual]         = useState<Record<string, number>>(() => Object.fromEntries(BONDS.map(b => [b.id, 0])))
+  const zeroBondAdj = () => Object.fromEntries(BONDS.map(b => [b.id, 0]))
+  const [bidAdj, setBidAdj]         = useState<Record<string, number>>(zeroBondAdj)
+  const [askAdj, setAskAdj]         = useState<Record<string, number>>(zeroBondAdj)
   const [running, setRunning]       = useState(false)
   const [speed, setSpeed]           = useState(0.5)
   const [hedgeQty, setHedgeQty]     = useState(50)
@@ -294,8 +301,8 @@ export default function FixedIncomeMarketMaker() {
   }, [frame])
 
   // Latest controls available to the (single, stable) game-loop.
-  const ctrl = useRef<Ctrl>({ halfSpread, manual, running, speed })
-  ctrl.current = { halfSpread, manual, running, speed }
+  const ctrl = useRef<Ctrl>({ halfSpread, manual, bidAdj, askAdj, running, speed })
+  ctrl.current = { halfSpread, manual, bidAdj, askAdj, running, speed }
 
   const snapshot = (s: SimState, c: Ctrl): Frame => {
     const book = buildBook(s, c)
@@ -375,19 +382,20 @@ export default function FixedIncomeMarketMaker() {
   const directional = f && r ? r.netPnl - f.edge : 0
   const dvFmt = (n: number) => `${n >= 0 ? '+' : ''}$${Math.round(n)}`
 
-  // Editing a bid/ask re-marks that bond's yield so the mid lands where you
-  // typed; routes to the existing per-bond yield-nudge override (linearized via
-  // modified duration, no change to the pricing math).
+  // Editing a bid/ask requotes only that side off the bond's mid (model price);
+  // the other side stays put, so you can quote a skewed market. The yield-nudge
+  // sliders re-mark the bond (move the mid) separately.
   const onQuote = (id: string, side: 'bid' | 'ask', price: number) => {
     const q = f?.book[id]
-    if (!q || q.modDur <= 0 || q.price <= 0) return
-    const mid = side === 'bid' ? price + halfSpread : price - halfSpread
-    // Absolute target nudge off this frame's values (not the accumulating state),
-    // so repeated chevron clicks before the next tick stay idempotent.
-    const dYbp = -(mid - q.price) / (q.modDur * q.price * 0.0001)
-    const target = Math.max(-99, Math.min(99, +((manual[id] ?? 0) + dYbp).toFixed(1)))
-    setManual(m => ({ ...m, [id]: target }))
+    if (!q || q.price <= 0) return
+    const dist = Math.max(0, side === 'bid' ? q.price - price : price - q.price)
+    const adj = Math.min(5, dist - halfSpread)
+    if (side === 'bid') setBidAdj(m => ({ ...m, [id]: adj }))
+    else setAskAdj(m => ({ ...m, [id]: adj }))
   }
+  // Repaint the book the moment a quote edit lands so the bid/ask react at once
+  // even while the sim is paused, instead of waiting for the next tick.
+  useEffect(() => { setFrame(snapshot(sim.current, ctrl.current)) }, [bidAdj, askAdj]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <PageWrapper>
