@@ -76,6 +76,7 @@ def _load_intl() -> "tuple[dict, dict]":
 _INTL_SETS, _INTL_NAMES = _load_intl()
 _INDEX_SETS.update(_INTL_SETS)        # so _resolve_universe + the yfinance path resolve them
 _INTL_KEYS = set(_INTL_SETS.keys())   # universes that need USD FX-normalization + skip FMP
+_ALL_INTL = set().union(*_INTL_SETS.values()) if _INTL_SETS else set()
 
 # Country -> region bucket for the Region filter (country comes from yfinance .info).
 _INTL_COUNTRY = {"ftse100": "United Kingdom", "dax40": "Germany", "nikkei225": "Japan"}
@@ -92,15 +93,8 @@ _COUNTRY_REGION = {
     "Singapore": "Asia-Pacific", "India": "Asia-Pacific",
 }
 
-# Selectable universes beyond the three raw index sets. Index ETFs reuse the
-# bundled set of the index they track; Sector SPDRs are the S&P 500 members in
-# one GICS sector, which is exactly what the Select Sector SPDR funds hold. Both
-# resolve entirely against bundled data, so picking an ETF needs no holdings API.
-_ETF_ALIAS = {
-    "spy": "sp500", "voo": "sp500", "ivv": "sp500",
-    "qqq": "nasdaq100",
-    "mdy": "sp400", "ijh": "sp400",
-}
+# Sector SPDRs are the S&P 500 members in one GICS sector, which is exactly what
+# the Select Sector SPDR funds hold — resolved against bundled data, no API.
 _SECTOR_SPDR = {
     "xlk": "Technology", "xlv": "Healthcare", "xlf": "Financial Services",
     "xly": "Consumer Cyclical", "xlc": "Communication Services",
@@ -108,18 +102,13 @@ _SECTOR_SPDR = {
     "xlu": "Utilities", "xlre": "Real Estate", "xlb": "Basic Materials",
 }
 
-# Picker options for the frontend (value, label, group). "" screens all indexes.
+# Picker options for the frontend (value, label, group). "" = everything (the US
+# indexes plus the bundled international names).
 UNIVERSE_OPTIONS = [
-    {"value": "",          "label": "All (S&P 500 + 400 + Nasdaq 100)", "group": "Indexes"},
+    {"value": "",          "label": "All",             "group": "Indexes"},
     {"value": "sp500",     "label": "S&P 500",         "group": "Indexes"},
     {"value": "sp400",     "label": "S&P 400 Midcap",  "group": "Indexes"},
     {"value": "nasdaq100", "label": "Nasdaq 100",      "group": "Indexes"},
-    {"value": "spy", "label": "SPY · S&P 500",        "group": "Index ETFs"},
-    {"value": "voo", "label": "VOO · S&P 500",        "group": "Index ETFs"},
-    {"value": "ivv", "label": "IVV · S&P 500",        "group": "Index ETFs"},
-    {"value": "qqq", "label": "QQQ · Nasdaq 100",     "group": "Index ETFs"},
-    {"value": "mdy", "label": "MDY · S&P 400 Midcap", "group": "Index ETFs"},
-    {"value": "ijh", "label": "IJH · S&P 400 Midcap", "group": "Index ETFs"},
     {"value": "xlk",  "label": "XLK · Technology",          "group": "Sector SPDRs"},
     {"value": "xlf",  "label": "XLF · Financials",          "group": "Sector SPDRs"},
     {"value": "xlv",  "label": "XLV · Health Care",         "group": "Sector SPDRs"},
@@ -175,8 +164,6 @@ def _resolve_universe(u) -> "tuple[set, str | None]":
     key = str(u).lower()
     if key in _INDEX_SETS:
         return _INDEX_SETS[key], None
-    if key in _ETF_ALIAS:
-        return _INDEX_SETS.get(_ETF_ALIAS[key], _UNIVERSE), None
     if key in _SECTOR_SPDR:
         return _INDEX_SETS.get("sp500", _UNIVERSE), _SECTOR_SPDR[key]
     return _UNIVERSE, None
@@ -393,6 +380,42 @@ def _fmp_snapshot(sector, exchange) -> list:
     # Refresh failed (rate-limited / empty): serve the last good copy so data
     # never blanks once it has been warmed.
     return disk_get(sticky_key) or []
+
+
+def _intl_snapshot() -> list:
+    """Base data for every bundled international name, FX-normalized to USD, with
+    bundled company names + per-index country. Disk-cached 6h (+ 7d sticky) so the
+    'All' / international screens don't re-fetch ~140 fast_info calls each time."""
+    if not _ALL_INTL:
+        return []
+    fresh = disk_get("screener:intlsnap")
+    if fresh is not None:
+        return fresh
+    tk_country = {t: _INTL_COUNTRY.get(k) for k, s in _INTL_SETS.items() for t in s}
+
+    def _q(tk):
+        try:
+            fi = yf.Ticker(tk).fast_info
+            price = getattr(fi, "last_price", None)
+            mc = getattr(fi, "market_cap", None)
+            rate, divisor = _fx_to_usd(getattr(fi, "currency", None))
+            return {
+                "ticker": tk, "companyName": _INTL_NAMES.get(tk) or tk,
+                "price": round(float(price) / divisor * rate, 2) if price else None,
+                "marketCap": round(float(mc) / divisor * rate / 1e9, 2) if mc else None,
+                "beta": None, "volume": None, "sector": "", "industry": "", "exchange": "",
+                "country": tk_country.get(tk), "change1d": None,
+            }
+        except Exception:
+            return None
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=15) as ex:
+        rows = [r for r in ex.map(_q, sorted(_ALL_INTL)) if r and r.get("price")]
+    if rows:
+        disk_set("screener:intlsnap", rows, ttl=21600)
+        disk_set("screener:intlsnap:sticky", rows, ttl=604800)
+        return rows
+    return disk_get("screener:intlsnap:sticky") or []
 
 
 # ── Detail enrichment per ticker ──────────────────────────────────────────────
@@ -629,7 +652,7 @@ def _compute_history_batch(tickers: list[str]) -> dict:
 def run_screen(req: ScreenRequest):
     import json, hashlib
     # Bump CACHE_VER whenever screener logic changes to invalidate stale disk-cached results
-    CACHE_VER = "v13"
+    CACHE_VER = "v14"
     cache_key = CACHE_VER + hashlib.md5(json.dumps(req.model_dump(), sort_keys=True).encode()).hexdigest()
     with _lock:
         if cache_key in _screen_cache:
@@ -667,6 +690,18 @@ def run_screen(req: ScreenRequest):
     # result honestly means nothing in that index passed the filters.
     if _UNIVERSE and candidates:
         candidates = [c for c in candidates if _norm_tk(c["ticker"]) in uni_set]
+
+    # Add international names: the picked intl universe, or every intl name when the
+    # universe is "All". Base data comes USD-normalized from the cached intl snapshot.
+    if not req.sector and not req.exchange:
+        if is_intl:
+            intl_want = uni_set
+        elif not req.universe:
+            intl_want = _ALL_INTL
+        else:
+            intl_want = set()
+        if intl_want:
+            candidates += [r for r in _intl_snapshot() if r["ticker"] in intl_want]
 
     # Fallback: sector-aware liquid tickers via yfinance
     SECTOR_TICKERS: dict[str, list[str]] = {
@@ -775,10 +810,11 @@ def run_screen(req: ScreenRequest):
     if not candidates:
         raise HTTPException(503, "No data source available. Configure FMP_API_KEY for best results.")
 
-    # Enrich top candidates in parallel (cap at 150 to leave room for sector/exchange
-    # filtering). Cached tickers enrich for free; new ones draw on a small per-screen
-    # budget so a cold screen can't exhaust the free-tier daily FMP cap.
-    to_enrich = candidates[:150]
+    # Sort by market cap before capping so the largest names (incl. international,
+    # which are appended unsorted) survive the cap. Enrichment is cache-backed and
+    # cheap now, so a larger cap is fine.
+    candidates.sort(key=lambda c: c.get("marketCap") or 0, reverse=True)
+    to_enrich = candidates[:250]
     _budget = {"n": _LIVE_ENRICH_BUDGET}
     _budget_lock = threading.Lock()
     def _claim() -> bool:

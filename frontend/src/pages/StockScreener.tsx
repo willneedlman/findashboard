@@ -161,7 +161,7 @@ export default function StockScreener() {
   const exchanges: string[] = meta?.exchanges ?? []
   const regions: string[]   = meta?.regions ?? []
   const universes: { value: string; label: string; group: string }[] = meta?.universes ?? [
-    { value: '', label: 'All (S&P 500 + 400 + Nasdaq 100)', group: 'Indexes' },
+    { value: '', label: 'All', group: 'Indexes' },
     { value: 'sp500', label: 'S&P 500', group: 'Indexes' },
   ]
   const universeGroups = [...new Set(universes.map(u => u.group))]
