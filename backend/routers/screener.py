@@ -184,7 +184,7 @@ def _resolve_universe(u) -> "tuple[set, str | None]":
 # Max NEW (uncached) tickers a single screen may deep-fetch. Cached fundamentals
 # (30d disk cache, filled by the backfill loop below) enrich for free, so a cold
 # screen stays well under the free-tier FMP daily cap. Tune via env.
-_LIVE_ENRICH_BUDGET = int(os.getenv("SCREENER_LIVE_ENRICH", "25"))
+_LIVE_ENRICH_BUDGET = int(os.getenv("SCREENER_LIVE_ENRICH", "8"))
 
 
 def _backfill_order() -> list:
@@ -208,6 +208,10 @@ def _backfill_once(daily: int) -> int:
     deploys can't stack multiple runs and blow the free-tier daily FMP cap."""
     if not fmp.available():
         return 0
+    # Warm the base-data snapshot first (one call fills every screen's base columns
+    # + the 7d sticky fallback). The 6h fresh window is below the backfill cadence,
+    # so this naturally refetches.
+    _fmp_snapshot("", "")
     if disk_get("screener:backfill:ran") is not None:
         return -1
     fetched = 0
@@ -290,7 +294,6 @@ SCREENER_FIELDS = [
     {"id": "change52wHiPct", "label": "% Below 52W High",    "group": "Price & Market"},
     # Valuation
     {"id": "peRatio",        "label": "P/E Ratio",            "group": "Valuation"},
-    {"id": "forwardPE",      "label": "Forward P/E",          "group": "Valuation"},
     {"id": "pbRatio",        "label": "P/B Ratio",            "group": "Valuation"},
     {"id": "psRatio",        "label": "P/S Ratio",            "group": "Valuation"},
     {"id": "evEbitda",       "label": "EV/EBITDA",            "group": "Valuation"},
@@ -327,6 +330,8 @@ _PERIOD_DAYS = {"1D": 1, "1W": 5, "1M": 21, "3M": 63, "6M": 126, "1Y": 252}
 # never pays the history-download cost). priceChange is parameterized by period.
 TECH_FIELDS = {"rsi14", "smaDist50", "smaDist200", "vol30"}
 HISTORY_FIELDS = TECH_FIELDS | {"priceChange"}
+# Fields that need a per-ticker yfinance fast_info call (the slow part of a screen).
+FASTINFO_FIELDS = {"change52wHiPct", "avgVolume"}
 
 SECTORS = ["Technology","Healthcare","Financial Services","Consumer Cyclical",
            "Industrials","Communication Services","Consumer Defensive",
@@ -339,83 +344,96 @@ def get_fields():
     return {"fields": SCREENER_FIELDS, "sectors": SECTORS, "exchanges": EXCHANGES,
             "universes": UNIVERSE_OPTIONS, "regions": REGIONS}
 
-# ── FMP screener params builder ───────────────────────────────────────────────
+# ── Cached base-data snapshot from the FMP screener ───────────────────────────
 
-def _fmp_params_from_filters(filters: list[FilterRule], sector, exchange, limit) -> dict:
-    # FMP returns by descending market cap, so to reliably include the smallest
-    # index members (S&P 400 midcaps sit well below the mega caps) we pull the
-    # full top band before intersecting/curating client-side.
-    p: dict = {"limit": 3000}
+def _fmp_snapshot(sector, exchange) -> list:
+    """Base data (price, mkt cap, sector, name, beta, volume, 1D) for the top band
+    of names, pulled once from the FMP screener and disk-cached for 6h. Keyed by
+    sector/exchange only — independent of the numeric filters (those run client
+    side) — so every screen reuses one pull instead of spending an FMP call. This
+    is what keeps screens fast and off the free-tier daily cap."""
+    base = f"{(sector or '').lower()}:{(exchange or '').lower()}"
+    fresh_key, sticky_key = f"screener:snap:{base}", f"screener:snap:sticky:{base}"
+    fresh = disk_get(fresh_key)
+    if fresh is not None:
+        return fresh
+    if not fmp.available():
+        return disk_get(sticky_key) or []
+    params: dict = {"limit": 3000}
     if sector:
-        p["sector"] = sector
+        params["sector"] = sector
     if exchange:
-        p["exchange"] = exchange.lower()  # FMP expects lowercase exchange codes
+        params["exchange"] = str(exchange).lower()
+    rows = []
+    try:
+        raw = fmp._get("/stock-screener", params)
+        if isinstance(raw, list):
+            for r in raw:
+                if not r.get("symbol"):
+                    continue
+                rows.append({
+                    "ticker":      r.get("symbol", ""),
+                    "companyName": r.get("companyName", ""),
+                    "price":       r.get("price"),
+                    "marketCap":   round((r.get("marketCap") or 0) / 1e9, 2),
+                    "beta":        r.get("beta"),
+                    "volume":      r.get("volume"),
+                    "sector":      r.get("sector", ""),
+                    "industry":    r.get("industry", ""),
+                    "exchange":    r.get("exchangeShortName", ""),
+                    "country":     r.get("country", ""),
+                    "change1d":    r.get("changesPercentage"),
+                })
+    except Exception as e:
+        logger.warning("FMP snapshot error: %s", e)
+    if rows:
+        disk_set(fresh_key, rows, ttl=21600)     # 6h fresh window
+        disk_set(sticky_key, rows, ttl=604800)   # 7d sticky fallback when FMP is throttled
+        return rows
+    # Refresh failed (rate-limited / empty): serve the last good copy so data
+    # never blanks once it has been warmed.
+    return disk_get(sticky_key) or []
 
-    field_map = {
-        "marketCap":     ("marketCapMoreThan", "marketCapLessThan", 1e9),
-        "price":         ("priceMoreThan",     "priceLessThan",     1),
-        "volume":        ("volumeMoreThan",    "volumeLessThan",    1),
-        "beta":          ("betaMoreThan",      "betaLessThan",      1),
-        "dividendYield": ("dividendMoreThan",  "dividendLessThan",  0.01),
-    }
-
-    for f in filters:
-        if f.field not in field_map:
-            continue
-        more_key, less_key, scale = field_map[f.field]
-        val = f.value * scale
-        if f.operator in ("gt", "gte"):
-            p[more_key] = val
-        elif f.operator in ("lt", "lte"):
-            p[less_key] = val
-        elif f.operator == "between" and f.value2 is not None:
-            p[more_key] = val
-            p[less_key] = f.value2 * scale
-
-    return p
 
 # ── Detail enrichment per ticker ──────────────────────────────────────────────
 
-def _enrich(ticker: str, base: dict, claim) -> dict:
-    cache_key = ticker
+def _enrich(ticker: str, base: dict, claim, want_fastinfo: bool = False) -> dict:
+    # Separate cache entries for fast-info vs not, so a cheap screen's result isn't
+    # served when 52w-high / avg-volume are needed.
+    cache_key = ticker + ("+fi" if want_fastinfo else "")
     with _lock:
         if cache_key in _detail_cache:
             return {**base, **_detail_cache[cache_key]}
 
+    detail: dict = {"change1d": base.get("change1d")}
     try:
-        tkr = yf.Ticker(ticker)
-        fi = tkr.fast_info
+        price = base.get("price")
+        # yfinance is only touched for 52w-high / avg-volume, and only when a screen
+        # actually uses them — those per-ticker calls are the slow part of a screen.
+        if want_fastinfo:
+            try:
+                fi = yf.Ticker(ticker).fast_info
+                hi52 = getattr(fi, "year_high", None)
+                last_price = getattr(fi, "last_price", None)
+                prev_close = getattr(fi, "previous_close", None)
+                avg_vol = getattr(fi, "three_month_average_volume", None)
+                price = price or last_price
+                hi_ref = last_price or price
+                if hi52 and hi_ref and hi52 > 0:
+                    detail["change52wHiPct"] = round((hi_ref / hi52 - 1) * 100, 1)
+                if avg_vol:
+                    detail["avgVolume"] = int(avg_vol)
+                if detail["change1d"] is None and prev_close and last_price and prev_close > 0:
+                    detail["change1d"] = round((last_price / prev_close - 1) * 100, 2)
+            except Exception:
+                pass
 
-        hi52       = getattr(fi, "year_high",                    None)
-        last_price = getattr(fi, "last_price",                   None)
-        prev_close = getattr(fi, "previous_close",               None)
-        avg_vol    = getattr(fi, "three_month_average_volume",   None)
-        price      = base.get("price") or last_price
-
-        # Ratio uses last_price (same currency as year_high); base price may be
-        # USD-normalized for intl, which would mismatch the local-currency high.
-        hi_ref = last_price or price
-        change52 = round((hi_ref / hi52 - 1) * 100, 1) if hi52 and hi_ref and hi52 > 0 else None
-
-        # Always calculate 1D% from fast_info; only fall back to base if unavailable
-        change1d = base.get("change1d")
-        if change1d is None and prev_close and last_price and prev_close > 0:
-            change1d = round((last_price / prev_close - 1) * 100, 2)
-
-        detail: dict = {
-            "avgVolume":      int(avg_vol) if avg_vol else None,
-            "change52wHiPct": change52,
-            "change1d":       change1d,
-        }
-
-        # Deep fundamentals: free when cached (30d disk, filled by the backfill job
-        # and prior screens); otherwise one budget unit, so a single cold screen
-        # can't blow the free-tier daily FMP cap. Uncached + no budget -> the
-        # yfinance .info fallback below fills what it can.
-        fmp_ok = False
+        # Deep fundamentals are free when cached (filled by the backfill loop + prior
+        # screens). A small per-screen budget allows a little live warming without
+        # burning the free-tier daily FMP cap; uncached + no budget stays null and
+        # gets warmed by the backfill instead of a slow per-ticker yfinance call.
         fund = fmp.get_fundamentals(ticker, cached_only=True) if fmp.available() else None
-        granted = fund is not None or claim()
-        if granted and fund is None and fmp.available():
+        if fund is None and fmp.available() and claim():
             fund = fmp.get_fundamentals(ticker)
         if fund:
             try:
@@ -456,7 +474,6 @@ def _enrich(ticker: str, base: dict, claim) -> dict:
                     "industry":       prof.get("industry") or base.get("industry"),
                     "country":        prof.get("country") or base.get("country"),
                     "peRatio":        round(price_val / eps, 1) if eps > 0 and price_val else None,
-                    "forwardPE":      None,
                     "pbRatio":        round(mktcap / equity, 2) if equity > 0 else None,
                     "psRatio":        round(mktcap / rev, 2) if rev > 0 else None,
                     "evEbitda":       round(ev_raw / ebitda, 1) if ebitda > 0 else None,
@@ -472,64 +489,16 @@ def _enrich(ticker: str, base: dict, claim) -> dict:
                     "epsGrowth":      round((eps / eps_prior - 1) * 100, 1) if eps and eps_prior and eps_prior > 0 else None,
                     "dividendYield":  round((prof.get("lastAnnualDividend") or 0) / price_val * 100, 2) if price_val and price_val > 0 else None,
                 })
-                fmp_ok = True
+                # PEG = trailing P/E over EPS growth, from the values just computed.
+                _pe, _eg = detail.get("peRatio"), detail.get("epsGrowth")
+                detail["pegRatio"] = round(_pe / _eg, 2) if _pe and _eg and _eg > 0 else None
             except Exception:
                 pass
 
-        # Always use yfinance for company name if FMP didn't provide it or it equals the ticker
-        company_from_base = base.get("companyName") or ""
-        needs_name = not detail.get("companyName") or detail.get("companyName") == ticker
-
-        # Map yfinance exchange codes to standard display names (used as fallback if FMP didn't populate it)
-        _YF_EXCHANGE_MAP = {
-            "NMS": "NASDAQ", "NGM": "NASDAQ", "NCM": "NASDAQ", "NAS": "NASDAQ",
-            "NYQ": "NYSE",   "NYS": "NYSE",
-            "ASE": "AMEX",   "PCX": "AMEX",
-        }
-
-        # Populate exchange from yfinance whenever it's not already set (from base or FMP profile)
-        if granted and not detail.get("exchange") and not base.get("exchange"):
-            try:
-                info_dict = tkr.info
-                yf_exch = (info_dict.get("exchange") or "").upper()
-                mapped_exch = _YF_EXCHANGE_MAP.get(yf_exch, yf_exch)
-                if mapped_exch:
-                    detail["exchange"] = mapped_exch
-            except Exception:
-                pass
-
-        if granted and (not fmp_ok or needs_name):
-            try:
-                info_dict = tkr.info
-                cn = info_dict.get("longName") or info_dict.get("shortName")
-                if cn:
-                    detail["companyName"] = cn
-                # Fill fundamentals from yfinance when FMP was unavailable/failed
-                if not fmp_ok:
-                    detail.update({
-                        "peRatio":        info_dict.get("trailingPE"),
-                        "forwardPE":      info_dict.get("forwardPE"),
-                        "pbRatio":        info_dict.get("priceToBook"),
-                        "psRatio":        info_dict.get("priceToSalesTrailing12Months"),
-                        "evEbitda":       info_dict.get("enterpriseToEbitda"),
-                        "pegRatio":       info_dict.get("trailingPegRatio"),
-                        "grossMargin":    round((info_dict.get("grossMargins") or 0) * 100, 1),
-                        "operatingMargin":round((info_dict.get("operatingMargins") or 0) * 100, 1),
-                        "netMargin":      round((info_dict.get("profitMargins") or 0) * 100, 1),
-                        "roe":            round((info_dict.get("returnOnEquity") or 0) * 100, 1),
-                        "roa":            round((info_dict.get("returnOnAssets") or 0) * 100, 1),
-                        "debtEquity":     info_dict.get("debtToEquity"),
-                        "currentRatio":   info_dict.get("currentRatio"),
-                        "revenueGrowth":  round((info_dict.get("revenueGrowth") or 0) * 100, 1),
-                        "epsGrowth":      round((info_dict.get("earningsGrowth") or 0) * 100, 1),
-                        "dividendYield":  round((info_dict.get("dividendYield") or 0) * 100, 2),
-                        "sector":         info_dict.get("sector") or base.get("sector"),
-                        "industry":       info_dict.get("industry") or base.get("industry"),
-                        "country":        info_dict.get("country") or base.get("country"),
-                    })
-            except Exception:
-                if needs_name:
-                    detail["companyName"] = company_from_base or ticker
+        # Name/sector come from the FMP screener result (base) or the FMP profile
+        # above; fall back to the ticker so a row never shows blank.
+        if not detail.get("companyName") and not base.get("companyName"):
+            detail["companyName"] = ticker
 
     except Exception as e:
         logger.warning("enrich %s: %s", ticker, e)
@@ -660,7 +629,7 @@ def _compute_history_batch(tickers: list[str]) -> dict:
 def run_screen(req: ScreenRequest):
     import json, hashlib
     # Bump CACHE_VER whenever screener logic changes to invalidate stale disk-cached results
-    CACHE_VER = "v11"
+    CACHE_VER = "v13"
     cache_key = CACHE_VER + hashlib.md5(json.dumps(req.model_dump(), sort_keys=True).encode()).hexdigest()
     with _lock:
         if cache_key in _screen_cache:
@@ -683,31 +652,14 @@ def run_screen(req: ScreenRequest):
     # compute them when a filter or the sort references one (keeps fundamentals-
     # only screens fast).
     need_history = req.sort_by in HISTORY_FIELDS or any(f.field in HISTORY_FIELDS for f in req.filters)
+    need_fastinfo = req.sort_by in FASTINFO_FIELDS or any(f.field in FASTINFO_FIELDS for f in req.filters)
 
     fmp_screened = False  # tracks whether FMP already applied sector/exchange filtering
     if fmp.available() and not is_intl:
-        try:
-            params = _fmp_params_from_filters(req.filters, effective_sector, req.exchange, req.limit)
-            raw = fmp._get("/stock-screener", params)
-            if isinstance(raw, list) and raw:
-                fmp_screened = True
-                for r in raw:
-                    candidates.append({
-                        "ticker":      r.get("symbol", ""),
-                        "companyName": r.get("companyName", ""),
-                        "price":       r.get("price"),
-                        "marketCap":   round((r.get("marketCap") or 0) / 1e9, 2),
-                        "beta":        r.get("beta"),
-                        "volume":      r.get("volume"),
-                        "sector":      r.get("sector", ""),
-                        "industry":    r.get("industry", ""),
-                        "exchange":    r.get("exchangeShortName", ""),
-                        "country":     r.get("country", ""),
-                        "change1d":    r.get("changesPercentage"),
-                        "_fmp_screened": True,
-                    })
-        except Exception as e:
-            logger.warning("FMP screener error: %s", e)
+        snap = _fmp_snapshot(effective_sector, req.exchange)
+        if snap:
+            fmp_screened = True
+            candidates = [{**r, "_fmp_screened": True} for r in snap]
 
     # Curate to the chosen index universe (S&P 500 / S&P 400 midcap / Nasdaq 100).
     # req.universe picks one index; otherwise all three. Strict: the user asked to
@@ -751,7 +703,7 @@ def run_screen(req: ScreenRequest):
             # Broad fallback over the index universe; capped because each name is a
             # separate yfinance fast_info call (this path only runs when FMP is down).
             sel = uni_set if req.universe else None
-            tickers_to_fetch = (sorted(sel) if sel else _UNIVERSE_LIST)[:300]
+            tickers_to_fetch = (sorted(sel) if sel else _UNIVERSE_LIST)[:150]
         else:
             tickers_to_fetch = LIQUID_TICKERS
 
@@ -836,7 +788,7 @@ def run_screen(req: ScreenRequest):
                 return True
             return False
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
-        enriched = list(ex.map(lambda c: _enrich(c["ticker"], c, _claim), to_enrich))
+        enriched = list(ex.map(lambda c: _enrich(c["ticker"], c, _claim, need_fastinfo), to_enrich))
 
     # Apply sector / exchange filters (post-enrichment so sector data is populated).
     # Skip for FMP-screened candidates — FMP already filtered them at the source,

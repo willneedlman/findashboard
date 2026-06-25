@@ -38,7 +38,7 @@ const SECTOR_COLORS: Record<string, string> = {
   'Industrials': '#e07a5f', 'Energy': '#d4a72c', 'Utilities': '#6ee7b7', 'Real Estate': '#c084fc',
   'Basic Materials': '#94a3b8',
 }
-const sectorColor = (s?: string) => (s && SECTOR_COLORS[s]) || '#56657b'
+const sectorColor = (s?: string) => (s && SECTOR_COLORS[s]) || 'var(--theme-text-dim, #56657b)'
 
 interface FieldMeta { id: string; label: string; group: string }
 interface FilterRow { id: number; field: string; operator: string; value: string; value2: string; param?: string }
@@ -48,7 +48,7 @@ const PRICE_PERIODS = ['1D', '1W', '1M', '3M', '6M', 'YTD', '1Y']
 interface ScreenResult {
   ticker: string; companyName: string; price: number | null; marketCap: number | null
   beta: number | null; volume: number | null; sector: string; exchange: string
-  peRatio: number | null; forwardPE: number | null
+  peRatio: number | null; pegRatio: number | null
   pbRatio: number | null; psRatio: number | null; evEbitda: number | null
   grossMargin: number | null; operatingMargin: number | null; netMargin: number | null
   roe: number | null; debtEquity: number | null; currentRatio: number | null
@@ -68,7 +68,7 @@ const TABLE_COLS: { key: keyof ScreenResult; label: string; w: string; align: 'l
   { key: 'volume',          label: 'Volume',     w: '88px',  align: 'right', fmt: v => v != null ? Intl.NumberFormat('en', { notation: 'compact' }).format(Number(v)) : '—' },
   { key: 'beta',            label: 'Beta',       w: '70px',  align: 'right', fmt: v => v != null ? Number(v).toFixed(2) : '—', colorFn: v => v > 1.5 ? C.warn : v < 0 ? C.neg : C.text },
   { key: 'peRatio',         label: 'P/E',        w: '70px',  align: 'right', fmt: v => v != null ? Number(v).toFixed(1) : '—' },
-  { key: 'forwardPE',       label: 'Fwd P/E',    w: '78px',  align: 'right', fmt: v => v != null ? Number(v).toFixed(1) : '—' },
+  { key: 'pegRatio',        label: 'PEG',        w: '70px',  align: 'right', fmt: v => v != null ? Number(v).toFixed(2) : '—', colorFn: v => v > 0 && v < 1 ? C.pos : v < 2 ? C.text : C.neg },
   { key: 'pbRatio',         label: 'P/B',        w: '70px',  align: 'right', fmt: v => v != null ? Number(v).toFixed(2) : '—' },
   { key: 'psRatio',         label: 'P/S',        w: '70px',  align: 'right', fmt: v => v != null ? Number(v).toFixed(2) : '—' },
   { key: 'evEbitda',        label: 'EV/EBITDA',  w: '92px',  align: 'right', fmt: v => v != null ? Number(v).toFixed(1) : '—' },
@@ -136,7 +136,7 @@ export default function StockScreener() {
   const [sortDir,  setSortDir]  = useState<'desc' | 'asc'>(DEFAULT_PRESET.sortDir)
   const [sortParam, setSortParam] = useState(DEFAULT_PRESET.sortParam ?? '1M')
   const [visibleCols, setVisibleCols] = useState<Set<string>>(
-    new Set(['sector', 'price', 'priceChange', 'marketCap', 'peRatio', 'forwardPE', 'operatingMargin', 'revenueGrowth'])
+    new Set(['sector', 'price', 'priceChange', 'marketCap', 'peRatio', 'pegRatio', 'operatingMargin', 'revenueGrowth'])
   )
   const [colPanelOpen, setColPanelOpen] = useState(false)
   const [localSort, setLocalSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: DEFAULT_PRESET.sortBy, dir: DEFAULT_PRESET.sortDir })
@@ -250,7 +250,7 @@ export default function StockScreener() {
     const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1])
     const mix = sorted.slice(0, 6).map(([name, c]) => ({ name, pct: (c / total) * 100, color: sectorColor(name) }))
     const other = sorted.slice(6).reduce((a, [, c]) => a + c, 0)
-    if (other > 0) mix.push({ name: 'Other', pct: (other / total) * 100, color: '#56657b' })
+    if (other > 0) mix.push({ name: 'Other', pct: (other / total) * 100, color: 'var(--theme-text-dim, #56657b)' })
     return { matches: data?.total ?? rows.length, avgPE: mean(col('peRatio').filter(v => v > 0)), medRev: median(col('revenueGrowth')), avgOp: mean(col('operatingMargin')), medMc: median(col('marketCap')), mix }
   }, [data])
 
@@ -271,7 +271,7 @@ export default function StockScreener() {
   const railBtn: React.CSSProperties = { cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, background: 'none' }
   const scopeSelect: React.CSSProperties = { ...SELECT, fontSize: 10.5, padding: '5px 6px', width: 'auto', border: '1px solid var(--theme-border, rgba(255,255,255,0.13))', background: C.surface, color: C.chipVal }
 
-  // ── Filter chip + inline editor popover ──
+  // ── Filter chip (the editor is a separate bar below the row) ──
   const chip = (f: FilterRow) => {
     const fieldLabel = (fields.find(x => x.id === f.field)?.label ?? f.field).replace(' (%)', '').replace(' ($B)', '').replace(' ($)', '')
     const opSym = OPERATORS.find(o => o.value === f.operator)?.label ?? f.operator
@@ -279,40 +279,16 @@ export default function StockScreener() {
     const expr = `${opSym} ${f.value || '·'}${f.operator === 'between' && f.value2 ? `–${f.value2}` : ''}`
     const editing = editingFilterId === f.id
     return (
-      <span key={f.id} style={{ position: 'relative' }}>
-        <span onClick={() => setEditingFilterId(editing ? null : f.id)}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, border: `1px solid ${editing ? C.gold : 'color-mix(in srgb, var(--theme-primary, #c9a84c) 42%, transparent)'}`, background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)', fontFamily: C.mono, fontSize: 11, padding: '6px 10px', cursor: 'pointer' }}>
-          <span style={{ color: C.gold }}>{fieldLabel}{periodSuffix}</span>
-          <span style={{ color: C.chipVal }}>{expr}</span>
-          <span onClick={e => { e.stopPropagation(); removeFilter(f.id) }} style={{ color: C.dim, fontSize: 13, lineHeight: 1 }} title="Remove filter">×</span>
-        </span>
-        {editing && (
-          <div style={{ position: 'absolute', left: 0, top: 'calc(100% + 6px)', zIndex: 30, background: C.surface, border: `1px solid ${C.border}`, padding: 10, width: 250, display: 'flex', flexDirection: 'column', gap: 6, boxShadow: '0 6px 20px rgba(0,0,0,0.4)' }}>
-            <FieldSelect value={f.field} fields={fields} onChange={v => patchFilter(f.id, { field: v, param: v === 'priceChange' ? (f.param || '1M') : undefined })} />
-            <div style={{ display: 'flex', gap: 6 }}>
-              {f.field === 'priceChange' && (
-                <select value={f.param || '1M'} onChange={e => patchFilter(f.id, { param: e.target.value })} style={{ ...SELECT, width: 60, padding: '4px 4px' }}>
-                  {PRICE_PERIODS.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
-              )}
-              <select value={f.operator} onChange={e => patchFilter(f.id, { operator: e.target.value })} style={{ ...SELECT, width: 56, padding: '4px 4px' }}>
-                {OPERATORS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-              <input type="number" value={f.value} placeholder="Value" autoFocus style={{ ...INPUT, flex: 1 }}
-                onChange={e => patchFilter(f.id, { value: e.target.value })} onKeyDown={e => { if (e.key === 'Enter') { setEditingFilterId(null); mutate() } }} />
-              {f.operator === 'between' && (
-                <input type="number" value={f.value2} placeholder="To" style={{ ...INPUT, flex: 1 }} onChange={e => patchFilter(f.id, { value2: e.target.value })} />
-              )}
-            </div>
-            <button onClick={() => { setEditingFilterId(null); mutate() }}
-              style={{ background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)', border: `1px solid ${C.gold}`, color: C.gold, fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '6px 0', cursor: 'pointer' }}>
-              Apply
-            </button>
-          </div>
-        )}
+      <span key={f.id} onClick={() => setEditingFilterId(editing ? null : f.id)}
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flex: 'none', whiteSpace: 'nowrap', border: `1px solid ${editing ? C.gold : 'color-mix(in srgb, var(--theme-primary, #c9a84c) 42%, transparent)'}`, background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)', fontFamily: C.mono, fontSize: 11, padding: '6px 10px', cursor: 'pointer' }}>
+        <span style={{ color: C.gold }}>{fieldLabel}{periodSuffix}</span>
+        <span style={{ color: C.chipVal }}>{expr}</span>
+        <span onClick={e => { e.stopPropagation(); removeFilter(f.id) }} style={{ color: C.dim, fontSize: 13, lineHeight: 1 }} title="Remove filter">×</span>
       </span>
     )
   }
+
+  const editingFilter = filters.find(f => f.id === editingFilterId)
 
   return (
     <PageWrapper>
@@ -442,12 +418,41 @@ export default function StockScreener() {
                 </button>
               </div>
 
-              {/* filter chips */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-                <span style={EB}>Filters</span>
-                {filters.map(chip)}
-                <span onClick={addFilter} style={{ fontFamily: C.sans, fontSize: 11, color: C.dim, padding: '0 4px', cursor: 'pointer' }}>+ Add filter</span>
+              {/* filter chips — scroll horizontally instead of wrapping off-screen */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, minWidth: 0 }}>
+                <span style={{ ...EB, flex: 'none' }}>Filters</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflowX: 'auto', flex: 1, paddingBottom: 2 }}>
+                  {filters.map(chip)}
+                  <span onClick={addFilter} style={{ fontFamily: C.sans, fontSize: 11, color: C.dim, padding: '0 4px', cursor: 'pointer', flex: 'none', whiteSpace: 'nowrap' }}>+ Add filter</span>
+                </div>
               </div>
+
+              {/* filter editor — a non-clipped bar so the horizontal-scroll chips don't hide it */}
+              {editingFilter && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, padding: 8, background: C.surface, border: `1px solid ${C.border}`, flexWrap: 'wrap' }}>
+                  <span style={{ ...EB, flex: 'none' }}>Edit</span>
+                  <div style={{ flex: '0 0 200px' }}>
+                    <FieldSelect value={editingFilter.field} fields={fields} onChange={v => patchFilter(editingFilter.id, { field: v, param: v === 'priceChange' ? (editingFilter.param || '1M') : undefined })} />
+                  </div>
+                  {editingFilter.field === 'priceChange' && (
+                    <select value={editingFilter.param || '1M'} onChange={e => patchFilter(editingFilter.id, { param: e.target.value })} style={{ ...SELECT, width: 64, flex: 'none', padding: '4px 4px' }}>
+                      {PRICE_PERIODS.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  )}
+                  <select value={editingFilter.operator} onChange={e => patchFilter(editingFilter.id, { operator: e.target.value })} style={{ ...SELECT, width: 60, flex: 'none', padding: '4px 4px' }}>
+                    {OPERATORS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                  <input type="number" value={editingFilter.value} placeholder="Value" autoFocus style={{ ...INPUT, width: 90, flex: 'none' }}
+                    onChange={e => patchFilter(editingFilter.id, { value: e.target.value })} onKeyDown={e => { if (e.key === 'Enter') { setEditingFilterId(null); mutate() } }} />
+                  {editingFilter.operator === 'between' && (
+                    <input type="number" value={editingFilter.value2} placeholder="To" style={{ ...INPUT, width: 90, flex: 'none' }} onChange={e => patchFilter(editingFilter.id, { value2: e.target.value })} />
+                  )}
+                  <button onClick={() => { setEditingFilterId(null); mutate() }}
+                    style={{ flex: 'none', background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)', border: `1px solid ${C.gold}`, color: C.gold, fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '6px 14px', cursor: 'pointer' }}>
+                    Apply
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* states / results */}
@@ -462,7 +467,7 @@ export default function StockScreener() {
             ) : (
               <>
                 {/* summary stats band */}
-                <div style={{ display: 'flex', alignItems: 'stretch', borderBottom: `1px solid ${C.border}`, background: 'rgba(0,0,0,0.16)', flex: 'none' }}>
+                <div style={{ display: 'flex', alignItems: 'stretch', borderBottom: `1px solid ${C.border}`, background: 'var(--theme-surface, #0d1826)', flex: 'none' }}>
                   {[
                     { label: 'Matches', value: String(stats.matches), color: C.gold, weight: 700 },
                     { label: 'Avg P/E', value: stats.avgPE != null ? stats.avgPE.toFixed(1) : '—', color: C.text, weight: 500 },
@@ -523,7 +528,7 @@ export default function StockScreener() {
                             </div>
                           )
                         }
-                        const color = col.colorFn && raw != null ? col.colorFn(Number(raw)) : col.key === 'marketCap' ? C.emph : ['peRatio', 'forwardPE', 'pbRatio', 'psRatio', 'evEbitda'].includes(col.key as string) ? C.mutedNum : col.align === 'left' ? 'var(--theme-text-muted, #9fb0c7)' : C.text
+                        const color = col.colorFn && raw != null ? col.colorFn(Number(raw)) : col.key === 'marketCap' ? C.emph : ['peRatio', 'pegRatio', 'pbRatio', 'psRatio', 'evEbitda'].includes(col.key as string) ? C.mutedNum : col.align === 'left' ? 'var(--theme-text-muted, #9fb0c7)' : C.text
                         return (
                           <div key={col.key as string} style={{ fontFamily: col.align === 'right' ? C.mono : C.sans, fontSize: col.align === 'right' ? 12 : 11, color, textAlign: col.align, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {col.fmt(raw)}
