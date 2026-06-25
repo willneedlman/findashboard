@@ -275,6 +275,23 @@ export default function FixedIncomeMarketMaker() {
   const [hedgeQty, setHedgeQty]     = useState(50)
   const [selected, setSelected]     = useState('10Y')   // bond driving the tape + hedge panel
   const [frame, setFrame]           = useState<Frame | null>(null)
+  const [flash, setFlash]           = useState<{ bond: string; side: string } | null>(null)
+  const lastFillSig = useRef('')
+  const flashTimer = useRef<ReturnType<typeof setTimeout>>()
+
+  // Flash the bond row green/red when a new client order prints there.
+  useEffect(() => {
+    const lg = frame?.ledger
+    if (!lg || !lg.length) return
+    const last = lg[lg.length - 1]
+    const sig = `${last.tLabel}|${last.bond}|${last.size}`
+    if (sig === lastFillSig.current) return
+    lastFillSig.current = sig
+    if (last.clientSide.includes('HEDGE')) return
+    setFlash({ bond: last.bond, side: last.clientSide })
+    clearTimeout(flashTimer.current)
+    flashTimer.current = setTimeout(() => setFlash(null), 650)
+  }, [frame])
 
   // Latest controls available to the (single, stable) game-loop.
   const ctrl = useRef<Ctrl>({ halfSpread, manual, running, speed })
@@ -468,7 +485,7 @@ export default function FixedIncomeMarketMaker() {
 
           {/* Treasury book: wide table with editable quotes */}
           <Widget title="Treasury Book" right={<span style={{ fontFamily: T.sans, fontSize: 8, color: T.muted, letterSpacing: '0.04em' }}>edit any bid / ask to requote · click a row to select</span>}>
-            {renderBookTable(f, selected, setSelected, onQuote)}
+            {renderBookTable(f, selected, setSelected, onQuote, flash)}
           </Widget>
 
           {/* Ledger strip */}
@@ -498,7 +515,7 @@ function bigBtn(color: string): React.CSSProperties {
 
 // Treasury book as a compact wide table. Bid/Ask are editable quote cells; the
 // row is clickable to drive the tape + hedge panel.
-function renderBookTable(f: Frame, selected: string, onSelect: (id: string) => void, onQuote: (id: string, side: 'bid' | 'ask', price: number) => void) {
+function renderBookTable(f: Frame, selected: string, onSelect: (id: string) => void, onQuote: (id: string, side: 'bid' | 'ask', price: number) => void, flash: { bond: string; side: string } | null) {
   const G = 'var(--theme-positive, #22c55e)', R = 'var(--theme-negative, #ef4444)', M = 'var(--theme-secondary, #5e768f)', GD = 'var(--theme-primary, #c9a84c)', T2 = 'var(--theme-text, #d7e3fc)'
   const th: React.CSSProperties = { fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: M, padding: '6px 12px', textAlign: 'right', whiteSpace: 'nowrap' }
   const td: React.CSSProperties = { fontFamily: 'var(--theme-mono)', fontSize: 13, padding: '5px 12px', textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }
@@ -522,7 +539,7 @@ function renderBookTable(f: Frame, selected: string, onSelect: (id: string) => v
             const isSel = b.id === selected
             return (
               <tr key={b.id} onClick={() => onSelect(b.id)}
-                style={{ cursor: 'pointer', borderBottom: `1px solid var(--theme-border, rgba(255,255,255,0.04))`, background: isSel ? 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' : 'transparent' }}>
+                style={{ cursor: 'pointer', borderBottom: `1px solid var(--theme-border, rgba(255,255,255,0.04))`, transition: 'background 0.5s ease-out', background: flash?.bond === b.id ? `color-mix(in srgb, var(--theme-${flash.side === 'BUY' ? 'positive' : 'negative'}) 32%, transparent)` : isSel ? 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' : 'transparent' }}>
                 <td style={{ ...td, textAlign: 'left', fontSize: 15, fontWeight: 700, color: GD }}>
                   {b.id}{isSel && <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', color: M, marginLeft: 6 }}>TAPE</span>}
                 </td>

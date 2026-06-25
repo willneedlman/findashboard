@@ -266,9 +266,26 @@ export default function OptionsMarketMaker() {
   const [hedgeQty, setHedgeQty]     = useState(100)
   const [tapeSel, setTapeSel]       = useState<string[]>([])   // contracts overlaid on the tape
   const [frame, setFrame]           = useState<Frame | null>(null)
+  const [flash, setFlash]           = useState<{ k: number; side: string } | null>(null)
+  const lastFillSig = useRef('')
+  const flashTimer = useRef<ReturnType<typeof setTimeout>>()
 
   const toggleTape = (key: string) =>
     setTapeSel(sel => sel.includes(key) ? sel.filter(k => k !== key) : [...sel, key])
+
+  // Flash the strike row green/red when a new client order prints there.
+  useEffect(() => {
+    const lg = frame?.ledger
+    if (!lg || !lg.length) return
+    const last = lg[lg.length - 1]
+    const sig = `${last.tLabel}|${last.contract}|${last.size}`
+    if (sig === lastFillSig.current) return
+    lastFillSig.current = sig
+    if (last.contract === 'STOCK') return
+    setFlash({ k: parseInt(last.contract.slice(1), 10), side: last.clientSide })
+    clearTimeout(flashTimer.current)
+    flashTimer.current = setTimeout(() => setFlash(null), 650)
+  }, [frame])
 
   // Latest controls available to the (single, stable) game-loop.
   const ctrl = useRef({ baseIv, skew, halfSpread, manual, spreadAdj, running, speed })
@@ -476,7 +493,7 @@ export default function OptionsMarketMaker() {
 
           {/* Options chain: wide table with editable quotes */}
           <Widget title="Options Chain" right={<span style={{ fontFamily: T.sans, fontSize: 8, color: T.muted, letterSpacing: '0.04em' }}>edit bid / ask to requote · click Theo to plot · click strike for underlying</span>}>
-            {renderChainTable(f, tapeSel, toggleTape, onQuote, () => setTapeSel([]))}
+            {renderChainTable(f, tapeSel, toggleTape, onQuote, () => setTapeSel([]), flash)}
           </Widget>
 
           {/* Ledger strip */}
@@ -506,7 +523,7 @@ function bigBtn(color: string): React.CSSProperties {
 
 // Option chain as a compact wide table. Bid/Ask are editable quote cells; Theo
 // is clickable to overlay that contract's premium on the tape.
-function renderChainTable(f: Frame, tapeSel: string[], onToggle: (key: string) => void, onQuote: (key: string, side: 'bid' | 'ask', price: number) => void, onPlotUnderlying: () => void) {
+function renderChainTable(f: Frame, tapeSel: string[], onToggle: (key: string) => void, onQuote: (key: string, side: 'bid' | 'ask', price: number) => void, onPlotUnderlying: () => void, flash: { k: number; side: string } | null) {
   const G = 'var(--theme-positive, #22c55e)', R = 'var(--theme-negative, #ef4444)', M = 'var(--theme-secondary, #5e768f)', GD = 'var(--theme-primary, #c9a84c)', B = 'var(--theme-tertiary, #60a5fa)'
   const th: React.CSSProperties = { fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: M, padding: '6px 10px', textAlign: 'right', whiteSpace: 'nowrap' }
   const td: React.CSSProperties = { fontFamily: 'var(--theme-mono)', fontSize: 13, padding: '5px 10px', textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }
@@ -540,7 +557,7 @@ function renderChainTable(f: Frame, tapeSel: string[], onToggle: (key: string) =
             const cKey = `C${k}`, pKey = `P${k}`
             const atm = Math.abs(k - f.spot) <= 5
             return (
-              <tr key={k} style={{ borderBottom: `1px solid var(--theme-border, rgba(255,255,255,0.04))`, background: atm ? 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' : 'transparent' }}>
+              <tr key={k} style={{ borderBottom: `1px solid var(--theme-border, rgba(255,255,255,0.04))`, transition: 'background 0.5s ease-out', background: flash?.k === k ? `color-mix(in srgb, var(--theme-${flash.side === 'BUY' ? 'positive' : 'negative'}) 32%, transparent)` : atm ? 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' : 'transparent' }}>
                 <td style={{ ...td, textAlign: 'left' }}>{posCell(cKey)}</td>
                 <td style={td}>{deltaCell(cKey)}</td>
                 <td style={td}><QuoteCell value={f.chain[cKey].bid} side="bid" step={0.01} decimals={2} onCommit={v => onQuote(cKey, 'bid', v)} /></td>
