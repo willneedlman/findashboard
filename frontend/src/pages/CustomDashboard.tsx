@@ -69,6 +69,13 @@ export default function CustomDashboard() {
     if (document.fullscreenElement) document.exitFullscreen()
     else fullscreenRef.current?.requestFullscreen?.()
   }
+  // Track viewport height so the grid can scale to fill the screen when full.
+  const [viewportH, setViewportH] = useState(typeof window !== 'undefined' ? window.innerHeight : 900)
+  useEffect(() => {
+    const onResize = () => setViewportH(window.innerHeight)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   // Dashboard-wide ticker: one input that retargets every ticker-driven widget
   // so you don't set them one by one.
@@ -91,6 +98,14 @@ export default function CustomDashboard() {
   }
 
   const rglLayouts: Layouts = { lg: layouts, md: layouts, sm: layouts }
+
+  // In full screen, scale the row height so the top row of widgets (y === 0)
+  // fills the viewport. ~100px accounts for the toolbar + wrapper padding above
+  // the grid; lower rows scale up too and scroll below.
+  const topRowUnits = Math.max(1, ...layouts.filter(l => l.y === 0).map(l => l.h))
+  const rowHeight = isFull
+    ? Math.max(60, Math.floor((viewportH - 100 - (topRowUnits - 1) * 10) / topRowUnits))
+    : 60
 
   const handleReset = () => {
     if (confirmReset) { resetDashboard(); setConfirmReset(false) }
@@ -256,7 +271,7 @@ export default function CustomDashboard() {
             layouts={rglLayouts}
             breakpoints={BREAKPOINTS}
             cols={COLS}
-            rowHeight={60}
+            rowHeight={rowHeight}
             margin={[10, 10]}
             isDraggable={editMode}
             isResizable={editMode}
