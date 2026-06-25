@@ -125,7 +125,7 @@ export default function PortfolioIO({ mode, assets, onImportAssets, tickers, onI
 
   // ── Export ─────────────────────────────────────────────────────────────────
   function handleExport(format: 'json' | 'csv') {
-    const slug = (name ?? 'portfolio').toLowerCase().replace(/\s+/g, '-')
+    const slug = (name ?? 'Portfolio').trim().replace(/\s+/g, '-') || 'Portfolio'
     const date = new Date().toISOString().split('T')[0]
 
     if (mode === 'portfolio' && assets) {

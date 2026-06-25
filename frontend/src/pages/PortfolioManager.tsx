@@ -227,6 +227,7 @@ export default function PortfolioManager() {
   const [editStock, setEditStock] = useState<{ i: number; shares: string; avgCost: string } | null>(null)
   const [editFut, setEditFut] = useState<{ id: string; contracts: string; entry: string } | null>(null)
   const [editCash, setEditCash] = useState<{ id: string; amount: string; rate: string } | null>(null)
+  const [portfolioName, setPortfolioName] = useState(() => localStorage.getItem('pmPortfolioName') || 'Portfolio')
 
   // Tab management
   const clearEdits = () => { setEditStock(null); setEditFut(null); setEditCash(null) }
@@ -377,7 +378,9 @@ export default function PortfolioManager() {
     // assets have ticker + weight (0-1 or 0-100); map to holding with weight as placeholder shares
     const imported: Holding[] = assets.map(a => ({
       ticker:  a.ticker,
-      shares:  a.weight > 1 ? a.weight : a.weight * 100, // treat weight as share count if imported from CSV
+      // A real portfolio export carries avg_cost, so weight is a literal share count
+      // (may be fractional/1). Only the legacy weight-only format uses the 0-1 heuristic.
+      shares:  (a.avgCost != null || a.weight > 1) ? a.weight : a.weight * 100,
       avgCost: a.avgCost ?? 0,                           // restore per-share cost when present
     }))
     setHoldings(imported)
@@ -655,15 +658,24 @@ export default function PortfolioManager() {
             {/* Import / Export */}
             <div>
               <div style={{ ...lbl, marginBottom: 10 }}>Import / Export</div>
+              <input
+                value={portfolioName}
+                onChange={e => { setPortfolioName(e.target.value); localStorage.setItem('pmPortfolioName', e.target.value) }}
+                placeholder="Portfolio name"
+                aria-label="Portfolio name (used for the export filename)"
+                style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.label, fontSize: 11, padding: '5px 8px', width: '100%', outline: 'none', boxSizing: 'border-box', marginBottom: 8 }}
+                onFocus={e => (e.target.style.borderColor = T.gold)}
+                onBlur={e => (e.target.style.borderColor = T.border)}
+              />
               <PortfolioIO
                 mode="portfolio"
                 assets={holdings.map(h => ({ ticker: h.ticker, weight: h.shares, avgCost: h.avgCost }))}
                 onImportAssets={handleImport}
-                name="portfolio"
+                name={portfolioName.trim() || 'Portfolio'}
               />
               <p style={{ fontFamily: T.label, fontSize: 8, color: T.muted, marginTop: 8, lineHeight: 1.5 }}>
-                CSV format: <span style={{ fontFamily: T.mono }}>TICKER,SHARES,AVG_COST</span><br />
-                JSON: array of <span style={{ fontFamily: T.mono }}>{`{ticker, weight, strategy}`}</span>
+                Exports as <span style={{ fontFamily: T.mono }}>{(portfolioName.trim() || 'Portfolio').replace(/\s+/g, '-')}-{new Date().toISOString().split('T')[0]}</span><br />
+                CSV columns: <span style={{ fontFamily: T.mono }}>TICKER,SHARES,AVG_COST</span>
               </p>
             </div>
 
