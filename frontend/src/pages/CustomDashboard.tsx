@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import RGL, { type Layout, type Layouts } from 'react-grid-layout'
 import { useTheme } from '../contexts/ThemeContext'
 import 'react-grid-layout/css/styles.css'
@@ -11,7 +11,7 @@ const { Responsive, WidthProvider } = RGL as unknown as {
 }
 import { Lock, Unlock, Plus, RotateCcw, X, ChevronDown,
   LayoutGrid, Gauge, Search, Filter, Globe, Layers, Shield, BarChart3, LineChart,
-  Briefcase, Activity, Eye, PieChart, Newspaper, TrendingUp, DollarSign, type LucideIcon } from 'lucide-react'
+  Briefcase, Activity, Eye, PieChart, Newspaper, TrendingUp, DollarSign, Maximize2, Minimize2, type LucideIcon } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import WidgetFrame from '../components/dashboard/WidgetFrame'
 import WidgetRenderer from '../components/dashboard/WidgetRenderer'
@@ -56,6 +56,20 @@ export default function CustomDashboard() {
   const [presetMenuOpen, setPresetMenuOpen] = useState(false)
   const [iconPickerOpen, setIconPickerOpen] = useState(false)
 
+  // Full-screen the dashboard (toolbar + grid) via the Fullscreen API, so the
+  // board can fill the display with no terminal chrome around it.
+  const fullscreenRef = useRef<HTMLDivElement>(null)
+  const [isFull, setIsFull] = useState(false)
+  useEffect(() => {
+    const onChange = () => setIsFull(document.fullscreenElement === fullscreenRef.current)
+    document.addEventListener('fullscreenchange', onChange)
+    return () => document.removeEventListener('fullscreenchange', onChange)
+  }, [])
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) document.exitFullscreen()
+    else fullscreenRef.current?.requestFullscreen?.()
+  }
+
   // Dashboard-wide ticker: one input that retargets every ticker-driven widget
   // so you don't set them one by one.
   const tickerWidgets = widgets.filter(w => TICKER_WIDGET_TYPES.includes(w.type))
@@ -85,6 +99,7 @@ export default function CustomDashboard() {
 
   return (
     <PageWrapper>
+      <div ref={fullscreenRef} className="ft-dashboard-fs">
       {/* ── Consolidated top bar: one line — icon-collapsed dashboard tabs + controls ── */}
       {isMobile ? (
         <h1 className="ft-page-title" style={{ marginBottom: 12 }}>My Dashboard</h1>
@@ -212,6 +227,13 @@ export default function CustomDashboard() {
           >
             {editMode ? <><Unlock size={12} /> Done</> : <><Lock size={12} /> Edit</>}
           </button>
+          <button
+            onClick={toggleFullscreen}
+            title={isFull ? 'Exit full screen' : 'Full screen'}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--theme-surface, #1f2a3d)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', color: 'var(--theme-secondary, #5e768f)', padding: '6px 10px', cursor: 'pointer', transition: 'all 0.15s' }}
+          >
+            {isFull ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+          </button>
         </div>
       </div>
       )}
@@ -267,6 +289,7 @@ export default function CustomDashboard() {
         onClose={() => setPaletteOpen(false)}
         onAdd={(type: WidgetType) => { if (type === 'ticker-control') setShowTicker(true); else addWidget(type) }}
       />
+      </div>
     </PageWrapper>
   )
 }

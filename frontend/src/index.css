@@ -480,3 +480,15 @@ textarea:focus:not(:focus-visible) {
     scroll-behavior: auto !important;
   }
 }
+
+/* Dashboard full-screen (native Fullscreen API, like a YouTube video):
+   guarantee the dashboard fills the whole monitor with the terminal's dark bg. */
+.ft-dashboard-fs:fullscreen,
+.ft-dashboard-fs:-webkit-full-screen {
+  width: 100vw;
+  height: 100vh;
+  overflow-y: auto;
+  background: var(--theme-bg, #101c2e);
+  padding: 14px 18px;
+  box-sizing: border-box;
+}
