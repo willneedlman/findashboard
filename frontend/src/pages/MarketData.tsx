@@ -5,7 +5,6 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
 import { RailSection } from './valuationShared'
-import TVChart from '../components/charts/TVChart'
 import { fetchMarketHistory } from '../hooks/useApi'
 import { TOOLTIP_STYLE, CROSSHAIR_CURSOR, BAR_CURSOR } from '../components/ChartTooltip'
 import EmptyState from '../components/EmptyState'
@@ -151,11 +150,39 @@ export default function MarketData() {
               </div>
 
               <ChartPanel label={priceLabel} height={268}>
-                <TVChart data={data.price} color="#1f5673" height={240} fillArea />
+                <ResponsiveContainer width="100%" height={240}>
+                  <AreaChart data={data.price}>
+                    <defs>
+                      <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#1f5673" stopOpacity={0.45} />
+                        <stop offset="100%" stopColor="#1f5673" stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.07)" />
+                    <XAxis dataKey="date" tick={TICK_STYLE} tickFormatter={fmtAxis} interval="preserveStartEnd" />
+                    <YAxis tick={TICK_STYLE} tickFormatter={v => `$${v}`} orientation="right" domain={['auto', 'auto']} width={58} />
+                    <Tooltip formatter={(v: number) => [`$${Number(v).toLocaleString()}`, 'Price']} labelFormatter={fmtAxis} contentStyle={TOOLTIP_STYLE} cursor={CROSSHAIR_CURSOR} />
+                    <Area type="monotone" dataKey="value" stroke="#1f5673" fill="url(#priceGrad)" strokeWidth={1.5} />
+                  </AreaChart>
+                </ResponsiveContainer>
               </ChartPanel>
 
               <ChartPanel label={volLabel} height={188}>
-                <TVChart data={data.volatility} color="#d97736" height={160} formatValue={v => `${(v * 100).toFixed(1)}%`} />
+                <ResponsiveContainer width="100%" height={160}>
+                  <AreaChart data={data.volatility.map((d: any) => ({ ...d, value: +(d.value * 100).toFixed(2) }))}>
+                    <defs>
+                      <linearGradient id="volGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#d97736" stopOpacity={0.4} />
+                        <stop offset="100%" stopColor="#d97736" stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.07)" />
+                    <XAxis dataKey="date" tick={TICK_STYLE} tickFormatter={fmtAxis} interval="preserveStartEnd" />
+                    <YAxis tick={TICK_STYLE} tickFormatter={v => `${v}%`} orientation="right" width={48} />
+                    <Tooltip formatter={(v: number) => [`${v}%`, 'Volatility']} labelFormatter={fmtAxis} contentStyle={TOOLTIP_STYLE} cursor={CROSSHAIR_CURSOR} />
+                    <Area type="monotone" dataKey="value" stroke="#d97736" fill="url(#volGrad)" strokeWidth={1.5} />
+                  </AreaChart>
+                </ResponsiveContainer>
               </ChartPanel>
 
               <ChartPanel label="Peak Drawdown" height={168}>
