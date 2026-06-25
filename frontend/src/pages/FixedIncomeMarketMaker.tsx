@@ -368,7 +368,7 @@ export default function FixedIncomeMarketMaker() {
           <HeaderBar tool="Fixed Income MM Simulator" running={f.running} />
 
           {/* Metrics row */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.32fr 1fr', gap: 10, alignItems: 'start' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.32fr 1fr', gap: 10 }}>
             <Widget title="Profit & Loss" bodyStyle={{ padding: '9px 14px', display: 'flex', flexDirection: 'column', gap: 9 }}>
               <div>
                 <div style={{ fontFamily: T.mono, fontSize: 25, fontWeight: 700, lineHeight: 1, color: r.netPnl >= 0 ? T.green : T.red }}>{fmtMoney(r.netPnl)}</div>
