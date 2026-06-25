@@ -492,3 +492,22 @@ textarea:focus:not(:focus-visible) {
   padding: 14px 18px;
   box-sizing: border-box;
 }
+
+/* MM simulator editable quote cells + chevron steppers */
+.mm-quote {
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.mm-quote:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+.mm-quote:focus {
+  background: var(--theme-bg, #101c2e) !important;
+  border-color: var(--theme-primary, #c9a84c) !important;
+}
+.mm-chev {
+  color: var(--theme-secondary, #8099b0);
+  transition: color 0.12s ease;
+}
+.mm-chev:hover {
+  color: var(--theme-primary, #c9a84c);
+}

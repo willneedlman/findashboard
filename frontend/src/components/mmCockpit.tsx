@@ -1,6 +1,7 @@
 // Shared page chrome for the two market-maker simulators (Options + Fixed
 // Income). Presentational only. Colors route through --theme-* tokens.
-import { Minus, Plus } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Minus, Plus, ChevronUp, ChevronDown } from 'lucide-react'
 
 const V = {
   surface: 'var(--theme-surface, #0d1826)',
@@ -148,6 +149,109 @@ export function Chips({ options, value, onPick }: { options: { label: string; va
       })}
     </div>
   )
+}
+
+// One compact KPI cell for the unified top instrument strip. Cells sit in a row
+// separated by hairline borders; the strip reads as one instrument, not cards.
+export function KpiCell({ label, value, color, valueSize = 13, grow = false, minWidth }: {
+  label: string; value: string; color?: string; valueSize?: number; grow?: boolean; minWidth?: number
+}) {
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2,
+      padding: '6px 13px', borderRight: `1px solid ${V.border}`,
+      flex: grow ? 1 : '0 0 auto', minWidth,
+    }}>
+      <span style={{ ...EYEBROW, fontSize: 8 }}>{label}</span>
+      <span style={{ fontFamily: V.mono, fontSize: valueSize, fontWeight: 700, color: color || V.text, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+    </div>
+  )
+}
+
+// Inline risk meter for the top strip: a header row (label + value/limit, status
+// on the right) over a compact red-ends / green-band gradient bar with a gold
+// marker. Fills the remaining strip width. Distinct from the taller card meter.
+export function RiskMeterStrip({ label, value, limit, unit, over, fmt }: {
+  label: string; value: number; limit: number; unit?: string; over: boolean; fmt?: (n: number) => string
+}) {
+  const f = fmt || ((n: number) => `${n >= 0 ? '+' : ''}${Math.round(n)}`)
+  const pct = Math.max(0, Math.min(100, ((value + limit) / (2 * limit)) * 100))
+  return (
+    <div style={{ flex: 1, minWidth: 320, padding: '6px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 7 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+        <span style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+          <span style={{ ...EYEBROW, fontSize: 8 }}>{label}</span>
+          <span style={{ fontFamily: V.mono, fontSize: 11, fontWeight: 700, color: over ? V.neg : V.gold, fontVariantNumeric: 'tabular-nums' }}>{f(value)} / {f(limit)}{unit ? ` ${unit}` : ''}</span>
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6, ...EYEBROW, fontSize: 8, color: over ? V.neg : V.pos }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: over ? V.neg : V.pos }} />
+          {over ? 'Over Limit' : 'Within Limits'}
+        </span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: V.mono, fontSize: 9, color: V.sec }}>
+        <span style={{ fontVariantNumeric: 'tabular-nums' }}>{f(-limit)}</span>
+        <div style={{
+          position: 'relative', flex: 1, height: 7, borderRadius: 4,
+          background: 'linear-gradient(90deg, var(--theme-negative,#ef4444) 0%, var(--theme-negative,#ef4444) 12.5%, rgba(34,197,94,0.45) 12.5%, rgba(34,197,94,0.45) 87.5%, var(--theme-negative,#ef4444) 87.5%, var(--theme-negative,#ef4444) 100%)',
+        }}>
+          <div style={{ position: 'absolute', top: -2, bottom: -2, left: `${pct}%`, width: 2, marginLeft: -1, background: V.gold, boxShadow: '0 0 6px rgba(201,168,76,0.7)' }} />
+        </div>
+        <span style={{ fontVariantNumeric: 'tabular-nums' }}>{f(limit)}</span>
+      </div>
+    </div>
+  )
+}
+
+// Editable quote cell: a tabular-nums field that reads as part of the table plus
+// a vertical chevron stepper. Typing commits on blur/Enter; a chevron bumps by
+// one tick. Both route to the page's existing per-instrument quote override.
+export function QuoteCell({ value, side, step, decimals, onCommit }: {
+  value: number; side: 'bid' | 'ask'; step: number; decimals: number; onCommit: (v: number) => void
+}) {
+  const color = side === 'bid' ? V.pos : V.neg
+  const [draft, setDraft] = useState<string | null>(null)
+  const shown = draft ?? value.toFixed(decimals)
+  // Track the live quote in a ref so consecutive chevron clicks accumulate even
+  // before the next sim tick re-derives `value`; reset only when value moves.
+  const liveRef = useRef(value)
+  useEffect(() => { if (draft === null) liveRef.current = value }, [value, draft])
+  const commit = (raw: string) => {
+    const n = parseFloat(raw)
+    if (!Number.isNaN(n)) onCommit(+n.toFixed(decimals))
+    setDraft(null)
+  }
+  const bump = (dir: number) => {
+    const next = +(liveRef.current + dir * step).toFixed(decimals)
+    liveRef.current = next
+    onCommit(next)
+  }
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }} onClick={e => e.stopPropagation()}>
+      <input
+        className="mm-quote" value={shown} inputMode="decimal" aria-label={`${side} quote`}
+        onChange={e => setDraft(e.target.value)}
+        onFocus={e => { setDraft(value.toFixed(decimals)); e.currentTarget.select() }}
+        onBlur={e => commit(e.currentTarget.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter') e.currentTarget.blur()
+          else if (e.key === 'Escape') { setDraft(null); e.currentTarget.blur() }
+        }}
+        style={{
+          width: decimals >= 3 ? 60 : 52, textAlign: 'right', fontFamily: V.mono, fontSize: 13, fontWeight: 600,
+          color, background: 'rgba(255,255,255,0.04)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 30%, transparent)',
+          borderRadius: 3, padding: '2px 5px', fontVariantNumeric: 'tabular-nums', outline: 'none',
+        }}
+      />
+      <span style={{ display: 'flex', flexDirection: 'column' }}>
+        <button className="mm-chev" onClick={() => bump(1)} aria-label={`${side} up`} style={CHEV}><ChevronUp size={11} /></button>
+        <button className="mm-chev" onClick={() => bump(-1)} aria-label={`${side} down`} style={CHEV}><ChevronDown size={11} /></button>
+      </span>
+    </span>
+  )
+}
+const CHEV: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', justifyContent: 'center', width: 15, height: 10,
+  padding: 0, background: 'transparent', border: 'none', cursor: 'pointer', lineHeight: 0,
 }
 
 // Segmented control (FI maturity selector): active segment = gold fill, dark text.

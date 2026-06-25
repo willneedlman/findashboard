@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
-import { Widget, HeaderBar, RiskMeter, StatRow, PnLBar, Stepper, Chips } from '../components/mmCockpit'
+import { Widget, HeaderBar, KpiCell, RiskMeterStrip, QuoteCell, Stepper, Chips } from '../components/mmCockpit'
 
 /*
  * Options MM Simulator
@@ -360,125 +360,48 @@ export default function OptionsMarketMaker() {
   const spotChg = f && f.spotHistory.length > 1 ? (f.spot / f.spotHistory[0] - 1) * 100 : 0
   const spread = f ? f.edge : 0
   const directional = f && g ? g.netPnl - f.edge : 0
-  const maxMag = Math.max(Math.abs(spread), Math.abs(directional), 1)
+
+  // Editing a bid/ask requotes that contract's spread; the mid stays where the
+  // IV sliders set it. Routes to the existing per-contract spreadAdj override.
+  const onQuote = (key: string, side: 'bid' | 'ask', price: number) => {
+    const leg = f?.chain[key]
+    if (!leg || leg.theo <= 0) return
+    const hs = Math.max(0, side === 'bid' ? leg.theo - price : price - leg.theo)
+    const adj = Math.max(-0.09, Math.min(0.5, hs / leg.theo - halfSpread))
+    setSpreadAdj(m => ({ ...m, [key]: adj }))
+  }
 
   return (
     <PageWrapper>
       {!f || !g ? (
         <div style={{ padding: 24, fontFamily: T.mono, color: T.muted }}>Starting desk…</div>
       ) : (
-        <div style={{ maxWidth: 1340, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ maxWidth: 1340, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <HeaderBar tool="Options MM Simulator" running={f.running} />
 
-          {/* Metrics row */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.32fr 1fr', gap: 10 }}>
-            <Widget title="Profit & Loss" bodyStyle={{ padding: '9px 14px', display: 'flex', flexDirection: 'column', gap: 9 }}>
-              <div>
-                <div style={{ fontFamily: T.mono, fontSize: 25, fontWeight: 700, lineHeight: 1, color: g.netPnl >= 0 ? T.green : T.red }}>{fmtMoney(g.netPnl)}</div>
-                <div style={{ ...labelStyle, marginTop: 4, marginBottom: 0 }}>Net P&L</div>
-              </div>
-              <PnLBar label="Spread" value={fmtMoney(spread)} fill={T.green} frac={Math.abs(spread) / maxMag} />
-              <PnLBar label="Directional" value={fmtMoney(directional)} fill={directional >= 0 ? T.green : T.red} frac={Math.abs(directional) / maxMag} />
-            </Widget>
-
-            <Widget title="Delta Risk">
-              <RiskMeter value={g.totalDeltaSh} limit={DELTA_LIMIT} unit="sh net delta" over={overLimit}
-                footerRight={<span style={{ fontFamily: T.mono, fontSize: 10, color: T.muted }}>Net Gamma {g.gamma >= 0 ? '+' : ''}{g.gamma.toFixed(1)}</span>} />
-            </Widget>
-
-            <Widget title="Book Greeks">
-              <StatRow label="Net Gamma" hint="delta / $1 move" value={`${g.gamma >= 0 ? '+' : ''}${g.gamma.toFixed(1)}`} />
-              <StatRow label="Net Vega" hint="PnL / +1% IV" value={fmtMoney(g.vega1pct)} />
-              <StatRow label="Stock" hint="hedge shares" value={`${f.stock >= 0 ? '+' : ''}${f.stock.toLocaleString()}`} last />
-            </Widget>
+          {/* Unified top instrument strip: KPI cells + inline risk meter */}
+          <div style={{ display: 'flex', alignItems: 'stretch', background: T.surface, border: `1px solid ${T.border}`, overflowX: 'auto' }}>
+            <KpiCell label="Net P&L" value={fmtMoney(g.netPnl)} color={g.netPnl >= 0 ? T.green : T.red} valueSize={16} />
+            <KpiCell label="Spread" value={fmtMoney(spread)} color={T.green} />
+            <KpiCell label="Directional" value={fmtMoney(directional)} color={directional >= 0 ? T.green : T.red} />
+            <KpiCell label="Net Gamma" value={`${g.gamma >= 0 ? '+' : ''}${g.gamma.toFixed(1)}`} />
+            <KpiCell label="Net Vega" value={fmtMoney(g.vega1pct)} />
+            <KpiCell label="Stock" value={`${f.stock >= 0 ? '+' : ''}${f.stock.toLocaleString()}`} />
+            <KpiCell label="Spot" value={`$${f.spot.toFixed(2)} ${spotChg >= 0 ? '+' : ''}${spotChg.toFixed(2)}%`} color={spotChg >= 0 ? T.green : T.red} />
+            <RiskMeterStrip label="Delta Risk" value={g.totalDeltaSh} limit={DELTA_LIMIT} unit="sh" over={overLimit} />
           </div>
 
-          {/* MM Controls band */}
-          <Widget title="MM Controls" bodyStyle={{ padding: '12px 16px' }}>
-            <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'center' }}>
-              <div style={{ width: 150 }}>{sliderRow('Sim Speed', `${speed.toFixed(1)}x`, range(speed, SPEED_MIN, SPEED_MAX, 0.1, setSpeed))}</div>
-              <div style={{ width: 150 }}>{sliderRow('Base IV', `${(baseIv * 100).toFixed(0)}%`, range(baseIv, 0.05, 0.80, 0.01, setBaseIv))}</div>
-              <div style={{ width: 150 }}>{sliderRow('IV Skew', skew.toFixed(2), range(skew, -0.20, 0.20, 0.01, setSkew))}</div>
-              <div style={{ width: 150 }}>{sliderRow('Half-Spread', `${(halfSpread * 100).toFixed(1)}%`, range(halfSpread, 0.005, 0.20, 0.005, setHalfSpread))}</div>
-              <div style={{ width: 1, alignSelf: 'stretch', background: T.border, margin: '2px 4px' }} />
-              <div style={{ flex: 1, minWidth: 240 }}>
-                <div style={{ ...labelStyle, marginBottom: 6 }}>Per-strike IV nudge</div>
-                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${STRIKES.length}, 1fr)`, gap: 14 }}>
-                  {STRIKES.map(k => (
-                    <div key={k}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 1 }}>
-                        <span style={{ fontSize: 9, fontFamily: T.mono, color: T.text }}>{k}</span>
-                        <span style={{ fontSize: 9, fontFamily: T.mono, color: T.muted }}>{(manual[k] ?? 0) >= 0 ? '+' : ''}{((manual[k] ?? 0) * 100).toFixed(0)}</span>
-                      </div>
-                      {range(manual[k] ?? 0, -0.15, 0.15, 0.01, v => setManual(m => ({ ...m, [k]: v })))}
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div style={{ width: 1, alignSelf: 'stretch', background: T.border, margin: '2px 4px' }} />
-              <div style={{ flex: 1, minWidth: 280 }}>
-                <div style={{ ...labelStyle, marginBottom: 6 }}>Per-contract spread widen</div>
-                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${STRIKES.length}, 1fr)`, gap: 14, rowGap: 6 }}>
-                  {(['C', 'P'] as const).flatMap(kind => STRIKES.map(k => {
-                    const key = `${kind}${k}`
-                    const v = spreadAdj[key] ?? 0
-                    return (
-                      <div key={key}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 1 }}>
-                          <span style={{ fontSize: 9, fontFamily: T.mono, color: kind === 'C' ? T.green : T.red }}>{kind} {k}</span>
-                          <span style={{ fontSize: 9, fontFamily: T.mono, color: T.muted }}>+{(v * 100).toFixed(1)}</span>
-                        </div>
-                        {range(v, 0, 0.20, 0.005, nv => setSpreadAdj(m => ({ ...m, [key]: nv })))}
-                      </div>
-                    )
-                  }))}
-                </div>
-              </div>
-            </div>
-          </Widget>
-
-          {/* Body row */}
-          <div style={{ display: 'grid', gridTemplateColumns: '286px 1fr 372px', gap: 10, alignItems: 'stretch' }}>
-            {/* Hedge */}
-            <Widget title="Hedge" bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 14, gap: 16 }}>
-              <div style={{ background: T.bg, border: `1px solid ${T.border}`, padding: '12px 14px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                  <span style={{ ...labelStyle, marginBottom: 0 }}>Net Delta</span>
-                  <span style={{ fontSize: 9, fontFamily: T.mono, color: overLimit ? T.red : T.muted }}>{overLimit ? 'over' : 'within'} {DELTA_LIMIT}</span>
-                </div>
-                <div style={{ fontFamily: T.mono, fontSize: 26, fontWeight: 700, color: overLimit ? T.red : T.text, margin: '4px 0 9px' }}>
-                  {g.totalDeltaSh >= 0 ? '+' : ''}{g.totalDeltaSh.toFixed(0)}<span style={{ fontSize: 10, color: T.muted, marginLeft: 5 }}>sh</span>
-                </div>
-                <button onClick={() => onTradeStock(need)} disabled={need === 0}
-                  style={{ width: '100%', padding: '8px 0', fontFamily: T.mono, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', cursor: need === 0 ? 'default' : 'pointer', background: 'transparent', border: `1px solid ${need === 0 ? T.border : T.gold}`, color: need === 0 ? T.muted : T.gold, opacity: need === 0 ? 0.6 : 1, textTransform: 'uppercase' }}>
-                  Flatten · {flatten}
-                </button>
-              </div>
-
-              <div>
-                <div style={{ ...labelStyle, marginBottom: 6 }}>Trade Size (shares)</div>
-                <Stepper value={hedgeQty} step={25} unit="sh" onChange={v => setHedgeQty(Math.max(0, v))} />
-                <div style={{ marginTop: 8 }}>
-                  <Chips options={[{ label: '100', value: 100 }, { label: '200', value: 200 }, { label: '500', value: 500 }, { label: '1k', value: 1000 }]} value={hedgeQty} onPick={setHedgeQty} />
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: `1px solid ${T.border}`, paddingTop: 10, fontFamily: T.mono, fontSize: 11 }}>
-                <span style={{ color: T.muted }}>Notional <span style={{ color: T.text }}>{fmtMoney(hedgeQty * f.spot)}</span></span>
-                <span style={{ color: T.muted }}>Adds Δ <span style={{ color: T.text }}>±{hedgeQty}</span></span>
-              </div>
-
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => onTradeStock(hedgeQty)} style={bigBtn(T.green)}>BUY</button>
-                <button onClick={() => onTradeStock(-hedgeQty)} style={bigBtn(T.red)}>SELL</button>
-              </div>
-
-              <div style={{ flex: 1 }} />
-
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => setRunning(r => !r)} style={btnStyle(running ? T.text : T.green)}>{running ? 'PAUSE' : 'START'}</button>
-                <button onClick={onReset} style={btnStyle(T.muted)}>RESET</button>
-              </div>
+          {/* Middle row: slim Controls | tall Tape | Hedge */}
+          <div style={{ display: 'grid', gridTemplateColumns: '250px 1fr 230px', gap: 8, alignItems: 'stretch' }}>
+            {/* MM Controls */}
+            <Widget title="MM Controls" bodyStyle={{ padding: '10px 12px' }}>
+              {sliderRow('Sim Speed', `${speed.toFixed(1)}x`, range(speed, SPEED_MIN, SPEED_MAX, 0.1, setSpeed))}
+              {sliderRow('Base IV', `${(baseIv * 100).toFixed(0)}%`, range(baseIv, 0.05, 0.80, 0.01, setBaseIv))}
+              {sliderRow('IV Skew', skew.toFixed(2), range(skew, -0.20, 0.20, 0.01, setSkew))}
+              {sliderRow('Half-Spread', `${(halfSpread * 100).toFixed(1)}%`, range(halfSpread, 0.005, 0.20, 0.005, setHalfSpread))}
+              <div style={{ height: 1, background: T.border, margin: '4px 0 10px' }} />
+              <div style={{ ...labelStyle, marginBottom: 8 }}>Per-strike IV nudge</div>
+              {STRIKES.map(k => <div key={k}>{sliderRow(`${k}`, `${(manual[k] ?? 0) >= 0 ? '+' : ''}${((manual[k] ?? 0) * 100).toFixed(0)}`, range(manual[k] ?? 0, -0.15, 0.15, 0.01, v => setManual(m => ({ ...m, [k]: v }))))}</div>)}
             </Widget>
 
             {/* Tape */}
@@ -489,7 +412,7 @@ export default function OptionsMarketMaker() {
                     <button onClick={() => setTapeSel([])} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.muted, fontFamily: T.sans }}>clear</button>
                   </span>
                 : <span style={{ fontFamily: T.mono, fontSize: 12, color: spotChg >= 0 ? T.green : T.red }}>${f.spot.toFixed(2)} {spotChg >= 0 ? '+' : ''}{spotChg.toFixed(2)}%</span>}>
-              <div style={{ height: 430, padding: '8px 6px 6px' }}>
+              <div style={{ height: 274, padding: '8px 6px 6px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={tapeData} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.07)" />
@@ -508,14 +431,51 @@ export default function OptionsMarketMaker() {
               </div>
             </Widget>
 
-            {/* Book cards */}
-            <Widget title="Options Chain" right={<span style={{ fontFamily: T.sans, fontSize: 8, color: T.muted, letterSpacing: '0.04em' }}>click a price to plot</span>}>
-              {renderChainCards(f, tapeSel, toggleTape)}
+            {/* Hedge */}
+            <Widget title="Hedge" bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 12, gap: 12 }}>
+              <div style={{ background: T.bg, border: `1px solid ${T.border}`, padding: '10px 12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                  <span style={{ ...labelStyle, marginBottom: 0 }}>Net Delta</span>
+                  <span style={{ fontSize: 9, fontFamily: T.mono, color: overLimit ? T.red : T.muted }}>{overLimit ? 'over' : 'within'} {DELTA_LIMIT}</span>
+                </div>
+                <div style={{ fontFamily: T.mono, fontSize: 24, fontWeight: 700, color: overLimit ? T.red : T.text, margin: '3px 0 8px' }}>
+                  {g.totalDeltaSh >= 0 ? '+' : ''}{g.totalDeltaSh.toFixed(0)}<span style={{ fontSize: 10, color: T.muted, marginLeft: 5 }}>sh</span>
+                </div>
+                <button onClick={() => onTradeStock(need)} disabled={need === 0}
+                  style={{ width: '100%', padding: '8px 0', fontFamily: T.mono, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', cursor: need === 0 ? 'default' : 'pointer', background: 'transparent', border: `1px solid ${need === 0 ? T.border : T.gold}`, color: need === 0 ? T.muted : T.gold, opacity: need === 0 ? 0.6 : 1, textTransform: 'uppercase' }}>
+                  Flatten · {flatten}
+                </button>
+              </div>
+
+              <div>
+                <div style={{ ...labelStyle, marginBottom: 6 }}>Trade Size (shares)</div>
+                <Stepper value={hedgeQty} step={25} unit="sh" onChange={v => setHedgeQty(Math.max(0, v))} />
+                <div style={{ marginTop: 8 }}>
+                  <Chips options={[{ label: '100', value: 100 }, { label: '200', value: 200 }, { label: '500', value: 500 }, { label: '1k', value: 1000 }]} value={hedgeQty} onPick={setHedgeQty} />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => onTradeStock(hedgeQty)} style={bigBtn(T.green)}>BUY</button>
+                <button onClick={() => onTradeStock(-hedgeQty)} style={bigBtn(T.red)}>SELL</button>
+              </div>
+
+              <div style={{ flex: 1 }} />
+
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setRunning(rr => !rr)} style={btnStyle(running ? T.text : T.green)}>{running ? 'PAUSE' : 'START'}</button>
+                <button onClick={onReset} style={btnStyle(T.muted)}>RESET</button>
+              </div>
             </Widget>
           </div>
 
-          {/* Ledger */}
-          <Widget title="Trade Ledger">{renderLedger(f)}</Widget>
+          {/* Options chain: wide table with editable quotes */}
+          <Widget title="Options Chain" right={<span style={{ fontFamily: T.sans, fontSize: 8, color: T.muted, letterSpacing: '0.04em' }}>edit any bid / ask to requote · click Theo to plot</span>}>
+            {renderChainTable(f, tapeSel, toggleTape, onQuote)}
+          </Widget>
+
+          {/* Ledger strip */}
+          {renderLedgerStrip(f)}
         </div>
       )}
     </PageWrapper>
@@ -533,90 +493,94 @@ function btnStyle(color: string): React.CSSProperties {
 
 function bigBtn(color: string): React.CSSProperties {
   return {
-    flex: 1, padding: '14px 0', fontFamily: 'var(--theme-mono)', fontSize: 13, fontWeight: 700,
+    flex: 1, padding: '12px 0', fontFamily: 'var(--theme-mono)', fontSize: 13, fontWeight: 700,
     letterSpacing: '0.1em', cursor: 'pointer', color, textTransform: 'uppercase',
     background: `color-mix(in srgb, ${color} 12%, transparent)`, border: `1px solid ${color}`,
   }
 }
 
-// Option chain as a vertical stack of per-strike cards (Call | Put columns).
-function renderChainCards(f: Frame, tapeSel: string[], onToggle: (key: string) => void) {
+// Option chain as a compact wide table. Bid/Ask are editable quote cells; Theo
+// is clickable to overlay that contract's premium on the tape.
+function renderChainTable(f: Frame, tapeSel: string[], onToggle: (key: string) => void, onQuote: (key: string, side: 'bid' | 'ask', price: number) => void) {
   const G = 'var(--theme-positive, #22c55e)', R = 'var(--theme-negative, #ef4444)', M = 'var(--theme-secondary, #5e768f)', GD = 'var(--theme-primary, #c9a84c)', B = 'var(--theme-tertiary, #60a5fa)'
-  const side = (kind: 'C' | 'P', k: number) => {
-    const key = `${kind}${k}`
-    const leg = f.chain[key]
-    const pos = f.positions[key]; const sold = f.sold[key] || 0
+  const th: React.CSSProperties = { fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: M, padding: '6px 10px', textAlign: 'right', whiteSpace: 'nowrap' }
+  const td: React.CSSProperties = { fontFamily: 'var(--theme-mono)', fontSize: 13, padding: '5px 10px', textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }
+  const deltaCell = (key: string) => {
+    const d = f.chain[key].delta
+    return <span style={{ color: M }}>{d >= 0 ? '+' : ''}{d.toFixed(2)}</span>
+  }
+  const theoCell = (key: string) => {
     const i = tapeSel.indexOf(key); const on = i >= 0
-    const lineCol = on ? TAPE_COLORS[i % TAPE_COLORS.length] : B
-    return (
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: kind === 'C' ? G : R }}>
-          {kind === 'C' ? 'CALL' : 'PUT'} · Δ {leg.delta >= 0 ? '+' : ''}{leg.delta.toFixed(2)}
-        </div>
-        <div onClick={() => onToggle(key)} title="Plot on tape"
-          style={{ fontFamily: 'var(--theme-mono)', fontSize: 13, margin: '3px 0', cursor: 'pointer', padding: '1px 3px', background: on ? `color-mix(in srgb, ${lineCol} 14%, transparent)` : 'transparent' }}>
-          <span style={{ color: G }}>{leg.bid.toFixed(2)}</span>
-          <span style={{ color: M }}> / </span>
-          <span style={{ color: lineCol }}>{leg.theo.toFixed(2)}</span>
-          <span style={{ color: M }}> / </span>
-          <span style={{ color: R }}>{leg.ask.toFixed(2)}</span>
-        </div>
-        <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: M }}>
-          pos <span style={{ color: pos === 0 ? M : pos > 0 ? G : R }}>{pos > 0 ? '+' : ''}{pos}</span>{sold > 0 ? ` · ${sold} sold` : ''}
-        </div>
-      </div>
-    )
+    const col = on ? TAPE_COLORS[i % TAPE_COLORS.length] : B
+    return <span onClick={() => onToggle(key)} title="Plot on tape" style={{ cursor: 'pointer', color: col, padding: '1px 4px', background: on ? `color-mix(in srgb, ${col} 16%, transparent)` : 'transparent' }}>{f.chain[key].theo.toFixed(2)}</span>
+  }
+  const posCell = (key: string) => {
+    const p = f.positions[key]; const sold = f.sold[key] || 0
+    return <span style={{ color: M }}><span style={{ color: p === 0 ? M : p > 0 ? G : R }}>{p > 0 ? '+' : ''}{p}</span>{sold > 0 ? ` · ${sold}s` : ''}</span>
   }
   return (
-    <div>
-      {STRIKES.map(k => {
-        const atm = Math.abs(k - f.spot) <= 5
-        const money = f.spot > k ? 'ITM' : f.spot < k ? 'OTM' : 'ATM'
-        return (
-          <div key={k} style={{ padding: '9px 13px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.05))', background: atm ? 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' : 'transparent' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-              <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 16, fontWeight: 700, color: GD }}>{k}</span>
-              <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', color: M }}>{money}</span>
-            </div>
-            <div style={{ display: 'flex', gap: 12 }}>{side('C', k)}{side('P', k)}</div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-function renderLedger(f: Frame) {
-  const th: React.CSSProperties = { fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', padding: '8px 18px', textAlign: 'left' }
-  const td: React.CSSProperties = { fontFamily: 'var(--theme-mono)', fontSize: 13, padding: '10px 18px', color: 'var(--theme-text, #d7e3fc)' }
-  if (f.ledger.length === 0) {
-    return <div style={{ padding: '14px 18px', fontFamily: 'var(--theme-mono)', fontSize: 12, color: 'var(--theme-secondary, #5e768f)' }}>No fills yet. Quotes are live. Client orders arrive every few seconds.</div>
-  }
-  return (
-    <div style={{ overflowY: 'auto', maxHeight: 280 }}>
+    <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
-          <tr style={{ borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.06))' }}>
-            {['Time', 'Action', 'Contract', 'Size', 'Fill', 'Edge'].map(h => <th key={h} style={th}>{h}</th>)}
+          <tr style={{ borderBottom: `1px solid var(--theme-border, rgba(255,255,255,0.06))` }}>
+            <th style={{ ...th, textAlign: 'left' }}>Calls</th>
+            <th style={th}>&#916;</th><th style={th}>Bid</th><th style={th}>Theo</th><th style={th}>Ask</th>
+            <th style={{ ...th, textAlign: 'center', color: GD }}>Strike</th>
+            <th style={th}>Bid</th><th style={th}>Theo</th><th style={th}>Ask</th><th style={th}>&#916;</th>
+            <th style={{ ...th, textAlign: 'left' }}>Puts</th>
           </tr>
         </thead>
         <tbody>
-          {[...f.ledger].reverse().map((t, i) => {
-            const isStock = t.contract === 'STOCK'
-            const actionColor = isStock ? 'var(--theme-primary, #c9a84c)' : t.clientSide === 'BUY' ? 'var(--theme-positive, #22c55e)' : 'var(--theme-negative, #ef4444)'
+          {STRIKES.map(k => {
+            const cKey = `C${k}`, pKey = `P${k}`
+            const atm = Math.abs(k - f.spot) <= 5
             return (
-              <tr key={i} style={{ borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.04))' }}>
-                <td style={{ ...td, color: 'var(--theme-secondary, #5e768f)' }}>{t.tLabel}</td>
-                <td style={{ ...td, color: actionColor }}>{t.clientSide}</td>
-                <td style={td}>{t.contract}</td>
-                <td style={td}>{t.size}</td>
-                <td style={td}>${t.fillPrice.toFixed(2)}</td>
-                <td style={{ ...td, color: t.edge ? 'var(--theme-positive, #22c55e)' : 'var(--theme-secondary, #5e768f)' }}>{t.edge ? fmtMoney(t.edge) : '-'}</td>
+              <tr key={k} style={{ borderBottom: `1px solid var(--theme-border, rgba(255,255,255,0.04))`, background: atm ? 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' : 'transparent' }}>
+                <td style={{ ...td, textAlign: 'left' }}>{posCell(cKey)}</td>
+                <td style={td}>{deltaCell(cKey)}</td>
+                <td style={td}><QuoteCell value={f.chain[cKey].bid} side="bid" step={0.01} decimals={2} onCommit={v => onQuote(cKey, 'bid', v)} /></td>
+                <td style={td}>{theoCell(cKey)}</td>
+                <td style={td}><QuoteCell value={f.chain[cKey].ask} side="ask" step={0.01} decimals={2} onCommit={v => onQuote(cKey, 'ask', v)} /></td>
+                <td style={{ ...td, textAlign: 'center', fontSize: 16, fontWeight: 700, color: GD }}>{k}</td>
+                <td style={td}><QuoteCell value={f.chain[pKey].bid} side="bid" step={0.01} decimals={2} onCommit={v => onQuote(pKey, 'bid', v)} /></td>
+                <td style={td}>{theoCell(pKey)}</td>
+                <td style={td}><QuoteCell value={f.chain[pKey].ask} side="ask" step={0.01} decimals={2} onCommit={v => onQuote(pKey, 'ask', v)} /></td>
+                <td style={td}>{deltaCell(pKey)}</td>
+                <td style={{ ...td, textAlign: 'left' }}>{posCell(pKey)}</td>
               </tr>
             )
           })}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+// Ledger as a single thin strip: a gold tag cell then the latest fills inline.
+function renderLedgerStrip(f: Frame) {
+  const M = 'var(--theme-secondary, #5e768f)', GD = 'var(--theme-primary, #c9a84c)', T2 = 'var(--theme-text, #d7e3fc)'
+  const last = [...f.ledger].slice(-3).reverse()
+  const tag: React.CSSProperties = { display: 'flex', alignItems: 'center', padding: '0 14px', borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: GD, flexShrink: 0 }
+  return (
+    <div style={{ display: 'flex', alignItems: 'stretch', background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', overflowX: 'auto', minHeight: 38 }}>
+      <div style={tag}>Ledger</div>
+      {last.length === 0
+        ? <div style={{ display: 'flex', alignItems: 'center', padding: '0 14px', fontFamily: 'var(--theme-mono)', fontSize: 12, color: M }}>No fills yet. Quotes are live. Client orders arrive every few seconds.</div>
+        : last.map((t, i) => {
+          const isStock = t.contract === 'STOCK'
+          const ac = isStock ? GD : t.clientSide === 'BUY' ? 'var(--theme-positive, #22c55e)' : 'var(--theme-negative, #ef4444)'
+          return (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.05))', fontFamily: 'var(--theme-mono)', fontSize: 12, whiteSpace: 'nowrap' }}>
+              <span style={{ color: M }}>{t.tLabel}</span>
+              <span style={{ color: ac, fontWeight: 700 }}>{t.clientSide}</span>
+              <span style={{ color: T2 }}>{t.contract}</span>
+              <span style={{ color: M }}>{t.size}</span>
+              <span style={{ color: M }}>@</span>
+              <span style={{ color: T2 }}>${t.fillPrice.toFixed(2)}</span>
+              {t.edge ? <span style={{ color: 'var(--theme-positive, #22c55e)' }}>{fmtMoney(t.edge)}</span> : null}
+            </div>
+          )
+        })}
     </div>
   )
 }
