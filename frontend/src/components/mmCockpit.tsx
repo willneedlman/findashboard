@@ -210,11 +210,14 @@ export function QuoteCell({ value, side, step, decimals, onCommit }: {
 }) {
   const color = side === 'bid' ? V.pos : V.neg
   const [draft, setDraft] = useState<string | null>(null)
-  const shown = draft ?? value.toFixed(decimals)
+  // Optimistic value so a chevron click shows immediately, before the ~1s sim
+  // tick re-derives `value` from the committed override.
+  const [optimistic, setOptimistic] = useState<number | null>(null)
+  const shown = draft ?? (optimistic != null ? optimistic.toFixed(decimals) : value.toFixed(decimals))
   // Track the live quote in a ref so consecutive chevron clicks accumulate even
   // before the next sim tick re-derives `value`; reset only when value moves.
   const liveRef = useRef(value)
-  useEffect(() => { if (draft === null) liveRef.current = value }, [value, draft])
+  useEffect(() => { if (draft === null) liveRef.current = value; setOptimistic(null) }, [value, draft])
   const commit = (raw: string) => {
     const n = parseFloat(raw)
     if (!Number.isNaN(n)) onCommit(+n.toFixed(decimals))
@@ -223,6 +226,7 @@ export function QuoteCell({ value, side, step, decimals, onCommit }: {
   const bump = (dir: number) => {
     const next = +(liveRef.current + dir * step).toFixed(decimals)
     liveRef.current = next
+    setOptimistic(next)
     onCommit(next)
   }
   return (
