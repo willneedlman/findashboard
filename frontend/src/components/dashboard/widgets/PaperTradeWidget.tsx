@@ -16,7 +16,7 @@ import { readToken } from '../../../lib/theme'
 
 interface Position { symbol: string; quantity: number; avg_cost: number; price: number; unrealized_pnl: number }
 interface OptionPosition { option_symbol: string; underlying: string; type: string; strike: number; quantity: number; unrealized_pnl: number }
-interface OrderRow { id: string; symbol: string; option_symbol?: string; side: string; status: string; order_type?: string; limit_price?: number | null; stop_price?: number | null; fill_price: number | null; created_at?: number }
+interface OrderRow { id: string; symbol: string; option_symbol?: string; side: string; status: string; order_type?: string; quantity?: number; limit_price?: number | null; stop_price?: number | null; fill_price: number | null; created_at?: number }
 const PENDING_STATUSES = ['pending', 'open', 'partially_filled']
 // Right-click order types that actually REST at the clicked level, so the menu
 // can't place a marketable (instant-fill) order. Below market: buy limit / sell
@@ -29,6 +29,12 @@ const ABOVE_ORDER_ACTIONS = [
   { side: 'sell', order_type: 'limit', label: 'Sell limit' },
   { side: 'buy', order_type: 'stop', label: 'Buy stop' },
 ] as const
+const isPending = (o: OrderRow) => PENDING_STATUSES.includes((o.status ?? '').toLowerCase())
+const orderPrice = (o: OrderRow) => (o.limit_price ?? o.stop_price ?? 0)
+const orderTag = (o: OrderRow) => `${String(o.side).startsWith('buy') ? 'BUY' : 'SELL'} ${(o.order_type ?? '').toLowerCase() === 'limit' ? 'LMT' : 'STP'}`
+const isPendingEquityLine = (o: OrderRow, ticker: string) =>
+  isPending(o) && o.symbol === ticker && !o.option_symbol &&
+  ['limit', 'stop', 'stop_limit'].includes((o.order_type ?? '').toLowerCase()) && orderPrice(o) > 0
 interface Account { cash: number; equity: number; buying_power: number; realized_pnl: number; positions: Position[]; option_positions?: OptionPosition[]; orders?: OrderRow[] }
 interface PaperOrder { status: string; reason: string | null; fill_price: number | null }
 type OType = 'market' | 'limit' | 'stop'
@@ -147,7 +153,7 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
   }
   const orderLineRef = useRef<IPriceLine | null>(null)
   const pendingLinesRef = useRef<Map<string, IPriceLine>>(new Map())
-  const [menu, setMenu] = useState<{ x: number; y: number; price: number } | null>(null)
+  const [menu, setMenu] = useState<{ x: number; y: number; price: number; cancelId?: string; cancelLabel?: string } | null>(null)
   const draggingRef = useRef(false)
   const [spot, setSpot] = useState<number | null>(null)
   const [chartErr, setChartErr] = useState(false)
@@ -396,10 +402,7 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
     const series = candleRef.current
     if (!series) return
     const cPos = readToken('--theme-positive', '#22c55e'), cNeg = readToken('--theme-negative', '#ef4444')
-    const mine = (account.data?.orders ?? []).filter(o =>
-      PENDING_STATUSES.includes((o.status ?? '').toLowerCase()) && o.symbol === ticker && !o.option_symbol &&
-      ['limit', 'stop', 'stop_limit'].includes((o.order_type ?? '').toLowerCase()) &&
-      ((o.limit_price ?? o.stop_price ?? 0) > 0))
+    const mine = (account.data?.orders ?? []).filter(o => isPendingEquityLine(o, ticker))
     const want = new Set(mine.map(o => o.id))
     for (const [id, line] of pendingLinesRef.current) {
       if (!want.has(id)) { try { series.removePriceLine(line) } catch { /* gone */ } pendingLinesRef.current.delete(id) }
@@ -502,14 +505,28 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
     onError: (e: unknown) => setResult({ text: ((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail) ?? 'Order failed', ok: false }),
   })
 
+  const cancelOrder = useMutation({
+    mutationFn: (id: string) => axios.delete(`/api/paper/order/${id}?user_id=${user!.id}`, { headers: authHeaders }).then(r => r.data),
+    onSuccess: () => { setResult({ text: 'Order cancelled', ok: true }); qc.invalidateQueries({ queryKey: ['paper-account', user?.id] }) },
+    onError: (e: unknown) => setResult({ text: ((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail) ?? 'Cancel failed', ok: false }),
+  })
+
   const onChartContextMenu = (e: React.MouseEvent) => {
     const series = candleRef.current, el = containerRef.current
     if (!series || !el || instrument !== 'equity') return
     e.preventDefault()
     const rect = el.getBoundingClientRect()
-    const price = series.coordinateToPrice(e.clientY - rect.top) as number | null
+    const clickY = e.clientY - rect.top
+    const price = series.coordinateToPrice(clickY) as number | null
     if (price == null || !(price > 0)) return
-    setMenu({ x: e.clientX - rect.left, y: e.clientY - rect.top, price })
+    // Right-clicking on (within 6px of) an existing pending order line offers to
+    // cancel it instead of placing a new order.
+    let hit: { id: string; label: string } | undefined
+    for (const o of (account.data?.orders ?? []).filter(o => isPendingEquityLine(o, ticker))) {
+      const oy = series.priceToCoordinate(orderPrice(o))
+      if (oy != null && Math.abs(oy - clickY) <= 6) { hit = { id: o.id, label: `${orderTag(o)} ${orderPrice(o).toFixed(2)}` }; break }
+    }
+    setMenu({ x: e.clientX - rect.left, y: clickY, price, cancelId: hit?.id, cancelLabel: hit?.label })
   }
   useEffect(() => {
     if (!menu) return
@@ -602,8 +619,8 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
   const lbl: React.CSSProperties = { fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.muted }
   const numLbl: React.CSSProperties = { fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: T.muted }
   const acct = account.data
-  const pos = acct?.positions ?? []
-  const optPos = acct?.option_positions ?? []
+  // All resting orders (equity + option, any ticker), newest first, for the panel.
+  const pendingOrders = (acct?.orders ?? []).filter(isPending).sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))
   const selStyle: React.CSSProperties = { background: 'var(--theme-bg, #101c2e)', border: `1px solid ${T.border}`, color: T.gold, fontFamily: T.mono, fontSize: 9, padding: '2px 4px', outline: 'none', cursor: 'pointer' }
 
   return (
@@ -680,10 +697,23 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
                 width: 150, zIndex: 20, background: T.surface, border: `1px solid ${T.gold}`, boxShadow: '0 8px 24px rgba(0,0,0,0.45)',
               }}>
                 <div style={{ padding: '5px 8px', borderBottom: `1px solid ${T.border}`, fontFamily: T.mono, fontSize: 9 }}>
-                  <span style={{ color: T.muted }}>{ticker} @ </span><span style={{ color: T.gold, fontWeight: 700 }}>${menu.price.toFixed(2)}</span>
-                  {spot != null && <span style={{ color: T.muted, fontSize: 8, marginLeft: 4 }}>{menu.price < spot ? 'below' : 'above'}</span>}
+                  {menu.cancelId
+                    ? <span style={{ color: T.gold, fontWeight: 700 }}>{menu.cancelLabel}</span>
+                    : <>
+                        <span style={{ color: T.muted }}>{ticker} @ </span><span style={{ color: T.gold, fontWeight: 700 }}>${menu.price.toFixed(2)}</span>
+                        {spot != null && <span style={{ color: T.muted, fontSize: 8, marginLeft: 4 }}>{menu.price < spot ? 'below' : 'above'}</span>}
+                      </>}
                 </div>
-                {(spot == null ? [...BELOW_ORDER_ACTIONS, ...ABOVE_ORDER_ACTIONS] : menu.price < spot ? BELOW_ORDER_ACTIONS : ABOVE_ORDER_ACTIONS).map(a => (
+                {menu.cancelId ? (
+                  <button onClick={() => { cancelOrder.mutate(menu.cancelId!); setMenu(null) }}
+                    style={{
+                      display: 'block', width: '100%', textAlign: 'left', padding: '6px 8px', background: 'transparent',
+                      border: 'none', color: T.neg, fontFamily: T.mono, fontSize: 10, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.04em',
+                    }}
+                    onMouseEnter={ev => { (ev.currentTarget as HTMLButtonElement).style.background = 'color-mix(in srgb, var(--theme-negative) 12%, transparent)' }}
+                    onMouseLeave={ev => { (ev.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
+                  >Cancel order</button>
+                ) : (spot == null ? [...BELOW_ORDER_ACTIONS, ...ABOVE_ORDER_ACTIONS] : menu.price < spot ? BELOW_ORDER_ACTIONS : ABOVE_ORDER_ACTIONS).map(a => (
                   <button key={`${a.side}-${a.order_type}`}
                     onClick={() => { quickOrder.mutate({ side: a.side, order_type: a.order_type, price: menu.price }); setMenu(null) }}
                     style={{
@@ -835,25 +865,28 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
 
           <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 10px 4px' }}>
-              <span style={{ ...lbl, fontSize: 9 }}>Positions</span>
+              <span style={{ ...lbl, fontSize: 9 }}>Pending{pendingOrders.length > 0 ? ` · ${pendingOrders.length}` : ''}</span>
               <button onClick={() => reset.mutate()} title="Reset paper account" style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.muted }}>Reset</button>
             </div>
-            {pos.length === 0 && optPos.length === 0 ? (
-              <div style={{ padding: '2px 10px 8px', fontFamily: T.mono, fontSize: 10, color: T.muted }}>{account.isLoading ? 'Loading…' : 'None open'}</div>
-            ) : (<>
-              {pos.map(p => (
-                <div key={p.symbol} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '4px 10px', borderBottom: `1px solid ${T.border}` }}>
-                  <span style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: T.gold }}>{p.symbol}<span style={{ color: T.muted, fontSize: 9, marginLeft: 4 }}>{p.quantity}</span></span>
-                  <span style={{ fontFamily: T.mono, fontSize: 10, color: p.unrealized_pnl >= 0 ? T.pos : T.neg }}>{p.unrealized_pnl >= 0 ? '+' : ''}{p.unrealized_pnl.toFixed(0)}</span>
+            {pendingOrders.length === 0 ? (
+              <div style={{ padding: '2px 10px 8px', fontFamily: T.mono, fontSize: 10, color: T.muted }}>{account.isLoading ? 'Loading…' : 'No pending orders'}</div>
+            ) : pendingOrders.map(o => {
+              const sym = o.option_symbol ? occUnderlying(o.option_symbol) : o.symbol
+              const isBuy = String(o.side).startsWith('buy')
+              return (
+                <div key={o.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, padding: '4px 10px', borderBottom: `1px solid ${T.border}` }}>
+                  <span style={{ fontFamily: T.mono, fontSize: 10, fontWeight: 700, color: T.gold, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {sym}{o.option_symbol ? <span style={{ color: T.muted, fontSize: 8, marginLeft: 3 }}>OPT</span> : null}
+                    <span style={{ color: isBuy ? T.pos : T.neg, marginLeft: 4 }}>{orderTag(o)}</span>
+                    <span style={{ color: T.muted, marginLeft: 4 }}>{o.quantity}@{orderPrice(o).toFixed(2)}</span>
+                  </span>
+                  <button onClick={() => cancelOrder.mutate(o.id)} disabled={cancelOrder.isPending} title="Cancel order"
+                    style={{ background: 'none', border: `1px solid ${T.border}`, color: T.neg, cursor: 'pointer', fontFamily: T.mono, fontSize: 11, lineHeight: 1, padding: '1px 5px', flexShrink: 0 }}>
+                    &times;
+                  </button>
                 </div>
-              ))}
-              {optPos.map(p => (
-                <div key={p.option_symbol} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '4px 10px', borderBottom: `1px solid ${T.border}` }}>
-                  <span style={{ fontFamily: T.mono, fontSize: 10, fontWeight: 700, color: T.gold }}>{p.underlying} {p.strike}{p.type === 'call' ? 'C' : 'P'}<span style={{ color: T.muted, fontSize: 9, marginLeft: 4 }}>{p.quantity}</span></span>
-                  <span style={{ fontFamily: T.mono, fontSize: 10, color: p.unrealized_pnl >= 0 ? T.pos : T.neg }}>{p.unrealized_pnl >= 0 ? '+' : ''}{p.unrealized_pnl.toFixed(0)}</span>
-                </div>
-              ))}
-            </>)}
+              )
+            })}
           </div>
         </div>
       </div>

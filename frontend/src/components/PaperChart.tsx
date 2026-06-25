@@ -54,6 +54,7 @@ export interface ChartFill { time: number; side: string; symbol?: string; option
 // A resting equity limit/stop order, drawn as a persistent on-chart price line.
 export interface ChartOrder { id: string; symbol: string; side: 'buy' | 'sell'; type: 'limit' | 'stop'; price: number }
 export type PlaceOrderFn = (o: { symbol: string; price: number; side: 'buy' | 'sell'; type: 'limit' | 'stop' }) => void
+export type CancelOrderFn = (id: string) => void
 
 const inputStyle: React.CSSProperties = {
   background: 'var(--theme-bg, #101c2e)', border: `1px solid ${T.border}`, color: T.text,
@@ -61,7 +62,7 @@ const inputStyle: React.CSSProperties = {
 }
 const selStyle: React.CSSProperties = { background: 'var(--theme-bg, #101c2e)', border: `1px solid ${T.border}`, color: T.gold, fontFamily: T.mono, fontSize: 9, padding: '2px 4px', outline: 'none', cursor: 'pointer' }
 
-export default function PaperChart({ initialTicker = 'SPY', fills = [], orders = [], onPlaceOrder, storageKey = 'page' }: { initialTicker?: string; fills?: ChartFill[]; orders?: ChartOrder[]; onPlaceOrder?: PlaceOrderFn; storageKey?: string }) {
+export default function PaperChart({ initialTicker = 'SPY', fills = [], orders = [], onPlaceOrder, onCancelOrder, storageKey = 'page' }: { initialTicker?: string; fills?: ChartFill[]; orders?: ChartOrder[]; onPlaceOrder?: PlaceOrderFn; onCancelOrder?: CancelOrderFn; storageKey?: string }) {
   const init = loadState(storageKey)
   const [ticker, setTicker] = useState(initialTicker.toUpperCase())
   const [tickerInput, setTickerInput] = useState(initialTicker.toUpperCase())
@@ -89,7 +90,7 @@ export default function PaperChart({ initialTicker = 'SPY', fills = [], orders =
   const volumeRef = useRef<ISeriesApi<'Histogram'> | null>(null)
   const lenRef = useRef(0)
   const pendingLinesRef = useRef<Map<string, IPriceLine>>(new Map())
-  const [menu, setMenu] = useState<{ x: number; y: number; price: number } | null>(null)
+  const [menu, setMenu] = useState<{ x: number; y: number; price: number; cancelId?: string; cancelLabel?: string } | null>(null)
   const windowRef = useRef(windowKey); useEffect(() => { windowRef.current = windowKey }, [windowKey])
   const barSpacingRef = useRef(barSpacing); useEffect(() => { barSpacingRef.current = barSpacing }, [barSpacing])
   const candlesRef = useRef<Candle[]>([]); useEffect(() => { candlesRef.current = candles }, [candles])
@@ -297,16 +298,28 @@ export default function PaperChart({ initialTicker = 'SPY', fills = [], orders =
     }
   }, [orders, ticker, candles])
 
-  // Right-click a price level to drop a resting limit/stop order there.
+  // Right-click a price level to drop a resting order — or, when the click lands
+  // on an existing pending order line, to cancel that order instead.
   const onChartContextMenu = (e: React.MouseEvent) => {
-    if (!onPlaceOrder) return
+    if (!onPlaceOrder && !onCancelOrder) return
     const series = candleRef.current, el = containerRef.current
     if (!series || !el) return
     e.preventDefault()
     const rect = el.getBoundingClientRect()
-    const price = series.coordinateToPrice(e.clientY - rect.top) as number | null
+    const clickY = e.clientY - rect.top
+    const price = series.coordinateToPrice(clickY) as number | null
     if (price == null || !(price > 0)) return
-    setMenu({ x: e.clientX - rect.left, y: e.clientY - rect.top, price })
+    let hit: { id: string; label: string } | undefined
+    if (onCancelOrder) {
+      for (const o of orders.filter(o => o.symbol === ticker && o.price > 0)) {
+        const oy = series.priceToCoordinate(o.price)
+        if (oy != null && Math.abs(oy - clickY) <= 6) {
+          hit = { id: o.id, label: `${o.side === 'buy' ? 'BUY' : 'SELL'} ${o.type === 'limit' ? 'LMT' : 'STP'} ${o.price.toFixed(2)}` }
+          break
+        }
+      }
+    }
+    setMenu({ x: e.clientX - rect.left, y: clickY, price, cancelId: hit?.id, cancelLabel: hit?.label })
   }
   useEffect(() => {
     if (!menu) return
@@ -375,9 +388,10 @@ export default function PaperChart({ initialTicker = 'SPY', fills = [], orders =
       </div>
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }} onContextMenu={onChartContextMenu}>
         <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
-        {menu && onPlaceOrder && (
+        {menu && (onPlaceOrder || onCancelOrder) && (
           <OrderContextMenu menu={menu} ticker={ticker} spot={spot} onClose={() => setMenu(null)}
-            onPick={(side, type) => { onPlaceOrder({ symbol: ticker, price: menu.price, side, type }); setMenu(null) }} />
+            onCancel={menu.cancelId && onCancelOrder ? () => { onCancelOrder(menu.cancelId!); setMenu(null) } : undefined}
+            onPick={onPlaceOrder ? (side, type) => { onPlaceOrder({ symbol: ticker, price: menu.price, side, type }); setMenu(null) } : undefined} />
         )}
         {chartErr && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: T.mono, fontSize: 11, color: T.muted }}>No chart data</div>}
         {isAway && !chartErr && (
@@ -415,12 +429,13 @@ const ABOVE_ACTIONS = [
   { side: 'buy', type: 'stop', label: 'Buy stop', color: T.pos },
 ] as const
 
-function OrderContextMenu({ menu, ticker, spot, onClose, onPick }: {
-  menu: { x: number; y: number; price: number }
+function OrderContextMenu({ menu, ticker, spot, onClose, onPick, onCancel }: {
+  menu: { x: number; y: number; price: number; cancelLabel?: string }
   ticker: string
   spot: number | null
   onClose: () => void
-  onPick: (side: 'buy' | 'sell', type: 'limit' | 'stop') => void
+  onPick?: (side: 'buy' | 'sell', type: 'limit' | 'stop') => void
+  onCancel?: () => void
 }) {
   const W = 168
   const left = `min(${menu.x}px, calc(100% - ${W + 8}px))`
@@ -439,12 +454,26 @@ function OrderContextMenu({ menu, ticker, spot, onClose, onPick }: {
         background: T.surface, border: `1px solid ${T.gold}`, boxShadow: '0 8px 24px rgba(0,0,0,0.45)',
       }}>
         <div style={{ padding: '6px 9px', borderBottom: `1px solid ${T.border}`, fontFamily: T.mono, fontSize: 10 }}>
-          <span style={{ color: T.muted }}>{ticker} @ </span>
-          <span style={{ color: T.gold, fontWeight: 700 }}>${menu.price.toFixed(2)}</span>
-          {rel && <span style={{ color: T.muted, fontSize: 8.5, marginLeft: 5 }}>{rel}</span>}
+          {onCancel
+            ? <span style={{ color: T.gold, fontWeight: 700 }}>{menu.cancelLabel}</span>
+            : <>
+                <span style={{ color: T.muted }}>{ticker} @ </span>
+                <span style={{ color: T.gold, fontWeight: 700 }}>${menu.price.toFixed(2)}</span>
+                {rel && <span style={{ color: T.muted, fontSize: 8.5, marginLeft: 5 }}>{rel}</span>}
+              </>}
         </div>
-        {actions.map(a => (
-          <button key={`${a.side}-${a.type}`} onClick={() => onPick(a.side, a.type)}
+        {onCancel ? (
+          <button onClick={onCancel}
+            style={{
+              display: 'block', width: '100%', textAlign: 'left', padding: '7px 9px',
+              background: 'transparent', border: 'none', color: T.neg, fontFamily: T.mono,
+              fontSize: 11, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.04em',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'color-mix(in srgb, var(--theme-negative) 12%, transparent)' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
+          >Cancel order</button>
+        ) : actions.map(a => (
+          <button key={`${a.side}-${a.type}`} onClick={() => onPick?.(a.side, a.type)}
             style={{
               display: 'block', width: '100%', textAlign: 'left', padding: '7px 9px',
               background: 'transparent', border: 'none', borderBottom: `1px solid ${T.border}`,

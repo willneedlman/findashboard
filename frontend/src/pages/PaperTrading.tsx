@@ -253,7 +253,7 @@ export default function PaperTrading() {
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 10, height: '100%', overflow: 'hidden' }}>
             <div style={{ flex: '3 1 0', minHeight: 0, background: T.surface, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
               <PaperChart initialTicker={chartInitTicker} fills={chartFills} orders={chartOrders}
-                onPlaceOrder={v => placeMutation.mutate(v)} storageKey={uid || 'page'} />
+                onPlaceOrder={v => placeMutation.mutate(v)} onCancelOrder={id => cancelMutation.mutate(id)} storageKey={uid || 'page'} />
             </div>
             <div style={{ flex: '2 1 0', minHeight: 0, background: T.surface, border: `1px solid ${T.border}`, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
               <PositionsPanel positions={positions} />
