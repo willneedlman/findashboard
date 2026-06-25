@@ -141,19 +141,21 @@ function advanceSpot(s: SimState): void {
   if (s.spotHistory.length > 120) s.spotHistory = s.spotHistory.slice(-120)
 }
 
-function buildChain(s: SimState, baseIv: number, skew: number, halfSpread: number, manual: Record<number, number>, spreadAdj: Record<string, number>, strikeWiden: Record<number, number>): Chain {
+function buildChain(s: SimState, baseIv: number, skew: number, halfSpread: number, manual: Record<number, number>, bidAdj: Record<string, number>, askAdj: Record<string, number>, strikeWiden: Record<number, number>): Chain {
   const chain: Chain = {}
   for (const kind of ['C', 'P'] as const) {
     for (const k of STRIKES) {
       const iv = strikeIv(k, baseIv, skew, manual)
       const q = priceOption(s.spot, k, TIME_TO_EXPIRY, RISK_FREE, iv, kind)
-      // Half-spread = global base + this contract's own bid/ask edit + this
-      // strike's widen. The three layers stack, so widening a strike keeps each
-      // leg's custom quote intact and just adds width on top.
-      const hs = Math.max(q.theo * (halfSpread + (spreadAdj[ck(kind, k)] ?? 0) + (strikeWiden[k] ?? 0)), 0.03)
-      chain[ck(kind, k)] = {
+      // Bid and ask are quoted independently: each side's distance from theo =
+      // global base + that side's own edit + this strike's widen. So you can skew
+      // a quote (asymmetric spread, mid off theo) and widening keeps both edits.
+      const key = ck(kind, k), w = strikeWiden[k] ?? 0
+      const bidHs = Math.max(q.theo * (halfSpread + (bidAdj[key] ?? 0) + w), 0.03)
+      const askHs = Math.max(q.theo * (halfSpread + (askAdj[key] ?? 0) + w), 0.03)
+      chain[key] = {
         kind, strike: k, iv, theo: q.theo,
-        bid: Math.max(0.01, q.theo - hs), ask: q.theo + hs,
+        bid: Math.max(0.01, q.theo - bidHs), ask: q.theo + askHs,
         delta: q.delta, gamma: q.gamma, vega: q.vega,
       }
     }
@@ -261,9 +263,13 @@ export default function OptionsMarketMaker() {
   const [skew, setSkew]             = useState(0.06)
   const [halfSpread, setHalfSpread] = useState(0.04)
   const [manual, setManual]         = useState<Record<number, number>>(() => Object.fromEntries(STRIKES.map(k => [k, 0])))
-  const [spreadAdj, setSpreadAdj]   = useState<Record<string, number>>(() => Object.fromEntries(STRIKES.flatMap(k => [[`C${k}`, 0], [`P${k}`, 0]])))
+  // Bid and ask edits live in independent per-contract layers, so quoting one
+  // side never moves the other (asymmetric / skewed markets).
+  const zeroAdj = () => Object.fromEntries(STRIKES.flatMap(k => [[`C${k}`, 0], [`P${k}`, 0]]))
+  const [bidAdj, setBidAdj]         = useState<Record<string, number>>(zeroAdj)
+  const [askAdj, setAskAdj]         = useState<Record<string, number>>(zeroAdj)
   // Per-strike widen sits in its own layer so it composes with (rather than
-  // overwrites) the per-contract bid/ask edits in spreadAdj.
+  // overwrites) the per-contract bid/ask edits.
   const [strikeWiden, setStrikeWiden] = useState<Record<number, number>>(() => Object.fromEntries(STRIKES.map(k => [k, 0])))
   const [running, setRunning]       = useState(false)
   const [speed, setSpeed]           = useState(0.5)
@@ -292,11 +298,11 @@ export default function OptionsMarketMaker() {
   }, [frame])
 
   // Latest controls available to the (single, stable) game-loop.
-  const ctrl = useRef({ baseIv, skew, halfSpread, manual, spreadAdj, strikeWiden, running, speed })
-  ctrl.current = { baseIv, skew, halfSpread, manual, spreadAdj, strikeWiden, running, speed }
+  const ctrl = useRef({ baseIv, skew, halfSpread, manual, bidAdj, askAdj, strikeWiden, running, speed })
+  ctrl.current = { baseIv, skew, halfSpread, manual, bidAdj, askAdj, strikeWiden, running, speed }
 
   const snapshot = (s: SimState, c: typeof ctrl.current): Frame => {
-    const chain = buildChain(s, c.baseIv, c.skew, c.halfSpread, c.manual, c.spreadAdj, c.strikeWiden)
+    const chain = buildChain(s, c.baseIv, c.skew, c.halfSpread, c.manual, c.bidAdj, c.askAdj, c.strikeWiden)
     return {
       chain, greeks: portfolioGreeks(s, chain), spot: s.spot, spotHistory: [...s.spotHistory],
       positions: { ...s.positions }, sold: { ...s.sold }, stock: s.stock, edge: s.edgeTotal,
@@ -312,7 +318,7 @@ export default function OptionsMarketMaker() {
       if (c.running) {
         s.tick += 1
         advanceSpot(s)
-        maybeGenerateOrder(s, buildChain(s, c.baseIv, c.skew, c.halfSpread, c.manual, c.spreadAdj, c.strikeWiden), c.running)
+        maybeGenerateOrder(s, buildChain(s, c.baseIv, c.skew, c.halfSpread, c.manual, c.bidAdj, c.askAdj, c.strikeWiden), c.running)
       }
       setFrame(snapshot(s, c))
       timer = setTimeout(loop, Math.round(1000 / c.speed))
@@ -382,17 +388,17 @@ export default function OptionsMarketMaker() {
   const spread = f ? f.edge : 0
   const directional = f && g ? g.netPnl - f.edge : 0
 
-  // Editing a bid/ask requotes that contract's spread; the mid stays where the
-  // IV sliders set it. Routes to the existing per-contract spreadAdj override.
+  // Editing a bid/ask requotes only that side of the contract; the other side
+  // stays put, so you can quote a skewed (asymmetric) market. The base
+  // half-spread and strike widen stay in their own layers and keep scaling it.
   const onQuote = (key: string, side: 'bid' | 'ask', price: number) => {
     const leg = f?.chain[key]
     if (!leg || leg.theo <= 0) return
     const k = parseInt(key.slice(1), 10)
     const hs = Math.max(0, side === 'bid' ? leg.theo - price : price - leg.theo)
-    // Back out only this contract's own layer; the base half-spread and the
-    // strike widen stay separate so they keep scaling this quote afterward.
     const adj = Math.max(-0.09, Math.min(0.5, hs / leg.theo - halfSpread - (strikeWiden[k] ?? 0)))
-    setSpreadAdj(m => ({ ...m, [key]: adj }))
+    if (side === 'bid') setBidAdj(m => ({ ...m, [key]: adj }))
+    else setAskAdj(m => ({ ...m, [key]: adj }))
   }
 
   // Per-strike widen: steps this strike's own widen layer, leaving each leg's
@@ -407,7 +413,7 @@ export default function OptionsMarketMaker() {
   // Repaint the chain the moment any spread override changes (widen stepper or a
   // bid/ask requote) so the bid/ask columns react at once even while paused,
   // instead of waiting for the next sim tick.
-  useEffect(() => { setFrame(snapshot(sim.current, ctrl.current)) }, [spreadAdj, strikeWiden]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setFrame(snapshot(sim.current, ctrl.current)) }, [bidAdj, askAdj, strikeWiden]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <PageWrapper>
