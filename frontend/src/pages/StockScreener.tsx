@@ -48,7 +48,7 @@ interface ScreenResult {
   revenueGrowth: number | null; epsGrowth: number | null; dividendYield: number | null
   change52wHiPct: number | null; avgVolume: number | null
   rsi14: number | null; smaDist50: number | null; smaDist200: number | null; vol30: number | null
-  priceChange: number | null
+  priceChange: number | null; region: string | null; country: string | null
 }
 
 // ── Columns shown in the results table ───────────────────────────────────────
@@ -80,6 +80,7 @@ const TABLE_COLS: { key: keyof ScreenResult; label: string; fmt: (v: unknown) =>
   { key: 'smaDist200',      label: 'vs 200D MA',   fmt: v => v != null ? `${Number(v) >= 0 ? '+' : ''}${Number(v).toFixed(1)}%` : '—', colorFn: v => v >= 0 ? C.pos : C.neg },
   { key: 'vol30',           label: '30D Vol',      fmt: v => v != null ? `${Number(v).toFixed(1)}%` : '—', colorFn: v => v > 50 ? C.neg : v > 30 ? C.warn : C.text },
   { key: 'sector',          label: 'Sector',       fmt: v => String(v ?? '—') },
+  { key: 'region',          label: 'Region',       fmt: v => String(v ?? '—') },
 ]
 
 // ── Grouped field options for the filter selector ────────────────────────────
@@ -105,6 +106,7 @@ export default function StockScreener() {
   const [paramsOpen, setParamsOpen] = useState(true)
   const [sector,   setSector]   = useState('')
   const [exchange, setExchange] = useState('')
+  const [region,   setRegion]   = useState('')
   const [universe, setUniverse] = useState('')   // '' = all indices, else sp500 | sp400 | nasdaq100
   const [sortBy,   setSortBy]   = useState('marketCap')
   const [sortDir,  setSortDir]  = useState<'desc' | 'asc'>('desc')
@@ -126,6 +128,7 @@ export default function StockScreener() {
   const fields: FieldMeta[] = meta?.fields ?? []
   const sectors: string[]   = meta?.sectors ?? []
   const exchanges: string[] = meta?.exchanges ?? []
+  const regions: string[]   = meta?.regions ?? []
   const universes: { value: string; label: string; group: string }[] = meta?.universes ?? [
     { value: '', label: 'All (S&P 500 + 400 + Nasdaq 100)', group: 'Indexes' },
     { value: 'sp500', label: 'S&P 500', group: 'Indexes' },
@@ -144,6 +147,7 @@ export default function StockScreener() {
       })),
       sector:   sector || null,
       exchange: exchange || null,
+      region:   region || null,
       universe: universe || null,
       sort_by:  sortBy,
       sort_dir: sortDir,
@@ -167,7 +171,7 @@ export default function StockScreener() {
     setLocalSort(prev => ({ key: col, dir: prev.key === col && prev.dir === 'desc' ? 'asc' : 'desc' }))
   }
 
-  const STRING_KEYS = useMemo(() => new Set(['ticker', 'companyName', 'sector', 'exchange']), [])
+  const STRING_KEYS = useMemo(() => new Set(['ticker', 'companyName', 'sector', 'exchange', 'region']), [])
 
   const displayRows = useMemo(() => {
     if (!data?.results) return []
@@ -236,6 +240,13 @@ export default function StockScreener() {
                 {exchanges.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
+            <div>
+              <label style={LABEL}>Region</label>
+              <select value={region} onChange={e => setRegion(e.target.value)} style={SELECT} onFocus={focus} onBlur={blur}>
+                <option value="">All Regions</option>
+                {regions.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
           </div>
 
           {/* Filter rows */}
@@ -284,7 +295,7 @@ export default function StockScreener() {
               <label style={LABEL}>Sort by</label>
               <div style={{ display: 'flex', gap: 4 }}>
                 <select value={sortBy} onChange={e => { setSortBy(e.target.value); setLocalSort(prev => ({ ...prev, key: e.target.value })) }} style={{ ...SELECT, flex: 1 }} onFocus={focus} onBlur={blur}>
-                  {TABLE_COLS.filter(c => !['ticker','companyName','sector'].includes(c.key as string)).map(c => (
+                  {TABLE_COLS.filter(c => !['ticker','companyName','sector','region'].includes(c.key as string)).map(c => (
                     <option key={c.key as string} value={c.key as string}>{c.label === 'Chg %' ? 'Price Change' : c.label}</option>
                   ))}
                 </select>

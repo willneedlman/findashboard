@@ -52,6 +52,39 @@ def _load_universe() -> "tuple[set, list, dict]":
 
 _UNIVERSE, _UNIVERSE_LIST, _INDEX_SETS = _load_universe()
 
+
+def _load_intl() -> dict:
+    # International tickers keep their exchange-suffix dot (SAP.DE, 7203.T), so they
+    # are NOT run through _norm_tk (which would turn the dot into a dash).
+    import json
+    try:
+        path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "intl_constituents.json")
+        d = json.load(open(path))
+        return {k: {str(t).strip().upper() for t in v if t}
+                for k, v in d.items() if k in ("dax40", "ftse100", "nikkei225")}
+    except Exception as e:
+        logger.warning("intl constituents load failed: %s", e)
+        return {}
+
+_INTL_SETS = _load_intl()
+_INDEX_SETS.update(_INTL_SETS)        # so _resolve_universe + the yfinance path resolve them
+_INTL_KEYS = set(_INTL_SETS.keys())   # universes that need USD FX-normalization + skip FMP
+
+# Country -> region bucket for the Region filter (country comes from yfinance .info).
+_INTL_COUNTRY = {"ftse100": "United Kingdom", "dax40": "Germany", "nikkei225": "Japan"}
+REGIONS = ["North America", "Europe", "Asia-Pacific"]
+_COUNTRY_REGION = {
+    "United States": "North America", "US": "North America", "USA": "North America",
+    "Canada": "North America", "Mexico": "North America",
+    "United Kingdom": "Europe", "Germany": "Europe", "France": "Europe", "Netherlands": "Europe",
+    "Switzerland": "Europe", "Ireland": "Europe", "Spain": "Europe", "Italy": "Europe",
+    "Sweden": "Europe", "Denmark": "Europe", "Finland": "Europe", "Norway": "Europe",
+    "Belgium": "Europe", "Luxembourg": "Europe", "Austria": "Europe", "Portugal": "Europe",
+    "Japan": "Asia-Pacific", "China": "Asia-Pacific", "Hong Kong": "Asia-Pacific",
+    "Taiwan": "Asia-Pacific", "South Korea": "Asia-Pacific", "Australia": "Asia-Pacific",
+    "Singapore": "Asia-Pacific", "India": "Asia-Pacific",
+}
+
 # Selectable universes beyond the three raw index sets. Index ETFs reuse the
 # bundled set of the index they track; Sector SPDRs are the S&P 500 members in
 # one GICS sector, which is exactly what the Select Sector SPDR funds hold. Both
@@ -91,7 +124,39 @@ UNIVERSE_OPTIONS = [
     {"value": "xlu",  "label": "XLU · Utilities",           "group": "Sector SPDRs"},
     {"value": "xlre", "label": "XLRE · Real Estate",        "group": "Sector SPDRs"},
     {"value": "xlb",  "label": "XLB · Materials",           "group": "Sector SPDRs"},
+    {"value": "ftse100",   "label": "FTSE 100 · UK",        "group": "International"},
+    {"value": "dax40",     "label": "DAX 40 · Germany",     "group": "International"},
+    {"value": "nikkei225", "label": "Nikkei 225 · Japan",   "group": "International"},
 ]
+
+
+_FX_CACHE: TTLCache = TTLCache(maxsize=32, ttl=3600)
+# Approximate fallbacks so a transient FX-rate fetch failure doesn't silently
+# leave international values in local currency labeled as USD.
+_FX_FALLBACK = {"EUR": 1.08, "GBP": 1.27, "JPY": 0.0067, "CHF": 1.12, "CAD": 0.73,
+                "AUD": 0.66, "HKD": 0.128, "SGD": 0.74, "SEK": 0.095, "DKK": 0.145}
+
+def _fx_to_usd(currency) -> "tuple[float, float]":
+    """Return (rate, divisor) converting a listing currency to USD: value/divisor*rate.
+    GBp (London pence) divides by 100 then applies GBPUSD. Rates from yfinance FX
+    pairs, cached (mem + disk). Unknown/failed rate falls back to 1.0 (no-op)."""
+    raw = currency or "USD"
+    base, div = ("GBP", 100.0) if raw == "GBp" else (str(raw).upper(), 1.0)
+    if base == "USD":
+        return 1.0, div
+    if base in _FX_CACHE:
+        return _FX_CACHE[base], div
+    rate = disk_get(f"fx:{base}")
+    if rate is None:
+        try:
+            rate = float(yf.Ticker(f"{base}USD=X").fast_info.last_price)
+        except Exception:
+            rate = None
+        if rate:
+            disk_set(f"fx:{base}", rate, ttl=43200)
+    if rate:
+        _FX_CACHE[base] = rate
+    return (rate or _FX_FALLBACK.get(base, 1.0)), div
 
 
 def _resolve_universe(u) -> "tuple[set, str | None]":
@@ -198,6 +263,7 @@ class ScreenRequest(BaseModel):
     sector:     str | None = None
     industry:   str | None = None
     exchange:   str | None = None
+    region:     str | None = None   # North America | Europe | Asia-Pacific
     sort_by:    str = "marketCap"
     sort_dir:   str = "desc"
     sort_param: str | None = None   # period when sorting by priceChange
@@ -263,7 +329,8 @@ EXCHANGES = ["NASDAQ", "NYSE", "AMEX"]
 
 @router.get("/fields")
 def get_fields():
-    return {"fields": SCREENER_FIELDS, "sectors": SECTORS, "exchanges": EXCHANGES, "universes": UNIVERSE_OPTIONS}
+    return {"fields": SCREENER_FIELDS, "sectors": SECTORS, "exchanges": EXCHANGES,
+            "universes": UNIVERSE_OPTIONS, "regions": REGIONS}
 
 # ── FMP screener params builder ───────────────────────────────────────────────
 
@@ -318,7 +385,10 @@ def _enrich(ticker: str, base: dict, claim) -> dict:
         avg_vol    = getattr(fi, "three_month_average_volume",   None)
         price      = base.get("price") or last_price
 
-        change52 = round((price / hi52 - 1) * 100, 1) if hi52 and price and hi52 > 0 else None
+        # Ratio uses last_price (same currency as year_high); base price may be
+        # USD-normalized for intl, which would mismatch the local-currency high.
+        hi_ref = last_price or price
+        change52 = round((hi_ref / hi52 - 1) * 100, 1) if hi52 and hi_ref and hi52 > 0 else None
 
         # Always calculate 1D% from fast_info; only fall back to base if unavailable
         change1d = base.get("change1d")
@@ -377,6 +447,7 @@ def _enrich(ticker: str, base: dict, claim) -> dict:
                     "companyName":    prof.get("companyName") or base.get("companyName"),
                     "sector":         prof.get("sector") or base.get("sector"),
                     "industry":       prof.get("industry") or base.get("industry"),
+                    "country":        prof.get("country") or base.get("country"),
                     "peRatio":        round(price_val / eps, 1) if eps > 0 and price_val else None,
                     "forwardPE":      None,
                     "pbRatio":        round(mktcap / equity, 2) if equity > 0 else None,
@@ -447,6 +518,7 @@ def _enrich(ticker: str, base: dict, claim) -> dict:
                         "dividendYield":  round((info_dict.get("dividendYield") or 0) * 100, 2),
                         "sector":         info_dict.get("sector") or base.get("sector"),
                         "industry":       info_dict.get("industry") or base.get("industry"),
+                        "country":        info_dict.get("country") or base.get("country"),
                     })
             except Exception:
                 if needs_name:
@@ -581,7 +653,7 @@ def _compute_history_batch(tickers: list[str]) -> dict:
 def run_screen(req: ScreenRequest):
     import json, hashlib
     # Bump CACHE_VER whenever screener logic changes to invalidate stale disk-cached results
-    CACHE_VER = "v8"
+    CACHE_VER = "v10"
     cache_key = CACHE_VER + hashlib.md5(json.dumps(req.model_dump(), sort_keys=True).encode()).hexdigest()
     with _lock:
         if cache_key in _screen_cache:
@@ -599,13 +671,14 @@ def run_screen(req: ScreenRequest):
     # its sector flows through the same path the Sector dropdown uses.
     uni_set, spdr_sector = _resolve_universe(req.universe)
     effective_sector = req.sector or spdr_sector
+    is_intl = str(req.universe).lower() in _INTL_KEYS   # routes via yfinance + FX-normalizes
     # Technical indicators and price-change periods need price history, so only
     # compute them when a filter or the sort references one (keeps fundamentals-
     # only screens fast).
     need_history = req.sort_by in HISTORY_FIELDS or any(f.field in HISTORY_FIELDS for f in req.filters)
 
     fmp_screened = False  # tracks whether FMP already applied sector/exchange filtering
-    if fmp.available():
+    if fmp.available() and not is_intl:
         try:
             params = _fmp_params_from_filters(req.filters, effective_sector, req.exchange, req.limit)
             raw = fmp._get("/stock-screener", params)
@@ -622,6 +695,7 @@ def run_screen(req: ScreenRequest):
                         "sector":      r.get("sector", ""),
                         "industry":    r.get("industry", ""),
                         "exchange":    r.get("exchangeShortName", ""),
+                        "country":     r.get("country", ""),
                         "change1d":    r.get("changesPercentage"),
                         "_fmp_screened": True,
                     })
@@ -679,10 +753,16 @@ def run_screen(req: ScreenRequest):
                 fi = yf.Ticker(tk).fast_info
                 price = getattr(fi, "last_price", None)
                 mc    = getattr(fi, "market_cap", None)
+                # International listings quote price/market cap in local currency;
+                # normalize to USD so they compare against US names.
+                rate, divisor = (_fx_to_usd(getattr(fi, "currency", None)) if is_intl else (1.0, 1.0))
+                price_usd = float(price) / divisor * rate if price else None
+                mc_usd    = float(mc) / divisor * rate if mc else None
                 return {"ticker": tk, "companyName": tk,
-                        "price":     round(float(price), 2) if price else None,
-                        "marketCap": round(float(mc) / 1e9, 2) if mc else None,
-                        "beta": None, "volume": None, "sector": "", "industry": "", "exchange": ""}
+                        "price":     round(price_usd, 2) if price_usd else None,
+                        "marketCap": round(mc_usd / 1e9, 2) if mc_usd else None,
+                        "beta": None, "volume": None, "sector": "", "industry": "", "exchange": "",
+                        "country": _INTL_COUNTRY.get(str(req.universe).lower()) if is_intl else ""}
             except Exception:
                 return None
 
@@ -761,6 +841,12 @@ def run_screen(req: ScreenRequest):
     if req.exchange and not fmp_screened:
         fe = req.exchange.lower()
         enriched = [r for r in enriched if (r.get("exchange") or "").lower() == fe]
+
+    # Region is derived from the company's country; filter on it when requested.
+    for r in enriched:
+        r["region"] = _COUNTRY_REGION.get(r.get("country") or "")
+    if req.region:
+        enriched = [r for r in enriched if r.get("region") == req.region]
 
     # Merge history metrics (technicals + price-change periods) only when
     # requested, after sector/exchange filtering so history is fetched for the
