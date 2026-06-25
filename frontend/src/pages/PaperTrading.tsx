@@ -10,7 +10,7 @@ import CustomStrategyModal, { type CustomStrategyDef } from '../components/Custo
 import { loadCustomStrategies, saveCustomStrategy } from '../utils/customStrategies'
 import { useTheme } from '../contexts/ThemeContext'
 import { buildOCC, parseOCC, isOCC } from '../lib/occ'
-import PaperChart, { type ChartFill } from '../components/PaperChart'
+import PaperChart, { type ChartFill, type ChartOrder } from '../components/PaperChart'
 import { loadActivePortfolio } from '../components/dashboard/widgets/usePortfolio'
 import { EMPTY_LEG, OPTION_STRATEGY_TEMPLATES, type LegState, type StrategyTemplate } from './paper-trading/optionTemplates'
 import { useAuth, adaptAccount, T, inp, sel, lbl, btn, sectionHeader, fmt$, fmtDate, statusColor, computeReplayStats, applyRiskToChart, PT_LS_KEY, BUILTIN_STRATEGY_INFO, PAPER_DEFAULT_PARAMS, PAPER_PARAM_LABELS, STRATEGY_TEMPLATE, RISK_DEFAULTS, type Balances, type Position, type Order, type AccountData, type PendingOptionStrategy, type ChartPoint, type StrategyEntry, type ReplayEvent, type ReplayResult, type RiskConfig, type SchedulerStatus, type SchedulerJob, type SchedulerLogEntry } from './paper-trading/shared'
@@ -58,6 +58,18 @@ export default function PaperTrading() {
     queryClient.invalidateQueries({ queryKey: ['trading-account'] })
   }
 
+  // Right-click-to-place from the chart. Drops a single share/contract resting
+  // order at the clicked level; size larger orders via the ticket.
+  const placeMutation = useMutation({
+    mutationFn: (v: { symbol: string; side: 'buy' | 'sell'; type: 'limit' | 'stop'; price: number }) =>
+      axios.post('/api/paper/order', {
+        user_id: uid, symbol: v.symbol.toUpperCase(), side: v.side, quantity: 1,
+        order_type: v.type, limit_price: v.type === 'limit' ? v.price : null,
+        stop_price: v.type === 'stop' ? v.price : null,
+      }, headers).then(r => r.data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['trading-account'] }),
+  })
+
   const bal = data?.balances
   const positions = data?.positions ?? []
   const orders = [...(data?.orders ?? [])].sort((a, b) =>
@@ -72,6 +84,18 @@ export default function PaperTrading() {
       return { time: Math.floor(new Date(o.create_date).getTime() / 1000), side: o.side, symbol: occ ? undefined : o.symbol, option_symbol: occ ? o.symbol : undefined }
     })
   const chartInitTicker = positions.find(p => /^[A-Z.]{1,6}$/.test(p.symbol))?.symbol || 'SPY'
+
+  // Resting equity limit/stop orders → persistent on-chart price lines. Carries
+  // the symbol so the chart shows only the lines for whatever ticker it's on.
+  const PENDING = ['pending', 'open', 'partially_filled']
+  const chartOrders: ChartOrder[] = orders
+    .filter(o => PENDING.includes((o.status ?? '').toLowerCase()) && !isOCC(o.symbol)
+      && ['limit', 'stop', 'stop_limit'].includes((o.type ?? '').toLowerCase()) && (o.price ?? 0) > 0)
+    .map(o => ({
+      id: o.id, symbol: o.symbol, price: o.price as number,
+      side: o.side.startsWith('buy') ? 'buy' : 'sell',
+      type: (o.type ?? '').toLowerCase() === 'limit' ? 'limit' : 'stop',
+    }))
 
   const dayChangeColor = bal
     ? bal.day_change >= 0 ? T.pos : T.neg
@@ -228,7 +252,8 @@ export default function PaperTrading() {
           {/* Middle: Chart over Positions — flex */}
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 10, height: '100%', overflow: 'hidden' }}>
             <div style={{ flex: '3 1 0', minHeight: 0, background: T.surface, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
-              <PaperChart initialTicker={chartInitTicker} fills={chartFills} storageKey={uid || 'page'} />
+              <PaperChart initialTicker={chartInitTicker} fills={chartFills} orders={chartOrders}
+                onPlaceOrder={v => placeMutation.mutate(v)} storageKey={uid || 'page'} />
             </div>
             <div style={{ flex: '2 1 0', minHeight: 0, background: T.surface, border: `1px solid ${T.border}`, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
               <PositionsPanel positions={positions} />

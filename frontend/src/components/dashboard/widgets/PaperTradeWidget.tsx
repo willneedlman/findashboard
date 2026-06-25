@@ -16,7 +16,8 @@ import { readToken } from '../../../lib/theme'
 
 interface Position { symbol: string; quantity: number; avg_cost: number; price: number; unrealized_pnl: number }
 interface OptionPosition { option_symbol: string; underlying: string; type: string; strike: number; quantity: number; unrealized_pnl: number }
-interface OrderRow { id: string; symbol: string; option_symbol?: string; side: string; status: string; fill_price: number | null; created_at?: number }
+interface OrderRow { id: string; symbol: string; option_symbol?: string; side: string; status: string; order_type?: string; limit_price?: number | null; stop_price?: number | null; fill_price: number | null; created_at?: number }
+const PENDING_STATUSES = ['pending', 'open', 'partially_filled']
 interface Account { cash: number; equity: number; buying_power: number; realized_pnl: number; positions: Position[]; option_positions?: OptionPosition[]; orders?: OrderRow[] }
 interface PaperOrder { status: string; reason: string | null; fill_price: number | null }
 type OType = 'market' | 'limit' | 'stop'
@@ -134,6 +135,8 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
     else applyWindow(ts, candlesRef.current, windowRef.current)
   }
   const orderLineRef = useRef<IPriceLine | null>(null)
+  const pendingLinesRef = useRef<Map<string, IPriceLine>>(new Map())
+  const [menu, setMenu] = useState<{ x: number; y: number; price: number } | null>(null)
   const draggingRef = useRef(false)
   const [spot, setSpot] = useState<number | null>(null)
   const [chartErr, setChartErr] = useState(false)
@@ -375,6 +378,34 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
     })
   }, [otype, orderPx, side])
 
+  // Resting limit/stop orders on this ticker → persistent dashed lines. Unlike the
+  // single working-order preview above, these come from account state, so several
+  // show at once and they don't vanish when the entry switches to the market tab.
+  useEffect(() => {
+    const series = candleRef.current
+    if (!series) return
+    const cPos = readToken('--theme-positive', '#22c55e'), cNeg = readToken('--theme-negative', '#ef4444')
+    const mine = (account.data?.orders ?? []).filter(o =>
+      PENDING_STATUSES.includes((o.status ?? '').toLowerCase()) && o.symbol === ticker && !o.option_symbol &&
+      ['limit', 'stop', 'stop_limit'].includes((o.order_type ?? '').toLowerCase()) &&
+      ((o.limit_price ?? o.stop_price ?? 0) > 0))
+    const want = new Set(mine.map(o => o.id))
+    for (const [id, line] of pendingLinesRef.current) {
+      if (!want.has(id)) { try { series.removePriceLine(line) } catch { /* gone */ } pendingLinesRef.current.delete(id) }
+    }
+    for (const o of mine) {
+      const isLimit = (o.order_type ?? '').toLowerCase() === 'limit'
+      const isBuy = String(o.side).startsWith('buy')
+      const opts = {
+        price: (o.limit_price ?? o.stop_price) as number, color: isBuy ? cPos : cNeg, lineWidth: 2 as const,
+        lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: `${isBuy ? 'BUY' : 'SELL'} ${isLimit ? 'LMT' : 'STP'}`,
+      }
+      const existing = pendingLinesRef.current.get(o.id)
+      if (existing) existing.applyOptions(opts)
+      else pendingLinesRef.current.set(o.id, series.createPriceLine(opts))
+    }
+  }, [account.data, ticker, candles])
+
   // Drag the order line, or click anywhere on the chart, to set the price.
   useEffect(() => {
     const el = containerRef.current
@@ -390,7 +421,7 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
       return series.coordinateToPrice(clientY - rect.top) as number | null
     }
     const onDown = (e: PointerEvent) => {
-      if (otype === 'market' || !(orderPx > 0)) return
+      if (e.button !== 0 || otype === 'market' || !(orderPx > 0)) return
       const rect = el.getBoundingClientRect()
       const lineY = series.priceToCoordinate(orderPx)
       if (lineY == null || Math.abs((e.clientY - rect.top) - lineY) > 9) return
@@ -441,6 +472,40 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
     onError: (e: unknown) => setResult({ text: ((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail) ?? 'Order failed', ok: false }),
     onSettled: () => setConfirming(false),
   })
+
+  // Right-click-to-place: drop a resting limit/stop order at the clicked level,
+  // sized by the current quantity field.
+  const quickOrder = useMutation({
+    mutationFn: (v: { side: 'buy' | 'sell'; order_type: 'limit' | 'stop'; price: number }) =>
+      axios.post('/api/paper/order', {
+        user_id: user!.id, symbol: ticker, side: v.side, quantity: Number(qty) || 1, order_type: v.order_type,
+        limit_price: v.order_type === 'limit' ? v.price : null,
+        stop_price: v.order_type === 'stop' ? v.price : null,
+      }, { headers: authHeaders }).then(r => r.data as PaperOrder),
+    onSuccess: (o) => {
+      if (o.status === 'filled') setResult({ text: `Filled @ $${o.fill_price?.toFixed(2)}`, ok: true })
+      else if (o.status === 'open') setResult({ text: 'Resting (open order)', ok: true })
+      else setResult({ text: `Rejected: ${o.reason ?? o.status}`, ok: false })
+      qc.invalidateQueries({ queryKey: ['paper-account', user?.id] })
+    },
+    onError: (e: unknown) => setResult({ text: ((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail) ?? 'Order failed', ok: false }),
+  })
+
+  const onChartContextMenu = (e: React.MouseEvent) => {
+    const series = candleRef.current, el = containerRef.current
+    if (!series || !el || instrument !== 'equity') return
+    e.preventDefault()
+    const rect = el.getBoundingClientRect()
+    const price = series.coordinateToPrice(e.clientY - rect.top) as number | null
+    if (price == null || !(price > 0)) return
+    setMenu({ x: e.clientX - rect.left, y: e.clientY - rect.top, price })
+  }
+  useEffect(() => {
+    if (!menu) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenu(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [menu])
 
   const reset = useMutation({
     mutationFn: () => axios.post('/api/paper/reset', { user_id: user!.id }, { headers: authHeaders }).then(r => r.data),
@@ -593,8 +658,39 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
 
       {/* Body: chart + order/positions sidebar */}
       <div style={{ display: 'flex', flexDirection: 'row', flex: 1, minHeight: 0, overflow: 'hidden' }}>
-        <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
+        <div style={{ flex: 1, minWidth: 0, position: 'relative' }} onContextMenu={onChartContextMenu}>
           <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+          {menu && (
+            <>
+              <div onClick={() => setMenu(null)} onContextMenu={e => { e.preventDefault(); setMenu(null) }}
+                style={{ position: 'absolute', inset: 0, zIndex: 19 }} />
+              <div style={{
+                position: 'absolute', left: `min(${menu.x}px, calc(100% - 158px))`, top: `min(${menu.y}px, calc(100% - 132px))`,
+                width: 150, zIndex: 20, background: T.surface, border: `1px solid ${T.gold}`, boxShadow: '0 8px 24px rgba(0,0,0,0.45)',
+              }}>
+                <div style={{ padding: '5px 8px', borderBottom: `1px solid ${T.border}`, fontFamily: T.mono, fontSize: 9 }}>
+                  <span style={{ color: T.muted }}>{ticker} @ </span><span style={{ color: T.gold, fontWeight: 700 }}>${menu.price.toFixed(2)}</span>
+                </div>
+                {([
+                  { side: 'buy', order_type: 'limit', label: 'Buy limit', color: T.pos },
+                  { side: 'sell', order_type: 'limit', label: 'Sell limit', color: T.neg },
+                  { side: 'buy', order_type: 'stop', label: 'Buy stop', color: T.pos },
+                  { side: 'sell', order_type: 'stop', label: 'Sell stop', color: T.neg },
+                ] as const).map(a => (
+                  <button key={`${a.side}-${a.order_type}`}
+                    onClick={() => { quickOrder.mutate({ side: a.side, order_type: a.order_type, price: menu.price }); setMenu(null) }}
+                    style={{
+                      display: 'block', width: '100%', textAlign: 'left', padding: '6px 8px', background: 'transparent',
+                      border: 'none', borderBottom: `1px solid ${T.border}`, color: a.color, fontFamily: T.mono,
+                      fontSize: 10, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.04em',
+                    }}
+                    onMouseEnter={ev => { (ev.currentTarget as HTMLButtonElement).style.background = 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' }}
+                    onMouseLeave={ev => { (ev.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
+                  >{a.label}</button>
+                ))}
+              </div>
+            </>
+          )}
           {chartErr && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: T.mono, fontSize: 10, color: T.muted }}>No chart data</div>}
           {isAway && !chartErr && (
             <button onClick={snapBack} title="Snap back to latest" aria-label="Snap back to latest"

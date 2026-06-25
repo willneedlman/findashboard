@@ -1,7 +1,7 @@
 import { T } from '../lib/theme'
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { createChart, ColorType, CrosshairMode } from 'lightweight-charts'
-import type { IChartApi, ISeriesApi, Time, SeriesMarker } from 'lightweight-charts'
+import { createChart, ColorType, CrosshairMode, LineStyle } from 'lightweight-charts'
+import type { IChartApi, ISeriesApi, Time, SeriesMarker, IPriceLine } from 'lightweight-charts'
 import { Sliders, ChevronsRight } from 'lucide-react'
 import { smaArr, emaArr, bollinger, vwapArr, type Candle } from '../lib/indicators'
 import { marketSession } from '../lib/marketSession'
@@ -51,6 +51,9 @@ function loadState(key: string): ChartPrefs {
 }
 
 export interface ChartFill { time: number; side: string; symbol?: string; option_symbol?: string }
+// A resting equity limit/stop order, drawn as a persistent on-chart price line.
+export interface ChartOrder { id: string; symbol: string; side: 'buy' | 'sell'; type: 'limit' | 'stop'; price: number }
+export type PlaceOrderFn = (o: { symbol: string; price: number; side: 'buy' | 'sell'; type: 'limit' | 'stop' }) => void
 
 const inputStyle: React.CSSProperties = {
   background: 'var(--theme-bg, #101c2e)', border: `1px solid ${T.border}`, color: T.text,
@@ -58,7 +61,7 @@ const inputStyle: React.CSSProperties = {
 }
 const selStyle: React.CSSProperties = { background: 'var(--theme-bg, #101c2e)', border: `1px solid ${T.border}`, color: T.gold, fontFamily: T.mono, fontSize: 9, padding: '2px 4px', outline: 'none', cursor: 'pointer' }
 
-export default function PaperChart({ initialTicker = 'SPY', fills = [], storageKey = 'page' }: { initialTicker?: string; fills?: ChartFill[]; storageKey?: string }) {
+export default function PaperChart({ initialTicker = 'SPY', fills = [], orders = [], onPlaceOrder, storageKey = 'page' }: { initialTicker?: string; fills?: ChartFill[]; orders?: ChartOrder[]; onPlaceOrder?: PlaceOrderFn; storageKey?: string }) {
   const init = loadState(storageKey)
   const [ticker, setTicker] = useState(initialTicker.toUpperCase())
   const [tickerInput, setTickerInput] = useState(initialTicker.toUpperCase())
@@ -85,6 +88,8 @@ export default function PaperChart({ initialTicker = 'SPY', fills = [], storageK
   const overlayRefs = useRef<ISeriesApi<'Line'>[]>([])
   const volumeRef = useRef<ISeriesApi<'Histogram'> | null>(null)
   const lenRef = useRef(0)
+  const pendingLinesRef = useRef<Map<string, IPriceLine>>(new Map())
+  const [menu, setMenu] = useState<{ x: number; y: number; price: number } | null>(null)
   const windowRef = useRef(windowKey); useEffect(() => { windowRef.current = windowKey }, [windowKey])
   const barSpacingRef = useRef(barSpacing); useEffect(() => { barSpacingRef.current = barSpacing }, [barSpacing])
   const candlesRef = useRef<Candle[]>([]); useEffect(() => { candlesRef.current = candles }, [candles])
@@ -267,6 +272,49 @@ export default function PaperChart({ initialTicker = 'SPY', fills = [], storageK
     series.setMarkers(markers)
   }, [candles, fills, ticker])
 
+  // Resting limit/stop orders for this ticker → persistent dashed price lines.
+  // Driven off account state (not the order form), so they stay put regardless of
+  // which order-type tab is active and multiple can show at once. Diff-rendered so
+  // live polls don't flicker the lines.
+  useEffect(() => {
+    const series = candleRef.current
+    if (!series) return
+    const cPos = readToken('--theme-positive', '#22c55e'), cNeg = readToken('--theme-negative', '#ef4444')
+    const mine = orders.filter(o => o.symbol === ticker && o.price > 0)
+    const want = new Set(mine.map(o => o.id))
+    for (const [id, line] of pendingLinesRef.current) {
+      if (!want.has(id)) { try { series.removePriceLine(line) } catch { /* gone */ } pendingLinesRef.current.delete(id) }
+    }
+    for (const o of mine) {
+      const opts = {
+        price: o.price, color: o.side === 'buy' ? cPos : cNeg, lineWidth: 2 as const,
+        lineStyle: LineStyle.Dashed, axisLabelVisible: true,
+        title: `${o.side === 'buy' ? 'BUY' : 'SELL'} ${o.type === 'limit' ? 'LMT' : 'STP'}`,
+      }
+      const existing = pendingLinesRef.current.get(o.id)
+      if (existing) existing.applyOptions(opts)
+      else pendingLinesRef.current.set(o.id, series.createPriceLine(opts))
+    }
+  }, [orders, ticker, candles])
+
+  // Right-click a price level to drop a resting limit/stop order there.
+  const onChartContextMenu = (e: React.MouseEvent) => {
+    if (!onPlaceOrder) return
+    const series = candleRef.current, el = containerRef.current
+    if (!series || !el) return
+    e.preventDefault()
+    const rect = el.getBoundingClientRect()
+    const price = series.coordinateToPrice(e.clientY - rect.top) as number | null
+    if (price == null || !(price > 0)) return
+    setMenu({ x: e.clientX - rect.left, y: e.clientY - rect.top, price })
+  }
+  useEffect(() => {
+    if (!menu) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenu(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [menu])
+
   const commitTicker = () => { const t = tickerInput.trim().toUpperCase(); if (t) setTicker(t) }
   const numLbl: React.CSSProperties = { fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: T.muted }
 
@@ -325,8 +373,12 @@ export default function PaperChart({ initialTicker = 'SPY', fills = [], storageK
           )}
         </div>
       </div>
-      <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+      <div style={{ flex: 1, minHeight: 0, position: 'relative' }} onContextMenu={onChartContextMenu}>
         <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+        {menu && onPlaceOrder && (
+          <OrderContextMenu menu={menu} ticker={ticker} onClose={() => setMenu(null)}
+            onPick={(side, type) => { onPlaceOrder({ symbol: ticker, price: menu.price, side, type }); setMenu(null) }} />
+        )}
         {chartErr && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: T.mono, fontSize: 11, color: T.muted }}>No chart data</div>}
         {isAway && !chartErr && (
           <button onClick={snapBack} title="Snap back to latest" aria-label="Snap back to latest"
@@ -348,5 +400,49 @@ export default function PaperChart({ initialTicker = 'SPY', fills = [], storageK
         )}
       </div>
     </div>
+  )
+}
+
+function OrderContextMenu({ menu, ticker, onClose, onPick }: {
+  menu: { x: number; y: number; price: number }
+  ticker: string
+  onClose: () => void
+  onPick: (side: 'buy' | 'sell', type: 'limit' | 'stop') => void
+}) {
+  const W = 168
+  const left = `min(${menu.x}px, calc(100% - ${W + 8}px))`
+  const top = `min(${menu.y}px, calc(100% - 142px))`
+  const actions: { side: 'buy' | 'sell'; type: 'limit' | 'stop'; label: string; color: string }[] = [
+    { side: 'buy', type: 'limit', label: 'Buy limit', color: T.pos },
+    { side: 'sell', type: 'limit', label: 'Sell limit', color: T.neg },
+    { side: 'buy', type: 'stop', label: 'Buy stop', color: T.pos },
+    { side: 'sell', type: 'stop', label: 'Sell stop', color: T.neg },
+  ]
+  return (
+    <>
+      <div onClick={onClose} onContextMenu={e => { e.preventDefault(); onClose() }}
+        style={{ position: 'absolute', inset: 0, zIndex: 19 }} />
+      <div style={{
+        position: 'absolute', left, top, width: W, zIndex: 20,
+        background: T.surface, border: `1px solid ${T.gold}`, boxShadow: '0 8px 24px rgba(0,0,0,0.45)',
+      }}>
+        <div style={{ padding: '6px 9px', borderBottom: `1px solid ${T.border}`, fontFamily: T.mono, fontSize: 10 }}>
+          <span style={{ color: T.muted }}>{ticker} @ </span>
+          <span style={{ color: T.gold, fontWeight: 700 }}>${menu.price.toFixed(2)}</span>
+        </div>
+        {actions.map(a => (
+          <button key={`${a.side}-${a.type}`} onClick={() => onPick(a.side, a.type)}
+            style={{
+              display: 'block', width: '100%', textAlign: 'left', padding: '7px 9px',
+              background: 'transparent', border: 'none', borderBottom: `1px solid ${T.border}`,
+              color: a.color, fontFamily: T.mono, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+              letterSpacing: '0.04em',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
+          >{a.label}</button>
+        ))}
+      </div>
+    </>
   )
 }
