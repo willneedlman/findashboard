@@ -327,7 +327,7 @@ export default function FixedIncomeMarketMaker() {
   // ── Sidebar: controls + rules ────────────────────────────────────────────
   const labelStyle: React.CSSProperties = { fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.muted, marginBottom: 3, fontFamily: T.sans }
   const sliderRow = (label: string, value: string, slider: React.ReactNode, ends?: [string, string]) => (
-    <div style={{ marginBottom: 10 }}>
+    <div style={{ marginBottom: 5 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <span style={labelStyle}>{label}</span>
         <span style={{ fontSize: 10, fontFamily: T.mono, color: T.gold }}>{value}</span>
@@ -395,18 +395,25 @@ export default function FixedIncomeMarketMaker() {
           {/* Middle row: slim Controls | tall Tape | Hedge */}
           <div style={{ display: 'grid', gridTemplateColumns: '250px 1fr 230px', gap: 8, alignItems: 'stretch' }}>
             {/* MM Controls */}
-            <Widget title="MM Controls" bodyStyle={{ padding: '10px 12px' }}>
-              {sliderRow('Sim Speed', `${speed.toFixed(1)}x`, range(speed, SPEED_MIN, SPEED_MAX, 0.1, setSpeed))}
-              {sliderRow('Half-Spread', `${halfSpread.toFixed(2)} pts`, range(halfSpread, 0.01, 0.5, 0.01, setHalfSpread))}
-              <div style={{ height: 1, background: T.border, margin: '4px 0 10px' }} />
-              <div style={{ ...labelStyle, marginBottom: 8 }}>Per-bond yield nudge (bp)</div>
-              {BONDS.map(b => <div key={b.id}>{sliderRow(b.id, `${(manual[b.id] ?? 0) >= 0 ? '+' : ''}${manual[b.id] ?? 0}`, range(manual[b.id] ?? 0, -25, 25, 1, v => setManual(m => ({ ...m, [b.id]: v }))))}</div>)}
+            <Widget title="MM Controls" bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '10px 12px' }}>
+              <div>
+                {sliderRow('Sim Speed', `${speed.toFixed(1)}x`, range(speed, SPEED_MIN, SPEED_MAX, 0.1, setSpeed))}
+                {sliderRow('Half-Spread', `${halfSpread.toFixed(2)} pts`, range(halfSpread, 0.01, 0.5, 0.01, setHalfSpread))}
+              </div>
+              <div>
+                <div style={{ height: 1, background: T.border, margin: '2px 0 8px' }} />
+                <div style={{ ...labelStyle, marginBottom: 6 }}>Per-bond yield nudge (bp)</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 12 }}>
+                  {BONDS.map(b => <div key={b.id}>{sliderRow(b.id, `${(manual[b.id] ?? 0) >= 0 ? '+' : ''}${manual[b.id] ?? 0}`, range(manual[b.id] ?? 0, -25, 25, 1, v => setManual(m => ({ ...m, [b.id]: v }))))}</div>)}
+                </div>
+              </div>
             </Widget>
 
             {/* Tape */}
             <Widget title={`${selected} Yield Tape`}
-              right={<span style={{ fontFamily: T.mono, fontSize: 12, color: yChgBp <= 0 ? T.green : T.red }}>{selQuote.yieldPct.toFixed(2)}% {yChgBp >= 0 ? '+' : ''}{yChgBp.toFixed(1)}bp</span>}>
-              <div style={{ height: 274, padding: '8px 6px 6px' }}>
+              right={<span style={{ fontFamily: T.mono, fontSize: 12, color: yChgBp <= 0 ? T.green : T.red }}>{selQuote.yieldPct.toFixed(2)}% {yChgBp >= 0 ? '+' : ''}{yChgBp.toFixed(1)}bp</span>}
+              bodyStyle={{ flex: 1, display: 'flex', minHeight: 0 }}>
+              <div style={{ flex: 1, minHeight: 200, padding: '8px 6px 6px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={yHist.map((y, i) => ({ i, y: +y.toFixed(3) }))} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.07)" />
@@ -422,7 +429,7 @@ export default function FixedIncomeMarketMaker() {
             </Widget>
 
             {/* Hedge */}
-            <Widget title="Hedge" bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 12, gap: 12 }}>
+            <Widget title="Hedge" bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: 12, gap: 10 }}>
               <Segmented options={BONDS.map(b => b.id)} value={selected} onChange={setSelected} />
 
               <div style={{ background: T.bg, border: `1px solid ${T.border}`, padding: '10px 12px' }}>
@@ -451,8 +458,6 @@ export default function FixedIncomeMarketMaker() {
                 <button onClick={() => onTradeHedge(hedgeQty)} style={bigBtn(T.green)}>BUY {selected}</button>
                 <button onClick={() => onTradeHedge(-hedgeQty)} style={bigBtn(T.red)}>SELL {selected}</button>
               </div>
-
-              <div style={{ flex: 1 }} />
 
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={() => setRunning(x => !x)} style={btnStyle(running ? T.text : T.green)}>{running ? 'PAUSE' : 'START'}</button>

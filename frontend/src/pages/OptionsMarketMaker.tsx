@@ -335,7 +335,7 @@ export default function OptionsMarketMaker() {
   // ── Sidebar: controls + rules ────────────────────────────────────────────
   const labelStyle: React.CSSProperties = { fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.muted, marginBottom: 3, fontFamily: T.sans }
   const sliderRow = (label: string, value: string, slider: React.ReactNode, ends?: [string, string]) => (
-    <div style={{ marginBottom: 10 }}>
+    <div style={{ marginBottom: 5 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <span style={labelStyle}>{label}</span>
         <span style={{ fontSize: 10, fontFamily: T.mono, color: T.gold }}>{value}</span>
@@ -394,14 +394,20 @@ export default function OptionsMarketMaker() {
           {/* Middle row: slim Controls | tall Tape | Hedge */}
           <div style={{ display: 'grid', gridTemplateColumns: '250px 1fr 230px', gap: 8, alignItems: 'stretch' }}>
             {/* MM Controls */}
-            <Widget title="MM Controls" bodyStyle={{ padding: '10px 12px' }}>
-              {sliderRow('Sim Speed', `${speed.toFixed(1)}x`, range(speed, SPEED_MIN, SPEED_MAX, 0.1, setSpeed))}
-              {sliderRow('Base IV', `${(baseIv * 100).toFixed(0)}%`, range(baseIv, 0.05, 0.80, 0.01, setBaseIv))}
-              {sliderRow('IV Skew', skew.toFixed(2), range(skew, -0.20, 0.20, 0.01, setSkew))}
-              {sliderRow('Half-Spread', `${(halfSpread * 100).toFixed(1)}%`, range(halfSpread, 0.005, 0.20, 0.005, setHalfSpread))}
-              <div style={{ height: 1, background: T.border, margin: '4px 0 10px' }} />
-              <div style={{ ...labelStyle, marginBottom: 8 }}>Per-strike IV nudge</div>
-              {STRIKES.map(k => <div key={k}>{sliderRow(`${k}`, `${(manual[k] ?? 0) >= 0 ? '+' : ''}${((manual[k] ?? 0) * 100).toFixed(0)}`, range(manual[k] ?? 0, -0.15, 0.15, 0.01, v => setManual(m => ({ ...m, [k]: v }))))}</div>)}
+            <Widget title="MM Controls" bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '10px 12px' }}>
+              <div>
+                {sliderRow('Sim Speed', `${speed.toFixed(1)}x`, range(speed, SPEED_MIN, SPEED_MAX, 0.1, setSpeed))}
+                {sliderRow('Base IV', `${(baseIv * 100).toFixed(0)}%`, range(baseIv, 0.05, 0.80, 0.01, setBaseIv))}
+                {sliderRow('IV Skew', skew.toFixed(2), range(skew, -0.20, 0.20, 0.01, setSkew))}
+                {sliderRow('Half-Spread', `${(halfSpread * 100).toFixed(1)}%`, range(halfSpread, 0.005, 0.20, 0.005, setHalfSpread))}
+              </div>
+              <div>
+                <div style={{ height: 1, background: T.border, margin: '2px 0 8px' }} />
+                <div style={{ ...labelStyle, marginBottom: 6 }}>Per-strike IV nudge</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 12 }}>
+                  {STRIKES.map(k => <div key={k}>{sliderRow(`${k}`, `${(manual[k] ?? 0) >= 0 ? '+' : ''}${((manual[k] ?? 0) * 100).toFixed(0)}`, range(manual[k] ?? 0, -0.15, 0.15, 0.01, v => setManual(m => ({ ...m, [k]: v }))))}</div>)}
+                </div>
+              </div>
             </Widget>
 
             {/* Tape */}
@@ -411,8 +417,9 @@ export default function OptionsMarketMaker() {
                     {tapeSel.map((k, idx) => <span key={k} style={{ fontFamily: T.mono, fontSize: 9, color: TAPE_COLORS[idx % TAPE_COLORS.length] }}>{k}</span>)}
                     <button onClick={() => setTapeSel([])} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.muted, fontFamily: T.sans }}>clear</button>
                   </span>
-                : <span style={{ fontFamily: T.mono, fontSize: 12, color: spotChg >= 0 ? T.green : T.red }}>${f.spot.toFixed(2)} {spotChg >= 0 ? '+' : ''}{spotChg.toFixed(2)}%</span>}>
-              <div style={{ height: 274, padding: '8px 6px 6px' }}>
+                : <span style={{ fontFamily: T.mono, fontSize: 12, color: spotChg >= 0 ? T.green : T.red }}>${f.spot.toFixed(2)} {spotChg >= 0 ? '+' : ''}{spotChg.toFixed(2)}%</span>}
+              bodyStyle={{ flex: 1, display: 'flex', minHeight: 0 }}>
+              <div style={{ flex: 1, minHeight: 200, padding: '8px 6px 6px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={tapeData} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.07)" />
@@ -432,7 +439,7 @@ export default function OptionsMarketMaker() {
             </Widget>
 
             {/* Hedge */}
-            <Widget title="Hedge" bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 12, gap: 12 }}>
+            <Widget title="Hedge" bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: 12, gap: 10 }}>
               <div style={{ background: T.bg, border: `1px solid ${T.border}`, padding: '10px 12px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                   <span style={{ ...labelStyle, marginBottom: 0 }}>Net Delta</span>
@@ -459,8 +466,6 @@ export default function OptionsMarketMaker() {
                 <button onClick={() => onTradeStock(hedgeQty)} style={bigBtn(T.green)}>BUY</button>
                 <button onClick={() => onTradeStock(-hedgeQty)} style={bigBtn(T.red)}>SELL</button>
               </div>
-
-              <div style={{ flex: 1 }} />
 
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={() => setRunning(rr => !rr)} style={btnStyle(running ? T.text : T.green)}>{running ? 'PAUSE' : 'START'}</button>
