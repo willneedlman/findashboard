@@ -376,7 +376,7 @@ export default function PaperChart({ initialTicker = 'SPY', fills = [], orders =
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }} onContextMenu={onChartContextMenu}>
         <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
         {menu && onPlaceOrder && (
-          <OrderContextMenu menu={menu} ticker={ticker} onClose={() => setMenu(null)}
+          <OrderContextMenu menu={menu} ticker={ticker} spot={spot} onClose={() => setMenu(null)}
             onPick={(side, type) => { onPlaceOrder({ symbol: ticker, price: menu.price, side, type }); setMenu(null) }} />
         )}
         {chartErr && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: T.mono, fontSize: 11, color: T.muted }}>No chart data</div>}
@@ -403,21 +403,33 @@ export default function PaperChart({ initialTicker = 'SPY', fills = [], orders =
   )
 }
 
-function OrderContextMenu({ menu, ticker, onClose, onPick }: {
+// Only the order types that actually REST at the clicked level are offered, so a
+// right-click can't accidentally place a marketable (immediately-filling) order.
+// Below the market: buy limit / sell stop. Above it: sell limit / buy stop.
+const BELOW_ACTIONS = [
+  { side: 'buy', type: 'limit', label: 'Buy limit', color: T.pos },
+  { side: 'sell', type: 'stop', label: 'Sell stop', color: T.neg },
+] as const
+const ABOVE_ACTIONS = [
+  { side: 'sell', type: 'limit', label: 'Sell limit', color: T.neg },
+  { side: 'buy', type: 'stop', label: 'Buy stop', color: T.pos },
+] as const
+
+function OrderContextMenu({ menu, ticker, spot, onClose, onPick }: {
   menu: { x: number; y: number; price: number }
   ticker: string
+  spot: number | null
   onClose: () => void
   onPick: (side: 'buy' | 'sell', type: 'limit' | 'stop') => void
 }) {
   const W = 168
   const left = `min(${menu.x}px, calc(100% - ${W + 8}px))`
-  const top = `min(${menu.y}px, calc(100% - 142px))`
-  const actions: { side: 'buy' | 'sell'; type: 'limit' | 'stop'; label: string; color: string }[] = [
-    { side: 'buy', type: 'limit', label: 'Buy limit', color: T.pos },
-    { side: 'sell', type: 'limit', label: 'Sell limit', color: T.neg },
-    { side: 'buy', type: 'stop', label: 'Buy stop', color: T.pos },
-    { side: 'sell', type: 'stop', label: 'Sell stop', color: T.neg },
-  ]
+  const top = `min(${menu.y}px, calc(100% - 110px))`
+  // No spot yet → offer everything; otherwise only the resting side.
+  const actions = spot == null
+    ? [...BELOW_ACTIONS, ...ABOVE_ACTIONS]
+    : menu.price < spot ? BELOW_ACTIONS : ABOVE_ACTIONS
+  const rel = spot == null ? '' : menu.price < spot ? 'below market' : 'above market'
   return (
     <>
       <div onClick={onClose} onContextMenu={e => { e.preventDefault(); onClose() }}
@@ -429,6 +441,7 @@ function OrderContextMenu({ menu, ticker, onClose, onPick }: {
         <div style={{ padding: '6px 9px', borderBottom: `1px solid ${T.border}`, fontFamily: T.mono, fontSize: 10 }}>
           <span style={{ color: T.muted }}>{ticker} @ </span>
           <span style={{ color: T.gold, fontWeight: 700 }}>${menu.price.toFixed(2)}</span>
+          {rel && <span style={{ color: T.muted, fontSize: 8.5, marginLeft: 5 }}>{rel}</span>}
         </div>
         {actions.map(a => (
           <button key={`${a.side}-${a.type}`} onClick={() => onPick(a.side, a.type)}

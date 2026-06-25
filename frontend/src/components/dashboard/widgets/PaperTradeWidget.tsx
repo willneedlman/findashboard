@@ -18,6 +18,17 @@ interface Position { symbol: string; quantity: number; avg_cost: number; price: 
 interface OptionPosition { option_symbol: string; underlying: string; type: string; strike: number; quantity: number; unrealized_pnl: number }
 interface OrderRow { id: string; symbol: string; option_symbol?: string; side: string; status: string; order_type?: string; limit_price?: number | null; stop_price?: number | null; fill_price: number | null; created_at?: number }
 const PENDING_STATUSES = ['pending', 'open', 'partially_filled']
+// Right-click order types that actually REST at the clicked level, so the menu
+// can't place a marketable (instant-fill) order. Below market: buy limit / sell
+// stop. Above market: sell limit / buy stop.
+const BELOW_ORDER_ACTIONS = [
+  { side: 'buy', order_type: 'limit', label: 'Buy limit' },
+  { side: 'sell', order_type: 'stop', label: 'Sell stop' },
+] as const
+const ABOVE_ORDER_ACTIONS = [
+  { side: 'sell', order_type: 'limit', label: 'Sell limit' },
+  { side: 'buy', order_type: 'stop', label: 'Buy stop' },
+] as const
 interface Account { cash: number; equity: number; buying_power: number; realized_pnl: number; positions: Position[]; option_positions?: OptionPosition[]; orders?: OrderRow[] }
 interface PaperOrder { status: string; reason: string | null; fill_price: number | null }
 type OType = 'market' | 'limit' | 'stop'
@@ -670,18 +681,14 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
               }}>
                 <div style={{ padding: '5px 8px', borderBottom: `1px solid ${T.border}`, fontFamily: T.mono, fontSize: 9 }}>
                   <span style={{ color: T.muted }}>{ticker} @ </span><span style={{ color: T.gold, fontWeight: 700 }}>${menu.price.toFixed(2)}</span>
+                  {spot != null && <span style={{ color: T.muted, fontSize: 8, marginLeft: 4 }}>{menu.price < spot ? 'below' : 'above'}</span>}
                 </div>
-                {([
-                  { side: 'buy', order_type: 'limit', label: 'Buy limit', color: T.pos },
-                  { side: 'sell', order_type: 'limit', label: 'Sell limit', color: T.neg },
-                  { side: 'buy', order_type: 'stop', label: 'Buy stop', color: T.pos },
-                  { side: 'sell', order_type: 'stop', label: 'Sell stop', color: T.neg },
-                ] as const).map(a => (
+                {(spot == null ? [...BELOW_ORDER_ACTIONS, ...ABOVE_ORDER_ACTIONS] : menu.price < spot ? BELOW_ORDER_ACTIONS : ABOVE_ORDER_ACTIONS).map(a => (
                   <button key={`${a.side}-${a.order_type}`}
                     onClick={() => { quickOrder.mutate({ side: a.side, order_type: a.order_type, price: menu.price }); setMenu(null) }}
                     style={{
                       display: 'block', width: '100%', textAlign: 'left', padding: '6px 8px', background: 'transparent',
-                      border: 'none', borderBottom: `1px solid ${T.border}`, color: a.color, fontFamily: T.mono,
+                      border: 'none', borderBottom: `1px solid ${T.border}`, color: a.side === 'buy' ? T.pos : T.neg, fontFamily: T.mono,
                       fontSize: 10, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.04em',
                     }}
                     onMouseEnter={ev => { (ev.currentTarget as HTMLButtonElement).style.background = 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' }}
