@@ -257,7 +257,11 @@ export default function StockScreener() {
   const activePreset = PRESETS.find(p => p.id === activeScreenId)
   const sortColLabel = sortBy === 'priceChange' ? `${sortParam} price change` : (TABLE_COLS.find(c => c.key === sortBy)?.label ?? sortBy)
   const renderCols = TABLE_COLS.filter(c => visibleCols.has(c.key as string))
-  const gridTemplate = `minmax(210px,1.5fr) ${renderCols.map(c => c.w).join(' ')}`
+  const gridTemplate = `minmax(190px,1.5fr) ${renderCols.map(c => c.w).join(' ')}`
+  // Natural width of the table; the scroll container falls back to horizontal
+  // scroll below this so columns stay readable instead of being clipped when the
+  // results pane is narrow (e.g. the app nav rail is expanded).
+  const tableMinWidth = 48 + 190 + renderCols.reduce((s, c) => s + parseInt(c.w, 10), 0)
   const rowPad = density === 'compact' ? 7 : 11
   const universeLabel = universes.find(u => u.value === universe)?.label ?? 'All'
 
@@ -485,22 +489,24 @@ export default function StockScreener() {
                   </div>
                 </div>
 
-                {/* table header */}
-                <div style={{ display: 'grid', gridTemplateColumns: gridTemplate, alignItems: 'center', padding: '11px 24px', background: 'rgba(0,0,0,0.22)', flex: 'none' }}>
-                  <div onClick={() => handleSort('ticker')} style={{ ...EB, fontSize: 9, letterSpacing: '0.11em', cursor: 'pointer', color: localSort.key === 'ticker' ? C.gold : C.muted }}>
-                    Company{localSort.key === 'ticker' ? (localSort.dir === 'desc' ? ' ↓' : ' ↑') : ''}
-                  </div>
-                  {renderCols.map(col => (
-                    <div key={col.key as string} onClick={() => handleSort(col.key as string)}
-                      style={{ ...EB, fontSize: 9, letterSpacing: '0.11em', cursor: 'pointer', textAlign: col.align, color: localSort.key === col.key ? C.gold : C.muted, whiteSpace: 'nowrap' }}>
-                      {col.key === 'priceChange' && data.changePeriod ? `${data.changePeriod} Chg` : col.label}{localSort.key === col.key ? (localSort.dir === 'desc' ? ' ↓' : ' ↑') : ''}
+                {/* table: header + rows scroll together (h + v); header stays sticky */}
+                <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+                  <div style={{ minWidth: tableMinWidth }}>
+                    {/* table header */}
+                    <div style={{ display: 'grid', gridTemplateColumns: gridTemplate, alignItems: 'center', padding: '11px 24px', background: 'var(--theme-surface, #0d1826)', position: 'sticky', top: 0, zIndex: 2, borderBottom: `1px solid ${C.border}` }}>
+                      <div onClick={() => handleSort('ticker')} style={{ ...EB, fontSize: 9, letterSpacing: '0.11em', cursor: 'pointer', color: localSort.key === 'ticker' ? C.gold : C.muted }}>
+                        Company{localSort.key === 'ticker' ? (localSort.dir === 'desc' ? ' ↓' : ' ↑') : ''}
+                      </div>
+                      {renderCols.map(col => (
+                        <div key={col.key as string} onClick={() => handleSort(col.key as string)}
+                          style={{ ...EB, fontSize: 9, letterSpacing: '0.11em', cursor: 'pointer', textAlign: col.align, color: localSort.key === col.key ? C.gold : C.muted, whiteSpace: 'nowrap' }}>
+                          {col.key === 'priceChange' && data.changePeriod ? `${data.changePeriod} Chg` : col.label}{localSort.key === col.key ? (localSort.dir === 'desc' ? ' ↓' : ' ↑') : ''}
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
 
-                {/* rows */}
-                <div style={{ flex: 1, overflowY: 'auto' }}>
-                  {displayRows.map((r, i) => (
+                    {/* rows */}
+                    {displayRows.map((r, i) => (
                     <div key={r.ticker} className="ft-screen-row"
                       style={{ display: 'grid', gridTemplateColumns: gridTemplate, alignItems: 'center', padding: `${rowPad}px 24px`, background: zebra && i % 2 === 1 ? 'var(--theme-hover, rgba(255,255,255,0.03))' : 'transparent', borderBottom: '1px solid var(--theme-border-faint, rgba(255,255,255,0.045))' }}>
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, minWidth: 0 }}>
@@ -526,9 +532,10 @@ export default function StockScreener() {
                       })}
                     </div>
                   ))}
-                  {displayRows.length === 0 && (
-                    <div style={{ padding: 40, color: C.muted, fontFamily: C.sans, fontSize: 12 }}>No matches. Loosen the filters or pick a different screen.</div>
-                  )}
+                    {displayRows.length === 0 && (
+                      <div style={{ padding: 40, color: C.muted, fontFamily: C.sans, fontSize: 12 }}>No matches. Loosen the filters or pick a different screen.</div>
+                    )}
+                  </div>
                 </div>
 
                 {/* footer */}
