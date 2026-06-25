@@ -1,26 +1,46 @@
 {
-  "_note": "Curated liquid large-cap constituents in yfinance ticker format (.L London/GBp, .DE XETRA/EUR, .T Tokyo/JPY). Representative major members, not exhaustive index membership. Refresh periodically.",
-  "dax40": [
-    "SAP.DE","SIE.DE","ALV.DE","DTE.DE","AIR.DE","MBG.DE","BMW.DE","VOW3.DE",
-    "BAS.DE","BAYN.DE","ADS.DE","DB1.DE","MUV2.DE","IFX.DE","RWE.DE","MRK.DE",
-    "DBK.DE","HEN3.DE","DHL.DE","VNA.DE","EOAN.DE","BEI.DE","HEI.DE","CON.DE",
-    "ZAL.DE","MTX.DE","SHL.DE","ENR.DE","P911.DE","RHM.DE","CBK.DE","FME.DE",
-    "BNR.DE","1COV.DE","SRT3.DE","PAH3.DE","FRE.DE","QIA.DE","SY1.DE","HNR1.DE"
-  ],
-  "ftse100": [
-    "AZN.L","SHEL.L","HSBA.L","ULVR.L","BP.L","GSK.L","RIO.L","BATS.L","DGE.L",
-    "REL.L","GLEN.L","NG.L","LSEG.L","RR.L","BARC.L","LLOY.L","VOD.L","PRU.L",
-    "AAL.L","TSCO.L","NWG.L","CPG.L","BA.L","IMB.L","STAN.L","AHT.L","SSE.L",
-    "NXT.L","RKT.L","CRH.L","ANTO.L","SGE.L","AV.L","LGEN.L","FERG.L","WPP.L",
-    "INF.L","SMIN.L","ITRK.L","HLMA.L","BNZL.L","SPX.L","WTB.L","ADM.L","PSON.L",
-    "III.L","MNG.L","SVT.L","UU.L","DCC.L","PSN.L","BDEV.L","LAND.L","MKS.L"
-  ],
-  "nikkei225": [
-    "7203.T","6758.T","9984.T","8306.T","6861.T","9432.T","6098.T","7974.T",
-    "8035.T","6594.T","4063.T","9433.T","7741.T","6902.T","8316.T","4502.T",
-    "6367.T","6501.T","7267.T","6981.T","8058.T","8001.T","8031.T","9434.T",
-    "4519.T","6954.T","7751.T","6503.T","6273.T","4543.T","8766.T","8411.T",
-    "9983.T","4661.T","6178.T","7011.T","6702.T","6857.T","4568.T","6752.T",
-    "8053.T","2914.T","4452.T","4901.T","6326.T","7269.T","7270.T","6920.T"
-  ]
+  "_note": "Curated liquid large-cap constituents as {ticker: company name} in yfinance ticker format (.L London/GBp, .DE XETRA/EUR, .T Tokyo/JPY). Names are bundled so numeric tickers (Tokyo) always show a company name. Representative major members, not exhaustive. Refresh periodically.",
+  "dax40": {
+    "SAP.DE": "SAP", "SIE.DE": "Siemens", "ALV.DE": "Allianz", "DTE.DE": "Deutsche Telekom",
+    "AIR.DE": "Airbus", "MBG.DE": "Mercedes-Benz Group", "BMW.DE": "BMW", "VOW3.DE": "Volkswagen",
+    "BAS.DE": "BASF", "BAYN.DE": "Bayer", "ADS.DE": "Adidas", "DB1.DE": "Deutsche Boerse",
+    "MUV2.DE": "Munich Re", "IFX.DE": "Infineon Technologies", "RWE.DE": "RWE", "MRK.DE": "Merck KGaA",
+    "DBK.DE": "Deutsche Bank", "HEN3.DE": "Henkel", "DHL.DE": "DHL Group", "VNA.DE": "Vonovia",
+    "EOAN.DE": "E.ON", "BEI.DE": "Beiersdorf", "HEI.DE": "Heidelberg Materials", "CON.DE": "Continental",
+    "ZAL.DE": "Zalando", "MTX.DE": "MTU Aero Engines", "SHL.DE": "Siemens Healthineers", "ENR.DE": "Siemens Energy",
+    "P911.DE": "Porsche AG", "RHM.DE": "Rheinmetall", "CBK.DE": "Commerzbank", "FME.DE": "Fresenius Medical Care",
+    "BNR.DE": "Brenntag", "1COV.DE": "Covestro", "SRT3.DE": "Sartorius", "PAH3.DE": "Porsche SE",
+    "FRE.DE": "Fresenius", "QIA.DE": "Qiagen", "SY1.DE": "Symrise", "HNR1.DE": "Hannover Re"
+  },
+  "ftse100": {
+    "AZN.L": "AstraZeneca", "SHEL.L": "Shell", "HSBA.L": "HSBC Holdings", "ULVR.L": "Unilever",
+    "BP.L": "BP", "GSK.L": "GSK", "RIO.L": "Rio Tinto", "BATS.L": "British American Tobacco",
+    "DGE.L": "Diageo", "REL.L": "RELX", "GLEN.L": "Glencore", "NG.L": "National Grid",
+    "LSEG.L": "London Stock Exchange Group", "RR.L": "Rolls-Royce Holdings", "BARC.L": "Barclays",
+    "LLOY.L": "Lloyds Banking Group", "VOD.L": "Vodafone Group", "PRU.L": "Prudential",
+    "AAL.L": "Anglo American", "TSCO.L": "Tesco", "NWG.L": "NatWest Group", "CPG.L": "Compass Group",
+    "BA.L": "BAE Systems", "IMB.L": "Imperial Brands", "STAN.L": "Standard Chartered", "AHT.L": "Ashtead Group",
+    "SSE.L": "SSE", "NXT.L": "Next", "RKT.L": "Reckitt Benckiser", "CRH.L": "CRH", "ANTO.L": "Antofagasta",
+    "SGE.L": "Sage Group", "AV.L": "Aviva", "LGEN.L": "Legal & General", "FERG.L": "Ferguson",
+    "WPP.L": "WPP", "INF.L": "Informa", "SMIN.L": "Smiths Group", "ITRK.L": "Intertek Group",
+    "HLMA.L": "Halma", "BNZL.L": "Bunzl", "SPX.L": "Spirax Group", "WTB.L": "Whitbread",
+    "ADM.L": "Admiral Group", "PSON.L": "Pearson", "III.L": "3i Group", "MNG.L": "M&G",
+    "SVT.L": "Severn Trent", "UU.L": "United Utilities", "DCC.L": "DCC", "PSN.L": "Persimmon",
+    "BDEV.L": "Barratt Redrow", "LAND.L": "Land Securities", "MKS.L": "Marks & Spencer"
+  },
+  "nikkei225": {
+    "7203.T": "Toyota Motor", "6758.T": "Sony Group", "9984.T": "SoftBank Group",
+    "8306.T": "Mitsubishi UFJ Financial", "6861.T": "Keyence", "9432.T": "Nippon Telegraph & Telephone",
+    "6098.T": "Recruit Holdings", "7974.T": "Nintendo", "8035.T": "Tokyo Electron", "6594.T": "Nidec",
+    "4063.T": "Shin-Etsu Chemical", "9433.T": "KDDI", "7741.T": "Hoya", "6902.T": "Denso",
+    "8316.T": "Sumitomo Mitsui Financial", "4502.T": "Takeda Pharmaceutical", "6367.T": "Daikin Industries",
+    "6501.T": "Hitachi", "7267.T": "Honda Motor", "6981.T": "Murata Manufacturing", "8058.T": "Mitsubishi Corp",
+    "8001.T": "Itochu", "8031.T": "Mitsui & Co", "9434.T": "SoftBank Corp", "4519.T": "Chugai Pharmaceutical",
+    "6954.T": "Fanuc", "7751.T": "Canon", "6503.T": "Mitsubishi Electric", "6273.T": "SMC", "4543.T": "Terumo",
+    "8766.T": "Tokio Marine Holdings", "8411.T": "Mizuho Financial", "9983.T": "Fast Retailing",
+    "4661.T": "Oriental Land", "6178.T": "Japan Post Holdings", "7011.T": "Mitsubishi Heavy Industries",
+    "6702.T": "Fujitsu", "6857.T": "Advantest", "4568.T": "Daiichi Sankyo", "6752.T": "Panasonic Holdings",
+    "8053.T": "Sumitomo Corp", "2914.T": "Japan Tobacco", "4452.T": "Kao", "4901.T": "Fujifilm Holdings",
+    "6326.T": "Kubota", "7269.T": "Suzuki Motor", "7270.T": "Subaru", "6920.T": "Lasertec"
+  }
 }

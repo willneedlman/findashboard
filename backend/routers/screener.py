@@ -53,20 +53,27 @@ def _load_universe() -> "tuple[set, list, dict]":
 _UNIVERSE, _UNIVERSE_LIST, _INDEX_SETS = _load_universe()
 
 
-def _load_intl() -> dict:
+def _load_intl() -> "tuple[dict, dict]":
     # International tickers keep their exchange-suffix dot (SAP.DE, 7203.T), so they
-    # are NOT run through _norm_tk (which would turn the dot into a dash).
+    # are NOT run through _norm_tk (which would turn the dot into a dash). Names are
+    # bundled (ticker -> name) so numeric Tokyo tickers always show a company name.
     import json
     try:
         path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "intl_constituents.json")
         d = json.load(open(path))
-        return {k: {str(t).strip().upper() for t in v if t}
-                for k, v in d.items() if k in ("dax40", "ftse100", "nikkei225")}
+        sets, names = {}, {}
+        for k, v in d.items():
+            if k not in ("dax40", "ftse100", "nikkei225") or not isinstance(v, dict):
+                continue
+            sets[k] = {str(t).strip().upper() for t in v}
+            for t, nm in v.items():
+                names[str(t).strip().upper()] = nm
+        return sets, names
     except Exception as e:
         logger.warning("intl constituents load failed: %s", e)
-        return {}
+        return {}, {}
 
-_INTL_SETS = _load_intl()
+_INTL_SETS, _INTL_NAMES = _load_intl()
 _INDEX_SETS.update(_INTL_SETS)        # so _resolve_universe + the yfinance path resolve them
 _INTL_KEYS = set(_INTL_SETS.keys())   # universes that need USD FX-normalization + skip FMP
 
@@ -653,7 +660,7 @@ def _compute_history_batch(tickers: list[str]) -> dict:
 def run_screen(req: ScreenRequest):
     import json, hashlib
     # Bump CACHE_VER whenever screener logic changes to invalidate stale disk-cached results
-    CACHE_VER = "v10"
+    CACHE_VER = "v11"
     cache_key = CACHE_VER + hashlib.md5(json.dumps(req.model_dump(), sort_keys=True).encode()).hexdigest()
     with _lock:
         if cache_key in _screen_cache:
@@ -758,7 +765,7 @@ def run_screen(req: ScreenRequest):
                 rate, divisor = (_fx_to_usd(getattr(fi, "currency", None)) if is_intl else (1.0, 1.0))
                 price_usd = float(price) / divisor * rate if price else None
                 mc_usd    = float(mc) / divisor * rate if mc else None
-                return {"ticker": tk, "companyName": tk,
+                return {"ticker": tk, "companyName": _INTL_NAMES.get(tk) or tk,
                         "price":     round(price_usd, 2) if price_usd else None,
                         "marketCap": round(mc_usd / 1e9, 2) if mc_usd else None,
                         "beta": None, "volume": None, "sector": "", "industry": "", "exchange": "",
