@@ -209,6 +209,12 @@ def _backfill_once(daily: int) -> int:
             continue
         if fmp.get_fundamentals(sym):
             fetched += 1
+    # Build the full international snapshot (sector + fundamentals via yfinance
+    # .info) once per productive cycle — slow, so it runs here in the background.
+    try:
+        _intl_snapshot(full=True)
+    except Exception as e:
+        logger.warning("intl snapshot warm failed: %s", e)
     # Hold the redeploy-stacking guard for ~20h after real progress; if nothing
     # was fetched (free daily cap exhausted / throttled), keep a short window so
     # the next run retries once the quota resets instead of idling a full day.
@@ -382,30 +388,58 @@ def _fmp_snapshot(sector, exchange) -> list:
     return disk_get(sticky_key) or []
 
 
-def _intl_snapshot() -> list:
+def _intl_snapshot(full: bool = False) -> list:
     """Base data for every bundled international name, FX-normalized to USD, with
-    bundled company names + per-index country. Disk-cached 6h (+ 7d sticky) so the
-    'All' / international screens don't re-fetch ~140 fast_info calls each time."""
+    bundled names + per-index country. Disk-cached 6h (+ 7d sticky) so 'All' /
+    international screens don't re-fetch ~140 quotes each time.
+
+    full=True (called by the backfill) ALSO pulls yfinance .info per name for
+    sector/industry and the fundamentals FMP doesn't cover for intl (P/E, margins,
+    ROE, growth, yield). It is slow, so it runs in the background and overwrites the
+    cache; screens read the cached result. full=False is the quick fast_info-only
+    build used on a cold cache miss."""
     if not _ALL_INTL:
         return []
-    fresh = disk_get("screener:intlsnap")
-    if fresh is not None:
-        return fresh
+    if not full:
+        fresh = disk_get("screener:intlsnap")
+        if fresh is not None:
+            return fresh
     tk_country = {t: _INTL_COUNTRY.get(k) for k, s in _INTL_SETS.items() for t in s}
+    _pct = lambda v: round(v * 100, 1) if isinstance(v, (int, float)) else None
 
     def _q(tk):
         try:
-            fi = yf.Ticker(tk).fast_info
+            t = yf.Ticker(tk)
+            fi = t.fast_info
             price = getattr(fi, "last_price", None)
             mc = getattr(fi, "market_cap", None)
             rate, divisor = _fx_to_usd(getattr(fi, "currency", None))
-            return {
+            row = {
                 "ticker": tk, "companyName": _INTL_NAMES.get(tk) or tk,
                 "price": round(float(price) / divisor * rate, 2) if price else None,
                 "marketCap": round(float(mc) / divisor * rate / 1e9, 2) if mc else None,
                 "beta": None, "volume": None, "sector": "", "industry": "", "exchange": "",
                 "country": tk_country.get(tk), "change1d": None,
             }
+            if full:
+                try:
+                    info = t.info
+                    row.update({
+                        "sector": info.get("sector") or "", "industry": info.get("industry") or "",
+                        "beta": info.get("beta"),
+                        "peRatio": info.get("trailingPE"), "pbRatio": info.get("priceToBook"),
+                        "psRatio": info.get("priceToSalesTrailing12Months"),
+                        "evEbitda": info.get("enterpriseToEbitda"), "pegRatio": info.get("trailingPegRatio"),
+                        "grossMargin": _pct(info.get("grossMargins")), "operatingMargin": _pct(info.get("operatingMargins")),
+                        "netMargin": _pct(info.get("profitMargins")), "roe": _pct(info.get("returnOnEquity")),
+                        "roa": _pct(info.get("returnOnAssets")), "debtEquity": info.get("debtToEquity"),
+                        "currentRatio": info.get("currentRatio"),
+                        "revenueGrowth": _pct(info.get("revenueGrowth")), "epsGrowth": _pct(info.get("earningsGrowth")),
+                        "dividendYield": _pct(info.get("dividendYield")),
+                    })
+                except Exception:
+                    pass
+            return row
         except Exception:
             return None
 
@@ -652,7 +686,7 @@ def _compute_history_batch(tickers: list[str]) -> dict:
 def run_screen(req: ScreenRequest):
     import json, hashlib
     # Bump CACHE_VER whenever screener logic changes to invalidate stale disk-cached results
-    CACHE_VER = "v14"
+    CACHE_VER = "v15"
     cache_key = CACHE_VER + hashlib.md5(json.dumps(req.model_dump(), sort_keys=True).encode()).hexdigest()
     with _lock:
         if cache_key in _screen_cache:
