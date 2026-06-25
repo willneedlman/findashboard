@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
-import SidebarLayout from '../components/SidebarLayout'
-import { RailSection } from './valuationShared'
+import { Widget, DeskCoach, RiskMeter, StatRow, PnLBar } from '../components/mmCockpit'
 
 /*
  * Options MM Simulator
@@ -259,7 +259,6 @@ interface Frame {
 
 export default function OptionsMarketMaker() {
   const sim = useRef<SimState>(freshState())
-  const [paramsOpen, setParamsOpen] = useState(true)
   const [baseIv, setBaseIv]         = useState(0.25)
   const [skew, setSkew]             = useState(0.06)
   const [halfSpread, setHalfSpread] = useState(0.04)
@@ -268,7 +267,7 @@ export default function OptionsMarketMaker() {
   const [running, setRunning]       = useState(false)
   const [speed, setSpeed]           = useState(0.5)
   const [hedgeQty, setHedgeQty]     = useState(100)
-  const [rulesOpen, setRulesOpen]   = useState(false)
+  const [advancedOpen, setAdvancedOpen] = useState(false)
   const [tapeSel, setTapeSel]       = useState<string[]>([])   // contracts overlaid on the tape
   const [frame, setFrame]           = useState<Frame | null>(null)
 
@@ -319,8 +318,6 @@ export default function OptionsMarketMaker() {
   const f = frame
   const g = f?.greeks
   const overLimit = g ? Math.abs(g.totalDeltaSh) > DELTA_LIMIT : false
-  const nowSec = Date.now() / 1000
-  const showAlert = f?.lastOrder && (nowSec - f.lastOrderAt) < 4
 
   // Tape series: with no selection it plots the underlying; selecting contracts
   // in the chain overlays each one's premium, repriced across the spot history
@@ -362,171 +359,138 @@ export default function OptionsMarketMaker() {
       style={{ width: '100%', accentColor: T.gold }} />
   )
 
-  const sidebar = (
-    <RailSection title="MM Controls" open={paramsOpen} onToggle={() => setParamsOpen(o => !o)}>
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontFamily: T.mono }}>
-      {sliderRow('Sim Speed', `${speed.toFixed(1)}x`, range(speed, SPEED_MIN, SPEED_MAX, 0.1, setSpeed))}
-      {sliderRow('Base Implied Vol', `${(baseIv * 100).toFixed(0)}%`, range(baseIv, 0.05, 0.80, 0.01, setBaseIv))}
-      {sliderRow('IV Skew', skew.toFixed(2), range(skew, -0.20, 0.20, 0.01, setSkew), ['High strikes', 'Low strikes'])}
-      {sliderRow('Half-Spread (% of theo)', `${(halfSpread * 100).toFixed(1)}%`, range(halfSpread, 0.005, 0.20, 0.005, setHalfSpread))}
+  // Plain-English read of the book + the next move, for the Desk Coach strip.
+  const need = g ? -Math.round(g.totalDeltaSh) : 0
+  const coachText = !g ? '' : overLimit
+    ? `Net delta ${g.totalDeltaSh >= 0 ? '+' : ''}${g.totalDeltaSh.toFixed(0)} is past the limit of ${DELTA_LIMIT}. ${need > 0 ? `Buy ${need}` : `Sell ${Math.abs(need)}`} shares to flatten before the next move bites.`
+    : `Client flow left you ${g.totalDeltaSh >= 0 ? 'long' : 'short'} ${Math.abs(g.totalDeltaSh).toFixed(0)} delta${f && f.stock !== 0 ? `, offset by your ${f.stock > 0 ? '+' : ''}${f.stock} share hedge` : ''}, within the limit of ${DELTA_LIMIT}. Keep quoting both sides to earn the spread.`
 
-      <div style={{ ...labelStyle, marginTop: 6 }}>Manual per-strike IV nudge</div>
-      {STRIKES.map(k => (
-        <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-          <span style={{ fontSize: 10, fontFamily: T.mono, color: T.text, width: 28 }}>{k}</span>
-          {range(manual[k] ?? 0, -0.15, 0.15, 0.01, v => setManual(m => ({ ...m, [k]: v })))}
-          <span style={{ fontSize: 9, fontFamily: T.mono, color: T.muted, width: 34, textAlign: 'right' }}>
-            {(manual[k] ?? 0) >= 0 ? '+' : ''}{((manual[k] ?? 0) * 100).toFixed(0)}
-          </span>
-        </div>
-      ))}
+  const advToggle: React.CSSProperties = {
+    width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+    background: 'transparent', border: `1px solid ${T.border}`, cursor: 'pointer', padding: '6px 8px', marginTop: 4,
+    fontFamily: T.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.text,
+  }
 
-      <div style={{ ...labelStyle, marginTop: 6 }}>Per-contract spread widen (+% of theo)</div>
-      {(['C', 'P'] as const).flatMap(kind => STRIKES.map(k => {
-        const key = `${kind}${k}`
-        const v = spreadAdj[key] ?? 0
-        return (
-          <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-            <span style={{ fontSize: 10, fontFamily: T.mono, color: kind === 'C' ? T.green : T.red, width: 28 }}>{kind} {k}</span>
-            {range(v, 0, 0.20, 0.005, nv => setSpreadAdj(m => ({ ...m, [key]: nv })))}
-            <span style={{ fontSize: 9, fontFamily: T.mono, color: T.muted, width: 34, textAlign: 'right' }}>
-              +{(v * 100).toFixed(1)}
-            </span>
-          </div>
-        )
-      }))}
-
-      {/* Manual hedge — trade the underlying yourself, like a real maker */}
-      <div style={{ ...labelStyle, marginTop: 10 }}>Hedge — Trade Underlying</div>
-      {g && (() => {
-        const need = -Math.round(g.totalDeltaSh)
-        const flatten = need > 0 ? `BUY ${need}` : need < 0 ? `SELL ${Math.abs(need)}` : 'flat'
-        return (
-          <div style={{ fontSize: 9, fontFamily: T.mono, color: T.muted, marginBottom: 5 }}>
-            Net Delta {g.totalDeltaSh >= 0 ? '+' : ''}{g.totalDeltaSh.toFixed(0)} sh ·
-            to flatten: <span style={{ color: need === 0 ? T.green : T.gold }}>{flatten}</span>
-          </div>
-        )
-      })()}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.muted, fontFamily: T.sans }}>Trade Size</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <input type="number" min={0} step={25} value={hedgeQty}
-            onChange={e => setHedgeQty(Math.max(0, Math.round(+e.target.value) || 0))}
-            aria-label="Trade size in shares"
-            style={{ width: 64, background: T.bg, border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: T.gold, fontFamily: T.mono, fontSize: 11, padding: '2px 5px', outline: 'none', textAlign: 'right' }} />
-          <span style={{ fontSize: 9, color: T.muted, fontFamily: T.sans }}>sh</span>
-        </div>
-      </div>
-      {range(hedgeQty, 0, 2000, 25, setHedgeQty)}
-      <div style={{ fontSize: 9, color: T.muted, fontFamily: T.sans, margin: '1px 0 6px' }}>
-        @ ${f ? f.spot.toFixed(2) : '-'} = {fmtMoney(hedgeQty * (f ? f.spot : 0))} notional
-      </div>
-      <div style={{ display: 'flex', gap: 6 }}>
-        <button onClick={() => onTradeStock(hedgeQty)} style={btnStyle(T.green)}>BUY</button>
-        <button onClick={() => onTradeStock(-hedgeQty)} style={btnStyle(T.red)}>SELL</button>
-      </div>
-
-      <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-        <button onClick={() => setRunning(r => !r)} style={btnStyle(running ? T.text : T.green)}>{running ? 'PAUSE' : 'START'}</button>
-        <button onClick={onReset} style={btnStyle(T.muted)}>RESET</button>
-      </div>
-
-      <div style={{ marginTop: 12, borderTop: `1px solid ${T.border}`, paddingTop: 8 }}>
-        <button onClick={() => setRulesOpen(o => !o)}
-          style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                   background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, color: T.text }}>
-          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', fontFamily: T.sans }}>How the Desk Works</span>
-          <span style={{ fontSize: 9, color: T.muted }}>{rulesOpen ? '▲' : '▼'}</span>
-        </button>
-        {rulesOpen && (
-          <div style={{ marginTop: 8, fontSize: 10, lineHeight: '15px', color: T.muted, fontFamily: T.sans }}>
-            1. You stream a <span style={{ color: T.green }}>BID</span> and <span style={{ color: T.red }}>ASK</span> around each option's theoretical value.<br />
-            2. Clients trade against your quote — they BUY at your ask, SELL at your bid. You capture the half-spread as <span style={{ color: T.gold }}>edge</span>.<br />
-            3. Every fill hands you inventory and Greeks. A short call is short Delta; the stock can move against you.<br />
-            4. Watch Net Delta, then <span style={{ color: T.green }}>BUY</span> or <span style={{ color: T.red }}>SELL</span> the underlying to offset it. Buying shares adds positive delta; selling adds negative. Drive Net Delta toward 0.<br />
-            5. If Net Delta blows past the limit, the desk flashes <span style={{ color: T.red }}>UNHEDGED RISK</span> — trade stock before a move wipes out your spread.
-            <div style={{ color: T.text, fontWeight: 700, letterSpacing: '0.1em', margin: '8px 0 4px' }}>THE TRADE-OFF</div>
-            Wider spreads earn more per fill but scare flow away. Hedging removes direction but leaves you short gamma — a delta-flat book still bleeds on large realized moves. The maker gets paid the spread, not the bet.
-          </div>
-        )}
-      </div>
-    </div>
-    </RailSection>
-  )
+  const spotChg = f && f.spotHistory.length > 1 ? (f.spot / f.spotHistory[0] - 1) * 100 : 0
+  const spread = f ? f.edge : 0
+  const directional = f && g ? g.netPnl - f.edge : 0
+  const maxMag = Math.max(Math.abs(spread), Math.abs(directional), 1)
 
   return (
     <PageWrapper title="Options MM Simulator">
-      <SidebarLayout sidebarWidth={236} sidebarTitle="" sidebar={sidebar}>
-        {!f ? (
-          <div style={{ padding: 24, fontFamily: T.mono, color: T.muted }}>Starting desk…</div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {/* Status */}
-            <div style={{ fontFamily: T.mono, fontSize: 10, letterSpacing: '0.14em', color: f.running ? T.green : T.muted }}>
-              DESK STATUS: {f.running ? 'LIVE' : 'PAUSED'}
-            </div>
+      {!f || !g ? (
+        <div style={{ padding: 24, fontFamily: T.mono, color: T.muted }}>Starting desk…</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+          <DeskCoach text={coachText} over={overLimit} />
 
-            {/* Scoreboard — P&L split into spread (edge) vs directional (inventory move) */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
-              {scoreCard('Net P&L', fmtMoney(g!.netPnl), g!.netPnl >= 0 ? T.green : T.red, 'directional + spread')}
-              {scoreCard('Directional P&L', fmtMoney(g!.netPnl - f.edge), (g!.netPnl - f.edge) >= 0 ? T.green : T.red, 'inventory mark-to-market')}
-              {scoreCard('Spread P&L', fmtMoney(f.edge), T.green, 'edge captured from fills')}
-              {scoreCard('Spot', `$${f.spot.toFixed(2)}`, T.text, 'underlying')}
-              {scoreCard('Stock Inventory', `${f.stock >= 0 ? '+' : ''}${f.stock.toLocaleString()}`, T.text, 'shares (hedge)')}
-              {scoreCard('Net Delta', `${g!.totalDeltaSh >= 0 ? '+' : ''}${g!.totalDeltaSh.toFixed(0)}`, overLimit ? T.red : T.gold, `shares | limit ${DELTA_LIMIT}`)}
-              {scoreCard('Net Gamma', `${g!.gamma >= 0 ? '+' : ''}${g!.gamma.toFixed(1)}`, T.text, 'delta / $1 move')}
-              {scoreCard('Net Vega', fmtMoney(g!.vega1pct), T.text, 'PnL / +1% IV')}
-            </div>
+          <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            {/* LEFT — controls + hedge */}
+            <div style={{ width: 236, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 9 }}>
+              <Widget title="MM Controls" style={{ flex: 1 }} bodyStyle={{ padding: '11px 13px' }}>
+                {sliderRow('Sim Speed', `${speed.toFixed(1)}x`, range(speed, SPEED_MIN, SPEED_MAX, 0.1, setSpeed))}
+                {sliderRow('Base Implied Vol', `${(baseIv * 100).toFixed(0)}%`, range(baseIv, 0.05, 0.80, 0.01, setBaseIv))}
+                {sliderRow('IV Skew', skew.toFixed(2), range(skew, -0.20, 0.20, 0.01, setSkew), ['High strikes', 'Low strikes'])}
+                {sliderRow('Half-Spread (% of theo)', `${(halfSpread * 100).toFixed(1)}%`, range(halfSpread, 0.005, 0.20, 0.005, setHalfSpread))}
 
-            {/* Risk status — always rendered at a fixed height so it never reflows the page */}
-            <div style={{
-              fontFamily: T.mono, fontSize: 13, fontWeight: overLimit ? 700 : 400, letterSpacing: '0.08em',
-              textAlign: 'center', padding: '8px 12px', minHeight: 35, boxSizing: 'border-box',
-              color: overLimit ? T.red : T.muted,
-              border: `1px solid ${overLimit ? T.red : T.border}`,
-              background: overLimit ? 'color-mix(in srgb, var(--theme-negative, #ef4444) 10%, transparent)' : 'transparent',
-            }}>
-              {overLimit
-                ? `Unhedged Directional Risk - Net ${g!.totalDeltaSh > 0 ? 'Long' : 'Short'} ${Math.abs(g!.totalDeltaSh).toFixed(0)} shares - Hedge your Delta`
-                : `Net Delta ${g!.totalDeltaSh >= 0 ? '+' : ''}${g!.totalDeltaSh.toFixed(0)} / ${DELTA_LIMIT} sh - within limits`}
-            </div>
+                <button onClick={() => setAdvancedOpen(o => !o)} style={advToggle}>
+                  <span>Per-strike tuning</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: T.muted }}>9 {advancedOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}</span>
+                </button>
+                {advancedOpen && (
+                  <>
+                    <div style={{ ...labelStyle, marginTop: 8 }}>Manual per-strike IV nudge</div>
+                    {STRIKES.map(k => (
+                      <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                        <span style={{ fontSize: 10, fontFamily: T.mono, color: T.text, width: 28 }}>{k}</span>
+                        {range(manual[k] ?? 0, -0.15, 0.15, 0.01, v => setManual(m => ({ ...m, [k]: v })))}
+                        <span style={{ fontSize: 9, fontFamily: T.mono, color: T.muted, width: 34, textAlign: 'right' }}>
+                          {(manual[k] ?? 0) >= 0 ? '+' : ''}{((manual[k] ?? 0) * 100).toFixed(0)}
+                        </span>
+                      </div>
+                    ))}
+                    <div style={{ ...labelStyle, marginTop: 6 }}>Per-contract spread widen (+% of theo)</div>
+                    {(['C', 'P'] as const).flatMap(kind => STRIKES.map(k => {
+                      const key = `${kind}${k}`
+                      const v = spreadAdj[key] ?? 0
+                      return (
+                        <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                          <span style={{ fontSize: 10, fontFamily: T.mono, color: kind === 'C' ? T.green : T.red, width: 28 }}>{kind} {k}</span>
+                          {range(v, 0, 0.20, 0.005, nv => setSpreadAdj(m => ({ ...m, [key]: nv })))}
+                          <span style={{ fontSize: 9, fontFamily: T.mono, color: T.muted, width: 34, textAlign: 'right' }}>+{(v * 100).toFixed(1)}</span>
+                        </div>
+                      )
+                    }))}
+                  </>
+                )}
 
-            {/* Last client order — also fixed height; highlights when fresh, dims when stale */}
-            <div style={{
-              fontFamily: T.mono, fontSize: 12, fontWeight: 700, padding: '8px 12px', minHeight: 33, boxSizing: 'border-box',
-              color: showAlert ? T.gold : T.muted,
-              border: `1px solid ${showAlert ? T.gold : T.border}`,
-              background: showAlert ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)' : 'transparent',
-            }}>
-              {f.lastOrder
-                ? `CLIENT ORDER → ${f.lastOrder.clientSide} ${f.lastOrder.size} ${f.lastOrder.contract} @ $${f.lastOrder.fillPrice.toFixed(2)} (${f.lastOrder.clientSide === 'BUY' ? 'lifted your offer' : 'hit your bid'})   edge ${fmtMoney(f.lastOrder.edge)}`
-                : 'Awaiting client flow…'}
-            </div>
+              </Widget>
 
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {/* Chain + tape */}
-              <div style={{ flex: '1 1 560px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ background: T.bg, border: `1px solid ${T.border}` }}>
-                  <div style={{ ...panelHeader, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>OPTIONS CHAIN — YOUR LIVE QUOTES</span>
-                    <span style={{ fontSize: 8, fontWeight: 400, letterSpacing: '0.04em', textTransform: 'none', color: T.muted }}>click a Theo to plot it</span>
-                  </div>
-                  {renderChain(f, tapeSel, toggleTape)}
+              <Widget title="Hedge" bodyStyle={{ padding: '11px 13px' }}>
+                <div style={{ fontSize: 9, fontFamily: T.mono, color: T.muted, marginBottom: 6 }}>
+                  Net Delta {g.totalDeltaSh >= 0 ? '+' : ''}{g.totalDeltaSh.toFixed(0)} sh · to flatten: <span style={{ color: need === 0 ? T.green : T.gold }}>{need > 0 ? `BUY ${need}` : need < 0 ? `SELL ${Math.abs(need)}` : 'flat'}</span>
                 </div>
-                <div style={{ background: T.bg, border: `1px solid ${T.border}` }}>
-                  <div style={{ ...panelHeader, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>{tapeOptions ? 'OPTION PREMIUMS' : 'UNDERLYING TAPE'}</span>
-                    {tapeOptions && (
-                      <span style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                        {tapeSel.map((k, idx) => (
-                          <span key={k} style={{ fontSize: 9, color: TAPE_COLORS[idx % TAPE_COLORS.length] }}>{k}</span>
-                        ))}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.muted, fontFamily: T.sans }}>Trade Size</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <input type="number" min={0} step={25} value={hedgeQty}
+                      onChange={e => setHedgeQty(Math.max(0, Math.round(+e.target.value) || 0))} aria-label="Trade size in shares"
+                      style={{ width: 64, background: T.bg, border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: T.gold, fontFamily: T.mono, fontSize: 11, padding: '2px 5px', outline: 'none', textAlign: 'right' }} />
+                    <span style={{ fontSize: 9, color: T.muted, fontFamily: T.sans }}>sh</span>
+                  </div>
+                </div>
+                {range(hedgeQty, 0, 2000, 25, setHedgeQty)}
+                <div style={{ fontSize: 9, color: T.muted, fontFamily: T.sans, margin: '1px 0 7px' }}>
+                  @ ${f.spot.toFixed(2)} = {fmtMoney(hedgeQty * f.spot)} notional
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button onClick={() => onTradeStock(hedgeQty)} style={btnStyle(T.green)}>BUY</button>
+                  <button onClick={() => onTradeStock(-hedgeQty)} style={btnStyle(T.red)}>SELL</button>
+                </div>
+                <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                  <button onClick={() => setRunning(r => !r)} style={btnStyle(running ? T.text : T.green)}>{running ? 'PAUSE' : 'START'}</button>
+                  <button onClick={onReset} style={btnStyle(T.muted)}>RESET</button>
+                </div>
+              </Widget>
+            </div>
+
+            {/* RIGHT — vitals, chain, tape, ledger */}
+            <div style={{ flex: 1, minWidth: 340, display: 'flex', flexDirection: 'column', gap: 9 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1.3fr 1fr', gap: 9, alignItems: 'start' }}>
+                <Widget title="Profit & Loss" bodyStyle={{ padding: '11px 14px', display: 'flex', flexDirection: 'column', gap: 9 }}>
+                  <div>
+                    <div style={{ fontFamily: T.mono, fontSize: 27, fontWeight: 700, lineHeight: 1, color: g.netPnl >= 0 ? T.green : T.red }}>{fmtMoney(g.netPnl)}</div>
+                    <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, marginTop: 4 }}>Net P&L</div>
+                  </div>
+                  <PnLBar label="Spread" value={fmtMoney(spread)} fill={T.green} frac={Math.abs(spread) / maxMag} />
+                  <PnLBar label="Directional" value={fmtMoney(directional)} fill={directional >= 0 ? T.green : T.red} frac={Math.abs(directional) / maxMag} />
+                </Widget>
+
+                <Widget title="Delta Risk">
+                  <RiskMeter value={g.totalDeltaSh} limit={DELTA_LIMIT} unit="sh net delta" over={overLimit} />
+                </Widget>
+
+                <Widget title="Book Greeks">
+                  <StatRow label="Net Gamma" hint="delta / $1 move" value={`${g.gamma >= 0 ? '+' : ''}${g.gamma.toFixed(1)}`} />
+                  <StatRow label="Net Vega" hint="PnL / +1% IV" value={fmtMoney(g.vega1pct)} />
+                  <StatRow label="Stock" hint="hedge shares" value={`${f.stock >= 0 ? '+' : ''}${f.stock.toLocaleString()}`} last />
+                </Widget>
+              </div>
+
+              <Widget title="Options Chain · Live Quotes"
+                right={<span style={{ fontFamily: T.sans, fontSize: 8, color: T.muted, letterSpacing: '0.04em' }}>click a Theo to plot it</span>}>
+                {renderChain(f, tapeSel, toggleTape)}
+              </Widget>
+
+              <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
+                <Widget title={tapeOptions ? 'Option Premiums' : 'Underlying Tape'} style={{ flex: '1.5 1 360px' }}
+                  right={tapeOptions
+                    ? <span style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                        {tapeSel.map((k, idx) => <span key={k} style={{ fontFamily: T.mono, fontSize: 9, color: TAPE_COLORS[idx % TAPE_COLORS.length] }}>{k}</span>)}
                         <button onClick={() => setTapeSel([])} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.muted, fontFamily: T.sans }}>clear</button>
                       </span>
-                    )}
-                  </div>
-                  <div style={{ height: 180, padding: '6px 4px 4px' }}>
+                    : <span style={{ fontFamily: T.mono, fontSize: 11, color: spotChg >= 0 ? T.green : T.red }}>${f.spot.toFixed(2)} {spotChg >= 0 ? '+' : ''}{spotChg.toFixed(2)}%</span>}>
+                  <div style={{ height: 168, padding: '6px 4px 4px' }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={tapeData} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.07)" />
@@ -535,57 +499,35 @@ export default function OptionsMarketMaker() {
                         <Tooltip contentStyle={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 0, fontFamily: T.mono, fontSize: 11 }}
                           formatter={(v: number, name: string) => [`$${(+v).toFixed(tapeOptions ? 3 : 2)}`, tapeOptions ? name : 'spot']} labelFormatter={() => ''} />
                         {tapeOptions
-                          ? tapeSel.map((k, idx) => (
-                              <Line key={k} type="monotone" dataKey={k} stroke={TAPE_COLORS[idx % TAPE_COLORS.length]} strokeWidth={2} dot={false} isAnimationActive={false} />
-                            ))
+                          ? tapeSel.map((k, idx) => <Line key={k} type="monotone" dataKey={k} stroke={TAPE_COLORS[idx % TAPE_COLORS.length]} strokeWidth={2} dot={false} isAnimationActive={false} />)
                           : <>
-                              {STRIKES.map(k => (
-                                <ReferenceLine key={k} y={k} stroke="color-mix(in srgb, var(--theme-primary) 25%, transparent)" strokeDasharray="3 4" />
-                              ))}
-                              <Line type="monotone" dataKey="spot" stroke={T.gold} strokeWidth={2} dot={false} isAnimationActive={false} />
+                              {STRIKES.map(k => <ReferenceLine key={k} y={k} stroke="color-mix(in srgb, var(--theme-primary) 25%, transparent)" strokeDasharray="3 4" />)}
+                              <Line type="monotone" dataKey="spot" stroke="var(--theme-tertiary, #60a5fa)" strokeWidth={2} dot={false} isAnimationActive={false} />
                             </>}
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
-                </div>
-              </div>
+                </Widget>
 
-              {/* Ledger */}
-              <div style={{ flex: '1 1 320px', minWidth: 0, background: T.bg, border: `1px solid ${T.border}` }}>
-                <div style={panelHeader}>TRADE LEDGER</div>
-                {renderLedger(f)}
+                <Widget title="Trade Ledger" style={{ flex: '1 1 280px' }}>
+                  {renderLedger(f)}
+                </Widget>
               </div>
             </div>
           </div>
-        )}
-      </SidebarLayout>
+        </div>
+      )}
     </PageWrapper>
   )
 }
 
 // ── UI helpers ────────────────────────────────────────────────────────────────
-const panelHeader: React.CSSProperties = {
-  padding: '5px 10px', fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700,
-  letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)',
-  background: 'var(--theme-surface, #0d1826)', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
-}
-
 function btnStyle(color: string): React.CSSProperties {
   return {
     width: '100%', padding: '7px 8px', fontFamily: 'var(--theme-mono)', fontSize: 10, fontWeight: 700,
     letterSpacing: '0.1em', cursor: 'pointer', color, background: 'transparent',
     border: `1px solid ${color}`, textTransform: 'uppercase',
   }
-}
-
-function scoreCard(label: string, value: string, color: string, sub: string) {
-  return (
-    <div key={label} style={{ background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '8px 10px' }}>
-      <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)' }}>{label}</div>
-      <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 19, fontWeight: 700, color, lineHeight: 1.2, marginTop: 2 }}>{value}</div>
-      <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 8, color: 'var(--theme-secondary, #5e768f)' }}>{sub}</div>
-    </div>
-  )
 }
 
 function renderChain(f: Frame, tapeSel: string[], onToggle: (key: string) => void) {
@@ -662,7 +604,7 @@ function renderLedger(f: Frame) {
   const th: React.CSSProperties = { fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', padding: '5px 8px', textAlign: 'left' }
   const td: React.CSSProperties = { fontFamily: 'var(--theme-mono)', fontSize: 11, padding: '4px 8px', color: 'var(--theme-text, #d7e3fc)' }
   if (f.ledger.length === 0) {
-    return <div style={{ padding: 14, fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-secondary, #5e768f)' }}>No fills yet. Quotes are live — client orders arrive every few seconds.</div>
+    return <div style={{ padding: 14, fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-secondary, #5e768f)' }}>No fills yet. Quotes are live. Client orders arrive every few seconds.</div>
   }
   return (
     <div style={{ overflowY: 'auto', maxHeight: 420 }}>
