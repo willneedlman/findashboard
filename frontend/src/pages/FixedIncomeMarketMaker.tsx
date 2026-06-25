@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
-import { Widget, HeaderBar, KpiCell, RiskMeterStrip, QuoteCell, Stepper, Chips, Segmented } from '../components/mmCockpit'
+import { Widget, HeaderBar, KpiCell, RiskMeterStrip, QuoteCell, Stepper, Chips, Segmented, WidenControl } from '../components/mmCockpit'
 
 /*
  * Fixed Income MM Simulator
@@ -119,7 +119,7 @@ function freshState(): SimState {
   }
 }
 
-interface Ctrl { halfSpread: number; manual: Record<string, number>; bidAdj: Record<string, number>; askAdj: Record<string, number>; running: boolean; speed: number }
+interface Ctrl { halfSpread: number; manual: Record<string, number>; bidAdj: Record<string, number>; askAdj: Record<string, number>; bondWiden: Record<string, number>; running: boolean; speed: number }
 
 // Yield for a bond: starting curve + parallel level + slope twist + manual nudge.
 function bondYield(id: string, maturity: number, s: SimState, c: Ctrl): number {
@@ -156,10 +156,11 @@ function buildBook(s: SimState, c: Ctrl): Book {
     const yld = bondYield(b.id, b.maturity, s, c)
     const m   = bondMath(b.coupon, b.maturity, yld)
     // Bid and ask are quoted independently off the mid (model price): each side's
-    // distance = global half-spread + that side's own edit. Lets you skew a bond's
-    // market without the other side moving in lockstep.
-    const bidHs = Math.max(c.halfSpread + (c.bidAdj[b.id] ?? 0), 0.001)
-    const askHs = Math.max(c.halfSpread + (c.askAdj[b.id] ?? 0), 0.001)
+    // distance = global half-spread + that side's own edit + this bond's widen.
+    // Lets you skew a bond's market and widen it without the sides moving in step.
+    const w = c.bondWiden[b.id] ?? 0
+    const bidHs = Math.max(c.halfSpread + (c.bidAdj[b.id] ?? 0) + w, 0.001)
+    const askHs = Math.max(c.halfSpread + (c.askAdj[b.id] ?? 0) + w, 0.001)
     book[b.id] = {
       id: b.id, maturity: b.maturity, coupon: b.coupon, yieldPct: yld,
       price: m.price, modDur: m.modDur, convexity: m.convexity, dv01: perUnitDV01(m),
@@ -277,6 +278,7 @@ export default function FixedIncomeMarketMaker() {
   const zeroBondAdj = () => Object.fromEntries(BONDS.map(b => [b.id, 0]))
   const [bidAdj, setBidAdj]         = useState<Record<string, number>>(zeroBondAdj)
   const [askAdj, setAskAdj]         = useState<Record<string, number>>(zeroBondAdj)
+  const [bondWiden, setBondWiden]   = useState<Record<string, number>>(zeroBondAdj)
   const [running, setRunning]       = useState(false)
   const [speed, setSpeed]           = useState(0.5)
   const [hedgeQty, setHedgeQty]     = useState(50)
@@ -301,8 +303,8 @@ export default function FixedIncomeMarketMaker() {
   }, [frame])
 
   // Latest controls available to the (single, stable) game-loop.
-  const ctrl = useRef<Ctrl>({ halfSpread, manual, bidAdj, askAdj, running, speed })
-  ctrl.current = { halfSpread, manual, bidAdj, askAdj, running, speed }
+  const ctrl = useRef<Ctrl>({ halfSpread, manual, bidAdj, askAdj, bondWiden, running, speed })
+  ctrl.current = { halfSpread, manual, bidAdj, askAdj, bondWiden, running, speed }
 
   const snapshot = (s: SimState, c: Ctrl): Frame => {
     const book = buildBook(s, c)
@@ -389,13 +391,24 @@ export default function FixedIncomeMarketMaker() {
     const q = f?.book[id]
     if (!q || q.price <= 0) return
     const dist = Math.max(0, side === 'bid' ? q.price - price : price - q.price)
-    const adj = Math.min(5, dist - halfSpread)
+    // Back out only this side's own layer; the base half-spread and bond widen
+    // stay separate so they keep scaling this quote afterward.
+    const adj = Math.min(5, dist - halfSpread - (bondWiden[id] ?? 0))
     if (side === 'bid') setBidAdj(m => ({ ...m, [id]: adj }))
     else setAskAdj(m => ({ ...m, [id]: adj }))
   }
-  // Repaint the book the moment a quote edit lands so the bid/ask react at once
-  // even while the sim is paused, instead of waiting for the next tick.
-  useEffect(() => { setFrame(snapshot(sim.current, ctrl.current)) }, [bidAdj, askAdj]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Per-bond widen: steps this bond's own widen layer (in price points), leaving
+  // each side's bid/ask edit intact so customized quotes stay put and widen too.
+  const WIDEN_STEP = 0.01
+  const onWiden = (id: string, dir: 1 | -1) => {
+    setBondWiden(prev => {
+      const next = Math.max(0, Math.min(2, +((prev[id] ?? 0) + dir * WIDEN_STEP).toFixed(4)))
+      return { ...prev, [id]: next }
+    })
+  }
+  // Repaint the book the moment a quote/widen edit lands so the bid/ask react at
+  // once even while the sim is paused, instead of waiting for the next tick.
+  useEffect(() => { setFrame(snapshot(sim.current, ctrl.current)) }, [bidAdj, askAdj, bondWiden]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <PageWrapper>
@@ -493,7 +506,7 @@ export default function FixedIncomeMarketMaker() {
 
           {/* Treasury book: wide table with editable quotes */}
           <Widget title="Treasury Book" right={<span style={{ fontFamily: T.sans, fontSize: 8, color: T.muted, letterSpacing: '0.04em' }}>edit any bid / ask to requote · click a row to select</span>}>
-            {renderBookTable(f, selected, setSelected, onQuote, flash)}
+            {renderBookTable(f, selected, setSelected, onQuote, flash, bondWiden, onWiden)}
           </Widget>
 
           {/* Ledger strip */}
@@ -523,7 +536,9 @@ function bigBtn(color: string): React.CSSProperties {
 
 // Treasury book as a compact wide table. Bid/Ask are editable quote cells; the
 // row is clickable to drive the tape + hedge panel.
-function renderBookTable(f: Frame, selected: string, onSelect: (id: string) => void, onQuote: (id: string, side: 'bid' | 'ask', price: number) => void, flash: { bond: string; side: string } | null) {
+const fmtWidenPts = (v: number) => (v > 1e-4 ? `+${v.toFixed(2)}` : '0.00')
+
+function renderBookTable(f: Frame, selected: string, onSelect: (id: string) => void, onQuote: (id: string, side: 'bid' | 'ask', price: number) => void, flash: { bond: string; side: string } | null, bondWiden: Record<string, number>, onWiden: (id: string, dir: 1 | -1) => void) {
   const G = 'var(--theme-positive, #22c55e)', R = 'var(--theme-negative, #ef4444)', M = 'var(--theme-secondary, #5e768f)', GD = 'var(--theme-primary, #c9a84c)', T2 = 'var(--theme-text, #d7e3fc)'
   const th: React.CSSProperties = { fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: M, padding: '6px 12px', textAlign: 'right', whiteSpace: 'nowrap' }
   const td: React.CSSProperties = { fontFamily: 'var(--theme-mono)', fontSize: 13, padding: '5px 12px', textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }
@@ -553,7 +568,10 @@ function renderBookTable(f: Frame, selected: string, onSelect: (id: string) => v
                 </td>
                 <td style={{ ...td, color: T2 }}>{q.yieldPct.toFixed(2)}%</td>
                 <td style={td}><QuoteCell value={q.bid} side="bid" step={0.001} decimals={3} onCommit={v => onQuote(b.id, 'bid', v)} /></td>
-                <td style={{ ...td, color: M }}>{q.price.toFixed(3)}</td>
+                <td style={{ ...td, padding: '3px 12px' }}>
+                  <div style={{ color: M }}>{q.price.toFixed(3)}</div>
+                  <WidenControl value={bondWiden[b.id] ?? 0} onStep={dir => onWiden(b.id, dir)} format={fmtWidenPts} />
+                </td>
                 <td style={td}><QuoteCell value={q.ask} side="ask" step={0.001} decimals={3} onCommit={v => onQuote(b.id, 'ask', v)} /></td>
                 <td style={td}>{signed(pos, n => `${n}`)}</td>
                 <td style={{ ...td, color: sold > 0 ? R : M }}>{sold}</td>

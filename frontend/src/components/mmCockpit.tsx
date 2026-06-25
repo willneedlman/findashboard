@@ -134,6 +134,30 @@ export function Stepper({ value, step, unit, onChange }: { value: number; step: 
   )
 }
 
+// Compact per-row spread-widen stepper, meant to sit under the Theo/Strike
+// cell. Adds to the base half-spread for that row. `format` renders the value in
+// the host sim's units (percent of theo for options, price points for FI).
+// Buttons stop click propagation so they don't trigger the row's own onClick.
+export function WidenControl({ value, onStep, format }: { value: number; onStep: (dir: 1 | -1) => void; format: (v: number) => string }) {
+  const on = value > 1e-4
+  const btn: React.CSSProperties = {
+    width: 15, height: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+    background: 'transparent', border: `1px solid ${V.border}`, color: V.sec, cursor: 'pointer',
+    fontFamily: V.mono, fontSize: 12, lineHeight: 1,
+  }
+  const step = (e: React.MouseEvent, dir: 1 | -1) => { e.stopPropagation(); onStep(dir) }
+  return (
+    <div title="Widen this row's spread (adds to base half-spread)"
+      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, marginTop: 3 }}>
+      <button style={btn} onClick={e => step(e, -1)} aria-label="Tighten spread">-</button>
+      <span style={{ fontFamily: V.mono, fontSize: 9, fontWeight: 700, color: on ? V.gold : V.sec, minWidth: 34, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+        {format(value)}
+      </span>
+      <button style={btn} onClick={e => step(e, 1)} aria-label="Widen spread">+</button>
+    </div>
+  )
+}
+
 // A row of preset chips; the chip matching `value` reads active (gold).
 export function Chips({ options, value, onPick }: { options: { label: string; value: number }[]; value: number; onPick: (v: number) => void }) {
   return (
