@@ -475,8 +475,8 @@ export default function OptionsMarketMaker() {
           </div>
 
           {/* Options chain: wide table with editable quotes */}
-          <Widget title="Options Chain" right={<span style={{ fontFamily: T.sans, fontSize: 8, color: T.muted, letterSpacing: '0.04em' }}>edit any bid / ask to requote · click Theo to plot</span>}>
-            {renderChainTable(f, tapeSel, toggleTape, onQuote)}
+          <Widget title="Options Chain" right={<span style={{ fontFamily: T.sans, fontSize: 8, color: T.muted, letterSpacing: '0.04em' }}>edit bid / ask to requote · click Theo to plot · click strike for underlying</span>}>
+            {renderChainTable(f, tapeSel, toggleTape, onQuote, () => setTapeSel([]))}
           </Widget>
 
           {/* Ledger strip */}
@@ -506,7 +506,7 @@ function bigBtn(color: string): React.CSSProperties {
 
 // Option chain as a compact wide table. Bid/Ask are editable quote cells; Theo
 // is clickable to overlay that contract's premium on the tape.
-function renderChainTable(f: Frame, tapeSel: string[], onToggle: (key: string) => void, onQuote: (key: string, side: 'bid' | 'ask', price: number) => void) {
+function renderChainTable(f: Frame, tapeSel: string[], onToggle: (key: string) => void, onQuote: (key: string, side: 'bid' | 'ask', price: number) => void, onPlotUnderlying: () => void) {
   const G = 'var(--theme-positive, #22c55e)', R = 'var(--theme-negative, #ef4444)', M = 'var(--theme-secondary, #5e768f)', GD = 'var(--theme-primary, #c9a84c)', B = 'var(--theme-tertiary, #60a5fa)'
   const th: React.CSSProperties = { fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: M, padding: '6px 10px', textAlign: 'right', whiteSpace: 'nowrap' }
   const td: React.CSSProperties = { fontFamily: 'var(--theme-mono)', fontSize: 13, padding: '5px 10px', textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }
@@ -546,7 +546,7 @@ function renderChainTable(f: Frame, tapeSel: string[], onToggle: (key: string) =
                 <td style={td}><QuoteCell value={f.chain[cKey].bid} side="bid" step={0.01} decimals={2} onCommit={v => onQuote(cKey, 'bid', v)} /></td>
                 <td style={td}>{theoCell(cKey)}</td>
                 <td style={td}><QuoteCell value={f.chain[cKey].ask} side="ask" step={0.01} decimals={2} onCommit={v => onQuote(cKey, 'ask', v)} /></td>
-                <td style={{ ...td, textAlign: 'center', fontSize: 16, fontWeight: 700, color: GD }}>{k}</td>
+                <td onClick={onPlotUnderlying} title="Plot underlying on tape" style={{ ...td, textAlign: 'center', fontSize: 16, fontWeight: 700, color: GD, cursor: 'pointer' }}>{k}</td>
                 <td style={td}><QuoteCell value={f.chain[pKey].bid} side="bid" step={0.01} decimals={2} onCommit={v => onQuote(pKey, 'bid', v)} /></td>
                 <td style={td}>{theoCell(pKey)}</td>
                 <td style={td}><QuoteCell value={f.chain[pKey].ask} side="ask" step={0.01} decimals={2} onCommit={v => onQuote(pKey, 'ask', v)} /></td>

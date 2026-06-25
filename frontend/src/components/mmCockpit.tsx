@@ -227,6 +227,10 @@ export function QuoteCell({ value, side, step, decimals, onCommit }: {
   }
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }} onClick={e => e.stopPropagation()}>
+      <span style={{ display: 'flex', flexDirection: 'column' }}>
+        <button className="mm-chev" onClick={() => bump(1)} aria-label={`${side} up`} style={CHEV}><ChevronUp size={11} /></button>
+        <button className="mm-chev" onClick={() => bump(-1)} aria-label={`${side} down`} style={CHEV}><ChevronDown size={11} /></button>
+      </span>
       <input
         className="mm-quote" value={shown} inputMode="decimal" aria-label={`${side} quote`}
         onChange={e => setDraft(e.target.value)}
@@ -242,10 +246,6 @@ export function QuoteCell({ value, side, step, decimals, onCommit }: {
           borderRadius: 3, padding: '2px 5px', fontVariantNumeric: 'tabular-nums', outline: 'none',
         }}
       />
-      <span style={{ display: 'flex', flexDirection: 'column' }}>
-        <button className="mm-chev" onClick={() => bump(1)} aria-label={`${side} up`} style={CHEV}><ChevronUp size={11} /></button>
-        <button className="mm-chev" onClick={() => bump(-1)} aria-label={`${side} down`} style={CHEV}><ChevronDown size={11} /></button>
-      </span>
     </span>
   )
 }
