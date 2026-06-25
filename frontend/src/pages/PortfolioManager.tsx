@@ -378,7 +378,7 @@ export default function PortfolioManager() {
     const imported: Holding[] = assets.map(a => ({
       ticker:  a.ticker,
       shares:  a.weight > 1 ? a.weight : a.weight * 100, // treat weight as share count if imported from CSV
-      avgCost: 0,
+      avgCost: a.avgCost ?? 0,                           // restore per-share cost when present
     }))
     setHoldings(imported)
   }, [])
@@ -657,7 +657,7 @@ export default function PortfolioManager() {
               <div style={{ ...lbl, marginBottom: 10 }}>Import / Export</div>
               <PortfolioIO
                 mode="portfolio"
-                assets={holdings.map(h => ({ ticker: h.ticker, weight: h.shares, strategy: String(h.avgCost) }))}
+                assets={holdings.map(h => ({ ticker: h.ticker, weight: h.shares, avgCost: h.avgCost }))}
                 onImportAssets={handleImport}
                 name="portfolio"
               />

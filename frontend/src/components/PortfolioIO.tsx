@@ -18,6 +18,7 @@ export interface PortfolioAsset {
   ticker: string
   weight: number
   strategy?: string
+  avgCost?: number        // portfolio mode: per-share average cost
   stratParams?: Record<string, unknown>
 }
 
@@ -93,7 +94,9 @@ function parseFile(text: string, filename: string): { assets?: PortfolioAsset[];
       const ticker = parts[0].trim().toUpperCase()
       if (!ticker) continue
       const weight = parseFloat(parts[1])
-      if (!isNaN(weight)) assets.push({ ticker, weight, strategy: parts[2]?.trim() })
+      const third = parts[2]?.trim()
+      const avgCost = third != null && third !== '' && !isNaN(parseFloat(third)) ? parseFloat(third) : undefined
+      if (!isNaN(weight)) assets.push({ ticker, weight, strategy: third, avgCost })
       else tickers.push(ticker)
     }
     if (assets.length > 0) return { assets }
@@ -104,10 +107,13 @@ function parseFile(text: string, filename: string): { assets?: PortfolioAsset[];
 }
 
 function normalizeAsset(a: Partial<PortfolioAsset>): PortfolioAsset {
+  const avgCost = a.avgCost != null ? Number(a.avgCost)
+    : (a.strategy != null && a.strategy !== '' && !isNaN(Number(a.strategy)) ? Number(a.strategy) : undefined)
   return {
     ticker:     String(a.ticker ?? '').toUpperCase().trim(),
     weight:     Number(a.weight ?? 0),
     strategy:   a.strategy,
+    avgCost,
     stratParams: a.stratParams ?? {},
   }
 }
@@ -127,8 +133,8 @@ export default function PortfolioIO({ mode, assets, onImportAssets, tickers, onI
         const payload = { version: 1, type: 'portfolio', exported: date, assets }
         downloadFile(JSON.stringify(payload, null, 2), `${slug}-${date}.json`, 'application/json')
       } else {
-        const header = '# ticker,weight,strategy'
-        const rows   = assets.map(a => `${a.ticker},${a.weight},${a.strategy ?? ''}`)
+        const header = '# ticker,shares,avg_cost'
+        const rows   = assets.map(a => `${a.ticker},${a.weight},${a.avgCost ?? a.strategy ?? ''}`)
         downloadFile([header, ...rows].join('\n'), `${slug}-${date}.csv`, 'text/csv')
       }
     }
