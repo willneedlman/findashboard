@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, ChevronUp } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
-import { Widget, DeskCoach, RiskMeter, StatRow, PnLBar } from '../components/mmCockpit'
+import { Widget, HeaderBar, RiskMeter, StatRow, PnLBar, Stepper, Chips, Segmented } from '../components/mmCockpit'
 
 /*
  * Fixed Income MM Simulator
@@ -104,7 +103,6 @@ interface SimState {
   hedge: Record<string, number>         // your hedges, per bond (matched-maturity notes)
   edgeTotal: number; ledger: Fill[]
   tick: number; nextOrderTick: number
-  lastOrder: Fill | null; lastOrderAt: number
   yldHistory: Record<string, number[]>  // yield level per bond, for the tape
 }
 
@@ -117,7 +115,7 @@ function freshState(): SimState {
   return {
     level: 0, slope: 0, cash: 0, positions, sold, hedge, edgeTotal: 0, ledger: [],
     tick: 0, nextOrderTick: randIntInclusive(ORDER_MIN_TICKS, ORDER_MAX_TICKS),
-    lastOrder: null, lastOrderAt: 0, yldHistory,
+    yldHistory,
   }
 }
 
@@ -210,7 +208,6 @@ function maybeGenerateOrder(s: SimState, book: Book, running: boolean): void {
   s.edgeTotal += edge
   const rec: Fill = { tLabel: new Date().toLocaleTimeString('en-US', { hour12: false }), clientSide, bond: b.id, size, fillPrice: fill, edge }
   s.ledger.push(rec)
-  s.lastOrder = rec; s.lastOrderAt = Date.now() / 1000
   s.nextOrderTick = s.tick + randIntInclusive(ORDER_MIN_TICKS, ORDER_MAX_TICKS)
 }
 
@@ -266,7 +263,7 @@ function fmtMoney(x: number): string {
 interface Frame {
   book: Book; risk: Risk; yldHistory: Record<string, number[]>
   positions: Record<string, number>; sold: Record<string, number>; hedge: Record<string, number>; edge: number
-  ledger: Fill[]; lastOrder: Fill | null; lastOrderAt: number; running: boolean
+  ledger: Fill[]; running: boolean
 }
 
 export default function FixedIncomeMarketMaker() {
@@ -277,7 +274,6 @@ export default function FixedIncomeMarketMaker() {
   const [speed, setSpeed]           = useState(0.5)
   const [hedgeQty, setHedgeQty]     = useState(50)
   const [selected, setSelected]     = useState('10Y')   // bond driving the tape + hedge panel
-  const [advancedOpen, setAdvancedOpen] = useState(false)
   const [frame, setFrame]           = useState<Frame | null>(null)
 
   // Latest controls available to the (single, stable) game-loop.
@@ -291,7 +287,7 @@ export default function FixedIncomeMarketMaker() {
     return {
       book, risk: portfolioRisk(s), yldHistory,
       positions: { ...s.positions }, sold: { ...s.sold }, hedge: { ...s.hedge }, edge: s.edgeTotal,
-      ledger: s.ledger.slice(-18), lastOrder: s.lastOrder, lastOrderAt: s.lastOrderAt, running: c.running,
+      ledger: s.ledger.slice(-18), running: c.running,
     }
   }
 
@@ -354,18 +350,8 @@ export default function FixedIncomeMarketMaker() {
   const selBucket = r ? r.buckets[selected] : 0
   const selNetUnits = f ? (f.positions[selected] + f.hedge[selected]) : 0
 
-  // Plain-English read of the curve risk + the next move, for the Desk Coach.
   const hedgeNeed = -Math.round(selNetUnits)
-  const coachText = !r ? '' : overLimit
-    ? `Your ${r.worstId} bucket is past its DV01 limit at ${fmtMoney(Math.abs(r.worstDV01))}/bp. ${r.worstDV01 > 0 ? `Sell ${r.worstId}` : `Buy ${r.worstId}`} notes to flatten it before a rate move bites.`
-    : `Net DV01 sits near flat at ${r.netDV01 >= 0 ? '+' : ''}${fmtMoney(r.netDV01)}/bp, but curve DV01 ${r.curveDV01 >= 0 ? '+' : ''}${fmtMoney(r.curveDV01)}/bp means a twist still bites. Flatten each bucket, not just the total.`
-
-  const advToggle: React.CSSProperties = {
-    width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-    background: 'transparent', border: `1px solid ${T.border}`, cursor: 'pointer', padding: '6px 8px', marginTop: 4,
-    fontFamily: T.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.text,
-  }
-
+  const flatten = hedgeNeed > 0 ? `BUY ${hedgeNeed}` : hedgeNeed < 0 ? `SELL ${Math.abs(hedgeNeed)}` : 'flat'
   const yHist = f ? f.yldHistory[selected] : []
   const yChgBp = yHist.length > 1 ? (yHist[yHist.length - 1] - yHist[0]) * 100 : 0
   const spread = f ? f.edge : 0
@@ -374,122 +360,131 @@ export default function FixedIncomeMarketMaker() {
   const dvFmt = (n: number) => `${n >= 0 ? '+' : ''}$${Math.round(n)}`
 
   return (
-    <PageWrapper title="Fixed Income MM Simulator">
+    <PageWrapper>
       {!f || !r || !selQuote ? (
         <div style={{ padding: 24, fontFamily: T.mono, color: T.muted }}>Starting desk…</div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-          <DeskCoach text={coachText} over={overLimit} />
+        <div style={{ maxWidth: 1340, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <HeaderBar tool="Fixed Income MM Simulator" running={f.running} />
 
-          <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-            {/* LEFT — controls + hedge */}
-            <div style={{ width: 236, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 9 }}>
-              <Widget title="MM Controls" style={{ flex: 1 }} bodyStyle={{ padding: '11px 13px' }}>
-                {sliderRow('Sim Speed', `${speed.toFixed(1)}x`, range(speed, SPEED_MIN, SPEED_MAX, 0.1, setSpeed))}
-                {sliderRow('Half-Spread', `${halfSpread.toFixed(2)} pts`, range(halfSpread, 0.01, 0.5, 0.01, setHalfSpread))}
-
-                <button onClick={() => setAdvancedOpen(o => !o)} style={advToggle}>
-                  <span>Per-bond yield nudge</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: T.muted }}>{BONDS.length} {advancedOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}</span>
-                </button>
-                {advancedOpen && (
-                  <div style={{ marginTop: 8 }}>
-                    {BONDS.map(b => (
-                      <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                        <span style={{ fontSize: 10, fontFamily: T.mono, color: T.text, width: 32 }}>{b.id}</span>
-                        {range(manual[b.id] ?? 0, -25, 25, 1, v => setManual(m => ({ ...m, [b.id]: v })))}
-                        <span style={{ fontSize: 9, fontFamily: T.mono, color: T.muted, width: 34, textAlign: 'right' }}>
-                          {(manual[b.id] ?? 0) >= 0 ? '+' : ''}{manual[b.id] ?? 0}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-              </Widget>
-
-              <Widget title={`Hedge · ${selected} Note`} bodyStyle={{ padding: '11px 13px' }}>
-                <div style={{ fontSize: 9, fontFamily: T.sans, color: T.muted, marginBottom: 5 }}>Click a book row to switch maturity.</div>
-                <div style={{ fontSize: 9, fontFamily: T.mono, color: T.muted, marginBottom: 6 }}>
-                  {selected} DV01 {selBucket >= 0 ? '+' : ''}{selBucket.toFixed(0)} $/bp · to flatten: <span style={{ color: hedgeNeed === 0 ? T.green : T.gold }}>{hedgeNeed > 0 ? `BUY ${hedgeNeed}` : hedgeNeed < 0 ? `SELL ${Math.abs(hedgeNeed)}` : 'flat'}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.muted, fontFamily: T.sans }}>Trade Size</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <input type="number" min={0} step={25} value={hedgeQty}
-                      onChange={e => setHedgeQty(Math.max(0, Math.round(+e.target.value) || 0))} aria-label="Hedge trade size in bonds"
-                      style={{ width: 64, background: T.bg, border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: T.gold, fontFamily: T.mono, fontSize: 11, padding: '2px 5px', outline: 'none', textAlign: 'right' }} />
-                    <span style={{ fontSize: 9, color: T.muted, fontFamily: T.sans }}>×$1k</span>
-                  </div>
-                </div>
-                {range(hedgeQty, 0, 1000, 25, setHedgeQty)}
-                <div style={{ fontSize: 9, color: T.muted, fontFamily: T.sans, margin: '1px 0 7px' }}>
-                  {fmtMoney(hedgeQty * FACE_UNIT)} face · {fmtMoney(hedgeQty * selQuote.dv01)}/bp DV01
-                </div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button onClick={() => onTradeHedge(hedgeQty)} style={btnStyle(T.green)}>BUY {selected}</button>
-                  <button onClick={() => onTradeHedge(-hedgeQty)} style={btnStyle(T.red)}>SELL {selected}</button>
-                </div>
-                <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                  <button onClick={() => setRunning(x => !x)} style={btnStyle(running ? T.text : T.green)}>{running ? 'PAUSE' : 'START'}</button>
-                  <button onClick={onReset} style={btnStyle(T.muted)}>RESET</button>
-                </div>
-              </Widget>
-            </div>
-
-            {/* RIGHT — vitals, book, tape, ledger */}
-            <div style={{ flex: 1, minWidth: 340, display: 'flex', flexDirection: 'column', gap: 9 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1.3fr 1fr', gap: 9, alignItems: 'start' }}>
-                <Widget title="Profit & Loss" bodyStyle={{ padding: '11px 14px', display: 'flex', flexDirection: 'column', gap: 9 }}>
-                  <div>
-                    <div style={{ fontFamily: T.mono, fontSize: 27, fontWeight: 700, lineHeight: 1, color: r.netPnl >= 0 ? T.green : T.red }}>{fmtMoney(r.netPnl)}</div>
-                    <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, marginTop: 4 }}>Net P&L</div>
-                  </div>
-                  <PnLBar label="Spread" value={fmtMoney(spread)} fill={T.green} frac={Math.abs(spread) / maxMag} />
-                  <PnLBar label="Directional" value={fmtMoney(directional)} fill={directional >= 0 ? T.green : T.red} frac={Math.abs(directional) / maxMag} />
-                </Widget>
-
-                <Widget title="DV01 Risk">
-                  <RiskMeter value={r.netDV01} limit={DV01_LIMIT} unit="/bp net DV01" over={overLimit} fmt={dvFmt}
-                    footerRight={<span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted }}>Curve DV01 {r.curveDV01 >= 0 ? '+' : ''}{fmtMoney(r.curveDV01)}</span>} />
-                </Widget>
-
-                <Widget title="Book Risk">
-                  <StatRow label="Curve DV01" hint="$/bp per 1bp steepen" value={`${r.curveDV01 >= 0 ? '+' : ''}${fmtMoney(r.curveDV01)}`} />
-                  <StatRow label="Net Convexity" hint="P&L / 100bp curve" value={`${r.convexity >= 0 ? '+' : ''}${fmtMoney(r.convexity)}`} />
-                  <StatRow label="Gross Notional" hint="face warehoused" value={fmtMoney(r.grossNotional)} last />
-                </Widget>
+          {/* Metrics row */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.32fr 1fr', gap: 10, alignItems: 'start' }}>
+            <Widget title="Profit & Loss" bodyStyle={{ padding: '9px 14px', display: 'flex', flexDirection: 'column', gap: 9 }}>
+              <div>
+                <div style={{ fontFamily: T.mono, fontSize: 25, fontWeight: 700, lineHeight: 1, color: r.netPnl >= 0 ? T.green : T.red }}>{fmtMoney(r.netPnl)}</div>
+                <div style={{ ...labelStyle, marginTop: 4, marginBottom: 0 }}>Net P&L</div>
               </div>
+              <PnLBar label="Spread" value={fmtMoney(spread)} fill={T.green} frac={Math.abs(spread) / maxMag} />
+              <PnLBar label="Directional" value={fmtMoney(directional)} fill={directional >= 0 ? T.green : T.red} frac={Math.abs(directional) / maxMag} />
+            </Widget>
 
-              <Widget title="Treasury Book · Live Quotes"
-                right={<span style={{ fontFamily: T.sans, fontSize: 8, color: T.muted, letterSpacing: '0.04em' }}>click a row to select</span>}>
-                {renderBook(f, selected, setSelected)}
-              </Widget>
+            <Widget title="DV01 Risk">
+              <RiskMeter value={r.netDV01} limit={DV01_LIMIT} unit="/bp net DV01" over={overLimit} fmt={dvFmt}
+                footerRight={<span style={{ fontFamily: T.mono, fontSize: 10, color: T.muted }}>Curve DV01 {dvFmt(r.curveDV01)}</span>} />
+            </Widget>
 
-              <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
-                <Widget title={`${selected} Yield Tape`} style={{ flex: '1.5 1 360px' }}
-                  right={<span style={{ fontFamily: T.mono, fontSize: 11, color: yChgBp <= 0 ? T.green : T.red }}>{selQuote.yieldPct.toFixed(2)}% {yChgBp >= 0 ? '+' : ''}{yChgBp.toFixed(1)}bp</span>}>
-                  <div style={{ height: 168, padding: '6px 4px 4px' }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={yHist.map((y, i) => ({ i, y: +y.toFixed(3) }))} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.07)" />
-                        <XAxis dataKey="i" hide />
-                        <YAxis tick={{ fontSize: 9, fill: T.muted, fontFamily: T.mono }} orientation="right" domain={['auto', 'auto']} tickFormatter={v => `${(+v).toFixed(2)}%`} width={46} />
-                        <Tooltip contentStyle={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 0, fontFamily: T.mono, fontSize: 11 }}
-                          formatter={(v: number) => [`${(+v).toFixed(3)}%`, selected]} labelFormatter={() => ''} />
-                        <ReferenceLine y={CURVE0[selected]} stroke="color-mix(in srgb, var(--theme-primary) 25%, transparent)" strokeDasharray="3 4" />
-                        <Line type="monotone" dataKey="y" stroke="var(--theme-tertiary, #60a5fa)" strokeWidth={2} dot={false} isAnimationActive={false} />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </Widget>
-
-                <Widget title="Trade Ledger" style={{ flex: '1 1 280px' }}>
-                  {renderLedger(f)}
-                </Widget>
-              </div>
-            </div>
+            <Widget title="Book Risk">
+              <StatRow label="Curve DV01" hint="$/bp per 1bp steepen" value={dvFmt(r.curveDV01)} />
+              <StatRow label="Net Convexity" hint="P&L / 100bp curve" value={`${r.convexity >= 0 ? '+' : ''}${fmtMoney(r.convexity)}`} />
+              <StatRow label="Gross Notional" hint="face warehoused" value={fmtMoney(r.grossNotional)} last />
+            </Widget>
           </div>
+
+          {/* MM Controls band */}
+          <Widget title="MM Controls" bodyStyle={{ padding: '12px 16px' }}>
+            <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'center' }}>
+              <div style={{ width: 150 }}>{sliderRow('Sim Speed', `${speed.toFixed(1)}x`, range(speed, SPEED_MIN, SPEED_MAX, 0.1, setSpeed))}</div>
+              <div style={{ width: 150 }}>{sliderRow('Half-Spread', `${halfSpread.toFixed(2)} pts`, range(halfSpread, 0.01, 0.5, 0.01, setHalfSpread))}</div>
+              <div style={{ width: 1, alignSelf: 'stretch', background: T.border, margin: '2px 4px' }} />
+              <div style={{ flex: 1, minWidth: 280 }}>
+                <div style={{ ...labelStyle, marginBottom: 6 }}>Per-bond yield nudge (bp)</div>
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${BONDS.length}, 1fr)`, gap: 14 }}>
+                  {BONDS.map(b => (
+                    <div key={b.id}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 1 }}>
+                        <span style={{ fontSize: 9, fontFamily: T.mono, color: T.text }}>{b.id}</span>
+                        <span style={{ fontSize: 9, fontFamily: T.mono, color: T.muted }}>{(manual[b.id] ?? 0) >= 0 ? '+' : ''}{manual[b.id] ?? 0}</span>
+                      </div>
+                      {range(manual[b.id] ?? 0, -25, 25, 1, v => setManual(m => ({ ...m, [b.id]: v })))}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </Widget>
+
+          {/* Body row */}
+          <div style={{ display: 'grid', gridTemplateColumns: '286px 1fr 372px', gap: 10, alignItems: 'stretch' }}>
+            {/* Hedge */}
+            <Widget title="Hedge" bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 14, gap: 16 }}>
+              <Segmented options={BONDS.map(b => b.id)} value={selected} onChange={setSelected} />
+
+              <div style={{ background: T.bg, border: `1px solid ${T.border}`, padding: '12px 14px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                  <span style={{ ...labelStyle, marginBottom: 0 }}>{selected} Bucket DV01</span>
+                  <span style={{ fontSize: 9, fontFamily: T.mono, color: overLimit ? T.red : T.muted }}>{overLimit ? 'over' : 'within'} {BUCKET_LIMIT}</span>
+                </div>
+                <div style={{ fontFamily: T.mono, fontSize: 26, fontWeight: 700, color: Math.abs(selBucket) > BUCKET_LIMIT ? T.red : T.text, margin: '4px 0 9px' }}>
+                  {selBucket >= 0 ? '+' : ''}{selBucket.toFixed(0)}<span style={{ fontSize: 10, color: T.muted, marginLeft: 5 }}>$/bp</span>
+                </div>
+                <button onClick={() => onTradeHedge(hedgeNeed)} disabled={hedgeNeed === 0}
+                  style={{ width: '100%', padding: '8px 0', fontFamily: T.mono, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', cursor: hedgeNeed === 0 ? 'default' : 'pointer', background: 'transparent', border: `1px solid ${hedgeNeed === 0 ? T.border : T.gold}`, color: hedgeNeed === 0 ? T.muted : T.gold, opacity: hedgeNeed === 0 ? 0.6 : 1, textTransform: 'uppercase' }}>
+                  Flatten · {flatten}
+                </button>
+              </div>
+
+              <div>
+                <div style={{ ...labelStyle, marginBottom: 6 }}>Trade Size (×$1k)</div>
+                <Stepper value={hedgeQty} step={25} unit="×$1k" onChange={v => setHedgeQty(Math.max(0, v))} />
+                <div style={{ marginTop: 8 }}>
+                  <Chips options={[{ label: '25', value: 25 }, { label: '50', value: 50 }, { label: '100', value: 100 }, { label: '250', value: 250 }]} value={hedgeQty} onPick={setHedgeQty} />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: `1px solid ${T.border}`, paddingTop: 10, fontFamily: T.mono, fontSize: 11 }}>
+                <span style={{ color: T.muted }}>Face <span style={{ color: T.text }}>{fmtMoney(hedgeQty * FACE_UNIT)}</span></span>
+                <span style={{ color: T.muted }}>DV01 <span style={{ color: T.text }}>{fmtMoney(hedgeQty * selQuote.dv01)}/bp</span></span>
+              </div>
+
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => onTradeHedge(hedgeQty)} style={bigBtn(T.green)}>BUY {selected}</button>
+                <button onClick={() => onTradeHedge(-hedgeQty)} style={bigBtn(T.red)}>SELL {selected}</button>
+              </div>
+
+              <div style={{ flex: 1 }} />
+
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setRunning(x => !x)} style={btnStyle(running ? T.text : T.green)}>{running ? 'PAUSE' : 'START'}</button>
+                <button onClick={onReset} style={btnStyle(T.muted)}>RESET</button>
+              </div>
+            </Widget>
+
+            {/* Tape */}
+            <Widget title={`${selected} Yield Tape`}
+              right={<span style={{ fontFamily: T.mono, fontSize: 12, color: yChgBp <= 0 ? T.green : T.red }}>{selQuote.yieldPct.toFixed(2)}% {yChgBp >= 0 ? '+' : ''}{yChgBp.toFixed(1)}bp</span>}>
+              <div style={{ height: 430, padding: '8px 6px 6px' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={yHist.map((y, i) => ({ i, y: +y.toFixed(3) }))} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.07)" />
+                    <XAxis dataKey="i" hide />
+                    <YAxis tick={{ fontSize: 9, fill: T.muted, fontFamily: T.mono }} orientation="right" domain={['auto', 'auto']} tickFormatter={v => `${(+v).toFixed(2)}%`} width={46} />
+                    <Tooltip contentStyle={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 0, fontFamily: T.mono, fontSize: 11 }}
+                      formatter={(v: number) => [`${(+v).toFixed(3)}%`, selected]} labelFormatter={() => ''} />
+                    <ReferenceLine y={CURVE0[selected]} stroke="color-mix(in srgb, var(--theme-primary) 25%, transparent)" strokeDasharray="3 4" />
+                    <Line type="monotone" dataKey="y" stroke="var(--theme-tertiary, #60a5fa)" strokeWidth={2} dot={false} isAnimationActive={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </Widget>
+
+            {/* Book cards */}
+            <Widget title="Treasury Book" right={<span style={{ fontFamily: T.sans, fontSize: 8, color: T.muted, letterSpacing: '0.04em' }}>click to select</span>}>
+              {renderBookCards(f, selected, setSelected)}
+            </Widget>
+          </div>
+
+          {/* Ledger */}
+          <Widget title="Trade Ledger">{renderLedger(f)}</Widget>
         </div>
       )}
     </PageWrapper>
@@ -505,63 +500,64 @@ function btnStyle(color: string): React.CSSProperties {
   }
 }
 
-function renderBook(f: Frame, selected: string, onSelect: (id: string) => void) {
-  const th: React.CSSProperties = { fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', padding: '6px 8px', textAlign: 'right' }
-  const td: React.CSSProperties = { fontFamily: 'var(--theme-mono)', fontSize: 12, padding: '5px 8px', textAlign: 'right', color: 'var(--theme-text, #d7e3fc)' }
+function bigBtn(color: string): React.CSSProperties {
+  return {
+    flex: 1, padding: '14px 0', fontFamily: 'var(--theme-mono)', fontSize: 13, fontWeight: 700,
+    letterSpacing: '0.1em', cursor: 'pointer', color, textTransform: 'uppercase',
+    background: `color-mix(in srgb, ${color} 12%, transparent)`, border: `1px solid ${color}`,
+  }
+}
+
+// Treasury book as a vertical stack of per-tenor cards (click to select tenor).
+function renderBookCards(f: Frame, selected: string, onSelect: (id: string) => void) {
   const G = 'var(--theme-positive, #22c55e)', R = 'var(--theme-negative, #ef4444)', M = 'var(--theme-secondary, #5e768f)', GD = 'var(--theme-primary, #c9a84c)'
   const signed = (v: number, fmt: (n: number) => string) => v === 0
     ? <span style={{ color: M }}>{fmt(0)}</span>
     : <span style={{ color: v > 0 ? G : R, fontWeight: 700 }}>{v > 0 ? '+' : ''}{fmt(v)}</span>
-
+  const field = (label: string, node: React.ReactNode) => (
+    <div>
+      <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: M }}>{label}</div>
+      <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 12 }}>{node}</div>
+    </div>
+  )
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr style={{ borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.06))' }}>
-            <th style={{ ...th, textAlign: 'left', color: GD }}>BOND</th>
-            <th style={th}>Yield</th>
-            <th style={{ ...th, color: G }}>Bid</th><th style={th}>Theo</th><th style={{ ...th, color: R }}>Ask</th>
-            <th style={th}>Pos</th><th style={th}>Sold</th><th style={th}>Hedge</th><th style={th}>Bucket DV01</th>
-          </tr>
-        </thead>
-        <tbody>
-          {BONDS.map(b => {
-            const q = f.book[b.id]
-            const pos = f.positions[b.id], hedge = f.hedge[b.id]
-            const bucket = f.risk.buckets[b.id]
-            const isSel = b.id === selected
-            return (
-              <tr key={b.id} onClick={() => onSelect(b.id)}
-                style={{ cursor: 'pointer', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.04))',
-                         background: isSel ? 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' : 'transparent' }}>
-                <td style={{ ...td, textAlign: 'left', fontWeight: 700, color: GD }}>
-                  {b.id}{isSel && <span style={{ fontSize: 8, color: M, marginLeft: 4 }}>TAPE</span>}
-                </td>
-                <td style={td}>{q.yieldPct.toFixed(2)}%</td>
-                <td style={{ ...td, color: G }}>{q.bid.toFixed(3)}</td>
-                <td style={{ ...td, color: M }}>{q.price.toFixed(3)}</td>
-                <td style={{ ...td, color: R }}>{q.ask.toFixed(3)}</td>
-                <td style={td}>{signed(pos, n => `${n}`)}</td>
-                <td style={{ ...td, color: R }}>{f.sold[b.id] || 0}</td>
-                <td style={td}>{signed(hedge, n => `${n}`)}</td>
-                <td style={td}>{signed(bucket, n => `$${Math.round(n)}`)}</td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+    <div>
+      {BONDS.map(b => {
+        const q = f.book[b.id]
+        const pos = f.positions[b.id], hedge = f.hedge[b.id], bucket = f.risk.buckets[b.id], sold = f.sold[b.id] || 0
+        const isSel = b.id === selected
+        return (
+          <div key={b.id} onClick={() => onSelect(b.id)}
+            style={{ cursor: 'pointer', padding: '9px 13px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.05))', background: isSel ? 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' : 'transparent' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+              <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 16, fontWeight: 700, color: GD }}>
+                {b.id}{isSel && <span style={{ fontSize: 8, color: M, marginLeft: 5 }}>TAPE</span>}
+              </span>
+              <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 12, color: 'var(--theme-text, #d7e3fc)' }}>{q.yieldPct.toFixed(2)}%</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 12px' }}>
+              {field('Bid', <span style={{ color: G }}>{q.bid.toFixed(3)}</span>)}
+              {field('Ask', <span style={{ color: R }}>{q.ask.toFixed(3)}</span>)}
+              {field('Pos', signed(pos, n => `${n}`))}
+              {field('Sold', <span style={{ color: sold > 0 ? R : M }}>{sold}</span>)}
+              {field('Hedge', signed(hedge, n => `${n}`))}
+              {field('Bucket DV01', signed(bucket, n => `$${Math.round(n)}`))}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
 
 function renderLedger(f: Frame) {
-  const th: React.CSSProperties = { fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', padding: '5px 8px', textAlign: 'left' }
-  const td: React.CSSProperties = { fontFamily: 'var(--theme-mono)', fontSize: 11, padding: '4px 8px', color: 'var(--theme-text, #d7e3fc)' }
+  const th: React.CSSProperties = { fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', padding: '8px 18px', textAlign: 'left' }
+  const td: React.CSSProperties = { fontFamily: 'var(--theme-mono)', fontSize: 13, padding: '10px 18px', color: 'var(--theme-text, #d7e3fc)' }
   if (f.ledger.length === 0) {
-    return <div style={{ padding: 14, fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-secondary, #5e768f)' }}>No fills yet. Quotes are live. Client orders arrive every few seconds.</div>
+    return <div style={{ padding: '14px 18px', fontFamily: 'var(--theme-mono)', fontSize: 12, color: 'var(--theme-secondary, #5e768f)' }}>No fills yet. Quotes are live. Client orders arrive every few seconds.</div>
   }
   return (
-    <div style={{ overflowY: 'auto', maxHeight: 420 }}>
+    <div style={{ overflowY: 'auto', maxHeight: 280 }}>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
           <tr style={{ borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.06))' }}>
@@ -571,9 +567,7 @@ function renderLedger(f: Frame) {
         <tbody>
           {[...f.ledger].reverse().map((t, i) => {
             const isHedge = t.clientSide.includes('HEDGE')
-            const actionColor = isHedge
-              ? 'var(--theme-primary, #c9a84c)'
-              : t.clientSide === 'BUY' ? 'var(--theme-positive, #22c55e)' : 'var(--theme-negative, #ef4444)'
+            const actionColor = isHedge ? 'var(--theme-primary, #c9a84c)' : t.clientSide === 'BUY' ? 'var(--theme-positive, #22c55e)' : 'var(--theme-negative, #ef4444)'
             return (
               <tr key={i} style={{ borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.04))' }}>
                 <td style={{ ...td, color: 'var(--theme-secondary, #5e768f)' }}>{t.tLabel}</td>
