@@ -60,6 +60,7 @@ interface Props {
   params: StrategyParams
   onChange: (strategy: string, params: StrategyParams) => void
   compact?: boolean
+  hideDrift?: boolean   // backtester: drift adj only affects the forward projection, not the historical backtest
 }
 
 // ── Standard (full-width) sub-components ────────────────────────────────────
@@ -170,7 +171,11 @@ function CRule({ tag, children }: { tag: string; children: React.ReactNode }) {
 // Prefix for saved custom strategies in the <select> value, invisible to parents
 const SAVED_PREFIX = '__saved__:'
 
-export default function StrategySelector({ value, params, onChange, compact }: Props) {
+export default function StrategySelector({ value, params, onChange, compact, hideDrift }: Props) {
+  // Drift-adjustment inputs only matter for the Monte Carlo projection; the
+  // backtester hides them (they don't change the signal-driven historical result).
+  const GNum = (props: React.ComponentProps<typeof CNum>) =>
+    hideDrift && /drift adj/i.test(props.label) ? null : <GNum {...props} />
   const [open, setOpen] = useState(false)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
@@ -346,13 +351,13 @@ export default function StrategySelector({ value, params, onChange, compact }: P
               <div style={{ marginTop: 8, borderTop: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.08)))', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
 
                 {value === "SMA Trend Following (50/200)" && (<>
-                  <CNum label="Fast SMA (days)" value={p.sma_fast!} step={5} min={5} max={100} onChange={v => setParam('sma_fast', v)}
+                  <GNum label="Fast SMA (days)" value={p.sma_fast!} step={5} min={5} max={100} onChange={v => setParam('sma_fast', v)}
                     help="Short moving average — reacts quickly to price changes. Common values: 20 or 50 days." />
-                  <CNum label="Slow SMA (days)" value={p.sma_slow!} step={10} min={50} max={400} onChange={v => setParam('sma_slow', v)}
+                  <GNum label="Slow SMA (days)" value={p.sma_slow!} step={10} min={50} max={400} onChange={v => setParam('sma_slow', v)}
                     help="Long moving average — reflects the broader trend. Must be greater than the Fast SMA." />
-                  <CNum label="Bull drift adj (%)" value={p.bull_drift_adj!} step={0.5} min={0} max={15} onChange={v => setParam('bull_drift_adj', v)}
+                  <GNum label="Bull drift adj (%)" value={p.bull_drift_adj!} step={0.5} min={0} max={15} onChange={v => setParam('bull_drift_adj', v)}
                     help="Extra annualised drift added when the Golden Cross is active (fast SMA above slow SMA)." />
-                  <CNum label="Bear drift adj (%)" value={p.bear_drift_adj!} step={0.5} max={0} min={-15} onChange={v => setParam('bear_drift_adj', v)}
+                  <GNum label="Bear drift adj (%)" value={p.bear_drift_adj!} step={0.5} max={0} min={-15} onChange={v => setParam('bear_drift_adj', v)}
                     help="Drift penalty during a Death Cross (fast SMA below slow SMA). Keep this negative." />
                   <div style={{ borderTop: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))', paddingTop: 6 }}>
                     <CRule tag="BUY">Price above both SMAs — drift +{p.bull_drift_adj}%/yr.</CRule>
@@ -362,15 +367,15 @@ export default function StrategySelector({ value, params, onChange, compact }: P
                 </>)}
 
                 {value === "RSI Mean Reversion (14)" && (<>
-                  <CNum label="RSI period (days)" value={p.rsi_period!} step={1} min={5} max={30} onChange={v => setParam('rsi_period', v)}
+                  <GNum label="RSI period (days)" value={p.rsi_period!} step={1} min={5} max={30} onChange={v => setParam('rsi_period', v)}
                     help="Lookback window for RSI calculation. 14 is standard. Lower = noisier signals; higher = smoother." />
-                  <CNum label="Overbought level" value={p.overbought!} step={1} min={55} max={90} onChange={v => setParam('overbought', v)}
+                  <GNum label="Overbought level" value={p.overbought!} step={1} min={55} max={90} onChange={v => setParam('overbought', v)}
                     help="RSI above this signals the asset has risen too fast — drift penalty is applied to reflect likely pullback." />
-                  <CNum label="Oversold level" value={p.oversold!} step={1} min={10} max={45} onChange={v => setParam('oversold', v)}
+                  <GNum label="Oversold level" value={p.oversold!} step={1} min={10} max={45} onChange={v => setParam('oversold', v)}
                     help="RSI below this signals the asset has fallen hard — drift boost is applied to reflect likely bounce." />
-                  <CNum label="Overbought drift adj (%)" value={p.ob_drift_adj!} step={0.5} max={0} min={-15} onChange={v => setParam('ob_drift_adj', v)}
+                  <GNum label="Overbought drift adj (%)" value={p.ob_drift_adj!} step={0.5} max={0} min={-15} onChange={v => setParam('ob_drift_adj', v)}
                     help="Drift penalty when RSI is overbought. Keep negative — a high RSI suggests mean reversion risk." />
-                  <CNum label="Oversold drift adj (%)" value={p.os_drift_adj!} step={0.5} min={0} max={15} onChange={v => setParam('os_drift_adj', v)}
+                  <GNum label="Oversold drift adj (%)" value={p.os_drift_adj!} step={0.5} min={0} max={15} onChange={v => setParam('os_drift_adj', v)}
                     help="Drift boost when RSI is oversold. Keep positive — a low RSI suggests a likely recovery." />
                   <div style={{ borderTop: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))', paddingTop: 6 }}>
                     <CRule tag="BUY">RSI &lt; {p.oversold} → +{p.os_drift_adj}% drift.</CRule>
@@ -380,13 +385,13 @@ export default function StrategySelector({ value, params, onChange, compact }: P
                 </>)}
 
                 {value === "6-Month Price Momentum" && (<>
-                  <CNum label="Lookback (days)" value={p.lookback_days!} step={5} min={21} max={252} onChange={v => setParam('lookback_days', v)}
+                  <GNum label="Lookback (days)" value={p.lookback_days!} step={5} min={21} max={252} onChange={v => setParam('lookback_days', v)}
                     help="How far back to measure price return. 126 ≈ 6 months, 252 = 1 year. Longer windows smooth out noise." />
-                  <CNum label="Entry threshold (%)" value={p.threshold_pct!} step={0.5} min={-20} max={20} onChange={v => setParam('threshold_pct', v)}
+                  <GNum label="Entry threshold (%)" value={p.threshold_pct!} step={0.5} min={-20} max={20} onChange={v => setParam('threshold_pct', v)}
                     help="Minimum return over the lookback window to stay invested. 0% = any positive momentum qualifies." />
-                  <CNum label="Drift sensitivity" value={p.adj_scale!} step={0.05} min={0.05} max={0.5} onChange={v => setParam('adj_scale', v)}
+                  <GNum label="Drift sensitivity" value={p.adj_scale!} step={0.05} min={0.05} max={0.5} onChange={v => setParam('adj_scale', v)}
                     help="Scales how strongly momentum converts into a drift adjustment. 0.25 means a 20% return → +5% drift." />
-                  <CNum label="Max drift adj (%)" value={p.adj_cap!} step={0.5} min={1} max={20} onChange={v => setParam('adj_cap', v)}
+                  <GNum label="Max drift adj (%)" value={p.adj_cap!} step={0.5} min={1} max={20} onChange={v => setParam('adj_cap', v)}
                     help="Hard cap on the drift adjustment in either direction. Prevents extreme momentum from dominating." />
                   <div style={{ borderTop: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))', paddingTop: 6 }}>
                     <CRule tag="BUY">{p.lookback_days}d return &gt; {p.threshold_pct}% → up to +{p.adj_cap}%.</CRule>
@@ -395,13 +400,13 @@ export default function StrategySelector({ value, params, onChange, compact }: P
                 </>)}
 
                 {value === "Bollinger Breakout (20,2)" && (<>
-                  <CNum label="BB Period (days)" value={p.bb_period!} step={1} min={5} max={50} onChange={v => setParam('bb_period', v)}
+                  <GNum label="BB Period (days)" value={p.bb_period!} step={1} min={5} max={50} onChange={v => setParam('bb_period', v)}
                     help="Lookback for BB midline (SMA) and standard deviation. 20 is standard." />
-                  <CNum label="Std Dev multiplier" value={p.bb_std!} step={0.1} min={1} max={4} onChange={v => setParam('bb_std', v)}
+                  <GNum label="Std Dev multiplier" value={p.bb_std!} step={0.1} min={1} max={4} onChange={v => setParam('bb_std', v)}
                     help="Width of the bands. 2.0 means ±2 standard deviations. Higher = fewer but stronger signals." />
-                  <CNum label="Bull drift adj (%)" value={p.bull_drift_adj!} step={0.5} min={0} max={15} onChange={v => setParam('bull_drift_adj', v)}
+                  <GNum label="Bull drift adj (%)" value={p.bull_drift_adj!} step={0.5} min={0} max={15} onChange={v => setParam('bull_drift_adj', v)}
                     help="Drift boost while in an active breakout trade." />
-                  <CNum label="Bear drift adj (%)" value={p.bear_drift_adj!} step={0.5} max={0} min={-10} onChange={v => setParam('bear_drift_adj', v)}
+                  <GNum label="Bear drift adj (%)" value={p.bear_drift_adj!} step={0.5} max={0} min={-10} onChange={v => setParam('bear_drift_adj', v)}
                     help="Drift penalty when not in a breakout (in cash)." />
                   <div style={{ borderTop: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))', paddingTop: 6 }}>
                     <CRule tag="BUY">Price closes above upper band → enter long, drift +{p.bull_drift_adj}%.</CRule>
@@ -410,15 +415,15 @@ export default function StrategySelector({ value, params, onChange, compact }: P
                 </>)}
 
                 {value === "MACD Crossover (12,26,9)" && (<>
-                  <CNum label="Fast EMA (days)" value={p.macd_fast!} step={1} min={3} max={30} onChange={v => setParam('macd_fast', v)}
+                  <GNum label="Fast EMA (days)" value={p.macd_fast!} step={1} min={3} max={30} onChange={v => setParam('macd_fast', v)}
                     help="Short exponential moving average period. Default 12." />
-                  <CNum label="Slow EMA (days)" value={p.macd_slow!} step={1} min={10} max={60} onChange={v => setParam('macd_slow', v)}
+                  <GNum label="Slow EMA (days)" value={p.macd_slow!} step={1} min={10} max={60} onChange={v => setParam('macd_slow', v)}
                     help="Long exponential moving average period. Default 26." />
-                  <CNum label="Signal EMA (days)" value={p.macd_signal!} step={1} min={3} max={20} onChange={v => setParam('macd_signal', v)}
+                  <GNum label="Signal EMA (days)" value={p.macd_signal!} step={1} min={3} max={20} onChange={v => setParam('macd_signal', v)}
                     help="EMA of the MACD line — acts as the trigger line. Default 9." />
-                  <CNum label="Bull drift adj (%)" value={p.bull_drift_adj!} step={0.5} min={0} max={15} onChange={v => setParam('bull_drift_adj', v)}
+                  <GNum label="Bull drift adj (%)" value={p.bull_drift_adj!} step={0.5} min={0} max={15} onChange={v => setParam('bull_drift_adj', v)}
                     help="Drift boost when MACD line is above the signal line." />
-                  <CNum label="Bear drift adj (%)" value={p.bear_drift_adj!} step={0.5} max={0} min={-15} onChange={v => setParam('bear_drift_adj', v)}
+                  <GNum label="Bear drift adj (%)" value={p.bear_drift_adj!} step={0.5} max={0} min={-15} onChange={v => setParam('bear_drift_adj', v)}
                     help="Drift penalty when MACD line is below the signal line." />
                   <div style={{ borderTop: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))', paddingTop: 6 }}>
                     <CRule tag="BUY">MACD above signal → bullish crossover, drift +{p.bull_drift_adj}%.</CRule>
@@ -427,17 +432,17 @@ export default function StrategySelector({ value, params, onChange, compact }: P
                 </>)}
 
                 {value === "Value — Trailing P/E" && (<>
-                  <CNum label="Deep value P/E" value={p.pe_deep_value!} step={1} min={1} max={25} onChange={v => setParam('pe_deep_value', v)}
+                  <GNum label="Deep value P/E" value={p.pe_deep_value!} step={1} min={1} max={25} onChange={v => setParam('pe_deep_value', v)}
                     help="P/E below this is considered deep value — maximum bullish drift is applied. Historically below 10–15 is cheap." />
-                  <CNum label="Fair value P/E" value={p.pe_fair_value!} step={1} min={5} max={50} onChange={v => setParam('pe_fair_value', v)}
+                  <GNum label="Fair value P/E" value={p.pe_fair_value!} step={1} min={5} max={50} onChange={v => setParam('pe_fair_value', v)}
                     help="P/E below this is fairly valued — half the bullish drift is applied. S&P 500 long-run average is ~15–20." />
-                  <CNum label="Exit above P/E" value={p.pe_in_threshold!} step={1} min={10} max={100} onChange={v => setParam('pe_in_threshold', v)}
+                  <GNum label="Exit above P/E" value={p.pe_in_threshold!} step={1} min={10} max={100} onChange={v => setParam('pe_in_threshold', v)}
                     help="Step to cash and apply bearish drift when trailing P/E exceeds this. Stock is considered expensive." />
-                  <CNum label="Very expensive P/E" value={p.pe_expensive!} step={5} min={20} max={200} onChange={v => setParam('pe_expensive', v)}
+                  <GNum label="Very expensive P/E" value={p.pe_expensive!} step={5} min={20} max={200} onChange={v => setParam('pe_expensive', v)}
                     help="P/E above this triggers the maximum bearish drift penalty. Represents extreme overvaluation." />
-                  <CNum label="Bull drift adj (%)" value={p.bull_drift_adj!} step={0.5} min={0} max={15} onChange={v => setParam('bull_drift_adj', v)}
+                  <GNum label="Bull drift adj (%)" value={p.bull_drift_adj!} step={0.5} min={0} max={15} onChange={v => setParam('bull_drift_adj', v)}
                     help="Drift boost added when P/E is in deep-value or fair-value territory. Keep positive." />
-                  <CNum label="Bear drift adj (%)" value={p.bear_drift_adj!} step={0.5} max={0} min={-15} onChange={v => setParam('bear_drift_adj', v)}
+                  <GNum label="Bear drift adj (%)" value={p.bear_drift_adj!} step={0.5} max={0} min={-15} onChange={v => setParam('bear_drift_adj', v)}
                     help="Drift penalty when P/E is expensive. Keep this negative to reflect overvaluation risk." />
                   <div style={{ borderTop: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))', paddingTop: 6 }}>
                     <CRule tag="BUY">P/E &lt; {p.pe_deep_value} → +{p.bull_drift_adj}%/yr.</CRule>
@@ -447,11 +452,11 @@ export default function StrategySelector({ value, params, onChange, compact }: P
                 </>)}
 
                 {value === "Earnings Growth Momentum" && (<>
-                  <CNum label="Exit when EPS growth below (%)" value={p.exit_threshold_pct!} step={0.5} min={-30} max={0} onChange={v => setParam('exit_threshold_pct', v)}
+                  <GNum label="Exit when EPS growth below (%)" value={p.exit_threshold_pct!} step={0.5} min={-30} max={0} onChange={v => setParam('exit_threshold_pct', v)}
                     help="Step to cash when quarterly EPS growth (year-over-year) falls below this. -5% means exit if earnings are down more than 5%." />
-                  <CNum label="Drift sensitivity" value={p.adj_scale!} step={5} min={10} max={120} onChange={v => setParam('adj_scale', v)}
+                  <GNum label="Drift sensitivity" value={p.adj_scale!} step={5} min={10} max={120} onChange={v => setParam('adj_scale', v)}
                     help="Multiplies EPS growth rate into a drift adjustment. E.g. sensitivity 60 × 10% EPS growth = +6% drift boost." />
-                  <CNum label="Max drift adj (%)" value={p.adj_cap!} step={0.5} min={1} max={20} onChange={v => setParam('adj_cap', v)}
+                  <GNum label="Max drift adj (%)" value={p.adj_cap!} step={0.5} min={1} max={20} onChange={v => setParam('adj_cap', v)}
                     help="Hard cap on the drift adjustment in either direction. Prevents extreme EPS swings from dominating." />
                   <div style={{ borderTop: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))', paddingTop: 6 }}>
                     <CRule tag="BUY">EPS growth &gt; {p.exit_threshold_pct}% → up to +{p.adj_cap}%.</CRule>
@@ -461,17 +466,17 @@ export default function StrategySelector({ value, params, onChange, compact }: P
                 </>)}
 
                 {value === "EMA Micro-Scalp (3/8)" && (<>
-                  <CNum label="Fast EMA (days)" value={p.ema_fast!} step={1} min={2} max={10} onChange={v => setParam('ema_fast', v)}
+                  <GNum label="Fast EMA (days)" value={p.ema_fast!} step={1} min={2} max={10} onChange={v => setParam('ema_fast', v)}
                     help="Very short EMA — reacts within days. Default 3. Lower = more signals but more noise." />
-                  <CNum label="Slow EMA (days)" value={p.ema_slow!} step={1} min={4} max={30} onChange={v => setParam('ema_slow', v)}
+                  <GNum label="Slow EMA (days)" value={p.ema_slow!} step={1} min={4} max={30} onChange={v => setParam('ema_slow', v)}
                     help="Reference EMA trend baseline. Default 8. Must be greater than Fast EMA." />
-                  <CNum label="ATR period" value={p.atr_period!} step={1} min={2} max={20} onChange={v => setParam('atr_period', v)}
+                  <GNum label="ATR period" value={p.atr_period!} step={1} min={2} max={20} onChange={v => setParam('atr_period', v)}
                     help="Bars used to compute Average True Range. Filters out low-volatility noise." />
-                  <CNum label="Min ATR % (0=off)" value={p.atr_mult!} step={0.1} min={0} max={2} onChange={v => setParam('atr_mult', v)}
+                  <GNum label="Min ATR % (0=off)" value={p.atr_mult!} step={0.1} min={0} max={2} onChange={v => setParam('atr_mult', v)}
                     help="Skip signals when ATR is below this % of price. 0 disables the filter. 0.3 requires the stock to move at least 0.3% per bar on average." />
-                  <CNum label="Bull drift adj (%)" value={p.bull_drift_adj!} step={0.5} min={0} max={20} onChange={v => setParam('bull_drift_adj', v)}
+                  <GNum label="Bull drift adj (%)" value={p.bull_drift_adj!} step={0.5} min={0} max={20} onChange={v => setParam('bull_drift_adj', v)}
                     help="Drift boost when EMA(fast) is above EMA(slow)." />
-                  <CNum label="Bear drift adj (%)" value={p.bear_drift_adj!} step={0.5} max={0} min={-15} onChange={v => setParam('bear_drift_adj', v)}
+                  <GNum label="Bear drift adj (%)" value={p.bear_drift_adj!} step={0.5} max={0} min={-15} onChange={v => setParam('bear_drift_adj', v)}
                     help="Drift penalty when EMA(fast) is below EMA(slow). Keep negative." />
                   <div style={{ borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.06))', paddingTop: 6 }}>
                     <CRule tag="BUY">EMA({p.ema_fast}) crosses above EMA({p.ema_slow}) — enter, drift +{p.bull_drift_adj}%.</CRule>

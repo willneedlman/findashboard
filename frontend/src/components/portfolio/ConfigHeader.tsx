@@ -100,9 +100,9 @@ function NumberInput({ value, onChange, placeholder, step, min }:
   )
 }
 
-function HoldingCard({ holding, index, maxWeight, onChange, onRemove, tickerListId }: {
+function HoldingCard({ holding, index, maxWeight, onChange, onRemove, tickerListId, hideDrift }: {
   holding: Holding; index: number; maxWeight: number
-  onChange: (patch: Partial<Holding>) => void; onRemove: () => void; tickerListId?: string
+  onChange: (patch: Partial<Holding>) => void; onRemove: () => void; tickerListId?: string; hideDrift?: boolean
 }) {
   const [hover, setHover] = useState(false)
   const barPct = maxWeight > 0 ? Math.max(0, (holding.weight / maxWeight) * 100) : 0
@@ -135,7 +135,7 @@ function HoldingCard({ holding, index, maxWeight, onChange, onRemove, tickerList
       </div>
       <div style={{ marginTop: 8 }}>
         <StrategySelector value={holding.strategy} params={holding.stratParams}
-          onChange={(s, p) => onChange({ strategy: s, stratParams: p })} compact />
+          onChange={(s, p) => onChange({ strategy: s, stratParams: p })} compact hideDrift={hideDrift} />
       </div>
     </div>
   )
@@ -241,6 +241,7 @@ export default function ConfigHeader(p: Props) {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(166px, 1fr))', gap: 8 }}>
               {p.holdings.map((h, i) => (
                 <HoldingCard key={i} holding={h} index={i} maxWeight={maxWeight} tickerListId={p.tickerListId}
+                  hideDrift={p.mode === 'backtester'}
                   onChange={patch => updateHolding(i, patch)}
                   onRemove={() => p.onHoldingsChange(p.holdings.filter((_, j) => j !== i))} />
               ))}
