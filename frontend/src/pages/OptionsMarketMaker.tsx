@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import { Widget, HeaderBar, KpiCell, RiskMeterStrip, QuoteCell, Stepper, Chips, WidenControl } from '../components/mmCockpit'
+import { useChallenge, ModeToggle, ChallengeClock, LeaderboardModal, CHALLENGE_SPEED, type SimMode } from '../components/mmChallenge'
 
 /*
  * Options MM Simulator
@@ -273,6 +274,8 @@ export default function OptionsMarketMaker() {
   const [strikeWiden, setStrikeWiden] = useState<Record<number, number>>(() => Object.fromEntries(STRIKES.map(k => [k, 0])))
   const [running, setRunning]       = useState(false)
   const [speed, setSpeed]           = useState(0.5)
+  const [mode, setMode]             = useState<SimMode>('unlimited')
+  const [boardOpen, setBoardOpen]   = useState(false)
   const [hedgeQty, setHedgeQty]     = useState(100)
   const [tapeSel, setTapeSel]       = useState<string[]>([])   // contracts overlaid on the tape
   const [frame, setFrame]           = useState<Frame | null>(null)
@@ -300,6 +303,14 @@ export default function OptionsMarketMaker() {
   // Latest controls available to the (single, stable) game-loop.
   const ctrl = useRef({ baseIv, skew, halfSpread, manual, bidAdj, askAdj, strikeWiden, running, speed })
   ctrl.current = { baseIv, skew, halfSpread, manual, bidAdj, askAdj, strikeWiden, running, speed }
+
+  // Live Net P&L straight from the sim, used as the challenge score at time-out.
+  const currentPnl = () => {
+    const s = sim.current, c = ctrl.current
+    return portfolioGreeks(s, buildChain(s, c.baseIv, c.skew, c.halfSpread, c.manual, c.bidAdj, c.askAdj, c.strikeWiden)).netPnl
+  }
+  const { remaining, ended, finalScore, reset: resetChallenge } = useChallenge(mode, running, setRunning, currentPnl)
+  useEffect(() => { if (ended) setBoardOpen(true) }, [ended])
 
   const snapshot = (s: SimState, c: typeof ctrl.current): Frame => {
     const chain = buildChain(s, c.baseIv, c.skew, c.halfSpread, c.manual, c.bidAdj, c.askAdj, c.strikeWiden)
@@ -335,8 +346,24 @@ export default function OptionsMarketMaker() {
   }
   const onReset = () => {
     sim.current = freshState()
+    resetChallenge()
     setFrame(snapshot(sim.current, ctrl.current))
   }
+  // Switching mode starts a clean session; the challenge locks the sim to 0.5x.
+  const onMode = (m: SimMode) => {
+    if (m === mode) return
+    setMode(m); setRunning(false); setBoardOpen(false)
+    sim.current = freshState(); resetChallenge()
+    if (m === 'challenge') setSpeed(CHALLENGE_SPEED)
+    setFrame(snapshot(sim.current, ctrl.current))
+  }
+  const onPlayAgain = () => {
+    sim.current = freshState(); resetChallenge(); setBoardOpen(false)
+    setFrame(snapshot(sim.current, ctrl.current))
+    setRunning(true)
+  }
+  // In challenge mode a finished run restarts; otherwise plain start/pause.
+  const onStartPause = () => (mode === 'challenge' && ended ? onPlayAgain() : setRunning(rr => !rr))
 
   const f = frame
   const g = f?.greeks
@@ -440,7 +467,10 @@ export default function OptionsMarketMaker() {
             {/* MM Controls */}
             <Widget title="MM Controls" bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '10px 12px' }}>
               <div>
-                {sliderRow('Sim Speed', `${speed.toFixed(1)}x`, range(speed, SPEED_MIN, SPEED_MAX, 0.1, setSpeed))}
+                <ModeToggle mode={mode} onChange={onMode} />
+                {mode === 'challenge'
+                  ? <ChallengeClock remaining={remaining} ended={ended} />
+                  : sliderRow('Sim Speed', `${speed.toFixed(1)}x`, range(speed, SPEED_MIN, SPEED_MAX, 0.1, setSpeed))}
                 {sliderRow('Base IV', `${(baseIv * 100).toFixed(0)}%`, range(baseIv, 0.05, 0.80, 0.01, setBaseIv))}
                 {sliderRow('IV Skew', skew.toFixed(2), range(skew, -0.20, 0.20, 0.01, setSkew))}
                 {sliderRow('Half-Spread', `${(halfSpread * 100).toFixed(1)}%`, range(halfSpread, 0.005, 0.20, 0.005, setHalfSpread))}
@@ -512,7 +542,7 @@ export default function OptionsMarketMaker() {
               </div>
 
               <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => setRunning(rr => !rr)} style={btnStyle(running ? T.text : T.green)}>{running ? 'PAUSE' : 'START'}</button>
+                <button onClick={onStartPause} style={btnStyle(mode === 'challenge' && ended ? T.gold : running ? T.text : T.green)}>{mode === 'challenge' && ended ? 'PLAY AGAIN' : running ? 'PAUSE' : 'START'}</button>
                 <button onClick={onReset} style={btnStyle(T.muted)}>RESET</button>
               </div>
             </Widget>
@@ -525,6 +555,11 @@ export default function OptionsMarketMaker() {
 
           {/* Ledger strip */}
           {renderLedgerStrip(f)}
+
+          {mode === 'challenge' && boardOpen && (
+            <LeaderboardModal game="options-mm" score={finalScore} scoreLabel="Net P&L" fmtScore={fmtMoney}
+              onPlayAgain={onPlayAgain} onClose={() => setBoardOpen(false)} />
+          )}
         </div>
       )}
     </PageWrapper>

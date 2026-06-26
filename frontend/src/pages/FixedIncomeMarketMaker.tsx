@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import { Widget, HeaderBar, KpiCell, RiskMeterStrip, QuoteCell, Stepper, Chips, Segmented, WidenControl } from '../components/mmCockpit'
+import { useChallenge, ModeToggle, ChallengeClock, LeaderboardModal, CHALLENGE_SPEED, type SimMode } from '../components/mmChallenge'
 
 /*
  * Fixed Income MM Simulator
@@ -281,6 +282,8 @@ export default function FixedIncomeMarketMaker() {
   const [bondWiden, setBondWiden]   = useState<Record<string, number>>(zeroBondAdj)
   const [running, setRunning]       = useState(false)
   const [speed, setSpeed]           = useState(0.5)
+  const [mode, setMode]             = useState<SimMode>('unlimited')
+  const [boardOpen, setBoardOpen]   = useState(false)
   const [hedgeQty, setHedgeQty]     = useState(50)
   const [selected, setSelected]     = useState('10Y')   // bond driving the tape + hedge panel
   const [frame, setFrame]           = useState<Frame | null>(null)
@@ -305,6 +308,11 @@ export default function FixedIncomeMarketMaker() {
   // Latest controls available to the (single, stable) game-loop.
   const ctrl = useRef<Ctrl>({ halfSpread, manual, bidAdj, askAdj, bondWiden, running, speed })
   ctrl.current = { halfSpread, manual, bidAdj, askAdj, bondWiden, running, speed }
+
+  // Live Net P&L straight from the sim, used as the challenge score at time-out.
+  const currentPnl = () => portfolioRisk(sim.current).netPnl
+  const { remaining, ended, finalScore, reset: resetChallenge } = useChallenge(mode, running, setRunning, currentPnl)
+  useEffect(() => { if (ended) setBoardOpen(true) }, [ended])
 
   const snapshot = (s: SimState, c: Ctrl): Frame => {
     const book = buildBook(s, c)
@@ -342,8 +350,24 @@ export default function FixedIncomeMarketMaker() {
   }
   const onReset = () => {
     sim.current = freshState()
+    resetChallenge()
     setFrame(snapshot(sim.current, ctrl.current))
   }
+  // Switching mode starts a clean session; the challenge locks the sim to 0.5x.
+  const onMode = (m: SimMode) => {
+    if (m === mode) return
+    setMode(m); setRunning(false); setBoardOpen(false)
+    sim.current = freshState(); resetChallenge()
+    if (m === 'challenge') setSpeed(CHALLENGE_SPEED)
+    setFrame(snapshot(sim.current, ctrl.current))
+  }
+  const onPlayAgain = () => {
+    sim.current = freshState(); resetChallenge(); setBoardOpen(false)
+    setFrame(snapshot(sim.current, ctrl.current))
+    setRunning(true)
+  }
+  // In challenge mode a finished run restarts; otherwise plain start/pause.
+  const onStartPause = () => (mode === 'challenge' && ended ? onPlayAgain() : setRunning(x => !x))
 
   const f = frame
   const r = f?.risk
@@ -435,7 +459,10 @@ export default function FixedIncomeMarketMaker() {
             {/* MM Controls */}
             <Widget title="MM Controls" bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '10px 12px' }}>
               <div>
-                {sliderRow('Sim Speed', `${speed.toFixed(1)}x`, range(speed, SPEED_MIN, SPEED_MAX, 0.1, setSpeed))}
+                <ModeToggle mode={mode} onChange={onMode} />
+                {mode === 'challenge'
+                  ? <ChallengeClock remaining={remaining} ended={ended} />
+                  : sliderRow('Sim Speed', `${speed.toFixed(1)}x`, range(speed, SPEED_MIN, SPEED_MAX, 0.1, setSpeed))}
                 {sliderRow('Half-Spread', `${halfSpread.toFixed(2)} pts`, range(halfSpread, 0.01, 0.5, 0.01, setHalfSpread))}
               </div>
               <div>
@@ -498,7 +525,7 @@ export default function FixedIncomeMarketMaker() {
               </div>
 
               <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => setRunning(x => !x)} style={btnStyle(running ? T.text : T.green)}>{running ? 'PAUSE' : 'START'}</button>
+                <button onClick={onStartPause} style={btnStyle(mode === 'challenge' && ended ? T.gold : running ? T.text : T.green)}>{mode === 'challenge' && ended ? 'PLAY AGAIN' : running ? 'PAUSE' : 'START'}</button>
                 <button onClick={onReset} style={btnStyle(T.muted)}>RESET</button>
               </div>
             </Widget>
@@ -511,6 +538,11 @@ export default function FixedIncomeMarketMaker() {
 
           {/* Ledger strip */}
           {renderLedgerStrip(f)}
+
+          {mode === 'challenge' && boardOpen && (
+            <LeaderboardModal game="fixed-income-mm" score={finalScore} scoreLabel="Net P&L" fmtScore={fmtMoney}
+              onPlayAgain={onPlayAgain} onClose={() => setBoardOpen(false)} />
+          )}
         </div>
       )}
     </PageWrapper>
