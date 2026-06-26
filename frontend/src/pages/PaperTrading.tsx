@@ -31,9 +31,9 @@ export default function PaperTrading() {
     queryKey: ['trading-account', uid],
     queryFn: () => axios.get(`/api/paper/account?user_id=${uid}`, headers).then(r => adaptAccount(r.data)),
     enabled: authed,
-    staleTime: 10_000,
+    staleTime: 5_000,
     refetchOnWindowFocus: true,
-    refetchInterval: 15_000,
+    refetchInterval: 6_000,   // keep position P&L marking to the live price
   })
 
   const cancelMutation = useMutation({

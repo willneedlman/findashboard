@@ -457,22 +457,15 @@ def get_ohlcv(ticker: str, period: str = "1y", interval: str = "1d", tf: str | N
 
 @router.get("/live-quote")
 def get_live_quote(ticker: str):
-    """Near-real-time last price from Tradier, for the live chart-tick overlay. The
-    full /ohlcv candle history refreshes slowly (yfinance, ~1/min); this lets the
-    chart's forming bar tick every few seconds in between."""
+    """Freshest last price for the live chart-tick overlay — Tradier real-time for
+    equities, yfinance fast_info for futures/crypto/FX. The /ohlcv candle history
+    refreshes slowly (~1/min); this lets the forming bar tick every few seconds."""
     ticker = validate_ticker(ticker)
-    import tradier
-    if not tradier.available():
-        raise HTTPException(503, "Live quotes unavailable")
-    try:
-        q = tradier.get_quote_live(ticker)
-    except Exception:
-        raise HTTPException(502, "Live quote fetch failed")
-    q = q or {}
-    last = q.get("last") or q.get("close") or q.get("prevclose")
+    import quotes
+    last = quotes.live_price(ticker)
     if not last:   # None or 0 (halted / no-trade) — don't tick the chart to zero
         raise HTTPException(404, "No live quote")
-    return {"ticker": ticker, "last": float(last), "bid": q.get("bid"), "ask": q.get("ask"), "ts": q.get("trade_date")}
+    return {"ticker": ticker, "last": last}
 
 
 def _pd_empty():

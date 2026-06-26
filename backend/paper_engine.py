@@ -101,6 +101,15 @@ def _save(user_id: str, acct: dict) -> None:
 
 
 def _price(symbol: str) -> float | None:
+    # Live last price first (real-time, 4s-cached) so intraday position marks and
+    # fills track the market across all asset classes; daily close is the fallback.
+    try:
+        import quotes
+        p = quotes.live_price(symbol)
+        if p:
+            return p
+    except Exception:
+        pass
     try:
         h = get_history(symbol, period="5d")
         closes = h["Close"].dropna()

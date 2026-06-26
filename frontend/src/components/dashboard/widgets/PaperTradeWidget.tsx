@@ -319,7 +319,8 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
     queryKey: ['paper-account', user?.id],
     queryFn: () => axios.get(`/api/paper/account?user_id=${user!.id}`, { headers: authHeaders }).then(r => r.data),
     enabled: authed,
-    staleTime: 15_000,
+    staleTime: 5_000,
+    refetchInterval: 6_000,   // re-mark positions/P&L to the live price without a manual refresh
     retry: 1,
   })
 
