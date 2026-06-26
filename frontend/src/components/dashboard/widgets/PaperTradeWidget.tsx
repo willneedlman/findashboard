@@ -15,7 +15,7 @@ import { readToken } from '../../../lib/theme'
 import { useLiveTick } from '../../../lib/useLiveTick'
 
 
-interface Position { symbol: string; quantity: number; avg_cost: number; price: number; unrealized_pnl: number; multiplier?: number }
+interface Position { symbol: string; quantity: number; avg_cost: number; price: number; unrealized_pnl: number; multiplier?: number; margin?: number }
 interface OptionPosition { option_symbol: string; underlying: string; type: string; strike: number; quantity: number; unrealized_pnl: number }
 interface OrderRow { id: string; symbol: string; option_symbol?: string; side: string; status: string; order_type?: string; quantity?: number; limit_price?: number | null; stop_price?: number | null; fill_price: number | null; created_at?: number }
 const PENDING_STATUSES = ['pending', 'open', 'partially_filled']
@@ -624,11 +624,13 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
   const acct = account.data
   // All resting orders (equity + option, any ticker), newest first, for the panel.
   const pendingOrders = (acct?.orders ?? []).filter(isPending).sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))
-  // Open positions (equity + option) with unrealized P&L; equity also carries a %.
+  // Open positions (equity + option) with unrealized P&L and a %. Futures show
+  // return on margin (leveraged): P&L over the posted margin, not the raw move.
   const openPositions = [
     ...(acct?.positions ?? []).map(p => ({
       key: p.symbol, sym: p.symbol, qty: p.quantity, pnl: p.unrealized_pnl, isOpt: false,
-      pct: p.avg_cost && p.quantity ? (p.unrealized_pnl / (p.avg_cost * (p.multiplier || 1) * p.quantity)) * 100 : null,
+      pct: p.margin ? (p.unrealized_pnl / p.margin) * 100
+        : p.avg_cost && p.quantity ? (p.unrealized_pnl / (p.avg_cost * p.quantity)) * 100 : null,
     })),
     ...(acct?.option_positions ?? []).map(p => ({
       key: p.option_symbol, sym: p.underlying, qty: p.quantity, pnl: p.unrealized_pnl, isOpt: true, pct: null as number | null,

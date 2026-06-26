@@ -19,7 +19,7 @@ export function useAuth() {
 // Adapt the per-user engine's account response to the shape this page renders.
 export function adaptAccount(d: any): AccountData {
   const positions = [
-    ...(d?.positions ?? []).map((p: any) => ({ symbol: p.symbol, quantity: p.quantity, cost_basis: p.avg_cost * p.quantity, date_acquired: '', multiplier: p.multiplier })),
+    ...(d?.positions ?? []).map((p: any) => ({ symbol: p.symbol, quantity: p.quantity, cost_basis: p.avg_cost * p.quantity, date_acquired: '', multiplier: p.multiplier, margin: p.margin })),
     ...(d?.option_positions ?? []).map((p: any) => ({ symbol: p.option_symbol, quantity: p.quantity, cost_basis: p.avg_cost * p.quantity, date_acquired: '' })),
   ]
   const orders = (d?.orders ?? []).map((o: any) => ({
@@ -131,6 +131,7 @@ export interface Position {
   cost_basis: number
   date_acquired: string
   multiplier?: number   // futures contract multiplier (USD per 1.0 price move); absent for equities
+  margin?: number       // futures posted margin; P&L % is return on this (leveraged)
 }
 
 export interface Order {

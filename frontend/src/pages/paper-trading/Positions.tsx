@@ -187,11 +187,14 @@ export function PositionsPanel({ positions }: { positions: Position[] }) {
                 {positions.map((p, i) => {
                   const q = quotes[p.symbol]
                   const costPerShare = p.quantity ? p.cost_basis / p.quantity : 0
-                  // Futures P&L is leveraged by the contract multiplier; the % is the
-                  // underlying price move. Equities have multiplier 1 (unchanged).
+                  // Futures P&L is leveraged by the contract multiplier, and the %
+                  // is return on posted margin (a 1% move on ~10x reads ~10%).
+                  // Equities have multiplier 1 and show the raw price-move %.
                   const mult = p.multiplier || 1
                   const unrealized = q ? (q.price - costPerShare) * mult * p.quantity : null
-                  const unrealizedPct = q && costPerShare ? (q.price / costPerShare - 1) * 100 : null
+                  const unrealizedPct = unrealized != null && p.margin
+                    ? (unrealized / p.margin) * 100
+                    : q && costPerShare ? (q.price / costPerShare - 1) * 100 : null
                   return (
                     <tr key={i}
                       onClick={() => setChartTicker(p.symbol)}
