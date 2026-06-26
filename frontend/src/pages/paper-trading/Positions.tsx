@@ -126,7 +126,7 @@ function TickerChartModal({ ticker, onClose }: { ticker: string; onClose: () => 
 }
 
 // ─── Positions panel ──────────────────────────────────────────────────────────
-export function PositionsPanel({ positions, embedded }: { positions: Position[]; embedded?: boolean }) {
+export function PositionsPanel({ positions }: { positions: Position[] }) {
   const [quotes, setQuotes] = useState<Record<string, { price: number; pct1d: number | null }>>({})
   const [chartTicker, setChartTicker] = useState<string | null>(null)
 
@@ -160,7 +160,7 @@ export function PositionsPanel({ positions, embedded }: { positions: Position[];
     <>
       {chartTicker && <TickerChartModal ticker={chartTicker} onClose={() => setChartTicker(null)} />}
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-        {!embedded && sectionHeader('POSITIONS', positions.length)}
+        {sectionHeader('POSITIONS', positions.length)}
         {positions.length === 0 ? (
           <div style={{
             flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -187,9 +187,11 @@ export function PositionsPanel({ positions, embedded }: { positions: Position[];
                 {positions.map((p, i) => {
                   const q = quotes[p.symbol]
                   const costPerShare = p.quantity ? p.cost_basis / p.quantity : 0
-                  const mktVal = q ? q.price * p.quantity : null
-                  const unrealized = mktVal != null ? mktVal - p.cost_basis : null
-                  const unrealizedPct = unrealized != null && p.cost_basis ? (unrealized / p.cost_basis) * 100 : null
+                  // Futures P&L is leveraged by the contract multiplier; the % is the
+                  // underlying price move. Equities have multiplier 1 (unchanged).
+                  const mult = p.multiplier || 1
+                  const unrealized = q ? (q.price - costPerShare) * mult * p.quantity : null
+                  const unrealizedPct = q && costPerShare ? (q.price / costPerShare - 1) * 100 : null
                   return (
                     <tr key={i}
                       onClick={() => setChartTicker(p.symbol)}
@@ -240,14 +242,13 @@ export function PositionsPanel({ positions, embedded }: { positions: Position[];
 }
 
 // ─── Orders panel ─────────────────────────────────────────────────────────────
-export function OrdersPanel({ orders, onCancel, onCancelAll, cancelAllPending, cancelAllError, automatedOrders, embedded, initialStatus }: {
+export function OrdersPanel({ orders, onCancel, onCancelAll, cancelAllPending, cancelAllError, automatedOrders, initialStatus }: {
   orders: Order[]
   onCancel: (id: string) => void
   onCancelAll: () => void
   cancelAllPending?: boolean
   cancelAllError?: boolean
   automatedOrders?: Record<string, string>
-  embedded?: boolean
   initialStatus?: 'all'|'filled'|'pending'|'rejected'|'canceled'
 }) {
   const [statusF, setStatusF] = useState<'all'|'filled'|'pending'|'rejected'|'canceled'>(initialStatus ?? 'all')
@@ -286,8 +287,8 @@ export function OrdersPanel({ orders, onCancel, onCancelAll, cancelAllPending, c
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: embedded ? 'flex-end' : 'space-between' }}>
-        {!embedded && sectionHeader('ORDERS & HISTORY', orders.length)}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        {sectionHeader('ORDERS & HISTORY', orders.length)}
         {pendingOrders.length > 0 && (
           <button
             onClick={onCancelAll}

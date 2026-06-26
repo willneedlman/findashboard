@@ -5,6 +5,7 @@ import type { IChartApi, ISeriesApi, Time, SeriesMarker, IPriceLine } from 'ligh
 import { Sliders, ChevronsRight } from 'lucide-react'
 import { smaArr, emaArr, bollinger, vwapArr, type Candle } from '../lib/indicators'
 import { marketSession } from '../lib/marketSession'
+import { useLiveTick } from '../lib/useLiveTick'
 import { occUnderlying } from '../lib/occ'
 import { readToken } from '../lib/theme'
 
@@ -94,6 +95,8 @@ export default function PaperChart({ initialTicker = 'SPY', fills = [], orders =
   const windowRef = useRef(windowKey); useEffect(() => { windowRef.current = windowKey }, [windowKey])
   const barSpacingRef = useRef(barSpacing); useEffect(() => { barSpacingRef.current = barSpacing }, [barSpacing])
   const candlesRef = useRef<Candle[]>([]); useEffect(() => { candlesRef.current = candles }, [candles])
+  // Tick the forming candle from a live Tradier quote while the market is live.
+  useLiveTick(ticker, !/closed|weekend|overnight/.test(session.key), candleRef, candlesRef, setSpot)
 
   useEffect(() => { try { localStorage.setItem(`paper-chart-overlays-${storageKey}`, JSON.stringify({ on: overlays, params, windowKey, barSpacing })) } catch { /* ignore */ } }, [overlays, params, windowKey, barSpacing, storageKey])
 

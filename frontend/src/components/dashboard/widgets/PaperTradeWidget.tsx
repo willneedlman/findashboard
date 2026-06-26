@@ -12,9 +12,10 @@ import { buildOCC, occUnderlying } from '../../../lib/occ'
 import { smaArr, emaArr, bollinger, vwapArr, type Candle } from '../../../lib/indicators'
 import { marketSession } from '../../../lib/marketSession'
 import { readToken } from '../../../lib/theme'
+import { useLiveTick } from '../../../lib/useLiveTick'
 
 
-interface Position { symbol: string; quantity: number; avg_cost: number; price: number; unrealized_pnl: number }
+interface Position { symbol: string; quantity: number; avg_cost: number; price: number; unrealized_pnl: number; multiplier?: number }
 interface OptionPosition { option_symbol: string; underlying: string; type: string; strike: number; quantity: number; unrealized_pnl: number }
 interface OrderRow { id: string; symbol: string; option_symbol?: string; side: string; status: string; order_type?: string; quantity?: number; limit_price?: number | null; stop_price?: number | null; fill_price: number | null; created_at?: number }
 const PENDING_STATUSES = ['pending', 'open', 'partially_filled']
@@ -163,6 +164,8 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
   const [, setTick] = useState(0)
   useEffect(() => { const id = window.setInterval(() => setTick(t => t + 1), 30_000); return () => window.clearInterval(id) }, [])
   const session = marketSession(new Date(), ticker)
+  // Tick the forming candle from a live Tradier quote while the market is live.
+  useLiveTick(ticker, !/closed|weekend|overnight/.test(session.key), candleRef, candlesRef, setSpot)
 
   const [side, setSide] = useState<'buy' | 'sell'>('buy')
   const [qty, setQty] = useState('1')
@@ -621,6 +624,17 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
   const acct = account.data
   // All resting orders (equity + option, any ticker), newest first, for the panel.
   const pendingOrders = (acct?.orders ?? []).filter(isPending).sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))
+  // Open positions (equity + option) with unrealized P&L; equity also carries a %.
+  const openPositions = [
+    ...(acct?.positions ?? []).map(p => ({
+      key: p.symbol, sym: p.symbol, qty: p.quantity, pnl: p.unrealized_pnl, isOpt: false,
+      pct: p.avg_cost && p.quantity ? (p.unrealized_pnl / (p.avg_cost * (p.multiplier || 1) * p.quantity)) * 100 : null,
+    })),
+    ...(acct?.option_positions ?? []).map(p => ({
+      key: p.option_symbol, sym: p.underlying, qty: p.quantity, pnl: p.unrealized_pnl, isOpt: true, pct: null as number | null,
+    })),
+  ]
+  const signedMoney = (v: number) => (v >= 0 ? '+' : '') + money(v)
   const selStyle: React.CSSProperties = { background: 'var(--theme-bg, #101c2e)', border: `1px solid ${T.border}`, color: T.gold, fontFamily: T.mono, fontSize: 9, padding: '2px 4px', outline: 'none', cursor: 'pointer' }
 
   return (
@@ -863,30 +877,57 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
             <span style={{ fontFamily: T.mono, fontSize: 12, fontWeight: 700, color: T.text }}>{acct ? money(acct.buying_power) : '—'}</span>
           </div>
 
-          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 10px 4px' }}>
-              <span style={{ ...lbl, fontSize: 9 }}>Pending{pendingOrders.length > 0 ? ` · ${pendingOrders.length}` : ''}</span>
-              <button onClick={() => reset.mutate()} title="Reset paper account" style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.muted }}>Reset</button>
+          {/* Two stacked sections — Positions over Pending — each scrolls on its own. */}
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {/* Positions */}
+            <div style={{ flex: '1 1 0', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderBottom: `1px solid ${T.border}` }}>
+              <div style={{ padding: '7px 10px 4px', flexShrink: 0 }}>
+                <span style={{ ...lbl, fontSize: 9 }}>Positions{openPositions.length > 0 ? ` · ${openPositions.length}` : ''}</span>
+              </div>
+              <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+                {openPositions.length === 0 ? (
+                  <div style={{ padding: '2px 10px 8px', fontFamily: T.mono, fontSize: 10, color: T.muted }}>{account.isLoading ? 'Loading…' : 'No open positions'}</div>
+                ) : openPositions.map(p => (
+                  <div key={p.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, padding: '4px 10px', borderBottom: `1px solid ${T.border}` }}>
+                    <span style={{ fontFamily: T.mono, fontSize: 10, fontWeight: 700, color: T.gold, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {p.sym}{p.isOpt ? <span style={{ color: T.muted, fontSize: 8, marginLeft: 3 }}>OPT</span> : null}
+                      <span style={{ color: T.muted, marginLeft: 4 }}>{p.qty}</span>
+                    </span>
+                    <span style={{ fontFamily: T.mono, fontSize: 10, whiteSpace: 'nowrap', flexShrink: 0, color: p.pnl >= 0 ? T.pos : T.neg }}>
+                      {signedMoney(p.pnl)}{p.pct != null ? <span style={{ fontSize: 8, marginLeft: 3 }}>{p.pct >= 0 ? '+' : ''}{p.pct.toFixed(1)}%</span> : null}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
-            {pendingOrders.length === 0 ? (
-              <div style={{ padding: '2px 10px 8px', fontFamily: T.mono, fontSize: 10, color: T.muted }}>{account.isLoading ? 'Loading…' : 'No pending orders'}</div>
-            ) : pendingOrders.map(o => {
-              const sym = o.option_symbol ? occUnderlying(o.option_symbol) : o.symbol
-              const isBuy = String(o.side).startsWith('buy')
-              return (
-                <div key={o.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, padding: '4px 10px', borderBottom: `1px solid ${T.border}` }}>
-                  <span style={{ fontFamily: T.mono, fontSize: 10, fontWeight: 700, color: T.gold, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {sym}{o.option_symbol ? <span style={{ color: T.muted, fontSize: 8, marginLeft: 3 }}>OPT</span> : null}
-                    <span style={{ color: isBuy ? T.pos : T.neg, marginLeft: 4 }}>{orderTag(o)}</span>
-                    <span style={{ color: T.muted, marginLeft: 4 }}>{o.quantity}@{orderPrice(o).toFixed(2)}</span>
-                  </span>
-                  <button onClick={() => cancelOrder.mutate(o.id)} disabled={cancelOrder.isPending} title="Cancel order"
-                    style={{ background: 'none', border: `1px solid ${T.border}`, color: T.neg, cursor: 'pointer', fontFamily: T.mono, fontSize: 11, lineHeight: 1, padding: '1px 5px', flexShrink: 0 }}>
-                    &times;
-                  </button>
-                </div>
-              )
-            })}
+            {/* Pending */}
+            <div style={{ flex: '1 1 0', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 10px 4px', flexShrink: 0 }}>
+                <span style={{ ...lbl, fontSize: 9 }}>Pending{pendingOrders.length > 0 ? ` · ${pendingOrders.length}` : ''}</span>
+                <button onClick={() => reset.mutate()} title="Reset paper account" style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.muted }}>Reset</button>
+              </div>
+              <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+                {pendingOrders.length === 0 ? (
+                  <div style={{ padding: '2px 10px 8px', fontFamily: T.mono, fontSize: 10, color: T.muted }}>{account.isLoading ? 'Loading…' : 'No pending orders'}</div>
+                ) : pendingOrders.map(o => {
+                  const sym = o.option_symbol ? occUnderlying(o.option_symbol) : o.symbol
+                  const isBuy = String(o.side).startsWith('buy')
+                  return (
+                    <div key={o.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, padding: '4px 10px', borderBottom: `1px solid ${T.border}` }}>
+                      <span style={{ fontFamily: T.mono, fontSize: 10, fontWeight: 700, color: T.gold, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {sym}{o.option_symbol ? <span style={{ color: T.muted, fontSize: 8, marginLeft: 3 }}>OPT</span> : null}
+                        <span style={{ color: isBuy ? T.pos : T.neg, marginLeft: 4 }}>{orderTag(o)}</span>
+                        <span style={{ color: T.muted, marginLeft: 4 }}>{o.quantity}@{orderPrice(o).toFixed(2)}</span>
+                      </span>
+                      <button onClick={() => cancelOrder.mutate(o.id)} disabled={cancelOrder.isPending} title="Cancel order"
+                        style={{ background: 'none', border: `1px solid ${T.border}`, color: T.neg, cursor: 'pointer', fontFamily: T.mono, fontSize: 11, lineHeight: 1, padding: '1px 5px', flexShrink: 0 }}>
+                        &times;
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
           </div>
         </div>
       </div>

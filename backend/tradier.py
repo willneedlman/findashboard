@@ -57,11 +57,23 @@ def _post(path: str, data: dict | None = None) -> dict:
 
 # ── Market data ───────────────────────────────────────────────────────────────
 
+def available() -> bool:
+    return bool(_KEY)
+
+
+def _fetch_quote(symbol: str) -> dict:
+    data = _get("/markets/quotes", {"symbols": symbol, "greeks": "false"})
+    return data.get("quotes", {}).get("quote", {})
+
+
 @ttl_cache(maxsize=512, ttl=20)   # live quotes — dedupe bursts, ~real-time
 def get_quote(symbol: str) -> dict:
-    data = _get("/markets/quotes", {"symbols": symbol, "greeks": "false"})
-    q = data.get("quotes", {}).get("quote", {})
-    return q
+    return _fetch_quote(symbol)
+
+
+@ttl_cache(maxsize=512, ttl=4)    # tighter cache for the live chart-tick overlay
+def get_quote_live(symbol: str) -> dict:
+    return _fetch_quote(symbol)
 
 
 @ttl_cache(maxsize=256, ttl=3600)   # expirations barely change intraday

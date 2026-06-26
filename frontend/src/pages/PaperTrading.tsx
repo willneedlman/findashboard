@@ -88,7 +88,6 @@ export default function PaperTrading() {
   // Resting equity limit/stop orders → persistent on-chart price lines. Carries
   // the symbol so the chart shows only the lines for whatever ticker it's on.
   const PENDING = ['pending', 'open', 'partially_filled']
-  const pendingCount = orders.filter(o => PENDING.includes((o.status ?? '').toLowerCase())).length
   const chartOrders: ChartOrder[] = orders
     .filter(o => PENDING.includes((o.status ?? '').toLowerCase()) && !isOCC(o.symbol)
       && ['limit', 'stop', 'stop_limit'].includes((o.type ?? '').toLowerCase()) && (o.price ?? 0) > 0)
@@ -111,7 +110,6 @@ export default function PaperTrading() {
 
   // Template import from StrategyPanel → OrderTicket
   const [importedTemplate, setImportedTemplate] = useState<StrategyTemplate | null>(null)
-  const [centerTab, setCenterTab] = useState<'positions' | 'pending'>('positions')
 
   // Pending strategy sent from Strategy Builder via localStorage
   const [pendingBuilderStrategy, setPendingBuilderStrategy] = useState<PendingOptionStrategy | null>(() => {
@@ -257,38 +255,21 @@ export default function PaperTrading() {
               <PaperChart initialTicker={chartInitTicker} fills={chartFills} orders={chartOrders}
                 onPlaceOrder={v => placeMutation.mutate(v)} onCancelOrder={id => cancelMutation.mutate(id)} storageKey={uid || 'page'} />
             </div>
-            <div style={{ flex: '2 1 0', minHeight: 0, background: T.surface, border: `1px solid ${T.border}`, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-              {/* Tabs: Positions | Pending Orders */}
-              <div style={{ display: 'flex', borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
-                {([['positions', 'Positions', positions.length], ['pending', 'Pending Orders', pendingCount]] as const).map(([id, label, count]) => {
-                  const active = centerTab === id
-                  return (
-                    <button key={id} onClick={() => setCenterTab(id)} style={{
-                      padding: '8px 16px', fontFamily: T.mono, fontSize: 10, fontWeight: 700,
-                      letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer',
-                      background: 'transparent', border: 'none', borderBottom: `2px solid ${active ? T.gold : 'transparent'}`,
-                      color: active ? T.gold : T.muted,
-                    }}>
-                      {label}<span style={{ color: active ? T.gold : T.dim, marginLeft: 6 }}>{count}</span>
-                    </button>
-                  )
-                })}
+            {/* Stacked: Positions over Pending, each scrolls on its own */}
+            <div style={{ flex: '2 1 0', minHeight: 0, display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden' }}>
+              <div style={{ flex: '1 1 0', minHeight: 0, background: T.surface, border: `1px solid ${T.border}`, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <PositionsPanel positions={positions} />
               </div>
-              <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-                {centerTab === 'positions' ? (
-                  <PositionsPanel positions={positions} embedded />
-                ) : (
-                  <OrdersPanel
-                    orders={orders}
-                    onCancel={id => cancelMutation.mutate(id)}
-                    onCancelAll={() => cancelAllMutation.mutate()}
-                    cancelAllPending={cancelAllMutation.isPending}
-                    cancelAllError={cancelAllMutation.isError}
-                    automatedOrders={automatedOrders}
-                    embedded
-                    initialStatus="pending"
-                  />
-                )}
+              <div style={{ flex: '1 1 0', minHeight: 0, background: T.surface, border: `1px solid ${T.border}`, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <OrdersPanel
+                  orders={orders}
+                  onCancel={id => cancelMutation.mutate(id)}
+                  onCancelAll={() => cancelAllMutation.mutate()}
+                  cancelAllPending={cancelAllMutation.isPending}
+                  cancelAllError={cancelAllMutation.isError}
+                  automatedOrders={automatedOrders}
+                  initialStatus="pending"
+                />
               </div>
             </div>
           </div>
