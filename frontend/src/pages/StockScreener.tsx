@@ -91,10 +91,12 @@ const TABLE_COLS: { key: keyof ScreenResult; label: string; w: string; align: 'l
 // Client-side seeded screens (presets). Selecting one loads its filters + sort.
 interface Preset { id: string; name: string; desc: string; universe?: string; sortBy: string; sortDir: 'asc' | 'desc'; sortParam?: string; filters: { field: string; operator: string; value: string; param?: string }[] }
 const PRESETS: Preset[] = [
+  { id: 'liquid-large-caps', name: 'Liquid Large Caps', desc: 'Big, liquid names — loads instantly', sortBy: 'marketCap', sortDir: 'desc',
+    filters: [{ field: 'marketCap', operator: 'gt', value: '10' }] },
   { id: 'mega-cap-quality', name: 'Mega-Cap Quality', desc: 'Large, profitable compounders', sortBy: 'marketCap', sortDir: 'desc',
     filters: [{ field: 'marketCap', operator: 'gt', value: '100' }, { field: 'operatingMargin', operator: 'gt', value: '20' }, { field: 'roe', operator: 'gt', value: '15' }] },
   { id: 'deep-value', name: 'Deep Value', desc: 'Low P/E, low price-to-book', sortBy: 'peRatio', sortDir: 'asc',
-    filters: [{ field: 'peRatio', operator: 'between', value: '0' }, { field: 'pbRatio', operator: 'lt', value: '3' }] },
+    filters: [{ field: 'peRatio', operator: 'gt', value: '0' }, { field: 'peRatio', operator: 'lt', value: '15' }, { field: 'pbRatio', operator: 'lt', value: '3' }] },
   { id: 'high-growth', name: 'High Growth', desc: 'Revenue growth over 25%', sortBy: 'revenueGrowth', sortDir: 'desc',
     filters: [{ field: 'revenueGrowth', operator: 'gt', value: '25' }] },
   { id: 'dividend-growers', name: 'Dividend Growers', desc: 'Yield over 2%, profitable', sortBy: 'dividendYield', sortDir: 'desc',

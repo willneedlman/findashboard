@@ -34,7 +34,7 @@ def _norm_tk(t) -> str:
     return str(t).strip().upper().replace(".", "-")
 
 
-def _load_universe() -> "tuple[set, list, dict]":
+def _load_universe() -> "tuple[set, dict]":
     import json
     try:
         path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "index_constituents.json")
@@ -45,12 +45,12 @@ def _load_universe() -> "tuple[set, list, dict]":
         }
         uni = set().union(*sets.values())
         if uni:
-            return uni, sorted(uni), sets
+            return uni, sets
     except Exception as e:
         logger.warning("index constituents load failed: %s", e)
-    return set(), [], {}
+    return set(), {}
 
-_UNIVERSE, _UNIVERSE_LIST, _INDEX_SETS = _load_universe()
+_UNIVERSE, _INDEX_SETS = _load_universe()
 
 
 def _load_intl() -> "tuple[dict, dict]":
@@ -171,7 +171,7 @@ def _resolve_universe(u) -> "tuple[set, str | None]":
 # Max NEW (uncached) tickers a single screen may deep-fetch. Cached fundamentals
 # (30d disk cache, filled by the backfill loop below) enrich for free, so a cold
 # screen stays well under the free-tier FMP daily cap. Tune via env.
-_LIVE_ENRICH_BUDGET = int(os.getenv("SCREENER_LIVE_ENRICH", "8"))
+_LIVE_ENRICH_BUDGET = int(os.getenv("SCREENER_LIVE_ENRICH", "25"))
 
 
 def _backfill_order() -> list:
@@ -215,6 +215,15 @@ def _backfill_once(daily: int) -> int:
         _intl_snapshot(full=True)
     except Exception as e:
         logger.warning("intl snapshot warm failed: %s", e)
+    # Pre-warm price-history metrics (technicals + multi-period price change) for the
+    # most-screened names so the first technical screen of the day isn't a cold 1y
+    # bulk download. Batched to bound memory; runs in the background loop.
+    try:
+        warm = [t for t in _BACKFILL_ORDER if disk_get(f"histv2:{t}") is None][:int(os.getenv("SCREENER_HISTORY_WARM", "120"))]
+        for i in range(0, len(warm), 40):
+            _compute_history_batch(warm[i:i + 40])
+    except Exception as e:
+        logger.warning("history warm failed: %s", e)
     # Hold the redeploy-stacking guard for ~20h after real progress; if nothing
     # was fetched (free daily cap exhausted / throttled), keep a short window so
     # the next run retries once the quota resets instead of idling a full day.
@@ -322,7 +331,17 @@ _PERIOD_DAYS = {"1D": 1, "1W": 5, "1M": 21, "3M": 63, "6M": 126, "1Y": 252}
 # Fields requiring price-history computation (gated so a fundamentals-only screen
 # never pays the history-download cost). priceChange is parameterized by period.
 TECH_FIELDS = {"rsi14", "smaDist50", "smaDist200", "vol30"}
-HISTORY_FIELDS = TECH_FIELDS | {"priceChange"}
+
+
+def _needs_history(field: str, param: "str | None") -> bool:
+    """Whether evaluating this field requires the 1y price-history download. The 1D
+    price change is free from the snapshot, so a Price Change 1D filter/sort does
+    NOT pay the history cost — only technicals and 1W+ periods do."""
+    if field in TECH_FIELDS:
+        return True
+    if field == "priceChange":
+        return (param if param in PRICE_CHANGE_PERIODS else "1D") != "1D"
+    return False
 # Fields that need a per-ticker yfinance fast_info call (the slow part of a screen).
 FASTINFO_FIELDS = {"change52wHiPct", "avgVolume"}
 
@@ -568,32 +587,52 @@ def _enrich(ticker: str, base: dict, claim, want_fastinfo: bool = False) -> dict
 
 # ── Filter application ────────────────────────────────────────────────────────
 
+# Fields served straight from the screener snapshot (no per-ticker fetch). A filter
+# on one of these can be applied before enrichment to narrow the candidate set.
+BASE_FILTER_FIELDS = {"price", "marketCap", "volume", "beta"}
+
+
+def _filter_value(row: dict, f: FilterRule):
+    """Resolve the value a filter compares against. priceChange is parameterized:
+    the free 1D move comes from the snapshot (change1d); longer periods come from
+    computed history (chg:<period>)."""
+    if f.field == "priceChange":
+        p = f.param if f.param in PRICE_CHANGE_PERIODS else "1D"
+        return row.get("change1d") if p == "1D" else row.get(f"chg:{p}")
+    return row.get(f.field)
+
+
+def _compare(v: float, f: FilterRule) -> bool:
+    op = f.operator
+    if op in ("gt",  ">"):  return v > f.value
+    if op in ("gte", ">="): return v >= f.value
+    if op in ("lt",  "<"):  return v < f.value
+    if op in ("lte", "<="): return v <= f.value
+    if op == "eq":          return abs(v - f.value) < 0.01
+    if op == "between":
+        # A one-sided 'between' (no upper bound entered) acts as a lower bound
+        # instead of silently passing everything.
+        return f.value <= v if f.value2 is None else f.value <= v <= f.value2
+    return True
+
+
 def _passes(row: dict, filters: list[FilterRule]) -> bool:
     for f in filters:
-        # priceChange is parameterized: resolve to the chosen period's value.
-        if f.field == "priceChange":
-            val = row.get(f"chg:{f.param if f.param in PRICE_CHANGE_PERIODS else '1D'}")
-        else:
-            val = row.get(f.field)
+        val = _filter_value(row, f)
         if val is None:
             return False
         try:
             v = float(val)
-            fv = float(f.value)
         except (TypeError, ValueError):
             continue
-        if   f.operator in ("gt",  ">"):  ok = v > fv
-        elif f.operator in ("gte", ">="): ok = v >= fv
-        elif f.operator in ("lt",  "<"):  ok = v < fv
-        elif f.operator in ("lte", "<="): ok = v <= fv
-        elif f.operator == "eq":          ok = abs(v - fv) < 0.01
-        elif f.operator == "between" and f.value2 is not None:
-            ok = fv <= v <= float(f.value2)
-        else:
-            ok = True
-        if not ok:
+        if not _compare(v, f):
             return False
     return True
+
+
+def _is_base_filter(f: FilterRule) -> bool:
+    return f.field in BASE_FILTER_FIELDS or (
+        f.field == "priceChange" and (f.param if f.param in PRICE_CHANGE_PERIODS else "1D") == "1D")
 
 # ── Technical indicators (computed from daily closes) ─────────────────────────
 
@@ -686,7 +725,7 @@ def _compute_history_batch(tickers: list[str]) -> dict:
 def run_screen(req: ScreenRequest):
     import json, hashlib
     # Bump CACHE_VER whenever screener logic changes to invalidate stale disk-cached results
-    CACHE_VER = "v15"
+    CACHE_VER = "v16"
     cache_key = CACHE_VER + hashlib.md5(json.dumps(req.model_dump(), sort_keys=True).encode()).hexdigest()
     with _lock:
         if cache_key in _screen_cache:
@@ -708,7 +747,7 @@ def run_screen(req: ScreenRequest):
     # Technical indicators and price-change periods need price history, so only
     # compute them when a filter or the sort references one (keeps fundamentals-
     # only screens fast).
-    need_history = req.sort_by in HISTORY_FIELDS or any(f.field in HISTORY_FIELDS for f in req.filters)
+    need_history = _needs_history(req.sort_by, req.sort_param) or any(_needs_history(f.field, f.param) for f in req.filters)
     need_fastinfo = req.sort_by in FASTINFO_FIELDS or any(f.field in FASTINFO_FIELDS for f in req.filters)
 
     fmp_screened = False  # tracks whether FMP already applied sector/exchange filtering
@@ -763,16 +802,20 @@ def run_screen(req: ScreenRequest):
         "SHOP","SQ","PYPL","COIN","HOOD","MSTR","PLTR","RBLX","UBER","LYFT",
     ]
 
-    if not candidates:
+    # yfinance fill. Runs when the FMP snapshot gave no US base data (no key /
+    # throttled) so US screens aren't left empty — or international-only, since the
+    # intl snapshot above can pre-fill `candidates` and would otherwise suppress the
+    # old `if not candidates` US fallback. Appends (deduped) rather than replaces.
+    us_missing = not is_intl and not fmp_screened
+    if us_missing or not candidates:
         filter_sector = effective_sector.lower() if effective_sector else None
-        # Use sector-specific tickers when sector is requested; otherwise use broad list
+        # Sector → its liquid members; a specific index → that index (capped, since
+        # each name is a separate fast_info call); 'All' → curated megacaps (the
+        # alpha-sorted universe would miss most large names in a 60-name slice).
         if filter_sector and filter_sector in SECTOR_TICKERS:
             tickers_to_fetch = SECTOR_TICKERS[filter_sector]
-        elif _UNIVERSE_LIST:
-            # Broad fallback over the index universe; capped because each name is a
-            # separate yfinance fast_info call (this path only runs when FMP is down).
-            sel = uni_set if req.universe else None
-            tickers_to_fetch = (sorted(sel) if sel else _UNIVERSE_LIST)[:150]
+        elif req.universe and uni_set:
+            tickers_to_fetch = sorted(uni_set)[:60]
         else:
             tickers_to_fetch = LIQUID_TICKERS
 
@@ -781,68 +824,43 @@ def run_screen(req: ScreenRequest):
                 fi = yf.Ticker(tk).fast_info
                 price = getattr(fi, "last_price", None)
                 mc    = getattr(fi, "market_cap", None)
+                prev  = getattr(fi, "previous_close", None)
                 # International listings quote price/market cap in local currency;
-                # normalize to USD so they compare against US names.
+                # normalize to USD so they compare against US names. The 1D change is
+                # a ratio, so it needs no FX conversion.
                 rate, divisor = (_fx_to_usd(getattr(fi, "currency", None)) if is_intl else (1.0, 1.0))
                 price_usd = float(price) / divisor * rate if price else None
                 mc_usd    = float(mc) / divisor * rate if mc else None
                 return {"ticker": tk, "companyName": _INTL_NAMES.get(tk) or tk,
                         "price":     round(price_usd, 2) if price_usd else None,
                         "marketCap": round(mc_usd / 1e9, 2) if mc_usd else None,
+                        "change1d":  round((float(price) / prev - 1) * 100, 2) if price and prev else None,
                         "beta": None, "volume": None, "sector": "", "industry": "", "exchange": "",
                         "country": _INTL_COUNTRY.get(str(req.universe).lower()) if is_intl else ""}
             except Exception:
                 return None
 
+        have = {c["ticker"] for c in candidates}
+        fetch = [t for t in tickers_to_fetch if t not in have]
         with concurrent.futures.ThreadPoolExecutor(max_workers=15) as ex:
-            results = list(ex.map(_quick, tickers_to_fetch))
-        candidates = [r for r in results if r and r.get("price")]
+            results = list(ex.map(_quick, fetch))
+        new_rows = [r for r in results if r and r.get("price")]
         # Pre-fill sector so post-enrichment filter doesn't strip them if yfinance/FMP fails
         if filter_sector and effective_sector:
-            for c in candidates:
+            for c in new_rows:
                 if not c.get("sector"):
                     c["sector"] = effective_sector
-
-    if not candidates:
-        try:
-            from ai_client import groq_complete, parse_json
-            tickers_str = ", ".join(LIQUID_TICKERS[:20])
-            raw = groq_complete(
-                f"Return estimated fundamentals for: {tickers_str}\n"
-                "JSON array with fields: ticker, companyName, sector, exchange, marketCap(B), "
-                "peRatio, operatingMargin(%), netMargin(%), revenueGrowth(%), beta, price, isAiEstimate=true. "
-                "No markdown, just the array.",
-                max_tokens=1500,
-            )
-            ai_rows = parse_json(raw)
-            if isinstance(ai_rows, list):
-                candidates = [
-                    {
-                        "ticker":    r.get("ticker", ""),
-                        "companyName": r.get("companyName", r.get("ticker", "")),
-                        "price":     r.get("price"),
-                        "marketCap": r.get("marketCap"),
-                        "peRatio":   r.get("peRatio"),
-                        "operatingMargin": r.get("operatingMargin"),
-                        "netMargin": r.get("netMargin"),
-                        "revenueGrowth": r.get("revenueGrowth"),
-                        "beta":      r.get("beta"),
-                        "sector":    r.get("sector", ""),
-                        "exchange":  r.get("exchange", ""),
-                        "isAiEstimate": True,
-                        "change1d": None, "volume": None, "forwardPE": None,
-                        "pbRatio": None, "psRatio": None, "evEbitda": None,
-                        "grossMargin": None, "roe": None, "debtEquity": None,
-                        "currentRatio": None, "epsGrowth": None,
-                        "dividendYield": None, "change52wHiPct": None, "avgVolume": None,
-                    }
-                    for r in ai_rows if r.get("ticker")
-                ]
-        except Exception as e:
-            logger.warning("AI screener fallback failed: %s", e)
+        candidates += new_rows
 
     if not candidates:
         raise HTTPException(503, "No data source available. Configure FMP_API_KEY for best results.")
+
+    # Apply snapshot-served base filters (price, market cap, volume, beta, 1D change)
+    # before enrichment so the deep-fetch budget lands on names that already pass the
+    # cheap constraints — and a tightly-scoped screen enriches far fewer tickers.
+    base_filters = [f for f in req.filters if _is_base_filter(f)]
+    if base_filters:
+        candidates = [c for c in candidates if _passes(c, base_filters)]
 
     # Sort by market cap before capping so the largest names (incl. international,
     # which are appended unsorted) survive the cap. Enrichment is cache-backed and
@@ -872,8 +890,13 @@ def run_screen(req: ScreenRequest):
         enriched = [r for r in enriched if (r.get("exchange") or "").lower() == fe]
 
     # Region is derived from the company's country; filter on it when requested.
+    # Names in the bundled US indexes default to United States so Region still works
+    # when FMP (the usual country source) is throttled and country comes back blank.
     for r in enriched:
-        r["region"] = _COUNTRY_REGION.get(r.get("country") or "")
+        country = r.get("country")
+        if not country and _norm_tk(r.get("ticker", "")) in _UNIVERSE:
+            country = r["country"] = "United States"
+        r["region"] = _COUNTRY_REGION.get(country or "")
     if req.region:
         enriched = [r for r in enriched if r.get("region") == req.region]
 
