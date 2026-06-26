@@ -302,14 +302,14 @@ function AdminPanel() {
               </div>
             )}
             {/* User table */}
-            <div style={{ border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', overflow: 'hidden', maxHeight: 340, overflowY: 'auto' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 90px 70px 50px 100px', background: 'var(--theme-bg, #080f1d)', padding: '5px 10px', position: 'sticky', top: 0, borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+            <div style={{ border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', maxHeight: 340, overflowY: 'auto', overflowX: 'auto' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 90px 70px 50px 100px', minWidth: 480, background: 'var(--theme-bg, #080f1d)', padding: '5px 10px', position: 'sticky', top: 0, borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
                 {['Display','Username','Joined','Last Login','Logins','Actions'].map(h => (
                   <span key={h} style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, color: 'var(--theme-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{h}</span>
                 ))}
               </div>
               {data.users.map((u, i) => (
-                <div key={u.username} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 90px 70px 50px 100px', padding: '5px 10px', background: i % 2 === 0 ? 'var(--theme-surface, #0d1826)' : 'transparent', borderBottom: i < data.users.length - 1 ? '1px solid #1a2535' : 'none', alignItems: 'center' }}>
+                <div key={u.username} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 90px 70px 50px 100px', minWidth: 480, padding: '5px 10px', background: i % 2 === 0 ? 'var(--theme-surface, #0d1826)' : 'transparent', borderBottom: i < data.users.length - 1 ? '1px solid #1a2535' : 'none', alignItems: 'center' }}>
                   <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-text, #d7e3fc)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.display_name}</span>
                   <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary)' }}>@{u.username}</span>
                   <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary)' }}>{new Date(u.created_at).toLocaleDateString()}</span>
@@ -740,15 +740,15 @@ export default function Settings() {
                     <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>
                       All profiles on this device
                     </div>
-                    <div style={{ border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', overflow: 'hidden' }}>
+                    <div style={{ border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', overflowX: 'auto' }}>
                       {/* Header */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 90px 60px', background: 'var(--theme-bg, #080f1d)', padding: '5px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 90px 60px', minWidth: 420, background: 'var(--theme-bg, #080f1d)', padding: '5px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
                         {['Display Name', 'Username', 'Created', ''].map(h => (
                           <span key={h} style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{h}</span>
                         ))}
                       </div>
                       {allUsers.map((u, i) => (
-                        <div key={u.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 90px 60px', padding: '6px 10px', background: i % 2 === 0 ? 'var(--theme-surface, #0d1826)' : 'transparent', borderBottom: i < allUsers.length - 1 ? '1px solid #1a2535' : 'none', alignItems: 'center' }}>
+                        <div key={u.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 90px 60px', minWidth: 420, padding: '6px 10px', background: i % 2 === 0 ? 'var(--theme-surface, #0d1826)' : 'transparent', borderBottom: i < allUsers.length - 1 ? '1px solid #1a2535' : 'none', alignItems: 'center' }}>
                           <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: u.id === user.id ? 'var(--theme-primary)' : 'var(--theme-text, #d7e3fc)' }}>
                             {u.displayName}
                           </span>

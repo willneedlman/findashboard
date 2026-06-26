@@ -4,6 +4,7 @@ import axios from 'axios'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer, Cell } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
+import useIsMobile from '../hooks/useIsMobile'
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 
@@ -97,6 +98,7 @@ function Section({ title, children }: { title: React.ReactNode; children: React.
 }
 
 export default function StressTester() {
+  const isMobile = useIsMobile()
   const [pmSource, setPmSource] = useState(false)
 
   const [holdings, setHoldings] = useState<Holding[]>(() => {
@@ -180,7 +182,7 @@ export default function StressTester() {
           title="Portfolio Stress Tester"
         />
 
-        <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 24, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : '300px 1fr', gap: isMobile ? 16 : 24, alignItems: 'start' }}>
 
           {/* ── Left panel: inputs ── */}
           <div>

@@ -149,11 +149,11 @@ export function WidenControl({ value, onStep, format }: { value: number; onStep:
   return (
     <div title="Widen this row's spread (adds to base half-spread)"
       style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, marginTop: 3 }}>
-      <button style={btn} onClick={e => step(e, -1)} aria-label="Tighten spread">-</button>
+      <button className="mm-widen-btn" style={btn} onClick={e => step(e, -1)} aria-label="Tighten spread">-</button>
       <span style={{ fontFamily: V.mono, fontSize: 9, fontWeight: 700, color: on ? V.gold : V.sec, minWidth: 34, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
         {format(value)}
       </span>
-      <button style={btn} onClick={e => step(e, 1)} aria-label="Widen spread">+</button>
+      <button className="mm-widen-btn" style={btn} onClick={e => step(e, 1)} aria-label="Widen spread">+</button>
     </div>
   )
 }

@@ -658,7 +658,7 @@ export default function TradeJournal() {
     <PageWrapper title="Trade Journal">
       <div style={{
         display: 'flex',
-        height: 'calc(100vh - 52px)',
+        height: 'calc(100dvh - 52px)',
         background: C.bg,
         fontFamily: C.mono,
         overflow: 'hidden',

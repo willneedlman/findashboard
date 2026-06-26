@@ -3,6 +3,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import PageWrapper from '../components/PageWrapper'
 import { Widget, HeaderBar, KpiCell, RiskMeterStrip, QuoteCell, Stepper, Chips, WidenControl } from '../components/mmCockpit'
 import { useChallenge, ModeToggle, ChallengeClock, LeaderboardModal, CHALLENGE_SPEED, type SimMode } from '../components/mmChallenge'
+import useIsMobile from '../hooks/useIsMobile'
 
 /*
  * Options MM Simulator
@@ -273,6 +274,7 @@ interface Frame {
 }
 
 export default function OptionsMarketMaker() {
+  const isMobile = useIsMobile()
   const sim = useRef<SimState>(freshState())
   const [baseIv, setBaseIv]         = useState(0.25)
   const [skew, setSkew]             = useState(0.06)
@@ -484,7 +486,7 @@ export default function OptionsMarketMaker() {
           </div>
 
           {/* Middle row: slim Controls | tall Tape | Hedge */}
-          <div style={{ display: 'grid', gridTemplateColumns: '250px 1fr 230px', gap: 8, alignItems: 'stretch' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : '250px 1fr 230px', gap: 8, alignItems: 'stretch' }}>
             {/* MM Controls */}
             <Widget title="MM Controls" bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '10px 12px' }}>
               <div>

@@ -294,7 +294,7 @@ export default function StockScreener() {
 
   return (
     <PageWrapper>
-      <div style={{ height: 'calc(100vh - 36px)', display: 'flex', flexDirection: 'column', background: C.bg, border: `1px solid ${C.border}` }}>
+      <div style={{ height: 'calc(100dvh - 36px)', display: 'flex', flexDirection: 'column', background: C.bg, border: `1px solid ${C.border}` }}>
 
         {/* title bar */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '15px 24px', borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 22%, transparent)', flex: 'none' }}>

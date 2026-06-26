@@ -8,6 +8,7 @@ import PortfolioIO, { type PortfolioAsset } from '../components/PortfolioIO'
 import { usePortfolio } from '../contexts/PortfolioContext'
 import { FUTURES, FUTURES_BY_GROUP, futuresSpec } from '../lib/futures'
 import { normalizeTicker } from '../lib/pmImport'
+import useIsMobile from '../hooks/useIsMobile'
 
 
 const STORAGE_KEY = 'ft-portfolio-manager'
@@ -177,6 +178,7 @@ const editInp: React.CSSProperties = {
 type Upd<T> = T | ((prev: T) => T)
 
 export default function PortfolioManager() {
+  const isMobile = useIsMobile()
   const navigate = useNavigate()
   // Multi-portfolio store — the active tab is the working set. The position
   // setters below patch the active portfolio so the rest of the component (add/
@@ -554,7 +556,7 @@ export default function PortfolioManager() {
           <button onClick={addPortfolio} style={{ background: 'none', border: 'none', color: T.gold, cursor: 'pointer', fontFamily: T.label, fontSize: 11, fontWeight: 700, padding: '6px 10px', letterSpacing: '0.08em' }}>+ New</button>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 24, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : '260px 1fr', gap: isMobile ? 16 : 24, alignItems: 'start' }}>
 
           {/* ── Left panel ── */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>

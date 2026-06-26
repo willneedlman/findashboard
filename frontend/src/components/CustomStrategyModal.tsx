@@ -498,7 +498,7 @@ export default function CustomStrategyModal({ open, onClose, onSave, initialDef 
       {/* Drawer */}
       <div style={{
         position: 'relative', zIndex: 1,
-        width: 'min(820px, 96vw)', height: '100vh',
+        width: 'min(820px, 96vw)', height: '100dvh',
         background: T.bg, borderLeft: `1px solid ${T.border}`,
         display: 'flex', flexDirection: 'column',
         overflowY: 'auto',

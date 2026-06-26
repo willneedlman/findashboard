@@ -512,6 +512,15 @@ textarea:focus:not(:focus-visible) {
   color: var(--theme-primary, #c9a84c);
 }
 
+/* Touch devices: enlarge the densest cockpit controls for finger taps without
+   changing the desktop mouse layout. Overrides the inline sizes (which win over
+   classes normally) only under a coarse pointer. */
+@media (pointer: coarse) {
+  .mm-chev { width: 30px !important; height: 22px !important; }
+  .mm-quote { min-height: 34px !important; }
+  .mm-widen-btn { width: 26px !important; height: 26px !important; }
+}
+
 /* Screener Screen Library rail collapse/expand */
 .ft-rail { transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1); }
 .ft-screen-row:hover { background: color-mix(in srgb, var(--theme-primary, #c9a84c) 5%, transparent) !important; }

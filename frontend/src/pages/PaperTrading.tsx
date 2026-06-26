@@ -17,6 +17,7 @@ import { useAuth, adaptAccount, T, inp, sel, lbl, btn, sectionHeader, fmt$, fmtD
 import { OrderTicket } from './paper-trading/OrderTicket'
 import { PositionsPanel, OrdersPanel } from './paper-trading/Positions'
 import { StrategyPanel } from './paper-trading/StrategyPanel'
+import useIsMobile from '../hooks/useIsMobile'
 
 
 // OCC option symbol helpers live in lib/occ (shared with the paper-trade widget).
@@ -24,6 +25,7 @@ import { StrategyPanel } from './paper-trading/StrategyPanel'
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function PaperTrading() {
+  const isMobile = useIsMobile()
   const queryClient = useQueryClient()
   const { uid, authed, headers } = useAuth()
 
@@ -136,10 +138,10 @@ export default function PaperTrading() {
   const [pendingUnderlying, setPendingUnderlying] = useState<string | null>(null)
 
   // Column height tracking
-  const [bodyHeight, setBodyHeight] = useState('calc(100vh - 130px)')
+  const [bodyHeight, setBodyHeight] = useState('calc(100dvh - 130px)')
   useEffect(() => {
     function updateHeight() {
-      setBodyHeight(`calc(100vh - 130px)`)
+      setBodyHeight(`calc(100dvh - 130px)`)
     }
     window.addEventListener('resize', updateHeight)
     return () => window.removeEventListener('resize', updateHeight)
@@ -228,17 +230,20 @@ export default function PaperTrading() {
 
         {(<>
         <div style={{
-          display: 'flex', gap: 10, alignItems: 'flex-start',
-          height: bodyHeight, overflow: 'hidden',
+          display: 'flex', gap: 10,
+          alignItems: 'flex-start',
+          flexDirection: isMobile ? 'column' : 'row',
+          height: isMobile ? 'auto' : bodyHeight,
+          overflow: isMobile ? 'visible' : 'hidden',
         }}>
           {/* Left: Order Ticket — 300px */}
           <div style={{
-            width: 300, flexShrink: 0,
+            width: isMobile ? '100%' : 300, flexShrink: 0,
             background: T.surface,
             border: `1px solid ${T.border}`,
             display: 'flex', flexDirection: 'column',
-            height: '100%',
-            overflow: 'hidden',
+            height: isMobile ? 'auto' : '100%',
+            overflow: isMobile ? 'visible' : 'hidden',
           }}>
             <OrderTicket
               onOrderPlaced={invalidateAccount}
@@ -250,17 +255,17 @@ export default function PaperTrading() {
           </div>
 
           {/* Right of the ticket: Chart over tabbed Positions / Pending Orders */}
-          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 10, height: '100%', overflow: 'hidden' }}>
-            <div style={{ flex: '3 1 0', minHeight: 0, background: T.surface, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
+          <div style={{ flex: 1, minWidth: 0, width: isMobile ? '100%' : undefined, display: 'flex', flexDirection: 'column', gap: 10, height: isMobile ? 'auto' : '100%', overflow: isMobile ? 'visible' : 'hidden' }}>
+            <div style={{ flex: isMobile ? 'none' : '3 1 0', height: isMobile ? 340 : undefined, minHeight: 0, background: T.surface, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
               <PaperChart initialTicker={chartInitTicker} fills={chartFills} orders={chartOrders}
                 onPlaceOrder={v => placeMutation.mutate(v)} onCancelOrder={id => cancelMutation.mutate(id)} storageKey={uid || 'page'} />
             </div>
             {/* Stacked: Positions over Pending, each scrolls on its own */}
-            <div style={{ flex: '2 1 0', minHeight: 0, display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden' }}>
-              <div style={{ flex: '1 1 0', minHeight: 0, background: T.surface, border: `1px solid ${T.border}`, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ flex: isMobile ? 'none' : '2 1 0', minHeight: 0, display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden' }}>
+              <div style={{ flex: isMobile ? 'none' : '1 1 0', height: isMobile ? 300 : undefined, minHeight: 0, background: T.surface, border: `1px solid ${T.border}`, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                 <PositionsPanel positions={positions} />
               </div>
-              <div style={{ flex: '1 1 0', minHeight: 0, background: T.surface, border: `1px solid ${T.border}`, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <div style={{ flex: isMobile ? 'none' : '1 1 0', height: isMobile ? 300 : undefined, minHeight: 0, background: T.surface, border: `1px solid ${T.border}`, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                 <OrdersPanel
                   orders={orders}
                   onCancel={id => cancelMutation.mutate(id)}

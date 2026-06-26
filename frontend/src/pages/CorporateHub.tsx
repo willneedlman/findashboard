@@ -142,14 +142,14 @@ function InsiderPanel({ sorted, insiderData, insiderPending }: {
   const toggle = (tk: string) => setExpanded(p => ({ ...p, [tk]: !p[tk] }))
 
   return (
-    <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+    <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', overflowX: 'auto' }}>
       <div style={{ padding: '6px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)', display: 'flex', alignItems: 'center', gap: 10 }}>
         <span style={{ ...LABEL_S, color: 'var(--theme-text, #d7e3fc)' }}>Insider Transaction Flow</span>
         {insiderPending && <span style={{ fontSize: 10, color: 'var(--theme-secondary, #99907e)', letterSpacing: '0.1em' }}>FETCHING…</span>}
       </div>
 
       {/* Summary header */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 110px 90px 90px 24px', padding: '5px 10px', background: 'var(--theme-bg, #0a1628)', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 110px 90px 90px 24px', minWidth: 540, padding: '5px 10px', background: 'var(--theme-bg, #0a1628)', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
         {['Ticker', 'Txns', 'Latest Move', 'Last Date', 'Total Value', ''].map(h => (
           <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-text-faint, rgba(255,255,255,0.22))' }}>{h}</div>
         ))}
@@ -172,7 +172,7 @@ function InsiderPanel({ sorted, insiderData, insiderPending }: {
             <div
               onClick={() => txs && txs.length > 0 && toggle(row.ticker)}
               style={{
-                display: 'grid', gridTemplateColumns: '1fr 90px 110px 90px 90px 24px',
+                display: 'grid', gridTemplateColumns: '1fr 90px 110px 90px 90px 24px', minWidth: 540,
                 padding: '6px 10px', borderBottom: '1px solid var(--theme-hover, rgba(255,255,255,0.04))',
                 cursor: txs && txs.length > 0 ? 'pointer' : 'default', alignItems: 'center',
               }}
