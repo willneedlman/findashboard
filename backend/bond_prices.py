@@ -85,13 +85,30 @@ _SSGA_FUNDS = ("SPAB", "TOTL", "STOT",
                "TFI", "SHM", "HYMB")                      # municipals
 
 
+_SSGA_DEADLINE = 60   # seconds; SSGA throttles datacenter IPs, so cap the wall time per file
+
+
+def _download_deadline(url: str, deadline: int = _SSGA_DEADLINE) -> bytes:
+    """Stream a download with a hard wall-clock cap. requests' `timeout` only
+    guards per-read gaps, so a steady-but-slow transfer (SSGA throttles Fly to
+    ~100s/file) never trips it and pins a worker for minutes. Abort past the cap
+    so the background build stays bounded; the fund just retries next cycle."""
+    start = time.monotonic()
+    with requests.get(url, headers=_BROWSER_UA, timeout=(5, 15), stream=True) as r:
+        r.raise_for_status()
+        buf = io.BytesIO()
+        for chunk in r.iter_content(64 * 1024):
+            buf.write(chunk)
+            if time.monotonic() - start > deadline:
+                raise TimeoutError(f"download exceeded {deadline}s deadline")
+        return buf.getvalue()
+
+
 def _ssga_holdings(fund: str) -> dict:
     import openpyxl
     url = ("https://www.ssga.com/us/en/intermediary/library-content/products/"
            f"fund-data/etfs/us/holdings-daily-us-en-{fund.lower()}.xlsx")
-    r = requests.get(url, headers=_BROWSER_UA, timeout=25)
-    r.raise_for_status()
-    wb = openpyxl.load_workbook(io.BytesIO(r.content), read_only=True, data_only=True)
+    wb = openpyxl.load_workbook(io.BytesIO(_download_deadline(url)), read_only=True, data_only=True)
     rows = list(wb.active.iter_rows(values_only=True))
 
     as_of = None
@@ -166,7 +183,11 @@ def _build_etf_map() -> dict:
     it off the request path (warm_etf_map / background)."""
     from concurrent.futures import ThreadPoolExecutor
     m: dict = {}
-    with ThreadPoolExecutor(max_workers=8) as pool:
+    # Low concurrency: the prod box is small and openpyxl parsing is CPU-bound, so
+    # many parallel parses starved request handling during the warm. Two at a time
+    # keeps the app responsive; the build just takes longer (it's off the request
+    # path). Per-fund caching means partial coverage accumulates across cycles.
+    with ThreadPoolExecutor(max_workers=2) as pool:
         for h in pool.map(_ssga_holdings_cached, _SSGA_FUNDS):
             m.update(h)
     if m:                                              # never cache an empty (failed) build
