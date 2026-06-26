@@ -19,6 +19,7 @@ import re
 import time
 import base64
 import logging
+import threading
 import requests
 
 logger = logging.getLogger(__name__)
@@ -155,19 +156,56 @@ def _ssga_holdings_cached(fund: str) -> dict:
     return h
 
 
-def _etf_price_map() -> dict:
-    cached = disk_get("etf_px_map:v5")
-    if cached is not None:
-        return cached
-    # Fetch funds concurrently: total build time is the slowest single download,
-    # not the sum, so the combined map stays well inside the request timeout.
+_etf_build_lock = threading.Lock()
+_etf_building = False
+
+
+def _build_etf_map() -> dict:
+    """Download + parse all 21 SPDR holdings sheets and combine them. Slow: SSGA
+    throttles datacenter IPs to ~100s per file, so a cold build is minutes. Run
+    it off the request path (warm_etf_map / background)."""
     from concurrent.futures import ThreadPoolExecutor
     m: dict = {}
     with ThreadPoolExecutor(max_workers=8) as pool:
         for h in pool.map(_ssga_holdings_cached, _SSGA_FUNDS):
             m.update(h)
-    disk_set("etf_px_map:v5", m, ttl=43200)           # 12 h
+    if m:                                              # never cache an empty (failed) build
+        disk_set("etf_px_map:v5", m, ttl=43200)        # 12 h
     return m
+
+
+def warm_etf_map() -> None:
+    """Kick off a one-shot background build if the combined map isn't cached.
+    Idempotent: a build already in flight is not duplicated. Called at startup so
+    the first issuer search hits a warm cache instead of a multi-minute download."""
+    global _etf_building
+    if disk_get("etf_px_map:v5") is not None:
+        return
+    with _etf_build_lock:
+        if _etf_building:
+            return
+        _etf_building = True
+
+    def _run() -> None:
+        global _etf_building
+        try:
+            _build_etf_map()
+        except Exception as e:                         # pragma: no cover - defensive
+            logger.warning("etf map warm failed: %s", e)
+        finally:
+            _etf_building = False
+
+    threading.Thread(target=_run, name="etf-map-warm", daemon=True).start()
+
+
+def _etf_price_map() -> dict:
+    """Combined ETF holdings map. Returns the cached map, or {} while a background
+    build populates it — never blocks the request on the slow cold download."""
+    cached = disk_get("etf_px_map:v5")
+    if cached is not None:
+        return cached
+    warm_etf_map()
+    return {}
 
 
 def search_issuers(q: str, max_entities: int = 12, max_bonds: int = 40) -> list:
