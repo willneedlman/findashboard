@@ -41,11 +41,13 @@ def _binance_price(sym: str) -> "float | None":
     return None
 
 
-@ttl_cache(maxsize=1024, ttl=4)
-def live_price(symbol: str) -> "float | None":
-    sym = (symbol or "").strip().upper()
-    if not sym:
-        return None
+@ttl_cache(maxsize=1024, ttl=1)   # crypto ticks fast — 1s so the 1s REST fallback stays fresh
+def _crypto_price(sym: str) -> "float | None":
+    return _binance_price(sym)
+
+
+@ttl_cache(maxsize=1024, ttl=4)   # equities/futures/FX don't move sub-second; 4s respects upstream limits
+def _slow_price(sym: str) -> "float | None":
     # Tradier: real-time, but only US equities/ETFs/options.
     try:
         import tradier
@@ -56,10 +58,6 @@ def live_price(symbol: str) -> "float | None":
                 return float(last)
     except Exception:
         pass
-    # Binance: real-time crypto, no key.
-    p = _binance_price(sym)
-    if p:
-        return p
     # yfinance fast_info: futures, FX, and an equity/crypto fallback.
     try:
         import yfinance as yf
@@ -69,3 +67,14 @@ def live_price(symbol: str) -> "float | None":
     except Exception:
         pass
     return None
+
+
+def live_price(symbol: str) -> "float | None":
+    sym = (symbol or "").strip().upper()
+    if not sym:
+        return None
+    if sym.endswith("-USD"):              # crypto: Binance real-time, 1s-cached
+        p = _crypto_price(sym)
+        if p:
+            return p
+    return _slow_price(sym)               # else (or Binance miss): Tradier -> yfinance, 4s-cached
