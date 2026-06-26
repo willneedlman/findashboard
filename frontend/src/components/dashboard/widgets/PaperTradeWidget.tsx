@@ -36,7 +36,7 @@ const orderTag = (o: OrderRow) => `${String(o.side).startsWith('buy') ? 'BUY' : 
 const isPendingEquityLine = (o: OrderRow, ticker: string) =>
   isPending(o) && o.symbol === ticker && !o.option_symbol &&
   ['limit', 'stop', 'stop_limit'].includes((o.order_type ?? '').toLowerCase()) && orderPrice(o) > 0
-interface Account { cash: number; equity: number; buying_power: number; realized_pnl: number; positions: Position[]; option_positions?: OptionPosition[]; orders?: OrderRow[] }
+interface Account { cash: number; equity: number; buying_power: number; margin_used?: number; realized_pnl: number; positions: Position[]; option_positions?: OptionPosition[]; orders?: OrderRow[] }
 interface PaperOrder { status: string; reason: string | null; fill_price: number | null }
 type OType = 'market' | 'limit' | 'stop'
 
@@ -872,9 +872,13 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
             {result && <div style={{ fontFamily: T.mono, fontSize: 10, color: result.ok ? T.pos : T.neg, lineHeight: 1.3 }}>{result.text}</div>}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '6px 10px', borderBottom: `1px solid ${T.border}` }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '6px 10px 3px' }}>
             <span style={{ ...lbl, fontSize: 9 }}>Buying power</span>
             <span style={{ fontFamily: T.mono, fontSize: 12, fontWeight: 700, color: T.text }}>{acct ? money(acct.buying_power) : '—'}</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '0 10px 6px', borderBottom: `1px solid ${T.border}` }}>
+            <span style={{ ...lbl, fontSize: 9 }}>Margin held</span>
+            <span style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: acct?.margin_used ? T.gold : T.muted }}>{acct ? money(acct.margin_used ?? 0) : '—'}</span>
           </div>
 
           {/* Two stacked sections — Positions over Pending — each scrolls on its own. */}
