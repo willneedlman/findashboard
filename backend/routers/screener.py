@@ -53,6 +53,28 @@ def _load_universe() -> "tuple[set, dict]":
 _UNIVERSE, _INDEX_SETS = _load_universe()
 
 
+def _load_us_fundamentals() -> dict:
+    # Bundled basic stats (sector + ratios + margins + growth) for the US universe,
+    # built offline from Finnhub by scripts/build_us_fundamentals.py. Serves as the
+    # durable fallback so major US names always show real data when FMP is throttled
+    # or a name's deep fundamentals aren't cached yet. Keyed by normalized ticker.
+    import json
+    try:
+        path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "us_fundamentals.json")
+        d = json.load(open(path))
+        return {_norm_tk(k): v for k, v in d.items()} if isinstance(d, dict) else {}
+    except Exception as e:
+        logger.warning("us fundamentals load failed: %s", e)
+        return {}
+
+_US_FUND = _load_us_fundamentals()
+# Fundamental + descriptive fields the bundled seed can backfill on a row.
+_SEED_FIELDS = ("companyName", "sector", "industry", "country", "beta", "peRatio",
+                "pbRatio", "psRatio", "evEbitda", "pegRatio", "grossMargin",
+                "operatingMargin", "netMargin", "roe", "roa", "debtEquity",
+                "currentRatio", "revenueGrowth", "epsGrowth", "dividendYield")
+
+
 def _load_intl() -> "tuple[dict, dict]":
     # International tickers keep their exchange-suffix dot (SAP.DE, 7203.T), so they
     # are NOT run through _norm_tk (which would turn the dot into a dash). Names are
@@ -571,6 +593,15 @@ def _enrich(ticker: str, base: dict, claim, want_fastinfo: bool = False) -> dict
             except Exception:
                 pass
 
+        # Bundled US fundamentals fallback: fill any basic stat still missing after
+        # the FMP path (throttled / not yet cached) so US names never show blank
+        # fundamentals or sector. Live FMP/base values always take precedence.
+        seed = _US_FUND.get(_norm_tk(ticker)) if _US_FUND else None
+        if seed:
+            for k in _SEED_FIELDS:
+                if detail.get(k) in (None, "") and base.get(k) in (None, "") and seed.get(k) not in (None, ""):
+                    detail[k] = seed[k]
+
         # Name/sector come from the FMP screener result (base) or the FMP profile
         # above; fall back to the ticker so a row never shows blank.
         if not detail.get("companyName") and not base.get("companyName"):
@@ -725,7 +756,7 @@ def _compute_history_batch(tickers: list[str]) -> dict:
 def run_screen(req: ScreenRequest):
     import json, hashlib
     # Bump CACHE_VER whenever screener logic changes to invalidate stale disk-cached results
-    CACHE_VER = "v16"
+    CACHE_VER = "v17"
     cache_key = CACHE_VER + hashlib.md5(json.dumps(req.model_dump(), sort_keys=True).encode()).hexdigest()
     with _lock:
         if cache_key in _screen_cache:
@@ -802,12 +833,23 @@ def run_screen(req: ScreenRequest):
         "SHOP","SQ","PYPL","COIN","HOOD","MSTR","PLTR","RBLX","UBER","LYFT",
     ]
 
-    # yfinance fill. Runs when the FMP snapshot gave no US base data (no key /
-    # throttled) so US screens aren't left empty — or international-only, since the
-    # intl snapshot above can pre-fill `candidates` and would otherwise suppress the
-    # old `if not candidates` US fallback. Appends (deduped) rather than replaces.
     us_missing = not is_intl and not fmp_screened
-    if us_missing or not candidates:
+    # Durable US fill: when FMP gave no live US base data, seed the chosen universe
+    # straight from the bundled fundamentals snapshot so major US names always appear
+    # with real stats (sector, ratios, margins) instead of a blank, near-empty board.
+    if us_missing and _US_FUND:
+        want = uni_set if req.universe else _UNIVERSE
+        have = {_norm_tk(c["ticker"]) for c in candidates}
+        seeded = [dict(_US_FUND[t]) for t in want if t in _US_FUND and t not in have]
+        if effective_sector:
+            fs = effective_sector.lower()
+            seeded = [r for r in seeded if (r.get("sector") or "").lower() == fs]
+        candidates += seeded
+
+    # yfinance fill — last resort when neither FMP nor the bundled seed covered the
+    # request (e.g. the seed file is missing, or an international-only universe with a
+    # cold intl snapshot). Each name is a separate fast_info call, so it stays capped.
+    if not candidates or (us_missing and not _US_FUND):
         filter_sector = effective_sector.lower() if effective_sector else None
         # Sector → its liquid members; a specific index → that index (capped, since
         # each name is a separate fast_info call); 'All' → curated megacaps (the

@@ -27,7 +27,7 @@ const T = {
 }
 
 // ── Market constants ────────────────────────────────────────────────────────────
-const SPOT_START     = 100
+const SPOT_START     = 105
 const STRIKES        = [90, 100, 110, 120]
 const RISK_FREE      = 0.04
 const TIME_TO_EXPIRY = 30 / 365        // fixed so Greeks stay stable for teaching
@@ -36,7 +36,8 @@ const SPOT_TICK_VOL  = 0.0018          // realized move per tick, separate from 
 const ORDER_MIN_TICKS = 3              // client orders arrive every 3-5 ticks
 const ORDER_MAX_TICKS = 5
 const ORDER_SIZES    = [1, 2, 5, 10, 15, 20, 25]
-const DELTA_LIMIT    = 200             // |net delta shares| above this flashes a warning
+const DELTA_LIMIT    = 200             // |net delta shares| above this flashes a warning (soft)
+const HARD_DELTA_LIMIT = DELTA_LIMIT * 2   // manual hedges can't push |net delta| past this hard cap
 const SPEED_MIN      = 0.1             // ticks/sec multiplier; interval = 1000 / speed ms
 const SPEED_MAX      = 3.0
 
@@ -52,6 +53,13 @@ const SPREAD_FLOW_SENS = 5             // wider quotes win less flow — clients
 const TAPE_COLORS    = ['#c9a84c', '#60a5fa', '#22c55e', '#ef4444', '#a78bfa', '#f97316']
 
 const randIntInclusive = (lo: number, hi: number) => lo + Math.floor(Math.random() * (hi - lo + 1))
+
+// A manual trade is blocked only when it pushes risk further past the hard cap;
+// trades that reduce risk (or keep it within the cap) are always allowed, so you can
+// de-risk even after client flow has carried the book over. Dynamic by construction:
+// it tests the resulting risk against live exposure each time.
+const overHardCap = (cur: number, next: number, hard: number) =>
+  Math.abs(next) > hard && Math.abs(next) > Math.abs(cur)
 
 // ── Black-Scholes (pure TS; normCdf via Zelen-Severo, error < 8e-8) ─────────────
 const NPDF_C = 0.3989422804014327
@@ -116,7 +124,8 @@ interface Fill { tLabel: string; clientSide: string; contract: string; size: num
 interface SimState {
   spot: number; cash: number; stock: number
   positions: Record<string, number>
-  sold: Record<string, number>          // cumulative contracts sold to clients, per contract
+  sold: Record<string, number>          // cumulative contracts sold to clients (client BUYs), per contract
+  bought: Record<string, number>        // cumulative contracts bought from clients (client SELLs), per contract
   edgeTotal: number; ledger: Fill[]
   tick: number; nextOrderTick: number
   spotHistory: number[]
@@ -125,9 +134,14 @@ interface SimState {
 function freshState(): SimState {
   const positions: Record<string, number> = {}
   const sold: Record<string, number> = {}
-  for (const k of STRIKES) { positions[ck('C', k)] = 0; positions[ck('P', k)] = 0; sold[ck('C', k)] = 0; sold[ck('P', k)] = 0 }
+  const bought: Record<string, number> = {}
+  for (const k of STRIKES) {
+    positions[ck('C', k)] = 0; positions[ck('P', k)] = 0
+    sold[ck('C', k)] = 0; sold[ck('P', k)] = 0
+    bought[ck('C', k)] = 0; bought[ck('P', k)] = 0
+  }
   return {
-    spot: SPOT_START, cash: 0, stock: 0, positions, sold, edgeTotal: 0, ledger: [],
+    spot: SPOT_START, cash: 0, stock: 0, positions, sold, bought, edgeTotal: 0, ledger: [],
     tick: 0, nextOrderTick: randIntInclusive(ORDER_MIN_TICKS, ORDER_MAX_TICKS),
     spotHistory: [SPOT_START],
   }
@@ -206,7 +220,7 @@ function maybeGenerateOrder(s: SimState, chain: Chain, running: boolean): void {
     s.positions[key] -= size; s.sold[key] += size; s.cash += fill * size * MULT
   } else {
     fill = leg.bid; edge = (fair - fill) * size * MULT
-    s.positions[key] += size; s.cash -= fill * size * MULT
+    s.positions[key] += size; s.bought[key] += size; s.cash -= fill * size * MULT
   }
   s.edgeTotal += edge
   const rec: Fill = { tLabel: new Date().toLocaleTimeString('en-US', { hour12: false }), clientSide, contract: key, size, fillPrice: fill, edge }
@@ -254,7 +268,7 @@ function fmtMoney(x: number): string {
 // ── Component ─────────────────────────────────────────────────────────────────
 interface Frame {
   chain: Chain; greeks: Portfolio; spot: number; spotHistory: number[]
-  positions: Record<string, number>; sold: Record<string, number>; stock: number; edge: number
+  positions: Record<string, number>; sold: Record<string, number>; bought: Record<string, number>; stock: number; edge: number
   ledger: Fill[]; running: boolean
 }
 
@@ -316,7 +330,7 @@ export default function OptionsMarketMaker() {
     const chain = buildChain(s, c.baseIv, c.skew, c.halfSpread, c.manual, c.bidAdj, c.askAdj, c.strikeWiden)
     return {
       chain, greeks: portfolioGreeks(s, chain), spot: s.spot, spotHistory: [...s.spotHistory],
-      positions: { ...s.positions }, sold: { ...s.sold }, stock: s.stock, edge: s.edgeTotal,
+      positions: { ...s.positions }, sold: { ...s.sold }, bought: { ...s.bought }, stock: s.stock, edge: s.edgeTotal,
       ledger: s.ledger.slice(-18), running: c.running,
     }
   }
@@ -340,7 +354,9 @@ export default function OptionsMarketMaker() {
   }, [])
 
   const onTradeStock = (qty: number) => {
-    const s = sim.current
+    const s = sim.current, c = ctrl.current
+    const cur = portfolioGreeks(s, buildChain(s, c.baseIv, c.skew, c.halfSpread, c.manual, c.bidAdj, c.askAdj, c.strikeWiden)).totalDeltaSh
+    if (overHardCap(cur, cur + qty, HARD_DELTA_LIMIT)) return   // would push |net delta| past the hard cap
     tradeStock(s, qty)
     setFrame(snapshot(s, ctrl.current))
   }
@@ -410,6 +426,11 @@ export default function OptionsMarketMaker() {
   )
 
   const need = g ? -Math.round(g.totalDeltaSh) : 0
+  // Hard-cap gating: disable a hedge direction when buying/selling `hedgeQty` shares
+  // would push |net delta| past the cap. Recomputed from live delta, so it tracks
+  // client flow. Each share carries ±1 delta, so the resulting delta is delta ± qty.
+  const blockBuy  = g ? overHardCap(g.totalDeltaSh, g.totalDeltaSh + hedgeQty, HARD_DELTA_LIMIT) : false
+  const blockSell = g ? overHardCap(g.totalDeltaSh, g.totalDeltaSh - hedgeQty, HARD_DELTA_LIMIT) : false
   const flatten = need > 0 ? `BUY ${need}` : need < 0 ? `SELL ${Math.abs(need)}` : 'flat'
   const spotChg = f && f.spotHistory.length > 1 ? (f.spot / f.spotHistory[0] - 1) * 100 : 0
   const spread = f ? f.edge : 0
@@ -522,10 +543,12 @@ export default function OptionsMarketMaker() {
                 <div style={{ fontFamily: T.mono, fontSize: 24, fontWeight: 700, color: overLimit ? T.red : T.text, margin: '3px 0 8px' }}>
                   {g.totalDeltaSh >= 0 ? '+' : ''}{g.totalDeltaSh.toFixed(0)}<span style={{ fontSize: 10, color: T.muted, marginLeft: 5 }}>sh</span>
                 </div>
-                <button onClick={() => onTradeStock(need)} disabled={need === 0}
-                  style={{ width: '100%', padding: '8px 0', fontFamily: T.mono, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', cursor: need === 0 ? 'default' : 'pointer', background: 'transparent', border: `1px solid ${need === 0 ? T.border : T.gold}`, color: need === 0 ? T.muted : T.gold, opacity: need === 0 ? 0.6 : 1, textTransform: 'uppercase' }}>
-                  Flatten · {flatten}
-                </button>
+                {mode !== 'challenge' && (
+                  <button onClick={() => onTradeStock(need)} disabled={need === 0}
+                    style={{ width: '100%', padding: '8px 0', fontFamily: T.mono, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', cursor: need === 0 ? 'default' : 'pointer', background: 'transparent', border: `1px solid ${need === 0 ? T.border : T.gold}`, color: need === 0 ? T.muted : T.gold, opacity: need === 0 ? 0.6 : 1, textTransform: 'uppercase' }}>
+                    Flatten · {flatten}
+                  </button>
+                )}
               </div>
 
               <div>
@@ -537,8 +560,10 @@ export default function OptionsMarketMaker() {
               </div>
 
               <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => onTradeStock(hedgeQty)} style={bigBtn(T.green)}>BUY</button>
-                <button onClick={() => onTradeStock(-hedgeQty)} style={bigBtn(T.red)}>SELL</button>
+                <button onClick={() => onTradeStock(hedgeQty)} disabled={blockBuy} title={blockBuy ? `Blocked: would exceed the ±${HARD_DELTA_LIMIT} sh risk cap` : ''}
+                  style={{ ...bigBtn(T.green), opacity: blockBuy ? 0.4 : 1, cursor: blockBuy ? 'not-allowed' : 'pointer' }}>BUY</button>
+                <button onClick={() => onTradeStock(-hedgeQty)} disabled={blockSell} title={blockSell ? `Blocked: would exceed the ±${HARD_DELTA_LIMIT} sh risk cap` : ''}
+                  style={{ ...bigBtn(T.red), opacity: blockSell ? 0.4 : 1, cursor: blockSell ? 'not-allowed' : 'pointer' }}>SELL</button>
               </div>
 
               <div style={{ display: 'flex', gap: 8 }}>
@@ -601,8 +626,13 @@ function renderChainTable(f: Frame, tapeSel: string[], onToggle: (key: string) =
     return <span onClick={() => onToggle(key)} title="Plot on tape" style={{ cursor: 'pointer', color: col, padding: '1px 4px', background: on ? `color-mix(in srgb, ${col} 16%, transparent)` : 'transparent' }}>{f.chain[key].theo.toFixed(2)}</span>
   }
   const posCell = (key: string) => {
-    const p = f.positions[key]; const sold = f.sold[key] || 0
-    return <span style={{ color: M }}><span style={{ color: p === 0 ? M : p > 0 ? G : R }}>{p > 0 ? '+' : ''}{p}</span>{sold > 0 ? ` · ${sold}s` : ''}</span>
+    const p = f.positions[key]; const sold = f.sold[key] || 0; const bought = f.bought[key] || 0
+    return (
+      <span style={{ color: M }}>
+        <span style={{ color: p === 0 ? M : p > 0 ? G : R }}>{p > 0 ? '+' : ''}{p}</span>
+        {(bought > 0 || sold > 0) ? <span style={{ fontSize: 10, marginLeft: 6 }}><span style={{ color: G }}>{bought}b</span><span style={{ color: M }}>/</span><span style={{ color: R }}>{sold}s</span></span> : null}
+      </span>
+    )
   }
   return (
     <div style={{ overflowX: 'auto' }}>

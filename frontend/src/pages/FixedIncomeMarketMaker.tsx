@@ -44,7 +44,8 @@ const DOLLARS_PER_PT  = FACE_UNIT / 100  // $10 P&L per 1.00 price point, per un
 const ORDER_MIN_TICKS = 3
 const ORDER_MAX_TICKS = 5
 const ORDER_SIZES     = [10, 25, 50, 100, 250]   // units of $1k face
-const DV01_LIMIT      = 250              // |net DV01| ($/bp) above this flags risk
+const DV01_LIMIT      = 250              // |net DV01| ($/bp) above this flags risk (soft)
+const HARD_DV01_LIMIT = DV01_LIMIT * 2   // manual hedges can't push |net DV01| past this hard cap
 const BUCKET_LIMIT    = 120              // |per-maturity DV01| ($/bp) above this flags risk
 const MEAN_REVERT     = 0.02             // gentle pull of the curve factors back toward start
 // How volatile rates are is a property of the market, not a trader dial, so the
@@ -67,6 +68,13 @@ const SPEED_MAX       = 3.0
 const slopeKey = (maturity: number) => (maturity - 10) / 10
 
 const randIntInclusive = (lo: number, hi: number) => lo + Math.floor(Math.random() * (hi - lo + 1))
+
+// A manual hedge is blocked only when it pushes risk further past the hard cap;
+// trades that reduce risk (or keep it within the cap) are always allowed, so you can
+// de-risk even after the curve has carried the book over. Dynamic by construction:
+// it tests the resulting risk against live exposure each time.
+const overHardCap = (cur: number, next: number, hard: number) =>
+  Math.abs(next) > hard && Math.abs(next) > Math.abs(cur)
 const normal = () => Math.sqrt(-2 * Math.log(Math.random() || 1e-12)) * Math.cos(2 * Math.PI * Math.random())
 
 // ── Bond math (semiannual; price per $100 face) ─────────────────────────────────
@@ -100,7 +108,8 @@ interface SimState {
   level: number; slope: number          // two curve factors: parallel shift + twist (%)
   cash: number
   positions: Record<string, number>     // client-driven inventory, per bond
-  sold: Record<string, number>          // cumulative quantity sold to clients, per bond
+  sold: Record<string, number>          // cumulative quantity sold to clients (client BUYs), per bond
+  bought: Record<string, number>        // cumulative quantity bought from clients (client SELLs), per bond
   hedge: Record<string, number>         // your hedges, per bond (matched-maturity notes)
   edgeTotal: number; ledger: Fill[]
   tick: number; nextOrderTick: number
@@ -110,11 +119,12 @@ interface SimState {
 function freshState(): SimState {
   const positions: Record<string, number> = {}
   const sold: Record<string, number> = {}
+  const bought: Record<string, number> = {}
   const hedge: Record<string, number> = {}
   const yldHistory: Record<string, number[]> = {}
-  for (const b of BONDS) { positions[b.id] = 0; sold[b.id] = 0; hedge[b.id] = 0; yldHistory[b.id] = [CURVE0[b.id]] }
+  for (const b of BONDS) { positions[b.id] = 0; sold[b.id] = 0; bought[b.id] = 0; hedge[b.id] = 0; yldHistory[b.id] = [CURVE0[b.id]] }
   return {
-    level: 0, slope: 0, cash: 0, positions, sold, hedge, edgeTotal: 0, ledger: [],
+    level: 0, slope: 0, cash: 0, positions, sold, bought, hedge, edgeTotal: 0, ledger: [],
     tick: 0, nextOrderTick: randIntInclusive(ORDER_MIN_TICKS, ORDER_MAX_TICKS),
     yldHistory,
   }
@@ -209,7 +219,7 @@ function maybeGenerateOrder(s: SimState, book: Book, running: boolean): void {
     s.positions[b.id] -= size; s.sold[b.id] += size; s.cash += fill * size * DOLLARS_PER_PT
   } else {
     fill = q.bid; edge = (fairPrice - fill) * size * DOLLARS_PER_PT
-    s.positions[b.id] += size; s.cash -= fill * size * DOLLARS_PER_PT
+    s.positions[b.id] += size; s.bought[b.id] += size; s.cash -= fill * size * DOLLARS_PER_PT
   }
   s.edgeTotal += edge
   const rec: Fill = { tLabel: new Date().toLocaleTimeString('en-US', { hour12: false }), clientSide, bond: b.id, size, fillPrice: fill, edge }
@@ -268,7 +278,7 @@ function fmtMoney(x: number): string {
 // ── Component ─────────────────────────────────────────────────────────────────
 interface Frame {
   book: Book; risk: Risk; yldHistory: Record<string, number[]>
-  positions: Record<string, number>; sold: Record<string, number>; hedge: Record<string, number>; edge: number
+  positions: Record<string, number>; sold: Record<string, number>; bought: Record<string, number>; hedge: Record<string, number>; edge: number
   ledger: Fill[]; running: boolean
 }
 
@@ -320,7 +330,7 @@ export default function FixedIncomeMarketMaker() {
     for (const b of BONDS) yldHistory[b.id] = [...s.yldHistory[b.id]]
     return {
       book, risk: portfolioRisk(s), yldHistory,
-      positions: { ...s.positions }, sold: { ...s.sold }, hedge: { ...s.hedge }, edge: s.edgeTotal,
+      positions: { ...s.positions }, sold: { ...s.sold }, bought: { ...s.bought }, hedge: { ...s.hedge }, edge: s.edgeTotal,
       ledger: s.ledger.slice(-18), running: c.running,
     }
   }
@@ -345,6 +355,9 @@ export default function FixedIncomeMarketMaker() {
 
   const onTradeHedge = (qty: number) => {
     const s = sim.current
+    const def = BONDS.find(x => x.id === selected)!
+    const cur = portfolioRisk(s).netDV01
+    if (overHardCap(cur, cur + qty * perUnitDV01(fairMath(def, s)), HARD_DV01_LIMIT)) return   // would push |net DV01| past the cap
     tradeHedge(s, selected, qty)
     setFrame(snapshot(s, ctrl.current))
   }
@@ -402,6 +415,12 @@ export default function FixedIncomeMarketMaker() {
 
   const hedgeNeed = -Math.round(selNetUnits)
   const flatten = hedgeNeed > 0 ? `BUY ${hedgeNeed}` : hedgeNeed < 0 ? `SELL ${Math.abs(hedgeNeed)}` : 'flat'
+  // Hard-cap gating on the note buttons: disable a direction when trading `hedgeQty`
+  // units of the selected note would push |net DV01| past the cap. Each unit moves
+  // net DV01 by the bond's per-unit DV01, so it tracks the live curve.
+  const dvUnit = selQuote ? selQuote.dv01 : 0
+  const blockBuy  = r ? overHardCap(r.netDV01, r.netDV01 + hedgeQty * dvUnit, HARD_DV01_LIMIT) : false
+  const blockSell = r ? overHardCap(r.netDV01, r.netDV01 - hedgeQty * dvUnit, HARD_DV01_LIMIT) : false
   const yHist = f ? f.yldHistory[selected] : []
   const yChgBp = yHist.length > 1 ? (yHist[yHist.length - 1] - yHist[0]) * 100 : 0
   const spread = f ? f.edge : 0
@@ -505,10 +524,12 @@ export default function FixedIncomeMarketMaker() {
                 <div style={{ fontFamily: T.mono, fontSize: 24, fontWeight: 700, color: Math.abs(selBucket) > BUCKET_LIMIT ? T.red : T.text, margin: '3px 0 8px' }}>
                   {selBucket >= 0 ? '+' : ''}{selBucket.toFixed(0)}<span style={{ fontSize: 10, color: T.muted, marginLeft: 5 }}>$/bp</span>
                 </div>
-                <button onClick={() => onTradeHedge(hedgeNeed)} disabled={hedgeNeed === 0}
-                  style={{ width: '100%', padding: '8px 0', fontFamily: T.mono, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', cursor: hedgeNeed === 0 ? 'default' : 'pointer', background: 'transparent', border: `1px solid ${hedgeNeed === 0 ? T.border : T.gold}`, color: hedgeNeed === 0 ? T.muted : T.gold, opacity: hedgeNeed === 0 ? 0.6 : 1, textTransform: 'uppercase' }}>
-                  Flatten · {flatten}
-                </button>
+                {mode !== 'challenge' && (
+                  <button onClick={() => onTradeHedge(hedgeNeed)} disabled={hedgeNeed === 0}
+                    style={{ width: '100%', padding: '8px 0', fontFamily: T.mono, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', cursor: hedgeNeed === 0 ? 'default' : 'pointer', background: 'transparent', border: `1px solid ${hedgeNeed === 0 ? T.border : T.gold}`, color: hedgeNeed === 0 ? T.muted : T.gold, opacity: hedgeNeed === 0 ? 0.6 : 1, textTransform: 'uppercase' }}>
+                    Flatten · {flatten}
+                  </button>
+                )}
               </div>
 
               <div>
@@ -520,8 +541,10 @@ export default function FixedIncomeMarketMaker() {
               </div>
 
               <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => onTradeHedge(hedgeQty)} style={bigBtn(T.green)}>BUY {selected}</button>
-                <button onClick={() => onTradeHedge(-hedgeQty)} style={bigBtn(T.red)}>SELL {selected}</button>
+                <button onClick={() => onTradeHedge(hedgeQty)} disabled={blockBuy} title={blockBuy ? `Blocked: would exceed the ±$${HARD_DV01_LIMIT}/bp risk cap` : ''}
+                  style={{ ...bigBtn(T.green), opacity: blockBuy ? 0.4 : 1, cursor: blockBuy ? 'not-allowed' : 'pointer' }}>BUY {selected}</button>
+                <button onClick={() => onTradeHedge(-hedgeQty)} disabled={blockSell} title={blockSell ? `Blocked: would exceed the ±$${HARD_DV01_LIMIT}/bp risk cap` : ''}
+                  style={{ ...bigBtn(T.red), opacity: blockSell ? 0.4 : 1, cursor: blockSell ? 'not-allowed' : 'pointer' }}>SELL {selected}</button>
               </div>
 
               <div style={{ display: 'flex', gap: 8 }}>
@@ -584,13 +607,13 @@ function renderBookTable(f: Frame, selected: string, onSelect: (id: string) => v
           <tr style={{ borderBottom: `1px solid var(--theme-border, rgba(255,255,255,0.06))` }}>
             <th style={{ ...th, textAlign: 'left' }}>Bond</th>
             <th style={th}>Yield</th><th style={th}>Bid</th><th style={th}>Theo</th><th style={th}>Ask</th>
-            <th style={th}>Pos</th><th style={th}>Sold</th><th style={th}>Hedge</th><th style={th}>Bucket DV01</th>
+            <th style={th}>Pos</th><th style={th}>Bought</th><th style={th}>Sold</th><th style={th}>Hedge</th><th style={th}>Bucket DV01</th>
           </tr>
         </thead>
         <tbody>
           {BONDS.map(b => {
             const q = f.book[b.id]
-            const pos = f.positions[b.id], hedge = f.hedge[b.id], bucket = f.risk.buckets[b.id], sold = f.sold[b.id] || 0
+            const pos = f.positions[b.id], hedge = f.hedge[b.id], bucket = f.risk.buckets[b.id], sold = f.sold[b.id] || 0, bought = f.bought[b.id] || 0
             const isSel = b.id === selected
             return (
               <tr key={b.id} onClick={() => onSelect(b.id)}
@@ -606,6 +629,7 @@ function renderBookTable(f: Frame, selected: string, onSelect: (id: string) => v
                 </td>
                 <td style={td}><QuoteCell value={q.ask} side="ask" step={0.001} decimals={3} onCommit={v => onQuote(b.id, 'ask', v)} /></td>
                 <td style={td}>{signed(pos, n => `${n}`)}</td>
+                <td style={{ ...td, color: bought > 0 ? G : M }}>{bought}</td>
                 <td style={{ ...td, color: sold > 0 ? R : M }}>{sold}</td>
                 <td style={td}>{signed(hedge, n => `${n}`)}</td>
                 <td style={td}>{signed(bucket, n => `$${Math.round(n)}`)}</td>
