@@ -126,7 +126,7 @@ function TickerChartModal({ ticker, onClose }: { ticker: string; onClose: () => 
 }
 
 // ─── Positions panel ──────────────────────────────────────────────────────────
-export function PositionsPanel({ positions }: { positions: Position[] }) {
+export function PositionsPanel({ positions, embedded }: { positions: Position[]; embedded?: boolean }) {
   const [quotes, setQuotes] = useState<Record<string, { price: number; pct1d: number | null }>>({})
   const [chartTicker, setChartTicker] = useState<string | null>(null)
 
@@ -160,13 +160,12 @@ export function PositionsPanel({ positions }: { positions: Position[] }) {
     <>
       {chartTicker && <TickerChartModal ticker={chartTicker} onClose={() => setChartTicker(null)} />}
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-        {sectionHeader('POSITIONS', positions.length)}
+        {!embedded && sectionHeader('POSITIONS', positions.length)}
         {positions.length === 0 ? (
           <div style={{
             flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: T.dim, fontFamily: T.mono, fontSize: 12, flexDirection: 'column', gap: 6,
+            color: T.dim, fontFamily: T.mono, fontSize: 12,
           }}>
-            <span style={{ fontSize: 24, opacity: 0.3 }}>⬜</span>
             No open positions
           </div>
         ) : (
@@ -178,7 +177,8 @@ export function PositionsPanel({ positions }: { positions: Position[] }) {
                   <th style={{ ...th, textAlign: 'right' as const }}>Qty</th>
                   <th style={{ ...th, textAlign: 'right' as const }}>Cost / Share</th>
                   <th style={{ ...th, textAlign: 'right' as const }}>Last</th>
-                  <th style={{ ...th, textAlign: 'right' as const }}>Unr. P&amp;L</th>
+                  <th style={{ ...th, textAlign: 'right' as const }}>Unr. P&amp;L $</th>
+                  <th style={{ ...th, textAlign: 'right' as const }}>Unr. P&amp;L %</th>
                   <th style={{ ...th, textAlign: 'right' as const }}>1D %</th>
                   <th style={{ ...th, textAlign: 'right' as const }}>Date</th>
                 </tr>
@@ -207,9 +207,13 @@ export function PositionsPanel({ positions }: { positions: Position[] }) {
                         {unrealized != null ? (
                           <span style={{ color: unrealized >= 0 ? T.pos : T.neg }}>
                             {unrealized >= 0 ? '+' : ''}{fmt$(unrealized)}
-                            {unrealizedPct != null && (
-                              <span style={{ fontSize: 10, marginLeft: 4 }}>({unrealizedPct >= 0 ? '+' : ''}{unrealizedPct.toFixed(1)}%)</span>
-                            )}
+                          </span>
+                        ) : <span style={{ color: T.dim }}>…</span>}
+                      </td>
+                      <td style={{ ...td, textAlign: 'right' as const }}>
+                        {unrealizedPct != null ? (
+                          <span style={{ color: unrealizedPct >= 0 ? T.pos : T.neg }}>
+                            {unrealizedPct >= 0 ? '+' : ''}{unrealizedPct.toFixed(2)}%
                           </span>
                         ) : <span style={{ color: T.dim }}>…</span>}
                       </td>
@@ -236,15 +240,17 @@ export function PositionsPanel({ positions }: { positions: Position[] }) {
 }
 
 // ─── Orders panel ─────────────────────────────────────────────────────────────
-export function OrdersPanel({ orders, onCancel, onCancelAll, cancelAllPending, cancelAllError, automatedOrders }: {
+export function OrdersPanel({ orders, onCancel, onCancelAll, cancelAllPending, cancelAllError, automatedOrders, embedded, initialStatus }: {
   orders: Order[]
   onCancel: (id: string) => void
   onCancelAll: () => void
   cancelAllPending?: boolean
   cancelAllError?: boolean
   automatedOrders?: Record<string, string>
+  embedded?: boolean
+  initialStatus?: 'all'|'filled'|'pending'|'rejected'|'canceled'
 }) {
-  const [statusF, setStatusF] = useState<'all'|'filled'|'pending'|'rejected'|'canceled'>('all')
+  const [statusF, setStatusF] = useState<'all'|'filled'|'pending'|'rejected'|'canceled'>(initialStatus ?? 'all')
   const [sideF,   setSideF]   = useState<'all'|'buy'|'sell'>('all')
 
   const isPending = (status: string) =>
@@ -280,8 +286,8 @@ export function OrdersPanel({ orders, onCancel, onCancelAll, cancelAllPending, c
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        {sectionHeader('ORDERS & HISTORY', orders.length)}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: embedded ? 'flex-end' : 'space-between' }}>
+        {!embedded && sectionHeader('ORDERS & HISTORY', orders.length)}
         {pendingOrders.length > 0 && (
           <button
             onClick={onCancelAll}
