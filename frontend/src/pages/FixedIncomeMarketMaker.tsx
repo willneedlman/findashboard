@@ -478,7 +478,7 @@ export default function FixedIncomeMarketMaker() {
           {/* Middle row: slim Controls | tall Tape | Hedge */}
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : '250px 1fr 230px', gap: 8, alignItems: 'stretch' }}>
             {/* MM Controls */}
-            <Widget title="MM Controls" bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '10px 12px' }}>
+            <Widget title="MM Controls" bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '10px 12px' }}>
               <div>
                 <ModeToggle mode={mode} onChange={onMode} />
                 {mode === 'challenge'
@@ -486,10 +486,10 @@ export default function FixedIncomeMarketMaker() {
                   : sliderRow('Sim Speed', `${speed.toFixed(1)}x`, range(speed, SPEED_MIN, SPEED_MAX, 0.1, setSpeed))}
                 {sliderRow('Half-Spread', `${halfSpread.toFixed(2)} pts`, range(halfSpread, 0.01, 0.5, 0.01, setHalfSpread))}
               </div>
-              <div>
-                <div style={{ height: 1, background: T.border, margin: '2px 0 8px' }} />
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', marginTop: 10 }}>
+                <div style={{ height: 1, background: T.border, marginBottom: 8 }} />
                 <div style={{ ...labelStyle, marginBottom: 6 }}>Per-bond yield nudge (bp)</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 12 }}>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                   {BONDS.map(b => <div key={b.id}>{sliderRow(b.id, `${(manual[b.id] ?? 0) >= 0 ? '+' : ''}${manual[b.id] ?? 0}`, range(manual[b.id] ?? 0, -25, 25, 1, v => setManual(m => ({ ...m, [b.id]: v }))))}</div>)}
                 </div>
               </div>
@@ -597,8 +597,8 @@ const fmtWidenPts = (v: number) => (v > 1e-4 ? `+${v.toFixed(2)}` : '0.00')
 
 function renderBookTable(f: Frame, selected: string, onSelect: (id: string) => void, onQuote: (id: string, side: 'bid' | 'ask', price: number) => void, flash: { bond: string; side: string } | null, bondWiden: Record<string, number>, onWiden: (id: string, dir: 1 | -1) => void) {
   const G = 'var(--theme-positive, #22c55e)', R = 'var(--theme-negative, #ef4444)', M = 'var(--theme-secondary, #5e768f)', GD = 'var(--theme-primary, #c9a84c)', T2 = 'var(--theme-text, #d7e3fc)'
-  const th: React.CSSProperties = { fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: M, padding: '6px 12px', textAlign: 'right', whiteSpace: 'nowrap' }
-  const td: React.CSSProperties = { fontFamily: 'var(--theme-mono)', fontSize: 13, padding: '5px 12px', textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }
+  const th: React.CSSProperties = { fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: M, padding: '6px 10px', textAlign: 'right', whiteSpace: 'nowrap' }
+  const td: React.CSSProperties = { fontFamily: 'var(--theme-mono)', fontSize: 13, padding: '5px 10px', textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', verticalAlign: 'middle' }
   const signed = (v: number, fmt: (n: number) => string) => v === 0
     ? <span style={{ color: M }}>{fmt(0)}</span>
     : <span style={{ color: v > 0 ? G : R, fontWeight: 700 }}>{v > 0 ? '+' : ''}{fmt(v)}</span>
@@ -620,15 +620,18 @@ function renderBookTable(f: Frame, selected: string, onSelect: (id: string) => v
             return (
               <tr key={b.id} onClick={() => onSelect(b.id)}
                 style={{ cursor: 'pointer', borderBottom: `1px solid var(--theme-border, rgba(255,255,255,0.04))`, transition: 'background 0.5s ease-out', background: flash?.bond === b.id ? `color-mix(in srgb, var(--theme-${flash.side === 'BUY' ? 'positive' : 'negative'}) 32%, transparent)` : isSel ? 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' : 'transparent' }}>
-                <td style={{ ...td, textAlign: 'left', fontSize: 15, fontWeight: 700, color: GD }}>
-                  {b.id}{isSel && <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', color: M, marginLeft: 6 }}>TAPE</span>}
+                <td style={{ ...td, textAlign: 'left', padding: '3px 10px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                    <span style={{ display: 'flex', alignItems: 'center' }}>
+                      <span style={{ fontSize: 16, fontWeight: 700, color: GD, lineHeight: 1 }}>{b.id}</span>
+                      {isSel && <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', color: M, marginLeft: 6 }}>TAPE</span>}
+                    </span>
+                    <WidenControl value={bondWiden[b.id] ?? 0} onStep={dir => onWiden(b.id, dir)} format={fmtWidenPts} />
+                  </div>
                 </td>
                 <td style={{ ...td, color: T2 }}>{q.yieldPct.toFixed(2)}%</td>
                 <td style={td}><QuoteCell value={q.bid} side="bid" step={0.001} decimals={3} onCommit={v => onQuote(b.id, 'bid', v)} /></td>
-                <td style={{ ...td, padding: '3px 12px' }}>
-                  <div style={{ color: M }}>{q.price.toFixed(3)}</div>
-                  <WidenControl value={bondWiden[b.id] ?? 0} onStep={dir => onWiden(b.id, dir)} format={fmtWidenPts} />
-                </td>
+                <td style={{ ...td, color: M }}>{q.price.toFixed(3)}</td>
                 <td style={td}><QuoteCell value={q.ask} side="ask" step={0.001} decimals={3} onCommit={v => onQuote(b.id, 'ask', v)} /></td>
                 <td style={td}>{signed(pos, n => `${n}`)}</td>
                 <td style={{ ...td, color: bought > 0 ? G : M }}>{bought}</td>
