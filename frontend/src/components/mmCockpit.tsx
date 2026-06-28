@@ -269,7 +269,7 @@ export function QuoteCell({ value, side, step, decimals, onCommit }: {
           else if (e.key === 'Escape') { setDraft(null); e.currentTarget.blur() }
         }}
         style={{
-          width: decimals >= 3 ? 60 : 52, textAlign: 'right', fontFamily: V.mono, fontSize: 13, fontWeight: 600,
+          width: decimals >= 3 ? 72 : 52, textAlign: 'right', fontFamily: V.mono, fontSize: 13, fontWeight: 600,
           color, background: 'rgba(255,255,255,0.04)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 30%, transparent)',
           borderRadius: 3, padding: '2px 5px', fontVariantNumeric: 'tabular-nums', outline: 'none',
         }}
