@@ -607,8 +607,8 @@ function renderBookTable(f: Frame, selected: string, onSelect: (id: string) => v
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
           <tr style={{ borderBottom: `1px solid var(--theme-border, rgba(255,255,255,0.06))` }}>
-            <th style={{ ...th, textAlign: 'left' }}>Bond</th>
-            <th style={th}>Yield</th><th style={th}>Bid</th><th style={{ ...th, textAlign: 'center' }}>Theo</th><th style={th}>Ask</th>
+            <th style={{ ...th, textAlign: 'left' }}>Yield</th>
+            <th style={th}>Bid</th><th style={{ ...th, textAlign: 'center', color: GD }}>Bond</th><th style={th}>Ask</th>
             <th style={th}>Pos</th><th style={th}>Bought</th><th style={th}>Sold</th><th style={th}>Hedge</th><th style={th}>Bucket DV01</th>
           </tr>
         </thead>
@@ -620,15 +620,15 @@ function renderBookTable(f: Frame, selected: string, onSelect: (id: string) => v
             return (
               <tr key={b.id} onClick={() => onSelect(b.id)}
                 style={{ cursor: 'pointer', borderBottom: `1px solid var(--theme-border, rgba(255,255,255,0.04))`, transition: 'background 0.5s ease-out', background: flash?.bond === b.id ? `color-mix(in srgb, var(--theme-${flash.side === 'BUY' ? 'positive' : 'negative'}) 32%, transparent)` : isSel ? 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' : 'transparent' }}>
-                <td style={{ ...td, textAlign: 'left' }}>
-                  <span style={{ fontSize: 16, fontWeight: 700, color: GD }}>{b.id}</span>
-                  {isSel && <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', color: M, marginLeft: 6 }}>TAPE</span>}
-                </td>
-                <td style={{ ...td, color: T2 }}>{q.yieldPct.toFixed(2)}%</td>
+                <td style={{ ...td, textAlign: 'left', color: T2 }}>{q.yieldPct.toFixed(2)}%</td>
                 <td style={td}><QuoteCell value={q.bid} side="bid" step={0.001} decimals={3} onCommit={v => onQuote(b.id, 'bid', v)} /></td>
                 <td style={{ ...td, textAlign: 'center', padding: '3px 10px' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <span style={{ color: M, lineHeight: 1 }}>{q.price.toFixed(3)}</span>
+                    <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <span style={{ fontSize: 16, fontWeight: 700, color: GD, lineHeight: 1 }}>{b.id}</span>
+                      {isSel && <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', color: M, marginLeft: 6 }}>TAPE</span>}
+                    </span>
+                    <span style={{ color: M, lineHeight: 1, margin: '3px 0' }}>{q.price.toFixed(3)}</span>
                     <WidenControl value={bondWiden[b.id] ?? 0} onStep={dir => onWiden(b.id, dir)} format={fmtWidenPts} />
                   </div>
                 </td>
