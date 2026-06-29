@@ -22,7 +22,6 @@ interface SkewData {
 const GOLD = 'var(--theme-primary, #c9a84c)'
 const BLUE = 'var(--theme-tertiary, #60a5fa)'
 const NEG = 'var(--theme-negative)'
-const FAINT = 'var(--theme-text-faint, rgba(255,255,255,0.4))'
 const STRIP: React.CSSProperties = {
   display: 'flex', alignItems: 'stretch', overflowX: 'auto',
   background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
@@ -95,10 +94,6 @@ export default function SkewTool() {
               <KpiCell grow label="Near vs Far Vol" value={`${data.ts_slope > 0 ? '+' : ''}${data.ts_slope.toFixed(1)}`} color={data.ts_slope < -0.5 ? NEG : undefined} sub={data.ts_slope < -0.5 ? 'near-term jitters' : data.ts_slope > 0.5 ? 'calm shape' : 'flat'} />
               <KpiCell grow label="Spot" value={`$${data.spot}`} sub={`${sel.dte}d to expiry`} />
             </div>
-
-            {data.read && (
-              <div style={{ fontSize: 10, color: FAINT, fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em', lineHeight: 1.5 }}>{data.read}</div>
-            )}
 
             <Widget title={`IV Smile — ${data.ticker} ${sel.expiry}`} right={caption('IV vs % moneyness')} bodyStyle={{ padding: '8px' }}>
               <ResponsiveContainer width="100%" height={272}>
