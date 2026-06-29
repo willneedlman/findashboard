@@ -11,7 +11,7 @@ from pydantic import BaseModel
 import yfinance as yf
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from cache import get_history
+from cache import get_history, cached
 import options_data
 from validation import validate_ticker
 
@@ -87,6 +87,7 @@ def probability_cone(req: ProbRequest):
 
 
 @router.get("/chain-distribution")
+@cached(ttl=600, maxsize=256)
 def chain_distribution(ticker: str, expiry: str = ""):
     ticker = validate_ticker(ticker)
     try:
@@ -303,6 +304,7 @@ def chain_distribution(ticker: str, expiry: str = ""):
 
 
 @router.get("/skew")
+@cached(ttl=600, maxsize=128)
 def skew_surface(ticker: str):
     """Vol-skew + term-structure tool for premium sellers.
 
