@@ -76,6 +76,19 @@ export function AlgoStrategyBuilderContent() {
     },
   })
 
+  const sendToPaper = useMutation<{ name: string }, Error>({
+    mutationFn: async () => {
+      if (!activeDef) throw new Error('Select a strategy first.')
+      const { data } = await axios.post('/api/paper/strategies/custom', {
+        name: activeDef.name,
+        rules: { buy: activeDef.buy, sell: activeDef.sell },
+        bull_drift: activeDef.bull_drift ?? 0,
+        bear_drift: activeDef.bear_drift ?? 0,
+      })
+      return data
+    },
+  })
+
   const m = data?.metrics
 
   return (
@@ -143,6 +156,18 @@ export function AlgoStrategyBuilderContent() {
           cursor: (!activeDef || isPending) ? 'default' : 'pointer', opacity: (!activeDef || isPending) ? 0.6 : 1,
         }}>{isPending ? 'Running…' : 'Run Backtest'}</button>
         {isError && <div style={{ fontSize: 9, color: 'var(--theme-negative)', fontFamily: 'var(--theme-sans)', textAlign: 'center' }}>{(error as Error)?.message ?? 'Backtest failed'}</div>}
+
+        <button onClick={() => sendToPaper.mutate()} disabled={!activeDef || sendToPaper.isPending} style={{
+          width: '100%', background: 'transparent', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))', color: activeDef ? 'var(--theme-secondary, #8099b0)' : 'var(--theme-text-faint, rgba(255,255,255,0.35))',
+          fontFamily: 'inherit', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '7px 0',
+          cursor: (!activeDef || sendToPaper.isPending) ? 'default' : 'pointer', opacity: (!activeDef || sendToPaper.isPending) ? 0.6 : 1,
+        }}>{sendToPaper.isPending ? 'Sending…' : '→ Send to Paper Trader'}</button>
+        {sendToPaper.isSuccess && <div style={{ fontSize: 9, color: 'var(--theme-positive)', fontFamily: 'var(--theme-sans)', textAlign: 'center' }}>Imported · enable it in Paper Trading</div>}
+        {sendToPaper.isError && <div style={{ fontSize: 9, color: 'var(--theme-negative)', fontFamily: 'var(--theme-sans)', textAlign: 'center' }}>{(sendToPaper.error as Error)?.message ?? 'Import failed'}</div>}
+
+        <div style={{ fontSize: 8, color: 'var(--theme-text-faint, rgba(255,255,255,0.35))', lineHeight: '13px', marginTop: 2 }}>
+          Saved strategies also appear under "Custom Rule Strategy" in Monte Carlo and the Backtester.
+        </div>
       </div>
     </>}>
 
