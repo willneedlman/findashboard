@@ -108,16 +108,17 @@ export default function SkewTool() {
               </ResponsiveContainer>
             </Widget>
 
-            <Widget title="ATM IV Term Structure" right={caption('ATM IV + put skew vs DTE')} bodyStyle={{ padding: '8px' }}>
+            <Widget title="ATM IV Term Structure" right={caption('ATM IV (L, gold) · 25Δ skew (R, blue) vs DTE')} bodyStyle={{ padding: '8px' }}>
               <ResponsiveContainer width="100%" height={232}>
-                <LineChart data={data.term_structure} margin={{ top: 8, right: 16, left: 0, bottom: 4 }}>
+                <LineChart data={data.term_structure} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.045)" />
                   <XAxis dataKey="dte" tick={TICK} tickFormatter={(v: number) => `${v}d`} type="number" domain={[0, termXMax]} allowDataOverflow />
-                  <YAxis tick={TICK} tickFormatter={(v: number) => `${v}%`} width={42} domain={['auto', 'auto']} orientation="right" />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number, n: string) => [`${v.toFixed(1)}${n === 'atm_iv' ? '%' : ''}`, n === 'atm_iv' ? 'ATM IV' : 'Put Skew']} labelFormatter={(d) => `${d} DTE`} />
-                  <ReferenceLine x={sel.dte} stroke="color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)" strokeDasharray="3 4" label={{ value: 'selected', fill: GOLD, fontSize: 9 }} />
-                  <Line type="monotone" dataKey="atm_iv" name="atm_iv" stroke={GOLD} strokeWidth={2} dot={{ r: 2 }} />
-                  <Line type="monotone" dataKey="rr_25" name="rr_25" stroke={BLUE} strokeWidth={1.5} strokeDasharray="4 3" dot={false} />
+                  <YAxis yAxisId="iv" orientation="left" tick={{ ...TICK, fill: GOLD }} tickFormatter={(v: number) => `${v}%`} width={42} domain={['auto', 'auto']} />
+                  <YAxis yAxisId="rr" orientation="right" tick={{ ...TICK, fill: BLUE }} tickFormatter={(v: number) => v.toFixed(0)} width={34} domain={['auto', 'auto']} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number, n: string) => [`${v.toFixed(1)}${n === 'atm_iv' ? '%' : ' pts'}`, n === 'atm_iv' ? 'ATM IV' : '25Δ Put Skew']} labelFormatter={(d) => `${d} DTE`} />
+                  <ReferenceLine yAxisId="iv" x={sel.dte} stroke="color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)" strokeDasharray="3 4" label={{ value: 'selected', fill: GOLD, fontSize: 9 }} />
+                  <Line yAxisId="iv" type="monotone" dataKey="atm_iv" name="atm_iv" stroke={GOLD} strokeWidth={2} dot={{ r: 2 }} />
+                  <Line yAxisId="rr" type="monotone" dataKey="rr_25" name="rr_25" stroke={BLUE} strokeWidth={1.5} strokeDasharray="4 3" dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </Widget>
