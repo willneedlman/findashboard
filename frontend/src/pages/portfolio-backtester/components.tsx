@@ -6,7 +6,7 @@ import {
   ReferenceLine, Legend,
 } from 'recharts'
 import PageWrapper from '../../components/PageWrapper'
-import MetricCard from '../../components/MetricCard'
+import { KpiCell } from '../../components/mmCockpit'
 import { useChartColors } from '../../hooks/useChartColors'
 import StrategySelector, { STRATEGIES, CUSTOM_STRATEGY_KEY, type StrategyParams } from '../../components/StrategySelector'
 import { TOOLTIP_STYLE, CROSSHAIR_CURSOR, BAR_CURSOR } from '../../components/ChartTooltip'
@@ -23,6 +23,12 @@ import { usePortfolio } from '../../contexts/PortfolioContext'
 import ConfigHeader from '../../components/portfolio/ConfigHeader'
 import HelpTip from '../../components/HelpTip'
 import { TAB_BAR, TAB_BASE, type Tab, type Asset, makeAsset, PORT_DEFAULTS, PORT_INPUT, PORT_LABEL, PORT_TICK, ALGO_STRATEGIES, ALGO_DEFAULT_PARAMS, ALGO_PARAM_LABELS, ALGO_INPUT, ALGO_LABEL, ALGO_TICK, ALGO_SECTION_DIVIDER, type BacktestResult, type SignalResult } from './shared'
+
+const STRIP: React.CSSProperties = {
+  display: 'flex', alignItems: 'stretch', overflowX: 'auto',
+  background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
+}
+const POS = 'var(--theme-positive)', NEG = 'var(--theme-negative)'
 
 // ── Shared sub-components ────────────────────────────────────────────────────
 
@@ -349,50 +355,27 @@ export function PortfolioTab() {
               </div>
             )}
 
-            <div style={{
-              background: 'var(--theme-bg, #0a1628)', padding: '8px 0 4px',
-              borderBottom: '1px solid rgba(46,57,77,0.8)',
-              display: 'flex', flexDirection: 'column', gap: 6,
-            }}>
-              <div className="metric-grid">
-                <MetricCard label="Portfolio CAGR" value={`${data.metrics.port_cagr}%`}
-                  delta={`${data.metrics.port_cagr - data.metrics.bench_cagr > 0 ? '+' : ''}${(data.metrics.port_cagr - data.metrics.bench_cagr).toFixed(2)}% vs ${benchmark}`}
-                  deltaPositive={data.metrics.port_cagr > data.metrics.bench_cagr}
-                  help="Compound Annual Growth Rate — the smoothed annualized return your portfolio achieved over the backtest period." />
-                <MetricCard label={`${benchmark} CAGR`} value={`${data.metrics.bench_cagr}%`}
-                  help={`Compound Annual Growth Rate of the ${benchmark} benchmark over the same period. Used as the passive-hold baseline.`} />
-                <MetricCard label="Sharpe" value={data.metrics.port_sharpe}
-                  help="Sharpe Ratio — excess return earned per unit of total volatility. Higher is better; >1 is generally considered good." />
-                <MetricCard label="Ann. Vol" value={`${data.metrics.port_vol}%`}
-                  help="Annualized Volatility — the standard deviation of daily returns scaled to a full year." />
-              </div>
-
-            {data.strategyResult ? (
-              <div className="metric-grid">
-                <MetricCard label="Strategy CAGR" value={`${data.strategyResult.cagr}%`}
-                  delta={`${(data.strategyResult.cagr - data.metrics.port_cagr).toFixed(2)}% vs portfolio`}
-                  deltaPositive={data.strategyResult.cagr > data.metrics.port_cagr}
-                  help="Compound Annual Growth Rate of the active overlay strategy, compared against the base portfolio." />
-                <MetricCard label="Max Drawdown" value={`${data.metrics.max_drawdown}%`} deltaPositive={false}
-                  help="Maximum Drawdown — the largest peak-to-trough decline during the backtest." />
-                <MetricCard label="Sortino" value={data.metrics.sortino}
-                  help="Sortino Ratio — penalizes only downside volatility. Higher is better; >1 is solid." />
-                <MetricCard label="Beta" value={data.metrics.beta}
-                  help="Beta — measures the portfolio's sensitivity to benchmark movements." />
-              </div>
-            ) : (
-              <div className="metric-grid">
-                <MetricCard label="Max Drawdown" value={`${data.metrics.max_drawdown}%`} deltaPositive={false}
-                  help="Maximum Drawdown — the largest peak-to-trough decline during the backtest." />
-                <MetricCard label="Sortino" value={data.metrics.sortino}
-                  help="Sortino Ratio — penalizes only downside volatility. Higher is better; >1 is solid." />
-                <MetricCard label="Calmar" value={data.metrics.calmar}
-                  help="Calmar Ratio — annualized return divided by maximum drawdown." />
-                <MetricCard label="Beta" value={data.metrics.beta}
-                  help="Beta — measures the portfolio's sensitivity to benchmark movements." />
-              </div>
-            )}
-            </div>
+            {(() => {
+              const m = data.metrics
+              const vsBench = m.port_cagr - m.bench_cagr
+              return (
+                <div style={STRIP}>
+                  <KpiCell grow minWidth={155} label="Portfolio CAGR" value={`${m.port_cagr}%`} valueSize={16}
+                    color={m.port_cagr >= 0 ? POS : NEG}
+                    sub={`${vsBench > 0 ? '+' : ''}${vsBench.toFixed(2)}% vs ${benchmark}`} subColor={vsBench > 0 ? POS : NEG} />
+                  <KpiCell grow label={`${benchmark} CAGR`} value={`${m.bench_cagr}%`} />
+                  <KpiCell grow label="Sharpe" value={String(m.port_sharpe)} color={m.port_sharpe >= 1 ? POS : undefined} />
+                  <KpiCell grow label="Ann. Vol" value={`${m.port_vol}%`} />
+                  <KpiCell grow label="Max Drawdown" value={`${m.max_drawdown}%`} color={NEG} />
+                  <KpiCell grow label="Sortino" value={String(m.sortino)} color={m.sortino >= 1 ? POS : undefined} />
+                  {data.strategyResult
+                    ? <KpiCell grow label="Strategy CAGR" value={`${data.strategyResult.cagr}%`} color={data.strategyResult.cagr >= m.port_cagr ? POS : NEG}
+                        sub={`${(data.strategyResult.cagr - m.port_cagr).toFixed(2)}% vs port`} subColor={data.strategyResult.cagr >= m.port_cagr ? POS : NEG} />
+                    : <KpiCell grow label="Calmar" value={String(m.calmar)} />}
+                  <KpiCell grow label="Beta" value={String(m.beta)} />
+                </div>
+              )
+            })()}
 
             <PortChartPanel label="Cumulative Return — Base 100" height={308}>
               <ResponsiveContainer width="100%" height={280}>
@@ -920,50 +903,21 @@ export function StrategyTab() {
 
       {result && !backtestMutation.isPending && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-            <MetricCard
-              label="Total Return"
-              value={`${result.metrics.total_return > 0 ? '+' : ''}${result.metrics.total_return.toFixed(2)}%`}
-              deltaPositive={result.metrics.total_return >= 0}
-            />
-            <MetricCard
-              label="Ann. Return"
-              value={`${result.metrics.ann_return > 0 ? '+' : ''}${result.metrics.ann_return.toFixed(2)}%`}
-              deltaPositive={result.metrics.ann_return >= 0}
-            />
-            <MetricCard
-              label="Max Drawdown"
-              value={`${result.metrics.max_drawdown.toFixed(2)}%`}
-              deltaPositive={false}
-            />
-            <MetricCard
-              label="Sharpe Ratio"
-              value={result.metrics.sharpe.toFixed(3)}
-              deltaPositive={result.metrics.sharpe >= 1}
-            />
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-            <MetricCard
-              label="Num Trades"
-              value={result.metrics.num_trades}
-            />
-            <MetricCard
-              label="Win Rate"
-              value={`${result.metrics.win_rate.toFixed(1)}%`}
-              deltaPositive={result.metrics.win_rate >= 50}
-            />
-            <MetricCard
-              label="Final Capital"
-              value={`$${result.metrics.final_capital >= 1000 ? (result.metrics.final_capital / 1000).toFixed(1) + 'K' : result.metrics.final_capital.toFixed(0)}`}
-              deltaPositive={result.metrics.total_pnl >= 0}
-            />
-            <MetricCard
-              label="P&L ($)"
-              value={`${result.metrics.total_pnl >= 0 ? '+' : ''}$${Math.abs(result.metrics.total_pnl) >= 1000 ? (result.metrics.total_pnl / 1000).toFixed(1) + 'K' : result.metrics.total_pnl.toFixed(0)}`}
-              deltaPositive={result.metrics.total_pnl >= 0}
-            />
-          </div>
+          {(() => {
+            const m = result.metrics
+            return (
+              <div style={STRIP}>
+                <KpiCell grow minWidth={150} label="Total Return" value={`${m.total_return > 0 ? '+' : ''}${m.total_return.toFixed(2)}%`} valueSize={16} color={m.total_return >= 0 ? POS : NEG} />
+                <KpiCell grow label="Ann. Return" value={`${m.ann_return > 0 ? '+' : ''}${m.ann_return.toFixed(2)}%`} color={m.ann_return >= 0 ? POS : NEG} />
+                <KpiCell grow label="Max Drawdown" value={`${m.max_drawdown.toFixed(2)}%`} color={NEG} />
+                <KpiCell grow label="Sharpe Ratio" value={m.sharpe.toFixed(3)} color={m.sharpe >= 1 ? POS : undefined} />
+                <KpiCell grow label="Num Trades" value={String(m.num_trades)} />
+                <KpiCell grow label="Win Rate" value={`${m.win_rate.toFixed(1)}%`} color={m.win_rate >= 50 ? POS : NEG} />
+                <KpiCell grow label="Final Capital" value={`$${m.final_capital >= 1000 ? (m.final_capital / 1000).toFixed(1) + 'K' : m.final_capital.toFixed(0)}`} />
+                <KpiCell grow label="P&L ($)" value={`${m.total_pnl >= 0 ? '+' : ''}$${Math.abs(m.total_pnl) >= 1000 ? (m.total_pnl / 1000).toFixed(1) + 'K' : m.total_pnl.toFixed(0)}`} color={m.total_pnl >= 0 ? POS : NEG} />
+              </div>
+            )
+          })()}
 
           {/* AI Backtest Commentary */}
           <div style={{ border: '1px solid color-mix(in srgb, var(--theme-primary) 20%, transparent)', background: 'color-mix(in srgb, var(--theme-primary) 3%, transparent)' }}>
