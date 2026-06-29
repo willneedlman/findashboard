@@ -2,8 +2,14 @@ import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Legend } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
-import MetricCard from '../components/MetricCard'
+import { KpiCell } from '../components/mmCockpit'
 import { useChartColors } from '../hooks/useChartColors'
+
+const STRIP: React.CSSProperties = {
+  display: 'flex', alignItems: 'stretch', overflowX: 'auto',
+  background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
+}
+const POS = 'var(--theme-positive)', NEG = 'var(--theme-negative)'
 import StrategySelector, { STRATEGIES, CUSTOM_STRATEGY_KEY, type StrategyParams } from '../components/StrategySelector'
 import { TOOLTIP_STYLE, CROSSHAIR_CURSOR, BAR_CURSOR } from '../components/ChartTooltip'
 import { FUTURES } from '../lib/futures'
@@ -415,33 +421,19 @@ export function MonteCarloContent() {
                 ))}
               </div>
 
-              {/* Metric cards */}
-              <div className="metric-grid">
-                <MetricCard label="Starting Value" value="$100.00" />
-                <MetricCard label="Median Final" value={`$${data.median.toFixed(2)}`}
-                  delta={`${((data.median / data.S0 - 1) * 100).toFixed(1)}%`}
-                  deltaPositive={data.median > data.S0} />
-                <MetricCard label="Prob of Profit" value={`${data.probProfit.toFixed(1)}%`}
-                  deltaPositive={data.probProfit > 50} />
-                <MetricCard label="VaR 95%" value={`$${data.varAmt.toFixed(2)}`} deltaPositive={false} />
-                {data.probTarget !== null && (
-                  <MetricCard
-                    label={`Prob ≥ $${data.targetPrice}`}
-                    value={`${data.probTarget.toFixed(1)}%`}
-                    deltaPositive={data.probTarget > 50}
-                  />
-                )}
-              </div>
-
-              <div className="metric-grid">
-                <MetricCard label="P5 Outcome" value={`$${data.p5.toFixed(2)}`} />
-                <MetricCard label="P95 Outcome" value={`$${data.p95.toFixed(2)}`} />
-                <MetricCard label="CVaR 95%" value={`$${data.cvarAmt.toFixed(2)}`} deltaPositive={false} />
-                <MetricCard label="Eff. Portfolio Drift" value={`${data.effDrift.toFixed(1)}%`} />
-                {data.probRuin > 0 && (
-                  <MetricCard label="Prob of Ruin" value={`${data.probRuin.toFixed(1)}%`}
-                    delta="wiped to $0" deltaPositive={false} />
-                )}
+              {/* Answer-first outcome strip */}
+              <div style={STRIP}>
+                <KpiCell grow minWidth={150} label="Median Final" value={`$${data.median.toFixed(2)}`} valueSize={16}
+                  color={data.median > data.S0 ? POS : NEG}
+                  sub={`${data.median > data.S0 ? '+' : ''}${((data.median / data.S0 - 1) * 100).toFixed(1)}% vs start`} subColor={data.median > data.S0 ? POS : NEG} />
+                <KpiCell grow label="Prob of Profit" value={`${data.probProfit.toFixed(1)}%`} color={data.probProfit > 50 ? POS : NEG} />
+                <KpiCell grow label="P5 Outcome" value={`$${data.p5.toFixed(2)}`} />
+                <KpiCell grow label="P95 Outcome" value={`$${data.p95.toFixed(2)}`} />
+                <KpiCell grow label="VaR 95%" value={`$${data.varAmt.toFixed(2)}`} color={NEG} />
+                <KpiCell grow label="CVaR 95%" value={`$${data.cvarAmt.toFixed(2)}`} color={NEG} />
+                <KpiCell grow label="Eff. Drift" value={`${data.effDrift.toFixed(1)}%`} />
+                {data.probTarget !== null && <KpiCell grow label={`Prob ≥ $${data.targetPrice}`} value={`${data.probTarget.toFixed(1)}%`} color={data.probTarget > 50 ? POS : undefined} />}
+                {data.probRuin > 0 && <KpiCell grow label="Prob of Ruin" value={`${data.probRuin.toFixed(1)}%`} color={NEG} sub="wiped to $0" subColor={NEG} />}
               </div>
 
               <ChartPanel label={`Simulated Portfolio Paths vs ${data.benchmark}`} height={328}>
