@@ -3,11 +3,10 @@ import { ComposedChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cartesi
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
-import MetricCard from '../components/MetricCard'
 import EmptyState from '../components/EmptyState'
 import TickerInput from '../components/TickerInput'
 import { useChartColors } from '../hooks/useChartColors'
-import { INPUT, LABEL, HINT, SIDEBAR, SECTION, RailSection, PRIMARY_BTN, GHOST_BTN, READOUT_ROW, TOOLTIP_STYLE, TOOLTIP_LABEL, TOOLTIP_ITEM, TOOLTIP_CURSOR, TICK, METRIC_GRID, STACK, fmtM, ChartPanel } from './valuationShared'
+import { INPUT, LABEL, HINT, SIDEBAR, SECTION, RailSection, PRIMARY_BTN, GHOST_BTN, READOUT_ROW, TOOLTIP_STYLE, TOOLTIP_LABEL, TOOLTIP_ITEM, TOOLTIP_CURSOR, TICK, PANEL, STACK, fmtM, ChartPanel, VerdictStrip, type VerdictTone } from './valuationShared'
 
 type Reverse = {
   implied_growth: number | null
@@ -153,12 +152,22 @@ export function ReverseDCFContent() {
               {data.note}
             </div>
           )}
-          <div style={METRIC_GRID}>
-            <MetricCard label="Implied revenue growth" value={`${implied.toFixed(1)}%`} help="Annual revenue growth the price implies, with margins held constant" />
-            <MetricCard label="Current growth" value={data.current_growth != null ? `${data.current_growth.toFixed(1)}%` : 'n/a'} />
-            <MetricCard label="Growth gap" value={data.growth_gap != null ? `${data.growth_gap > 0 ? '+' : ''}${data.growth_gap.toFixed(1)} pts` : 'n/a'} deltaPositive={(data.growth_gap ?? 0) <= 0} />
-            <MetricCard label="Price solved against" value={`$${data.market_price.toFixed(2)}`} />
-          </div>
+          {(() => {
+            const vlabel = data.verdict === 'demanding' ? 'Demanding' : data.verdict === 'undemanding' ? 'Undemanding' : data.verdict === 'in-line' ? 'In-line' : 'Implied growth'
+            const vtone: VerdictTone = data.verdict === 'demanding' ? 'neg' : data.verdict === 'undemanding' ? 'pos' : 'gold'
+            return (
+              <div style={PANEL}>
+                <VerdictStrip
+                  primary={{ label: vlabel, value: `${implied.toFixed(1)}%`, tone: vtone, context: `Revenue growth the price implies · solved at $${data.market_price.toFixed(2)}`, contextTone: 'muted' }}
+                  cells={[
+                    { label: 'Current Growth', value: data.current_growth != null ? `${data.current_growth.toFixed(1)}%` : 'n/a' },
+                    { label: 'Growth Gap', value: data.growth_gap != null ? `${data.growth_gap > 0 ? '+' : ''}${data.growth_gap.toFixed(1)} pts` : 'n/a', tone: (data.growth_gap ?? 0) <= 0 ? 'pos' : 'neg' },
+                    { label: 'Price Solved', value: `$${data.market_price.toFixed(2)}` },
+                  ]}
+                />
+              </div>
+            )
+          })()}
 
           {data.fcfs && data.fcfs.length > 0 && (
             <ChartPanel title="Implied free cash flow path">

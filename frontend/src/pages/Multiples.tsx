@@ -2,10 +2,9 @@ import { useState, useMemo } from 'react'
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
-import MetricCard from '../components/MetricCard'
 import EmptyState from '../components/EmptyState'
 import TickerInput from '../components/TickerInput'
-import { INPUT, LABEL, SIDEBAR, RailSection, PRIMARY_BTN, READOUT_ROW, TH, TD, PANEL, METRIC_GRID, STACK } from './valuationShared'
+import { INPUT, LABEL, SIDEBAR, RailSection, PRIMARY_BTN, READOUT_ROW, TH, TD, PANEL, STACK, VerdictStrip, upsidePrimary } from './valuationShared'
 
 type Metric = { key: string; label: string; per_share: number; current_mult: number | null; ev_based: boolean }
 type MultiplesData = {
@@ -93,10 +92,14 @@ export function MultiplesContent() {
 
       {rows && data!.metrics.length > 0 && (
         <div style={STACK}>
-          <div style={METRIC_GRID}>
-            <MetricCard label="Blended implied value" value={rows.avg != null ? `$${rows.avg.toFixed(2)}` : 'n/a'} />
-            <MetricCard label="Market price" value={data!.price ? `$${data!.price.toFixed(2)}` : 'n/a'} />
-            <MetricCard label="Upside vs price" value={rows.avgUpside != null ? `${rows.avgUpside > 0 ? '+' : ''}${rows.avgUpside.toFixed(1)}%` : 'n/a'} deltaPositive={(rows.avgUpside ?? 0) >= 0} />
+          <div style={PANEL}>
+            <VerdictStrip
+              primary={upsidePrimary(rows.avgUpside ?? null, rows.avg != null ? `$${rows.avg.toFixed(2)}` : 'n/a', data!.price ? `$${data!.price.toFixed(2)}` : null)}
+              cells={[
+                { label: 'Blended Implied', value: rows.avg != null ? `$${rows.avg.toFixed(2)}` : 'n/a' },
+                { label: 'Market Price', value: data!.price ? `$${data!.price.toFixed(2)}` : 'n/a' },
+              ]}
+            />
           </div>
 
           <div style={PANEL}>

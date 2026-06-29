@@ -3,12 +3,11 @@ import { ComposedChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cartesi
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
-import MetricCard from '../components/MetricCard'
 import EmptyState from '../components/EmptyState'
 import { useChartColors } from '../hooks/useChartColors'
 import {
   INPUT, LABEL, HINT, SIDEBAR, SECTION, RailSection, PRIMARY_BTN, READOUT_ROW, TOOLTIP_STYLE, TOOLTIP_LABEL,
-  TOOLTIP_ITEM, TOOLTIP_CURSOR, TICK, METRIC_GRID, STACK, Field, ChartPanel,
+  TOOLTIP_ITEM, TOOLTIP_CURSOR, TICK, PANEL, STACK, Field, ChartPanel, VerdictStrip, upsidePrimary,
 } from './valuationShared'
 
 type DDM = {
@@ -127,11 +126,15 @@ export function DividendDiscountContent() {
             </div>
           )}
 
-          <div style={METRIC_GRID}>
-            <MetricCard label="Intrinsic value" value={calc.validTerminal ? `$${calc.value.toFixed(2)}` : 'n/a'} />
-            <MetricCard label="Market price" value={data!.price ? `$${data!.price.toFixed(2)}` : 'n/a'} />
-            <MetricCard label="Upside" value={calc.upside != null ? `${calc.upside > 0 ? '+' : ''}${calc.upside.toFixed(1)}%` : 'n/a'} deltaPositive={(calc.upside ?? 0) >= 0} />
-            <MetricCard label="Dividend yield" value={data!.div_yield != null ? `${data!.div_yield.toFixed(2)}%` : 'n/a'} />
+          <div style={PANEL}>
+            <VerdictStrip
+              primary={upsidePrimary(calc.upside ?? null, calc.validTerminal ? `$${calc.value.toFixed(2)}` : 'n/a', data!.price ? `$${data!.price.toFixed(2)}` : null)}
+              cells={[
+                { label: 'Intrinsic Value', value: calc.validTerminal ? `$${calc.value.toFixed(2)}` : 'n/a' },
+                { label: 'Market Price', value: data!.price ? `$${data!.price.toFixed(2)}` : 'n/a' },
+                { label: 'Dividend Yield', value: data!.div_yield != null ? `${data!.div_yield.toFixed(2)}%` : 'n/a' },
+              ]}
+            />
           </div>
 
           {!calc.validTerminal && (

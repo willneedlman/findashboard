@@ -169,6 +169,26 @@ const TONE: Record<VerdictTone, string> = {
 }
 export const toneColor = (t: VerdictTone = 'text') => TONE[t]
 
+// Shared valuation verdict from an upside-to-price %, so every valuation tool
+// reads the same way (undervalued/fair/overvalued, with matching tone).
+export function valuationVerdict(upside: number | null): { label: string; tone: VerdictTone } {
+  if (upside == null) return { label: 'Fair value', tone: 'gold' }
+  if (upside > 10) return { label: 'Undervalued', tone: 'pos' }
+  if (upside > 2) return { label: 'Modestly undervalued', tone: 'pos' }
+  if (upside >= -2) return { label: 'Fairly valued', tone: 'gold' }
+  if (upside >= -10) return { label: 'Modestly overvalued', tone: 'neg' }
+  return { label: 'Overvalued', tone: 'neg' }
+}
+
+// Standard answer-first VerdictStrip headline: verdict + upside hero with a
+// "fair vs price" context. Falls back to the fair figure alone when no price.
+export function upsidePrimary(upside: number | null, fair: string, price: string | null) {
+  const v = valuationVerdict(upside)
+  return upside != null && price != null
+    ? { label: v.label, value: `${upside >= 0 ? '+' : '−'}${Math.abs(upside).toFixed(1)}%`, tone: v.tone, context: `Fair ${fair} vs ${price}`, contextTone: 'muted' as VerdictTone }
+    : { label: 'Fair value', value: fair, tone: 'gold' as VerdictTone }
+}
+
 // Zero-anchored heatmap scale — forest-green above 0, maroon below — used by the
 // sensitivity grid and the sector table. These are deliberate data-viz heat
 // colors (not theme tokens); matches the existing heatColor() in DCFValuation.

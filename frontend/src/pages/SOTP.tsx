@@ -3,13 +3,12 @@ import { ComposedChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cartesi
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
-import MetricCard from '../components/MetricCard'
 import EmptyState from '../components/EmptyState'
 import TickerInput from '../components/TickerInput'
 import { useChartColors } from '../hooks/useChartColors'
 import {
   INPUT, LABEL, SIDEBAR, SECTION, RailSection, PRIMARY_BTN, GHOST_BTN, READOUT_ROW, TOOLTIP_STYLE, TOOLTIP_LABEL,
-  TOOLTIP_ITEM, TOOLTIP_CURSOR, TICK, TH, TD, PANEL, METRIC_GRID, STACK, fmtM, ChartPanel,
+  TOOLTIP_ITEM, TOOLTIP_CURSOR, TICK, TH, TD, PANEL, STACK, fmtM, ChartPanel, VerdictStrip, upsidePrimary,
 } from './valuationShared'
 
 type Seg = { name: string; revenue: number; pct: number | null; sector?: string | null }
@@ -199,11 +198,15 @@ export function SOTPContent() {
 
       {calc && (
         <div style={STACK}>
-          <div style={METRIC_GRID}>
-            <MetricCard label="Implied market value" value={fmtM(calc.total)} />
-            <MetricCard label="Value / share" value={`$${calc.perShare.toFixed(2)}`} />
-            <MetricCard label="Upside vs price" value={calc.upside != null ? `${calc.upside > 0 ? '+' : ''}${calc.upside.toFixed(1)}%` : 'n/a'}
-              delta={calc.upside != null ? `$${data!.market_price?.toFixed(2)} mkt` : undefined} deltaPositive={(calc.upside ?? 0) >= 0} />
+          <div style={PANEL}>
+            <VerdictStrip
+              primary={upsidePrimary(calc.upside ?? null, `$${calc.perShare.toFixed(2)}`, data!.market_price != null ? `$${data!.market_price.toFixed(2)}` : null)}
+              cells={[
+                { label: 'Implied Market Value', value: fmtM(calc.total) },
+                { label: 'Value / Share', value: `$${calc.perShare.toFixed(2)}` },
+                { label: 'Market Price', value: data!.market_price != null ? `$${data!.market_price.toFixed(2)}` : 'n/a' },
+              ]}
+            />
           </div>
 
           {(data!.source || data!.fiscalYear) && (
