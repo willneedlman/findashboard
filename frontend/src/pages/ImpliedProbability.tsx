@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Legend } from 'recharts'
+import { AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, ReferenceDot, Legend } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import { KpiCell } from '../components/mmCockpit'
 import SidebarLayout from '../components/SidebarLayout'
@@ -13,6 +13,23 @@ import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection } from './valuationShare
 const STRIP: React.CSSProperties = {
   display: 'flex', alignItems: 'stretch', overflowX: 'auto',
   background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
+}
+// KPI strips carry a 2px gold top border per the design.
+const STRIP_GOLD: React.CSSProperties = { ...STRIP, borderTop: '2px solid var(--theme-primary, #c9a84c)' }
+
+// Linear interpolation of a curve ([{strike, <key>}], strike-ascending) at x.
+function interpAt(arr: any[] | undefined, key: string, x: number): number | null {
+  if (!arr || arr.length === 0) return null
+  if (x <= arr[0].strike) return arr[0][key]
+  if (x >= arr[arr.length - 1].strike) return arr[arr.length - 1][key]
+  for (let i = 0; i < arr.length - 1; i++) {
+    const a = arr[i], b = arr[i + 1]
+    if (x >= a.strike && x <= b.strike) {
+      const t = (x - a.strike) / ((b.strike - a.strike) || 1)
+      return a[key] + (b[key] - a[key]) * t
+    }
+  }
+  return arr[arr.length - 1][key]
 }
 
 function ChartPanel({ label, height, note, children }: { label: string; height: number; note?: string; children: React.ReactNode }) {
@@ -65,6 +82,16 @@ export function ImpliedProbabilityContent() {
   const cone = data?.cone
   const dist = data?.dist
 
+  // Probability Explorer: a strike the user drags to test, synced across both
+  // lower charts. Seeds to the median and clamps to the density range on load.
+  const [strike, setStrike] = useState<number | null>(null)
+  useEffect(() => { if (dist?.p50 != null) setStrike(dist.p50) }, [dist])
+
+  const dte = (() => {
+    const d = new Date(`${expiry}T00:00:00`)
+    return isNaN(+d) ? null : Math.max(0, Math.round((+d - Date.now()) / 86_400_000))
+  })()
+
   return (
     <SidebarLayout sidebarWidth={210} sidebarTitle="" sidebar={<>
           <RailSection title="Distribution Parameters" open={paramsOpen} onToggle={() => setParamsOpen(o => !o)}>
@@ -97,10 +124,11 @@ export function ImpliedProbabilityContent() {
           {/* Volatility Cone section */}
           {cone && (
             <>
-              <div style={STRIP}>
+              <div style={STRIP_GOLD}>
                 <KpiCell grow minWidth={150} label="Current Spot" value={`$${cone.S0.toLocaleString()}`} color="var(--theme-primary, #c9a84c)" valueSize={16} />
                 <KpiCell grow label="ATM Implied Vol" value={`${(cone.sigma * 100).toFixed(1)}%`} color="var(--theme-tertiary, #60a5fa)" />
                 <KpiCell grow label="Risk-Free Rate" value={`${(cone.r * 100).toFixed(2)}%`} />
+                <KpiCell grow label="Days to Expiry" value={dte != null ? `${dte}d` : '—'} />
               </div>
 
               <ChartPanel label={`Volatility Cone — ${ticker}`} height={328} note="BS Risk-Neutral">
@@ -131,61 +159,99 @@ export function ImpliedProbabilityContent() {
           )}
 
           {/* Market-implied distribution section */}
-          {dist && (
+          {dist && (() => {
+            const sMin = dist.density?.length ? dist.density[0].strike : 0
+            const sMax = dist.density?.length ? dist.density[dist.density.length - 1].strike : 0
+            const k = strike ?? dist.p50
+            const pAbove = interpAt(dist.delta_curve, 'delta', k)
+            const densV = interpAt(dist.density, 'density', k)
+            const dPoint = dist.density?.length
+              ? dist.density.reduce((b: any, p: any) => Math.abs(p.strike - k) < Math.abs(b.strike - k) ? p : b, dist.density[0])
+              : null
+            const spot = cone?.S0 ?? null
+            const vsSpot = spot ? (k - spot) / spot * 100 : null
+            const GOLD = 'var(--theme-primary, #c9a84c)', SEC = 'var(--theme-secondary, #8099b0)'
+            return (
             <>
               <SectionHeader label="Market-Implied Probability Distribution" />
 
-              <div style={STRIP}>
-                <KpiCell grow minWidth={150} label="P50 Strike · Median" value={`$${dist.p50.toLocaleString()}`} color="var(--theme-primary, #c9a84c)" valueSize={16} />
-                <KpiCell grow label="Modal Strike" value={`$${dist.modal_strike.toLocaleString()}`} />
-                <KpiCell grow label="P10 Strike" value={`$${dist.p10.toLocaleString()}`} />
-                <KpiCell grow label="P90 Strike" value={`$${dist.p90.toLocaleString()}`} />
-                <KpiCell grow label="IV Skew (P−C)" value={`${dist.iv_skew > 0 ? '+' : ''}${dist.iv_skew.toFixed(1)}%`} color={dist.iv_skew > 0 ? 'var(--theme-negative)' : 'var(--theme-positive)'} />
+              <div style={STRIP_GOLD}>
+                <KpiCell grow label="Modal Strike" value={`$${dist.modal_strike.toLocaleString()}`} sub="most likely" />
+                <KpiCell grow label="P10 Strike" value={`$${dist.p10.toLocaleString()}`} color={cc.gain} sub="10% finish above" />
+                <KpiCell grow minWidth={130} label="P50 Strike" value={`$${dist.p50.toLocaleString()}`} color={GOLD} valueSize={16} sub="median" />
+                <KpiCell grow label="P90 Strike" value={`$${dist.p90.toLocaleString()}`} color={cc.loss} sub="90% finish above" />
+                <KpiCell grow label="IV Skew (P−C)" value={`${dist.iv_skew > 0 ? '+' : ''}${dist.iv_skew.toFixed(1)}%`} color={dist.iv_skew > 0 ? cc.loss : cc.gain} sub="put-rich" />
               </div>
 
-              <div style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', letterSpacing: '0.06em' }}>
-                Expiry: <span style={{ color: 'var(--theme-primary, #c9a84c)' }}>{dist.expiry}</span>
+              <div style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', letterSpacing: '0.06em', lineHeight: 1.5 }}>
+                Expiry: <span style={{ color: GOLD }}>{dist.expiry}</span>
                 &nbsp;·&nbsp; Avg Call IV: <span style={{ color: 'var(--theme-text, #d7e3fc)' }}>{dist.avg_call_iv.toFixed(1)}%</span>
-                &nbsp;·&nbsp; P(S_T &gt; K) = N(d2) from the live IV smile (skew-aware)
-              </div>
-              <div style={{ fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', letterSpacing: '0.04em', marginTop: 4, lineHeight: 1.5 }}>
-                This is the <span style={{ color: 'var(--theme-text, #d7e3fc)' }}>risk-neutral</span> distribution — what options price in, including a downside risk premium — not a real-world forecast. Realized jumps and gaps (earnings, macro) can exceed the smooth curve. For premium selling, the skew matters more than the peak.
+                &nbsp;·&nbsp; P(S_T &gt; K) = N(d2) from the live IV smile (skew-aware). Risk-neutral, not a real-world forecast. For premium selling the skew matters more than the peak.
               </div>
 
-              <ChartPanel label={`Market-Implied Probability Density — ${ticker}`} height={348}>
-                <ResponsiveContainer width="100%" height={320}>
-                  <AreaChart data={dist.density} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.07)" />
-                    <XAxis type="number" tick={TICK} tickFormatter={v => `${(v * 100).toFixed(2)}%`} />
-                    <YAxis type="category" dataKey="strike" tick={TICK} width={52} tickFormatter={v => `$${v}`} reversed />
-                    <Tooltip formatter={(v: number) => [`${(v * 100).toFixed(3)}%`, 'Density']} contentStyle={TOOLTIP_STYLE} />
-                    {[dist.p10, dist.p50, dist.p90].map((level, i) => (
-                      <ReferenceLine key={i} y={level} stroke={[cc.gain,cc.c2,cc.loss][i]} strokeDasharray="4 4"
-                        label={{ value: `P${[10,50,90][i]}`, fill: [cc.gain,cc.c2,cc.loss][i], fontSize: 9 }} />
-                    ))}
-                    <Area type="monotone" dataKey="density" stroke={cc.c2} fill={cc.c2Dim} strokeWidth={2} name="Market Density" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </ChartPanel>
+              {/* Probability Explorer — drag a strike, synced across both charts */}
+              <div style={{ background: 'var(--theme-surface, #0d1826)', border: '1px solid rgba(201,168,76,0.3)', padding: '13px 15px', display: 'flex', flexDirection: 'column', gap: 11 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: GOLD }}>Probability Explorer</span>
+                  <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: SEC, letterSpacing: '0.06em' }}>DRAG TO TEST A STRIKE · SYNCS BOTH CHARTS</span>
+                </div>
+                <div>
+                  <input type="range" min={sMin} max={sMax} step={1} value={k} onChange={e => setStrike(+e.target.value)}
+                    style={{ width: '100%', accentColor: GOLD }} aria-label="Test strike" />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--theme-mono)', fontSize: 9, color: SEC, marginTop: 2 }}>
+                    <span>${sMin}</span><span>${sMax}</span>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'stretch', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+                  <KpiCell grow label="Strike" value={`$${k.toLocaleString()}`} color={GOLD} valueSize={18} />
+                  <KpiCell grow label="P(Finish Above)" value={pAbove != null ? `${(pAbove * 100).toFixed(1)}%` : '—'} color={cc.gain} valueSize={18} />
+                  <KpiCell grow label="P(Below)" value={pAbove != null ? `${((1 - pAbove) * 100).toFixed(1)}%` : '—'} color={cc.loss} valueSize={18} />
+                  <KpiCell grow label="Density" value={densV != null ? `${(densV * 100).toFixed(2)}%` : '—'} color="var(--theme-tertiary, #60a5fa)" valueSize={18} />
+                  <KpiCell grow label="vs Spot" value={vsSpot != null ? `${vsSpot >= 0 ? '+' : ''}${vsSpot.toFixed(1)}%` : '—'} color={(vsSpot ?? 0) >= 0 ? cc.gain : cc.loss} valueSize={18} />
+                </div>
+              </div>
 
-              <ChartPanel label="Cumulative Probability — P(Finish Above Strike)" height={248}
-                note={`P50 strike = $${dist.p50} (50% above)`}>
-                <ResponsiveContainer width="100%" height={220}>
-                  <LineChart data={dist.delta_curve}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.07)" />
-                    <XAxis dataKey="strike" tick={TICK} tickFormatter={v => `$${v}`} interval="preserveStartEnd" />
-                    <YAxis tick={TICK} tickFormatter={v => `${(v * 100).toFixed(0)}%`} domain={[0,1]} orientation="right" />
-                    <Tooltip formatter={(v: number) => [`${(v*100).toFixed(1)}%`, 'P(S_T > K)']} contentStyle={TOOLTIP_STYLE} />
-                    <ReferenceLine y={0.5}      stroke="color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)" strokeDasharray="4 4" label={{ value: '50%', fill: 'var(--theme-primary, #c9a84c)', fontSize: 9, position: 'insideTopLeft' }} />
-                    <ReferenceLine x={dist.p50} stroke="color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)" strokeDasharray="4 4" label={{ value: `P50 $${dist.p50}`, fill: 'var(--theme-primary, #c9a84c)', fontSize: 9, position: 'insideTopRight' }} />
-                    <ReferenceLine x={dist.p10} stroke={cc.gainMuted} strokeDasharray="3 5" label={{ value: 'P10', fill: cc.gain, fontSize: 9 }} />
-                    <ReferenceLine x={dist.p90} stroke={cc.lossMuted} strokeDasharray="3 5" label={{ value: 'P90', fill: cc.loss, fontSize: 9 }} />
-                    <Line type="monotone" dataKey="delta" stroke={cc.c2} strokeWidth={2} dot={false} name="P(S_T > K)" />
-                  </LineChart>
-                </ResponsiveContainer>
-              </ChartPanel>
+              {/* Bottom chart row: density + cumulative side-by-side */}
+              <div style={{ display: 'flex', gap: 12, alignItems: 'stretch', flexWrap: 'wrap' }}>
+                <div style={{ width: 372, flexShrink: 0, minWidth: 0 }}>
+                  <ChartPanel label={`Probability Density — ${ticker}`} height={324}>
+                    <ResponsiveContainer width="100%" height={296}>
+                      <AreaChart data={dist.density} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.045)" />
+                        <XAxis type="number" tick={TICK} tickFormatter={v => `${(v * 100).toFixed(1)}%`} />
+                        <YAxis type="category" dataKey="strike" tick={TICK} width={52} tickFormatter={v => `$${v}`} reversed />
+                        <Tooltip formatter={(v: number) => [`${(v * 100).toFixed(3)}%`, 'Density']} contentStyle={TOOLTIP_STYLE} />
+                        <ReferenceLine y={dist.modal_strike} stroke={SEC} strokeDasharray="4 4" strokeOpacity={0.5} label={{ value: 'Modal', fill: SEC, fontSize: 9 }} />
+                        <Area type="monotone" dataKey="density" stroke={cc.c2} fill={cc.c2Dim} strokeWidth={2} name="Market Density" />
+                        {dPoint && <ReferenceLine y={dPoint.strike} stroke={GOLD} strokeDasharray="5 3" />}
+                        {dPoint && <ReferenceDot x={dPoint.density} y={dPoint.strike} r={4} fill={GOLD} stroke="#0a1320" strokeWidth={1.5} />}
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </ChartPanel>
+                </div>
+                <div style={{ flex: 1, minWidth: 320 }}>
+                  <ChartPanel label="Cumulative — P(Finish Above Strike)" height={324} note={`P50 = $${dist.p50}`}>
+                    <ResponsiveContainer width="100%" height={296}>
+                      <LineChart data={dist.delta_curve}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.045)" />
+                        <XAxis type="number" dataKey="strike" domain={['dataMin', 'dataMax']} tick={TICK} tickFormatter={v => `$${v}`} interval="preserveStartEnd" />
+                        <YAxis tick={TICK} tickFormatter={v => `${(v * 100).toFixed(0)}%`} domain={[0, 1]} orientation="right" />
+                        <Tooltip formatter={(v: number) => [`${(v * 100).toFixed(1)}%`, 'P(S_T > K)']} contentStyle={TOOLTIP_STYLE} />
+                        <ReferenceLine y={0.5}      stroke="color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)" strokeDasharray="4 4" label={{ value: '50%', fill: GOLD, fontSize: 9, position: 'insideTopLeft' }} />
+                        <ReferenceLine x={dist.p50} stroke="color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)" strokeDasharray="4 4" label={{ value: 'P50', fill: GOLD, fontSize: 9, position: 'insideTopRight' }} />
+                        <ReferenceLine x={dist.p10} stroke={cc.gainMuted} strokeDasharray="3 5" label={{ value: 'P10', fill: cc.gain, fontSize: 9 }} />
+                        <ReferenceLine x={dist.p90} stroke={cc.lossMuted} strokeDasharray="3 5" label={{ value: 'P90', fill: cc.loss, fontSize: 9 }} />
+                        <Line type="monotone" dataKey="delta" stroke={cc.c2} strokeWidth={2.2} dot={false} name="P(S_T > K)" />
+                        <ReferenceLine x={k} stroke={GOLD} strokeDasharray="5 3" />
+                        {pAbove != null && <ReferenceDot x={k} y={pAbove} r={4} fill={GOLD} stroke="#0a1320" strokeWidth={1.5} />}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </ChartPanel>
+                </div>
+              </div>
             </>
-          )}
+            )
+          })()}
 
           {data && !dist && (
             <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: 16, fontSize: 12, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))' }}>
