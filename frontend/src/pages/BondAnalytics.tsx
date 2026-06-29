@@ -3,20 +3,16 @@ import { useLocation } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Legend } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
+import { KpiCell } from '../components/mmCockpit'
 import { fetchBondAnalytics } from '../hooks/useApi'
 import SidebarLayout from '../components/SidebarLayout'
 import EmptyState from '../components/EmptyState'
 import axios from 'axios'
 import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
 
-function MetricCard({ label, value, delta, deltaPositive }: { label: string; value: string; delta?: string; deltaPositive?: boolean }) {
-  return (
-    <div style={{ background: 'var(--theme-surface, #142032)', border: '1px solid var(--theme-border, rgba(255,255,255,0.07))', borderTop: '3px solid var(--theme-primary, #c9a84c)', padding: 10 }}>
-      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', marginBottom: 6 }}>{label}</div>
-      <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 18, fontWeight: 700, color: 'var(--theme-text, #d7e3fc)' }}>{value}</div>
-      {delta && <div style={{ fontSize: 10, marginTop: 2, color: deltaPositive ? 'var(--theme-positive)' : 'var(--theme-negative)' }}>{delta}</div>}
-    </div>
-  )
+const STRIP: React.CSSProperties = {
+  display: 'flex', alignItems: 'stretch', overflowX: 'auto',
+  background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
 }
 
 function ChartPanel({ label, height, children }: { label: string; height: number; children: React.ReactNode }) {
@@ -169,19 +165,18 @@ export function BondAnalyticsContent() {
           )}
           {data && (
             <>
-              {/* Bond type + metrics */}
-              <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
-                <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)', display: 'flex', alignItems: 'baseline', gap: 10 }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)' }}>Bond Classification</span>
-                  <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 16, fontWeight: 700, color: liveBondType === 'Premium Bond' ? 'var(--theme-positive, #22c55e)' : liveBondType === 'Discount Bond' ? 'var(--theme-negative, #ef4444)' : 'var(--theme-primary, #c9a84c)' }}>{liveBondType}</span>
-                </div>
-                <div style={{ padding: 10, display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
-                  <MetricCard label="Implied YTM"        value={`${data.ytm}%`} />
-                  <MetricCard label="Modified Duration"  value={String(data.mod_duration)} />
-                  <MetricCard label="Convexity"          value={String(data.convexity)} />
-                  <MetricCard label="Coupon Payment"     value={`$${data.coupon_payment}`} />
-                </div>
-              </div>
+              {/* Bond classification + metrics */}
+              {(() => {
+                const typeColor = liveBondType === 'Premium Bond' ? 'var(--theme-positive)' : liveBondType === 'Discount Bond' ? 'var(--theme-negative)' : 'var(--theme-primary, #c9a84c)'
+                return (
+                  <div style={STRIP}>
+                    <KpiCell grow minWidth={150} label="Implied YTM" value={`${data.ytm}%`} valueSize={16} color="var(--theme-primary, #c9a84c)" sub={liveBondType} subColor={typeColor} />
+                    <KpiCell grow label="Modified Duration" value={String(data.mod_duration)} />
+                    <KpiCell grow label="Convexity" value={String(data.convexity)} />
+                    <KpiCell grow label="Coupon Payment" value={`$${data.coupon_payment}`} />
+                  </div>
+                )
+              })()}
 
               {/* Duration sensitivity */}
               <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
@@ -198,15 +193,18 @@ export function BondAnalyticsContent() {
                     </span>
                   </div>
 
-                  {shiftedPoint && (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 12 }}>
-                      <MetricCard label="Rate Shift" value={`${shift > 0 ? '+' : ''}${shift} bps`} />
-                      <MetricCard label="New Price" value={`$${shiftedPoint.price.toFixed(2)}`}
-                        delta={`${((shiftedPoint.price - p.market_price) / p.market_price * 100).toFixed(2)}%`}
-                        deltaPositive={shiftedPoint.price > p.market_price} />
-                      <MetricCard label="New YTM" value={`${Math.max(((data.ytm / 100) + shift / 10000) * 100, 0.01).toFixed(2)}%`} />
-                    </div>
-                  )}
+                  {shiftedPoint && (() => {
+                    const chg = (shiftedPoint.price - p.market_price) / p.market_price * 100
+                    return (
+                      <div style={{ ...STRIP, marginBottom: 12 }}>
+                        <KpiCell grow label="Rate Shift" value={`${shift > 0 ? '+' : ''}${shift} bps`} />
+                        <KpiCell grow label="New Price" value={`$${shiftedPoint.price.toFixed(2)}`}
+                          color={shiftedPoint.price > p.market_price ? 'var(--theme-positive)' : 'var(--theme-negative)'}
+                          sub={`${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%`} subColor={shiftedPoint.price > p.market_price ? 'var(--theme-positive)' : 'var(--theme-negative)'} />
+                        <KpiCell grow label="New YTM" value={`${Math.max(((data.ytm / 100) + shift / 10000) * 100, 0.01).toFixed(2)}%`} />
+                      </div>
+                    )
+                  })()}
                 </div>
 
                 <ChartPanel label="Price vs Rate Shift" height={248}>
