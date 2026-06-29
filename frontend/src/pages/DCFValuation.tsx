@@ -3,13 +3,11 @@ import { useSearchParams } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, Cell, ReferenceLine } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
-import MetricCard from '../components/MetricCard'
 import SidebarLayout from '../components/SidebarLayout'
 import axios from 'axios'
 import EmptyState from '../components/EmptyState'
 import TickerInput from '../components/TickerInput'
 import { useChartColors } from '../hooks/useChartColors'
-import useIsMobile from '../hooks/useIsMobile'
 function fmtM(v: number) {
   const abs = Math.abs(v)
   if (abs >= 1_000_000) return `$${(v / 1_000_000).toFixed(2)}T`
@@ -78,7 +76,7 @@ function computeDCF(
   return { fcfs, pvFcfs, terminalValue, ev, equity, ips }
 }
 
-import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection, RangeTrack } from './valuationShared'
+import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection, RangeTrack, VerdictStrip, PANEL, type VerdictTone } from './valuationShared'
 import { T } from '../lib/theme'
 
 function ChartPanel({ label, height, children }: { label: string; height: number; children: React.ReactNode }) {
@@ -100,7 +98,6 @@ function ChartPanel({ label, height, children }: { label: string; height: number
 }
 
 export function DCFValuationContent() {
-  const isMobile = useIsMobile()
   const cc = useChartColors()
   const [searchParams, setSearchParams] = useSearchParams()
   const [ticker, setTickerRaw] = useState(searchParams.get('ticker') || 'AAPL')
@@ -238,6 +235,11 @@ export function DCFValuationContent() {
   const sensiValues = data?.sensitivity?.map(s => s.value) ?? []
   const sensiMin = sensiValues.length ? Math.min(...sensiValues) : 0
   const sensiMax = sensiValues.length ? Math.max(...sensiValues) : 0
+
+  const verdict = upside == null ? null
+    : upside > 10 ? 'Undervalued' : upside > 2 ? 'Modestly undervalued'
+    : upside >= -2 ? 'Fairly valued' : upside >= -10 ? 'Modestly overvalued' : 'Overvalued'
+  const verdictTone: VerdictTone = upside == null ? 'gold' : upside > 2 ? 'pos' : upside >= -2 ? 'gold' : 'neg'
 
   return (
       <SidebarLayout sidebarWidth={220} sidebarTitle="" sidebar={<>
@@ -387,21 +389,23 @@ export function DCFValuationContent() {
 
           {data && (
             <>
-              {/* Valuation range bar */}
-              {data.market_price != null && (() => {
+              {/* Answer-first verdict strip: headline verdict + valuation range + key stats */}
+              {(() => {
                 const intrinsic = data.intrinsic_per_share
                 const price = data.market_price
-                const bear = Math.min(sensiMin, intrinsic, price)
-                const bull = Math.max(sensiMax, intrinsic, price)
-                if (bull <= bear) return null
-                const up = upside ?? 0
-                const verdict = up > 10 ? 'Undervalued' : up > 2 ? 'Modestly undervalued'
-                  : up >= -2 ? 'Fairly valued' : up >= -10 ? 'Modestly overvalued' : 'Overvalued'
-                const clamp = (x: number) => Math.max(0, Math.min(100, x))
-                return (
-                  <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '12px 16px' }}>
-                    <RangeTrack title="Valuation range"
-                      chip={{ text: `${verdict} · ${up >= 0 ? '+' : '−'}${Math.abs(up).toFixed(1)}%`, tone: up >= 0 ? 'pos' : 'neg' }}
+                const termPct = data.enterprise_value > 0 ? data.terminal_value / data.enterprise_value * 100 : null
+                const cells = [
+                  { label: 'Enterprise Value', value: fmtM(data.enterprise_value) },
+                  { label: 'Equity Value', value: fmtM(data.equity_value) },
+                  { label: 'Terminal % EV', value: termPct == null ? '—' : `${termPct.toFixed(0)}%`, tone: (termPct ?? 0) > 85 ? 'neg' : 'text' as VerdictTone },
+                ]
+                let range: React.ReactNode = undefined
+                if (price != null) {
+                  const bear = Math.min(sensiMin, intrinsic, price)
+                  const bull = Math.max(sensiMax, intrinsic, price)
+                  if (bull > bear) {
+                    const clamp = (x: number) => Math.max(0, Math.min(100, x))
+                    range = <RangeTrack title="Valuation range"
                       gradient={`linear-gradient(90deg, ${T.posTint(35)}, color-mix(in srgb, var(--theme-secondary) 22%, transparent), ${T.negTint(35)})`}
                       ticks={[{ pct: clamp((intrinsic - bear) / (bull - bear) * 100), tone: 'gold' }, { pct: clamp((price - bear) / (bull - bear) * 100), tone: 'text' }]}
                       labels={[
@@ -410,6 +414,14 @@ export function DCFValuationContent() {
                         { text: `price $${price.toFixed(2)}`, pct: clamp((price - bear) / (bull - bear) * 100), tone: 'text' },
                         { text: `$${sensiMax.toFixed(0)} bull`, pct: clamp((sensiMax - bear) / (bull - bear) * 100), tone: 'muted' },
                       ]} />
+                  }
+                }
+                const primary = price != null && upside != null
+                  ? { label: verdict ?? 'Verdict', value: `${upside >= 0 ? '+' : '−'}${Math.abs(upside).toFixed(1)}%`, tone: verdictTone, context: `Fair $${intrinsic.toFixed(2)} vs $${price.toFixed(2)}`, contextTone: 'muted' as VerdictTone }
+                  : { label: 'Intrinsic / Share', value: `$${intrinsic.toFixed(2)}`, tone: 'gold' as VerdictTone }
+                return (
+                  <div style={PANEL}>
+                    <VerdictStrip primary={primary} range={range} cells={cells} />
                   </div>
                 )
               })()}
@@ -441,35 +453,6 @@ export function DCFValuationContent() {
                   </div>
                 </div>
               )}
-              {/* Summary metrics */}
-              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${isMobile ? 2 : 5},1fr)`, gap: 8 }}>
-                <MetricCard label="Enterprise Value" value={fmtM(data.enterprise_value)} />
-                <MetricCard label="Equity Value" value={fmtM(data.equity_value)} />
-                <MetricCard label="Intrinsic / Share" value={`$${data.intrinsic_per_share.toLocaleString()}`} />
-                {data.market_price != null && (
-                  <MetricCard label="Market Price" value={`$${data.market_price.toLocaleString()}`} />
-                )}
-                {upside != null && (
-                  <MetricCard label="Upside / Downside"
-                    value={`${upside > 0 ? '+' : ''}${upside.toFixed(1)}%`}
-                    deltaPositive={upside > 0} />
-                )}
-              </div>
-
-              {/* Summary sub-line */}
-              <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '8px 12px', display: 'flex', gap: 20 }}>
-                {[
-                  ['Terminal Value', fmtM(data.terminal_value)],
-                  ['PV of FCFs', fmtM(data.pv_fcfs)],
-                  ['Terminal % of EV', data.enterprise_value > 0 ? `${(data.terminal_value / data.enterprise_value * 100).toFixed(1)}%` : '—'],
-                ].map(([label, val]) => (
-                  <div key={label}>
-                    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-text-faint, rgba(255,255,255,0.22))' }}>{label}</span>
-                    <span style={{ marginLeft: 8, fontFamily: 'var(--theme-mono)', fontSize: 12, color: 'var(--theme-text, #d7e3fc)' }}>{val}</span>
-                  </div>
-                ))}
-              </div>
-
               {/* FCF chart — Revenue bars (left axis) + FCF/PV lines (right axis) */}
               <ChartPanel label="10-Year Free Cash Flow Projections ($M)" height={268}>
                 <ResponsiveContainer width="100%" height={240}>
