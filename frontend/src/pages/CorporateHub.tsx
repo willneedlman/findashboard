@@ -389,7 +389,7 @@ export function CorporateHubContent() {
       </div>
 
       <div style={panel}>
-        {panelHead('All Signals · One Row Per Ticker', 'CATALYST · VALUATION · SHORT · INSIDER')}
+        {panelHead('Upcoming Catalysts & Valuation', 'CATALYST · VALUATION · SHORT · INSIDER')}
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', minWidth: 820, borderCollapse: 'collapse' }}>
             <thead>

@@ -263,6 +263,32 @@ def _extract_earnings_date(stock) -> tuple:
         return None, None
 
 
+def _consensus_label(info: dict):
+    """Map yfinance analyst recommendation to the UI's consensus labels."""
+    key = (info.get("recommendationKey") or "").lower()
+    mapping = {
+        "strong_buy": "Strong Buy",
+        "buy": "Moderate Buy",
+        "hold": "Hold",
+        "underperform": "Underperform",
+        "sell": "Underperform",
+        "strong_sell": "Underperform",
+    }
+    if key in mapping:
+        return mapping[key]
+    try:
+        m = float(info.get("recommendationMean"))
+    except (TypeError, ValueError):
+        return None
+    if m <= 1.5:
+        return "Strong Buy"
+    if m <= 2.5:
+        return "Moderate Buy"
+    if m <= 3.5:
+        return "Hold"
+    return "Underperform"
+
+
 @router.get("/hub")
 async def get_corporate_hub(ticker: str):
     """Fetches fundamental financial data or ETF asset structures resiliently with nested metric safeties."""
@@ -346,7 +372,7 @@ async def get_corporate_hub(ticker: str):
             "peg_ratio": t_peg,
             "pct_change_1d": t_pct_1d,
             "implied_move": None,
-            "consensus": None,
+            "consensus": _consensus_label(info),
             "date": earnings_date,
             "horizon": earnings_horizon,
             "news": news_items,
