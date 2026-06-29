@@ -16,7 +16,7 @@ interface TickerRow {
   pe: number | null
   pctChange: number | null
   marketCap: number | null
-  consensus: string; isConfirmed: boolean
+  consensus: string | null; isConfirmed: boolean
   news: { title: string; link: string; publisher: string }[]
   sparkline: number[]
 }
@@ -100,7 +100,7 @@ async function fetchTicker(tk: string): Promise<TickerRow> {
       ticker: tk, name: d.company_name || tk, date: d.date || '—', horizon: d.horizon || '—',
       impliedMove: d.implied_move ?? 4.5, pe: d.estimated_pe ?? null,
       pctChange: d.pct_change_1d ?? null, marketCap: d.market_cap ?? null,
-      consensus: d.consensus || 'Hold', isConfirmed: d.is_confirmed ?? false,
+      consensus: d.consensus ?? null, isConfirmed: d.is_confirmed ?? false,
       sparkline: d.sparkline ?? [],
       news: (d.news || []).slice(0, 2).map((n: any) => ({
         title: n.title || 'Market Update', link: n.link || '#', publisher: n.publisher || 'Financial Wire',
@@ -108,7 +108,7 @@ async function fetchTicker(tk: string): Promise<TickerRow> {
     }
   } catch {
     return { ticker: tk, name: tk, date: '—', horizon: '—', impliedMove: 4.5, pe: null,
-             pctChange: null, marketCap: null, consensus: 'Hold', isConfirmed: false, news: [], sparkline: [] }
+             pctChange: null, marketCap: null, consensus: null, isConfirmed: false, news: [], sparkline: [] }
   }
 }
 
@@ -169,8 +169,6 @@ export function CorporateHubContent() {
 
   const [sortBy, setSortBy] = useState('ticker')
   const [fiscalFilter, setFiscalFilter] = useState('All Horizons')
-  const [showShort, setShowShort]       = useState(true)
-  const [showInsider, setShowInsider]   = useState(false)
 
   const [rows, setRows]                   = useState<TickerRow[]>([])
   const [shortData, setShortData]         = useState<Record<string, ShortRow>>({})
@@ -198,25 +196,21 @@ export function CorporateHubContent() {
     setIsPending(true); setRows([]); setShortData({}); setInsiderData({})
     const results = await Promise.all(tickers.map(fetchTicker))
     setRows(results); setIsPending(false)
-    // Lazy supplemental fetches in parallel
-    const extras: Promise<void>[] = []
-    if (showShort) {
-      extras.push((async () => {
+    // Short interest + insider activity always load (in parallel, after the main rows)
+    await Promise.all([
+      (async () => {
         setShortPending(true)
         const pairs = await Promise.all(tickers.map(fetchShortTicker))
         setShortData(Object.fromEntries(pairs))
         setShortPending(false)
-      })())
-    }
-    if (showInsider) {
-      extras.push((async () => {
+      })(),
+      (async () => {
         setInsiderPending(true)
         const pairs = await Promise.all(tickers.map(fetchInsiderTicker))
         setInsiderData(Object.fromEntries(pairs))
         setInsiderPending(false)
-      })())
-    }
-    await Promise.all(extras)
+      })(),
+    ])
   }
 
   const fetchAiBrief = async () => {
@@ -320,6 +314,13 @@ export function CorporateHubContent() {
     const cs = CONSENSUS_STYLE[text] ?? CONSENSUS_STYLE['Hold']
     return <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', border: `1px solid ${cs.border}`, color: cs.color, padding: '2px 5px', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{text}</span>
   }
+  const faint = 'var(--theme-text-faint, rgba(255,255,255,0.35))'
+  // Consensus is loaded with the main scan: show "…" while pending, never a fake
+  // rating; a genuinely uncovered name (null) reads as "—".
+  const consensusNode = (c: string | null) =>
+    isPending ? <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: faint }}>…</span>
+    : c ? chip(c)
+    : <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: faint }}>—</span>
   const tlMetric = (label: string, value: string, color = 'var(--theme-text, #d7e3fc)') => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       <span style={{ ...LABEL, fontSize: 8, letterSpacing: '0.1em' }}>{label}</span>
@@ -380,7 +381,7 @@ export function CorporateHubContent() {
                   <span style={{ ...LABEL, fontSize: 8 }}>1D</span>
                   <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: pctTone(r.pctChange) }}>{pctStr(r.pctChange)}</span>
                 </div>
-                <span style={{ alignSelf: 'flex-start' }}>{chip(r.consensus)}</span>
+                <span style={{ alignSelf: 'flex-start' }}>{consensusNode(r.consensus)}</span>
               </div>
             )
           })}
@@ -445,7 +446,7 @@ export function CorporateHubContent() {
                       <td style={{ ...TD, fontSize: 11, color: ins.color, fontWeight: 600 }}>
                         {ins.label}{txs && txs.length > 0 && <span style={{ marginLeft: 6, color: 'var(--theme-text-faint, rgba(255,255,255,0.3))', fontSize: 9 }}>{isOpen ? '▲' : '▼'}</span>}
                       </td>
-                      <td style={TD}>{chip(r.consensus)}</td>
+                      <td style={TD}>{consensusNode(r.consensus)}</td>
                     </tr>
                     {isOpen && txs && txs.length > 0 && (
                       <tr>
@@ -525,7 +526,7 @@ export function CorporateHubContent() {
                           {tlMetric('Mkt Cap', fmtCap(r.marketCap))}
                           {tlMetric('Fwd P/E', r.pe != null ? `${r.pe.toFixed(2)}x` : '—')}
                           {tlMetric('Short %', shortPending && !s ? '…' : (s?.shortPctFloat ?? '—'))}
-                          {chip(r.consensus)}
+                          {consensusNode(r.consensus)}
                         </div>
                       </div>
                     </div>
@@ -584,16 +585,6 @@ export function CorporateHubContent() {
                 <option>All Horizons</option>
                 <option>Confirmed Future Releases</option>
               </select>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                <input type="checkbox" checked={showShort} onChange={e => setShowShort(e.target.checked)} style={{ accentColor: 'var(--theme-primary, #c9a84c)' }} />
-                <span style={{ ...LABEL, color: 'var(--theme-text, #d7e3fc)' }}>Short Interest</span>
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                <input type="checkbox" checked={showInsider} onChange={e => setShowInsider(e.target.checked)} style={{ accentColor: 'var(--theme-primary, #c9a84c)' }} />
-                <span style={{ ...LABEL, color: 'var(--theme-text, #d7e3fc)' }}>Insider Activity</span>
-              </label>
             </div>
           </div>
           <div style={{ padding: 10, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', display: 'flex', flexDirection: 'column', gap: 8 }}>
