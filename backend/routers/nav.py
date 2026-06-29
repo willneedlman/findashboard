@@ -221,6 +221,18 @@ def _get_etf_nav(ticker: str) -> float | None:
         return None
 
 
+def _live_price(sym: str) -> float | None:
+    """Freshest last trade for the NAV snapshot — Binance for crypto, Tradier/
+    yfinance for equities/ETFs/FX. Returns None on any failure so callers fall
+    back to the EOD close from history."""
+    try:
+        from quotes import live_price
+        p = live_price(sym)
+        return float(p) if p else None
+    except Exception:
+        return None
+
+
 class NavRequest(BaseModel):
     target: str = "MSTR"
     asset: str = "BTC-USD"
@@ -273,6 +285,13 @@ def nav_proxy(req: NavRequest):
         raise
     except Exception:
         logger.exception("internal error"); raise HTTPException(500, "Internal server error")
+
+    # Live last-trade for the snapshot (history Close is the prior EOD). Crypto
+    # via Binance, equities/ETFs via Tradier->yfinance; falls back to EOD.
+    live_target_px = _live_price(target)
+    live_asset_px  = _live_price(req.asset)
+    if live_asset_px:
+        latest_spot = live_asset_px
 
     # ── Resolve holdings/NAV LIVE. Nothing financial is stored in the registry.
     #    MSTR uses its dedicated EDGAR feed; crypto treasuries use CoinGecko;
@@ -329,6 +348,13 @@ def nav_proxy(req: NavRequest):
     if df.empty:
         raise HTTPException(404, "No overlapping data after alignment")
 
+    # Override the latest row with live prices so the current snapshot (and the
+    # chart's right edge) reflect the market now, not yesterday's close.
+    if live_target_px:
+        df.iat[-1, df.columns.get_loc("target")] = live_target_px
+    if live_asset_px:
+        df.iat[-1, df.columns.get_loc("asset")] = live_asset_px
+
     net_debt = (gross_debt_m - gross_cash_m) * 1_000_000
     df["gav_per_share"] = (holdings * df["asset"]) / shares
     df["nav_per_share"] = df["gav_per_share"] - net_debt / shares
@@ -346,6 +372,7 @@ def nav_proxy(req: NavRequest):
             "premium":       round(float(latest["premium"]) * 100, 2),
             "asset_spot":    round(btc_price, 2),
         },
+        "is_live":        bool(live_target_px or live_asset_px),
         "holdings":       round(holdings, 2),
         "avg_cost":       avg_cost,
         "company_name":   company_name,
