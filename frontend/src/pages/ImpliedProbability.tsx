@@ -193,7 +193,6 @@ export function ImpliedProbabilityContent() {
               <div style={{ background: 'var(--theme-surface, #0d1826)', border: '1px solid rgba(201,168,76,0.3)', padding: '13px 15px', display: 'flex', flexDirection: 'column', gap: 11 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
                   <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: GOLD }}>Probability Explorer</span>
-                  <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: SEC, letterSpacing: '0.06em' }}>DRAG TO TEST A STRIKE · SYNCS BOTH CHARTS</span>
                 </div>
                 <div>
                   <input type="range" min={sMin} max={sMax} step={1} value={k} onChange={e => setStrike(+e.target.value)}
