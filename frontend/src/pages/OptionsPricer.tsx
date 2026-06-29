@@ -134,17 +134,17 @@ function MultiResults({ data, view, setView }: { data: MultiData; view: '2d' | '
   return (
     <>
       <div style={STRIP}>
-        <KpiCell label={`Net ${debit ? 'Debit' : 'Credit'}`} value={`$${Math.abs(data.net_price).toFixed(2)}`} color="var(--theme-primary, #c9a84c)" valueSize={16} />
-        <KpiCell label="Max Profit" value={data.max_profit_unbounded ? 'Unbounded' : `$${data.max_profit.toFixed(2)}`} color="var(--theme-positive)" />
-        <KpiCell label="Max Loss" value={data.max_loss_unbounded ? 'Unbounded' : `$${Math.abs(data.max_loss).toFixed(2)}`} color="var(--theme-negative)" />
-        {data.breakevens.length > 0 && <KpiCell label="Breakeven" value={data.breakevens.map(b => `$${b.toFixed(2)}`).join(' · ')} color="var(--theme-tertiary, #60a5fa)" />}
-        <KpiCell label="Delta"  value={gFmt(data.greeks.delta)} />
-        <KpiCell label="Gamma"  value={gFmt(data.greeks.gamma)} />
-        <KpiCell label="Theta"  value={gFmt(data.greeks.theta)} />
-        <KpiCell label="Vega"   value={gFmt(data.greeks.vega)} />
-        <KpiCell label="Vanna"  value={gFmt(data.vanna)} />
-        <KpiCell label="Charm"  value={gFmt(data.charm)} />
-        <KpiCell label="Lambda" value={gFmt(data.lambda)} />
+        <KpiCell grow minWidth={130} label={`Net ${debit ? 'Debit' : 'Credit'}`} value={`$${Math.abs(data.net_price).toFixed(2)}`} color="var(--theme-primary, #c9a84c)" valueSize={16} />
+        <KpiCell grow label="Max Profit" value={data.max_profit_unbounded ? 'Unbounded' : `$${data.max_profit.toFixed(2)}`} color="var(--theme-positive)" />
+        <KpiCell grow label="Max Loss" value={data.max_loss_unbounded ? 'Unbounded' : `$${Math.abs(data.max_loss).toFixed(2)}`} color="var(--theme-negative)" />
+        {data.breakevens.length > 0 && <KpiCell grow label="Breakeven" value={data.breakevens.map(b => `$${b.toFixed(2)}`).join(' · ')} color="var(--theme-tertiary, #60a5fa)" />}
+        <KpiCell grow label="Delta"  value={gFmt(data.greeks.delta)} />
+        <KpiCell grow label="Gamma"  value={gFmt(data.greeks.gamma)} />
+        <KpiCell grow label="Theta"  value={gFmt(data.greeks.theta)} />
+        <KpiCell grow label="Vega"   value={gFmt(data.greeks.vega)} />
+        <KpiCell grow label="Vanna"  value={gFmt(data.vanna)} />
+        <KpiCell grow label="Charm"  value={gFmt(data.charm)} />
+        <KpiCell grow label="Lambda" value={gFmt(data.lambda)} />
       </div>
       <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
         {/* Per-leg breakdown */}
@@ -464,15 +464,15 @@ export function OptionsPricerContent() {
           {/* Premium + Greeks */}
           {priceData && (<>
             <div style={STRIP}>
-              <KpiCell label="Option Premium" value={`$${priceData.price}`} color="var(--theme-primary, #c9a84c)" valueSize={16} />
-              {loadedMark && <KpiCell label="Market" value={`$${loadedMark.mark.toFixed(2)}`} color="var(--theme-tertiary, #60a5fa)" />}
-              <KpiCell label="Delta"  value={gFmt(priceData.greeks.delta)} />
-              <KpiCell label="Gamma"  value={gFmt(priceData.greeks.gamma)} />
-              <KpiCell label="Theta"  value={gFmt(priceData.greeks.theta)} />
-              <KpiCell label="Vega"   value={gFmt(priceData.greeks.vega)} />
-              <KpiCell label="Vanna"  value={gFmt(priceData.vanna)} />
-              <KpiCell label="Charm"  value={gFmt(priceData.charm)} />
-              <KpiCell label="Lambda" value={gFmt(priceData.lambda)} />
+              <KpiCell grow minWidth={140} label="Option Premium" value={`$${priceData.price}`} color="var(--theme-primary, #c9a84c)" valueSize={16} />
+              {loadedMark && <KpiCell grow label="Market" value={`$${loadedMark.mark.toFixed(2)}`} color="var(--theme-tertiary, #60a5fa)" />}
+              <KpiCell grow label="Delta"  value={gFmt(priceData.greeks.delta)} />
+              <KpiCell grow label="Gamma"  value={gFmt(priceData.greeks.gamma)} />
+              <KpiCell grow label="Theta"  value={gFmt(priceData.greeks.theta)} />
+              <KpiCell grow label="Vega"   value={gFmt(priceData.greeks.vega)} />
+              <KpiCell grow label="Vanna"  value={gFmt(priceData.vanna)} />
+              <KpiCell grow label="Charm"  value={gFmt(priceData.charm)} />
+              <KpiCell grow label="Lambda" value={gFmt(priceData.lambda)} />
             </div>
             <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 9.5, letterSpacing: '0.06em', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', padding: '0 2px' }}>
               {params.option_type.toUpperCase()} · S={params.S} · K={params.K} · T={params.T}d · σ={params.sigma}% · r={params.r}%{loadedMark ? ` · ${loadedMark.label}` : ''}

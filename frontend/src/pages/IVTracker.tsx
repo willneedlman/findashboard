@@ -472,16 +472,16 @@ export default function IVTracker() {
 
             {/* Answer-first instrument strip: lead with the IV-rank verdict */}
             <div style={{ display: 'flex', alignItems: 'stretch', background: T.surface, border: `1px solid ${T.border}`, overflowX: 'auto' }}>
-              <KpiCell label="IV Rank" value={ivRank == null ? '—' : `${ivRank.toFixed(0)} · ${ivLabel(ivRank)}`} color={ivLabelColor(ivRank)} valueSize={16} />
-              <KpiCell label="Current IV" value={`${data.current_iv.toFixed(1)}%`} color={ivColor} />
-              <KpiCell label="HV 30d" value={fmtPct(data.current_hv_30d)} />
-              <KpiCell label="IV Premium" value={data.iv_premium != null ? `${data.iv_premium >= 0 ? '+' : ''}${data.iv_premium.toFixed(1)}%` : '—'} color={data.iv_premium != null ? (data.iv_premium >= 0 ? T.neg : T.pos) : undefined} />
-              <KpiCell label="Implied Move" value={data.implied_move != null ? `±${data.implied_move.toFixed(1)}%` : '—'} />
-              <KpiCell label="Underlying" value={`$${data.spot.toFixed(2)}`} />
-              <KpiCell label="Straddle" value={data.straddle != null ? `$${data.straddle.toFixed(2)}` : '—'} />
-              <KpiCell label="Bid / Ask" value={`$${data.bid.toFixed(2)} / $${data.ask.toFixed(2)}`} />
-              <KpiCell label="Vol / OI" value={`${data.volume.toLocaleString()} / ${data.open_interest.toLocaleString()}`} />
-              <KpiCell label="IV Range" value={`${fmtPct(data.iv_min)}–${fmtPct(data.iv_max)}`} />
+              <KpiCell grow minWidth={150} label="IV Rank" value={ivRank == null ? '—' : `${ivRank.toFixed(0)} · ${ivLabel(ivRank)}`} color={ivLabelColor(ivRank)} valueSize={16} />
+              <KpiCell grow label="Current IV" value={`${data.current_iv.toFixed(1)}%`} color={ivColor} />
+              <KpiCell grow label="HV 30d" value={fmtPct(data.current_hv_30d)} />
+              <KpiCell grow label="IV Premium" value={data.iv_premium != null ? `${data.iv_premium >= 0 ? '+' : ''}${data.iv_premium.toFixed(1)}%` : '—'} color={data.iv_premium != null ? (data.iv_premium >= 0 ? T.neg : T.pos) : undefined} />
+              <KpiCell grow label="Implied Move" value={data.implied_move != null ? `±${data.implied_move.toFixed(1)}%` : '—'} />
+              <KpiCell grow label="Underlying" value={`$${data.spot.toFixed(2)}`} />
+              <KpiCell grow label="Straddle" value={data.straddle != null ? `$${data.straddle.toFixed(2)}` : '—'} />
+              <KpiCell grow label="Bid / Ask" value={`$${data.bid.toFixed(2)} / $${data.ask.toFixed(2)}`} />
+              <KpiCell grow label="Vol / OI" value={`${data.volume.toLocaleString()} / ${data.open_interest.toLocaleString()}`} />
+              <KpiCell grow label="IV Range" value={`${fmtPct(data.iv_min)}–${fmtPct(data.iv_max)}`} />
             </div>
 
             {/* IV Rank + IV Percentile gauges */}
@@ -611,12 +611,12 @@ export default function IVTracker() {
             {Object.keys(greeks).length > 0 && (
               <Widget title="Option Greeks (current)">
                 <div style={{ display: 'flex', alignItems: 'stretch', overflowX: 'auto' }}>
-                  <KpiCell label="Δ Delta" value={fmtNum(greeks.delta, 4)} />
-                  <KpiCell label="Γ Gamma" value={fmtNum(greeks.gamma, 6)} />
-                  <KpiCell label="Θ Theta" value={`$${fmtNum(greeks.theta, 4)}/d`} />
-                  <KpiCell label="ν Vega" value={`$${fmtNum(greeks.vega, 4)}`} />
-                  <KpiCell label="ρ Rho" value={`$${fmtNum(greeks.rho, 4)}`} />
-                  <KpiCell label="Risk-Free Rate" value={fmtPct(data.risk_free_rate)} />
+                  <KpiCell grow label="Δ Delta" value={fmtNum(greeks.delta, 4)} />
+                  <KpiCell grow label="Γ Gamma" value={fmtNum(greeks.gamma, 6)} />
+                  <KpiCell grow label="Θ Theta" value={`$${fmtNum(greeks.theta, 4)}/d`} />
+                  <KpiCell grow label="ν Vega" value={`$${fmtNum(greeks.vega, 4)}`} />
+                  <KpiCell grow label="ρ Rho" value={`$${fmtNum(greeks.rho, 4)}`} />
+                  <KpiCell grow label="Risk-Free Rate" value={fmtPct(data.risk_free_rate)} />
                 </div>
               </Widget>
             )}
