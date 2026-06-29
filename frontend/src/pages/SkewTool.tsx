@@ -7,7 +7,8 @@ import {
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
 import EmptyState from '../components/EmptyState'
-import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection, MetricCard } from './valuationShared'
+import { Widget, KpiCell } from '../components/mmCockpit'
+import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
 
 interface TermPoint { expiry: string; dte: number; atm_iv: number; rr_25: number; bf_25: number; smile: { moneyness: number; iv: number }[] }
 interface SkewData {
@@ -19,7 +20,13 @@ interface SkewData {
 }
 
 const GOLD = 'var(--theme-primary, #c9a84c)'
-const FAINT = 'var(--theme-text-faint, rgba(255,255,255,0.22))'
+const BLUE = 'var(--theme-tertiary, #60a5fa)'
+const NEG = 'var(--theme-negative)'
+const FAINT = 'var(--theme-text-faint, rgba(255,255,255,0.4))'
+const STRIP: React.CSSProperties = {
+  display: 'flex', alignItems: 'stretch', overflowX: 'auto',
+  background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
+}
 
 // Convert an annualized IV into the ±1σ move expected by a date: spot × IV × √(t).
 function expectedMove(ivPct: number, dte: number, spot: number) {
@@ -28,15 +35,7 @@ function expectedMove(ivPct: number, dte: number, spot: number) {
   return { pct: sigma * 100, dollars, lo: spot - dollars, hi: spot + dollars }
 }
 
-function ChartPanel({ label, height, note, children }: { label: string; height: number; note?: string; children: React.ReactNode }) {
-  return (
-    <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', position: 'relative' }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 10, background: 'var(--theme-surface, rgba(46,57,77,0.8))', padding: '3px 8px', borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>{label}</div>
-      {note && <div style={{ position: 'absolute', top: 0, right: 0, padding: '3px 8px', fontSize: 10, color: FAINT, letterSpacing: '0.06em', zIndex: 10 }}>{note}</div>}
-      <div style={{ paddingTop: 28, paddingLeft: 8, paddingRight: 8, paddingBottom: 8, height }}>{children}</div>
-    </div>
-  )
-}
+const caption = (text: string) => <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, letterSpacing: '0.06em', color: 'var(--theme-secondary, #8099b0)' }}>{text}</span>
 
 export default function SkewTool() {
   const [ticker, setTicker] = useState('SPY')
@@ -46,10 +45,10 @@ export default function SkewTool() {
     mutationFn: () => axios.get(`/api/prob/skew?ticker=${ticker.trim().toUpperCase()}`).then(r => r.data),
     onSuccess: (d) => setExpiry(d.front_expiry),   // default to the nearest expiry
   })
-  const skewColor = (v: number) => (v > 4 ? 'var(--theme-negative)' : v > 1.5 ? 'var(--theme-warn, #d97736)' : 'var(--theme-positive)')
+  const skewColor = (v: number) => (v > 4 ? NEG : v > 1.5 ? 'var(--theme-warn, #d97736)' : 'var(--theme-positive)')
 
   return (
-    <PageWrapper title="Vol Skew & Term Structure">
+    <PageWrapper title="Volatility Skew">
       <SidebarLayout sidebarWidth={210} sidebarTitle="" sidebar={
         <RailSection title="Parameters" open={open} onToggle={() => setOpen(o => !o)}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -74,7 +73,7 @@ export default function SkewTool() {
           </div>
         </RailSection>
       }>
-        {!data && !isPending && <EmptyState title="Vol Skew" hint="Enter a ticker and press Generate." />}
+        {!data && !isPending && <EmptyState title="Volatility Skew" hint="Enter a ticker and press Generate. Reads the IV smile, term structure, and crash-fear skew." />}
         {isPending && <EmptyState title="Loading skew surface…" hint="Solving the IV smile across expiries." />}
         {error && !isPending && <EmptyState title="No skew data" hint="Insufficient options data for this ticker." />}
         {data && (() => {
@@ -85,52 +84,49 @@ export default function SkewTool() {
           const maxDte = Math.max(...data.term_structure.map(t => t.dte))
           const termXMax = Math.min(maxDte, Math.max(Math.round(sel.dte * 4), 120))
           return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
-              <MetricCard label="ATM IV (annualized)" value={`${sel.atm_iv.toFixed(1)}%`} sub={`${sel.expiry} · spot $${data.spot}`} help="The market's expected volatility for this expiry, annualized. Roughly 15-20% is calm, 30%+ is nervous." />
-              <MetricCard label="Downside Premium" value={`${sel.rr_25 > 0 ? '+' : ''}${sel.rr_25.toFixed(1)}`} color={skewColor(sel.rr_25)} sub={sel.rr_25 > 4 ? 'high crash fear' : sel.rr_25 > 1.5 ? 'mild' : 'low'} help="How much more downside protection (puts) costs than upside (calls). Higher = more fear of a drop is priced in — and that's where put-selling premium is richest." />
-              <MetricCard label="Tail Premium" value={`${sel.bf_25 > 0 ? '+' : ''}${sel.bf_25.toFixed(1)}`} sub={sel.bf_25 > 6 ? 'fat tails priced' : 'normal'} help="How expensive the far edges are vs the middle. Higher = the market is paying up for a big move in either direction." />
-              <MetricCard label="Near vs Far Vol" value={`${data.ts_slope > 0 ? '+' : ''}${data.ts_slope.toFixed(1)}`} color={data.ts_slope < -0.5 ? 'var(--theme-negative)' : GOLD} sub={data.ts_slope < -0.5 ? 'near-term jitters' : data.ts_slope > 0.5 ? 'normal/calm' : 'flat'} help="Near-term expected vol minus longer-dated. Negative = the market expects something soon (an event) and that usually settles back down. Positive = the normal calm shape." />
+          <>
+            {/* Answer-first skew strip */}
+            <div style={STRIP}>
+              <KpiCell grow minWidth={165} label="Downside Skew · 25Δ RR" value={`${sel.rr_25 > 0 ? '+' : ''}${sel.rr_25.toFixed(1)}`} valueSize={16}
+                color={skewColor(sel.rr_25)} sub={sel.rr_25 > 4 ? 'high crash fear' : sel.rr_25 > 1.5 ? 'mild fear' : 'low fear'} />
+              <KpiCell grow label="ATM IV" value={`${sel.atm_iv.toFixed(1)}%`} color={BLUE} sub={sel.expiry} />
+              <KpiCell grow label="Implied Move" value={`±${em.pct.toFixed(1)}%`} color={GOLD} sub={`$${em.lo.toFixed(0)}–$${em.hi.toFixed(0)}`} />
+              <KpiCell grow label="Tail Premium · 25Δ BF" value={`${sel.bf_25 > 0 ? '+' : ''}${sel.bf_25.toFixed(1)}`} sub={sel.bf_25 > 6 ? 'fat tails priced' : 'normal'} />
+              <KpiCell grow label="Near vs Far Vol" value={`${data.ts_slope > 0 ? '+' : ''}${data.ts_slope.toFixed(1)}`} color={data.ts_slope < -0.5 ? NEG : undefined} sub={data.ts_slope < -0.5 ? 'near-term jitters' : data.ts_slope > 0.5 ? 'calm shape' : 'flat'} />
+              <KpiCell grow label="Spot" value={`$${data.spot}`} sub={`${sel.dte}d to expiry`} />
             </div>
 
-            {/* Implied move for the selected expiry. */}
-            <div style={{ background: 'var(--theme-surface, #142032)', border: `1px solid color-mix(in srgb, ${GOLD} 30%, transparent)`, padding: '14px 16px', display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '4px 22px' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', width: '100%', marginBottom: 4 }}>
-                Implied Move by {sel.expiry}
-              </div>
-              <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 30, fontWeight: 700, color: GOLD }}>±{em.pct.toFixed(1)}%</div>
-              <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 18, color: 'var(--theme-text, #d7e3fc)' }}>${em.lo.toFixed(0)} – ${em.hi.toFixed(0)}</div>
-              <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 12, color: 'var(--theme-secondary, #99907e)' }}>
-                {sel.dte} day{sel.dte === 1 ? '' : 's'} · IV {sel.atm_iv.toFixed(1)}% · ±{em.dollars.toFixed(2)}
-              </div>
-            </div>
+            {data.read && (
+              <div style={{ fontSize: 10, color: FAINT, fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em', lineHeight: 1.5 }}>{data.read}</div>
+            )}
 
-            <ChartPanel label={`IV Smile — ${data.ticker} ${sel.expiry}`} height={300} note="IV vs % moneyness">
+            <Widget title={`IV Smile — ${data.ticker} ${sel.expiry}`} right={caption('IV vs % moneyness')} bodyStyle={{ padding: '8px' }}>
               <ResponsiveContainer width="100%" height={272}>
                 <LineChart data={sel.smile} margin={{ top: 8, right: 16, left: 0, bottom: 4 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.08)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.045)" />
                   <XAxis dataKey="moneyness" tick={TICK} tickFormatter={(v: number) => `${v > 0 ? '+' : ''}${v}%`} type="number" domain={['dataMin', 'dataMax']} />
-                  <YAxis tick={TICK} tickFormatter={(v: number) => `${v}%`} width={42} domain={['auto', 'auto']} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [`${v.toFixed(1)}%`, 'IV']} labelFormatter={(m) => `${Number(m) > 0 ? '+' : ''}${m}% moneyness`} />
+                  <YAxis tick={TICK} tickFormatter={(v: number) => `${v}%`} width={42} domain={['auto', 'auto']} orientation="right" />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [`${v.toFixed(1)}%`, 'IV']} labelFormatter={(mny) => `${Number(mny) > 0 ? '+' : ''}${mny}% moneyness`} />
                   <ReferenceLine x={0} stroke="color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)" strokeDasharray="4 4" label={{ value: 'ATM', fill: GOLD, fontSize: 9, position: 'insideTopRight' }} />
                   <Line type="monotone" dataKey="iv" stroke={GOLD} strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
-            </ChartPanel>
+            </Widget>
 
-            <ChartPanel label="ATM IV Term Structure" height={260} note="ATM IV vs days to expiry">
+            <Widget title="ATM IV Term Structure" right={caption('ATM IV + put skew vs DTE')} bodyStyle={{ padding: '8px' }}>
               <ResponsiveContainer width="100%" height={232}>
                 <LineChart data={data.term_structure} margin={{ top: 8, right: 16, left: 0, bottom: 4 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.08)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.045)" />
                   <XAxis dataKey="dte" tick={TICK} tickFormatter={(v: number) => `${v}d`} type="number" domain={[0, termXMax]} allowDataOverflow />
-                  <YAxis tick={TICK} tickFormatter={(v: number) => `${v}%`} width={42} domain={['auto', 'auto']} />
+                  <YAxis tick={TICK} tickFormatter={(v: number) => `${v}%`} width={42} domain={['auto', 'auto']} orientation="right" />
                   <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number, n: string) => [`${v.toFixed(1)}${n === 'atm_iv' ? '%' : ''}`, n === 'atm_iv' ? 'ATM IV' : 'Put Skew']} labelFormatter={(d) => `${d} DTE`} />
+                  <ReferenceLine x={sel.dte} stroke="color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)" strokeDasharray="3 4" label={{ value: 'selected', fill: GOLD, fontSize: 9 }} />
                   <Line type="monotone" dataKey="atm_iv" name="atm_iv" stroke={GOLD} strokeWidth={2} dot={{ r: 2 }} />
-                  <Line type="monotone" dataKey="rr_25" name="rr_25" stroke="var(--theme-tertiary, #60a5fa)" strokeWidth={1.5} strokeDasharray="4 3" dot={false} />
+                  <Line type="monotone" dataKey="rr_25" name="rr_25" stroke={BLUE} strokeWidth={1.5} strokeDasharray="4 3" dot={false} />
                 </LineChart>
               </ResponsiveContainer>
-            </ChartPanel>
-          </div>
+            </Widget>
+          </>
           )
         })()}
       </SidebarLayout>

@@ -75,6 +75,7 @@ export const HUBS: Hub[] = [
       { title: 'Options Pricer',      chip: 'Pricer',              desc: 'Black-Scholes greeks and payoff diagrams',          route: '/options',         icon: LineChart },
       { title: 'Chain Scanner',       chip: 'Chain Scanner',       desc: 'Live option chains with IV rank and skew',          route: '/chain',           icon: BarChart2 },
       { title: 'IV Tracker',          chip: 'IV Tracker',          desc: 'Implied volatility rank and term structure',        route: '/iv-tracker',      icon: Waves },
+      { title: 'Volatility Skew',      chip: 'Skew',               desc: 'IV smile, term structure, and crash-fear skew',     route: '/skew',            icon: Waves },
       { title: 'Dealer GEX',          chip: 'Dealer GEX',          desc: 'Gamma exposure by strike and expiry',               route: '/gex',             icon: Zap },
       { title: 'Options Flow',        chip: 'Flow',                desc: 'Volume and open-interest surges',                   route: '/unusual-options', icon: Activity },
       { title: 'Options Strategy Builder', chip: 'Options Strategy', desc: 'Multi-leg P&L and risk profiles',                   route: '/strategy',        icon: Shuffle },
