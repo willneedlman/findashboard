@@ -62,20 +62,6 @@ function ivAt(smile: SmilePoint[], m: number): number {
   return last.iv
 }
 
-// DTE at which the front 25Δ skew decays to half its value (interpolated).
-function skewHalfLife(ts: TermPoint[]): string {
-  if (ts.length < 2 || ts[0].rr_25 <= 0) return '—'
-  const half = ts[0].rr_25 / 2
-  for (let i = 1; i < ts.length; i++) {
-    if (ts[i].rr_25 <= half) {
-      const a = ts[i - 1], b = ts[i]
-      const t = (a.rr_25 - half) / ((a.rr_25 - b.rr_25) || 1)
-      return `~${Math.round(a.dte + t * (b.dte - a.dte))}d`
-    }
-  }
-  return `>${ts[ts.length - 1].dte}d`
-}
-
 const caption = (text: string) => <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '0.06em', color: SEC }}>{text}</span>
 
 export default function SkewTool() {
@@ -123,7 +109,6 @@ export default function SkewTool() {
                 ['Smile slope', sel.rr_25 > 0.5 ? 'put-rich' : sel.rr_25 < -0.5 ? 'call-rich' : 'flat', sel.rr_25 > 0.5 ? NEG : sel.rr_25 < -0.5 ? POS : BODY],
                 ['Term shape', data.ts_slope > 0.5 ? 'contango' : data.ts_slope < -0.5 ? 'backwardation' : 'flat', data.ts_slope > 0.5 ? POS : data.ts_slope < -0.5 ? NEG : BODY],
                 ['Front dip', `${dip > 0 ? '+' : ''}${dip.toFixed(1)} pts`, BLUE],
-                ['Skew half-life', skewHalfLife(data.term_structure), BODY],
               ]
               return (
                 <div style={{ marginTop: 4 }}>
