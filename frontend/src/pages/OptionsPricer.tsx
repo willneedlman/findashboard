@@ -3,21 +3,11 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts'
 import { X } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
+import { KpiCell } from '../components/mmCockpit'
 import SidebarLayout from '../components/SidebarLayout'
 import TickerInput from '../components/TickerInput'
 import ExpirySelect from '../components/ExpirySelect'
 import { priceOption, optionPayoff, optionSurface, optionMultiLeg, fetchOptionsChain, fetchRiskFreeRate } from '../hooks/useApi'
-import useIsMobile from '../hooks/useIsMobile'
-
-const GREEK_HELP: Record<string, string> = {
-  delta:  'Rate of change of option price per $1 move in the underlying.',
-  gamma:  'Rate of change of Delta per $1 move in the underlying.',
-  theta:  'Option value lost per calendar day as time passes.',
-  vega:   'Sensitivity of option price to a 1% change in implied volatility.',
-  vanna:  'Second-order: Delta sensitivity to changes in volatility.',
-  charm:  'Second-order: Delta sensitivity to the passage of time.',
-  lambda: 'Lambda (omega): percent change in option value per 1% move in the underlying. The option\'s leverage.',
-}
 
 const GREEK_COLOR: Record<string, string> = {
   delta: 'var(--theme-tertiary, #1f5673)', gamma: '#7b5ea7', theta: '#8c2e36', vega: '#2f6b4b',
@@ -36,30 +26,13 @@ interface ChainData {
 const rowMark = (r: ChainRow) =>
   r.bid > 0 && r.ask > 0 ? (r.bid + r.ask) / 2 : (r.ask > 0 ? r.ask : r.lastPrice)
 
-function GreekCard({ label, value, help }: { label: string; value: number; help?: string }) {
-  const [show, setShow] = useState(false)
-  return (
-    <div style={{ background: 'var(--theme-surface, #142032)', border: '1px solid var(--theme-border, rgba(255,255,255,0.07))', borderTop: '3px solid var(--theme-primary, #c9a84c)', padding: 10, position: 'relative' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
-        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)' }}>{label}</span>
-        {help && (
-          <span style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', cursor: 'help' }}
-            onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>ⓘ</span>
-        )}
-        {show && help && (
-          <div style={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: 6,
-            background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', padding: '6px 8px', width: 180, fontSize: 11,
-            color: 'var(--theme-text, #d7e3fc)', lineHeight: '15px', zIndex: 50, pointerEvents: 'none' }}>
-            {help}
-          </div>
-        )}
-      </div>
-      <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 18, fontWeight: 700, color: 'var(--theme-text, #d7e3fc)' }}>
-        {value}
-      </div>
-    </div>
-  )
+// Cockpit instrument strip — the answer-first band shared with the MM sims and
+// IV Tracker: a hero figure then hairline-divided KpiCells.
+const STRIP: React.CSSProperties = {
+  display: 'flex', alignItems: 'stretch', overflowX: 'auto',
+  background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
 }
+const gFmt = (v: number) => (Number.isFinite(v) ? String(v) : '—')
 
 function ChartPanel({ label, height, children }: { label: string; height: number; children: React.ReactNode }) {
   return (
@@ -156,38 +129,26 @@ function NumCell({ label, value, step, onChange }: { label: string; value: numbe
   )
 }
 
-function MultiResults({ data, view, setView, isMobile }: { data: MultiData; view: '2d' | 'payoff'; setView: (v: '2d' | 'payoff') => void; isMobile: boolean }) {
+function MultiResults({ data, view, setView }: { data: MultiData; view: '2d' | 'payoff'; setView: (v: '2d' | 'payoff') => void }) {
   const debit = data.net_price >= 0
-  const chip = (label: string, value: string, color: string) => (
-    <span style={{ fontSize: 10, fontFamily: 'var(--theme-mono)', color: 'var(--theme-text-faint, rgba(255,255,255,0.5))', letterSpacing: '0.04em' }}>
-      {label} <span style={{ color }}>{value}</span>
-    </span>
-  )
   return (
     <>
+      <div style={STRIP}>
+        <KpiCell label={`Net ${debit ? 'Debit' : 'Credit'}`} value={`$${Math.abs(data.net_price).toFixed(2)}`} color="var(--theme-primary, #c9a84c)" valueSize={16} />
+        <KpiCell label="Max Profit" value={data.max_profit_unbounded ? 'Unbounded' : `$${data.max_profit.toFixed(2)}`} color="var(--theme-positive)" />
+        <KpiCell label="Max Loss" value={data.max_loss_unbounded ? 'Unbounded' : `$${Math.abs(data.max_loss).toFixed(2)}`} color="var(--theme-negative)" />
+        {data.breakevens.length > 0 && <KpiCell label="Breakeven" value={data.breakevens.map(b => `$${b.toFixed(2)}`).join(' · ')} color="var(--theme-tertiary, #60a5fa)" />}
+        <KpiCell label="Delta"  value={gFmt(data.greeks.delta)} />
+        <KpiCell label="Gamma"  value={gFmt(data.greeks.gamma)} />
+        <KpiCell label="Theta"  value={gFmt(data.greeks.theta)} />
+        <KpiCell label="Vega"   value={gFmt(data.greeks.vega)} />
+        <KpiCell label="Vanna"  value={gFmt(data.vanna)} />
+        <KpiCell label="Charm"  value={gFmt(data.charm)} />
+        <KpiCell label="Lambda" value={gFmt(data.lambda)} />
+      </div>
       <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
-        <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)' }}>
-            Net {debit ? 'Debit' : 'Credit'}
-          </span>
-          <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 28, fontWeight: 700, color: 'var(--theme-primary, #c9a84c)' }}>
-            ${Math.abs(data.net_price).toFixed(2)}
-          </span>
-          {chip('Max Profit', data.max_profit_unbounded ? 'Unbounded' : `$${data.max_profit.toFixed(2)}`, 'var(--theme-positive)')}
-          {chip('Max Loss', data.max_loss_unbounded ? 'Unbounded' : `$${Math.abs(data.max_loss).toFixed(2)}`, 'var(--theme-negative)')}
-          {data.breakevens.length > 0 && chip('Breakeven', data.breakevens.map(b => `$${b.toFixed(2)}`).join(' · '), 'var(--theme-tertiary, #60a5fa)')}
-        </div>
-        <div style={{ padding: 10, display: 'grid', gridTemplateColumns: isMobile ? 'repeat(3,1fr)' : 'repeat(7,1fr)', gap: 8 }}>
-          <GreekCard label="Delta"  value={data.greeks.delta} help={GREEK_HELP.delta} />
-          <GreekCard label="Gamma"  value={data.greeks.gamma} help={GREEK_HELP.gamma} />
-          <GreekCard label="Theta"  value={data.greeks.theta} help={GREEK_HELP.theta} />
-          <GreekCard label="Vega"   value={data.greeks.vega}  help={GREEK_HELP.vega}  />
-          <GreekCard label="Vanna"  value={data.vanna}        help={GREEK_HELP.vanna} />
-          <GreekCard label="Charm"  value={data.charm}        help={GREEK_HELP.charm} />
-          <GreekCard label="Lambda" value={data.lambda}       help={GREEK_HELP.lambda} />
-        </div>
         {/* Per-leg breakdown */}
-        <div style={{ borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', overflowX: 'auto' }}>
+        <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--theme-mono)', fontSize: 11.5 }}>
             <thead>
               <tr>{['Leg', 'Qty', 'Strike', 'Days', 'IV', 'Premium', 'Delta'].map((h, i) => (
@@ -269,7 +230,6 @@ function MultiResults({ data, view, setView, isMobile }: { data: MultiData; view
 const tdNum: React.CSSProperties = { padding: '7px 12px', textAlign: 'right', color: 'var(--theme-secondary, #8099b0)', fontVariantNumeric: 'tabular-nums' }
 
 export function OptionsPricerContent() {
-  const isMobile = useIsMobile()
   const [params, setParams] = useState<Params>({ S: 100, K: 100, T: 30, sigma: 20, r: 5, option_type: 'call' })
   const [view, setView] = useState<'2d' | 'payoff'>('2d')
   const [paramsOpen, setParamsOpen] = useState(true)
@@ -502,39 +462,22 @@ export function OptionsPricerContent() {
 
           {mode === 'single' && (<>
           {/* Premium + Greeks */}
-          {priceData && (
-            <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
-              {/* Premium header */}
-              <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)' }}>
-                  Option Premium
-                </span>
-                <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 28, fontWeight: 700, color: 'var(--theme-primary, #c9a84c)' }}>
-                  ${priceData.price}
-                </span>
-                {loadedMark && (
-                  <span style={{ fontSize: 10, fontFamily: 'var(--theme-mono)', color: 'var(--theme-tertiary, #60a5fa)', letterSpacing: '0.04em' }}>
-                    Mkt ${loadedMark.mark.toFixed(2)} · {loadedMark.label}
-                  </span>
-                )}
-                {!isMobile && (
-                  <span style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', letterSpacing: '0.08em' }}>
-                    {params.option_type.toUpperCase()} · S={params.S} · K={params.K} · T={params.T}d · σ={params.sigma}% · r={params.r}%
-                  </span>
-                )}
-              </div>
-              {/* Greeks grid */}
-              <div style={{ padding: 10, display: 'grid', gridTemplateColumns: isMobile ? 'repeat(3,1fr)' : 'repeat(7,1fr)', gap: 8 }}>
-                <GreekCard label="Delta"  value={priceData.greeks.delta} help={GREEK_HELP.delta} />
-                <GreekCard label="Gamma"  value={priceData.greeks.gamma} help={GREEK_HELP.gamma} />
-                <GreekCard label="Theta"  value={priceData.greeks.theta} help={GREEK_HELP.theta} />
-                <GreekCard label="Vega"   value={priceData.greeks.vega}  help={GREEK_HELP.vega}  />
-                <GreekCard label="Vanna"  value={priceData.vanna}        help={GREEK_HELP.vanna} />
-                <GreekCard label="Charm"  value={priceData.charm}        help={GREEK_HELP.charm} />
-                <GreekCard label="Lambda" value={priceData.lambda}       help={GREEK_HELP.lambda} />
-              </div>
+          {priceData && (<>
+            <div style={STRIP}>
+              <KpiCell label="Option Premium" value={`$${priceData.price}`} color="var(--theme-primary, #c9a84c)" valueSize={16} />
+              {loadedMark && <KpiCell label="Market" value={`$${loadedMark.mark.toFixed(2)}`} color="var(--theme-tertiary, #60a5fa)" />}
+              <KpiCell label="Delta"  value={gFmt(priceData.greeks.delta)} />
+              <KpiCell label="Gamma"  value={gFmt(priceData.greeks.gamma)} />
+              <KpiCell label="Theta"  value={gFmt(priceData.greeks.theta)} />
+              <KpiCell label="Vega"   value={gFmt(priceData.greeks.vega)} />
+              <KpiCell label="Vanna"  value={gFmt(priceData.vanna)} />
+              <KpiCell label="Charm"  value={gFmt(priceData.charm)} />
+              <KpiCell label="Lambda" value={gFmt(priceData.lambda)} />
             </div>
-          )}
+            <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 9.5, letterSpacing: '0.06em', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', padding: '0 2px' }}>
+              {params.option_type.toUpperCase()} · S={params.S} · K={params.K} · T={params.T}d · σ={params.sigma}% · r={params.r}%{loadedMark ? ` · ${loadedMark.label}` : ''}
+            </div>
+          </>)}
 
           {/* Tab bar */}
           <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
@@ -591,7 +534,7 @@ export function OptionsPricerContent() {
           </>)}
 
           {mode === 'multi' && multiData && (
-            <MultiResults data={multiData} view={view} setView={setView} isMobile={isMobile} />
+            <MultiResults data={multiData} view={view} setView={setView} />
           )}
 
         </SidebarLayout>
