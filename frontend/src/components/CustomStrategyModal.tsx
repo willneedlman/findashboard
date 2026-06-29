@@ -556,7 +556,12 @@ export default function CustomStrategyModal({ open, onClose, onSave, initialDef 
           </div>
 
           {/* Divider */}
-          <div style={{ height: 1, background: T.border, marginBottom: 16 }} />
+          <div style={{ height: 1, background: T.border, marginBottom: 12 }} />
+
+          {/* Logic legend — make the ALL/ANY nesting explicit */}
+          <div style={{ fontSize: 9, color: T.dim, fontFamily: T.mono, lineHeight: 1.6, marginBottom: 14 }}>
+            Each <span style={{ color: T.muted }}>group</span> matches <span style={{ color: T.muted }}>ALL</span> or <span style={{ color: T.muted }}>ANY</span> of its conditions; a block fires when <span style={{ color: T.muted }}>ALL</span> or <span style={{ color: T.muted }}>ANY</span> of its groups match. Add a second group to combine signals with different logic.
+          </div>
 
           {/* BUY block */}
           <RuleBlockEditor
