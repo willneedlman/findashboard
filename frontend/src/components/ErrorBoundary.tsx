@@ -1,33 +1,6 @@
 import { Component, type ReactNode, type ErrorInfo } from 'react'
 import AlphaMark from './AlphaMark'
-
-const RELOAD_KEY = 'at-chunk-reload-at'
-
-function isChunkLoadError(error: unknown): boolean {
-  const e = error as { name?: string; message?: string } | null
-  const msg = e?.message || ''
-  return (
-    e?.name === 'ChunkLoadError' ||
-    /failed to fetch dynamically imported module|importing a module script failed|error loading dynamically imported module/i.test(msg)
-  )
-}
-
-// A new deploy rotates the content-hashed chunk filenames, so a tab still
-// running the previous index.html requests assets that no longer exist. Reload
-// once to pull the fresh manifest. The 8s guard breaks the loop if the asset is
-// genuinely unreachable (rollback, CDN miss) so the user sees a real error
-// instead of a reload storm.
-function reloadForChunkError(): boolean {
-  try {
-    const last = Number(sessionStorage.getItem(RELOAD_KEY) || 0)
-    if (Date.now() - last > 8000) {
-      sessionStorage.setItem(RELOAD_KEY, String(Date.now()))
-      window.location.reload()
-      return true
-    }
-  } catch { /* sessionStorage unavailable */ }
-  return false
-}
+import { isChunkLoadError, reloadForChunkError } from '../lib/chunkReload'
 
 interface Props { children: ReactNode }
 interface State { error: Error | null }
