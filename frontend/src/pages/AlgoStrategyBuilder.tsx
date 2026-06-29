@@ -9,7 +9,7 @@ import TickerInput from '../components/TickerInput'
 import { KpiCell } from '../components/mmCockpit'
 import { useChartColors } from '../hooks/useChartColors'
 import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
-import CustomStrategyModal, { type CustomStrategyDef } from '../components/CustomStrategyModal'
+import CustomStrategyModal, { type CustomStrategyDef, DEFAULT_RISK } from '../components/CustomStrategyModal'
 import { loadCustomStrategies, saveCustomStrategy, deleteCustomStrategy } from '../utils/customStrategies'
 
 const STRIP: React.CSSProperties = {
@@ -62,9 +62,15 @@ export function AlgoStrategyBuilderContent() {
   const { mutate: runBacktest, data, isPending, isError, error } = useMutation<BacktestResult>({
     mutationFn: async () => {
       if (!activeDef) throw new Error('Select or build a strategy first.')
+      const r = activeDef.risk ?? DEFAULT_RISK
       const { data } = await axios.post('/api/strategy/custom-backtest', {
         ticker, start, end: end || undefined,
         rules: { buy: activeDef.buy, sell: activeDef.sell },
+        position_size: r.sizingPct || 100,
+        stop_loss: r.stopLossPct || undefined,
+        take_profit: r.takeProfitPct || undefined,
+        trailing_stop: r.trailingStopPct || undefined,
+        max_hold_bars: r.maxHoldBars || undefined,
       })
       return data
     },
@@ -157,6 +163,16 @@ export function AlgoStrategyBuilderContent() {
             <KpiCell grow label="Final Capital" value={fmtCap(m.final_capital)} />
             <KpiCell grow label="P&L" value={`${m.total_pnl >= 0 ? '+' : ''}${fmtCap(m.total_pnl)}`} color={m.total_pnl >= 0 ? POS : NEG} />
           </div>
+
+          {activeDef?.risk && (() => {
+            const r = activeDef.risk
+            const parts = [`size ${r.sizingPct}%`]
+            if (r.stopLossPct) parts.push(`SL ${r.stopLossPct}%`)
+            if (r.takeProfitPct) parts.push(`TP ${r.takeProfitPct}%`)
+            if (r.trailingStopPct) parts.push(`trail ${r.trailingStopPct}%`)
+            if (r.maxHoldBars) parts.push(`max ${r.maxHoldBars} bars`)
+            return <div style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em' }}>Risk applied · {parts.join(' · ')}</div>
+          })()}
 
           <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', position: 'relative' }}>
             <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 10, background: 'var(--theme-surface, #142032)', padding: '3px 8px', borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>

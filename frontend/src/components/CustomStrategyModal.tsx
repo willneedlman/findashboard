@@ -39,12 +39,27 @@ export interface RuleBlock {
   groups: ConditionGroup[]
 }
 
+// Risk management — travels with the strategy so backtest/import apply it.
+// 0 means "off" for each control; sizingPct defaults to fully invested.
+export interface StrategyRisk {
+  sizingPct: number        // % of capital per position
+  stopLossPct: number      // exit if price drops X% from entry (0 = off)
+  takeProfitPct: number    // exit if price rises X% from entry (0 = off)
+  trailingStopPct: number  // exit if price drops X% from peak since entry (0 = off)
+  maxHoldBars: number      // exit after N bars (0 = off)
+}
+
+export const DEFAULT_RISK: StrategyRisk = {
+  sizingPct: 100, stopLossPct: 0, takeProfitPct: 0, trailingStopPct: 0, maxHoldBars: 0,
+}
+
 export interface CustomStrategyDef {
   name: string
   buy: RuleBlock
   sell: RuleBlock
   bull_drift: number
   bear_drift: number
+  risk?: StrategyRisk
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -452,6 +467,7 @@ const DEFAULTS: CustomStrategyDef = {
   },
   bull_drift: 0.0,
   bear_drift: 0.0,
+  risk: { ...DEFAULT_RISK },
 }
 
 interface Props {
@@ -557,6 +573,32 @@ export default function CustomStrategyModal({ open, onClose, onSave, initialDef 
             onChange={sell => u({ sell })}
             accentColor={T.neg}
           />
+
+          {/* Risk management */}
+          <div style={{ marginTop: 16 }}>
+            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', color: T.muted, textTransform: 'uppercase', marginBottom: 8, fontFamily: T.mono }}>
+              Risk Management
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
+              {([
+                ['Position Size %', 'sizingPct', 5],
+                ['Stop-Loss %', 'stopLossPct', 0.5],
+                ['Take-Profit %', 'takeProfitPct', 0.5],
+                ['Trailing Stop %', 'trailingStopPct', 0.5],
+                ['Max Hold (bars)', 'maxHoldBars', 1],
+              ] as [string, keyof StrategyRisk, number][]).map(([label, key, step]) => (
+                <div key={key}>
+                  <label style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.muted, display: 'block', marginBottom: 3, fontFamily: T.mono }}>{label}</label>
+                  <input type="number" min={0} step={step} value={(def.risk ?? DEFAULT_RISK)[key]}
+                    onChange={e => u({ risk: { ...(def.risk ?? DEFAULT_RISK), [key]: Math.max(0, +e.target.value) } })}
+                    style={{ width: '100%', boxSizing: 'border-box', background: T.bg, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.mono, fontSize: 11, padding: '5px 6px', outline: 'none' }} />
+                </div>
+              ))}
+            </div>
+            <div style={{ fontSize: 8, color: T.dim, fontFamily: T.mono, marginTop: 5 }}>
+              0 disables a control. Position size caps the % of capital committed per trade.
+            </div>
+          </div>
 
           {/* Reference guide */}
           <div style={{ marginTop: 16, padding: '10px 12px', background: T.surface, border: `1px solid ${T.border}` }}>
