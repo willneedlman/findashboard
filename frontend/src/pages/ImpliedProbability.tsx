@@ -231,15 +231,15 @@ export function ImpliedProbabilityContent() {
                 <div style={{ flex: 1, minWidth: 320 }}>
                   <ChartPanel label="Cumulative — P(Finish Above Strike)" height={324} note={`P50 = $${dist.p50}`}>
                     <ResponsiveContainer width="100%" height={296}>
-                      <LineChart data={dist.delta_curve}>
+                      <LineChart data={dist.delta_curve} margin={{ top: 22, right: 8, left: 0, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.045)" />
                         <XAxis type="number" dataKey="strike" domain={['dataMin', 'dataMax']} tick={TICK} tickFormatter={v => `$${v}`} interval="preserveStartEnd" />
                         <YAxis tick={TICK} tickFormatter={v => `${(v * 100).toFixed(0)}%`} domain={[0, 1]} orientation="right" />
                         <Tooltip formatter={(v: number) => [`${(v * 100).toFixed(1)}%`, 'P(S_T > K)']} contentStyle={TOOLTIP_STYLE} />
-                        <ReferenceLine y={0.5}      stroke="color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)" strokeDasharray="4 4" label={{ value: '50%', fill: GOLD, fontSize: 9, position: 'insideTopLeft' }} />
-                        <ReferenceLine x={dist.p50} stroke="color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)" strokeDasharray="4 4" label={{ value: 'P50', fill: GOLD, fontSize: 9, position: 'insideTop' }} />
-                        <ReferenceLine x={dist.p10} stroke={cc.gainMuted} strokeDasharray="3 5" label={{ value: 'P10', fill: cc.gain, fontSize: 9, position: 'insideTop' }} />
-                        <ReferenceLine x={dist.p90} stroke={cc.lossMuted} strokeDasharray="3 5" label={{ value: 'P90', fill: cc.loss, fontSize: 9, position: 'insideTop' }} />
+                        <ReferenceLine y={0.5}      stroke="color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)" strokeDasharray="4 4" label={{ value: '50%', fill: GOLD, fontSize: 9, position: 'insideLeft' }} />
+                        <ReferenceLine x={dist.p50} stroke="color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)" strokeDasharray="4 4" label={{ value: 'P50', fill: GOLD, fontSize: 9, position: 'top' }} />
+                        <ReferenceLine x={dist.p10} stroke={cc.gainMuted} strokeDasharray="3 5" label={{ value: 'P10', fill: cc.gain, fontSize: 9, position: 'top' }} />
+                        <ReferenceLine x={dist.p90} stroke={cc.lossMuted} strokeDasharray="3 5" label={{ value: 'P90', fill: cc.loss, fontSize: 9, position: 'top' }} />
                         <Line type="monotone" dataKey="delta" stroke={cc.c2} strokeWidth={2.2} dot={false} name="P(S_T > K)" />
                         <ReferenceLine x={k} stroke={GOLD} strokeDasharray="5 3" />
                         {pAbove != null && <ReferenceDot x={k} y={pAbove} r={4} fill={GOLD} stroke="#0a1320" strokeWidth={1.5} />}
