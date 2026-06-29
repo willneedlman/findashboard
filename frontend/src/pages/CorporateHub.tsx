@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { Radar, CalendarClock } from 'lucide-react'
 import { usePortfolio } from '../contexts/PortfolioContext'
 import PageWrapper from '../components/PageWrapper'
 import axios from 'axios'
@@ -9,7 +10,7 @@ import useIsMobile from '../hooks/useIsMobile'
 import PortfolioIO from '../components/PortfolioIO'
 
 interface TickerRow {
-  ticker: string
+  ticker: string; name: string
   date: string; horizon: string
   impliedMove: number
   pe: number | null
@@ -96,7 +97,7 @@ async function fetchTicker(tk: string): Promise<TickerRow> {
   try {
     const { data: d } = await axios.get(`/api/corporate/hub?ticker=${tk}`, { timeout: TIMEOUT })
     return {
-      ticker: tk, date: d.date || '—', horizon: d.horizon || '—',
+      ticker: tk, name: d.company_name || tk, date: d.date || '—', horizon: d.horizon || '—',
       impliedMove: d.implied_move ?? 4.5, pe: d.estimated_pe ?? null,
       pctChange: d.pct_change_1d ?? null, marketCap: d.market_cap ?? null,
       consensus: d.consensus || 'Hold', isConfirmed: d.is_confirmed ?? false,
@@ -106,7 +107,7 @@ async function fetchTicker(tk: string): Promise<TickerRow> {
       })),
     }
   } catch {
-    return { ticker: tk, date: '—', horizon: '—', impliedMove: 4.5, pe: null,
+    return { ticker: tk, name: tk, date: '—', horizon: '—', impliedMove: 4.5, pe: null,
              pctChange: null, marketCap: null, consensus: 'Hold', isConfirmed: false, news: [], sparkline: [] }
   }
 }
@@ -133,114 +134,6 @@ async function fetchShortTicker(tk: string): Promise<[string, ShortRow]> {
   }
 }
 
-function InsiderPanel({ sorted, insiderData, insiderPending }: {
-  sorted: TickerRow[]
-  insiderData: Record<string, InsiderTx[]>
-  insiderPending: boolean
-}) {
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
-  const toggle = (tk: string) => setExpanded(p => ({ ...p, [tk]: !p[tk] }))
-
-  return (
-    <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', overflowX: 'auto' }}>
-      <div style={{ padding: '6px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ ...LABEL_S, color: 'var(--theme-text, #d7e3fc)' }}>Insider Transaction Flow</span>
-        {insiderPending && <span style={{ fontSize: 10, color: 'var(--theme-secondary, #99907e)', letterSpacing: '0.1em' }}>FETCHING…</span>}
-      </div>
-
-      {/* Summary header */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 110px 90px 90px 24px', minWidth: 540, padding: '5px 10px', background: 'var(--theme-bg, #0a1628)', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
-        {['Ticker', 'Txns', 'Latest Move', 'Last Date', 'Total Value', ''].map(h => (
-          <div key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-text-faint, rgba(255,255,255,0.22))' }}>{h}</div>
-        ))}
-      </div>
-
-      {sorted.map(row => {
-        const txs = insiderData[row.ticker]
-        const isLoading = insiderPending && !txs
-        const isOpen = expanded[row.ticker]
-
-        // Summary stats
-        const latest   = txs?.[0]
-        const totalVal = txs?.reduce((s, t) => s + (t.value || 0), 0) ?? 0
-        const latestTx = latest?.transaction ?? '—'
-        const txColor  = latestTx === 'Sale' ? 'var(--theme-negative)' : latestTx === 'Purchase' ? 'var(--theme-positive)' : 'var(--theme-text, #d7e3fc)'
-
-        return (
-          <div key={row.ticker}>
-            {/* Collapsed summary row */}
-            <div
-              onClick={() => txs && txs.length > 0 && toggle(row.ticker)}
-              style={{
-                display: 'grid', gridTemplateColumns: '1fr 90px 110px 90px 90px 24px', minWidth: 540,
-                padding: '6px 10px', borderBottom: '1px solid var(--theme-hover, rgba(255,255,255,0.04))',
-                cursor: txs && txs.length > 0 ? 'pointer' : 'default', alignItems: 'center',
-              }}
-              onMouseEnter={e => { if (txs?.length) (e.currentTarget as HTMLElement).style.background = 'var(--theme-hover, rgba(255,255,255,0.03))' }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <TickerLogo ticker={row.ticker} />
-                <span style={{ fontWeight: 700, color: 'var(--theme-primary, #c9a84c)', fontSize: 12 }}>{row.ticker}</span>
-              </div>
-              <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-text, #d7e3fc)' }}>
-                {isLoading ? <span style={{ color: 'var(--theme-text-faint, rgba(255,255,255,0.22))' }}>…</span> : (txs?.length ?? '—')}
-              </div>
-              <div>
-                {isLoading ? <span style={{ fontSize: 11, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))' }}>…</span>
-                  : latest ? <span style={{ fontSize: 11, fontWeight: 600, color: txColor }}>{latestTx}</span>
-                  : <span style={{ fontSize: 11, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))' }}>No data</span>}
-              </div>
-              <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-secondary, #99907e)' }}>
-                {isLoading ? '…' : (latest?.date ?? '—')}
-              </div>
-              <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-text, #d7e3fc)' }}>
-                {isLoading ? '…' : totalVal > 0 ? `$${(totalVal / 1e6).toFixed(1)}M` : '—'}
-              </div>
-              <div style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', textAlign: 'center' }}>
-                {txs && txs.length > 0 ? (isOpen ? '▲' : '▼') : ''}
-              </div>
-            </div>
-
-            {/* Expanded detail table */}
-            {isOpen && txs && txs.length > 0 && (
-              <div style={{ borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', overflowX: 'auto' }}>
-                <table style={{ width: '100%', minWidth: 520, borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ background: 'var(--theme-bg, #0a1628)' }}>
-                      {['Date', 'Insider', 'Title', 'Transaction', 'Shares', 'Value'].map(h => (
-                        <th key={h} style={TH_S}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {txs.map((tx, i) => {
-                      const c = tx.transaction === 'Sale' ? 'var(--theme-negative)' : tx.transaction === 'Purchase' ? 'var(--theme-positive)' : 'var(--theme-text, #d7e3fc)'
-                      return (
-                        <tr key={i}
-                          onMouseEnter={e => (e.currentTarget.style.background = 'var(--theme-hover, rgba(255,255,255,0.03))')}
-                          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                          <td style={TD_S}>{tx.date}</td>
-                          <td style={TD_S}>{tx.insider}</td>
-                          <td style={{ ...TD_S, color: 'var(--theme-secondary, #99907e)' }}>{tx.title || 'Unknown'}</td>
-                          <td style={TD_S}><span style={{ color: c, fontWeight: 600 }}>{tx.transaction}</span></td>
-                          <td style={{ ...TD_S, fontFamily: 'var(--theme-mono)' }}>{tx.shares > 0 ? tx.shares.toLocaleString() : '—'}</td>
-                          <td style={{ ...TD_S, fontFamily: 'var(--theme-mono)' }}>{tx.value > 0 ? `$${(tx.value / 1e6).toFixed(2)}M` : '—'}</td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-const LABEL_S: React.CSSProperties = { fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)' }
 const TH_S: React.CSSProperties    = { fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', padding: '6px 10px', textAlign: 'left', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', whiteSpace: 'nowrap' }
 const TD_S: React.CSSProperties    = { padding: '5px 10px', borderBottom: '1px solid var(--theme-hover, rgba(255,255,255,0.03))', fontSize: 11, color: 'var(--theme-text, #d7e3fc)', verticalAlign: 'middle' }
 
@@ -268,6 +161,11 @@ export function CorporateHubContent() {
     setTickers(tickers.map((t, idx) => idx === i ? val.toUpperCase() : t))
   const addTicker = () => setTickers([...tickers, ''])
   const removeTicker = (i: number) => setTickers(tickers.filter((_, idx) => idx !== i))
+
+  const [view, setView] = useState<'radar' | 'timeline'>(() => searchParams.get('view') === 'timeline' ? 'timeline' : 'radar')
+  const changeView = (v: 'radar' | 'timeline') => { setView(v); setSearchParams(p => { p.set('view', v); return p }) }
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+  const toggleExpand = (tk: string) => setExpanded(p => ({ ...p, [tk]: !p[tk] }))
 
   const [sortBy, setSortBy] = useState('ticker')
   const [fiscalFilter, setFiscalFilter] = useState('All Horizons')
@@ -365,11 +263,290 @@ export function CorporateHubContent() {
     : a.ticker.localeCompare(b.ticker)
   )
 
+  // ── Catalyst date helpers (backend dates arrive ISO "YYYY-MM-DD" or "—") ──
+  const today0 = new Date(); today0.setHours(0, 0, 0, 0)
+  const parseDate = (s: string) => { if (!s || s === '—') return null; const d = new Date(`${s}T00:00:00`); return isNaN(+d) ? null : d }
+  const daysToEvent = (s: string) => { const d = parseDate(s); return d ? Math.round((+d - +today0) / 86_400_000) : null }
+  // Proximity color rides the gold accent: nearest events brightest, fading to muted.
+  const proximityColor = (days: number | null) =>
+    days == null ? 'var(--theme-text-faint, rgba(255,255,255,0.25))'
+    : days <= 21 ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 70%, #ffffff)'
+    : days <= 35 ? 'var(--theme-primary, #c9a84c)'
+    : 'var(--theme-secondary, #8099b0)'
+  const fmtMonthDay = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  const fmtCap = (n: number | null) => n == null ? '—' : n >= 1e12 ? `$${(n / 1e12).toFixed(2)}T` : n >= 1e9 ? `$${(n / 1e9).toFixed(1)}B` : `$${(n / 1e6).toFixed(0)}M`
+  const pctTone = (p: number | null) => p == null ? 'var(--theme-text-faint, rgba(255,255,255,0.35))' : p >= 0 ? 'var(--theme-positive, #22c55e)' : 'var(--theme-negative, #ef4444)'
+  const pctStr = (p: number | null) => p == null ? '—' : `${p >= 0 ? '+' : ''}${p.toFixed(2)}%`
+  const BLUE = 'var(--theme-tertiary, #60a5fa)'
+
+  const insiderSummary = (tk: string): { label: string; color: string } => {
+    const txs = insiderData[tk]
+    if (!txs || txs.length === 0) return { label: insiderPending ? '…' : 'No data', color: 'var(--theme-text-faint, rgba(255,255,255,0.35))' }
+    const t = txs[0].transaction
+    return { label: t, color: t === 'Sale' ? 'var(--theme-negative, #ef4444)' : t === 'Purchase' ? 'var(--theme-positive, #22c55e)' : 'var(--theme-text, #d7e3fc)' }
+  }
+
+  // Proximity-sorted catalysts (Sort By preserved as the stable tie-break)
+  const withDays = sorted.map(r => ({ r, days: daysToEvent(r.date) }))
+  const catalystsSorted = [...withDays].sort((a, b) =>
+    a.days == null && b.days == null ? 0 : a.days == null ? 1 : b.days == null ? -1 : a.days - b.days)
+
+  // Month-bucketed catalysts for the timeline (+ a trailing Unscheduled bucket)
+  const monthBuckets = (() => {
+    const map = new Map<string, { label: string; items: { r: TickerRow; days: number | null; d: Date | null }[] }>()
+    const undated: { r: TickerRow; days: number | null; d: Date | null }[] = []
+    for (const { r, days } of withDays) {
+      const d = parseDate(r.date)
+      if (!d) { undated.push({ r, days, d: null }); continue }
+      const key = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`
+      if (!map.has(key)) map.set(key, { label: d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }), items: [] })
+      map.get(key)!.items.push({ r, days, d })
+    }
+    const ordered = [...map.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([, v]) => {
+      v.items.sort((a, b) => (a.days ?? 0) - (b.days ?? 0)); return v
+    })
+    if (undated.length) ordered.push({ label: 'Unscheduled', items: undated })
+    return ordered
+  })()
+
+  const panel: React.CSSProperties = { background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }
+  const panelHead = (title: string, caption?: React.ReactNode) => (
+    <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+      <span style={{ ...LABEL, fontSize: 10, letterSpacing: '0.16em', color: 'var(--theme-text, #d7e3fc)' }}>{title}</span>
+      {caption != null && <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, letterSpacing: '0.1em', color: 'var(--theme-secondary, #8099b0)' }}>{caption}</span>}
+    </div>
+  )
+  const chip = (text: string) => {
+    const cs = CONSENSUS_STYLE[text] ?? CONSENSUS_STYLE['Hold']
+    return <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', border: `1px solid ${cs.border}`, color: cs.color, padding: '2px 5px', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{text}</span>
+  }
+  const tlMetric = (label: string, value: string, color = 'var(--theme-text, #d7e3fc)') => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <span style={{ ...LABEL, fontSize: 8, letterSpacing: '0.1em' }}>{label}</span>
+      <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 12, color }}>{value}</span>
+    </div>
+  )
+
+  // ── Page header (wordmark + live caption + view toggle) ──
+  const pageHeader = (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', paddingBottom: 12, marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+        <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 17, fontWeight: 700, letterSpacing: '0.32em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)' }}>Corporate Calendar</span>
+        <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, letterSpacing: '0.14em', color: 'var(--theme-secondary, #8099b0)' }}>{tickers.filter(Boolean).length} TICKERS TRACKED</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)' }}>View</span>
+        <div style={{ display: 'flex', border: '1px solid rgba(255,255,255,0.12)', background: 'var(--theme-surface, #0d1826)' }}>
+          {([['radar', 'Catalyst Radar', Radar], ['timeline', 'Timeline', CalendarClock]] as const).map(([v, label, Icon], i) => {
+            const on = view === v
+            return (
+              <button key={v} onClick={() => changeView(v)} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 15px', border: 'none', borderLeft: i === 1 ? '1px solid rgba(255,255,255,0.12)' : 'none', cursor: 'pointer', background: on ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 12%, transparent)' : 'transparent', color: on ? 'var(--theme-primary, #c9a84c)' : '#7d8ea0', fontFamily: 'var(--theme-sans)', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                <Icon size={13} />{label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+
+  // ── View 1: Catalyst Radar (proximity strip + one unified table) ──
+  const radarCenter = (
+    <>
+      <div style={panel}>
+        {panelHead('Catalyst Radar', isPending ? 'SCANNING…' : 'SORTED BY PROXIMITY')}
+        <div style={{ display: 'flex', gap: 10, overflowX: 'auto', padding: '13px 12px' }}>
+          {catalystsSorted.map(({ r, days }) => {
+            const col = proximityColor(days)
+            const d = parseDate(r.date)
+            return (
+              <div key={r.ticker} style={{ minWidth: 148, flex: '1 0 148px', background: 'var(--theme-surface, #0d1826)', border: '1px solid rgba(255,255,255,0.07)', borderTop: `2px solid ${col}`, padding: '11px 12px', display: 'flex', flexDirection: 'column', gap: 9 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                  <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 26, fontWeight: 700, lineHeight: 1, color: col }}>{days == null ? '—' : `${days}d`}</span>
+                  <span style={{ fontSize: 9, color: 'var(--theme-secondary, #8099b0)' }}>{d ? fmtMonthDay(d) : 'Unscheduled'}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 9 }}>
+                  <TickerLogo ticker={r.ticker} />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, color: 'var(--theme-primary, #c9a84c)', fontSize: 12 }}>{r.ticker}</div>
+                    <div style={{ fontSize: 9, color: 'var(--theme-secondary, #8099b0)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 108 }}>{r.name}</div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                  <span style={{ ...LABEL, fontSize: 8 }}>Implied</span>
+                  <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: BLUE }}>{r.impliedMove.toFixed(1)}%</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                  <span style={{ ...LABEL, fontSize: 8 }}>1D</span>
+                  <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: pctTone(r.pctChange) }}>{pctStr(r.pctChange)}</span>
+                </div>
+                <span style={{ alignSelf: 'flex-start' }}>{chip(r.consensus)}</span>
+              </div>
+            )
+          })}
+          {catalystsSorted.length === 0 && <div style={{ padding: '8px 4px', fontSize: 11, color: 'var(--theme-text-faint, rgba(255,255,255,0.35))', letterSpacing: '0.1em' }}>{isPending ? 'SCANNING…' : 'No tickers.'}</div>}
+        </div>
+      </div>
+
+      <div style={panel}>
+        {panelHead('All Signals · One Row Per Ticker', 'CATALYST · VALUATION · SHORT · INSIDER')}
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', minWidth: 820, borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: 'var(--theme-bg, #0a1628)' }}>
+                {['Ticker', 'Trend', 'Next Catalyst', 'Implied', '1D %', 'Mkt Cap', 'Fwd P/E', 'Short %', 'Insider', 'Consensus'].map((h, i) => (
+                  <th key={h} style={{ ...TH, textAlign: i >= 4 && i <= 7 ? 'right' : 'left' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {withDays.map(({ r, days }) => {
+                const col = proximityColor(days)
+                const d = parseDate(r.date)
+                const s = shortData[r.ticker]
+                const ins = insiderSummary(r.ticker)
+                const txs = insiderData[r.ticker]
+                const isOpen = expanded[r.ticker]
+                return (
+                  <Fragment key={r.ticker}>
+                    <tr onClick={() => txs && txs.length > 0 && toggleExpand(r.ticker)}
+                      style={{ background: 'transparent', cursor: txs && txs.length > 0 ? 'pointer' : 'default' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--theme-hover, rgba(255,255,255,0.03))')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                      <td style={TD}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <TickerLogo ticker={r.ticker} />
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontWeight: 700, color: 'var(--theme-primary, #c9a84c)', fontSize: 13 }}>{r.ticker}</div>
+                            <div style={{ fontSize: 9, color: 'var(--theme-secondary, #8099b0)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 130 }}>{r.name}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td style={{ ...TD, padding: '4px 10px' }}><Sparkline data={r.sparkline} positive={(r.pctChange ?? 0) >= 0} /></td>
+                      <td style={TD}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                          <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 12, fontWeight: 700, color: col }}>{days == null ? '—' : `${days}d`}</span>
+                          <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-secondary, #8099b0)' }}>{d ? fmtMonthDay(d) : 'Unscheduled'}</span>
+                        </div>
+                        <div style={{ fontSize: 9, fontWeight: 700, color: BLUE, letterSpacing: '0.08em', marginTop: 2 }}>{r.horizon}</div>
+                      </td>
+                      <td style={TD}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{ width: 48, height: 4, background: 'var(--theme-hover, rgba(255,255,255,0.08))', overflow: 'hidden' }}>
+                            <div style={{ width: `${Math.min(r.impliedMove / 8 * 100, 100)}%`, height: '100%', background: BLUE }} />
+                          </div>
+                          <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11 }}>{r.impliedMove.toFixed(1)}%</span>
+                        </div>
+                      </td>
+                      <td style={{ ...TD, textAlign: 'right', fontFamily: 'var(--theme-mono)', fontSize: 11, color: pctTone(r.pctChange) }}>{pctStr(r.pctChange)}</td>
+                      <td style={{ ...TD, textAlign: 'right', fontFamily: 'var(--theme-mono)', fontSize: 11 }}>{fmtCap(r.marketCap)}</td>
+                      <td style={{ ...TD, textAlign: 'right', fontFamily: 'var(--theme-mono)', fontSize: 11 }}>{r.pe != null ? `${r.pe.toFixed(2)}x` : '—'}</td>
+                      <td style={{ ...TD, textAlign: 'right', fontFamily: 'var(--theme-mono)', fontSize: 11 }}>{shortPending && !s ? '…' : (s?.shortPctFloat ?? '—')}</td>
+                      <td style={{ ...TD, fontSize: 11, color: ins.color, fontWeight: 600 }}>
+                        {ins.label}{txs && txs.length > 0 && <span style={{ marginLeft: 6, color: 'var(--theme-text-faint, rgba(255,255,255,0.3))', fontSize: 9 }}>{isOpen ? '▲' : '▼'}</span>}
+                      </td>
+                      <td style={TD}>{chip(r.consensus)}</td>
+                    </tr>
+                    {isOpen && txs && txs.length > 0 && (
+                      <tr>
+                        <td colSpan={10} style={{ padding: 0, background: 'var(--theme-bg, #0a1628)', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <thead><tr style={{ background: 'var(--theme-bg, #0a1628)' }}>{['Date', 'Insider', 'Title', 'Transaction', 'Shares', 'Value'].map(h => <th key={h} style={TH_S}>{h}</th>)}</tr></thead>
+                            <tbody>
+                              {txs.map((tx, i) => {
+                                const c = tx.transaction === 'Sale' ? 'var(--theme-negative)' : tx.transaction === 'Purchase' ? 'var(--theme-positive)' : 'var(--theme-text, #d7e3fc)'
+                                return (
+                                  <tr key={i} onMouseEnter={e => (e.currentTarget.style.background = 'var(--theme-hover, rgba(255,255,255,0.03))')} onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                                    <td style={TD_S}>{tx.date}</td>
+                                    <td style={TD_S}>{tx.insider}</td>
+                                    <td style={{ ...TD_S, color: 'var(--theme-secondary, #8099b0)' }}>{tx.title || 'Unknown'}</td>
+                                    <td style={TD_S}><span style={{ color: c, fontWeight: 600 }}>{tx.transaction}</span></td>
+                                    <td style={{ ...TD_S, fontFamily: 'var(--theme-mono)' }}>{tx.shares > 0 ? tx.shares.toLocaleString() : '—'}</td>
+                                    <td style={{ ...TD_S, fontFamily: 'var(--theme-mono)' }}>{tx.value > 0 ? `$${(tx.value / 1e6).toFixed(2)}M` : '—'}</td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                )
+              })}
+              {isPending && rows.length === 0 && <tr><td colSpan={10} style={{ ...TD, textAlign: 'center', color: 'var(--theme-text-faint, rgba(255,255,255,0.35))', letterSpacing: '0.1em' }}>SCANNING…</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  )
+
+  // ── View 2: Timeline (month-grouped agenda) ──
+  const timelineCenter = (
+    <div style={panel}>
+      {panelHead('Catalyst Timeline', 'UPCOMING · BY MONTH')}
+      <div style={{ padding: '8px 16px 18px' }}>
+        {monthBuckets.map(group => (
+          <div key={group.label} style={{ marginTop: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+              <span style={{ ...LABEL, fontSize: 11, letterSpacing: '0.14em', color: 'var(--theme-primary, #c9a84c)' }}>{group.label}</span>
+              <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-secondary, #8099b0)' }}>{group.items.length} event{group.items.length === 1 ? '' : 's'}</span>
+              <span style={{ flex: 1, height: 1, background: 'var(--theme-border, rgba(255,255,255,0.08))' }} />
+            </div>
+            <div style={{ paddingLeft: 22, borderLeft: '1px solid rgba(255,255,255,0.1)', marginLeft: 6 }}>
+              {group.items.map(({ r, days, d }) => {
+                const col = proximityColor(days)
+                const s = shortData[r.ticker]
+                return (
+                  <div key={r.ticker} style={{ position: 'relative', marginTop: 12 }}>
+                    <span style={{ position: 'absolute', left: -27, top: 18, width: 9, height: 9, borderRadius: '50%', background: col, border: '2px solid var(--theme-bg, #101c2e)' }} />
+                    <div style={{ background: 'var(--theme-surface, #0d1826)', border: '1px solid rgba(255,255,255,0.07)', borderLeft: `2px solid ${col}`, display: 'flex', alignItems: 'stretch' }}>
+                      <div style={{ width: 74, flexShrink: 0, borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '10px 0', gap: 1 }}>
+                        <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 22, fontWeight: 700, color: 'var(--theme-text, #d7e3fc)', lineHeight: 1 }}>{d ? d.getDate() : '—'}</span>
+                        <span style={{ ...LABEL, fontSize: 9, letterSpacing: '0.14em', color: 'var(--theme-secondary, #8099b0)' }}>{d ? d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase() : ''}</span>
+                        <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, fontWeight: 700, color: col }}>{days == null ? '' : `${days}d`}</span>
+                      </div>
+                      <div style={{ flex: 1, padding: '11px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                          <TickerLogo ticker={r.ticker} />
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{ fontWeight: 700, color: 'var(--theme-primary, #c9a84c)', fontSize: 14 }}>{r.ticker}</span>
+                              <span style={{ fontSize: 9, fontWeight: 700, color: BLUE, letterSpacing: '0.08em' }}>{r.horizon}</span>
+                            </div>
+                            <div style={{ fontSize: 9, color: 'var(--theme-secondary, #8099b0)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 170 }}>{r.name} · earnings</div>
+                          </div>
+                        </div>
+                        <Sparkline data={r.sparkline} positive={(r.pctChange ?? 0) >= 0} />
+                        <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap' }}>
+                          {tlMetric('Implied', `${r.impliedMove.toFixed(1)}%`, BLUE)}
+                          {tlMetric('1D', pctStr(r.pctChange), pctTone(r.pctChange))}
+                          {tlMetric('Mkt Cap', fmtCap(r.marketCap))}
+                          {tlMetric('Fwd P/E', r.pe != null ? `${r.pe.toFixed(2)}x` : '—')}
+                          {tlMetric('Short %', shortPending && !s ? '…' : (s?.shortPctFloat ?? '—'))}
+                          {chip(r.consensus)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+        {rows.length === 0 && <div style={{ padding: '12px 2px', fontSize: 11, color: 'var(--theme-text-faint, rgba(255,255,255,0.35))', letterSpacing: '0.1em' }}>{isPending ? 'SCANNING…' : 'No tickers.'}</div>}
+      </div>
+    </div>
+  )
+
   return (
-    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 12, alignItems: isMobile ? 'stretch' : 'flex-start' }}>
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      {pageHeader}
+      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 14, alignItems: isMobile ? 'stretch' : 'flex-start' }}>
 
         {/* Left sidebar */}
-        <div style={{ width: isMobile ? '100%' : 190, flexShrink: 0, background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ width: isMobile ? '100%' : 196, flexShrink: 0, background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)' }}>
             <div style={{ ...LABEL, color: 'var(--theme-text, #d7e3fc)' }}>Scan Parameters</div>
           </div>
@@ -437,132 +614,13 @@ export function CorporateHubContent() {
           </div>
         </div>
 
-        {/* Center: tables */}
+        {/* Center: switchable view */}
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
-
-          {/* Main table */}
-          <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
-            <div style={{ padding: '6px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ ...LABEL, color: 'var(--theme-text, #d7e3fc)' }}>Upcoming Catalysts & Valuation</span>
-              {isPending && <span style={{ fontSize: 10, color: 'var(--theme-secondary, #99907e)', letterSpacing: '0.1em' }}>SCANNING…</span>}
-            </div>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', minWidth: 700, borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ background: 'var(--theme-bg, #0a1628)' }}>
-                    {['Ticker', 'Chart', 'Date', 'Horizon', 'Implied Move', '1D %', 'Market Cap', 'Fwd P/E', 'Consensus', 'Conf'].map(h => (
-                      <th key={h} style={TH}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {sorted.map(row => {
-                    const cs = CONSENSUS_STYLE[row.consensus] ?? CONSENSUS_STYLE['Hold']
-                    return (
-                      <tr key={row.ticker} style={{ background: 'transparent' }}
-                        onMouseEnter={e => (e.currentTarget.style.background = 'var(--theme-hover, rgba(255,255,255,0.03))')}
-                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                        <td style={TD}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <TickerLogo ticker={row.ticker} />
-                            <span style={{ fontWeight: 700, color: 'var(--theme-primary, #c9a84c)', fontSize: 13 }}>{row.ticker}</span>
-                          </div>
-                        </td>
-                        <td style={{ ...TD, padding: '4px 10px' }}>
-                          <Sparkline data={row.sparkline} positive={(row.pctChange ?? 0) >= 0} />
-                        </td>
-                        <td style={{ ...TD, fontFamily: 'var(--theme-mono)', fontSize: 11 }}>{row.date}</td>
-                        <td style={TD}>
-                          <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--theme-tertiary, #9bcdef)', letterSpacing: '0.08em' }}>{row.horizon}</span>
-                        </td>
-                        <td style={TD}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <div style={{ width: 64, height: 4, background: 'var(--theme-hover, rgba(255,255,255,0.08))', borderRadius: 0, overflow: 'hidden' }}>
-                              <div style={{ width: `${Math.min(row.impliedMove / 20 * 100, 100)}%`, height: '100%', background: 'var(--theme-tertiary, #1f5673)' }} />
-                            </div>
-                            <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11 }}>{row.impliedMove.toFixed(1)}%</span>
-                          </div>
-                        </td>
-                        <td style={{ ...TD, fontFamily: 'var(--theme-mono)', fontSize: 11,
-                          color: row.pctChange == null ? 'var(--theme-text-faint)' : row.pctChange >= 0 ? 'var(--theme-positive)' : 'var(--theme-negative)' }}>
-                          {row.pctChange != null ? `${row.pctChange >= 0 ? '+' : ''}${row.pctChange.toFixed(2)}%` : '—'}
-                        </td>
-                        <td style={{ ...TD, fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-text, #d7e3fc)' }}>
-                          {row.marketCap != null
-                            ? row.marketCap >= 1e12 ? `$${(row.marketCap / 1e12).toFixed(2)}T`
-                            : row.marketCap >= 1e9  ? `$${(row.marketCap / 1e9).toFixed(1)}B`
-                            : `$${(row.marketCap / 1e6).toFixed(0)}M`
-                            : '—'}
-                        </td>
-                        <td style={{ ...TD, fontFamily: 'var(--theme-mono)', fontSize: 11 }}>{row.pe != null ? `${row.pe.toFixed(2)}x` : '—'}</td>
-                        <td style={TD}>
-                          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: cs.color, border: `1px solid ${cs.border}`, padding: '2px 5px', textTransform: 'uppercase', whiteSpace: 'nowrap', display: 'inline-block' }}>
-                            {row.consensus}
-                          </span>
-                        </td>
-                        <td style={{ ...TD, textAlign: 'center', color: row.isConfirmed ? 'var(--theme-positive)' : 'var(--theme-text-faint, rgba(255,255,255,0.18))' }}>
-                          {row.isConfirmed ? 'Yes' : '—'}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                  {isPending && rows.length === 0 && (
-                    <tr><td colSpan={9} style={{ ...TD, textAlign: 'center', color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', letterSpacing: '0.1em' }}>SCANNING…</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Short interest table */}
-          {showShort && rows.length > 0 && (
-            <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
-              <div style={{ padding: '6px 10px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #142032)', display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ ...LABEL, color: 'var(--theme-text, #d7e3fc)' }}>Short Interest Monitor</span>
-                {shortPending && <span style={{ fontSize: 10, color: 'var(--theme-secondary, #99907e)', letterSpacing: '0.1em' }}>FETCHING…</span>}
-              </div>
-              <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', minWidth: 400, borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ background: 'var(--theme-bg, #0a1628)' }}>
-                    {['Ticker', 'Short % Float', 'Short Ratio (Days)', 'Shares Short'].map(h => (
-                      <th key={h} style={TH}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {sorted.map(row => {
-                    const s = shortData[row.ticker]
-                    const dash = <span style={{ color: 'var(--theme-text-faint, rgba(255,255,255,0.22))' }}>—</span>
-                    return (
-                      <tr key={row.ticker}
-                        onMouseEnter={e => (e.currentTarget.style.background = 'var(--theme-hover, rgba(255,255,255,0.03))')}
-                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                        <td style={TD}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <TickerLogo ticker={row.ticker} />
-                            <span style={{ fontWeight: 700, color: 'var(--theme-primary, #c9a84c)', fontSize: 13 }}>{row.ticker}</span>
-                          </div>
-                        </td>
-                        <td style={{ ...TD, fontFamily: 'var(--theme-mono)', fontSize: 11 }}>{shortPending && !s ? '…' : (s?.shortPctFloat ?? dash)}</td>
-                        <td style={{ ...TD, fontFamily: 'var(--theme-mono)', fontSize: 11 }}>{shortPending && !s ? '…' : (s?.shortRatio ?? dash)}</td>
-                        <td style={{ ...TD, fontFamily: 'var(--theme-mono)', fontSize: 11 }}>{shortPending && !s ? '…' : (s?.sharesShort ?? dash)}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-              </div>
-            </div>
-          )}
-          {/* Insider transactions */}
-          {showInsider && rows.length > 0 && (
-            <InsiderPanel sorted={sorted} insiderData={insiderData} insiderPending={insiderPending} />
-          )}
+          {view === 'radar' ? radarCenter : timelineCenter}
         </div>
 
         {/* Right: news panel */}
-        <div style={{ width: isMobile ? '100%' : 240, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 0, maxHeight: isMobile ? undefined : 700 }}>
+        <div style={{ width: isMobile ? '100%' : 248, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 0, maxHeight: isMobile ? undefined : 700 }}>
 
           {/* AI Brief section */}
           <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid color-mix(in srgb, var(--theme-primary) 25%, transparent)', marginBottom: 8 }}>
@@ -640,9 +698,10 @@ export function CorporateHubContent() {
         </div>
 
       </div>
+    </div>
   )
 }
 
 export default function CorporateHub() {
-  return <PageWrapper title="Corporate Calendar"><CorporateHubContent /></PageWrapper>
+  return <PageWrapper><CorporateHubContent /></PageWrapper>
 }

@@ -63,6 +63,8 @@ const FLOW_PICK_SENS  = 0.04           // per bp: how much a mispriced bond pull
 const SPREAD_FLOW_SENS = 3             // per price point of half-spread: clients balk at wide quotes
 const SPEED_MIN       = 0.1
 const SPEED_MAX       = 3.0
+const TAPE_COLORS     = ['#c9a84c', '#60a5fa', '#22c55e', '#ef4444', '#a78bfa', '#f97316']
+const BENCH_ID        = '10Y'   // on-the-run benchmark, gold-tinted in the book
 
 // Slope sensitivity: long maturities move up, short maturities down, as the curve
 // steepens — the curve pivots around the 10Y.
@@ -297,7 +299,8 @@ export default function FixedIncomeMarketMaker() {
   const [mode, setMode]             = useState<SimMode>('unlimited')
   const [boardOpen, setBoardOpen]   = useState(false)
   const [hedgeQty, setHedgeQty]     = useState(50)
-  const [selected, setSelected]     = useState('10Y')   // bond driving the tape + hedge panel
+  const [selected, setSelected]     = useState('10Y')   // bond driving the hedge panel + default tape
+  const [plotted, setPlotted]       = useState<string[]>([])   // bonds whose yield is overlaid on the tape
   const [frame, setFrame]           = useState<Frame | null>(null)
   const [flash, setFlash]           = useState<{ bond: string; side: string } | null>(null)
   const lastFillSig = useRef('')
@@ -425,6 +428,17 @@ export default function FixedIncomeMarketMaker() {
   const blockSell = r ? overHardCap(r.netDV01, r.netDV01 - hedgeQty * dvUnit, HARD_DV01_LIMIT) : false
   const yHist = f ? f.yldHistory[selected] : []
   const yChgBp = yHist.length > 1 ? (yHist[yHist.length - 1] - yHist[0]) * 100 : 0
+  // Tape overlays: clicking a bond's Yield or label toggles it here. With none
+  // plotted the tape falls back to the hedge-selected bond so it is never empty.
+  const togglePlot = (id: string) => setPlotted(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id])
+  const plotIds = plotted.length ? plotted : [selected]
+  const multiPlot = plotted.length > 0
+  const baseHist = f ? (f.yldHistory[plotIds[0]] ?? []) : []
+  const tapeData = baseHist.map((_, i) => {
+    const row: Record<string, number> = { i }
+    for (const id of plotIds) row[id] = +((f!.yldHistory[id]?.[i]) ?? 0).toFixed(3)
+    return row
+  })
   const spread = f ? f.edge : 0
   const directional = f && r ? r.netPnl - f.edge : 0
   const dvFmt = (n: number) => `${n >= 0 ? '+' : ''}$${Math.round(n)}`
@@ -496,19 +510,24 @@ export default function FixedIncomeMarketMaker() {
             </Widget>
 
             {/* Tape */}
-            <Widget title={`${selected} Yield Tape`}
-              right={<span style={{ fontFamily: T.mono, fontSize: 12, color: yChgBp <= 0 ? T.green : T.red }}>{selQuote.yieldPct.toFixed(2)}% {yChgBp >= 0 ? '+' : ''}{yChgBp.toFixed(1)}bp</span>}
+            <Widget title={multiPlot ? 'Yield Tape' : `${selected} Yield Tape`}
+              right={multiPlot
+                ? <span style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                    {plotted.map((id, idx) => <span key={id} style={{ fontFamily: T.mono, fontSize: 9, color: TAPE_COLORS[idx % TAPE_COLORS.length] }}>{id}</span>)}
+                    <button onClick={() => setPlotted([])} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.muted, fontFamily: T.sans }}>clear</button>
+                  </span>
+                : <span style={{ fontFamily: T.mono, fontSize: 12, color: yChgBp <= 0 ? T.green : T.red }}>{selQuote.yieldPct.toFixed(2)}% {yChgBp >= 0 ? '+' : ''}{yChgBp.toFixed(1)}bp</span>}
               bodyStyle={{ flex: 1, display: 'flex', minHeight: 0 }}>
               <div style={{ flex: 1, minHeight: 200, padding: '8px 6px 6px' }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={yHist.map((y, i) => ({ i, y: +y.toFixed(3) }))} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
+                  <LineChart data={tapeData} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.07)" />
                     <XAxis dataKey="i" hide />
                     <YAxis tick={{ fontSize: 9, fill: T.muted, fontFamily: T.mono }} orientation="right" domain={['auto', 'auto']} tickFormatter={v => `${(+v).toFixed(2)}%`} width={46} />
                     <Tooltip contentStyle={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 0, fontFamily: T.mono, fontSize: 11 }}
-                      formatter={(v: number) => [`${(+v).toFixed(3)}%`, selected]} labelFormatter={() => ''} />
-                    <ReferenceLine y={CURVE0[selected]} stroke="color-mix(in srgb, var(--theme-primary) 25%, transparent)" strokeDasharray="3 4" />
-                    <Line type="monotone" dataKey="y" stroke="var(--theme-tertiary, #60a5fa)" strokeWidth={2} dot={false} isAnimationActive={false} />
+                      formatter={(v: number, name: string) => [`${(+v).toFixed(3)}%`, name]} labelFormatter={() => ''} />
+                    {!multiPlot && <ReferenceLine y={CURVE0[selected]} stroke="color-mix(in srgb, var(--theme-primary) 25%, transparent)" strokeDasharray="3 4" />}
+                    {plotIds.map((id, idx) => <Line key={id} type="monotone" dataKey={id} stroke={multiPlot ? TAPE_COLORS[idx % TAPE_COLORS.length] : 'var(--theme-tertiary, #60a5fa)'} strokeWidth={2} dot={false} isAnimationActive={false} />)}
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -557,8 +576,8 @@ export default function FixedIncomeMarketMaker() {
           </div>
 
           {/* Treasury book: wide table with editable quotes */}
-          <Widget title="Treasury Book" right={<span style={{ fontFamily: T.sans, fontSize: 8, color: T.muted, letterSpacing: '0.04em' }}>edit any bid / ask to requote · click a row to select</span>}>
-            {renderBookTable(f, selected, setSelected, onQuote, flash, bondWiden, onWiden)}
+          <Widget title="Treasury Book" right={<span style={{ fontFamily: T.sans, fontSize: 8, color: T.muted, letterSpacing: '0.04em' }}>edit bid / ask to requote · click yield to plot · click bond for curve</span>}>
+            {renderBookTable(f, plotted, togglePlot, onQuote, flash, bondWiden, onWiden)}
           </Widget>
 
           {/* Ledger strip */}
@@ -591,53 +610,62 @@ function bigBtn(color: string): React.CSSProperties {
   }
 }
 
-// Treasury book as a compact wide table. Bid/Ask are editable quote cells; the
-// row is clickable to drive the tape + hedge panel.
+// Treasury book as a wide quote grid, the rates-desk analog of the Options
+// Chain: a fixed-width colgroup, the Bond tenor as the centered anchor between
+// editable Bid/Ask quote cells, plus inventory and per-bucket DV01. Click a
+// bond's Yield or tenor to overlay its yield on the tape.
 const fmtWidenPts = (v: number) => (v > 1e-4 ? `+${v.toFixed(2)}` : '0.00')
 
-function renderBookTable(f: Frame, selected: string, onSelect: (id: string) => void, onQuote: (id: string, side: 'bid' | 'ask', price: number) => void, flash: { bond: string; side: string } | null, bondWiden: Record<string, number>, onWiden: (id: string, dir: 1 | -1) => void) {
-  const G = 'var(--theme-positive, #22c55e)', R = 'var(--theme-negative, #ef4444)', M = 'var(--theme-secondary, #5e768f)', GD = 'var(--theme-primary, #c9a84c)', T2 = 'var(--theme-text, #d7e3fc)'
-  const th: React.CSSProperties = { fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: M, padding: '6px 10px', textAlign: 'right', whiteSpace: 'nowrap' }
-  const td: React.CSSProperties = { fontFamily: 'var(--theme-mono)', fontSize: 13, padding: '5px 10px', textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', verticalAlign: 'middle' }
+function renderBookTable(f: Frame, plotted: string[], onPlot: (id: string) => void, onQuote: (id: string, side: 'bid' | 'ask', price: number) => void, flash: { bond: string; side: string } | null, bondWiden: Record<string, number>, onWiden: (id: string, dir: 1 | -1) => void) {
+  const G = 'var(--theme-positive, #22c55e)', R = 'var(--theme-negative, #ef4444)', M = 'var(--theme-secondary, #5e768f)', GD = 'var(--theme-primary, #c9a84c)', T2 = 'var(--theme-text, #d7e3fc)', BLUE = 'var(--theme-tertiary, #60a5fa)'
+  const th: React.CSSProperties = { fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: M, padding: '8px 9px', textAlign: 'right', whiteSpace: 'nowrap' }
+  const td: React.CSSProperties = { fontFamily: 'var(--theme-mono)', fontSize: 13, padding: '7px 9px', textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', verticalAlign: 'middle' }
   const signed = (v: number, fmt: (n: number) => string) => v === 0
     ? <span style={{ color: M }}>{fmt(0)}</span>
     : <span style={{ color: v > 0 ? G : R, fontWeight: 700 }}>{v > 0 ? '+' : ''}{fmt(v)}</span>
   return (
     <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+        <colgroup>
+          <col style={{ width: '15%' }} /><col style={{ width: '18%' }} /><col style={{ width: '15%' }} /><col style={{ width: '18%' }} />
+          <col style={{ width: '7%' }} /><col style={{ width: '7%' }} /><col style={{ width: '7%' }} /><col style={{ width: '7%' }} /><col style={{ width: '6%' }} />
+        </colgroup>
         <thead>
-          <tr style={{ borderBottom: `1px solid var(--theme-border, rgba(255,255,255,0.06))` }}>
-            <th style={{ ...th, textAlign: 'left' }}>Yield</th>
-            <th style={th}>Bid</th><th style={{ ...th, textAlign: 'center', color: GD }}>Bond</th><th style={th}>Ask</th>
-            <th style={th}>Pos</th><th style={th}>Bought</th><th style={th}>Sold</th><th style={th}>Hedge</th><th style={th}>Bucket DV01</th>
+          <tr style={{ borderBottom: `1px solid var(--theme-border, rgba(255,255,255,0.07))` }}>
+            <th style={th}>Yield</th>
+            <th style={{ ...th, textAlign: 'center' }}>Bid</th><th style={{ ...th, textAlign: 'center', color: GD }}>Bond</th><th style={{ ...th, textAlign: 'center' }}>Ask</th>
+            <th style={th}>Pos</th><th style={th}>Bought</th><th style={th}>Sold</th><th style={th}>Hedge</th><th style={th}>DV01</th>
           </tr>
         </thead>
         <tbody>
           {BONDS.map(b => {
             const q = f.book[b.id]
             const pos = f.positions[b.id], hedge = f.hedge[b.id], bucket = f.risk.buckets[b.id], sold = f.sold[b.id] || 0, bought = f.bought[b.id] || 0
-            const isSel = b.id === selected
+            const isPlot = plotted.includes(b.id)
+            const over = Math.abs(bucket) >= BUCKET_LIMIT
+            const rowBg = flash?.bond === b.id
+              ? `color-mix(in srgb, var(--theme-${flash.side === 'BUY' ? 'positive' : 'negative'}) 32%, transparent)`
+              : over ? 'color-mix(in srgb, var(--theme-negative) 10%, transparent)'
+              : b.id === BENCH_ID ? 'color-mix(in srgb, var(--theme-primary) 10%, transparent)'
+              : 'transparent'
+            const plotClick = (e: React.MouseEvent) => { e.stopPropagation(); onPlot(b.id) }
             return (
-              <tr key={b.id} onClick={() => onSelect(b.id)}
-                style={{ cursor: 'pointer', borderBottom: `1px solid var(--theme-border, rgba(255,255,255,0.04))`, transition: 'background 0.5s ease-out', background: flash?.bond === b.id ? `color-mix(in srgb, var(--theme-${flash.side === 'BUY' ? 'positive' : 'negative'}) 32%, transparent)` : isSel ? 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' : 'transparent' }}>
-                <td style={{ ...td, textAlign: 'left', color: T2 }}>{q.yieldPct.toFixed(2)}%</td>
-                <td style={td}><QuoteCell value={q.bid} side="bid" step={0.001} decimals={3} onCommit={v => onQuote(b.id, 'bid', v)} /></td>
-                <td style={{ ...td, textAlign: 'center', padding: '3px 10px' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <span style={{ fontSize: 16, fontWeight: 700, color: GD, lineHeight: 1 }}>{b.id}</span>
-                      {isSel && <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', color: M, marginLeft: 6 }}>TAPE</span>}
-                    </span>
-                    <span style={{ color: M, lineHeight: 1, margin: '3px 0' }}>{q.price.toFixed(3)}</span>
-                    <WidenControl value={bondWiden[b.id] ?? 0} onStep={dir => onWiden(b.id, dir)} format={fmtWidenPts} />
-                  </div>
+              <tr key={b.id} style={{ borderBottom: `1px solid var(--theme-border, rgba(255,255,255,0.04))`, transition: 'background 0.5s ease-out', background: rowBg }}>
+                <td style={td}>
+                  <span onClick={plotClick} title="Plot yield on tape"
+                    style={{ cursor: 'pointer', color: isPlot ? GD : BLUE, padding: '1px 5px', background: isPlot ? 'color-mix(in srgb, var(--theme-primary) 16%, transparent)' : 'transparent' }}>{q.yieldPct.toFixed(3)}%</span>
                 </td>
-                <td style={td}><QuoteCell value={q.ask} side="ask" step={0.001} decimals={3} onCommit={v => onQuote(b.id, 'ask', v)} /></td>
+                <td style={{ ...td, textAlign: 'center' }}><QuoteCell value={q.bid} side="bid" step={0.01} decimals={2} width={64} onCommit={v => onQuote(b.id, 'bid', v)} /></td>
+                <td style={{ ...td, textAlign: 'center', padding: '3px 8px' }}>
+                  <div onClick={plotClick} title="Plot bond curve" style={{ fontSize: 16, fontWeight: 700, color: GD, cursor: 'pointer', lineHeight: 1 }}>{b.id}</div>
+                  <WidenControl value={bondWiden[b.id] ?? 0} onStep={dir => onWiden(b.id, dir)} format={fmtWidenPts} />
+                </td>
+                <td style={{ ...td, textAlign: 'center' }}><QuoteCell value={q.ask} side="ask" step={0.01} decimals={2} width={64} onCommit={v => onQuote(b.id, 'ask', v)} /></td>
                 <td style={td}>{signed(pos, n => `${n}`)}</td>
                 <td style={{ ...td, color: bought > 0 ? G : M }}>{bought}</td>
                 <td style={{ ...td, color: sold > 0 ? R : M }}>{sold}</td>
-                <td style={td}>{signed(hedge, n => `${n}`)}</td>
-                <td style={td}>{signed(bucket, n => `$${Math.round(n)}`)}</td>
+                <td style={{ ...td, color: hedge === 0 ? M : T2 }}>{hedge === 0 ? '0' : hedge > 0 ? `+${hedge}` : `${hedge}`}</td>
+                <td style={{ ...td, color: over ? R : bucket > 0 ? G : bucket < 0 ? R : M, fontWeight: over ? 700 : 400 }}>{bucket === 0 ? '$0' : bucket > 0 ? `+$${Math.round(bucket)}` : `-$${Math.abs(Math.round(bucket))}`}</td>
               </tr>
             )
           })}

@@ -229,8 +229,8 @@ export function RiskMeterStrip({ label, value, limit, unit, over, fmt }: {
 // Editable quote cell: a tabular-nums field that reads as part of the table plus
 // a vertical chevron stepper. Typing commits on blur/Enter; a chevron bumps by
 // one tick. Both route to the page's existing per-instrument quote override.
-export function QuoteCell({ value, side, step, decimals, onCommit }: {
-  value: number; side: 'bid' | 'ask'; step: number; decimals: number; onCommit: (v: number) => void
+export function QuoteCell({ value, side, step, decimals, onCommit, width }: {
+  value: number; side: 'bid' | 'ask'; step: number; decimals: number; onCommit: (v: number) => void; width?: number
 }) {
   const color = side === 'bid' ? V.pos : V.neg
   const [draft, setDraft] = useState<string | null>(null)
@@ -269,7 +269,7 @@ export function QuoteCell({ value, side, step, decimals, onCommit }: {
           else if (e.key === 'Escape') { setDraft(null); e.currentTarget.blur() }
         }}
         style={{
-          width: decimals >= 3 ? 72 : 52, textAlign: 'right', fontFamily: V.mono, fontSize: 13, fontWeight: 600,
+          width: width ?? (decimals >= 3 ? 72 : 52), textAlign: 'right', fontFamily: V.mono, fontSize: 13, fontWeight: 600,
           color, background: 'rgba(255,255,255,0.04)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 30%, transparent)',
           borderRadius: 3, padding: '2px 5px', fontVariantNumeric: 'tabular-nums', outline: 'none',
         }}
