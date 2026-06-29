@@ -237,9 +237,9 @@ export function ImpliedProbabilityContent() {
                         <YAxis tick={TICK} tickFormatter={v => `${(v * 100).toFixed(0)}%`} domain={[0, 1]} orientation="right" />
                         <Tooltip formatter={(v: number) => [`${(v * 100).toFixed(1)}%`, 'P(S_T > K)']} contentStyle={TOOLTIP_STYLE} />
                         <ReferenceLine y={0.5}      stroke="color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)" strokeDasharray="4 4" label={{ value: '50%', fill: GOLD, fontSize: 9, position: 'insideTopLeft' }} />
-                        <ReferenceLine x={dist.p50} stroke="color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)" strokeDasharray="4 4" label={{ value: 'P50', fill: GOLD, fontSize: 9, position: 'insideTopRight' }} />
-                        <ReferenceLine x={dist.p10} stroke={cc.gainMuted} strokeDasharray="3 5" label={{ value: 'P10', fill: cc.gain, fontSize: 9 }} />
-                        <ReferenceLine x={dist.p90} stroke={cc.lossMuted} strokeDasharray="3 5" label={{ value: 'P90', fill: cc.loss, fontSize: 9 }} />
+                        <ReferenceLine x={dist.p50} stroke="color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)" strokeDasharray="4 4" label={{ value: 'P50', fill: GOLD, fontSize: 9, position: 'insideTop' }} />
+                        <ReferenceLine x={dist.p10} stroke={cc.gainMuted} strokeDasharray="3 5" label={{ value: 'P10', fill: cc.gain, fontSize: 9, position: 'insideTop' }} />
+                        <ReferenceLine x={dist.p90} stroke={cc.lossMuted} strokeDasharray="3 5" label={{ value: 'P90', fill: cc.loss, fontSize: 9, position: 'insideTop' }} />
                         <Line type="monotone" dataKey="delta" stroke={cc.c2} strokeWidth={2.2} dot={false} name="P(S_T > K)" />
                         <ReferenceLine x={k} stroke={GOLD} strokeDasharray="5 3" />
                         {pAbove != null && <ReferenceDot x={k} y={pAbove} r={4} fill={GOLD} stroke="#0a1320" strokeWidth={1.5} />}
