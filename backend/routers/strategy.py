@@ -382,3 +382,46 @@ def get_custom_signal(req: CustomSignalRequest):
                    for d, v in zip(close.index, sig_arr)]
     return {"signal": signal_list, "drift_adj": round(adj, 2),
             "label": label, "detail": detail}
+
+
+# ─── Custom rule backtest (Algorithmic Strategy Builder) ──────────────────────
+# Runs a composed buy/sell rule set through the shared engine + algo risk
+# controls + metrics, returning the same shape as /algo/backtest so the builder
+# UI reuses the standard result strip + equity curve.
+
+class CustomBacktestRequest(BaseModel):
+    ticker: str
+    rules: dict = {}
+    start: str = "2022-01-01"
+    end: str | None = None
+    stop_loss: float | None = None
+    take_profit: float | None = None
+    trailing_stop: float | None = None
+    max_hold_bars: int | None = None
+    position_size: float = 100
+    initial_capital: float = 10_000
+
+    @model_validator(mode="after")
+    def _validate(self):
+        self.ticker = validate_ticker(self.ticker)
+        validate_date(self.start)
+        if self.end:
+            validate_date(self.end)
+        return self
+
+
+@router.post("/custom-backtest")
+def custom_backtest(req: CustomBacktestRequest):
+    from .algo import _apply_risk_controls, _compute_metrics
+    import datetime
+    end = req.end or datetime.date.today().isoformat()
+    close = _fetch_close(req.ticker, req.start, end)
+    if len(close) < 60:
+        raise HTTPException(422, "Insufficient price history for backtest")
+    close.name = req.ticker.strip().upper()
+    sig_arr = evaluate_custom_rules(close.values.astype(float), req.rules)
+    signal = pd.Series(sig_arr, index=close.index)
+    signal = _apply_risk_controls(
+        signal, close, req.stop_loss, req.take_profit, req.trailing_stop, req.max_hold_bars,
+    )
+    return _compute_metrics(signal, close, req.position_size, req.initial_capital)

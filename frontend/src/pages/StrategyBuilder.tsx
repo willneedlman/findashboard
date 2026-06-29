@@ -243,7 +243,7 @@ export default function StrategyBuilder() {
     setLegs(p => p.map((l, idx) => idx === i ? { ...l, [k]: v } : l))
 
   return (
-    <PageWrapper title="Strategy Builder">
+    <PageWrapper title="Options Strategy Builder">
       <SidebarLayout sidebarWidth={210} sidebarTitle="" sidebar={<>
           <RailSection title="Parameters" open={paramsOpen} onToggle={() => setParamsOpen(o => !o)}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

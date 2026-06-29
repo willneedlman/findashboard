@@ -40,6 +40,7 @@ const MonteCarlo         = lazy(() => import('./pages/MonteCarlo'))
 const PortfolioCompare   = lazy(() => import('./pages/PortfolioCompare'))
 const SkewTool           = lazy(() => import('./pages/SkewTool'))
 const StrategyBuilder    = lazy(() => import('./pages/StrategyBuilder'))
+const AlgoStrategyBuilder = lazy(() => import('./pages/AlgoStrategyBuilder'))
 const DealerGEX          = lazy(() => import('./pages/DealerGEX'))
 const CustomDashboard    = lazy(() => import('./pages/CustomDashboard'))
 const PrivacyPolicy      = lazy(() => import('./pages/legal/PrivacyPolicy'))
@@ -190,6 +191,7 @@ export default function App() {
               <Route path="/chain"      element={<OptionsChainScanner />} />
               <Route path="/correlation" element={<CorrelationAnalysis />} />
               <Route path="/strategy"   element={<StrategyBuilder />} />
+              <Route path="/algo-strategy" element={<AlgoStrategyBuilder />} />
               <Route path="/gex"        element={<DealerGEX />} />
               <Route path="/dashboard"       element={<CustomDashboard />} />
               <Route path="/settings"        element={<SettingsPage />} />

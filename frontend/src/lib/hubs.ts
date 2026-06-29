@@ -3,7 +3,7 @@ import {
   Filter, TrendingUp, Brain, CalendarClock, CalendarDays, FileText, Activity,
   GitCompare, PieChart, Globe, Scale, Coins, Boxes, RotateCcw, Gem,
   LineChart, BarChart2, Waves, Zap, Shuffle, Percent,
-  GitBranch, Landmark, Dices, Gauge, BookOpen, Bell,
+  GitBranch, Landmark, Dices, Gauge, BookOpen, Bell, Workflow,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -77,7 +77,7 @@ export const HUBS: Hub[] = [
       { title: 'IV Tracker',          chip: 'IV Tracker',          desc: 'Implied volatility rank and term structure',        route: '/iv-tracker',      icon: Waves },
       { title: 'Dealer GEX',          chip: 'Dealer GEX',          desc: 'Gamma exposure by strike and expiry',               route: '/gex',             icon: Zap },
       { title: 'Options Flow',        chip: 'Flow',                desc: 'Volume and open-interest surges',                   route: '/unusual-options', icon: Activity },
-      { title: 'Strategy Builder',    chip: 'Strategy Builder',    desc: 'Multi-leg P&L and risk profiles',                   route: '/strategy',        icon: Shuffle },
+      { title: 'Options Strategy Builder', chip: 'Options Strategy', desc: 'Multi-leg P&L and risk profiles',                   route: '/strategy',        icon: Shuffle },
       { title: 'Implied Probability', chip: 'Implied Probability', desc: 'Risk-neutral distributions from the chain',         route: '/probability',     icon: Percent },
     ],
   },
@@ -116,6 +116,7 @@ export const HUBS: Hub[] = [
     icon: Terminal,
     tools: [
       { title: 'Paper Trading',            chip: 'Paper Trading',            desc: 'Simulated live execution across asset classes', route: '/paper-trading', icon: Terminal },
+      { title: 'Algorithmic Strategy Builder', chip: 'Algo Builder', desc: 'Compose entry/exit rules and risk, then save and run', route: '/algo-strategy', icon: Workflow },
       { title: 'Options MM Simulator',       chip: 'Options MM',       desc: 'Two-sided option quoting and delta hedging',    route: '/market-maker',     icon: Gauge },
       { title: 'Fixed Income MM Simulator',  chip: 'Fixed Income MM',  desc: 'Quote a Treasury book and hedge DV01',          route: '/fixed-income-mm',  icon: Landmark },
       { title: 'Trade Journal',            chip: 'Trade Journal',            desc: 'Entry/exit, P&L, and win-rate analytics',       route: '/trade-journal', icon: BookOpen },
