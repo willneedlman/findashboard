@@ -2,11 +2,17 @@ import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Legend } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
+import { KpiCell } from '../components/mmCockpit'
 import SidebarLayout from '../components/SidebarLayout'
 import { fetchGEX, fetchOptionsChain } from '../hooks/useApi'
 import EmptyState from '../components/EmptyState'
 import { useChartColors } from '../hooks/useChartColors'
-import { INPUT, LABEL, TOOLTIP_STYLE, TOOLTIP_LABEL, TOOLTIP_ITEM, TICK, RailSection, MetricCard } from './valuationShared'
+import { INPUT, LABEL, TOOLTIP_STYLE, TOOLTIP_LABEL, TOOLTIP_ITEM, TICK, RailSection } from './valuationShared'
+
+const STRIP: React.CSSProperties = {
+  display: 'flex', alignItems: 'stretch', overflowX: 'auto',
+  background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
+}
 
 function ChartPanel({ label, note, height, children }: { label: string; note?: string; height: number; children: React.ReactNode }) {
   const headerH = note ? 42 : 26
@@ -157,15 +163,13 @@ export default function DealerGEX() {
                   {data.quote_time && <span style={{ color: 'var(--theme-secondary, #5e768f)' }}>· quote as of {new Date(data.quote_time).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>}
                 </div>
               )}
-              <div className="metric-grid">
-                <MetricCard label="Spot Price" value={`$${spot?.toFixed(2)}`} />
-                <MetricCard label="Net GEX" value={`${totalNet > 0 ? '+' : ''}$${totalNet.toFixed(1)}M`}
-                  sub={totalNet > 0 ? 'Dealers long γ' : 'Dealers short γ'}
-                  help="Positive = dealers long gamma (stabilising). Negative = dealers short (trend amplification)." />
-                <MetricCard label="Call GEX" value={`+$${totalCall.toFixed(1)}M`} />
-                <MetricCard label="Put GEX" value={`$${totalPut.toFixed(1)}M`} />
-                <MetricCard label="Gamma Flip" value={flipLevel ? `~$${flipLevel.toLocaleString()}` : 'N/A'}
-                  help="Cumulative net GEX zero crossing — key support/resistance level." />
+              <div style={STRIP}>
+                <KpiCell grow minWidth={170} label={totalNet > 0 ? 'Net GEX · Dealers Long γ' : 'Net GEX · Dealers Short γ'}
+                  value={`${totalNet > 0 ? '+' : ''}$${totalNet.toFixed(1)}M`} color={totalNet > 0 ? 'var(--theme-positive)' : 'var(--theme-negative)'} valueSize={16} />
+                <KpiCell grow label="Spot Price" value={`$${spot?.toFixed(2)}`} />
+                <KpiCell grow label="Call GEX" value={`+$${totalCall.toFixed(1)}M`} color="var(--theme-positive)" />
+                <KpiCell grow label="Put GEX" value={`$${totalPut.toFixed(1)}M`} color="var(--theme-negative)" />
+                <KpiCell grow label="Gamma Flip" value={flipLevel ? `~$${flipLevel.toLocaleString()}` : 'N/A'} />
               </div>
 
               <ChartPanel label="Net Dealer GEX by Strike ($M per 1% move)" height={368}

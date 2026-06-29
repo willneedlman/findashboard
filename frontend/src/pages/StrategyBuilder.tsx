@@ -1,10 +1,16 @@
 import { useState, useMemo, useEffect } from 'react'
 import { ComposedChart, Area, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
+import { KpiCell } from '../components/mmCockpit'
 import SidebarLayout from '../components/SidebarLayout'
 import ExpirySelect from '../components/ExpirySelect'
 import axios from 'axios'
 import { TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
+
+const STRIP: React.CSSProperties = {
+  display: 'flex', alignItems: 'stretch', overflowX: 'auto',
+  background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
+}
 import { type Leg, type GreekPos, type GreekResult, DEFAULT_TICKER, DEFAULT_EXPIRY, mk, roundToStrike, scalePreset, GREEK_COLORS, PRESETS, PRESET_DESC, PRESET_GROUPS, LEG_COLORS, LS_KEY, toOCC, INPUT, SELECT, type LegChain, fmtExpiry, intrinsic, type PendingOptionStrategy } from './strategy-builder/shared'
 
 export default function StrategyBuilder() {
@@ -762,6 +768,19 @@ export default function StrategyBuilder() {
             </div>
           )}
 
+          {/* Answer-first strip: net cost + breakevens + spot */}
+          {(() => {
+            const netCost = legs.reduce((s, l) => s + (l.action === 'buy' ? 1 : -1) * (l.premium ?? 0) * (l.quantity ?? 0), 0) * 100
+            return (
+              <div style={STRIP}>
+                <KpiCell grow minWidth={150} label={netCost >= 0 ? 'Net Debit' : 'Net Credit'} value={`$${Math.abs(netCost).toFixed(2)}`} color="var(--theme-primary, #c9a84c)" valueSize={16} />
+                <KpiCell grow label="Breakeven" value={chartData.breakevens.length ? chartData.breakevens.map(b => `$${b}`).join(' · ') : '—'} color="var(--theme-tertiary, #60a5fa)" />
+                <KpiCell grow label="Legs" value={String(legs.length)} />
+                <KpiCell grow label={`${primaryTicker} Spot`} value={`$${chartData.spot.toFixed(2)}`} />
+              </div>
+            )
+          })()}
+
           {/* Leg summary + breakeven */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
             {legs.map((leg, i) => (
@@ -802,17 +821,10 @@ export default function StrategyBuilder() {
             {greekResult && (
               <>
                 {/* Net greeks row */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
-                  {(['delta','gamma','theta','vega'] as const).map((g, i) => {
+                <div style={{ display: 'flex', alignItems: 'stretch', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+                  {(['delta','gamma','theta','vega'] as const).map(g => {
                     const v = greekResult.net[g]
-                    return (
-                      <div key={g} style={{ padding: '10px 12px', borderRight: i < 3 ? '1px solid rgba(255,255,255,0.08)' : 'none' }}>
-                        <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', marginBottom: 4 }}>Net {g}</div>
-                        <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 18, fontWeight: 700, color: GREEK_COLORS[g], lineHeight: 1 }}>
-                          {v >= 0 ? '+' : ''}{v.toFixed(4)}
-                        </div>
-                      </div>
-                    )
+                    return <KpiCell grow key={g} label={`Net ${g}`} value={`${v >= 0 ? '+' : ''}${v.toFixed(4)}`} color={GREEK_COLORS[g]} />
                   })}
                 </div>
 

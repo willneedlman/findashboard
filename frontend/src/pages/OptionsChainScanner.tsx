@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
+import { KpiCell } from '../components/mmCockpit'
 import SidebarLayout from '../components/SidebarLayout'
 import { fetchOptionsChain } from '../hooks/useApi'
 import axios from 'axios'
@@ -11,14 +12,9 @@ import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection } from './valuationShare
 const TH: React.CSSProperties = { fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', padding: '7px 10px', textAlign: 'right', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', whiteSpace: 'nowrap' }
 const TD: React.CSSProperties = { padding: '5px 10px', borderBottom: '1px solid var(--theme-hover, rgba(255,255,255,0.04))', fontSize: 11, fontFamily: 'var(--theme-mono)', color: 'var(--theme-text, #d7e3fc)', textAlign: 'right', verticalAlign: 'middle' }
 
-function SummaryCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div style={{ background: 'var(--theme-surface, #142032)', border: '1px solid var(--theme-border, rgba(255,255,255,0.07))', borderTop: '3px solid var(--theme-primary, #c9a84c)', padding: 10 }}>
-      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', marginBottom: 6 }}>{label}</div>
-      <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 20, fontWeight: 700, color: 'var(--theme-text, #d7e3fc)' }}>{value}</div>
-      {sub && <div style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', marginTop: 2 }}>{sub}</div>}
-    </div>
-  )
+const STRIP: React.CSSProperties = {
+  display: 'flex', alignItems: 'stretch', overflowX: 'auto',
+  background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
 }
 
 const SELECT: React.CSSProperties = { background: 'var(--theme-bg, #0a1628)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-mono)', fontSize: 12, padding: '5px 8px', width: '100%', outline: 'none' }
@@ -107,12 +103,14 @@ export function OptionsChainScannerContent() {
 
           {data && (
             <>
-              {/* Metric cards */}
-              <div className="metric-grid">
-                <SummaryCard label="Put/Call OI Ratio" value={pcRatio.toFixed(2)} sub={pcRatio < 1 ? 'Bullish sentiment' : 'Bearish sentiment'} />
-                <SummaryCard label="Total Call OI" value={totalCallOI.toLocaleString()} />
-                <SummaryCard label="Total Put OI"  value={totalPutOI.toLocaleString()} />
-                <SummaryCard label="IV Skew (Put − Call)" value={`${ivSkew > 0 ? '+' : ''}${ivSkew.toFixed(1)}%`} sub="Positive = fear premium" />
+              {/* Answer-first sentiment strip */}
+              <div style={STRIP}>
+                <KpiCell grow minWidth={170} label={pcRatio < 1 ? 'P/C OI Ratio · Bullish' : 'P/C OI Ratio · Bearish'} value={pcRatio.toFixed(2)} color={pcRatio < 1 ? 'var(--theme-positive)' : 'var(--theme-negative)'} valueSize={16} />
+                <KpiCell grow label="Total Call OI" value={totalCallOI.toLocaleString()} color="var(--theme-positive)" />
+                <KpiCell grow label="Total Put OI" value={totalPutOI.toLocaleString()} color="var(--theme-negative)" />
+                <KpiCell grow label="IV Skew (P−C)" value={`${ivSkew > 0 ? '+' : ''}${ivSkew.toFixed(1)}%`} color={ivSkew > 0 ? 'var(--theme-negative)' : 'var(--theme-positive)'} />
+                <KpiCell grow label="Avg Call IV" value={`${(avgCallIV * 100).toFixed(1)}%`} />
+                <KpiCell grow label="Avg Put IV" value={`${(avgPutIV * 100).toFixed(1)}%`} />
               </div>
 
               {/* Tabs */}
