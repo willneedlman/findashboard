@@ -2,12 +2,18 @@ import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Legend } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
+import { KpiCell } from '../components/mmCockpit'
 import SidebarLayout from '../components/SidebarLayout'
 import axios from 'axios'
 import EmptyState from '../components/EmptyState'
 import ExpirySelect from '../components/ExpirySelect'
 import { useChartColors } from '../hooks/useChartColors'
-import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection, MetricCard } from './valuationShared'
+import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
+
+const STRIP: React.CSSProperties = {
+  display: 'flex', alignItems: 'stretch', overflowX: 'auto',
+  background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
+}
 
 function ChartPanel({ label, height, note, children }: { label: string; height: number; note?: string; children: React.ReactNode }) {
   return (
@@ -91,10 +97,10 @@ export function ImpliedProbabilityContent() {
           {/* Volatility Cone section */}
           {cone && (
             <>
-              <div className="metric-grid">
-                <MetricCard label="Current Spot"    value={`$${cone.S0.toLocaleString()}`} />
-                <MetricCard label="ATM Implied Vol" value={`${(cone.sigma * 100).toFixed(1)}%`} />
-                <MetricCard label="Risk-Free Rate"  value={`${(cone.r * 100).toFixed(2)}%`} />
+              <div style={STRIP}>
+                <KpiCell grow minWidth={150} label="Current Spot" value={`$${cone.S0.toLocaleString()}`} color="var(--theme-primary, #c9a84c)" valueSize={16} />
+                <KpiCell grow label="ATM Implied Vol" value={`${(cone.sigma * 100).toFixed(1)}%`} color="var(--theme-tertiary, #60a5fa)" />
+                <KpiCell grow label="Risk-Free Rate" value={`${(cone.r * 100).toFixed(2)}%`} />
               </div>
 
               <ChartPanel label={`Volatility Cone — ${ticker}`} height={328} note="BS Risk-Neutral">
@@ -129,12 +135,12 @@ export function ImpliedProbabilityContent() {
             <>
               <SectionHeader label="Market-Implied Probability Distribution" />
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10 }}>
-                <MetricCard label="Modal Strike" value={`$${dist.modal_strike.toLocaleString()}`} help="Strike with highest probability mass" />
-                <MetricCard label="P10 Strike"   value={`$${dist.p10.toLocaleString()}`}          help="10% chance of finishing above" />
-                <MetricCard label="P50 Strike"   value={`$${dist.p50.toLocaleString()}`}          help="50% chance of finishing above (median)" />
-                <MetricCard label="P90 Strike"   value={`$${dist.p90.toLocaleString()}`}          help="90% chance of finishing above" />
-                <MetricCard label="IV Skew (P−C)" value={`${dist.iv_skew > 0 ? '+' : ''}${dist.iv_skew.toFixed(1)}%`} help="Positive = put premium, fear indicator" />
+              <div style={STRIP}>
+                <KpiCell grow minWidth={150} label="P50 Strike · Median" value={`$${dist.p50.toLocaleString()}`} color="var(--theme-primary, #c9a84c)" valueSize={16} />
+                <KpiCell grow label="Modal Strike" value={`$${dist.modal_strike.toLocaleString()}`} />
+                <KpiCell grow label="P10 Strike" value={`$${dist.p10.toLocaleString()}`} />
+                <KpiCell grow label="P90 Strike" value={`$${dist.p90.toLocaleString()}`} />
+                <KpiCell grow label="IV Skew (P−C)" value={`${dist.iv_skew > 0 ? '+' : ''}${dist.iv_skew.toFixed(1)}%`} color={dist.iv_skew > 0 ? 'var(--theme-negative)' : 'var(--theme-positive)'} />
               </div>
 
               <div style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', letterSpacing: '0.06em' }}>
