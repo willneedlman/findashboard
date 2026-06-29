@@ -227,7 +227,9 @@ export function AlgoStrategyBuilderContent() {
         </>
       )}
 
-      <CustomStrategyModal open={modalOpen} onClose={() => setModalOpen(false)} onSave={onModalSave} initialDef={editing} />
+      {modalOpen && (
+        <CustomStrategyModal open onClose={() => setModalOpen(false)} onSave={onModalSave} initialDef={editing} />
+      )}
     </SidebarLayout>
   )
 }
