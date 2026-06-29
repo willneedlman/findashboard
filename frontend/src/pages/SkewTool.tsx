@@ -157,11 +157,11 @@ export default function SkewTool() {
             {/* Answer-first skew strip */}
             <div style={STRIP}>
               <KpiCell grow minWidth={165} label="Downside Skew · 25Δ RR" value={`${sel.rr_25 > 0 ? '+' : ''}${sel.rr_25.toFixed(1)}`} valueSize={21}
-                color={skewColor(sel.rr_25)} sub={sel.rr_25 > 4 ? 'high crash fear' : sel.rr_25 > 1.5 ? 'mild fear' : 'low fear'} />
+                color={skewColor(sel.rr_25)} />
               <KpiCell grow label="ATM IV" value={`${sel.atm_iv.toFixed(1)}%`} valueSize={21} color={BLUE} sub={sel.expiry} />
               <KpiCell grow label="Implied Move" value={`±${em.pct.toFixed(1)}%`} valueSize={21} color={GOLD} sub={`$${em.lo.toFixed(0)}–$${em.hi.toFixed(0)}`} />
-              <KpiCell grow label="Tail Premium · 25Δ BF" value={`${sel.bf_25 > 0 ? '+' : ''}${sel.bf_25.toFixed(1)}`} valueSize={21} sub={sel.bf_25 > 6 ? 'fat tails priced' : 'normal'} />
-              <KpiCell grow label="Near vs Far Vol" value={`${data.ts_slope > 0 ? '+' : ''}${data.ts_slope.toFixed(1)}`} valueSize={21} color={data.ts_slope > 0.5 ? POS : data.ts_slope < -0.5 ? NEG : undefined} sub={data.ts_slope < -0.5 ? 'near-term jitters' : data.ts_slope > 0.5 ? 'calm shape' : 'flat'} />
+              <KpiCell grow label="Tail Premium · 25Δ BF" value={`${sel.bf_25 > 0 ? '+' : ''}${sel.bf_25.toFixed(1)}`} valueSize={21} />
+              <KpiCell grow label="Near vs Far Vol" value={`${data.ts_slope > 0 ? '+' : ''}${data.ts_slope.toFixed(1)}`} valueSize={21} color={data.ts_slope > 0.5 ? POS : data.ts_slope < -0.5 ? NEG : undefined} />
               <KpiCell grow label="Spot" value={`$${data.spot}`} valueSize={21} sub={`${sel.dte}d to expiry`} />
             </div>
 
@@ -214,13 +214,13 @@ export default function SkewTool() {
             {/* ATM IV Term Structure */}
             <Widget title="ATM IV Term Structure" right={caption('ATM IV (L) · 25Δ skew (R) vs DTE')} bodyStyle={{ padding: '8px' }}>
               <ResponsiveContainer width="100%" height={238}>
-                <LineChart data={data.term_structure} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}>
+                <LineChart data={data.term_structure} margin={{ top: 18, right: 8, left: 0, bottom: 4 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.045)" />
                   <XAxis dataKey="dte" tick={TICK} tickFormatter={(v: number) => `${v}d`} type="number" domain={[0, termXMax]} allowDataOverflow />
                   <YAxis yAxisId="iv" orientation="left" tick={{ ...TICK, fill: GOLD }} tickFormatter={(v: number) => `${v}%`} width={42} domain={['auto', 'auto']} />
                   <YAxis yAxisId="rr" orientation="right" tick={{ ...TICK, fill: BLUE }} tickFormatter={(v: number) => v.toFixed(0)} width={34} domain={['auto', 'auto']} />
                   <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number, n: string) => [`${v.toFixed(1)}${n === 'atm_iv' ? '%' : ' pts'}`, n === 'atm_iv' ? 'ATM IV' : '25Δ Put Skew']} labelFormatter={(d) => `${d} DTE`} />
-                  <ReferenceLine yAxisId="iv" x={sel.dte} stroke="color-mix(in srgb, var(--theme-primary, #c9a84c) 50%, transparent)" strokeDasharray="3 4" label={{ value: 'selected', fill: GOLD, fontSize: 9 }} />
+                  <ReferenceLine yAxisId="iv" x={sel.dte} stroke="color-mix(in srgb, var(--theme-primary, #c9a84c) 50%, transparent)" strokeDasharray="3 4" label={{ value: 'selected', fill: GOLD, fontSize: 9, position: 'top' }} />
                   <Line yAxisId="iv" type="monotone" dataKey="atm_iv" name="atm_iv" stroke={GOLD} strokeWidth={2.2} dot={{ r: 2.6 }} isAnimationActive={false} />
                   <Line yAxisId="rr" type="monotone" dataKey="rr_25" name="rr_25" stroke={BLUE} strokeWidth={1.6} strokeDasharray="5 3" dot={false} isAnimationActive={false} />
                 </LineChart>
