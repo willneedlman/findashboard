@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
+import { Widget, KpiCell } from '../components/mmCockpit'
 import {
   ComposedChart, Line, Area, XAxis, YAxis,
   Tooltip, CartesianGrid, ResponsiveContainer,
@@ -161,58 +162,6 @@ function IVGauge({
           </>
         )}
       </svg>
-    </div>
-  )
-}
-
-// ── Metric card ───────────────────────────────────────────────────────────────
-function MetricCard({
-  label, value, sub, color,
-}: {
-  label: string; value: string; sub?: string; color?: string
-}) {
-  return (
-    <div style={{ ...PANEL, minWidth: 110, flex: '1 1 110px' }}>
-      <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.14em',
-                    textTransform: 'uppercase', color: T.muted,
-                    fontFamily: T.mono, marginBottom: 4 }}>
-        {label}
-      </div>
-      <div style={{ fontSize: 20, fontWeight: 700, fontFamily: T.mono,
-                    color: color ?? T.text, lineHeight: 1.1 }}>
-        {value}
-      </div>
-      {sub && (
-        <div style={{ fontSize: 8, color: T.muted, fontFamily: T.mono, marginTop: 3 }}>
-          {sub}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── Greek card ────────────────────────────────────────────────────────────────
-function GreekCard({
-  symbol, name, value, desc,
-}: {
-  symbol: string; name: string; value: string; desc: string
-}) {
-  return (
-    <div style={{ ...PANEL, flex: '1 1 110px', minWidth: 110 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, marginBottom: 3 }}>
-        <span style={{ fontSize: 13, fontStyle: 'italic', color: T.gold,
-                       fontFamily: 'Georgia, serif' }}>{symbol}</span>
-        <span style={{ fontSize: 8, color: T.muted, fontFamily: T.mono,
-                       textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-          {name}
-        </span>
-      </div>
-      <div style={{ fontSize: 17, fontWeight: 700, fontFamily: T.mono, color: T.text }}>
-        {value}
-      </div>
-      <div style={{ fontSize: 7, color: T.dim, fontFamily: T.mono, marginTop: 2 }}>
-        {desc}
-      </div>
     </div>
   )
 }
@@ -521,36 +470,18 @@ export default function IVTracker() {
           <>
             <SLabel label={`${data.ticker} ${data.strike} ${data.option_type.toUpperCase()} · ${data.expiry} · ${data.dte}d to expiry`} />
 
-            {/* Primary metrics row */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-              <MetricCard
-                label="Current IV"
-                value={`${data.current_iv.toFixed(1)}%`}
-                sub={`HV 30d: ${fmtPct(data.current_hv_30d)} · Premium: ${data.iv_premium != null ? (data.iv_premium >= 0 ? '+' : '') + data.iv_premium.toFixed(1) + '%' : '—'}`}
-                color={ivColor}
-              />
-              <MetricCard
-                label="Implied Move"
-                value={data.implied_move != null ? `${data.implied_move.toFixed(1)}%` : '—'}
-                sub={data.implied_move != null
-                  ? `${(data.spot * data.implied_move / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} by ${data.expiry}${data.straddle != null ? ` · straddle $${data.straddle.toFixed(2)}` : ''}`
-                  : 'No straddle data'}
-              />
-              <MetricCard
-                label="Underlying"
-                value={`$${data.spot.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                sub={`Spot price`}
-              />
-              <MetricCard
-                label="Bid / Ask"
-                value={`$${data.bid.toFixed(2)} / $${data.ask.toFixed(2)}`}
-                sub={`Mid: $${data.mid.toFixed(2)} · Vol: ${data.volume.toLocaleString()} · OI: ${data.open_interest.toLocaleString()}`}
-              />
-              <MetricCard
-                label="IV Range"
-                value={`${fmtPct(data.iv_min)} – ${fmtPct(data.iv_max)}`}
-                sub={`Mean: ${fmtPct(data.iv_mean)} over lookback`}
-              />
+            {/* Answer-first instrument strip: lead with the IV-rank verdict */}
+            <div style={{ display: 'flex', alignItems: 'stretch', background: T.surface, border: `1px solid ${T.border}`, overflowX: 'auto' }}>
+              <KpiCell label="IV Rank" value={ivRank == null ? '—' : `${ivRank.toFixed(0)} · ${ivLabel(ivRank)}`} color={ivLabelColor(ivRank)} valueSize={16} />
+              <KpiCell label="Current IV" value={`${data.current_iv.toFixed(1)}%`} color={ivColor} />
+              <KpiCell label="HV 30d" value={fmtPct(data.current_hv_30d)} />
+              <KpiCell label="IV Premium" value={data.iv_premium != null ? `${data.iv_premium >= 0 ? '+' : ''}${data.iv_premium.toFixed(1)}%` : '—'} color={data.iv_premium != null ? (data.iv_premium >= 0 ? T.neg : T.pos) : undefined} />
+              <KpiCell label="Implied Move" value={data.implied_move != null ? `±${data.implied_move.toFixed(1)}%` : '—'} />
+              <KpiCell label="Underlying" value={`$${data.spot.toFixed(2)}`} />
+              <KpiCell label="Straddle" value={data.straddle != null ? `$${data.straddle.toFixed(2)}` : '—'} />
+              <KpiCell label="Bid / Ask" value={`$${data.bid.toFixed(2)} / $${data.ask.toFixed(2)}`} />
+              <KpiCell label="Vol / OI" value={`${data.volume.toLocaleString()} / ${data.open_interest.toLocaleString()}`} />
+              <KpiCell label="IV Range" value={`${fmtPct(data.iv_min)}–${fmtPct(data.iv_max)}`} />
             </div>
 
             {/* IV Rank + IV Percentile gauges */}
@@ -576,8 +507,7 @@ export default function IVTracker() {
             </div>
 
             {/* ── Chart ── */}
-            <SLabel label={`IV vs HV vs Stock Price · ${days}-day window`} />
-            <div style={{ ...PANEL, padding: '12px 8px' }}>
+            <Widget title={`IV vs HV vs Stock Price · ${days}-day window`} bodyStyle={{ padding: '12px 8px' }}>
               <ResponsiveContainer width="100%" height={320}>
                 <ComposedChart data={chartData}
                                margin={{ top: 8, right: 55, left: 0, bottom: 0 }}>
@@ -675,53 +605,20 @@ export default function IVTracker() {
                   />
                 </ComposedChart>
               </ResponsiveContainer>
-            </div>
+            </Widget>
 
             {/* ── Greeks ── */}
             {Object.keys(greeks).length > 0 && (
-              <>
-                <SLabel label="Option Greeks (current)" />
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-                  <GreekCard
-                    symbol="Δ" name="Delta"
-                    value={fmtNum(greeks.delta, 4)}
-                    desc={`Directional exposure. ${data.option_type === 'call' ? '0→1 range' : '-1→0 range'}`}
-                  />
-                  <GreekCard
-                    symbol="Γ" name="Gamma"
-                    value={fmtNum(greeks.gamma, 6)}
-                    desc="Rate of delta change per $1 move"
-                  />
-                  <GreekCard
-                    symbol="Θ" name="Theta"
-                    value={`$${fmtNum(greeks.theta, 4)}/d`}
-                    desc="Daily time decay in dollars (per contract ×100)"
-                  />
-                  <GreekCard
-                    symbol="ν" name="Vega"
-                    value={`$${fmtNum(greeks.vega, 4)}`}
-                    desc="$/1% move in IV (per contract ×100)"
-                  />
-                  <GreekCard
-                    symbol="ρ" name="Rho"
-                    value={`$${fmtNum(greeks.rho, 4)}`}
-                    desc="$/1% move in risk-free rate"
-                  />
-                  <div style={{ ...PANEL, flex: '1 1 140px' }}>
-                    <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.14em',
-                                  textTransform: 'uppercase', color: T.muted,
-                                  fontFamily: T.mono, marginBottom: 4 }}>
-                      Risk-Free Rate
-                    </div>
-                    <div style={{ fontSize: 17, fontWeight: 700, fontFamily: T.mono, color: T.text }}>
-                      {fmtPct(data.risk_free_rate)}
-                    </div>
-                    <div style={{ fontSize: 7, color: T.dim, fontFamily: T.mono, marginTop: 2 }}>
-                      13-week T-bill (^IRX)
-                    </div>
-                  </div>
+              <Widget title="Option Greeks (current)">
+                <div style={{ display: 'flex', alignItems: 'stretch', overflowX: 'auto' }}>
+                  <KpiCell label="Δ Delta" value={fmtNum(greeks.delta, 4)} />
+                  <KpiCell label="Γ Gamma" value={fmtNum(greeks.gamma, 6)} />
+                  <KpiCell label="Θ Theta" value={`$${fmtNum(greeks.theta, 4)}/d`} />
+                  <KpiCell label="ν Vega" value={`$${fmtNum(greeks.vega, 4)}`} />
+                  <KpiCell label="ρ Rho" value={`$${fmtNum(greeks.rho, 4)}`} />
+                  <KpiCell label="Risk-Free Rate" value={fmtPct(data.risk_free_rate)} />
                 </div>
-              </>
+              </Widget>
             )}
 
           </>
