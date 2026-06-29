@@ -99,15 +99,13 @@ export function AlgoStrategyBuilderContent() {
             <label style={LABEL}>Ticker</label>
             <TickerInput value={ticker} onChange={setTicker} onEnter={() => activeDef && runBacktest()} style={INPUT} placeholder="Ticker or company" />
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <div style={{ flex: 1 }}>
-              <label style={LABEL}>Start</label>
-              <input type="date" value={start} onChange={e => setStart(e.target.value)} style={INPUT} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={LABEL}>End</label>
-              <input type="date" value={end} onChange={e => setEnd(e.target.value)} style={INPUT} />
-            </div>
+          <div>
+            <label style={LABEL}>Start</label>
+            <input type="date" value={start} onChange={e => setStart(e.target.value)} style={INPUT} />
+          </div>
+          <div>
+            <label style={LABEL}>End</label>
+            <input type="date" value={end} onChange={e => setEnd(e.target.value)} style={INPUT} />
           </div>
         </div>
       </RailSection>
