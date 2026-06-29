@@ -198,9 +198,8 @@ export default function SkewTool() {
 
             {/* Smile Explorer */}
             <div style={{ background: SURFACE, border: '1px solid rgba(201,168,76,0.3)', padding: '13px 15px', display: 'flex', flexDirection: 'column', gap: 11 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: GOLD, fontFamily: SANS }}>Smile Explorer</span>
-                <span style={{ fontSize: 9, fontFamily: MONO, letterSpacing: '0.06em', color: SEC }}>DRAG ACROSS STRIKES · SYNCS THE SMILE</span>
               </div>
               <div>
                 <input type="range" min={mnyMin} max={mnyMax} step={0.1} value={cur} onChange={e => setMny(+e.target.value)}
