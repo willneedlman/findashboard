@@ -249,20 +249,36 @@ function Gauge({ score, conf }: { score: number; conf: number }) {
 }
 
 // ── Sparkline ──────────────────────────────────────────────────────────────────
-function Sparkline({ points }: { points: HistoryPoint[] }) {
+// Plots composite sentiment over time. When pricePoints are supplied, a second
+// line (the benchmark price, independently normalized) is overlaid on the same
+// time axis so lead/lag between sentiment and price is visible at a glance.
+function Sparkline({ points, pricePoints }: { points: HistoryPoint[]; pricePoints?: { t: number; value: number }[] }) {
   if (points.length < 2) return null
   const W = 220, H = 48
+  const hasPrice = !!pricePoints && pricePoints.length >= 2
+  const ts = points.map(p => p.fetched_at)
+  const allT = hasPrice ? [...ts, ...pricePoints!.map(p => p.t)] : ts
+  const tMin = Math.min(...allT), tMax = Math.max(...allT), tRange = (tMax - tMin) || 1
+  const sx = (t: number) => ((t - tMin) / tRange) * W
+
   const scores = points.map(p => p.composite_score)
-  const min    = Math.min(...scores, 30), max = Math.max(...scores, 70)
-  const range  = max - min || 1
-  const xs = points.map((_, i) => (i / (points.length - 1)) * W)
-  const ys = scores.map(s => H - ((s - min) / range) * H)
-  const path = xs.map((x, i) => `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${ys[i].toFixed(1)}`).join(' ')
+  const sMin = Math.min(...scores, 30), sMax = Math.max(...scores, 70), sRange = sMax - sMin || 1
+  const sy = (s: number) => H - ((s - sMin) / sRange) * H
+  const sPath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${sx(p.fetched_at).toFixed(1)} ${sy(p.composite_score).toFixed(1)}`).join(' ')
   const color = sentimentColor(scores[scores.length - 1])
+
+  let pPath = ''
+  if (hasPrice) {
+    const pv = pricePoints!.map(p => p.value)
+    const pMin = Math.min(...pv), pMax = Math.max(...pv), pRange = pMax - pMin || 1
+    pPath = pricePoints!.map((p, i) => `${i === 0 ? 'M' : 'L'} ${sx(p.t).toFixed(1)} ${(H - ((p.value - pMin) / pRange) * H).toFixed(1)}`).join(' ')
+  }
+  const lastX = sx(points[points.length - 1].fetched_at)
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: H, display: 'block' }}>
-      <path d={path} fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round" opacity={0.7} />
-      <circle cx={xs[xs.length - 1]} cy={ys[ys.length - 1]} r={3} fill={color} />
+      {pPath && <path d={pPath} fill="none" stroke="var(--theme-secondary, #8099b0)" strokeWidth={1} strokeDasharray="3 3" opacity={0.55} />}
+      <path d={sPath} fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round" opacity={0.85} />
+      <circle cx={lastX} cy={sy(scores[scores.length - 1])} r={3} fill={color} />
     </svg>
   )
 }
@@ -764,6 +780,24 @@ export default function SentimentTracker() {
     return filtered.length >= 2 ? filtered : history.slice(-20)
   }, [history, tf.hours])
 
+  // Optional SPY price overlay on the trend, to eyeball whether sentiment leads
+  // or lags the market. Fetched only when toggled on, over the same window.
+  const [overlayPrice, setOverlayPrice] = useState(false)
+  const overlayStart = new Date(Date.now() - tf.hours * 3600 * 1000).toISOString().slice(0, 10)
+  const overlayEnd   = new Date(Date.now() + 86400 * 1000).toISOString().slice(0, 10)
+  const { data: spyResp } = useQuery({
+    queryKey: ['sentiment-overlay-spy', overlayStart, overlayEnd],
+    queryFn:  () => axios.get(`/api/market/history?ticker=SPY&start=${overlayStart}&end=${overlayEnd}`).then(r => r.data),
+    enabled:  overlayPrice,
+    staleTime: 5 * 60 * 1000,
+  })
+  const pricePoints = useMemo(() => {
+    const cutoff = Date.now() / 1000 - tf.hours * 3600
+    return ((spyResp?.price ?? []) as { date: number | string; value: number }[])
+      .map(p => ({ t: typeof p.date === 'number' ? p.date : Math.floor(Date.parse(p.date) / 1000), value: p.value }))
+      .filter(p => p.t >= cutoff)
+  }, [spyResp, tf.hours])
+
   const baselineAvg = useMemo(() => {
     if (data?.baseline_score != null) return data.baseline_score
     if (history.length < 3) return null
@@ -1007,13 +1041,28 @@ export default function SentimentTracker() {
 
       {/* Trend sparkline */}
       <div style={{ background: T.surface, border: `1px solid ${T.border}`, padding: 12 }}>
-        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, marginBottom: 6, fontFamily: T.mono }}>
-          Trend — {tf.label}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+          <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, fontFamily: T.mono }}>
+            Trend — {tf.label}
+          </div>
+          <button onClick={() => setOverlayPrice(v => !v)}
+            title="Overlay SPY price to compare against sentiment"
+            style={{ fontFamily: T.mono, fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+              cursor: 'pointer', padding: '2px 6px', background: overlayPrice ? 'color-mix(in srgb, var(--theme-secondary, #8099b0) 18%, transparent)' : 'transparent',
+              color: overlayPrice ? T.text : T.dim, border: `1px solid ${overlayPrice ? 'color-mix(in srgb, var(--theme-secondary, #8099b0) 50%, transparent)' : T.border}` }}>
+            + SPY
+          </button>
         </div>
         {sparklineHistory.length >= 2
-          ? <Sparkline points={sparklineHistory} />
+          ? <Sparkline points={sparklineHistory} pricePoints={overlayPrice ? pricePoints : undefined} />
           : <div style={{ fontSize: 9, color: T.muted, fontFamily: T.mono, textAlign: 'center', padding: '12px 0' }}>Accumulates across refreshes</div>
         }
+        {overlayPrice && (
+          <div style={{ display: 'flex', gap: 12, marginTop: 6, fontFamily: T.mono, fontSize: 8, color: T.dim }}>
+            <span style={{ color: sentimentColor(data?.composite_score ?? 50) }}>— Sentiment</span>
+            <span style={{ color: T.muted }}>--- SPY (normalized)</span>
+          </div>
+        )}
       </div>
 
       {/* Source score bars */}
