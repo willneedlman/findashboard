@@ -191,15 +191,6 @@ function sentimentColor(score: number): string {
   if (score >= 35) return 'var(--theme-negative, #fca5a5)'
   return 'var(--theme-negative-strong, #e07878)'
 }
-// Band label for a client-derived (horizon-weighted) score; server sends its own
-// label for the raw composite, but the slider/toggle index needs one too.
-function bandLabel(score: number): string {
-  if (score >= 65) return 'Bullish'
-  if (score >= 55) return 'Leaning Bullish'
-  if (score >= 45) return 'Neutral'
-  if (score >= 35) return 'Leaning Bearish'
-  return 'Bearish'
-}
 function sentimentBg(score: number): string {
   if (score >= 65) return 'rgba(110,231,183,0.07)'
   if (score >= 55) return 'rgba(110,231,183,0.03)'
@@ -729,7 +720,6 @@ function MarketContextCard({ ctx }: { ctx: MarketContext }) {
 // ── Page ───────────────────────────────────────────────────────────────────────
 export default function SentimentTracker() {
   const [timeframe, setTimeframe] = useState<Timeframe>('24h')
-  const [horizon, setHorizon] = useState(0.5)              // 0 = backward, 1 = forward
   const [lens, setLens] = useState<'all' | 'forward' | 'backward'>('all')
   const qc = useQueryClient()
   const tf  = TIMEFRAMES.find(t => t.id === timeframe)!
@@ -817,16 +807,9 @@ export default function SentimentTracker() {
   const lowSignal = conf < 0.5
   const sources   = data?.sources ?? []
 
-  // Horizon split: blend the forward/backward composites by the slider, or pin to
-  // one side via the hard toggle. Items are filtered at the 0.5 threshold.
+  // Forward- vs backward-looking subscores shown beneath the overall sentiment.
   const fwdComposite = data?.forward_composite ?? data?.composite_score ?? 50
   const bwdComposite = data?.backward_composite ?? data?.composite_score ?? 50
-  const displayScore = !data
-    ? 50
-    : lens === 'forward' ? fwdComposite
-    : lens === 'backward' ? bwdComposite
-    : horizon * fwdComposite + (1 - horizon) * bwdComposite
-  const horizonActive = lens !== 'all' || Math.abs(horizon - 0.5) > 0.001
   const displaySources = lens === 'all'
     ? sources
     : sources
@@ -846,15 +829,25 @@ export default function SentimentTracker() {
         </div>
         {data ? (
           <>
-            <Gauge score={displayScore} conf={conf} />
-            <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.06em', color: sentimentColor(displayScore), marginTop: 6, fontFamily: T.mono, textAlign: 'center' }}>
-              {horizonActive ? bandLabel(displayScore) : data.label}
+            <Gauge score={data.composite_score} conf={conf} />
+            <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.06em', color: sentimentColor(data.composite_score), marginTop: 6, fontFamily: T.mono, textAlign: 'center' }}>
+              {data.label}
             </div>
-            {horizonActive && (
-              <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.07em', color: T.gold, marginTop: 3, fontFamily: T.mono, textAlign: 'center' }}>
-                {lens === 'forward' ? 'FORWARD-LOOKING ONLY' : lens === 'backward' ? 'BACKWARD-LOOKING ONLY' : `${Math.round(horizon * 100)}% FORWARD BLEND`} · RAW {data.composite_score.toFixed(0)}
-              </div>
-            )}
+            {/* Forward / backward subscores beneath the overall sentiment */}
+            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+              {([['Forward', fwdComposite, data.forward_count ?? 0, T.gold], ['Backward', bwdComposite, data.backward_count ?? 0, 'var(--theme-tertiary, #60a5fa)']] as const).map(([lbl, val, n, accent]) => (
+                <div key={lbl} style={{ flex: 1, background: 'var(--theme-bg, #101c2e)', border: `1px solid ${T.border}`, padding: '6px 8px' }}>
+                  <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: accent, fontFamily: T.mono }}>{lbl}-Looking</div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 2 }}>
+                    <span style={{ fontSize: 17, fontWeight: 700, color: sentimentColor(val), fontFamily: T.mono }}>{val.toFixed(0)}</span>
+                    <span style={{ fontSize: 8, color: T.muted, fontFamily: T.mono }}>{n} art</span>
+                  </div>
+                  <div style={{ height: 3, background: T.border, marginTop: 4 }}>
+                    <div style={{ width: `${Math.max(0, Math.min(100, val))}%`, height: '100%', background: sentimentColor(val) }} />
+                  </div>
+                </div>
+              ))}
+            </div>
             {data.scoring_degraded && (() => {
               const err = data.groq_error ?? ''
               const rateLimitMatch = err.match(/retry in ([^.'"]+)/i)
@@ -1051,34 +1044,17 @@ export default function SentimentTracker() {
 
       {data && (
         <>
-          {/* Horizon weighting slider + hard toggle */}
-          <div style={{ background: T.surface, border: `1px solid ${T.border}`, padding: '12px 14px', marginBottom: 14, display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'center' }}>
-            <div style={{ flex: '2 1 300px', minWidth: 240, opacity: lens === 'all' ? 1 : 0.4 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, fontFamily: T.mono }}>Sentiment Horizon Weighting</span>
-                <span style={{ fontSize: 10, fontWeight: 700, color: T.gold, fontFamily: T.mono }}>{Math.abs(horizon - 0.5) < 0.001 ? '50 / 50 split' : `${Math.round(horizon * 100)}% forward`}</span>
-              </div>
-              <input type="range" min={0} max={1} step={0.01} value={horizon} disabled={lens !== 'all'}
-                onChange={e => setHorizon(parseFloat(e.target.value))}
-                style={{ width: '100%', accentColor: T.gold, cursor: lens === 'all' ? 'pointer' : 'not-allowed' }} />
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3, fontSize: 8, color: T.muted, fontFamily: T.mono }}>
-                <span>100% BACKWARD</span><span>BALANCED</span><span>100% FORWARD</span>
-              </div>
-            </div>
-            <div style={{ flex: '1 1 auto' }}>
-              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, fontFamily: T.mono, marginBottom: 6 }}>View</div>
-              <div style={{ display: 'flex', border: `1px solid ${T.border}` }}>
-                {([['all', 'All Articles'], ['forward', 'Forward-Looking'], ['backward', 'Backward-Looking']] as const).map(([k, lbl], i) => (
-                  <button key={k} onClick={() => setLens(k)} style={{
-                    background: lens === k ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 16%, transparent)' : 'transparent',
-                    border: 'none', borderLeft: i ? `1px solid ${T.border}` : 'none', cursor: 'pointer',
-                    color: lens === k ? T.gold : T.muted, fontFamily: T.mono, fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '6px 11px', whiteSpace: 'nowrap',
-                  }}>{lbl}</button>
-                ))}
-              </div>
-              <div style={{ fontSize: 8, color: T.muted, fontFamily: T.mono, marginTop: 5, textAlign: 'right' }}>
-                FWD {fwdComposite.toFixed(0)} ({data.forward_count ?? 0}) · BWD {bwdComposite.toFixed(0)} ({data.backward_count ?? 0})
-              </div>
+          {/* Headline horizon filter */}
+          <div style={{ background: T.surface, border: `1px solid ${T.border}`, padding: '10px 14px', marginBottom: 14, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, fontFamily: T.mono }}>Filter Headlines By Horizon</span>
+            <div style={{ display: 'flex', border: `1px solid ${T.border}` }}>
+              {([['all', 'All Articles'], ['forward', 'Forward-Looking'], ['backward', 'Backward-Looking']] as const).map(([k, lbl], i) => (
+                <button key={k} onClick={() => setLens(k)} style={{
+                  background: lens === k ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 16%, transparent)' : 'transparent',
+                  border: 'none', borderLeft: i ? `1px solid ${T.border}` : 'none', cursor: 'pointer',
+                  color: lens === k ? T.gold : T.muted, fontFamily: T.mono, fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '6px 11px', whiteSpace: 'nowrap',
+                }}>{lbl}</button>
+              ))}
             </div>
           </div>
 
