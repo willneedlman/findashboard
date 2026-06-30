@@ -1,7 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
+import EmptyState from '../components/EmptyState'
+import LoadingState from '../components/LoadingState'
+import ErrorState from '../components/ErrorState'
 
 const C = {
   bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))', surface: 'var(--theme-surface, #0d1826)',
@@ -128,7 +132,16 @@ function FieldSelect({ value, fields, onChange }: { value: string; fields: Field
 const fmtMc = (b: number) => b >= 1000 ? `$${(b / 1000).toFixed(1)}T` : `$${Math.round(b)}B`
 const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`
 
+// Deep links from a screened name into the rest of the terminal.
+const ROW_LINKS: { label: string; base: string }[] = [
+  { label: 'Profile', base: '/supply-chain' },
+  { label: 'Peers',   base: '/relative-valuation' },
+  { label: 'DCF',     base: '/dcf' },
+  { label: 'Alert',   base: '/alerts' },
+]
+
 export default function StockScreener() {
+  const navigate = useNavigate()
   const [filters, setFilters]   = useState<FilterRow[]>(() => toRows(DEFAULT_PRESET))
   const [sector,   setSector]   = useState('')
   const [exchange, setExchange] = useState('')
@@ -459,13 +472,17 @@ export default function StockScreener() {
 
             {/* states / results */}
             {error ? (
-              <div style={{ padding: 24, color: C.neg, fontFamily: C.sans, fontSize: 12 }}>
-                {(error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Screen failed. Check FMP_API_KEY is configured.'}
+              <div style={{ padding: 24 }}>
+                <ErrorState
+                  title="Screen failed"
+                  message={(error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Screen failed. Check FMP_API_KEY is configured.'}
+                  onRetry={() => mutate()}
+                />
               </div>
             ) : !data && isPending ? (
-              <div style={{ padding: 40, color: C.muted, fontFamily: C.sans, fontSize: 12 }}>Screening…</div>
+              <div style={{ padding: 24 }}><LoadingState label="Screening" /></div>
             ) : !data ? (
-              <div style={{ padding: 40, color: C.muted, fontFamily: C.sans, fontSize: 12 }}>Pick a screen from the library or set filters, then Run.</div>
+              <div style={{ padding: 24 }}><EmptyState title="Stock Screener" hint="Pick a screen from the library or set filters, then Run." /></div>
             ) : (
               <>
                 {/* summary stats band */}
@@ -514,11 +531,22 @@ export default function StockScreener() {
 
                     {/* rows */}
                     {displayRows.map((r, i) => (
-                    <div key={r.ticker} className="ft-screen-row"
+                    <div key={`${r.ticker}-${i}`} className="ft-screen-row"
                       style={{ display: 'grid', gridTemplateColumns: gridTemplate, alignItems: 'center', padding: `${rowPad}px 24px`, background: zebra && i % 2 === 1 ? 'var(--theme-hover, rgba(255,255,255,0.03))' : 'transparent', borderBottom: '1px solid var(--theme-border-faint, rgba(255,255,255,0.045))' }}>
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, minWidth: 0 }}>
                         <span style={{ fontFamily: C.mono, fontWeight: 700, fontSize: 12.5, color: C.gold }}>{r.ticker}</span>
                         <span style={{ fontFamily: C.sans, fontSize: 11, color: C.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.companyName}</span>
+                        <span className="ft-row-actions" style={{ display: 'flex', alignItems: 'center', gap: 9, marginLeft: 'auto', paddingLeft: 10, flex: 'none' }}>
+                          {ROW_LINKS.map(l => (
+                            <span key={l.label} title={`Open ${r.ticker} in ${l.label}`}
+                              onClick={() => navigate(`${l.base}?ticker=${encodeURIComponent(r.ticker)}`)}
+                              onMouseEnter={e => (e.currentTarget.style.color = C.gold)}
+                              onMouseLeave={e => (e.currentTarget.style.color = C.dim)}
+                              style={{ fontFamily: C.sans, fontSize: 9.5, fontWeight: 600, letterSpacing: '0.04em', color: C.dim, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                              {l.label}
+                            </span>
+                          ))}
+                        </span>
                       </div>
                       {renderCols.map(col => {
                         const raw = r[col.key]

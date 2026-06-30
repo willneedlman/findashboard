@@ -524,6 +524,9 @@ textarea:focus:not(:focus-visible) {
 /* Screener Screen Library rail collapse/expand */
 .ft-rail { transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1); }
 .ft-screen-row:hover { background: color-mix(in srgb, var(--theme-primary, #c9a84c) 5%, transparent) !important; }
+.ft-row-actions { opacity: 0; transition: opacity 0.12s ease-out; }
+.ft-screen-row:hover .ft-row-actions { opacity: 1; }
+@media (hover: none) { .ft-row-actions { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
   .ft-rail { transition: none !important; }
 }
