@@ -562,6 +562,7 @@ export function StrategyTab() {
   const [positionSize, setPositionSize] = useState('100')
   const [initialCapital, setInitialCapital] = useState('10000')
 
+  const [oosSplit, setOosSplit] = useState(0)   // 0 = off; else in-sample fraction (0.7, 0.5)
   const [result, setResult] = useState<BacktestResult | null>(null)
   const [priceChartData, setPriceChartData] = useState<SignalChartPoint[]>([])
   const [liveSignal, setLiveSignal] = useState<SignalResult | null>(null)
@@ -642,6 +643,30 @@ export function StrategyTab() {
       return: parseFloat(((end / start - 1) * 100).toFixed(2)),
     }))
   }, [result])
+
+  // Walk-forward sanity: split the equity curve into in-sample / out-of-sample
+  // and compute each segment's return / Sharpe / max-drawdown client-side.
+  const oos = useMemo(() => {
+    if (!result || oosSplit <= 0) return null
+    const c = result.equity_curve
+    if (c.length < 10) return null
+    const splitIdx = Math.max(2, Math.min(c.length - 3, Math.floor(c.length * oosSplit)))
+    const seg = (lo: number, hi: number) => {
+      const s = c.slice(lo, hi + 1)
+      if (s.length < 2) return null
+      let peak = s[0].strategy, mdd = 0
+      const rets: number[] = []
+      for (let i = 0; i < s.length; i++) {
+        peak = Math.max(peak, s[i].strategy)
+        mdd = Math.min(mdd, s[i].strategy / peak - 1)
+        if (i > 0) rets.push(s[i].strategy / s[i - 1].strategy - 1)
+      }
+      const mean = rets.reduce((a, b) => a + b, 0) / (rets.length || 1)
+      const sd = Math.sqrt(rets.reduce((a, b) => a + (b - mean) ** 2, 0) / (rets.length || 1)) || 1e-9
+      return { ret: (s[s.length - 1].strategy / s[0].strategy - 1) * 100, mdd: mdd * 100, sharpe: (mean / sd) * Math.sqrt(252) }
+    }
+    return { splitDate: c[splitIdx]?.date, is: seg(0, splitIdx), oosM: seg(splitIdx, c.length - 1) }
+  }, [result, oosSplit])
 
   const signalColor = liveSignal
     ? liveSignal.signal === 'BUY' ? cc.gain
@@ -984,6 +1009,29 @@ export function StrategyTab() {
             )}
           </div>
 
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
+            <span style={ALGO_LABEL}>Out-of-sample test</span>
+            <div style={{ display: 'flex', border: '1px solid var(--theme-border, rgba(255,255,255,0.1))' }}>
+              {([['Off', 0], ['70 / 30', 0.7], ['50 / 50', 0.5]] as const).map(([lbl, v], i) => (
+                <button key={lbl} onClick={() => setOosSplit(v)} style={{
+                  background: oosSplit === v ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 16%, transparent)' : 'transparent',
+                  border: 'none', borderRight: i < 2 ? '1px solid var(--theme-border, rgba(255,255,255,0.1))' : 'none', cursor: 'pointer',
+                  color: oosSplit === v ? cc.primary : cc.muted, fontFamily: 'var(--theme-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 10px',
+                }}>{lbl}</button>
+              ))}
+            </div>
+            {oos?.is && oos.oosM && (
+              <div style={{ display: 'flex', gap: 16, marginLeft: 'auto', fontFamily: 'var(--theme-mono)', fontSize: 10, flexWrap: 'wrap' }}>
+                {([['IN-SAMPLE', oos.is], ['OUT-OF-SAMPLE', oos.oosM]] as const).map(([k, m]) => (
+                  <span key={k} style={{ color: cc.muted }}>
+                    {k}: <span style={{ color: m.ret >= 0 ? cc.gain : cc.loss, fontWeight: 700 }}>{m.ret >= 0 ? '+' : ''}{m.ret.toFixed(1)}%</span>
+                    {' · '}Sharpe {m.sharpe.toFixed(2)}{' · '}DD {m.mdd.toFixed(1)}%
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
           <AlgoChartPanel label={`Equity Curve — Strategy vs Buy & Hold (starts $${Number(initialCapital || 10000).toLocaleString()})`} height={350}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={result.equity_curve} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
@@ -1018,6 +1066,7 @@ export function StrategyTab() {
                   wrapperStyle={{ fontSize: 9, fontFamily: 'var(--theme-mono)', letterSpacing: '0.08em', paddingTop: 6 }}
                 />
                 <ReferenceLine y={100} stroke="var(--theme-text-subtle, rgba(255,255,255,0.12))" strokeDasharray="4 2" />
+                {oos?.splitDate && <ReferenceLine x={oos.splitDate} stroke={cc.primary} strokeOpacity={0.6} strokeDasharray="3 4" label={{ value: 'OOS →', fill: cc.primary, fontSize: 9, position: 'insideTopRight' }} />}
                 <Area
                   type="monotone"
                   dataKey="strategy"
