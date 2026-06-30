@@ -222,7 +222,8 @@ export default function App() {
               <Route path="/fixed-income-mm"    element={<FixedIncomeMarketMaker />} />
               <Route path="/unusual-options"    element={<UnusualOptions />} />
               <Route path="/compare"            element={<Compare />} />
-              <Route path="/etf-xray"           element={<EtfXray />} />
+              <Route path="/etf-analyzer"       element={<EtfXray />} />
+              <Route path="/etf-xray"           element={<Navigate to="/etf-analyzer" replace />} />
               <Route path="*"                   element={<Navigate to="/app" replace />} />
             </Route>
           </Routes>
