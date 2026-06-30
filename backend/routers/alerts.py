@@ -179,6 +179,13 @@ def _fetch_quotes_sync(tickers: list[str], extended: bool = True) -> dict[str, d
     return out
 
 
+_QUOTE_CONDITIONS = {"price_above", "price_below", "pct_change_1d_above", "pct_change_1d_below"}
+# Indicator conditions evaluate against price history. For rsi_* the threshold is
+# the RSI level (e.g. 30); for the SMA conditions it is the SMA period (e.g. 50).
+_INDICATOR_CONDITIONS = {"rsi_below", "rsi_above", "price_above_sma", "price_below_sma",
+                         "price_cross_above_sma", "price_cross_below_sma"}
+
+
 def _evaluate(alert: dict, quotes: dict[str, dict]) -> bool:
     q = quotes.get(alert["ticker"].upper())
     if not q:
@@ -194,6 +201,39 @@ def _evaluate(alert: dict, quotes: dict[str, dict]) -> bool:
     if cond == "pct_change_1d_below":
         return q["pct_1d"] < threshold
     return False
+
+
+def _indicator_triggered_sync(ticker: str, cond: str, threshold: float) -> tuple[bool, float | None]:
+    """Evaluate an indicator alert against history. Returns (triggered, price)."""
+    try:
+        from cache import get_history
+        from routers.algo import _compute_rsi
+        close = get_history(ticker, period="1y")["Close"].dropna()
+        if len(close) < 30:
+            return False, None
+        price = float(close.iloc[-1])
+        if cond == "rsi_below":
+            return float(_compute_rsi(close, 14).iloc[-1]) < threshold, price
+        if cond == "rsi_above":
+            return float(_compute_rsi(close, 14).iloc[-1]) > threshold, price
+        period = max(2, int(threshold))
+        if len(close) < period + 2:
+            return False, price
+        sma = close.rolling(period).mean()
+        cur_sma = float(sma.iloc[-1])
+        if cond == "price_above_sma":
+            return price > cur_sma, price
+        if cond == "price_below_sma":
+            return price < cur_sma, price
+        prev_price, prev_sma = float(close.iloc[-2]), float(sma.iloc[-2])
+        if cond == "price_cross_above_sma":
+            return (prev_price <= prev_sma and price > cur_sma), price
+        if cond == "price_cross_below_sma":
+            return (prev_price >= prev_sma and price < cur_sma), price
+        return False, price
+    except Exception as e:
+        _log.warning("indicator eval %s %s: %s", ticker, cond, e)
+        return False, None
 
 
 async def _run_evaluation_loop():
@@ -219,27 +259,41 @@ async def _run_evaluation_loop():
                 _LAST_QUOTES.update(quotes)   # serve these prices to the page
 
                 for alert in alerts:
-                    if alert["cooldown_until"] < now and _evaluate(alert, quotes):
-                        q = quotes[alert["ticker"].upper()]
-                        cooldown = now + 3600
-                        await _db_execute(
-                            "UPDATE alerts SET cooldown_until=? WHERE id=?",
-                            (cooldown, alert["id"]),
-                        )
-                        payload = {
-                            "type":          "alert_triggered",
-                            "alert_id":      alert["id"],
-                            "ticker":        alert["ticker"],
-                            "condition":     alert["condition"],
-                            "threshold":     alert["threshold"],
-                            "current_price": q["price"],
-                            "pct_1d":        q["pct_1d"],
-                            "triggered_at":  now,
-                            "cooldown_until": cooldown,
-                        }
-                        await _ws_broadcast(alert["user_id"], payload)
-                        _log.info("Alert triggered: %s %s %s (price=%.2f)",
-                                  alert["ticker"], alert["condition"], alert["threshold"], q["price"])
+                    if alert["cooldown_until"] >= now:
+                        continue
+                    tkr = alert["ticker"].upper()
+                    cond = alert["condition"]
+                    if cond in _INDICATOR_CONDITIONS:
+                        triggered, ind_price = await loop.run_in_executor(
+                            _EXECUTOR, _indicator_triggered_sync, tkr, cond, alert["threshold"])
+                        if not triggered:
+                            continue
+                        price = ind_price if ind_price is not None else quotes.get(tkr, {}).get("price", 0.0)
+                        pct = quotes.get(tkr, {}).get("pct_1d", 0.0)
+                    else:
+                        if not _evaluate(alert, quotes):
+                            continue
+                        q = quotes[tkr]
+                        price, pct = q["price"], q["pct_1d"]
+                    cooldown = now + 3600
+                    await _db_execute(
+                        "UPDATE alerts SET cooldown_until=? WHERE id=?",
+                        (cooldown, alert["id"]),
+                    )
+                    payload = {
+                        "type":          "alert_triggered",
+                        "alert_id":      alert["id"],
+                        "ticker":        alert["ticker"],
+                        "condition":     alert["condition"],
+                        "threshold":     alert["threshold"],
+                        "current_price": price,
+                        "pct_1d":        pct,
+                        "triggered_at":  now,
+                        "cooldown_until": cooldown,
+                    }
+                    await _ws_broadcast(alert["user_id"], payload)
+                    _log.info("Alert triggered: %s %s %s (price=%.2f)",
+                              alert["ticker"], alert["condition"], alert["threshold"], price)
         except asyncio.CancelledError:
             _log.info("Alert evaluation loop cancelled")
             return
@@ -271,7 +325,7 @@ class AlertCreate(BaseModel):
     threshold: float
 
 
-_VALID_CONDITIONS = {"price_above", "price_below", "pct_change_1d_above", "pct_change_1d_below"}
+_VALID_CONDITIONS = _QUOTE_CONDITIONS | _INDICATOR_CONDITIONS
 
 
 @router.post("")

@@ -9,10 +9,16 @@ import useIsMobile from '../hooks/useIsMobile'
 import { useTheme } from '../contexts/ThemeContext'
 
 const CONDITIONS = [
-  { value: 'price_above',         label: 'Price above $' },
-  { value: 'price_below',         label: 'Price below $' },
-  { value: 'pct_change_1d_above', label: '1-Day % change above %' },
-  { value: 'pct_change_1d_below', label: '1-Day % change below %' },
+  { value: 'price_above',           label: 'Price above $' },
+  { value: 'price_below',           label: 'Price below $' },
+  { value: 'pct_change_1d_above',   label: '1-Day % change above %' },
+  { value: 'pct_change_1d_below',   label: '1-Day % change below %' },
+  { value: 'rsi_below',             label: 'RSI below (level)' },
+  { value: 'rsi_above',             label: 'RSI above (level)' },
+  { value: 'price_above_sma',       label: 'Price above SMA (period)' },
+  { value: 'price_below_sma',       label: 'Price below SMA (period)' },
+  { value: 'price_cross_above_sma', label: 'Price crosses above SMA (period)' },
+  { value: 'price_cross_below_sma', label: 'Price crosses below SMA (period)' },
 ]
 
 interface Alert {
@@ -32,8 +38,21 @@ function conditionLabel(cond: string, threshold: number): string {
     case 'price_below':          return `Price < $${threshold}`
     case 'pct_change_1d_above':  return `1D% > ${threshold}%`
     case 'pct_change_1d_below':  return `1D% < ${threshold}%`
+    case 'rsi_below':            return `RSI(14) < ${threshold}`
+    case 'rsi_above':            return `RSI(14) > ${threshold}`
+    case 'price_above_sma':      return `Price > SMA(${threshold})`
+    case 'price_below_sma':      return `Price < SMA(${threshold})`
+    case 'price_cross_above_sma': return `Price ↗ SMA(${threshold})`
+    case 'price_cross_below_sma': return `Price ↘ SMA(${threshold})`
     default:                      return `${cond} ${threshold}`
   }
+}
+
+function thresholdLabel(cond: string): string {
+  if (cond.startsWith('rsi')) return 'RSI level (0–100)'
+  if (cond.includes('sma')) return 'SMA period (days)'
+  if (cond.includes('pct')) return 'Threshold (%)'
+  return 'Threshold ($)'
 }
 
 const inp: React.CSSProperties = {
@@ -62,9 +81,12 @@ export default function Alerts() {
   const isMobile = useIsMobile()
   const qc = useQueryClient()
 
-  const [ticker,    setTicker]    = useState('')
-  const [condition, setCondition] = useState('price_above')
-  const [threshold, setThreshold] = useState('')
+  // Prefill from the URL so any tool can deep-link "create alert from this view"
+  // (e.g. /alerts?ticker=AAPL&condition=rsi_below&threshold=30).
+  const _sp = new URLSearchParams(window.location.search)
+  const [ticker,    setTicker]    = useState(() => (_sp.get('ticker') || '').toUpperCase())
+  const [condition, setCondition] = useState(() => (_sp.get('condition') && CONDITIONS.some(c => c.value === _sp.get('condition'))) ? _sp.get('condition')! : 'price_above')
+  const [threshold, setThreshold] = useState(() => _sp.get('threshold') || '')
   const [filter,    setFilter]    = useState<'all' | 'armed' | 'cooldown'>('all')
   const [notifState, setNotifState] = useState<NotificationPermission | 'unsupported'>('default')
 
@@ -207,7 +229,7 @@ export default function Alerts() {
                   </select>
                 </div>
                 <div>
-                  <label style={lbl}>{condition.includes('pct') ? 'Threshold (%)' : 'Threshold ($)'}</label>
+                  <label style={lbl}>{thresholdLabel(condition)}</label>
                   <input value={threshold} onChange={e => setThreshold(e.target.value)} type="number" step="any" placeholder="0.00" style={inp}
                     onKeyDown={e => e.key === 'Enter' && submit()} />
                 </div>
