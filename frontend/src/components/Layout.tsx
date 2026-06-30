@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Home, LayoutGrid, Briefcase, X, Menu, Settings,
-  ShieldAlert, Star, ChevronRight, ChevronLeft,
+  ShieldAlert, Star, ChevronRight, ChevronLeft, Search,
 } from 'lucide-react'
 import Footer from './Footer'
 import AlphaMark from './AlphaMark'
@@ -180,6 +180,24 @@ export default function Layout({ children }: LayoutProps) {
             style={{ background: 'none', border: 'none', cursor: 'pointer', padding: collapsed ? 0 : 4, marginLeft: 'auto', display: 'flex', alignItems: 'center', color: 'var(--theme-secondary, #5e768f)' }}
           >
             {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={16} />}
+          </button>
+        </div>
+
+        {/* command palette launcher */}
+        <div style={{ margin: '10px 8px 0' }}>
+          <button onClick={() => window.dispatchEvent(new Event('cmdk:open'))} title="Search tools & tickers (Cmd/Ctrl-K)"
+            style={{ width: '100%', boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between', gap: 8,
+              padding: collapsed ? '7px 0' : '7px 10px', background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.1))',
+              cursor: 'pointer', color: 'var(--theme-secondary, #8099b0)', fontFamily: 'var(--theme-sans)' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Search size={14} />
+              {!collapsed && <span style={{ fontSize: 12 }}>Search…</span>}
+            </span>
+            {!collapsed && (
+              <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, fontWeight: 700, color: 'var(--theme-text-faint, #5e768f)', border: '1px solid var(--theme-border, rgba(255,255,255,0.1))', padding: '0 5px' }}>
+                {/Mac/i.test(navigator.platform) ? '⌘K' : 'Ctrl K'}
+              </span>
+            )}
           </button>
         </div>
 

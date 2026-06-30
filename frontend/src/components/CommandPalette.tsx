@@ -36,6 +36,18 @@ function score(q: string, c: Cmd): number {
   return s
 }
 
+// Tools that read ?ticker= and pre-fill, for "open SYMBOL in X" commands.
+const TICKER_TARGETS: [string, string][] = [
+  ['Market Data', '/market'],
+  ['Chain Scanner', '/chain'],
+  ['Volatility Skew', '/skew'],
+  ['DCF Valuation', '/dcf'],
+  ['Company Profile', '/supply-chain'],
+  ['Relative Valuation', '/relative-valuation'],
+  ['Corporate Calendar', '/corporate'],
+]
+const TICKER_RE = /^[A-Za-z]{1,5}$/
+
 const GOLD = 'var(--theme-primary, #c9a84c)'
 const SURFACE = 'var(--theme-surface, #0d1826)'
 const BORDER = 'var(--theme-border, rgba(255,255,255,0.1))'
@@ -53,8 +65,14 @@ export default function CommandPalette() {
 
   const results = useMemo(() => {
     if (!q.trim()) return COMMANDS
-    return COMMANDS.map(c => ({ c, s: score(q, c) })).filter(x => x.s >= 0)
+    const tools = COMMANDS.map(c => ({ c, s: score(q, c) })).filter(x => x.s >= 0)
       .sort((a, b) => a.s - b.s).map(x => x.c).slice(0, 40)
+    // If the query looks like a symbol, append "open SYMBOL in <tool>" commands.
+    const sym = q.trim().toUpperCase()
+    const ticker: Cmd[] = TICKER_RE.test(q.trim())
+      ? TICKER_TARGETS.map(([label, base]) => ({ label: `${sym} → ${label}`, route: `${base}?ticker=${sym}`, group: 'Open ticker' }))
+      : []
+    return [...tools, ...ticker]
   }, [q])
 
   // Global ⌘K / Ctrl+K toggle.
@@ -67,8 +85,10 @@ export default function CommandPalette() {
         setOpen(false)
       }
     }
+    const onOpen = () => setOpen(true)
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('cmdk:open', onOpen)
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('cmdk:open', onOpen) }
   }, [])
 
   useEffect(() => {

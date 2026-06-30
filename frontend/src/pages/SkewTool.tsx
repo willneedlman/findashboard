@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import axios from 'axios'
 import {
@@ -65,7 +66,8 @@ function ivAt(smile: SmilePoint[], m: number): number {
 const caption = (text: string) => <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '0.06em', color: SEC }}>{text}</span>
 
 export default function SkewTool() {
-  const [ticker, setTicker] = useState('SPY')
+  const [sp] = useSearchParams()
+  const [ticker, setTicker] = useState((sp.get('ticker') || 'SPY').toUpperCase())
   const [open, setOpen] = useState(true)
   const [expiry, setExpiry] = useState('')   // selected expiry — drives the smile, metrics, and move
   const [mny, setMny] = useState(0)          // Smile Explorer cursor (% from spot)
@@ -74,6 +76,9 @@ export default function SkewTool() {
     onSuccess: (d) => setExpiry(d.front_expiry),   // default to the nearest expiry
   })
   const skewColor = (v: number) => (v > 4 ? NEG : v > 1.5 ? 'var(--theme-warn, #d97736)' : POS)
+
+  // Auto-generate when arriving with ?ticker= (e.g. from the command palette).
+  useEffect(() => { if (sp.get('ticker')) mutate() }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
   const sel = data ? (data.term_structure.find(t => t.expiry === expiry) ?? data.term_structure[0]) : null
 

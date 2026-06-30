@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
@@ -21,7 +22,8 @@ const SELECT: React.CSSProperties = { background: 'var(--theme-bg, #0a1628)', bo
 
 export function OptionsChainScannerContent() {
   const cc = useChartColors()
-  const [ticker, setTicker] = useState('SPY')
+  const [sp] = useSearchParams()
+  const [ticker, setTicker] = useState((sp.get('ticker') || 'SPY').toUpperCase())
   const [topN, setTopN]     = useState(12)
   const [paramsOpen, setParamsOpen] = useState(true)
   const [view, setView]     = useState<'calls' | 'puts' | 'chart'>('calls')
@@ -36,6 +38,9 @@ export function OptionsChainScannerContent() {
       return { ...chainResp, spot: histResp.data?.metrics?.current_price ?? null }
     },
   })
+
+  // Auto-scan when arriving with ?ticker= (e.g. from the command palette).
+  useEffect(() => { if (sp.get('ticker')) mutate() }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
   const spot: number | null = data?.spot ?? null
 
