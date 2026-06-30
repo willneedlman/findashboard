@@ -5,6 +5,7 @@ import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
 import TickerInput from '../components/TickerInput'
+import TickerLogo from '../components/TickerLogo'
 import useIsMobile from '../hooks/useIsMobile'
 
 
@@ -438,6 +439,7 @@ export function SupplyChainContent() {
             {/* ── Identity strip: title row + 7-metric grid ──────────── */}
             <div className="ft-panel">
               <div style={{ padding: '18px 24px', display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
+                <TickerLogo ticker={data.ticker} size={40} />
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
                   <span style={{ fontFamily: T.mono, fontSize: 24, fontWeight: 700, color: T.gold }}>{data.ticker}</span>
                   <span style={{ fontFamily: T.label, fontSize: 15, color: T.text }}>{data.name}</span>

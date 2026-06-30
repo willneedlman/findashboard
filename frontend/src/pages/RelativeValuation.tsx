@@ -5,6 +5,7 @@ import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
 import TickerInput from '../components/TickerInput'
+import TickerLogo from '../components/TickerLogo'
 import useIsMobile from '../hooks/useIsMobile'
 
 
@@ -345,6 +346,18 @@ export function RelativeValuationContent() {
 
         {data && (
           <>
+            {/* ── Selected company identity ──────────────────────────── */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
+              <TickerLogo ticker={data.ticker} size={40} />
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+                <span style={{ fontFamily: T.mono, fontSize: 24, fontWeight: 700, color: T.gold }}>{data.ticker}</span>
+                {(() => {
+                  const name = data.peers.find(p => p.ticker === data.ticker)?.name
+                  return name ? <span style={{ fontFamily: T.label, fontSize: 15, color: T.text }}>{name}</span> : null
+                })()}
+              </div>
+            </div>
+
             {/* ── Analyst Consensus ──────────────────────────────────── */}
             <div className="ft-panel" style={{ marginBottom: 20 }}>
               <div className="ft-panel-header">Analyst Consensus</div>
