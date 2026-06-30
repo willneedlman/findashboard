@@ -35,6 +35,13 @@ _BACKWARD_PATTERNS = [
     r"recap", r"logged", r"last (?:quarter|year|month|week)",
     r"year[- ]over[- ]year", r"yoy", r"q[1-4] (?:results|earnings|revenue|profit)",
     r"earnings (?:beat|miss)", r"prior", r"previously", r"closed (?:up|down|lower|higher)",
+    # reported-outcome / past-performance / current-state markers
+    r"data shows?", r"shows?", r"as expected", r"grew", r"grows", r"growing",
+    r"enjoys?", r"enjoyed", r"driving", r"drove", r"first half", r"second half",
+    r"first quarter", r"third quarter", r"fourth quarter", r"downtrend", r"uptrend",
+    r"resistance", r"support at", r"live levels", r"record (?:high|low)",
+    r"in \d+ years", r"\d+[- ]year (?:high|low)", r"best .* in", r"worst .* in",
+    r"so far this year", r"this year", r"impact", r"after",
 ]
 
 _FORWARD_RE = [re.compile(rf"\b{p}\b", re.IGNORECASE) for p in _FORWARD_PATTERNS]

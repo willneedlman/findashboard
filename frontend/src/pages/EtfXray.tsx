@@ -52,7 +52,7 @@ function Panel({ title, right, children, style, bodyStyle }: { title: string; ri
 }
 
 export function EtfXrayContent() {
-  const [picked, setPicked] = useState<string[]>(['SPY', 'XLK', 'XLF', 'DIA', 'MDY'])
+  const [picked, setPicked] = useState<string[]>([])
   const [open, setOpen] = useState(true)
   const [sort, setSort] = useState<'weight' | 'funds' | 'ticker'>('weight')
   const [fundFilter, setFundFilter] = useState<string[]>([])

@@ -492,7 +492,7 @@ function SourcePanel({ src, timeframeHours }: { src: Source; timeframeHours: num
                   conf {(item.confidence * 100).toFixed(0)}%
                 </span>
                 {(() => {
-                  const fwd = item.forward_looking_weight >= 0.5
+                  const fwd = item.forward_looking_weight > 0.5
                   const Icon = fwd ? TrendingUp : History
                   const c = fwd ? T.gold : 'var(--theme-tertiary, #60a5fa)'
                   return (
@@ -821,7 +821,7 @@ export default function SentimentTracker() {
   const displaySources = lens === 'all'
     ? sources
     : sources
-        .map(s => ({ ...s, items: s.items.filter(it => lens === 'forward' ? it.forward_looking_weight >= 0.5 : it.forward_looking_weight < 0.5) }))
+        .map(s => ({ ...s, items: s.items.filter(it => lens === 'forward' ? it.forward_looking_weight > 0.5 : it.forward_looking_weight <= 0.5) }))
         .filter(s => s.items.length > 0)
   const shownCount = lens === 'all'
     ? (data?.in_window_count ?? 0)

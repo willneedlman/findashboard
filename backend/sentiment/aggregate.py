@@ -70,7 +70,7 @@ def horizon_composites(
         fwd_den += w * fw
         bwd_num += a.score * w * (1.0 - fw)
         bwd_den += w * (1.0 - fw)
-        if fw >= 0.5:
+        if fw > 0.5:  # strictly forward; 0.5 (no markers) counts as backward
             fwd_count += 1
         else:
             bwd_count += 1

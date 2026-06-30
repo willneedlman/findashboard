@@ -82,7 +82,17 @@ def test_horizon_composites_empty_is_neutral():
     assert aggregate.horizon_composites([], {}) == (50.0, 50.0, 0, 0)
 
 
-def test_count_split_at_half_threshold():
-    scored = [_article("a", fw=0.5), _article("b", fw=0.49)]
+def test_count_split_strictly_above_half():
+    scored = [_article("a", fw=0.6), _article("b", fw=0.5)]
     _, _, fc, bc = aggregate.horizon_composites(scored, {})
-    assert fc == 1 and bc == 1  # 0.5 counts forward, 0.49 backward
+    assert fc == 1 and bc == 1  # 0.6 forward; 0.5 (no markers) counts backward
+
+
+def test_reported_headlines_are_backward():
+    for t in [
+        "Small-cap stocks enjoy their best first half in 35 years. Here's what's driving it",
+        "Microsoft stuck in downtrend, resistance at $381: Live levels",
+        "UK economy grows as expected before Iran war impact, ONS data shows",
+        "Apple unveils new iPhone color",  # no markers -> backward by default
+    ]:
+        assert forward_looking_weight(t) <= 0.5, t
