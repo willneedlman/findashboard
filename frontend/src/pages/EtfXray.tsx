@@ -222,7 +222,7 @@ export function EtfXrayContent() {
                       <div style={{ width: 90, height: 7, background: 'rgba(255,255,255,0.05)', flexShrink: 0 }}>
                         <div style={{ width: `${Math.min(100, (a.weight / rowMax) * 100)}%`, height: '100%', background: GOLD }} />
                       </div>
-                      <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, color: BODY, width: 52, textAlign: 'right', flexShrink: 0 }}>{a.weight.toFixed(2)}%</span>
+                      <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, color: BODY, width: 62, textAlign: 'right', flexShrink: 0 }}>{a.weight.toFixed(3)}%</span>
                     </div>
                   ))}
                 </div>
@@ -272,7 +272,7 @@ export function EtfXrayContent() {
                           <div key={s.ticker} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 2px', borderBottom: i < sharedNames.length - 1 ? `1px solid ${HAIR}` : 'none' }}>
                             <span style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, color: GOLD, width: 56, flexShrink: 0 }}>{s.ticker}</span>
                             <span style={{ fontSize: 10, color: BODY, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
-                            <span style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, color: BODY, flexShrink: 0 }}>{s.weight.toFixed(2)}%</span>
+                            <span style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, color: BODY, flexShrink: 0 }}>{s.weight.toFixed(3)}%</span>
                           </div>
                         ))}
                       </div>
