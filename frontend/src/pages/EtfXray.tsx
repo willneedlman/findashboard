@@ -55,7 +55,7 @@ export function EtfXrayContent() {
   const [picked, setPicked] = useState<string[]>(['SPY', 'XLK', 'XLF', 'DIA', 'MDY'])
   const [open, setOpen] = useState(true)
   const [sort, setSort] = useState<'weight' | 'funds' | 'ticker'>('weight')
-  const [fundFilter, setFundFilter] = useState('')
+  const [fundFilter, setFundFilter] = useState<string[]>([])
   const [pair, setPair] = useState<[string, string] | null>(null)
   const [hover, setHover] = useState('')
 
@@ -77,7 +77,7 @@ export function EtfXrayContent() {
     const m = data.overlap.reduce((a, b) => b.overlap > a.overlap ? b : a)
     return [m.a, m.b]
   }, [data])
-  useEffect(() => { setPair(maxPair); setFundFilter(''); setSort('weight') }, [maxPair])
+  useEffect(() => { setPair(maxPair); setFundFilter([]); setSort('weight') }, [maxPair])
 
   const ov: Record<string, Record<string, number>> = {}
   if (data) for (const o of data.overlap) { (ov[o.a] ??= {})[o.b] = o.overlap; (ov[o.b] ??= {})[o.a] = o.overlap }
@@ -89,7 +89,7 @@ export function EtfXrayContent() {
   const rows = useMemo(() => {
     if (!data) return []
     let r = data.aggregate
-    if (fundFilter) r = r.filter(a => a.funds.includes(fundFilter))
+    if (fundFilter.length) r = r.filter(a => a.funds.some(f => fundFilter.includes(f)))  // union of selected funds
     const s = [...r]
     if (sort === 'funds') s.sort((a, b) => b.fund_count - a.fund_count || b.weight - a.weight)
     else if (sort === 'ticker') s.sort((a, b) => a.ticker.localeCompare(b.ticker))
@@ -181,7 +181,7 @@ export function EtfXrayContent() {
           {/* Two-column results */}
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'stretch' }}>
             {/* Left — Look-through holdings */}
-            <Panel title="Look-Through Holdings" right={`equal-weight blend · ${fundFilter ? `${rows.length} in ${fundFilter}` : `all ${rows.length}`}`} style={{ flex: '1.55 1 460px' }} bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <Panel title="Look-Through Holdings" right={`equal-weight blend · ${fundFilter.length ? `${rows.length} in ${fundFilter.join(' ∪ ')}` : `all ${rows.length}`}`} style={{ flex: '1.55 1 460px' }} bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
               <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 9, flex: 1, minHeight: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ ...EYEBROW, fontSize: 8, color: SEC }}>Sort</span>
@@ -197,12 +197,12 @@ export function EtfXrayContent() {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                   <span style={{ ...EYEBROW, fontSize: 8, color: SEC }}>Fund</span>
-                  <button onClick={() => setFundFilter('')} style={{ background: !fundFilter ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 16%, transparent)' : 'transparent', border: `1px solid ${!fundFilter ? GOLD : BORDER}`, cursor: 'pointer', color: !fundFilter ? GOLD : SEC, fontFamily: MONO, fontSize: 9, fontWeight: 700, padding: '3px 8px' }}>ALL</button>
+                  <button onClick={() => setFundFilter([])} style={{ background: !fundFilter.length ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 16%, transparent)' : 'transparent', border: `1px solid ${!fundFilter.length ? GOLD : BORDER}`, cursor: 'pointer', color: !fundFilter.length ? GOLD : SEC, fontFamily: MONO, fontSize: 9, fontWeight: 700, padding: '3px 8px' }}>ALL</button>
                   {data.funds.map(f => {
                     const lit = hoverFunds.includes(f.fund)
-                    const sel = fundFilter === f.fund
+                    const sel = fundFilter.includes(f.fund)
                     return (
-                      <button key={f.fund} onClick={() => setFundFilter(ff => ff === f.fund ? '' : f.fund)}
+                      <button key={f.fund} onClick={() => setFundFilter(ff => ff.includes(f.fund) ? ff.filter(x => x !== f.fund) : [...ff, f.fund])}
                         style={{ display: 'flex', alignItems: 'center', gap: 4, background: sel ? `color-mix(in srgb, ${fundColor(f.fund)} 16%, transparent)` : 'transparent',
                           border: `1px solid ${sel || lit ? fundColor(f.fund) : BORDER}`, outline: lit ? `1px solid ${fundColor(f.fund)}` : 'none', cursor: 'pointer',
                           color: sel || lit ? fundColor(f.fund) : SEC, fontFamily: MONO, fontSize: 9, fontWeight: 700, padding: '3px 8px' }}>
