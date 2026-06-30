@@ -60,6 +60,26 @@ SOURCE_MATRIX: tuple[SourceSpec, ...] = (
                "https://www.investing.com/rss/news_25.rss"),
     SourceSpec("rss:fox-business", "Fox Business", "rss", 2, 0.8,
                "https://moxie.foxbusiness.com/google-publisher/markets.xml"),
+    SourceSpec("rss:cnbc-economy", "CNBC Economy", "rss", 1, 1.2,
+               "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=20910258"),
+    SourceSpec("rss:cnbc-top", "CNBC Top News", "rss", 1, 1.2,
+               "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114"),
+    SourceSpec("rss:bbc-business", "BBC Business", "rss", 1, 1.1,
+               "https://feeds.bbci.co.uk/news/business/rss.xml"),
+    SourceSpec("rss:guardian-business", "Guardian Business", "rss", 1, 1.0,
+               "https://www.theguardian.com/uk/business/rss"),
+    SourceSpec("rss:nasdaq", "Nasdaq Markets", "rss", 2, 1.0,
+               "https://www.nasdaq.com/feed/rssoutbound?category=Markets"),
+    SourceSpec("rss:business-insider", "Business Insider", "rss", 2, 0.9,
+               "https://markets.businessinsider.com/rss/news"),
+    SourceSpec("rss:seeking-alpha", "Seeking Alpha", "rss", 2, 0.9,
+               "https://seekingalpha.com/feed.xml"),
+    SourceSpec("rss:motley-fool", "Motley Fool", "rss", 2, 0.8,
+               "https://www.fool.com/feeds/index.aspx"),
+    SourceSpec("rss:benzinga", "Benzinga", "rss", 2, 0.8,
+               "https://www.benzinga.com/feed"),
+    SourceSpec("rss:investing-economy", "Investing.com Economy", "rss", 2, 1.0,
+               "https://www.investing.com/rss/news_14.rss"),
     SourceSpec("reddit:investing", "Reddit/Investing", "reddit", 3, 1.2,
                "investing", confidence_cap=0.3),
     SourceSpec("reddit:stocks", "Reddit/Stocks", "reddit", 3, 1.0,
@@ -72,6 +92,12 @@ SOURCE_MATRIX: tuple[SourceSpec, ...] = (
                "SecurityAnalysis", confidence_cap=0.3),
     SourceSpec("reddit:wsb", "Reddit/WSB", "reddit", 3, 0.7,
                "wallstreetbets", confidence_cap=0.3),
+    SourceSpec("reddit:stockmarket", "Reddit/StockMarket", "reddit", 3, 0.9,
+               "StockMarket", confidence_cap=0.3),
+    SourceSpec("reddit:valueinvesting", "Reddit/ValueInvesting", "reddit", 3, 1.1,
+               "ValueInvesting", confidence_cap=0.3),
+    SourceSpec("reddit:options", "Reddit/Options", "reddit", 3, 0.8,
+               "options", confidence_cap=0.3),
     SourceSpec("finnhub:general", "Finnhub News", "finnhub", 2, 1.1, ""),
 )
 
@@ -114,8 +140,8 @@ SINGLE_STOCK_IMPACT_CAP: float = 0.45
 # ── Window / qualification thresholds ─────────────────────────────────────────
 MIN_SIGNAL_HEADLINES: int = 10      # in-window articles for full session confidence
 MIN_SOURCE_HEADLINES: int = 2       # unique headlines for a source to "qualify"
-DEFAULT_SAMPLE_SIZE: int = 500
-PER_SOURCE_SCORE_CAP: int = 12      # top-N in-window items scored per source (payload bound)
+DEFAULT_SAMPLE_SIZE: int = 900
+PER_SOURCE_SCORE_CAP: int = 18      # top-N in-window items scored per source (payload bound)
 BASELINE_WINDOW: int = 48
 
 # ── Caching ───────────────────────────────────────────────────────────────────
