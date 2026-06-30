@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
+import { getRecentTickers, recordRecentTicker } from '../lib/recentTickers'
 
 // Drop-in replacement for a plain ticker <input> that also accepts a company
 // name. Typing a symbol behaves exactly as before (value updates live, upper-
@@ -34,6 +35,7 @@ export default function TickerInput({
   const [matches, setMatches] = useState<Match[]>([])
   const [open, setOpen] = useState(false)
   const [hi, setHi] = useState(0)
+  const [recents, setRecents] = useState<string[]>([])
   const blurTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   // Keep the field in sync when the page changes the symbol itself (URL param,
@@ -58,8 +60,14 @@ export default function TickerInput({
   // inside this click, so firing now would act on the previous symbol. The user
   // runs it with the existing button or a second Enter, once state has settled.
   const pick = (m: Match) => {
-    setText(m.ticker); onChange(m.ticker)
+    setText(m.ticker); onChange(m.ticker); recordRecentTicker(m.ticker)
     setOpen(false); setMatches([])
+  }
+
+  // Quick-pick a remembered symbol — same effect as typing it and pressing Enter.
+  const pickRecent = (sym: string) => {
+    setText(sym); onChange(sym); recordRecentTicker(sym)
+    setOpen(false); setMatches([]); onEnter?.()
   }
 
   const onType = (v: string) => {
@@ -79,20 +87,24 @@ export default function TickerInput({
       // Resolve to the highlighted match unless the text already IS that ticker
       // (so a bare 5-letter name like "tesla" resolves to TSLA, while "AAPL" runs
       // immediately). A second Enter then runs the now-resolved symbol.
+      const live = (e.currentTarget as HTMLInputElement).value.trim()
       const top = open && matches.length ? matches[hi] : undefined
-      if (top && top.ticker.toUpperCase() !== text.trim().toUpperCase()) { e.preventDefault(); pick(top); return }
+      if (top && top.ticker.toUpperCase() !== live.toUpperCase()) { e.preventDefault(); pick(top); return }
+      if (TICKER_RE.test(live)) recordRecentTicker(live.toUpperCase())
       setOpen(false); onEnter?.()
     }
   }
 
   const showMenu = open && matches.length > 0
+  // With an empty field and nothing matched, offer recently viewed symbols.
+  const showRecents = open && matches.length === 0 && text.trim() === '' && recents.length > 0
   return (
     <div style={{ position: 'relative', flex: style?.flex }}>
       <input
         value={text}
         onChange={e => onType(e.target.value)}
         onKeyDown={onKeyDown}
-        onFocus={e => { setOpen(true); onFocus?.(e) }}
+        onFocus={e => { setOpen(true); setRecents(getRecentTickers()); onFocus?.(e) }}
         onBlur={e => { blurTimer.current = setTimeout(() => setOpen(false), 120); onBlur?.(e) }}
         placeholder={placeholder}
         style={style}
@@ -123,6 +135,31 @@ export default function TickerInput({
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</span>
               <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 700,
                 color: 'var(--theme-primary, #c9a84c)', flexShrink: 0 }}>{m.ticker}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {showRecents && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 50,
+          background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))',
+          maxHeight: 260, overflowY: 'auto', boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+        }}
+          onMouseDown={() => { if (blurTimer.current) clearTimeout(blurTimer.current) }}>
+          <div style={{ padding: '6px 11px', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700,
+            letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text-faint, rgba(255,255,255,0.3))' }}>
+            Recent
+          </div>
+          {recents.map(sym => (
+            <button key={sym} type="button" onClick={() => pickRecent(sym)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
+                cursor: 'pointer', border: 'none', padding: '8px 11px', background: 'transparent',
+                borderBottom: '1px solid rgba(255,255,255,0.04)',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(201,168,76,0.12)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+              <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 12, fontWeight: 700, color: 'var(--theme-primary, #c9a84c)' }}>{sym}</span>
             </button>
           ))}
         </div>
