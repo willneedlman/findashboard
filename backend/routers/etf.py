@@ -203,12 +203,15 @@ def xray(req: XrayRequest):
     w = 1.0 / len(funds)  # equal-weight blend across the selected funds
 
     # Look-through aggregate: blended weight of each underlying across the basket.
+    # by_fund keeps the holding's raw weight in each fund so the UI can re-blend
+    # over a selected subset (the "union of these ETFs" view).
     agg: dict[str, dict] = {}
     for f, d in loaded.items():
         for t, h in d["holdings"].items():
-            a = agg.setdefault(t, {"ticker": t, "name": h["name"], "weight": 0.0, "funds": []})
+            a = agg.setdefault(t, {"ticker": t, "name": h["name"], "weight": 0.0, "funds": [], "by_fund": {}})
             a["weight"] += h["weight"] * w
             a["funds"].append(f)
+            a["by_fund"][f] = round(h["weight"], 4)
     aggregate = sorted(
         ({**a, "weight": round(a["weight"], 4), "fund_count": len(a["funds"])} for a in agg.values()),
         key=lambda r: r["weight"], reverse=True,

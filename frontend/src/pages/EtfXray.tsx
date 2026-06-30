@@ -29,7 +29,7 @@ const EYEBROW: React.CSSProperties = { fontSize: 9, fontWeight: 700, letterSpaci
 
 interface Supported { ticker: string; label: string; partial: boolean }
 interface FundRow { fund: string; name: string; as_of: string; count: number; top10: number; partial: boolean; coverage: number; total: number | null }
-interface AggRow { ticker: string; name: string; weight: number; fund_count: number; funds: string[] }
+interface AggRow { ticker: string; name: string; weight: number; fund_count: number; funds: string[]; by_fund: Record<string, number> }
 interface XrayResult {
   funds: FundRow[]
   unique_holdings: number
@@ -86,18 +86,21 @@ export function EtfXrayContent() {
   const aggByTicker = useMemo(() => { const m: Record<string, string[]> = {}; if (data) for (const a of data.aggregate) m[a.ticker] = a.funds; return m }, [data])
   const hoverFunds = hover ? (aggByTicker[hover] ?? []) : []
 
+  // Columns shown in the holdings table: the selected funds (union) or all run funds.
+  const cols = data ? (fundFilter.length ? fundFilter : data.funds.map(f => f.fund)) : []
+
   const rows = useMemo(() => {
     if (!data) return []
+    const colsLocal = fundFilter.length ? fundFilter : data.funds.map(f => f.fund)
     let r = data.aggregate
     if (fundFilter.length) r = r.filter(a => a.funds.some(f => fundFilter.includes(f)))  // union of selected funds
+    const keyW = (a: AggRow) => Math.max(0, ...colsLocal.map(f => a.by_fund[f] ?? 0))  // biggest single-fund position
     const s = [...r]
-    if (sort === 'funds') s.sort((a, b) => b.fund_count - a.fund_count || b.weight - a.weight)
+    if (sort === 'funds') s.sort((a, b) => b.fund_count - a.fund_count || keyW(b) - keyW(a))
     else if (sort === 'ticker') s.sort((a, b) => a.ticker.localeCompare(b.ticker))
-    else s.sort((a, b) => b.weight - a.weight)
+    else s.sort((a, b) => keyW(b) - keyW(a))
     return s
   }, [data, fundFilter, sort])
-  const rowMax = Math.max(0.01, ...rows.map(r => r.weight))
-
   const activePair = pair ?? maxPair
   const sharedNames = useMemo(() => {
     if (!data || !activePair) return []
@@ -113,9 +116,6 @@ export function EtfXrayContent() {
     ].filter(g => g.funds.length)
   }, [supported])
 
-  const tag = (f: string) => (
-    <span key={f} style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, color: fundColor(f), border: `1px solid ${fundColor(f)}`, padding: '1px 4px', whiteSpace: 'nowrap' }}>{f}</span>
-  )
 
   return (
     <SidebarLayout sidebarWidth={220} sidebarTitle="" sidebar={<>
@@ -181,7 +181,7 @@ export function EtfXrayContent() {
           {/* Two-column results */}
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'stretch' }}>
             {/* Left — Look-through holdings */}
-            <Panel title="Look-Through Holdings" right={`equal-weight blend · ${fundFilter.length ? `${rows.length} in ${fundFilter.join(' ∪ ')}` : `all ${rows.length}`}`} style={{ flex: '1.55 1 460px' }} bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <Panel title="Look-Through Holdings" right={`weight per fund · ${fundFilter.length ? `${rows.length} in ${fundFilter.join(' ∪ ')}` : `all ${rows.length}`}`} style={{ flex: '1.55 1 460px' }} bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
               <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 9, flex: 1, minHeight: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ ...EYEBROW, fontSize: 8, color: SEC }}>Sort</span>
@@ -211,20 +211,28 @@ export function EtfXrayContent() {
                     )
                   })}
                 </div>
-                <div style={{ flex: 1, minHeight: 160, maxHeight: 'calc(100vh - 250px)', overflowY: 'auto' }}>
-                  {rows.map((a, i) => (
-                    <div key={a.ticker} onMouseEnter={() => setHover(a.ticker)} onMouseLeave={() => setHover('')}
-                      style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '5px 4px', borderBottom: i < rows.length - 1 ? `1px solid ${HAIR}` : 'none', background: hover === a.ticker ? 'rgba(255,255,255,0.03)' : 'transparent' }}>
-                      <span style={{ fontFamily: MONO, fontSize: 9, color: FAINT, width: 18, flexShrink: 0, textAlign: 'right' }}>{String(i + 1).padStart(2, '0')}</span>
-                      <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, color: GOLD, width: 58, flexShrink: 0 }}>{a.ticker}</span>
-                      <span style={{ fontSize: 11, color: BODY, flex: 1, minWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
-                      <span style={{ display: 'flex', gap: 3, flexShrink: 0 }}>{a.funds.map(tag)}</span>
-                      <div style={{ width: 90, height: 7, background: 'rgba(255,255,255,0.05)', flexShrink: 0 }}>
-                        <div style={{ width: `${Math.min(100, (a.weight / rowMax) * 100)}%`, height: '100%', background: GOLD }} />
-                      </div>
-                      <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, color: BODY, width: 62, textAlign: 'right', flexShrink: 0 }}>{a.weight.toFixed(3)}%</span>
+                <div style={{ flex: 1, minHeight: 160, maxHeight: 'calc(100vh - 250px)', overflow: 'auto' }}>
+                  <div style={{ minWidth: 320 + cols.length * 66 }}>
+                    {/* Header: one weight column per fund */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '0 4px 5px', borderBottom: `1px solid ${BORDER}`, position: 'sticky', top: 0, background: SURFACE, zIndex: 1 }}>
+                      <span style={{ width: 18, flexShrink: 0 }} />
+                      <span style={{ ...EYEBROW, fontSize: 8, color: SEC, width: 58, flexShrink: 0 }}>Ticker</span>
+                      <span style={{ ...EYEBROW, fontSize: 8, color: SEC, flex: 1, minWidth: 80 }}>Holding</span>
+                      {cols.map(f => <span key={'h' + f} style={{ width: 62, flexShrink: 0, textAlign: 'right', fontFamily: MONO, fontSize: 9, fontWeight: 700, color: fundColor(f) }}>{f}</span>)}
                     </div>
-                  ))}
+                    {rows.map((a, i) => (
+                      <div key={a.ticker} onMouseEnter={() => setHover(a.ticker)} onMouseLeave={() => setHover('')}
+                        style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '5px 4px', borderBottom: i < rows.length - 1 ? `1px solid ${HAIR}` : 'none', background: hover === a.ticker ? 'rgba(255,255,255,0.03)' : 'transparent' }}>
+                        <span style={{ fontFamily: MONO, fontSize: 9, color: FAINT, width: 18, flexShrink: 0, textAlign: 'right' }}>{String(i + 1).padStart(2, '0')}</span>
+                        <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, color: GOLD, width: 58, flexShrink: 0 }}>{a.ticker}</span>
+                        <span style={{ fontSize: 11, color: BODY, flex: 1, minWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
+                        {cols.map(f => {
+                          const v = a.by_fund[f]
+                          return <span key={f} style={{ width: 62, flexShrink: 0, textAlign: 'right', fontFamily: MONO, fontSize: 10, fontWeight: v != null ? 700 : 400, color: v != null ? fundColor(f) : FAINT, fontVariantNumeric: 'tabular-nums' }}>{v != null ? `${v.toFixed(3)}%` : '·'}</span>
+                        })}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </Panel>
