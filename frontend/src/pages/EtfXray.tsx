@@ -56,6 +56,7 @@ export function EtfXrayContent() {
   const [open, setOpen] = useState(true)
   const [sort, setSort] = useState<'weight' | 'funds' | 'ticker'>('weight')
   const [fundFilter, setFundFilter] = useState<string[]>([])
+  const [filterMode, setFilterMode] = useState<'shared' | 'union' | 'only'>('shared')
   const [pair, setPair] = useState<[string, string] | null>(null)
   const [hover, setHover] = useState('')
   const [hoverPos, setHoverPos] = useState({ x: 0, y: 0 })
@@ -78,7 +79,7 @@ export function EtfXrayContent() {
     const m = data.overlap.reduce((a, b) => b.overlap > a.overlap ? b : a)
     return [m.a, m.b]
   }, [data])
-  useEffect(() => { setPair(maxPair); setFundFilter([]); setSort('weight') }, [maxPair])
+  useEffect(() => { setPair(maxPair); setFundFilter([]); setSort('weight'); setFilterMode('shared') }, [maxPair])
 
   const ov: Record<string, Record<string, number>> = {}
   if (data) for (const o of data.overlap) { (ov[o.a] ??= {})[o.b] = o.overlap; (ov[o.b] ??= {})[o.a] = o.overlap }
@@ -91,10 +92,13 @@ export function EtfXrayContent() {
     if (!data) return []
     let r = data.aggregate
     if (fundFilter.length) {
-      // Intersection: keep only holdings held by ALL selected funds (a name in
-      // SPY but not SCHD is dropped). Re-blend the weight over the selected funds.
-      r = r
-        .filter(a => fundFilter.every(f => a.funds.includes(f)))
+      // shared = held by ALL selected · union = held by ANY · only = held by
+      // exactly one of the selected funds. Re-blend weight over the selected set.
+      const inSel = (a: AggRow) => fundFilter.filter(f => a.funds.includes(f)).length
+      const keep = filterMode === 'union' ? (a: AggRow) => inSel(a) >= 1
+        : filterMode === 'only' ? (a: AggRow) => inSel(a) === 1
+        : (a: AggRow) => inSel(a) === fundFilter.length
+      r = r.filter(keep)
         .map(a => ({ ...a, weight: fundFilter.reduce((sum, f) => sum + (a.by_fund[f] ?? 0), 0) / fundFilter.length }))
     }
     const s = [...r]
@@ -102,7 +106,7 @@ export function EtfXrayContent() {
     else if (sort === 'ticker') s.sort((a, b) => a.ticker.localeCompare(b.ticker))
     else s.sort((a, b) => b.weight - a.weight)
     return s
-  }, [data, fundFilter, sort])
+  }, [data, fundFilter, sort, filterMode])
   const hovered = hover ? rows.find(r => r.ticker === hover) ?? null : null
 
   const activePair = pair ?? maxPair
@@ -188,7 +192,7 @@ export function EtfXrayContent() {
           {/* Two-column results */}
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'stretch' }}>
             {/* Left — Look-through holdings */}
-            <Panel title="Look-Through Holdings" right={`hover a row for per-fund weights · ${fundFilter.length === 0 ? `all ${rows.length}` : fundFilter.length === 1 ? `${rows.length} in ${fundFilter[0]}` : `${rows.length} held by all of ${fundFilter.join(' + ')}`}`} style={{ flex: '1.55 1 460px' }} bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <Panel title="Look-Through Holdings" right={`hover for per-fund weights · ${fundFilter.length === 0 ? `all ${rows.length}` : fundFilter.length === 1 ? `${rows.length} in ${fundFilter[0]}` : `${rows.length} ${filterMode === 'union' ? 'in any of' : filterMode === 'only' ? 'in only one of' : 'held by all of'} ${fundFilter.join(' + ')}`}`} style={{ flex: '1.55 1 460px' }} bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
               <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 9, flex: 1, minHeight: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ ...EYEBROW, fontSize: 8, color: SEC }}>Sort</span>
@@ -218,10 +222,24 @@ export function EtfXrayContent() {
                     )
                   })}
                 </div>
+                {fundFilter.length > 1 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ ...EYEBROW, fontSize: 8, color: SEC }}>Show</span>
+                    <div style={{ display: 'flex', border: `1px solid ${BORDER}` }}>
+                      {([['shared', 'Held by all'], ['union', 'In any'], ['only', 'In only one']] as const).map(([k, lbl], i) => (
+                        <button key={k} onClick={() => setFilterMode(k)} style={{
+                          background: filterMode === k ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 16%, transparent)' : 'transparent',
+                          border: 'none', borderRight: i < 2 ? `1px solid ${BORDER}` : 'none', cursor: 'pointer',
+                          color: filterMode === k ? GOLD : SEC, fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', padding: '4px 10px',
+                        }}>{lbl}</button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div style={{ flex: 1, minHeight: 160, maxHeight: 'calc(100vh - 250px)', overflowY: 'auto' }}>
                   {rows.length === 0 && fundFilter.length > 1 && (
                     <div style={{ fontSize: 10, color: SEC, fontFamily: SANS, padding: '20px 8px', textAlign: 'center', lineHeight: 1.5 }}>
-                      No holdings are shared by all of {fundFilter.join(' + ')}. These funds have no common names.
+                      No holdings {filterMode === 'only' ? 'are unique to a single one of' : 'are shared by all of'} {fundFilter.join(' + ')}.
                     </div>
                   )}
                   {rows.map((a, i) => (
