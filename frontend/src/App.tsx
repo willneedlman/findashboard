@@ -42,6 +42,7 @@ const PortfolioCompare   = lazyWithReload(() => import('./pages/PortfolioCompare
 const SkewTool           = lazyWithReload(() => import('./pages/SkewTool'))
 const StrategyBuilder    = lazyWithReload(() => import('./pages/StrategyBuilder'))
 const AlgoStrategyBuilder = lazyWithReload(() => import('./pages/AlgoStrategyBuilder'))
+const EtfXray            = lazyWithReload(() => import('./pages/EtfXray'))
 const DealerGEX          = lazyWithReload(() => import('./pages/DealerGEX'))
 const CustomDashboard    = lazyWithReload(() => import('./pages/CustomDashboard'))
 const PrivacyPolicy      = lazyWithReload(() => import('./pages/legal/PrivacyPolicy'))
@@ -221,6 +222,7 @@ export default function App() {
               <Route path="/fixed-income-mm"    element={<FixedIncomeMarketMaker />} />
               <Route path="/unusual-options"    element={<UnusualOptions />} />
               <Route path="/compare"            element={<Compare />} />
+              <Route path="/etf-xray"           element={<EtfXray />} />
               <Route path="*"                   element={<Navigate to="/app" replace />} />
             </Route>
           </Routes>
