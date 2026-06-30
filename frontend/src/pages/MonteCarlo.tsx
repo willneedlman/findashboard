@@ -315,17 +315,35 @@ export function MonteCarloContent() {
           })()
         : 8
 
-      // Per-leg simulations (normalized to start at 1.0). Block bootstrap needs
-      // the leg's fetched return series; legs without one (cash sleeve, or before
-      // Fetch Live Vol/Drift) fall back to GBM so a run never fails silently.
+      // Block bootstrap needs each leg's real return series. Auto-fetch any the
+      // user hasn't already pulled via "Fetch Live Vol / Drift" so the model
+      // works straight from a Run, the same way GBM does off default vol/drift.
+      const legReturns: (number[] | undefined)[] = legs.map(l => l.returns)
+      if (model === 'bootstrap') {
+        await Promise.all(legs.map(async (leg, i) => {
+          if (leg.ticker === CASH_SYMBOL || (legReturns[i]?.length ?? 0) > BLOCK_SIZE) return
+          try {
+            const { data } = await axios.get(`/api/market/history?ticker=${leg.ticker}&start=2022-01-01`)
+            const px: number[] = (data?.price ?? []).map((p: { value: number }) => p.value).filter((v: number) => v > 0)
+            const rets: number[] = []
+            for (let k = 1; k < px.length; k++) rets.push(Math.log(px[k] / px[k - 1]))
+            legReturns[i] = rets
+          } catch { /* leave undefined; this leg falls back to GBM */ }
+        }))
+      }
+
+      // Per-leg simulations (normalized to start at 1.0). A bootstrap leg with no
+      // usable history (cash sleeve, or a failed fetch) falls back to GBM so a run
+      // never fails silently.
       const n = Math.min(nSims, 500)
       const dt = 1 / 252
       const allPaths = legs.map((leg, i) => {
         const mu    = (leg.drift + legAdjs[i].stratAdj) / 100
         const sigma = leg.vol / 100
-        if (model === 'bootstrap' && leg.returns && leg.returns.length > BLOCK_SIZE) {
+        const rets  = legReturns[i]
+        if (model === 'bootstrap' && rets && rets.length > BLOCK_SIZE) {
           const targetMean = (mu - 0.5 * sigma * sigma) * dt
-          return runBootstrap(1.0, leg.returns, horizon, n, BLOCK_SIZE, targetMean)
+          return runBootstrap(1.0, rets, horizon, n, BLOCK_SIZE, targetMean)
         }
         if (model === 't') {
           return runDiffusion(1.0, mu, sigma, horizon, n, () => tRandom(T_DF))
@@ -393,7 +411,7 @@ export function MonteCarloContent() {
       return {
         bands, histogram, S0, median, p5, p95, probProfit, probRuin, varAmt, cvarAmt, effDrift,
         probTarget, targetPrice, model,
-        bootstrapReady: model !== 'bootstrap' || legs.every(l => l.ticker === CASH_SYMBOL || (l.returns?.length ?? 0) > BLOCK_SIZE),
+        bootstrapReady: model !== 'bootstrap' || legs.every((l, i) => l.ticker === CASH_SYMBOL || (legReturns[i]?.length ?? 0) > BLOCK_SIZE),
         benchmark, legs: legs.map((l, i) => ({ ...l, ...legAdjs[i] })),
       }
     },
