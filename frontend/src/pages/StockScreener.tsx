@@ -533,24 +533,26 @@ export default function StockScreener() {
                     {/* rows */}
                     {displayRows.map((r, i) => (
                     <div key={`${r.ticker}-${i}`} className="ft-screen-row"
-                      style={{ display: 'grid', gridTemplateColumns: gridTemplate, alignItems: 'center', padding: `${rowPad}px 24px`, background: zebra && i % 2 === 1 ? 'var(--theme-hover, rgba(255,255,255,0.03))' : 'transparent', borderBottom: '1px solid var(--theme-border-faint, rgba(255,255,255,0.045))' }}>
+                      style={{ position: 'relative', display: 'grid', gridTemplateColumns: gridTemplate, alignItems: 'center', padding: `${rowPad}px 24px`, background: zebra && i % 2 === 1 ? 'var(--theme-hover, rgba(255,255,255,0.03))' : 'transparent', borderBottom: '1px solid var(--theme-border-faint, rgba(255,255,255,0.045))' }}>
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, minWidth: 0 }}>
                         <span style={{ fontFamily: C.mono, fontWeight: 700, fontSize: 12.5, color: C.gold }}>{r.ticker}</span>
                         <span style={{ fontFamily: C.sans, fontSize: 11, color: C.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.companyName}</span>
-                        <span className="ft-row-actions" style={{ display: 'flex', alignItems: 'center', gap: 9, marginLeft: 'auto', paddingLeft: 10, flex: 'none' }}>
-                          {ROW_LINKS.map(l => (
-                            <Tooltip key={l.label} label={`Open ${r.ticker} in ${l.label}`}>
-                              <span
-                                onClick={() => navigate(`${l.base}?ticker=${encodeURIComponent(r.ticker)}`)}
-                                onMouseEnter={e => (e.currentTarget.style.color = C.gold)}
-                                onMouseLeave={e => (e.currentTarget.style.color = C.dim)}
-                                style={{ fontFamily: C.sans, fontSize: 9.5, fontWeight: 600, letterSpacing: '0.04em', color: C.dim, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                                {l.label}
-                              </span>
-                            </Tooltip>
-                          ))}
-                        </span>
                       </div>
+                      {/* Actions float over the row's right edge on hover so they never
+                          steal width from the company name. Opaque backdrop keeps them legible. */}
+                      <span className="ft-row-actions" style={{ position: 'absolute', right: 0, top: 0, bottom: 0, display: 'flex', alignItems: 'center', gap: 11, padding: '0 24px 0 36px', background: 'linear-gradient(90deg, transparent, var(--theme-surface, #0d1826) 28px)' }}>
+                        {ROW_LINKS.map(l => (
+                          <Tooltip key={l.label} label={`Open ${r.ticker} in ${l.label}`}>
+                            <span
+                              onClick={() => navigate(`${l.base}?ticker=${encodeURIComponent(r.ticker)}`)}
+                              onMouseEnter={e => (e.currentTarget.style.color = C.gold)}
+                              onMouseLeave={e => (e.currentTarget.style.color = C.dim)}
+                              style={{ fontFamily: C.sans, fontSize: 10, fontWeight: 600, letterSpacing: '0.04em', color: C.dim, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                              {l.label}
+                            </span>
+                          </Tooltip>
+                        ))}
+                      </span>
                       {renderCols.map(col => {
                         const raw = r[col.key]
                         if (col.key === 'sector') {
