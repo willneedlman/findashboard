@@ -2,6 +2,7 @@ import { Suspense, useEffect } from 'react'
 import { lazyWithReload } from './lib/chunkReload'
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
+import CommandPalette from './components/CommandPalette'
 import Layout from './components/Layout'
 import { ThemeProvider, useTheme } from './contexts/ThemeContext'
 import { PortfolioProvider } from './contexts/PortfolioContext'
@@ -109,6 +110,7 @@ function TerminalChrome() {
   }, [location.pathname, location.search])
   return (
     <Layout>
+      <CommandPalette />
       <AnimatePresence mode="wait">
         <Suspense key={location.pathname} fallback={<PageLoader />}>
           <Outlet />
