@@ -39,14 +39,14 @@ interface XrayResult {
   overlap: { a: string; b: string; overlap: number; shared: number }[]
 }
 
-function Panel({ title, right, children, style }: { title: string; right?: React.ReactNode; children: React.ReactNode; style?: React.CSSProperties }) {
+function Panel({ title, right, children, style, bodyStyle }: { title: string; right?: React.ReactNode; children: React.ReactNode; style?: React.CSSProperties; bodyStyle?: React.CSSProperties }) {
   return (
     <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, display: 'flex', flexDirection: 'column', minWidth: 0, ...style }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, background: CHROME, padding: '5px 10px', borderBottom: `1px solid ${HAIR}` }}>
         <span style={{ ...EYEBROW, fontSize: 10, letterSpacing: '0.16em', color: GOLD }}>{title}</span>
         {right && <span style={{ fontFamily: MONO, fontSize: 9, color: SEC, letterSpacing: '0.04em', textAlign: 'right' }}>{right}</span>}
       </div>
-      <div style={{ minWidth: 0 }}>{children}</div>
+      <div style={{ minWidth: 0, ...bodyStyle }}>{children}</div>
     </div>
   )
 }
@@ -94,7 +94,7 @@ export function EtfXrayContent() {
     if (sort === 'funds') s.sort((a, b) => b.fund_count - a.fund_count || b.weight - a.weight)
     else if (sort === 'ticker') s.sort((a, b) => a.ticker.localeCompare(b.ticker))
     else s.sort((a, b) => b.weight - a.weight)
-    return s.slice(0, 25)
+    return s
   }, [data, fundFilter, sort])
   const rowMax = Math.max(0.01, ...rows.map(r => r.weight))
 
@@ -179,10 +179,10 @@ export function EtfXrayContent() {
           </div>
 
           {/* Two-column results */}
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'stretch' }}>
             {/* Left — Look-through holdings */}
-            <Panel title="Look-Through Holdings" right={`equal-weight blend · top ${rows.length} of ${data.unique_holdings}`} style={{ flex: '1.55 1 460px' }}>
-              <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 9 }}>
+            <Panel title="Look-Through Holdings" right={`equal-weight blend · ${fundFilter ? `${rows.length} in ${fundFilter}` : `all ${rows.length}`}`} style={{ flex: '1.55 1 460px' }} bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+              <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 9, flex: 1, minHeight: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ ...EYEBROW, fontSize: 8, color: SEC }}>Sort</span>
                   <div style={{ display: 'flex', border: `1px solid ${BORDER}` }}>
@@ -211,7 +211,7 @@ export function EtfXrayContent() {
                     )
                   })}
                 </div>
-                <div style={{ maxHeight: 460, overflowY: 'auto' }}>
+                <div style={{ flex: 1, minHeight: 160, maxHeight: 'calc(100vh - 250px)', overflowY: 'auto' }}>
                   {rows.map((a, i) => (
                     <div key={a.ticker} onMouseEnter={() => setHover(a.ticker)} onMouseLeave={() => setHover('')}
                       style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '5px 4px', borderBottom: i < rows.length - 1 ? `1px solid ${HAIR}` : 'none', background: hover === a.ticker ? 'rgba(255,255,255,0.03)' : 'transparent' }}>
