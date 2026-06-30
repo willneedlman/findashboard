@@ -538,9 +538,10 @@ export default function StockScreener() {
                         <span style={{ fontFamily: C.mono, fontWeight: 700, fontSize: 12.5, color: C.gold }}>{r.ticker}</span>
                         <span style={{ fontFamily: C.sans, fontSize: 11, color: C.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.companyName}</span>
                       </div>
-                      {/* Actions float over the row's right edge on hover so they never
-                          steal width from the company name. Opaque backdrop keeps them legible. */}
-                      <span className="ft-row-actions" style={{ position: 'absolute', right: 0, top: 0, bottom: 0, display: 'flex', alignItems: 'center', gap: 11, padding: '0 24px 0 36px', background: 'linear-gradient(90deg, transparent, var(--theme-surface, #0d1826) 28px)' }}>
+                      {/* Actions float over the row's LEFT edge (the ticker) on hover, so
+                          they stay on-screen even when the table scrolls horizontally and
+                          never steal width from the company name. Opaque backdrop, fading right. */}
+                      <span className="ft-row-actions" style={{ position: 'absolute', left: 0, top: 0, bottom: 0, display: 'flex', alignItems: 'center', gap: 11, padding: '0 36px 0 24px', background: 'linear-gradient(90deg, var(--theme-surface, #0d1826), var(--theme-surface, #0d1826) calc(100% - 28px), transparent)' }}>
                         {ROW_LINKS.map(l => (
                           <Tooltip key={l.label} label={`Open ${r.ticker} in ${l.label}`}>
                             <span
