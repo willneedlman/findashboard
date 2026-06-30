@@ -177,14 +177,16 @@ export function Chips({ options, value, onPick }: { options: { label: string; va
 
 // One compact KPI cell for the unified top instrument strip. Cells sit in a row
 // separated by hairline borders; the strip reads as one instrument, not cards.
-export function KpiCell({ label, value, color, valueSize = 13, grow = false, minWidth, sub, subColor }: {
+export function KpiCell({ label, value, color, valueSize = 13, grow = false, minWidth, sub, subColor, align = 'center' }: {
   label: string; value: string; color?: string; valueSize?: number; grow?: boolean; minWidth?: number
-  sub?: string; subColor?: string
+  sub?: string; subColor?: string; align?: 'center' | 'top'
 }) {
+  // align="top" gives every cell the same label/value baseline regardless of
+  // whether it has a sub line (so a mixed strip stays aligned).
   return (
     <div style={{
-      display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2,
-      padding: '6px 13px', borderRight: `1px solid ${V.border}`,
+      display: 'flex', flexDirection: 'column', justifyContent: align === 'top' ? 'flex-start' : 'center', gap: 3,
+      padding: align === 'top' ? '11px 14px' : '6px 13px', borderRight: `1px solid ${V.border}`,
       flex: grow ? 1 : '0 0 auto', minWidth,
     }}>
       <span style={{ ...EYEBROW, fontSize: 8 }}>{label}</span>

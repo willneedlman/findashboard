@@ -161,13 +161,13 @@ export default function SkewTool() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {/* Answer-first skew strip */}
             <div style={STRIP}>
-              <KpiCell grow minWidth={165} label="Downside Skew · 25Δ RR" value={`${sel.rr_25 > 0 ? '+' : ''}${sel.rr_25.toFixed(1)}`} valueSize={21}
+              <KpiCell grow align="top" minWidth={170} label="Downside Skew · 25Δ RR" value={`${sel.rr_25 > 0 ? '+' : ''}${sel.rr_25.toFixed(1)}`} valueSize={21}
                 color={skewColor(sel.rr_25)} />
-              <KpiCell grow label="ATM IV" value={`${sel.atm_iv.toFixed(1)}%`} valueSize={21} color={BLUE} sub={sel.expiry} />
-              <KpiCell grow label="Implied Move" value={`±${em.pct.toFixed(1)}%`} valueSize={21} color={GOLD} sub={`$${em.lo.toFixed(0)}–$${em.hi.toFixed(0)}`} />
-              <KpiCell grow label="Tail Premium · 25Δ BF" value={`${sel.bf_25 > 0 ? '+' : ''}${sel.bf_25.toFixed(1)}`} valueSize={21} />
-              <KpiCell grow label="Near vs Far Vol" value={`${data.ts_slope > 0 ? '+' : ''}${data.ts_slope.toFixed(1)}`} valueSize={21} color={data.ts_slope > 0.5 ? POS : data.ts_slope < -0.5 ? NEG : undefined} />
-              <KpiCell grow label="Spot" value={`$${data.spot}`} valueSize={21} sub={`${sel.dte}d to expiry`} />
+              <KpiCell grow align="top" minWidth={120} label="ATM IV" value={`${sel.atm_iv.toFixed(1)}%`} valueSize={21} color={BLUE} sub={sel.expiry} />
+              <KpiCell grow align="top" minWidth={130} label="Implied Move" value={`±${em.pct.toFixed(1)}%`} valueSize={21} color={GOLD} sub={`$${em.lo.toFixed(0)}–$${em.hi.toFixed(0)}`} />
+              <KpiCell grow align="top" minWidth={150} label="Tail Premium · 25Δ BF" value={`${sel.bf_25 > 0 ? '+' : ''}${sel.bf_25.toFixed(1)}`} valueSize={21} />
+              <KpiCell grow align="top" minWidth={130} label="Near vs Far Vol" value={`${data.ts_slope > 0 ? '+' : ''}${data.ts_slope.toFixed(1)}`} valueSize={21} color={data.ts_slope > 0.5 ? POS : data.ts_slope < -0.5 ? NEG : undefined} />
+              <KpiCell grow align="top" minWidth={110} label="Spot" value={`$${data.spot}`} valueSize={21} sub={`${sel.dte}d to expiry`} />
             </div>
 
             {/* IV Smile */}
