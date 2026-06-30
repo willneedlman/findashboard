@@ -10,13 +10,16 @@ const WORKSPACE: Cmd[] = [
   { label: 'Portfolio Manager', route: '/portfolio-manager', group: 'Workspace' },
 ]
 
-const COMMANDS: Cmd[] = [
+const _RAW: Cmd[] = [
   ...WORKSPACE,
   ...HUBS.flatMap(h => [
     { label: `${h.label} Hub`, route: `/hub/${h.slug}`, group: 'Hubs', desc: h.tagline },
     ...h.tools.map(t => ({ label: t.title, route: t.route, group: h.label, desc: t.desc })),
   ]),
 ]
+// Dedupe by route (e.g. Portfolio Manager lives in both Workspace and a hub) so
+// there are no duplicate React keys / phantom rows.
+const COMMANDS: Cmd[] = _RAW.filter((c, i) => _RAW.findIndex(x => x.route === c.route) === i)
 
 // All query tokens must appear; rank prefers prefix/label matches.
 function score(q: string, c: Cmd): number {
@@ -106,7 +109,7 @@ export default function CommandPalette() {
             <div style={{ padding: '18px 12px', color: SEC, fontFamily: MONO, fontSize: 12, textAlign: 'center' }}>No matches</div>
           )}
           {results.map((c, i) => (
-            <div key={c.route + c.label} onClick={() => go(c)} onMouseEnter={() => setSel(i)}
+            <div key={`${c.group}:${c.route}`} onClick={() => go(c)} onMouseEnter={() => setSel(i)}
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '8px 11px', cursor: 'pointer',
                 background: i === sel ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)' : 'transparent',
                 borderLeft: `2px solid ${i === sel ? GOLD : 'transparent'}` }}>
