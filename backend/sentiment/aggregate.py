@@ -36,13 +36,47 @@ def _article_weight(a: ScoredArticle, corr: float) -> float:
 
 
 def _item_out(a: ScoredArticle) -> ItemOut:
+    fw = a.forward_looking_weight
     return ItemOut(
         text=a.title, published_at=a.published_at, age_hours=a.age_hours, url=a.url,
         sentiment=a.sentiment, score=a.score, direction=a.direction, macro_tier=a.macro_tier,
         confidence=a.confidence, recency_weight=a.recency_weight,
         market_impact_weight=a.market_impact_weight, reasoning_tag=a.reasoning_tag,
+        forward_looking_weight=fw,
+        forward_sentiment_score=round(a.score * fw, 2),
+        backward_sentiment_score=round(a.score * (1.0 - fw), 2),
         entities=a.entities,
     )
+
+
+def horizon_composites(
+    all_scored: list[ScoredArticle], corroboration: dict[str, float],
+) -> tuple[float, float, int, int]:
+    """(forward_composite, backward_composite, forward_count, backward_count).
+
+    Each side is the article-weighted average score over its horizon mass: the
+    standard article weight scaled by forward_looking_weight (forward) or by
+    1 - forward_looking_weight (backward). A side with no mass falls back to the
+    neutral 50.0. Counts split articles at the 0.5 threshold (the hard toggle).
+    """
+    if not all_scored:
+        return 50.0, 50.0, 0, 0
+    fwd_num = fwd_den = bwd_num = bwd_den = 0.0
+    fwd_count = bwd_count = 0
+    for a in all_scored:
+        w = _article_weight(a, _corr(corroboration, a))
+        fw = a.forward_looking_weight
+        fwd_num += a.score * w * fw
+        fwd_den += w * fw
+        bwd_num += a.score * w * (1.0 - fw)
+        bwd_den += w * (1.0 - fw)
+        if fw >= 0.5:
+            fwd_count += 1
+        else:
+            bwd_count += 1
+    fwd = round(fwd_num / fwd_den, 1) if fwd_den > 0 else 50.0
+    bwd = round(bwd_num / bwd_den, 1) if bwd_den > 0 else 50.0
+    return fwd, bwd, fwd_count, bwd_count
 
 
 def build_sources(

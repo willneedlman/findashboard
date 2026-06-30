@@ -23,7 +23,7 @@ from zoneinfo import ZoneInfo
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 import json  # noqa: E402
 
-from sentiment import aggregate, audit, config, enrich, lexicon, source_manager  # noqa: E402
+from sentiment import aggregate, audit, config, enrich, horizon, lexicon, source_manager  # noqa: E402
 from sentiment.reliability import Reliability  # noqa: E402
 from sentiment.schemas import ScoredArticle, SentimentSnapshot  # noqa: E402
 from sentiment.sources import fetch_market_context, fetch_source  # noqa: E402
@@ -121,7 +121,9 @@ def _score_window(
                 direction=lex.direction, confidence=round(conf, 2), macro_tier=lex.macro_tier,
                 sentiment=lex.sentiment,
                 market_impact_weight=lexicon.market_impact_weight(art.title, entities),
-                reasoning_tag="Neutral Signal", entities=entities,
+                reasoning_tag="Neutral Signal",
+                forward_looking_weight=horizon.forward_looking_weight(art.title),
+                entities=entities,
             ))
     return scored, in_window
 
@@ -148,6 +150,7 @@ def _compute(sample_size: int, timeframe_hours: int, now: int) -> SentimentSnaps
 
     source_results = aggregate.build_sources(scored_by_source, specs_by_label, corroboration)
     comp, direction, path = aggregate.composite(source_results, eff_weight, scored, corroboration)
+    fwd_comp, bwd_comp, fwd_count, bwd_count = aggregate.horizon_composites(scored, corroboration)
     bull, bear, neutral, bull_pct, bear_pct = aggregate.breakdown(scored)
     hi_score, hi_count = aggregate.high_impact(scored)
     session_conf = round(min(1.0, in_window / max(1, config.MIN_SIGNAL_HEADLINES)), 2)
@@ -178,6 +181,8 @@ def _compute(sample_size: int, timeframe_hours: int, now: int) -> SentimentSnaps
         total_scored=len(scored), sources_used=len(source_results),
         bull_count=bull, bear_count=bear, neutral_count=neutral, bull_pct=bull_pct, bear_pct=bear_pct,
         scoring_degraded=False, groq_error=None,
+        forward_composite=fwd_comp, backward_composite=bwd_comp,
+        forward_count=fwd_count, backward_count=bwd_count,
         high_impact_score=hi_score, high_impact_count=hi_count if hi_score is not None else None,
         momentum=momentum, market_context=market_ctx or None,
         source_health=health,

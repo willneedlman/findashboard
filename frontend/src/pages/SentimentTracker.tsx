@@ -33,6 +33,9 @@ interface ScoredItem {
   confidence:     number
   recency_weight: number
   reasoning_tag:  string
+  forward_looking_weight:  number
+  forward_sentiment_score: number
+  backward_sentiment_score: number
   entities:       Entity[]
 }
 
@@ -96,6 +99,10 @@ interface Snapshot {
   market_context?:    MarketContext
   scoring_degraded?:  boolean
   groq_error?:        string | null
+  forward_composite?:  number
+  backward_composite?: number
+  forward_count?:      number
+  backward_count?:     number
 }
 
 interface MktEntry {
@@ -183,6 +190,15 @@ function sentimentColor(score: number): string {
   if (score >= 45) return T.muted
   if (score >= 35) return 'var(--theme-negative, #fca5a5)'
   return 'var(--theme-negative-strong, #e07878)'
+}
+// Band label for a client-derived (horizon-weighted) score; server sends its own
+// label for the raw composite, but the slider/toggle index needs one too.
+function bandLabel(score: number): string {
+  if (score >= 65) return 'Bullish'
+  if (score >= 55) return 'Leaning Bullish'
+  if (score >= 45) return 'Neutral'
+  if (score >= 35) return 'Leaning Bearish'
+  return 'Bearish'
 }
 function sentimentBg(score: number): string {
   if (score >= 65) return 'rgba(110,231,183,0.07)'
@@ -707,6 +723,8 @@ function MarketContextCard({ ctx }: { ctx: MarketContext }) {
 // ── Page ───────────────────────────────────────────────────────────────────────
 export default function SentimentTracker() {
   const [timeframe, setTimeframe] = useState<Timeframe>('24h')
+  const [horizon, setHorizon] = useState(0.5)              // 0 = backward, 1 = forward
+  const [lens, setLens] = useState<'all' | 'forward' | 'backward'>('all')
   const qc = useQueryClient()
   const tf  = TIMEFRAMES.find(t => t.id === timeframe)!
 
@@ -793,6 +811,25 @@ export default function SentimentTracker() {
   const lowSignal = conf < 0.5
   const sources   = data?.sources ?? []
 
+  // Horizon split: blend the forward/backward composites by the slider, or pin to
+  // one side via the hard toggle. Items are filtered at the 0.5 threshold.
+  const fwdComposite = data?.forward_composite ?? data?.composite_score ?? 50
+  const bwdComposite = data?.backward_composite ?? data?.composite_score ?? 50
+  const displayScore = !data
+    ? 50
+    : lens === 'forward' ? fwdComposite
+    : lens === 'backward' ? bwdComposite
+    : horizon * fwdComposite + (1 - horizon) * bwdComposite
+  const horizonActive = lens !== 'all' || Math.abs(horizon - 0.5) > 0.001
+  const displaySources = lens === 'all'
+    ? sources
+    : sources
+        .map(s => ({ ...s, items: s.items.filter(it => lens === 'forward' ? it.forward_looking_weight >= 0.5 : it.forward_looking_weight < 0.5) }))
+        .filter(s => s.items.length > 0)
+  const shownCount = lens === 'all'
+    ? (data?.in_window_count ?? 0)
+    : displaySources.reduce((n, s) => n + s.items.length, 0)
+
   const sidebar = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
@@ -803,10 +840,15 @@ export default function SentimentTracker() {
         </div>
         {data ? (
           <>
-            <Gauge score={data.composite_score} conf={conf} />
-            <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.06em', color: sentimentColor(data.composite_score), marginTop: 6, fontFamily: T.mono, textAlign: 'center' }}>
-              {data.label}
+            <Gauge score={displayScore} conf={conf} />
+            <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.06em', color: sentimentColor(displayScore), marginTop: 6, fontFamily: T.mono, textAlign: 'center' }}>
+              {horizonActive ? bandLabel(displayScore) : data.label}
             </div>
+            {horizonActive && (
+              <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.07em', color: T.gold, marginTop: 3, fontFamily: T.mono, textAlign: 'center' }}>
+                {lens === 'forward' ? 'FORWARD-LOOKING ONLY' : lens === 'backward' ? 'BACKWARD-LOOKING ONLY' : `${Math.round(horizon * 100)}% FORWARD BLEND`} · RAW {data.composite_score.toFixed(0)}
+              </div>
+            )}
             {data.scoring_degraded && (() => {
               const err = data.groq_error ?? ''
               const rateLimitMatch = err.match(/retry in ([^.'"]+)/i)
@@ -1003,6 +1045,37 @@ export default function SentimentTracker() {
 
       {data && (
         <>
+          {/* Horizon weighting slider + hard toggle */}
+          <div style={{ background: T.surface, border: `1px solid ${T.border}`, padding: '12px 14px', marginBottom: 14, display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'center' }}>
+            <div style={{ flex: '2 1 300px', minWidth: 240, opacity: lens === 'all' ? 1 : 0.4 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, fontFamily: T.mono }}>Sentiment Horizon Weighting</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: T.gold, fontFamily: T.mono }}>{Math.abs(horizon - 0.5) < 0.001 ? '50 / 50 split' : `${Math.round(horizon * 100)}% forward`}</span>
+              </div>
+              <input type="range" min={0} max={1} step={0.01} value={horizon} disabled={lens !== 'all'}
+                onChange={e => setHorizon(parseFloat(e.target.value))}
+                style={{ width: '100%', accentColor: T.gold, cursor: lens === 'all' ? 'pointer' : 'not-allowed' }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3, fontSize: 8, color: T.muted, fontFamily: T.mono }}>
+                <span>100% BACKWARD</span><span>BALANCED</span><span>100% FORWARD</span>
+              </div>
+            </div>
+            <div style={{ flex: '1 1 auto' }}>
+              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, fontFamily: T.mono, marginBottom: 6 }}>View</div>
+              <div style={{ display: 'flex', border: `1px solid ${T.border}` }}>
+                {([['all', 'All Articles'], ['forward', 'Forward-Looking'], ['backward', 'Backward-Looking']] as const).map(([k, lbl], i) => (
+                  <button key={k} onClick={() => setLens(k)} style={{
+                    background: lens === k ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 16%, transparent)' : 'transparent',
+                    border: 'none', borderLeft: i ? `1px solid ${T.border}` : 'none', cursor: 'pointer',
+                    color: lens === k ? T.gold : T.muted, fontFamily: T.mono, fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '6px 11px', whiteSpace: 'nowrap',
+                  }}>{lbl}</button>
+                ))}
+              </div>
+              <div style={{ fontSize: 8, color: T.muted, fontFamily: T.mono, marginTop: 5, textAlign: 'right' }}>
+                FWD {fwdComposite.toFixed(0)} ({data.forward_count ?? 0}) · BWD {bwdComposite.toFixed(0)} ({data.backward_count ?? 0})
+              </div>
+            </div>
+          </div>
+
           {/* Bull / Bear distribution */}
           <BullBearBar bull={data.bull_count} bear={data.bear_count} neutral={data.neutral_count} />
 
@@ -1019,9 +1092,13 @@ export default function SentimentTracker() {
           {sources.length > 0 && (
             <div>
               <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, marginBottom: 8, fontFamily: T.mono }}>
-                News Headlines — last {tf.label} · {data.in_window_count} articles in window
+                News Headlines — last {tf.label} · {shownCount} {lens === 'forward' ? 'forward-looking' : lens === 'backward' ? 'backward-looking' : 'articles'} in window
               </div>
-              {sources.map(src => (
+              {displaySources.length === 0 ? (
+                <div style={{ fontSize: 10, color: T.muted, fontFamily: T.mono, padding: '16px 0', textAlign: 'center' }}>
+                  No {lens}-looking articles in this window.
+                </div>
+              ) : displaySources.map(src => (
                 <SourcePanel key={src.label} src={src} timeframeHours={tf.hours} />
               ))}
             </div>

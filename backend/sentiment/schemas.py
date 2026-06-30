@@ -43,6 +43,7 @@ class ScoredArticle:
     sentiment: str
     market_impact_weight: float
     reasoning_tag: str
+    forward_looking_weight: float = 0.5  # 1.0 = predictive/speculative, 0.0 = historical
     entities: list[Entity] = field(default_factory=list)
 
 
@@ -100,6 +101,9 @@ class ItemOut(BaseModel):
     recency_weight: float
     market_impact_weight: float
     reasoning_tag: str
+    forward_looking_weight: float           # [0,1] horizon: 1 = forward, 0 = backward
+    forward_sentiment_score: float          # score * forward_looking_weight
+    backward_sentiment_score: float         # score * (1 - forward_looking_weight)
     entities: list[Entity]
 
 
@@ -188,6 +192,12 @@ class SentimentSnapshot(BaseModel):
     bear_pct: int
     scoring_degraded: bool
     groq_error: str | None = None  # name kept for contract; now = enrichment error
+
+    # Horizon split — forward-looking vs backward-looking composite indices.
+    forward_composite: float = 50.0
+    backward_composite: float = 50.0
+    forward_count: int = 0   # articles with forward_looking_weight >= 0.5
+    backward_count: int = 0  # articles with forward_looking_weight < 0.5
 
     # Legacy contract — present only when available (stripped when None).
     high_impact_score: float | None = None
