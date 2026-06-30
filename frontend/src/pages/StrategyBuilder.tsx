@@ -11,7 +11,7 @@ const STRIP: React.CSSProperties = {
   display: 'flex', alignItems: 'stretch', overflowX: 'auto',
   background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
 }
-import { type Leg, type GreekPos, type GreekResult, DEFAULT_TICKER, DEFAULT_EXPIRY, mk, roundToStrike, scalePreset, GREEK_COLORS, PRESETS, PRESET_DESC, PRESET_GROUPS, LEG_COLORS, LS_KEY, toOCC, INPUT, SELECT, type LegChain, fmtExpiry, intrinsic, type PendingOptionStrategy } from './strategy-builder/shared'
+import { type Leg, type GreekPos, type GreekResult, DEFAULT_TICKER, DEFAULT_EXPIRY, mk, roundToStrike, scalePreset, GREEK_COLORS, PRESETS, PRESET_DESC, PRESET_GROUPS, LEG_COLORS, LS_KEY, toOCC, INPUT, SELECT, type LegChain, fmtExpiry, intrinsic, impliedVol, legPnlAt, type PendingOptionStrategy } from './strategy-builder/shared'
 
 export default function StrategyBuilder() {
   const [legs, setLegs]               = useState<Leg[]>(PRESETS['Long Call'])
@@ -21,6 +21,7 @@ export default function StrategyBuilder() {
     Object.fromEntries(PRESET_GROUPS.map(g => [g.label, g.label === 'Single Leg']))
   )
   const [spotOverrides, setSpotOverrides] = useState<Record<string, number>>({})
+  const [daysFromNow, setDaysFromNow] = useState(0)   // 0 = today's mark; max = expiry
   const [greekResult, setGreekResult] = useState<GreekResult | null>(null)
   const [greekLoading, setGreekLoading] = useState(false)
   const [greekError, setGreekError]   = useState<string | null>(null)
@@ -128,18 +129,32 @@ export default function StrategyBuilder() {
       .filter(l => l.ticker !== primaryTicker)
       .reduce((sum, leg) => sum + intrinsic(getSpot(leg.ticker), leg), 0)
 
+    const primary = legs.filter(l => l.ticker === primaryTicker)
+    // Implied vol + days-to-expiry per primary leg, for the before-expiry curve.
+    const legMeta = primary.map(leg => {
+      const dteDays = Math.max(0, Math.round((new Date(leg.expiry + 'T12:00:00').getTime() - Date.now()) / 86400000))
+      const iv = impliedVol(leg.premium, leg.option_type, getSpot(leg.ticker), leg.K, dteDays / 365)
+      return { leg, dteDays, iv }
+    })
+    const maxDte = legMeta.reduce((m, x) => Math.max(m, x.dteDays), 0)
+    const tDays = Math.min(daysFromNow, maxDte)
+    const showT = maxDte > 0   // before-expiry curve only meaningful with time left
+
     const rows = Array.from({ length: steps + 1 }, (_, i) => {
       const S     = lo + (hi - lo) * (i / steps)
-      const total = legs.filter(l => l.ticker === primaryTicker)
-        .reduce((sum, leg) => sum + intrinsic(S, leg), 0) + secondaryOffset
+      const total = primary.reduce((sum, leg) => sum + intrinsic(S, leg), 0) + secondaryOffset
+      const tval  = showT
+        ? legMeta.reduce((sum, m) => sum + legPnlAt(S, m.leg, m.iv, tDays), 0) + secondaryOffset
+        : total
       const row: Record<string, number> = {
         price:  +S.toFixed(2),
         total:  +total.toFixed(2),
+        tval:   +tval.toFixed(2),
         profit: +Math.max(total, 0).toFixed(2),
         loss:   +Math.min(total, 0).toFixed(2),
       }
       // Per-leg lines (primary ticker only)
-      legs.filter(l => l.ticker === primaryTicker).forEach((leg, idx) => {
+      primary.forEach((leg, idx) => {
         row[`leg${idx}`] = +intrinsic(S, leg).toFixed(2)
       })
       return row
@@ -162,8 +177,8 @@ export default function StrategyBuilder() {
       }
     }
 
-    return { rows, atm, spot, yMin, yMax, breakevens, lo, hi, pct: (spot - atm) / atm * 100 }
-  }, [legs, spotOverrides, primaryTicker]) // spotOverrides intentional — live updates
+    return { rows, atm, spot, yMin, yMax, breakevens, lo, hi, pct: (spot - atm) / atm * 100, maxDte, tDays, showT }
+  }, [legs, spotOverrides, primaryTicker, daysFromNow]) // spotOverrides intentional — live updates
 
   const primaryLegs = legs.filter(l => l.ticker === primaryTicker)
 
@@ -695,7 +710,12 @@ export default function StrategyBuilder() {
                       strokeWidth={1} strokeDasharray="5 3" dot={false} name={`Leg ${idx + 1}`} legendType="none" />
                   ))}
 
-                  {/* Total P&L — main gold line */}
+                  {/* Before-expiry P&L (Black-Scholes at the chosen day) */}
+                  {chartData.showT && (
+                    <Line type="monotone" dataKey="tval" stroke="var(--theme-tertiary, #60a5fa)" strokeWidth={1.75} strokeDasharray="5 3" dot={false} name="tval" legendType="none" />
+                  )}
+
+                  {/* Total P&L at expiry — main gold line */}
                   <Line type="monotone" dataKey="total" stroke="var(--theme-primary, #c9a84c)" strokeWidth={2.5} dot={false} name="total" legendType="none" />
                 </ComposedChart>
               </ResponsiveContainer>
@@ -735,6 +755,46 @@ export default function StrategyBuilder() {
                 </div>
               </div>
             </div>
+
+            {/* Time-decay slider: dashed blue line = P&L this many days from now */}
+            {chartData.showT && (
+              <div style={{ padding: '8px 14px 12px', borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-tertiary, #60a5fa)', whiteSpace: 'nowrap', width: 68 }}>
+                    Time
+                  </span>
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    <input type="range" min={0} max={chartData.maxDte} step={1} value={chartData.tDays}
+                      onChange={e => setDaysFromNow(+e.target.value)}
+                      style={{ width: '100%', accentColor: 'var(--theme-tertiary, #60a5fa)' }} />
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      {[0, 0.25, 0.5, 0.75, 1].map(f => {
+                        const d = Math.round(chartData.maxDte * f)
+                        return (
+                          <button key={f} onClick={() => setDaysFromNow(d)}
+                            style={{ fontSize: 9, fontFamily: 'var(--theme-mono)', color: 'var(--theme-tertiary, #60a5fa)',
+                              background: 'none', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '2px 5px', cursor: 'pointer' }}>
+                            {f === 0 ? 'Today' : f === 1 ? 'Expiry' : `+${d}d`}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 14, fontWeight: 700, color: 'var(--theme-tertiary, #60a5fa)' }}>
+                      {chartData.tDays === 0 ? 'Today' : `+${chartData.tDays}d`}
+                    </div>
+                    <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-secondary, #8099b0)' }}>
+                      {Math.max(0, chartData.maxDte - chartData.tDays)} DTE left
+                    </div>
+                  </div>
+                </div>
+                <div style={{ fontSize: 9, fontFamily: 'var(--theme-mono)', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', marginTop: 6 }}>
+                  <span style={{ color: 'var(--theme-tertiary, #60a5fa)' }}>--- </span>P&L at this date (Black-Scholes, implied vol from premium) ·
+                  <span style={{ color: 'var(--theme-primary, #c9a84c)' }}> — </span>at expiry
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Secondary ticker sliders */}

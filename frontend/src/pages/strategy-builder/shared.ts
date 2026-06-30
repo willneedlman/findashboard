@@ -157,3 +157,43 @@ export function intrinsic(S: number, leg: Leg): number {
   const sign = leg.action === 'buy' ? 1 : -1
   return sign * (val - leg.premium) * leg.quantity * 100
 }
+
+// ── Black-Scholes (for the before-expiry P&L curve) ──────────────────────────
+// Standard-normal CDF (Zelen & Severo approximation, ~1e-7 accuracy).
+function normCdf(x: number): number {
+  const t = 1 / (1 + 0.2316419 * Math.abs(x))
+  const d = 0.3989422804014327 * Math.exp(-x * x / 2)
+  const p = d * t * (0.319381530 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))))
+  return x > 0 ? 1 - p : p
+}
+
+export function bsPrice(type: 'call' | 'put', S: number, K: number, tau: number, sigma: number, r = 0.04): number {
+  if (tau <= 0 || sigma <= 0) return Math.max(type === 'call' ? S - K : K - S, 0)
+  const sq = sigma * Math.sqrt(tau)
+  const d1 = (Math.log(S / K) + (r + 0.5 * sigma * sigma) * tau) / sq
+  const d2 = d1 - sq
+  return type === 'call'
+    ? S * normCdf(d1) - K * Math.exp(-r * tau) * normCdf(d2)
+    : K * Math.exp(-r * tau) * normCdf(-d2) - S * normCdf(-d1)
+}
+
+// Implied vol backed out of the leg's entry premium by bisection, so the
+// before-expiry curve uses the vol the market actually priced in.
+export function impliedVol(price: number, type: 'call' | 'put', S: number, K: number, tau: number, r = 0.04): number {
+  if (tau <= 0 || price <= Math.max(type === 'call' ? S - K : K - S, 0)) return 0.3
+  let lo = 0.01, hi = 5
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2
+    if (bsPrice(type, S, K, tau, mid, r) > price) hi = mid; else lo = mid
+  }
+  return (lo + hi) / 2
+}
+
+// P&L of a leg at spot S, `days` from now (theta decay), using its implied vol.
+export function legPnlAt(S: number, leg: Leg, iv: number, daysFromNow: number, r = 0.04): number {
+  const dteDays = Math.max(0, Math.round((new Date(leg.expiry + 'T12:00:00').getTime() - Date.now()) / 86400000))
+  const tau = Math.max(0, (dteDays - daysFromNow)) / 365
+  const val = bsPrice(leg.option_type, S, leg.K, tau, iv, r)
+  const sign = leg.action === 'buy' ? 1 : -1
+  return sign * (val - leg.premium) * leg.quantity * 100
+}
