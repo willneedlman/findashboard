@@ -135,6 +135,31 @@ def test_isolated_spike_discounted_but_corroborated_not():
     assert sorted(len(c) for c in clusters) == [1, 2]
 
 
+def test_paraphrased_headlines_cluster_on_rare_anchor():
+    # Same event, three different wordings — too lexically divergent for the
+    # shingle test, but all anchored by the rare surname "Hammack".
+    items = [
+        _scored("CNBC Markets", "rss:cnbc", "Fed's Hammack tells CNBC rate hikes may be needed to quell high inflation", 30, 4),
+        _scored("CNBC Top News", "rss:cnbctop", "Fed's Hammack says rate hikes possible if inflation persists", 32, 4),
+        _scored("Investing.com", "rss:investing", "Cleveland Fed President Hammack says AI could fuel inflation, rate hikes may be necessary", 28, 4),
+        # An unrelated story sharing only generic market words must stay separate.
+        _scored("Yahoo Finance", "rss:yahoo", "Tech stocks rally as earnings season kicks off", 60, 3),
+    ]
+    _factor, _stats, clusters = source_manager.verify(items)
+    assert sorted(len(c) for c in clusters) == [1, 3]
+
+
+def test_unrelated_stories_sharing_generic_words_do_not_merge():
+    # Different events that share only generic market vocabulary (prices/climb) and
+    # have no rare subject anchor in common must NOT be fused by the paraphrase path.
+    items = [
+        _scored("CNBC Markets", "rss:cnbc", "Oil prices climb on supply concerns", 45, 3),
+        _scored("Yahoo Finance", "rss:yahoo", "Gold prices climb on safe haven demand", 55, 3),
+    ]
+    _factor, _stats, clusters = source_manager.verify(items)
+    assert sorted(len(c) for c in clusters) == [1, 1]
+
+
 # ── Pure aggregation determinism ──────────────────────────────────────────────
 def test_aggregate_is_deterministic():
     sbs = {

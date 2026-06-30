@@ -120,6 +120,13 @@ DECAY_HALFLIFE_RATIO: float = 1.0 / 3.0   # half-life = timeframe / 3
 CORROBORATION_DISCOUNT: float = 0.5       # weight multiplier for an isolated spike
 SHINGLE_K: int = 3                        # token shingle size for dedup
 SHINGLE_SIMILARITY: float = 0.6           # Jaccard >= this => same cluster
+# Paraphrase clustering: headlines that reword the same event (different titles,
+# same story) won't pass the shingle test, but share a rare anchor token (e.g. a
+# surname) plus enough content. Cluster when they share a rare, non-generic token
+# AND >= MIN_SHARED content tokens AND the overlap is >= RATIO of the shorter title.
+PARAPHRASE_RARE_DF_FRACTION: float = 0.06  # token is a "rare anchor" if it appears in <= this fraction of the batch
+PARAPHRASE_MIN_SHARED: int = 2             # min shared content tokens
+PARAPHRASE_RATIO: float = 0.4              # shared / shorter-title-length floor
 HIGH_IMPACT_TIER: int = 4                 # tier >= this counts toward high_impact_score
 # An "isolated spike" worth discounting is a systemic, very strongly directional
 # claim carried by a single source — the precise fake-news / manipulation guard.

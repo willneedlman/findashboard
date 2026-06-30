@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import re
+from collections import Counter
 
 from sentiment import config
 from sentiment.config import SourceSpec
@@ -19,6 +20,32 @@ from sentiment.reliability import Reliability
 from sentiment.schemas import ScoredArticle, Verification
 
 _WORD = re.compile(r"[a-z0-9]+")
+
+# Tokens that carry no subject identity: function words plus generic market
+# vocabulary. They can count as shared content but must NOT serve as the rare
+# anchor that fuses two paraphrased headlines, or template lines like
+# "X stock rises on earnings" / "Y stock rises on earnings" would wrongly merge.
+_STOP = frozenset("""
+a an the of to in on for and or but with as at by from is are was were be been being this that these those
+it its it's he she they them his her their you your we our us not no nor than then over under into out up down
+off about after before may might could would should will can has have had do does did say says said tell tells
+told amid if when while what why how who whom whose new now get gets new amp via per
+""".split())
+_COMMON_FINANCE = frozenset("""
+stock stocks share shares market markets rate rates inflation earnings revenue revenues profit profits loss
+losses fed ecb boe economy economic price prices index indexes dow nasdaq treasury treasuries yield yields
+oil gold silver dollar euro bond bonds close closes closing open opens rise rises rose fall falls fell gain
+gains drop drops tumble rally rallies surge surges slump high highs low lows week weeks day days month months
+quarter report reports data growth investors trading trade session futures cut cuts hike hikes outlook forecast
+sector stocks500 sp500 wall street percent points
+beat beats miss misses top tops topped jump jumps jumped slide slides soar soars sink sinks climb climbs dip
+dips plunge plunges slip slips edge edges rebound rebounds season company shares stockmarket
+""".split())
+
+
+def _content_tokens(title: str) -> frozenset[str]:
+    """Subject-bearing tokens: length >= 3, minus function words."""
+    return frozenset(t for t in _WORD.findall(title.lower()) if len(t) >= 3 and t not in _STOP)
 
 
 def active_specs() -> list[SourceSpec]:
@@ -67,18 +94,39 @@ def verify(items: list[ScoredArticle]) -> tuple[dict[str, float], Verification, 
     can collapse a story syndicated across feeds to one representative.
     """
     shings = [_shingles(it.title) for it in items]
-    # Each cluster: [representative shingles, member indices, distinct source labels]
-    clusters: list[tuple[frozenset[str], list[int], set[str]]] = []
-    for i, sh in enumerate(shings):
+    toks = [_content_tokens(it.title) for it in items]
+
+    # Rare anchor tokens: subject words (e.g. a surname) appearing in only a small
+    # fraction of the batch and not generic market vocabulary. Two reworded
+    # headlines about the same event share one even when their wording differs.
+    n = len(items)
+    df: Counter[str] = Counter()
+    for ts in toks:
+        df.update(ts)
+    rare_df = max(3, round(n * config.PARAPHRASE_RARE_DF_FRACTION))
+    rare = {t for t, c in df.items() if c <= rare_df and t not in _COMMON_FINANCE}
+
+    def _same_story(i: int, rep_i: int) -> bool:
+        if _jaccard(shings[rep_i], shings[i]) >= config.SHINGLE_SIMILARITY:
+            return True
+        shared = toks[rep_i] & toks[i]
+        if len(shared) < config.PARAPHRASE_MIN_SHARED or not (shared & rare):
+            return False
+        shorter = min(len(toks[rep_i]), len(toks[i])) or 1
+        return len(shared) / shorter >= config.PARAPHRASE_RATIO
+
+    # Each cluster: [representative index, member indices, distinct source labels]
+    clusters: list[tuple[int, list[int], set[str]]] = []
+    for i in range(n):
         placed = False
-        for rep, members, sources in clusters:
-            if _jaccard(rep, sh) >= config.SHINGLE_SIMILARITY:
+        for rep_i, members, sources in clusters:
+            if _same_story(i, rep_i):
                 members.append(i)
                 sources.add(items[i].source_label)
                 placed = True
                 break
         if not placed:
-            clusters.append((sh, [i], {items[i].source_label}))
+            clusters.append((i, [i], {items[i].source_label}))
 
     factor: dict[str, float] = {}
     discounted = 0
