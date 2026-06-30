@@ -47,9 +47,11 @@ def _nasdaq_calendar(day: str) -> list[dict]:
                 continue
             t = x.get("time") or ""
             hour = "bmo" if "pre-market" in t else "amc" if "after-hours" in t else ""
-            eps = x.get("epsForecast") or ""
+            eps = (x.get("epsForecast") or "").strip()
+            neg = "(" in eps   # Nasdaq shows negative estimates as "$(0.05)"
+            num = eps.replace("$", "").replace(",", "").replace("(", "").replace(")", "")
             try:
-                eps_est = float(eps.replace("$", "").replace(",", "")) if eps else None
+                eps_est = (-1 if neg else 1) * float(num) if num else None
             except ValueError:
                 eps_est = None
             out.append({"symbol": sym, "date": day, "hour": hour, "quarter": None,
