@@ -1,9 +1,14 @@
 """ETF X-ray — look-through holdings, overlap, and concentration.
 
-Source: SPDR/SSGA publish an ungated daily holdings .xlsx per fund (the same
-feed bond_prices.py uses for bond SPDRs). Equity SPDR files expose Name /
-Ticker / Weight per holding, which is everything the X-ray needs. Scope is the
-SPDR family; other issuers (iShares/Vanguard/Invesco) would need their own feeds.
+Two holdings sources:
+  - SSGA: SPDR funds publish a full daily holdings .xlsx (Name/Ticker/Weight),
+    the same ungated feed bond_prices.py uses. Complete holdings.
+  - stockanalysis.com: a JSON endpoint covering essentially any ETF, but only
+    the TOP 25 holdings. Used for non-SPDR funds (QQQ, Vanguard, iShares, ARK…),
+    flagged partial so overlap/look-through is read with the right caveat.
+
+Other issuers' own feeds (Invesco, iShares, Vanguard) are bot-blocked server-side,
+hence the stockanalysis.com fallback.
 """
 import io
 import logging
@@ -18,23 +23,51 @@ from cache import cached
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# Curated SPDR equity funds the X-ray supports (label for the picker).
-SUPPORTED = {
-    "SPY": "S&P 500", "DIA": "Dow 30", "MDY": "S&P MidCap 400", "SPMD": "S&P MidCap 400",
-    "SPYG": "S&P 500 Growth", "SPYV": "S&P 500 Value", "SPLG": "S&P 500 (low-cost)",
-    "XLK": "Technology", "XLF": "Financials", "XLE": "Energy", "XLV": "Health Care",
-    "XLY": "Consumer Disc.", "XLP": "Consumer Staples", "XLI": "Industrials",
-    "XLB": "Materials", "XLRE": "Real Estate", "XLU": "Utilities", "XLC": "Communication",
+_UA = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"}
+
+# fund -> (source, key, label). source "ssga" = full; "sa" = stockanalysis top-25.
+SUPPORTED: dict[str, tuple[str, str, str]] = {
+    # SPDR / SSGA — full holdings
+    "SPY":  ("ssga", "spy",  "S&P 500"),
+    "DIA":  ("ssga", "dia",  "Dow 30"),
+    "MDY":  ("ssga", "mdy",  "S&P MidCap 400"),
+    "SPYG": ("ssga", "spyg", "S&P 500 Growth"),
+    "SPYV": ("ssga", "spyv", "S&P 500 Value"),
+    "XLK":  ("ssga", "xlk",  "Technology"),
+    "XLF":  ("ssga", "xlf",  "Financials"),
+    "XLE":  ("ssga", "xle",  "Energy"),
+    "XLV":  ("ssga", "xlv",  "Health Care"),
+    "XLY":  ("ssga", "xly",  "Consumer Disc."),
+    "XLP":  ("ssga", "xlp",  "Consumer Staples"),
+    "XLI":  ("ssga", "xli",  "Industrials"),
+    "XLB":  ("ssga", "xlb",  "Materials"),
+    "XLRE": ("ssga", "xlre", "Real Estate"),
+    "XLU":  ("ssga", "xlu",  "Utilities"),
+    "XLC":  ("ssga", "xlc",  "Communication"),
+    # Other issuers — top-25 via stockanalysis.com
+    "QQQ":  ("sa", "QQQ",  "Nasdaq-100"),
+    "VOO":  ("sa", "VOO",  "Vanguard S&P 500"),
+    "VTI":  ("sa", "VTI",  "Vanguard Total Market"),
+    "IVV":  ("sa", "IVV",  "iShares S&P 500"),
+    "IWM":  ("sa", "IWM",  "Russell 2000"),
+    "VUG":  ("sa", "VUG",  "Vanguard Growth"),
+    "VTV":  ("sa", "VTV",  "Vanguard Value"),
+    "SCHD": ("sa", "SCHD", "Schwab Dividend"),
+    "ARKK": ("sa", "ARKK", "ARK Innovation"),
+    "ARKW": ("sa", "ARKW", "ARK Next-Gen Internet"),
+    "ARKG": ("sa", "ARKG", "ARK Genomic"),
+    "ARKF": ("sa", "ARKF", "ARK Fintech"),
+    "ARKQ": ("sa", "ARKQ", "ARK Autonomous & Robotics"),
 }
 
 
 @cached(ttl=86_400, maxsize=64)
 def _spdr_holdings(fund: str) -> dict:
-    """{ as_of, name, holdings: {ticker: {name, weight}} } for one SPDR equity fund."""
+    """Full holdings for one SPDR equity fund via the SSGA daily .xlsx."""
     import openpyxl
     url = ("https://www.ssga.com/us/en/intermediary/library-content/products/"
            f"fund-data/etfs/us/holdings-daily-us-en-{fund.lower()}.xlsx")
-    resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
+    resp = requests.get(url, headers=_UA, timeout=20)
     if resp.status_code != 200 or not resp.content:
         return {}
     wb = openpyxl.load_workbook(io.BytesIO(resp.content), read_only=True, data_only=True)
@@ -73,28 +106,69 @@ def _spdr_holdings(fund: str) -> dict:
             continue
         t = str(tkr).strip().upper()
         nm = row[hdr["Name"]]
-        # A fund can list a ticker twice (multi-class); keep the larger weight.
         if t not in holdings or wt > holdings[t]["weight"]:
             holdings[t] = {"name": str(nm).strip() if nm else t, "weight": round(wt, 4)}
-    return {"as_of": as_of, "name": fund_name or fund.upper(), "holdings": holdings}
+    return {"as_of": as_of, "name": fund_name, "holdings": holdings, "partial": False, "total": len(holdings)}
+
+
+@cached(ttl=86_400, maxsize=128)
+def _sa_holdings(ticker: str) -> dict:
+    """Top-25 holdings for any ETF via stockanalysis.com's JSON endpoint."""
+    url = f"https://stockanalysis.com/api/symbol/e/{ticker.upper()}/holdings"
+    resp = requests.get(url, headers=_UA, timeout=20)
+    if resp.status_code != 200:
+        return {}
+    d = (resp.json() or {}).get("data", {})
+    holdings: dict[str, dict] = {}
+    for h in d.get("holdings", []):
+        sym = str(h.get("s") or "").lstrip("$").strip().upper()
+        if not sym:
+            continue
+        try:
+            wt = float(str(h.get("as") or "").rstrip("%"))
+        except ValueError:
+            continue
+        if wt <= 0:
+            continue
+        holdings[sym] = {"name": str(h.get("n") or sym).strip(), "weight": round(wt, 4)}
+    return {"as_of": d.get("date"), "name": None, "holdings": holdings,
+            "partial": True, "total": d.get("count") or len(holdings)}
+
+
+def _load(fund: str) -> dict:
+    """Unified holdings load for a supported fund, tagged with src/label."""
+    meta = SUPPORTED.get(fund)
+    if not meta:
+        return {}
+    src, key, label = meta
+    d = _spdr_holdings(key) if src == "ssga" else _sa_holdings(key)
+    if d and d.get("holdings"):
+        d = dict(d)
+        d["label"] = label
+        d["name"] = d.get("name") or label
+        d["src"] = src
+    return d
 
 
 @router.get("/supported")
 def supported():
-    return {"funds": [{"ticker": k, "label": v} for k, v in SUPPORTED.items()]}
+    return {"funds": [
+        {"ticker": k, "label": v[2], "partial": v[0] == "sa"} for k, v in SUPPORTED.items()
+    ]}
 
 
 @router.get("/holdings")
 def holdings(fund: str):
     f = fund.strip().upper()
-    data = _spdr_holdings(f)
+    data = _load(f)
     if not data or not data.get("holdings"):
-        raise HTTPException(404, f"No SPDR holdings available for {f}")
+        raise HTTPException(404, f"No holdings available for {f}")
     rows = sorted(
         ({"ticker": t, "name": h["name"], "weight": h["weight"]} for t, h in data["holdings"].items()),
         key=lambda r: r["weight"], reverse=True,
     )
-    return {"fund": f, "name": data["name"], "as_of": data["as_of"], "count": len(rows), "holdings": rows}
+    return {"fund": f, "name": data["name"], "as_of": data["as_of"], "count": len(rows),
+            "partial": data.get("partial", False), "total": data.get("total"), "holdings": rows}
 
 
 class XrayRequest(BaseModel):
@@ -109,7 +183,7 @@ def xray(req: XrayRequest):
 
     loaded: dict[str, dict] = {}
     for f in funds:
-        d = _spdr_holdings(f)
+        d = _load(f)
         if d and d.get("holdings"):
             loaded[f] = d
     if len(loaded) < 2:
@@ -145,12 +219,14 @@ def xray(req: XrayRequest):
         per_fund.append({
             "fund": f, "name": d["name"], "as_of": d["as_of"],
             "count": len(hs), "top10": round(sum(hs[:10]), 2),
+            "partial": d.get("partial", False), "coverage": round(sum(hs), 1), "total": d.get("total"),
         })
 
     return {
         "funds": per_fund,
         "unique_holdings": len(agg),
         "overlapping_holdings": sum(1 for a in agg.values() if len(a["funds"]) > 1),
+        "any_partial": any(p["partial"] for p in per_fund),
         "aggregate": aggregate,
         "overlap": overlap,
     }

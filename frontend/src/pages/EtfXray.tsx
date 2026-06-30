@@ -20,11 +20,12 @@ const STRIP: React.CSSProperties = {
   background: SURFACE, border: `1px solid ${BORDER}`, borderTop: `2px solid ${GOLD}`,
 }
 
-interface Supported { ticker: string; label: string }
+interface Supported { ticker: string; label: string; partial: boolean }
 interface XrayResult {
-  funds: { fund: string; name: string; as_of: string; count: number; top10: number }[]
+  funds: { fund: string; name: string; as_of: string; count: number; top10: number; partial: boolean; coverage: number; total: number | null }[]
   unique_holdings: number
   overlapping_holdings: number
+  any_partial: boolean
   aggregate: { ticker: string; name: string; weight: number; fund_count: number; funds: string[] }[]
   overlap: { a: string; b: string; overlap: number; shared: number }[]
 }
@@ -64,8 +65,11 @@ export function EtfXrayContent() {
               <div key={f.ticker} onClick={() => toggle(f.ticker)}
                 style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '6px 9px',
                   border: `1px solid ${on ? GOLD : BORDER}`, background: on ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)' : 'transparent' }}>
-                <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, color: on ? GOLD : BODY }}>{f.ticker}</span>
-                <span style={{ fontSize: 9, color: SEC, fontFamily: 'var(--theme-sans)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.label}</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+                  <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, color: on ? GOLD : BODY }}>{f.ticker}</span>
+                  {f.partial && <span title="top 25 holdings only" style={{ fontFamily: MONO, fontSize: 8, color: FAINT }}>·25</span>}
+                </span>
+                <span style={{ fontSize: 9, color: SEC, fontFamily: 'var(--theme-sans)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'right' }}>{f.label}</span>
               </div>
             )
           })}
@@ -148,11 +152,14 @@ export function EtfXrayContent() {
                 <div key={f.fund} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px', borderBottom: i < data.funds.length - 1 ? `1px solid ${HAIR}` : 'none' }}>
                   <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, color: GOLD, width: 56, flexShrink: 0 }}>{f.fund}</span>
                   <span style={{ fontSize: 11, color: BODY, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
-                  <span style={{ fontSize: 10, color: SEC, fontFamily: MONO, flexShrink: 0 }}>{f.count} holdings</span>
+                  <span style={{ fontSize: 10, color: f.partial ? FAINT : SEC, fontFamily: MONO, flexShrink: 0 }}>
+                    {f.partial ? `top 25 · ${f.coverage.toFixed(0)}% wt` : `${f.count} holdings`}
+                  </span>
                   <span style={{ fontSize: 10, color: BODY, fontFamily: MONO, width: 110, textAlign: 'right', flexShrink: 0 }}>top-10 {f.top10.toFixed(1)}%</span>
                 </div>
               ))}
-              {data.funds[0]?.as_of && <div style={{ fontSize: 9, color: FAINT, fontFamily: MONO, marginTop: 6 }}>Holdings as of {data.funds[0].as_of} · SPDR/SSGA daily files.</div>}
+              {data.any_partial && <div style={{ fontSize: 9, color: FAINT, fontFamily: MONO, marginTop: 6, lineHeight: 1.5 }}>ETFs marked ·25 expose only their top 25 holdings (stockanalysis.com), so overlap and look-through for those reflect top holdings only. SPDR funds are full.</div>}
+              {data.funds[0]?.as_of && <div style={{ fontSize: 9, color: FAINT, fontFamily: MONO, marginTop: 4 }}>Holdings as of {data.funds[0].as_of}.</div>}
             </div>
           </Widget>
         </div>
