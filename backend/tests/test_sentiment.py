@@ -191,3 +191,22 @@ def test_future_timestamp_recency_capped(monkeypatch):
     snap = engine.build_snapshot(refresh=True, now=NOW)
     weights = [it.recency_weight for s in snap.sources for it in s.items]
     assert weights and all(w <= 1.0 for w in weights)  # no future item dominates
+
+
+# ── Dismissive framing / reverser (June 2026 fix) ─────────────────────────────
+def test_dismissive_framing_not_bearish():
+    from sentiment.lexicon import extract_entities as _ee, score_text as _st
+    t = "Inflation fears are overblown. What the rate-hike camp gets wrong about the stock market."
+    s = _st(t, _ee(t))
+    assert s.sentiment != "bearish", s
+
+def test_beat_and_betting_not_bearish():
+    from sentiment.lexicon import extract_entities as _ee, score_text as _st
+    t = "Value stocks beat growth when inflation is high. Top newsletters are betting on these now."
+    s = _st(t, _ee(t))
+    assert s.sentiment != "bearish", s
+
+def test_genuine_bearish_unaffected():
+    from sentiment.lexicon import extract_entities as _ee, score_text as _st
+    s = _st("Stocks plunge as inflation surges and recession fears mount", _ee(""))
+    assert s.sentiment == "bearish", s

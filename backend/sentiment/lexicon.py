@@ -388,6 +388,8 @@ _LEXICON: dict[str, tuple[float, float]] = {
     "fears": (-0.40, 1.0), "jitters": (-0.35, 0.9), "steady": (0.15, 0.7),
     "holds steady": (0.20, 0.9), "in line": (0.10, 0.7), "in-line": (0.10, 0.7),
     "mixed": (0.0, 0.6),
+    "beat": (0.45, 1.0), "beats": (0.45, 1.0), "outperform": (0.40, 1.0),
+    "outperforms": (0.40, 1.0), "outperforming": (0.40, 1.0), "betting on": (0.30, 0.8),
 }
 
 _NEGATORS: frozenset[str] = frozenset({
@@ -402,6 +404,14 @@ _INTENSIFIERS: frozenset[str] = frozenset({
     "sharply", "sharp", "steeply", "steep", "massively", "massive",
     "dramatically", "dramatic", "deeply", "heavily", "significantly",
 })
+# Dismissive framing: a headline that calls a bearish concern "overblown" is
+# reassuring, not bearish. When any reverser appears, negative contributions are
+# flipped to a damped positive (e.g. "inflation fears are overblown").
+_REVERSERS: frozenset[str] = frozenset({
+    "overblown", "overdone", "unfounded", "exaggerated", "overstated",
+    "overrated", "misplaced", "debunked", "dispelled", "myth", "mistaken",
+})
+_REVERSAL_FACTOR: float = 0.5
 
 # Directional movement verbs: + = the subject's level rises, - = falls. The
 # polarity is written for the DEFAULT subject (equities / risk assets). For a
@@ -589,6 +599,15 @@ def score_text(text: str, entities: list[Entity]) -> LexScore:
     lex_hits, consumed = _match_terms(tokens)
     hits = lex_hits + _movement_hits(tokens, consumed)
     tier = derive_tier(text, entities)
+
+    # Dismissive framing ("fears are overblown") flips bearish contributions to a
+    # damped positive so the headline does not read as bearish.
+    if hits and any(t in _REVERSERS for t in tokens):
+        hits = [
+            h if h.contribution >= 0 else
+            TermHit(h.term, -h.polarity * _REVERSAL_FACTOR, h.salience, -h.contribution * _REVERSAL_FACTOR)
+            for h in hits
+        ]
 
     if not hits:
         return LexScore(50, 0.0, config.MIN_CONFIDENCE, tier, "neutral", 0.0, ())

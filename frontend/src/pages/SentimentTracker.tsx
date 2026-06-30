@@ -499,6 +499,12 @@ function SourcePanel({ src, timeframeHours }: { src: Source; timeframeHours: num
                 <span style={{ fontSize: 9, color: T.muted, fontFamily: T.mono }}>
                   conf {(item.confidence * 100).toFixed(0)}%
                 </span>
+                <span title={`Forward subscore ${item.forward_sentiment_score.toFixed(0)} · Backward subscore ${item.backward_sentiment_score.toFixed(0)}`}
+                  style={{ fontSize: 9, padding: '1px 5px', fontFamily: T.mono, fontWeight: 700, letterSpacing: '0.06em', cursor: 'help',
+                    color: item.forward_looking_weight >= 0.5 ? T.gold : 'var(--theme-tertiary, #60a5fa)',
+                    background: 'rgba(255,255,255,0.03)', border: `1px solid ${item.forward_looking_weight >= 0.5 ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)' : 'color-mix(in srgb, var(--theme-tertiary, #60a5fa) 40%, transparent)'}` }}>
+                  {item.forward_looking_weight >= 0.5 ? 'FWD' : 'BWD'} {Math.round(item.forward_looking_weight * 100)}%
+                </span>
                 {item.entities.slice(0, 3).map(e => <AssetTag key={e.name} name={e.name} assetClass={e.asset_class} />)}
               </div>
             </div>
