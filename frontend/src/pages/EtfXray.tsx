@@ -91,9 +91,10 @@ export function EtfXrayContent() {
     if (!data) return []
     let r = data.aggregate
     if (fundFilter.length) {
-      // Union of the selected funds, re-blended over just that subset (equal weight).
+      // Intersection: keep only holdings held by ALL selected funds (a name in
+      // SPY but not SCHD is dropped). Re-blend the weight over the selected funds.
       r = r
-        .filter(a => a.funds.some(f => fundFilter.includes(f)))
+        .filter(a => fundFilter.every(f => a.funds.includes(f)))
         .map(a => ({ ...a, weight: fundFilter.reduce((sum, f) => sum + (a.by_fund[f] ?? 0), 0) / fundFilter.length }))
     }
     const s = [...r]
@@ -187,7 +188,7 @@ export function EtfXrayContent() {
           {/* Two-column results */}
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'stretch' }}>
             {/* Left — Look-through holdings */}
-            <Panel title="Look-Through Holdings" right={`hover a row for per-fund weights · ${fundFilter.length ? `${rows.length} in ${fundFilter.join(' ∪ ')}` : `all ${rows.length}`}`} style={{ flex: '1.55 1 460px' }} bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <Panel title="Look-Through Holdings" right={`hover a row for per-fund weights · ${fundFilter.length === 0 ? `all ${rows.length}` : fundFilter.length === 1 ? `${rows.length} in ${fundFilter[0]}` : `${rows.length} held by all of ${fundFilter.join(' + ')}`}`} style={{ flex: '1.55 1 460px' }} bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
               <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 9, flex: 1, minHeight: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ ...EYEBROW, fontSize: 8, color: SEC }}>Sort</span>
@@ -218,6 +219,11 @@ export function EtfXrayContent() {
                   })}
                 </div>
                 <div style={{ flex: 1, minHeight: 160, maxHeight: 'calc(100vh - 250px)', overflowY: 'auto' }}>
+                  {rows.length === 0 && fundFilter.length > 1 && (
+                    <div style={{ fontSize: 10, color: SEC, fontFamily: SANS, padding: '20px 8px', textAlign: 'center', lineHeight: 1.5 }}>
+                      No holdings are shared by all of {fundFilter.join(' + ')}. These funds have no common names.
+                    </div>
+                  )}
                   {rows.map((a, i) => (
                     <div key={a.ticker}
                       onMouseEnter={e => { setHover(a.ticker); setHoverPos({ x: e.clientX, y: e.clientY }) }}
