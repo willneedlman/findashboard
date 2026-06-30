@@ -6,6 +6,7 @@ import PageWrapper from '../components/PageWrapper'
 import EmptyState from '../components/EmptyState'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
+import Tooltip from '../components/Tooltip'
 
 const C = {
   bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))', surface: 'var(--theme-surface, #0d1826)',
@@ -538,13 +539,15 @@ export default function StockScreener() {
                         <span style={{ fontFamily: C.sans, fontSize: 11, color: C.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.companyName}</span>
                         <span className="ft-row-actions" style={{ display: 'flex', alignItems: 'center', gap: 9, marginLeft: 'auto', paddingLeft: 10, flex: 'none' }}>
                           {ROW_LINKS.map(l => (
-                            <span key={l.label} title={`Open ${r.ticker} in ${l.label}`}
-                              onClick={() => navigate(`${l.base}?ticker=${encodeURIComponent(r.ticker)}`)}
-                              onMouseEnter={e => (e.currentTarget.style.color = C.gold)}
-                              onMouseLeave={e => (e.currentTarget.style.color = C.dim)}
-                              style={{ fontFamily: C.sans, fontSize: 9.5, fontWeight: 600, letterSpacing: '0.04em', color: C.dim, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                              {l.label}
-                            </span>
+                            <Tooltip key={l.label} label={`Open ${r.ticker} in ${l.label}`}>
+                              <span
+                                onClick={() => navigate(`${l.base}?ticker=${encodeURIComponent(r.ticker)}`)}
+                                onMouseEnter={e => (e.currentTarget.style.color = C.gold)}
+                                onMouseLeave={e => (e.currentTarget.style.color = C.dim)}
+                                style={{ fontFamily: C.sans, fontSize: 9.5, fontWeight: 600, letterSpacing: '0.04em', color: C.dim, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                                {l.label}
+                              </span>
+                            </Tooltip>
                           ))}
                         </span>
                       </div>

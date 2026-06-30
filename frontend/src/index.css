@@ -527,6 +527,9 @@ textarea:focus:not(:focus-visible) {
 .ft-row-actions { opacity: 0; transition: opacity 0.12s ease-out; }
 .ft-screen-row:hover .ft-row-actions { opacity: 1; }
 @media (hover: none) { .ft-row-actions { opacity: 1; } }
+.fdb-tooltip { animation: fdb-tip-in 0.12s ease-out; }
+@keyframes fdb-tip-in { from { opacity: 0 } to { opacity: 1 } }
+@media (prefers-reduced-motion: reduce) { .fdb-tooltip { animation: none; } }
 @media (prefers-reduced-motion: reduce) {
   .ft-rail { transition: none !important; }
 }
