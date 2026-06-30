@@ -197,6 +197,13 @@ export function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy
     refetchInterval: open ? 30_000 : false,
   })
 
+  const { data: attribution } = useQuery<{ strategies: { strategy: string; realized_pnl: number; trades: number; win_rate: number; open_positions: number }[]; total_realized: number }>({
+    queryKey: ['paper/scheduler/attribution'],
+    queryFn: () => axios.get(`/api/paper/scheduler/attribution?user_id=${uid}`, headers).then(r => r.data),
+    enabled: open && authed,
+    refetchInterval: open ? 30_000 : false,
+  })
+
   const createJobMut = useMutation({
     mutationFn: (body: { ticker: string; strategy_name: string; qty: number; params: Record<string, number> }) =>
       axios.post('/api/paper/scheduler/jobs', { ...body, user_id: uid }, headers).then(r => r.data),
@@ -1015,6 +1022,28 @@ export function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy
                       </div>
                     )
                   })}
+                </div>
+              )}
+
+              {/* Per-strategy P&L attribution */}
+              {attribution && attribution.strategies.length > 0 && (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 3 }}>
+                    <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', color: T.muted, textTransform: 'uppercase' }}>Strategy P&L</span>
+                    <span style={{ fontSize: 8, fontFamily: T.mono, fontWeight: 700, color: attribution.total_realized >= 0 ? 'var(--theme-positive)' : 'var(--theme-negative)' }}>
+                      {attribution.total_realized >= 0 ? '+' : ''}${attribution.total_realized.toFixed(2)}
+                    </span>
+                  </div>
+                  {attribution.strategies.map(s => (
+                    <div key={s.strategy} style={{ display: 'flex', gap: 6, alignItems: 'baseline', padding: '2px 0', borderBottom: `1px solid ${T.border}` }}>
+                      <span style={{ fontSize: 8, color: T.gold, fontFamily: T.mono, fontWeight: 700, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.strategy}</span>
+                      <span style={{ fontSize: 8, color: T.dim, fontFamily: T.mono, whiteSpace: 'nowrap' }}>{s.trades}t · {s.win_rate.toFixed(0)}%{s.open_positions ? ` · ${s.open_positions} open` : ''}</span>
+                      <span style={{ fontSize: 8, fontFamily: T.mono, fontWeight: 700, color: s.realized_pnl >= 0 ? 'var(--theme-positive)' : 'var(--theme-negative)', width: 60, textAlign: 'right' }}>
+                        {s.realized_pnl >= 0 ? '+' : ''}${s.realized_pnl.toFixed(2)}
+                      </span>
+                    </div>
+                  ))}
+                  <div style={{ fontSize: 7, color: T.dim, fontFamily: T.mono, marginTop: 3 }}>Realized from executed scheduler trades.</div>
                 </div>
               )}
 

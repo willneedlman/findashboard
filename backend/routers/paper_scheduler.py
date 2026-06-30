@@ -518,6 +518,59 @@ def get_log(user_id: str, limit: int = 200, ticker: str | None = None, signal: s
     return [LogEntry(**dict(r)) for r in rows]
 
 
+@router.get("/attribution")
+def attribution(user_id: str, authorization: str = Header(default=""), x_session_token: str = Header(default="")):
+    """Per-strategy realized P&L from executed scheduler trades.
+
+    Strategies are long-only single-position, so each SELL closes the oldest
+    open BUY for that (strategy, ticker). Uses the logged fill price and the
+    job's qty. Open (unclosed) buys are reported but not realized.
+    """
+    _require_owner(user_id, authorization, x_session_token)
+    with _db() as conn:
+        rows = conn.execute(
+            "SELECT l.strategy_name, l.ticker, l.signal, l.price, l.timestamp, "
+            "COALESCE(j.qty, 1) AS qty FROM paper_schedule_log l "
+            "LEFT JOIN paper_schedule_jobs j ON j.id = l.job_id "
+            "WHERE l.user_id=? AND l.order_id IS NOT NULL AND l.signal IN ('BUY','SELL') "
+            "ORDER BY l.timestamp ASC",
+            (user_id,),
+        ).fetchall()
+
+    agg: dict[str, dict] = {}
+    open_buys: dict[tuple, list] = {}   # (strategy, ticker) -> [(price, qty)]
+    for r in rows:
+        strat, tkr, sig, px, qty = r["strategy_name"], r["ticker"], r["signal"], float(r["price"]), int(r["qty"] or 1)
+        a = agg.setdefault(strat, {"strategy": strat, "realized_pnl": 0.0, "trades": 0, "wins": 0, "open": 0})
+        key = (strat, tkr)
+        stack = open_buys.setdefault(key, [])
+        if sig == "BUY":
+            stack.append((px, qty))
+        elif sig == "SELL" and stack:
+            buy_px, buy_qty = stack.pop(0)
+            q = min(qty, buy_qty)
+            pnl = (px - buy_px) * q
+            a["realized_pnl"] += pnl
+            a["trades"] += 1
+            if pnl > 0:
+                a["wins"] += 1
+            if buy_qty > q:                       # partial close: keep the remainder open
+                stack.insert(0, (buy_px, buy_qty - q))
+    for key, stack in open_buys.items():
+        if stack:
+            agg.setdefault(key[0], {"strategy": key[0], "realized_pnl": 0.0, "trades": 0, "wins": 0, "open": 0})["open"] += len(stack)
+
+    out = [{
+        "strategy": a["strategy"],
+        "realized_pnl": round(a["realized_pnl"], 2),
+        "trades": a["trades"],
+        "win_rate": round(100 * a["wins"] / a["trades"], 1) if a["trades"] else 0.0,
+        "open_positions": a["open"],
+    } for a in agg.values()]
+    out.sort(key=lambda x: x["realized_pnl"], reverse=True)
+    return {"strategies": out, "total_realized": round(sum(x["realized_pnl"] for x in out), 2)}
+
+
 @router.delete("/log")
 def clear_log(user_id: str, authorization: str = Header(default=""), x_session_token: str = Header(default="")):
     _require_owner(user_id, authorization, x_session_token)
