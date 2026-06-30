@@ -102,7 +102,6 @@ export function EtfXrayContent() {
     else s.sort((a, b) => b.weight - a.weight)
     return s
   }, [data, fundFilter, sort])
-  const rowMax = Math.max(0.01, ...rows.map(r => r.weight))
   const hovered = hover ? rows.find(r => r.ticker === hover) ?? null : null
 
   const activePair = pair ?? maxPair
@@ -188,7 +187,7 @@ export function EtfXrayContent() {
           {/* Two-column results */}
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'stretch' }}>
             {/* Left — Look-through holdings */}
-            <Panel title="Look-Through Holdings" right={`equal-weight blend · hover for per-fund · ${fundFilter.length ? `${rows.length} in ${fundFilter.join(' ∪ ')}` : `all ${rows.length}`}`} style={{ flex: '1.55 1 460px' }} bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <Panel title="Look-Through Holdings" right={`hover a row for per-fund weights · ${fundFilter.length ? `${rows.length} in ${fundFilter.join(' ∪ ')}` : `all ${rows.length}`}`} style={{ flex: '1.55 1 460px' }} bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
               <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 9, flex: 1, minHeight: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ ...EYEBROW, fontSize: 8, color: SEC }}>Sort</span>
@@ -229,10 +228,6 @@ export function EtfXrayContent() {
                       <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, color: GOLD, width: 58, flexShrink: 0 }}>{a.ticker}</span>
                       <span style={{ fontSize: 11, color: BODY, flex: 1, minWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
                       <span style={{ display: 'flex', gap: 3, flexShrink: 0 }}>{a.funds.map(tag)}</span>
-                      <div style={{ width: 90, height: 7, background: 'rgba(255,255,255,0.05)', flexShrink: 0 }}>
-                        <div style={{ width: `${Math.min(100, (a.weight / rowMax) * 100)}%`, height: '100%', background: GOLD }} />
-                      </div>
-                      <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, color: BODY, width: 62, textAlign: 'right', flexShrink: 0 }}>{a.weight.toFixed(3)}%</span>
                     </div>
                   ))}
                 </div>
