@@ -65,31 +65,37 @@ function runDiffusion(S0: number, mu: number, sigma: number, T: number, nSims: n
   return paths
 }
 
-// Moving-block bootstrap: resample the asset's REAL daily log returns in
-// contiguous blocks, so genuine fat tails, volatility clustering and multi-day
-// crash runs (which GBM's iid normal shocks cannot produce) carry through. Blocks
-// are recentered to the target log-drift so the median matches the other models.
+// Moving-block bootstrap across all legs with SHARED block indices: resample REAL
+// daily log returns in contiguous blocks, drawing the SAME historical dates for
+// every leg each block. This carries genuine fat tails, volatility clustering and
+// multi-day crash runs (which GBM's iid normal shocks cannot produce) AND keeps
+// cross-asset correlation — a macro drawdown lands on the whole portfolio at once
+// instead of being diversified away by independent per-leg draws. Each leg's
+// returns are date-aligned (same length) and recentered to its own target drift.
 const BLOCK_SIZE = 10
-function runBootstrap(S0: number, returns: number[], T: number, nSims: number, block: number, targetMean: number) {
-  const N = returns.length
-  const empMean = returns.reduce((a, b) => a + b, 0) / N
-  const B = Math.min(block, N)
-  const maxStart = N - B
-  const paths: number[][] = []
+function runBootstrapShared(alignedReturns: number[][], targetMeans: number[], T: number, nSims: number, block: number): number[][][] {
+  const k = alignedReturns.length
+  const M = alignedReturns[0]?.length ?? 0
+  const empMeans = alignedReturns.map(r => r.reduce((a, b) => a + b, 0) / (r.length || 1))
+  const B = Math.min(block, M)
+  const maxStart = M - B
+  const out: number[][][] = alignedReturns.map(() => [])
   for (let s = 0; s < nSims; s++) {
-    const path = [S0]
-    let v = S0
+    const v = new Array(k).fill(1.0)
+    const paths: number[][] = alignedReturns.map(() => [1.0])
     let t = 0
     while (t < T) {
-      const start = Math.floor(uniRandom() * (maxStart + 1))
+      const start = Math.floor(uniRandom() * (maxStart + 1))   // shared across every leg
       for (let b = 0; b < B && t < T; b++, t++) {
-        v = v * Math.exp(returns[start + b] - empMean + targetMean)
-        path.push(v)
+        for (let li = 0; li < k; li++) {
+          v[li] *= Math.exp(alignedReturns[li][start + b] - empMeans[li] + targetMeans[li])
+          paths[li].push(v[li])
+        }
       }
     }
-    paths.push(path)
+    for (let li = 0; li < k; li++) out[li].push(paths[li])
   }
-  return paths
+  return out
 }
 
 type SimModel = 'gbm' | 't' | 'bootstrap'
@@ -122,7 +128,6 @@ type Leg = {
   strategy: string
   stratParams: StrategyParams
   fetched: boolean
-  returns?: number[]   // daily log returns from fetched history; feeds block bootstrap
 }
 
 const makeLeg = (ticker: string, weight: number): Leg => ({
@@ -199,15 +204,11 @@ export function MonteCarloContent() {
             // CAGR = (1 + totalReturn/100)^(1/years) - 1; cap at ±150%/yr for sane simulation
             const cagr = (Math.pow(1 + data.metrics.total_return / 100, 1 / years) - 1) * 100
             const drift = Math.max(-150, Math.min(150, +cagr.toFixed(1)))
-            const px: number[] = (data.price ?? []).map((p: { value: number }) => p.value).filter((v: number) => v > 0)
-            const returns: number[] = []
-            for (let i = 1; i < px.length; i++) returns.push(Math.log(px[i] / px[i - 1]))
             return {
               ...leg,
               spot: +data.metrics.current_price.toFixed(2),
               vol:  +data.metrics.ann_volatility.toFixed(1),
               drift,
-              returns,
               fetched: true,
             }
           }
@@ -315,35 +316,62 @@ export function MonteCarloContent() {
           })()
         : 8
 
-      // Block bootstrap needs each leg's real return series. Auto-fetch any the
-      // user hasn't already pulled via "Fetch Live Vol / Drift" so the model
-      // works straight from a Run, the same way GBM does off default vol/drift.
-      const legReturns: (number[] | undefined)[] = legs.map(l => l.returns)
+      const n = Math.min(nSims, 500)
+      const dt = 1 / 252
+
+      // Block bootstrap: fetch each leg's price history and align all legs on their
+      // COMMON trading dates, so a resampled block lands on the same calendar days
+      // for every leg. Sharing the block index across legs keeps real cross-asset
+      // correlation — macro drawdowns co-occur instead of being diversified away.
+      const bootEligible: number[] = []      // leg indices simulated by the shared bootstrap
+      let sharedPaths: number[][][] = []
       if (model === 'bootstrap') {
-        await Promise.all(legs.map(async (leg, i) => {
-          if (leg.ticker === CASH_SYMBOL || (legReturns[i]?.length ?? 0) > BLOCK_SIZE) return
+        const series = await Promise.all(legs.map(async (leg) => {
+          if (leg.ticker === CASH_SYMBOL) return null
           try {
             const { data } = await axios.get(`/api/market/history?ticker=${leg.ticker}&start=2022-01-01`)
-            const px: number[] = (data?.price ?? []).map((p: { value: number }) => p.value).filter((v: number) => v > 0)
+            return ((data?.price ?? []) as { date: string; value: number }[]).filter(p => p.value > 0)
+          } catch { return null }
+        }))
+        let common: Set<string> | null = null
+        for (const pts of series) {
+          if (!pts || pts.length === 0) continue
+          const ds = new Set<string>(pts.map(p => p.date))
+          if (common === null) { common = ds; continue }
+          const prev: Set<string> = common
+          common = new Set<string>([...prev].filter(d => ds.has(d)))
+        }
+        const commonDates: string[] = common ? [...common].sort() : []
+        const aligned: number[][] = []
+        const targetMeans: number[] = []
+        if (commonDates.length > BLOCK_SIZE + 1) {
+          series.forEach((pts, i) => {
+            if (!pts) return
+            const byDate: Record<string, number> = {}
+            pts.forEach(p => { byDate[p.date] = p.value })
+            const px = commonDates.map(d => byDate[d])
             const rets: number[] = []
             for (let k = 1; k < px.length; k++) rets.push(Math.log(px[k] / px[k - 1]))
-            legReturns[i] = rets
-          } catch { /* leave undefined; this leg falls back to GBM */ }
-        }))
+            const mu = (legs[i].drift + legAdjs[i].stratAdj) / 100
+            const em = rets.reduce((a, b) => a + b, 0) / rets.length
+            const ev = rets.reduce((a, x) => a + (x - em) * (x - em), 0) / rets.length
+            bootEligible.push(i)
+            aligned.push(rets)
+            targetMeans.push(mu / 252 - 0.5 * ev)   // = (mu - 0.5 σ²) dt with empirical σ
+          })
+        }
+        if (aligned.length) sharedPaths = runBootstrapShared(aligned, targetMeans, horizon, n, BLOCK_SIZE)
       }
 
       // Per-leg simulations (normalized to start at 1.0). A bootstrap leg with no
       // usable history (cash sleeve, or a failed fetch) falls back to GBM so a run
       // never fails silently.
-      const n = Math.min(nSims, 500)
-      const dt = 1 / 252
       const allPaths = legs.map((leg, i) => {
         const mu    = (leg.drift + legAdjs[i].stratAdj) / 100
         const sigma = leg.vol / 100
-        const rets  = legReturns[i]
-        if (model === 'bootstrap' && rets && rets.length > BLOCK_SIZE) {
-          const targetMean = (mu - 0.5 * sigma * sigma) * dt
-          return runBootstrap(1.0, rets, horizon, n, BLOCK_SIZE, targetMean)
+        const bootPos = bootEligible.indexOf(i)
+        if (model === 'bootstrap' && bootPos >= 0) {
+          return sharedPaths[bootPos]
         }
         if (model === 't') {
           return runDiffusion(1.0, mu, sigma, horizon, n, () => tRandom(T_DF))
@@ -411,7 +439,7 @@ export function MonteCarloContent() {
       return {
         bands, histogram, S0, median, p5, p95, probProfit, probRuin, varAmt, cvarAmt, effDrift,
         probTarget, targetPrice, model,
-        bootstrapReady: model !== 'bootstrap' || legs.every((l, i) => l.ticker === CASH_SYMBOL || (legReturns[i]?.length ?? 0) > BLOCK_SIZE),
+        bootstrapReady: model !== 'bootstrap' || legs.every((l, i) => l.ticker === CASH_SYMBOL || bootEligible.includes(i)),
         benchmark, legs: legs.map((l, i) => ({ ...l, ...legAdjs[i] })),
       }
     },
