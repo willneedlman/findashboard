@@ -46,7 +46,7 @@ export const HUBS: Hub[] = [
       { title: 'Correlation',           chip: 'Correlation',     desc: 'Correlation matrix, rolling drift, and beta',              route: '/correlation',        icon: Waves },
       { title: 'Asset Overlay',         chip: 'Asset Overlay',   desc: 'Overlay any set of assets on a single chart',              route: '/compare',            icon: GitCompare },
       { title: 'Sector Rotation',       chip: 'Sector Rotation', desc: 'GICS sector performance heatmap over time',                route: '/sector-rotation',    icon: PieChart },
-      { title: 'ETF X-ray',             chip: 'ETF X-ray',       desc: 'Look-through holdings, overlap, and concentration',        route: '/etf-xray',           icon: Boxes },
+      { title: 'ETF Analyzer',          chip: 'ETF Analyzer',    desc: 'Look-through holdings, overlap, and concentration',        route: '/etf-xray',           icon: Boxes },
       { title: 'Company Profile',       chip: 'Company Profile', desc: 'Revenue mix, supply chain, and geography',                 route: '/supply-chain',       icon: Globe },
       { title: 'Peer Comparison',       chip: 'Peers',           desc: 'Trading multiples versus sector peers',                    route: '/relative-valuation', icon: Scale },
     ],

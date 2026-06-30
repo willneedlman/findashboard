@@ -149,12 +149,12 @@ export function EtfXrayContent() {
           width: '100%', background: GOLD, border: `1px solid ${GOLD}`, color: 'var(--theme-bg)',
           fontFamily: 'inherit', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '9px 0',
           cursor: (picked.length < 2 || isPending) ? 'default' : 'pointer', opacity: (picked.length < 2 || isPending) ? 0.6 : 1,
-        }}>{isPending ? 'Loading…' : 'Run X-ray'}</button>
+        }}>{isPending ? 'Loading…' : 'Run Analysis'}</button>
         {picked.length < 2 && <div style={{ fontSize: 9, color: FAINT, fontFamily: SANS, textAlign: 'center' }}>Select at least two ETFs.</div>}
-        {isError && <div style={{ fontSize: 9, color: 'var(--theme-negative)', fontFamily: SANS, textAlign: 'center' }}>{(error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'X-ray failed'}</div>}
+        {isError && <div style={{ fontSize: 9, color: 'var(--theme-negative)', fontFamily: SANS, textAlign: 'center' }}>{(error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Analysis failed'}</div>}
       </div>
     </>}>
-      {!data && !isPending && <EmptyState title="ETF X-ray" hint="Pick two or more ETFs and run the X-ray to blend them into one look-through portfolio: what you own, where the funds overlap, and how concentrated each is." />}
+      {!data && !isPending && <EmptyState title="ETF Analyzer" hint="Pick two or more ETFs and run the analysis to blend them into one look-through portfolio: what you own, where the funds overlap, and how concentrated each is." />}
       {isPending && <EmptyState title="Reading holdings…" hint="Pulling each fund's holdings." />}
 
       {data && activePair && (
@@ -314,5 +314,5 @@ export function EtfXrayContent() {
 }
 
 export default function EtfXray() {
-  return <PageWrapper title="ETF X-ray"><EtfXrayContent /></PageWrapper>
+  return <PageWrapper title="ETF Analyzer"><EtfXrayContent /></PageWrapper>
 }
