@@ -145,19 +145,19 @@ export function EtfXrayContent() {
         </div>
       </RailSection>
       <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <button onClick={() => runXray()} disabled={picked.length < 2 || isPending} style={{
+        <button onClick={() => runXray()} disabled={picked.length < 1 || isPending} style={{
           width: '100%', background: GOLD, border: `1px solid ${GOLD}`, color: 'var(--theme-bg)',
           fontFamily: 'inherit', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '9px 0',
-          cursor: (picked.length < 2 || isPending) ? 'default' : 'pointer', opacity: (picked.length < 2 || isPending) ? 0.6 : 1,
+          cursor: (picked.length < 1 || isPending) ? 'default' : 'pointer', opacity: (picked.length < 1 || isPending) ? 0.6 : 1,
         }}>{isPending ? 'Loading…' : 'Run Analysis'}</button>
-        {picked.length < 2 && <div style={{ fontSize: 9, color: FAINT, fontFamily: SANS, textAlign: 'center' }}>Select at least two ETFs.</div>}
+        {picked.length < 1 && <div style={{ fontSize: 9, color: FAINT, fontFamily: SANS, textAlign: 'center' }}>Select at least one ETF.</div>}
         {isError && <div style={{ fontSize: 9, color: 'var(--theme-negative)', fontFamily: SANS, textAlign: 'center' }}>{(error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Analysis failed'}</div>}
       </div>
     </>}>
-      {!data && !isPending && <EmptyState title="ETF Analyzer" hint="Pick two or more ETFs and run the analysis to blend them into one look-through portfolio: what you own, where the funds overlap, and how concentrated each is." />}
+      {!data && !isPending && <EmptyState title="ETF Analyzer" hint="Pick one or more ETFs and run the analysis: what you own, where the funds overlap, and how concentrated each is. With two or more, you also get the pairwise overlap matrix and shared names." />}
       {isPending && <EmptyState title="Reading holdings…" hint="Pulling each fund's holdings." />}
 
-      {data && activePair && (
+      {data && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {/* Selected-fund pills */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -172,10 +172,10 @@ export function EtfXrayContent() {
 
           {/* KPI strip */}
           <div style={STRIP}>
-            <KpiCell grow label="ETFs" value={String(data.funds.length)} valueSize={25} sub="funds blended" />
-            <KpiCell grow label="Unique Holdings" value={String(data.unique_holdings)} valueSize={25} color={GOLD} sub="across all funds" />
-            <KpiCell grow label="Overlapping Names" value={String(data.overlapping_holdings)} valueSize={25} sub="held in ≥2 funds" />
-            <KpiCell grow label="Max Pair Overlap" value={`${maxPair ? (ov[maxPair[0]]?.[maxPair[1]] ?? 0).toFixed(1) : '0'}%`} valueSize={25} color={GOLD} sub={maxPair ? `${maxPair[0]} × ${maxPair[1]} by weight` : ''} />
+            <KpiCell grow label="ETFs" value={String(data.funds.length)} valueSize={25} sub={data.funds.length > 1 ? 'funds blended' : 'single fund'} />
+            <KpiCell grow label="Unique Holdings" value={String(data.unique_holdings)} valueSize={25} color={GOLD} sub={data.funds.length > 1 ? 'across all funds' : 'in this fund'} />
+            <KpiCell grow label="Overlapping Names" value={data.funds.length > 1 ? String(data.overlapping_holdings) : '—'} valueSize={25} sub="held in ≥2 funds" />
+            <KpiCell grow label="Max Pair Overlap" value={maxPair ? `${(ov[maxPair[0]]?.[maxPair[1]] ?? 0).toFixed(1)}%` : '—'} valueSize={25} color={GOLD} sub={maxPair ? `${maxPair[0]} × ${maxPair[1]} by weight` : 'needs 2+ funds'} />
           </div>
 
           {/* Two-column results */}
@@ -231,6 +231,7 @@ export function EtfXrayContent() {
 
             {/* Right column */}
             <div style={{ flex: '1 1 320px', display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
+              {fundList.length >= 2 && activePair && <>
               <Panel title="Pairwise Overlap" right="% by weight · click a cell">
                 <div style={{ overflowX: 'auto', padding: 8 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: `36px repeat(${fundList.length}, minmax(40px, 1fr))`, gap: 0 }}>
@@ -281,6 +282,7 @@ export function EtfXrayContent() {
                   )}
                 </div>
               </Panel>
+              </>}
 
               <Panel title="Per-Fund Concentration" right="top-10 share of fund">
                 <div style={{ padding: 8 }}>

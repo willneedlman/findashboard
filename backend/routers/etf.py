@@ -188,16 +188,16 @@ class XrayRequest(BaseModel):
 @router.post("/xray")
 def xray(req: XrayRequest):
     funds = [f.strip().upper() for f in req.funds if f.strip()][:8]
-    if len(funds) < 2:
-        raise HTTPException(422, "Select at least two ETFs to compare")
+    if len(funds) < 1:
+        raise HTTPException(422, "Select at least one ETF")
 
     loaded: dict[str, dict] = {}
     for f in funds:
         d = _load(f)
         if d and d.get("holdings"):
             loaded[f] = d
-    if len(loaded) < 2:
-        raise HTTPException(404, "Could not load holdings for at least two of the selected ETFs")
+    if len(loaded) < 1:
+        raise HTTPException(404, "Could not load holdings for the selected ETF(s)")
 
     funds = list(loaded.keys())
     w = 1.0 / len(funds)  # equal-weight blend across the selected funds
