@@ -98,6 +98,76 @@ function runBootstrapShared(alignedReturns: number[][], targetMeans: number[], T
   return out
 }
 
+// Pearson correlation matrix of the legs' aligned daily returns, clamped off ±1
+// so the Cholesky stays well-conditioned.
+function correlationMatrix(returns: number[][]): number[][] {
+  const k = returns.length
+  const M = returns[0].length
+  const mean = returns.map(r => r.reduce((a, b) => a + b, 0) / r.length)
+  const std = returns.map((r, i) => Math.sqrt(r.reduce((a, x) => a + (x - mean[i]) ** 2, 0) / r.length) || 1e-9)
+  const R = Array.from({ length: k }, () => new Array(k).fill(0))
+  for (let i = 0; i < k; i++) {
+    for (let j = i; j < k; j++) {
+      let cov = 0
+      for (let t = 0; t < M; t++) cov += (returns[i][t] - mean[i]) * (returns[j][t] - mean[j])
+      const c = i === j ? 1 : Math.max(-0.999, Math.min(0.999, cov / M / (std[i] * std[j])))
+      R[i][j] = R[j][i] = c
+    }
+  }
+  return R
+}
+
+// Lower-triangular Cholesky factor (L·Lᵀ = A); a small diagonal jitter keeps it
+// real if the empirical matrix is barely non-positive-definite.
+function cholesky(A: number[][]): number[][] {
+  const n = A.length
+  const L = Array.from({ length: n }, () => new Array(n).fill(0))
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j <= i; j++) {
+      let sum = 0
+      for (let m = 0; m < j; m++) sum += L[i][m] * L[j][m]
+      if (i === j) L[i][j] = Math.sqrt(Math.max(A[i][i] - sum, 1e-12))
+      else L[i][j] = (A[i][j] - sum) / (L[j][j] || 1e-9)
+    }
+  }
+  return L
+}
+
+// Correlated GBM / Student-t across legs. `chol` is the Cholesky factor of the
+// legs' return-correlation matrix, so multiplying an iid shock vector by it yields
+// shocks with that correlation — macro moves hit correlated legs together. For
+// Student-t a single chi-square scale shared per step gives joint tail dependence
+// (extreme days arrive across the whole portfolio at once).
+function runDiffusionCorrelated(mus: number[], sigmas: number[], chol: number[][], T: number, nSims: number, studentT: boolean): number[][][] {
+  const k = mus.length
+  const dt = 1 / 252
+  const sqdt = Math.sqrt(dt)
+  const out: number[][][] = mus.map(() => [])
+  for (let s = 0; s < nSims; s++) {
+    const v = new Array(k).fill(1.0)
+    const paths: number[][] = mus.map(() => [1.0])
+    for (let t = 0; t < T; t++) {
+      const z = new Array(k)
+      for (let i = 0; i < k; i++) z[i] = gaussRandom()
+      let scale = 1.0
+      if (studentT) {
+        let chi2 = 0
+        for (let i = 0; i < T_DF; i++) { const g = gaussRandom(); chi2 += g * g }
+        scale = Math.sqrt((T_DF - 2) / chi2)   // standardized multivariate-t shock
+      }
+      for (let i = 0; i < k; i++) {
+        let corr = 0
+        for (let j = 0; j <= i; j++) corr += chol[i][j] * z[j]
+        const shock = corr * scale
+        v[i] *= Math.exp((mus[i] - 0.5 * sigmas[i] * sigmas[i]) * dt + sigmas[i] * sqdt * shock)
+        paths[i].push(v[i])
+      }
+    }
+    for (let i = 0; i < k; i++) out[i].push(paths[i])
+  }
+  return out
+}
+
 type SimModel = 'gbm' | 't' | 'bootstrap'
 const MODEL_LABELS: Record<SimModel, string> = {
   gbm: 'GBM (lognormal)',
@@ -317,15 +387,15 @@ export function MonteCarloContent() {
         : 8
 
       const n = Math.min(nSims, 500)
-      const dt = 1 / 252
 
-      // Block bootstrap: fetch each leg's price history and align all legs on their
-      // COMMON trading dates, so a resampled block lands on the same calendar days
-      // for every leg. Sharing the block index across legs keeps real cross-asset
-      // correlation — macro drawdowns co-occur instead of being diversified away.
-      const bootEligible: number[] = []      // leg indices simulated by the shared bootstrap
-      let sharedPaths: number[][][] = []
-      if (model === 'bootstrap') {
+      // Fetch + date-align leg histories whenever legs need linkage: always for
+      // bootstrap, and for GBM / Student-t whenever there are >=2 real legs to
+      // correlate. Aligning on COMMON trading dates lets a resampled block (or an
+      // estimated correlation) reflect the legs actually moving together.
+      const nonCashCount = legs.filter(l => l.ticker !== CASH_SYMBOL).length
+      const alignedIdx: number[] = []        // leg indices that have usable aligned history
+      const aligned: number[][] = []
+      if (model === 'bootstrap' || nonCashCount >= 2) {
         const series = await Promise.all(legs.map(async (leg) => {
           if (leg.ticker === CASH_SYMBOL) return null
           try {
@@ -342,8 +412,6 @@ export function MonteCarloContent() {
           common = new Set<string>([...prev].filter(d => ds.has(d)))
         }
         const commonDates: string[] = common ? [...common].sort() : []
-        const aligned: number[][] = []
-        const targetMeans: number[] = []
         if (commonDates.length > BLOCK_SIZE + 1) {
           series.forEach((pts, i) => {
             if (!pts) return
@@ -352,31 +420,41 @@ export function MonteCarloContent() {
             const px = commonDates.map(d => byDate[d])
             const rets: number[] = []
             for (let k = 1; k < px.length; k++) rets.push(Math.log(px[k] / px[k - 1]))
-            const mu = (legs[i].drift + legAdjs[i].stratAdj) / 100
-            const em = rets.reduce((a, b) => a + b, 0) / rets.length
-            const ev = rets.reduce((a, x) => a + (x - em) * (x - em), 0) / rets.length
-            bootEligible.push(i)
+            alignedIdx.push(i)
             aligned.push(rets)
-            targetMeans.push(mu / 252 - 0.5 * ev)   // = (mu - 0.5 σ²) dt with empirical σ
           })
         }
-        if (aligned.length) sharedPaths = runBootstrapShared(aligned, targetMeans, horizon, n, BLOCK_SIZE)
       }
 
-      // Per-leg simulations (normalized to start at 1.0). A bootstrap leg with no
-      // usable history (cash sleeve, or a failed fetch) falls back to GBM so a run
-      // never fails silently.
-      const allPaths = legs.map((leg, i) => {
+      // Linked simulation for the legs that have aligned history. Bootstrap shares
+      // block indices; GBM / Student-t draw shocks correlated by the empirical
+      // correlation matrix (Cholesky) so macro moves hit correlated legs together.
+      const allPaths: number[][][] = new Array(legs.length)
+      if (model === 'bootstrap' && aligned.length) {
+        const targetMeans = alignedIdx.map((i, p) => {
+          const mu = (legs[i].drift + legAdjs[i].stratAdj) / 100
+          const em = aligned[p].reduce((a, b) => a + b, 0) / aligned[p].length
+          const ev = aligned[p].reduce((a, x) => a + (x - em) * (x - em), 0) / aligned[p].length
+          return mu / 252 - 0.5 * ev   // = (mu - 0.5 σ²) dt with empirical σ
+        })
+        const sharedPaths = runBootstrapShared(aligned, targetMeans, horizon, n, BLOCK_SIZE)
+        alignedIdx.forEach((i, p) => { allPaths[i] = sharedPaths[p] })
+      } else if (model !== 'bootstrap' && aligned.length >= 2) {
+        const mus    = alignedIdx.map(i => (legs[i].drift + legAdjs[i].stratAdj) / 100)
+        const sigmas = alignedIdx.map(i => legs[i].vol / 100)
+        const chol   = cholesky(correlationMatrix(aligned))
+        const corrPaths = runDiffusionCorrelated(mus, sigmas, chol, horizon, n, model === 't')
+        alignedIdx.forEach((i, p) => { allPaths[i] = corrPaths[p] })
+      }
+
+      // Remaining legs (cash, a failed fetch, or single-leg runs with no linkage)
+      // simulate independently. A bootstrap leg with no history falls back to GBM.
+      legs.forEach((leg, i) => {
+        if (allPaths[i]) return
         const mu    = (leg.drift + legAdjs[i].stratAdj) / 100
         const sigma = leg.vol / 100
-        const bootPos = bootEligible.indexOf(i)
-        if (model === 'bootstrap' && bootPos >= 0) {
-          return sharedPaths[bootPos]
-        }
-        if (model === 't') {
-          return runDiffusion(1.0, mu, sigma, horizon, n, () => tRandom(T_DF))
-        }
-        return runGBM(1.0, mu, sigma, horizon, n)
+        if (model === 't') allPaths[i] = runDiffusion(1.0, mu, sigma, horizon, n, () => tRandom(T_DF))
+        else allPaths[i] = runGBM(1.0, mu, sigma, horizon, n)
       })
 
       // Combine into weighted portfolio paths (normalized to start at 1.0)
@@ -439,7 +517,7 @@ export function MonteCarloContent() {
       return {
         bands, histogram, S0, median, p5, p95, probProfit, probRuin, varAmt, cvarAmt, effDrift,
         probTarget, targetPrice, model,
-        bootstrapReady: model !== 'bootstrap' || legs.every((l, i) => l.ticker === CASH_SYMBOL || bootEligible.includes(i)),
+        bootstrapReady: model !== 'bootstrap' || legs.every((l, i) => l.ticker === CASH_SYMBOL || alignedIdx.includes(i)),
         benchmark, legs: legs.map((l, i) => ({ ...l, ...legAdjs[i] })),
       }
     },
