@@ -48,10 +48,16 @@ SUPPORTED: dict[str, tuple[str, str, str]] = {
     "QQQ":  ("sa", "QQQ",  "Nasdaq-100"),
     "VOO":  ("sa", "VOO",  "Vanguard S&P 500"),
     "VTI":  ("sa", "VTI",  "Vanguard Total Market"),
-    "IVV":  ("sa", "IVV",  "iShares S&P 500"),
-    "IWM":  ("sa", "IWM",  "Russell 2000"),
+    "VXUS": ("sa", "VXUS", "Vanguard Total Int'l"),
+    "VEA":  ("sa", "VEA",  "Vanguard Developed Mkts"),
+    "VWO":  ("sa", "VWO",  "Vanguard Emerging Mkts"),
     "VUG":  ("sa", "VUG",  "Vanguard Growth"),
     "VTV":  ("sa", "VTV",  "Vanguard Value"),
+    "VIG":  ("sa", "VIG",  "Vanguard Dividend Appr."),
+    "VYM":  ("sa", "VYM",  "Vanguard High Dividend"),
+    "VGT":  ("sa", "VGT",  "Vanguard Info Tech"),
+    "IVV":  ("sa", "IVV",  "iShares S&P 500"),
+    "IWM":  ("sa", "IWM",  "Russell 2000"),
     "SCHD": ("sa", "SCHD", "Schwab Dividend"),
     "ARKK": ("sa", "ARKK", "ARK Innovation"),
     "ARKW": ("sa", "ARKW", "ARK Next-Gen Internet"),
@@ -121,7 +127,11 @@ def _sa_holdings(ticker: str) -> dict:
     d = (resp.json() or {}).get("data", {})
     holdings: dict[str, dict] = {}
     for h in d.get("holdings", []):
-        sym = str(h.get("s") or "").lstrip("$").strip().upper()
+        raw = str(h.get("s") or "").strip()
+        if not raw:
+            continue
+        # "$NVDA" for US listings; "!tpe/2330" for foreign listings (exch/code).
+        sym = raw[1:].upper() if raw.startswith("$") else raw.split("/")[-1].upper() if raw.startswith("!") else raw.upper()
         if not sym:
             continue
         try:
