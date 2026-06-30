@@ -848,7 +848,7 @@ export default function SentimentTracker() {
                   <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: accent, fontFamily: T.mono }}>{lbl}-Looking</div>
                   <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 2 }}>
                     <span style={{ fontSize: 17, fontWeight: 700, color: sentimentColor(val), fontFamily: T.mono }}>{val.toFixed(0)}</span>
-                    <span style={{ fontSize: 8, color: T.muted, fontFamily: T.mono }}>{n} art</span>
+                    <span style={{ fontSize: 8, color: T.muted, fontFamily: T.mono }}>{n} {n === 1 ? 'article' : 'articles'}</span>
                   </div>
                   <div style={{ height: 3, background: T.border, marginTop: 4 }}>
                     <div style={{ width: `${Math.max(0, Math.min(100, val))}%`, height: '100%', background: sentimentColor(val) }} />
