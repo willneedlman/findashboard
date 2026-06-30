@@ -45,6 +45,7 @@ class ScoredArticle:
     reasoning_tag: str
     forward_looking_weight: float = 0.5  # 1.0 = predictive/speculative, 0.0 = historical
     entities: list[Entity] = field(default_factory=list)
+    seen_in_sources: int = 1  # distinct feeds that carried this story (1 = unique)
 
 
 # ── Ingestion boundary ────────────────────────────────────────────────────────
@@ -105,6 +106,7 @@ class ItemOut(BaseModel):
     forward_sentiment_score: float          # score * forward_looking_weight
     backward_sentiment_score: float         # score * (1 - forward_looking_weight)
     entities: list[Entity]
+    seen_in_sources: int = 1                 # distinct feeds carrying this story
 
 
 class SourceResult(BaseModel):

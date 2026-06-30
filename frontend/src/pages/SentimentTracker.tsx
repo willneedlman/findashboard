@@ -38,6 +38,7 @@ interface ScoredItem {
   forward_sentiment_score: number
   backward_sentiment_score: number
   entities:       Entity[]
+  seen_in_sources?: number
 }
 
 interface Source {
@@ -504,6 +505,13 @@ function SourcePanel({ src, timeframeHours }: { src: Source; timeframeHours: num
                     </span>
                   )
                 })()}
+                {(item.seen_in_sources ?? 1) > 1 && (
+                  <span title={`Corroborated — this story was carried by ${item.seen_in_sources} feeds`}
+                    style={{ fontSize: 9, padding: '1px 5px', fontFamily: T.mono, fontWeight: 700, letterSpacing: '0.06em', cursor: 'help',
+                      color: T.pos, background: 'rgba(134,239,172,0.09)', border: '1px solid rgba(134,239,172,0.22)' }}>
+                    {item.seen_in_sources} FEEDS
+                  </span>
+                )}
                 {item.entities.slice(0, 3).map(e => <AssetTag key={e.name} name={e.name} assetClass={e.asset_class} />)}
               </div>
             </div>

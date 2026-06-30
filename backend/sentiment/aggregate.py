@@ -46,6 +46,7 @@ def _item_out(a: ScoredArticle) -> ItemOut:
         forward_sentiment_score=round(a.score * fw, 2),
         backward_sentiment_score=round(a.score * (1.0 - fw), 2),
         entities=a.entities,
+        seen_in_sources=a.seen_in_sources,
     )
 
 

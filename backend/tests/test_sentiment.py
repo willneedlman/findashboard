@@ -125,12 +125,14 @@ def test_isolated_spike_discounted_but_corroborated_not():
         _scored("WSJ", "rss:wsj", "Stocks tumble on recession fears today", 24, 4),
         _scored("CNBC Markets", "rss:cnbc", "Stocks tumble on recession fears", 24, 4),
     ]
-    factor, stats = source_manager.verify(items)
+    factor, stats, clusters = source_manager.verify(items)
     spike = factor["rss:marketwatch::Fed announces emergency rate hike"]
     corro = factor["rss:wsj::Stocks tumble on recession fears today"]
     assert spike == 0.5          # lone systemic tier-5 strong claim discounted
     assert corro == 1.0          # tier-4 echoed across sources kept
     assert stats.corroborated >= 1
+    # The two recession-fears headlines cluster; the lone spike stays separate.
+    assert sorted(len(c) for c in clusters) == [1, 2]
 
 
 # ── Pure aggregation determinism ──────────────────────────────────────────────

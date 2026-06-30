@@ -58,12 +58,13 @@ def _is_spike(it: ScoredArticle) -> bool:
     return it.macro_tier >= config.SPIKE_TIER and abs(it.direction) >= config.SPIKE_DIRECTION
 
 
-def verify(items: list[ScoredArticle]) -> tuple[dict[str, float], Verification]:
-    """Cluster near-duplicates; return (corroboration factor by article key, stats).
+def verify(items: list[ScoredArticle]) -> tuple[dict[str, float], Verification, list[list[int]]]:
+    """Cluster near-duplicates; return (corroboration factor, stats, clusters).
 
     Single-linkage greedy clustering in input order is deterministic. The factor
     key is ``f"{source_key}::{title}"``; aggregate multiplies each article's
-    weight by it.
+    weight by it. ``clusters`` is the member indices per cluster, so the caller
+    can collapse a story syndicated across feeds to one representative.
     """
     shings = [_shingles(it.title) for it in items]
     # Each cluster: [representative shingles, member indices, distinct source labels]
@@ -94,4 +95,5 @@ def verify(items: list[ScoredArticle]) -> tuple[dict[str, float], Verification]:
             factor[f"{it.source_key}::{it.title}"] = (
                 config.CORROBORATION_DISCOUNT if discount else 1.0
             )
-    return factor, Verification(clusters=len(clusters), corroborated=corroborated, discounted=discounted)
+    cluster_members = [members for _rep, members, _sources in clusters]
+    return factor, Verification(clusters=len(clusters), corroborated=corroborated, discounted=discounted), cluster_members

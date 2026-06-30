@@ -141,8 +141,26 @@ def _compute(sample_size: int, timeframe_hours: int, now: int) -> SentimentSnaps
     scored = [replace(a, reasoning_tag=tags.get(f"{a.source_key}::{a.title}", a.reasoning_tag)) for a in scored]
 
     # Cross-source corroboration + effective weights.
-    corroboration, verification = source_manager.verify(scored)
+    corroboration, verification, clusters = source_manager.verify(scored)
     eff_weight = {s.label: source_manager.effective_weight(s, _reliability) for s in specs}
+
+    # Collapse each near-duplicate cluster to a single representative so a story
+    # syndicated across feeds (e.g. CNBC Markets + CNBC Top News carrying the same
+    # headline) is counted and shown once. Corroboration is measured above on the
+    # full set first, so the multi-source signal is preserved; the representative
+    # records how many feeds carried it.
+    def _authority(a: ScoredArticle) -> float:
+        spec = specs_by_label.get(a.source_label)
+        return spec.authority if spec else 0.0
+
+    deduped: list[ScoredArticle] = []
+    for members in clusters:
+        arts = [scored[i] for i in members]
+        rep = max(arts, key=lambda a: (_authority(a), a.confidence, a.recency_weight, a.source_label, a.title))
+        n_sources = len({a.source_label for a in arts})
+        deduped.append(replace(rep, seen_in_sources=n_sources) if n_sources > 1 else rep)
+    deduped.sort(key=lambda a: a.published_at, reverse=True)
+    scored = deduped
 
     scored_by_source: dict[str, list[ScoredArticle]] = {}
     for a in scored:
