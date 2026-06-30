@@ -18,18 +18,46 @@ import EmptyState from '../components/EmptyState'
 import PortfolioIO, { type PortfolioAsset } from '../components/PortfolioIO'
 import PMImportPicker from '../components/PMImportPicker'
 import { CASH_SYMBOL } from '../lib/pmImport'
-import ConfigHeader from '../components/portfolio/ConfigHeader'
+import ConfigHeader, { Field, paramInput } from '../components/portfolio/ConfigHeader'
 import { usePortfolio, type PortfolioHolding } from '../contexts/PortfolioContext'
 // ── GBM math ────────────────────────────────────────────────────────────────
 
 function runGBM(S0: number, mu: number, sigma: number, T: number, nSims: number) {
+  return runDiffusion(S0, mu, sigma, T, nSims, gaussRandom)
+}
+
+let _seed = 12345
+function uniRandom() {
+  _seed = (_seed * 1664525 + 1013904223) & 0xffffffff
+  return (_seed >>> 0) / 0x100000000
+}
+function gaussRandom() {
+  const u1 = uniRandom()
+  const u2 = uniRandom()
+  return Math.sqrt(-2 * Math.log(Math.max(u1, 1e-10))) * Math.cos(2 * Math.PI * u2)
+}
+
+// Standardized Student-t shock (unit variance) — fatter tails than Gaussian, so
+// extreme single-day moves and crashes show up far more often than GBM allows.
+const T_DF = 5
+function tRandom(df: number) {
+  const z = gaussRandom()
+  let chi2 = 0
+  for (let i = 0; i < df; i++) { const g = gaussRandom(); chi2 += g * g }
+  const t = z / Math.sqrt(chi2 / df)
+  return t * Math.sqrt((df - 2) / df)
+}
+
+// GBM with a pluggable shock. shock() returns a unit-variance draw; Gaussian
+// recovers classic GBM, Student-t adds fat tails without changing drift/vol.
+function runDiffusion(S0: number, mu: number, sigma: number, T: number, nSims: number, shock: () => number) {
   const dt = 1 / 252
   const paths: number[][] = []
   for (let s = 0; s < nSims; s++) {
     const path = [S0]
     let v = S0
     for (let t = 0; t < T; t++) {
-      v = v * Math.exp((mu - 0.5 * sigma * sigma) * dt + sigma * Math.sqrt(dt) * gaussRandom())
+      v = v * Math.exp((mu - 0.5 * sigma * sigma) * dt + sigma * Math.sqrt(dt) * shock())
       path.push(v)
     }
     paths.push(path)
@@ -37,13 +65,38 @@ function runGBM(S0: number, mu: number, sigma: number, T: number, nSims: number)
   return paths
 }
 
-let _seed = 12345
-function gaussRandom() {
-  _seed = (_seed * 1664525 + 1013904223) & 0xffffffff
-  const u1 = ((_seed >>> 0) / 0x100000000)
-  _seed = (_seed * 1664525 + 1013904223) & 0xffffffff
-  const u2 = ((_seed >>> 0) / 0x100000000)
-  return Math.sqrt(-2 * Math.log(Math.max(u1, 1e-10))) * Math.cos(2 * Math.PI * u2)
+// Moving-block bootstrap: resample the asset's REAL daily log returns in
+// contiguous blocks, so genuine fat tails, volatility clustering and multi-day
+// crash runs (which GBM's iid normal shocks cannot produce) carry through. Blocks
+// are recentered to the target log-drift so the median matches the other models.
+const BLOCK_SIZE = 10
+function runBootstrap(S0: number, returns: number[], T: number, nSims: number, block: number, targetMean: number) {
+  const N = returns.length
+  const empMean = returns.reduce((a, b) => a + b, 0) / N
+  const B = Math.min(block, N)
+  const maxStart = N - B
+  const paths: number[][] = []
+  for (let s = 0; s < nSims; s++) {
+    const path = [S0]
+    let v = S0
+    let t = 0
+    while (t < T) {
+      const start = Math.floor(uniRandom() * (maxStart + 1))
+      for (let b = 0; b < B && t < T; b++, t++) {
+        v = v * Math.exp(returns[start + b] - empMean + targetMean)
+        path.push(v)
+      }
+    }
+    paths.push(path)
+  }
+  return paths
+}
+
+type SimModel = 'gbm' | 't' | 'bootstrap'
+const MODEL_LABELS: Record<SimModel, string> = {
+  gbm: 'GBM (lognormal)',
+  t: 'Student-t (fat tails)',
+  bootstrap: 'Block bootstrap (historical)',
 }
 
 function pathPercentiles(paths: number[][], day: number) {
@@ -69,6 +122,7 @@ type Leg = {
   strategy: string
   stratParams: StrategyParams
   fetched: boolean
+  returns?: number[]   // daily log returns from fetched history; feeds block bootstrap
 }
 
 const makeLeg = (ticker: string, weight: number): Leg => ({
@@ -116,6 +170,7 @@ export function MonteCarloContent() {
   const [collapsed, setCollapsed] = useState(false)
   const [horizon, setHorizon] = useState(252)
   const [nSims, setNSims] = useState(500)
+  const [model, setModel] = useState<SimModel>('gbm')
   const [benchmark, setBenchmark] = useState('SPY')
   const [targetPrice, setTargetPrice] = useState(0)
   const [fetching, setFetching] = useState(false)
@@ -144,11 +199,15 @@ export function MonteCarloContent() {
             // CAGR = (1 + totalReturn/100)^(1/years) - 1; cap at ±150%/yr for sane simulation
             const cagr = (Math.pow(1 + data.metrics.total_return / 100, 1 / years) - 1) * 100
             const drift = Math.max(-150, Math.min(150, +cagr.toFixed(1)))
+            const px: number[] = (data.price ?? []).map((p: { value: number }) => p.value).filter((v: number) => v > 0)
+            const returns: number[] = []
+            for (let i = 1; i < px.length; i++) returns.push(Math.log(px[i] / px[i - 1]))
             return {
               ...leg,
               spot: +data.metrics.current_price.toFixed(2),
               vol:  +data.metrics.ann_volatility.toFixed(1),
               drift,
+              returns,
               fetched: true,
             }
           }
@@ -256,11 +315,22 @@ export function MonteCarloContent() {
           })()
         : 8
 
-      // Per-leg GBMs (normalized to start at 1.0)
+      // Per-leg simulations (normalized to start at 1.0). Block bootstrap needs
+      // the leg's fetched return series; legs without one (cash sleeve, or before
+      // Fetch Live Vol/Drift) fall back to GBM so a run never fails silently.
+      const n = Math.min(nSims, 500)
+      const dt = 1 / 252
       const allPaths = legs.map((leg, i) => {
         const mu    = (leg.drift + legAdjs[i].stratAdj) / 100
         const sigma = leg.vol / 100
-        return runGBM(1.0, mu, sigma, horizon, Math.min(nSims, 500))
+        if (model === 'bootstrap' && leg.returns && leg.returns.length > BLOCK_SIZE) {
+          const targetMean = (mu - 0.5 * sigma * sigma) * dt
+          return runBootstrap(1.0, leg.returns, horizon, n, BLOCK_SIZE, targetMean)
+        }
+        if (model === 't') {
+          return runDiffusion(1.0, mu, sigma, horizon, n, () => tRandom(T_DF))
+        }
+        return runGBM(1.0, mu, sigma, horizon, n)
       })
 
       // Combine into weighted portfolio paths (normalized to start at 1.0)
@@ -322,7 +392,8 @@ export function MonteCarloContent() {
 
       return {
         bands, histogram, S0, median, p5, p95, probProfit, probRuin, varAmt, cvarAmt, effDrift,
-        probTarget, targetPrice,
+        probTarget, targetPrice, model,
+        bootstrapReady: model !== 'bootstrap' || legs.every(l => l.ticker === CASH_SYMBOL || (l.returns?.length ?? 0) > BLOCK_SIZE),
         benchmark, legs: legs.map((l, i) => ({ ...l, ...legAdjs[i] })),
       }
     },
@@ -360,6 +431,16 @@ export function MonteCarloContent() {
         isRunning={isPending}
         tickerListId="mc-futures"
         tickerList={<datalist id="mc-futures">{FUTURES.map(f => <option key={f.sym} value={f.sym}>{f.label}</option>)}</datalist>}
+        paramExtra={
+          <Field label="Simulation Model">
+            <select value={model} onChange={e => setModel(e.target.value as SimModel)}
+              style={{ ...paramInput, cursor: 'pointer' }}>
+              {(Object.keys(MODEL_LABELS) as SimModel[]).map(m => (
+                <option key={m} value={m}>{MODEL_LABELS[m]}</option>
+              ))}
+            </select>
+          </Field>
+        }
         overflow={
           <>
             <button onClick={fetchAll} disabled={fetching}
@@ -419,6 +500,16 @@ export function MonteCarloContent() {
                     )}
                   </div>
                 ))}
+                <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {!data.bootstrapReady && (
+                    <span style={{ fontSize: 9, color: 'var(--theme-negative)', letterSpacing: '0.04em' }}>
+                      no history — using GBM, run Fetch Live Vol / Drift
+                    </span>
+                  )}
+                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)' }}>
+                    {MODEL_LABELS[data.model as SimModel]}
+                  </span>
+                </span>
               </div>
 
               {/* Answer-first outcome strip */}

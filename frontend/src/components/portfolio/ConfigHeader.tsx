@@ -32,6 +32,8 @@ interface Props {
   horizon?: number; setHorizon?: (v: number) => void
   nSims?: number; setNSims?: (v: number) => void
   targetPrice?: number; setTargetPrice?: (v: number) => void
+  // Extra full-width control rendered below the parameter grid (e.g. MC model)
+  paramExtra?: React.ReactNode
 
   onRun: () => void
   isRunning: boolean
@@ -78,16 +80,17 @@ const SECTION: React.CSSProperties = {
   fontFamily: T.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.16em',
   textTransform: 'uppercase', color: T.sec,
 }
-const inputBase: React.CSSProperties = {
+export const paramInput: React.CSSProperties = {
   width: '100%', boxSizing: 'border-box', background: T.bg,
   border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 30%, transparent)',
   color: T.text, fontFamily: T.mono, fontSize: 12, padding: '6px 8px', outline: 'none',
 }
+const inputBase = paramInput
 const focusOn = (e: React.FocusEvent<HTMLInputElement>) => (e.target.style.borderColor = T.primary)
 const focusOff = (e: React.FocusEvent<HTMLInputElement>) =>
   (e.target.style.borderColor = 'color-mix(in srgb, var(--theme-primary, #c9a84c) 30%, transparent)')
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+export function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <div><label style={SUBLABEL}>{label}</label>{children}</div>
 }
 
@@ -277,6 +280,7 @@ export default function ConfigHeader(p: Props) {
                     <div style={{ gridColumn: '1 / -1' }}>
                       <Field label="Target Endpoint ($)"><NumberInput value={p.targetPrice || ''} onChange={v => p.setTargetPrice?.(v === '' ? 0 : +v)} placeholder="e.g. 120 = +20%" /></Field>
                     </div>
+                    {p.paramExtra && <div style={{ gridColumn: '1 / -1' }}>{p.paramExtra}</div>}
                   </>
                 )}
               </div>
