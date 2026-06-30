@@ -10,9 +10,11 @@ since. Enrichment is cached 24h per ticker so repeat views are cheap.
 from __future__ import annotations
 
 import concurrent.futures as cf
+import logging
 from datetime import date, datetime, timedelta
 
 import pandas as pd
+import requests
 import yfinance as yf
 from fastapi import APIRouter, HTTPException, Query
 
@@ -21,8 +23,42 @@ import options_data
 from disk_cache import disk_get, disk_set
 
 router = APIRouter()
+_log = logging.getLogger(__name__)
 
 _MAX_ENRICH = 60
+_NASDAQ_UA = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36", "Accept": "application/json"}
+
+
+def _nasdaq_calendar(day: str) -> list[dict]:
+    """Earnings for a single date from Nasdaq's calendar API (more complete than
+    Finnhub's free feed — includes large caps it omits). Cached 6h. Row shape
+    matches finnhub.get_earnings_calendar so the two merge cleanly."""
+    ck = f"earn:nasdaq:{day}"
+    cached = disk_get(ck)
+    if cached is not None:
+        return cached
+    out: list[dict] = []
+    try:
+        r = requests.get(f"https://api.nasdaq.com/api/calendar/earnings?date={day}", headers=_NASDAQ_UA, timeout=12)
+        rows = ((r.json() or {}).get("data") or {}).get("rows") or []
+        for x in rows:
+            sym = (x.get("symbol") or "").strip().upper()
+            if not sym:
+                continue
+            t = x.get("time") or ""
+            hour = "bmo" if "pre-market" in t else "amc" if "after-hours" in t else ""
+            eps = x.get("epsForecast") or ""
+            try:
+                eps_est = float(eps.replace("$", "").replace(",", "")) if eps else None
+            except ValueError:
+                eps_est = None
+            out.append({"symbol": sym, "date": day, "hour": hour, "quarter": None,
+                        "year": None, "epsEstimate": eps_est, "revenueEstimate": None})
+    except Exception as e:
+        _log.warning("nasdaq earnings %s: %s", day, e)
+        return []
+    disk_set(ck, out, ttl=21600)
+    return out
 
 
 @router.get("/calendar")
@@ -39,6 +75,14 @@ def calendar(
 
     d1 = d0 + timedelta(days=days - 1)
     rows = finnhub.get_earnings_calendar(d0.isoformat(), d1.isoformat())
+    # Augment with Nasdaq (Finnhub's free feed omits many large caps, e.g. NKE).
+    seen = {(r.get("date"), r.get("symbol")) for r in rows}
+    for n in range(days):
+        for nr in _nasdaq_calendar((d0 + timedelta(days=n)).isoformat()):
+            k = (nr["date"], nr["symbol"])
+            if k not in seen:
+                rows.append(nr)
+                seen.add(k)
     # Date first, then covered names (those with an estimate) ahead of the
     # long tail of micro-caps that report with no analyst coverage.
     rows.sort(key=lambda r: (r["date"] or "", r.get("epsEstimate") is None, r["symbol"]))
