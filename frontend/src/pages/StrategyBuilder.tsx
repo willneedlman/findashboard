@@ -5,7 +5,7 @@ import { KpiCell } from '../components/mmCockpit'
 import SidebarLayout from '../components/SidebarLayout'
 import ExpirySelect from '../components/ExpirySelect'
 import axios from 'axios'
-import { TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
+import { TICK, RailSection } from './valuationShared'
 
 const STRIP: React.CSSProperties = {
   display: 'flex', alignItems: 'stretch', overflowX: 'auto',
@@ -140,8 +140,7 @@ export default function StrategyBuilder() {
     const tDays = Math.min(daysFromNow, maxDte)
     const showT = maxDte > 0   // before-expiry curve only meaningful with time left
 
-    const rows = Array.from({ length: steps + 1 }, (_, i) => {
-      const S     = lo + (hi - lo) * (i / steps)
+    const buildRow = (S: number): Record<string, number> => {
       const total = primary.reduce((sum, leg) => sum + intrinsic(S, leg), 0) + secondaryOffset
       const tval  = showT
         ? legMeta.reduce((sum, m) => sum + legPnlAt(S, m.leg, m.iv, tDays), 0) + secondaryOffset
@@ -153,12 +152,17 @@ export default function StrategyBuilder() {
         profit: +Math.max(total, 0).toFixed(2),
         loss:   +Math.min(total, 0).toFixed(2),
       }
-      // Per-leg lines (primary ticker only)
       primary.forEach((leg, idx) => {
         row[`leg${idx}`] = +intrinsic(S, leg).toFixed(2)
       })
       return row
-    })
+    }
+
+    // Even grid, plus an exact point at the spot so the crosshair snaps to the
+    // spot line instead of jumping over it (spot rarely lands on a grid step).
+    const prices = Array.from({ length: steps + 1 }, (_, i) => +(lo + (hi - lo) * (i / steps)).toFixed(2))
+    if (spot > lo && spot < hi) prices.push(+spot.toFixed(2))
+    const rows = [...new Set(prices)].sort((a, b) => a - b).map(buildRow)
 
     const allVals = rows.map(r => r.total)
     const rawMin  = Math.min(...allVals)
@@ -678,8 +682,32 @@ export default function StrategyBuilder() {
                   <XAxis dataKey="price" type="number" domain={[chartData.lo, chartData.hi]} tick={TICK} tickFormatter={v => `$${(+v).toFixed(2)}`} interval="preserveStartEnd" allowDataOverflow />
                   <YAxis tick={TICK} tickFormatter={v => `$${v.toFixed(0)}`} orientation="right"
                     domain={[chartData.yMin, chartData.yMax]} />
-                  <Tooltip formatter={(v: number, name: string) => [`$${(+v).toFixed(2)}`, name === 'total' ? 'Total P&L' : name]}
-                    labelFormatter={v => `${primaryTicker} @ $${(+v).toFixed(2)}`} contentStyle={TOOLTIP_STYLE} />
+                  <Tooltip
+                    cursor={{ stroke: 'var(--theme-text-faint, rgba(255,255,255,0.3))', strokeWidth: 1, strokeDasharray: '3 3' }}
+                    content={(props) => {
+                      const { active, payload, label } = props as { active?: boolean; payload?: { dataKey?: string; value?: number }[]; label?: number }
+                      if (!active || !payload?.length) return null
+                      const at = (k: string) => payload.find(p => p.dataKey === k)?.value
+                      const total = at('total'), tval = at('tval')
+                      const signed = (v?: number) => v == null ? '—' : `${v >= 0 ? '+' : '-'}$${Math.abs(v).toFixed(2)}`
+                      const col = (v?: number) => v == null ? 'var(--theme-text, #d7e3fc)' : v >= 0 ? 'var(--theme-positive, #22c55e)' : 'var(--theme-negative, #ef4444)'
+                      const row = (lbl: string, lblColor: string, v?: number) => (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 18, marginTop: 4 }}>
+                          <span style={{ color: lblColor }}>{lbl}</span>
+                          <span style={{ color: col(v), fontWeight: 700 }}>{signed(v)}</span>
+                        </div>
+                      )
+                      return (
+                        <div style={{ background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-border, rgba(255,255,255,0.16))', padding: '8px 11px', fontFamily: 'var(--theme-mono)', fontSize: 11, boxShadow: '0 6px 20px rgba(0,0,0,0.55)' }}>
+                          <div style={{ color: 'var(--theme-text, #d7e3fc)', fontWeight: 700, marginBottom: 2 }}>
+                            {primaryTicker} @ ${label != null ? (+label).toFixed(2) : '—'}
+                          </div>
+                          {row('At expiry', 'var(--theme-primary, #c9a84c)', total)}
+                          {chartData.showT && row(chartData.tDays === 0 ? 'Today' : `+${chartData.tDays}d`, 'var(--theme-tertiary, #60a5fa)', tval)}
+                        </div>
+                      )
+                    }}
+                  />
 
                   {/* Green profit zone */}
                   <Area type="monotone" dataKey="profit" fill="rgba(47,107,75,0.25)" stroke="none" />
