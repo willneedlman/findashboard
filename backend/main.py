@@ -24,7 +24,7 @@ from routers import (
     filings, lob, regression, screener,
     paper_scheduler, paper_strategies, paper,
     iv_tracker, valuation, analytics,
-    earnings, leaderboard, etf,
+    earnings, leaderboard, etf, fx,
 )
 
 @asynccontextmanager
@@ -153,6 +153,7 @@ app.include_router(nav.router,               prefix="/api/nav",               ta
 app.include_router(etf.router,               prefix="/api/etf",               tags=["etf"])
 app.include_router(corporate.router,         prefix="/api/corporate",         tags=["corporate"])
 app.include_router(rates.router,             prefix="/api/rates",             tags=["rates"])
+app.include_router(fx.router,                prefix="/api/fx",                tags=["fx"])
 app.include_router(correlation.router,       prefix="/api/correlation",       tags=["correlation"])
 app.include_router(dcf.router,               prefix="/api/dcf",               tags=["dcf"])
 app.include_router(users.router,             prefix="/api/users",             tags=["users"])

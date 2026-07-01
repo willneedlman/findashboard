@@ -56,6 +56,7 @@ const PortfolioManager   = lazyWithReload(() => import('./pages/PortfolioManager
 const AdminTester        = lazyWithReload(() => import('./pages/AdminTester'))
 const CreditSpreads      = lazyWithReload(() => import('./pages/CreditSpreads'))
 const MarketHours        = lazyWithReload(() => import('./pages/MarketHours'))
+const CurrencyMatrix     = lazyWithReload(() => import('./pages/CurrencyMatrix'))
 const RelativeValuation  = lazyWithReload(() => import('./pages/RelativeValuation'))
 const SupplyChain        = lazyWithReload(() => import('./pages/SupplyChain'))
 const TradeJournal       = lazyWithReload(() => import('./pages/TradeJournal'))
@@ -206,6 +207,7 @@ export default function App() {
               <Route path="/economy"             element={<EconomyMonitor />} />
               <Route path="/credit-spreads"      element={<CreditSpreads />} />
               <Route path="/market-hours"        element={<MarketHours />} />
+              <Route path="/currency"            element={<CurrencyMatrix />} />
               <Route path="/relative-valuation"  element={<RelativeValuation />} />
               <Route path="/supply-chain"        element={<SupplyChain />} />
               <Route path="/gamma-scalping"      element={<Navigate to="/paper-trading" replace />} />

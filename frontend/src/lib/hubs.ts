@@ -3,7 +3,7 @@ import {
   Filter, TrendingUp, Brain, CalendarClock, CalendarDays, FileText, Activity,
   GitCompare, PieChart, Globe, Scale, Coins, Boxes, RotateCcw, Gem,
   LineChart, BarChart2, Waves, Zap, Shuffle, Percent,
-  GitBranch, Landmark, Dices, Gauge, BookOpen, Bell, Workflow, Clock,
+  GitBranch, Landmark, Dices, Gauge, BookOpen, Bell, Workflow, Clock, ArrowLeftRight,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -94,6 +94,7 @@ export const HUBS: Hub[] = [
       { title: 'Bond Lookup',    chip: 'Lookup',         desc: 'Resolve a CUSIP or issuer to bond reference data', route: '/cusip',          icon: BookOpen },
       { title: 'Credit Spreads', chip: 'Credit Spreads', desc: 'Investment-grade and high-yield spread monitor', route: '/credit-spreads', icon: Activity },
       { title: 'Market Hours',   chip: 'Market Hours',   desc: 'Live global session clock across futures, US, Europe, Asia', route: '/market-hours',   icon: Clock },
+      { title: 'Currency Matrix', chip: 'FX Matrix',     desc: 'Spot cross-rates, forward points, cross-currency basis, and FX vol', route: '/currency', icon: ArrowLeftRight },
     ],
   },
   {
