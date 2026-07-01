@@ -6,6 +6,7 @@ import { AreaChart, Area, XAxis, YAxis, ReferenceLine, ResponsiveContainer } fro
 import { Search, LayoutGrid, ArrowUpRight, Clock, X, Upload, Briefcase, TrendingUp, Zap, Calculator, Globe, Scale, Building2 } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import TickerLogo from '../components/TickerLogo'
+import MarketClockMini from '../components/MarketClockMini'
 import useIsMobile from '../hooks/useIsMobile'
 import { usePortfolio, type PortfolioHolding } from '../contexts/PortfolioContext'
 import { loadActivePortfolio, useQuotes, priceHoldings } from '../components/dashboard/widgets/usePortfolio'
@@ -292,48 +293,6 @@ function PortfolioImportStrip() {
 }
 
 // ── Hub card ────────────────────────────────────────────────────────────────
-function HubCard({ slug }: { slug: string }) {
-  const navigate = useNavigate()
-  const [hover, setHover] = useState(false)
-  const hub = HUBS.find(h => h.slug === slug)!
-  const Icon = hub.icon
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={() => navigate(`/hub/${hub.slug}`)}
-      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/hub/${hub.slug}`) } }}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        display: 'flex', flexDirection: 'column', gap: 12, padding: '17px 18px',
-        background: hover ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 4%, var(--theme-bg, #0d1826))' : F.panel,
-        border: `1px solid ${hover ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)' : F.border}`,
-        cursor: 'pointer', outline: 'none', transition: 'border-color 0.14s ease, background 0.14s ease',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 13 }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 38, flexShrink: 0, background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 22%, transparent)', color: F.gold }}>
-          <Icon size={18} />
-        </span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontFamily: F.sans, fontSize: 15, fontWeight: 400, color: F.text }}>{hub.label}</span>
-            <span style={{ fontFamily: F.mono, fontSize: 9, color: F.muted, border: '1px solid rgba(255,255,255,0.1)', padding: '1px 5px' }}>{hub.tools.length}</span>
-            <ArrowUpRight size={13} style={{ marginLeft: 'auto', color: F.gold, opacity: hover ? 0.9 : 0.5, transform: hover ? 'translate(1px,-1px)' : 'none', transition: 'opacity 0.14s ease, transform 0.14s ease' }} />
-          </div>
-          <div style={{ fontFamily: F.sans, fontSize: 11, color: F.sec, lineHeight: 1.45, marginTop: 4 }}>{hub.tagline}</div>
-        </div>
-      </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, paddingTop: 11, borderTop: `1px solid ${F.borderFaint}` }}>
-        {hub.tools.map(t => (
-          <span key={t.route} style={{ fontFamily: F.sans, fontSize: 10.5, color: 'var(--theme-secondary, #9fb0c6)', padding: '3px 8px', background: 'color-mix(in srgb, var(--theme-text, #fff) 4%, transparent)', border: `1px solid ${F.border}`, whiteSpace: 'nowrap' }}>{t.chip}</span>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 function MiniStat({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
     <div style={{ minWidth: 0 }}>
@@ -344,12 +303,13 @@ function MiniStat({ label, value, color }: { label: string; value: string; color
 }
 
 // ── Section header (gold tick + label + rule) ────────────────────────────────
-function SectionLabel({ icon: Icon, label, count }: { icon: React.ElementType; label: string; count?: number }) {
+function SectionLabel({ icon: Icon, label, count, note }: { icon: React.ElementType; label: string; count?: number; note?: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
       <Icon size={11} style={{ color: F.muted, flexShrink: 0 }} />
       <span style={{ fontFamily: F.sans, fontSize: 10, fontWeight: 400, letterSpacing: '0.16em', textTransform: 'uppercase', color: F.sec, whiteSpace: 'nowrap' }}>{label}</span>
       {count != null && <span style={{ fontFamily: F.mono, fontSize: 10, color: F.muted }}>{count}</span>}
+      {note && <span style={{ fontFamily: F.sans, fontSize: 10, color: F.muted, whiteSpace: 'nowrap' }}>{note}</span>}
       <div style={{ flex: 1, height: 1, background: F.borderFaint }} />
     </div>
   )
@@ -618,15 +578,6 @@ export default function Home() {
   const dayPct = (totalValue - dayPnl) > 0 ? (dayPnl / (totalValue - dayPnl)) * 100 : 0
   const totalPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0
 
-  // Top holdings list for the right cockpit cell.
-  const topHoldings = useMemo(() => {
-    if (hasPM) {
-      return [...priced].sort((a, b) => b.value - a.value).slice(0, 5)
-        .map(p => ({ sym: p.ticker, secondary: `${p.shares.toLocaleString()} sh`, price: quotes[p.ticker]?.current_price ?? p.price, pct: quotes[p.ticker]?.pct_change_1d ?? null }))
-    }
-    const src = hasHoldings ? ctx.holdings.map(h => h.ticker) : dataTickers
-    return src.slice(0, 5).map((t, i) => ({ sym: t, secondary: hasHoldings && ctx.holdings[i]?.weight ? `${ctx.holdings[i].weight}%` : 'Market', price: quotes[t]?.current_price ?? null, pct: quotes[t]?.pct_change_1d ?? null }))
-  }, [hasPM, priced, ctx.holdings, dataTickers, hasHoldings, quotes])
 
   // Best / worst day movers for the value-cell stat strip.
   const movers = useMemo(() => [...priced].filter(p => quotes[p.ticker]).sort((a, b) => b.pct1d - a.pct1d), [priced, quotes])
@@ -709,37 +660,54 @@ export default function Home() {
   }
   const recentTickers = useMemo(() => getRecentTickers(), [])
 
-  const cockpitCols = isMobile ? '1fr' : '1fr 1.5fr 1.25fr'
+  const overviewCols = isMobile ? '1fr' : '0.82fr 0.98fr 1.12fr'
+  const utcStamp = new Date().toLocaleTimeString('en-GB', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit' })
+
+  // Holdings rows for Overview column 1 (dollar value + day change), largest first.
+  const holdingRows = useMemo(
+    () => [...priced].sort((a, b) => b.value - a.value).slice(0, 4)
+      .map(p => ({ ticker: p.ticker, value: p.value, pct: quotes[p.ticker]?.pct_change_1d ?? p.pct1d ?? null })),
+    [priced, quotes],
+  )
+
+  // Movers for Overview column 2 — largest absolute day moves, bar sized to magnitude.
+  const moversTop = useMemo(() => {
+    const ranked = [...movers].sort((a, b) => Math.abs(b.pct1d) - Math.abs(a.pct1d)).slice(0, 3)
+    const max = Math.max(1, ...ranked.map(m => Math.abs(m.pct1d)))
+    return ranked.map(m => ({ ticker: m.ticker, pct: m.pct1d, mag: Math.abs(m.pct1d) / max }))
+  }, [movers])
 
   return (
     <PageWrapper>
-      <div className="mx-auto w-full max-w-[1180px] 2xl:max-w-[1440px]" style={{ background: F.surface, border: `1px solid ${F.border}` }}>
+      <div style={{ background: 'var(--theme-bg, #090e16)' }}>
         <Tape segments={tapeSegments} source={tapeSource} onSource={setTapeSource} />
 
-        <div style={{ padding: isMobile ? '18px 16px 22px' : '24px 28px 30px' }}>
-          {/* hero */}
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap', paddingBottom: 18, borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 15%, transparent)' }}>
-            <div>
-              <div style={{ fontFamily: 'Cinzel, Georgia, serif', fontSize: 24, fontWeight: 700, letterSpacing: '0.1em', color: F.gold, lineHeight: 1 }}>ALPHATAPE</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 10 }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: session.color, flexShrink: 0 }} />
-                <span style={{ fontFamily: F.sans, fontSize: 11.5, color: F.sec, letterSpacing: '0.02em' }}>{dateLabel} · {session.label}</span>
-              </div>
+        <div style={{ maxWidth: 1360, margin: '0 auto', width: '100%', boxSizing: 'border-box', padding: isMobile ? '0 16px 40px' : '0 40px 48px' }}>
+          {/* Hero — centered wordmark, status, command search, recent chips */}
+          <div style={{ textAlign: 'center', padding: isMobile ? '32px 0 26px' : '56px 0 36px' }}>
+            <div style={{ fontFamily: 'Cinzel, Georgia, serif', fontSize: isMobile ? 30 : 40, fontWeight: 700, letterSpacing: '0.2em', color: F.gold, lineHeight: 1 }}>ALPHATAPE</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9, marginTop: 14 }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: session.color, boxShadow: `0 0 0 3px color-mix(in srgb, ${session.color} 20%, transparent)`, flexShrink: 0 }} />
+              <span style={{ fontFamily: F.sans, fontSize: 12.5, color: F.sec, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{dateLabel} · {session.label}</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: F.topbar, border: `1px solid ${searchFocus ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 55%, transparent)' : F.border}`, padding: '9px 12px', width: isMobile ? 200 : 280, transition: 'border-color 0.15s ease' }}>
-                <Search size={13} style={{ color: F.muted, flexShrink: 0 }} />
-                <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={onSearchKey} onFocus={() => setSearchFocus(true)} onBlur={() => setSearchFocus(false)} aria-label="Search tools, tickers, and actions" placeholder="Search tools, tickers, actions" style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none', color: F.text, fontFamily: F.sans, fontSize: 12 }} />
-                {q && <button onClick={() => setQ('')} aria-label="Clear" style={{ background: 'none', border: 'none', cursor: 'pointer', color: F.muted, display: 'flex', padding: 0 }}><X size={12} /></button>}
-              </div>
-              <button onClick={() => navigate('/dashboard')} style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, background: F.gold, border: 'none', padding: '9px 14px', cursor: 'pointer' }}>
-                <LayoutGrid size={14} style={{ color: '#101c2e' }} />
-                <span style={{ fontFamily: F.sans, fontSize: 12, fontWeight: 400, color: '#101c2e', letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>My Dashboard</span>
-              </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, maxWidth: 640, margin: '26px auto 0', borderBottom: `1px solid ${searchFocus ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 70%, transparent)' : 'color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)'}`, padding: '12px 4px', transition: 'border-color 0.15s ease' }}>
+              <Search size={17} style={{ color: F.gold, flexShrink: 0 }} />
+              <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={onSearchKey} onFocus={() => setSearchFocus(true)} onBlur={() => setSearchFocus(false)} aria-label="Search tickers or tools" placeholder="Search tickers or tools" style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none', color: F.text, fontFamily: F.sans, fontSize: 16 }} />
+              {q
+                ? <button onClick={() => setQ('')} aria-label="Clear" style={{ background: 'none', border: 'none', cursor: 'pointer', color: F.muted, display: 'flex', padding: 0 }}><X size={14} /></button>
+                : <span style={{ fontFamily: F.mono, fontSize: 10, color: F.muted, border: `1px solid ${F.border}`, padding: '2px 6px', borderRadius: 3, whiteSpace: 'nowrap' }}>⌘K</span>}
             </div>
+            {!ql && recentTickers.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 18, marginTop: 18, flexWrap: 'wrap' }}>
+                <span style={{ fontFamily: F.sans, fontSize: 10, fontWeight: 400, letterSpacing: '0.16em', textTransform: 'uppercase', color: F.muted }}>Recent</span>
+                {recentTickers.slice(0, 5).map(t => (
+                  <button key={t} onClick={() => setQ(t)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: F.mono, fontSize: 12, color: F.sec, letterSpacing: '0.04em' }}>{t}</button>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* search results override the hubs grid */}
+          {/* search results override the overview + hubs */}
           {ql ? (
             <div style={{ marginTop: 22, display: 'flex', flexDirection: 'column', gap: 20 }}>
               {dashSym && (
@@ -786,107 +754,126 @@ export default function Home() {
             </div>
           ) : (
             <>
-              {recentTickers.length > 0 && (
-                <div style={{ marginTop: 18, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <span style={{ fontFamily: F.sans, fontSize: 9, fontWeight: 400, letterSpacing: '0.16em', textTransform: 'uppercase', color: F.muted }}>Recent</span>
-                  {recentTickers.map(t => (
-                    <button key={t} onClick={() => setQ(t)} style={{ fontFamily: F.mono, fontSize: 11, fontWeight: 400, color: F.text, background: F.panel, border: `1px solid ${F.border}`, padding: '4px 10px', cursor: 'pointer', letterSpacing: '0.06em' }}>{t}</button>
-                  ))}
-                </div>
-              )}
-              {/* cockpit band */}
-              <div style={{ marginTop: 18, border: `1px solid ${F.border}`, borderTop: `2px solid ${F.gold}`, background: F.panel, display: 'grid', gridTemplateColumns: cockpitCols }}>
-                {/* portfolio value */}
-                <div style={{ padding: '16px 18px', borderRight: isMobile ? 'none' : `1px solid ${F.borderFaint}`, borderBottom: isMobile ? `1px solid ${F.borderFaint}` : 'none' }}>
-                  <div style={cap}>Portfolio Value</div>
+              {/* ── Overview: 3-column divided region ── */}
+              <SectionLabel icon={LayoutGrid} label="Overview" note={`as of ${utcStamp} UTC`} />
+              <div style={{ display: 'grid', gridTemplateColumns: overviewCols }}>
+                {/* Column 1 — Portfolio + Holdings */}
+                <div style={{ padding: isMobile ? '20px 0' : '4px 34px 4px 0' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={cap}>Portfolio</span>
+                    <div style={{ display: 'flex', gap: 3 }}>
+                      {RANGES.slice(1).map((r) => {
+                        const idx = RANGES.indexOf(r)
+                        return (
+                          <button key={r.label} onClick={() => setRangeIdx(idx)} style={{ fontFamily: F.mono, fontSize: 9, padding: '2px 6px', cursor: 'pointer', background: 'none', color: idx === rangeIdx ? F.gold : F.muted, border: `1px solid ${idx === rangeIdx ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)' : 'transparent'}` }}>{r.label}</button>
+                        )
+                      })}
+                    </div>
+                  </div>
                   {hasPM ? (
                     <>
-                      <div style={{ fontFamily: F.mono, fontSize: 31, fontWeight: 700, color: F.text, fontVariantNumeric: 'tabular-nums', marginTop: 10, letterSpacing: '-0.01em' }}>{money(totalValue)}</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
-                        <ArrowUpRight size={13} style={{ color: dayPnl >= 0 ? F.pos : F.neg, transform: dayPnl >= 0 ? 'none' : 'scaleY(-1)' }} />
-                        <span style={{ fontFamily: F.mono, fontSize: 14, fontWeight: 400, color: dayPnl >= 0 ? F.pos : F.neg, fontVariantNumeric: 'tabular-nums' }}>{dayPnl >= 0 ? '+' : ''}{money(dayPnl)}</span>
-                        <span style={{ fontFamily: F.mono, fontSize: 12, color: dayPnl >= 0 ? F.pos : F.neg }}>{dayPct >= 0 ? '+' : ''}{dayPct.toFixed(2)}%</span>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: 10 }}>
+                        <span style={{ fontFamily: F.mono, fontSize: 34, fontWeight: 700, color: F.bright, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em' }}>{money(totalValue)}</span>
+                        <span style={{ fontFamily: F.mono, fontSize: 13, color: dayPnl >= 0 ? F.pos : F.neg }}>{dayPct >= 0 ? '▲' : '▼'} {Math.abs(dayPct).toFixed(2)}%</span>
                       </div>
-                      <div style={{ marginTop: 16, paddingTop: 12, borderTop: `1px solid ${F.borderFaint}`, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '11px 16px' }}>
-                        <MiniStat label="Total Return" value={`${totalPct >= 0 ? '+' : ''}${totalPct.toFixed(1)}%`} color={totalPnl >= 0 ? F.pos : F.neg} />
-                        <MiniStat label="Positions" value={String(priced.length)} />
+                      <div style={{ marginTop: 12, height: 80 }}>
+                        <PerformanceSpark tickers={perfTickers} weights={perfWeights} rangeIdx={rangeIdx} />
+                      </div>
+                      <div style={{ display: 'flex', gap: 28, marginTop: 12 }}>
                         <MiniStat label="Invested" value={money(totalValue - pm.cash)} />
+                        <MiniStat label="Positions" value={String(priced.length)} />
                         <MiniStat label="Cash" value={money(pm.cash)} />
-                        {best && <MiniStat label="Top Today" value={`${best.ticker} ${best.pct1d >= 0 ? '+' : ''}${best.pct1d.toFixed(1)}%`} color={best.pct1d >= 0 ? F.pos : F.neg} />}
-                        {worst && <MiniStat label="Lag Today" value={`${worst.ticker} ${worst.pct1d >= 0 ? '+' : ''}${worst.pct1d.toFixed(1)}%`} color={worst.pct1d >= 0 ? F.pos : F.neg} />}
                       </div>
+                      <div style={{ marginTop: 18, paddingTop: 14, borderTop: `1px solid ${F.borderFaint}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={cap}>Holdings · {priced.length}</span>
+                        <button onClick={() => navigate('/portfolio-manager')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: F.sans, fontSize: 11, color: F.gold }}>Manage →</button>
+                      </div>
+                      {holdingRows.map(h => (
+                        <div key={h.ticker} style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 0.7fr', alignItems: 'center', padding: '9px 0', borderBottom: `1px solid ${F.borderFaint}` }}>
+                          <span style={{ fontFamily: F.mono, fontSize: 13, fontWeight: 700, color: F.text }}>{h.ticker}</span>
+                          <span style={{ fontFamily: F.mono, fontSize: 12, color: F.sec, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{money(h.value)}</span>
+                          <span style={{ fontFamily: F.mono, fontSize: 12, color: h.pct == null ? F.muted : h.pct >= 0 ? F.pos : F.neg, textAlign: 'right' }}>{h.pct != null ? `${h.pct >= 0 ? '+' : ''}${h.pct.toFixed(1)}%` : '—'}</span>
+                        </div>
+                      ))}
+                      {priced.length > holdingRows.length && (
+                        <button onClick={() => navigate('/portfolio-manager')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '10px 0 0', fontFamily: F.sans, fontSize: 11.5, color: F.gold }}>View all {priced.length} →</button>
+                      )}
                     </>
                   ) : (
-                    <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-start' }}>
-                      <div style={{ fontFamily: F.sans, fontSize: 11.5, color: F.sec, lineHeight: 1.5, maxWidth: 220 }}>Track live value, day P&amp;L, and return. Add holdings in the Portfolio Manager.</div>
-                      <button onClick={() => navigate('/portfolio-manager')} style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 30%, transparent)', color: F.gold, fontFamily: F.sans, fontSize: 11, fontWeight: 400, padding: '7px 12px', cursor: 'pointer' }}>
+                    <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-start' }}>
+                      <div style={{ fontFamily: F.sans, fontSize: 12.5, color: F.sec, lineHeight: 1.55, maxWidth: 260 }}>Track live value, day P&amp;L, and holdings here. Add positions in the Portfolio Manager.</div>
+                      <button onClick={() => navigate('/portfolio-manager')} style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'none', border: `1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)`, color: F.gold, fontFamily: F.sans, fontSize: 12, padding: '9px 14px', cursor: 'pointer' }}>
                         <Briefcase size={13} /> Open Portfolio Manager
                       </button>
                     </div>
                   )}
                 </div>
 
-                {/* performance */}
-                <div style={{ padding: '16px 18px', borderRight: isMobile ? 'none' : `1px solid ${F.borderFaint}`, borderBottom: isMobile ? `1px solid ${F.borderFaint}` : 'none', display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={cap}>Performance</div>
-                    <div style={{ display: 'flex', gap: 3 }}>
-                      {RANGES.map((r, i) => (
-                        <button key={r.label} onClick={() => setRangeIdx(i)} style={{ fontFamily: F.mono, fontSize: 9, padding: '2px 6px', cursor: 'pointer', background: 'none', color: i === rangeIdx ? F.gold : F.muted, border: `1px solid ${i === rangeIdx ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)' : 'transparent'}` }}>{r.label}</button>
-                      ))}
+                {/* Column 2 — Since you left / Movers / This week */}
+                <div style={{ padding: isMobile ? '20px 0' : '4px 34px', borderLeft: isMobile ? 'none' : `1px solid ${F.border}`, borderTop: isMobile ? `1px solid ${F.border}` : 'none', display: 'flex', flexDirection: 'column', gap: 22 }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                      <Clock size={11} style={{ color: F.gold }} />
+                      <span style={{ fontFamily: F.sans, fontSize: 10, fontWeight: 400, letterSpacing: '0.16em', textTransform: 'uppercase', color: F.gold }}>Since you left</span>
+                    </div>
+                    <div style={{ fontFamily: F.sans, fontSize: 13.5, lineHeight: 1.62, color: F.text }}>
+                      {hasPM && best && worst ? (
+                        <>Book {dayPct >= 0 ? 'up' : 'down'} <b style={{ color: dayPct >= 0 ? F.pos : F.neg }}>{Math.abs(dayPct).toFixed(2)}%</b>{worst.pct1d < 0 ? <>, dragged by <b style={{ color: F.neg }}>{worst.ticker} {worst.pct1d.toFixed(1)}%</b></> : null}. <b style={{ color: best.pct1d >= 0 ? F.pos : F.neg }}>{best.ticker} {best.pct1d >= 0 ? '+' : ''}{best.pct1d.toFixed(1)}%</b> leads today.</>
+                      ) : (
+                        <>Markets update live. Add holdings to get a personalized since-you-left brief on your book each session.</>
+                      )}
                     </div>
                   </div>
-                  <div style={{ flex: 1, marginTop: 12, minHeight: 120 }}>
-                    <PerformanceSpark tickers={perfTickers} weights={perfWeights} rangeIdx={rangeIdx} />
-                  </div>
+
+                  {moversTop.length > 0 && (
+                    <div>
+                      <span style={cap}>Movers</span>
+                      <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 9 }}>
+                        {moversTop.map(m => (
+                          <div key={m.ticker} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <span style={{ fontFamily: F.mono, fontSize: 11.5, color: F.text, width: 46, flex: 'none' }}>{m.ticker}</span>
+                            <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.05)', borderRadius: 2, overflow: 'hidden' }}>
+                              <div style={{ width: `${Math.round(m.mag * 100)}%`, height: '100%', background: m.pct >= 0 ? F.pos : F.neg, opacity: 0.85 }} />
+                            </div>
+                            <span style={{ fontFamily: F.mono, fontSize: 11.5, color: m.pct >= 0 ? F.pos : F.neg, width: 52, textAlign: 'right', flex: 'none' }}>{m.pct >= 0 ? '+' : ''}{m.pct.toFixed(1)}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <ThisWeek holdings={holdingTickers} onOpen={() => navigate('/earnings-calendar')} />
                 </div>
 
-                {/* top holdings */}
-                <div style={{ padding: '14px 16px' }}>
-                  <div style={{ ...cap, marginBottom: 9 }}>{hasHoldings ? 'Top Holdings' : 'Markets'}</div>
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    {topHoldings.map(h => (
-                      <div key={h.sym} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '5px 0', borderBottom: `1px solid ${F.borderFaint}` }}>
-                        <TickerLogo ticker={h.sym} size={24} />
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ fontFamily: F.sans, fontSize: 12, fontWeight: 400, color: F.bright, lineHeight: 1.2 }}>{h.sym}</div>
-                          <div style={{ fontFamily: F.sans, fontSize: 9, color: F.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{h.secondary}</div>
-                        </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontFamily: F.mono, fontSize: 12, color: F.text, fontVariantNumeric: 'tabular-nums', lineHeight: 1.2 }}>{h.price != null ? h.price.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '—'}</div>
-                          <div style={{ fontFamily: F.mono, fontSize: 10, color: h.pct == null ? F.muted : h.pct >= 0 ? F.pos : F.neg }}>{h.pct != null ? `${h.pct >= 0 ? '+' : ''}${h.pct.toFixed(1)}%` : '—'}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                {/* Column 3 — 24-hour dial */}
+                <div style={{ padding: isMobile ? '24px 0 8px' : '4px 0 4px 34px', borderLeft: isMobile ? 'none' : `1px solid ${F.border}`, borderTop: isMobile ? `1px solid ${F.border}` : 'none' }}>
+                  <MarketClockMini />
                 </div>
               </div>
 
-              {/* jump back in */}
+              {/* ── Jump Back In ── */}
               {recents.length > 0 && (
-                <div style={{ marginTop: 22 }}>
-                  <SectionLabel icon={Clock} label="Jump Back In" />
-                  <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 10 }}>
-                    {recents.map(r => {
-                      const Icon = r.icon
-                      return (
-                        <RecentChip key={r.route} icon={Icon} title={r.title} onClick={() => navigate(r.route)} />
-                      )
-                    })}
+                <div style={{ marginTop: 14, paddingTop: 22, borderTop: `1px solid ${F.border}` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Clock size={11} style={{ color: F.muted }} />
+                    <span style={{ fontFamily: F.sans, fontSize: 10, fontWeight: 400, letterSpacing: '0.18em', textTransform: 'uppercase', color: F.muted }}>Jump Back In</span>
+                  </div>
+                  <div style={{ height: 8 }} />
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                    {recents.map(r => <JumpItem key={r.route} icon={r.icon} title={r.title} onClick={() => navigate(r.route)} />)}
                   </div>
                 </div>
               )}
 
-              {/* hubs */}
-              <div style={{ marginTop: 26 }}>
-                <SectionLabel icon={LayoutGrid} label="Hubs" count={HUBS.length} />
-                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)', gap: 12 }}>
-                  {HUBS.map(h => <HubCard key={h.slug} slug={h.slug} />)}
+              {/* ── Hubs ledger ── */}
+              <div style={{ marginTop: 30 }}>
+                <SectionLabel icon={LayoutGrid} label="Hubs" note={`${HUBS.length} workspaces · ${ALL_TOOLS.length} tools`} />
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', columnGap: 56 }}>
+                  {HUBS.map((h, i) => <HubLedgerCell key={h.slug} slug={h.slug} last={i >= HUBS.length - 2} onNav={navigate} />)}
                 </div>
               </div>
 
-              {/* context portfolio importer */}
-              <div style={{ marginTop: 26 }}>
+              <div style={{ marginTop: 28 }}>
                 <PortfolioImportStrip />
               </div>
             </>
@@ -897,25 +884,87 @@ export default function Home() {
   )
 }
 
-function RecentChip({ icon: Icon, title, onClick }: { icon: React.ElementType; title: string; onClick: () => void }) {
+// Bounded outline link (no fill) for the Jump Back In row.
+function JumpItem({ icon: Icon, title, onClick }: { icon: React.ElementType; title: string; onClick: () => void }) {
   const [hover, setHover] = useState(false)
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onClick}
-      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } }}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+    <button onClick={onClick} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
       style={{
-        display: 'flex', alignItems: 'center', gap: 10, padding: '11px 13px',
-        background: hover ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 5%, var(--theme-bg, #0d1826))' : F.panel,
-        border: `1px solid ${hover ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 42%, transparent)' : F.border}`,
-        cursor: 'pointer', outline: 'none', transition: 'border-color 0.14s ease, background 0.14s ease',
-      }}
-    >
+        display: 'inline-flex', alignItems: 'center', gap: 9, padding: '9px 15px', cursor: 'pointer', background: 'none',
+        border: `1px solid ${hover ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 50%, transparent)' : 'rgba(255,255,255,0.12)'}`,
+        transition: 'border-color 0.14s ease, color 0.14s ease',
+      }}>
       <Icon size={15} style={{ color: F.gold, flexShrink: 0 }} />
-      <span style={{ fontFamily: F.sans, fontSize: 12, fontWeight: 400, color: F.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</span>
+      <span style={{ fontFamily: F.sans, fontSize: 13.5, fontWeight: 400, color: hover ? F.bright : F.sec, whiteSpace: 'nowrap' }}>{title}</span>
+    </button>
+  )
+}
+
+const DAY_ABBR = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
+
+// This-week calendar: upcoming earnings for the user's holdings (tagged HELD).
+// Best-effort — the earnings feed can be unavailable; falls back gracefully.
+function ThisWeek({ holdings, onOpen }: { holdings: string[]; onOpen: () => void }) {
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  const { data } = useQuery<{ rows: { symbol: string; date: string }[] }>({
+    queryKey: ['home-thisweek', today],
+    queryFn: () => axios.get(`/api/earnings/calendar?date=${today}&days=7`).then(r => r.data),
+    staleTime: 30 * 60 * 1000,
+    retry: 0,
+  })
+  const held = useMemo(() => new Set(holdings.map(h => h.toUpperCase())), [holdings])
+  const rows = useMemo(() =>
+    (data?.rows ?? [])
+      .filter(r => held.has((r.symbol || '').toUpperCase()))
+      .slice(0, 6)
+      .map(r => ({ day: DAY_ABBR[new Date(r.date + 'T12:00:00').getDay()], event: `${r.symbol} earnings` })),
+    [data, held])
+  return (
+    <div>
+      <span style={cap}>This week</span>
+      {rows.length > 0 ? (
+        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 11 }}>
+          {rows.map((r, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, fontFamily: F.sans, fontSize: 13 }}>
+              <span style={{ fontFamily: F.mono, color: F.gold, width: 34, flex: 'none' }}>{r.day}</span>
+              <span style={{ color: F.sec, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.event}</span>
+              <span style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.08em', color: F.gold, flex: 'none' }}>HELD</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ marginTop: 10, fontFamily: F.sans, fontSize: 12, color: F.muted, lineHeight: 1.5 }}>
+          No holdings report this week.{' '}
+          <button onClick={onOpen} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: F.sans, fontSize: 12, color: F.gold }}>Open calendar →</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Hubs ledger cell — header/subheader → hairline → clickable tool tags (tileless).
+function HubLedgerCell({ slug, last, onNav }: { slug: string; last: boolean; onNav: (route: string) => void }) {
+  const hub = HUBS.find(h => h.slug === slug)!
+  return (
+    <div style={{ padding: '26px 0', borderBottom: last ? 'none' : `1px solid ${F.border}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontFamily: F.sans, fontSize: 22, fontWeight: 400, color: F.bright }}>{hub.label}</span>
+        <span style={{ fontFamily: F.mono, fontSize: 12, color: F.muted }}>{hub.tools.length}</span>
+        <div style={{ flex: 1 }} />
+        <button onClick={() => onNav(`/hub/${hub.slug}`)} aria-label={`Open ${hub.label} hub`} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: F.gold, display: 'flex' }}>
+          <ArrowUpRight size={16} />
+        </button>
+      </div>
+      <div style={{ fontFamily: F.sans, fontSize: 14, color: F.sec, marginTop: 6 }}>{hub.tagline}</div>
+      <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${F.borderFaint}`, display: 'flex', flexWrap: 'wrap', gap: '9px 18px' }}>
+        {hub.tools.map(t => (
+          <button key={t.route} onClick={() => onNav(t.route)}
+            onMouseEnter={e => (e.currentTarget.style.color = F.bright)} onMouseLeave={e => (e.currentTarget.style.color = F.sec)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: F.sans, fontSize: 13.5, color: F.sec, transition: 'color 0.12s ease' }}>
+            {t.chip}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }
