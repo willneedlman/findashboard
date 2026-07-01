@@ -34,7 +34,7 @@ const EXPIRY_WIDGETS: WidgetType[]          = ['dealer-gex', 'vol-skew']
 const PORTFOLIO_PICK_WIDGETS: WidgetType[]  = ['risk-metrics', 'pnl-attribution', 'exposure-map']
 // Frame supplies the title (no gear) for widgets that host their own inline
 // controls in the body, à la Price Card's period row.
-const HEADER_WIDGETS: WidgetType[]          = ['sector-rotation', 'sentiment-gauge', 'screener', 'pm-portfolios', 'paper-trade', 'risk-metrics', 'pnl-attribution', 'exposure-map', 'unusual-flow', 'heatmap', 'trade-blotter', 'position-sizer']
+const HEADER_WIDGETS: WidgetType[]          = ['sector-rotation', 'sentiment-gauge', 'screener', 'pm-portfolios', 'paper-trade', 'risk-metrics', 'pnl-attribution', 'exposure-map', 'unusual-flow', 'heatmap', 'trade-blotter', 'position-sizer', 'market-hours']
 
 const MACRO_CAT_OPTIONS: { key: string; label: string; color: string }[] = [
   { key: 'equity',    label: 'Equity', color: 'var(--theme-positive, #22c55e)' },
@@ -421,7 +421,25 @@ export default function WidgetFrame({ config, editMode, onRemove, onUpdate, chil
               {widgetTitle(config)}
             </span>
           </div>
-          <div className="widget-no-drag" style={{ display: 'flex', gap: 4 }}>
+          <div className="widget-no-drag" style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            {config.type === 'market-hours' && (
+              <div style={{ display: 'flex', border: '1px solid var(--theme-border, rgba(255,255,255,0.1))', borderRadius: 3, overflow: 'hidden', marginRight: 2 }}>
+                {(['clock', 'rows'] as const).map(mode => {
+                  const active = (config.layout ?? 'clock') === mode
+                  return (
+                    <button key={mode} onClick={() => onUpdate({ layout: mode })}
+                      style={{
+                        fontFamily: S.mono, fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+                        padding: '2px 7px', cursor: 'pointer', border: 'none',
+                        background: active ? 'var(--theme-primary, #c9a84c)' : 'transparent',
+                        color: active ? 'var(--theme-bg, #0a1628)' : 'var(--theme-secondary, #5e768f)',
+                      }}>
+                      {mode === 'clock' ? 'Clock' : 'Rows'}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
             {hasSettings && (
               <button
                 onClick={() => setConfigOpen(o => !o)}

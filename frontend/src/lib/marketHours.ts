@@ -152,9 +152,64 @@ export const PHASE_COLOR: Record<Phase, string> = {
   regular:   'var(--theme-positive, #22c55e)',
   pre:       'var(--theme-primary, #c9a84c)',
   after:     'var(--theme-primary, #c9a84c)',
-  overnight: 'var(--theme-tertiary, #60a5fa)',
-  break:     'var(--theme-secondary, #8099b0)',
-  closed:    'var(--theme-text-faint, rgba(255,255,255,0.25))',
+  overnight: 'var(--theme-tertiary, #5b8fd6)',
+  break:     '#7c93ac',
+  closed:    '#33415a',
+}
+
+// Bar/arc fill opacity per phase (single source for rows timeline + dial arcs).
+export const PHASE_OPACITY: Record<Phase, number> = {
+  regular: 0.92, pre: 0.72, after: 0.72, overnight: 0.72, break: 0.5, closed: 0.3,
+}
+
+// Status-label text color per phase (Open/Overnight/Closed/Pre/After).
+export const PHASE_TEXT: Record<Phase, string> = {
+  regular:   'var(--theme-positive, #22c55e)',
+  pre:       'var(--theme-primary, #c9a84c)',
+  after:     'var(--theme-primary, #c9a84c)',
+  overnight: 'var(--theme-tertiary, #5b8fd6)',
+  break:     '#7c93ac',
+  closed:    '#6b8199',
+}
+
+// Follow-the-sun ring order for the dial (earliest UTC open innermost → outermost).
+export const SUN_ORDER = ['asx', 'tse', 'krx', 'sse', 'hkex', 'nse', 'lse', 'xetra', 'nyse', 'nasdaq', 'cme']
+
+// Market's current local-minus-UTC offset in minutes (DST-correct via Intl).
+function tzOffsetMinutes(tz: string, now: Date): number {
+  const p = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).formatToParts(now).reduce<Record<string, string>>((a, x) => { a[x.type] = x.value; return a }, {})
+  let h = parseInt(p.hour, 10); if (h === 24) h = 0
+  const asUTC = Date.UTC(+p.year, +p.month - 1, +p.day, h, +p.minute, +p.second)
+  return Math.round((asUTC - now.getTime()) / 60000)
+}
+
+function splitWrap(a: number, b: number): [number, number][] {
+  const len = b - a
+  let s = ((a % 1440) + 1440) % 1440
+  const e = s + len
+  if (e <= 1440) return [[s, e]]
+  return [[s, 1440], [0, e - 1440]]
+}
+
+// This market's current trading sessions mapped onto the 0..24h UTC axis (hours),
+// splitting any window that straddles UTC midnight. Feeds the radial dial.
+export function utcArcs(m: MarketDef, now: Date): { t0: number; t1: number; phase: Phase }[] {
+  const lp = localParts(m.tz, now)
+  const off = tzOffsetMinutes(m.tz, now)
+  const out: { t0: number; t1: number; phase: Phase }[] = []
+  for (const s of daySegments(m, lp.weekday)) {
+    if (s.phase === 'closed') continue
+    for (const [x0, x1] of splitWrap(s.start - off, s.end - off)) out.push({ t0: x0 / 60, t1: x1 / 60, phase: s.phase })
+  }
+  return out
+}
+
+// Current UTC time as a fractional hour [0,24), for the dial's now-hand.
+export function utcNowHours(now: Date): number {
+  return (now.getUTCHours() + now.getUTCMinutes() / 60 + now.getUTCSeconds() / 3600) % 24
 }
 
 export function countdown(ms: number): string {

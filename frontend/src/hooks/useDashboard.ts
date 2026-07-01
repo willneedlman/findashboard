@@ -74,6 +74,7 @@ export interface WidgetConfig {
   stop?: number                            // position-sizer
   accountValue?: number                    // position-sizer
   portfolioId?: string                     // risk-metrics, pnl-attribution, exposure-map: which saved portfolio
+  layout?: 'clock' | 'rows'                // market-hours: dial vs rows
 }
 
 // Widget types that key off config.ticker — the dashboard-wide ticker control
@@ -140,7 +141,7 @@ export const WIDGET_DEFAULT_SIZE: Record<WidgetType, { w: number; h: number }> =
   'heatmap':             { w: 8, h: 8 },
   'trade-blotter':       { w: 6, h: 6 },
   'position-sizer':      { w: 4, h: 6 },
-  'market-hours':        { w: 4, h: 8 },
+  'market-hours':        { w: 5, h: 9 },
   'ticker-control':      { w: 3, h: 2 },   // unused — never placed as a tile
 }
 

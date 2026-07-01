@@ -530,6 +530,9 @@ textarea:focus:not(:focus-visible) {
 .fdb-tooltip { animation: fdb-tip-in 0.12s ease-out; }
 @keyframes fdb-tip-in { from { opacity: 0 } to { opacity: 1 } }
 @media (prefers-reduced-motion: reduce) { .fdb-tooltip { animation: none; } }
+.fdb-now-marker { animation: fdb-nowpulse 2.4s ease-in-out infinite; }
+@keyframes fdb-nowpulse { 0%,100% { opacity: 1 } 50% { opacity: 0.55 } }
+@media (prefers-reduced-motion: reduce) { .fdb-now-marker { animation: none; } }
 @media (prefers-reduced-motion: reduce) {
   .ft-rail { transition: none !important; }
 }
