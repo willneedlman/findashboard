@@ -7,6 +7,10 @@ import yfinance as yf
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from cache import get_history, get_info
 try:
+    import fmp
+except ImportError:                                   # pragma: no cover
+    fmp = None
+try:
     from disk_cache import disk_get, disk_set
 except ImportError:                                   # pragma: no cover
     def disk_get(_k): return None
@@ -547,6 +551,54 @@ def _synthetic_rating(cov):
     return "D", 15.12
 
 
+# Backup rating scale keyed on gross leverage (total debt / EBITDA) for names
+# where interest expense is not broken out. Thresholds track how agencies weight
+# leverage: no / very low leverage → high grade, >6x → deep sub-IG.
+_LEV_RATING = [
+    (0.0, "AA", 0.78), (1.0, "A", 1.08), (2.0, "BBB", 1.56), (3.0, "BB+", 2.00),
+    (4.0, "BB", 2.40), (5.0, "B", 4.21), (6.0, "B-", 5.15), (1e9, "CCC", 8.20),
+]
+
+
+def _leverage_rating(lev):
+    """Rating from gross debt/EBITDA when interest coverage is missing."""
+    if lev is None:
+        return None, None
+    for hi, rating, spread in _LEV_RATING:
+        if lev <= hi:
+            return rating, spread
+    return "CCC", 8.20
+
+
+def _altman_rating(z):
+    """Last-resort rating tier from the Altman Z bankruptcy zone."""
+    if z is None:
+        return None, None
+    if z > 2.99:
+        return "BBB", 1.56
+    if z >= 1.81:
+        return "BB", 2.40
+    return "CCC", 8.20
+
+
+def _ttm(df, *names):
+    """Trailing-twelve-month sum from a quarterly statement (newest-first cols).
+    Sums the available reported quarters (>=2) so a missing latest quarter still
+    yields a usable figure."""
+    if df is None or getattr(df, "empty", True):
+        return None
+    for n in names:
+        if n in df.index:
+            try:
+                vals = [float(v) for v in df.loc[n].values[:4]
+                        if v is not None and not (isinstance(v, float) and v != v)]
+                if len(vals) >= 2:
+                    return sum(vals)
+            except Exception:
+                continue
+    return None
+
+
 def _fin_row(df, *names):
     """Most-recent NON-NaN value for the first matching income/balance line item.
     yfinance leaves the latest column NaN for items it no longer breaks out, so we
@@ -601,8 +653,41 @@ def get_credit(ticker: str):
     cur_liab = _fin_row(bs, "Current Liabilities", "Total Current Liabilities")
     retained = _fin_row(bs, "Retained Earnings", "RetainedEarnings")
 
-    coverage = round(ebit / abs(interest), 2) if ebit is not None and interest not in (None, 0) else None
-    rating, spread = _synthetic_rating(coverage)
+    coverage = ebit / abs(interest) if ebit is not None and interest not in (None, 0) else None
+
+    # Fallback 1: trailing-twelve-month coverage from the quarterly statement —
+    # annual columns often drop interest expense that the quarters still report.
+    if coverage is None:
+        try:
+            q = stock.quarterly_income_stmt
+            q_ebit = _ttm(q, "EBIT", "Operating Income", "OperatingIncome")
+            q_int = _ttm(q, "Interest Expense", "InterestExpense", "Interest Expense Non Operating")
+            if q_ebit is not None and q_int not in (None, 0):
+                coverage = q_ebit / abs(q_int)
+        except Exception:
+            pass
+
+    # Fallback 2: FMP income statement (independent source; also backfills EBITDA
+    # and debt/cash when yfinance omits them).
+    if fmp is not None and (coverage is None or ebitda is None or total_debt is None or cash is None):
+        try:
+            fi = (fmp.get_income(sym, 1) or [None])[0] or {}
+            if coverage is None:
+                oi, ie = fi.get("operatingIncome"), fi.get("interestExpense")
+                if oi is not None and ie not in (None, 0):
+                    coverage = oi / abs(ie)
+            ebitda = ebitda or fi.get("ebitda")
+        except Exception:
+            pass
+        if total_debt is None or cash is None:
+            try:
+                fb = fmp.get_balance(sym) or {}
+                total_debt = total_debt if total_debt is not None else fb.get("totalDebt")
+                cash = cash if cash is not None else fb.get("cashAndCashEquivalents")
+            except Exception:
+                pass
+
+    coverage = round(coverage, 2) if coverage is not None else None
     debt_to_ebitda = round(total_debt / ebitda, 2) if total_debt is not None and ebitda not in (None, 0) else None
     net_debt = round(total_debt - cash) if total_debt is not None and cash is not None else None
 
@@ -617,9 +702,25 @@ def get_credit(ticker: str):
         altman = round(1.2 * A + 1.4 * B + 3.3 * C + 0.6 * D + 1.0 * E, 2)
         altman_zone = "safe" if altman > 2.99 else "grey" if altman >= 1.81 else "distress"
 
+    # Layered rating: interest coverage → gross leverage → Altman Z. Each rung is
+    # a coarser proxy used only when the finer input is unavailable.
+    lev_ok = ebitda is not None and ebitda > 0 and debt_to_ebitda is not None  # a leverage ratio only reads correctly on positive EBITDA
+    if coverage is not None:
+        rating, spread = _synthetic_rating(coverage)
+        rating_basis = "interest coverage"
+    elif lev_ok:
+        rating, spread = _leverage_rating(debt_to_ebitda)
+        rating_basis = "gross leverage"
+    elif altman is not None:
+        rating, spread = _altman_rating(altman)
+        rating_basis = "Altman Z"
+    else:
+        rating, spread, rating_basis = None, None, None
+
     out = {
         "ticker": sym,
         "synthetic_rating": rating,
+        "rating_basis": rating_basis,
         "default_spread_pct": spread,
         "interest_coverage": coverage,
         "debt_to_ebitda": debt_to_ebitda,

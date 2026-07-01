@@ -529,7 +529,8 @@ function ratingColor(r: string | null): string {
 const fmtBn = (v: number | null) => v == null ? '—' : Math.abs(v) >= 1e9 ? `$${(v / 1e9).toFixed(1)}B` : Math.abs(v) >= 1e6 ? `$${(v / 1e6).toFixed(0)}M` : `$${v.toLocaleString()}`
 
 interface Credit {
-  synthetic_rating: string | null; default_spread_pct: number | null; interest_coverage: number | null
+  synthetic_rating: string | null; rating_basis: string | null; default_spread_pct: number | null
+  interest_coverage: number | null
   debt_to_ebitda: number | null; net_debt: number | null; altman_z: number | null
   altman_zone: 'safe' | 'grey' | 'distress' | null; current_ratio: number | null
 }
@@ -565,7 +566,7 @@ function CreditPanel({ ticker }: { ticker: string }) {
                 <span style={{ ...labelStyle, marginTop: 5 }}>Synthetic</span>
               </div>
               <div style={{ fontFamily: T.label, fontSize: 11.5, color: T.muted, lineHeight: 1.5 }}>
-                Model rating from interest coverage (Damodaran). {d.default_spread_pct != null && <>Implied default spread <span style={{ color: T.text }}>{d.default_spread_pct.toFixed(2)}%</span>.</>}
+                Model rating from {d.rating_basis ?? 'interest coverage'}{(d.rating_basis ?? 'interest coverage') === 'interest coverage' ? ' (Damodaran)' : ''}. {d.default_spread_pct != null && <>Implied default spread <span style={{ color: T.text }}>{d.default_spread_pct.toFixed(2)}%</span>.</>}
               </div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px 16px' }}>
