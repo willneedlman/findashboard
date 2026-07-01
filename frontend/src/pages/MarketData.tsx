@@ -77,7 +77,7 @@ export default function MarketData() {
   }
 
   return (
-    <PageWrapper title="Market Data">
+    <PageWrapper title="Ticker Analytics">
       <SidebarLayout sidebarWidth={210} sidebarTitle="" sidebar={
         <RailSection title="Market Controls" open={paramsOpen} onToggle={() => setParamsOpen(o => !o)}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -206,7 +206,7 @@ export default function MarketData() {
           )}
 
           {!data && !isPending && (
-            <EmptyState title="Market Data" hint="Enter a ticker and date range, then press Load Data." />
+            <EmptyState title="Ticker Analytics" hint="Enter a ticker and date range, then press Load Data." />
           )}
 
       </SidebarLayout>

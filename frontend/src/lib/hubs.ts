@@ -37,11 +37,10 @@ export const HUBS: Hub[] = [
     icon: Search,
     tools: [
       { title: 'Stock Screener',        chip: 'Screener',        desc: '25+ fundamental and technical filters across the universe', route: '/screener',                 icon: Filter },
-      { title: 'Market Data',           chip: 'Market Data',     desc: 'Price, volatility, drawdown, and volume analytics',        route: '/market',                   icon: TrendingUp },
+      { title: 'Ticker Analytics',      chip: 'Ticker Analytics', desc: 'Price, volatility, drawdown, and volume for any security',  route: '/market',                   icon: TrendingUp },
       { title: 'Sentiment Tracker',     chip: 'Sentiment',       desc: 'AI-scored news sentiment across 7 sources',                route: '/sentiment',                icon: Brain },
-      { title: 'Corporate Calendar',    chip: 'Calendar',        desc: 'Upcoming catalysts, earnings dates, and valuation',        route: '/corporate',          icon: CalendarClock },
+      { title: 'Market Calendar',       chip: 'Calendar',        desc: 'Corporate catalysts and the earnings calendar in one view',  route: '/corporate',          icon: CalendarClock },
       { title: 'Earnings AI',           chip: 'Earnings AI',     desc: 'Call transcripts and filing summaries on demand',          route: '/earnings',           icon: FileText },
-      { title: 'Earnings Calendar',     chip: 'Earnings Cal',    desc: 'Who reports on a date, with estimates and prior-report moves', route: '/earnings-calendar',  icon: CalendarDays },
       { title: 'Regression',            chip: 'Regression',      desc: 'OLS and polynomial fits with diagnostics',                 route: '/regression',         icon: Activity },
       { title: 'Correlation',           chip: 'Correlation',     desc: 'Correlation matrix, rolling drift, and beta',              route: '/correlation',        icon: Waves },
       { title: 'Asset Overlay',         chip: 'Asset Overlay',   desc: 'Overlay any set of assets on a single chart',              route: '/compare',            icon: GitCompare },
@@ -75,8 +74,7 @@ export const HUBS: Hub[] = [
     tools: [
       { title: 'Options Pricer',      chip: 'Pricer',              desc: 'Black-Scholes greeks and payoff diagrams',          route: '/options',         icon: LineChart },
       { title: 'Chain Scanner',       chip: 'Chain Scanner',       desc: 'Live option chains with IV rank and skew',          route: '/chain',           icon: BarChart2 },
-      { title: 'IV Tracker',          chip: 'IV Tracker',          desc: 'Implied volatility rank and term structure',        route: '/iv-tracker',      icon: Waves },
-      { title: 'Volatility Skew',      chip: 'Skew',               desc: 'IV smile, term structure, and crash-fear skew',     route: '/skew',            icon: Waves },
+      { title: 'Implied Volatility',  chip: 'Implied Vol',         desc: 'IV rank, term structure, and skew/smile',           route: '/iv-tracker',      icon: Waves },
       { title: 'Dealer GEX',          chip: 'Dealer GEX',          desc: 'Gamma exposure by strike and expiry',               route: '/gex',             icon: Zap },
       { title: 'Options Flow',        chip: 'Flow',                desc: 'Volume and open-interest surges',                   route: '/unusual-options', icon: Activity },
       { title: 'Options Strategy Builder', chip: 'Options Strategy', desc: 'Multi-leg P&L and risk profiles',                   route: '/strategy',        icon: Shuffle },
@@ -120,8 +118,7 @@ export const HUBS: Hub[] = [
     tools: [
       { title: 'Paper Trading',            chip: 'Paper Trading',            desc: 'Simulated live execution across asset classes', route: '/paper-trading', icon: Terminal },
       { title: 'Algorithmic Strategy Builder', chip: 'Algo Builder', desc: 'Compose entry/exit rules and risk, then save and run', route: '/algo-strategy', icon: Workflow },
-      { title: 'Options MM Simulator',       chip: 'Options MM',       desc: 'Two-sided option quoting and delta hedging',    route: '/market-maker',     icon: Gauge },
-      { title: 'Fixed Income MM Simulator',  chip: 'Fixed Income MM',  desc: 'Quote a Treasury book and hedge DV01',          route: '/fixed-income-mm',  icon: Landmark },
+      { title: 'Market Maker Simulator',     chip: 'Market Maker',     desc: 'Quote two-sided markets and hedge — options and Treasury desks', route: '/market-maker', icon: Gauge },
       { title: 'Trade Journal',            chip: 'Trade Journal',            desc: 'Entry/exit, P&L, and win-rate analytics',       route: '/trade-journal', icon: BookOpen },
       { title: 'Price Alerts',             chip: 'Price Alerts',             desc: 'Price and percent-change notifications',        route: '/alerts',        icon: Bell },
     ],

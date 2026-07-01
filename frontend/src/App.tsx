@@ -28,7 +28,7 @@ const CusipLookup        = lazyWithReload(() => import('./pages/CusipLookup'))
 const NAVTracker         = lazyWithReload(() => import('./pages/NAVTracker'))
 const ImpliedProbability = lazyWithReload(() => import('./pages/ImpliedProbability'))
 const FedRates           = lazyWithReload(() => import('./pages/FedRates'))
-const CorporateHub       = lazyWithReload(() => import('./pages/CorporateHub'))
+const MarketCalendar     = lazyWithReload(() => import('./pages/MarketCalendar'))
 const DCFValuation       = lazyWithReload(() => import('./pages/DCFValuation'))
 const DividendDiscount   = lazyWithReload(() => import('./pages/DividendDiscount'))
 const SOTP               = lazyWithReload(() => import('./pages/SOTP'))
@@ -40,7 +40,6 @@ const CorrelationAnalysis = lazyWithReload(() => import('./pages/CorrelationAnal
 const PortfolioBacktester = lazyWithReload(() => import('./pages/PortfolioBacktester'))
 const MonteCarlo         = lazyWithReload(() => import('./pages/MonteCarlo'))
 const PortfolioCompare   = lazyWithReload(() => import('./pages/PortfolioCompare'))
-const SkewTool           = lazyWithReload(() => import('./pages/SkewTool'))
 const StrategyBuilder    = lazyWithReload(() => import('./pages/StrategyBuilder'))
 const AlgoStrategyBuilder = lazyWithReload(() => import('./pages/AlgoStrategyBuilder'))
 const EtfXray            = lazyWithReload(() => import('./pages/EtfXray'))
@@ -53,7 +52,6 @@ const DataSources        = lazyWithReload(() => import('./pages/legal/DataSource
 const SettingsPage       = lazyWithReload(() => import('./pages/Settings'))
 const StockScreener      = lazyWithReload(() => import('./pages/StockScreener'))
 const EarningsSummarizer = lazyWithReload(() => import('./pages/EarningsSummarizer'))
-const EarningsCalendar   = lazyWithReload(() => import('./pages/EarningsCalendar'))
 const PortfolioManager   = lazyWithReload(() => import('./pages/PortfolioManager'))
 const AdminTester        = lazyWithReload(() => import('./pages/AdminTester'))
 const CreditSpreads      = lazyWithReload(() => import('./pages/CreditSpreads'))
@@ -66,9 +64,8 @@ const SentimentTracker   = lazyWithReload(() => import('./pages/SentimentTracker
 const AlertsPage         = lazyWithReload(() => import('./pages/Alerts'))
 const EconomyMonitor     = lazyWithReload(() => import('./pages/EconomyMonitor'))
 const SectorRotation     = lazyWithReload(() => import('./pages/SectorRotation'))
-const IVTracker          = lazyWithReload(() => import('./pages/IVTracker'))
-const OptionsMarketMaker = lazyWithReload(() => import('./pages/OptionsMarketMaker'))
-const FixedIncomeMarketMaker = lazyWithReload(() => import('./pages/FixedIncomeMarketMaker'))
+const ImpliedVolatility  = lazyWithReload(() => import('./pages/ImpliedVolatility'))
+const MarketMakerSimulator = lazyWithReload(() => import('./pages/MarketMakerSimulator'))
 const UnusualOptions     = lazyWithReload(() => import('./pages/UnusualOptions'))
 const Compare            = lazyWithReload(() => import('./pages/Compare'))
 const ResetPassword      = lazyWithReload(() => import('./pages/ResetPassword'))
@@ -190,9 +187,9 @@ export default function App() {
               <Route path="/reverse-dcf" element={<ReverseDCF />} />
               <Route path="/valuation"   element={<Navigate to="/dcf" replace />} />
               <Route path="/probability" element={<ImpliedProbability />} />
-              <Route path="/skew"       element={<SkewTool />} />
+              <Route path="/skew"       element={<Navigate to="/iv-tracker?tab=skew" replace />} />
               <Route path="/fed"        element={<FedRates />} />
-              <Route path="/corporate"  element={<CorporateHub />} />
+              <Route path="/corporate"  element={<MarketCalendar />} />
               <Route path="/chain"      element={<OptionsChainScanner />} />
               <Route path="/correlation" element={<CorrelationAnalysis />} />
               <Route path="/strategy"   element={<StrategyBuilder />} />
@@ -202,7 +199,7 @@ export default function App() {
               <Route path="/settings"        element={<SettingsPage />} />
               <Route path="/screener"        element={<StockScreener />} />
               <Route path="/earnings"        element={<EarningsSummarizer />} />
-              <Route path="/earnings-calendar" element={<EarningsCalendar />} />
+              <Route path="/earnings-calendar" element={<Navigate to="/corporate?tab=earnings" replace />} />
               <Route path="/admin"           element={<AdminTester />} />
               <Route path="/stress-test"     element={<Navigate to="/admin" replace />} />
               <Route path="/sector-rotation" element={<SectorRotation />} />
@@ -221,9 +218,9 @@ export default function App() {
               <Route path="/options-hub"        element={<Navigate to="/options" replace />} />
               <Route path="/macro-hub"          element={<Navigate to="/fed" replace />} />
               <Route path="/research-hub"       element={<Navigate to="/corporate" replace />} />
-              <Route path="/iv-tracker"         element={<IVTracker />} />
-              <Route path="/market-maker"       element={<OptionsMarketMaker />} />
-              <Route path="/fixed-income-mm"    element={<FixedIncomeMarketMaker />} />
+              <Route path="/iv-tracker"         element={<ImpliedVolatility />} />
+              <Route path="/market-maker"       element={<MarketMakerSimulator />} />
+              <Route path="/fixed-income-mm"    element={<Navigate to="/market-maker?desk=fixed-income" replace />} />
               <Route path="/unusual-options"    element={<UnusualOptions />} />
               <Route path="/compare"            element={<Compare />} />
               <Route path="/etf-analyzer"       element={<EtfXray />} />

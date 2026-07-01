@@ -273,7 +273,7 @@ interface Frame {
   ledger: Fill[]; running: boolean
 }
 
-export default function OptionsMarketMaker() {
+export function OptionsMarketMakerContent() {
   const isMobile = useIsMobile()
   const sim = useRef<SimState>(freshState())
   const [baseIv, setBaseIv]         = useState(0.25)
@@ -466,7 +466,7 @@ export default function OptionsMarketMaker() {
   useEffect(() => { setFrame(snapshot(sim.current, ctrl.current)) }, [bidAdj, askAdj, strikeWiden]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <PageWrapper>
+    <>
       {!f || !g ? (
         <div style={{ padding: 24, fontFamily: T.mono, color: T.muted }}>Starting desk…</div>
       ) : (
@@ -589,7 +589,7 @@ export default function OptionsMarketMaker() {
           )}
         </div>
       )}
-    </PageWrapper>
+    </>
   )
 }
 

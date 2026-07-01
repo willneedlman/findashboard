@@ -232,7 +232,7 @@ function ChartTooltip({ active, payload, label }: any) {
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
-export default function IVTracker() {
+export function IVTrackerContent() {
   const [ticker,     setTicker]     = useState('')
   const [tickerInput, setTickerInput] = useState('')
   const [expiry,     setExpiry]     = useState('')
@@ -322,9 +322,6 @@ export default function IVTracker() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <PageWrapper
-      title="IV Tracker"
-    >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
         {/* ── Controls ── */}
@@ -647,6 +644,5 @@ export default function IVTracker() {
         )}
 
       </div>
-    </PageWrapper>
   )
 }

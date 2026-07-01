@@ -285,7 +285,7 @@ interface Frame {
   ledger: Fill[]; running: boolean
 }
 
-export default function FixedIncomeMarketMaker() {
+export function FixedIncomeMarketMakerContent() {
   const isMobile = useIsMobile()
   const sim = useRef<SimState>(freshState())
   const [halfSpread, setHalfSpread] = useState(0.06)
@@ -470,7 +470,7 @@ export default function FixedIncomeMarketMaker() {
   useEffect(() => { setFrame(snapshot(sim.current, ctrl.current)) }, [bidAdj, askAdj, bondWiden]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <PageWrapper>
+    <>
       {!f || !r || !selQuote ? (
         <div style={{ padding: 24, fontFamily: T.mono, color: T.muted }}>Starting desk…</div>
       ) : (
@@ -589,7 +589,7 @@ export default function FixedIncomeMarketMaker() {
           )}
         </div>
       )}
-    </PageWrapper>
+    </>
   )
 }
 

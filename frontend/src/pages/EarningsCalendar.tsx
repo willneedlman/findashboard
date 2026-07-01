@@ -76,7 +76,7 @@ function HourChip({ hour }: { hour: string }) {
   )
 }
 
-export default function EarningsCalendar() {
+export function EarningsCalendarContent() {
   const isMobile = useIsMobile()
   const { tickers: watchTickers } = usePortfolio()
   const watchSet = useMemo(() => new Set(watchTickers.map(t => t.toUpperCase())), [watchTickers])
@@ -170,7 +170,7 @@ export default function EarningsCalendar() {
     : ['Symbol', 'Mkt Cap', 'Time', 'EPS Est', 'Rev Est', 'Impl Move', 'Surprise', 'React', 'Since']
 
   return (
-    <PageWrapper title="Earnings Calendar">
+    <>
       <style>{`@keyframes ec-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
 
       {/* Controls */}
@@ -262,7 +262,7 @@ export default function EarningsCalendar() {
           Since = move from that report to now. Estimates from finnhub, reactions from prior-quarter prices.
         </div>
       )}
-    </PageWrapper>
+    </>
   )
 }
 

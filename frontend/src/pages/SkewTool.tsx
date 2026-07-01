@@ -65,7 +65,7 @@ function ivAt(smile: SmilePoint[], m: number): number {
 
 const caption = (text: string) => <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '0.06em', color: SEC }}>{text}</span>
 
-export default function SkewTool() {
+export function SkewToolContent() {
   const [sp] = useSearchParams()
   const [ticker, setTicker] = useState((sp.get('ticker') || 'SPY').toUpperCase())
   const [open, setOpen] = useState(true)
@@ -86,7 +86,6 @@ export default function SkewTool() {
   useEffect(() => { setMny(0) }, [expiry, data])
 
   return (
-    <PageWrapper title="Volatility Skew">
       <SidebarLayout sidebarWidth={210} sidebarTitle="" sidebar={
         <RailSection title="Parameters" open={open} onToggle={() => setOpen(o => !o)}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -243,6 +242,5 @@ export default function SkewTool() {
           )
         })()}
       </SidebarLayout>
-    </PageWrapper>
   )
 }
