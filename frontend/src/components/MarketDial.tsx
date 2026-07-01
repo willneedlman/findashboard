@@ -6,8 +6,8 @@ import {
 
 const T = {
   text: 'var(--theme-text, #d7e3fc)', gold: 'var(--theme-primary, #c9a84c)',
-  muted: 'var(--theme-secondary, #8099b0)', faint: '#41556b', dim: '#3f5268',
-  hand: '#f4d47a', hub: '#0a1524', track: '#16233a',
+  muted: 'var(--theme-secondary, #8099b0)', faint: 'var(--theme-text-faint, #41556b)', dim: 'var(--theme-text-faint, #3f5268)',
+  hand: 'var(--theme-primary, #c9a84c)', hub: 'var(--theme-bg, #0a1524)', track: 'color-mix(in srgb, var(--theme-text, #d7e3fc) 12%, transparent)',
   mono: 'var(--theme-mono)', sans: 'var(--theme-sans)',
 }
 
@@ -60,7 +60,7 @@ export default function MarketDial({ showLegend = false }: { showLegend?: boolea
       <circle cx={hx2.toFixed(1)} cy={hy2.toFixed(1)} r={5} fill={T.hand} />
       <circle cx={CX} cy={CY} r={70} fill={T.hub} stroke="rgba(255,255,255,0.06)" />
       <text x={CX} y={290} textAnchor="middle" fontFamily={T.mono} fontSize={30} fontWeight={700} fill={T.gold}>{utcClock}</text>
-      <text x={CX} y={314} textAnchor="middle" fontFamily={T.sans} fontSize={11} letterSpacing="2" fill="#4b5f75">UTC · NOW</text>
+      <text x={CX} y={314} textAnchor="middle" fontFamily={T.sans} fontSize={11} letterSpacing="2" fill={T.dim}>UTC · NOW</text>
     </svg>
   )
 

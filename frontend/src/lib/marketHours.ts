@@ -153,8 +153,8 @@ export const PHASE_COLOR: Record<Phase, string> = {
   pre:       'var(--theme-primary, #c9a84c)',
   after:     'var(--theme-primary, #c9a84c)',
   overnight: 'var(--theme-tertiary, #5b8fd6)',
-  break:     '#7c93ac',
-  closed:    '#33415a',
+  break:     'var(--theme-secondary, #7c93ac)',
+  closed:    'var(--theme-text-faint, #33415a)',
 }
 
 // Bar/arc fill opacity per phase (single source for rows timeline + dial arcs).
@@ -168,8 +168,8 @@ export const PHASE_TEXT: Record<Phase, string> = {
   pre:       'var(--theme-primary, #c9a84c)',
   after:     'var(--theme-primary, #c9a84c)',
   overnight: 'var(--theme-tertiary, #5b8fd6)',
-  break:     '#7c93ac',
-  closed:    '#6b8199',
+  break:     'var(--theme-secondary, #7c93ac)',
+  closed:    'var(--theme-secondary, #6b8199)',
 }
 
 // Follow-the-sun ring order for the dial (earliest UTC open innermost → outermost).

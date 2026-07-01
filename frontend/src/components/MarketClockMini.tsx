@@ -6,9 +6,12 @@ import { MARKETS, SUN_ORDER, marketStatus, utcArcs, utcNowHours, PHASE_COLOR, ty
 // (hoveredMarket) drives ring dimming, chip highlight, and the readout — hovering
 // any ring OR its chip isolates that market everywhere. Reuses lib/marketHours.
 const T = {
-  text: '#eaf0f8', muted: '#8099b0', muted2: '#5e768f', track: '#16233a',
-  gold: 'var(--theme-primary, #c9a84c)', needle: '#f5d06b', closedDot: '#3a4a63',
-  mono: '-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif',
+  text: 'var(--theme-text, #eaf0f8)', muted: 'var(--theme-secondary, #8099b0)',
+  muted2: 'var(--theme-text-faint, #5e768f)',
+  track: 'color-mix(in srgb, var(--theme-text, #d7e3fc) 12%, transparent)',
+  gold: 'var(--theme-primary, #c9a84c)', needle: 'var(--theme-primary, #c9a84c)',
+  closedDot: 'var(--theme-text-faint, #3a4a63)',
+  mono: 'var(--theme-mono)',
   sans: 'var(--theme-sans)',
 }
 
