@@ -13,6 +13,7 @@ const ALL_TYPES: WidgetType[] = [
   'time-and-sales', 'unusual-flow', 'heatmap', 'trade-blotter',
   'ticker-control',
   'index-tape',
+  'market-hours',
   'macro-strip',
   'macro-calendar',
   'global-macro',

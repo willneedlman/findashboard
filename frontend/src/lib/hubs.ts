@@ -3,7 +3,7 @@ import {
   Filter, TrendingUp, Brain, CalendarClock, CalendarDays, FileText, Activity,
   GitCompare, PieChart, Globe, Scale, Coins, Boxes, RotateCcw, Gem,
   LineChart, BarChart2, Waves, Zap, Shuffle, Percent,
-  GitBranch, Landmark, Dices, Gauge, BookOpen, Bell, Workflow,
+  GitBranch, Landmark, Dices, Gauge, BookOpen, Bell, Workflow, Clock,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -95,6 +95,7 @@ export const HUBS: Hub[] = [
       { title: 'Bond Analytics', chip: 'Bonds',          desc: 'Yield-to-maturity, duration, and convexity',     route: '/bond',           icon: Landmark },
       { title: 'Bond Lookup',    chip: 'Lookup',         desc: 'Resolve a CUSIP or issuer to bond reference data', route: '/cusip',          icon: BookOpen },
       { title: 'Credit Spreads', chip: 'Credit Spreads', desc: 'Investment-grade and high-yield spread monitor', route: '/credit-spreads', icon: Activity },
+      { title: 'Market Hours',   chip: 'Market Hours',   desc: 'Live global session clock across futures, US, Europe, Asia', route: '/market-hours',   icon: Clock },
     ],
   },
   {

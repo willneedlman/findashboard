@@ -34,9 +34,11 @@ import UnusualFlowWidget from './widgets/UnusualFlowWidget'
 import HeatmapWidget from './widgets/HeatmapWidget'
 import TradeBlotterWidget from './widgets/TradeBlotterWidget'
 import PositionSizerWidget from './widgets/PositionSizerWidget'
+import MarketHoursWidget from './widgets/MarketHoursWidget'
 
 export default function WidgetRenderer({ config }: { config: WidgetConfig }) {
   switch (config.type) {
+    case 'market-hours':      return <MarketHoursWidget config={config} />
     case 'price-card':        return <PriceCard config={config} />
     case 'mini-chart':        return <MiniChart config={config} />
     case 'news-feed':         return <NewsFeed config={config} />

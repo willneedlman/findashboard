@@ -39,6 +39,7 @@ export type WidgetType =
   | 'heatmap'
   | 'trade-blotter'
   | 'position-sizer'
+  | 'market-hours'
   // Not a real tile: selecting it in the palette surfaces the top-bar ticker
   // selector instead of inserting a widget. Present here only so it can carry a
   // palette label/icon/description.
@@ -139,6 +140,7 @@ export const WIDGET_DEFAULT_SIZE: Record<WidgetType, { w: number; h: number }> =
   'heatmap':             { w: 8, h: 8 },
   'trade-blotter':       { w: 6, h: 6 },
   'position-sizer':      { w: 4, h: 6 },
+  'market-hours':        { w: 4, h: 8 },
   'ticker-control':      { w: 3, h: 2 },   // unused — never placed as a tile
 }
 
@@ -178,6 +180,7 @@ export const WIDGET_LABELS: Record<WidgetType, string> = {
   'heatmap':             'Market Heatmap',
   'trade-blotter':       'Trade Blotter',
   'position-sizer':      'Position Sizer',
+  'market-hours':        'Market Hours',
   'ticker-control':      'Ticker Control',
 }
 
@@ -217,6 +220,7 @@ export const WIDGET_DESCRIPTIONS: Record<WidgetType, string> = {
   'heatmap':             'S&P treemap by sector & market cap, colored by daily % change.',
   'trade-blotter':       'Order & fill history — side, qty, avg price, and fill status.',
   'position-sizer':      'Risk-based share sizing from account %, entry, and stop.',
+  'market-hours':        'Live global session clock: futures, US, Europe, and Asia-Pacific.',
   'ticker-control':      'Shows the dashboard-wide ticker selector in the top bar (not a tile).',
 }
 
@@ -256,6 +260,7 @@ export const WIDGET_ICONS: Record<WidgetType, string> = {
   'heatmap':             'HM',
   'trade-blotter':       'BLT',
   'position-sizer':      'SIZ',
+  'market-hours':        'HRS',
   'ticker-control':      'TKR',
 }
 
