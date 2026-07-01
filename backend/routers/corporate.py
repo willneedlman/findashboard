@@ -527,6 +527,112 @@ async def get_corporate_hub_analyst(ticker: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ── Credit quality (synthetic, model-based — NOT an agency rating) ────────────
+# Damodaran interest-coverage → synthetic rating → default spread (large-cap
+# table). Spreads drift year to year; ratings map is stable. Public methodology.
+_SYNTH_RATING = [
+    (8.50, "AAA", 0.59), (6.50, "AA", 0.78), (5.50, "A+", 0.98), (4.25, "A", 1.08),
+    (3.00, "A-", 1.22), (2.50, "BBB", 1.56), (2.25, "BB+", 2.00), (2.00, "BB", 2.40),
+    (1.75, "B+", 3.51), (1.50, "B", 4.21), (1.25, "B-", 5.15), (0.80, "CCC", 8.20),
+    (0.65, "CC", 8.64), (0.20, "C", 11.34), (-1e9, "D", 15.12),
+]
+
+
+def _synthetic_rating(cov):
+    if cov is None:
+        return None, None
+    for lo, rating, spread in _SYNTH_RATING:
+        if cov >= lo:
+            return rating, spread
+    return "D", 15.12
+
+
+def _fin_row(df, *names):
+    """Most-recent NON-NaN value for the first matching income/balance line item.
+    yfinance leaves the latest column NaN for items it no longer breaks out, so we
+    fall back to the most recent period that actually reported the figure."""
+    if df is None or getattr(df, "empty", True):
+        return None
+    for n in names:
+        if n in df.index:
+            try:
+                for v in df.loc[n].values:   # columns are newest-first
+                    if v is not None and not (isinstance(v, float) and v != v):
+                        return float(v)
+            except Exception:
+                continue
+    return None
+
+
+@router.get("/credit")
+def get_credit(ticker: str):
+    """Model-based credit quality: synthetic (Damodaran) rating from interest
+    coverage, leverage, an Altman Z bankruptcy score, and the implied default
+    spread. Not an agency rating — computed from the latest financials."""
+    sym = ticker.strip().upper()
+    ck = f"credit:{sym}"
+    cached = disk_get(ck)
+    if cached is not None:
+        return cached
+    try:
+        stock = yf.Ticker(sym)
+        inc = stock.income_stmt
+        bs = stock.balance_sheet
+    except Exception as e:
+        raise HTTPException(502, f"financials unavailable: {e}")
+
+    info = {}
+    try:
+        info = get_info(sym) or {}
+    except Exception:
+        pass
+
+    ebit = _fin_row(inc, "EBIT", "Operating Income", "OperatingIncome")
+    interest = _fin_row(inc, "Interest Expense", "InterestExpense", "Interest Expense Non Operating")
+    revenue = _fin_row(inc, "Total Revenue", "TotalRevenue", "Operating Revenue")
+    ebitda = info.get("ebitda") or _fin_row(inc, "EBITDA", "Normalized EBITDA")
+    total_debt = info.get("totalDebt") or _fin_row(bs, "Total Debt", "TotalDebt")
+    cash = info.get("totalCash") or _fin_row(bs, "Cash And Cash Equivalents", "Cash Cash Equivalents And Short Term Investments")
+    mkt_cap = info.get("marketCap")
+
+    total_assets = _fin_row(bs, "Total Assets", "TotalAssets")
+    total_liab = _fin_row(bs, "Total Liabilities Net Minority Interest", "Total Liab", "TotalLiabilitiesNetMinorityInterest")
+    cur_assets = _fin_row(bs, "Current Assets", "Total Current Assets")
+    cur_liab = _fin_row(bs, "Current Liabilities", "Total Current Liabilities")
+    retained = _fin_row(bs, "Retained Earnings", "RetainedEarnings")
+
+    coverage = round(ebit / abs(interest), 2) if ebit is not None and interest not in (None, 0) else None
+    rating, spread = _synthetic_rating(coverage)
+    debt_to_ebitda = round(total_debt / ebitda, 2) if total_debt is not None and ebitda not in (None, 0) else None
+    net_debt = round(total_debt - cash) if total_debt is not None and cash is not None else None
+
+    altman = altman_zone = None
+    if all(v not in (None, 0) for v in (total_assets, total_liab)) and ebit is not None:
+        wc = (cur_assets - cur_liab) if cur_assets is not None and cur_liab is not None else 0.0
+        A = wc / total_assets
+        B = (retained or 0.0) / total_assets
+        C = ebit / total_assets
+        D = (mkt_cap or 0.0) / total_liab
+        E = (revenue or 0.0) / total_assets
+        altman = round(1.2 * A + 1.4 * B + 3.3 * C + 0.6 * D + 1.0 * E, 2)
+        altman_zone = "safe" if altman > 2.99 else "grey" if altman >= 1.81 else "distress"
+
+    out = {
+        "ticker": sym,
+        "synthetic_rating": rating,
+        "default_spread_pct": spread,
+        "interest_coverage": coverage,
+        "debt_to_ebitda": debt_to_ebitda,
+        "net_debt": net_debt,
+        "total_debt": round(total_debt) if total_debt is not None else None,
+        "altman_z": altman,
+        "altman_zone": altman_zone,
+        "current_ratio": round(cur_assets / cur_liab, 2) if cur_assets and cur_liab else None,
+    }
+    disk_set(ck, out, ttl=86400)
+    return out
+
+
 @router.get("/profile")
 async def get_corporate_profile(ticker: str):
     """Fetches deep corporate profile details, explicitly safeguarding executive list arrays."""

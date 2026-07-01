@@ -494,7 +494,13 @@ export function SupplyChainContent() {
               <RevenuePanel title="Revenue · By Activity (Fees vs Trading)" block={data.revenue_activity} />
             )}
 
-            {/* ── Row 2: Institutional ownership (full width) ────────── */}
+            {/* ── Row 2: Credit quality + Analyst ratings ──────────── */}
+            <div style={{ display: 'grid', gridTemplateColumns: isMobileLayout ? '1fr' : '1fr 1fr', gap: 18, alignItems: 'stretch' }}>
+              <CreditPanel ticker={data.ticker} />
+              <AnalystPanel ticker={data.ticker} />
+            </div>
+
+            {/* ── Row 3: Institutional ownership (full width) ────────── */}
             <InstitutionalPanel inst={inst} loading={instLoading} tab={instTab} onTab={setInstTab} />
           </div>
           )
@@ -506,6 +512,148 @@ export function SupplyChainContent() {
           </div>
         )}
       </div>
+  )
+}
+
+const POS = 'var(--theme-positive, #22c55e)'
+const NEG = 'var(--theme-negative, #ef4444)'
+const AMBER = 'var(--theme-primary, #c9a84c)'
+
+// Investment-grade (AAA..BBB) reads gold; speculative (BB and below) reads red.
+const INVESTMENT_GRADE = new Set(['AAA', 'AA', 'A+', 'A', 'A-', 'BBB'])
+function ratingColor(r: string | null): string {
+  if (!r) return T.muted
+  if (INVESTMENT_GRADE.has(r)) return r.startsWith('A') ? POS : AMBER
+  return r.startsWith('BB') ? AMBER : NEG
+}
+const fmtBn = (v: number | null) => v == null ? '—' : Math.abs(v) >= 1e9 ? `$${(v / 1e9).toFixed(1)}B` : Math.abs(v) >= 1e6 ? `$${(v / 1e6).toFixed(0)}M` : `$${v.toLocaleString()}`
+
+interface Credit {
+  synthetic_rating: string | null; default_spread_pct: number | null; interest_coverage: number | null
+  debt_to_ebitda: number | null; net_debt: number | null; altman_z: number | null
+  altman_zone: 'safe' | 'grey' | 'distress' | null; current_ratio: number | null
+}
+function CreditPanel({ ticker }: { ticker: string }) {
+  const [d, setD] = useState<Credit | null>(null)
+  const [state, setState] = useState<'loading' | 'ok' | 'err'>('loading')
+  useEffect(() => {
+    let live = true
+    setState('loading')
+    axios.get(`/api/corporate/credit?ticker=${encodeURIComponent(ticker)}`)
+      .then(r => { if (live) { setD(r.data); setState('ok') } })
+      .catch(() => { if (live) setState('err') })
+    return () => { live = false }
+  }, [ticker])
+  const stat = (label: string, value: string, color?: string) => (
+    <div>
+      <div style={{ ...labelStyle, marginBottom: 4 }}>{label}</div>
+      <div style={{ fontFamily: T.mono, fontSize: 15, fontWeight: 700, color: color ?? T.text }}>{value}</div>
+    </div>
+  )
+  const zoneColor = d?.altman_zone === 'safe' ? POS : d?.altman_zone === 'grey' ? AMBER : NEG
+  return (
+    <div className="ft-panel" style={{ display: 'flex', flexDirection: 'column' }}>
+      <div className="ft-panel-header">Credit Quality</div>
+      <div style={{ padding: '16px 18px', flex: 1 }}>
+        {state === 'loading' && <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11 }}>Loading…</div>}
+        {state === 'err' && <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11 }}>Credit metrics unavailable for this name.</div>}
+        {state === 'ok' && d && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minWidth: 78, padding: '10px 12px', border: `1px solid ${ratingColor(d.synthetic_rating)}`, background: `color-mix(in srgb, ${ratingColor(d.synthetic_rating)} 10%, transparent)` }}>
+                <span style={{ fontFamily: T.mono, fontSize: 28, fontWeight: 700, color: ratingColor(d.synthetic_rating), lineHeight: 1 }}>{d.synthetic_rating ?? '—'}</span>
+                <span style={{ ...labelStyle, marginTop: 5 }}>Synthetic</span>
+              </div>
+              <div style={{ fontFamily: T.label, fontSize: 11.5, color: T.muted, lineHeight: 1.5 }}>
+                Model rating from interest coverage (Damodaran). {d.default_spread_pct != null && <>Implied default spread <span style={{ color: T.text }}>{d.default_spread_pct.toFixed(2)}%</span>.</>}
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px 16px' }}>
+              {stat('Interest Coverage', d.interest_coverage != null ? `${d.interest_coverage.toFixed(1)}×` : '—', d.interest_coverage != null && d.interest_coverage < 2 ? NEG : T.text)}
+              {stat('Debt / EBITDA', d.debt_to_ebitda != null ? `${d.debt_to_ebitda.toFixed(1)}×` : '—', d.debt_to_ebitda != null && d.debt_to_ebitda > 4 ? NEG : T.text)}
+              {stat('Net Debt', fmtBn(d.net_debt))}
+              {stat('Altman Z', d.altman_z != null ? d.altman_z.toFixed(2) : '—', zoneColor)}
+              {stat('Z Zone', d.altman_zone ? d.altman_zone.toUpperCase() : '—', zoneColor)}
+              {stat('Current Ratio', d.current_ratio != null ? d.current_ratio.toFixed(2) : '—')}
+            </div>
+            <div style={{ marginTop: 14, fontSize: 9.5, color: T.muted, fontFamily: T.label, fontStyle: 'italic' }}>
+              Model-based estimate from the latest financials — not an agency (S&amp;P/Moody's/Fitch) rating.
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+interface Analyst {
+  distribution: { strongBuy: number; buy: number; hold: number; sell: number; strongSell: number }
+  total_analysts: number | null; recommendation_key: string | null; recommendation_mean: number | null
+  target_mean: number | null; target_high: number | null; target_low: number | null
+  price: number | null; implied_upside: number | null
+}
+function AnalystPanel({ ticker }: { ticker: string }) {
+  const [d, setD] = useState<Analyst | null>(null)
+  const [state, setState] = useState<'loading' | 'ok' | 'err'>('loading')
+  useEffect(() => {
+    let live = true
+    setState('loading')
+    axios.get(`/api/corporate/hub/analyst?ticker=${encodeURIComponent(ticker)}`)
+      .then(r => { if (live) { setD(r.data); setState('ok') } })
+      .catch(() => { if (live) setState('err') })
+    return () => { live = false }
+  }, [ticker])
+  const dist = d?.distribution
+  const total = dist ? dist.strongBuy + dist.buy + dist.hold + dist.sell + dist.strongSell : 0
+  const buy = dist ? dist.strongBuy + dist.buy : 0
+  const sell = dist ? dist.sell + dist.strongSell : 0
+  const pct = (n: number) => total > 0 ? (n / total) * 100 : 0
+  const recLabel = d?.recommendation_key ? d.recommendation_key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '—'
+  const stat = (label: string, value: string, color?: string) => (
+    <div>
+      <div style={{ ...labelStyle, marginBottom: 4 }}>{label}</div>
+      <div style={{ fontFamily: T.mono, fontSize: 15, fontWeight: 700, color: color ?? T.text }}>{value}</div>
+    </div>
+  )
+  return (
+    <div className="ft-panel" style={{ display: 'flex', flexDirection: 'column' }}>
+      <div className="ft-panel-header">Analyst Ratings</div>
+      <div style={{ padding: '16px 18px', flex: 1 }}>
+        {state === 'loading' && <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11 }}>Loading…</div>}
+        {state === 'err' && <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11 }}>No analyst coverage for this name.</div>}
+        {state === 'ok' && d && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 12 }}>
+              <span style={{ fontFamily: T.mono, fontSize: 20, fontWeight: 700, color: buy >= sell ? POS : NEG }}>{recLabel}</span>
+              {d.recommendation_mean != null && <span style={{ fontFamily: T.mono, fontSize: 12, color: T.muted }}>{d.recommendation_mean.toFixed(2)}/5</span>}
+              {d.total_analysts != null && <span style={{ fontFamily: T.label, fontSize: 11, color: T.muted, marginLeft: 'auto' }}>{d.total_analysts} analysts</span>}
+            </div>
+            {total > 0 && (
+              <>
+                <div style={{ display: 'flex', height: 8, borderRadius: 2, overflow: 'hidden', marginBottom: 5 }}>
+                  <div style={{ width: `${pct(buy)}%`, background: POS, opacity: 0.85 }} />
+                  <div style={{ width: `${pct(dist!.hold)}%`, background: T.muted, opacity: 0.5 }} />
+                  <div style={{ width: `${pct(sell)}%`, background: NEG, opacity: 0.85 }} />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: T.mono, fontSize: 10, marginBottom: 16 }}>
+                  <span style={{ color: POS }}>{buy} Buy</span>
+                  <span style={{ color: T.muted }}>{dist!.hold} Hold</span>
+                  <span style={{ color: NEG }}>{sell} Sell</span>
+                </div>
+              </>
+            )}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px 16px' }}>
+              {stat('Mean Target', d.target_mean != null ? `$${d.target_mean.toFixed(2)}` : '—', AMBER)}
+              {stat('Implied Upside', d.implied_upside != null ? `${d.implied_upside >= 0 ? '+' : ''}${d.implied_upside.toFixed(1)}%` : '—', d.implied_upside != null ? (d.implied_upside >= 0 ? POS : NEG) : undefined)}
+              {stat('Current', d.price != null ? `$${d.price.toFixed(2)}` : '—')}
+              {stat('High Target', d.target_high != null ? `$${d.target_high.toFixed(2)}` : '—')}
+              {stat('Low Target', d.target_low != null ? `$${d.target_low.toFixed(2)}` : '—')}
+              {stat('Consensus', recLabel, buy >= sell ? POS : NEG)}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   )
 }
 
