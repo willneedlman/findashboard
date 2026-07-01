@@ -109,7 +109,7 @@ export function CurrencyMatrixContent() {
           <table style={{ borderCollapse: 'collapse', width: '100%' }}>
             <thead>
               <tr>
-                <th style={{ ...eyebrow, fontSize: 9, letterSpacing: '0.14em', color: T.faint, padding: '11px 13px', textAlign: 'left', whiteSpace: 'nowrap' }}>1 ↓ = … →</th>
+                <th style={{ padding: '11px 13px' }} aria-hidden />
                 {currencies.map(c => (
                   <th key={c} style={{ padding: '11px 13px', textAlign: 'right' }}>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
