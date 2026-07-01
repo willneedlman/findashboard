@@ -763,12 +763,9 @@ export default function Home() {
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span style={cap}>Portfolio</span>
                     <div style={{ display: 'flex', gap: 3 }}>
-                      {RANGES.slice(1).map((r) => {
-                        const idx = RANGES.indexOf(r)
-                        return (
-                          <button key={r.label} onClick={() => setRangeIdx(idx)} style={{ fontFamily: F.mono, fontSize: 9, padding: '2px 6px', cursor: 'pointer', background: 'none', color: idx === rangeIdx ? F.gold : F.muted, border: `1px solid ${idx === rangeIdx ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)' : 'transparent'}` }}>{r.label}</button>
-                        )
-                      })}
+                      {RANGES.map((r, idx) => (
+                        <button key={r.label} onClick={() => setRangeIdx(idx)} style={{ fontFamily: F.mono, fontSize: 9, padding: '2px 6px', cursor: 'pointer', background: 'none', color: idx === rangeIdx ? F.gold : F.muted, border: `1px solid ${idx === rangeIdx ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)' : 'transparent'}` }}>{r.label}</button>
+                      ))}
                     </div>
                   </div>
                   {hasPM ? (
