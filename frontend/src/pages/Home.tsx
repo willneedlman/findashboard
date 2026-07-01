@@ -975,11 +975,12 @@ function HubLedgerCell({ slug, last, onNav }: { slug: string; last: boolean; onN
         </button>
       </div>
       <div style={{ fontFamily: F.sans, fontSize: 14, color: F.sec, marginTop: 6 }}>{hub.tagline}</div>
-      <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${F.borderFaint}`, display: 'flex', flexWrap: 'wrap', gap: '9px 18px' }}>
+      <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${F.borderFaint}`, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         {hub.tools.map(t => (
           <button key={t.route} onClick={() => onNav(t.route)}
-            onMouseEnter={e => (e.currentTarget.style.color = F.bright)} onMouseLeave={e => (e.currentTarget.style.color = F.sec)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: F.sans, fontSize: 13.5, color: F.sec, transition: 'color 0.12s ease' }}>
+            onMouseEnter={e => { e.currentTarget.style.color = F.bright; e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--theme-primary, #c9a84c) 55%, transparent)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)' }}
+            onMouseLeave={e => { e.currentTarget.style.color = F.sec; e.currentTarget.style.borderColor = F.border; e.currentTarget.style.background = 'transparent' }}
+            style={{ background: 'transparent', border: `1px solid ${F.border}`, borderRadius: 3, cursor: 'pointer', padding: '4px 10px', fontFamily: F.sans, fontSize: 13, color: F.sec, transition: 'color 0.12s ease, border-color 0.12s ease, background 0.12s ease' }}>
             {t.chip}
           </button>
         ))}
