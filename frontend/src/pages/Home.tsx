@@ -55,7 +55,7 @@ const RANGES = [
   { label: '1Y', points: Infinity },
 ]
 
-const cap: React.CSSProperties = { fontFamily: F.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: F.muted }
+const cap: React.CSSProperties = { fontFamily: F.sans, fontSize: 9, fontWeight: 400, letterSpacing: '0.16em', textTransform: 'uppercase', color: F.muted }
 
 // ── Holdings / index marquee tape ──────────────────────────────────────────
 const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
@@ -68,7 +68,7 @@ function TapeToggle({ source, onSource }: { source: TapeSource; onSource: (s: Ta
       onClick={() => onSource(key)}
       aria-pressed={source === key}
       style={{
-        fontFamily: F.mono, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
+        fontFamily: F.mono, fontSize: 8.5, fontWeight: 400, letterSpacing: '0.1em', textTransform: 'uppercase',
         padding: '2px 8px', cursor: 'pointer', background: 'none',
         color: source === key ? F.gold : F.muted,
         border: `1px solid ${source === key ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)' : 'transparent'}`,
@@ -264,7 +264,7 @@ function PortfolioImportStrip() {
     reader.readAsText(file)
     e.target.value = ''
   }
-  const btn: React.CSSProperties = { background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 30%, transparent)', color: F.gold, fontFamily: F.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '5px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }
+  const btn: React.CSSProperties = { background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 30%, transparent)', color: F.gold, fontFamily: F.sans, fontSize: 9, fontWeight: 400, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '5px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }
   return (
     <div style={{ background: F.panel, border: `1px solid ${F.border}`, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
       <input ref={fileRef} type="file" accept=".json,.csv,.txt" style={{ display: 'none' }} onChange={handleFile} />
@@ -318,7 +318,7 @@ function HubCard({ slug }: { slug: string }) {
         </span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontFamily: F.sans, fontSize: 15, fontWeight: 700, color: F.text }}>{hub.label}</span>
+            <span style={{ fontFamily: F.sans, fontSize: 15, fontWeight: 400, color: F.text }}>{hub.label}</span>
             <span style={{ fontFamily: F.mono, fontSize: 9, color: F.muted, border: '1px solid rgba(255,255,255,0.1)', padding: '1px 5px' }}>{hub.tools.length}</span>
             <ArrowUpRight size={13} style={{ marginLeft: 'auto', color: F.gold, opacity: hover ? 0.9 : 0.5, transform: hover ? 'translate(1px,-1px)' : 'none', transition: 'opacity 0.14s ease, transform 0.14s ease' }} />
           </div>
@@ -338,7 +338,7 @@ function MiniStat({ label, value, color }: { label: string; value: string; color
   return (
     <div style={{ minWidth: 0 }}>
       <div style={{ ...cap, fontSize: 8.5 }}>{label}</div>
-      <div style={{ fontFamily: F.mono, fontSize: 12, fontWeight: 700, color: color ?? F.text, marginTop: 3, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
+      <div style={{ fontFamily: F.mono, fontSize: 12, fontWeight: 400, color: color ?? F.text, marginTop: 3, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
     </div>
   )
 }
@@ -348,7 +348,7 @@ function SectionLabel({ icon: Icon, label, count }: { icon: React.ElementType; l
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
       <Icon size={11} style={{ color: F.muted, flexShrink: 0 }} />
-      <span style={{ fontFamily: F.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: F.sec, whiteSpace: 'nowrap' }}>{label}</span>
+      <span style={{ fontFamily: F.sans, fontSize: 10, fontWeight: 400, letterSpacing: '0.16em', textTransform: 'uppercase', color: F.sec, whiteSpace: 'nowrap' }}>{label}</span>
       {count != null && <span style={{ fontFamily: F.mono, fontSize: 10, color: F.muted }}>{count}</span>}
       <div style={{ flex: 1, height: 1, background: F.borderFaint }} />
     </div>
@@ -365,7 +365,7 @@ function ResultTile({ icon: Icon, title, sub, onClick, selected }: { icon: React
       style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 13px', background: selected ? '#101e30' : F.panel, border: `1px solid ${selected ? 'rgba(201,168,76,0.55)' : F.border}`, cursor: 'pointer' }}>
       <Icon size={15} style={{ color: F.gold, flexShrink: 0 }} />
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontFamily: F.sans, fontSize: 12.5, fontWeight: 700, color: F.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
+        <div style={{ fontFamily: F.sans, fontSize: 12.5, fontWeight: 400, color: F.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
         <div style={{ fontFamily: F.sans, fontSize: 10, color: F.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</div>
       </div>
     </div>
@@ -403,8 +403,8 @@ const rangePct = (price?: number | null, lo?: number | null, hi?: number | null)
 function StatCell({ label, value }: { label: string; value: string }) {
   return (
     <div style={{ padding: '13px 22px', borderRight: '1px solid rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-      <div style={{ fontFamily: F.sans, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: F.muted }}>{label}</div>
-      <div style={{ fontFamily: F.mono, fontSize: 13.5, fontWeight: 600, color: F.text, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+      <div style={{ fontFamily: F.sans, fontSize: 8.5, fontWeight: 400, letterSpacing: '0.14em', textTransform: 'uppercase', color: F.muted }}>{label}</div>
+      <div style={{ fontFamily: F.mono, fontSize: 13.5, fontWeight: 400, color: F.text, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
     </div>
   )
 }
@@ -414,7 +414,7 @@ function RangeBar({ label, lo, hi, price, color, divider }: { label: string; lo?
   return (
     <div style={{ padding: '16px 22px', borderRight: divider ? `1px solid ${F.borderFaint}` : undefined }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11 }}>
-        <span style={{ fontFamily: F.sans, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: F.muted }}>{label}</span>
+        <span style={{ fontFamily: F.sans, fontSize: 8.5, fontWeight: 400, letterSpacing: '0.14em', textTransform: 'uppercase', color: F.muted }}>{label}</span>
         <span style={{ fontFamily: F.mono, fontSize: 10, color: F.sec }}>{fmtPrice(lo)} – {fmtPrice(hi)}</span>
       </div>
       <div style={{ position: 'relative', height: 4, background: 'rgba(255,255,255,0.07)' }}>
@@ -457,7 +457,7 @@ function JumpTile({ icon: Icon, title, sub, onClick }: { icon: React.ElementType
       style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '13px 15px', background: hover ? '#101e30' : F.panel, border: `1px solid ${hover ? 'rgba(201,168,76,0.45)' : F.border}`, cursor: 'pointer', transition: 'border-color 0.15s ease, background 0.15s ease' }}>
       <Icon size={16} style={{ color: F.gold, flexShrink: 0 }} />
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontFamily: F.sans, fontSize: 12.5, fontWeight: 700, color: F.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
+        <div style={{ fontFamily: F.sans, fontSize: 12.5, fontWeight: 400, color: F.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
         <div style={{ fontFamily: F.sans, fontSize: 10, color: F.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</div>
       </div>
     </div>
@@ -502,7 +502,7 @@ function TickerDashboard({ sym }: { sym: string }) {
   if (price == null || price === 0) {
     return (
       <div style={{ ...panel, padding: '26px 22px', textAlign: 'center' }}>
-        <div style={{ fontFamily: F.sans, fontSize: 13, fontWeight: 700, color: F.text }}>No market data for {sym}</div>
+        <div style={{ fontFamily: F.sans, fontSize: 13, fontWeight: 400, color: F.text }}>No market data for {sym}</div>
         <div style={{ fontFamily: F.sans, fontSize: 11, color: F.muted, marginTop: 6 }}>Not a recognized US-listed security, or no quote available.</div>
       </div>
     )
@@ -518,16 +518,16 @@ function TickerDashboard({ sym }: { sym: string }) {
             <TickerLogo ticker={sym} size={50} />
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                <span style={{ fontFamily: F.sans, fontSize: 21, fontWeight: 700, color: F.bright, lineHeight: 1 }}>{dash(hub?.company_name ?? sym)}</span>
+                <span style={{ fontFamily: F.sans, fontSize: 21, fontWeight: 400, color: F.bright, lineHeight: 1 }}>{dash(hub?.company_name ?? sym)}</span>
                 {exchangeLabel(hub?.exchange) && <span style={{ fontFamily: F.mono, fontSize: 9, color: F.sec, border: '1px solid rgba(255,255,255,0.12)', padding: '2px 6px' }}>{exchangeLabel(hub?.exchange)}</span>}
               </div>
               <div style={{ fontFamily: F.sans, fontSize: 11.5, color: F.muted, marginTop: 7 }}>{dash(hub?.sector)}</div>
             </div>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontFamily: F.mono, fontSize: 34, fontWeight: 700, color: F.bright, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{fmtPrice(price)}</div>
+            <div style={{ fontFamily: F.mono, fontSize: 34, fontWeight: 400, color: F.bright, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{fmtPrice(price)}</div>
             {pct != null && (
-              <div style={{ display: 'inline-flex', alignItems: 'center', marginTop: 8, fontFamily: F.mono, fontSize: 13, fontWeight: 700, color: chg, background: up ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)', border: `1px solid ${up ? 'rgba(34,197,94,0.32)' : 'rgba(239,68,68,0.32)'}`, padding: '4px 10px' }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', marginTop: 8, fontFamily: F.mono, fontSize: 13, fontWeight: 400, color: chg, background: up ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)', border: `1px solid ${up ? 'rgba(34,197,94,0.32)' : 'rgba(239,68,68,0.32)'}`, padding: '4px 10px' }}>
                 {up ? '↑' : '↓'}&nbsp;{chgAbs != null ? `${up ? '+' : '-'}${Math.abs(chgAbs).toFixed(2)}` : '—'}&nbsp;&nbsp;{up ? '+' : '-'}{Math.abs(pct).toFixed(2)}%
               </div>
             )}
@@ -556,8 +556,8 @@ function TickerDashboard({ sym }: { sym: string }) {
         {/* 4. 1-month sparkline */}
         <div style={{ padding: '16px 22px', borderTop: `1px solid ${F.borderFaint}` }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-            <span style={{ fontFamily: F.sans, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: F.muted }}>1-Month Trend</span>
-            {monthPct != null && <span style={{ fontFamily: F.mono, fontSize: 10, fontWeight: 700, color: monthColor }}>{monthUp ? '+' : '-'}{Math.abs(monthPct).toFixed(2)}%</span>}
+            <span style={{ fontFamily: F.sans, fontSize: 8.5, fontWeight: 400, letterSpacing: '0.14em', textTransform: 'uppercase', color: F.muted }}>1-Month Trend</span>
+            {monthPct != null && <span style={{ fontFamily: F.mono, fontSize: 10, fontWeight: 400, color: monthColor }}>{monthUp ? '+' : '-'}{Math.abs(monthPct).toFixed(2)}%</span>}
           </div>
           <TickerSpark data={spark} color={monthColor} />
         </div>
@@ -734,7 +734,7 @@ export default function Home() {
               </div>
               <button onClick={() => navigate('/dashboard')} style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, background: F.gold, border: 'none', padding: '9px 14px', cursor: 'pointer' }}>
                 <LayoutGrid size={14} style={{ color: '#101c2e' }} />
-                <span style={{ fontFamily: F.sans, fontSize: 12, fontWeight: 700, color: '#101c2e', letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>My Dashboard</span>
+                <span style={{ fontFamily: F.sans, fontSize: 12, fontWeight: 400, color: '#101c2e', letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>My Dashboard</span>
               </button>
             </div>
           </div>
@@ -788,9 +788,9 @@ export default function Home() {
             <>
               {recentTickers.length > 0 && (
                 <div style={{ marginTop: 18, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <span style={{ fontFamily: F.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: F.muted }}>Recent</span>
+                  <span style={{ fontFamily: F.sans, fontSize: 9, fontWeight: 400, letterSpacing: '0.16em', textTransform: 'uppercase', color: F.muted }}>Recent</span>
                   {recentTickers.map(t => (
-                    <button key={t} onClick={() => setQ(t)} style={{ fontFamily: F.mono, fontSize: 11, fontWeight: 700, color: F.text, background: F.panel, border: `1px solid ${F.border}`, padding: '4px 10px', cursor: 'pointer', letterSpacing: '0.06em' }}>{t}</button>
+                    <button key={t} onClick={() => setQ(t)} style={{ fontFamily: F.mono, fontSize: 11, fontWeight: 400, color: F.text, background: F.panel, border: `1px solid ${F.border}`, padding: '4px 10px', cursor: 'pointer', letterSpacing: '0.06em' }}>{t}</button>
                   ))}
                 </div>
               )}
@@ -804,7 +804,7 @@ export default function Home() {
                       <div style={{ fontFamily: F.mono, fontSize: 31, fontWeight: 700, color: F.text, fontVariantNumeric: 'tabular-nums', marginTop: 10, letterSpacing: '-0.01em' }}>{money(totalValue)}</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
                         <ArrowUpRight size={13} style={{ color: dayPnl >= 0 ? F.pos : F.neg, transform: dayPnl >= 0 ? 'none' : 'scaleY(-1)' }} />
-                        <span style={{ fontFamily: F.mono, fontSize: 14, fontWeight: 700, color: dayPnl >= 0 ? F.pos : F.neg, fontVariantNumeric: 'tabular-nums' }}>{dayPnl >= 0 ? '+' : ''}{money(dayPnl)}</span>
+                        <span style={{ fontFamily: F.mono, fontSize: 14, fontWeight: 400, color: dayPnl >= 0 ? F.pos : F.neg, fontVariantNumeric: 'tabular-nums' }}>{dayPnl >= 0 ? '+' : ''}{money(dayPnl)}</span>
                         <span style={{ fontFamily: F.mono, fontSize: 12, color: dayPnl >= 0 ? F.pos : F.neg }}>{dayPct >= 0 ? '+' : ''}{dayPct.toFixed(2)}%</span>
                       </div>
                       <div style={{ marginTop: 16, paddingTop: 12, borderTop: `1px solid ${F.borderFaint}`, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '11px 16px' }}>
@@ -819,7 +819,7 @@ export default function Home() {
                   ) : (
                     <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-start' }}>
                       <div style={{ fontFamily: F.sans, fontSize: 11.5, color: F.sec, lineHeight: 1.5, maxWidth: 220 }}>Track live value, day P&amp;L, and return. Add holdings in the Portfolio Manager.</div>
-                      <button onClick={() => navigate('/portfolio-manager')} style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 30%, transparent)', color: F.gold, fontFamily: F.sans, fontSize: 11, fontWeight: 700, padding: '7px 12px', cursor: 'pointer' }}>
+                      <button onClick={() => navigate('/portfolio-manager')} style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 30%, transparent)', color: F.gold, fontFamily: F.sans, fontSize: 11, fontWeight: 400, padding: '7px 12px', cursor: 'pointer' }}>
                         <Briefcase size={13} /> Open Portfolio Manager
                       </button>
                     </div>
@@ -849,7 +849,7 @@ export default function Home() {
                       <div key={h.sym} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '5px 0', borderBottom: `1px solid ${F.borderFaint}` }}>
                         <TickerLogo ticker={h.sym} size={24} />
                         <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ fontFamily: F.sans, fontSize: 12, fontWeight: 600, color: F.bright, lineHeight: 1.2 }}>{h.sym}</div>
+                          <div style={{ fontFamily: F.sans, fontSize: 12, fontWeight: 400, color: F.bright, lineHeight: 1.2 }}>{h.sym}</div>
                           <div style={{ fontFamily: F.sans, fontSize: 9, color: F.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{h.secondary}</div>
                         </div>
                         <div style={{ textAlign: 'right' }}>
@@ -915,7 +915,7 @@ function RecentChip({ icon: Icon, title, onClick }: { icon: React.ElementType; t
       }}
     >
       <Icon size={15} style={{ color: F.gold, flexShrink: 0 }} />
-      <span style={{ fontFamily: F.sans, fontSize: 12, fontWeight: 600, color: F.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</span>
+      <span style={{ fontFamily: F.sans, fontSize: 12, fontWeight: 400, color: F.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</span>
     </div>
   )
 }
