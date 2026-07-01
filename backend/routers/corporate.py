@@ -622,7 +622,7 @@ def get_credit(ticker: str):
     coverage, leverage, an Altman Z bankruptcy score, and the implied default
     spread. Not an agency rating — computed from the latest financials."""
     sym = ticker.strip().upper()
-    ck = f"credit:{sym}"
+    ck = f"credit:v2:{sym}"
     cached = disk_get(ck)
     if cached is not None:
         return cached
