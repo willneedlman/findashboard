@@ -184,7 +184,9 @@ export function EtfXrayContent() {
           {/* KPI strip */}
           <div style={STRIP}>
             <KpiCell grow label="ETFs" value={String(data.funds.length)} valueSize={25} sub={data.funds.length > 1 ? 'funds blended' : 'single fund'} />
-            <KpiCell grow label="Unique Holdings" value={String(data.unique_holdings)} valueSize={25} color={GOLD} sub={data.funds.length > 1 ? 'across all funds' : 'in this fund'} />
+            <KpiCell grow label="Unique Holdings" value={String(data.unique_holdings)} valueSize={25} color={GOLD}
+              sub={data.any_partial ? (data.funds.length > 1 ? 'top 25 per capped fund' : 'top 25 shown only') : (data.funds.length > 1 ? 'across all funds' : 'in this fund')}
+              subColor={data.any_partial ? 'var(--theme-primary, #c9a84c)' : undefined} />
             <KpiCell grow label="Overlapping Names" value={data.funds.length > 1 ? String(data.overlapping_holdings) : '—'} valueSize={25} sub="held in ≥2 funds" />
             <KpiCell grow label="Max Pair Overlap" value={maxPair ? `${(ov[maxPair[0]]?.[maxPair[1]] ?? 0).toFixed(1)}%` : '—'} valueSize={25} color={GOLD} sub={maxPair ? `${maxPair[0]} × ${maxPair[1]} by weight` : 'needs 2+ funds'} />
           </div>
