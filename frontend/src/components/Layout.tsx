@@ -253,6 +253,13 @@ export default function Layout({ children }: LayoutProps) {
       <main id="main-content" className="flex-1 overflow-y-auto" style={{ background: 'var(--theme-bg, #0a1628)' }}>
         {location.pathname === '/dashboard' ? (
           <div style={{ padding: '24px 24px 300px' }}>{children}</div>
+        ) : location.pathname === '/app' ? (
+          // Home is a full-bleed command surface: no max-width/padding here so the
+          // ticker tape spans the whole main width; Home centers its own content.
+          <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
+            <div style={{ flex: 1 }}>{children}</div>
+            <Footer />
+          </div>
         ) : (
           <div className="max-w-7xl 2xl:max-w-[1700px] mx-auto px-6 2xl:px-10 py-6" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
             <div style={{ flex: 1 }}>{children}</div>

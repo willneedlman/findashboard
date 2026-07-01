@@ -679,10 +679,9 @@ export default function Home() {
   return (
     <PageWrapper>
       <div style={{ background: 'var(--theme-bg, #090e16)' }}>
-        {/* Full-bleed tape: cancel the Layout content padding so it spans the whole top. */}
-        <div style={{ margin: '-16px -14px 0' }}>
-          <Tape segments={tapeSegments} source={tapeSource} onSource={setTapeSource} />
-        </div>
+        {/* Home renders full-bleed (Layout gives /app a no-padding container), so the
+            tape spans the whole top; content below is centered by the inner max-width. */}
+        <Tape segments={tapeSegments} source={tapeSource} onSource={setTapeSource} />
 
         <div style={{ maxWidth: 1360, margin: '0 auto', width: '100%', boxSizing: 'border-box', padding: isMobile ? '0 16px 40px' : '0 40px 48px' }}>
           {/* Hero — centered wordmark, status, command search, recent chips */}
@@ -907,15 +906,15 @@ const DAY_ABBR = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 // This-week calendar: the user's holdings' earnings (HELD) merged with the
 // macro/economic calendar (MACRO), chronological. Best-effort — either feed can
 // be unavailable; falls back gracefully.
-interface WeekRow { date: string; day: string; event: string; tag: 'HELD' | 'MACRO' }
+interface WeekRow { date: string; day: string; time?: string; event: string; tag: 'HELD' | 'MACRO' }
 function ThisWeek({ holdings, onOpen }: { holdings: string[]; onOpen: () => void }) {
   const today = useMemo(() => new Date().toISOString().slice(0, 10), [])
-  const earn = useQuery<{ rows: { symbol: string; date: string }[] }>({
+  const earn = useQuery<{ rows: { symbol: string; date: string; hour?: string }[] }>({
     queryKey: ['home-earn', today],
     queryFn: () => axios.get(`/api/earnings/calendar?date=${today}&days=7`).then(r => r.data),
     staleTime: 30 * 60 * 1000, retry: 0,
   })
-  const macro = useQuery<{ events: { date: string; label: string; importance: 'high' | 'medium' }[] }>({
+  const macro = useQuery<{ events: { date: string; label: string; importance: 'high' | 'medium'; time_et?: string }[] }>({
     queryKey: ['home-macro'],
     queryFn: () => axios.get('/api/rates/macro-calendar').then(r => r.data),
     staleTime: 30 * 60 * 1000, retry: 0,
@@ -928,11 +927,12 @@ function ThisWeek({ holdings, onOpen }: { holdings: string[]; onOpen: () => void
       return days >= 0 && days <= 7
     }
     const dayOf = (d: string) => DAY_ABBR[new Date(d + 'T12:00:00').getDay()]
+    const earnTime = (h?: string) => h === 'bmo' ? 'BMO' : h === 'amc' ? 'AMC' : undefined
     const out: WeekRow[] = []
     for (const r of earn.data?.rows ?? [])
-      if (r.date && held.has((r.symbol || '').toUpperCase()) && within(r.date)) out.push({ date: r.date, day: dayOf(r.date), event: `${r.symbol} earnings`, tag: 'HELD' })
+      if (r.date && held.has((r.symbol || '').toUpperCase()) && within(r.date)) out.push({ date: r.date, day: dayOf(r.date), time: earnTime(r.hour), event: `${r.symbol} earnings`, tag: 'HELD' })
     for (const e of macro.data?.events ?? [])
-      if (e.date && within(e.date)) out.push({ date: e.date, day: dayOf(e.date), event: e.label, tag: 'MACRO' })
+      if (e.date && within(e.date)) out.push({ date: e.date, day: dayOf(e.date), time: e.time_et ? `${e.time_et} ET` : undefined, event: e.label, tag: 'MACRO' })
     // Chronological; HELD before MACRO on the same day.
     out.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : (a.tag === b.tag ? 0 : a.tag === 'HELD' ? -1 : 1))
     return out.slice(0, 6)
@@ -946,6 +946,7 @@ function ThisWeek({ holdings, onOpen }: { holdings: string[]; onOpen: () => void
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, fontFamily: F.sans, fontSize: 13 }}>
               <span style={{ fontFamily: F.mono, color: F.gold, width: 34, flex: 'none' }}>{r.day}</span>
               <span style={{ color: F.sec, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.event}</span>
+              {r.time && <span style={{ fontFamily: F.mono, fontSize: 10, color: F.muted, flex: 'none' }}>{r.time}</span>}
               <span style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.08em', color: r.tag === 'HELD' ? F.gold : F.muted, flex: 'none' }}>{r.tag}</span>
             </div>
           ))}
