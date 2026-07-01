@@ -5,10 +5,10 @@ import {
 } from '../lib/marketHours'
 
 const T = {
-  bg: '#101c2e', track: '#0a1524',
-  border: 'rgba(255,255,255,0.05)', text: 'var(--theme-text, #d7e3fc)',
-  muted: 'var(--theme-secondary, #8099b0)', faint: '#3f5268', scale: '#41556b',
-  gold: 'var(--theme-primary, #c9a84c)', verb: '#4b5f75', when: '#647a93',
+  bg: 'var(--theme-bg, #101c2e)', track: 'color-mix(in srgb, var(--theme-bg, #101c2e) 55%, #000 45%)',
+  border: 'var(--theme-border-faint, rgba(255,255,255,0.05))', text: 'var(--theme-text, #d7e3fc)',
+  muted: 'var(--theme-secondary, #8099b0)', faint: 'var(--theme-text-faint, #3f5268)', scale: 'var(--theme-text-faint, #41556b)',
+  gold: 'var(--theme-primary, #c9a84c)', verb: 'var(--theme-text-faint, #4b5f75)', when: 'var(--theme-secondary, #647a93)',
   mono: 'var(--theme-mono)', sans: 'var(--theme-sans)',
 }
 

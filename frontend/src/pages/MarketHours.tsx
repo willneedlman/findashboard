@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
 import MarketSessions from '../components/MarketSessions'
-import { MARKETS, marketStatus } from '../lib/marketHours'
+import { MARKETS, marketStatus, PHASE_COLOR, PHASE_OPACITY, type Phase } from '../lib/marketHours'
 
 const T = {
   text: 'var(--theme-text, #d7e3fc)', muted: 'var(--theme-secondary, #8099b0)',
@@ -39,18 +39,18 @@ export function MarketHoursContent() {
 
       {/* Legend */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 22, marginTop: 14, marginBottom: 12 }}>
-        {[
-          ['Open', '#22c55e'], ['Pre / After', '#c9a84c'], ['Overnight', '#5b8fd6'],
-          ['Lunch break', '#7c93ac'], ['Closed', '#33415a'],
-        ].map(([label, c]) => (
+        {([
+          ['Open', 'regular'], ['Pre / After', 'pre'], ['Overnight', 'overnight'],
+          ['Lunch break', 'break'], ['Closed', 'closed'],
+        ] as [string, Phase][]).map(([label, phase]) => (
           <span key={label} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ width: 22, height: 8, borderRadius: 2, background: c }} />
+            <span style={{ width: 22, height: 8, borderRadius: 2, background: PHASE_COLOR[phase], opacity: PHASE_OPACITY[phase] }} />
             <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.muted }}>{label}</span>
           </span>
         ))}
       </div>
 
-      <div style={{ background: '#0c1727', border: '1px solid rgba(255,255,255,0.07)', padding: '24px 26px' }}>
+      <div style={{ background: T.surface, border: `1px solid ${T.border}`, padding: '24px 26px' }}>
         <MarketSessions />
       </div>
 
