@@ -25,6 +25,7 @@ from routers import (
     paper_scheduler, paper_strategies, paper,
     iv_tracker, valuation, analytics,
     earnings, leaderboard, etf, fx,
+    maritime,
 )
 
 @asynccontextmanager
@@ -34,7 +35,9 @@ async def lifespan(app: FastAPI):
     screener.start_backfill_loop()   # warm fundamentals cache within the free-tier daily cap
     import bond_prices
     bond_prices.warm_etf_map()       # SSGA holdings are minutes to fetch; build off the request path
+    maritime.start_ais_stream()      # live AIS worker (no-op without AISSTREAM_API_KEY)
     yield
+    maritime.stop_ais_stream()
     screener.stop_backfill_loop()
     alerts.stop_evaluation_loop()
     paper_scheduler.stop_scheduler()
@@ -176,6 +179,7 @@ app.include_router(iv_tracker.router,        prefix="/api/iv",                ta
 app.include_router(valuation.router,         prefix="/api/valuation",         tags=["valuation"])
 app.include_router(earnings.router,          prefix="/api/earnings",          tags=["earnings"])
 app.include_router(leaderboard.router,       prefix="/api/leaderboard",       tags=["leaderboard"])
+app.include_router(maritime.router,          prefix="/api/maritime",          tags=["maritime"])
 
 
 @app.get("/api/health")
