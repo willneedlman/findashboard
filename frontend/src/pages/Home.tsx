@@ -815,9 +815,21 @@ export default function Home() {
                       <span style={{ fontFamily: F.sans, fontSize: 10, fontWeight: 400, letterSpacing: '0.16em', textTransform: 'uppercase', color: F.gold }}>Since you left</span>
                     </div>
                     <div style={{ fontFamily: F.sans, fontSize: 13.5, lineHeight: 1.62, color: F.text }}>
-                      {hasPM && best && worst ? (
-                        <>Book {dayPct >= 0 ? 'up' : 'down'} <b style={{ color: dayPct >= 0 ? F.pos : F.neg }}>{Math.abs(dayPct).toFixed(2)}%</b>{worst.pct1d < 0 ? <>, dragged by <b style={{ color: F.neg }}>{worst.ticker} {worst.pct1d.toFixed(1)}%</b></> : null}. <b style={{ color: best.pct1d >= 0 ? F.pos : F.neg }}>{best.ticker} {best.pct1d >= 0 ? '+' : ''}{best.pct1d.toFixed(1)}%</b> leads today.</>
-                      ) : (
+                      {hasPM && best ? (() => {
+                        // Lead with the name driving the book its way, then the counterweight
+                        // if it's actually pulling the other direction.
+                        const up = dayPct >= 0
+                        const w = worst ?? best
+                        const fmtPctv = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`
+                        const chip = (m: typeof best) => <b style={{ color: m.pct1d >= 0 ? F.pos : F.neg }}>{m.ticker} {fmtPctv(m.pct1d)}</b>
+                        const driver = up ? best : w
+                        const counter = up ? w : best
+                        const counterMatters = driver.ticker !== counter.ticker && (up ? counter.pct1d < 0 : counter.pct1d > 0)
+                        return (
+                          <>Book {up ? 'up' : 'down'} <b style={{ color: up ? F.pos : F.neg }}>{Math.abs(dayPct).toFixed(2)}%</b>, {up ? 'led' : 'dragged'} by {chip(driver)}
+                            {counterMatters ? <>, though {chip(counter)} {up ? 'lagged' : 'held up'}.</> : '.'}</>
+                        )
+                      })() : (
                         <>Markets update live. Add holdings to get a personalized since-you-left brief on your book each session.</>
                       )}
                     </div>
