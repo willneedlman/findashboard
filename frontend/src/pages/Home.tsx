@@ -2,7 +2,7 @@ import { useRef, useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useQuery } from '@tanstack/react-query'
-import { AreaChart, Area, XAxis, YAxis, ReferenceLine, ResponsiveContainer } from 'recharts'
+import { AreaChart, Area, YAxis, ReferenceLine, ResponsiveContainer } from 'recharts'
 import { Search, LayoutGrid, ArrowUpRight, Clock, X, Upload, Briefcase, TrendingUp, Zap, Calculator, Globe, Scale, Building2 } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import TickerLogo from '../components/TickerLogo'
@@ -187,7 +187,7 @@ function PerformanceSpark({ tickers, weights, rangeIdx }: { tickers: string[]; w
 
   if (pts.length < 2) {
     return (
-      <div style={{ height: '100%', minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: F.sans, fontSize: 10, color: F.muted }}>
+      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: F.sans, fontSize: 10, color: F.muted }}>
         {isLoading ? <Spinner /> : 'No performance data'}
       </div>
     )
@@ -196,9 +196,9 @@ function PerformanceSpark({ tickers, weights, rangeIdx }: { tickers: string[]; w
   const stroke = up ? 'var(--theme-positive, #22c55e)' : 'var(--theme-negative, #ef4444)'
 
   return (
-    <div style={{ height: '100%', minHeight: 120 }}>
+    <div style={{ height: '100%' }}>
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={pts} margin={{ top: 6, right: 6, left: 6, bottom: 0 }}>
+        <AreaChart data={pts} margin={{ top: 6, right: 4, left: 4, bottom: 2 }}>
           <defs>
             <linearGradient id="homePerf" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={stroke} stopOpacity={0.22} />
@@ -206,9 +206,8 @@ function PerformanceSpark({ tickers, weights, rangeIdx }: { tickers: string[]; w
             </linearGradient>
           </defs>
           <ReferenceLine y={0} stroke="rgba(255,255,255,0.1)" strokeDasharray="3 4" />
-          <XAxis dataKey="date" tickFormatter={d => fmtAxisDate(d, rangeIdx)} tick={{ fontSize: 8, fill: F.muted, fontFamily: 'var(--theme-mono)' }} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={44} tickMargin={8} padding={{ left: 14, right: 14 }} />
           <YAxis orientation="right" width={34} tickFormatter={v => `${v >= 0 ? '+' : ''}${v.toFixed(v >= 10 || v <= -10 ? 0 : 1)}%`} tick={{ fontSize: 8, fill: F.muted, fontFamily: 'var(--theme-mono)' }} tickLine={false} axisLine={false} tickCount={3} />
-          <Area type="monotone" dataKey="pct" stroke={stroke} strokeWidth={1.5} fill="url(#homePerf)" dot={false} isAnimationActive={false} />
+          <Area type="monotone" dataKey="pct" stroke={stroke} strokeWidth={1.8} fill="url(#homePerf)" dot={false} isAnimationActive={false} />
         </AreaChart>
       </ResponsiveContainer>
     </div>
@@ -680,7 +679,10 @@ export default function Home() {
   return (
     <PageWrapper>
       <div style={{ background: 'var(--theme-bg, #090e16)' }}>
-        <Tape segments={tapeSegments} source={tapeSource} onSource={setTapeSource} />
+        {/* Full-bleed tape: cancel the Layout content padding so it spans the whole top. */}
+        <div style={{ margin: '-16px -14px 0' }}>
+          <Tape segments={tapeSegments} source={tapeSource} onSource={setTapeSource} />
+        </div>
 
         <div style={{ maxWidth: 1360, margin: '0 auto', width: '100%', boxSizing: 'border-box', padding: isMobile ? '0 16px 40px' : '0 40px 48px' }}>
           {/* Hero — centered wordmark, status, command search, recent chips */}
