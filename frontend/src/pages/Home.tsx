@@ -902,23 +902,39 @@ function JumpItem({ icon: Icon, title, onClick }: { icon: React.ElementType; tit
 
 const DAY_ABBR = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 
-// This-week calendar: upcoming earnings for the user's holdings (tagged HELD).
-// Best-effort — the earnings feed can be unavailable; falls back gracefully.
+// This-week calendar: the user's holdings' earnings (HELD) merged with the
+// macro/economic calendar (MACRO), chronological. Best-effort — either feed can
+// be unavailable; falls back gracefully.
+interface WeekRow { date: string; day: string; event: string; tag: 'HELD' | 'MACRO' }
 function ThisWeek({ holdings, onOpen }: { holdings: string[]; onOpen: () => void }) {
   const today = useMemo(() => new Date().toISOString().slice(0, 10), [])
-  const { data } = useQuery<{ rows: { symbol: string; date: string }[] }>({
-    queryKey: ['home-thisweek', today],
+  const earn = useQuery<{ rows: { symbol: string; date: string }[] }>({
+    queryKey: ['home-earn', today],
     queryFn: () => axios.get(`/api/earnings/calendar?date=${today}&days=7`).then(r => r.data),
-    staleTime: 30 * 60 * 1000,
-    retry: 0,
+    staleTime: 30 * 60 * 1000, retry: 0,
+  })
+  const macro = useQuery<{ events: { date: string; label: string; importance: 'high' | 'medium' }[] }>({
+    queryKey: ['home-macro'],
+    queryFn: () => axios.get('/api/rates/macro-calendar').then(r => r.data),
+    staleTime: 30 * 60 * 1000, retry: 0,
   })
   const held = useMemo(() => new Set(holdings.map(h => h.toUpperCase())), [holdings])
-  const rows = useMemo(() =>
-    (data?.rows ?? [])
-      .filter(r => held.has((r.symbol || '').toUpperCase()))
-      .slice(0, 6)
-      .map(r => ({ day: DAY_ABBR[new Date(r.date + 'T12:00:00').getDay()], event: `${r.symbol} earnings` })),
-    [data, held])
+  const rows = useMemo<WeekRow[]>(() => {
+    const midnight = new Date(); midnight.setHours(0, 0, 0, 0)
+    const within = (d: string) => {
+      const days = Math.round((new Date(d + 'T12:00:00').getTime() - midnight.getTime()) / 86400000)
+      return days >= 0 && days <= 7
+    }
+    const dayOf = (d: string) => DAY_ABBR[new Date(d + 'T12:00:00').getDay()]
+    const out: WeekRow[] = []
+    for (const r of earn.data?.rows ?? [])
+      if (r.date && held.has((r.symbol || '').toUpperCase()) && within(r.date)) out.push({ date: r.date, day: dayOf(r.date), event: `${r.symbol} earnings`, tag: 'HELD' })
+    for (const e of macro.data?.events ?? [])
+      if (e.date && within(e.date)) out.push({ date: e.date, day: dayOf(e.date), event: e.label, tag: 'MACRO' })
+    // Chronological; HELD before MACRO on the same day.
+    out.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : (a.tag === b.tag ? 0 : a.tag === 'HELD' ? -1 : 1))
+    return out.slice(0, 6)
+  }, [earn.data, macro.data, held])
   return (
     <div>
       <span style={cap}>This week</span>
@@ -928,13 +944,13 @@ function ThisWeek({ holdings, onOpen }: { holdings: string[]; onOpen: () => void
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, fontFamily: F.sans, fontSize: 13 }}>
               <span style={{ fontFamily: F.mono, color: F.gold, width: 34, flex: 'none' }}>{r.day}</span>
               <span style={{ color: F.sec, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.event}</span>
-              <span style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.08em', color: F.gold, flex: 'none' }}>HELD</span>
+              <span style={{ fontFamily: F.mono, fontSize: 9, letterSpacing: '0.08em', color: r.tag === 'HELD' ? F.gold : F.muted, flex: 'none' }}>{r.tag}</span>
             </div>
           ))}
         </div>
       ) : (
         <div style={{ marginTop: 10, fontFamily: F.sans, fontSize: 12, color: F.muted, lineHeight: 1.5 }}>
-          No holdings report this week.{' '}
+          Nothing scheduled this week.{' '}
           <button onClick={onOpen} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: F.sans, fontSize: 12, color: F.gold }}>Open calendar →</button>
         </div>
       )}
