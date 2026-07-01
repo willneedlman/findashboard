@@ -66,7 +66,7 @@ export default function VolSkewWidget({ config }: { config: WidgetConfig }) {
           </div>
 
           <div style={{ padding: '4px 10px 0', fontFamily: T.mono, fontSize: 8, color: T.muted, letterSpacing: '0.06em', flexShrink: 0 }}>
-            Smile · {smileExpiry} · IV by moneyness
+            Skew · {smileExpiry} · IV by moneyness
           </div>
           <div style={{ flex: 1, minHeight: 0, padding: '2px 4px 4px' }}>
             <ResponsiveContainer width="100%" height="100%">

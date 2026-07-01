@@ -204,7 +204,7 @@ export const WIDGET_DESCRIPTIONS: Record<WidgetType, string> = {
   'yield-curve':         'US Treasury yield curve with 1M/3M/1Y comparisons, key spreads, and 3M/10Y inversion history.',
   'sector-rotation':     '11 GICS sectors ranked by relative strength — 1-month return heatmap, leaders to laggards.',
   'dealer-gex':          'Net dealer gamma by strike for a ticker, with spot, total net GEX, and the gamma-flip level.',
-  'vol-skew':            'ATM IV, 25-delta put skew, term-structure slope, and the front-expiry IV smile for a ticker.',
+  'vol-skew':            'ATM IV, 25-delta put skew, term-structure slope, and the front-expiry IV skew for a ticker.',
   'sentiment-gauge':     'Market-wide AI news sentiment: composite score, bull/neutral/bear split over the last 4 hours.',
   'screener':            'Quick stock screens — biggest names, top gainers/losers, and volume leaders.',
   'pm-portfolios':       'Your Portfolio Manager books with live value and unrealized P&L per holding.',

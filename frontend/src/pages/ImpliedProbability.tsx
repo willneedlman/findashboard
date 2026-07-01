@@ -186,7 +186,7 @@ export function ImpliedProbabilityContent() {
               <div style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', letterSpacing: '0.06em', lineHeight: 1.5 }}>
                 Expiry: <span style={{ color: GOLD }}>{dist.expiry}</span>
                 &nbsp;·&nbsp; Avg Call IV: <span style={{ color: 'var(--theme-text, #d7e3fc)' }}>{dist.avg_call_iv.toFixed(1)}%</span>
-                &nbsp;·&nbsp; P(S_T &gt; K) = N(d2) from the live IV smile (skew-aware). Risk-neutral, not a real-world forecast. For premium selling the skew matters more than the peak.
+                &nbsp;·&nbsp; P(S_T &gt; K) = N(d2) from the live IV skew. Risk-neutral, not a real-world forecast. For premium selling the skew matters more than the peak.
               </div>
 
               {/* Probability Explorer — drag a strike, synced across both charts */}

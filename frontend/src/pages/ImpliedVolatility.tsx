@@ -9,7 +9,7 @@ import { SkewToolContent } from './SkewTool'
 // in ?tab= so /skew can redirect straight to the skew view.
 const TABS: ToolTab[] = [
   { key: 'rank', label: 'IV Rank & Term' },
-  { key: 'skew', label: 'Skew & Smile' },
+  { key: 'skew', label: 'Volatility Skew' },
 ]
 
 export default function ImpliedVolatility() {

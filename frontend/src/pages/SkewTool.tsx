@@ -110,7 +110,7 @@ export function SkewToolContent() {
             {data && sel && (() => {
               const dip = Math.min(...sel.smile.map(s => s.iv)) - sel.atm_iv
               const rows: [string, string, string][] = [
-                ['Smile slope', sel.rr_25 > 0.5 ? 'put-rich' : sel.rr_25 < -0.5 ? 'call-rich' : 'flat', sel.rr_25 > 0.5 ? NEG : sel.rr_25 < -0.5 ? POS : BODY],
+                ['Skew slope', sel.rr_25 > 0.5 ? 'put-rich' : sel.rr_25 < -0.5 ? 'call-rich' : 'flat', sel.rr_25 > 0.5 ? NEG : sel.rr_25 < -0.5 ? POS : BODY],
                 ['Term shape', data.ts_slope > 0.5 ? 'contango' : data.ts_slope < -0.5 ? 'backwardation' : 'flat', data.ts_slope > 0.5 ? POS : data.ts_slope < -0.5 ? NEG : BODY],
                 ['Front dip', `${dip > 0 ? '+' : ''}${dip.toFixed(1)} pts`, BLUE],
               ]
@@ -131,8 +131,8 @@ export function SkewToolContent() {
           </div>
         </RailSection>
       }>
-        {!data && !isPending && <EmptyState title="Volatility Skew" hint="Enter a ticker and press Generate. Reads the IV smile, term structure, and crash-fear skew." />}
-        {isPending && <EmptyState title="Loading skew surface…" hint="Solving the IV smile across expiries." />}
+        {!data && !isPending && <EmptyState title="Volatility Skew" hint="Enter a ticker and press Generate. Reads the IV skew across strikes, term structure, and crash-fear tails." />}
+        {isPending && <EmptyState title="Loading skew surface…" hint="Solving the IV skew across expiries." />}
         {error && !isPending && <EmptyState title="No skew data" hint="Insufficient options data for this ticker." />}
         {data && sel && (() => {
           const em = expectedMove(sel.atm_iv, sel.dte, data.spot)
@@ -170,7 +170,7 @@ export function SkewToolContent() {
             </div>
 
             {/* IV Smile */}
-            <Widget title={`IV Smile — ${data.ticker} ${sel.expiry}`} right={caption('IV vs % from spot')} bodyStyle={{ padding: '8px' }}>
+            <Widget title={`IV Skew — ${data.ticker} ${sel.expiry}`} right={caption('IV vs % from spot')} bodyStyle={{ padding: '8px' }}>
               <ResponsiveContainer width="100%" height={250}>
                 <AreaChart data={sel.smile} margin={{ top: 8, right: 16, left: 0, bottom: 4 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.045)" />
@@ -188,7 +188,7 @@ export function SkewToolContent() {
             {/* Smile Explorer */}
             <div style={{ background: SURFACE, border: '1px solid rgba(201,168,76,0.3)', padding: '13px 15px', display: 'flex', flexDirection: 'column', gap: 11 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: GOLD, fontFamily: SANS }}>Smile Explorer</span>
+                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: GOLD, fontFamily: SANS }}>Skew Explorer</span>
               </div>
               <div>
                 <input type="range" min={mnyMin} max={mnyMax} step={0.1} value={cur} onChange={e => setMny(+e.target.value)}
