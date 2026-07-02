@@ -37,6 +37,7 @@ async def lifespan(app: FastAPI):
     bond_prices.warm_etf_map()       # SSGA holdings are minutes to fetch; build off the request path
     maritime.start_ais_stream()      # live AIS worker (no-op without AISSTREAM_API_KEY)
     maritime.start_rest_poll()       # REST vessel fallback (no-op without VESSELAPI_KEY)
+    maritime.start_history_sampler() # 24h AIS ring buffer for the replay scrubber
     import maritime_kystverket        # Norway coastal AIS (open TCP feed)
     maritime_kystverket.start_stream(maritime._upsert, maritime._classify, maritime._remember)
     yield

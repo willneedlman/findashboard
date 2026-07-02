@@ -763,6 +763,61 @@ def _snapshot() -> list:
         ]
 
 
+# ── AIS position history (24h ring buffer for the replay scrubber) ──────────
+_HIST_INTERVAL = 600          # sample every 10 min → 145 frames/24h
+_HIST_MAX_FRAMES = 145
+_HIST_MAX_VESSELS = 400       # per-frame cap keeps the payload ~1-2 MB
+_hist_frames: list = []
+_hist_lock = threading.Lock()
+_hist_thread = None
+
+_CAT_CODE = {"tanker": "t", "lng": "l", "cargo": "c"}
+
+
+def _sample_history():
+    vessels = _snapshot()
+    if not vessels:
+        return
+    if len(vessels) > _HIST_MAX_VESSELS:
+        step = len(vessels) / _HIST_MAX_VESSELS
+        vessels = [vessels[int(i * step)] for i in range(_HIST_MAX_VESSELS)]
+    frame = {
+        "t": int(time.time()),
+        "v": [
+            [v["mmsi"], round(v["lat"], 3), round(v["lon"], 3),
+             int(v["heading"]) if v.get("heading") not in (None, 511) else int(v.get("cog") or 0),
+             _CAT_CODE.get(v.get("category"), "o")]
+            for v in vessels
+        ],
+    }
+    with _hist_lock:
+        _hist_frames.append(frame)
+        del _hist_frames[:-_HIST_MAX_FRAMES]
+        disk_set("ais_hist_frames", _hist_frames, ttl=2 * 86400)
+
+
+def _run_history_sampler():
+    while not _stop.is_set():
+        try:
+            _sample_history()
+        except Exception as e:
+            _log.warning("AIS history sample failed: %s", e)
+        _stop.wait(_HIST_INTERVAL)
+
+
+def start_history_sampler():
+    """Record vessel positions every 10 min so the replay scrubber has data."""
+    global _hist_thread
+    if _hist_thread and _hist_thread.is_alive():
+        return
+    restored = disk_get("ais_hist_frames")
+    if restored:
+        with _hist_lock:
+            _hist_frames.extend(restored[-_HIST_MAX_FRAMES:])
+    _hist_thread = threading.Thread(target=_run_history_sampler, name="ais-history", daemon=True)
+    _hist_thread.start()
+
+
 # ── IMF PortWatch: daily chokepoint transit history ─────────────────────────
 # AIS-derived daily transit calls + deadweight capacity per chokepoint,
 # published by the IMF (~4 day lag, history back to 2019). Free ArcGIS feed.
@@ -870,6 +925,65 @@ def chokepoint_history(
     return out
 
 
+# Approximate global seaborne crude+products trade, Mb/d (EIA/UNCTAD scale).
+# Denominator for the inspector's "share of seaborne oil" figure.
+_SEABORNE_OIL_MBD = 78.0
+
+
+@router.get("/chokepoint-stats")
+def chokepoint_stats():
+    """Per-chokepoint transit stats for the cockpit strip, inspector and
+    alert widgets: 7d avg calls + delta vs prior 7d, 30d daily series,
+    latest tanker/cargo mix, 2-sigma anomaly flag. IMF PortWatch, cached 6h."""
+    cached = disk_get("pw_choke_stats")
+    if cached:
+        return cached
+    mapping = _portwatch_ids()
+
+    def build(meta):
+        m = mapping.get(meta["id"])
+        if not m:
+            return None
+        try:
+            pts = _pw_history(m["portid"], 44)
+        except Exception as e:
+            _log.warning("PortWatch stats failed for %s: %s", meta["id"], e)
+            return None
+        rows = [p for p in pts if p["total"] is not None]
+        if len(rows) < 21:
+            return None
+        totals = [p["total"] for p in rows]
+        last7, prev7 = totals[-7:], totals[-14:-7]
+        avg7 = sum(last7) / 7
+        prev_avg = sum(prev7) / 7
+        delta = ((avg7 - prev_avg) / prev_avg * 100) if prev_avg else None
+        s30 = totals[-30:]
+        mean30 = sum(s30) / len(s30)
+        sd30 = (sum((x - mean30) ** 2 for x in s30) / len(s30)) ** 0.5
+        anomaly = "high" if sd30 and avg7 > mean30 + 2 * sd30 else \
+                  "low" if sd30 and avg7 < mean30 - 2 * sd30 else None
+        status = "congested" if (delta is not None and delta <= -5) or anomaly == "low" else \
+                 "watch" if anomaly == "high" or (delta is not None and delta >= 8) else "normal"
+        latest = rows[-1]
+        caps = [p["cap"] for p in rows[-7:] if p["cap"] is not None]
+        return {
+            "id": meta["id"], "name": meta["name"], "oil_mbd": meta["oil_mbd"],
+            "share_pct": round(meta["oil_mbd"] / _SEABORNE_OIL_MBD * 100),
+            "avg7": round(avg7, 1), "delta_pct": round(delta, 1) if delta is not None else None,
+            "transits7": sum(last7), "series30": s30,
+            "mix": {"tanker": latest["tanker"], "cargo": latest["cargo"], "total": latest["total"]},
+            "cap7": round(sum(caps) / len(caps)) if caps else None,
+            "anomaly": anomaly, "status": status, "as_of": latest["d"],
+        }
+
+    with ThreadPoolExecutor(max_workers=len(CHOKEPOINTS)) as ex:
+        stats = [s for s in ex.map(build, CHOKEPOINTS) if s]
+    out = {"stats": stats, "source": "IMF PortWatch"}
+    if len(stats) == len([c for c in CHOKEPOINTS if c["id"] in mapping]):
+        disk_set("pw_choke_stats", out, ttl=6 * 3600)
+    return out
+
+
 @router.get("/ports")
 def ports(bbox: str | None = Query(None, description="south,west,north,east for live OSM commercial ports")):
     return get_ports(bbox)
@@ -906,6 +1020,17 @@ def facilities(bbox: str | None = Query(None, description="south,west,north,east
 @router.get("/emodnet")
 def emodnet(bbox: str | None = Query(None, description="south,west,north,east")):
     return fetch_emodnet(bbox)
+
+
+@router.get("/vessel-history")
+def vessel_history(hours: int = Query(24, ge=1, le=24)):
+    """Sampled AIS position frames for the replay scrubber. Categories are
+    coded t/l/c/o (tanker, LNG, cargo, other); each vessel row is
+    [mmsi, lat, lon, heading, cat]."""
+    cutoff = time.time() - hours * 3600
+    with _hist_lock:
+        frames = [f for f in _hist_frames if f["t"] >= cutoff]
+    return {"frames": frames, "interval_s": _HIST_INTERVAL, "count": len(frames)}
 
 
 @router.get("/vessels")
