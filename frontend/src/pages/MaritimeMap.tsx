@@ -80,7 +80,7 @@ interface OsmPort { name: string; lat: number; lon: number; kind: string }
 interface EmodFeat { kind: string; n: string; coords?: [number, number][]; la?: number; lo?: number }
 interface HelcomFeat { coords: [number, number][]; location: string; crossings: number }
 
-type LayerKey = 'tanker' | 'lng' | 'cargo' | 'pGem' | 'pEia' | 'pOsm' | 'pEmod' | 'terminals' | 'lngTerm' | 'fields' | 'refineries' | 'power' | 'coal' | 'wpi' | 'chokepoints' | 'helcom'
+type LayerKey = 'tanker' | 'lng' | 'cargo' | 'lanes' | 'pGem' | 'pEia' | 'pOsm' | 'pEmod' | 'terminals' | 'lngTerm' | 'fields' | 'refineries' | 'power' | 'coal' | 'wpi' | 'chokepoints' | 'helcom'
 
 // ── Map helper components ─────────────────────────────────────────────────────
 function SizeFix() {
@@ -163,7 +163,7 @@ export function MaritimeMapContent() {
   }, [])
 
   const [layers, setLayers] = useState<Record<LayerKey, boolean>>({
-    tanker: true, lng: true, cargo: true, pGem: true, pEia: false, pOsm: false, pEmod: false,
+    tanker: true, lng: true, cargo: true, lanes: true, pGem: true, pEia: false, pOsm: false, pEmod: false,
     terminals: true, lngTerm: true, fields: true, refineries: false, power: false, coal: false,
     wpi: false, chokepoints: true, helcom: false,
   })
@@ -183,7 +183,7 @@ export function MaritimeMapContent() {
 
   const VCOLOR = useMemo<Record<string, string>>(() => ({ tanker: C.tanker, lng: C.lng, cargo: C.cargo, other: C.cargo }), [C])
   const GLYPH = useMemo<Record<LayerKey, React.CSSProperties>>(() => ({
-    tanker: gArrow(C.tanker), lng: gArrow(C.lng), cargo: gArrow(C.cargo),
+    tanker: gArrow(C.tanker), lng: gArrow(C.lng), cargo: gArrow(C.cargo), lanes: gLine(C.lane, true),
     pGem: gLine(C.gold), pEia: gLine(C.gold), pOsm: gLine(C.gold), pEmod: gLine(C.gold),
     terminals: gDot(C.oilTerm), lngTerm: gRing(C.lngTerm), fields: gDiamond(C.field),
     refineries: gSquare(C.refinery), power: gDot(C.power), coal: gSquare(C.coal),
@@ -250,11 +250,6 @@ export function MaritimeMapContent() {
     <div style={{ display: 'flex', gap: 14, height: '78vh', minHeight: 640 }}>
       <style>{`
         .gfm-map { background: var(--theme-bg); }
-        .flow-lane { stroke-dasharray: 3 9; animation: gfm-flow 1.4s linear infinite; }
-        @keyframes gfm-flow { to { stroke-dashoffset: -12; } }
-        .choke-pulse { animation: gfm-pulse 2.6s ease-in-out infinite; }
-        @keyframes gfm-pulse { 0%,100% { opacity: .9 } 50% { opacity: .35 } }
-        @media (prefers-reduced-motion: reduce) { .flow-lane, .choke-pulse { animation: none !important; } }
         .leaflet-popup-content-wrapper, .leaflet-popup-tip, .leaflet-tooltip {
           background: var(--theme-surface); color: var(--theme-text); border: 1px solid color-mix(in srgb, var(--theme-primary) 30%, transparent); border-radius: 2px; box-shadow: 0 8px 26px rgba(0,0,0,0.6);
         }
@@ -291,6 +286,7 @@ export function MaritimeMapContent() {
           <Toggle glyph={GLYPH.tanker} label="Crude tankers" on={layers.tanker} onToggle={() => toggle('tanker')} />
           <Toggle glyph={GLYPH.lng} label="LNG carriers" on={layers.lng} onToggle={() => toggle('lng')} />
           <Toggle glyph={GLYPH.cargo} label="Cargo / dry bulk" on={layers.cargo} onToggle={() => toggle('cargo')} />
+          <Toggle glyph={GLYPH.lanes} label="Shipping lanes" on={layers.lanes} onToggle={() => toggle('lanes')} />
         </RailSection>
 
         <RailSection label="Pipelines">
@@ -334,9 +330,9 @@ export function MaritimeMapContent() {
           <FocusController focus={focus} />
           <ViewportWatcher onChange={(bbox, zoom) => setView({ bbox, zoom })} />
 
-          {/* Shipping lanes (grouped under vessel toggles) */}
-          {LANES.filter(l => layers[l.type]).map((l, i) => (
-            <Polyline key={`lane-${i}`} positions={l.pts} pathOptions={{ color: C.lane, weight: 1.4, opacity: 0.5, className: 'flow-lane' }} />
+          {/* Shipping lanes — dashArray (not CSS class) so the dash renders on canvas */}
+          {layers.lanes && LANES.map((l, i) => (
+            <Polyline key={`lane-${i}`} positions={l.pts} pathOptions={{ color: C.lane, weight: 1.2, opacity: 0.5, dashArray: '4 8' }} />
           ))}
 
           {/* Pipelines: glow + core (gas dashed) */}
@@ -399,7 +395,7 @@ export function MaritimeMapContent() {
           {/* Chokepoints — pulsing gold rings */}
           {layers.chokepoints && choke.data?.chokepoints.map(c => (
             <Fragment key={`cp-${c.id}`}>
-              <CircleMarker center={[c.lat, c.lon]} radius={9} pathOptions={{ color: C.gold, fillColor: C.gold, fillOpacity: 0.1, weight: 2, className: 'choke-pulse' }}><Tooltip><b>{c.name}</b><br />~{c.oil_mbd} Mb/d oil transit</Tooltip></CircleMarker>
+              <CircleMarker center={[c.lat, c.lon]} radius={9} pathOptions={{ color: C.gold, fillColor: C.gold, fillOpacity: 0.1, weight: 2 }}><Tooltip><b>{c.name}</b><br />~{c.oil_mbd} Mb/d oil transit</Tooltip></CircleMarker>
               <CircleMarker center={[c.lat, c.lon]} radius={2.5} pathOptions={{ color: C.gold, fillColor: C.gold, fillOpacity: 1, weight: 0 }} />
             </Fragment>
           ))}
@@ -448,7 +444,7 @@ function buildLegend(l: Record<LayerKey, boolean>, C: Colors) {
   if (l.tanker) it.push({ glyph: gArrow(C.tanker), label: 'Crude tanker' })
   if (l.lng) it.push({ glyph: gArrow(C.lng), label: 'LNG carrier' })
   if (l.cargo) it.push({ glyph: gArrow(C.cargo), label: 'Cargo / dry bulk' })
-  if (l.tanker || l.lng || l.cargo) it.push({ glyph: gLine(C.lane, true), label: 'Shipping lane' })
+  if (l.lanes) it.push({ glyph: gLine(C.lane, true), label: 'Shipping lane' })
   if (it.length) G.push({ group: 'Vessels & lanes', items: it })
 
   it = []
