@@ -192,14 +192,30 @@ export function MaritimeMapContent() {
   const terms = useQuery<{ ports: Port[] }>({ queryKey: ['mar-terms'], queryFn: () => axios.get('/api/maritime/ports').then(r => r.data), staleTime: Infinity })
   const lngQ = useQuery<{ lng: LngTerm[] }>({ queryKey: ['mar-lng'], queryFn: () => axios.get('/api/maritime/lng').then(r => r.data), staleTime: Infinity })
   const vess = useQuery<{ vessels: Vessel[]; count: number; status: { key_present: boolean; connected: boolean } }>({
-    queryKey: ['mar-vessels'], queryFn: () => axios.get('/api/maritime/vessels').then(r => r.data), refetchInterval: 8000, staleTime: 4000,
+    queryKey: ['mar-vessels'], queryFn: () => axios.get('/api/maritime/vessels').then(r => r.data), refetchInterval: 12000, staleTime: 8000,
   })
 
+  // Viewport-cull + cap for DOM-marker (divIcon) layers — they don't ride the
+  // canvas renderer, so an unbounded count is what makes the map lag. Keep only
+  // markers near the current view and sample down to a cap.
+  const vb = view ? view.bbox.split(',').map(Number) : null   // [s, w, n, e]
+  const M = 6
+  const inView = (la: number, lo: number) => !vb || (la >= vb[0] - M && la <= vb[2] + M && lo >= vb[1] - M && lo <= vb[3] + M)
+  function cull<T>(arr: T[], lat: (t: T) => number, lon: (t: T) => number, cap: number): T[] {
+    const v = arr.filter(t => inView(lat(t), lon(t)))
+    if (v.length <= cap) return v
+    const step = Math.ceil(v.length / cap)
+    return v.filter((_, i) => i % step === 0)
+  }
+
   const catShown = (c?: string) => c === 'lng' ? layers.lng : c === 'cargo' ? layers.cargo : c === 'tanker' ? layers.tanker : layers.cargo
-  const vessels = (vess.data?.vessels ?? []).filter(v => catShown(v.category))
-  const anyVessel = layers.tanker || layers.lng || layers.cargo
-  const facBy = (k: string) => fac.filter(f => f.k === k)
-  const refs = fac.filter(f => f.k === 'refinery' || f.k === 'processing')
+  const vessels = cull((vess.data?.vessels ?? []).filter(v => catShown(v.category)), v => v.lat, v => v.lon, 350)
+  const facBy = (k: string) => cull(fac.filter(f => f.k === k), f => f.la, f => f.lo, 300)
+  const refs = cull(fac.filter(f => f.k === 'refinery' || f.k === 'processing'), f => f.la, f => f.lo, 300)
+  const wpiShown = cull(wpiPorts, p => p.la, p => p.lo, 600)
+  const platformsShown = cull(osmPlatforms, p => p.lat, p => p.lon, 300)
+  const emodPlatforms = cull(emod.filter(f => f.kind === 'platform' && f.la != null), f => f.la!, f => f.lo!, 300)
+  const emodWind = cull(emod.filter(f => f.kind === 'windfarm' && f.la != null), f => f.la!, f => f.lo!, 300)
   const pipeStyle = (sub: string) => ({ color: C.gold, weight: 2, opacity: 0.9, dashArray: sub === 'gas' ? '6 6' : undefined })
 
   const legend = buildLegend(layers)
@@ -301,7 +317,7 @@ export function MaritimeMapContent() {
           {[layers.pGem && gemPipes, layers.pEia && eiaPipes, layers.pOsm && osmPipes, layers.pEmod && emod.filter(f => f.kind === 'pipeline').map(f => ({ name: f.n, substance: 'oil', coords: f.coords! }))]
             .filter(Boolean).flatMap((arr, gi) => (arr as Pipeline[]).map((p, i) => (
               <Fragment key={`pg-${gi}-${i}`}>
-                <Polyline positions={p.coords} pathOptions={{ color: C.gold, weight: 6, opacity: 0.1 }} />
+                {(view?.zoom ?? 2) >= 5 && <Polyline positions={p.coords} pathOptions={{ color: C.gold, weight: 6, opacity: 0.1 }} />}
                 <Polyline positions={p.coords} pathOptions={pipeStyle(p.substance)}>
                   <Tooltip sticky>{p.name} · {p.substance === 'gas' ? 'Natural gas' : 'Crude oil'}</Tooltip>
                 </Polyline>
@@ -309,9 +325,9 @@ export function MaritimeMapContent() {
             )))}
 
           {/* Offshore platforms (OSM + EMODnet) + wind farms (EMODnet) */}
-          {layers.pOsm && osmPlatforms.map((p, i) => <Marker key={`osmp-${i}`} position={[p.lat, p.lon]} icon={platformIcon()}><Tooltip>{p.name} · Offshore platform · OSM</Tooltip></Marker>)}
-          {layers.pEmod && emod.filter(f => f.kind === 'platform' && f.la != null).map((f, i) => <Marker key={`emp-${i}`} position={[f.la!, f.lo!]} icon={platformIcon()}><Tooltip>{f.n} · platform · EMODnet</Tooltip></Marker>)}
-          {layers.pEmod && emod.filter(f => f.kind === 'windfarm' && f.la != null).map((f, i) => <CircleMarker key={`emw-${i}`} center={[f.la!, f.lo!]} radius={4} pathOptions={{ color: C.wind, weight: 1.5, fillOpacity: 0 }}><Tooltip>{f.n} · wind farm · EMODnet</Tooltip></CircleMarker>)}
+          {layers.pOsm && platformsShown.map((p, i) => <Marker key={`osmp-${i}`} position={[p.lat, p.lon]} icon={platformIcon()}><Tooltip>{p.name} · Offshore platform · OSM</Tooltip></Marker>)}
+          {layers.pEmod && emodPlatforms.map((f, i) => <Marker key={`emp-${i}`} position={[f.la!, f.lo!]} icon={platformIcon()}><Tooltip>{f.n} · platform · EMODnet</Tooltip></Marker>)}
+          {layers.pEmod && emodWind.map((f, i) => <CircleMarker key={`emw-${i}`} center={[f.la!, f.lo!]} radius={4} pathOptions={{ color: C.wind, weight: 1.5, fillOpacity: 0 }}><Tooltip>{f.n} · wind farm · EMODnet</Tooltip></CircleMarker>)}
 
           {/* Vessels — heading arrows + telemetry popup */}
           {vessels.map(v => {
@@ -352,7 +368,7 @@ export function MaritimeMapContent() {
           })}
 
           {/* World ports (WPI) — hollow squares sized by harbour size */}
-          {layers.wpi && wpiPorts.map((p, i) => <Marker key={`wpi-${i}`} position={[p.la, p.lo]} icon={wpiIcon(p.s)}><Tooltip>{p.n}{p.c ? ` · ${p.c}` : ''}{p.s ? ` · ${p.s} harbour` : ''}{p.cppi ? ` · CPPI #${p.cppi}/405` : ''} · WPI</Tooltip></Marker>)}
+          {layers.wpi && wpiShown.map((p, i) => <Marker key={`wpi-${i}`} position={[p.la, p.lo]} icon={wpiIcon(p.s)}><Tooltip>{p.n}{p.c ? ` · ${p.c}` : ''}{p.s ? ` · ${p.s} harbour` : ''}{p.cppi ? ` · CPPI #${p.cppi}/405` : ''} · WPI</Tooltip></Marker>)}
 
           {/* Chokepoints — pulsing gold rings */}
           {layers.chokepoints && choke.data?.chokepoints.map(c => (
