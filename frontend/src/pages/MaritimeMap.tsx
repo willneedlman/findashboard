@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import { MapContainer, Polyline, CircleMarker, Marker, Popup, Tooltip, useMap, useMapEvents } from 'react-leaflet'
@@ -14,7 +14,9 @@ const C = {
   power: '#cbb26a', coal: '#556070', wpi: '#6f8bb0', helcom: '#a07cc4',
 }
 const VLABEL: Record<string, string> = { tanker: 'Crude Tanker', lng: 'LNG / Gas Carrier', cargo: 'Cargo / Dry Bulk', other: 'Vessel' }
-const VCOLOR: Record<string, string> = { tanker: C.tanker, lng: C.lng, cargo: C.cargo, other: C.wpi }
+// 'other'/unclassified vessels ride the cargo toggle, so color them as cargo to
+// stay 1:1 with the legend (no unexplained slate arrows colliding with WPI ports).
+const VCOLOR: Record<string, string> = { tanker: C.tanker, lng: C.lng, cargo: C.cargo, other: C.cargo }
 const DETAIL_MIN_ZOOM = 5
 
 // Curated major shipping lanes (illustrative, grouped under vessel toggles).
@@ -298,12 +300,12 @@ export function MaritimeMapContent() {
           {/* Pipelines: glow + core (gas dashed) */}
           {[layers.pGem && gemPipes, layers.pEia && eiaPipes, layers.pOsm && osmPipes, layers.pEmod && emod.filter(f => f.kind === 'pipeline').map(f => ({ name: f.n, substance: 'oil', coords: f.coords! }))]
             .filter(Boolean).flatMap((arr, gi) => (arr as Pipeline[]).map((p, i) => (
-              <div key={`pg-${gi}-${i}`} style={{ display: 'contents' }}>
+              <Fragment key={`pg-${gi}-${i}`}>
                 <Polyline positions={p.coords} pathOptions={{ color: C.gold, weight: 6, opacity: 0.1 }} />
                 <Polyline positions={p.coords} pathOptions={pipeStyle(p.substance)}>
                   <Tooltip sticky>{p.name} · {p.substance === 'gas' ? 'Natural gas' : 'Crude oil'}</Tooltip>
                 </Polyline>
-              </div>
+              </Fragment>
             )))}
 
           {/* Offshore platforms (OSM + EMODnet) + wind farms (EMODnet) */}
@@ -354,10 +356,10 @@ export function MaritimeMapContent() {
 
           {/* Chokepoints — pulsing gold rings */}
           {layers.chokepoints && choke.data?.chokepoints.map(c => (
-            <div key={`cp-${c.id}`} style={{ display: 'contents' }}>
+            <Fragment key={`cp-${c.id}`}>
               <CircleMarker center={[c.lat, c.lon]} radius={9} pathOptions={{ color: C.gold, fillColor: C.gold, fillOpacity: 0.1, weight: 2, className: 'choke-pulse' }}><Tooltip><b>{c.name}</b><br />~{c.oil_mbd} Mb/d oil transit</Tooltip></CircleMarker>
               <CircleMarker center={[c.lat, c.lon]} radius={2.5} pathOptions={{ color: C.gold, fillColor: C.gold, fillOpacity: 1, weight: 0 }} />
-            </div>
+            </Fragment>
           ))}
 
           {/* HELCOM Baltic passage lines */}
