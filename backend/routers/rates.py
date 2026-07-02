@@ -31,21 +31,16 @@ _warm_thread = None
 
 
 def _run_curve_warmer():
-    # Let the server bind and the other boot warms finish first: the build
-    # burst on top of startup OOM-killed the small prod VM (398MB RSS).
+    # Warms the FRED curve only. The Fed-path build goes through yfinance and
+    # its pandas allocations OOM-killed the 512MB prod VM twice when run here
+    # (baseline RSS is already ~390MB after the other boot warms); it stays
+    # cold-on-demand, ~5s worst case with the capped pool.
     _warm_stop.wait(90)
     while not _warm_stop.is_set():
         try:
             yield_curve()
         except Exception as e:
             _log.warning("curve warm failed: %s", e)
-        _warm_stop.wait(15)
-        if _warm_stop.is_set():
-            return
-        try:
-            fed_projections()
-        except Exception as e:
-            _log.warning("fed path warm failed: %s", e)
         _warm_stop.wait(_WARM_INTERVAL)
 
 
