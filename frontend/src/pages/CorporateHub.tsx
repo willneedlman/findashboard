@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, Fragment } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Radar, CalendarClock } from 'lucide-react'
 import { usePortfolio } from '../contexts/PortfolioContext'
-import PageWrapper from '../components/PageWrapper'
 import axios from 'axios'
 import TickerTagInput from '../components/TickerTagInput'
 import { tickerLogoUrl } from '../lib/tickerLogos'
@@ -328,13 +327,11 @@ export function CorporateHubContent() {
     </div>
   )
 
-  // ── Page header (wordmark + live caption + view toggle) ──
+  // ── Tab header (live caption + view toggle; the page title lives on the
+  // Market Calendar shell, so no wordmark here) ──
   const pageHeader = (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', paddingBottom: 12, marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
-        <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 17, fontWeight: 700, letterSpacing: '0.32em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)' }}>Corporate Calendar</span>
-        <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, letterSpacing: '0.14em', color: 'var(--theme-secondary, #8099b0)' }}>{tickers.filter(Boolean).length} TICKERS TRACKED</span>
-      </div>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingBottom: 12, marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
+      <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, letterSpacing: '0.14em', color: 'var(--theme-secondary, #8099b0)' }}>{tickers.filter(Boolean).length} TICKERS TRACKED</span>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)' }}>View</span>
         <div style={{ display: 'flex', border: '1px solid rgba(255,255,255,0.12)', background: 'var(--theme-surface, #0d1826)' }}>
@@ -691,8 +688,4 @@ export function CorporateHubContent() {
       </div>
     </div>
   )
-}
-
-export default function CorporateHub() {
-  return <PageWrapper><CorporateHubContent /></PageWrapper>
 }
