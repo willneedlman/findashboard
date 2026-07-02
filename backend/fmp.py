@@ -366,6 +366,19 @@ def _fund_points(rows, field: str) -> list:
     return sorted(out, key=lambda x: x["date"])
 
 
+def _durable_series(kind: str, key: str, fetch) -> list:
+    """Backlog layer for series data: every successful fetch is persisted for
+    ~13 months, and a failed/throttled fetch serves the backlog instead of
+    nothing. Fundamentals barely change intra-quarter, so stale beats empty
+    and the free-tier daily quota is never a hard dependency."""
+    dk = f"fmp:backlog:{kind}:{key}"
+    pts = fetch()
+    if pts:
+        disk_set(dk, pts, ttl=400 * 86400)
+        return pts
+    return disk_get(dk) or []
+
+
 def get_fundamental_series(ticker: str, metric: str = "revenue", period: str = "quarter", limit: int = 24) -> list:
     """Time series of a fundamental metric for chart overlays. Returns [{date, value}]
     oldest-first. metric: revenue | net_income | eps | ebitda | fcf | gross_margin |
@@ -399,7 +412,7 @@ def get_fundamental_series(ticker: str, metric: str = "revenue", period: str = "
         except Exception:
             return []
 
-    return _cached(_fundamentals_cache, key, fetch)
+    return _cached(_fundamentals_cache, key, lambda: _durable_series("fund", key, fetch))
 
 
 # ── Standardized multiples & ratios (size-neutral, comparable across companies) ──
@@ -478,7 +491,7 @@ def get_ratio_series(ticker: str, metric: str, period: str = "annual", limit: in
             pts = extract("quarter" if period == "annual" else "annual")
         return pts
 
-    return _cached(_ratio_cache, key, fetch)
+    return _cached(_ratio_cache, key, lambda: _durable_series("ratio", key, fetch))
 
 
 _segments_cache: TTLCache = TTLCache(maxsize=200, ttl=86400)  # 24 hr

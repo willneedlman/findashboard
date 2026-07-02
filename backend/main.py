@@ -25,7 +25,7 @@ from routers import (
     paper_scheduler, paper_strategies, paper,
     iv_tracker, valuation, analytics,
     earnings, leaderboard, etf, fx,
-    maritime,
+    maritime, snapshots,
 )
 
 @asynccontextmanager
@@ -39,9 +39,11 @@ async def lifespan(app: FastAPI):
     maritime.start_rest_poll()       # REST vessel fallback (no-op without VESSELAPI_KEY)
     maritime.start_history_sampler() # 24h AIS ring buffer for the replay scrubber
     rates.start_curve_warmer()       # keep yield-curve + Fed-path caches warm (cold path is ~30s)
+    snapshots.start_snapshot_loop()  # daily GEX/IV30 points for the core watchlist (240s post-boot)
     import maritime_kystverket        # Norway coastal AIS (open TCP feed)
     maritime_kystverket.start_stream(maritime._upsert, maritime._classify, maritime._remember)
     yield
+    snapshots.stop_snapshot_loop()
     rates.stop_curve_warmer()
     maritime_kystverket.stop_stream()
     maritime.stop_ais_stream()
@@ -163,6 +165,7 @@ app.include_router(nav.router,               prefix="/api/nav",               ta
 app.include_router(etf.router,               prefix="/api/etf",               tags=["etf"])
 app.include_router(corporate.router,         prefix="/api/corporate",         tags=["corporate"])
 app.include_router(rates.router,             prefix="/api/rates",             tags=["rates"])
+app.include_router(snapshots.router,         prefix="/api/snapshots",         tags=["snapshots"])
 app.include_router(fx.router,                prefix="/api/fx",                tags=["fx"])
 app.include_router(correlation.router,       prefix="/api/correlation",       tags=["correlation"])
 app.include_router(dcf.router,               prefix="/api/dcf",               tags=["dcf"])

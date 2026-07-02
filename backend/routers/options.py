@@ -826,6 +826,14 @@ def dealer_gex(ticker: str, expiry: str | None = None):
         **_meta,
     }
     disk_set(cache_key, result, ttl=86400)   # reuse while the market is closed
+    # Full-chain profiles feed the accruing daily GEX history (Chart Studio).
+    if expiry is None:
+        try:
+            from routers.snapshots import record_point
+            net = float(pivot["net_gex"].sum())
+            record_point("gex", sym, {"v": round(net, 2), "spot": round(float(spot), 2) if spot else None})
+        except Exception:
+            pass
     return result
 
 

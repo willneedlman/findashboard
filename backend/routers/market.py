@@ -365,6 +365,51 @@ def compare_assets(tickers: str, period: str = "1y", normalize: str = "indexed",
             "overlays": sec_avail + fred_avail, "series": series, "meta": meta, "axis": axis}
 
 
+def _daily_pe_from_backlog(ticker: str) -> list:
+    """Daily P/E = close / TTM EPS, from the banked EPS quarters + cached price
+    history. Zero FMP calls once the backlog exists, and daily resolution beats
+    FMP's quarterly ratio snapshots."""
+    import fmp as _fmp
+    quarters = _fmp.get_fundamental_series(ticker, "eps", "quarter", 24)
+    if len(quarters) < 2:
+        # No FMP backlog yet — seed from yfinance reported EPS (chart-events).
+        # Report dates also avoid look-ahead bias vs fiscal quarter-ends.
+        try:
+            ev = chart_events(ticker)
+            quarters = [{"date": e["date"], "value": e["eps"]}
+                        for e in ev.get("earnings", []) if e.get("eps") is not None]
+        except Exception:
+            quarters = []
+    if len(quarters) < 2:
+        return []
+    q = sorted(quarters, key=lambda p: p["date"])
+    import datetime as _dt
+    gaps = [( _dt.date.fromisoformat(q[i + 1]["date"]) - _dt.date.fromisoformat(q[i]["date"])).days
+            for i in range(len(q) - 1)]
+    quarterly = sorted(gaps)[len(gaps) // 2] < 150
+    ttm: list[tuple[str, float]] = []
+    if quarterly:
+        for i in range(3, len(q)):
+            ttm.append((q[i]["date"], sum(float(q[j]["value"]) for j in range(i - 3, i + 1))))
+    else:
+        ttm = [(p["date"], float(p["value"])) for p in q]
+    if not ttm:
+        return []
+
+    hist = _cached_history(ticker, period="5y")
+    if hist.empty:
+        return []
+    closes = hist["Close"].dropna()
+    pts, i = [], 0
+    for d, close in closes.items():
+        ds = str(d.date())
+        while i + 1 < len(ttm) and ttm[i + 1][0] <= ds:
+            i += 1
+        if ttm[i][0] <= ds and ttm[i][1] > 0:
+            pts.append({"date": ds, "value": round(float(close) / ttm[i][1], 2)})
+    return pts
+
+
 @router.get("/fundamental-series")
 def fundamental_series(ticker: str, metric: str = "pe", period: str = "quarter"):
     """Time series of a standardized multiple/ratio (P/E, EV/EBITDA, P/S, P/B, ROE,
@@ -372,6 +417,15 @@ def fundamental_series(ticker: str, metric: str = "pe", period: str = "quarter")
     across companies. Also serves absolute fundamentals (revenue, FCF, …) if requested."""
     ticker = validate_ticker(ticker)
     import fmp as _fmp
+
+    # P/E computes locally from the banked EPS quarters + price history, so it
+    # works at daily resolution even when FMP is throttled or down.
+    if metric == "pe":
+        pts = _daily_pe_from_backlog(ticker)
+        if pts:
+            return {"ticker": ticker.upper(), "metric": "pe", "unit": "x", "points": pts,
+                    "source": "close / TTM EPS (cached backlog)"}
+
     if not _fmp.available():
         raise HTTPException(503, "Fundamentals data source unavailable")
 
@@ -399,8 +453,10 @@ _TF = {
     "3m":  ("1m",  "5d",  "3min",  True),
     "5m":  ("5m",  "1mo", None,    True),
     "10m": ("5m",  "1mo", "10min", True),   # was 1m/5d → 5m/1mo: ~5 days → ~30 days
+    "15m": ("15m", "1mo", None,    True),
     "1h":  ("60m", "2y",  None,    True),    # was 3mo → 2y
     "2h":  ("60m", "2y",  "2h",    True),    # was 6mo → 2y
+    "4h":  ("60m", "2y",  "4h",    True),
     "6h":  ("60m", "2y",  "6h",    True),    # was 1y → 2y
     "12h": ("60m", "2y",  "12h",   True),
     "1d":  ("1d",  "max", None,    False),   # full daily history back to inception
@@ -453,6 +509,48 @@ def get_ohlcv(ticker: str, period: str = "1y", interval: str = "1d", tf: str | N
         except Exception:
             pass
     return {"ticker": ticker.upper(), "candles": candles}
+
+
+@router.get("/chart-events")
+@cached(ttl=6 * 3600, maxsize=64)
+def chart_events(ticker: str):
+    """Earnings dates (with EPS vs estimate), dividends and splits as
+    time-mapped markers for the Chart Studio timeline."""
+    ticker = validate_ticker(ticker)
+    import yfinance as yf
+    events: dict = {"earnings": [], "dividends": [], "splits": []}
+    try:
+        df = yf.Ticker(ticker).get_earnings_dates(limit=16)
+        if df is not None and not df.empty:
+            for ts, row in df.sort_index().iterrows():
+                eps = row.get("Reported EPS")
+                est = row.get("EPS Estimate")
+                sur = row.get("Surprise(%)")
+                events["earnings"].append({
+                    "date": ts.date().isoformat(),
+                    "eps": round(float(eps), 2) if pd.notna(eps) else None,
+                    "estimate": round(float(est), 2) if pd.notna(est) else None,
+                    "surprise_pct": round(float(sur), 1) if pd.notna(sur) else None,
+                })
+    except Exception:
+        pass
+    try:
+        tk = yf.Ticker(ticker)
+        div = tk.dividends
+        if div is not None and len(div):
+            events["dividends"] = [
+                {"date": ts.date().isoformat(), "amount": round(float(v), 4)}
+                for ts, v in div.tail(40).items()
+            ]
+        sp = tk.splits
+        if sp is not None and len(sp):
+            events["splits"] = [
+                {"date": ts.date().isoformat(), "ratio": float(v)}
+                for ts, v in sp.tail(10).items()
+            ]
+    except Exception:
+        pass
+    return {"ticker": ticker.upper(), **events}
 
 
 @router.get("/live-quote")
