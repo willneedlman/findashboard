@@ -22,6 +22,9 @@ const TFS = ['1m', '5m', '15m', '1h', '4h', '1d', '1wk'] as const
 type TF = typeof TFS[number]
 const INTRADAY: Set<TF> = new Set(['1m', '5m', '15m', '1h', '4h'])
 
+type LaneId = 'volume' | 'rsi' | 'macd' | 'iv'
+const LANE_IDS: LaneId[] = ['volume', 'rsi', 'macd', 'iv']
+
 type AssetClass = 'equities' | 'index' | 'futures' | 'fx'
 const ASSET_CLASSES: { key: AssetClass; label: string; watch: string[] }[] = [
   { key: 'equities', label: 'EQUITIES', watch: ['QQQ', 'IWM', 'NVDA', 'AAPL'] },
@@ -155,8 +158,9 @@ interface State {
   assetClass: AssetClass
   tf: TF
   candleWidth: CandleWidth
-  ind: { bb: boolean; vwap: boolean; gflip: boolean }
-  lanes: { volume: boolean; rsi: boolean; macd: boolean; gex: boolean; iv: boolean }
+  ind: { bb: boolean; vwap: boolean; gflip: boolean; gexProfile: boolean }
+  lanes: { volume: boolean; rsi: boolean; macd: boolean; iv: boolean }
+  laneOrder: LaneId[]
   mas: MA[]
   events: { earnings: boolean; dividends: boolean; splits: boolean }
   overlays: string[]
@@ -170,15 +174,18 @@ type Action =
   | { type: 'event'; k: keyof State['events'] }
   | { type: 'overlay'; id: string } | { type: 'addCompare'; sym: string } | { type: 'rmCompare'; sym: string }
   | { type: 'addMA'; ma: MA } | { type: 'rmMA'; key: string }
+  | { type: 'moveLane'; id: LaneId; dir: 'up' | 'down' }
   | { type: 'param'; k: keyof Params; v: number }
 
+// Clean slate by default: candles and volume only, every overlay opt-in.
 const DEFAULT: State = {
   ticker: 'SPY', assetClass: 'equities', tf: '1d', candleWidth: 'med',
-  ind: { bb: true, vwap: true, gflip: true },
-  lanes: { volume: true, rsi: true, macd: true, gex: true, iv: true },
-  mas: [{ kind: 'sma', period: 20 }, { kind: 'ema', period: 9 }],
-  events: { earnings: true, dividends: true, splits: false },
-  overlays: ['us10y'], compares: ['QQQ'],
+  ind: { bb: false, vwap: false, gflip: false, gexProfile: false },
+  lanes: { volume: true, rsi: false, macd: false, iv: false },
+  laneOrder: [...LANE_IDS],
+  mas: [],
+  events: { earnings: false, dividends: false, splits: false },
+  overlays: [], compares: [],
   params: { bbP: 20, bbK: 2, rsiP: 14, macdF: 12, macdS: 26, macdSig: 9 },
 }
 
@@ -196,20 +203,31 @@ function reducer(s: State, a: Action): State {
     case 'rmCompare': return { ...s, compares: s.compares.filter(x => x !== a.sym) }
     case 'addMA': return s.mas.some(m => maKey(m) === maKey(a.ma)) ? s : { ...s, mas: [...s.mas, a.ma].slice(-6) }
     case 'rmMA': return { ...s, mas: s.mas.filter(m => maKey(m) !== a.key) }
+    case 'moveLane': {
+      const order = [...s.laneOrder]
+      const i = order.indexOf(a.id)
+      const j = i + (a.dir === 'up' ? -1 : 1)
+      if (i < 0 || j < 0 || j >= order.length) return s
+      ;[order[i], order[j]] = [order[j], order[i]]
+      return { ...s, laneOrder: order }
+    }
     case 'param': return { ...s, params: { ...s.params, [a.k]: a.v } }
   }
 }
 
 const load = (): State => {
   try {
-    const raw = JSON.parse(localStorage.getItem('unifiedOverlay') || localStorage.getItem('chartStudio') || 'null')
+    // v2 key: earlier keys carried the old default-on overlay set, and the
+    // tool now starts clean for everyone.
+    const raw = JSON.parse(localStorage.getItem('unifiedOverlay2') || 'null')
     if (!raw) return DEFAULT
-    let mas: MA[] = Array.isArray(raw.mas) ? raw.mas.filter((m: any) => (m?.kind === 'sma' || m?.kind === 'ema') && m.period >= 2) : []
-    if (!mas.length) mas = DEFAULT.mas
+    const mas: MA[] = Array.isArray(raw.mas) ? raw.mas.filter((m: any) => (m?.kind === 'sma' || m?.kind === 'ema') && m.period >= 2) : []
+    const stored: LaneId[] = Array.isArray(raw.laneOrder) ? raw.laneOrder.filter((id: any) => LANE_IDS.includes(id)) : []
+    const laneOrder = [...stored, ...LANE_IDS.filter(id => !stored.includes(id))]
     // Old shape: rsi/macd/volume lived in `ind`; lanes did not exist.
     const lanes = { ...DEFAULT.lanes, ...(raw.lanes ?? {}), ...(raw.ind?.rsi != null ? { rsi: raw.ind.rsi } : {}), ...(raw.ind?.macd != null ? { macd: raw.ind.macd } : {}), ...(raw.ind?.volume != null ? { volume: raw.ind.volume } : {}) }
     const ind = { ...DEFAULT.ind, ...(raw.ind?.bb != null ? { bb: raw.ind.bb } : {}), ...(raw.ind?.vwap != null ? { vwap: raw.ind.vwap } : {}), ...(raw.ind?.gflip != null ? { gflip: raw.ind.gflip } : {}) }
-    return { ...DEFAULT, ...raw, mas, ind, lanes, events: { ...DEFAULT.events, ...raw.events }, params: { ...DEFAULT.params, ...raw.params } }
+    return { ...DEFAULT, ...raw, mas, ind, lanes, laneOrder, events: { ...DEFAULT.events, ...raw.events }, params: { ...DEFAULT.params, ...raw.params } }
   } catch { return DEFAULT }
 }
 
@@ -330,26 +348,25 @@ const LANE_DEFS = [
   { id: 'volume' as const, h: 60, label: 'VOLUME' },
   { id: 'rsi' as const, h: 78, label: 'RSI' },
   { id: 'macd' as const, h: 92, label: 'MACD' },
-  { id: 'gex' as const, h: 92, label: 'DEALER NET GEX $Bn' },
   { id: 'iv' as const, h: 78, label: 'IV RANK' },
 ]
-type LaneId = typeof LANE_DEFS[number]['id']
 
 // ── Main component ───────────────────────────────────────────────────────────
 export function ChartStudioContent() {
   const [state, dispatch] = useReducer(reducer, undefined, load)
-  const { ticker, assetClass, tf, candleWidth, ind, lanes, mas, events, overlays, compares, params } = state
+  const { ticker, assetClass, tf, candleWidth, ind, lanes, laneOrder, mas, events, overlays, compares, params } = state
   const [tickerDraft, setTickerDraft] = useState(ticker)
   const [compareDraft, setCompareDraft] = useState('')
   const [maDraft, setMaDraft] = useState<MA>({ kind: 'ema', period: 21 })
   const [windowKey, setWindowKey] = useState('3M')
   const [crossTime, setCrossTime] = useState<number | null>(null)
+  const [scaleTick, setScaleTick] = useState(0)   // bumps when the price scale can have moved
   const applyingSpan = useRef(false)
   const addMA = () => {
     if (maDraft.period >= 2 && maDraft.period <= 400) dispatch({ type: 'addMA', ma: { ...maDraft } })
   }
 
-  useEffect(() => { localStorage.setItem('unifiedOverlay', JSON.stringify(state)) }, [state])
+  useEffect(() => { localStorage.setItem('unifiedOverlay2', JSON.stringify(state)) }, [state])
   const C = useMemo(chartColors, [])
 
   // ── Data ──
@@ -363,12 +380,7 @@ export function ChartStudioContent() {
   const gexQ = useQuery({
     queryKey: ['cs-gexprofile', ticker],
     queryFn: () => axios.get(`/api/options/gex?ticker=${encodeURIComponent(ticker)}`).then(r => r.data),
-    enabled: ind.gflip, staleTime: 1800_000, retry: 1,
-  })
-  const gexHistQ = useQuery({
-    queryKey: ['cs-snap-gex', ticker],
-    queryFn: () => axios.get(`/api/snapshots/series?kind=gex&ticker=${encodeURIComponent(ticker)}`).then(r => r.data),
-    enabled: lanes.gex, staleTime: 1800_000, retry: 1,
+    enabled: ind.gflip || ind.gexProfile, staleTime: 1800_000, retry: 1,
   })
   const ivHistQ = useQuery({
     queryKey: ['cs-snap-iv', ticker],
@@ -470,11 +482,13 @@ export function ChartStudioContent() {
   }, [candles, closes, params, mas, C])
 
   // GEX lane data ($Bn) + IV rank lane (expanding-window percentile of IV30).
-  const gexLane = useMemo(() => {
-    const pts = sanitize((gexHistQ.data?.points ?? []).filter((p: any) => p.v != null)
-      .map((p: any) => ({ time: toEpoch(p.d), value: +(p.v / 1000).toFixed(3) })))
-    return pts
-  }, [gexHistQ.data])
+  // Net dealer GEX ($Bn) from the live by-strike profile.
+  const gexNet = useMemo(() => {
+    const rows = gexQ.data?.data
+    if (!rows?.length) return null
+    return rows.reduce((a: number, r: any) => a + (r.net_gex ?? 0), 0) / 1000
+  }, [gexQ.data])
+
   const ivLane = useMemo(() => {
     const raw = sanitize((ivHistQ.data?.points ?? []).filter((p: any) => p.v != null)
       .map((p: any) => ({ time: toEpoch(p.d), value: p.v })))
@@ -494,7 +508,7 @@ export function ChartStudioContent() {
 
   // ── Chart instances: price + 5 lanes + minimap ──
   const mainRef = useRef<HTMLDivElement>(null)
-  const laneRefs = useRef<Record<LaneId, HTMLDivElement | null>>({ volume: null, rsi: null, macd: null, gex: null, iv: null })
+  const laneRefs = useRef<Record<LaneId, HTMLDivElement | null>>({ volume: null, rsi: null, macd: null, iv: null })
   const miniRef = useRef<HTMLDivElement>(null)
   const charts = useRef<{ main?: IChartApi; mini?: IChartApi } & Partial<Record<LaneId, IChartApi>>>({})
   const series = useRef<Record<string, ISeriesApi<any>>>({})
@@ -512,9 +526,33 @@ export function ChartStudioContent() {
     const main = createChart(mainRef.current, {
       ...baseOptions(C, 360), width: mainRef.current.clientWidth,
       timeScale: { borderColor: 'rgba(255,255,255,0.08)', timeVisible: true, secondsVisible: false, barSpacing: 9 },
-      handleScroll: { mouseWheel: true, pressedMouseMove: true },
-      handleScale: { mouseWheel: true, pinch: true },
+      handleScroll: { mouseWheel: false, pressedMouseMove: true },
+      // Native wheel zoom is sluggish: replaced by the amplified cursor-pivot
+      // handler below (same pattern as PaperChart, higher coefficient).
+      handleScale: { mouseWheel: false, pinch: true },
     })
+    const wheelEl = mainRef.current
+    const onWheel = (e: WheelEvent) => {
+      const ts = main.timeScale()
+      const range = ts.getVisibleLogicalRange()
+      if (!range) return
+      e.preventDefault()
+      const rect = wheelEl.getBoundingClientRect()
+      const width = range.to - range.from
+      // Trackpad horizontal swipe pans; vertical wheel zooms.
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        const shift = e.deltaX * (width / rect.width)
+        try { ts.setVisibleLogicalRange({ from: range.from + shift, to: range.to + shift }) } catch { /* no data */ }
+        return
+      }
+      const pivot = ts.coordinateToLogical(e.clientX - rect.left)
+      const factor = Math.exp(e.deltaY * (e.ctrlKey ? 0.02 : 0.003))
+      const newWidth = Math.min(Math.max(6, width * factor), 60000)
+      const p = pivot == null ? range.from + width / 2 : pivot
+      const newFrom = p - (p - range.from) * (newWidth / width)
+      try { ts.setVisibleLogicalRange({ from: newFrom, to: newFrom + newWidth }) } catch { /* no data yet */ }
+    }
+    wheelEl.addEventListener('wheel', onWheel, { passive: false })
     const laneCharts: Partial<Record<LaneId, IChartApi>> = {}
     for (const lane of LANE_DEFS) {
       const el = laneRefs.current[lane.id]
@@ -551,13 +589,11 @@ export function ChartStudioContent() {
     const macdHist = laneCharts.macd?.addHistogramSeries({ priceLineVisible: false, lastValueVisible: false })
     const macdLine = laneCharts.macd?.addLineSeries({ color: C.blue, lineWidth: 2, priceLineVisible: false, lastValueVisible: false })
     const macdSigS = laneCharts.macd?.addLineSeries({ color: C.gold, lineWidth: 1, priceLineVisible: false, lastValueVisible: false })
-    const gexS = laneCharts.gex?.addHistogramSeries({ priceLineVisible: false, lastValueVisible: false })
-    gexS?.createPriceLine({ price: 0, color: 'rgba(255,255,255,0.2)', lineWidth: 1, lineStyle: LineStyle.Solid, axisLabelVisible: true, title: '' })
     const ivS = laneCharts.iv?.addAreaSeries({ lineColor: C.gold, topColor: `${C.gold}24`, bottomColor: 'transparent', lineWidth: 2, priceLineVisible: false, lastValueVisible: false })
     const miniArea = mini.addAreaSeries({ lineColor: C.gold, topColor: `${C.gold}1f`, bottomColor: 'transparent', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false })
 
     charts.current = { main, mini, ...laneCharts }
-    series.current = { candle, bbU, bbL, bbM, vwapS: vwapS!, volS: volS!, rsiS: rsiS!, macdHist: macdHist!, macdLine: macdLine!, macdSigS: macdSigS!, gexS: gexS!, ivS: ivS!, miniArea }
+    series.current = { candle, bbU, bbL, bbM, vwapS: vwapS!, volS: volS!, rsiS: rsiS!, macdHist: macdHist!, macdLine: macdLine!, macdSigS: macdSigS!, ivS: ivS!, miniArea }
 
     // One-way time-range sync: the price panel drives, lanes follow. (Logical
     // sync breaks once overlays add weekend time points; two-way sync lets a
@@ -581,10 +617,11 @@ export function ChartStudioContent() {
         setWindowBox({ left: l * 100, width: Math.max(0.5, (rgt - l) * 100) })
       }
       if (!applyingSpan.current) setWindowKey('custom')
+      setScaleTick(t => t + 1)
     })
 
     // Crosshair: drive the inspector and echo positions into every lane.
-    const laneSeriesFor: Partial<Record<LaneId, ISeriesApi<any>>> = { volume: volS, rsi: rsiS, macd: macdLine, gex: gexS, iv: ivS }
+    const laneSeriesFor: Partial<Record<LaneId, ISeriesApi<any>>> = { volume: volS, rsi: rsiS, macd: macdLine, iv: ivS }
     main.subscribeCrosshairMove(param => {
       const t = param.time as number | undefined
       setCrossTime(t ?? null)
@@ -613,11 +650,13 @@ export function ChartStudioContent() {
       main.applyOptions({ width: w })
       for (const lane of LANE_DEFS) charts.current[lane.id]?.applyOptions({ width: w })
       mini.applyOptions({ width: w })
+      setScaleTick(t => t + 1)
     })
     ro.observe(mainRef.current)
 
     return () => {
       ro.disconnect()
+      wheelEl.removeEventListener('wheel', onWheel)
       main.remove(); laneList.forEach(c => c.remove()); mini.remove()
       charts.current = {}; series.current = {}; overlaySeries.current.clear(); maSeries.current.clear(); flipLine.current = null
     }
@@ -723,16 +762,7 @@ export function ChartStudioContent() {
     })
   }, [overlayQs.data, activeOverlayDefs, candles])
 
-  // ── GEX + IV lanes ──
-  useEffect(() => {
-    const s = series.current
-    if (!s.gexS) return
-    try {
-      const pts = lanes.gex ? gexLane : []
-      s.gexS.setData(pts.map(p => ({ time: p.time as Time, value: p.value, color: p.value >= 0 ? `${C.lanePos}99` : `${C.laneNeg}9e` })))
-      store.current.set('lane:gex', toSorted(pts))
-    } catch (e) { console.warn('gex lane failed', e) }
-  }, [gexLane, lanes.gex, C])
+  // ── IV lane ──
   useEffect(() => {
     const s = series.current
     if (!s.ivS) return
@@ -858,6 +888,36 @@ export function ChartStudioContent() {
   }
   const loadSymbol = (sym: string) => { setTickerDraft(sym); dispatch({ type: 'ticker', v: sym }) }
 
+  // GEX-by-strike profile geometry: horizontal bars anchored at the right edge
+  // of the price pane, each at its strike's y-coordinate (a volume profile
+  // rotated 90 degrees). Recomputed whenever the price scale can have moved.
+  const gexProfile = useMemo(() => {
+    if (!ind.gexProfile) return null
+    const rows = gexQ.data?.data
+    const candle = series.current.candle
+    const main = charts.current.main
+    if (!rows?.length || !candle || !main) return null
+    let pane: { width: number; height: number }
+    try { pane = (main as any).paneSize() } catch { return null }
+    if (!pane?.width) return null
+    const maxAbs = Math.max(...rows.map((r: any) => Math.abs(r.net_gex ?? 0))) || 1
+    const bars: { y: number; frac: number; pos: boolean; strike: number }[] = []
+    for (const r of rows) {
+      const g = r.net_gex ?? 0
+      if (!g) continue
+      let y: number | null = null
+      try { y = candle.priceToCoordinate(r.strike) as number | null } catch { continue }
+      if (y == null || y < 0 || y > pane.height) continue
+      bars.push({ y, frac: Math.abs(g) / maxAbs, pos: g >= 0, strike: r.strike })
+    }
+    if (!bars.length) return null
+    bars.sort((a, b) => a.y - b.y)
+    const gaps = bars.slice(1).map((b, i) => b.y - bars[i].y).filter(g => g > 0).sort((a, b) => a - b)
+    const thick = Math.max(2, Math.min(8, (gaps[gaps.length >> 1] ?? 6) - 1))
+    return { bars, paneW: pane.width, paneH: pane.height, thick }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ind.gexProfile, gexQ.data, scaleTick, candles])
+
   // ── Inspector data ──
   const lastC = candles.length ? candles[candles.length - 1] : undefined
   const inspectT = crossTime ?? lastC?.time ?? null
@@ -874,10 +934,10 @@ export function ChartStudioContent() {
     ...(ind.vwap ? [{ label: 'VWAP', color: '#c084fc', style: 'dash' as GlyphStyle }] : []),
     ...activeOverlayDefs.map((d, i) => ({ label: d.label, color: overlayColor(d.id, i), style: d.style })),
     ...(ind.gflip && flipLevel != null ? [{ label: `γ-flip ${flipLevel}`, color: '#c084fc', style: 'dash' as GlyphStyle }] : []),
+    ...(ind.gexProfile ? [{ label: 'GEX by strike', color: '#3fb6a0', style: 'hist' as GlyphStyle }] : []),
   ]
 
   const pct = inspectC && inspectC.open ? ((inspectC.close - inspectC.open) / inspectC.open) * 100 : 0
-  const gexAt = at('lane:gex')
   const dateOf = (t: number | null) => t == null ? '' : new Date(t * 1000).toISOString().slice(0, 10)
 
   const inspectorGroups: { group: string; rows: { label: string; value: string; color: string }[] }[] = useMemo(() => {
@@ -902,9 +962,9 @@ export function ChartStudioContent() {
     if (tech.length) g.push({ group: 'Technicals', rows: tech })
 
     const pos: { label: string; value: string; color: string }[] = []
-    if (lanes.gex && gexAt != null) {
-      pos.push({ label: 'Dealer net GEX', value: `${gexAt >= 0 ? '+' : ''}${gexAt.toFixed(2)} Bn`, color: gexAt >= 0 ? C.lanePos : C.laneNeg })
-      pos.push({ label: 'γ regime', value: gexAt >= 0 ? 'Positive' : 'Negative', color: gexAt >= 0 ? C.lanePos : C.laneNeg })
+    if ((ind.gexProfile || ind.gflip) && gexNet != null) {
+      pos.push({ label: 'Dealer net GEX', value: `${gexNet >= 0 ? '+' : ''}${gexNet.toFixed(2)} Bn`, color: gexNet >= 0 ? C.lanePos : C.laneNeg })
+      pos.push({ label: 'γ regime', value: gexNet >= 0 ? 'Positive' : 'Negative', color: gexNet >= 0 ? C.lanePos : C.laneNeg })
     }
     if (ind.gflip && flipLevel != null) pos.push({ label: 'γ-flip level', value: String(flipLevel), color: '#c084fc' })
     if (lanes.iv) {
@@ -926,10 +986,9 @@ export function ChartStudioContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     // overlayQs.data/gexLane/candles are deps so the readout refreshes when
     // feeds land, not only on the next crosshair move.
-  }, [inspectT, inspectC, mas, ind, lanes, activeOverlayDefs, flipLevel, gexAt, ivLane, params, C, ticker, ivHistQ.data, overlayQs.data, gexLane, candles])
+  }, [inspectT, inspectC, mas, ind, lanes, activeOverlayDefs, flipLevel, gexNet, ivLane, params, C, ticker, ivHistQ.data, overlayQs.data, candles])
 
   const watch = ASSET_CLASSES.find(a => a.key === assetClass)?.watch ?? []
-  const gexRegime = gexLane.length ? (gexLane[gexLane.length - 1].value >= 0 ? 'POSITIVE γ' : 'NEGATIVE γ') : ''
 
   return (
     <div style={{ maxWidth: 1680, minWidth: 1180, margin: '0 auto', background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.12)' }}>
@@ -1023,15 +1082,31 @@ export function ChartStudioContent() {
             <Row label={`Bollinger ${params.bbP}·${params.bbK}`} on={ind.bb} src="computed" color="#8099b0" style="dash" onToggle={() => dispatch({ type: 'ind', k: 'bb' })} />
             <Row label="VWAP" on={ind.vwap} src="computed" color="#c084fc" style="dash" onToggle={() => dispatch({ type: 'ind', k: 'vwap' })} />
             <Row label="Gamma flip" on={ind.gflip} src="Tradier" color="#c084fc" style="dash" onToggle={() => dispatch({ type: 'ind', k: 'gflip' })} />
+            <Row label="GEX by strike" on={ind.gexProfile} src="Tradier" color="#3fb6a0" style="hist" onToggle={() => dispatch({ type: 'ind', k: 'gexProfile' })} />
           </div>
 
           <div style={{ padding: '11px 16px 9px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}><span style={eyebrow}>Sub-panel lanes</span><span style={{ fontFamily: MONO, fontSize: 8, color: '#3f5670' }}>OSC</span></div>
-            <Row label="Volume" on={lanes.volume} src="OHLCV" color="#3fb6a0" style="hist" onToggle={() => dispatch({ type: 'lane', k: 'volume' })} />
-            <Row label={`RSI ${params.rsiP}`} on={lanes.rsi} src="computed" color="#c084fc" style="line" onToggle={() => dispatch({ type: 'lane', k: 'rsi' })} />
-            <Row label={`MACD ${params.macdF}·${params.macdS}·${params.macdSig}`} on={lanes.macd} src="computed" color="#60a5fa" style="line" onToggle={() => dispatch({ type: 'lane', k: 'macd' })} />
-            <Row label="Dealer net GEX" on={lanes.gex} src="Tradier" color="#3fb6a0" style="hist" onToggle={() => dispatch({ type: 'lane', k: 'gex' })} />
-            <Row label="IV rank" on={lanes.iv} src="accrues" color="#c9a84c" style="area" onToggle={() => dispatch({ type: 'lane', k: 'iv' })} />
+            {laneOrder.map((id, oi) => {
+              const cfg: Record<LaneId, { label: string; src: string; color: string; style: GlyphStyle }> = {
+                volume: { label: 'Volume', src: 'OHLCV', color: '#3fb6a0', style: 'hist' },
+                rsi: { label: `RSI ${params.rsiP}`, src: 'computed', color: '#c084fc', style: 'line' },
+                macd: { label: `MACD ${params.macdF}·${params.macdS}·${params.macdSig}`, src: 'computed', color: '#60a5fa', style: 'line' },
+                iv: { label: 'IV rank', src: 'accrues', color: '#c9a84c', style: 'area' },
+              }
+              const c = cfg[id]
+              return (
+                <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <Row label={c.label} on={lanes[id]} src={c.src} color={c.color} style={c.style} onToggle={() => dispatch({ type: 'lane', k: id })} />
+                  </div>
+                  <button onClick={() => dispatch({ type: 'moveLane', id, dir: 'up' })} disabled={oi === 0} aria-label={`Move ${c.label} up`}
+                    style={{ background: 'none', border: 'none', cursor: oi === 0 ? 'default' : 'pointer', fontFamily: MONO, fontSize: 10, color: oi === 0 ? '#2c3d52' : '#56708a', padding: '0 2px' }}>↑</button>
+                  <button onClick={() => dispatch({ type: 'moveLane', id, dir: 'down' })} disabled={oi === laneOrder.length - 1} aria-label={`Move ${c.label} down`}
+                    style={{ background: 'none', border: 'none', cursor: oi === laneOrder.length - 1 ? 'default' : 'pointer', fontFamily: MONO, fontSize: 10, color: oi === laneOrder.length - 1 ? '#2c3d52' : '#56708a', padding: '0 2px' }}>↓</button>
+                </div>
+              )
+            })}
           </div>
 
           {(() => {
@@ -1085,6 +1160,9 @@ export function ChartStudioContent() {
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '7px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <span style={{ fontFamily: MONO, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.14em', color: '#56708a' }}>ACTIVE OVERLAYS</span>
+            {activeLegend.length === 0 && (
+              <span style={{ fontFamily: SANS, fontSize: 9.5, color: '#3f5670' }}>None. Toggle layers in the left rail.</span>
+            )}
             {activeLegend.map(l => (
               <span key={l.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                 <Glyph style={l.style} color={l.color} />
@@ -1095,6 +1173,16 @@ export function ChartStudioContent() {
 
           <div style={{ position: 'relative' }}>
             <div ref={mainRef} style={{ width: '100%' }} />
+            {gexProfile && (
+              <svg width={gexProfile.paneW} height={gexProfile.paneH} style={{ position: 'absolute', top: 0, left: 0, zIndex: 3, pointerEvents: 'none' }}>
+                {gexProfile.bars.map(b => (
+                  <rect key={b.strike} x={gexProfile.paneW - b.frac * 120} y={b.y - gexProfile.thick / 2}
+                    width={b.frac * 120} height={gexProfile.thick}
+                    fill={b.pos ? 'rgba(63,182,160,0.42)' : 'rgba(207,75,63,0.45)'} />
+                ))}
+                <text x={gexProfile.paneW - 4} y={12} textAnchor="end" fontFamily="var(--theme-mono)" fontSize={8.5} fontWeight={700} letterSpacing="0.1em" fill="#56708a">GEX BY STRIKE</text>
+              </svg>
+            )}
             <div style={{ position: 'absolute', top: 8, left: 10, zIndex: 5, pointerEvents: 'none', background: 'rgba(10,14,22,0.74)', border: '1px solid rgba(255,255,255,0.08)', padding: '5px 11px', display: 'flex', gap: 10, fontFamily: MONO, fontSize: 10.5, flexWrap: 'wrap' }}>
               {inspectC && (
                 <>
@@ -1119,13 +1207,11 @@ export function ChartStudioContent() {
             )}
           </div>
 
-          {LANE_DEFS.map(lane => {
+          {laneOrder.map(id => LANE_DEFS.find(l => l.id === id)!).map(lane => {
             const on = lanes[lane.id]
-            const header = lane.id === 'gex'
-              ? <>DEALER NET GEX $Bn {gexRegime && <b style={{ color: gexRegime.startsWith('POS') ? C.lanePos : C.laneNeg }}> · {gexRegime}</b>}{gexLane.length < 30 && <span style={{ color: '#3f5670' }}> · accrues daily</span>}</>
-              : lane.id === 'iv'
-                ? <>{ivLane.kind === 'rank' ? 'IV RANK' : 'ATM IV30'}{ivLane.pts.length < 30 && <span style={{ color: '#3f5670' }}> · accrues daily</span>}</>
-                : lane.id === 'rsi' ? `RSI ${params.rsiP}` : lane.id === 'macd' ? `MACD ${params.macdF}·${params.macdS}·${params.macdSig}` : lane.label
+            const header = lane.id === 'iv'
+              ? <>{ivLane.kind === 'rank' ? 'IV RANK' : 'ATM IV30'}{ivLane.pts.length < 30 && <span style={{ color: '#3f5670' }}> · accrues daily</span>}</>
+              : lane.id === 'rsi' ? `RSI ${params.rsiP}` : lane.id === 'macd' ? `MACD ${params.macdF}·${params.macdS}·${params.macdSig}` : lane.label
             return (
               <div key={lane.id} style={{ display: on ? 'block' : 'none', borderTop: '1px solid rgba(255,255,255,0.06)', position: 'relative' }}>
                 <span style={{ position: 'absolute', top: 4, left: 10, zIndex: 5, fontFamily: MONO, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.16em', color: '#56708a' }}>{header}</span>
@@ -1150,27 +1236,25 @@ export function ChartStudioContent() {
         </div>
 
         {/* Right inspector */}
-        <div style={{ width: 272, flex: 'none', background: 'var(--theme-surface, #0d1826)', borderLeft: '1px solid rgba(255,255,255,0.08)' }}>
-          <div style={{ padding: '12px 16px 10px', borderBottom: '1px solid rgba(201,168,76,0.3)', background: 'rgba(201,168,76,0.05)' }}>
-            <div style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', color: '#56708a' }}>READOUT AT CROSSHAIR</div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 3 }}>
-              <span style={{ fontFamily: MONO, fontSize: 16, fontWeight: 700, color: 'var(--theme-primary, #c9a84c)' }}>{dateOf(inspectT) || '—'}</span>
-              {barIdx >= 0 && <span style={{ fontFamily: MONO, fontSize: 10, color: '#8099b0' }}>bar {barIdx + 1} / {candles.length}</span>}
-            </div>
+        <div style={{ width: 188, flex: 'none', background: 'var(--theme-surface, #0d1826)', borderLeft: '1px solid rgba(255,255,255,0.08)' }}>
+          <div style={{ padding: '10px 12px 8px', borderBottom: '1px solid rgba(201,168,76,0.3)', background: 'rgba(201,168,76,0.05)' }}>
+            <div style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', color: '#56708a' }}>READOUT AT CROSSHAIR</div>
+            <div style={{ fontFamily: MONO, fontSize: 13, fontWeight: 700, color: 'var(--theme-primary, #c9a84c)', marginTop: 3 }}>{dateOf(inspectT) || '—'}</div>
+            {barIdx >= 0 && <div style={{ fontFamily: MONO, fontSize: 9, color: '#8099b0', marginTop: 1 }}>bar {barIdx + 1} / {candles.length}</div>}
           </div>
           {inspectorGroups.map(g => (
-            <div key={g.group} style={{ padding: '9px 16px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-              <div style={{ fontFamily: MONO, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#56708a', marginBottom: 5 }}>{g.group}</div>
+            <div key={g.group} style={{ padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+              <div style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#56708a', marginBottom: 4 }}>{g.group}</div>
               {g.rows.map(r => (
-                <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, lineHeight: '19px' }}>
-                  <span style={{ fontFamily: SANS, fontSize: 10.5, color: '#7f97af' }}>{r.label}</span>
-                  <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 600, color: r.color, fontVariantNumeric: 'tabular-nums' }}>{r.value}</span>
+                <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, lineHeight: '17px' }}>
+                  <span style={{ fontFamily: SANS, fontSize: 10, color: '#7f97af', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.label}</span>
+                  <span style={{ fontFamily: MONO, fontSize: 10.5, fontWeight: 600, color: r.color, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{r.value}</span>
                 </div>
               ))}
             </div>
           ))}
-          <div style={{ padding: '9px 16px', fontFamily: SANS, fontSize: 9.5, color: '#3f5670', lineHeight: '13px' }}>
-            Every active series resolves its value at the crosshair timestamp. Monthly and quarterly feeds carry forward from their last release.
+          <div style={{ padding: '8px 12px', fontFamily: SANS, fontSize: 9, color: '#3f5670', lineHeight: '12px' }}>
+            Values resolve at the crosshair timestamp. Monthly and quarterly feeds carry forward.
           </div>
         </div>
       </div>
