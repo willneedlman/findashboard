@@ -24,8 +24,9 @@ const LNG_TERM_COLOR = '#38bdf8'
 const WPI_COLOR = '#64748b'
 const HELCOM_COLOR = '#a78bfa'
 const PLATFORM_COLOR = '#f472b6'
-const FAC_COLOR: Record<string, string> = { field: '#eab308', plant: '#fb923c', coal_terminal: '#9ca3af' }
-const FAC_LABEL: Record<string, string> = { field: 'Oil/gas field', plant: 'Oil/gas plant', coal_terminal: 'Coal terminal' }
+const FAC_COLOR: Record<string, string> = { field: '#eab308', plant: '#fb923c', coal_terminal: '#9ca3af', refinery: '#ef4444', processing: '#a3e635' }
+const FAC_LABEL: Record<string, string> = { field: 'Oil/gas field', plant: 'Oil/gas plant', coal_terminal: 'Coal terminal', refinery: 'Refinery', processing: 'Processing plant' }
+const EMODNET_COLOR: Record<string, string> = { pipeline: '#22d3ee', platform: '#f472b6', windfarm: '#a3e635' }
 const DETAIL_MIN_ZOOM = 5          // gate rate-limited/heavy layers to zoomed-in views
 
 interface Vessel {
@@ -39,6 +40,7 @@ interface LngTerm { n: string; la: number; lo: number; st: string; ie: string; c
 interface WpiPort { n: string; la: number; lo: number; c: string; s: string }
 interface Facility { n: string; la: number; lo: number; k: string; x?: string | number }
 interface OsmPort { name: string; lat: number; lon: number; kind: string }
+interface EmodFeat { kind: string; n: string; coords?: [number, number][]; la?: number; lo?: number }
 
 const DARK_TILES = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
 const TILE_ATTR = '&copy; OpenStreetMap &copy; CARTO'
@@ -75,7 +77,7 @@ function Toggle({ label, color, on, onChange }: { label: string; color?: string;
 export function MaritimeMapContent() {
   const [layers, setLayers] = useState({
     pipelines: true, lngTerminals: true, terminals: true, worldPorts: false, chokepoints: true, facilities: false,
-    osm: false, eia: false, helcom: false,
+    osm: false, eia: false, helcom: false, emodnet: false,
     tanker: true, lngShip: true, cargo: true, unclassified: false,
   })
   const [focus, setFocus] = useState<{ lat: number; lon: number; zoom: number } | null>(null)
@@ -84,6 +86,7 @@ export function MaritimeMapContent() {
   const [osmPipes, setOsmPipes] = useState<Pipeline[]>([])
   const [osmPorts, setOsmPorts] = useState<OsmPort[]>([])
   const [facilities, setFacilities] = useState<Facility[]>([])
+  const [emod, setEmod] = useState<EmodFeat[]>([])
   const [eiaPipes, setEiaPipes] = useState<Pipeline[]>([])
   const [worldPorts, setWorldPorts] = useState<WpiPort[]>([])
   const [helcom, setHelcom] = useState<{ coords: [number, number][]; location: string; crossings: number }[]>([])
@@ -115,9 +118,12 @@ export function MaritimeMapContent() {
         const url = zoom < 4 ? '/api/maritime/facilities' : `/api/maritime/facilities?bbox=${bbox}`
         axios.get(url).then(r => setFacilities(r.data.facilities || [])).catch(() => {})
       }
+      if (layers.emodnet) {
+        axios.get(`/api/maritime/emodnet?bbox=${bbox}`).then(r => setEmod(r.data.features || [])).catch(() => {})
+      }
     }, 500)
     return () => clearTimeout(t)
-  }, [view, layers.pipelines, layers.osm, layers.eia, layers.worldPorts, layers.helcom, layers.facilities])
+  }, [view, layers.pipelines, layers.osm, layers.eia, layers.worldPorts, layers.helcom, layers.facilities, layers.emodnet])
 
   // Clear layer data the moment its toggle goes off.
   useEffect(() => { if (!layers.pipelines) setGemPipes([]) }, [layers.pipelines])
@@ -126,6 +132,7 @@ export function MaritimeMapContent() {
   useEffect(() => { if (!layers.worldPorts) setWorldPorts([]) }, [layers.worldPorts])
   useEffect(() => { if (!layers.helcom) setHelcom([]) }, [layers.helcom])
   useEffect(() => { if (!layers.facilities) setFacilities([]) }, [layers.facilities])
+  useEffect(() => { if (!layers.emodnet) setEmod([]) }, [layers.emodnet])
 
   const choke = useQuery<{ chokepoints: Chokepoint[] }>({ queryKey: ['mar-choke'], queryFn: () => axios.get('/api/maritime/chokepoints').then(r => r.data), staleTime: Infinity })
   const ports = useQuery<{ ports: Port[] }>({ queryKey: ['mar-ports'], queryFn: () => axios.get('/api/maritime/ports').then(r => r.data), staleTime: Infinity })
@@ -202,6 +209,7 @@ export function MaritimeMapContent() {
           <Toggle label="OSM infrastructure" color={OSM_PORT_COLOR} on={layers.osm} onChange={() => toggle('osm')} />
           <Toggle label="US pipelines (EIA)" on={layers.eia} onChange={() => toggle('eia')} />
           <Toggle label="Baltic shipping (HELCOM)" color={HELCOM_COLOR} on={layers.helcom} onChange={() => toggle('helcom')} />
+          <Toggle label="EU offshore (EMODnet)" color={EMODNET_COLOR.pipeline} on={layers.emodnet} onChange={() => toggle('emodnet')} />
           {needZoom && <div style={{ fontFamily: T.sans, fontSize: 9.5, color: T.faint, lineHeight: '14px', paddingLeft: 23 }}>Zoom in to load OSM / EIA detail.</div>}
         </div>
 
@@ -266,6 +274,18 @@ export function MaritimeMapContent() {
               </CircleMarker>
             )
           })}
+
+          {layers.emodnet && emod.map((f, i) => (
+            f.coords
+              ? <Polyline key={`em-${i}`} positions={f.coords} pathOptions={{ color: EMODNET_COLOR[f.kind] ?? '#22d3ee', weight: 1.5, opacity: 0.75 }}>
+                  <Tooltip sticky>{f.n} · {f.kind} <span style={{ opacity: 0.6 }}>· EMODnet</span></Tooltip>
+                </Polyline>
+              : (f.la != null && f.lo != null
+                  ? <CircleMarker key={`em-${i}`} center={[f.la, f.lo]} radius={3.5} pathOptions={{ color: EMODNET_COLOR[f.kind] ?? '#22d3ee', fillColor: EMODNET_COLOR[f.kind] ?? '#22d3ee', fillOpacity: 0.8, weight: 0.5 }}>
+                      <Tooltip>{f.n} · {f.kind} <span style={{ opacity: 0.6 }}>· EMODnet</span></Tooltip>
+                    </CircleMarker>
+                  : null)
+          ))}
 
           {layers.facilities && facilities.map((f, i) => (
             <CircleMarker key={`fac-${i}`} center={[f.la, f.lo]} radius={3} pathOptions={{ color: FAC_COLOR[f.k] ?? '#9ca3af', fillColor: FAC_COLOR[f.k] ?? '#9ca3af', fillOpacity: 0.7, weight: 0.5 }}>

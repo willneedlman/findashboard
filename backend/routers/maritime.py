@@ -111,6 +111,8 @@ _GEM_PIPES = _load_bundle("gem_pipelines.json", "pipelines")   # [{n,f,g:[[[lat,
 _GEM_LNG = _load_bundle("gem_lng.json", "lng")                  # [{n,la,lo,st,ie,cap}]
 _WPI = _load_bundle("world_ports.json", "ports")               # [{n,la,lo,c,s}]
 _GEM_FAC = _load_bundle("gem_facilities.json", "facilities")   # [{n,la,lo,k,x}] fields/plants/coal terminals
+_NETL_FAC = _load_bundle("netl_facilities.json", "facilities") # NETL refineries + processing plants
+_ALL_FAC = _GEM_FAC + _NETL_FAC
 
 # GEM LNG Carrier Tracker → hard-classify gas carriers by IMO/name (AIS type
 # codes can't distinguish LNG from crude tankers).
@@ -423,18 +425,74 @@ def get_world_ports(bbox: str | None) -> dict:
 
 
 def get_facilities(bbox: str | None) -> dict:
-    """GEM oil/gas fields, oil/gas plants, and coal terminals. The plant set is
-    large, so the world view returns only fields + coal terminals; a bbox
-    returns everything in view."""
+    """GEM fields/plants/coal terminals + NETL refineries/processing plants. The
+    power-plant set is large, so the world view drops it; a bbox returns all."""
     if not bbox:
-        light = [f for f in _GEM_FAC if f.get("k") != "plant"]
-        return {"facilities": light, "count": len(light), "scope": "fields+terminals"}
+        light = [f for f in _ALL_FAC if f.get("k") != "plant"]
+        return {"facilities": light, "count": len(light), "scope": "no-plants"}
     try:
         s, w, n, e = _parse_bbox(bbox)
-        inb = [f for f in _GEM_FAC if s <= f["la"] <= n and w <= f["lo"] <= e]
+        inb = [f for f in _ALL_FAC if s <= f["la"] <= n and w <= f["lo"] <= e]
     except Exception:
         inb = []
-    return {"facilities": inb[:3000], "count": len(inb), "scope": "bbox"}
+    return {"facilities": inb[:4000], "count": len(inb), "scope": "bbox"}
+
+
+# ── EMODnet Human Activities (EU offshore) via WFS ──────────────────────────
+_EMODNET_WFS = "https://ows.emodnet-humanactivities.eu/wfs"
+_EMODNET_LAYERS = [("emodnet:pipelines", "pipeline"), ("emodnet:platforms", "platform"), ("emodnet:windfarms", "windfarm")]
+
+
+def _emodnet_layer(typename: str, kind: str) -> list:
+    ck = f"emodnet:{typename}"
+    cached = disk_get(ck)
+    if cached is not None:
+        return cached
+    params = {"service": "WFS", "version": "2.0.0", "request": "GetFeature", "typeNames": typename,
+              "outputFormat": "application/json", "srsName": "EPSG:4326", "count": 10000}
+    try:
+        r = requests.get(_EMODNET_WFS, params=params, timeout=60, headers={"User-Agent": "AlphatapeTerminal/1.0"})
+        r.raise_for_status()
+        gj = r.json()
+    except Exception as ex:
+        _log.warning("EMODnet %s fetch failed: %s", typename, ex)
+        return []
+    out = []
+    for f in gj.get("features", []):
+        g = f.get("geometry") or {}
+        t = g.get("type")
+        pr = f.get("properties") or {}
+        nm = pr.get("name") or pr.get("NAME") or pr.get("country") or kind
+        if t == "Point":
+            lo, la = g["coordinates"][:2]
+            out.append({"kind": kind, "la": la, "lo": lo, "n": str(nm)[:60]})
+        elif t in ("LineString", "MultiLineString"):
+            segs = [g["coordinates"]] if t == "LineString" else g["coordinates"]
+            for seg in segs:
+                coords = [[c[1], c[0]] for c in seg if len(c) >= 2]
+                if len(coords) >= 2:
+                    out.append({"kind": kind, "coords": coords, "n": str(nm)[:60]})
+    disk_set(ck, out, ttl=86400)
+    return out
+
+
+def fetch_emodnet(bbox: str | None) -> dict:
+    """EU offshore pipelines, platforms, and wind farms (EMODnet WFS). Fetched
+    whole + cached, then filtered to the viewport."""
+    items = []
+    for tn, kind in _EMODNET_LAYERS:
+        items += _emodnet_layer(tn, kind)
+    if bbox:
+        try:
+            s, w, n, e = _parse_bbox(bbox)
+            def inb(it):
+                if "coords" in it:
+                    return any(s <= p[0] <= n and w <= p[1] <= e for p in it["coords"])
+                return s <= it.get("la", 999) <= n and w <= it.get("lo", 999) <= e
+            items = [it for it in items if inb(it)]
+        except Exception:
+            pass
+    return {"features": items, "count": len(items)}
 
 
 # ── Live AIS vessel stream (aisstream.io WebSocket) ─────────────────────────
@@ -745,6 +803,11 @@ def helcom(bbox: str | None = Query(None, description="south,west,north,east for
 @router.get("/facilities")
 def facilities(bbox: str | None = Query(None, description="south,west,north,east; omit for fields+terminals only")):
     return get_facilities(bbox)
+
+
+@router.get("/emodnet")
+def emodnet(bbox: str | None = Query(None, description="south,west,north,east")):
+    return fetch_emodnet(bbox)
 
 
 @router.get("/vessels")
