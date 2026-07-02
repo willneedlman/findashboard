@@ -323,6 +323,59 @@ def get_pipelines(bbox: str | None, source: str = "gem") -> dict:
     return {"pipelines": _gem_pipes_bbox(s, w, n, e), "colors": colors, "source": "gem"}
 
 
+# ── HELCOM Baltic shipping (ArcGIS MapServer) ───────────────────────────────
+_HELCOM_URL = "https://maps.helcom.fi/arcgis/rest/services/MADS/Shipping/MapServer/0/query"
+_HELCOM_DIR = os.path.join(_DATA, "cache", "helcom")
+
+
+def fetch_helcom(bbox: str | None) -> dict:
+    """HELCOM 'AIS passage line crossings by ship type' (Baltic) as polylines,
+    weighted by total crossings. Cached in disk_cache and mirrored to a raw
+    GeoJSON file under data/cache/helcom/."""
+    ck = f"helcom:{bbox or 'all'}"
+    cached = disk_get(ck)
+    if cached is not None:
+        return cached
+    params = {"where": "1=1", "outFields": "*", "f": "geojson", "outSR": "4326", "resultRecordCount": 4000}
+    if bbox:
+        try:
+            s, w, n, e = _parse_bbox(bbox)
+            params.update({"geometry": f"{w},{s},{e},{n}", "geometryType": "esriGeometryEnvelope",
+                           "inSR": "4326", "spatialRel": "esriSpatialRelIntersects"})
+        except Exception:
+            pass
+    try:
+        r = requests.get(_HELCOM_URL, params=params, timeout=35, headers={"User-Agent": "AlphatapeTerminal/1.0"})
+        r.raise_for_status()
+        gj = r.json()
+    except Exception as ex:
+        _log.warning("HELCOM fetch failed: %s", ex)
+        return {"features": [], "count": 0}
+    feats = []
+    for f in gj.get("features", []):
+        g = f.get("geometry") or {}
+        t = g.get("type")
+        if t not in ("LineString", "MultiLineString"):
+            continue
+        pr = f.get("properties") or {}
+        crossings = sum(v for k, v in pr.items()
+                        if isinstance(v, (int, float)) and k not in ("OBJECTID", "Id", "Shape_STLe"))
+        segs = [g["coordinates"]] if t == "LineString" else g["coordinates"]
+        for seg in segs:
+            coords = [[c[1], c[0]] for c in seg if len(c) >= 2]
+            if len(coords) >= 2:
+                feats.append({"coords": coords, "location": pr.get("Location"), "crossings": round(crossings)})
+    out = {"features": feats, "count": len(feats)}
+    try:
+        os.makedirs(_HELCOM_DIR, exist_ok=True)
+        with open(os.path.join(_HELCOM_DIR, "layer0.geojson"), "w") as fh:
+            json.dump(gj, fh)
+    except Exception:
+        pass
+    disk_set(ck, out, ttl=86400)
+    return out
+
+
 def get_lng(bbox: str | None) -> dict:
     """GEM LNG terminals (points). Small enough to serve globally; bbox optional."""
     items = _GEM_LNG
@@ -640,6 +693,11 @@ def world_ports(bbox: str | None = Query(None, description="south,west,north,eas
     return get_world_ports(bbox)
 
 
+@router.get("/helcom")
+def helcom(bbox: str | None = Query(None, description="south,west,north,east for the Baltic view")):
+    return fetch_helcom(bbox)
+
+
 @router.get("/vessels")
 def vessels(classified_only: bool = Query(False, description="drop vessels whose type is still unknown")):
     """Current in-memory AIS snapshot, enriched from the persistent ship
@@ -656,4 +714,10 @@ def vessels(classified_only: bool = Query(False, description="drop vessels whose
         x.setdefault("category", _classify(x.get("ship_type"), x.get("name")))
     if classified_only:
         v = [x for x in v if x.get("category") and x["category"] != "other"]
-    return {"vessels": v, "count": len(v), "status": _status}
+    status = dict(_status)
+    try:
+        import maritime_kystverket
+        status["kystverket"] = maritime_kystverket.status()
+    except Exception:
+        pass
+    return {"vessels": v, "count": len(v), "status": status}

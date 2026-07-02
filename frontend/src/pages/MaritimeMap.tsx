@@ -22,6 +22,7 @@ const CHOKE_COLOR = '#c9a84c'
 const OSM_PORT_COLOR = '#2dd4bf'
 const LNG_TERM_COLOR = '#38bdf8'
 const WPI_COLOR = '#64748b'
+const HELCOM_COLOR = '#a78bfa'
 const DETAIL_MIN_ZOOM = 5          // gate rate-limited/heavy layers to zoomed-in views
 
 interface Vessel {
@@ -69,7 +70,7 @@ function Toggle({ label, color, on, onChange }: { label: string; color?: string;
 export function MaritimeMapContent() {
   const [layers, setLayers] = useState({
     pipelines: true, lngTerminals: true, terminals: true, worldPorts: false, chokepoints: true,
-    osm: false, eia: false,
+    osm: false, eia: false, helcom: false,
     tanker: true, lngShip: true, cargo: true, unclassified: false,
   })
   const [focus, setFocus] = useState<{ lat: number; lon: number; zoom: number } | null>(null)
@@ -79,6 +80,7 @@ export function MaritimeMapContent() {
   const [osmPorts, setOsmPorts] = useState<{ name: string; lat: number; lon: number }[]>([])
   const [eiaPipes, setEiaPipes] = useState<Pipeline[]>([])
   const [worldPorts, setWorldPorts] = useState<WpiPort[]>([])
+  const [helcom, setHelcom] = useState<{ coords: [number, number][]; location: string; crossings: number }[]>([])
   const toggle = (k: keyof typeof layers) => setLayers(s => ({ ...s, [k]: !s[k] }))
 
   // Combined, debounced viewport fetch for the bbox-driven layers.
@@ -100,15 +102,19 @@ export function MaritimeMapContent() {
       if (layers.worldPorts) {
         axios.get(`/api/maritime/world-ports?bbox=${bbox}`).then(r => setWorldPorts(r.data.ports || [])).catch(() => {})
       }
+      if (layers.helcom) {
+        axios.get(`/api/maritime/helcom?bbox=${bbox}`).then(r => setHelcom(r.data.features || [])).catch(() => {})
+      }
     }, 500)
     return () => clearTimeout(t)
-  }, [view, layers.pipelines, layers.osm, layers.eia, layers.worldPorts])
+  }, [view, layers.pipelines, layers.osm, layers.eia, layers.worldPorts, layers.helcom])
 
   // Clear layer data the moment its toggle goes off.
   useEffect(() => { if (!layers.pipelines) setGemPipes([]) }, [layers.pipelines])
   useEffect(() => { if (!layers.osm) { setOsmPipes([]); setOsmPorts([]) } }, [layers.osm])
   useEffect(() => { if (!layers.eia) setEiaPipes([]) }, [layers.eia])
   useEffect(() => { if (!layers.worldPorts) setWorldPorts([]) }, [layers.worldPorts])
+  useEffect(() => { if (!layers.helcom) setHelcom([]) }, [layers.helcom])
 
   const choke = useQuery<{ chokepoints: Chokepoint[] }>({ queryKey: ['mar-choke'], queryFn: () => axios.get('/api/maritime/chokepoints').then(r => r.data), staleTime: Infinity })
   const ports = useQuery<{ ports: Port[] }>({ queryKey: ['mar-ports'], queryFn: () => axios.get('/api/maritime/ports').then(r => r.data), staleTime: Infinity })
@@ -183,6 +189,7 @@ export function MaritimeMapContent() {
           <div style={{ ...chip, marginBottom: 4 }}>Overlays</div>
           <Toggle label="OSM infrastructure" color={OSM_PORT_COLOR} on={layers.osm} onChange={() => toggle('osm')} />
           <Toggle label="US pipelines (EIA)" on={layers.eia} onChange={() => toggle('eia')} />
+          <Toggle label="Baltic shipping (HELCOM)" color={HELCOM_COLOR} on={layers.helcom} onChange={() => toggle('helcom')} />
           {needZoom && <div style={{ fontFamily: T.sans, fontSize: 9.5, color: T.faint, lineHeight: '14px', paddingLeft: 23 }}>Zoom in to load OSM / EIA detail.</div>}
         </div>
 
@@ -223,6 +230,12 @@ export function MaritimeMapContent() {
           {layers.eia && eiaPipes.map((p, i) => (
             <Polyline key={`eia-${i}`} positions={p.coords} pathOptions={{ color: PIPE_COLOR.gas, weight: 1.5, opacity: 0.6 }}>
               <Tooltip sticky>{p.name} · US gas · EIA</Tooltip>
+            </Polyline>
+          ))}
+
+          {layers.helcom && helcom.map((h, i) => (
+            <Polyline key={`helcom-${i}`} positions={h.coords} pathOptions={{ color: HELCOM_COLOR, weight: Math.max(1, Math.min(5, Math.log10(h.crossings + 1) - 3)), opacity: 0.75 }}>
+              <Tooltip>{h.location || 'Passage line'} · {h.crossings.toLocaleString()} crossings <span style={{ opacity: 0.6 }}>· HELCOM</span></Tooltip>
             </Polyline>
           ))}
 
