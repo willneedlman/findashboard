@@ -96,7 +96,7 @@ export const HUBS: Hub[] = [
       { title: 'Credit Spreads', chip: 'Credit Spreads', desc: 'Investment-grade and high-yield spread monitor', route: '/credit-spreads', icon: Activity },
       { title: 'Market Hours',   chip: 'Market Hours',   desc: 'Live global session clock across futures, US, Europe, Asia', route: '/market-hours',   icon: Clock },
       { title: 'Currency Matrix', chip: 'FX Matrix',     desc: 'Spot cross-rates, forward points, cross-currency basis, and FX vol', route: '/currency', icon: ArrowLeftRight },
-      { title: 'Global Flows Map', chip: 'Flows Map',    desc: 'Live AIS vessels, energy pipelines, export terminals, and chokepoints', route: '/flows-map', icon: Ship },
+      { title: 'Global Energy Flows', chip: 'Energy Flows', desc: 'Live AIS vessels, energy pipelines, export terminals, and chokepoints', route: '/flows-map', icon: Ship },
     ],
   },
   {

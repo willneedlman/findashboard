@@ -180,6 +180,49 @@ function MapClickCatcher({ onBackgroundClick, suppress }: { onBackgroundClick: (
 // ── Chrome glyphs & shared styles ─────────────────────────────────────────────
 const gArrow = (c: string): React.CSSProperties => ({ width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderBottom: `11px solid ${c}` })
 const gRing = (c: string): React.CSSProperties => ({ width: 11, height: 11, borderRadius: '50%', border: `2px solid ${c}` })
+const gLine = (c: string, dash = false): React.CSSProperties => ({ width: 18, height: 0, borderTop: `2px ${dash ? 'dashed' : 'solid'} ${c}` })
+const gDot = (c: string): React.CSSProperties => ({ width: 10, height: 10, borderRadius: '50%', background: c })
+const gDiamond = (c: string): React.CSSProperties => ({ width: 9, height: 9, background: c, transform: 'rotate(45deg)' })
+const gDiamondO = (c: string): React.CSSProperties => ({ width: 9, height: 9, border: `1.5px solid ${c}`, transform: 'rotate(45deg)' })
+const gSquare = (c: string): React.CSSProperties => ({ width: 10, height: 10, background: c })
+const gSquareO = (c: string): React.CSSProperties => ({ width: 10, height: 10, border: `1.5px solid ${c}` })
+
+// Grouped dynamic legend, 1:1 with the layers actually rendered (vis already
+// carries the zoom gate, so gated-off layers drop out here too).
+function buildLegend(v: Record<LayerKey, boolean>, C: Colors) {
+  const G: { group: string; items: { glyph: React.CSSProperties; label: string }[] }[] = []
+  let it: { glyph: React.CSSProperties; label: string }[] = []
+  if (v.tanker) it.push({ glyph: gArrow(C.tanker), label: 'Crude tanker' })
+  if (v.lng) it.push({ glyph: gArrow(C.lng), label: 'LNG carrier' })
+  if (v.cargo) it.push({ glyph: gArrow(C.cargo), label: 'Cargo / dry bulk' })
+  if (v.lanes) it.push({ glyph: gLine(C.lane, true), label: 'Shipping lane' })
+  if (it.length) G.push({ group: 'Vessels & lanes', items: it })
+
+  it = []
+  if (v.pGem || v.pEia || v.pOsm || v.pEmod) { it.push({ glyph: gLine(C.gold), label: 'Oil pipeline' }); it.push({ glyph: gLine(C.gold, true), label: 'Gas pipeline' }) }
+  if (v.pOsm || v.pEmod) it.push({ glyph: gDiamondO(C.gold), label: 'Offshore platform' })
+  if (v.pEmod) it.push({ glyph: gRing(C.wind), label: 'Offshore wind farm' })
+  if (it.length) G.push({ group: 'Pipelines & offshore', items: it })
+
+  it = []
+  if (v.terminals) { it.push({ glyph: gDot(C.oilTerm), label: 'Oil export terminal' }); it.push({ glyph: gDot(C.lngTerm), label: 'LNG export terminal' }) }
+  if (v.lngTerm) it.push({ glyph: gRing(C.lngTerm), label: 'LNG terminal (GEM)' })
+  if (v.fields) it.push({ glyph: gDiamond(C.field), label: 'Oil / gas field' })
+  if (v.refineries) it.push({ glyph: gSquare(C.refinery), label: 'Refinery / processing' })
+  if (v.power) it.push({ glyph: gDot(C.power), label: 'Power plant (oil/gas)' })
+  if (v.coal) it.push({ glyph: gSquare(C.coal), label: 'Coal terminal' })
+  if (it.length) G.push({ group: 'Facilities', items: it })
+
+  it = []
+  if (v.wpi) it.push({ glyph: gSquareO(C.wpi), label: 'World port (WPI)' })
+  if (v.chokepoints) it.push({ glyph: gRing(C.gold), label: 'Chokepoint' })
+  if (it.length) G.push({ group: 'Ports & points', items: it })
+
+  it = []
+  if (v.helcom) it.push({ glyph: gLine(C.helcom), label: 'Baltic passage (HELCOM)' })
+  if (it.length) G.push({ group: 'Overlays', items: it })
+  return G
+}
 
 const MONO = 'var(--theme-mono)'
 const SANS = 'var(--theme-sans)'
@@ -461,14 +504,7 @@ export function MaritimeMapContent() {
   const vesselsInStrait = (c: { lat: number; lon: number }) =>
     allVessels.filter(v => Math.abs(v.lat - c.lat) < 1.5 && Math.abs(v.lon - c.lon) < 1.5).length
 
-  const legendItems = useMemo(() => {
-    const it: { glyph: React.CSSProperties; label: string }[] = []
-    if (vis.tanker) it.push({ glyph: gArrow(C.tanker), label: 'Crude' })
-    if (vis.lng) it.push({ glyph: gArrow(C.lng), label: 'LNG' })
-    if (vis.cargo) it.push({ glyph: gArrow(C.cargo), label: 'Cargo' })
-    if (vis.chokepoints) it.push({ glyph: gRing(C.gold), label: 'Chokepoint' })
-    return it
-  }, [vis, C])
+  const legendGroups = useMemo(() => buildLegend(vis, C), [vis, C])
 
   const mv = (delay = 0) => reduced ? {} : {
     initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 },
@@ -484,6 +520,11 @@ export function MaritimeMapContent() {
         .gfm-map { background: var(--theme-bg); }
         .gfm-chip:hover { border-color: ${GOLD} !important; color: ${TEXT} !important; }
         .gfm-row:hover { background: rgba(255,255,255,0.04); }
+        .gfm-cpcell { container-type: inline-size; overflow: hidden; }
+        @container (max-width: 225px) { .gfm-spark { display: none; } }
+        @container (max-width: 285px) { .gfm-spark-long { display: none; } }
+        @container (max-width: 175px) { .gfm-transits { display: none; } }
+        @container (max-width: 140px) { .gfm-delta { display: none; } }
         .leaflet-tooltip.gfm-callout {
           background: color-mix(in srgb, var(--theme-surface, #0d1826) 95%, transparent); color: ${TEXT};
           border: ${goldBorder(0.35)}; border-radius: 0; box-shadow: none;
@@ -603,7 +644,7 @@ export function MaritimeMapContent() {
 
         {/* ── Brand chip ── */}
         <motion.div {...mv(0)} style={{ position: 'absolute', top: 14, left: 14, zIndex: 520, display: 'flex', alignItems: 'center', gap: 12, padding: '8px 13px', background: panelBg(), border: goldBorder(0.4) }}>
-          <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, letterSpacing: '0.18em', color: GOLD }}>GLOBAL FLOWS</span>
+          <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, letterSpacing: '0.18em', color: GOLD }}>GLOBAL ENERGY FLOWS</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ width: 5, height: 5, borderRadius: '50%', background: C.positive, boxShadow: `0 0 7px ${C.positive}`, animation: reduced ? undefined : 'gfm-pulse 2.6s infinite' }} />
             <span style={{ fontFamily: MONO, fontSize: 9, color: SEC }}>LIVE · {vess.data?.count ?? 0} · {clock}</span>
@@ -794,27 +835,36 @@ export function MaritimeMapContent() {
         )}
         </div>
 
-        {/* ── Legend chip ── */}
-        {legendItems.length > 0 && (
-          <div style={{ position: 'absolute', left: 14, bottom: 14, zIndex: 520, display: 'flex', alignItems: 'center', gap: 13, padding: '7px 12px', background: panelBg(0.92), border: neutralBorder }}>
-            {legendItems.map(it => (
-              <span key={it.label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={it.glyph} />
-                <span style={{ fontFamily: SANS, fontSize: 10, color: SEC }}>{it.label}</span>
-              </span>
+        {/* ── Bottom chrome: legend left, scrubber + history center, replay right.
+             One flex row so the panels can never overlap. ── */}
+        <div style={{ position: 'absolute', left: 14, right: 14, bottom: 14, zIndex: 540, display: 'flex', alignItems: 'flex-end', gap: 10, pointerEvents: 'none' }}>
+        {legendGroups.length > 0 && (
+          <div style={{ flex: 'none', pointerEvents: 'auto', maxHeight: '38vh', overflowY: 'auto', minWidth: 172, padding: '10px 13px', background: panelBg(0.92), border: neutralBorder }}>
+            <div style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', color: TEXT, marginBottom: 7 }}>LEGEND</div>
+            {legendGroups.map(g => (
+              <div key={g.group} style={{ marginBottom: 7 }}>
+                <div style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: MUTED, marginBottom: 3 }}>{g.group}</div>
+                {g.items.map(it => (
+                  <div key={it.label} style={{ display: 'flex', alignItems: 'center', gap: 8, lineHeight: '16px' }}>
+                    <span style={{ width: 20, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={it.glyph} /></span>
+                    <span style={{ fontFamily: SANS, fontSize: 10.5, color: SEC }}>{it.label}</span>
+                  </div>
+                ))}
+              </div>
             ))}
           </div>
         )}
 
-        {/* ── Replay: collapsed button or scrubber ── */}
-        {!replay.open ? (
-          <button onClick={() => setReplay(r => ({ ...r, open: true, t: 1, playing: false }))}
-            style={{ position: 'absolute', right: 14, bottom: 14, zIndex: 520, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 13px', cursor: 'pointer', background: panelBg(), border: goldBorder(0.45) }}>
-            <span style={{ width: 0, height: 0, borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderLeft: `8px solid ${GOLD}` }} />
-            <span style={{ fontFamily: MONO, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.14em', color: GOLD }}>REPLAY 24H</span>
-          </button>
-        ) : (
-          <div style={{ position: 'absolute', left: 14, right: 14, bottom: 14, zIndex: 540, display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+        {histOpen && (
+          <div style={{ width: 'min(1020px, 100%)', pointerEvents: 'auto' }}>
+            <HistoryPanel C={C} chokepoints={choke.data?.chokepoints ?? []} ids={histIds} days={histDays} metric={histMetric}
+              series={hist.data?.series ?? []} loading={hist.isLoading}
+              onToggleId={id => setHistIds(ids => ids.includes(id) ? (ids.length > 1 ? ids.filter(x => x !== id) : ids) : [...ids, id].slice(-4))}
+              onDays={setHistDays} onMetric={setHistMetric} onClose={() => setHistOpen(false)} />
+          </div>
+        )}
+        {replay.open && (
           <motion.div initial={reduced ? false : { opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, ease: [0.23, 1, 0.32, 1] }}
             style={{ width: 'min(760px, 100%)', pointerEvents: 'auto', background: panelBg(0.96), border: goldBorder(0.4), padding: '10px 14px' }}>
             {frames.length < 2 ? (
@@ -855,18 +905,17 @@ export function MaritimeMapContent() {
               </>
             )}
           </motion.div>
-          </div>
         )}
+        </div>
 
-        {/* ── Transit history overlay (Open history) ── */}
-        {histOpen && (
-          <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', bottom: 14, zIndex: 550, width: 'min(1020px, calc(100% - 28px))' }}>
-            <HistoryPanel C={C} chokepoints={choke.data?.chokepoints ?? []} ids={histIds} days={histDays} metric={histMetric}
-              series={hist.data?.series ?? []} loading={hist.isLoading}
-              onToggleId={id => setHistIds(ids => ids.includes(id) ? (ids.length > 1 ? ids.filter(x => x !== id) : ids) : [...ids, id].slice(-4))}
-              onDays={setHistDays} onMetric={setHistMetric} onClose={() => setHistOpen(false)} />
-          </div>
+        {!replay.open && (
+          <button onClick={() => setReplay(r => ({ ...r, open: true, t: 1, playing: false }))}
+            style={{ flex: 'none', pointerEvents: 'auto', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 13px', cursor: 'pointer', background: panelBg(), border: goldBorder(0.45) }}>
+            <span style={{ width: 0, height: 0, borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderLeft: `8px solid ${GOLD}` }} />
+            <span style={{ fontFamily: MONO, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.14em', color: GOLD }}>REPLAY 24H</span>
+          </button>
         )}
+        </div>
       </div>
 
       {/* ── Docked chokepoint strip ── */}
@@ -878,18 +927,18 @@ export function MaritimeMapContent() {
           const dotCol = s?.status === 'congested' ? C.negative : s?.status === 'watch' ? C.gold : MUTED
           return (
             <div key={id} onClick={() => { if (c) flyTo({ kind: 'choke', id: c.id, name: c.name, lat: c.lat, lon: c.lon }) }}
-              className="gfm-row"
-              style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '0 14px', cursor: 'pointer', borderLeft: i ? '1px solid rgba(255,255,255,0.05)' : 'none', fontVariantNumeric: 'tabular-nums', minWidth: 0 }}>
+              className="gfm-row gfm-cpcell"
+              style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '0 14px', cursor: 'pointer', borderLeft: i ? '1px solid rgba(255,255,255,0.05)' : 'none', fontVariantNumeric: 'tabular-nums', minWidth: 0, whiteSpace: 'nowrap' }}>
               <span style={{ fontFamily: MONO, fontSize: 9.5, fontWeight: 700, color: TEXT, flex: 'none' }}>{short}</span>
               <span style={{ fontFamily: MONO, fontSize: 13, fontWeight: 700, color: TEXT, flex: 'none' }}>{c?.oil_mbd.toFixed(1) ?? '—'}</span>
               {s?.delta_pct != null && (
-                <span style={{ fontFamily: MONO, fontSize: 9.5, color: s.delta_pct >= 0 ? C.positive : C.negative, flex: 'none' }}>
+                <span className="gfm-delta" style={{ fontFamily: MONO, fontSize: 9.5, color: s.delta_pct >= 0 ? C.positive : C.negative, flex: 'none' }}>
                   {s.delta_pct >= 0 ? '+' : ''}{s.delta_pct.toFixed(1)}%
                 </span>
               )}
-              {s && <span style={{ fontFamily: MONO, fontSize: 9, color: MUTED, flex: 'none' }}>{s.transits7}t</span>}
-              <span style={{ marginLeft: 'auto', flex: 'none' }}>{s && <Sparkline data={s.series30} color={C.spark} />}</span>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: dotCol, flex: 'none' }} />
+              {s && <span className="gfm-transits" style={{ fontFamily: MONO, fontSize: 9, color: MUTED, flex: 'none' }}>{s.transits7}t</span>}
+              <span className={short.length > 8 ? 'gfm-spark gfm-spark-long' : 'gfm-spark'} style={{ marginLeft: 'auto', flex: 'none' }}>{s && <Sparkline data={s.series30} color={C.spark} />}</span>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: dotCol, flex: 'none', marginLeft: 'auto' }} />
             </div>
           )
         })}

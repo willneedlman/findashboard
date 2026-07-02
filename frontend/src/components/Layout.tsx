@@ -260,6 +260,12 @@ export default function Layout({ children }: LayoutProps) {
             <div style={{ flex: 1 }}>{children}</div>
             <Footer />
           </div>
+        ) : location.pathname === '/flows-map' ? (
+          // Map cockpit wants the full main width: gutters waste map area.
+          <div className="px-4 py-4" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
+            <div style={{ flex: 1 }}>{children}</div>
+            <Footer />
+          </div>
         ) : (
           <div className="max-w-7xl 2xl:max-w-[1700px] mx-auto px-6 2xl:px-10 py-6" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
             <div style={{ flex: 1 }}>{children}</div>
