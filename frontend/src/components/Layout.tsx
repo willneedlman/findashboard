@@ -260,8 +260,8 @@ export default function Layout({ children }: LayoutProps) {
             <div style={{ flex: 1 }}>{children}</div>
             <Footer />
           </div>
-        ) : location.pathname === '/flows-map' ? (
-          // Map cockpit wants the full main width: gutters waste map area.
+        ) : location.pathname === '/flows-map' || location.pathname === '/chart-studio' ? (
+          // Map cockpit and Chart Studio want the full main width: gutters waste chart area.
           <div className="px-4 py-4" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
             <div style={{ flex: 1 }}>{children}</div>
             <Footer />

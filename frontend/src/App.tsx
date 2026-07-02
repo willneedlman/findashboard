@@ -22,6 +22,7 @@ const MktShell       = lazyWithReload(() => import('./marketing/Marketing').then
 // Lazy-load all pages — crash in one route can't bring down the whole app
 const Home               = lazyWithReload(() => import('./pages/Home'))
 const MarketData         = lazyWithReload(() => import('./pages/MarketData'))
+const ChartStudio        = lazyWithReload(() => import('./pages/ChartStudio'))
 const OptionsPricer      = lazyWithReload(() => import('./pages/OptionsPricer'))
 const BondAnalytics      = lazyWithReload(() => import('./pages/BondAnalytics'))
 const CusipLookup        = lazyWithReload(() => import('./pages/CusipLookup'))
@@ -170,6 +171,7 @@ export default function App() {
               <Route path="/app"        element={<Home />} />
               <Route path="/hub/:slug"  element={<HubLanding />} />
               <Route path="/market"     element={<MarketData />} />
+              <Route path="/chart-studio" element={<ChartStudio />} />
               <Route path="/options"    element={<OptionsPricer />} />
               <Route path="/bond"       element={<BondAnalytics />} />
               <Route path="/cusip"      element={<CusipLookup />} />

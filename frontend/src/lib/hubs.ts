@@ -39,6 +39,7 @@ export const HUBS: Hub[] = [
     tools: [
       { title: 'Stock Screener',        chip: 'Screener',        desc: '25+ fundamental and technical filters across the universe', route: '/screener',                 icon: Filter },
       { title: 'Stock Analytics',       chip: 'Stock Analytics', desc: 'Price, volatility, drawdown, and volume for any security',  route: '/market',                   icon: TrendingUp },
+      { title: 'Unified Chart Overlay', chip: 'Chart Overlay',   desc: 'Every time-series feed in the app on one candlestick chart', route: '/chart-studio', icon: TrendingUp },
       { title: 'Sentiment Tracker',     chip: 'Sentiment',       desc: 'AI-scored news sentiment across 7 sources',                route: '/sentiment',                icon: Brain },
       { title: 'Market Calendar',       chip: 'Calendar',        desc: 'Corporate catalysts and the earnings calendar in one view',  route: '/corporate',          icon: CalendarClock },
       { title: 'Earnings AI',           chip: 'Earnings AI',     desc: 'Call transcripts and filing summaries on demand',          route: '/earnings',           icon: FileText },
