@@ -10,6 +10,7 @@ Data fetching lives here; the React page (pages/MaritimeMap.tsx) only plots.
 import json
 import logging
 import os
+import re
 import threading
 import time
 
@@ -114,6 +115,33 @@ _GEM_FAC = _load_bundle("gem_facilities.json", "facilities")   # [{n,la,lo,k,x}]
 _NETL_FAC = _load_bundle("netl_facilities.json", "facilities") # NETL refineries + processing plants
 _ALL_FAC = _GEM_FAC + _NETL_FAC
 _EMODNET = _load_bundle("emodnet.json", "features")            # EU offshore pipelines/platforms/windfarms
+
+# World Bank Container Port Performance Index (2023) — port efficiency rank.
+try:
+    with open(os.path.join(_DATA, "cppi.json")) as _f:
+        _cppi_b = json.load(_f)
+except Exception:
+    _cppi_b = {"ranks": {}, "total": 0}
+_CPPI_TOTAL = _cppi_b.get("total", 405)
+
+
+def _norm_port(n: str) -> str:
+    n = re.sub(r"\(.*?\)", "", n or "").upper()
+    return re.sub(r"[^A-Z0-9]+", " ", n).strip()
+
+
+_CPPI_NORM = {_norm_port(k): v for k, v in _cppi_b.get("ranks", {}).items()}
+
+
+def _cppi_rank(name: str):
+    return _CPPI_NORM.get(_norm_port(name))
+
+
+# Tag curated terminals with their CPPI rank once at load.
+for _p in PORTS:
+    _r = _cppi_rank(_p["name"])
+    if _r:
+        _p["cppi"] = _r
 
 # GEM LNG Carrier Tracker → hard-classify gas carriers by IMO/name (AIS type
 # codes can't distinguish LNG from crude tankers).
@@ -419,10 +447,14 @@ def get_world_ports(bbox: str | None) -> dict:
         return {"ports": big, "count": len(big), "scope": "large"}
     try:
         s, w, n, e = _parse_bbox(bbox)
-        inb = [p for p in _WPI if s <= p["la"] <= n and w <= p["lo"] <= e]
+        inb = []
+        for p in _WPI:
+            if s <= p["la"] <= n and w <= p["lo"] <= e:
+                r = _cppi_rank(p["n"])
+                inb.append({**p, "cppi": r} if r else p)
     except Exception:
         inb = []
-    return {"ports": inb[:2500], "count": len(inb), "scope": "bbox"}
+    return {"ports": inb[:2500], "count": len(inb), "scope": "bbox", "cppi_total": _CPPI_TOTAL}
 
 
 def get_facilities(bbox: str | None) -> dict:

@@ -34,10 +34,10 @@ interface Vessel {
   heading?: number; destination?: string; category?: string; time_utc?: string
 }
 interface Chokepoint { id: string; name: string; lat: number; lon: number; oil_mbd: number; note: string }
-interface Port { name: string; country: string; lat: number; lon: number; kind: 'oil' | 'lng'; throughput: string }
+interface Port { name: string; country: string; lat: number; lon: number; kind: 'oil' | 'lng'; throughput: string; cppi?: number }
 interface Pipeline { name: string; substance: string; coords: [number, number][] }
 interface LngTerm { n: string; la: number; lo: number; st: string; ie: string; cap: number | null }
-interface WpiPort { n: string; la: number; lo: number; c: string; s: string }
+interface WpiPort { n: string; la: number; lo: number; c: string; s: string; cppi?: number }
 interface Facility { n: string; la: number; lo: number; k: string; x?: string | number }
 interface OsmPort { name: string; lat: number; lon: number; kind: string }
 interface EmodFeat { kind: string; n: string; coords?: [number, number][]; la?: number; lo?: number }
@@ -295,7 +295,7 @@ export function MaritimeMapContent() {
 
           {layers.worldPorts && worldPorts.map((p, i) => (
             <CircleMarker key={`wpi-${i}`} center={[p.la, p.lo]} radius={2.5} pathOptions={{ color: WPI_COLOR, fillColor: WPI_COLOR, fillOpacity: 0.8, weight: 0.5 }}>
-              <Tooltip>{p.n}{p.c ? ` · ${p.c}` : ''}{p.s ? ` · ${p.s} harbour` : ''} <span style={{ opacity: 0.6 }}>· WPI</span></Tooltip>
+              <Tooltip>{p.n}{p.c ? ` · ${p.c}` : ''}{p.s ? ` · ${p.s} harbour` : ''}{p.cppi ? ` · CPPI #${p.cppi}/405` : ''} <span style={{ opacity: 0.6 }}>· WPI</span></Tooltip>
             </CircleMarker>
           ))}
 
@@ -309,7 +309,7 @@ export function MaritimeMapContent() {
 
           {layers.terminals && ports.data?.ports.map(p => (
             <CircleMarker key={`term-${p.name}`} center={[p.lat, p.lon]} radius={5} pathOptions={{ color: PORT_COLOR[p.kind], fillColor: PORT_COLOR[p.kind], fillOpacity: 0.85, weight: 1 }}>
-              <Tooltip><b>{p.name}</b> — {p.country}<br />{p.kind.toUpperCase()} terminal · {p.throughput}</Tooltip>
+              <Tooltip><b>{p.name}</b> — {p.country}<br />{p.kind.toUpperCase()} terminal · {p.throughput}{p.cppi ? <><br />CPPI #{p.cppi} / 405 (container efficiency)</> : null}</Tooltip>
             </CircleMarker>
           ))}
 
