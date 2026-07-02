@@ -113,6 +113,7 @@ _WPI = _load_bundle("world_ports.json", "ports")               # [{n,la,lo,c,s}]
 _GEM_FAC = _load_bundle("gem_facilities.json", "facilities")   # [{n,la,lo,k,x}] fields/plants/coal terminals
 _NETL_FAC = _load_bundle("netl_facilities.json", "facilities") # NETL refineries + processing plants
 _ALL_FAC = _GEM_FAC + _NETL_FAC
+_EMODNET = _load_bundle("emodnet.json", "features")            # EU offshore pipelines/platforms/windfarms
 
 # GEM LNG Carrier Tracker → hard-classify gas carriers by IMO/name (AIS type
 # codes can't distinguish LNG from crude tankers).
@@ -438,50 +439,12 @@ def get_facilities(bbox: str | None) -> dict:
     return {"facilities": inb[:4000], "count": len(inb), "scope": "bbox"}
 
 
-# ── EMODnet Human Activities (EU offshore) via WFS ──────────────────────────
-_EMODNET_WFS = "https://ows.emodnet-humanactivities.eu/wfs"
-_EMODNET_LAYERS = [("emodnet:pipelines", "pipeline"), ("emodnet:platforms", "platform"), ("emodnet:windfarms", "windfarm")]
-
-
-def _emodnet_layer(typename: str, kind: str) -> list:
-    ck = f"emodnet:{typename}"
-    cached = disk_get(ck)
-    if cached is not None:
-        return cached
-    params = {"service": "WFS", "version": "2.0.0", "request": "GetFeature", "typeNames": typename,
-              "outputFormat": "application/json", "srsName": "EPSG:4326", "count": 10000}
-    try:
-        r = requests.get(_EMODNET_WFS, params=params, timeout=60, headers={"User-Agent": "AlphatapeTerminal/1.0"})
-        r.raise_for_status()
-        gj = r.json()
-    except Exception as ex:
-        _log.warning("EMODnet %s fetch failed: %s", typename, ex)
-        return []
-    out = []
-    for f in gj.get("features", []):
-        g = f.get("geometry") or {}
-        t = g.get("type")
-        pr = f.get("properties") or {}
-        nm = pr.get("name") or pr.get("NAME") or pr.get("country") or kind
-        if t == "Point":
-            lo, la = g["coordinates"][:2]
-            out.append({"kind": kind, "la": la, "lo": lo, "n": str(nm)[:60]})
-        elif t in ("LineString", "MultiLineString"):
-            segs = [g["coordinates"]] if t == "LineString" else g["coordinates"]
-            for seg in segs:
-                coords = [[c[1], c[0]] for c in seg if len(c) >= 2]
-                if len(coords) >= 2:
-                    out.append({"kind": kind, "coords": coords, "n": str(nm)[:60]})
-    disk_set(ck, out, ttl=86400)
-    return out
-
-
+# ── EMODnet Human Activities (EU offshore) ──────────────────────────────────
+# Bundled snapshot from the EMODnet WFS (pipelines/platforms/windfarms). WFS
+# fetch-all was too slow on the request path; refresh the bundle offline.
 def fetch_emodnet(bbox: str | None) -> dict:
-    """EU offshore pipelines, platforms, and wind farms (EMODnet WFS). Fetched
-    whole + cached, then filtered to the viewport."""
-    items = []
-    for tn, kind in _EMODNET_LAYERS:
-        items += _emodnet_layer(tn, kind)
+    """EU offshore pipelines, platforms, and wind farms, filtered to the view."""
+    items = _EMODNET
     if bbox:
         try:
             s, w, n, e = _parse_bbox(bbox)
