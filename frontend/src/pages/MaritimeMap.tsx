@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
-import { MapContainer, TileLayer, Polyline, CircleMarker, Popup, Tooltip, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Polyline, CircleMarker, Popup, Tooltip, useMap, useMapEvents } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import PageWrapper from '../components/PageWrapper'
 
@@ -24,6 +24,8 @@ const PORT_COLOR = { oil: '#8b1a1a', lng: '#c084fc' } as const
 // Concrete hex for Leaflet SVG paths — CSS var() is unreliable in SVG presentation
 // attributes. Chokepoint gold is a fixed semantic marker color, not theme chrome.
 const CHOKE_COLOR = '#c9a84c'
+const OSM_PORT_COLOR = '#2dd4bf'   // OSM commercial ports, distinct from curated terminals
+const OSM_MIN_ZOOM = 5             // don't hammer Overpass at world zoom
 
 interface Vessel {
   mmsi: string; name?: string; lat: number; lon: number; sog?: number; cog?: number
@@ -44,6 +46,16 @@ function FocusController({ focus }: { focus: { lat: number; lon: number; zoom: n
   return null
 }
 
+function ViewportWatcher({ onChange }: { onChange: (bbox: string, zoom: number) => void }) {
+  const map = useMapEvents({
+    moveend: () => {
+      const b = map.getBounds()
+      onChange(`${b.getSouth().toFixed(3)},${b.getWest().toFixed(3)},${b.getNorth().toFixed(3)},${b.getEast().toFixed(3)}`, map.getZoom())
+    },
+  })
+  return null
+}
+
 const chip: React.CSSProperties = {
   fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
   textTransform: 'uppercase', color: T.muted,
@@ -60,9 +72,27 @@ function Toggle({ label, color, on, onChange }: { label: string; color?: string;
 }
 
 export function MaritimeMapContent() {
-  const [layers, setLayers] = useState({ pipelines: true, tanker: true, lng: true, cargo: true, ports: true, chokepoints: true })
+  const [layers, setLayers] = useState({ pipelines: true, tanker: true, lng: true, cargo: true, unclassified: false, ports: true, chokepoints: true, osm: false })
   const [focus, setFocus] = useState<{ lat: number; lon: number; zoom: number } | null>(null)
+  const [view, setView] = useState<{ bbox: string; zoom: number } | null>(null)
+  const [osm, setOsm] = useState<{ pipes: Pipeline[]; ports: { name: string; lat: number; lon: number }[] }>({ pipes: [], ports: [] })
   const toggle = (k: keyof typeof layers) => setLayers(s => ({ ...s, [k]: !s[k] }))
+
+  // Live OSM detail for the current viewport (debounced, zoom-gated). Off by
+  // default so panning never floods the shared Overpass endpoint.
+  useEffect(() => {
+    if (!layers.osm || !view || view.zoom < OSM_MIN_ZOOM) { setOsm({ pipes: [], ports: [] }); return }
+    const t = setTimeout(async () => {
+      try {
+        const [pp, po] = await Promise.all([
+          axios.get(`/api/maritime/pipelines?bbox=${view.bbox}`).then(r => r.data),
+          axios.get(`/api/maritime/ports?bbox=${view.bbox}`).then(r => r.data),
+        ])
+        setOsm({ pipes: pp.source === 'overpass' ? pp.pipelines : [], ports: po.osm_ports ?? [] })
+      } catch { /* leave prior detail in place on a failed/rate-limited fetch */ }
+    }, 1000)
+    return () => clearTimeout(t)
+  }, [layers.osm, view])
 
   const choke = useQuery<{ chokepoints: Chokepoint[] }>({ queryKey: ['mar-choke'], queryFn: () => axios.get('/api/maritime/chokepoints').then(r => r.data), staleTime: Infinity })
   const ports = useQuery<{ ports: Port[] }>({ queryKey: ['mar-ports'], queryFn: () => axios.get('/api/maritime/ports').then(r => r.data), staleTime: Infinity })
@@ -73,8 +103,10 @@ export function MaritimeMapContent() {
   })
 
   const catShown = (c?: string) => {
-    const k = c === 'tanker' ? 'tanker' : c === 'lng' ? 'lng' : 'cargo'   // 'other' rides the cargo toggle
-    return layers[k as 'tanker' | 'lng' | 'cargo']
+    if (c === 'tanker') return layers.tanker
+    if (c === 'lng') return layers.lng
+    if (c === 'cargo') return layers.cargo
+    return layers.unclassified   // 'other' / not-yet-typed
   }
   const vessels = (vess.data?.vessels ?? []).filter(v => catShown(v.category))
   const keyMissing = vess.data?.status && !vess.data.status.key_present
@@ -129,6 +161,10 @@ export function MaritimeMapContent() {
           <Toggle label="Pipelines" on={layers.pipelines} onChange={() => toggle('pipelines')} />
           <Toggle label="Export terminals" color={PORT_COLOR.oil} on={layers.ports} onChange={() => toggle('ports')} />
           <Toggle label="Chokepoints" color={T.gold} on={layers.chokepoints} onChange={() => toggle('chokepoints')} />
+          <Toggle label="OSM live detail" color={OSM_PORT_COLOR} on={layers.osm} onChange={() => toggle('osm')} />
+          {layers.osm && (view?.zoom ?? 0) < OSM_MIN_ZOOM && (
+            <div style={{ fontFamily: T.sans, fontSize: 9.5, color: T.faint, lineHeight: '14px', paddingLeft: 23 }}>Zoom in to load live OSM pipelines and ports.</div>
+          )}
         </div>
 
         <div>
@@ -136,6 +172,7 @@ export function MaritimeMapContent() {
           <Toggle label="Crude tankers" color={VESSEL_COLOR.tanker} on={layers.tanker} onChange={() => toggle('tanker')} />
           <Toggle label="LNG carriers" color={VESSEL_COLOR.lng} on={layers.lng} onChange={() => toggle('lng')} />
           <Toggle label="Cargo / dry bulk" color={VESSEL_COLOR.cargo} on={layers.cargo} onChange={() => toggle('cargo')} />
+          <Toggle label="Unclassified" color={VESSEL_COLOR.other} on={layers.unclassified} onChange={() => toggle('unclassified')} />
         </div>
 
         <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -156,11 +193,25 @@ export function MaritimeMapContent() {
         <MapContainer center={[20, 30]} zoom={2} minZoom={2} worldCopyJump style={{ height: '100%', width: '100%', background: T.bg }}>
           <TileLayer url={DARK_TILES} attribution={TILE_ATTR} />
           <FocusController focus={focus} />
+          <ViewportWatcher onChange={(bbox, zoom) => setView({ bbox, zoom })} />
 
           {layers.pipelines && pipes.data?.pipelines.map((p, i) => (
             <Polyline key={`pipe-${i}`} positions={p.coords} pathOptions={{ color: pipes.data!.colors[p.substance] ?? '#6b7280', weight: 2.5, opacity: 0.85 }}>
               <Tooltip sticky>{p.name} · {p.substance === 'gas' ? 'Natural gas' : p.substance === 'oil' ? 'Crude oil' : p.substance}</Tooltip>
             </Polyline>
+          ))}
+
+          {layers.pipelines && layers.osm && osm.pipes.map((p, i) => (
+            <Polyline key={`osmpipe-${i}`} positions={p.coords} pathOptions={{ color: pipes.data?.colors[p.substance] ?? '#6b7280', weight: 2, opacity: 0.7, dashArray: '4 4' }}>
+              <Tooltip sticky>{p.name} · {p.substance} · OSM</Tooltip>
+            </Polyline>
+          ))}
+
+          {layers.ports && layers.osm && osm.ports.map((p, i) => (
+            <CircleMarker key={`osmport-${i}`} center={[p.lat, p.lon]} radius={3}
+              pathOptions={{ color: OSM_PORT_COLOR, fillColor: OSM_PORT_COLOR, fillOpacity: 0.75, weight: 1 }}>
+              <Tooltip>{p.name} <span style={{ opacity: 0.6 }}>· OSM port</span></Tooltip>
+            </CircleMarker>
           ))}
 
           {layers.ports && ports.data?.ports.map(p => (
@@ -182,10 +233,12 @@ export function MaritimeMapContent() {
           ))}
 
           {vessels.map(v => {
-            const col = VESSEL_COLOR[v.category ?? 'other'] ?? VESSEL_COLOR.other
+            const cat = v.category ?? 'other'
+            const col = VESSEL_COLOR[cat] ?? VESSEL_COLOR.other
+            const unknown = cat === 'other'
             return (
-              <CircleMarker key={`v-${v.mmsi}`} center={[v.lat, v.lon]} radius={4}
-                pathOptions={{ color: col, fillColor: col, fillOpacity: 0.9, weight: 1 }}>
+              <CircleMarker key={`v-${v.mmsi}`} center={[v.lat, v.lon]} radius={unknown ? 3 : 4}
+                pathOptions={{ color: col, fillColor: col, fillOpacity: unknown ? 0.5 : 0.9, weight: 1 }}>
                 <Popup>
                   <div style={{ fontFamily: 'var(--theme-mono, monospace)', fontSize: 12, minWidth: 180 }}>
                     <div style={{ fontWeight: 700, marginBottom: 4 }}>{v.name || `MMSI ${v.mmsi}`}</div>

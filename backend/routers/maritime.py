@@ -20,7 +20,9 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 try:
     from disk_cache import disk_get, disk_set
+    import disk_cache as _dc
 except ImportError:                                   # pragma: no cover
+    _dc = None
     def disk_get(_k): return None
     def disk_set(_k, _v, ttl=0): pass
 
@@ -135,6 +137,61 @@ def fetch_overpass_pipelines(south: float, west: float, north: float, east: floa
     return out
 
 
+def fetch_overpass_ports(south: float, west: float, north: float, east: float) -> list:
+    """Query OSM for harbours/ports within a bbox (free global port coordinates).
+    `out center` collapses ways/relations to a single point."""
+    q = (
+        f"[out:json][timeout:25];"
+        f"("
+        f'node["harbour"="yes"]({south},{west},{north},{east});'
+        f'way["harbour"="yes"]({south},{west},{north},{east});'
+        f'node["seamark:type"="harbour"]({south},{west},{north},{east});'
+        f'way["industrial"="port"]({south},{west},{north},{east});'
+        f");"
+        f"out center tags 120;"
+    )
+    try:
+        r = requests.post(_OVERPASS, data={"data": q}, timeout=30,
+                          headers={"User-Agent": "AlphatapeTerminal/1.0"})
+        r.raise_for_status()
+        elements = r.json().get("elements", [])
+    except Exception as e:
+        _log.warning("overpass ports fetch failed: %s", e)
+        return []
+    out, seen = [], set()
+    for el in elements:
+        lat = el.get("lat") or (el.get("center") or {}).get("lat")
+        lon = el.get("lon") or (el.get("center") or {}).get("lon")
+        if lat is None or lon is None:
+            continue
+        name = (el.get("tags") or {}).get("name")
+        key = name or f"{round(lat, 3)},{round(lon, 3)}"
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({"name": name or "OSM port", "lat": lat, "lon": lon, "kind": "osm"})
+    return out
+
+
+def get_ports(bbox: str | None) -> dict:
+    """Curated export terminals always; live OSM commercial ports when a bbox is
+    passed (cached 24h per bbox)."""
+    base = {"ports": PORTS, "osm_ports": [], "source": "curated"}
+    if not bbox:
+        return base
+    ck = f"osmports:{bbox}"
+    cached = disk_get(ck)
+    if cached is not None:
+        return {"ports": PORTS, "osm_ports": cached, "source": "curated+osm"}
+    try:
+        s, w, n, e = [float(x) for x in bbox.split(",")]
+    except Exception:
+        return base
+    osm = fetch_overpass_ports(s, w, n, e)
+    disk_set(ck, osm, ttl=86400)
+    return {"ports": PORTS, "osm_ports": osm, "source": "curated+osm"}
+
+
 def get_pipelines(bbox: str | None) -> dict:
     """Bundled coarse tracks by default; live Overpass detail when a bbox is
     passed (cached 24h per bbox). GEM/OSM are the open sources; the bundle is
@@ -168,12 +225,40 @@ _AIS_BBOXES = [
 ]
 
 _VESSEL_TTL = 600          # drop vessels not seen in 10 min
+_REG_TTL = 30 * 86400      # remember a vessel's static profile for 30 days
+_REG_PREFIX = "ais:static:"
 _vessels: dict[str, dict] = {}
+# Persistent MMSI -> static profile (category/name/destination/ship_type). Built
+# from the live ShipStaticData messages and reloaded on start, so a vessel is
+# classified from the first position report instead of waiting ~6 min for its
+# next static broadcast.
+_static_reg: dict[str, dict] = {}
 _lock = threading.Lock()
 _stop = threading.Event()
 _ws_thread: threading.Thread | None = None
 _ws_app = None
-_status = {"connected": False, "key_present": bool(os.getenv("AISSTREAM_API_KEY")), "error": None}
+_status = {"connected": False, "key_present": bool(os.getenv("AISSTREAM_API_KEY")), "error": None, "registry": 0}
+
+
+def _load_registry():
+    """Warm the in-memory ship registry from disk (survives restarts)."""
+    if _dc is None:
+        return
+    try:
+        rows = _dc._conn().execute(
+            "SELECT key, value FROM cache WHERE key LIKE ? AND expires_at > ?",
+            (_REG_PREFIX + "%", time.time()),
+        ).fetchall()
+    except Exception as e:
+        _log.warning("registry load failed: %s", e)
+        return
+    for key, value in rows:
+        try:
+            _static_reg[key[len(_REG_PREFIX):]] = json.loads(value)
+        except Exception:
+            continue
+    _status["registry"] = len(_static_reg)
+    _log.info("AIS ship registry loaded: %d vessels", len(_static_reg))
 
 
 def _classify(ship_type, name: str) -> str:
@@ -225,12 +310,22 @@ def _on_message(_ws, raw):
         )
     elif mtype == "ShipStaticData":
         sd = (msg.get("Message") or {}).get("ShipStaticData") or {}
-        _upsert(
-            mmsi, name=name or (sd.get("Name") or "").strip() or None,
-            ship_type=sd.get("Type"),
-            category=_classify(sd.get("Type"), name or sd.get("Name")),
-            destination=(sd.get("Destination") or "").strip() or None,
-        )
+        nm = name or (sd.get("Name") or "").strip() or None
+        cat = _classify(sd.get("Type"), nm)
+        dest = (sd.get("Destination") or "").strip() or None
+        _upsert(mmsi, name=nm, ship_type=sd.get("Type"), category=cat, destination=dest)
+        _remember(mmsi, {"category": cat, "name": nm, "destination": dest, "ship_type": sd.get("Type")})
+
+
+def _remember(mmsi: str, profile: dict):
+    """Persist a vessel's static profile, skipping unchanged rows to avoid churn."""
+    with _lock:
+        prev = _static_reg.get(mmsi)
+        _static_reg[mmsi] = profile
+        _status["registry"] = len(_static_reg)
+    if prev and prev.get("category") == profile.get("category") and prev.get("destination") == profile.get("destination"):
+        return
+    disk_set(_REG_PREFIX + mmsi, profile, ttl=_REG_TTL)
 
 
 def _on_open(ws):
@@ -286,6 +381,7 @@ def start_ais_stream():
         return
     if _ws_thread and _ws_thread.is_alive():
         return
+    _load_registry()
     _stop.clear()
     _ws_thread = threading.Thread(target=_run_ws, name="ais-stream", daemon=True)
     _ws_thread.start()
@@ -298,6 +394,57 @@ def stop_ais_stream():
             _ws_app.close()
         except Exception:
             pass
+
+
+# ── REST polling fallback (VesselAPI or any JSON vessel endpoint) ────────────
+# Enabled by env: VESSELAPI_URL (+ optional VESSELAPI_KEY). Merges into the same
+# vessel snapshot as the AIS stream, so it works as a fallback or supplement.
+_REST_INTERVAL = 30
+_rest_thread: threading.Thread | None = None
+
+
+def _run_rest_poll():
+    url = os.getenv("VESSELAPI_URL")
+    key = os.getenv("VESSELAPI_KEY")
+    if not url:
+        return
+    headers = {"Authorization": f"Bearer {key}"} if key else {}
+    while not _stop.is_set():
+        try:
+            r = requests.get(url, headers=headers, timeout=20)
+            r.raise_for_status()
+            data = r.json()
+            items = data if isinstance(data, list) else (data.get("data") or data.get("vessels") or [])
+            for it in items:
+                mmsi = str(it.get("mmsi") or it.get("MMSI") or "")
+                lat = it.get("lat") if it.get("lat") is not None else it.get("latitude")
+                lon = it.get("lon") if it.get("lon") is not None else it.get("longitude")
+                if not mmsi or lat is None or lon is None:
+                    continue
+                nm = it.get("name") or it.get("shipname")
+                _upsert(
+                    mmsi, name=nm, lat=lat, lon=lon,
+                    sog=it.get("sog") if it.get("sog") is not None else it.get("speed"),
+                    cog=it.get("cog") if it.get("cog") is not None else it.get("course"),
+                    heading=it.get("heading"),
+                    destination=it.get("destination") or it.get("dest"),
+                    category=_classify(it.get("type") or it.get("ship_type"), nm),
+                )
+        except Exception as e:
+            _log.warning("VesselAPI poll failed: %s", e)
+        _stop.wait(_REST_INTERVAL)
+
+
+def start_rest_poll():
+    """Start the REST fallback poller if VESSELAPI_URL is configured."""
+    global _rest_thread
+    _status["rest"] = bool(os.getenv("VESSELAPI_URL"))
+    if not _status["rest"]:
+        return
+    if _rest_thread and _rest_thread.is_alive():
+        return
+    _rest_thread = threading.Thread(target=_run_rest_poll, name="vesselapi-poll", daemon=True)
+    _rest_thread.start()
 
 
 def _snapshot() -> list:
@@ -319,8 +466,8 @@ def chokepoints():
 
 
 @router.get("/ports")
-def ports():
-    return {"ports": PORTS}
+def ports(bbox: str | None = Query(None, description="south,west,north,east for live OSM commercial ports")):
+    return get_ports(bbox)
 
 
 @router.get("/pipelines")
@@ -329,10 +476,19 @@ def pipelines(bbox: str | None = Query(None, description="south,west,north,east 
 
 
 @router.get("/vessels")
-def vessels():
-    """Current in-memory AIS snapshot. status.key_present=false means no
-    AISSTREAM_API_KEY is configured, so the layer will be empty by design."""
+def vessels(classified_only: bool = Query(False, description="drop vessels whose type is still unknown")):
+    """Current in-memory AIS snapshot, enriched from the persistent ship
+    registry so most vessels carry a type from the first position report.
+    status.key_present=false means no AISSTREAM_API_KEY is configured."""
     v = _snapshot()
     for x in v:
+        reg = _static_reg.get(x["mmsi"])
+        if reg:
+            if not x.get("category") or x["category"] == "other":
+                x["category"] = reg.get("category") or x.get("category")
+            x.setdefault("destination", reg.get("destination"))
+            x.setdefault("name", reg.get("name"))
         x.setdefault("category", _classify(x.get("ship_type"), x.get("name")))
+    if classified_only:
+        v = [x for x in v if x.get("category") and x["category"] != "other"]
     return {"vessels": v, "count": len(v), "status": _status}

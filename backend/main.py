@@ -36,6 +36,7 @@ async def lifespan(app: FastAPI):
     import bond_prices
     bond_prices.warm_etf_map()       # SSGA holdings are minutes to fetch; build off the request path
     maritime.start_ais_stream()      # live AIS worker (no-op without AISSTREAM_API_KEY)
+    maritime.start_rest_poll()       # REST vessel fallback (no-op without VESSELAPI_URL)
     yield
     maritime.stop_ais_stream()
     screener.stop_backfill_loop()
