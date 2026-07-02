@@ -681,9 +681,147 @@ def fed_projections():
     result = {
         "meetings":     meetings,
         "current_rate": round(current_rate, 2) if current_rate is not None else None,
+        "next_meeting_date": upcoming[0].isoformat() if upcoming else None,
         "source":       source,
     }
     return result
+
+
+# ── FOMC SEP dot plot (median + range, FRED) ────────────────────────────────
+# FRED carries the SEP distribution summary — median, central tendency and full
+# range of participant projections — but not the individual 19 dots (those live
+# only in the release PDF). We plot the honest summary (median tick, central-
+# tendency band, range whiskers) rather than fabricate participant positions.
+_SEP_SERIES = {
+    "median": "FEDTARMD", "ct_high": "FEDTARCTH", "ct_low": "FEDTARCTL",
+    "range_high": "FEDTARRH", "range_low": "FEDTARRL",
+}
+_SEP_LR = {
+    "median": "FEDTARMDLR", "range_high": "FEDTARRHLR", "range_low": "FEDTARRLLR",
+}
+
+
+def _fred_series_json(sid: str):
+    try:
+        r = requests.get(
+            "https://api.stlouisfed.org/fred/series/observations",
+            params={"series_id": sid, "api_key": _FRED_KEY, "file_type": "json"},
+            timeout=8,
+        )
+        return [(o["date"], float(o["value"])) for o in r.json().get("observations", [])
+                if o.get("value") not in (".", "", None)]
+    except Exception:
+        return []
+
+
+@router.get("/sep-dots")
+def sep_dots():
+    """FOMC Summary of Economic Projections for the fed funds rate: per-year
+    median, central-tendency band and full range, plus the longer-run bar and
+    a market-implied year-end marker. All summary stats are real FRED data;
+    individual participant dots are not published in machine-readable form."""
+    if not _FRED_KEY:
+        return {"years": [], "longer_run": None, "vintage": None, "source": "unavailable"}
+    cached = disk_get(f"rates:sepdots:{_CACHE_VERSION}")
+    if cached:
+        return cached
+
+    sids = list(_SEP_SERIES.values()) + list(_SEP_LR.values())
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        raw = dict(zip(sids, ex.map(_fred_series_json, sids)))
+
+    def year_map(sid: str) -> dict[int, float]:
+        return {int(d[:4]): round(v, 3) for d, v in raw.get(sid, [])}
+    fields = {k: year_map(sid) for k, sid in _SEP_SERIES.items()}
+
+    # Market-implied year-end: the implied path's last FOMC meeting per calendar
+    # year (reuse the cached fed-projections build so the two stay consistent).
+    mkt_by_year: dict[int, float] = {}
+    try:
+        for m in fed_projections().get("meetings", []):
+            y = int(m["date"][:4])
+            mkt_by_year[y] = m["rate"]   # later (Dec) meetings overwrite earlier ones
+    except Exception:
+        pass
+
+    years = []
+    for y in sorted(fields["median"]):
+        if fields["median"][y] is None:
+            continue
+        years.append({
+            "year": y,
+            "median": fields["median"].get(y),
+            "ct_high": fields["ct_high"].get(y),
+            "ct_low": fields["ct_low"].get(y),
+            "range_high": fields["range_high"].get(y),
+            "range_low": fields["range_low"].get(y),
+            "market": mkt_by_year.get(y),
+        })
+
+    lr_raw = {k: raw.get(sid, []) for k, sid in _SEP_LR.items()}
+    longer_run = None
+    if lr_raw["median"]:
+        longer_run = {
+            "median": round(lr_raw["median"][-1][1], 3),
+            "range_high": round(lr_raw["range_high"][-1][1], 3) if lr_raw["range_high"] else None,
+            "range_low": round(lr_raw["range_low"][-1][1], 3) if lr_raw["range_low"] else None,
+        }
+    # The SEP release date = the latest longer-run observation date (updated only
+    # at the four projection meetings: Mar/Jun/Sep/Dec).
+    vintage = lr_raw["median"][-1][0] if lr_raw["median"] else None
+
+    out = {"years": years, "longer_run": longer_run, "vintage": vintage, "source": "FRED SEP"}
+    if years:
+        disk_set(f"rates:sepdots:{_CACHE_VERSION}", out, ttl=24 * 3600)
+    return out
+
+
+# ── Curve spreads (2s10s / 3M10Y / 5s30s) with 6-month trend ────────────────
+_SPREAD_DEFS = [
+    ("2s10s", "10Y", "2Y"), ("3M10Y", "10Y", "3M"), ("5s30s", "30Y", "5Y"),
+]
+
+
+@router.get("/curve-spreads")
+@cached(ttl=3600, maxsize=1)
+def curve_spreads():
+    """Current level and ~6-month daily trend for the three headline curve
+    spreads, in basis points. Built from the same yfinance anchor closes the
+    yield-curve history uses (2Y/3M interpolated from the anchor set)."""
+    start = (date.today() - timedelta(days=200)).isoformat()
+    end = date.today().isoformat()
+    syms = tuple(v[0] for v in _YF_ANCHOR_TICKERS.values())
+    try:
+        raw = get_download(syms, start=start, end=end)
+        close = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw
+        close = close.ffill().dropna()
+    except Exception:
+        close = pd.DataFrame()
+
+    spreads = []
+    for name, long_t, short_t in _SPREAD_DEFS:
+        series = []
+        for dt, row in close.iterrows():
+            anchors: dict[float, float] = {}
+            for _lbl, (sym, years) in _YF_ANCHOR_TICKERS.items():
+                if sym in close.columns:
+                    v = float(row[sym])
+                    anchors[years] = v if v < 20.0 else v / 100.0
+            if len(anchors) < 2:
+                continue
+            lo = _interp_point(anchors, _FULL_TENOR_YEARS[long_t])
+            sh = _interp_point(anchors, _FULL_TENOR_YEARS[short_t])
+            series.append({"date": str(dt.date()), "bp": round((lo - sh) * 100, 1)})
+        series = series[-126:]
+        vals = [p["bp"] for p in series]
+        spreads.append({
+            "name": name,
+            "current": vals[-1] if vals else None,
+            "low": min(vals) if vals else None,
+            "high": max(vals) if vals else None,
+            "history": series,
+        })
+    return {"spreads": spreads, "as_of": end}
 
 
 # ── Macro Calendar ─────────────────────────────────────────────────────────────

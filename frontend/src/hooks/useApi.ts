@@ -56,5 +56,11 @@ export const fetchYieldCurve = () =>
 export const fetchFedProjections = () =>
   api.get('/rates/fed-projections').then(r => r.data)
 
+export const fetchSepDots = () =>
+  api.get('/rates/sep-dots').then(r => r.data)
+
+export const fetchCurveSpreads = () =>
+  api.get('/rates/curve-spreads').then(r => r.data)
+
 export const fetchCorrelation = (body: object) =>
   api.post('/correlation/matrix', body).then(r => r.data)

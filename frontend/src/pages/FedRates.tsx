@@ -1,93 +1,308 @@
 import { T } from '../lib/theme'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
+import {
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  Legend, LabelList, Customized,
+} from 'recharts'
 import PageWrapper from '../components/PageWrapper'
-import { fetchYieldCurve, fetchFedProjections } from '../hooks/useApi'
-import { TOOLTIP_STYLE, CROSSHAIR_CURSOR, BAR_CURSOR } from '../components/ChartTooltip'
+import { fetchYieldCurve, fetchFedProjections, fetchSepDots, fetchCurveSpreads } from '../hooks/useApi'
+import { TOOLTIP_STYLE, CROSSHAIR_CURSOR } from '../components/ChartTooltip'
 
+// Weight models — how a front-end funds shock decays across meetings / tenors.
 const FED_WEIGHTS = [1.0, 0.9, 0.7, 0.5, 0.3, 0.1]
-const YC_WEIGHTS  = [1.0, 0.98, 0.85, 0.40, 0.1, -0.19, -0.325]
-const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #5e768f)', fontFamily: 'var(--theme-mono)' }
+const YC_TENORS = ['FF', '1Y', '2Y', '5Y', '10Y', '20Y', '30Y']
+const YC_WEIGHTS = [1.0, 0.98, 0.85, 0.40, 0.1, -0.19, -0.325]
+const CURVE_TENORS = ['FF', '1M', '3M', '6M', '1Y', '2Y', '3Y', '5Y', '7Y', '10Y', '20Y', '30Y']
+const TWIST_W: Record<string, number> = { FF: 1.0, '1M': 1.0, '3M': 0.99, '6M': 0.98, '1Y': 0.98, '2Y': 0.85, '3Y': 0.65, '5Y': 0.40, '7Y': 0.25, '10Y': 0.1, '20Y': -0.19, '30Y': -0.325 }
+const PRESETS = [-100, -50, -25, 0, 25, 50, 100]
 
+// Outcome trio — same as the prior build.
+const C_HIKE = '#c0394d'
+const C_HOLD = 'var(--theme-chart-neutral, #4a7fa5)'
+const C_CUT = '#2e9a62'
+const VIOLET = 'var(--theme-accent-violet, #c084fc)'
 
-// ── Inline stat row — replaces isolated metric tiles ──────────────────────
-function StatRow({ items }: { items: { label: string; value: string; sub?: string; delta?: string; positive?: boolean }[] }) {
+const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
+const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #8099b0)', fontFamily: 'var(--theme-mono)' }
+const eyebrow: React.CSSProperties = { fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: T.muted }
+const bandTitle: React.CSSProperties = { fontFamily: T.mono, fontSize: 10, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: T.text }
+const band: React.CSSProperties = { padding: '14px 24px', borderTop: `1px solid ${T.borderFaint}` }
+
+// ── Measure a container's width (for hand-rolled SVG charts) ────────────────
+function useWidth<E extends HTMLElement>() {
+  const ref = useRef<E>(null)
+  const [w, setW] = useState(0)
+  useEffect(() => {
+    if (!ref.current) return
+    const ro = new ResizeObserver(entries => setW(entries[0].contentRect.width))
+    ro.observe(ref.current)
+    return () => ro.disconnect()
+  }, [])
+  return [ref, w] as const
+}
+
+const fmtClock = () => new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'America/New_York' }).format(new Date())
+
+// Isolated so the 1s tick doesn't re-render the charts / dot plot.
+function LiveClock() {
+  const [clock, setClock] = useState(fmtClock)
+  useEffect(() => { const id = setInterval(() => setClock(fmtClock()), 1000); return () => clearInterval(id) }, [])
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'stretch' }}>
-      {items.map((item, i) => (
-        <div
-          key={i}
-          style={{
-            flex: '1 1 130px',
-            minWidth: 130,
-            padding: '14px 18px',
-            borderRight: i < items.length - 1 ? `1px solid ${T.border}` : 'none',
-          }}
-        >
-          <div style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, marginBottom: 6 }}>
-            {item.label}
-          </div>
-          <div style={{ fontFamily: T.mono, fontSize: 22, fontWeight: 700, color: T.text, lineHeight: 1.1 }}>
-            {item.value}
-          </div>
-          {item.sub && <div style={{ fontFamily: T.label, fontSize: 10, color: T.muted, marginTop: 4 }}>{item.sub}</div>}
-          {item.delta && (
-            <div style={{ fontFamily: T.mono, fontSize: 10, marginTop: 4, color: item.positive ? T.pos : T.neg }}>
-              {item.delta}
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
+    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <span style={{ width: 5, height: 5, borderRadius: '50%', background: T.pos }} />
+      <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted }}>LIVE · {clock} ET</span>
+    </span>
   )
 }
 
-// ── Panel wrapper ─────────────────────────────────────────────────────────
-function Panel({ title, children, action }: { title?: string; children: React.ReactNode; action?: React.ReactNode }) {
+// ── Band 2: scenario chips + centre-anchored slider ─────────────────────────
+function ScenarioBand({ twist, setTwist }: { twist: number; setTwist: (n: number) => void }) {
+  const pct = (twist + 200) / 400 * 100          // thumb position 0..100
+  const fillLeft = Math.min(50, pct)             // centre-anchored gold fill
+  const fillWidth = Math.abs(pct - 50)
   return (
-    <div className="ft-panel">
-      {title && (
-        <div className="ft-panel-header">
-          <span>{title}</span>
-          {action}
+    <div style={{ ...band, borderTop: 'none', background: T.goldTint(5), borderBottom: `1px solid ${T.goldTint(28)}`, display: 'flex', alignItems: 'center', gap: 22, flexWrap: 'wrap' }}>
+      <div style={{ flex: 'none' }}>
+        <div style={{ ...eyebrow, marginBottom: 3 }}>Rate Scenario</div>
+        <div style={{ fontFamily: T.mono, fontSize: 26, fontWeight: 700, lineHeight: 1, color: twist === 0 ? T.muted : T.gold }}>
+          {twist > 0 ? '+' : ''}{twist}<span style={{ fontSize: 13, marginLeft: 4 }}>bps</span>
         </div>
+      </div>
+      <div style={{ display: 'flex', gap: 6, flex: 'none' }}>
+        {PRESETS.map(p => {
+          const on = twist === p
+          const neutral = p === 0
+          return (
+            <button key={p} onClick={() => setTwist(p)} style={{
+              fontFamily: T.mono, fontSize: 9.5, fontWeight: 700, padding: '5px 10px', cursor: 'pointer',
+              background: on ? (neutral ? 'rgba(255,255,255,0.1)' : T.gold) : 'transparent',
+              color: on ? (neutral ? T.text : 'var(--theme-bg, #101c2e)') : T.muted,
+              border: `1px solid ${on && !neutral ? T.gold : 'rgba(255,255,255,0.14)'}`,
+            }}>{p > 0 ? '+' : ''}{p}</button>
+          )
+        })}
+      </div>
+      <div style={{ position: 'relative', flex: '1 1 240px', height: 16, display: 'flex', alignItems: 'center', minWidth: 200 }}>
+        <div style={{ position: 'absolute', left: 0, right: 0, height: 3, background: 'rgba(255,255,255,0.12)' }} />
+        <div style={{ position: 'absolute', left: `${fillLeft}%`, width: `${fillWidth}%`, height: 3, background: T.gold }} />
+        <div style={{ position: 'absolute', left: `calc(${pct}% - 6px)`, width: 12, height: 12, background: T.gold, border: '2px solid var(--theme-bg, #101c2e)', boxShadow: `0 0 0 1px ${T.gold}` }} />
+        <input type="range" min={-200} max={200} step={5} value={twist} onChange={e => setTwist(+e.target.value)}
+          aria-label="Rate scenario shock in basis points"
+          style={{ position: 'absolute', left: 0, right: 0, width: '100%', margin: 0, opacity: 0, cursor: 'pointer', height: 16 }} />
+      </div>
+      {twist !== 0 && (
+        <button onClick={() => setTwist(0)} style={{ flex: 'none', fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.muted, background: 'none', border: `1px solid ${T.border}`, padding: '5px 10px', cursor: 'pointer' }}>Reset</button>
       )}
-      {children}
+      <div style={{ flex: '1 1 180px', minWidth: 160, fontFamily: T.label, fontSize: 11, color: T.muted }}>
+        Shock decays along the strip. Full at the front, fading past 10Y.
+      </div>
     </div>
   )
 }
 
-// ── Yield curve tenor table ───────────────────────────────────────────────
-function YieldTable({ curve, adjusted, twist }: { curve: Record<string, number>; adjusted: { tenor: string; current: number; adjusted: number }[]; twist: number }) {
-  const TENORS = ['FF', '1Y', '2Y', '5Y', '10Y', '20Y', '30Y']
-  const LABELS: Record<string, string> = { FF: 'Fed Funds' }
+// ── Band 3: base→adjusted connectors drawn in chart pixel space ─────────────
+function PathConnectors(props: any) {
+  const { xAxisMap, yAxisMap, data, twist } = props
+  if (!xAxisMap || !yAxisMap || twist === 0) return null
+  const xScale = (Object.values(xAxisMap)[0] as any).scale
+  const yScale = (Object.values(yAxisMap)[0] as any).scale
+  const bw = xScale.bandwidth ? xScale.bandwidth() : 0
   return (
-    <div style={{ display: 'flex', borderBottom: `1px solid ${T.border}` }}>
-      {TENORS.map((t, i) => {
-        const pt = adjusted.find(a => a.tenor === t)
-        const val = pt?.adjusted ?? curve[t] ?? null
-        const delta = pt && twist !== 0 ? (pt.adjusted - pt.current) * 100 : null
+    <g>
+      {[0, 2, 4].map(i => {
+        const d = data[i]
+        if (!d) return null
+        const x = xScale(d.date) + bw / 2
+        const yb = yScale(d.base_rate), ya = yScale(d.adjusted_rate)
+        const bp = Math.round((d.adjusted_rate - d.base_rate) * 100)
+        if (!bp) return null
         return (
-          <div
-            key={t}
-            style={{
-              flex: 1,
-              padding: '12px 14px',
-              borderRight: i < TENORS.length - 1 ? `1px solid ${T.border}` : 'none',
-            }}
-          >
-            <div style={{ fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, marginBottom: 5 }}>
-              {LABELS[t] ?? t}
+          <g key={i}>
+            <line x1={x} x2={x} y1={yb} y2={ya} stroke={T.gold} strokeWidth={1} strokeDasharray="2 2" opacity={0.55} />
+            <text x={x + 5} y={(yb + ya) / 2 + 3} fontFamily="var(--theme-mono)" fontSize={8.5} fill="#8099b0">+{bp} bp</text>
+          </g>
+        )
+      })}
+    </g>
+  )
+}
+
+const goldLabel = (p: any) => (
+  <text x={p.x} y={p.y - 9} textAnchor="middle" fontFamily="var(--theme-mono)" fontSize={9.5} fontWeight={700} fill={p.fill}>
+    {typeof p.value === 'number' ? p.value.toFixed(2) : p.value}
+  </text>
+)
+
+function FedPathChart({ meetings, twist }: { meetings: any[]; twist: number }) {
+  const active = twist !== 0
+  const vals = meetings.flatMap(m => [m.base_rate, m.adjusted_rate])
+  const lo = Math.floor(Math.min(...vals) * 5) / 5 - 0.1
+  const hi = Math.ceil(Math.max(...vals) * 5) / 5 + 0.1
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <LineChart data={meetings} margin={{ left: 4, right: 24, top: 26, bottom: 4 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+        <XAxis dataKey="date" tick={TICK} axisLine={false} tickLine={false} />
+        <YAxis tick={TICK} tickFormatter={v => `${v}%`} domain={[lo, hi]} axisLine={false} tickLine={false} width={44} />
+        <Tooltip contentStyle={TOOLTIP_STYLE} cursor={CROSSHAIR_CURSOR} formatter={(v: number, n: string) => [`${v.toFixed(2)}%`, n]} />
+        <Legend verticalAlign="top" align="right" wrapperStyle={{ fontFamily: T.label, fontSize: 9, letterSpacing: '0.1em', paddingBottom: 4 }} />
+        {active && <Line type="monotone" dataKey="base_rate" stroke="rgba(255,255,255,0.22)" strokeWidth={1.5} strokeDasharray="5 4" dot={false} name="BASE" isAnimationActive={false} />}
+        <Line type="monotone" dataKey="adjusted_rate" stroke={T.gold} strokeWidth={2.25}
+          dot={{ fill: T.gold, stroke: 'var(--theme-bg, #101c2e)', strokeWidth: 1.5, r: 4.5 }}
+          name={active ? 'SCENARIO' : 'IMPLIED'} isAnimationActive={false}>
+          <LabelList dataKey="adjusted_rate" content={(p: any) => goldLabel({ ...p, fill: active ? T.gold : T.text })} />
+        </Line>
+        <Customized component={(p: any) => <PathConnectors {...p} data={meetings} twist={twist} />} />
+      </LineChart>
+    </ResponsiveContainer>
+  )
+}
+
+// ── Band 4: meeting odds strip ──────────────────────────────────────────────
+function OddsStrip({ meetings }: { meetings: any[] }) {
+  const [hover, setHover] = useState<number | null>(null)
+  return (
+    <div style={band}>
+      <div style={{ ...bandTitle, marginBottom: 12 }}>Meeting Odds — Hike / Hold / Cut</div>
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(meetings.length, 8)}, 1fr)`, gap: 14 }}>
+      {meetings.slice(0, 8).map((m, i) => {
+        const outcomes: [string, number, string][] = [['HIKE', m.prob_hike, C_HIKE], ['HOLD', m.prob_hold, C_HOLD], ['CUT', m.prob_cut, C_CUT]]
+        const [domLabel, domVal, domCol] = outcomes.reduce((a, b) => b[1] > a[1] ? b : a)
+        return (
+          <div key={m.date} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} style={{ position: 'relative', minWidth: 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6, gap: 6 }}>
+              <span style={{ fontFamily: T.mono, fontSize: 9, color: i === 0 ? T.gold : T.muted, fontWeight: i === 0 ? 700 : 400, whiteSpace: 'nowrap' }}>{i === 0 ? '▸ ' : ''}{m.date}</span>
+              <span style={{ fontFamily: T.mono, fontSize: 10, fontWeight: 700, color: domCol, whiteSpace: 'nowrap' }}>{domLabel} {Math.round(domVal)}</span>
             </div>
-            <div style={{ fontFamily: T.mono, fontSize: 16, fontWeight: 700, color: T.text, lineHeight: 1 }}>
-              {val != null ? `${val.toFixed(2)}%` : '—'}
+            <div style={{ display: 'flex', height: 8, background: 'rgba(255,255,255,0.05)' }}>
+              {outcomes.map(([lbl, v, c]) => v > 0 && <div key={lbl} style={{ width: `${v}%`, background: c }} />)}
             </div>
-            {delta != null && (
-              <div style={{ fontFamily: T.mono, fontSize: 9, marginTop: 3, color: delta < 0 ? T.pos : T.neg }}>
-                {delta > 0 ? '+' : ''}{delta.toFixed(0)} bps
+            {hover === i && (
+              <div style={{ position: 'absolute', top: -6, left: '50%', transform: 'translate(-50%,-100%)', zIndex: 10, ...TOOLTIP_STYLE, whiteSpace: 'nowrap' }}>
+                {outcomes.map(([lbl, v, c]) => (
+                  <div key={lbl} style={{ display: 'flex', justifyContent: 'space-between', gap: 14, color: c }}><span>{lbl}</span><span>{Math.round(v)}%</span></div>
+                ))}
               </div>
             )}
+          </div>
+        )
+      })}
+      </div>
+    </div>
+  )
+}
+
+// ── Band 5: yield curve ─────────────────────────────────────────────────────
+function YieldCurveChart({ rows, twist }: { rows: any[]; twist: number }) {
+  const active = twist !== 0
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <LineChart data={rows} margin={{ left: 4, right: 20, top: 20, bottom: 4 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+        <XAxis dataKey="tenor" tick={TICK} axisLine={false} tickLine={false} />
+        <YAxis tick={TICK} tickFormatter={v => `${v}%`} domain={['auto', 'auto']} axisLine={false} tickLine={false} width={44} />
+        <Tooltip contentStyle={TOOLTIP_STYLE} cursor={CROSSHAIR_CURSOR} formatter={(v: number, n: string) => [`${v.toFixed(2)}%`, n]} />
+        <Legend verticalAlign="top" align="right" wrapperStyle={{ fontFamily: T.label, fontSize: 9, letterSpacing: '0.08em', paddingBottom: 4 }} />
+        <Line type="monotone" dataKey="m6" stroke="rgba(255,255,255,0.30)" strokeWidth={1.25} strokeDasharray="2 4" dot={false} name="6M ago" connectNulls isAnimationActive={false} />
+        <Line type="monotone" dataKey="m1" stroke="#5e768f" strokeWidth={1.5} strokeDasharray="6 4" dot={false} name="1M ago" connectNulls isAnimationActive={false} />
+        <Line type="monotone" dataKey="d1" stroke={VIOLET} strokeWidth={1.25} strokeDasharray="7 3" strokeOpacity={0.7} dot={false} name="1D ago" connectNulls isAnimationActive={false} />
+        <Line type="monotone" dataKey="today"
+          stroke={active ? 'rgba(255,255,255,0.28)' : T.gold} strokeWidth={active ? 1.75 : 2}
+          dot={active ? false : { fill: T.gold, r: 2.5 }} name="Today" connectNulls isAnimationActive={false} />
+        {active && <Line type="monotone" dataKey="adjusted" stroke={T.gold} strokeWidth={2} strokeDasharray="4 3" dot={false} name="Scenario" connectNulls isAnimationActive={false} />}
+      </LineChart>
+    </ResponsiveContainer>
+  )
+}
+
+// ── Band 6a: FOMC dot plot (median + central tendency + range) ──────────────
+function DotPlot({ data }: { data: any }) {
+  const [ref, w] = useWidth<HTMLDivElement>()
+  const h = 250, padL = 42, padR = 12, padT = 8, padB = 26
+  const cols: { key: string; label: string; d: any }[] = [
+    ...data.years.map((y: any) => ({ key: String(y.year), label: String(y.year), d: y })),
+  ]
+  if (data.longer_run) cols.push({ key: 'lr', label: 'LONGER RUN', d: { ...data.longer_run, market: null } })
+  const yLo = 2.5, yHi = 4.5
+  const plotH = h - padT - padB
+  const yPix = (v: number) => padT + (yHi - v) / (yHi - yLo) * plotH
+  const colW = w > 0 ? (w - padL - padR) / cols.length : 0
+  const cx = (i: number) => padL + colW * (i + 0.5)
+  const gridVals = [2.5, 3.0, 3.5, 4.0, 4.5]
+
+  return (
+    <div ref={ref} style={{ width: '100%' }}>
+      {w > 0 && (
+        <svg width={w} height={h}>
+          {gridVals.map(v => (
+            <g key={v}>
+              <line x1={padL} x2={w - padR} y1={yPix(v)} y2={yPix(v)} stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
+              <text x={padL - 8} y={yPix(v) + 3} textAnchor="end" fontFamily="var(--theme-mono)" fontSize={9} fill="#8099b0">{v.toFixed(1)}%</text>
+            </g>
+          ))}
+          {cols.map((c, i) => {
+            const x = cx(i)
+            const d = c.d
+            return (
+              <g key={c.key}>
+                {d.range_low != null && d.range_high != null && (
+                  <line x1={x} x2={x} y1={yPix(d.range_high)} y2={yPix(d.range_low)} stroke="#5e768f" strokeWidth={1} opacity={0.5} />
+                )}
+                {d.ct_low != null && d.ct_high != null && (
+                  <line x1={x} x2={x} y1={yPix(d.ct_high)} y2={yPix(d.ct_low)} stroke="#5e768f" strokeWidth={7} opacity={0.55} strokeLinecap="round" />
+                )}
+                {d.median != null && (
+                  <line x1={x - 14} x2={x + 14} y1={yPix(d.median)} y2={yPix(d.median)} stroke={T.gold} strokeWidth={2.5} />
+                )}
+                {d.market != null && (
+                  <g>
+                    <rect x={x - 5} y={yPix(d.market) - 5} width={10} height={10} fill={T.blue} transform={`rotate(45 ${x} ${yPix(d.market)})`} />
+                    <text x={x + 12} y={yPix(d.market) + 3} fontFamily="var(--theme-mono)" fontSize={8.5} fontWeight={700} fill={T.blue}>MKT {d.market.toFixed(2)}</text>
+                  </g>
+                )}
+                <text x={x} y={h - 8} textAnchor="middle" fontFamily="var(--theme-mono)" fontSize={9} fontWeight={700} letterSpacing="0.08em" fill="#8099b0">{c.label}</text>
+              </g>
+            )
+          })}
+        </svg>
+      )}
+    </div>
+  )
+}
+
+// ── Band 6b: curve spreads ──────────────────────────────────────────────────
+function Sparkline({ pts, w = 120, h = 30 }: { pts: number[]; w?: number; h?: number }) {
+  if (pts.length < 2) return <svg width={w} height={h} />
+  const min = Math.min(...pts, 0), max = Math.max(...pts, 0), span = max - min || 1
+  const y = (v: number) => h - 2 - (v - min) / span * (h - 4)
+  const x = (i: number) => (i / (pts.length - 1)) * w
+  const line = pts.map((v, i) => `${x(i)},${y(v)}`).join(' ')
+  return (
+    <svg width={w} height={h} style={{ display: 'block' }}>
+      {min <= 0 && max >= 0 && <line x1={0} x2={w} y1={y(0)} y2={y(0)} stroke="rgba(255,255,255,0.10)" strokeDasharray="3 3" />}
+      <polyline points={line} fill="none" stroke={T.blue} strokeWidth={1.75} />
+    </svg>
+  )
+}
+
+function SpreadsPanel({ spreads }: { spreads: any[] }) {
+  const [ref, w] = useWidth<HTMLDivElement>()
+  return (
+    <div ref={ref}>
+      {spreads.map((s, i) => {
+        const pos = (s.current ?? 0) >= 0
+        return (
+          <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 0', borderTop: i ? `1px solid ${T.borderFaint}` : 'none' }}>
+            <span style={{ flex: 'none', width: 56, fontFamily: T.mono, fontSize: 10, fontWeight: 700, color: '#8099b0' }}>{s.name}</span>
+            <span style={{ flex: 'none', width: 80, textAlign: 'right', fontFamily: T.mono, fontSize: 16, fontWeight: 700, color: pos ? T.pos : T.neg }}>
+              {s.current == null ? '—' : `${pos ? '+' : ''}${Math.round(s.current)}bp`}
+            </span>
+            <div style={{ flex: 1, minWidth: 0 }}><Sparkline pts={s.history.map((p: any) => p.bp)} w={Math.max(60, w - 248)} /></div>
+            <span style={{ flex: 'none', width: 96, textAlign: 'right', fontFamily: T.mono, fontSize: 9, color: T.muted, whiteSpace: 'nowrap' }}>
+              {s.low != null ? `${Math.round(s.low)} → ${Math.round(s.high)}` : ''}
+            </span>
           </div>
         )
       })}
@@ -95,187 +310,184 @@ function YieldTable({ curve, adjusted, twist }: { curve: Record<string, number>;
   )
 }
 
+// ── Small inline stat (value + optional scenario delta) ─────────────────────
+function InlineStat({ label, value, delta, deltaPos }: { label: string; value: string; delta?: string; deltaPos?: boolean }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6, whiteSpace: 'nowrap' }}>
+      <span style={{ ...eyebrow, fontSize: 9 }}>{label}</span>
+      <span style={{ fontFamily: T.mono, fontSize: 15, fontWeight: 700, color: T.text }}>{value}</span>
+      {delta && <span style={{ fontFamily: T.mono, fontSize: 10, color: deltaPos ? T.gold : '#8099b0' }}>{delta}</span>}
+    </span>
+  )
+}
+
 export function FedRatesContent() {
   const [twist, setTwist] = useState(0)
 
-  const { data: curveData, isError: curveErr } = useQuery({ queryKey: ['yield-curve'],    queryFn: fetchYieldCurve })
-  const { data: fedData, isError: fedErr }      = useQuery({ queryKey: ['fed-projections'], queryFn: fetchFedProjections })
+  const { data: curveData, isError: curveErr } = useQuery({ queryKey: ['yield-curve'], queryFn: fetchYieldCurve })
+  const { data: fedData, isError: fedErr } = useQuery({ queryKey: ['fed-projections'], queryFn: fetchFedProjections })
+  const { data: sepData } = useQuery({ queryKey: ['sep-dots'], queryFn: fetchSepDots })
+  const { data: spreadsData } = useQuery({ queryKey: ['curve-spreads'], queryFn: fetchCurveSpreads })
 
-  // Both feeds drive different widgets; fed-projections is slow on a cold cache.
-  // Gate every panel on both so the tab loads as one piece instead of staggering.
   const ready = !!curveData && !!fedData
   const failed = curveErr || fedErr
 
   const adjustedMeetings = fedData?.meetings.map((m: any, i: number) => ({
     ...m,
-    base_rate:     m.rate,
+    base_rate: m.rate,
     adjusted_rate: +(m.rate + (twist / 100) * (FED_WEIGHTS[i] ?? 0.05)).toFixed(2),
   })) ?? []
 
-  const adjustedCurve = curveData ? ['FF', '1Y', '2Y', '5Y', '10Y', '20Y', '30Y'].map((t, i) => ({
-    tenor:    t,
-    current:  curveData.curve[t] ?? 0,
+  const adjustedCurve = curveData ? YC_TENORS.map((t, i) => ({
+    tenor: t,
+    current: curveData.curve[t] ?? 0,
     adjusted: +Math.max(0.1, (curveData.curve[t] ?? 0) + (twist / 100) * YC_WEIGHTS[i]).toFixed(3),
   })) : []
 
-  // Full-tenor curve for the chart overlay: today vs 1d, ~1mo and ~6mo ago.
-  const CURVE_TENORS = ['FF', '1M', '3M', '6M', '1Y', '2Y', '3Y', '5Y', '7Y', '10Y', '20Y', '30Y']
-  const TWIST_W: Record<string, number> = { FF: 1.0, '1M': 1.0, '3M': 0.99, '6M': 0.98, '1Y': 0.98, '2Y': 0.85, '3Y': 0.65, '5Y': 0.40, '7Y': 0.25, '10Y': 0.1, '20Y': -0.19, '30Y': -0.325 }
   const curveChart = curveData ? CURVE_TENORS.filter(t => curveData.curve[t] != null).map(t => ({
-    tenor:    t,
-    today:    curveData.curve[t] ?? null,
-    d1:       curveData.curve_1d?.[t] ?? null,
-    m1:       curveData.curve_1m?.[t] ?? null,
-    m6:       curveData.curve_6m?.[t] ?? null,
+    tenor: t,
+    today: curveData.curve[t] ?? null,
+    d1: curveData.curve_1d?.[t] ?? null,
+    m1: curveData.curve_1m?.[t] ?? null,
+    m6: curveData.curve_6m?.[t] ?? null,
     adjusted: twist !== 0 ? +Math.max(0.1, (curveData.curve[t] ?? 0) + (twist / 100) * (TWIST_W[t] ?? 0.1)).toFixed(3) : null,
   })) : []
 
-  const nextRate  = adjustedMeetings[0]?.adjusted_rate
-  const yearEnd   = adjustedMeetings[4]?.adjusted_rate
+  // Header inline stats for the fed-path band.
+  const m0 = adjustedMeetings[0]
+  const yEnd = adjustedMeetings.find((m: any) => m.date.startsWith('2027-01')) ?? adjustedMeetings[4]
   const totalMove = adjustedMeetings.length >= 2
-    ? ((adjustedMeetings.at(-1)?.adjusted_rate ?? 0) - (adjustedMeetings[0]?.adjusted_rate ?? 0)) * 100
-    : 0
+    ? (adjustedMeetings.at(-1).adjusted_rate - adjustedMeetings[0].adjusted_rate) * 100 : 0
+  const dBp = (m: any) => m ? Math.round((m.adjusted_rate - m.base_rate) * 100) : 0
 
-  const summaryItems = [
-    { label: 'Next Meeting Implied',   value: nextRate != null ? `${nextRate.toFixed(2)}%` : '—',
-      delta: twist !== 0 ? `${(twist * FED_WEIGHTS[0]).toFixed(1)} bps adj` : undefined, positive: twist < 0 },
-    { label: adjustedMeetings[4]?.date ? `${adjustedMeetings[4].date} Implied` : 'Forward Implied',
-      value: yearEnd != null ? `${yearEnd.toFixed(2)}%` : '—' },
-    { label: 'Total Projected Move',    value: `${totalMove > 0 ? '+' : ''}${totalMove.toFixed(0)} bps`,
-      sub: 'Through last FOMC meeting' },
-  ]
+  // Countdown to the next FOMC meeting.
+  let fomcLabel = '', fomcDays = ''
+  if (fedData?.next_meeting_date) {
+    const d = new Date(fedData.next_meeting_date + 'T00:00:00')
+    fomcLabel = `${MONTHS[d.getMonth()]} ${d.getDate()}`
+    const days = Math.max(0, Math.ceil((d.getTime() - Date.now()) / 86400000))
+    fomcDays = `${days}D`
+  }
 
-  const fomc = fedData?.meetings[0]
-
-  // min(440px, 100%) so the column never forces a width wider than the screen
-  // (a bare minmax(440px,…) overflows the viewport on mobile).
-  const gridTwo: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(440px, 100%), 1fr))', gap: 12 }
+  // Dot-plot caption: where the market prices year-end vs the near SEP median.
+  let sepCaption: React.ReactNode = null
+  const sy = sepData?.years?.[0]
+  if (sy && sy.market != null && sy.median != null) {
+    const bp = Math.round((sy.market - sy.median) * 100)
+    sepCaption = <>Market prices year-end <b style={{ color: T.blue }}>{Math.abs(bp)} bp {bp >= 0 ? 'above' : 'below'}</b> the {sy.year} SEP median.</>
+  }
+  let sepVintage = ''
+  if (sepData?.vintage) {
+    const d = new Date(sepData.vintage + 'T00:00:00')
+    sepVintage = `${MONTHS[d.getMonth()]} ${d.getFullYear()} SEP`
+  }
 
   return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-
-        {/* Rate sensitivity slider */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 16, marginBottom: 2, paddingBottom: 14, borderBottom: `1px solid var(--theme-border-faint, rgba(255,255,255,0.05))` }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: T.surface, border: `1px solid ${T.border}`, padding: '8px 14px', flex: 1 }}>
-            <span style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.muted, whiteSpace: 'nowrap' }}>
-              Rate Scenario
+    <div style={{ maxWidth: 1560, margin: '0 auto', border: `1px solid ${T.border}`, background: T.bg }}>
+      {/* Band 1 — header */}
+      <div style={{ padding: '13px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 18, flexWrap: 'wrap' }}>
+        <span style={{ fontFamily: T.mono, fontSize: 12, fontWeight: 700, letterSpacing: '0.22em', color: T.gold }}>RATE ENGINE</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
+          {fomcLabel && (
+            <span style={{ fontFamily: T.mono, fontSize: 9, letterSpacing: '0.08em', color: T.muted }}>
+              NEXT FOMC <span style={{ color: T.text }}>{fomcLabel}</span> · <span style={{ color: T.gold }}>{fomcDays}</span>
             </span>
-            <input
-              type="range" min={-200} max={200} step={5} value={twist}
-              onChange={e => setTwist(+e.target.value)}
-              style={{ flex: 1, accentColor: T.gold }}
-            />
-            <span style={{ fontFamily: T.mono, fontSize: 13, fontWeight: 700, color: T.gold, width: 64, textAlign: 'right', whiteSpace: 'nowrap' }}>
-              {twist > 0 ? '+' : ''}{twist} bps
-            </span>
-            {twist !== 0 && (
-              <button
-                onClick={() => setTwist(0)}
-                style={{ fontFamily: T.label, fontSize: 9, color: T.muted, background: 'none', border: `1px solid ${T.border}`, padding: '2px 7px', cursor: 'pointer', letterSpacing: '0.1em', textTransform: 'uppercase' }}
-              >
-                Reset
-              </button>
-            )}
-          </div>
+          )}
+          <LiveClock />
         </div>
-
-        {failed ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 320, fontFamily: T.label, fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-negative, #c0394d)' }}>
-            Rate data is unavailable right now. Try again shortly.
-          </div>
-        ) : !ready ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 320, fontFamily: T.label, fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted }}>
-            Loading rate engine
-          </div>
-        ) : (
-        <>
-        {/* ── Summary + next-meeting probabilities, side by side ─────────── */}
-        <div style={gridTwo}>
-          {adjustedMeetings.length > 0 && (
-            <Panel title="Rate Outlook">
-              <StatRow items={summaryItems} />
-            </Panel>
-          )}
-          {fomc && (
-            <Panel title="Next FOMC Meeting — Probability Breakdown">
-              <StatRow items={[
-                { label: 'Hike',  value: `${fomc.prob_hike}%` },
-                { label: 'Hold',  value: `${fomc.prob_hold}%` },
-                { label: 'Cut',   value: `${fomc.prob_cut}%`  },
-              ]} />
-            </Panel>
-          )}
-        </div>
-
-        {/* ── Two primary charts, side by side ───────────────────────────── */}
-        <div style={gridTwo}>
-          {adjustedMeetings.length > 0 && (
-            <Panel title="Market-Implied Fed Funds Rate Path">
-              <div style={{ height: 260, padding: '8px 8px 0' }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={adjustedMeetings} margin={{ left: 0, right: 28, top: 8, bottom: 4 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--theme-hover, rgba(255,255,255,0.04))" />
-                    <XAxis dataKey="date" tick={TICK} axisLine={false} tickLine={false} />
-                    <YAxis tick={TICK} tickFormatter={v => `${v}%`} domain={['auto','auto']} axisLine={false} tickLine={false} width={44} />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} cursor={CROSSHAIR_CURSOR} />
-                    <Legend wrapperStyle={{ fontFamily: T.label, fontSize: 9, paddingBottom: 6 }} />
-                    <Line type="monotone" dataKey="base_rate"     stroke="var(--theme-text-faint, rgba(255,255,255,0.18))" strokeWidth={1.5} strokeDasharray="5 3" dot={false} name="Base Path" />
-                    <Line type="monotone" dataKey="adjusted_rate" stroke="var(--theme-tertiary, #60a5fa)" strokeWidth={2} dot={{ fill: 'var(--theme-primary, #c9a84c)', r: 4 }} name="Adjusted Path" />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </Panel>
-          )}
-
-          {fedData && (
-            <Panel title="Meeting Probability Distribution — Hike / Hold / Cut">
-              <div style={{ height: 260, padding: '8px 8px 0' }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={fedData.meetings} margin={{ left: 0, right: 28, top: 8, bottom: 4 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--theme-hover, rgba(255,255,255,0.04))" />
-                    <XAxis dataKey="date" tick={TICK} axisLine={false} tickLine={false} />
-                    <YAxis tick={TICK} tickFormatter={v => `${v}%`} axisLine={false} tickLine={false} width={44} />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} cursor={BAR_CURSOR} />
-                    <Legend wrapperStyle={{ fontFamily: T.label, fontSize: 9, paddingBottom: 6 }} />
-                    <Bar dataKey="prob_hike" name="Hike" fill="#c0394d" stackId="a" />
-                    <Bar dataKey="prob_hold" name="Hold" fill="var(--theme-chart-neutral, #4a7fa5)" stackId="a" />
-                    <Bar dataKey="prob_cut"  name="Cut"  fill="#2e9a62" stackId="a" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </Panel>
-          )}
-        </div>
-
-        {/* ── Treasury yield curve — full width ──────────────────────────── */}
-        {adjustedCurve.length > 0 && (
-          <Panel title="US Treasury Yield Curve">
-            <YieldTable curve={curveData?.curve ?? {}} adjusted={adjustedCurve} twist={twist} />
-            <div style={{ height: 200 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={curveChart} margin={{ left: 0, right: 24, top: 12, bottom: 4 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--theme-hover, rgba(255,255,255,0.04))" />
-                  <XAxis dataKey="tenor" tick={TICK} axisLine={false} tickLine={false} />
-                  <YAxis tick={TICK} tickFormatter={v => `${v}%`} domain={['auto','auto']} axisLine={false} tickLine={false} width={44} />
-                  <Tooltip formatter={(v: number) => [`${v.toFixed(2)}%`, '']} contentStyle={TOOLTIP_STYLE} cursor={CROSSHAIR_CURSOR} />
-                  <Legend wrapperStyle={{ fontFamily: T.label, fontSize: 9, paddingBottom: 6 }} />
-                  <Line type="monotone" dataKey="m6"    stroke="var(--theme-text-faint, rgba(255,255,255,0.28))" strokeWidth={1.25} strokeDasharray="2 3" dot={false} name="6M ago" connectNulls />
-                  <Line type="monotone" dataKey="m1"    stroke="var(--theme-secondary, #5e768f)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} name="1M ago" connectNulls />
-                  <Line type="monotone" dataKey="d1"    stroke="var(--theme-accent-violet, #c084fc)" strokeWidth={1.5} strokeDasharray="7 3" dot={false} name="1D ago" connectNulls />
-                  <Line type="monotone" dataKey="today" stroke="var(--theme-primary, #c9a84c)" strokeWidth={2.25} dot={{ fill: 'var(--theme-primary, #c9a84c)', r: 2.5 }} name="Today" connectNulls />
-                  {twist !== 0 && <Line type="monotone" dataKey="adjusted" stroke="var(--theme-tertiary, #60a5fa)" strokeWidth={2} strokeDasharray="4 2" dot={false} name="Scenario" connectNulls />}
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </Panel>
-        )}
-        </>
-        )}
-
       </div>
+
+      {/* Band 2 — scenario */}
+      <ScenarioBand twist={twist} setTwist={setTwist} />
+
+      {failed ? (
+        <div style={{ ...band, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 320, fontFamily: T.label, fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.neg }}>
+          Rate data is unavailable right now. Try again shortly.
+        </div>
+      ) : !ready ? (
+        <div style={{ ...band, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 320, fontFamily: T.label, fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted }}>
+          Loading rate engine
+        </div>
+      ) : (
+        <>
+          {/* Bands 3 + 4 need the implied path; skip both if it's empty. */}
+          {adjustedMeetings.length > 0 && (
+            <>
+              {/* Band 3 — fed funds path */}
+              <div style={band}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 18, flexWrap: 'wrap', marginBottom: 6 }}>
+                  <span style={bandTitle}>Market-Implied Fed Funds Rate Path</span>
+                  <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+                    <InlineStat label="Next Meeting" value={`${m0.adjusted_rate.toFixed(2)}%`} delta={twist ? `${dBp(m0) >= 0 ? '+' : ''}${dBp(m0)}` : undefined} deltaPos={dBp(m0) >= 0} />
+                    {yEnd && <InlineStat label={yEnd.date} value={`${yEnd.adjusted_rate.toFixed(2)}%`} delta={twist ? `${dBp(yEnd) >= 0 ? '+' : ''}${dBp(yEnd)}` : undefined} deltaPos={dBp(yEnd) >= 0} />}
+                    <InlineStat label="Total Move" value={`${totalMove > 0 ? '+' : ''}${totalMove.toFixed(0)} bps`} />
+                  </div>
+                </div>
+                <div style={{ height: 400 }}><FedPathChart meetings={adjustedMeetings} twist={twist} /></div>
+              </div>
+
+              {/* Band 4 — meeting odds */}
+              <OddsStrip meetings={adjustedMeetings} />
+            </>
+          )}
+
+          {/* Band 5 — yield curve */}
+          <div style={band}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 18, flexWrap: 'wrap', marginBottom: 6 }}>
+              <span style={bandTitle}>US Treasury Yield Curve</span>
+              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                {adjustedCurve.map(a => {
+                  const d = twist ? Math.round((a.adjusted - a.current) * 100) : null
+                  return (
+                    <span key={a.tenor} style={{ display: 'inline-flex', alignItems: 'baseline', gap: 5, whiteSpace: 'nowrap' }}>
+                      <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted }}>{a.tenor}</span>
+                      <span style={{ fontFamily: T.mono, fontSize: 12, fontWeight: 700, color: T.text }}>{(twist ? a.adjusted : a.current).toFixed(2)}</span>
+                      {d != null && d !== 0 && <span style={{ fontFamily: T.mono, fontSize: 9, color: d > 0 ? T.gold : '#8099b0' }}>{d > 0 ? '+' : ''}{d}</span>}
+                    </span>
+                  )
+                })}
+              </div>
+            </div>
+            <div style={{ height: 220 }}><YieldCurveChart rows={curveChart} twist={twist} /></div>
+          </div>
+
+          {/* Band 6 — dot plot + spreads */}
+          <div style={{ ...band, display: 'grid', gridTemplateColumns: 'minmax(0, 55fr) minmax(0, 45fr)', gap: 28 }} className="rate-split">
+            <div>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
+                <span style={bandTitle}>FOMC Dot Plot — SEP Projections vs Market</span>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                  {sepVintage && <span style={{ fontFamily: T.mono, fontSize: 8.5, letterSpacing: '0.1em', color: T.muted }}>{sepVintage}</span>}
+                  <span style={{ display: 'inline-flex', gap: 12, fontFamily: T.label, fontSize: 8.5, letterSpacing: '0.06em', color: T.muted }}>
+                    <span><span style={{ color: T.gold }}>—</span> MEDIAN</span>
+                    <span><span style={{ color: '#5e768f' }}>▮</span> CT / RANGE</span>
+                    <span><span style={{ color: T.blue }}>◆</span> MARKET</span>
+                  </span>
+                </div>
+              </div>
+              {sepData?.years?.length ? <DotPlot data={sepData} /> : <div style={{ height: 250, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: T.mono, fontSize: 11, color: T.muted }}>SEP projections unavailable.</div>}
+              {sepCaption && <div style={{ fontFamily: T.label, fontSize: 11, color: T.muted, marginTop: 8 }}>{sepCaption}</div>}
+            </div>
+            <div>
+              <div style={{ ...bandTitle, marginBottom: 8 }}>Curve Spreads — 6M Trend</div>
+              {spreadsData?.spreads?.length ? <SpreadsPanel spreads={spreadsData.spreads} /> : <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: T.mono, fontSize: 11, color: T.muted }}>Spread history unavailable.</div>}
+              {spreadsData?.spreads?.length > 0 && spreadsData.spreads.every((s: any) => (s.current ?? 0) > 0) && (
+                <div style={{ fontFamily: T.label, fontSize: 11, color: T.muted, marginTop: 8 }}>All three spreads are positive and steepening over the last six months.</div>
+              )}
+            </div>
+          </div>
+
+          {/* Band 7 — disclaimer */}
+          <div style={{ padding: '10px 24px', borderTop: `1px solid ${T.borderFaint}`, fontFamily: T.label, fontSize: 10, color: T.muted }}>
+            Informational and educational purposes only. Not investment advice. <Link to="/risk-disclosure" style={{ color: T.muted, textDecoration: 'underline' }}>Full disclaimer</Link>
+          </div>
+        </>
+      )}
+      <style>{`@media (max-width: 1080px) { .rate-split { grid-template-columns: 1fr !important; } }`}</style>
+    </div>
   )
 }
 
 export default function FedRates() {
-  return <PageWrapper title="Rate Engine"><FedRatesContent /></PageWrapper>
+  return <PageWrapper><FedRatesContent /></PageWrapper>
 }
