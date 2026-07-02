@@ -33,7 +33,9 @@ primary_region = "iad"
     soft_limit = 20
 
 [[vm]]
-  memory = "512mb"
+  # 512mb OOM-killed uvicorn at ~398MB RSS once the AIS replay buffer and
+  # rates warmer landed (2026-07-02 incident). Baseline needs the headroom.
+  memory = "1024mb"
   cpu_kind = "shared"
   cpus = 1
 

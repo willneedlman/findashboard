@@ -764,10 +764,13 @@ def _snapshot() -> list:
 
 
 # ── AIS position history (24h ring buffer for the replay scrubber) ──────────
+# Frames are kept as compact JSON strings, not Python object trees: 145 frames
+# of 300 nested lists as objects cost tens of MB resident and helped OOM-kill
+# the 512MB prod VM; as strings the buffer is ~2MB.
 _HIST_INTERVAL = 600          # sample every 10 min → 145 frames/24h
 _HIST_MAX_FRAMES = 145
-_HIST_MAX_VESSELS = 400       # per-frame cap keeps the payload ~1-2 MB
-_hist_frames: list = []
+_HIST_MAX_VESSELS = 300       # per-frame cap keeps the payload ~1 MB
+_hist_frames: list[tuple[int, str]] = []   # (epoch, json-encoded vessel rows)
 _hist_lock = threading.Lock()
 _hist_thread = None
 
@@ -781,17 +784,15 @@ def _sample_history():
     if len(vessels) > _HIST_MAX_VESSELS:
         step = len(vessels) / _HIST_MAX_VESSELS
         vessels = [vessels[int(i * step)] for i in range(_HIST_MAX_VESSELS)]
-    frame = {
-        "t": int(time.time()),
-        "v": [
-            [v["mmsi"], round(v["lat"], 3), round(v["lon"], 3),
-             int(v["heading"]) if v.get("heading") not in (None, 511) else int(v.get("cog") or 0),
-             _CAT_CODE.get(v.get("category"), "o")]
-            for v in vessels
-        ],
-    }
+    rows = [
+        [v["mmsi"], round(v["lat"], 3), round(v["lon"], 3),
+         int(v["heading"]) if v.get("heading") not in (None, 511) else int(v.get("cog") or 0),
+         _CAT_CODE.get(v.get("category"), "o")]
+        for v in vessels
+    ]
+    entry = (int(time.time()), json.dumps(rows, separators=(",", ":")))
     with _hist_lock:
-        _hist_frames.append(frame)
+        _hist_frames.append(entry)
         del _hist_frames[:-_HIST_MAX_FRAMES]
         disk_set("ais_hist_frames", _hist_frames, ttl=2 * 86400)
 
@@ -813,7 +814,12 @@ def start_history_sampler():
     restored = disk_get("ais_hist_frames")
     if restored:
         with _hist_lock:
-            _hist_frames.extend(restored[-_HIST_MAX_FRAMES:])
+            # JSON round-trip turns tuples into lists; older deploys stored
+            # dict frames — keep only entries in the (t, json_str) shape.
+            _hist_frames.extend(
+                (e[0], e[1]) for e in restored[-_HIST_MAX_FRAMES:]
+                if isinstance(e, (list, tuple)) and len(e) == 2 and isinstance(e[1], str)
+            )
     _hist_thread = threading.Thread(target=_run_history_sampler, name="ais-history", daemon=True)
     _hist_thread.start()
 
@@ -1029,7 +1035,8 @@ def vessel_history(hours: int = Query(24, ge=1, le=24)):
     [mmsi, lat, lon, heading, cat]."""
     cutoff = time.time() - hours * 3600
     with _hist_lock:
-        frames = [f for f in _hist_frames if f["t"] >= cutoff]
+        recent = [e for e in _hist_frames if e[0] >= cutoff]
+    frames = [{"t": t, "v": json.loads(j)} for t, j in recent]
     return {"frames": frames, "interval_s": _HIST_INTERVAL, "count": len(frames)}
 
 
