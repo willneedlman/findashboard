@@ -110,6 +110,17 @@ def _load_bundle(fname: str, key: str):
 _GEM_PIPES = _load_bundle("gem_pipelines.json", "pipelines")   # [{n,f,g:[[[lat,lon]..]..],bb:[s,w,n,e]}]
 _GEM_LNG = _load_bundle("gem_lng.json", "lng")                  # [{n,la,lo,st,ie,cap}]
 _WPI = _load_bundle("world_ports.json", "ports")               # [{n,la,lo,c,s}]
+_GEM_FAC = _load_bundle("gem_facilities.json", "facilities")   # [{n,la,lo,k,x}] fields/plants/coal terminals
+
+# GEM LNG Carrier Tracker → hard-classify gas carriers by IMO/name (AIS type
+# codes can't distinguish LNG from crude tankers).
+try:
+    with open(os.path.join(_DATA, "lng_carriers.json")) as _f:
+        _lng_b = json.load(_f)
+except Exception:
+    _lng_b = {"imos": [], "names": []}
+_LNG_IMOS = set(_lng_b.get("imos", []))
+_LNG_NAMES = set(_lng_b.get("names", []))
 
 
 def _parse_bbox(bbox: str):
@@ -147,8 +158,9 @@ def _gem_pipes_overview(cap=1200) -> list:
     return out
 
 
-# ── EIA / HIFLD US natural-gas pipelines (ArcGIS FeatureServer) ──────────────
-_EIA_URL = "https://geo.dot.gov/server/rest/services/Hosted/Natural_Gas_Pipelines_US_EIA/FeatureServer/0/query"
+# ── EIA / HIFLD US pipelines (ArcGIS FeatureServer) — gas + crude oil ────────
+_EIA_HOST = "https://geo.dot.gov/server/rest/services/Hosted"
+_EIA_LAYERS = [("Natural_Gas_Pipelines_US_EIA", "gas"), ("Crude_Oil_Pipelines_US_EIA", "oil")]
 
 
 def fetch_eia_pipelines(s, w, n, e) -> list:
@@ -156,28 +168,31 @@ def fetch_eia_pipelines(s, w, n, e) -> list:
     cached = disk_get(ck)
     if cached is not None:
         return cached
-    params = {
-        "where": "1=1", "geometry": f"{w},{s},{e},{n}", "geometryType": "esriGeometryEnvelope",
-        "inSR": "4326", "spatialRel": "esriSpatialRelIntersects", "outFields": "operator,typepipe,status",
-        "outSR": "4326", "f": "geojson", "resultRecordCount": "2000",
-    }
-    try:
-        r = requests.get(_EIA_URL, params=params, timeout=30, headers={"User-Agent": "AlphatapeTerminal/1.0"})
-        r.raise_for_status()
-        feats = r.json().get("features", [])
-    except Exception as ex:
-        _log.warning("EIA fetch failed: %s", ex)
-        return []
     out = []
-    for f in feats:
-        g = f.get("geometry") or {}
-        if g.get("type") != "LineString":
+    for layer, substance in _EIA_LAYERS:
+        params = {
+            "where": "1=1", "geometry": f"{w},{s},{e},{n}", "geometryType": "esriGeometryEnvelope",
+            "inSR": "4326", "spatialRel": "esriSpatialRelIntersects", "outFields": "*",
+            "outSR": "4326", "f": "geojson", "resultRecordCount": "2000",
+        }
+        try:
+            r = requests.get(f"{_EIA_HOST}/{layer}/FeatureServer/0/query", params=params,
+                             timeout=30, headers={"User-Agent": "AlphatapeTerminal/1.0"})
+            r.raise_for_status()
+            feats = r.json().get("features", [])
+        except Exception as ex:
+            _log.warning("EIA %s fetch failed: %s", layer, ex)
             continue
-        coords = [[c[1], c[0]] for c in g["coordinates"] if len(c) >= 2]
-        if len(coords) < 2:
-            continue
-        pr = f.get("properties") or {}
-        out.append({"name": pr.get("operator") or "EIA pipeline", "substance": "gas", "coords": coords})
+        for f in feats:
+            g = f.get("geometry") or {}
+            if g.get("type") != "LineString":
+                continue
+            coords = [[c[1], c[0]] for c in g["coordinates"] if len(c) >= 2]
+            if len(coords) < 2:
+                continue
+            pr = f.get("properties") or {}
+            out.append({"name": pr.get("opername") or pr.get("operator") or pr.get("pipename") or "EIA pipeline",
+                        "substance": substance, "coords": coords})
     disk_set(ck, out, ttl=86400)
     return out
 
@@ -236,8 +251,10 @@ def fetch_overpass_ports(south: float, west: float, north: float, east: float) -
         f'way["harbour"="yes"]({south},{west},{north},{east});'
         f'node["seamark:type"="harbour"]({south},{west},{north},{east});'
         f'way["industrial"="port"]({south},{west},{north},{east});'
+        f'node["man_made"="offshore_platform"]({south},{west},{north},{east});'
+        f'way["man_made"="offshore_platform"]({south},{west},{north},{east});'
         f");"
-        f"out center tags 120;"
+        f"out center tags 160;"
     )
     try:
         r = requests.post(_OVERPASS, data={"data": q}, timeout=30,
@@ -258,7 +275,10 @@ def fetch_overpass_ports(south: float, west: float, north: float, east: float) -
         if key in seen:
             continue
         seen.add(key)
-        out.append({"name": name or "OSM port", "lat": lat, "lon": lon, "kind": "osm"})
+        tags = el.get("tags") or {}
+        kind = "platform" if tags.get("man_made") == "offshore_platform" else "osm"
+        out.append({"name": name or ("Offshore platform" if kind == "platform" else "OSM port"),
+                    "lat": lat, "lon": lon, "kind": kind})
     return out
 
 
@@ -402,6 +422,21 @@ def get_world_ports(bbox: str | None) -> dict:
     return {"ports": inb[:2500], "count": len(inb), "scope": "bbox"}
 
 
+def get_facilities(bbox: str | None) -> dict:
+    """GEM oil/gas fields, oil/gas plants, and coal terminals. The plant set is
+    large, so the world view returns only fields + coal terminals; a bbox
+    returns everything in view."""
+    if not bbox:
+        light = [f for f in _GEM_FAC if f.get("k") != "plant"]
+        return {"facilities": light, "count": len(light), "scope": "fields+terminals"}
+    try:
+        s, w, n, e = _parse_bbox(bbox)
+        inb = [f for f in _GEM_FAC if s <= f["la"] <= n and w <= f["lo"] <= e]
+    except Exception:
+        inb = []
+    return {"facilities": inb[:3000], "count": len(inb), "scope": "bbox"}
+
+
 # ── Live AIS vessel stream (aisstream.io WebSocket) ─────────────────────────
 # aisstream bounding boxes are [[lat1, lon1], [lat2, lon2]] corner pairs.
 _AIS_BBOXES = [
@@ -454,11 +489,19 @@ def _load_registry():
     _log.info("AIS ship registry loaded: %d vessels", len(_static_reg))
 
 
-def _classify(ship_type, name: str) -> str:
-    """Best-effort vessel category from AIS ship-type code + name heuristics.
-    AIS type codes cannot distinguish crude from LNG (both 80-89), so a name
-    containing GAS/LNG promotes a tanker to the LNG bucket."""
+def _classify(ship_type, name: str, imo=None) -> str:
+    """Best-effort vessel category. AIS type codes can't tell LNG from crude
+    tankers (both 80-89), so we first match the GEM LNG Carrier registry by IMO
+    or name, then fall back to a name heuristic, then the AIS type code."""
+    if imo is not None:
+        try:
+            if str(int(imo)) in _LNG_IMOS:
+                return "lng"
+        except (TypeError, ValueError):
+            pass
     nm = (name or "").upper()
+    if nm and nm in _LNG_NAMES:
+        return "lng"
     if any(k in nm for k in ("LNG", "LPG", " GAS")):
         return "lng"
     try:
@@ -504,10 +547,11 @@ def _on_message(_ws, raw):
     elif mtype == "ShipStaticData":
         sd = (msg.get("Message") or {}).get("ShipStaticData") or {}
         nm = name or (sd.get("Name") or "").strip() or None
-        cat = _classify(sd.get("Type"), nm)
+        imo = sd.get("ImoNumber")
+        cat = _classify(sd.get("Type"), nm, imo)
         dest = (sd.get("Destination") or "").strip() or None
-        _upsert(mmsi, name=nm, ship_type=sd.get("Type"), category=cat, destination=dest)
-        _remember(mmsi, {"category": cat, "name": nm, "destination": dest, "ship_type": sd.get("Type")})
+        _upsert(mmsi, name=nm, ship_type=sd.get("Type"), category=cat, destination=dest, imo=imo)
+        _remember(mmsi, {"category": cat, "name": nm, "destination": dest, "ship_type": sd.get("Type"), "imo": imo})
 
 
 def _remember(mmsi: str, profile: dict):
@@ -698,6 +742,11 @@ def helcom(bbox: str | None = Query(None, description="south,west,north,east for
     return fetch_helcom(bbox)
 
 
+@router.get("/facilities")
+def facilities(bbox: str | None = Query(None, description="south,west,north,east; omit for fields+terminals only")):
+    return get_facilities(bbox)
+
+
 @router.get("/vessels")
 def vessels(classified_only: bool = Query(False, description="drop vessels whose type is still unknown")):
     """Current in-memory AIS snapshot, enriched from the persistent ship
@@ -711,7 +760,9 @@ def vessels(classified_only: bool = Query(False, description="drop vessels whose
                 x["category"] = reg.get("category") or x.get("category")
             x.setdefault("destination", reg.get("destination"))
             x.setdefault("name", reg.get("name"))
-        x.setdefault("category", _classify(x.get("ship_type"), x.get("name")))
+        imo = x.get("imo") or (reg or {}).get("imo")
+        if not x.get("category") or x["category"] == "other":
+            x["category"] = _classify(x.get("ship_type"), x.get("name"), imo)
     if classified_only:
         v = [x for x in v if x.get("category") and x["category"] != "other"]
     status = dict(_status)

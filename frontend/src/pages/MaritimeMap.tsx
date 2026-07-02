@@ -23,6 +23,9 @@ const OSM_PORT_COLOR = '#2dd4bf'
 const LNG_TERM_COLOR = '#38bdf8'
 const WPI_COLOR = '#64748b'
 const HELCOM_COLOR = '#a78bfa'
+const PLATFORM_COLOR = '#f472b6'
+const FAC_COLOR: Record<string, string> = { field: '#eab308', plant: '#fb923c', coal_terminal: '#9ca3af' }
+const FAC_LABEL: Record<string, string> = { field: 'Oil/gas field', plant: 'Oil/gas plant', coal_terminal: 'Coal terminal' }
 const DETAIL_MIN_ZOOM = 5          // gate rate-limited/heavy layers to zoomed-in views
 
 interface Vessel {
@@ -34,6 +37,8 @@ interface Port { name: string; country: string; lat: number; lon: number; kind: 
 interface Pipeline { name: string; substance: string; coords: [number, number][] }
 interface LngTerm { n: string; la: number; lo: number; st: string; ie: string; cap: number | null }
 interface WpiPort { n: string; la: number; lo: number; c: string; s: string }
+interface Facility { n: string; la: number; lo: number; k: string; x?: string | number }
+interface OsmPort { name: string; lat: number; lon: number; kind: string }
 
 const DARK_TILES = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
 const TILE_ATTR = '&copy; OpenStreetMap &copy; CARTO'
@@ -69,7 +74,7 @@ function Toggle({ label, color, on, onChange }: { label: string; color?: string;
 
 export function MaritimeMapContent() {
   const [layers, setLayers] = useState({
-    pipelines: true, lngTerminals: true, terminals: true, worldPorts: false, chokepoints: true,
+    pipelines: true, lngTerminals: true, terminals: true, worldPorts: false, chokepoints: true, facilities: false,
     osm: false, eia: false, helcom: false,
     tanker: true, lngShip: true, cargo: true, unclassified: false,
   })
@@ -77,7 +82,8 @@ export function MaritimeMapContent() {
   const [view, setView] = useState<{ bbox: string; zoom: number } | null>(null)
   const [gemPipes, setGemPipes] = useState<Pipeline[]>([])
   const [osmPipes, setOsmPipes] = useState<Pipeline[]>([])
-  const [osmPorts, setOsmPorts] = useState<{ name: string; lat: number; lon: number }[]>([])
+  const [osmPorts, setOsmPorts] = useState<OsmPort[]>([])
+  const [facilities, setFacilities] = useState<Facility[]>([])
   const [eiaPipes, setEiaPipes] = useState<Pipeline[]>([])
   const [worldPorts, setWorldPorts] = useState<WpiPort[]>([])
   const [helcom, setHelcom] = useState<{ coords: [number, number][]; location: string; crossings: number }[]>([])
@@ -105,9 +111,13 @@ export function MaritimeMapContent() {
       if (layers.helcom) {
         axios.get(`/api/maritime/helcom?bbox=${bbox}`).then(r => setHelcom(r.data.features || [])).catch(() => {})
       }
+      if (layers.facilities) {
+        const url = zoom < 4 ? '/api/maritime/facilities' : `/api/maritime/facilities?bbox=${bbox}`
+        axios.get(url).then(r => setFacilities(r.data.facilities || [])).catch(() => {})
+      }
     }, 500)
     return () => clearTimeout(t)
-  }, [view, layers.pipelines, layers.osm, layers.eia, layers.worldPorts, layers.helcom])
+  }, [view, layers.pipelines, layers.osm, layers.eia, layers.worldPorts, layers.helcom, layers.facilities])
 
   // Clear layer data the moment its toggle goes off.
   useEffect(() => { if (!layers.pipelines) setGemPipes([]) }, [layers.pipelines])
@@ -115,6 +125,7 @@ export function MaritimeMapContent() {
   useEffect(() => { if (!layers.eia) setEiaPipes([]) }, [layers.eia])
   useEffect(() => { if (!layers.worldPorts) setWorldPorts([]) }, [layers.worldPorts])
   useEffect(() => { if (!layers.helcom) setHelcom([]) }, [layers.helcom])
+  useEffect(() => { if (!layers.facilities) setFacilities([]) }, [layers.facilities])
 
   const choke = useQuery<{ chokepoints: Chokepoint[] }>({ queryKey: ['mar-choke'], queryFn: () => axios.get('/api/maritime/chokepoints').then(r => r.data), staleTime: Infinity })
   const ports = useQuery<{ ports: Port[] }>({ queryKey: ['mar-ports'], queryFn: () => axios.get('/api/maritime/ports').then(r => r.data), staleTime: Infinity })
@@ -182,6 +193,7 @@ export function MaritimeMapContent() {
           <Toggle label="LNG terminals" color={LNG_TERM_COLOR} on={layers.lngTerminals} onChange={() => toggle('lngTerminals')} />
           <Toggle label="Export terminals" color={PORT_COLOR.oil} on={layers.terminals} onChange={() => toggle('terminals')} />
           <Toggle label="World ports (WPI)" color={WPI_COLOR} on={layers.worldPorts} onChange={() => toggle('worldPorts')} />
+          <Toggle label="Facilities (GEM)" color={FAC_COLOR.plant} on={layers.facilities} onChange={() => toggle('facilities')} />
           <Toggle label="Chokepoints" color={CHOKE_COLOR} on={layers.chokepoints} onChange={() => toggle('chokepoints')} />
         </div>
 
@@ -245,9 +257,19 @@ export function MaritimeMapContent() {
             </Polyline>
           ))}
 
-          {layers.osm && osmPorts.map((p, i) => (
-            <CircleMarker key={`osmport-${i}`} center={[p.lat, p.lon]} radius={3} pathOptions={{ color: OSM_PORT_COLOR, fillColor: OSM_PORT_COLOR, fillOpacity: 0.75, weight: 1 }}>
-              <Tooltip>{p.name} <span style={{ opacity: 0.6 }}>· OSM port</span></Tooltip>
+          {layers.osm && osmPorts.map((p, i) => {
+            const isPlat = p.kind === 'platform'
+            const col = isPlat ? PLATFORM_COLOR : OSM_PORT_COLOR
+            return (
+              <CircleMarker key={`osmport-${i}`} center={[p.lat, p.lon]} radius={3} pathOptions={{ color: col, fillColor: col, fillOpacity: 0.75, weight: 1 }}>
+                <Tooltip>{p.name} <span style={{ opacity: 0.6 }}>· {isPlat ? 'offshore platform' : 'OSM port'}</span></Tooltip>
+              </CircleMarker>
+            )
+          })}
+
+          {layers.facilities && facilities.map((f, i) => (
+            <CircleMarker key={`fac-${i}`} center={[f.la, f.lo]} radius={3} pathOptions={{ color: FAC_COLOR[f.k] ?? '#9ca3af', fillColor: FAC_COLOR[f.k] ?? '#9ca3af', fillOpacity: 0.7, weight: 0.5 }}>
+              <Tooltip>{f.n} · {FAC_LABEL[f.k] ?? f.k}{f.x != null && f.x !== '' ? ` · ${f.x}` : ''}</Tooltip>
             </CircleMarker>
           ))}
 

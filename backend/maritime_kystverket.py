@@ -48,10 +48,11 @@ def _apply(d: dict, upsert, classify, remember):
     if t in _STATIC_TYPES:
         nm = (d.get("shipname") or "").strip() or None
         st = d.get("ship_type")
+        imo = d.get("imo")
         dest = (d.get("destination") or "").strip() or None
-        cat = classify(st, nm)
-        upsert(mmsi, name=nm, ship_type=st, category=cat, destination=dest, source="kystverket")
-        remember(mmsi, {"category": cat, "name": nm, "destination": dest, "ship_type": st})
+        cat = classify(st, nm, imo)
+        upsert(mmsi, name=nm, ship_type=st, category=cat, destination=dest, imo=imo, source="kystverket")
+        remember(mmsi, {"category": cat, "name": nm, "destination": dest, "ship_type": st, "imo": imo})
 
 
 def _handle_line(line: str, frag: dict, upsert, classify, remember):
