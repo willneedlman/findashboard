@@ -31,12 +31,21 @@ _warm_thread = None
 
 
 def _run_curve_warmer():
+    # Let the server bind and the other boot warms finish first: the build
+    # burst on top of startup OOM-killed the small prod VM (398MB RSS).
+    _warm_stop.wait(90)
     while not _warm_stop.is_set():
         try:
             yield_curve()
+        except Exception as e:
+            _log.warning("curve warm failed: %s", e)
+        _warm_stop.wait(15)
+        if _warm_stop.is_set():
+            return
+        try:
             fed_projections()
         except Exception as e:
-            _log.warning("rates warmer failed: %s", e)
+            _log.warning("fed path warm failed: %s", e)
         _warm_stop.wait(_WARM_INTERVAL)
 
 
@@ -112,7 +121,8 @@ def _fred_curves():
         except Exception:
             return []
 
-    with ThreadPoolExecutor(max_workers=len(_FRED_CURVE)) as ex:
+    # Modest pool: 12-wide bursts of JSON parsing OOM'd the 512MB prod VM.
+    with ThreadPoolExecutor(max_workers=4) as ex:
         all_obs = list(ex.map(fetch, [sid for _, sid in _FRED_CURVE]))
     for (label, sid), obs in zip(_FRED_CURVE, all_obs):
         if not obs:
@@ -587,7 +597,7 @@ def _curve_implied_path(upcoming: list[date], current_rate: float | None) -> lis
     if current_rate is not None:
         pts.append((0.0, current_rate))
     bills = (("DGS1MO", 1 / 12), ("DGS3MO", 0.25), ("DGS6MO", 0.5), ("DGS1", 1.0), ("DGS2", 2.0))
-    with ThreadPoolExecutor(max_workers=len(bills)) as ex:
+    with ThreadPoolExecutor(max_workers=3) as ex:
         latest = list(ex.map(_fred_latest, [s for s, _ in bills]))
     for (series, T), y in zip(bills, latest):
         if y is not None:
@@ -630,7 +640,8 @@ def fed_projections():
     current_rate = _current_ffr()
     curve_path = _curve_implied_path(upcoming, current_rate)
 
-    with ThreadPoolExecutor(max_workers=len(upcoming) or 1) as ex:
+    # yfinance holds a pandas frame per call: keep the pool small for memory.
+    with ThreadPoolExecutor(max_workers=2) as ex:
         zq_rates = list(ex.map(_zq_implied_rate, upcoming))
 
     meetings: list[dict] = []
