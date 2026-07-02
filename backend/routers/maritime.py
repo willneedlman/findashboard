@@ -92,6 +92,95 @@ PIPELINES = [
 
 SUBSTANCE_COLOR = {"gas": "#f59e0b", "oil": "#8b1a1a", "product": "#c084fc", "other": "#6b7280"}
 
+# ── Bundled open datasets ───────────────────────────────────────────────────
+# Built offline from Global Energy Monitor (GEM) GeoJSON trackers and NGA's
+# World Port Index. See scripts note in the feature memory for how to refresh.
+_DATA = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
+
+
+def _load_bundle(fname: str, key: str):
+    try:
+        with open(os.path.join(_DATA, fname)) as f:
+            return json.load(f).get(key, [])
+    except Exception as e:
+        _log.warning("bundle %s load failed: %s", fname, e)
+        return []
+
+
+_GEM_PIPES = _load_bundle("gem_pipelines.json", "pipelines")   # [{n,f,g:[[[lat,lon]..]..],bb:[s,w,n,e]}]
+_GEM_LNG = _load_bundle("gem_lng.json", "lng")                  # [{n,la,lo,st,ie,cap}]
+_WPI = _load_bundle("world_ports.json", "ports")               # [{n,la,lo,c,s}]
+
+
+def _parse_bbox(bbox: str):
+    s, w, n, e = [float(x) for x in bbox.split(",")]
+    return s, w, n, e
+
+
+def _bbox_hit(bb, s, w, n, e) -> bool:
+    """bb=[minlat,minlon,maxlat,maxlon] intersects the query box s,w,n,e."""
+    return not (bb[2] < s or bb[0] > n or bb[3] < w or bb[1] > e)
+
+
+def _gem_pipes_bbox(s, w, n, e, cap=2000) -> list:
+    out = []
+    for p in _GEM_PIPES:
+        if not _bbox_hit(p["bb"], s, w, n, e):
+            continue
+        for seg in p["g"]:
+            out.append({"name": p["n"], "substance": p["f"], "coords": seg})
+            if len(out) >= cap:
+                return out
+    return out
+
+
+def _gem_pipes_overview(cap=1200) -> list:
+    """Longest-span pipelines first, capped by output polyline count so the
+    zoomed-out world view stays light (features are multi-segment)."""
+    top = sorted(_GEM_PIPES, key=lambda p: (p["bb"][2] - p["bb"][0]) + (p["bb"][3] - p["bb"][1]), reverse=True)
+    out = []
+    for p in top:
+        for seg in p["g"]:
+            out.append({"name": p["n"], "substance": p["f"], "coords": seg})
+            if len(out) >= cap:
+                return out
+    return out
+
+
+# ── EIA / HIFLD US natural-gas pipelines (ArcGIS FeatureServer) ──────────────
+_EIA_URL = "https://geo.dot.gov/server/rest/services/Hosted/Natural_Gas_Pipelines_US_EIA/FeatureServer/0/query"
+
+
+def fetch_eia_pipelines(s, w, n, e) -> list:
+    ck = f"eia:{round(s,2)},{round(w,2)},{round(n,2)},{round(e,2)}"
+    cached = disk_get(ck)
+    if cached is not None:
+        return cached
+    params = {
+        "where": "1=1", "geometry": f"{w},{s},{e},{n}", "geometryType": "esriGeometryEnvelope",
+        "inSR": "4326", "spatialRel": "esriSpatialRelIntersects", "outFields": "operator,typepipe,status",
+        "outSR": "4326", "f": "geojson", "resultRecordCount": "2000",
+    }
+    try:
+        r = requests.get(_EIA_URL, params=params, timeout=30, headers={"User-Agent": "AlphatapeTerminal/1.0"})
+        r.raise_for_status()
+        feats = r.json().get("features", [])
+    except Exception as ex:
+        _log.warning("EIA fetch failed: %s", ex)
+        return []
+    out = []
+    for f in feats:
+        g = f.get("geometry") or {}
+        if g.get("type") != "LineString":
+            continue
+        coords = [[c[1], c[0]] for c in g["coordinates"] if len(c) >= 2]
+        if len(coords) < 2:
+            continue
+        pr = f.get("properties") or {}
+        out.append({"name": pr.get("operator") or "EIA pipeline", "substance": "gas", "coords": coords})
+    disk_set(ck, out, ttl=86400)
+    return out
+
 
 def _substance_of(tags: dict) -> str:
     raw = (tags.get("substance") or tags.get("type") or tags.get("content") or "").lower()
@@ -192,27 +281,72 @@ def get_ports(bbox: str | None) -> dict:
     return {"ports": PORTS, "osm_ports": osm, "source": "curated+osm"}
 
 
-def get_pipelines(bbox: str | None) -> dict:
-    """Bundled coarse tracks by default; live Overpass detail when a bbox is
-    passed (cached 24h per bbox). GEM/OSM are the open sources; the bundle is
-    the durable fallback so the layer always renders."""
-    base = {"pipelines": PIPELINES, "colors": SUBSTANCE_COLOR, "source": "bundled"}
+def get_pipelines(bbox: str | None, source: str = "gem") -> dict:
+    """Pipeline polylines by source:
+    - gem  (default): verified GEM tracks, viewport-filtered; world view shows the
+      longest lines. Falls back to the coarse bundle only if GEM failed to load.
+    - osm: live OpenStreetMap detail via Overpass (bbox, cached 24h).
+    - eia: US natural-gas network via the EIA/HIFLD ArcGIS service (bbox, cached).
+    """
+    colors = SUBSTANCE_COLOR
+    if source == "osm":
+        if not bbox:
+            return {"pipelines": [], "colors": colors, "source": "osm"}
+        ck = f"pipelines:osm:{bbox}"
+        cached = disk_get(ck)
+        if cached is not None:
+            return cached
+        try:
+            s, w, n, e = _parse_bbox(bbox)
+        except Exception:
+            return {"pipelines": [], "colors": colors, "source": "osm"}
+        out = {"pipelines": fetch_overpass_pipelines(s, w, n, e), "colors": colors, "source": "osm"}
+        disk_set(ck, out, ttl=86400)
+        return out
+    if source == "eia":
+        if not bbox:
+            return {"pipelines": [], "colors": colors, "source": "eia"}
+        try:
+            s, w, n, e = _parse_bbox(bbox)
+        except Exception:
+            return {"pipelines": [], "colors": colors, "source": "eia"}
+        return {"pipelines": fetch_eia_pipelines(s, w, n, e), "colors": colors, "source": "eia"}
+    # default: GEM
+    if not _GEM_PIPES:
+        return {"pipelines": PIPELINES, "colors": colors, "source": "fallback"}
     if not bbox:
-        return base
-    ck = f"pipelines:{bbox}"
-    cached = disk_get(ck)
-    if cached is not None:
-        return cached
+        return {"pipelines": _gem_pipes_overview(), "colors": colors, "source": "gem-overview"}
     try:
-        s, w, n, e = [float(x) for x in bbox.split(",")]
+        s, w, n, e = _parse_bbox(bbox)
     except Exception:
-        return base
-    live = fetch_overpass_pipelines(s, w, n, e)
-    if not live:
-        return base
-    out = {"pipelines": live, "colors": SUBSTANCE_COLOR, "source": "overpass"}
-    disk_set(ck, out, ttl=86400)
-    return out
+        return {"pipelines": _gem_pipes_overview(), "colors": colors, "source": "gem-overview"}
+    return {"pipelines": _gem_pipes_bbox(s, w, n, e), "colors": colors, "source": "gem"}
+
+
+def get_lng(bbox: str | None) -> dict:
+    """GEM LNG terminals (points). Small enough to serve globally; bbox optional."""
+    items = _GEM_LNG
+    if bbox:
+        try:
+            s, w, n, e = _parse_bbox(bbox)
+            items = [t for t in _GEM_LNG if s <= t["la"] <= n and w <= t["lo"] <= e]
+        except Exception:
+            pass
+    return {"lng": items, "count": len(items)}
+
+
+def get_world_ports(bbox: str | None) -> dict:
+    """NGA World Port Index. World view returns only Large harbours; a bbox
+    returns every port in view (capped)."""
+    if not bbox:
+        big = [p for p in _WPI if p.get("s") == "Large"]
+        return {"ports": big, "count": len(big), "scope": "large"}
+    try:
+        s, w, n, e = _parse_bbox(bbox)
+        inb = [p for p in _WPI if s <= p["la"] <= n and w <= p["lo"] <= e]
+    except Exception:
+        inb = []
+    return {"ports": inb[:2500], "count": len(inb), "scope": "bbox"}
 
 
 # ── Live AIS vessel stream (aisstream.io WebSocket) ─────────────────────────
@@ -220,8 +354,14 @@ def get_pipelines(bbox: str | None) -> dict:
 _AIS_BBOXES = [
     [[-5.0, 95.0], [8.0, 105.0]],     # Malacca
     [[27.0, 32.0], [33.0, 34.5]],     # Suez / Red Sea north
+    [[10.0, 42.0], [16.0, 45.0]],     # Bab el-Mandeb
     [[7.0, -81.0], [10.5, -78.0]],    # Panama
     [[24.0, 54.0], [28.0, 58.0]],     # Hormuz
+    [[50.0, -6.0], [54.0, 2.0]],      # English Channel / Dover
+    [[53.0, 3.0], [58.0, 14.0]],      # North Sea / Danish straits
+    [[24.0, -98.0], [30.0, -88.0]],   # US Gulf
+    [[35.0, 25.0], [41.0, 30.0]],     # Aegean / Turkish straits
+    [[31.0, 120.0], [38.0, 127.0]],   # Yellow Sea / Korea approaches
 ]
 
 _VESSEL_TTL = 600          # drop vessels not seen in 10 min
@@ -396,49 +536,61 @@ def stop_ais_stream():
             pass
 
 
-# ── REST polling fallback (VesselAPI or any JSON vessel endpoint) ────────────
-# Enabled by env: VESSELAPI_URL (+ optional VESSELAPI_KEY). Merges into the same
-# vessel snapshot as the AIS stream, so it works as a fallback or supplement.
-_REST_INTERVAL = 30
+# ── VesselAPI REST fallback (api.vesselapi.com bounding-box endpoint) ────────
+# Strictly a fallback: the free tier has a tiny monthly quota, so we only poll
+# when the AIS WebSocket is down, on a long interval, over a couple of small
+# (<=4 deg span) boxes. Enabled by VESSELAPI_KEY.
+_REST_BASE = os.getenv("VESSELAPI_BASE", "https://api.vesselapi.com").rstrip("/")
+_REST_INTERVAL = 300
+_REST_BOXES = [
+    (25.5, 55.5, 27.5, 57.0),   # Hormuz  (latBottom, lonLeft, latTop, lonRight)
+    (1.0, 103.0, 3.0, 105.0),   # Singapore / Malacca east
+]
 _rest_thread: threading.Thread | None = None
 
 
+def _poll_vesselapi_box(box, headers) -> int:
+    latB, lonL, latT, lonR = box
+    r = requests.get(
+        f"{_REST_BASE}/v1/location/vessels/bounding-box",
+        params={"filter.lonLeft": lonL, "filter.lonRight": lonR,
+                "filter.latBottom": latB, "filter.latTop": latT, "pagination.limit": 50},
+        headers=headers, timeout=20,
+    )
+    r.raise_for_status()
+    n = 0
+    for it in r.json().get("vessels", []):
+        mmsi = str(it.get("mmsi") or "")
+        la, lo = it.get("latitude"), it.get("longitude")
+        if not mmsi or la is None or lo is None:
+            continue
+        nm = it.get("vessel_name")
+        _upsert(mmsi, name=nm, lat=la, lon=lo, sog=it.get("sog"), cog=it.get("cog"),
+                heading=it.get("heading"), category=_classify(None, nm))
+        n += 1
+    return n
+
+
 def _run_rest_poll():
-    url = os.getenv("VESSELAPI_URL")
     key = os.getenv("VESSELAPI_KEY")
-    if not url:
+    if not key:
         return
-    headers = {"Authorization": f"Bearer {key}"} if key else {}
+    headers = {"Authorization": f"Bearer {key}", "User-Agent": "AlphatapeTerminal/1.0"}
     while not _stop.is_set():
-        try:
-            r = requests.get(url, headers=headers, timeout=20)
-            r.raise_for_status()
-            data = r.json()
-            items = data if isinstance(data, list) else (data.get("data") or data.get("vessels") or [])
-            for it in items:
-                mmsi = str(it.get("mmsi") or it.get("MMSI") or "")
-                lat = it.get("lat") if it.get("lat") is not None else it.get("latitude")
-                lon = it.get("lon") if it.get("lon") is not None else it.get("longitude")
-                if not mmsi or lat is None or lon is None:
-                    continue
-                nm = it.get("name") or it.get("shipname")
-                _upsert(
-                    mmsi, name=nm, lat=lat, lon=lon,
-                    sog=it.get("sog") if it.get("sog") is not None else it.get("speed"),
-                    cog=it.get("cog") if it.get("cog") is not None else it.get("course"),
-                    heading=it.get("heading"),
-                    destination=it.get("destination") or it.get("dest"),
-                    category=_classify(it.get("type") or it.get("ship_type"), nm),
-                )
-        except Exception as e:
-            _log.warning("VesselAPI poll failed: %s", e)
+        if not _status.get("connected"):          # fallback only — spare the quota while AIS is healthy
+            try:
+                got = sum(_poll_vesselapi_box(b, headers) for b in _REST_BOXES)
+                _status["rest_active"] = True
+                _log.info("VesselAPI fallback pulled %d vessels", got)
+            except Exception as e:
+                _log.warning("VesselAPI poll failed: %s", e)
         _stop.wait(_REST_INTERVAL)
 
 
 def start_rest_poll():
-    """Start the REST fallback poller if VESSELAPI_URL is configured."""
+    """Start the REST fallback poller if VESSELAPI_KEY is configured."""
     global _rest_thread
-    _status["rest"] = bool(os.getenv("VESSELAPI_URL"))
+    _status["rest"] = bool(os.getenv("VESSELAPI_KEY"))
     if not _status["rest"]:
         return
     if _rest_thread and _rest_thread.is_alive():
@@ -471,8 +623,21 @@ def ports(bbox: str | None = Query(None, description="south,west,north,east for 
 
 
 @router.get("/pipelines")
-def pipelines(bbox: str | None = Query(None, description="south,west,north,east for live OSM detail")):
-    return get_pipelines(bbox)
+def pipelines(
+    bbox: str | None = Query(None, description="south,west,north,east"),
+    source: str = Query("gem", description="gem | osm | eia"),
+):
+    return get_pipelines(bbox, source)
+
+
+@router.get("/lng")
+def lng(bbox: str | None = Query(None, description="south,west,north,east")):
+    return get_lng(bbox)
+
+
+@router.get("/world-ports")
+def world_ports(bbox: str | None = Query(None, description="south,west,north,east; omit for large harbours only")):
+    return get_world_ports(bbox)
 
 
 @router.get("/vessels")
