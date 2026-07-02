@@ -13,6 +13,8 @@ import os
 import re
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 
 import requests
 from fastapi import APIRouter, Query
@@ -761,10 +763,111 @@ def _snapshot() -> list:
         ]
 
 
+# ── IMF PortWatch: daily chokepoint transit history ─────────────────────────
+# AIS-derived daily transit calls + deadweight capacity per chokepoint,
+# published by the IMF (~4 day lag, history back to 2019). Free ArcGIS feed.
+_PW_BASE = "https://services9.arcgis.com/weJ1QsnbMYJlCHdG/arcgis/rest/services"
+
+# Our chokepoint id → a keyword that uniquely matches the PortWatch portname,
+# so the portid mapping survives PortWatch renames like Bosporus/Bosphorus.
+_PW_KEYWORDS = {
+    "hormuz": "hormuz", "malacca": "malacca", "suez": "suez", "bab": "mandeb",
+    "panama": "panama", "bosphorus": "bospor", "danish": "oresund",
+    "goodhope": "good hope", "gibraltar": "gibraltar", "taiwan": "taiwan",
+}
+
+
+def _portwatch_ids() -> dict:
+    cached = disk_get("pw_choke_ids")
+    if cached:
+        return cached
+    r = requests.get(
+        f"{_PW_BASE}/PortWatch_chokepoints_database/FeatureServer/0/query",
+        params={"where": "1=1", "outFields": "portid,portname",
+                "returnGeometry": "false", "f": "json"},
+        timeout=20,
+    )
+    r.raise_for_status()
+    rows = [f["attributes"] for f in r.json().get("features", [])]
+    out = {}
+    for ours, kw in _PW_KEYWORDS.items():
+        hit = next((x for x in rows if kw in (x.get("portname") or "").lower()), None)
+        if hit:
+            out[ours] = {"portid": hit["portid"], "portname": hit["portname"]}
+    if out:
+        disk_set("pw_choke_ids", out, ttl=7 * 86400)
+    return out
+
+
+def _pw_date(v) -> str:
+    if isinstance(v, (int, float)):
+        return time.strftime("%Y-%m-%d", time.gmtime(v / 1000))
+    return str(v)[:10]
+
+
+def _pw_history(portid: str, days: int) -> list:
+    since = (datetime.now(timezone.utc) - timedelta(days=days + 6)).strftime("%Y-%m-%d")
+    r = requests.get(
+        f"{_PW_BASE}/Daily_Chokepoints_Data/FeatureServer/0/query",
+        params={
+            "where": f"portid='{portid}' AND date >= DATE '{since}'",
+            "outFields": "date,n_tanker,n_cargo,n_total,capacity",
+            "orderByFields": "date ASC", "returnGeometry": "false",
+            "resultRecordCount": 2000, "f": "json",
+        },
+        timeout=30,
+    )
+    r.raise_for_status()
+    body = r.json()
+    if "error" in body:
+        raise RuntimeError(body["error"].get("message", "PortWatch query error"))
+    return [
+        {"d": _pw_date(a["date"]), "tanker": a.get("n_tanker"), "cargo": a.get("n_cargo"),
+         "total": a.get("n_total"), "cap": a.get("capacity")}
+        for a in (f["attributes"] for f in body.get("features", []))
+        if a.get("date") is not None
+    ]
+
+
 # ── Endpoints ───────────────────────────────────────────────────────────────
 @router.get("/chokepoints")
 def chokepoints():
     return {"chokepoints": CHOKEPOINTS}
+
+
+@router.get("/chokepoint-history")
+def chokepoint_history(
+    ids: str = Query("hormuz", description="comma-separated chokepoint ids (see /chokepoints)"),
+    days: int = Query(90, ge=14, le=730),
+):
+    """Daily transit calls and vessel capacity per chokepoint, IMF PortWatch."""
+    want = list(dict.fromkeys(s.strip() for s in ids.split(",") if s.strip()))[:6]
+    key = f"pw_hist_{days}_{'_'.join(sorted(want))}"
+    cached = disk_get(key)
+    if cached:
+        return cached
+    mapping = _portwatch_ids()
+    resolvable = [
+        (cid, mapping[cid], meta) for cid in want
+        if cid in mapping and (meta := next((c for c in CHOKEPOINTS if c["id"] == cid), None))
+    ]
+
+    def fetch(item):
+        cid, m, meta = item
+        try:
+            return {"id": cid, "name": meta["name"], "points": _pw_history(m["portid"], days)}
+        except Exception as e:
+            _log.warning("PortWatch history failed for %s: %s", cid, e)
+            return None
+
+    with ThreadPoolExecutor(max_workers=len(resolvable) or 1) as ex:
+        series = [s for s in ex.map(fetch, resolvable) if s]
+    out = {"series": series, "days": days, "source": "IMF PortWatch"}
+    # Only cache complete responses so one transient PortWatch failure
+    # doesn't pin a missing series for the whole TTL.
+    if series and len(series) == len(resolvable):
+        disk_set(key, out, ttl=6 * 3600)
+    return out
 
 
 @router.get("/ports")

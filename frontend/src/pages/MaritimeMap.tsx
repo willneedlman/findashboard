@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import { MapContainer, Polyline, CircleMarker, Marker, Popup, Tooltip, useMap, useMapEvents } from 'react-leaflet'
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as ChartTip } from 'recharts'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import PageWrapper from '../components/PageWrapper'
@@ -79,6 +80,9 @@ interface Facility { n: string; la: number; lo: number; k: string; x?: string | 
 interface OsmPort { name: string; lat: number; lon: number; kind: string }
 interface EmodFeat { kind: string; n: string; coords?: [number, number][]; la?: number; lo?: number }
 interface HelcomFeat { coords: [number, number][]; location: string; crossings: number }
+interface HistPoint { d: string; tanker: number | null; cargo: number | null; total: number | null; cap: number | null }
+interface HistSeries { id: string; name: string; points: HistPoint[] }
+type HistMetric = 'total' | 'tanker' | 'cargo' | 'cap'
 
 type LayerKey = 'tanker' | 'lng' | 'cargo' | 'lanes' | 'pGem' | 'pEia' | 'pOsm' | 'pEmod' | 'terminals' | 'lngTerm' | 'fields' | 'refineries' | 'power' | 'coal' | 'wpi' | 'chokepoints' | 'helcom'
 
@@ -168,6 +172,14 @@ export function MaritimeMapContent() {
     wpi: false, chokepoints: true, helcom: false,
   })
   const [focus, setFocus] = useState<{ lat: number; lon: number; zoom: number } | null>(null)
+  const [histOpen, setHistOpen] = useState(false)
+  const [histIds, setHistIds] = useState<string[]>(['hormuz'])
+  const [histDays, setHistDays] = useState(90)
+  const [histMetric, setHistMetric] = useState<HistMetric>('total')
+  const openHistory = (id?: string) => {
+    if (id) setHistIds(ids => ids.includes(id) ? ids : [...ids, id].slice(-4))
+    setHistOpen(true)
+  }
   const [view, setView] = useState<{ bbox: string; zoom: number } | null>(null)
   const [gemPipes, setGemPipes] = useState<Pipeline[]>([])
   const [eiaPipes, setEiaPipes] = useState<Pipeline[]>([])
@@ -222,6 +234,11 @@ export function MaritimeMapContent() {
   const vess = useQuery<{ vessels: Vessel[]; count: number; status: { key_present: boolean; connected: boolean } }>({
     queryKey: ['mar-vessels'], queryFn: () => axios.get('/api/maritime/vessels').then(r => r.data), refetchInterval: 12000, staleTime: 8000,
   })
+  const hist = useQuery<{ series: HistSeries[] }>({
+    queryKey: ['choke-hist', histIds.join(','), histDays],
+    queryFn: () => axios.get(`/api/maritime/chokepoint-history?ids=${histIds.join(',')}&days=${histDays}`).then(r => r.data),
+    enabled: histOpen && histIds.length > 0, staleTime: 6 * 3600 * 1000,
+  })
 
   // Viewport-cull + cap for DOM-marker (divIcon) layers — keeps the map smooth.
   const vb = view ? view.bbox.split(',').map(Number) : null   // [s, w, n, e]
@@ -247,9 +264,11 @@ export function MaritimeMapContent() {
   const legend = buildLegend(layers, C)
 
   return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
     <div style={{ display: 'flex', gap: 14, height: '78vh', minHeight: 640 }}>
       <style>{`
         .gfm-map { background: var(--theme-bg); }
+        .gfm-chip:hover { border-color: var(--theme-primary) !important; color: var(--theme-text) !important; }
         .leaflet-popup-content-wrapper, .leaflet-popup-tip, .leaflet-tooltip {
           background: var(--theme-surface); color: var(--theme-text); border: 1px solid color-mix(in srgb, var(--theme-primary) 30%, transparent); border-radius: 2px; box-shadow: 0 8px 26px rgba(0,0,0,0.6);
         }
@@ -308,6 +327,14 @@ export function MaritimeMapContent() {
         <RailSection label="Ports & Chokepoints">
           <Toggle glyph={GLYPH.wpi} label="World ports" src="WPI" on={layers.wpi} onToggle={() => toggle('wpi')} />
           <Toggle glyph={GLYPH.chokepoints} label="Chokepoints" on={layers.chokepoints} onToggle={() => toggle('chokepoints')} />
+          <button onClick={() => histOpen ? setHistOpen(false) : openHistory()} style={{
+            width: '100%', marginTop: 8, padding: '7px 8px', cursor: 'pointer',
+            background: histOpen ? 'var(--theme-primary)' : 'transparent',
+            color: histOpen ? 'var(--theme-bg)' : 'var(--theme-primary)',
+            border: '1px solid var(--theme-primary)',
+            fontFamily: 'var(--theme-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase',
+          }}>{histOpen ? 'Hide transit history' : 'View transit history'}</button>
+          <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-text-faint)', marginTop: 4 }}>IMF PortWatch, daily since 2019</div>
         </RailSection>
 
         <RailSection label="Overlays">
@@ -317,7 +344,7 @@ export function MaritimeMapContent() {
         <div style={{ marginTop: 'auto', padding: '14px 18px', borderTop: '1px solid var(--theme-border-faint)' }}>
           <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 22, fontWeight: 700, color: 'var(--theme-text)' }}>{vess.data?.count ?? 0}</div>
           <div style={{ ...railLabel, marginTop: 2 }}>Vessels Live</div>
-          <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, color: 'var(--theme-text-faint)', marginTop: 6, lineHeight: '14px' }}>18 feeds · AIS, pipelines, facilities, ports & shipping context</div>
+          <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, color: 'var(--theme-text-faint)', marginTop: 6, lineHeight: '14px' }}>19 feeds · AIS, pipelines, facilities, ports, transit history & shipping context</div>
         </div>
       </div>
 
@@ -395,7 +422,10 @@ export function MaritimeMapContent() {
           {/* Chokepoints — pulsing gold rings */}
           {layers.chokepoints && choke.data?.chokepoints.map(c => (
             <Fragment key={`cp-${c.id}`}>
-              <CircleMarker center={[c.lat, c.lon]} radius={9} pathOptions={{ color: C.gold, fillColor: C.gold, fillOpacity: 0.1, weight: 2 }}><Tooltip><b>{c.name}</b><br />~{c.oil_mbd} Mb/d oil transit</Tooltip></CircleMarker>
+              <CircleMarker center={[c.lat, c.lon]} radius={9} pathOptions={{ color: C.gold, fillColor: C.gold, fillOpacity: 0.1, weight: 2 }}
+                eventHandlers={{ click: () => openHistory(c.id) }}>
+                <Tooltip><b>{c.name}</b><br />~{c.oil_mbd} Mb/d oil transit<br />Click for transit history</Tooltip>
+              </CircleMarker>
               <CircleMarker center={[c.lat, c.lon]} radius={2.5} pathOptions={{ color: C.gold, fillColor: C.gold, fillOpacity: 1, weight: 0 }} />
             </Fragment>
           ))}
@@ -420,6 +450,14 @@ export function MaritimeMapContent() {
           ))}
         </div>
       </div>
+    </div>
+
+    {histOpen && (
+      <HistoryPanel C={C} chokepoints={choke.data?.chokepoints ?? []} ids={histIds} days={histDays} metric={histMetric}
+        series={hist.data?.series ?? []} loading={hist.isLoading}
+        onToggleId={id => setHistIds(ids => ids.includes(id) ? (ids.length > 1 ? ids.filter(x => x !== id) : ids) : [...ids, id].slice(-4))}
+        onDays={setHistDays} onMetric={setHistMetric} onClose={() => setHistOpen(false)} />
+    )}
     </div>
   )
 }
@@ -472,6 +510,113 @@ function buildLegend(l: Record<LayerKey, boolean>, C: Colors) {
   if (l.helcom) it.push({ glyph: gLine(C.helcom), label: 'Baltic passage (HELCOM)' })
   if (it.length) G.push({ group: 'Overlays', items: it })
   return G
+}
+
+// ── Chokepoint transit history (IMF PortWatch) ───────────────────────────────
+const HIST_RANGES = [{ label: '1M', d: 30 }, { label: '3M', d: 90 }, { label: '6M', d: 180 }, { label: '1Y', d: 365 }, { label: '2Y', d: 730 }]
+const HIST_METRICS: { k: HistMetric; label: string }[] = [
+  { k: 'total', label: 'All vessels' }, { k: 'tanker', label: 'Tankers' }, { k: 'cargo', label: 'Cargo ships' }, { k: 'cap', label: 'Capacity (dwt)' },
+]
+
+const fmtVal = (v: number | null, metric: HistMetric) =>
+  v == null ? '—' : metric === 'cap' ? (v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : `${(v / 1e3).toFixed(0)}k`) : `${Math.round(v)}`
+
+const chipBtn = (on: boolean, color?: string): React.CSSProperties => ({
+  padding: '4px 9px', cursor: 'pointer', background: 'transparent',
+  border: `1px solid ${on ? (color || 'var(--theme-primary)') : 'var(--theme-border)'}`,
+  color: on ? (color || 'var(--theme-primary)') : 'var(--theme-secondary)',
+  fontFamily: 'var(--theme-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
+})
+
+function HistoryPanel({ C, chokepoints, ids, days, metric, series, loading, onToggleId, onDays, onMetric, onClose }: {
+  C: Colors; chokepoints: Chokepoint[]; ids: string[]; days: number; metric: HistMetric
+  series: HistSeries[]; loading: boolean
+  onToggleId: (id: string) => void; onDays: (d: number) => void; onMetric: (m: HistMetric) => void; onClose: () => void
+}) {
+  const palette = [C.gold, C.lane, C.oilTerm, C.lngTerm, C.field, C.wind]
+  const colorOf = (id: string) => palette[ids.indexOf(id) % palette.length]
+
+  const { rows, summaries } = useMemo(() => {
+    const byDate: Record<string, Record<string, number | string | null>> = {}
+    const summaries: { id: string; name: string; last: number | null; delta: number | null; peak: number | null; low: number | null }[] = []
+    for (const s of series) {
+      const vals = s.points.map(p => p[metric])
+      const ma: (number | null)[] = s.points.map((_, i) => {
+        const win = vals.slice(Math.max(0, i - 6), i + 1).filter((v): v is number => v != null)
+        return win.length ? win.reduce((a, b) => a + b, 0) / win.length : null
+      })
+      s.points.forEach((p, i) => { (byDate[p.d] ??= { d: p.d })[s.id] = ma[i] })
+      const smoothed = ma.slice(6).filter((v): v is number => v != null)
+      const first = smoothed[0], last = smoothed[smoothed.length - 1]
+      summaries.push({
+        id: s.id, name: s.name,
+        last: last ?? null,
+        delta: first && last != null ? ((last - first) / first) * 100 : null,
+        peak: smoothed.length ? Math.max(...smoothed) : null,
+        low: smoothed.length ? Math.min(...smoothed) : null,
+      })
+    }
+    const rows = Object.values(byDate).sort((a, b) => String(a.d).localeCompare(String(b.d))).slice(6)
+    return { rows, summaries }
+  }, [series, metric])
+
+  return (
+    <div style={{ background: 'var(--theme-surface)', border: '1px solid var(--theme-border)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 14px', background: 'rgba(0,0,0,0.16)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+        <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--theme-primary)' }}>Chokepoint Transit History</span>
+        <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-text-faint)' }}>IMF PortWatch, 7-day average of daily transit calls</span>
+        <button className="gfm-chip" onClick={onClose} style={{ ...chipBtn(false), marginLeft: 'auto' }}>Close</button>
+      </div>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, padding: '10px 14px 0' }}>
+        {chokepoints.map(c => <button key={c.id} className="gfm-chip" onClick={() => onToggleId(c.id)} style={chipBtn(ids.includes(c.id), ids.includes(c.id) ? colorOf(c.id) : undefined)}>{c.name}</button>)}
+        <span style={{ flex: 'none', width: 1, height: 18, background: 'var(--theme-border)', margin: '0 6px' }} />
+        {HIST_RANGES.map(r => <button key={r.label} className="gfm-chip" onClick={() => onDays(r.d)} style={chipBtn(days === r.d)}>{r.label}</button>)}
+        <span style={{ flex: 'none', width: 1, height: 18, background: 'var(--theme-border)', margin: '0 6px' }} />
+        {HIST_METRICS.map(m => <button key={m.k} className="gfm-chip" onClick={() => onMetric(m.k)} style={chipBtn(metric === m.k)}>{m.label}</button>)}
+      </div>
+
+      <div style={{ height: 240, padding: '10px 14px 0' }}>
+        {loading ? (
+          <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-secondary)' }}>Loading transit history…</div>
+        ) : rows.length === 0 ? (
+          <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-secondary)' }}>No PortWatch data for this selection.</div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={rows} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+              <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
+              <XAxis dataKey="d" tick={{ fill: 'var(--theme-secondary)', fontSize: 9.5, fontFamily: 'var(--theme-mono)' }}
+                tickFormatter={(d: string) => days >= 365 ? d.slice(0, 7) : d.slice(5)} minTickGap={42} axisLine={{ stroke: 'var(--theme-border)' }} tickLine={false} />
+              <YAxis tick={{ fill: 'var(--theme-secondary)', fontSize: 9.5, fontFamily: 'var(--theme-mono)' }} width={44}
+                tickFormatter={(v: number) => fmtVal(v, metric)} domain={['auto', 'auto']} axisLine={false} tickLine={false} />
+              <ChartTip
+                contentStyle={{ background: 'var(--theme-surface)', border: '1px solid var(--theme-border)', borderRadius: 2, fontFamily: 'var(--theme-mono)', fontSize: 11 }}
+                labelStyle={{ color: 'var(--theme-text)' }}
+                formatter={(v: number, name: string) => [fmtVal(v, metric), series.find(s => s.id === name)?.name ?? name]} />
+              {ids.map(id => <Line key={id} type="monotone" dataKey={id} stroke={colorOf(id)} strokeWidth={1.8} dot={false} connectNulls
+                strokeDasharray={['', '7 3', '2 3', '9 3 2 3'][ids.indexOf(id) % 4] || ''} />)}
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, padding: '10px 14px 12px' }}>
+        {summaries.map(s => (
+          <div key={s.id} style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+            <span style={{ width: 10, height: 10, background: colorOf(s.id), alignSelf: 'center', flex: 'none' }} />
+            <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: 'var(--theme-text)' }}>{s.name}</span>
+            <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 12, fontWeight: 700, color: 'var(--theme-text)' }}>{fmtVal(s.last, metric)}<span style={{ fontSize: 9, color: 'var(--theme-secondary)', fontWeight: 400 }}>{metric === 'cap' ? ' dwt/d' : '/d'}</span></span>
+            {s.delta != null && (
+              <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 700, color: s.delta >= 0 ? 'var(--theme-positive, #3fb950)' : 'var(--theme-negative, #f85149)' }}>
+                {s.delta >= 0 ? '↑' : '↓'} {Math.abs(s.delta).toFixed(1)}%
+              </span>
+            )}
+            <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9.5, color: 'var(--theme-text-faint)' }}>range {fmtVal(s.low, metric)}–{fmtVal(s.peak, metric)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 export default function MaritimeMap() {
