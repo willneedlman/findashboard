@@ -1,22 +1,40 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import { MapContainer, Polyline, CircleMarker, Marker, Popup, Tooltip, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import PageWrapper from '../components/PageWrapper'
+import { readToken } from '../lib/theme'
 
-// ── Palette (concrete hex — CSS var() is unreliable in Leaflet SVG attrs) ────
-const C = {
-  gold: '#c9a84c', ocean: '#0b1626', land: '#0f1d31', coast: 'rgba(120,150,185,0.16)',
-  lane: '#35b7c2', tanker: '#3fb6a0', lng: '#5b93c9', cargo: '#cfa14b', wind: '#4a9e8f',
-  oilTerm: '#cf4b3f', lngTerm: '#c084fc', field: '#d07b34', refinery: '#b88a3a',
-  power: '#cbb26a', coal: '#556070', wpi: '#6f8bb0', helcom: '#a07cc4',
+// Leaflet SVG/canvas can't consume CSS var(), so resolve theme tokens to concrete
+// values at runtime (recomputed on preset change). Semantic categories map to the
+// theme's accent palette so they follow presets while staying distinct.
+type Colors = ReturnType<typeof buildColors>
+function buildColors() {
+  const t = (n: string, fb: string) => readToken(n, fb) || fb
+  return {
+    gold: t('--theme-primary', '#c9a84c'),
+    ocean: t('--theme-bg', '#0b1626'),
+    land: t('--theme-surface', '#0f1d31'),
+    coast: 'rgba(120,150,185,0.16)',
+    lane: t('--theme-tertiary', '#35b7c2'),
+    tanker: t('--theme-positive', '#3fb6a0'),
+    lng: t('--theme-tertiary', '#5b93c9'),
+    cargo: t('--theme-warn', '#cfa14b'),
+    wind: t('--theme-positive', '#4a9e8f'),
+    oilTerm: t('--theme-negative', '#cf4b3f'),
+    lngTerm: t('--theme-accent-violet', '#c084fc'),
+    field: t('--theme-accent-orange', '#d07b34'),
+    power: t('--theme-primary', '#cbb26a'),
+    coal: t('--theme-secondary', '#556070'),
+    wpi: t('--theme-secondary', '#6f8bb0'),
+    helcom: t('--theme-accent-violet', '#a07cc4'),
+    refinery: t('--theme-primary', '#b88a3a'),
+  }
 }
+
 const VLABEL: Record<string, string> = { tanker: 'Crude Tanker', lng: 'LNG / Gas Carrier', cargo: 'Cargo / Dry Bulk', other: 'Vessel' }
-// 'other'/unclassified vessels ride the cargo toggle, so color them as cargo to
-// stay 1:1 with the legend (no unexplained slate arrows colliding with WPI ports).
-const VCOLOR: Record<string, string> = { tanker: C.tanker, lng: C.lng, cargo: C.cargo, other: C.cargo }
 const DETAIL_MIN_ZOOM = 5
 
 // Curated major shipping lanes (illustrative, grouped under vessel toggles).
@@ -35,19 +53,19 @@ const LANES: { type: 'tanker' | 'lng' | 'cargo'; pts: [number, number][] }[] = [
   { type: 'cargo', pts: [[-33.9, 18.4], [-20, 10], [0, -5], [10, -18], [20, -25], [30, -25], [40, -20], [48, -10], [51.95, 4.05]] },
 ]
 
-// ── Leaflet divIcon factories ────────────────────────────────────────────────
+// ── Leaflet divIcon factories (colors passed in) ─────────────────────────────
 const arrowIcon = (color: string, heading: number, s = 9) => L.divIcon({
   className: '', iconSize: [s + 4, s + 4], iconAnchor: [(s + 4) / 2, (s + 4) / 2],
   html: `<div style="width:${s + 4}px;height:${s + 4}px;transform:rotate(${heading}deg);display:flex;align-items:center;justify-content:center;"><div style="width:0;height:0;border-left:${s * 0.4}px solid transparent;border-right:${s * 0.4}px solid transparent;border-bottom:${s}px solid ${color};filter:drop-shadow(0 0 1.5px ${color});"></div></div>`,
 })
 const boxIcon = (style: string, size: number) => L.divIcon({ className: '', iconSize: [size, size], iconAnchor: [size / 2, size / 2], html: `<div style="${style}"></div>` })
-const platformIcon = () => boxIcon(`width:9px;height:9px;border:1.5px solid ${C.gold};transform:rotate(45deg);`, 12)
-const fieldIcon = () => boxIcon(`width:9px;height:9px;background:${C.field};transform:rotate(45deg);border:1px solid rgba(0,0,0,0.5);`, 12)
-const refIcon = () => boxIcon(`width:9px;height:9px;background:${C.refinery};border:1px solid rgba(0,0,0,0.4);`, 11)
-const coalIcon = () => boxIcon(`width:9px;height:9px;background:${C.coal};border:1px solid rgba(0,0,0,0.4);`, 11)
-const wpiIcon = (s: string) => {
+const platformIcon = (c: string) => boxIcon(`width:9px;height:9px;border:1.5px solid ${c};transform:rotate(45deg);`, 12)
+const fieldIcon = (c: string) => boxIcon(`width:9px;height:9px;background:${c};transform:rotate(45deg);border:1px solid rgba(0,0,0,0.5);`, 12)
+const refIcon = (c: string) => boxIcon(`width:9px;height:9px;background:${c};border:1px solid rgba(0,0,0,0.4);`, 11)
+const coalIcon = (c: string) => boxIcon(`width:9px;height:9px;background:${c};border:1px solid rgba(0,0,0,0.4);`, 11)
+const wpiIcon = (s: string, c: string) => {
   const sz = s === 'Large' ? 11 : s === 'Medium' ? 9 : 7, b = sz - 3
-  return boxIcon(`width:${b}px;height:${b}px;border:1.5px solid ${C.wpi};background:rgba(111,139,176,0.14);`, sz)
+  return boxIcon(`width:${b}px;height:${b}px;border:1.5px solid ${c};background:color-mix(in srgb, ${c} 16%, transparent);`, sz)
 }
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -77,19 +95,19 @@ function SizeFix() {
   return null
 }
 
-function VectorBasemap() {
+function VectorBasemap({ land, coast }: { land: string; coast: string }) {
   const map = useMap()
   useEffect(() => {
     let layer: L.Layer | undefined
     fetch('/world-countries.geo.json').then(r => r.json()).then(gj => {
-      layer = L.geoJSON(gj, { style: { fillColor: C.land, color: C.coast, weight: 0.6, fillOpacity: 1 } as L.PathOptions, interactive: false }).addTo(map)
+      layer = L.geoJSON(gj, { style: { fillColor: land, color: coast, weight: 0.6, fillOpacity: 1 } as L.PathOptions, interactive: false }).addTo(map)
       ;(layer as L.GeoJSON).bringToBack()
     }).catch(() => {
       layer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', { subdomains: 'abcd', maxZoom: 6 }).addTo(map)
       ;(layer as L.TileLayer).bringToBack()
     })
     return () => { if (layer) map.removeLayer(layer) }
-  }, [map])
+  }, [map, land, coast])
   return null
 }
 
@@ -110,7 +128,7 @@ function ViewportWatcher({ onChange }: { onChange: (bbox: string, zoom: number) 
   return null
 }
 
-// ── Rail glyphs (match map symbology) ─────────────────────────────────────────
+// ── Rail/legend glyphs (match map symbology) ─────────────────────────────────
 const gArrow = (c: string): React.CSSProperties => ({ width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderBottom: `11px solid ${c}` })
 const gLine = (c: string, dash = false): React.CSSProperties => ({ width: 18, height: 0, borderTop: `2px ${dash ? 'dashed' : 'solid'} ${c}` })
 const gDot = (c: string): React.CSSProperties => ({ width: 10, height: 10, borderRadius: '50%', background: c })
@@ -120,29 +138,30 @@ const gDiamondO = (c: string): React.CSSProperties => ({ width: 9, height: 9, bo
 const gSquare = (c: string): React.CSSProperties => ({ width: 10, height: 10, background: c })
 const gSquareO = (c: string): React.CSSProperties => ({ width: 10, height: 10, border: `1.5px solid ${c}` })
 
-const GLYPH: Record<LayerKey, React.CSSProperties> = {
-  tanker: gArrow(C.tanker), lng: gArrow(C.lng), cargo: gArrow(C.cargo),
-  pGem: gLine(C.gold), pEia: gLine(C.gold), pOsm: gLine(C.gold), pEmod: gLine(C.gold),
-  terminals: gDot(C.oilTerm), lngTerm: gRing(C.lngTerm), fields: gDiamond(C.field),
-  refineries: gSquare(C.refinery), power: gDot(C.power), coal: gSquare(C.coal),
-  wpi: gSquareO(C.wpi), chokepoints: gRing(C.gold), helcom: gLine(C.helcom),
-}
+const railLabel: React.CSSProperties = { fontFamily: 'var(--theme-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--theme-secondary)' }
+const srcTag: React.CSSProperties = { fontFamily: 'var(--theme-mono)', fontSize: 8.5, letterSpacing: '0.08em', color: 'var(--theme-text-faint)', marginLeft: 'auto' }
 
-const railLabel: React.CSSProperties = { fontFamily: 'var(--theme-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: '#56708a' }
-const srcTag: React.CSSProperties = { fontFamily: 'var(--theme-mono)', fontSize: 8.5, letterSpacing: '0.08em', color: '#3f5670', marginLeft: 'auto' }
-
-function Toggle({ k, label, on, src, onToggle }: { k: LayerKey; label: string; on: boolean; src?: string; onToggle: () => void }) {
+function Toggle({ glyph, label, on, src, onToggle }: { glyph: React.CSSProperties; label: string; on: boolean; src?: string; onToggle: () => void }) {
   return (
     <div onClick={onToggle} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', cursor: 'pointer' }}>
-      <span style={{ width: 15, height: 15, borderRadius: 2, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${on ? C.gold : 'rgba(255,255,255,0.22)'}`, background: on ? C.gold : 'transparent', color: '#0a1424', fontSize: 11, fontWeight: 800 }}>{on ? '✓' : ''}</span>
-      <span style={{ width: 22, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={GLYPH[k]} /></span>
-      <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 12, color: on ? '#d7e3fc' : '#6d8199' }}>{label}</span>
+      <span style={{ width: 15, height: 15, borderRadius: 2, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${on ? 'var(--theme-primary)' : 'var(--theme-border)'}`, background: on ? 'var(--theme-primary)' : 'transparent', color: 'var(--theme-bg)', fontSize: 11, fontWeight: 800 }}>{on ? '✓' : ''}</span>
+      <span style={{ width: 22, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={glyph} /></span>
+      <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 12, color: on ? 'var(--theme-text)' : 'var(--theme-secondary)' }}>{label}</span>
       {src && <span style={srcTag}>{src}</span>}
     </div>
   )
 }
 
 export function MaritimeMapContent() {
+  const [C, setC] = useState<Colors>(buildColors)
+  useEffect(() => {
+    const rc = () => setC(buildColors())
+    rc()
+    const mo = new MutationObserver(rc)
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'class'] })
+    return () => mo.disconnect()
+  }, [])
+
   const [layers, setLayers] = useState<Record<LayerKey, boolean>>({
     tanker: true, lng: true, cargo: true, pGem: true, pEia: false, pOsm: false, pEmod: false,
     terminals: true, lngTerm: true, fields: true, refineries: false, power: false, coal: false,
@@ -161,6 +180,15 @@ export function MaritimeMapContent() {
   const toggle = (k: LayerKey) => setLayers(s => ({ ...s, [k]: !s[k] }))
 
   const anyFac = layers.fields || layers.refineries || layers.power || layers.coal
+
+  const VCOLOR = useMemo<Record<string, string>>(() => ({ tanker: C.tanker, lng: C.lng, cargo: C.cargo, other: C.cargo }), [C])
+  const GLYPH = useMemo<Record<LayerKey, React.CSSProperties>>(() => ({
+    tanker: gArrow(C.tanker), lng: gArrow(C.lng), cargo: gArrow(C.cargo),
+    pGem: gLine(C.gold), pEia: gLine(C.gold), pOsm: gLine(C.gold), pEmod: gLine(C.gold),
+    terminals: gDot(C.oilTerm), lngTerm: gRing(C.lngTerm), fields: gDiamond(C.field),
+    refineries: gSquare(C.refinery), power: gDot(C.power), coal: gSquare(C.coal),
+    wpi: gSquareO(C.wpi), chokepoints: gRing(C.gold), helcom: gLine(C.helcom),
+  }), [C])
 
   useEffect(() => {
     if (!view) return
@@ -195,9 +223,7 @@ export function MaritimeMapContent() {
     queryKey: ['mar-vessels'], queryFn: () => axios.get('/api/maritime/vessels').then(r => r.data), refetchInterval: 12000, staleTime: 8000,
   })
 
-  // Viewport-cull + cap for DOM-marker (divIcon) layers — they don't ride the
-  // canvas renderer, so an unbounded count is what makes the map lag. Keep only
-  // markers near the current view and sample down to a cap.
+  // Viewport-cull + cap for DOM-marker (divIcon) layers — keeps the map smooth.
   const vb = view ? view.bbox.split(',').map(Number) : null   // [s, w, n, e]
   const M = 6
   const inView = (la: number, lo: number) => !vb || (la >= vb[0] - M && la <= vb[2] + M && lo >= vb[1] - M && lo <= vb[3] + M)
@@ -218,43 +244,43 @@ export function MaritimeMapContent() {
   const emodWind = cull(emod.filter(f => f.kind === 'windfarm' && f.la != null), f => f.la!, f => f.lo!, 300)
   const pipeStyle = (sub: string) => ({ color: C.gold, weight: 2, opacity: 0.9, dashArray: sub === 'gas' ? '6 6' : undefined })
 
-  const legend = buildLegend(layers)
+  const legend = buildLegend(layers, C)
 
   return (
     <div style={{ display: 'flex', gap: 14, height: '78vh', minHeight: 640 }}>
       <style>{`
-        .gfm-map { background: ${C.ocean}; }
+        .gfm-map { background: var(--theme-bg); }
         .flow-lane { stroke-dasharray: 3 9; animation: gfm-flow 1.4s linear infinite; }
         @keyframes gfm-flow { to { stroke-dashoffset: -12; } }
         .choke-pulse { animation: gfm-pulse 2.6s ease-in-out infinite; }
         @keyframes gfm-pulse { 0%,100% { opacity: .9 } 50% { opacity: .35 } }
         @media (prefers-reduced-motion: reduce) { .flow-lane, .choke-pulse { animation: none !important; } }
         .leaflet-popup-content-wrapper, .leaflet-popup-tip, .leaflet-tooltip {
-          background: #0d1826; color: #d7e3fc; border: 1px solid rgba(201,168,76,0.30); border-radius: 2px; box-shadow: 0 8px 26px rgba(0,0,0,0.6);
+          background: var(--theme-surface); color: var(--theme-text); border: 1px solid color-mix(in srgb, var(--theme-primary) 30%, transparent); border-radius: 2px; box-shadow: 0 8px 26px rgba(0,0,0,0.6);
         }
         .leaflet-popup-content { margin: 10px 12px; }
         .leaflet-tooltip { font-family: var(--theme-sans); font-size: 11px; box-shadow: none; }
-        .leaflet-tooltip-top:before { border-top-color: rgba(201,168,76,0.30); }
-        .leaflet-tooltip-bottom:before { border-bottom-color: rgba(201,168,76,0.30); }
-        .leaflet-tooltip-left:before { border-left-color: rgba(201,168,76,0.30); }
-        .leaflet-tooltip-right:before { border-right-color: rgba(201,168,76,0.30); }
-        .leaflet-container a.leaflet-popup-close-button { color: #8099b0; }
-        .leaflet-bar a, .leaflet-bar a:hover { width: 28px; height: 28px; line-height: 28px; background: #0d1826; color: #d7e3fc; border-color: rgba(201,168,76,0.28); }
-        .leaflet-bar a:hover { background: #12253c; color: ${C.gold}; }
-        .leaflet-control-attribution { background: rgba(8,16,28,0.72) !important; color: #56708a !important; font-size: 9px; }
-        .leaflet-control-attribution a { color: ${C.gold} !important; }
+        .leaflet-tooltip-top:before { border-top-color: color-mix(in srgb, var(--theme-primary) 30%, transparent); }
+        .leaflet-tooltip-bottom:before { border-bottom-color: color-mix(in srgb, var(--theme-primary) 30%, transparent); }
+        .leaflet-tooltip-left:before { border-left-color: color-mix(in srgb, var(--theme-primary) 30%, transparent); }
+        .leaflet-tooltip-right:before { border-right-color: color-mix(in srgb, var(--theme-primary) 30%, transparent); }
+        .leaflet-container a.leaflet-popup-close-button { color: var(--theme-secondary); }
+        .leaflet-bar a, .leaflet-bar a:hover { width: 28px; height: 28px; line-height: 28px; background: var(--theme-surface); color: var(--theme-text); border-color: color-mix(in srgb, var(--theme-primary) 28%, transparent); }
+        .leaflet-bar a:hover { background: var(--theme-hover); color: var(--theme-primary); }
+        .leaflet-control-attribution { background: color-mix(in srgb, var(--theme-bg) 72%, transparent) !important; color: var(--theme-secondary) !important; font-size: 9px; }
+        .leaflet-control-attribution a { color: var(--theme-primary) !important; }
       `}</style>
 
       {/* Control rail */}
-      <div style={{ width: 252, flex: 'none', display: 'flex', flexDirection: 'column', background: '#0c1728', border: '1px solid rgba(255,255,255,0.08)', overflowY: 'auto' }}>
-        <div style={{ padding: '14px 18px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+      <div style={{ width: 252, flex: 'none', display: 'flex', flexDirection: 'column', background: 'var(--theme-surface)', border: '1px solid var(--theme-border)', overflowY: 'auto' }}>
+        <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--theme-border-faint)' }}>
           <div style={{ ...railLabel, marginBottom: 8 }}>Jump To</div>
           <select value="" onChange={e => {
             const id = e.target.value
             if (id === 'global') { setFocus({ lat: 24, lon: 40, zoom: 2.4 }); return }
             const c = choke.data?.chokepoints.find(x => x.id === id)
             if (c) setFocus({ lat: c.lat, lon: c.lon, zoom: 6 })
-          }} style={{ width: '100%', background: '#0a1424', color: '#d7e3fc', border: '1px solid rgba(255,255,255,0.08)', fontFamily: 'var(--theme-sans)', fontSize: 12, padding: '7px 8px' }}>
+          }} style={{ width: '100%', background: 'var(--theme-bg)', color: 'var(--theme-text)', border: '1px solid var(--theme-border)', fontFamily: 'var(--theme-sans)', fontSize: 12, padding: '7px 8px' }}>
             <option value="" disabled>Select…</option>
             <option value="global">Global view</option>
             {choke.data?.chokepoints.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -262,48 +288,48 @@ export function MaritimeMapContent() {
         </div>
 
         <RailSection label="Live Vessels" note="AISStream · Kystverket (NO) · VesselAPI">
-          <Toggle k="tanker" label="Crude tankers" on={layers.tanker} onToggle={() => toggle('tanker')} />
-          <Toggle k="lng" label="LNG carriers" on={layers.lng} onToggle={() => toggle('lng')} />
-          <Toggle k="cargo" label="Cargo / dry bulk" on={layers.cargo} onToggle={() => toggle('cargo')} />
+          <Toggle glyph={GLYPH.tanker} label="Crude tankers" on={layers.tanker} onToggle={() => toggle('tanker')} />
+          <Toggle glyph={GLYPH.lng} label="LNG carriers" on={layers.lng} onToggle={() => toggle('lng')} />
+          <Toggle glyph={GLYPH.cargo} label="Cargo / dry bulk" on={layers.cargo} onToggle={() => toggle('cargo')} />
         </RailSection>
 
         <RailSection label="Pipelines">
-          <Toggle k="pGem" label="Global pipelines" src="GEM" on={layers.pGem} onToggle={() => toggle('pGem')} />
-          <Toggle k="pEia" label="US pipelines" src="EIA" on={layers.pEia} onToggle={() => toggle('pEia')} />
-          <Toggle k="pOsm" label="OSM infrastructure" src="OSM" on={layers.pOsm} onToggle={() => toggle('pOsm')} />
-          <Toggle k="pEmod" label="EU offshore" src="EMODnet" on={layers.pEmod} onToggle={() => toggle('pEmod')} />
+          <Toggle glyph={GLYPH.pGem} label="Global pipelines" src="GEM" on={layers.pGem} onToggle={() => toggle('pGem')} />
+          <Toggle glyph={GLYPH.pEia} label="US pipelines" src="EIA" on={layers.pEia} onToggle={() => toggle('pEia')} />
+          <Toggle glyph={GLYPH.pOsm} label="OSM infrastructure" src="OSM" on={layers.pOsm} onToggle={() => toggle('pOsm')} />
+          <Toggle glyph={GLYPH.pEmod} label="EU offshore" src="EMODnet" on={layers.pEmod} onToggle={() => toggle('pEmod')} />
         </RailSection>
 
         <RailSection label="Facilities">
-          <Toggle k="terminals" label="Export terminals" src="Curated" on={layers.terminals} onToggle={() => toggle('terminals')} />
-          <Toggle k="lngTerm" label="LNG terminals" src="GEM" on={layers.lngTerm} onToggle={() => toggle('lngTerm')} />
-          <Toggle k="fields" label="Oil & gas fields" src="GEM" on={layers.fields} onToggle={() => toggle('fields')} />
-          <Toggle k="refineries" label="Refineries" src="NETL" on={layers.refineries} onToggle={() => toggle('refineries')} />
-          <Toggle k="power" label="Power plants" src="GEM" on={layers.power} onToggle={() => toggle('power')} />
-          <Toggle k="coal" label="Coal terminals" src="GEM" on={layers.coal} onToggle={() => toggle('coal')} />
+          <Toggle glyph={GLYPH.terminals} label="Export terminals" src="Curated" on={layers.terminals} onToggle={() => toggle('terminals')} />
+          <Toggle glyph={GLYPH.lngTerm} label="LNG terminals" src="GEM" on={layers.lngTerm} onToggle={() => toggle('lngTerm')} />
+          <Toggle glyph={GLYPH.fields} label="Oil & gas fields" src="GEM" on={layers.fields} onToggle={() => toggle('fields')} />
+          <Toggle glyph={GLYPH.refineries} label="Refineries" src="NETL" on={layers.refineries} onToggle={() => toggle('refineries')} />
+          <Toggle glyph={GLYPH.power} label="Power plants" src="GEM" on={layers.power} onToggle={() => toggle('power')} />
+          <Toggle glyph={GLYPH.coal} label="Coal terminals" src="GEM" on={layers.coal} onToggle={() => toggle('coal')} />
         </RailSection>
 
         <RailSection label="Ports & Chokepoints">
-          <Toggle k="wpi" label="World ports" src="WPI" on={layers.wpi} onToggle={() => toggle('wpi')} />
-          <Toggle k="chokepoints" label="Chokepoints" on={layers.chokepoints} onToggle={() => toggle('chokepoints')} />
+          <Toggle glyph={GLYPH.wpi} label="World ports" src="WPI" on={layers.wpi} onToggle={() => toggle('wpi')} />
+          <Toggle glyph={GLYPH.chokepoints} label="Chokepoints" on={layers.chokepoints} onToggle={() => toggle('chokepoints')} />
         </RailSection>
 
         <RailSection label="Overlays">
-          <Toggle k="helcom" label="Baltic shipping" src="HELCOM" on={layers.helcom} onToggle={() => toggle('helcom')} />
+          <Toggle glyph={GLYPH.helcom} label="Baltic shipping" src="HELCOM" on={layers.helcom} onToggle={() => toggle('helcom')} />
         </RailSection>
 
-        <div style={{ marginTop: 'auto', padding: '14px 18px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-          <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 22, fontWeight: 700, color: '#d7e3fc' }}>{vess.data?.count ?? 0}</div>
+        <div style={{ marginTop: 'auto', padding: '14px 18px', borderTop: '1px solid var(--theme-border-faint)' }}>
+          <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 22, fontWeight: 700, color: 'var(--theme-text)' }}>{vess.data?.count ?? 0}</div>
           <div style={{ ...railLabel, marginTop: 2 }}>Vessels Live</div>
-          <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, color: '#3f5670', marginTop: 6, lineHeight: '14px' }}>18 feeds · AIS, pipelines, facilities, ports & shipping context</div>
+          <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, color: 'var(--theme-text-faint)', marginTop: 6, lineHeight: '14px' }}>18 feeds · AIS, pipelines, facilities, ports & shipping context</div>
         </div>
       </div>
 
       {/* Map panel */}
-      <div style={{ flex: 1, minWidth: 0, position: 'relative', border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+      <div style={{ flex: 1, minWidth: 0, position: 'relative', border: '1px solid var(--theme-border)', overflow: 'hidden' }}>
         <MapContainer className="gfm-map" center={[24, 40]} zoom={2.4} minZoom={2} maxZoom={6} worldCopyJump preferCanvas
           maxBounds={[[-78, -200], [86, 220]]} maxBoundsViscosity={0.7} style={{ position: 'absolute', inset: 0, background: C.ocean }}>
-          <VectorBasemap />
+          <VectorBasemap land={C.land} coast={C.coast} />
           <SizeFix />
           <FocusController focus={focus} />
           <ViewportWatcher onChange={(bbox, zoom) => setView({ bbox, zoom })} />
@@ -325,8 +351,8 @@ export function MaritimeMapContent() {
             )))}
 
           {/* Offshore platforms (OSM + EMODnet) + wind farms (EMODnet) */}
-          {layers.pOsm && platformsShown.map((p, i) => <Marker key={`osmp-${i}`} position={[p.lat, p.lon]} icon={platformIcon()}><Tooltip>{p.name} · Offshore platform · OSM</Tooltip></Marker>)}
-          {layers.pEmod && emodPlatforms.map((f, i) => <Marker key={`emp-${i}`} position={[f.la!, f.lo!]} icon={platformIcon()}><Tooltip>{f.n} · platform · EMODnet</Tooltip></Marker>)}
+          {layers.pOsm && platformsShown.map((p, i) => <Marker key={`osmp-${i}`} position={[p.lat, p.lon]} icon={platformIcon(C.gold)}><Tooltip>{p.name} · Offshore platform · OSM</Tooltip></Marker>)}
+          {layers.pEmod && emodPlatforms.map((f, i) => <Marker key={`emp-${i}`} position={[f.la!, f.lo!]} icon={platformIcon(C.gold)}><Tooltip>{f.n} · platform · EMODnet</Tooltip></Marker>)}
           {layers.pEmod && emodWind.map((f, i) => <CircleMarker key={`emw-${i}`} center={[f.la!, f.lo!]} radius={4} pathOptions={{ color: C.wind, weight: 1.5, fillOpacity: 0 }}><Tooltip>{f.n} · wind farm · EMODnet</Tooltip></CircleMarker>)}
 
           {/* Vessels — heading arrows + telemetry popup */}
@@ -334,10 +360,10 @@ export function MaritimeMapContent() {
             const cat = v.category ?? 'other'
             const hd = v.heading != null && v.heading !== 511 ? v.heading : (v.cog ?? 0)
             return (
-              <Marker key={`v-${v.mmsi}`} position={[v.lat, v.lon]} icon={arrowIcon(VCOLOR[cat] ?? C.wpi, hd, 9)}>
+              <Marker key={`v-${v.mmsi}`} position={[v.lat, v.lon]} icon={arrowIcon(VCOLOR[cat] ?? C.cargo, hd, 9)}>
                 <Popup>
                   <div style={{ fontFamily: 'var(--theme-mono, monospace)', fontSize: 12, minWidth: 200 }}>
-                    <div style={{ fontWeight: 700, color: VCOLOR[cat] ?? '#d7e3fc', marginBottom: 6 }}>{v.name || `MMSI ${v.mmsi}`}</div>
+                    <div style={{ fontWeight: 700, color: VCOLOR[cat] ?? 'var(--theme-text)', marginBottom: 6 }}>{v.name || `MMSI ${v.mmsi}`}</div>
                     <Row k="Type" v={VLABEL[cat]} /><Row k="MMSI" v={v.mmsi} />
                     <Row k="Destination" v={v.destination || '—'} />
                     <Row k="Speed" v={v.sog != null ? `${v.sog.toFixed(1)} kn` : '—'} />
@@ -351,10 +377,10 @@ export function MaritimeMapContent() {
           })}
 
           {/* Facilities */}
-          {layers.fields && facBy('field').map((f, i) => <Marker key={`fld-${i}`} position={[f.la, f.lo]} icon={fieldIcon()}><Tooltip>{f.n} · Oil/gas field{f.x ? ` · ${f.x}` : ''} · GEM</Tooltip></Marker>)}
-          {layers.refineries && refs.map((f, i) => <Marker key={`ref-${i}`} position={[f.la, f.lo]} icon={refIcon()}><Tooltip>{f.n} · {f.k === 'processing' ? 'Processing plant' : 'Refinery'}{f.x ? ` · ${f.x}` : ''} · NETL</Tooltip></Marker>)}
+          {layers.fields && facBy('field').map((f, i) => <Marker key={`fld-${i}`} position={[f.la, f.lo]} icon={fieldIcon(C.field)}><Tooltip>{f.n} · Oil/gas field{f.x ? ` · ${f.x}` : ''} · GEM</Tooltip></Marker>)}
+          {layers.refineries && refs.map((f, i) => <Marker key={`ref-${i}`} position={[f.la, f.lo]} icon={refIcon(C.refinery)}><Tooltip>{f.n} · {f.k === 'processing' ? 'Processing plant' : 'Refinery'}{f.x ? ` · ${f.x}` : ''} · NETL</Tooltip></Marker>)}
           {layers.power && facBy('plant').map((f, i) => <CircleMarker key={`pw-${i}`} center={[f.la, f.lo]} radius={3.6} pathOptions={{ color: C.power, fillColor: C.power, fillOpacity: 0.9, weight: 0 }}><Tooltip>{f.n} · Oil/gas power plant{f.x ? ` · ${f.x}` : ''} · GEM</Tooltip></CircleMarker>)}
-          {layers.coal && facBy('coal_terminal').map((f, i) => <Marker key={`cl-${i}`} position={[f.la, f.lo]} icon={coalIcon()}><Tooltip>{f.n} · Coal terminal{f.x ? ` · ${f.x} Mt` : ''} · GEM</Tooltip></Marker>)}
+          {layers.coal && facBy('coal_terminal').map((f, i) => <Marker key={`cl-${i}`} position={[f.la, f.lo]} icon={coalIcon(C.coal)}><Tooltip>{f.n} · Coal terminal{f.x ? ` · ${f.x} Mt` : ''} · GEM</Tooltip></Marker>)}
 
           {/* LNG terminals (GEM) — purple rings */}
           {layers.lngTerm && lngQ.data?.lng.map((t, i) => <CircleMarker key={`lt-${i}`} center={[t.la, t.lo]} radius={5} pathOptions={{ color: C.lngTerm, weight: 2, fillOpacity: 0 }}><Tooltip><b>{t.n}</b><br />LNG {t.ie || ''} terminal · {t.st} · GEM{t.cap ? `<br />~${t.cap} Mtpa` : ''}</Tooltip></CircleMarker>)}
@@ -368,7 +394,7 @@ export function MaritimeMapContent() {
           })}
 
           {/* World ports (WPI) — hollow squares sized by harbour size */}
-          {layers.wpi && wpiShown.map((p, i) => <Marker key={`wpi-${i}`} position={[p.la, p.lo]} icon={wpiIcon(p.s)}><Tooltip>{p.n}{p.c ? ` · ${p.c}` : ''}{p.s ? ` · ${p.s} harbour` : ''}{p.cppi ? ` · CPPI #${p.cppi}/405` : ''} · WPI</Tooltip></Marker>)}
+          {layers.wpi && wpiShown.map((p, i) => <Marker key={`wpi-${i}`} position={[p.la, p.lo]} icon={wpiIcon(p.s, C.wpi)}><Tooltip>{p.n}{p.c ? ` · ${p.c}` : ''}{p.s ? ` · ${p.s} harbour` : ''}{p.cppi ? ` · CPPI #${p.cppi}/405` : ''} · WPI</Tooltip></Marker>)}
 
           {/* Chokepoints — pulsing gold rings */}
           {layers.chokepoints && choke.data?.chokepoints.map(c => (
@@ -383,15 +409,15 @@ export function MaritimeMapContent() {
         </MapContainer>
 
         {/* Dynamic legend */}
-        <div style={{ position: 'absolute', right: 14, bottom: 22, zIndex: 500, background: 'rgba(9,17,30,0.92)', backdropFilter: 'blur(4px)', border: '1px solid rgba(201,168,76,0.28)', borderRadius: 2, padding: '12px 14px', minWidth: 186, maxHeight: 'calc(100% - 44px)', overflowY: 'auto' }}>
-          <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 9.5, fontWeight: 700, letterSpacing: '0.16em', color: '#d7e3fc', marginBottom: 8 }}>LEGEND</div>
+        <div style={{ position: 'absolute', right: 14, bottom: 22, zIndex: 500, background: 'color-mix(in srgb, var(--theme-surface) 92%, transparent)', backdropFilter: 'blur(4px)', border: '1px solid color-mix(in srgb, var(--theme-primary) 28%, transparent)', borderRadius: 2, padding: '12px 14px', minWidth: 186, maxHeight: 'calc(100% - 44px)', overflowY: 'auto' }}>
+          <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 9.5, fontWeight: 700, letterSpacing: '0.16em', color: 'var(--theme-text)', marginBottom: 8 }}>LEGEND</div>
           {legend.map(g => (
             <div key={g.group} style={{ marginBottom: 8 }}>
-              <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 8.5, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#56708a', marginBottom: 4 }}>{g.group}</div>
+              <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 8.5, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary)', marginBottom: 4 }}>{g.group}</div>
               {g.items.map(it => (
                 <div key={it.label} style={{ display: 'flex', alignItems: 'center', gap: 9, lineHeight: '17px' }}>
                   <span style={{ width: 22, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={it.glyph} /></span>
-                  <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: '#a9bacf' }}>{it.label}</span>
+                  <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: 'var(--theme-text-muted)' }}>{it.label}</span>
                 </div>
               ))}
             </div>
@@ -404,19 +430,19 @@ export function MaritimeMapContent() {
 
 function RailSection({ label, note, children }: { label: string; note?: string; children: React.ReactNode }) {
   return (
-    <div style={{ padding: '14px 18px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+    <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--theme-border-faint)' }}>
       <div style={{ ...railLabel, marginBottom: 4 }}>{label}</div>
       {children}
-      {note && <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: '#3f5670', marginTop: 4 }}>{note}</div>}
+      {note && <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-text-faint)', marginTop: 4 }}>{note}</div>}
     </div>
   )
 }
 
 function Row({ k, v }: { k: string; v: string }) {
-  return <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, lineHeight: '19px' }}><span style={{ color: '#7f97af' }}>{k}</span><span style={{ color: '#d7e3fc', fontWeight: 600 }}>{v}</span></div>
+  return <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, lineHeight: '19px' }}><span style={{ color: 'var(--theme-secondary)' }}>{k}</span><span style={{ color: 'var(--theme-text)', fontWeight: 600 }}>{v}</span></div>
 }
 
-function buildLegend(l: Record<LayerKey, boolean>) {
+function buildLegend(l: Record<LayerKey, boolean>, C: Colors) {
   const G: { group: string; items: { glyph: React.CSSProperties; label: string }[] }[] = []
   let it: { glyph: React.CSSProperties; label: string }[] = []
   if (l.tanker) it.push({ glyph: gArrow(C.tanker), label: 'Crude tanker' })
