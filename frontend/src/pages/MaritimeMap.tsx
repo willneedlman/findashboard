@@ -1,38 +1,55 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
-import { MapContainer, TileLayer, Polyline, CircleMarker, Popup, Tooltip, useMap, useMapEvents } from 'react-leaflet'
+import { MapContainer, Polyline, CircleMarker, Marker, Popup, Tooltip, useMap, useMapEvents } from 'react-leaflet'
+import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import PageWrapper from '../components/PageWrapper'
 
-const T = {
-  bg: 'var(--theme-bg, #101c2e)', surface: 'var(--theme-surface, #0d1826)',
-  border: 'var(--theme-border, rgba(255,255,255,0.09))',
-  text: 'var(--theme-text, #d7e3fc)', muted: 'var(--theme-secondary, #8099b0)',
-  faint: 'var(--theme-text-faint, rgba(255,255,255,0.4))', gold: 'var(--theme-primary, #c9a84c)',
-  mono: 'var(--theme-mono)', sans: 'var(--theme-sans)',
+// ── Palette (concrete hex — CSS var() is unreliable in Leaflet SVG attrs) ────
+const C = {
+  gold: '#c9a84c', ocean: '#0b1626', land: '#0f1d31', coast: 'rgba(120,150,185,0.16)',
+  lane: '#35b7c2', tanker: '#3fb6a0', lng: '#5b93c9', cargo: '#cfa14b', wind: '#4a9e8f',
+  oilTerm: '#cf4b3f', lngTerm: '#c084fc', field: '#d07b34', refinery: '#b88a3a',
+  power: '#cbb26a', coal: '#556070', wpi: '#6f8bb0', helcom: '#a07cc4',
+}
+const VLABEL: Record<string, string> = { tanker: 'Crude Tanker', lng: 'LNG / Gas Carrier', cargo: 'Cargo / Dry Bulk', other: 'Vessel' }
+const VCOLOR: Record<string, string> = { tanker: C.tanker, lng: C.lng, cargo: C.cargo, other: C.wpi }
+const DETAIL_MIN_ZOOM = 5
+
+// Curated major shipping lanes (illustrative, grouped under vessel toggles).
+const LANES: { type: 'tanker' | 'lng' | 'cargo'; pts: [number, number][] }[] = [
+  { type: 'tanker', pts: [[26.64, 50.16], [26.55, 56.4], [24, 60], [17, 64], [8, 76], [6, 88], [3, 96], [2.5, 101.5], [6, 105], [15, 112], [25, 120], [29.9, 122.6]] },
+  { type: 'tanker', pts: [[26.55, 56.4], [20, 58], [14, 52], [12.6, 43.4], [20, 38], [27, 34.5], [30, 32.55], [32, 30], [35, 20], [37, 10], [37, 3], [36, -5.5], [43, -9], [49, -5], [51.95, 4.05]] },
+  { type: 'tanker', pts: [[26.55, 56.4], [15, 62], [0, 60], [-15, 50], [-30, 35], [-34.6, 19.6], [-20, 5], [0, -2], [15, -18], [30, -18], [40, -12], [48, -8], [51.95, 4.05]] },
+  { type: 'tanker', pts: [[29.35, -94.9], [26, -84], [25, -80], [30, -72], [38, -55], [45, -35], [49, -15], [50, -6], [51.95, 4.05]] },
+  { type: 'tanker', pts: [[4.45, 7.17], [0, 0], [5, -20], [12, -40], [20, -60], [25, -80], [29.35, -94.9]] },
+  { type: 'tanker', pts: [[60.35, 28.6], [59.5, 22], [58, 18], [55.7, 12.7], [57, 8], [54, 4], [51.95, 4.05]] },
+  { type: 'lng', pts: [[-23.8, 151.25], [-15, 155], [-5, 150], [5, 140], [15, 135], [25, 130], [33, 135], [35, 139.8]] },
+  { type: 'lng', pts: [[25.9, 51.6], [24, 58], [17, 64], [8, 76], [6, 88], [3, 96], [2.5, 101.5], [10, 110], [22, 120], [31, 128], [35, 139.8]] },
+  { type: 'lng', pts: [[29.73, -93.87], [26, -84], [25, -80], [30, -72], [40, -55], [48, -25], [50, -8], [51.35, 3.2]] },
+  { type: 'cargo', pts: [[31.2, 121.5], [30, 126], [20, 120], [8, 108], [2.5, 101.5], [6, 90], [10, 76], [18, 66], [25, 58], [26.55, 56.4]] },
+  { type: 'cargo', pts: [[35, 139.8], [38, 150], [45, 160], [52, 175], [55, -165], [52, -140], [45, -128], [37, -123]] },
+  { type: 'cargo', pts: [[-33.9, 18.4], [-20, 10], [0, -5], [10, -18], [20, -25], [30, -25], [40, -20], [48, -10], [51.95, 4.05]] },
+]
+
+// ── Leaflet divIcon factories ────────────────────────────────────────────────
+const arrowIcon = (color: string, heading: number, s = 9) => L.divIcon({
+  className: '', iconSize: [s + 4, s + 4], iconAnchor: [(s + 4) / 2, (s + 4) / 2],
+  html: `<div style="width:${s + 4}px;height:${s + 4}px;transform:rotate(${heading}deg);display:flex;align-items:center;justify-content:center;"><div style="width:0;height:0;border-left:${s * 0.4}px solid transparent;border-right:${s * 0.4}px solid transparent;border-bottom:${s}px solid ${color};filter:drop-shadow(0 0 1.5px ${color});"></div></div>`,
+})
+const boxIcon = (style: string, size: number) => L.divIcon({ className: '', iconSize: [size, size], iconAnchor: [size / 2, size / 2], html: `<div style="${style}"></div>` })
+const platformIcon = () => boxIcon(`width:9px;height:9px;border:1.5px solid ${C.gold};transform:rotate(45deg);`, 12)
+const fieldIcon = () => boxIcon(`width:9px;height:9px;background:${C.field};transform:rotate(45deg);border:1px solid rgba(0,0,0,0.5);`, 12)
+const refIcon = () => boxIcon(`width:9px;height:9px;background:${C.refinery};border:1px solid rgba(0,0,0,0.4);`, 11)
+const coalIcon = () => boxIcon(`width:9px;height:9px;background:${C.coal};border:1px solid rgba(0,0,0,0.4);`, 11)
+const wpiIcon = (s: string) => {
+  const sz = s === 'Large' ? 11 : s === 'Medium' ? 9 : 7, b = sz - 3
+  return boxIcon(`width:${b}px;height:${b}px;border:1.5px solid ${C.wpi};background:rgba(111,139,176,0.14);`, sz)
 }
 
-// Fixed semantic marker colors (concrete hex — CSS var() is unreliable in Leaflet SVG paths).
-const VESSEL_COLOR: Record<string, string> = { tanker: '#22c55e', lng: '#3b82f6', cargo: '#eab308', other: '#94a3b8' }
-const VESSEL_LABEL: Record<string, string> = { tanker: 'Crude Tanker', lng: 'LNG / Gas Carrier', cargo: 'Cargo / Dry Bulk', other: 'Other' }
-const PIPE_COLOR: Record<string, string> = { gas: '#f59e0b', oil: '#8b1a1a', product: '#c084fc', other: '#6b7280' }
-const PORT_COLOR = { oil: '#8b1a1a', lng: '#c084fc' } as const
-const CHOKE_COLOR = '#c9a84c'
-const OSM_PORT_COLOR = '#2dd4bf'
-const LNG_TERM_COLOR = '#38bdf8'
-const WPI_COLOR = '#64748b'
-const HELCOM_COLOR = '#a78bfa'
-const PLATFORM_COLOR = '#f472b6'
-const FAC_COLOR: Record<string, string> = { field: '#eab308', plant: '#fb923c', coal_terminal: '#9ca3af', refinery: '#ef4444', processing: '#a3e635' }
-const FAC_LABEL: Record<string, string> = { field: 'Oil/gas field', plant: 'Oil/gas plant', coal_terminal: 'Coal terminal', refinery: 'Refinery', processing: 'Processing plant' }
-const EMODNET_COLOR: Record<string, string> = { pipeline: '#22d3ee', platform: '#f472b6', windfarm: '#a3e635' }
-const DETAIL_MIN_ZOOM = 5          // gate rate-limited/heavy layers to zoomed-in views
-
-interface Vessel {
-  mmsi: string; name?: string; lat: number; lon: number; sog?: number; cog?: number
-  heading?: number; destination?: string; category?: string; time_utc?: string
-}
+// ── Types ────────────────────────────────────────────────────────────────────
+interface Vessel { mmsi: string; name?: string; lat: number; lon: number; sog?: number; cog?: number; heading?: number; destination?: string; category?: string; time_utc?: string; source?: string }
 interface Chokepoint { id: string; name: string; lat: number; lon: number; oil_mbd: number; note: string }
 interface Port { name: string; country: string; lat: number; lon: number; kind: 'oil' | 'lng'; throughput: string; cppi?: number }
 interface Pipeline { name: string; substance: string; coords: [number, number][] }
@@ -41,13 +58,42 @@ interface WpiPort { n: string; la: number; lo: number; c: string; s: string; cpp
 interface Facility { n: string; la: number; lo: number; k: string; x?: string | number }
 interface OsmPort { name: string; lat: number; lon: number; kind: string }
 interface EmodFeat { kind: string; n: string; coords?: [number, number][]; la?: number; lo?: number }
+interface HelcomFeat { coords: [number, number][]; location: string; crossings: number }
 
-const DARK_TILES = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-const TILE_ATTR = '&copy; OpenStreetMap &copy; CARTO'
+type LayerKey = 'tanker' | 'lng' | 'cargo' | 'pGem' | 'pEia' | 'pOsm' | 'pEmod' | 'terminals' | 'lngTerm' | 'fields' | 'refineries' | 'power' | 'coal' | 'wpi' | 'chokepoints' | 'helcom'
+
+// ── Map helper components ─────────────────────────────────────────────────────
+function SizeFix() {
+  const map = useMap()
+  useEffect(() => {
+    const t1 = setTimeout(() => map.invalidateSize(), 60)
+    const t2 = setTimeout(() => map.invalidateSize(), 320)
+    const ro = new ResizeObserver(() => map.invalidateSize())
+    ro.observe(map.getContainer())
+    return () => { clearTimeout(t1); clearTimeout(t2); ro.disconnect() }
+  }, [map])
+  return null
+}
+
+function VectorBasemap() {
+  const map = useMap()
+  useEffect(() => {
+    let layer: L.Layer | undefined
+    fetch('/world-countries.geo.json').then(r => r.json()).then(gj => {
+      layer = L.geoJSON(gj, { style: { fillColor: C.land, color: C.coast, weight: 0.6, fillOpacity: 1 } as L.PathOptions, interactive: false }).addTo(map)
+      ;(layer as L.GeoJSON).bringToBack()
+    }).catch(() => {
+      layer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', { subdomains: 'abcd', maxZoom: 6 }).addTo(map)
+      ;(layer as L.TileLayer).bringToBack()
+    })
+    return () => { if (layer) map.removeLayer(layer) }
+  }, [map])
+  return null
+}
 
 function FocusController({ focus }: { focus: { lat: number; lon: number; zoom: number } | null }) {
   const map = useMap()
-  useEffect(() => { if (focus) map.flyTo([focus.lat, focus.lon], focus.zoom, { duration: 1.2 }) }, [focus, map])
+  useEffect(() => { if (focus) map.flyTo([focus.lat, focus.lon], focus.zoom, { duration: 1.25 }) }, [focus, map])
   return null
 }
 
@@ -58,298 +104,334 @@ function ViewportWatcher({ onChange }: { onChange: (bbox: string, zoom: number) 
     onChange(`${b.getSouth().toFixed(3)},${b.getWest().toFixed(3)},${b.getNorth().toFixed(3)},${b.getEast().toFixed(3)}`, map.getZoom())
   }
   useMapEvents({ moveend: emit })
-  useEffect(() => { emit() }, [])   // emit the initial viewport once
+  useEffect(() => { emit() }, [])
   return null
 }
 
-const chip: React.CSSProperties = { fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted }
+// ── Rail glyphs (match map symbology) ─────────────────────────────────────────
+const gArrow = (c: string): React.CSSProperties => ({ width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderBottom: `11px solid ${c}` })
+const gLine = (c: string, dash = false): React.CSSProperties => ({ width: 18, height: 0, borderTop: `2px ${dash ? 'dashed' : 'solid'} ${c}` })
+const gDot = (c: string): React.CSSProperties => ({ width: 10, height: 10, borderRadius: '50%', background: c })
+const gRing = (c: string): React.CSSProperties => ({ width: 11, height: 11, borderRadius: '50%', border: `2px solid ${c}` })
+const gDiamond = (c: string): React.CSSProperties => ({ width: 9, height: 9, background: c, transform: 'rotate(45deg)' })
+const gDiamondO = (c: string): React.CSSProperties => ({ width: 9, height: 9, border: `1.5px solid ${c}`, transform: 'rotate(45deg)' })
+const gSquare = (c: string): React.CSSProperties => ({ width: 10, height: 10, background: c })
+const gSquareO = (c: string): React.CSSProperties => ({ width: 10, height: 10, border: `1.5px solid ${c}` })
 
-function Toggle({ label, color, on, onChange }: { label: string; color?: string; on: boolean; onChange: () => void }) {
+const GLYPH: Record<LayerKey, React.CSSProperties> = {
+  tanker: gArrow(C.tanker), lng: gArrow(C.lng), cargo: gArrow(C.cargo),
+  pGem: gLine(C.gold), pEia: gLine(C.gold), pOsm: gLine(C.gold), pEmod: gLine(C.gold),
+  terminals: gDot(C.oilTerm), lngTerm: gRing(C.lngTerm), fields: gDiamond(C.field),
+  refineries: gSquare(C.refinery), power: gDot(C.power), coal: gSquare(C.coal),
+  wpi: gSquareO(C.wpi), chokepoints: gRing(C.gold), helcom: gLine(C.helcom),
+}
+
+const railLabel: React.CSSProperties = { fontFamily: 'var(--theme-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: '#56708a' }
+const srcTag: React.CSSProperties = { fontFamily: 'var(--theme-mono)', fontSize: 8.5, letterSpacing: '0.08em', color: '#3f5670', marginLeft: 'auto' }
+
+function Toggle({ k, label, on, src, onToggle }: { k: LayerKey; label: string; on: boolean; src?: string; onToggle: () => void }) {
   return (
-    <label style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer', padding: '4px 0' }}>
-      <input type="checkbox" checked={on} onChange={onChange} style={{ accentColor: T.gold, width: 14, height: 14, cursor: 'pointer' }} />
-      {color && <span style={{ width: 10, height: 10, borderRadius: '50%', background: color, flex: 'none' }} />}
-      <span style={{ fontFamily: T.sans, fontSize: 12, color: on ? T.text : T.muted }}>{label}</span>
-    </label>
+    <div onClick={onToggle} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', cursor: 'pointer' }}>
+      <span style={{ width: 15, height: 15, borderRadius: 2, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${on ? C.gold : 'rgba(255,255,255,0.22)'}`, background: on ? C.gold : 'transparent', color: '#0a1424', fontSize: 11, fontWeight: 800 }}>{on ? '✓' : ''}</span>
+      <span style={{ width: 22, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={GLYPH[k]} /></span>
+      <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 12, color: on ? '#d7e3fc' : '#6d8199' }}>{label}</span>
+      {src && <span style={srcTag}>{src}</span>}
+    </div>
   )
 }
 
 export function MaritimeMapContent() {
-  const [layers, setLayers] = useState({
-    pipelines: true, lngTerminals: true, terminals: true, worldPorts: false, chokepoints: true, facilities: false,
-    osm: false, eia: false, helcom: false, emodnet: false,
-    tanker: true, lngShip: true, cargo: true, unclassified: false,
+  const [layers, setLayers] = useState<Record<LayerKey, boolean>>({
+    tanker: true, lng: true, cargo: true, pGem: true, pEia: false, pOsm: false, pEmod: false,
+    terminals: true, lngTerm: true, fields: true, refineries: false, power: false, coal: false,
+    wpi: false, chokepoints: true, helcom: false,
   })
   const [focus, setFocus] = useState<{ lat: number; lon: number; zoom: number } | null>(null)
   const [view, setView] = useState<{ bbox: string; zoom: number } | null>(null)
   const [gemPipes, setGemPipes] = useState<Pipeline[]>([])
-  const [osmPipes, setOsmPipes] = useState<Pipeline[]>([])
-  const [osmPorts, setOsmPorts] = useState<OsmPort[]>([])
-  const [facilities, setFacilities] = useState<Facility[]>([])
-  const [emod, setEmod] = useState<EmodFeat[]>([])
   const [eiaPipes, setEiaPipes] = useState<Pipeline[]>([])
-  const [worldPorts, setWorldPorts] = useState<WpiPort[]>([])
-  const [helcom, setHelcom] = useState<{ coords: [number, number][]; location: string; crossings: number }[]>([])
-  const toggle = (k: keyof typeof layers) => setLayers(s => ({ ...s, [k]: !s[k] }))
+  const [osmPipes, setOsmPipes] = useState<Pipeline[]>([])
+  const [osmPlatforms, setOsmPlatforms] = useState<OsmPort[]>([])
+  const [emod, setEmod] = useState<EmodFeat[]>([])
+  const [fac, setFac] = useState<Facility[]>([])
+  const [wpiPorts, setWpiPorts] = useState<WpiPort[]>([])
+  const [helcom, setHelcom] = useState<HelcomFeat[]>([])
+  const toggle = (k: LayerKey) => setLayers(s => ({ ...s, [k]: !s[k] }))
 
-  // Combined, debounced viewport fetch for the bbox-driven layers.
+  const anyFac = layers.fields || layers.refineries || layers.power || layers.coal
+
   useEffect(() => {
     if (!view) return
     const { bbox, zoom } = view
     const t = setTimeout(() => {
-      if (layers.pipelines) {
-        const url = zoom < 4 ? '/api/maritime/pipelines?source=gem' : `/api/maritime/pipelines?source=gem&bbox=${bbox}`
-        axios.get(url).then(r => setGemPipes(r.data.pipelines || [])).catch(() => {})
-      }
-      if (layers.osm && zoom >= DETAIL_MIN_ZOOM) {
+      if (layers.pGem) axios.get(zoom < 4 ? '/api/maritime/pipelines?source=gem' : `/api/maritime/pipelines?source=gem&bbox=${bbox}`).then(r => setGemPipes(r.data.pipelines || [])).catch(() => {})
+      if (layers.pEia && zoom >= DETAIL_MIN_ZOOM) axios.get(`/api/maritime/pipelines?source=eia&bbox=${bbox}`).then(r => setEiaPipes(r.data.pipelines || [])).catch(() => {})
+      if (layers.pOsm && zoom >= DETAIL_MIN_ZOOM) {
         axios.get(`/api/maritime/pipelines?source=osm&bbox=${bbox}`).then(r => setOsmPipes(r.data.pipelines || [])).catch(() => {})
-        axios.get(`/api/maritime/ports?bbox=${bbox}`).then(r => setOsmPorts(r.data.osm_ports || [])).catch(() => {})
+        axios.get(`/api/maritime/ports?bbox=${bbox}`).then(r => setOsmPlatforms((r.data.osm_ports || []).filter((p: OsmPort) => p.kind === 'platform'))).catch(() => {})
       }
-      if (layers.eia && zoom >= DETAIL_MIN_ZOOM) {
-        axios.get(`/api/maritime/pipelines?source=eia&bbox=${bbox}`).then(r => setEiaPipes(r.data.pipelines || [])).catch(() => {})
-      }
-      if (layers.worldPorts) {
-        axios.get(`/api/maritime/world-ports?bbox=${bbox}`).then(r => setWorldPorts(r.data.ports || [])).catch(() => {})
-      }
-      if (layers.helcom) {
-        axios.get(`/api/maritime/helcom?bbox=${bbox}`).then(r => setHelcom(r.data.features || [])).catch(() => {})
-      }
-      if (layers.facilities) {
-        const url = zoom < 4 ? '/api/maritime/facilities' : `/api/maritime/facilities?bbox=${bbox}`
-        axios.get(url).then(r => setFacilities(r.data.facilities || [])).catch(() => {})
-      }
-      if (layers.emodnet) {
-        axios.get(`/api/maritime/emodnet?bbox=${bbox}`).then(r => setEmod(r.data.features || [])).catch(() => {})
-      }
-    }, 500)
+      if (layers.pEmod) axios.get(`/api/maritime/emodnet?bbox=${bbox}`).then(r => setEmod(r.data.features || [])).catch(() => {})
+      if (anyFac) axios.get(zoom < 4 ? '/api/maritime/facilities' : `/api/maritime/facilities?bbox=${bbox}`).then(r => setFac(r.data.facilities || [])).catch(() => {})
+      if (layers.wpi) axios.get(`/api/maritime/world-ports?bbox=${bbox}`).then(r => setWpiPorts(r.data.ports || [])).catch(() => {})
+      if (layers.helcom) axios.get(`/api/maritime/helcom?bbox=${bbox}`).then(r => setHelcom(r.data.features || [])).catch(() => {})
+    }, 450)
     return () => clearTimeout(t)
-  }, [view, layers.pipelines, layers.osm, layers.eia, layers.worldPorts, layers.helcom, layers.facilities, layers.emodnet])
+  }, [view, layers.pGem, layers.pEia, layers.pOsm, layers.pEmod, anyFac, layers.wpi, layers.helcom])
 
-  // Clear layer data the moment its toggle goes off.
-  useEffect(() => { if (!layers.pipelines) setGemPipes([]) }, [layers.pipelines])
-  useEffect(() => { if (!layers.osm) { setOsmPipes([]); setOsmPorts([]) } }, [layers.osm])
-  useEffect(() => { if (!layers.eia) setEiaPipes([]) }, [layers.eia])
-  useEffect(() => { if (!layers.worldPorts) setWorldPorts([]) }, [layers.worldPorts])
+  useEffect(() => { if (!layers.pGem) setGemPipes([]) }, [layers.pGem])
+  useEffect(() => { if (!layers.pEia) setEiaPipes([]) }, [layers.pEia])
+  useEffect(() => { if (!layers.pOsm) { setOsmPipes([]); setOsmPlatforms([]) } }, [layers.pOsm])
+  useEffect(() => { if (!layers.pEmod) setEmod([]) }, [layers.pEmod])
+  useEffect(() => { if (!anyFac) setFac([]) }, [anyFac])
+  useEffect(() => { if (!layers.wpi) setWpiPorts([]) }, [layers.wpi])
   useEffect(() => { if (!layers.helcom) setHelcom([]) }, [layers.helcom])
-  useEffect(() => { if (!layers.facilities) setFacilities([]) }, [layers.facilities])
-  useEffect(() => { if (!layers.emodnet) setEmod([]) }, [layers.emodnet])
 
   const choke = useQuery<{ chokepoints: Chokepoint[] }>({ queryKey: ['mar-choke'], queryFn: () => axios.get('/api/maritime/chokepoints').then(r => r.data), staleTime: Infinity })
-  const ports = useQuery<{ ports: Port[] }>({ queryKey: ['mar-ports'], queryFn: () => axios.get('/api/maritime/ports').then(r => r.data), staleTime: Infinity })
+  const terms = useQuery<{ ports: Port[] }>({ queryKey: ['mar-terms'], queryFn: () => axios.get('/api/maritime/ports').then(r => r.data), staleTime: Infinity })
   const lngQ = useQuery<{ lng: LngTerm[] }>({ queryKey: ['mar-lng'], queryFn: () => axios.get('/api/maritime/lng').then(r => r.data), staleTime: Infinity })
   const vess = useQuery<{ vessels: Vessel[]; count: number; status: { key_present: boolean; connected: boolean } }>({
-    queryKey: ['mar-vessels'], queryFn: () => axios.get('/api/maritime/vessels').then(r => r.data),
-    refetchInterval: 8000, staleTime: 4000,
+    queryKey: ['mar-vessels'], queryFn: () => axios.get('/api/maritime/vessels').then(r => r.data), refetchInterval: 8000, staleTime: 4000,
   })
 
-  const catShown = (c?: string) => {
-    if (c === 'tanker') return layers.tanker
-    if (c === 'lng') return layers.lngShip
-    if (c === 'cargo') return layers.cargo
-    return layers.unclassified
-  }
+  const catShown = (c?: string) => c === 'lng' ? layers.lng : c === 'cargo' ? layers.cargo : c === 'tanker' ? layers.tanker : layers.cargo
   const vessels = (vess.data?.vessels ?? []).filter(v => catShown(v.category))
-  const keyMissing = vess.data?.status && !vess.data.status.key_present
-  const pcol = (s: string) => PIPE_COLOR[s] ?? PIPE_COLOR.other
-  const zoomHint = layers.osm || layers.eia
-  const needZoom = zoomHint && (view?.zoom ?? 0) < DETAIL_MIN_ZOOM
+  const anyVessel = layers.tanker || layers.lng || layers.cargo
+  const facBy = (k: string) => fac.filter(f => f.k === k)
+  const refs = fac.filter(f => f.k === 'refinery' || f.k === 'processing')
+  const pipeStyle = (sub: string) => ({ color: C.gold, weight: 2, opacity: 0.9, dashArray: sub === 'gas' ? '6 6' : undefined })
+
+  const legend = buildLegend(layers)
 
   return (
-    <div style={{ display: 'flex', gap: 14, height: '80vh', minHeight: 540 }}>
+    <div style={{ display: 'flex', gap: 14, height: '78vh', minHeight: 640 }}>
       <style>{`
+        .gfm-map { background: ${C.ocean}; }
+        .flow-lane { stroke-dasharray: 3 9; animation: gfm-flow 1.4s linear infinite; }
+        @keyframes gfm-flow { to { stroke-dashoffset: -12; } }
+        .choke-pulse { animation: gfm-pulse 2.6s ease-in-out infinite; }
+        @keyframes gfm-pulse { 0%,100% { opacity: .9 } 50% { opacity: .35 } }
+        @media (prefers-reduced-motion: reduce) { .flow-lane, .choke-pulse { animation: none !important; } }
         .leaflet-popup-content-wrapper, .leaflet-popup-tip, .leaflet-tooltip {
-          background: var(--theme-surface, #0d1826); color: var(--theme-text, #d7e3fc);
-          border: 1px solid var(--theme-border, rgba(255,255,255,0.14)); border-radius: 2px;
-          box-shadow: 0 6px 22px rgba(0,0,0,0.55);
+          background: #0d1826; color: #d7e3fc; border: 1px solid rgba(201,168,76,0.30); border-radius: 2px; box-shadow: 0 8px 26px rgba(0,0,0,0.6);
         }
         .leaflet-popup-content { margin: 10px 12px; }
         .leaflet-tooltip { font-family: var(--theme-sans); font-size: 11px; box-shadow: none; }
-        .leaflet-tooltip-top:before { border-top-color: var(--theme-border, rgba(255,255,255,0.14)); }
-        .leaflet-tooltip-bottom:before { border-bottom-color: var(--theme-border, rgba(255,255,255,0.14)); }
-        .leaflet-tooltip-left:before { border-left-color: var(--theme-border, rgba(255,255,255,0.14)); }
-        .leaflet-tooltip-right:before { border-right-color: var(--theme-border, rgba(255,255,255,0.14)); }
-        .leaflet-container a.leaflet-popup-close-button { color: var(--theme-secondary, #8099b0); }
-        .leaflet-bar a, .leaflet-bar a:hover { background: var(--theme-surface, #0d1826); color: var(--theme-text, #d7e3fc); border-color: var(--theme-border, rgba(255,255,255,0.14)); }
-        .leaflet-control-attribution { background: rgba(0,0,0,0.5) !important; color: var(--theme-secondary, #8099b0) !important; }
-        .leaflet-control-attribution a { color: var(--theme-primary, #c9a84c) !important; }
+        .leaflet-tooltip-top:before { border-top-color: rgba(201,168,76,0.30); }
+        .leaflet-tooltip-bottom:before { border-bottom-color: rgba(201,168,76,0.30); }
+        .leaflet-tooltip-left:before { border-left-color: rgba(201,168,76,0.30); }
+        .leaflet-tooltip-right:before { border-right-color: rgba(201,168,76,0.30); }
+        .leaflet-container a.leaflet-popup-close-button { color: #8099b0; }
+        .leaflet-bar a, .leaflet-bar a:hover { width: 28px; height: 28px; line-height: 28px; background: #0d1826; color: #d7e3fc; border-color: rgba(201,168,76,0.28); }
+        .leaflet-bar a:hover { background: #12253c; color: ${C.gold}; }
+        .leaflet-control-attribution { background: rgba(8,16,28,0.72) !important; color: #56708a !important; font-size: 9px; }
+        .leaflet-control-attribution a { color: ${C.gold} !important; }
       `}</style>
 
-      {/* Controls */}
-      <div style={{ width: 236, flex: 'none', display: 'flex', flexDirection: 'column', gap: 14, background: T.surface, border: `1px solid ${T.border}`, padding: '16px 16px', overflowY: 'auto' }}>
-        <div>
-          <div style={{ ...chip, marginBottom: 8 }}>Jump To</div>
-          <select
-            value=""
-            onChange={e => {
-              const id = e.target.value
-              if (id === 'global') { setFocus({ lat: 20, lon: 30, zoom: 2 }); return }
-              const c = choke.data?.chokepoints.find(x => x.id === id)
-              if (c) setFocus({ lat: c.lat, lon: c.lon, zoom: 7 })
-            }}
-            style={{ width: '100%', background: T.bg, color: T.text, border: `1px solid ${T.border}`, fontFamily: T.sans, fontSize: 12, padding: '7px 8px' }}
-          >
-            <option value="" disabled>Select a chokepoint…</option>
+      {/* Control rail */}
+      <div style={{ width: 252, flex: 'none', display: 'flex', flexDirection: 'column', background: '#0c1728', border: '1px solid rgba(255,255,255,0.08)', overflowY: 'auto' }}>
+        <div style={{ padding: '14px 18px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          <div style={{ ...railLabel, marginBottom: 8 }}>Jump To</div>
+          <select value="" onChange={e => {
+            const id = e.target.value
+            if (id === 'global') { setFocus({ lat: 24, lon: 40, zoom: 2.4 }); return }
+            const c = choke.data?.chokepoints.find(x => x.id === id)
+            if (c) setFocus({ lat: c.lat, lon: c.lon, zoom: 6 })
+          }} style={{ width: '100%', background: '#0a1424', color: '#d7e3fc', border: '1px solid rgba(255,255,255,0.08)', fontFamily: 'var(--theme-sans)', fontSize: 12, padding: '7px 8px' }}>
+            <option value="" disabled>Select…</option>
             <option value="global">Global view</option>
             {choke.data?.chokepoints.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
 
-        <div>
-          <div style={{ ...chip, marginBottom: 4 }}>Infrastructure</div>
-          <Toggle label="Pipelines (GEM)" color={PIPE_COLOR.gas} on={layers.pipelines} onChange={() => toggle('pipelines')} />
-          <Toggle label="LNG terminals" color={LNG_TERM_COLOR} on={layers.lngTerminals} onChange={() => toggle('lngTerminals')} />
-          <Toggle label="Export terminals" color={PORT_COLOR.oil} on={layers.terminals} onChange={() => toggle('terminals')} />
-          <Toggle label="World ports (WPI)" color={WPI_COLOR} on={layers.worldPorts} onChange={() => toggle('worldPorts')} />
-          <Toggle label="Facilities (GEM)" color={FAC_COLOR.plant} on={layers.facilities} onChange={() => toggle('facilities')} />
-          <Toggle label="Chokepoints" color={CHOKE_COLOR} on={layers.chokepoints} onChange={() => toggle('chokepoints')} />
-        </div>
+        <RailSection label="Live Vessels" note="AISStream · Kystverket (NO) · VesselAPI">
+          <Toggle k="tanker" label="Crude tankers" on={layers.tanker} onToggle={() => toggle('tanker')} />
+          <Toggle k="lng" label="LNG carriers" on={layers.lng} onToggle={() => toggle('lng')} />
+          <Toggle k="cargo" label="Cargo / dry bulk" on={layers.cargo} onToggle={() => toggle('cargo')} />
+        </RailSection>
 
-        <div>
-          <div style={{ ...chip, marginBottom: 4 }}>Overlays</div>
-          <Toggle label="OSM infrastructure" color={OSM_PORT_COLOR} on={layers.osm} onChange={() => toggle('osm')} />
-          <Toggle label="US pipelines (EIA)" on={layers.eia} onChange={() => toggle('eia')} />
-          <Toggle label="Baltic shipping (HELCOM)" color={HELCOM_COLOR} on={layers.helcom} onChange={() => toggle('helcom')} />
-          <Toggle label="EU offshore (EMODnet)" color={EMODNET_COLOR.pipeline} on={layers.emodnet} onChange={() => toggle('emodnet')} />
-          {needZoom && <div style={{ fontFamily: T.sans, fontSize: 9.5, color: T.faint, lineHeight: '14px', paddingLeft: 23 }}>Zoom in to load OSM / EIA detail.</div>}
-        </div>
+        <RailSection label="Pipelines">
+          <Toggle k="pGem" label="Global pipelines" src="GEM" on={layers.pGem} onToggle={() => toggle('pGem')} />
+          <Toggle k="pEia" label="US pipelines" src="EIA" on={layers.pEia} onToggle={() => toggle('pEia')} />
+          <Toggle k="pOsm" label="OSM infrastructure" src="OSM" on={layers.pOsm} onToggle={() => toggle('pOsm')} />
+          <Toggle k="pEmod" label="EU offshore" src="EMODnet" on={layers.pEmod} onToggle={() => toggle('pEmod')} />
+        </RailSection>
 
-        <div>
-          <div style={{ ...chip, marginBottom: 4 }}>Live Vessels</div>
-          <Toggle label="Crude tankers" color={VESSEL_COLOR.tanker} on={layers.tanker} onChange={() => toggle('tanker')} />
-          <Toggle label="LNG carriers" color={VESSEL_COLOR.lng} on={layers.lngShip} onChange={() => toggle('lngShip')} />
-          <Toggle label="Cargo / dry bulk" color={VESSEL_COLOR.cargo} on={layers.cargo} onChange={() => toggle('cargo')} />
-          <Toggle label="Unclassified" color={VESSEL_COLOR.other} on={layers.unclassified} onChange={() => toggle('unclassified')} />
-        </div>
+        <RailSection label="Facilities">
+          <Toggle k="terminals" label="Export terminals" src="Curated" on={layers.terminals} onToggle={() => toggle('terminals')} />
+          <Toggle k="lngTerm" label="LNG terminals" src="GEM" on={layers.lngTerm} onToggle={() => toggle('lngTerm')} />
+          <Toggle k="fields" label="Oil & gas fields" src="GEM" on={layers.fields} onToggle={() => toggle('fields')} />
+          <Toggle k="refineries" label="Refineries" src="NETL" on={layers.refineries} onToggle={() => toggle('refineries')} />
+          <Toggle k="power" label="Power plants" src="GEM" on={layers.power} onToggle={() => toggle('power')} />
+          <Toggle k="coal" label="Coal terminals" src="GEM" on={layers.coal} onToggle={() => toggle('coal')} />
+        </RailSection>
 
-        <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-            <span style={{ width: 7, height: 7, borderRadius: '50%', background: vess.data?.status?.connected ? VESSEL_COLOR.tanker : T.faint }} />
-            <span style={{ fontFamily: T.mono, fontSize: 11, color: T.muted }}>{vess.data?.count ?? 0} vessels live</span>
-          </div>
-          {keyMissing && (
-            <div style={{ fontFamily: T.sans, fontSize: 10, color: T.faint, lineHeight: '15px' }}>
-              Live AIS idle. Set <span style={{ color: T.gold }}>AISSTREAM_API_KEY</span> to stream vessels.
-            </div>
-          )}
+        <RailSection label="Ports & Chokepoints">
+          <Toggle k="wpi" label="World ports" src="WPI" on={layers.wpi} onToggle={() => toggle('wpi')} />
+          <Toggle k="chokepoints" label="Chokepoints" on={layers.chokepoints} onToggle={() => toggle('chokepoints')} />
+        </RailSection>
+
+        <RailSection label="Overlays">
+          <Toggle k="helcom" label="Baltic shipping" src="HELCOM" on={layers.helcom} onToggle={() => toggle('helcom')} />
+        </RailSection>
+
+        <div style={{ marginTop: 'auto', padding: '14px 18px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 22, fontWeight: 700, color: '#d7e3fc' }}>{vess.data?.count ?? 0}</div>
+          <div style={{ ...railLabel, marginTop: 2 }}>Vessels Live</div>
+          <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, color: '#3f5670', marginTop: 6, lineHeight: '14px' }}>18 feeds · AIS, pipelines, facilities, ports & shipping context</div>
         </div>
       </div>
 
-      {/* Map */}
-      <div style={{ flex: 1, minWidth: 0, border: `1px solid ${T.border}`, position: 'relative' }}>
-        <MapContainer center={[20, 30]} zoom={2} minZoom={2} worldCopyJump preferCanvas style={{ height: '100%', width: '100%', background: T.bg }}>
-          <TileLayer url={DARK_TILES} attribution={TILE_ATTR} />
+      {/* Map panel */}
+      <div style={{ flex: 1, minWidth: 0, position: 'relative', border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+        <MapContainer className="gfm-map" center={[24, 40]} zoom={2.4} minZoom={2} maxZoom={6} worldCopyJump preferCanvas
+          maxBounds={[[-78, -200], [86, 220]]} maxBoundsViscosity={0.7} style={{ position: 'absolute', inset: 0, background: C.ocean }}>
+          <VectorBasemap />
+          <SizeFix />
           <FocusController focus={focus} />
           <ViewportWatcher onChange={(bbox, zoom) => setView({ bbox, zoom })} />
 
-          {layers.pipelines && gemPipes.map((p, i) => (
-            <Polyline key={`gem-${i}`} positions={p.coords} pathOptions={{ color: pcol(p.substance), weight: 2, opacity: 0.85 }}>
-              <Tooltip sticky>{p.name} · {p.substance === 'gas' ? 'Natural gas' : p.substance === 'oil' ? 'Crude / NGL' : p.substance} · GEM</Tooltip>
-            </Polyline>
+          {/* Shipping lanes (grouped under vessel toggles) */}
+          {LANES.filter(l => layers[l.type]).map((l, i) => (
+            <Polyline key={`lane-${i}`} positions={l.pts} pathOptions={{ color: C.lane, weight: 1.4, opacity: 0.5, className: 'flow-lane' }} />
           ))}
 
-          {layers.eia && eiaPipes.map((p, i) => (
-            <Polyline key={`eia-${i}`} positions={p.coords} pathOptions={{ color: PIPE_COLOR.gas, weight: 1.5, opacity: 0.6 }}>
-              <Tooltip sticky>{p.name} · US gas · EIA</Tooltip>
-            </Polyline>
-          ))}
-
-          {layers.helcom && helcom.map((h, i) => (
-            <Polyline key={`helcom-${i}`} positions={h.coords} pathOptions={{ color: HELCOM_COLOR, weight: Math.max(1, Math.min(5, Math.log10(h.crossings + 1) - 3)), opacity: 0.75 }}>
-              <Tooltip>{h.location || 'Passage line'} · {h.crossings.toLocaleString()} crossings <span style={{ opacity: 0.6 }}>· HELCOM</span></Tooltip>
-            </Polyline>
-          ))}
-
-          {layers.osm && osmPipes.map((p, i) => (
-            <Polyline key={`osm-${i}`} positions={p.coords} pathOptions={{ color: pcol(p.substance), weight: 2, opacity: 0.7, dashArray: '4 4' }}>
-              <Tooltip sticky>{p.name} · {p.substance} · OSM</Tooltip>
-            </Polyline>
-          ))}
-
-          {layers.osm && osmPorts.map((p, i) => {
-            const isPlat = p.kind === 'platform'
-            const col = isPlat ? PLATFORM_COLOR : OSM_PORT_COLOR
-            return (
-              <CircleMarker key={`osmport-${i}`} center={[p.lat, p.lon]} radius={3} pathOptions={{ color: col, fillColor: col, fillOpacity: 0.75, weight: 1 }}>
-                <Tooltip>{p.name} <span style={{ opacity: 0.6 }}>· {isPlat ? 'offshore platform' : 'OSM port'}</span></Tooltip>
-              </CircleMarker>
-            )
-          })}
-
-          {layers.emodnet && emod.map((f, i) => (
-            f.coords
-              ? <Polyline key={`em-${i}`} positions={f.coords} pathOptions={{ color: EMODNET_COLOR[f.kind] ?? '#22d3ee', weight: 1.5, opacity: 0.75 }}>
-                  <Tooltip sticky>{f.n} · {f.kind} <span style={{ opacity: 0.6 }}>· EMODnet</span></Tooltip>
+          {/* Pipelines: glow + core (gas dashed) */}
+          {[layers.pGem && gemPipes, layers.pEia && eiaPipes, layers.pOsm && osmPipes, layers.pEmod && emod.filter(f => f.kind === 'pipeline').map(f => ({ name: f.n, substance: 'oil', coords: f.coords! }))]
+            .filter(Boolean).flatMap((arr, gi) => (arr as Pipeline[]).map((p, i) => (
+              <div key={`pg-${gi}-${i}`} style={{ display: 'contents' }}>
+                <Polyline positions={p.coords} pathOptions={{ color: C.gold, weight: 6, opacity: 0.1 }} />
+                <Polyline positions={p.coords} pathOptions={pipeStyle(p.substance)}>
+                  <Tooltip sticky>{p.name} · {p.substance === 'gas' ? 'Natural gas' : 'Crude oil'}</Tooltip>
                 </Polyline>
-              : (f.la != null && f.lo != null
-                  ? <CircleMarker key={`em-${i}`} center={[f.la, f.lo]} radius={3.5} pathOptions={{ color: EMODNET_COLOR[f.kind] ?? '#22d3ee', fillColor: EMODNET_COLOR[f.kind] ?? '#22d3ee', fillOpacity: 0.8, weight: 0.5 }}>
-                      <Tooltip>{f.n} · {f.kind} <span style={{ opacity: 0.6 }}>· EMODnet</span></Tooltip>
-                    </CircleMarker>
-                  : null)
-          ))}
+              </div>
+            )))}
 
-          {layers.facilities && facilities.map((f, i) => (
-            <CircleMarker key={`fac-${i}`} center={[f.la, f.lo]} radius={3} pathOptions={{ color: FAC_COLOR[f.k] ?? '#9ca3af', fillColor: FAC_COLOR[f.k] ?? '#9ca3af', fillOpacity: 0.7, weight: 0.5 }}>
-              <Tooltip>{f.n} · {FAC_LABEL[f.k] ?? f.k}{f.x != null && f.x !== '' ? ` · ${f.x}` : ''}</Tooltip>
-            </CircleMarker>
-          ))}
+          {/* Offshore platforms (OSM + EMODnet) + wind farms (EMODnet) */}
+          {layers.pOsm && osmPlatforms.map((p, i) => <Marker key={`osmp-${i}`} position={[p.lat, p.lon]} icon={platformIcon()}><Tooltip>{p.name} · Offshore platform · OSM</Tooltip></Marker>)}
+          {layers.pEmod && emod.filter(f => f.kind === 'platform' && f.la != null).map((f, i) => <Marker key={`emp-${i}`} position={[f.la!, f.lo!]} icon={platformIcon()}><Tooltip>{f.n} · platform · EMODnet</Tooltip></Marker>)}
+          {layers.pEmod && emod.filter(f => f.kind === 'windfarm' && f.la != null).map((f, i) => <CircleMarker key={`emw-${i}`} center={[f.la!, f.lo!]} radius={4} pathOptions={{ color: C.wind, weight: 1.5, fillOpacity: 0 }}><Tooltip>{f.n} · wind farm · EMODnet</Tooltip></CircleMarker>)}
 
-          {layers.worldPorts && worldPorts.map((p, i) => (
-            <CircleMarker key={`wpi-${i}`} center={[p.la, p.lo]} radius={2.5} pathOptions={{ color: WPI_COLOR, fillColor: WPI_COLOR, fillOpacity: 0.8, weight: 0.5 }}>
-              <Tooltip>{p.n}{p.c ? ` · ${p.c}` : ''}{p.s ? ` · ${p.s} harbour` : ''}{p.cppi ? ` · CPPI #${p.cppi}/405` : ''} <span style={{ opacity: 0.6 }}>· WPI</span></Tooltip>
-            </CircleMarker>
-          ))}
-
-          {layers.lngTerminals && lngQ.data?.lng.map((t, i) => (
-            <CircleMarker key={`lng-${i}`} center={[t.la, t.lo]} radius={4} pathOptions={{ color: LNG_TERM_COLOR, fillColor: LNG_TERM_COLOR, fillOpacity: 0.85, weight: 1 }}>
-              <Tooltip>
-                <b>{t.n}</b><br />LNG terminal{t.ie ? ` · ${t.ie}` : ''} · {t.st}{t.cap ? `<br />~${t.cap} Mtpa` : ''}
-              </Tooltip>
-            </CircleMarker>
-          ))}
-
-          {layers.terminals && ports.data?.ports.map(p => (
-            <CircleMarker key={`term-${p.name}`} center={[p.lat, p.lon]} radius={5} pathOptions={{ color: PORT_COLOR[p.kind], fillColor: PORT_COLOR[p.kind], fillOpacity: 0.85, weight: 1 }}>
-              <Tooltip><b>{p.name}</b> — {p.country}<br />{p.kind.toUpperCase()} terminal · {p.throughput}{p.cppi ? <><br />CPPI #{p.cppi} / 405 (container efficiency)</> : null}</Tooltip>
-            </CircleMarker>
-          ))}
-
-          {layers.chokepoints && choke.data?.chokepoints.map(c => (
-            <CircleMarker key={`cp-${c.id}`} center={[c.lat, c.lon]} radius={8} pathOptions={{ color: CHOKE_COLOR, fillColor: CHOKE_COLOR, fillOpacity: 0.18, weight: 2 }}>
-              <Tooltip><b>{c.name}</b><br />~{c.oil_mbd} Mb/d oil transit<br />{c.note}</Tooltip>
-            </CircleMarker>
-          ))}
-
+          {/* Vessels — heading arrows + telemetry popup */}
           {vessels.map(v => {
             const cat = v.category ?? 'other'
-            const col = VESSEL_COLOR[cat] ?? VESSEL_COLOR.other
-            const unknown = cat === 'other'
+            const hd = v.heading != null && v.heading !== 511 ? v.heading : (v.cog ?? 0)
             return (
-              <CircleMarker key={`v-${v.mmsi}`} center={[v.lat, v.lon]} radius={unknown ? 3 : 4} pathOptions={{ color: col, fillColor: col, fillOpacity: unknown ? 0.5 : 0.9, weight: 1 }}>
+              <Marker key={`v-${v.mmsi}`} position={[v.lat, v.lon]} icon={arrowIcon(VCOLOR[cat] ?? C.wpi, hd, 9)}>
                 <Popup>
-                  <div style={{ fontFamily: 'var(--theme-mono, monospace)', fontSize: 12, minWidth: 180 }}>
-                    <div style={{ fontWeight: 700, marginBottom: 4 }}>{v.name || `MMSI ${v.mmsi}`}</div>
-                    <TelemetryRow k="Type" val={VESSEL_LABEL[cat]} />
-                    <TelemetryRow k="Destination" val={v.destination || '—'} />
-                    <TelemetryRow k="Speed" val={v.sog != null ? `${v.sog.toFixed(1)} kn` : '—'} />
-                    <TelemetryRow k="Heading" val={v.heading != null && v.heading !== 511 ? `${v.heading}°` : v.cog != null ? `${v.cog.toFixed(0)}° (COG)` : '—'} />
-                    <TelemetryRow k="Updated" val={v.time_utc ? new Date(v.time_utc).toLocaleTimeString() : '—'} />
+                  <div style={{ fontFamily: 'var(--theme-mono, monospace)', fontSize: 12, minWidth: 200 }}>
+                    <div style={{ fontWeight: 700, color: VCOLOR[cat] ?? '#d7e3fc', marginBottom: 6 }}>{v.name || `MMSI ${v.mmsi}`}</div>
+                    <Row k="Type" v={VLABEL[cat]} /><Row k="MMSI" v={v.mmsi} />
+                    <Row k="Destination" v={v.destination || '—'} />
+                    <Row k="Speed" v={v.sog != null ? `${v.sog.toFixed(1)} kn` : '—'} />
+                    <Row k="Heading" v={v.heading != null && v.heading !== 511 ? `${v.heading}°${v.cog != null ? ` · COG ${v.cog.toFixed(0)}°` : ''}` : v.cog != null ? `COG ${v.cog.toFixed(0)}°` : '—'} />
+                    <Row k="Updated" v={v.time_utc ? new Date(v.time_utc).toLocaleTimeString() : '—'} />
+                    <Row k="Source" v={v.source === 'kystverket' ? 'Kystverket' : v.source === 'vesselapi' ? 'VesselAPI' : 'AISStream'} />
                   </div>
                 </Popup>
-              </CircleMarker>
+              </Marker>
             )
           })}
+
+          {/* Facilities */}
+          {layers.fields && facBy('field').map((f, i) => <Marker key={`fld-${i}`} position={[f.la, f.lo]} icon={fieldIcon()}><Tooltip>{f.n} · Oil/gas field{f.x ? ` · ${f.x}` : ''} · GEM</Tooltip></Marker>)}
+          {layers.refineries && refs.map((f, i) => <Marker key={`ref-${i}`} position={[f.la, f.lo]} icon={refIcon()}><Tooltip>{f.n} · {f.k === 'processing' ? 'Processing plant' : 'Refinery'}{f.x ? ` · ${f.x}` : ''} · NETL</Tooltip></Marker>)}
+          {layers.power && facBy('plant').map((f, i) => <CircleMarker key={`pw-${i}`} center={[f.la, f.lo]} radius={3.6} pathOptions={{ color: C.power, fillColor: C.power, fillOpacity: 0.9, weight: 0 }}><Tooltip>{f.n} · Oil/gas power plant{f.x ? ` · ${f.x}` : ''} · GEM</Tooltip></CircleMarker>)}
+          {layers.coal && facBy('coal_terminal').map((f, i) => <Marker key={`cl-${i}`} position={[f.la, f.lo]} icon={coalIcon()}><Tooltip>{f.n} · Coal terminal{f.x ? ` · ${f.x} Mt` : ''} · GEM</Tooltip></Marker>)}
+
+          {/* LNG terminals (GEM) — purple rings */}
+          {layers.lngTerm && lngQ.data?.lng.map((t, i) => <CircleMarker key={`lt-${i}`} center={[t.la, t.lo]} radius={5} pathOptions={{ color: C.lngTerm, weight: 2, fillOpacity: 0 }}><Tooltip><b>{t.n}</b><br />LNG {t.ie || ''} terminal · {t.st} · GEM{t.cap ? `<br />~${t.cap} Mtpa` : ''}</Tooltip></CircleMarker>)}
+
+          {/* Export terminals (curated) */}
+          {layers.terminals && terms.data?.ports.map(p => {
+            const col = p.kind === 'lng' ? C.lngTerm : C.oilTerm
+            return <CircleMarker key={`term-${p.name}`} center={[p.lat, p.lon]} radius={4.5} pathOptions={{ color: col, fillColor: col, fillOpacity: 0.9, weight: 1 }}>
+              <Tooltip><b>{p.name}</b> — {p.country}<br />{p.kind.toUpperCase()} export · {p.throughput}{p.cppi ? `<br />CPPI #${p.cppi}/405` : ''}</Tooltip>
+            </CircleMarker>
+          })}
+
+          {/* World ports (WPI) — hollow squares sized by harbour size */}
+          {layers.wpi && wpiPorts.map((p, i) => <Marker key={`wpi-${i}`} position={[p.la, p.lo]} icon={wpiIcon(p.s)}><Tooltip>{p.n}{p.c ? ` · ${p.c}` : ''}{p.s ? ` · ${p.s} harbour` : ''}{p.cppi ? ` · CPPI #${p.cppi}/405` : ''} · WPI</Tooltip></Marker>)}
+
+          {/* Chokepoints — pulsing gold rings */}
+          {layers.chokepoints && choke.data?.chokepoints.map(c => (
+            <div key={`cp-${c.id}`} style={{ display: 'contents' }}>
+              <CircleMarker center={[c.lat, c.lon]} radius={9} pathOptions={{ color: C.gold, fillColor: C.gold, fillOpacity: 0.1, weight: 2, className: 'choke-pulse' }}><Tooltip><b>{c.name}</b><br />~{c.oil_mbd} Mb/d oil transit</Tooltip></CircleMarker>
+              <CircleMarker center={[c.lat, c.lon]} radius={2.5} pathOptions={{ color: C.gold, fillColor: C.gold, fillOpacity: 1, weight: 0 }} />
+            </div>
+          ))}
+
+          {/* HELCOM Baltic passage lines */}
+          {layers.helcom && helcom.map((h, i) => <Polyline key={`hc-${i}`} positions={h.coords} pathOptions={{ color: C.helcom, weight: 3, opacity: 0.85 }}><Tooltip>{h.location || 'Passage line'} · {h.crossings.toLocaleString()} crossings · HELCOM</Tooltip></Polyline>)}
         </MapContainer>
+
+        {/* Dynamic legend */}
+        <div style={{ position: 'absolute', right: 14, bottom: 22, zIndex: 500, background: 'rgba(9,17,30,0.92)', backdropFilter: 'blur(4px)', border: '1px solid rgba(201,168,76,0.28)', borderRadius: 2, padding: '12px 14px', minWidth: 186, maxHeight: 'calc(100% - 44px)', overflowY: 'auto' }}>
+          <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 9.5, fontWeight: 700, letterSpacing: '0.16em', color: '#d7e3fc', marginBottom: 8 }}>LEGEND</div>
+          {legend.map(g => (
+            <div key={g.group} style={{ marginBottom: 8 }}>
+              <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 8.5, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#56708a', marginBottom: 4 }}>{g.group}</div>
+              {g.items.map(it => (
+                <div key={it.label} style={{ display: 'flex', alignItems: 'center', gap: 9, lineHeight: '17px' }}>
+                  <span style={{ width: 22, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={it.glyph} /></span>
+                  <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: '#a9bacf' }}>{it.label}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )
 }
 
-function TelemetryRow({ k, val }: { k: string; val: string }) {
+function RailSection({ label, note, children }: { label: string; note?: string; children: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, lineHeight: '18px' }}>
-      <span style={{ color: 'var(--theme-secondary, #8099b0)' }}>{k}</span><span style={{ fontWeight: 600 }}>{val}</span>
+    <div style={{ padding: '14px 18px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+      <div style={{ ...railLabel, marginBottom: 4 }}>{label}</div>
+      {children}
+      {note && <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: '#3f5670', marginTop: 4 }}>{note}</div>}
     </div>
   )
+}
+
+function Row({ k, v }: { k: string; v: string }) {
+  return <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, lineHeight: '19px' }}><span style={{ color: '#7f97af' }}>{k}</span><span style={{ color: '#d7e3fc', fontWeight: 600 }}>{v}</span></div>
+}
+
+function buildLegend(l: Record<LayerKey, boolean>) {
+  const G: { group: string; items: { glyph: React.CSSProperties; label: string }[] }[] = []
+  let it: { glyph: React.CSSProperties; label: string }[] = []
+  if (l.tanker) it.push({ glyph: gArrow(C.tanker), label: 'Crude tanker' })
+  if (l.lng) it.push({ glyph: gArrow(C.lng), label: 'LNG carrier' })
+  if (l.cargo) it.push({ glyph: gArrow(C.cargo), label: 'Cargo / dry bulk' })
+  if (l.tanker || l.lng || l.cargo) it.push({ glyph: gLine(C.lane, true), label: 'Shipping lane' })
+  if (it.length) G.push({ group: 'Vessels & lanes', items: it })
+
+  it = []
+  const anyPipe = l.pGem || l.pEia || l.pOsm || l.pEmod
+  if (anyPipe) { it.push({ glyph: gLine(C.gold), label: 'Oil pipeline' }); it.push({ glyph: gLine(C.gold, true), label: 'Gas pipeline' }) }
+  if (l.pOsm || l.pEmod) it.push({ glyph: gDiamondO(C.gold), label: 'Offshore platform' })
+  if (l.pEmod) it.push({ glyph: gRing(C.wind), label: 'Offshore wind farm' })
+  if (it.length) G.push({ group: 'Pipelines & offshore', items: it })
+
+  it = []
+  if (l.terminals) { it.push({ glyph: gDot(C.oilTerm), label: 'Oil export terminal' }); it.push({ glyph: gDot(C.lngTerm), label: 'LNG export terminal' }) }
+  if (l.lngTerm) it.push({ glyph: gRing(C.lngTerm), label: 'LNG terminal (GEM)' })
+  if (l.fields) it.push({ glyph: gDiamond(C.field), label: 'Oil / gas field' })
+  if (l.refineries) it.push({ glyph: gSquare(C.refinery), label: 'Refinery / processing' })
+  if (l.power) it.push({ glyph: gDot(C.power), label: 'Power plant (oil/gas)' })
+  if (l.coal) it.push({ glyph: gSquare(C.coal), label: 'Coal terminal' })
+  if (it.length) G.push({ group: 'Facilities', items: it })
+
+  it = []
+  if (l.wpi) it.push({ glyph: gSquareO(C.wpi), label: 'World port (WPI)' })
+  if (l.chokepoints) it.push({ glyph: gRing(C.gold), label: 'Chokepoint' })
+  if (it.length) G.push({ group: 'Ports & points', items: it })
+
+  it = []
+  if (l.helcom) it.push({ glyph: gLine(C.helcom), label: 'Baltic passage (HELCOM)' })
+  if (it.length) G.push({ group: 'Overlays', items: it })
+  return G
 }
 
 export default function MaritimeMap() {
