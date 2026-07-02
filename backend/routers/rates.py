@@ -1,8 +1,10 @@
+import logging
 import requests
 from fastapi import APIRouter
 from cachetools import TTLCache
 import threading
 import sys, os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import pandas as pd
@@ -15,13 +17,44 @@ except ImportError:
     def disk_set(_k, _v, ttl=0): pass  # type: ignore
 
 _FRED_KEY = os.getenv("FRED_API_KEY", "")
+_log = logging.getLogger("rates")
 
 router = APIRouter()
+
+# Background warmer: keeps the curve + Fed-path caches populated so user
+# requests rarely pay the cold path. Both TTLs are 1h and the warmer cannot
+# force a rebuild before expiry, so a short interval bounds the stale gap:
+# worst case one request pays the ~3s parallel rebuild within 20min of expiry.
+_WARM_INTERVAL = 20 * 60
+_warm_stop = threading.Event()
+_warm_thread = None
+
+
+def _run_curve_warmer():
+    while not _warm_stop.is_set():
+        try:
+            yield_curve()
+            fed_projections()
+        except Exception as e:
+            _log.warning("rates warmer failed: %s", e)
+        _warm_stop.wait(_WARM_INTERVAL)
+
+
+def start_curve_warmer():
+    global _warm_thread
+    if _warm_thread and _warm_thread.is_alive():
+        return
+    _warm_thread = threading.Thread(target=_run_curve_warmer, name="rates-warmer", daemon=True)
+    _warm_thread.start()
+
+
+def stop_curve_warmer():
+    _warm_stop.set()
 
 BACKSTOP = {"FF": 4.33, "1Y": 3.78, "2Y": 4.03, "5Y": 4.16, "10Y": 4.46, "20Y": 4.72, "30Y": 4.98}
 
 _CURVE_DISK_TTL = 3600   # 1 hour
-_CACHE_VERSION = "v11"    # bump to invalidate stale caches (FRED curve + history)
+_CACHE_VERSION = "v12"    # bump to invalidate stale caches (adds the 1D overlay)
 _rates_cache: TTLCache = TTLCache(maxsize=10, ttl=3600)
 _rates_lock = threading.Lock()
 
@@ -62,10 +95,11 @@ def _fred_curves():
     if not _FRED_KEY:
         return None
     start = (date.today() - timedelta(days=210)).isoformat()
-    today_c, m1, m6 = {}, {}, {}
+    today_c, d1c, m1, m6 = {}, {}, {}, {}
     asof = ""
     tenors_got = 0
-    for label, sid in _FRED_CURVE:
+
+    def fetch(sid: str) -> list[tuple[str, float]]:
         try:
             r = requests.get(
                 "https://api.stlouisfed.org/fred/series/observations",
@@ -73,10 +107,14 @@ def _fred_curves():
                         "api_key": _FRED_KEY, "file_type": "json", "sort_order": "asc"},
                 timeout=8,
             )
-            obs = [(o["date"], float(o["value"])) for o in r.json().get("observations", [])
-                   if o.get("value") not in (".", "", None)]
+            return [(o["date"], float(o["value"])) for o in r.json().get("observations", [])
+                    if o.get("value") not in (".", "", None)]
         except Exception:
-            obs = []
+            return []
+
+    with ThreadPoolExecutor(max_workers=len(_FRED_CURVE)) as ex:
+        all_obs = list(ex.map(fetch, [sid for _, sid in _FRED_CURVE]))
+    for (label, sid), obs in zip(_FRED_CURVE, all_obs):
         if not obs:
             continue
         if label != "FF":
@@ -86,8 +124,11 @@ def _fred_curves():
         if ld > asof:
             asof = ld
         ref = date.fromisoformat(ld)
+        vd = _obs_at_or_before(obs, (ref - timedelta(days=1)).isoformat())
         v1 = _obs_at_or_before(obs, (ref - timedelta(days=30)).isoformat())
         v6 = _obs_at_or_before(obs, (ref - timedelta(days=182)).isoformat())
+        if vd is not None:
+            d1c[label] = round(vd, 4)
         if v1 is not None:
             m1[label] = round(v1, 4)
         if v6 is not None:
@@ -96,7 +137,8 @@ def _fred_curves():
         return None
     ref = date.fromisoformat(asof)
     return {
-        "today": today_c, "m1": m1, "m6": m6, "asof": asof,
+        "today": today_c, "d1": d1c, "m1": m1, "m6": m6, "asof": asof,
+        "asof_1d": (ref - timedelta(days=1)).isoformat(),
         "asof_1m": (ref - timedelta(days=30)).isoformat(),
         "asof_6m": (ref - timedelta(days=182)).isoformat(),
     }
@@ -158,13 +200,14 @@ def _treasury_curves():
         c_today = days[latest]
         if len(c_today) < 5:
             return None
+        dd = (ref - timedelta(days=1)).isoformat()
         d1 = (ref - timedelta(days=30)).isoformat()
         d6 = (ref - timedelta(days=182)).isoformat()
-        c1 = _curve_at_or_before(days, d1)
-        c6 = _curve_at_or_before(days, d6)
         return {
-            "today": c_today, "m1": c1, "m6": c6,
+            "today": c_today, "d1": _curve_at_or_before(days, dd),
+            "m1": _curve_at_or_before(days, d1), "m6": _curve_at_or_before(days, d6),
             "asof": latest,
+            "asof_1d": max([d for d in days if d <= dd], default=None),
             "asof_1m": max([d for d in days if d <= d1], default=None),
             "asof_6m": max([d for d in days if d <= d6], default=None),
         }
@@ -182,7 +225,7 @@ def yield_curve():
     disk_val = disk_get(cache_key)
     if disk_val:
         with _rates_lock:
-            _rates_cache["curve"] = disk_val
+            _rates_cache[cache_key] = disk_val
         return disk_val
 
     curve = {}
@@ -190,14 +233,16 @@ def yield_curve():
     # Full accurate curve + history: FRED first (works from datacenter IPs), then
     # the Treasury.gov par-yield XML as a keyless fallback.
     treasury = _fred_curves() or _treasury_curves()
+    curve_1d: dict = {}
     curve_1m: dict = {}
     curve_6m: dict = {}
-    asof = asof_1m = asof_6m = None
+    asof = asof_1d = asof_1m = asof_6m = None
     if treasury:
         curve.update(treasury["today"])
+        curve_1d = treasury["d1"]
         curve_1m = treasury["m1"]
         curve_6m = treasury["m6"]
-        asof, asof_1m, asof_6m = treasury["asof"], treasury["asof_1m"], treasury["asof_6m"]
+        asof, asof_1d, asof_1m, asof_6m = treasury["asof"], treasury["asof_1d"], treasury["asof_1m"], treasury["asof_6m"]
 
     # yfinance T-bill / Treasury symbols (all return yield in %) — fallback that
     # fills any tenor Treasury didn't supply (e.g. Treasury unreachable).
@@ -346,9 +391,10 @@ def yield_curve():
     result = {
         "curve": ordered,
         "points": [{"tenor": k, "rate": v} for k, v in ordered.items()],
+        "curve_1d": order(curve_1d),   # prior trading day
         "curve_1m": order(curve_1m),   # ~1 month ago (empty if Treasury unavailable)
         "curve_6m": order(curve_6m),   # ~6 months ago
-        "asof": asof, "asof_1m": asof_1m, "asof_6m": asof_6m,
+        "asof": asof, "asof_1d": asof_1d, "asof_1m": asof_1m, "asof_6m": asof_6m,
     }
 
     cache_key = f"rates:curve:{_CACHE_VERSION}"
@@ -540,8 +586,10 @@ def _curve_implied_path(upcoming: list[date], current_rate: float | None) -> lis
     pts: list[tuple[float, float]] = []
     if current_rate is not None:
         pts.append((0.0, current_rate))
-    for series, T in (("DGS1MO", 1 / 12), ("DGS3MO", 0.25), ("DGS6MO", 0.5), ("DGS1", 1.0), ("DGS2", 2.0)):
-        y = _fred_latest(series)
+    bills = (("DGS1MO", 1 / 12), ("DGS3MO", 0.25), ("DGS6MO", 0.5), ("DGS1", 1.0), ("DGS2", 2.0))
+    with ThreadPoolExecutor(max_workers=len(bills)) as ex:
+        latest = list(ex.map(_fred_latest, [s for s, _ in bills]))
+    for (series, T), y in zip(bills, latest):
         if y is not None:
             pts.append((T, y))
     pts = sorted(set(pts))
@@ -582,11 +630,14 @@ def fed_projections():
     current_rate = _current_ffr()
     curve_path = _curve_implied_path(upcoming, current_rate)
 
+    with ThreadPoolExecutor(max_workers=len(upcoming) or 1) as ex:
+        zq_rates = list(ex.map(_zq_implied_rate, upcoming))
+
     meetings: list[dict] = []
     prev_rate = current_rate
     used_futures = False
     for i, mtg in enumerate(upcoming):
-        zq = _zq_implied_rate(mtg)
+        zq = zq_rates[i]
         if zq is not None:
             implied, src = zq, "futures"
             used_futures = True

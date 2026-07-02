@@ -38,9 +38,11 @@ async def lifespan(app: FastAPI):
     maritime.start_ais_stream()      # live AIS worker (no-op without AISSTREAM_API_KEY)
     maritime.start_rest_poll()       # REST vessel fallback (no-op without VESSELAPI_KEY)
     maritime.start_history_sampler() # 24h AIS ring buffer for the replay scrubber
+    rates.start_curve_warmer()       # keep yield-curve + Fed-path caches warm (cold path is ~30s)
     import maritime_kystverket        # Norway coastal AIS (open TCP feed)
     maritime_kystverket.start_stream(maritime._upsert, maritime._classify, maritime._remember)
     yield
+    rates.stop_curve_warmer()
     maritime_kystverket.stop_stream()
     maritime.stop_ais_stream()
     screener.stop_backfill_loop()

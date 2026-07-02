@@ -118,12 +118,13 @@ export function FedRatesContent() {
     adjusted: +Math.max(0.1, (curveData.curve[t] ?? 0) + (twist / 100) * YC_WEIGHTS[i]).toFixed(3),
   })) : []
 
-  // Full-tenor curve for the chart overlay: today vs ~1mo ago vs ~6mo ago.
+  // Full-tenor curve for the chart overlay: today vs 1d, ~1mo and ~6mo ago.
   const CURVE_TENORS = ['FF', '1M', '3M', '6M', '1Y', '2Y', '3Y', '5Y', '7Y', '10Y', '20Y', '30Y']
   const TWIST_W: Record<string, number> = { FF: 1.0, '1M': 1.0, '3M': 0.99, '6M': 0.98, '1Y': 0.98, '2Y': 0.85, '3Y': 0.65, '5Y': 0.40, '7Y': 0.25, '10Y': 0.1, '20Y': -0.19, '30Y': -0.325 }
   const curveChart = curveData ? CURVE_TENORS.filter(t => curveData.curve[t] != null).map(t => ({
     tenor:    t,
     today:    curveData.curve[t] ?? null,
+    d1:       curveData.curve_1d?.[t] ?? null,
     m1:       curveData.curve_1m?.[t] ?? null,
     m6:       curveData.curve_6m?.[t] ?? null,
     adjusted: twist !== 0 ? +Math.max(0.1, (curveData.curve[t] ?? 0) + (twist / 100) * (TWIST_W[t] ?? 0.1)).toFixed(3) : null,
@@ -260,6 +261,7 @@ export function FedRatesContent() {
                   <Legend wrapperStyle={{ fontFamily: T.label, fontSize: 9, paddingBottom: 6 }} />
                   <Line type="monotone" dataKey="m6"    stroke="var(--theme-text-faint, rgba(255,255,255,0.28))" strokeWidth={1.25} strokeDasharray="2 3" dot={false} name="6M ago" connectNulls />
                   <Line type="monotone" dataKey="m1"    stroke="var(--theme-secondary, #5e768f)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} name="1M ago" connectNulls />
+                  <Line type="monotone" dataKey="d1"    stroke="var(--theme-accent-violet, #c084fc)" strokeWidth={1.5} strokeDasharray="7 3" dot={false} name="1D ago" connectNulls />
                   <Line type="monotone" dataKey="today" stroke="var(--theme-primary, #c9a84c)" strokeWidth={2.25} dot={{ fill: 'var(--theme-primary, #c9a84c)', r: 2.5 }} name="Today" connectNulls />
                   {twist !== 0 && <Line type="monotone" dataKey="adjusted" stroke="var(--theme-tertiary, #60a5fa)" strokeWidth={2} strokeDasharray="4 2" dot={false} name="Scenario" connectNulls />}
                 </LineChart>
