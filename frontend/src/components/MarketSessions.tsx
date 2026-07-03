@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
-  MARKETS, marketStatus, daySegments, countdown,
+  MARKETS, marketStatus, todaySegments, countdown,
   PHASE_LABEL, PHASE_COLOR, PHASE_OPACITY, PHASE_TEXT, type MarketDef, type Region, type Phase,
 } from '../lib/marketHours'
 
@@ -31,8 +31,8 @@ function nextVerb(phase: Phase, nextPhase: Phase): string {
   return PHASE_LABEL[nextPhase].toLowerCase()
 }
 
-function TimelineBar({ m, weekday, localTime }: { m: MarketDef; weekday: number; localTime: string }) {
-  const segs = daySegments(m, weekday)
+function TimelineBar({ m, now, localTime, holiday }: { m: MarketDef; now: Date; localTime: string; holiday?: string }) {
+  const segs = todaySegments(m, now)
   const [h, mn] = localTime.split(':').map(Number)
   const nowPct = ((h * 60 + mn) / 1440) * 100
   return (
@@ -44,6 +44,14 @@ function TimelineBar({ m, weekday, localTime }: { m: MarketDef; weekday: number;
           background: PHASE_COLOR[s.phase], opacity: PHASE_OPACITY[s.phase],
         }} />
       ))}
+      {holiday && (
+        <span style={{
+          position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
+          justifyContent: segs.length ? 'flex-end' : 'center', paddingRight: segs.length ? 8 : 0,
+          fontFamily: T.sans, fontSize: 9, fontWeight: 600, letterSpacing: '0.08em',
+          textTransform: 'uppercase', color: T.when, pointerEvents: 'none',
+        }}>{segs.length ? `early close · ${holiday}` : holiday}</span>
+      )}
       <div className="fdb-now-marker" style={{
         position: 'absolute', top: -2, bottom: -2, left: `${nowPct}%`, width: 2,
         background: '#f4f8ff', boxShadow: '0 0 8px 1px rgba(244,248,255,0.8)',
@@ -69,7 +77,7 @@ export default function MarketSessions({ compact = false }: { compact?: boolean 
                     <span style={{ width: 6, height: 6, borderRadius: '50%', background: PHASE_COLOR[st.phase], flex: 'none', opacity: st.open ? 1 : 0.5 }} />
                     <span style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: T.text, width: 52, flex: 'none' }}>{m.short}</span>
                     <span style={{ fontFamily: T.mono, fontSize: 10, color: T.muted, width: 56, flex: 'none' }}>{st.localTime.slice(0, 5)}</span>
-                    <span style={{ fontFamily: T.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: PHASE_TEXT[st.phase], flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{PHASE_LABEL[st.phase]}</span>
+                    <span style={{ fontFamily: T.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: PHASE_TEXT[st.phase], flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{st.phase === 'holiday' ? st.holiday : PHASE_LABEL[st.phase]}</span>
                     <span style={{ fontFamily: T.mono, fontSize: 9, color: T.verb, flex: 'none' }}>{nextVerb(st.phase, st.nextPhase)} {countdown(st.msToNext)}</span>
                   </div>
                 )
@@ -109,7 +117,7 @@ export default function MarketSessions({ compact = false }: { compact?: boolean 
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifySelf: 'start', fontFamily: T.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: c, border: `1px solid ${c}`, background: 'rgba(255,255,255,0.03)', padding: '3px 9px', borderRadius: 2 }}>
                     <span style={{ width: 6, height: 6, borderRadius: '50%', background: c }} />{PHASE_LABEL[st.phase]}
                   </span>
-                  <TimelineBar m={m} weekday={st.weekday} localTime={st.localTime} />
+                  <TimelineBar m={m} now={now} localTime={st.localTime} holiday={st.holiday} />
                   <span style={{ fontFamily: T.mono, fontSize: 12, textAlign: 'right' }}>
                     <span style={{ color: T.verb, textTransform: 'uppercase' }}>{nextVerb(st.phase, st.nextPhase)}</span>{' '}
                     <span style={{ color: T.when }}>{countdown(st.msToNext)}</span>

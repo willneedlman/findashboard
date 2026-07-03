@@ -71,7 +71,11 @@ export default function MarketDial({ showLegend = false }: { showLegend?: boolea
       {hov ? (
         <>
           <text x={CX} y={284} textAnchor="middle" fontFamily={T.mono} fontSize={24} fontWeight={700} fill={T.gold}>{hov.m.short}</text>
-          <text x={CX} y={304} textAnchor="middle" fontFamily={T.sans} fontSize={11} fill={T.muted}>{hov.m.name.length > 18 ? hov.m.short : hov.m.name}</text>
+          <text x={CX} y={304} textAnchor="middle" fontFamily={T.sans} fontSize={11} fill={T.muted}>
+            {hov.st.phase === 'holiday' && hov.st.holiday
+              ? (hov.st.holiday.length > 20 ? `${hov.st.holiday.slice(0, 19)}…` : hov.st.holiday)
+              : (hov.m.name.length > 18 ? hov.m.short : hov.m.name)}
+          </text>
           <text x={CX} y={322} textAnchor="middle" fontFamily={T.sans} fontSize={11} fontWeight={700} letterSpacing="1" fill={PHASE_TEXT[hov.st.phase]}>{PHASE_LABEL[hov.st.phase].toUpperCase()}</text>
         </>
       ) : (

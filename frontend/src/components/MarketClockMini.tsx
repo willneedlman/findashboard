@@ -37,7 +37,7 @@ const byId = Object.fromEntries(MARKETS.map(m => [m.id, m])) as Record<string, M
 const RINGS = SUN_ORDER.map(id => byId[id]).filter(Boolean)
 
 const statusText = (phase: Phase): string =>
-  phase === 'regular' ? 'OPEN' : phase === 'overnight' ? 'OVERNIGHT' : phase === 'pre' ? 'PRE-MARKET' : phase === 'after' ? 'AFTER-HOURS' : phase === 'break' ? 'LUNCH' : 'CLOSED'
+  phase === 'regular' ? 'OPEN' : phase === 'overnight' ? 'OVERNIGHT' : phase === 'pre' ? 'PRE-MARKET' : phase === 'after' ? 'AFTER-HOURS' : phase === 'break' ? 'LUNCH' : phase === 'holiday' ? 'HOLIDAY' : 'CLOSED'
 
 export default function MarketClockMini() {
   const now = useNow(1000)
@@ -50,7 +50,11 @@ export default function MarketClockMini() {
   const utc = `${String(now.getUTCHours()).padStart(2, '0')}:${String(now.getUTCMinutes()).padStart(2, '0')}`
 
   const read = hovered != null
-    ? { code: RINGS[hovered].short, name: RINGS[hovered].name, status: statusText(states[hovered].phase), color: PHASE_COLOR[states[hovered].phase] }
+    ? {
+        code: RINGS[hovered].short,
+        name: states[hovered].phase === 'holiday' && states[hovered].holiday ? states[hovered].holiday! : RINGS[hovered].name,
+        status: statusText(states[hovered].phase), color: PHASE_COLOR[states[hovered].phase],
+      }
     : { code: `${openCount} OF ${RINGS.length}`, name: 'trading now', status: 'LIVE', color: PHASE_COLOR.regular }
 
   return (

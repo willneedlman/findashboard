@@ -1,9 +1,12 @@
 // Deterministic global market-session clock. Sessions are computed purely from
-// each market's timezone and weekly schedule (no API, no rate limits). Regular
-// holidays are NOT modeled — a market shown "open" on a holiday is the known
-// caveat. All times are derived from the live Date via Intl timezone parts.
+// each market's timezone and weekly schedule (no API, no rate limits), overlaid
+// with exchange holiday calendars from lib/marketHolidays (rule-generated for
+// US/UK/DE/AU, verified static tables for the lunar-calendar exchanges). All
+// times are derived from the live Date via Intl timezone parts.
 
-export type Phase = 'closed' | 'overnight' | 'pre' | 'regular' | 'after' | 'break'
+import { holidayFor } from './marketHolidays'
+
+export type Phase = 'closed' | 'overnight' | 'pre' | 'regular' | 'after' | 'break' | 'holiday'
 export type Region = 'Futures' | 'Americas' | 'Europe' | 'Asia-Pacific'
 
 const DAY = 1440          // minutes per day
@@ -81,23 +84,26 @@ export const MARKETS: MarketDef[] = [
 
 const WD: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }
 
-interface LocalParts { weekday: number; hour: number; minute: number; second: number; wkMin: number; timeStr: string }
+interface LocalParts {
+  weekday: number; hour: number; minute: number; second: number; wkMin: number; timeStr: string
+  year: number; month: number; day: number
+}
 
 function localParts(tz: string, now: Date): LocalParts {
   const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: tz, hour12: false, weekday: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit',
+    timeZone: tz, hour12: false, weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
   }).formatToParts(now).reduce<Record<string, string>>((a, p) => { a[p.type] = p.value; return a }, {})
   const weekday = WD[parts.weekday] ?? 0
   let hour = parseInt(parts.hour, 10); if (hour === 24) hour = 0
   const minute = parseInt(parts.minute, 10)
   const second = parseInt(parts.second, 10)
   const wkMin = weekday * DAY + hour * 60 + minute + second / 60
-  return { weekday, hour, minute, second, wkMin, timeStr: `${String(hour).padStart(2, '0')}:${parts.minute}:${parts.second}` }
-}
-
-const phaseAt = (segs: Segment[], wkMin: number): Phase => {
-  for (const s of segs) if (wkMin >= s.start && wkMin < s.end) return s.phase
-  return 'closed'
+  return {
+    weekday, hour, minute, second, wkMin,
+    timeStr: `${String(hour).padStart(2, '0')}:${parts.minute}:${parts.second}`,
+    year: +parts.year, month: +parts.month, day: +parts.day,
+  }
 }
 
 export interface MarketStatus {
@@ -107,31 +113,8 @@ export interface MarketStatus {
   weekday: number
   msToNext: number           // until the next phase boundary
   nextPhase: Phase
-}
-
-export function marketStatus(m: MarketDef, now: Date): MarketStatus {
-  const lp = localParts(m.tz, now)
-  const phase = phaseAt(m.segments, lp.wkMin)
-  // Next boundary: smallest segment start/end strictly after wkMin, wrapping the week.
-  let best = Infinity
-  for (const s of m.segments) {
-    for (const b of [s.start, s.end]) {
-      let d = b - lp.wkMin
-      if (d <= 1e-6) d += WEEK
-      if (d < best) best = d
-    }
-  }
-  if (!isFinite(best)) best = WEEK
-  const nextWk = (lp.wkMin + best) % WEEK
-  const nextPhase = phaseAt(m.segments, nextWk + 1e-6)
-  return {
-    phase,
-    open: phase === 'regular' || phase === 'pre' || phase === 'after' || phase === 'overnight',
-    localTime: lp.timeStr,
-    weekday: lp.weekday,
-    msToNext: best * 60000,
-    nextPhase,
-  }
+  holiday?: string           // holiday name when today is a full closure or early close
+  earlyClose?: number        // local minutes when today closes early
 }
 
 // Session segments clipped to a single weekday [0..1440), for a 24h timeline bar
@@ -144,8 +127,78 @@ export function daySegments(m: MarketDef, weekday: number): { start: number; end
     .sort((a, b) => a.start - b.start)
 }
 
+interface DaySeg { start: number; end: number; phase: Phase }
+
+// One calendar day's segments with that day's holiday applied: full closures
+// clear the day, early closes clip everything past the close.
+function effectiveDaySegments(m: MarketDef, y: number, mo: number, d: number, weekday: number): DaySeg[] {
+  const base = daySegments(m, weekday)
+  const hol = holidayFor(m.id, y, mo, d)
+  if (!hol) return base
+  if (hol.earlyClose == null) return []
+  return base
+    .filter(s => s.start < hol.earlyClose!)
+    .map(s => ({ ...s, end: Math.min(s.end, hol.earlyClose!) }))
+}
+
+// Today's holiday-aware segments in the market's local day, for timeline bars.
+export function todaySegments(m: MarketDef, now: Date): DaySeg[] {
+  const lp = localParts(m.tz, now)
+  return effectiveDaySegments(m, lp.year, lp.month, lp.day, lp.weekday)
+}
+
+const phaseInDay = (segs: DaySeg[], dayMin: number): Phase => {
+  for (const s of segs) if (dayMin >= s.start && dayMin < s.end) return s.phase
+  return 'closed'
+}
+
+export function marketStatus(m: MarketDef, now: Date): MarketStatus {
+  const lp = localParts(m.tz, now)
+  const dayMin = lp.wkMin - lp.weekday * DAY
+  const hol = holidayFor(m.id, lp.year, lp.month, lp.day)
+  const todaySegs = effectiveDaySegments(m, lp.year, lp.month, lp.day, lp.weekday)
+  let phase = phaseInDay(todaySegs, dayMin)
+  if (phase === 'closed' && hol && hol.earlyClose == null) phase = 'holiday'
+  // Next boundary: walk forward day by day so holidays are skipped and early
+  // closes counted; each day's boundaries are that day's effective segments.
+  let best = Infinity
+  let nextPhase: Phase = 'closed'
+  for (let off = 0; off <= 21 && !isFinite(best); off++) {
+    const cal = new Date(Date.UTC(lp.year, lp.month - 1, lp.day + off))
+    const [cy, cm, cd, cw] = [cal.getUTCFullYear(), cal.getUTCMonth() + 1, cal.getUTCDate(), cal.getUTCDay()]
+    const segs = off === 0 ? todaySegs : effectiveDaySegments(m, cy, cm, cd, cw)
+    for (const s of segs) {
+      for (const b of [s.start, s.end]) {
+        const delta = off * DAY + b - dayMin
+        if (delta > 1e-6 && delta < best) {
+          best = delta
+          nextPhase = phaseInDay(segs, b + 1e-6)
+          if (nextPhase === 'closed' && b + 1e-6 >= DAY) {
+            // Midnight seam: an overnight session continues on the next day.
+            const nx = new Date(Date.UTC(cy, cm - 1, cd + 1))
+            nextPhase = phaseInDay(
+              effectiveDaySegments(m, nx.getUTCFullYear(), nx.getUTCMonth() + 1, nx.getUTCDate(), nx.getUTCDay()), 1e-6)
+          }
+        }
+      }
+    }
+  }
+  if (!isFinite(best)) best = WEEK
+  return {
+    phase,
+    open: phase === 'regular' || phase === 'pre' || phase === 'after' || phase === 'overnight',
+    localTime: lp.timeStr,
+    weekday: lp.weekday,
+    msToNext: best * 60000,
+    nextPhase,
+    holiday: hol?.name,
+    earlyClose: hol?.earlyClose,
+  }
+}
+
 export const PHASE_LABEL: Record<Phase, string> = {
   closed: 'Closed', overnight: 'Overnight', pre: 'Pre-market', regular: 'Open', after: 'After-hours', break: 'Lunch break',
+  holiday: 'Holiday',
 }
 
 export const PHASE_COLOR: Record<Phase, string> = {
@@ -155,11 +208,12 @@ export const PHASE_COLOR: Record<Phase, string> = {
   overnight: 'var(--theme-tertiary, #5b8fd6)',
   break:     'var(--theme-secondary, #7c93ac)',
   closed:    'var(--theme-text-faint, #33415a)',
+  holiday:   'var(--theme-text-faint, #33415a)',
 }
 
 // Bar/arc fill opacity per phase (single source for rows timeline + dial arcs).
 export const PHASE_OPACITY: Record<Phase, number> = {
-  regular: 0.92, pre: 0.72, after: 0.72, overnight: 0.72, break: 0.5, closed: 0.3,
+  regular: 0.92, pre: 0.72, after: 0.72, overnight: 0.72, break: 0.5, closed: 0.3, holiday: 0.3,
 }
 
 // Status-label text color per phase (Open/Overnight/Closed/Pre/After).
@@ -170,6 +224,7 @@ export const PHASE_TEXT: Record<Phase, string> = {
   overnight: 'var(--theme-tertiary, #5b8fd6)',
   break:     'var(--theme-secondary, #7c93ac)',
   closed:    'var(--theme-secondary, #6b8199)',
+  holiday:   'var(--theme-primary, #c9a84c)',
 }
 
 // Follow-the-sun ring order for the dial (earliest UTC open innermost → outermost).
@@ -200,7 +255,7 @@ export function utcArcs(m: MarketDef, now: Date): { t0: number; t1: number; phas
   const lp = localParts(m.tz, now)
   const off = tzOffsetMinutes(m.tz, now)
   const out: { t0: number; t1: number; phase: Phase }[] = []
-  for (const s of daySegments(m, lp.weekday)) {
+  for (const s of effectiveDaySegments(m, lp.year, lp.month, lp.day, lp.weekday)) {
     if (s.phase === 'closed') continue
     for (const [x0, x1] of splitWrap(s.start - off, s.end - off)) out.push({ t0: x0 / 60, t1: x1 / 60, phase: s.phase })
   }

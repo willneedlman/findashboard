@@ -55,7 +55,7 @@ export function MarketHoursContent() {
       </div>
 
       <div style={{ marginTop: 14, padding: '10px 12px', background: T.surface, border: `1px solid ${T.border}`, fontFamily: T.sans, fontSize: 10, color: T.faint, lineHeight: '16px' }}>
-        Sessions are computed from each exchange's regular schedule and timezone, updated live. The 24h bar shows the trading day in the market's own local time, with the line marking now. Exchange holidays and ad-hoc halts are not reflected.
+        Sessions are computed from each exchange's regular schedule, timezone, and holiday calendar, updated live. US, UK, German, and Australian holidays follow standing rules. Asian exchange holidays come from published 2026 calendars. The 24h bar shows the trading day in the market's own local time, with the line marking now. Ad-hoc halts are not reflected.
       </div>
     </>
   )
