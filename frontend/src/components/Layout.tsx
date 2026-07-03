@@ -157,7 +157,7 @@ export default function Layout({ children }: LayoutProps) {
       <a href="#main-content" className="skip-link">Skip to content</a>
       <AlertToastQueue alerts={pendingAlerts} />
       <motion.aside
-        animate={{ width: collapsed ? 64 : 248 }}
+        animate={{ width: collapsed ? 64 : 204 }}
         transition={{ duration: 0.22, ease: 'easeInOut' }}
         className="flex-shrink-0 flex flex-col overflow-hidden"
         style={{ minWidth: 0, background: 'var(--theme-bg, #060e1c)', borderRightWidth: 1, borderRightStyle: 'solid', borderRightColor: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 19%, transparent)' }}
@@ -168,7 +168,7 @@ export default function Layout({ children }: LayoutProps) {
             <AlphaMark size={24} color="var(--theme-primary, #c9a84c)" />
             {!collapsed && (
               <span style={{ display: 'block', paddingLeft: 9, borderLeft: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 28%, transparent)', textAlign: 'left' }}>
-                <span style={{ fontFamily: 'Cinzel, Georgia, serif', fontSize: 16, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--theme-primary, #c9a84c)', display: 'block', lineHeight: 1.05 }}>ALPHATAPE</span>
+                <span style={{ fontFamily: 'Cinzel, Georgia, serif', fontSize: 14, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--theme-primary, #c9a84c)', display: 'block', lineHeight: 1.05 }}>ALPHATAPE</span>
                 <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', display: 'block' }}>Terminal</span>
               </span>
             )}
@@ -256,19 +256,22 @@ export default function Layout({ children }: LayoutProps) {
         ) : location.pathname === '/app' ? (
           // Home is a full-bleed command surface: no max-width/padding here so the
           // ticker tape spans the whole main width; Home centers its own content.
+          // The content region fills the viewport so the disclaimer footer only
+          // appears on scroll (same rule for every branch below).
           <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
-            <div style={{ flex: 1 }}>{children}</div>
+            <div style={{ flex: 1, minHeight: '100vh' }}>{children}</div>
             <Footer />
           </div>
         ) : location.pathname === '/flows-map' || location.pathname === '/chart-studio' ? (
           // Map cockpit and Chart Studio want the full main width: gutters waste chart area.
           <div className="px-4 py-4" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
-            <div style={{ flex: 1 }}>{children}</div>
+            <div style={{ flex: 1, minHeight: 'calc(100vh - 32px)' }}>{children}</div>
             <Footer />
           </div>
         ) : (
-          <div className="max-w-7xl 2xl:max-w-[1700px] mx-auto px-6 2xl:px-10 py-6" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
-            <div style={{ flex: 1 }}>{children}</div>
+          // Tools own the page: full width with modest gutters, no centered max-width column.
+          <div className="w-full px-5 2xl:px-8 py-5" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', boxSizing: 'border-box' }}>
+            <div style={{ flex: 1, minHeight: 'calc(100vh - 40px)' }}>{children}</div>
             <Footer />
           </div>
         )}
@@ -318,7 +321,7 @@ function ToolRow({ label, active, fav, onClick, onStar }: { label: string; activ
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 9px', cursor: 'pointer', color: active ? 'var(--theme-primary, #c9a84c)' : (hover ? 'var(--theme-text, #dce3ed)' : 'var(--theme-secondary, #7e93a8)'), background: hover || active ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 7%, transparent)' : 'transparent', fontFamily: 'var(--theme-sans)', fontSize: 11.5, fontWeight: active ? 600 : 400, transition: 'color 0.12s ease, background 0.12s ease' }}
+      style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '4px 8px', cursor: 'pointer', color: active ? 'var(--theme-primary, #c9a84c)' : (hover ? 'var(--theme-text, #dce3ed)' : 'var(--theme-secondary, #7e93a8)'), background: hover || active ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 7%, transparent)' : 'transparent', fontFamily: 'var(--theme-sans)', fontSize: 11, fontWeight: active ? 600 : 400, transition: 'color 0.12s ease, background 0.12s ease' }}
     >
       <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
       {(hover || fav) && (
@@ -348,11 +351,11 @@ function Row({ icon: Icon, label, collapsed, active, onClick, chevron, onChevron
       onMouseLeave={() => setHover(false)}
       title={title ?? (collapsed ? label : undefined)}
       style={{
-        display: 'flex', alignItems: 'center', gap: 10, justifyContent: collapsed ? 'center' : 'flex-start',
-        padding: '7px 9px', margin: '2px 0', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', gap: 8, justifyContent: collapsed ? 'center' : 'flex-start',
+        padding: '6px 8px', margin: '2px 0', cursor: 'pointer',
         color, background: active ? `color-mix(in srgb, ${accent} 10%, transparent)` : (hover ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 7%, transparent)' : 'transparent'),
         borderLeft: `2px solid ${active ? accent : 'transparent'}`,
-        fontFamily: 'var(--theme-sans)', fontSize: 12.5, fontWeight: active ? 600 : 400,
+        fontFamily: 'var(--theme-sans)', fontSize: 12, fontWeight: active ? 600 : 400,
         transition: 'color 0.13s ease, background 0.13s ease',
       }}
     >

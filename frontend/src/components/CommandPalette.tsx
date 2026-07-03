@@ -38,7 +38,7 @@ function score(q: string, c: Cmd): number {
 
 // Tools that read ?ticker= and pre-fill, for "open SYMBOL in X" commands.
 const TICKER_TARGETS: [string, string][] = [
-  ['Market Data', '/market'],
+  ['Market Data', '/supply-chain'],
   ['Chain Scanner', '/chain'],
   ['Volatility Skew', '/skew'],
   ['DCF Valuation', '/dcf'],

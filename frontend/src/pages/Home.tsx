@@ -528,10 +528,10 @@ function TickerDashboard({ sym }: { sym: string }) {
 function TickerJumpTiles({ sym, isMobile }: { sym: string; isMobile: boolean }) {
   const navigate = useNavigate()
   const tiles = [
-    { icon: TrendingUp, title: 'Market data', sub: 'Price history & chart', route: `/market?ticker=${sym}` },
+    { icon: Globe, title: 'Company profile', sub: 'Price history, revenue mix & credit', route: `/supply-chain?ticker=${sym}` },
     { icon: Calculator, title: 'DCF valuation', sub: 'Intrinsic value & upside', route: `/dcf?ticker=${sym}` },
-    { icon: Globe, title: 'Company profile', sub: 'Revenue mix & geography', route: `/supply-chain?ticker=${sym}` },
     { icon: Scale, title: 'Peer comparison', sub: 'Multiples vs sector peers', route: `/relative-valuation?ticker=${sym}` },
+    { icon: TrendingUp, title: 'Chart Studio', sub: 'Candles with every overlay', route: '/chart-studio' },
   ]
   return (
     <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: `repeat(${isMobile ? 2 : 4}, 1fr)`, gap: 10 }}>
@@ -654,7 +654,7 @@ export default function Home() {
     else if (e.key === 'ArrowUp') { e.preventDefault(); setSelIdx(i => Math.max(-1, i - 1)) }
     else if (e.key === 'Enter') {
       if (selIdx >= 0 && navRoutes[selIdx]) navigate(navRoutes[selIdx])
-      else if (dashSym) navigate(`/market?ticker=${dashSym}`)
+      else if (dashSym) navigate(`/supply-chain?ticker=${dashSym}`)
     }
   }
   const recentTickers = useMemo(() => getRecentTickers(), [])

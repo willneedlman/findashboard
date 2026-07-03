@@ -12,16 +12,16 @@ import { recordRecent } from './lib/recents'
 
 // Marketing launchpad — chrome-free, lives at / and /product/*
 const Landing        = lazyWithReload(() => import('./marketing/Marketing').then(m => ({ default: m.Landing })))
+const MktResearch    = lazyWithReload(() => import('./marketing/Marketing').then(m => ({ default: m.ResearchPage })))
 const MktOptions     = lazyWithReload(() => import('./marketing/Marketing').then(m => ({ default: m.OptionsPage })))
 const MktValuation   = lazyWithReload(() => import('./marketing/Marketing').then(m => ({ default: m.ValuationPage })))
-const MktPortfolio   = lazyWithReload(() => import('./marketing/Marketing').then(m => ({ default: m.PortfolioPage })))
+const MktCharting    = lazyWithReload(() => import('./marketing/Marketing').then(m => ({ default: m.ChartingPage })))
 const MktMacro       = lazyWithReload(() => import('./marketing/Marketing').then(m => ({ default: m.MacroPage })))
 const MktTrading     = lazyWithReload(() => import('./marketing/Marketing').then(m => ({ default: m.TradingPage })))
 const MktShell       = lazyWithReload(() => import('./marketing/Marketing').then(m => ({ default: m.MarketingShell })))
 
 // Lazy-load all pages — crash in one route can't bring down the whole app
 const Home               = lazyWithReload(() => import('./pages/Home'))
-const MarketData         = lazyWithReload(() => import('./pages/MarketData'))
 const ChartStudio        = lazyWithReload(() => import('./pages/ChartStudio'))
 const OptionsPricer      = lazyWithReload(() => import('./pages/OptionsPricer'))
 const BondAnalytics      = lazyWithReload(() => import('./pages/BondAnalytics'))
@@ -73,6 +73,7 @@ const UnusualOptions     = lazyWithReload(() => import('./pages/UnusualOptions')
 const Compare            = lazyWithReload(() => import('./pages/Compare'))
 const ResetPassword      = lazyWithReload(() => import('./pages/ResetPassword'))
 const HubLanding         = lazyWithReload(() => import('./pages/HubLanding'))
+const GlobalMarkets      = lazyWithReload(() => import('./pages/GlobalMarkets'))
 const ToolsRedesignDemo  = lazyWithReload(() => import('./pages/redesign/ToolsRedesignDemo'))
 
 function PageLoader() {
@@ -135,6 +136,12 @@ function RootGate() {
   return <Landing />
 }
 
+// Redirect that carries the query string along (?ticker=... must survive).
+function RedirectWithSearch({ to }: { to: string }) {
+  const location = useLocation()
+  return <Navigate to={`${to}${location.search}`} replace />
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -146,11 +153,13 @@ export default function App() {
           <Routes>
             {/* Marketing launchpad — no terminal chrome */}
             <Route path="/"                  element={<RootGate />} />
+            <Route path="/product/research"  element={<MktResearch />} />
             <Route path="/product/options"   element={<MktOptions />} />
             <Route path="/product/valuation" element={<MktValuation />} />
-            <Route path="/product/portfolio" element={<MktPortfolio />} />
+            <Route path="/product/charting"  element={<MktCharting />} />
             <Route path="/product/macro"     element={<MktMacro />} />
             <Route path="/product/trading"   element={<MktTrading />} />
+            <Route path="/product/portfolio" element={<Navigate to="/product/trading" replace />} />
 
             {/* Password reset — chrome-free, reached from the email link */}
             <Route path="/reset-password"    element={<ResetPassword />} />
@@ -169,8 +178,10 @@ export default function App() {
             {/* Terminal — wrapped in the sidebar Layout */}
             <Route element={<TerminalChrome />}>
               <Route path="/app"        element={<Home />} />
+              <Route path="/hub/portfolio" element={<Navigate to="/hub/trading" replace />} />
               <Route path="/hub/:slug"  element={<HubLanding />} />
-              <Route path="/market"     element={<MarketData />} />
+              <Route path="/market"     element={<RedirectWithSearch to="/supply-chain" />} />
+              <Route path="/global-markets" element={<GlobalMarkets />} />
               <Route path="/chart-studio" element={<ChartStudio />} />
               <Route path="/options"    element={<OptionsPricer />} />
               <Route path="/bond"       element={<BondAnalytics />} />
