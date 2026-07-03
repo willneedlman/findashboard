@@ -5,6 +5,7 @@ import {
   createChart, ColorType, CrosshairMode, LineStyle,
   type IChartApi, type ISeriesApi, type Time, type SeriesMarker, type IPriceLine,
 } from 'lightweight-charts'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import { readToken } from '../lib/theme'
 import { smaArr, emaArr, bollinger, vwapArr, rsiArr, macdArr, hvArr } from '../lib/indicators'
@@ -22,15 +23,25 @@ const TFS = ['1m', '5m', '15m', '1h', '4h', '1d', '1wk'] as const
 type TF = typeof TFS[number]
 const INTRADAY: Set<TF> = new Set(['1m', '5m', '15m', '1h', '4h'])
 
-type LaneId = 'volume' | 'rsi' | 'macd' | 'iv'
-const LANE_IDS: LaneId[] = ['volume', 'rsi', 'macd', 'iv']
+type LaneId = 'volume' | 'rsi' | 'macd' | 'iv' | 'overlays'
+const LANE_IDS: LaneId[] = ['volume', 'rsi', 'macd', 'iv', 'overlays']
+
+// Per-layer display config: how tall the series draws (scale-margin band on
+// its hidden price scale) and whether it rides the price panel or drops into
+// the shared overlay lane below the chart.
+type LayerSize = 'S' | 'M' | 'L'
+interface LayerCfg { size: LayerSize; place: 'chart' | 'lane' }
+const SIZE_MARGINS: Record<LayerSize, { top: number; bottom: number }> = {
+  S: { top: 0.62, bottom: 0.04 }, M: { top: 0.25, bottom: 0.08 }, L: { top: 0.04, bottom: 0.04 },
+}
+const GEX_WIDTHS: Record<LayerSize, number> = { S: 80, M: 140, L: 220 }
 
 type AssetClass = 'equities' | 'index' | 'futures' | 'fx'
-const ASSET_CLASSES: { key: AssetClass; label: string; watch: string[] }[] = [
-  { key: 'equities', label: 'EQUITIES', watch: ['QQQ', 'IWM', 'NVDA', 'AAPL'] },
-  { key: 'index', label: 'INDEX', watch: ['^GSPC', '^NDX', '^DJI', '^VIX'] },
-  { key: 'futures', label: 'FUTURES', watch: ['ES=F', 'NQ=F', 'GC=F', 'CL=F'] },
-  { key: 'fx', label: 'FX', watch: ['EURUSD=X', 'USDJPY=X', 'GBPUSD=X', 'DX-Y.NYB'] },
+const ASSET_CLASSES: { key: AssetClass; label: string }[] = [
+  { key: 'equities', label: 'EQUITIES' },
+  { key: 'index', label: 'INDEX' },
+  { key: 'futures', label: 'FUTURES' },
+  { key: 'fx', label: 'FX' },
 ]
 
 type CandleWidth = 'thin' | 'med' | 'wide'
@@ -69,15 +80,17 @@ const fetchCandles = async (ticker: string, tf: TF): Promise<Candle[]> => {
   return (r.data.candles as RawCandle[]).map(c => ({ ...c, time: toEpoch(c.time) }))
 }
 
-interface OverlayDef { id: string; label: string; src: string; style: GlyphStyle; fetch: () => Promise<{ time: number; value: number }[]> }
+// `cadence` is the honest update rhythm of the underlying feed, surfaced in
+// the inspector so the user knows how fresh each displayed series is.
+interface OverlayDef { id: string; label: string; src: string; style: GlyphStyle; cadence: string; fetch: () => Promise<{ time: number; value: number }[]> }
 
 const tickerOverlay = (sym: string, tf: TF): OverlayDef => ({
-  id: `cmp:${sym}`, label: sym, src: 'OHLCV', style: 'line',
+  id: `cmp:${sym}`, label: sym, src: 'OHLCV', style: 'line', cadence: 'per bar',
   fetch: async () => (await fetchCandles(sym, tf)).map(c => ({ time: c.time, value: c.close })),
 })
 
 const curveSpread = (name: string): OverlayDef => ({
-  id: `spread:${name}`, label: `${name} spread`, src: 'FRED', style: 'line',
+  id: `spread:${name}`, label: `${name} spread`, src: 'FRED', style: 'line', cadence: 'daily · 1h cache',
   fetch: async () => {
     const r = await axios.get('/api/rates/curve-spreads')
     const s = r.data.spreads.find((x: any) => x.name === name)
@@ -86,7 +99,7 @@ const curveSpread = (name: string): OverlayDef => ({
 })
 
 const creditOas = (key: 'ig_oas' | 'hy_oas', label: string): OverlayDef => ({
-  id: key, label, src: 'FRED', style: 'line',
+  id: key, label, src: 'FRED', style: 'line', cadence: 'daily · 1h cache',
   fetch: async () => {
     const r = await axios.get('/api/rates/credit-spreads?lookback=365')
     return (r.data.series?.[key]?.history ?? []).filter((p: any) => p.value != null)
@@ -94,28 +107,28 @@ const creditOas = (key: 'ig_oas' | 'hy_oas', label: string): OverlayDef => ({
   },
 })
 
-// `fund:*`, `hv30`, `snap:*` and `xlkrs` are re-bound to the active primary
+// `fund:*`, `hv30` and `snap:*` are re-bound to the active primary
 // ticker inside the component; placeholder fetches keep the registry uniform.
 const fundMetric = (metric: string, label: string): OverlayDef => ({
-  id: `fund:${metric}`, label, src: 'FMP', style: 'diamond', fetch: async () => [],
+  id: `fund:${metric}`, label, src: 'FMP', style: 'diamond', cadence: 'quarterly', fetch: async () => [],
 })
 
 interface OverlayGroup { group: string; tag: string; defs: OverlayDef[] }
-const APP_OVERLAY_GROUPS = (tf: TF): OverlayGroup[] => [
+const APP_OVERLAY_GROUPS = (tf: TF, hvP = 30): OverlayGroup[] => [
   {
     group: 'Rates & macro', tag: 'FRED', defs: [
       { ...tickerOverlay('^TNX', tf), id: 'us10y', label: 'US 10Y yield', src: 'CBOE' },
       { ...tickerOverlay('^IRX', tf), id: 'us3m', label: 'US 3M yield', src: 'CBOE' },
       curveSpread('2s10s'), curveSpread('3M10Y'),
       {
-        id: 'cpi', label: 'CPI YoY', src: 'FRED', style: 'diamond',
+        id: 'cpi', label: 'CPI YoY', src: 'FRED', style: 'diamond', cadence: 'monthly',
         fetch: async () => {
           const r = await axios.get('/api/rates/economy')
           return (r.data.inflation?.trend ?? []).filter((p: any) => p.cpi != null).map((p: any) => ({ time: monthEpoch(p.d), value: p.cpi }))
         },
       },
       {
-        id: 'unemp', label: 'Unemployment', src: 'FRED', style: 'diamond',
+        id: 'unemp', label: 'Unemployment', src: 'FRED', style: 'diamond', cadence: 'monthly',
         fetch: async () => {
           const r = await axios.get('/api/rates/economy')
           return (r.data.unemployment?.trend ?? []).filter((p: any) => p.v != null).map((p: any) => ({ time: monthEpoch(p.d), value: p.v }))
@@ -127,11 +140,10 @@ const APP_OVERLAY_GROUPS = (tf: TF): OverlayGroup[] => [
   {
     group: 'Cross-asset', tag: 'MKT', defs: [
       { ...tickerOverlay('DX-Y.NYB', tf), id: 'dxy', label: 'DXY dollar', src: 'ICE' },
-      { id: 'xlkrs', label: 'Sector RS · XLK', src: 'Computed', style: 'line', fetch: async () => [] },
       { ...tickerOverlay('^VIX', tf), id: 'vix', label: 'VIX', src: 'CBOE' },
-      { id: 'hv30', label: 'HV 30d', src: 'Computed', style: 'line', fetch: async () => [] },
+      { id: 'hv30', label: `HV ${hvP}d`, src: 'Computed', style: 'line', cadence: 'daily', fetch: async () => [] },
       {
-        id: 'hormuz', label: 'Hormuz transits', src: 'PortWatch', style: 'diamond',
+        id: 'hormuz', label: 'Hormuz transits', src: 'PortWatch', style: 'diamond', cadence: 'daily · 4d lag',
         fetch: async () => {
           const r = await axios.get('/api/maritime/chokepoint-history?ids=hormuz&days=365')
           const pts = r.data.series?.[0]?.points ?? []
@@ -147,10 +159,10 @@ const APP_OVERLAY_GROUPS = (tf: TF): OverlayGroup[] => [
     ],
   },
 ]
-const APP_OVERLAYS = (tf: TF): OverlayDef[] => APP_OVERLAY_GROUPS(tf).flatMap(g => g.defs)
+const APP_OVERLAYS = (tf: TF, hvP = 30): OverlayDef[] => APP_OVERLAY_GROUPS(tf, hvP).flatMap(g => g.defs)
 
 // ── State machine ────────────────────────────────────────────────────────────
-interface Params { bbP: number; bbK: number; rsiP: number; macdF: number; macdS: number; macdSig: number }
+interface Params { bbP: number; bbK: number; rsiP: number; macdF: number; macdS: number; macdSig: number; hvP: number }
 interface MA { kind: 'sma' | 'ema'; period: number }
 const maKey = (m: MA) => `${m.kind}${m.period}`
 interface State {
@@ -161,6 +173,9 @@ interface State {
   ind: { bb: boolean; vwap: boolean; gflip: boolean; gexProfile: boolean }
   lanes: { volume: boolean; rsi: boolean; macd: boolean; iv: boolean }
   laneOrder: LaneId[]
+  layerCfg: Record<string, Partial<LayerCfg>>
+  railOpen: boolean
+  inspectorOpen: boolean
   mas: MA[]
   events: { earnings: boolean; dividends: boolean; splits: boolean }
   overlays: string[]
@@ -175,6 +190,8 @@ type Action =
   | { type: 'overlay'; id: string } | { type: 'addCompare'; sym: string } | { type: 'rmCompare'; sym: string }
   | { type: 'addMA'; ma: MA } | { type: 'rmMA'; key: string }
   | { type: 'moveLane'; id: LaneId; dir: 'up' | 'down' }
+  | { type: 'layerCfg'; id: string; patch: Partial<LayerCfg> }
+  | { type: 'toggleRail' } | { type: 'toggleInspector' }
   | { type: 'param'; k: keyof Params; v: number }
 
 // Clean slate by default: candles and volume only, every overlay opt-in.
@@ -183,10 +200,11 @@ const DEFAULT: State = {
   ind: { bb: false, vwap: false, gflip: false, gexProfile: false },
   lanes: { volume: true, rsi: false, macd: false, iv: false },
   laneOrder: [...LANE_IDS],
+  layerCfg: {}, railOpen: true, inspectorOpen: true,
   mas: [],
   events: { earnings: false, dividends: false, splits: false },
   overlays: [], compares: [],
-  params: { bbP: 20, bbK: 2, rsiP: 14, macdF: 12, macdS: 26, macdSig: 9 },
+  params: { bbP: 20, bbK: 2, rsiP: 14, macdF: 12, macdS: 26, macdSig: 9, hvP: 30 },
 }
 
 function reducer(s: State, a: Action): State {
@@ -211,6 +229,9 @@ function reducer(s: State, a: Action): State {
       ;[order[i], order[j]] = [order[j], order[i]]
       return { ...s, laneOrder: order }
     }
+    case 'layerCfg': return { ...s, layerCfg: { ...s.layerCfg, [a.id]: { ...s.layerCfg[a.id], ...a.patch } } }
+    case 'toggleRail': return { ...s, railOpen: !s.railOpen }
+    case 'toggleInspector': return { ...s, inspectorOpen: !s.inspectorOpen }
     case 'param': return { ...s, params: { ...s.params, [a.k]: a.v } }
   }
 }
@@ -226,7 +247,7 @@ const load = (): State => {
     const laneOrder = [...stored, ...LANE_IDS.filter(id => !stored.includes(id))]
     // Old shape: rsi/macd/volume lived in `ind`; lanes did not exist.
     const lanes = { ...DEFAULT.lanes, ...(raw.lanes ?? {}), ...(raw.ind?.rsi != null ? { rsi: raw.ind.rsi } : {}), ...(raw.ind?.macd != null ? { macd: raw.ind.macd } : {}), ...(raw.ind?.volume != null ? { volume: raw.ind.volume } : {}) }
-    const ind = { ...DEFAULT.ind, ...(raw.ind?.bb != null ? { bb: raw.ind.bb } : {}), ...(raw.ind?.vwap != null ? { vwap: raw.ind.vwap } : {}), ...(raw.ind?.gflip != null ? { gflip: raw.ind.gflip } : {}) }
+    const ind = { ...DEFAULT.ind, ...(raw.ind?.bb != null ? { bb: raw.ind.bb } : {}), ...(raw.ind?.vwap != null ? { vwap: raw.ind.vwap } : {}), ...(raw.ind?.gflip != null ? { gflip: raw.ind.gflip } : {}), ...(raw.ind?.gexProfile != null ? { gexProfile: raw.ind.gexProfile } : {}) }
     return { ...DEFAULT, ...raw, mas, ind, lanes, laneOrder, events: { ...DEFAULT.events, ...raw.events }, params: { ...DEFAULT.params, ...raw.params } }
   } catch { return DEFAULT }
 }
@@ -234,12 +255,19 @@ const load = (): State => {
 // ── Theme (concrete values — canvas cannot read CSS vars) ───────────────────
 function chartColors() {
   const t = (n: string, fb: string) => readToken(n, fb) || fb
+  const bg = t('--theme-bg', '#101c2e')
+  // White hairlines vanish on light presets: derive grid/borders from the
+  // background's own luminance instead.
+  const hex = bg.replace('#', '')
+  const [r, g, b] = hex.length >= 6 ? [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16)) : [16, 28, 46]
+  const isLight = (0.299 * r + 0.587 * g + 0.114 * b) > 140
   return {
-    bg: t('--theme-bg', '#101c2e'), surface: t('--theme-surface', '#0d1826'),
+    bg, surface: t('--theme-surface', '#0d1826'),
     gold: t('--theme-primary', '#c9a84c'), text: t('--theme-secondary', '#8099b0'),
     pos: '#22c55e', neg: '#ef4444', lanePos: '#3fb6a0', laneNeg: '#cf4b3f',
     blue: t('--theme-tertiary', '#60a5fa'), violet: t('--theme-accent-violet', '#c084fc'),
-    grid: 'rgba(255,255,255,0.045)',
+    grid: isLight ? 'rgba(40,20,20,0.07)' : 'rgba(255,255,255,0.045)',
+    axisBorder: isLight ? 'rgba(40,20,20,0.16)' : 'rgba(255,255,255,0.08)',
   }
 }
 type Colors = ReturnType<typeof chartColors>
@@ -281,15 +309,15 @@ const baseOptions = (C: Colors, h: number) => ({
     vertLine: { color: `${C.gold}66`, labelBackgroundColor: C.surface },
     horzLine: { color: `${C.gold}66`, labelBackgroundColor: C.surface },
   },
-  rightPriceScale: { borderColor: 'rgba(255,255,255,0.08)' },
-  timeScale: { borderColor: 'rgba(255,255,255,0.08)' },
+  rightPriceScale: { borderColor: C.axisBorder },
+  timeScale: { borderColor: C.axisBorder },
   height: h,
 })
 
 // ── UI primitives ────────────────────────────────────────────────────────────
 const MONO = 'var(--theme-mono)'
 const SANS = 'var(--theme-sans)'
-const eyebrow: React.CSSProperties = { fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#56708a' }
+const eyebrow: React.CSSProperties = { fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)' }
 
 type GlyphStyle = 'line' | 'dash' | 'hist' | 'diamond' | 'area' | 'ring'
 function Glyph({ style, color }: { style: GlyphStyle; color: string }) {
@@ -309,22 +337,69 @@ function Row({ label, on, src, color, style, onToggle }: {
 }) {
   return (
     <div className="cs-row" onClick={onToggle} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '4px 0', cursor: 'pointer' }}>
-      <span style={{ width: 13, height: 13, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', background: on ? color : 'transparent', border: on ? `1px solid ${color}` : '1px solid rgba(255,255,255,0.22)', color: '#0a0e16', fontSize: 9, fontWeight: 800 }}>{on ? '✓' : ''}</span>
+      <span style={{ width: 13, height: 13, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', background: on ? color : 'transparent', border: on ? `1px solid ${color}` : '1px solid var(--theme-border, rgba(255,255,255,0.22))', color: 'var(--theme-bg, #0a0e16)', fontSize: 9, fontWeight: 800 }}>{on ? '✓' : ''}</span>
       <span style={{ width: 18, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Glyph style={style} color={color} /></span>
-      <span style={{ fontFamily: SANS, fontSize: 11, color: on ? 'var(--theme-text, #d7e3fc)' : '#6d8199' }}>{label}</span>
-      <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 8, color: '#3f5670' }}>{src}</span>
+      <span style={{ fontFamily: SANS, fontSize: 11, color: on ? 'var(--theme-text, #d7e3fc)' : 'var(--theme-secondary, #8099b0)' }}>{label}</span>
+      <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 8, color: 'var(--theme-secondary, #8099b0)' }}>{src}</span>
     </div>
   )
 }
 
+// Compact per-layer controls shown under an active row: scale-band size on the
+// price panel, and where the series draws (price panel vs the overlay lane).
+function CfgChips({ label, cfg, showPlace, onPatch }: {
+  label: string; cfg: LayerCfg; showPlace: boolean; onPatch: (p: Partial<LayerCfg>) => void
+}) {
+  const chip = (on: boolean): React.CSSProperties => ({
+    fontFamily: MONO, fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', padding: '1px 5px', cursor: 'pointer',
+    background: on ? 'var(--theme-primary, #c9a84c)' : 'transparent',
+    color: on ? 'var(--theme-bg, #0a0e16)' : 'var(--theme-secondary, #8099b0)',
+    border: on ? '1px solid var(--theme-primary, #c9a84c)' : '1px solid var(--theme-border, rgba(255,255,255,0.14))',
+  })
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 0 4px 40px' }}>
+      {(!showPlace || cfg.place === 'chart') && (['S', 'M', 'L'] as LayerSize[]).map(s => (
+        <button key={s} onClick={() => onPatch({ size: s })} aria-label={`${label} size ${s}`} style={chip(cfg.size === s)}>{s}</button>
+      ))}
+      {showPlace && (
+        <>
+          <span style={{ width: 5 }} />
+          <button onClick={() => onPatch({ place: 'chart' })} aria-label={`Draw ${label} on the price chart`} style={chip(cfg.place === 'chart')}>CHART</button>
+          <button onClick={() => onPatch({ place: 'lane' })} aria-label={`Draw ${label} in the lane below`} style={chip(cfg.place === 'lane')}>LANE</button>
+        </>
+      )}
+    </div>
+  )
+}
+
+// Inline numeric parameter editor shown under an active indicator row, same
+// pattern as the SMA/EMA period input.
+function NumParam({ label, value, min, max, step, onChange }: {
+  label: string; value: number; min: number; max: number; step?: number; onChange: (v: number) => void
+}) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+      <span style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--theme-secondary, #8099b0)' }}>{label}</span>
+      <input type="number" value={value} min={min} max={max} step={step ?? 1} aria-label={`${label} parameter`}
+        onChange={e => {
+          const v = +e.target.value
+          if (Number.isFinite(v) && v >= min && v <= max) onChange(step && step < 1 ? v : Math.round(v))
+        }}
+        style={{ width: 44, background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.14))', color: 'var(--theme-text, #d7e3fc)', fontFamily: MONO, fontSize: 10, padding: '1px 3px' }} />
+    </span>
+  )
+}
+
+const paramRow: React.CSSProperties = { display: 'flex', gap: 8, alignItems: 'center', padding: '0 0 4px 40px' }
+
 function Seg<T extends string>({ options, value, onChange, ariaLabel }: { options: { key: T; label: string }[]; value: T; onChange: (v: T) => void; ariaLabel: string }) {
   return (
-    <div role="group" aria-label={ariaLabel} style={{ display: 'flex', border: '1px solid rgba(255,255,255,0.12)' }}>
+    <div role="group" aria-label={ariaLabel} style={{ display: 'flex', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))' }}>
       {options.map(o => (
         <button key={o.key} className={value === o.key ? '' : 'cs-chip'} onClick={() => onChange(o.key)} style={{
           fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', padding: '4px 10px', cursor: 'pointer', border: 'none',
           background: value === o.key ? 'var(--theme-primary, #c9a84c)' : 'transparent',
-          color: value === o.key ? '#0a0e16' : 'var(--theme-secondary, #8099b0)',
+          color: value === o.key ? 'var(--theme-bg, #0a0e16)' : 'var(--theme-secondary, #8099b0)',
         }}>{o.label}</button>
       ))}
     </div>
@@ -338,7 +413,7 @@ function LiveClock() {
   return (
     <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
       <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#2e9a62', boxShadow: '0 0 6px #2e9a62' }} />
-      <span style={{ fontFamily: MONO, fontSize: 9, color: '#56708a' }}>LIVE · {clock} ET</span>
+      <span style={{ fontFamily: MONO, fontSize: 9, color: 'var(--theme-secondary, #8099b0)' }}>LIVE · {clock} ET</span>
     </span>
   )
 }
@@ -349,12 +424,14 @@ const LANE_DEFS = [
   { id: 'rsi' as const, h: 78, label: 'RSI' },
   { id: 'macd' as const, h: 92, label: 'MACD' },
   { id: 'iv' as const, h: 78, label: 'IV RANK' },
+  { id: 'overlays' as const, h: 110, label: 'OVERLAY LANE' },
 ]
 
 // ── Main component ───────────────────────────────────────────────────────────
 export function ChartStudioContent() {
   const [state, dispatch] = useReducer(reducer, undefined, load)
-  const { ticker, assetClass, tf, candleWidth, ind, lanes, laneOrder, mas, events, overlays, compares, params } = state
+  const { ticker, assetClass, tf, candleWidth, ind, lanes, laneOrder, layerCfg, railOpen, inspectorOpen, mas, events, overlays, compares, params } = state
+  const cfgOf = (id: string): LayerCfg => ({ size: 'M', place: 'chart', ...layerCfg[id] })
   const [tickerDraft, setTickerDraft] = useState(ticker)
   const [compareDraft, setCompareDraft] = useState('')
   const [maDraft, setMaDraft] = useState<MA>({ kind: 'ema', period: 21 })
@@ -365,13 +442,14 @@ export function ChartStudioContent() {
   const addMA = () => {
     if (maDraft.period >= 2 && maDraft.period <= 400) dispatch({ type: 'addMA', ma: { ...maDraft } })
   }
+  const setParam = (k: keyof Params) => (v: number) => dispatch({ type: 'param', k, v })
 
   useEffect(() => { localStorage.setItem('unifiedOverlay2', JSON.stringify(state)) }, [state])
   const C = useMemo(chartColors, [])
 
   // ── Data ──
-  const candlesQ = useQuery({ queryKey: ['cs-candles', ticker, tf], queryFn: () => fetchCandles(ticker, tf), staleTime: 60_000, retry: 1 })
-  const dailyQ = useQuery({ queryKey: ['cs-daily', ticker], queryFn: () => fetchCandles(ticker, '1d'), staleTime: 3600_000, retry: 1 })
+  const candleRefreshMs = INTRADAY.has(tf) ? 60_000 : 300_000
+  const candlesQ = useQuery({ queryKey: ['cs-candles', ticker, tf], queryFn: () => fetchCandles(ticker, tf), staleTime: candleRefreshMs, refetchInterval: candleRefreshMs, retry: 1 })
   const eventsQ = useQuery<ChartEvents>({
     queryKey: ['cs-events', ticker],
     queryFn: () => axios.get(`/api/market/chart-events?ticker=${encodeURIComponent(ticker)}`).then(r => r.data),
@@ -406,7 +484,7 @@ export function ChartStudioContent() {
   }, [gexQ.data])
 
   const overlayDefs = useMemo<OverlayDef[]>(() => {
-    const app = APP_OVERLAYS(tf).map(d => {
+    const app = APP_OVERLAYS(tf, params.hvP).map(d => {
       if (d.id.startsWith('fund:')) {
         const metric = d.id.slice(5)
         return {
@@ -422,33 +500,20 @@ export function ChartStudioContent() {
           ...d,
           fetch: async () => {
             const daily = await fetchCandles(ticker, '1d')
-            const hv = hvArr(daily.map(c => c.close), 30)
+            const hv = hvArr(daily.map(c => c.close), params.hvP)
             return daily.map((c, i) => hv[i] == null ? null : { time: c.time, value: hv[i] as number })
               .filter(Boolean) as { time: number; value: number }[]
-          },
-        }
-      }
-      if (d.id === 'xlkrs') {
-        return {
-          ...d,
-          fetch: async () => {
-            const [xlk, spy] = await Promise.all([fetchCandles('XLK', tf), fetchCandles('SPY', tf)])
-            const spyMap = new Map(spy.map(c => [c.time, c.close]))
-            return xlk.map(c => {
-              const s = spyMap.get(c.time)
-              return s ? { time: c.time, value: +(c.close / s * 100).toFixed(3) } : null
-            }).filter(Boolean) as { time: number; value: number }[]
           },
         }
       }
       return d
     })
     return [...compares.map(s => tickerOverlay(s, tf)), ...app]
-  }, [tf, ticker, compares])
+  }, [tf, ticker, compares, params.hvP])
 
   const activeOverlayDefs = overlayDefs.filter(d => overlays.includes(d.id) || compares.some(s => d.id === `cmp:${s}`))
   const overlayQs = useQuery({
-    queryKey: ['cs-overlays', tf, ticker, activeOverlayDefs.map(d => d.id).join(',')],
+    queryKey: ['cs-overlays', tf, ticker, params.hvP, activeOverlayDefs.map(d => d.id).join(',')],
     queryFn: async () => {
       const out: Record<string, { time: number; value: number }[]> = {}
       await Promise.all(activeOverlayDefs.map(async d => {
@@ -508,24 +573,23 @@ export function ChartStudioContent() {
 
   // ── Chart instances: price + 5 lanes + minimap ──
   const mainRef = useRef<HTMLDivElement>(null)
-  const laneRefs = useRef<Record<LaneId, HTMLDivElement | null>>({ volume: null, rsi: null, macd: null, iv: null })
-  const miniRef = useRef<HTMLDivElement>(null)
-  const charts = useRef<{ main?: IChartApi; mini?: IChartApi } & Partial<Record<LaneId, IChartApi>>>({})
+  const laneRefs = useRef<Record<LaneId, HTMLDivElement | null>>({ volume: null, rsi: null, macd: null, iv: null, overlays: null })
+  const charts = useRef<{ main?: IChartApi } & Partial<Record<LaneId, IChartApi>>>({})
   const series = useRef<Record<string, ISeriesApi<any>>>({})
-  const overlaySeries = useRef<Map<string, ISeriesApi<'Line'>>>(new Map())
+  // Each overlay tracks its owner chart and price scale so it can move between
+  // the price panel and the overlay lane when the user changes placement.
+  const overlaySeries = useRef<Map<string, { srs: ISeriesApi<'Line'>; owner: IChartApi; scaleId: string }>>(new Map())
   const maSeries = useRef<Map<string, ISeriesApi<'Line'>>>(new Map())
   const flipLine = useRef<IPriceLine | null>(null)
   const store = useRef<Map<string, Sorted>>(new Map())
   const candleStore = useRef<Map<number, Candle>>(new Map())
   const syncing = useRef(false)
-  const [windowBox, setWindowBox] = useState<{ left: number; width: number } | null>(null)
-  const miniDomain = useRef<{ t0: number; t1: number } | null>(null)
-
+  const echoing = useRef(false)
   useEffect(() => {
-    if (!mainRef.current || !miniRef.current) return
+    if (!mainRef.current) return
     const main = createChart(mainRef.current, {
       ...baseOptions(C, 360), width: mainRef.current.clientWidth,
-      timeScale: { borderColor: 'rgba(255,255,255,0.08)', timeVisible: true, secondsVisible: false, barSpacing: 9 },
+      timeScale: { borderColor: C.axisBorder, timeVisible: true, secondsVisible: false, barSpacing: 9 },
       handleScroll: { mouseWheel: false, pressedMouseMove: true },
       // Native wheel zoom is sluggish: replaced by the amplified cursor-pivot
       // handler below (same pattern as PaperChart, higher coefficient).
@@ -559,20 +623,12 @@ export function ChartStudioContent() {
       if (!el) continue
       laneCharts[lane.id] = createChart(el, {
         ...baseOptions(C, lane.h), width: el.clientWidth,
-        timeScale: { visible: false }, rightPriceScale: { borderColor: 'rgba(255,255,255,0.08)' },
+        timeScale: { visible: false }, rightPriceScale: { borderColor: C.axisBorder },
         // Lanes are followers: a sparse lane (one accrued GEX point) fitting
         // itself must never drag the shared range down to a single day.
         handleScroll: false as any, handleScale: false as any,
       })
     }
-    const mini = createChart(miniRef.current, {
-      ...baseOptions(C, 42), width: miniRef.current.clientWidth,
-      timeScale: { visible: false }, rightPriceScale: { visible: false }, leftPriceScale: { visible: false },
-      handleScroll: false as any, handleScale: false as any,
-      crosshair: { mode: CrosshairMode.Hidden as any, vertLine: { visible: false }, horzLine: { visible: false } },
-      grid: { vertLines: { visible: false }, horzLines: { visible: false } },
-    })
-
     const candle = main.addCandlestickSeries({
       upColor: C.pos, downColor: C.neg, borderUpColor: C.pos, borderDownColor: C.neg,
       wickUpColor: C.pos, wickDownColor: C.neg, priceLineColor: C.gold, priceLineWidth: 1,
@@ -590,10 +646,8 @@ export function ChartStudioContent() {
     const macdLine = laneCharts.macd?.addLineSeries({ color: C.blue, lineWidth: 2, priceLineVisible: false, lastValueVisible: false })
     const macdSigS = laneCharts.macd?.addLineSeries({ color: C.gold, lineWidth: 1, priceLineVisible: false, lastValueVisible: false })
     const ivS = laneCharts.iv?.addAreaSeries({ lineColor: C.gold, topColor: `${C.gold}24`, bottomColor: 'transparent', lineWidth: 2, priceLineVisible: false, lastValueVisible: false })
-    const miniArea = mini.addAreaSeries({ lineColor: C.gold, topColor: `${C.gold}1f`, bottomColor: 'transparent', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false })
-
-    charts.current = { main, mini, ...laneCharts }
-    series.current = { candle, bbU, bbL, bbM, vwapS: vwapS!, volS: volS!, rsiS: rsiS!, macdHist: macdHist!, macdLine: macdLine!, macdSigS: macdSigS!, ivS: ivS!, miniArea }
+    charts.current = { main, ...laneCharts }
+    series.current = { candle, bbU, bbL, bbM, vwapS: vwapS!, volS: volS!, rsiS: rsiS!, macdHist: macdHist!, macdLine: macdLine!, macdSigS: macdSigS!, ivS: ivS! }
 
     // One-way time-range sync: the price panel drives, lanes follow. (Logical
     // sync breaks once overlays add weekend time points; two-way sync lets a
@@ -606,26 +660,21 @@ export function ChartStudioContent() {
       syncing.current = false
     })
 
-    // Minimap window follows the main chart; user range changes flip the
-    // window selector to Custom.
-    main.timeScale().subscribeVisibleTimeRangeChange(vr => {
-      const dom = miniDomain.current
-      if (dom && vr) {
-        const span = dom.t1 - dom.t0 || 1
-        const l = Math.max(0, ((vr.from as number) - dom.t0) / span)
-        const rgt = Math.min(1, ((vr.to as number) - dom.t0) / span)
-        setWindowBox({ left: l * 100, width: Math.max(0.5, (rgt - l) * 100) })
-      }
+    // User range changes flip the window selector to Custom.
+    main.timeScale().subscribeVisibleTimeRangeChange(() => {
       if (!applyingSpan.current) setWindowKey('custom')
       setScaleTick(t => t + 1)
     })
 
     // Crosshair: drive the inspector and echo positions into every lane.
+    // Programmatic setCrosshairPosition fires the same subscription as a real
+    // mouse move, so echoes must be guarded (like range sync) or the handlers
+    // feed back — clearing the crosshair on the very lane being hovered, which
+    // flickers against the native one on every mousemove.
     const laneSeriesFor: Partial<Record<LaneId, ISeriesApi<any>>> = { volume: volS, rsi: rsiS, macd: macdLine, iv: ivS }
-    main.subscribeCrosshairMove(param => {
-      const t = param.time as number | undefined
-      setCrossTime(t ?? null)
+    const echoLanes = (t: number | undefined, exclude?: LaneId) => {
       for (const lane of LANE_DEFS) {
+        if (lane.id === exclude) continue
         const ch = laneCharts[lane.id]; const ls = laneSeriesFor[lane.id]
         if (!ch || !ls) continue
         try {
@@ -633,14 +682,25 @@ export function ChartStudioContent() {
           if (v != null) ch.setCrosshairPosition(v, t as Time, ls); else ch.clearCrosshairPosition()
         } catch { /* lane mid-swap */ }
       }
+    }
+    main.subscribeCrosshairMove(param => {
+      if (echoing.current) return
+      const t = param.time as number | undefined
+      setCrossTime(t ?? null)
+      echoing.current = true
+      echoLanes(t)
+      echoing.current = false
     })
     for (const lane of LANE_DEFS) {
       laneCharts[lane.id]?.subscribeCrosshairMove(param => {
         const t = param.time as number | undefined
-        if (!t || syncing.current) return
+        if (!t || syncing.current || echoing.current) return
         setCrossTime(t)
+        echoing.current = true
         const cd = candleStore.current.get(t)
         try { if (cd) main.setCrosshairPosition(cd.close, t as Time, candle) } catch { /* mid-swap */ }
+        echoLanes(t, lane.id)
+        echoing.current = false
       })
     }
 
@@ -649,7 +709,6 @@ export function ChartStudioContent() {
       if (!w) return
       main.applyOptions({ width: w })
       for (const lane of LANE_DEFS) charts.current[lane.id]?.applyOptions({ width: w })
-      mini.applyOptions({ width: w })
       setScaleTick(t => t + 1)
     })
     ro.observe(mainRef.current)
@@ -657,7 +716,7 @@ export function ChartStudioContent() {
     return () => {
       ro.disconnect()
       wheelEl.removeEventListener('wheel', onWheel)
-      main.remove(); laneList.forEach(c => c.remove()); mini.remove()
+      main.remove(); laneList.forEach(c => c.remove())
       charts.current = {}; series.current = {}; overlaySeries.current.clear(); maSeries.current.clear(); flipLine.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -728,12 +787,25 @@ export function ChartStudioContent() {
   useEffect(() => {
     const main = charts.current.main
     if (!main) return
+    const laneChart = charts.current.overlays
     const data = overlayQs.data ?? {}
     const wanted = new Set(activeOverlayDefs.map(d => d.id))
-    for (const [id, srs] of overlaySeries.current) {
-      if (!wanted.has(id)) {
-        try { main.removeSeries(srs) } catch { /* torn down */ }
-        overlaySeries.current.delete(id); store.current.delete(`ov:${id}`)
+    // First lane-placed series rides the lane's visible right axis so the lane
+    // isn't a bare pane; the rest keep hidden per-series scales.
+    const lanePlaced = activeOverlayDefs.filter(d => cfgOf(d.id).place === 'lane').map(d => d.id)
+    const targetFor = (id: string): { owner: IChartApi; scaleId: string } => {
+      const inLane = lanePlaced.includes(id) && !!laneChart
+      return {
+        owner: inLane ? laneChart! : main,
+        scaleId: inLane && lanePlaced[0] === id ? 'right' : `ov-${id}`,
+      }
+    }
+    for (const [id, meta] of overlaySeries.current) {
+      const t = targetFor(id)
+      if (!wanted.has(id) || meta.owner !== t.owner || meta.scaleId !== t.scaleId) {
+        try { meta.owner.removeSeries(meta.srs) } catch { /* torn down */ }
+        overlaySeries.current.delete(id)
+        if (!wanted.has(id)) store.current.delete(`ov:${id}`)
       }
     }
     const t0 = candles[0]?.time ?? 0
@@ -742,25 +814,36 @@ export function ChartStudioContent() {
       const raw = data[d.id]
       if (!raw) return
       try {
+        const cfg = cfgOf(d.id)
+        const target = targetFor(d.id)
+        const inLane = target.owner !== main
         const all = sanitize(raw)
         const pts = all.filter(p => p.time >= t0 && p.time <= tN)
-        let srs = overlaySeries.current.get(d.id)
-        if (!srs) {
-          srs = main.addLineSeries({
-            color: OVERLAY_PALETTE[i % OVERLAY_PALETTE.length], lineWidth: 1,
-            priceScaleId: `ov-${d.id}`, priceLineVisible: false, lastValueVisible: false,
+        let meta = overlaySeries.current.get(d.id)
+        if (!meta) {
+          const srs = target.owner.addLineSeries({
+            color: OVERLAY_PALETTE[i % OVERLAY_PALETTE.length], lineWidth: inLane ? 2 : 1,
+            priceScaleId: target.scaleId, priceLineVisible: false, lastValueVisible: false,
           })
-          main.priceScale(`ov-${d.id}`).applyOptions({ visible: false, scaleMargins: { top: 0.12, bottom: 0.2 } })
-          overlaySeries.current.set(d.id, srs)
+          meta = { srs, owner: target.owner, scaleId: target.scaleId }
+          overlaySeries.current.set(d.id, meta)
         }
-        srs.setData(pts.map(p => ({ time: p.time as Time, value: p.value })))
-        srs.applyOptions({ pointMarkersVisible: pts.length < 30 } as any)
+        target.owner.priceScale(target.scaleId).applyOptions(target.scaleId === 'right'
+          ? { scaleMargins: { top: 0.14, bottom: 0.1 } }
+          : { visible: false, scaleMargins: inLane ? { top: 0.14, bottom: 0.1 } : SIZE_MARGINS[cfg.size] })
+        meta.srs.setData(pts.map(p => ({ time: p.time as Time, value: p.value })))
+        meta.srs.applyOptions({ pointMarkersVisible: pts.length < 30 } as any)
         // Inspector carries the full history forward (monthly feeds resolve
         // even between releases), so store unclamped.
         store.current.set(`ov:${d.id}`, toSorted(all))
       } catch (e) { console.warn('overlay layer failed', d.id, e) }
     })
-  }, [overlayQs.data, activeOverlayDefs, candles])
+    // A lane that just gained its first series has no range yet: seed it.
+    if (laneChart && lanePlaced.length) {
+      try { const vr = main.timeScale().getVisibleRange(); if (vr) laneChart.timeScale().setVisibleRange(vr) } catch { /* no data yet */ }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overlayQs.data, activeOverlayDefs, candles, layerCfg])
 
   // ── IV lane ──
   useEffect(() => {
@@ -768,11 +851,20 @@ export function ChartStudioContent() {
     if (!s.ivS) return
     try {
       const pts = lanes.iv ? ivLane.pts : []
-      s.ivS.setData(pts.map(p => ({ time: p.time as Time, value: p.value })))
+      // Pad with whitespace on the candle skeleton: a sparse snapshot series
+      // (one accrued point) gives the lane no time density, so setVisibleRange
+      // stretches it arbitrarily across the pane. Sharing the main chart's
+      // timebase pins every point to its true date.
+      const vals = new Map(pts.map(p => [p.time, p.value]))
+      const times = new Set<number>(candles.map(c => c.time))
+      pts.forEach(p => times.add(p.time))
+      const merged = [...times].sort((a, b) => a - b)
+        .map(t => vals.has(t) ? { time: t as Time, value: vals.get(t)! } : { time: t as Time })
+      s.ivS.setData(pts.length ? merged : [])
       s.ivS.applyOptions({ pointMarkersVisible: pts.length < 30 } as any)
       store.current.set('lane:iv', toSorted(pts))
     } catch (e) { console.warn('iv lane failed', e) }
-  }, [ivLane, lanes.iv])
+  }, [ivLane, lanes.iv, candles])
 
   // ── Gamma-flip price line ──
   useEffect(() => {
@@ -804,49 +896,6 @@ export function ChartStudioContent() {
       s.setMarkers(markers.filter(m => (m.time as number) >= t0 && (m.time as number) <= tN).sort((a, b) => (a.time as number) - (b.time as number)))
     } catch (e) { console.warn('markers failed', e) }
   }, [eventsQ.data, events, candles, C])
-
-  // ── Minimap ──
-  useEffect(() => {
-    const daily = dailyQ.data
-    const s = series.current.miniArea
-    if (!daily?.length || !s) return
-    try {
-      s.setData(daily.map(c => ({ time: c.time as Time, value: c.close })))
-      charts.current.mini?.timeScale().fitContent()
-      miniDomain.current = { t0: daily[0].time, t1: daily[daily.length - 1].time }
-      const vr = charts.current.main?.timeScale().getVisibleRange()
-      if (vr) {
-        const span = miniDomain.current.t1 - miniDomain.current.t0 || 1
-        const l = Math.max(0, ((vr.from as number) - miniDomain.current.t0) / span)
-        const r = Math.min(1, ((vr.to as number) - miniDomain.current.t0) / span)
-        setWindowBox({ left: l * 100, width: Math.max(0.5, (r - l) * 100) })
-      }
-    } catch (e) { console.warn('minimap failed', e) }
-  }, [dailyQ.data])
-
-  const dragRef = useRef<{ mode: 'pan' | 'left' | 'right'; startX: number; box: { left: number; width: number } } | null>(null)
-  const onMiniPointerDown = (mode: 'pan' | 'left' | 'right') => (e: React.PointerEvent) => {
-    if (!windowBox) return
-    e.preventDefault(); e.stopPropagation()
-    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
-    dragRef.current = { mode, startX: e.clientX, box: windowBox }
-  }
-  const onMiniPointerMove = (e: React.PointerEvent) => {
-    const drag = dragRef.current
-    const dom = miniDomain.current
-    const wrap = miniRef.current
-    if (!drag || !dom || !wrap) return
-    const dxPct = ((e.clientX - drag.startX) / wrap.clientWidth) * 100
-    let { left, width } = drag.box
-    if (drag.mode === 'pan') left = Math.min(100 - width, Math.max(0, left + dxPct))
-    else if (drag.mode === 'left') { const r = left + width; left = Math.min(r - 1, Math.max(0, left + dxPct)); width = r - left }
-    else { width = Math.min(100 - left, Math.max(1, width + dxPct)) }
-    const span = dom.t1 - dom.t0
-    const from = dom.t0 + (left / 100) * span
-    const to = dom.t0 + ((left + width) / 100) * span
-    try { charts.current.main?.timeScale().setVisibleRange({ from: from as Time, to: to as Time }) } catch { /* mid-reload */ }
-  }
-  const onMiniPointerUp = () => { dragRef.current = null }
 
   // ── Window span + candle width ──
   const applySpan = useCallback((key: string) => {
@@ -886,7 +935,6 @@ export function ChartStudioContent() {
     const v = tickerDraft.trim().toUpperCase()
     if (v) dispatch({ type: 'ticker', v })
   }
-  const loadSymbol = (sym: string) => { setTickerDraft(sym); dispatch({ type: 'ticker', v: sym }) }
 
   // GEX-by-strike profile geometry: horizontal bars anchored at the right edge
   // of the price pane, each at its strike's y-coordinate (a volume profile
@@ -918,6 +966,29 @@ export function ChartStudioContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ind.gexProfile, gexQ.data, scaleTick, candles])
 
+  // The price scale can move without any time-range event firing (dragging the
+  // Y axis, autoscale shifts on new data). Watch the pane's actual price→pixel
+  // mapping — the prices at the top and bottom edges — and re-anchor the
+  // profile when it changes. Bumps state only on real movement, so it idles.
+  useEffect(() => {
+    if (!ind.gexProfile) return
+    let last = ''
+    const id = setInterval(() => {
+      const candle = series.current.candle
+      const main = charts.current.main
+      if (!candle || !main) return
+      try {
+        const h = (main as any).paneSize()?.height ?? 0
+        const top = candle.coordinateToPrice(0)
+        const bot = candle.coordinateToPrice(h)
+        const key = `${top}:${bot}:${h}`
+        if (last && key !== last) setScaleTick(t => t + 1)
+        last = key
+      } catch { /* chart mid-swap */ }
+    }, 120)
+    return () => clearInterval(id)
+  }, [ind.gexProfile])
+
   // ── Inspector data ──
   const lastC = candles.length ? candles[candles.length - 1] : undefined
   const inspectT = crossTime ?? lastC?.time ?? null
@@ -925,12 +996,12 @@ export function ChartStudioContent() {
   const barIdx = inspectT != null ? candles.findIndex(c => c.time === inspectT) : candles.length - 1
   const at = (key: string) => inspectT != null ? floorVal(store.current.get(key), inspectT) : null
   const overlayColor = useCallback((id: string, i: number) =>
-    overlaySeries.current.get(id)?.options().color ?? OVERLAY_PALETTE[i % OVERLAY_PALETTE.length], [])
+    overlaySeries.current.get(id)?.srs.options().color ?? OVERLAY_PALETTE[i % OVERLAY_PALETTE.length], [])
   const fmtN = (v: number | null, dp = 2, suffix = '') => v == null ? '—' : `${v.toFixed(dp)}${suffix}`
 
   const activeLegend = [
     ...mas.map((m, i) => ({ label: `${m.kind.toUpperCase()} ${m.period}`, color: MA_PALETTE[i % MA_PALETTE.length], style: 'line' as GlyphStyle })),
-    ...(ind.bb ? [{ label: `BB ${params.bbP}·${params.bbK}`, color: '#8099b0', style: 'dash' as GlyphStyle }] : []),
+    ...(ind.bb ? [{ label: `BB ${params.bbP}·${params.bbK}`, color: 'var(--theme-secondary, #8099b0)', style: 'dash' as GlyphStyle }] : []),
     ...(ind.vwap ? [{ label: 'VWAP', color: '#c084fc', style: 'dash' as GlyphStyle }] : []),
     ...activeOverlayDefs.map((d, i) => ({ label: d.label, color: overlayColor(d.id, i), style: d.style })),
     ...(ind.gflip && flipLevel != null ? [{ label: `γ-flip ${flipLevel}`, color: '#c084fc', style: 'dash' as GlyphStyle }] : []),
@@ -939,23 +1010,25 @@ export function ChartStudioContent() {
 
   const pct = inspectC && inspectC.open ? ((inspectC.close - inspectC.open) / inspectC.open) * 100 : 0
   const dateOf = (t: number | null) => t == null ? '' : new Date(t * 1000).toISOString().slice(0, 10)
+  const gexW = GEX_WIDTHS[cfgOf('gexprofile').size]
+  const laneOverlayCount = activeOverlayDefs.filter(d => cfgOf(d.id).place === 'lane').length
 
   const inspectorGroups: { group: string; rows: { label: string; value: string; color: string }[] }[] = useMemo(() => {
     const g: { group: string; rows: { label: string; value: string; color: string }[] }[] = []
     if (inspectC) {
       g.push({
         group: `Price · ${ticker}`, rows: [
-          { label: 'Open', value: inspectC.open.toFixed(2), color: '#d7e3fc' },
-          { label: 'High', value: inspectC.high.toFixed(2), color: '#d7e3fc' },
-          { label: 'Low', value: inspectC.low.toFixed(2), color: '#d7e3fc' },
-          { label: 'Close', value: inspectC.close.toFixed(2), color: '#d7e3fc' },
+          { label: 'Open', value: inspectC.open.toFixed(2), color: 'var(--theme-text, #d7e3fc)' },
+          { label: 'High', value: inspectC.high.toFixed(2), color: 'var(--theme-text, #d7e3fc)' },
+          { label: 'Low', value: inspectC.low.toFixed(2), color: 'var(--theme-text, #d7e3fc)' },
+          { label: 'Close', value: inspectC.close.toFixed(2), color: 'var(--theme-text, #d7e3fc)' },
           { label: 'Change', value: `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`, color: pct >= 0 ? C.lanePos : C.laneNeg },
         ],
       })
     }
     const tech: { label: string; value: string; color: string }[] = []
     mas.forEach((m, i) => { const v = at(`ma:${maKey(m)}`); if (v != null) tech.push({ label: `${m.kind.toUpperCase()} ${m.period}`, value: v.toFixed(2), color: MA_PALETTE[i % MA_PALETTE.length] }) })
-    if (ind.bb) { const u = at('bbU'), l = at('bbL'); if (u != null) tech.push({ label: 'BB upper', value: u.toFixed(2), color: '#8099b0' }); if (l != null) tech.push({ label: 'BB lower', value: l.toFixed(2), color: '#8099b0' }) }
+    if (ind.bb) { const u = at('bbU'), l = at('bbL'); if (u != null) tech.push({ label: 'BB upper', value: u.toFixed(2), color: 'var(--theme-secondary, #8099b0)' }); if (l != null) tech.push({ label: 'BB lower', value: l.toFixed(2), color: 'var(--theme-secondary, #8099b0)' }) }
     if (ind.vwap) { const v = at('vwap'); if (v != null) tech.push({ label: 'VWAP', value: v.toFixed(2), color: '#c084fc' }) }
     if (lanes.rsi) { const v = at('lane:rsi'); if (v != null) tech.push({ label: `RSI ${params.rsiP}`, value: v.toFixed(1), color: '#c084fc' }) }
     if (lanes.macd) { const v = at('lane:macd'); if (v != null) tech.push({ label: 'MACD', value: v.toFixed(2), color: '#60a5fa' }) }
@@ -988,44 +1061,34 @@ export function ChartStudioContent() {
     // feeds land, not only on the next crosshair move.
   }, [inspectT, inspectC, mas, ind, lanes, activeOverlayDefs, flipLevel, gexNet, ivLane, params, C, ticker, ivHistQ.data, overlayQs.data, candles])
 
-  const watch = ASSET_CLASSES.find(a => a.key === assetClass)?.watch ?? []
 
   return (
-    <div style={{ maxWidth: 1680, minWidth: 1180, margin: '0 auto', background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.12)' }}>
+    <div style={{ maxWidth: 1680, minWidth: 1180, margin: '0 auto', background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))' }}>
       <style>{`
-        .cs-row:hover { background: rgba(255,255,255,0.04); }
+        .cs-row:hover { background: var(--theme-hover, rgba(255,255,255,0.04)); }
         .cs-chip:hover { border-color: var(--theme-primary, #c9a84c) !important; color: var(--theme-text, #d7e3fc) !important; }
       `}</style>
 
       {/* ── Header bar ── */}
-      <div style={{ padding: '12px 20px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+      <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <span style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
           <span style={{ fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: '0.22em', color: 'var(--theme-primary, #c9a84c)' }}>UNIFIED CHART OVERLAY</span>
-          <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '0.14em', color: '#3f5670' }}>ALPHATAPE TERMINAL</span>
+          <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '0.14em', color: 'var(--theme-secondary, #8099b0)' }}>ALPHATAPE TERMINAL</span>
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '0.1em', color: '#8099b0' }}>{overlayDefs.length + LANE_DEFS.length + 3} TIME-SERIES FEEDS</span>
+          <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '0.1em', color: 'var(--theme-secondary, #8099b0)' }}>{overlayDefs.length + (LANE_DEFS.length - 1) + 3} TIME-SERIES FEEDS</span>
           <LiveClock />
         </span>
       </div>
 
       {/* ── Toolbar ── */}
-      <div style={{ padding: '9px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+      <div style={{ padding: '9px 20px', borderBottom: '1px solid var(--theme-border-faint, rgba(255,255,255,0.06))', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
         <Seg options={ASSET_CLASSES.map(a => ({ key: a.key, label: a.label }))} value={assetClass} onChange={v => dispatch({ type: 'assetClass', v })} ariaLabel="Asset class" />
         <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <input value={tickerDraft} onChange={e => setTickerDraft(e.target.value.toUpperCase())}
             onKeyDown={e => e.key === 'Enter' && submitTicker()} spellCheck={false} aria-label="Chart symbol"
-            style={{ width: 96, background: 'var(--theme-surface, #0d1826)', border: '1px solid rgba(255,255,255,0.14)', color: 'var(--theme-primary, #c9a84c)', fontFamily: MONO, fontSize: 15, fontWeight: 700, padding: '4px 8px' }} />
-          <button className="cs-chip" onClick={submitTicker} style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', padding: '5px 9px', cursor: 'pointer', background: 'transparent', color: 'var(--theme-secondary, #8099b0)', border: '1px solid rgba(255,255,255,0.14)' }}>LOAD</button>
-        </span>
-        <span style={{ display: 'flex', gap: 6 }}>
-          {watch.map(sym => (
-            <button key={sym} className="cs-chip" onClick={() => loadSymbol(sym)} style={{
-              fontFamily: MONO, fontSize: 9.5, fontWeight: 600, padding: '3px 8px', cursor: 'pointer',
-              background: 'transparent', color: sym === ticker ? 'var(--theme-primary, #c9a84c)' : '#8099b0',
-              border: sym === ticker ? '1px solid var(--theme-primary, #c9a84c)' : '1px solid rgba(255,255,255,0.12)',
-            }}>{sym}</button>
-          ))}
+            style={{ width: 96, background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-border, rgba(255,255,255,0.14))', color: 'var(--theme-primary, #c9a84c)', fontFamily: MONO, fontSize: 15, fontWeight: 700, padding: '4px 8px' }} />
+          <button className="cs-chip" onClick={submitTicker} style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', padding: '5px 9px', cursor: 'pointer', background: 'transparent', color: 'var(--theme-secondary, #8099b0)', border: '1px solid var(--theme-border, rgba(255,255,255,0.14))' }}>LOAD</button>
         </span>
         <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
           <span style={{ display: 'flex', gap: 4 }}>
@@ -1033,8 +1096,8 @@ export function ChartStudioContent() {
               <button key={t} className="cs-chip" onClick={() => dispatch({ type: 'tf', v: t })} style={{
                 fontFamily: MONO, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 8px', cursor: 'pointer',
                 background: tf === t ? 'var(--theme-primary, #c9a84c)' : 'transparent',
-                color: tf === t ? '#0a0e16' : 'var(--theme-secondary, #8099b0)',
-                border: tf === t ? '1px solid var(--theme-primary, #c9a84c)' : '1px solid rgba(255,255,255,0.14)',
+                color: tf === t ? 'var(--theme-bg, #0a0e16)' : 'var(--theme-secondary, #8099b0)',
+                border: tf === t ? '1px solid var(--theme-primary, #c9a84c)' : '1px solid var(--theme-border, rgba(255,255,255,0.14))',
               }}>{t.toUpperCase()}</button>
             ))}
           </span>
@@ -1045,7 +1108,7 @@ export function ChartStudioContent() {
           <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
             <span style={{ ...eyebrow, fontSize: 8.5 }}>Window</span>
             <select value={windowKey} onChange={e => applySpan(e.target.value)} aria-label="Visible span"
-              style={{ background: 'var(--theme-surface, #0d1826)', border: '1px solid rgba(255,255,255,0.14)', color: 'var(--theme-primary, #c9a84c)', fontFamily: MONO, fontSize: 10, padding: '3px 6px', cursor: 'pointer' }}>
+              style={{ background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-border, rgba(255,255,255,0.14))', color: 'var(--theme-primary, #c9a84c)', fontFamily: MONO, fontSize: 10, padding: '3px 6px', cursor: 'pointer' }}>
               {spansFor(tf).map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
               {windowKey === 'custom' && <option value="custom" disabled>CUSTOM</option>}
             </select>
@@ -1056,54 +1119,101 @@ export function ChartStudioContent() {
       {/* ── Body: rail | chart | inspector ── */}
       <div style={{ display: 'flex', alignItems: 'stretch' }}>
         {/* Left rail */}
-        <div style={{ width: 236, flex: 'none', background: 'var(--theme-surface, #0d1826)', borderRight: '1px solid rgba(255,255,255,0.08)' }}>
-          <div style={{ padding: '11px 16px 9px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}><span style={eyebrow}>Price overlays</span><span style={{ fontFamily: MONO, fontSize: 8, color: '#3f5670' }}>TA</span></div>
+        {!railOpen ? (
+          <button onClick={() => dispatch({ type: 'toggleRail' })} aria-label="Expand layer rail"
+            style={{ width: 26, flex: 'none', background: 'var(--theme-surface, #0d1826)', border: 'none', borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 10, gap: 10 }}>
+            <ChevronRight size={12} color="var(--theme-secondary, #8099b0)" />
+            <span style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, letterSpacing: '0.18em', color: 'var(--theme-secondary, #8099b0)', writingMode: 'vertical-rl' }}>LAYERS</span>
+          </button>
+        ) : (
+        <div style={{ width: 236, flex: 'none', background: 'var(--theme-surface, #0d1826)', borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+          <div style={{ padding: '11px 16px 9px', borderBottom: '1px solid var(--theme-border-faint, rgba(255,255,255,0.05))' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
+              <span style={eyebrow}>Price overlays</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontFamily: MONO, fontSize: 8, color: 'var(--theme-secondary, #8099b0)' }}>TA</span>
+                <button onClick={() => dispatch({ type: 'toggleRail' })} aria-label="Collapse layer rail"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex' }}>
+                  <ChevronLeft size={11} color="var(--theme-secondary, #8099b0)" />
+                </button>
+              </span>
+            </div>
             {mas.map((m, i) => (
               <div key={maKey(m)} className="cs-row" style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '4px 0' }}>
-                <span style={{ width: 13, height: 13, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', background: MA_PALETTE[i % MA_PALETTE.length], border: `1px solid ${MA_PALETTE[i % MA_PALETTE.length]}`, color: '#0a0e16', fontSize: 9, fontWeight: 800 }}>✓</span>
+                <span style={{ width: 13, height: 13, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', background: MA_PALETTE[i % MA_PALETTE.length], border: `1px solid ${MA_PALETTE[i % MA_PALETTE.length]}`, color: 'var(--theme-bg, #0a0e16)', fontSize: 9, fontWeight: 800 }}>✓</span>
                 <span style={{ width: 18, flex: 'none', display: 'flex', justifyContent: 'center' }}><Glyph style="line" color={MA_PALETTE[i % MA_PALETTE.length]} /></span>
                 <span style={{ fontFamily: SANS, fontSize: 11, color: 'var(--theme-text, #d7e3fc)' }}>{m.kind.toUpperCase()} {m.period}</span>
                 <button onClick={() => dispatch({ type: 'rmMA', key: maKey(m) })} aria-label={`Remove ${m.kind.toUpperCase()} ${m.period}`}
-                  style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontFamily: MONO, fontSize: 11, color: '#56708a' }}>x</button>
+                  style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontFamily: MONO, fontSize: 11, color: 'var(--theme-secondary, #8099b0)' }}>x</button>
               </div>
             ))}
             <div style={{ display: 'flex', gap: 5, margin: '4px 0 6px' }}>
               <select value={maDraft.kind} onChange={e => setMaDraft(d => ({ ...d, kind: e.target.value as MA['kind'] }))} aria-label="Average type"
-                style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.14)', color: 'var(--theme-text, #d7e3fc)', fontFamily: MONO, fontSize: 10, padding: '2px 3px' }}>
+                style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.14))', color: 'var(--theme-text, #d7e3fc)', fontFamily: MONO, fontSize: 10, padding: '2px 3px' }}>
                 <option value="sma">SMA</option><option value="ema">EMA</option>
               </select>
               <input type="number" min={2} max={400} value={maDraft.period} aria-label="Average period"
                 onChange={e => setMaDraft(d => ({ ...d, period: Math.round(+e.target.value) }))}
                 onKeyDown={e => e.key === 'Enter' && addMA()}
-                style={{ width: 48, background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.14)', color: 'var(--theme-text, #d7e3fc)', fontFamily: MONO, fontSize: 10, padding: '2px 4px' }} />
-              <button className="cs-chip" onClick={addMA} style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, padding: '0 8px', cursor: 'pointer', background: 'transparent', color: 'var(--theme-secondary, #8099b0)', border: '1px solid rgba(255,255,255,0.14)' }}>ADD</button>
+                style={{ width: 48, background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.14))', color: 'var(--theme-text, #d7e3fc)', fontFamily: MONO, fontSize: 10, padding: '2px 4px' }} />
+              <button className="cs-chip" onClick={addMA} style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, padding: '0 8px', cursor: 'pointer', background: 'transparent', color: 'var(--theme-secondary, #8099b0)', border: '1px solid var(--theme-border, rgba(255,255,255,0.14))' }}>ADD</button>
             </div>
             <Row label={`Bollinger ${params.bbP}·${params.bbK}`} on={ind.bb} src="computed" color="#8099b0" style="dash" onToggle={() => dispatch({ type: 'ind', k: 'bb' })} />
+            {ind.bb && (
+              <div style={paramRow}>
+                <NumParam label="LEN" value={params.bbP} min={5} max={200} onChange={setParam('bbP')} />
+                <NumParam label="K" value={params.bbK} min={1} max={4} step={0.5} onChange={setParam('bbK')} />
+              </div>
+            )}
             <Row label="VWAP" on={ind.vwap} src="computed" color="#c084fc" style="dash" onToggle={() => dispatch({ type: 'ind', k: 'vwap' })} />
             <Row label="Gamma flip" on={ind.gflip} src="Tradier" color="#c084fc" style="dash" onToggle={() => dispatch({ type: 'ind', k: 'gflip' })} />
             <Row label="GEX by strike" on={ind.gexProfile} src="Tradier" color="#3fb6a0" style="hist" onToggle={() => dispatch({ type: 'ind', k: 'gexProfile' })} />
+            {ind.gexProfile && <CfgChips label="GEX by strike" cfg={cfgOf('gexprofile')} showPlace={false} onPatch={p => dispatch({ type: 'layerCfg', id: 'gexprofile', patch: p })} />}
           </div>
 
-          <div style={{ padding: '11px 16px 9px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}><span style={eyebrow}>Sub-panel lanes</span><span style={{ fontFamily: MONO, fontSize: 8, color: '#3f5670' }}>OSC</span></div>
+          <div style={{ padding: '11px 16px 9px', borderBottom: '1px solid var(--theme-border-faint, rgba(255,255,255,0.05))' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}><span style={eyebrow}>Sub-panel lanes</span><span style={{ fontFamily: MONO, fontSize: 8, color: 'var(--theme-secondary, #8099b0)' }}>OSC</span></div>
             {laneOrder.map((id, oi) => {
               const cfg: Record<LaneId, { label: string; src: string; color: string; style: GlyphStyle }> = {
                 volume: { label: 'Volume', src: 'OHLCV', color: '#3fb6a0', style: 'hist' },
                 rsi: { label: `RSI ${params.rsiP}`, src: 'computed', color: '#c084fc', style: 'line' },
                 macd: { label: `MACD ${params.macdF}·${params.macdS}·${params.macdSig}`, src: 'computed', color: '#60a5fa', style: 'line' },
                 iv: { label: 'IV rank', src: 'accrues', color: '#c9a84c', style: 'area' },
+                overlays: { label: 'Overlay lane', src: laneOverlayCount ? `${laneOverlayCount} SERIES` : 'auto', color: '#5b93c9', style: 'line' },
               }
               const c = cfg[id]
               return (
-                <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <div key={id}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <Row label={c.label} on={lanes[id]} src={c.src} color={c.color} style={c.style} onToggle={() => dispatch({ type: 'lane', k: id })} />
+                    {id === 'overlays' ? (
+                      // No toggle: the lane appears when any overlay is placed
+                      // in it via its LANE chip. Row here is for ordering only.
+                      <div className="cs-row" style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '4px 0' }}>
+                        <span style={{ width: 13, flex: 'none' }} />
+                        <span style={{ width: 18, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Glyph style="line" color={c.color} /></span>
+                        <span style={{ fontFamily: SANS, fontSize: 11, whiteSpace: 'nowrap', color: laneOverlayCount ? 'var(--theme-text, #d7e3fc)' : 'var(--theme-secondary, #8099b0)' }}>{c.label}</span>
+                        <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 8, color: 'var(--theme-secondary, #8099b0)' }}>{c.src}</span>
+                      </div>
+                    ) : (
+                      <Row label={c.label} on={lanes[id]} src={c.src} color={c.color} style={c.style} onToggle={() => dispatch({ type: 'lane', k: id })} />
+                    )}
                   </div>
                   <button onClick={() => dispatch({ type: 'moveLane', id, dir: 'up' })} disabled={oi === 0} aria-label={`Move ${c.label} up`}
-                    style={{ background: 'none', border: 'none', cursor: oi === 0 ? 'default' : 'pointer', fontFamily: MONO, fontSize: 10, color: oi === 0 ? '#2c3d52' : '#56708a', padding: '0 2px' }}>↑</button>
+                    style={{ background: 'none', border: 'none', cursor: oi === 0 ? 'default' : 'pointer', fontFamily: MONO, fontSize: 10, color: oi === 0 ? 'var(--theme-border, #2c3d52)' : 'var(--theme-secondary, #8099b0)', padding: '0 2px' }}>↑</button>
                   <button onClick={() => dispatch({ type: 'moveLane', id, dir: 'down' })} disabled={oi === laneOrder.length - 1} aria-label={`Move ${c.label} down`}
-                    style={{ background: 'none', border: 'none', cursor: oi === laneOrder.length - 1 ? 'default' : 'pointer', fontFamily: MONO, fontSize: 10, color: oi === laneOrder.length - 1 ? '#2c3d52' : '#56708a', padding: '0 2px' }}>↓</button>
+                    style={{ background: 'none', border: 'none', cursor: oi === laneOrder.length - 1 ? 'default' : 'pointer', fontFamily: MONO, fontSize: 10, color: oi === laneOrder.length - 1 ? 'var(--theme-border, #2c3d52)' : 'var(--theme-secondary, #8099b0)', padding: '0 2px' }}>↓</button>
+                </div>
+                {id === 'rsi' && lanes.rsi && (
+                  <div style={paramRow}><NumParam label="LEN" value={params.rsiP} min={2} max={100} onChange={setParam('rsiP')} /></div>
+                )}
+                {id === 'macd' && lanes.macd && (
+                  <div style={paramRow}>
+                    <NumParam label="F" value={params.macdF} min={2} max={50} onChange={setParam('macdF')} />
+                    <NumParam label="S" value={params.macdS} min={3} max={100} onChange={setParam('macdS')} />
+                    <NumParam label="SIG" value={params.macdSig} min={2} max={50} onChange={setParam('macdSig')} />
+                  </div>
+                )}
                 </div>
               )
             })}
@@ -1113,62 +1223,74 @@ export function ChartStudioContent() {
             // Global running index so pre-activation fallback colors stay
             // distinct across groups (active series read their real color).
             let idx = compares.length
-            return APP_OVERLAY_GROUPS(tf).map(g => (
-              <div key={g.group} style={{ padding: '11px 16px 9px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}><span style={eyebrow}>{g.group}</span><span style={{ fontFamily: MONO, fontSize: 8, color: '#3f5670' }}>{g.tag}</span></div>
+            return APP_OVERLAY_GROUPS(tf, params.hvP).map(g => (
+              <div key={g.group} style={{ padding: '11px 16px 9px', borderBottom: '1px solid var(--theme-border-faint, rgba(255,255,255,0.05))' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}><span style={eyebrow}>{g.group}</span><span style={{ fontFamily: MONO, fontSize: 8, color: 'var(--theme-secondary, #8099b0)' }}>{g.tag}</span></div>
                 {g.defs.map(d => {
                   const on = overlays.includes(d.id)
                   const empty = on && overlayQs.data && (overlayQs.data[d.id]?.length ?? 0) === 0 && !overlayQs.isFetching
-                  return <Row key={d.id} label={d.label} on={on} src={empty ? 'NO DATA' : d.src} color={overlayColor(d.id, idx++)} style={d.style} onToggle={() => dispatch({ type: 'overlay', id: d.id })} />
+                  return (
+                    <div key={d.id}>
+                      <Row label={d.label} on={on} src={empty ? 'NO DATA' : d.src} color={overlayColor(d.id, idx++)} style={d.style} onToggle={() => dispatch({ type: 'overlay', id: d.id })} />
+                      {on && d.id === 'hv30' && (
+                        <div style={paramRow}><NumParam label="WIN" value={params.hvP} min={5} max={252} onChange={setParam('hvP')} /></div>
+                      )}
+                      {on && <CfgChips label={d.label} cfg={cfgOf(d.id)} showPlace onPatch={p => dispatch({ type: 'layerCfg', id: d.id, patch: p })} />}
+                    </div>
+                  )
                 })}
               </div>
             ))
           })()}
 
-          <div style={{ padding: '11px 16px 9px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}><span style={eyebrow}>Compare tickers</span><span style={{ fontFamily: MONO, fontSize: 8, color: '#3f5670' }}>MKT</span></div>
+          <div style={{ padding: '11px 16px 9px', borderBottom: '1px solid var(--theme-border-faint, rgba(255,255,255,0.05))' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}><span style={eyebrow}>Compare tickers</span><span style={{ fontFamily: MONO, fontSize: 8, color: 'var(--theme-secondary, #8099b0)' }}>MKT</span></div>
             <div style={{ display: 'flex', gap: 5, margin: '4px 0 6px' }}>
               <input value={compareDraft} onChange={e => setCompareDraft(e.target.value.toUpperCase())} placeholder="QQQ"
                 onKeyDown={e => { if (e.key === 'Enter' && compareDraft.trim()) { dispatch({ type: 'addCompare', sym: compareDraft.trim() }); setCompareDraft('') } }}
                 spellCheck={false} aria-label="Add comparison ticker"
-                style={{ flex: 1, minWidth: 0, background: 'var(--theme-bg, #101c2e)', border: '1px solid rgba(255,255,255,0.14)', color: 'var(--theme-text, #d7e3fc)', fontFamily: MONO, fontSize: 11, padding: '3px 6px' }} />
+                style={{ flex: 1, minWidth: 0, background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.14))', color: 'var(--theme-text, #d7e3fc)', fontFamily: MONO, fontSize: 11, padding: '3px 6px' }} />
               <button className="cs-chip" onClick={() => { if (compareDraft.trim()) { dispatch({ type: 'addCompare', sym: compareDraft.trim() }); setCompareDraft('') } }}
-                style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, padding: '0 8px', cursor: 'pointer', background: 'transparent', color: 'var(--theme-secondary, #8099b0)', border: '1px solid rgba(255,255,255,0.14)' }}>ADD</button>
+                style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, padding: '0 8px', cursor: 'pointer', background: 'transparent', color: 'var(--theme-secondary, #8099b0)', border: '1px solid var(--theme-border, rgba(255,255,255,0.14))' }}>ADD</button>
             </div>
             {compares.map((s, i) => (
               <div key={s} className="cs-row" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}>
                 <span style={{ width: 10, height: 2, background: overlayColor(`cmp:${s}`, i), flex: 'none' }} />
                 <span style={{ fontFamily: MONO, fontSize: 11, color: 'var(--theme-text, #d7e3fc)' }}>{s}</span>
                 <button onClick={() => dispatch({ type: 'rmCompare', sym: s })} aria-label={`Remove ${s}`}
-                  style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontFamily: MONO, fontSize: 11, color: '#56708a' }}>x</button>
+                  style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontFamily: MONO, fontSize: 11, color: 'var(--theme-secondary, #8099b0)' }}>x</button>
               </div>
             ))}
           </div>
 
           <div style={{ padding: '11px 16px 9px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}><span style={eyebrow}>Timeline events</span><span style={{ fontFamily: MONO, fontSize: 8, color: '#3f5670' }}>yf</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}><span style={eyebrow}>Timeline events</span><span style={{ fontFamily: MONO, fontSize: 8, color: 'var(--theme-secondary, #8099b0)' }}>yf</span></div>
             <Row label="Earnings" on={events.earnings} src="yfinance" color="#c9a84c" style="ring" onToggle={() => dispatch({ type: 'event', k: 'earnings' })} />
             <Row label="Dividends" on={events.dividends} src="yfinance" color="#60a5fa" style="ring" onToggle={() => dispatch({ type: 'event', k: 'dividends' })} />
             <Row label="Splits" on={events.splits} src="yfinance" color="#c084fc" style="ring" onToggle={() => dispatch({ type: 'event', k: 'splits' })} />
-            <div style={{ fontFamily: SANS, fontSize: 9.5, color: '#3f5670', marginTop: 8, lineHeight: '13px' }}>
+            <div style={{ fontFamily: SANS, fontSize: 9.5, color: 'var(--theme-secondary, #8099b0)', marginTop: 8, lineHeight: '13px' }}>
               Layers share one timeline on their own scales. Line series ride the price panel, oscillators drop into lanes.
             </div>
           </div>
         </div>
+        )}
 
         {/* Chart column */}
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ padding: '7px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <span style={{ fontFamily: MONO, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.14em', color: '#56708a' }}>ACTIVE OVERLAYS</span>
+          <div style={{ padding: '7px 16px', borderBottom: '1px solid var(--theme-border-faint, rgba(255,255,255,0.06))', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <span style={{ fontFamily: MONO, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--theme-secondary, #8099b0)' }}>ACTIVE OVERLAYS</span>
             {activeLegend.length === 0 && (
-              <span style={{ fontFamily: SANS, fontSize: 9.5, color: '#3f5670' }}>None. Toggle layers in the left rail.</span>
+              <span style={{ fontFamily: SANS, fontSize: 9.5, color: 'var(--theme-secondary, #8099b0)' }}>None. Toggle layers in the left rail.</span>
             )}
             {activeLegend.map(l => (
               <span key={l.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                 <Glyph style={l.style} color={l.color} />
-                <span style={{ fontFamily: MONO, fontSize: 9.5, color: '#a9bacf' }}>{l.label}</span>
+                <span style={{ fontFamily: MONO, fontSize: 9.5, color: 'var(--theme-secondary, #a9bacf)' }}>{l.label}</span>
               </span>
             ))}
+            <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 8.5, letterSpacing: '0.08em', color: 'var(--theme-secondary, #8099b0)', whiteSpace: 'nowrap' }}>
+              BARS · REFRESH {INTRADAY.has(tf) ? '60S' : '5M'}{candlesQ.dataUpdatedAt ? ` · AS OF ${new Date(candlesQ.dataUpdatedAt).toLocaleTimeString('en-US', { hour12: false })}` : ''}
+            </span>
           </div>
 
           <div style={{ position: 'relative' }}>
@@ -1176,87 +1298,90 @@ export function ChartStudioContent() {
             {gexProfile && (
               <svg width={gexProfile.paneW} height={gexProfile.paneH} style={{ position: 'absolute', top: 0, left: 0, zIndex: 3, pointerEvents: 'none' }}>
                 {gexProfile.bars.map(b => (
-                  <rect key={b.strike} x={gexProfile.paneW - b.frac * 120} y={b.y - gexProfile.thick / 2}
-                    width={b.frac * 120} height={gexProfile.thick}
+                  <rect key={b.strike} x={gexProfile.paneW - b.frac * gexW} y={b.y - gexProfile.thick / 2}
+                    width={b.frac * gexW} height={gexProfile.thick}
                     fill={b.pos ? 'rgba(63,182,160,0.42)' : 'rgba(207,75,63,0.45)'} />
                 ))}
-                <text x={gexProfile.paneW - 4} y={12} textAnchor="end" fontFamily="var(--theme-mono)" fontSize={8.5} fontWeight={700} letterSpacing="0.1em" fill="#56708a">GEX BY STRIKE</text>
+                <text x={gexProfile.paneW - 4} y={12} textAnchor="end" fontFamily="var(--theme-mono)" fontSize={8.5} fontWeight={700} letterSpacing="0.1em" fill="var(--theme-secondary, #8099b0)">GEX BY STRIKE</text>
               </svg>
             )}
-            <div style={{ position: 'absolute', top: 8, left: 10, zIndex: 5, pointerEvents: 'none', background: 'rgba(10,14,22,0.74)', border: '1px solid rgba(255,255,255,0.08)', padding: '5px 11px', display: 'flex', gap: 10, fontFamily: MONO, fontSize: 10.5, flexWrap: 'wrap' }}>
-              {inspectC && (
-                <>
-                  <span style={{ color: 'var(--theme-text, #d7e3fc)', fontWeight: 700, whiteSpace: 'nowrap' }}>{ticker} · {tf.toUpperCase()}</span>
-                  <span style={{ color: '#8099b0', whiteSpace: 'nowrap' }}>O <b style={{ color: '#d7e3fc' }}>{inspectC.open.toFixed(2)}</b></span>
-                  <span style={{ color: '#8099b0', whiteSpace: 'nowrap' }}>H <b style={{ color: '#d7e3fc' }}>{inspectC.high.toFixed(2)}</b></span>
-                  <span style={{ color: '#8099b0', whiteSpace: 'nowrap' }}>L <b style={{ color: '#d7e3fc' }}>{inspectC.low.toFixed(2)}</b></span>
-                  <span style={{ color: '#8099b0', whiteSpace: 'nowrap' }}>C <b style={{ color: '#d7e3fc' }}>{inspectC.close.toFixed(2)}</b></span>
-                  <span style={{ color: pct >= 0 ? C.lanePos : C.laneNeg, fontWeight: 700, whiteSpace: 'nowrap' }}>{pct >= 0 ? '+' : ''}{pct.toFixed(2)}%</span>
-                </>
-              )}
-            </div>
             {candlesQ.isLoading && (
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(16,28,46,0.6)', zIndex: 6 }}>
-                <span style={{ fontFamily: MONO, fontSize: 10, letterSpacing: '0.14em', color: '#8099b0' }}>LOADING {ticker}…</span>
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'color-mix(in srgb, var(--theme-bg, #101c2e) 70%, transparent)', zIndex: 6 }}>
+                <span style={{ fontFamily: MONO, fontSize: 10, letterSpacing: '0.14em', color: 'var(--theme-secondary, #8099b0)' }}>LOADING {ticker}…</span>
               </div>
             )}
             {candlesQ.isError && !candlesQ.isLoading && (
               <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 6 }}>
-                <span style={{ fontFamily: SANS, fontSize: 11, color: '#8099b0' }}>No data for {ticker} at {tf.toUpperCase()}. Try another symbol or timeframe.</span>
+                <span style={{ fontFamily: SANS, fontSize: 11, color: 'var(--theme-secondary, #8099b0)' }}>No data for {ticker} at {tf.toUpperCase()}. Try another symbol or timeframe.</span>
               </div>
             )}
           </div>
 
           {laneOrder.map(id => LANE_DEFS.find(l => l.id === id)!).map(lane => {
-            const on = lanes[lane.id]
+            const on = lane.id === 'overlays' ? laneOverlayCount > 0 : lanes[lane.id]
             const header = lane.id === 'iv'
-              ? <>{ivLane.kind === 'rank' ? 'IV RANK' : 'ATM IV30'}{ivLane.pts.length < 30 && <span style={{ color: '#3f5670' }}> · accrues daily</span>}</>
+              ? <>{ivLane.kind === 'rank' ? 'IV RANK' : 'ATM IV30'}{ivLane.pts.length < 30 && <span style={{ color: 'var(--theme-secondary, #8099b0)' }}> · {ivLane.pts.length} pt{ivLane.pts.length === 1 ? '' : 's'} · accrues daily</span>}</>
               : lane.id === 'rsi' ? `RSI ${params.rsiP}` : lane.id === 'macd' ? `MACD ${params.macdF}·${params.macdS}·${params.macdSig}` : lane.label
             return (
-              <div key={lane.id} style={{ display: on ? 'block' : 'none', borderTop: '1px solid rgba(255,255,255,0.06)', position: 'relative' }}>
-                <span style={{ position: 'absolute', top: 4, left: 10, zIndex: 5, fontFamily: MONO, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.16em', color: '#56708a' }}>{header}</span>
+              <div key={lane.id} style={{ display: on ? 'block' : 'none', borderTop: '1px solid var(--theme-border-faint, rgba(255,255,255,0.06))', position: 'relative' }}>
+                <span style={{ position: 'absolute', top: 4, left: 10, zIndex: 5, fontFamily: MONO, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.16em', color: 'var(--theme-secondary, #8099b0)' }}>{header}</span>
                 <div ref={el => { laneRefs.current[lane.id] = el }} style={{ width: '100%' }} />
               </div>
             )
           })}
 
-          {/* Minimap */}
-          <div style={{ borderTop: '1px solid rgba(201,168,76,0.28)', position: 'relative' }}
-            onPointerMove={onMiniPointerMove} onPointerUp={onMiniPointerUp}>
-            <div ref={miniRef} style={{ width: '100%' }} />
-            {windowBox && (
-              <>
-                <div onPointerDown={onMiniPointerDown('pan')} role="slider" aria-label="Visible range" aria-valuenow={Math.round(windowBox.left)}
-                  style={{ position: 'absolute', top: 0, bottom: 0, left: `${windowBox.left}%`, width: `${windowBox.width}%`, background: 'rgba(201,168,76,0.08)', border: '1px solid rgba(201,168,76,0.5)', cursor: 'grab', zIndex: 4 }} />
-                <div onPointerDown={onMiniPointerDown('left')} role="slider" aria-label="Range start" aria-valuenow={Math.round(windowBox.left)} style={{ position: 'absolute', top: 0, bottom: 0, left: `calc(${windowBox.left}% - 3px)`, width: 7, cursor: 'ew-resize', zIndex: 5 }} />
-                <div onPointerDown={onMiniPointerDown('right')} role="slider" aria-label="Range end" aria-valuenow={Math.round(windowBox.left + windowBox.width)} style={{ position: 'absolute', top: 0, bottom: 0, left: `calc(${windowBox.left + windowBox.width}% - 3px)`, width: 7, cursor: 'ew-resize', zIndex: 5 }} />
-              </>
-            )}
-          </div>
         </div>
 
         {/* Right inspector */}
-        <div style={{ width: 188, flex: 'none', background: 'var(--theme-surface, #0d1826)', borderLeft: '1px solid rgba(255,255,255,0.08)' }}>
+        {!inspectorOpen ? (
+          <button onClick={() => dispatch({ type: 'toggleInspector' })} aria-label="Expand readout inspector"
+            style={{ width: 26, flex: 'none', background: 'var(--theme-surface, #0d1826)', border: 'none', borderLeft: '1px solid var(--theme-border, rgba(255,255,255,0.08))', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 10, gap: 10 }}>
+            <ChevronLeft size={12} color="var(--theme-secondary, #8099b0)" />
+            <span style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, letterSpacing: '0.18em', color: 'var(--theme-secondary, #8099b0)', writingMode: 'vertical-rl' }}>READOUT</span>
+          </button>
+        ) : (
+        <div style={{ width: 188, flex: 'none', background: 'var(--theme-surface, #0d1826)', borderLeft: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
           <div style={{ padding: '10px 12px 8px', borderBottom: '1px solid rgba(201,168,76,0.3)', background: 'rgba(201,168,76,0.05)' }}>
-            <div style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', color: '#56708a' }}>READOUT AT CROSSHAIR</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--theme-secondary, #8099b0)' }}>READOUT AT CROSSHAIR</span>
+              <button onClick={() => dispatch({ type: 'toggleInspector' })} aria-label="Collapse readout inspector"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex' }}>
+                <ChevronRight size={11} color="var(--theme-secondary, #8099b0)" />
+              </button>
+            </div>
             <div style={{ fontFamily: MONO, fontSize: 13, fontWeight: 700, color: 'var(--theme-primary, #c9a84c)', marginTop: 3 }}>{dateOf(inspectT) || '—'}</div>
-            {barIdx >= 0 && <div style={{ fontFamily: MONO, fontSize: 9, color: '#8099b0', marginTop: 1 }}>bar {barIdx + 1} / {candles.length}</div>}
+            {barIdx >= 0 && <div style={{ fontFamily: MONO, fontSize: 9, color: 'var(--theme-secondary, #8099b0)', marginTop: 1 }}>bar {barIdx + 1} / {candles.length}</div>}
           </div>
           {inspectorGroups.map(g => (
-            <div key={g.group} style={{ padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-              <div style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#56708a', marginBottom: 4 }}>{g.group}</div>
+            <div key={g.group} style={{ padding: '8px 12px', borderBottom: '1px solid var(--theme-border-faint, rgba(255,255,255,0.05))' }}>
+              <div style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)', marginBottom: 4 }}>{g.group}</div>
               {g.rows.map(r => (
                 <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, lineHeight: '17px' }}>
-                  <span style={{ fontFamily: SANS, fontSize: 10, color: '#7f97af', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.label}</span>
+                  <span style={{ fontFamily: SANS, fontSize: 10, color: 'var(--theme-secondary, #7f97af)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.label}</span>
                   <span style={{ fontFamily: MONO, fontSize: 10.5, fontWeight: 600, color: r.color, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{r.value}</span>
                 </div>
               ))}
             </div>
           ))}
-          <div style={{ padding: '8px 12px', fontFamily: SANS, fontSize: 9, color: '#3f5670', lineHeight: '12px' }}>
+          <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--theme-border-faint, rgba(255,255,255,0.05))' }}>
+            <div style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)', marginBottom: 4 }}>Feed cadence</div>
+            {[
+              { label: `Candles ${tf.toUpperCase()}`, value: INTRADAY.has(tf) ? 'refresh 60s' : 'refresh 5m' },
+              ...(ind.gexProfile || ind.gflip ? [{ label: 'Dealer GEX', value: '30m cache' }] : []),
+              ...(lanes.iv ? [{ label: 'IV rank', value: 'daily snapshot' }] : []),
+              ...activeOverlayDefs.map(d => ({ label: d.label, value: d.cadence })),
+            ].map(r => (
+              <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, lineHeight: '17px' }}>
+                <span style={{ fontFamily: SANS, fontSize: 10, color: 'var(--theme-secondary, #7f97af)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.label}</span>
+                <span style={{ fontFamily: MONO, fontSize: 9, color: 'var(--theme-secondary, #8099b0)', whiteSpace: 'nowrap' }}>{r.value}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ padding: '8px 12px', fontFamily: SANS, fontSize: 9, color: 'var(--theme-secondary, #8099b0)', lineHeight: '12px' }}>
             Values resolve at the crosshair timestamp. Monthly and quarterly feeds carry forward.
           </div>
         </div>
+        )}
       </div>
     </div>
   )
