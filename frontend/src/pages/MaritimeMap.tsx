@@ -515,7 +515,9 @@ export function MaritimeMapContent() {
   const inspectedVessel = inspected?.kind === 'vessel' ? allVessels.find(v => v.mmsi === inspected.id) : undefined
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '84vh', minHeight: 680, border: '1px solid var(--theme-border)' }}>
+    // Fill the viewport (Layout adds 16px py gutters): the disclaimer footer
+    // lands below the fold and only appears on scroll.
+    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 32px)', minHeight: 680, border: '1px solid var(--theme-border)' }}>
       <style>{`
         .gfm-map { background: var(--theme-bg); }
         .gfm-chip:hover { border-color: ${GOLD} !important; color: ${TEXT} !important; }
@@ -651,8 +653,11 @@ export function MaritimeMapContent() {
           </span>
         </motion.div>
 
-        {/* ── View panel ── */}
-        <motion.div {...mv(0.05)} style={{ position: 'absolute', top: 62, left: 14, zIndex: 520, width: 218, background: panelBg(), border: neutralBorder }}>
+        {/* ── Left column: view panel on top, legend pinned to the bottom.
+             One flex column so the two can never overlap on short screens —
+             each scrolls internally instead. ── */}
+        <div style={{ position: 'absolute', top: 62, left: 14, bottom: 14, zIndex: 520, width: 218, display: 'flex', flexDirection: 'column', gap: 8, pointerEvents: 'none' }}>
+        <motion.div {...mv(0.05)} style={{ flex: '0 1 auto', minHeight: 0, overflowY: 'auto', pointerEvents: 'auto', background: panelBg(), border: neutralBorder }}>
           <div style={{ padding: '12px 14px 4px' }}>
             <div style={{ ...eyebrow, marginBottom: 6 }}>View</div>
             {PRESET_LABELS.map(p => {
@@ -689,8 +694,26 @@ export function MaritimeMapContent() {
           </div>
         </motion.div>
 
-        {/* ── Search command bar + mode pills ── */}
-        <div style={{ position: 'absolute', top: 14, left: 246, right: 324, zIndex: 540, display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
+        {legendGroups.length > 0 && (
+          <div style={{ marginTop: 'auto', flex: '0 1 auto', minHeight: 0, overflowY: 'auto', pointerEvents: 'auto', padding: '10px 13px', background: panelBg(0.92), border: neutralBorder }}>
+            <div style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', color: TEXT, marginBottom: 7 }}>LEGEND</div>
+            {legendGroups.map(g => (
+              <div key={g.group} style={{ marginBottom: 7 }}>
+                <div style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: MUTED, marginBottom: 3 }}>{g.group}</div>
+                {g.items.map(it => (
+                  <div key={it.label} style={{ display: 'flex', alignItems: 'center', gap: 8, lineHeight: '16px' }}>
+                    <span style={{ width: 20, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={it.glyph} /></span>
+                    <span style={{ fontFamily: SANS, fontSize: 10.5, color: SEC }}>{it.label}</span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+        </div>
+
+        {/* ── Search command bar + mode pills (left offset clears the brand chip) ── */}
+        <div style={{ position: 'absolute', top: 14, left: 348, right: 324, zIndex: 540, display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
         <motion.div {...mv(0.1)} style={{ width: 'min(520px, 100%)', pointerEvents: 'auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 13px', background: panelBg(), border: goldBorder(0.4) }}>
             <span style={{ fontFamily: MONO, fontSize: 12, color: GOLD }}>&gt;</span>
@@ -835,26 +858,9 @@ export function MaritimeMapContent() {
         )}
         </div>
 
-        {/* ── Bottom chrome: legend left, scrubber + history center, replay right.
-             One flex row so the panels can never overlap. ── */}
-        <div style={{ position: 'absolute', left: 14, right: 14, bottom: 14, zIndex: 540, display: 'flex', alignItems: 'flex-end', gap: 10, pointerEvents: 'none' }}>
-        {legendGroups.length > 0 && (
-          <div style={{ flex: 'none', pointerEvents: 'auto', maxHeight: '38vh', overflowY: 'auto', minWidth: 172, padding: '10px 13px', background: panelBg(0.92), border: neutralBorder }}>
-            <div style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', color: TEXT, marginBottom: 7 }}>LEGEND</div>
-            {legendGroups.map(g => (
-              <div key={g.group} style={{ marginBottom: 7 }}>
-                <div style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: MUTED, marginBottom: 3 }}>{g.group}</div>
-                {g.items.map(it => (
-                  <div key={it.label} style={{ display: 'flex', alignItems: 'center', gap: 8, lineHeight: '16px' }}>
-                    <span style={{ width: 20, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={it.glyph} /></span>
-                    <span style={{ fontFamily: SANS, fontSize: 10.5, color: SEC }}>{it.label}</span>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        )}
-
+        {/* ── Bottom chrome: scrubber + history center, replay right. Offset
+             past the left column so it can never slide under the legend. ── */}
+        <div style={{ position: 'absolute', left: 246, right: 14, bottom: 14, zIndex: 540, display: 'flex', alignItems: 'flex-end', gap: 10, pointerEvents: 'none' }}>
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
         {histOpen && (
           <div style={{ width: 'min(1020px, 100%)', pointerEvents: 'auto' }}>
