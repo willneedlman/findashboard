@@ -50,42 +50,6 @@ function Panel({ title, note, children }: { title: string; note?: string; childr
   )
 }
 
-type GRow = { label: string; asset_class: string; price: number; change_pct: number | null; currency: string | null; source: string }
-
-function fmtBoardPrice(v: number): string {
-  if (Math.abs(v) >= 1000) return v.toLocaleString('en-US', { maximumFractionDigits: 0 })
-  if (Math.abs(v) >= 1) return v.toFixed(2)
-  return v.toFixed(4)
-}
-
-function GlobalMarkets() {
-  const { data } = useQuery({
-    queryKey: ['global-markets'],
-    queryFn: () => axios.get('/api/market/global').then(r => r.data as { rows: GRow[]; budget: { remaining: number } }),
-    staleTime: 5 * 60_000,
-  })
-  if (!data?.rows?.length) return null
-  const gf = data.rows.filter(r => r.source === 'google_finance').length
-  return (
-    <Panel title="Global Markets" note={`Google Finance ${gf}/${data.rows.length} live · ${data.budget.remaining} calls left`}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 1, background: T.border }}>
-        {data.rows.map(r => {
-          const c = r.change_pct == null ? T.muted : r.change_pct >= 0 ? T.pos : T.neg
-          return (
-            <div key={r.label} style={{ flex: '1 1 150px', background: T.surface, padding: '9px 13px' }}>
-              <div style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.label}</div>
-              <div style={{ fontFamily: T.mono, fontSize: 15, fontWeight: 700, color: T.text, marginTop: 3 }}>{fmtBoardPrice(r.price)}</div>
-              <div style={{ fontFamily: T.mono, fontSize: 11, color: c, marginTop: 2 }}>
-                {r.change_pct == null ? '—' : `${r.change_pct >= 0 ? '+' : ''}${r.change_pct.toFixed(2)}%`}
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    </Panel>
-  )
-}
-
 export function EconomyMonitorContent() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['rates-economy'],
@@ -106,7 +70,6 @@ export function EconomyMonitorContent() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <GlobalMarkets />
       {/* Stat strip */}
       <div style={{ display: 'flex', border: `1px solid ${T.border}`, background: T.surface, flexWrap: 'wrap' }}>
         <Stat label="Unemployment" value={u.value != null ? `${u.value.toFixed(1)}%` : '—'}

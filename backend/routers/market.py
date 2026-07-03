@@ -11,57 +11,138 @@ import serpapi_finance
 router = APIRouter()
 
 
-# Cross-asset board for the global overview. Google Finance is the primary source
-# (its strength is breadth across indices/FX/crypto/commodities); each row falls
-# back to its yfinance symbol when the SerpAPI budget is spent or a query misses.
-# (label, asset_class, google_finance_query, yfinance_symbol)
-GLOBAL_BOARD = [
-    ("S&P 500",     "Index",     ".INX:INDEXSP",       "^GSPC"),
-    ("Dow Jones",   "Index",     ".DJI:INDEXDJX",      "^DJI"),
-    ("Nasdaq",      "Index",     ".IXIC:INDEXNASDAQ",  "^IXIC"),
-    ("VIX",         "Index",     "VIX:INDEXCBOE",      "^VIX"),
-    ("FTSE 100",    "Intl",      ".FTSE:INDEXFTSE",    "^FTSE"),
-    ("Nikkei 225",  "Intl",      ".N225:INDEXNIKKEI",  "^N225"),
-    ("EUR / USD",   "FX",        "EUR-USD",            "EURUSD=X"),
-    ("USD / JPY",   "FX",        "USD-JPY",            "JPY=X"),
-    ("Bitcoin",     "Crypto",    "BTC-USD",            "BTC-USD"),
-    ("Ethereum",    "Crypto",    "ETH-USD",            "ETH-USD"),
-    ("Gold (GLD)",  "Commodity", "GLD:NYSEARCA",       "GLD"),
-    ("Crude (USO)", "Commodity", "USO:NYSEARCA",       "USO"),
+# Global Markets board: major stock indices by region, FX, commodities, US
+# yields, and crypto. One batched yfinance download for all symbols (single
+# HTTP call, respects the concurrency budget), endpoint-cached 5 minutes.
+GLOBAL_MARKETS_BOARD: list[tuple[str, str, str]] = [
+    # (section, label, yfinance symbol)
+    ("Americas", "S&P 500", "^GSPC"), ("Americas", "Nasdaq", "^IXIC"),
+    ("Americas", "Dow Jones", "^DJI"), ("Americas", "Russell 2000", "^RUT"),
+    ("Americas", "VIX", "^VIX"), ("Americas", "TSX (Canada)", "^GSPTSE"),
+    ("Americas", "Bovespa (Brazil)", "^BVSP"), ("Americas", "IPC (Mexico)", "^MXX"),
+    ("Europe", "FTSE 100 (UK)", "^FTSE"), ("Europe", "DAX (Germany)", "^GDAXI"),
+    ("Europe", "CAC 40 (France)", "^FCHI"), ("Europe", "Euro Stoxx 50", "^STOXX50E"),
+    ("Europe", "IBEX 35 (Spain)", "^IBEX"), ("Europe", "SMI (Switzerland)", "^SSMI"),
+    ("Europe", "AEX (Netherlands)", "^AEX"), ("Europe", "FTSE MIB (Italy)", "FTSEMIB.MI"),
+    ("Asia-Pacific", "Nikkei 225 (Japan)", "^N225"), ("Asia-Pacific", "Hang Seng (HK)", "^HSI"),
+    ("Asia-Pacific", "Shanghai Composite", "000001.SS"), ("Asia-Pacific", "CSI 300 (China)", "000300.SS"),
+    ("Asia-Pacific", "KOSPI (Korea)", "^KS11"), ("Asia-Pacific", "TAIEX (Taiwan)", "^TWII"),
+    ("Asia-Pacific", "Nifty 50 (India)", "^NSEI"), ("Asia-Pacific", "ASX 200 (Australia)", "^AXJO"),
+    ("Asia-Pacific", "STI (Singapore)", "^STI"),
+    ("FX", "DXY (Dollar index)", "DX-Y.NYB"), ("FX", "EUR / USD", "EURUSD=X"),
+    ("FX", "USD / JPY", "JPY=X"), ("FX", "GBP / USD", "GBPUSD=X"),
+    ("FX", "USD / CNY", "CNY=X"), ("FX", "USD / CHF", "CHF=X"),
+    ("FX", "AUD / USD", "AUDUSD=X"), ("FX", "USD / CAD", "CAD=X"),
+    ("FX", "USD / MXN", "MXN=X"), ("FX", "USD / INR", "INR=X"),
+    ("Commodities", "WTI Crude", "CL=F"), ("Commodities", "Brent Crude", "BZ=F"),
+    ("Commodities", "Natural Gas", "NG=F"), ("Commodities", "Gold", "GC=F"),
+    ("Commodities", "Silver", "SI=F"), ("Commodities", "Copper", "HG=F"),
+    ("Commodities", "Platinum", "PL=F"), ("Commodities", "Wheat", "ZW=F"),
+    ("Commodities", "Corn", "ZC=F"), ("Commodities", "Soybeans", "ZS=F"),
+    ("US Yields", "13-week", "^IRX"), ("US Yields", "2-year", "2YY=F"),
+    ("US Yields", "5-year", "^FVX"), ("US Yields", "10-year", "^TNX"),
+    ("US Yields", "30-year", "^TYX"),
+    ("Crypto", "Bitcoin", "BTC-USD"), ("Crypto", "Ethereum", "ETH-USD"),
+    ("Crypto", "Solana", "SOL-USD"),
 ]
+_GLOBAL_SECTIONS = ["Americas", "Europe", "Asia-Pacific", "FX", "Commodities", "US Yields", "Crypto"]
 
 
-def _yf_quote(sym: str) -> dict | None:
-    """Price + 1-day percent change from cached yfinance history."""
-    try:
-        hist = _cached_history(sym, period="5d")
-        closes = hist["Close"].dropna()
-        if closes.empty:
-            return None
-        price = float(closes.iloc[-1])
-        pct = float((closes.iloc[-1] / closes.iloc[-2] - 1) * 100) if len(closes) >= 2 else None
-        return {"price": round(price, 4), "change_pct": round(pct, 2) if pct is not None else None, "currency": None}
-    except Exception:
-        return None
+@router.get("/global-board")
+@cached(ttl=300)
+def global_board(date: str | None = None):
+    """Global Markets tool: indices, FX, commodities, yields, crypto with a
+    10-session sparkline each. One batched download, no per-symbol calls.
 
-
-@router.get("/global")
-def global_markets():
-    """Cross-asset overview board. Google-Finance-first, yfinance fallback."""
-    rows = []
-    for label, cls, gf_query, yf_sym in GLOBAL_BOARD:
-        q = serpapi_finance.quote(gf_query, ttl=86400) if serpapi_finance.available() else None
-        source = "google_finance"
-        if not q:
-            q = _yf_quote(yf_sym)
-            source = "yfinance"
-        if q:
-            rows.append({
-                "label": label, "asset_class": cls,
-                "price": q["price"], "change_pct": q.get("change_pct"),
-                "currency": q.get("currency"), "source": source,
+    With ?date=YYYY-MM-DD, each row shows that session's close and change.
+    Markets with no print on that date (closed, or not yet settled) keep their
+    row but return null price/change so the UI shows a dash: pick today before
+    the US close and US indices dash while Asia and crypto have values."""
+    import datetime as _dt
+    target = None
+    if date:
+        try:
+            target = _dt.date.fromisoformat(date)
+        except ValueError:
+            raise HTTPException(400, "date must be YYYY-MM-DD")
+        if target > _dt.date.today():
+            raise HTTPException(400, "date cannot be in the future")
+    anchor = target or _dt.date.today()
+    end = (anchor + _dt.timedelta(days=1)).isoformat()
+    start = (anchor - _dt.timedelta(days=20)).isoformat()
+    syms = tuple(s for _, _, s in GLOBAL_MARKETS_BOARD)
+    df = get_download(syms, start, end, "1d")
+    closes = df.get("Close") if not df.empty else None
+    sections: dict[str, list] = {s: [] for s in _GLOBAL_SECTIONS}
+    # Yahoo's daily-bar feed lags for non-US indices (Asia's completed session
+    # can be missing for hours). For today's session, rows with no daily bar
+    # get patched from one batched intraday download instead of dashing.
+    pending: list[tuple[dict, pd.Series, str]] = []
+    for section, label, sym in GLOBAL_MARKETS_BOARD:
+        try:
+            s = closes[sym].dropna() if closes is not None and sym in closes else None
+            if s is None or s.empty:
+                continue
+            if target is not None:
+                on_day = s[[d == target for d in s.index.date]]
+                before = s[[d < target for d in s.index.date]]
+                if on_day.empty:
+                    row = {
+                        "label": label, "symbol": sym, "price": None,
+                        "change_pct": None, "change_abs": None,
+                        "spark": [round(float(v), 4) for v in before.tail(10)],
+                    }
+                    sections[section].append(row)
+                    if target == _dt.date.today():
+                        pending.append((row, before, sym))
+                    continue
+                price = float(on_day.iloc[-1])
+                prev = float(before.iloc[-1]) if not before.empty else None
+                spark_src = s[[d <= target for d in s.index.date]]
+            else:
+                price = float(s.iloc[-1])
+                prev = float(s.iloc[-2]) if len(s) >= 2 else None
+                spark_src = s
+            pct = round((price / prev - 1) * 100, 2) if prev else None
+            chg = round(price - prev, 4) if prev is not None else None
+            sections[section].append({
+                "label": label, "symbol": sym, "price": round(price, 4),
+                "change_pct": pct, "change_abs": chg,
+                "spark": [round(float(v), 4) for v in spark_src.tail(10)],
             })
-    return {"rows": rows, "budget": serpapi_finance.budget_status()}
+        except Exception:
+            continue
+    if pending:
+        try:
+            intr = get_download(
+                tuple(sym for _, _, sym in pending),
+                (anchor - _dt.timedelta(days=1)).isoformat(), end, "60m",
+            )
+            icloses = intr.get("Close") if not intr.empty else None
+            for row, before, sym in pending:
+                if icloses is None:
+                    break
+                bars = icloses[sym] if sym in icloses else (
+                    icloses if len(pending) == 1 else None)
+                if bars is None:
+                    continue
+                bars = bars.dropna()
+                bars = bars[[d.date() == target for d in bars.index]]
+                if bars.empty:
+                    continue
+                price = float(bars.iloc[-1])
+                prev = float(before.iloc[-1]) if not before.empty else None
+                row["price"] = round(price, 4)
+                row["change_pct"] = round((price / prev - 1) * 100, 2) if prev else None
+                row["change_abs"] = round(price - prev, 4) if prev is not None else None
+                row["spark"] = [round(float(v), 4) for v in before.tail(9)] + [round(price, 4)]
+        except Exception:
+            pass
+    return {
+        "sections": [{"name": n, "rows": sections[n]} for n in _GLOBAL_SECTIONS if sections[n]],
+        "as_of": pd.Timestamp.utcnow().isoformat(),
+        "date": target.isoformat() if target else None,
+    }
 
 
 @router.get("/quote/{ticker}")
