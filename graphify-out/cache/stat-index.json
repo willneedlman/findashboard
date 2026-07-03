@@ -1514,11 +1514,6 @@
     "mtime_ns": 1782181855362660799,
     "hash": "15ac52a87bfa0fd1078719baa5491a2ca8f5e70d4ffac1d4e5fa6c977197ff80"
   },
-  "/Users/willneedlman/finance_dashboard/settings-snap.md": {
-    "size": 2360,
-    "mtime_ns": 1781392842670982735,
-    "hash": "aaf22eec2784803c1bbbca0936652d08db7f99de5dc98f6a4e90024c0702c838"
-  },
   "/Users/willneedlman/finance_dashboard/backend/data/treasury_companies.json": {
     "size": 2720,
     "mtime_ns": 1781397067870181978,
@@ -1825,9 +1820,9 @@
     "hash": "2b1ea2a7554cd85bc1b0c06b0201c6c360238334bb764723b4e4d6c4c83ba0d7"
   },
   "/Users/willneedlman/finance_dashboard/backend/sentiment/lexicon.py": {
-    "size": 39683,
-    "mtime_ns": 1783115191845704132,
-    "hash": "013bcd49ed3820a2b638e63982f3434745f5d715b17912e61c1aa3342e3ae8d1"
+    "size": 39960,
+    "mtime_ns": 1783117254546684080,
+    "hash": "a85084c8f220c669ebd47cdc764ab38204b086a83e9bb40739744beac29200d7"
   },
   "/Users/willneedlman/finance_dashboard/backend/sentiment/engine.py": {
     "size": 11711,
@@ -1875,9 +1870,9 @@
     "hash": "9d645659162ab0edc8465edca8b57236d0548385e5f6d11f3a04d1931dc052e8"
   },
   "/Users/willneedlman/finance_dashboard/backend/tests/test_sentiment.py": {
-    "size": 14348,
-    "mtime_ns": 1783115220978853435,
-    "hash": "1637de0652028791ad865710eb42ba3a800f607b29ad3739f4c1facea428aa86"
+    "size": 14594,
+    "mtime_ns": 1783117276832638739,
+    "hash": "c31f5f860c5812ced82ca44d8de4a704ce1ebcd64a94c4d00b4642409b1da2ae"
   },
   "/Users/willneedlman/finance_dashboard/requirements-dev.txt": {
     "size": 136,
@@ -2175,9 +2170,9 @@
     "hash": "868ad70a060a550ae816a0e6754ecee142fd172077f312925b610d34df09c4d9"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/components/MarketSessions.tsx": {
-    "size": 7298,
-    "mtime_ns": 1782933981122099087,
-    "hash": "713d0f96e32fddade5c88a34589c581f7a89d6b25f0285f2f545ad156bf9525b"
+    "size": 7827,
+    "mtime_ns": 1783117977966553105,
+    "hash": "128997eede3b62346aa128e35da6aa557423d799b4307c219e6b49de6dc325e1"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/components/dashboard/widgets/MarketHoursWidget.tsx": {
     "size": 1193,
@@ -2185,24 +2180,24 @@
     "hash": "400e005be979935b5f08a3d0691e3bc2090947a6ff0e44ca4df961c27ce09e80"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/lib/marketHours.ts": {
-    "size": 10248,
-    "mtime_ns": 1782916606707418997,
-    "hash": "f4c5684839ca6f8acc3d698e8713e56e4ad77d80240faf53a24724b2c9c048da"
+    "size": 12817,
+    "mtime_ns": 1783118035506856578,
+    "hash": "4be24f97b53fa31c48570998f631d02ce0353a2940340a8ad0714e06850352bf"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/MarketHours.tsx": {
-    "size": 3340,
-    "mtime_ns": 1782933991340239383,
-    "hash": "f96be36ddaea842ddcd82e6537f739599a5ef80e87210d7a7b3e0220d5296ffe"
+    "size": 3460,
+    "mtime_ns": 1783118159995720788,
+    "hash": "f9c1a92d6ff99d270df3cb1e298808f3f81cf91813b41c3bd2488c5b4f081e2f"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/components/MarketDial.tsx": {
-    "size": 6675,
-    "mtime_ns": 1783059961750248570,
-    "hash": "ef05c55c7d11af9f8377747e631ea67be470e37baa1754a4b68c116a5741966b"
+    "size": 6862,
+    "mtime_ns": 1783117987750021517,
+    "hash": "f3de996a1ade199e37fb432b825d74225bb57d24957a0f9b0ebd7853a0c0816c"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/components/MarketClockMini.tsx": {
-    "size": 6570,
-    "mtime_ns": 1782916549964702658,
-    "hash": "1c3f363af0c80c0410bd97cf8f1806af412d364c6d0c7d3528a8958e5dfabb9c"
+    "size": 6727,
+    "mtime_ns": 1783118010232703616,
+    "hash": "e8efafb876bc884e85d868d35fd382f423aa0c973dfc2e342d8138c934db7e2d"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/components/ToolTabs.tsx": {
     "size": 1229,
@@ -2323,5 +2318,10 @@
     "size": 18468,
     "mtime_ns": 1783116338073040912,
     "hash": "d695477cabee61cdce44bfcb4292b7b944c9f36362644f3c3e8e4dd440f9d229"
+  },
+  "/Users/willneedlman/finance_dashboard/frontend/src/lib/marketHolidays.ts": {
+    "size": 11859,
+    "mtime_ns": 1783117851448629803,
+    "hash": "dbb215ae115a5737cb646e1b8336b0f28aba05be6b613b147d224ae9ab84b421"
   }
 }

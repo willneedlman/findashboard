@@ -2,7 +2,7 @@
 source_file: "frontend/src/lib/marketHours.ts"
 type: "code"
 community: "Frontend"
-location: "6"
+location: "9"
 tags:
   - graphify/code
   - graphify/EXTRACTED

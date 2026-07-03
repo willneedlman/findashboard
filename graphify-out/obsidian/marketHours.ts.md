@@ -22,6 +22,8 @@ tags:
 - [[frontend_src_lib_markethours_ts_localparts]] - `contains` [EXTRACTED]
 - [[frontend_src_lib_markethours_ts_marketstatus]] - `contains` [EXTRACTED]
 - [[frontend_src_lib_markethours_ts_daysegments]] - `contains` [EXTRACTED]
+- [[frontend_src_lib_markethours_ts_effectivedaysegments]] - `contains` [EXTRACTED]
+- [[frontend_src_lib_markethours_ts_todaysegments]] - `contains` [EXTRACTED]
 - [[frontend_src_lib_markethours_ts_phase_label]] - `contains` [EXTRACTED]
 - [[frontend_src_lib_markethours_ts_phase_color]] - `contains` [EXTRACTED]
 - [[frontend_src_lib_markethours_ts_phase_opacity]] - `contains` [EXTRACTED]
@@ -30,7 +32,5 @@ tags:
 - [[frontend_src_lib_markethours_ts_tzoffsetminutes]] - `contains` [EXTRACTED]
 - [[frontend_src_lib_markethours_ts_splitwrap]] - `contains` [EXTRACTED]
 - [[frontend_src_lib_markethours_ts_utcarcs]] - `contains` [EXTRACTED]
-- [[frontend_src_lib_markethours_ts_utcnowhours]] - `contains` [EXTRACTED]
-- [[frontend_src_lib_markethours_ts_countdown]] - `contains` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend
