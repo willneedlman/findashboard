@@ -334,6 +334,16 @@ _LEXICON: dict[str, tuple[float, float]] = {
     # Trade / geopolitics
     "trade war": (-0.70, 1.3), "trade deal": (0.55, 1.2), "tariff": (-0.55, 1.2),
     "tariffs": (-0.55, 1.2), "sanctions": (-0.45, 1.0), "war": (-0.60, 1.2),
+    # Sanctions EASING is de-escalation, not risk. Longest-first matching lets
+    # these phrases claim the tokens before the bare bearish "sanctions" term.
+    "sanctions waiver": (0.25, 1.0), "sanctions waivers": (0.25, 1.0),
+    "sanctions relief": (0.30, 1.0), "sanctions lifted": (0.35, 1.0),
+    "sanctions eased": (0.30, 1.0), "sanctions exemption": (0.25, 0.9),
+    "sanctions exemptions": (0.25, 0.9),
+    "lift sanctions": (0.30, 1.0), "lifts sanctions": (0.30, 1.0),
+    "lifting sanctions": (0.30, 1.0), "ease sanctions": (0.30, 1.0),
+    "eases sanctions": (0.30, 1.0), "easing sanctions": (0.30, 1.0),
+    "waive sanctions": (0.25, 1.0), "waives sanctions": (0.25, 1.0),
     "conflict": (-0.45, 1.0), "geopolitical": (-0.40, 1.0), "supply shock": (-0.60, 1.2),
     "tensions": (-0.35, 0.9), "tension": (-0.35, 0.9), "tensions ease": (0.40, 1.0),
     "tensions fade": (0.40, 1.0), "fears fade": (0.40, 1.0), "fears ease": (0.40, 1.0),
@@ -423,7 +433,7 @@ _MOVEMENT: dict[str, float] = {
     "soars": 0.65, "soar": 0.65, "soaring": 0.65, "surge": 0.55, "surges": 0.55, "surging": 0.55,
     "jumps": 0.45, "jump": 0.45, "jumping": 0.45, "rallies": 0.60, "rebounds": 0.55, "rebounding": 0.55,
     "climbs": 0.35, "climb": 0.35, "climbing": 0.35, "gains": 0.30, "rises": 0.30, "rise": 0.30,
-    "rising": 0.30, "advances": 0.35, "higher": 0.35, "lifts": 0.40, "buoys": 0.45, "boosts": 0.45,
+    "rising": 0.30, "advances": 0.35, "advance": 0.35, "higher": 0.35, "lifts": 0.40, "buoys": 0.45, "boosts": 0.45,
     "boost": 0.40, "recovers": 0.40, "rebound": 0.50,
     "plummets": -0.70, "plummet": -0.70, "tanks": -0.65, "plunges": -0.65, "plunge": -0.65,
     "plunging": -0.65, "tumbles": -0.60, "tumble": -0.60, "tumbling": -0.60, "slumps": -0.60,
@@ -440,9 +450,44 @@ _BAD_UP_TOKENS: frozenset[str] = frozenset({
     "oil", "crude", "brent", "gas", "gasoline", "gold", "rate", "rates",
     "deficit", "debt", "default", "defaults", "premium", "spread", "spreads",
 })
+# Subjects whose direction is ambiguous for equities: a falling dollar is not
+# bearish for stocks (often the opposite). Movement verbs scoped to these
+# subjects are skipped entirely rather than guessed.
+_FX_SUBJECT_TOKENS: frozenset[str] = frozenset({
+    "dollar", "dxy", "greenback", "usd", "euro", "yen", "yuan", "pound",
+    "sterling", "currency", "currencies", "forex", "fx",
+})
+
+# ── Rate-expectations repricing ("jobs data lowers Fed hike bets") ────────────
+# The market-moving content of these headlines is the DIRECTION of policy
+# expectations, not the words around it: fewer expected hikes / more expected
+# cuts is dovish and bullish for equities, and vice versa. An object token
+# (bets/odds/hopes/...) qualified by hike/cut within 2 tokens is repriced by the
+# nearest direction verb before the qualifier or after the object.
+_CLAUSE_BREAKS: frozenset[str] = frozenset({
+    "as", "after", "on", "amid", "while", "despite", "because", "before", "following",
+})
+
+_RATE_OBJ: frozenset[str] = frozenset({
+    "bets", "bet", "odds", "wagers", "expectations", "hopes", "chances", "pricing",
+    "concerns", "concern", "fears", "fear", "worries", "worry", "jitters", "anxiety",
+})
+_HIKE_TOKENS: frozenset[str] = frozenset({"hike", "hikes", "hiking", "tightening"})
+_CUT_TOKENS: frozenset[str] = frozenset({"cut", "cuts", "cutting", "easing"})
+_REPRICE_VERBS: dict[str, float] = {
+    **_MOVEMENT,
+    "lowers": -0.40, "raises": 0.40, "pares": -0.40, "pare": -0.40, "trims": -0.35,
+    "fuels": 0.45, "fuel": 0.45, "dashes": -0.55, "dash": -0.55, "dims": -0.40,
+    "cools": -0.35, "revives": 0.40, "cements": 0.35, "firms": 0.30,
+    "douses": -0.50, "tempers": -0.35, "curbs": -0.40, "scales": -0.35,
+    "ease": -0.45, "eases": -0.45, "easing": -0.45, "eased": -0.45,
+    "fade": -0.45, "fades": -0.45, "faded": -0.45, "recede": -0.45, "recedes": -0.45,
+    "abate": -0.40, "abates": -0.40, "wane": -0.40, "wanes": -0.40, "lift": 0.40,
+}
+_REPRICE_SALIENCE = 1.3
 
 _MAX_PHRASE_LEN = max(len(k.split()) for k in _LEXICON)
-_TOKEN_RE = re.compile(r"[a-z0-9&-]+")
+_TOKEN_RE = re.compile(r"[a-z0-9&]+")
 _APOSTROPHES = str.maketrans("", "", "'’ʼ`")
 
 
@@ -536,14 +581,14 @@ def derive_tier(title: str, entities: list[Entity]) -> int:
     return 1
 
 
-def _match_terms(tokens: list[str]) -> tuple[list[TermHit], list[bool]]:
+def _match_terms(tokens: list[str], consumed: list[bool]) -> tuple[list[TermHit], list[bool]]:
     """Longest-first, non-overlapping lexicon match with negation + intensifier.
 
-    Returns the hits and the consumed-token mask so the movement layer can scan
-    only tokens a lexicon phrase did not already claim (no double counting).
+    Skips tokens already claimed by the repricing layer (which resolves
+    expectation direction better than the bare phrases) and returns the hits
+    plus the consumed-token mask so the movement layer never double-counts.
     """
     n = len(tokens)
-    consumed = [False] * n
     hits: list[TermHit] = []
     for span in range(min(_MAX_PHRASE_LEN, n), 0, -1):
         for i in range(0, n - span + 1):
@@ -557,7 +602,8 @@ def _match_terms(tokens: list[str]) -> tuple[list[TermHit], list[bool]]:
             for k in range(i, i + span):
                 consumed[k] = True
             sign = -1.0 if any(
-                tokens[j] in _NEGATORS for j in range(max(0, i - config.NEGATION_WINDOW), i)
+                tokens[j] in _NEGATORS and not consumed[j]
+                for j in range(max(0, i - config.NEGATION_WINDOW), i)
             ) else 1.0
             intensified = any(
                 tokens[j] in _INTENSIFIERS
@@ -572,9 +618,64 @@ def _match_terms(tokens: list[str]) -> tuple[list[TermHit], list[bool]]:
     return hits, consumed
 
 
+def _rate_repricing_hits(tokens: list[str], consumed: list[bool]) -> list[TermHit]:
+    """Score policy-expectation repricing: 'lowers Fed hike bets' is dovish
+    (bullish), 'boosts rate cut odds' is dovish, 'dashes rate cut hopes' is
+    hawkish (bearish). Consumes the tokens it uses so the movement layer never
+    double-counts the same verb with the wrong subject."""
+    n = len(tokens)
+    hits: list[TermHit] = []
+    for i, tok in enumerate(tokens):
+        if consumed[i] or tok not in _RATE_OBJ:
+            continue
+        kind = 0
+        kind_idx = -1
+        for j in range(max(0, i - 2), i):
+            if tokens[j] in _HIKE_TOKENS:
+                kind, kind_idx = -1, j
+            elif tokens[j] in _CUT_TOKENS:
+                kind, kind_idx = 1, j
+        if kind == 0:
+            continue
+        # Nearest direction verb: up to 4 tokens before the hike/cut qualifier,
+        # or up to 4 after the object ("hike concerns begin to ease"). Never
+        # cross a clause connective — "Stocks slide as hike fears mount" must
+        # not read "slide" as the fears' verb.
+        verb_idx, verb_val = -1, 0.0
+        for j in range(kind_idx - 1, max(0, kind_idx - 5) - 1, -1):
+            if tokens[j] in _CLAUSE_BREAKS:
+                break
+            if not consumed[j] and tokens[j] in _REPRICE_VERBS:
+                verb_idx, verb_val = j, _REPRICE_VERBS[tokens[j]]
+                break
+        if verb_idx < 0:
+            for j in range(i + 1, min(n, i + 5)):
+                if tokens[j] in _CLAUSE_BREAKS:
+                    break
+                if not consumed[j] and tokens[j] in _REPRICE_VERBS:
+                    verb_idx, verb_val = j, _REPRICE_VERBS[tokens[j]]
+                    break
+        # No verb: the bare phrase still carries the expectation's own direction
+        # ("rate cut hopes" is dovish on its own). A confirmed verb is a direct
+        # policy-expectations statement, so it scores well above the bare phrase.
+        if verb_idx >= 0:
+            eff = kind * (1.0 if verb_val > 0 else -1.0) * (0.35 + abs(verb_val))
+        else:
+            eff = kind * 0.35
+        eff = max(-1.0, min(1.0, eff))
+        consumed[i] = consumed[kind_idx] = True
+        if verb_idx >= 0:
+            consumed[verb_idx] = True
+        label = " ".join(tokens[kind_idx:i + 1])
+        hits.append(TermHit(f"reprice:{label}", eff, _REPRICE_SALIENCE, eff * _REPRICE_SALIENCE))
+    return hits
+
+
 def _movement_hits(tokens: list[str], consumed: list[bool]) -> list[TermHit]:
     """Score directional verbs on tokens no lexicon phrase claimed, flipping the
-    sign when a bad-up subject (yields, oil, inflation, ...) precedes the verb."""
+    sign when a bad-up subject (yields, oil, inflation, ...) precedes the verb.
+    FX subjects (the dollar, crosses) are skipped: their direction is ambiguous
+    for equities."""
     n = len(tokens)
     hits: list[TermHit] = []
     for i, tok in enumerate(tokens):
@@ -583,8 +684,13 @@ def _movement_hits(tokens: list[str], consumed: list[bool]) -> list[TermHit]:
         base = _MOVEMENT.get(tok)
         if base is None:
             continue
-        negated = any(tokens[j] in _NEGATORS for j in range(max(0, i - config.NEGATION_WINDOW), i))
         bad_up = any(tokens[j] in _BAD_UP_TOKENS for j in range(max(0, i - 3), i))
+        # Wider window than bad-up: FX headlines pad the subject with qualifiers
+        # ("Dollar set for biggest weekly drop").
+        fx_subject = any(tokens[j] in _FX_SUBJECT_TOKENS for j in range(max(0, i - 6), i))
+        if fx_subject and not bad_up:
+            continue
+        negated = any(tokens[j] in _NEGATORS for j in range(max(0, i - config.NEGATION_WINDOW), i))
         intensified = any(tokens[j] in _INTENSIFIERS for j in range(max(0, i - 2), i)) or any(
             tokens[j] in _INTENSIFIERS for j in range(i + 1, min(n, i + 3)))
         factor = config.INTENSIFIER_FACTOR if intensified else 1.0
@@ -596,8 +702,12 @@ def _movement_hits(tokens: list[str], consumed: list[bool]) -> list[TermHit]:
 def score_text(text: str, entities: list[Entity]) -> LexScore:
     """Pure deterministic sentiment score for one headline. See module docstring."""
     tokens = _tokenize(text)
-    lex_hits, consumed = _match_terms(tokens)
-    hits = lex_hits + _movement_hits(tokens, consumed)
+    # Repricing gets first claim: "rate-hike concerns ease" must resolve as
+    # dovish before the bare "rate hike" / "concerns" phrases score bearish.
+    consumed = [False] * len(tokens)
+    reprice_hits = _rate_repricing_hits(tokens, consumed)
+    lex_hits, consumed = _match_terms(tokens, consumed)
+    hits = lex_hits + reprice_hits + _movement_hits(tokens, consumed)
     tier = derive_tier(text, entities)
 
     # Dismissive framing ("fears are overblown") flips bearish contributions to a

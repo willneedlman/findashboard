@@ -185,7 +185,7 @@ REASONING_TAGS: tuple[str, ...] = (
     "Recession Signal", "Inflation Surge", "Dollar Strength", "Dollar Weakness",
     "Credit Risk", "Liquidity Crunch", "Policy Pivot", "Trade War Risk",
     "Safe Haven Bid", "Risk-On Rally", "Geopolitical Risk", "Supply Shock",
-    "Central Bank Action", "Labor Market Strength", "Growth Slowdown", "Neutral Signal",
+    "Central Bank Action", "Labor Market", "Growth Slowdown", "Neutral Signal",
 )
 
 # Composite -> label thresholds, highest first (preserved from the legacy engine).

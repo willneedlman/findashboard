@@ -72,6 +72,41 @@ def test_movement_layer_and_inversion(text, expected):
     assert score_text(text, extract_entities(text)).sentiment == expected
 
 
+# Reported misreads (2026-07-03): sanctions EASING is not risk-on-its-face, the
+# dollar's direction is ambiguous for equities, and fewer expected hikes is
+# dovish (bullish) whatever the words around it.
+@pytest.mark.parametrize("text,expected", [
+    ("EXCLUSIVE: Iran exploring oil sales to Japan, buyers seek longer sanctions waiver, sources say", "bullish"),
+    ("Dollar set for biggest weekly drop since April after jobs data lowers Fed hike bets", "bullish"),
+    ("US lifts sanctions on Venezuelan crude", "bullish"),
+    ("US slaps new sanctions on Russian oil exporters", "bearish"),   # bare sanctions stays bearish
+    ("Dollar surges to two-year high", "neutral"),                    # FX move alone carries no equity sign
+    ("Euro falls against the dollar", "neutral"),
+    ("Stocks fall as dollar rises", "bearish"),                       # equity subject still scores
+    ("Traders boost rate cut bets after soft CPI", "bullish"),
+    ("Fed raises rate hike odds after strong jobs report", "bearish"),
+    ("Rate cut hopes lift stocks", "bullish"),
+])
+def test_fx_neutrality_sanctions_easing_and_rate_repricing(text, expected):
+    assert score_text(text, extract_entities(text)).sentiment == expected
+
+
+# Reported misread (2026-07-03): hyphenated qualifiers ("rate-hike") must
+# tokenize like their spaced forms, and worry-objects that EASE are dovish.
+# The repricing verb scan must never cross a clause connective ("as", "after")
+# into the equity clause.
+@pytest.mark.parametrize("text,expected", [
+    ("Canadian Stocks Advance As US Fed Rate-Hike Concerns Begin To Ease", "bullish"),
+    ("Stocks advance as rate-hike concerns ease", "bullish"),
+    ("Stocks slide as rate-hike fears mount", "bearish"),
+    ("Rate-cut hopes fade after hot inflation print", "bearish"),
+    ("Rate-cut expectations recede after strong jobs report", "bearish"),
+    ("Fed officials signal rate hike concerns are growing", "bearish"),
+])
+def test_hyphenated_repricing_and_easing_worries(text, expected):
+    assert score_text(text, extract_entities(text)).sentiment == expected
+
+
 def test_score_bounds_and_neutral_default():
     # No lexical signal -> exactly neutral with floor confidence.
     s = score_text("A quiet uneventful day downtown", [])

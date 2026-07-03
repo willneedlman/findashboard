@@ -38,7 +38,7 @@ _FALLBACK_RULES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r'\bwar\b|geopolit|conflict|military|nuclear|ukraine', re.I), "Geopolitical Risk"),
     (re.compile(r'supply\s+shock|shortage', re.I), "Supply Shock"),
     (re.compile(r'rally|record\s+high|all.time\s+high|risk-on|rebound', re.I), "Risk-On Rally"),
-    (re.compile(r'jobs?|payrolls?|hiring|unemployment|labor', re.I), "Labor Market Strength"),
+    (re.compile(r'jobs?|payrolls?|hiring|unemployment|labor', re.I), "Labor Market"),
     (re.compile(r'safe.haven|flight\s+to\s+safety|gold\s+(surge|rally)', re.I), "Safe Haven Bid"),
     (re.compile(r'dollar|dxy', re.I), "Dollar Strength"),
     (re.compile(r'central\s+bank|\bfed\b|fomc|powell|ecb|boj', re.I), "Central Bank Action"),
