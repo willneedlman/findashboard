@@ -102,6 +102,9 @@ def test_fx_neutrality_sanctions_easing_and_rate_repricing(text, expected):
     ("Rate-cut hopes fade after hot inflation print", "bearish"),
     ("Rate-cut expectations recede after strong jobs report", "bearish"),
     ("Fed officials signal rate hike concerns are growing", "bearish"),
+    ("Analysts cut Canadian dollar forecasts as USMCA uncertainty clips rate hike chances: Reuters poll", "bullish"),
+    ("Strong retail sales dent rate cut hopes", "bearish"),
+    ("Cooling inflation erodes rate hike expectations", "bullish"),
 ])
 def test_hyphenated_repricing_and_easing_worries(text, expected):
     assert score_text(text, extract_entities(text)).sentiment == expected

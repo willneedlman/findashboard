@@ -483,6 +483,10 @@ _REPRICE_VERBS: dict[str, float] = {
     "ease": -0.45, "eases": -0.45, "easing": -0.45, "eased": -0.45,
     "fade": -0.45, "fades": -0.45, "faded": -0.45, "recede": -0.45, "recedes": -0.45,
     "abate": -0.40, "abates": -0.40, "wane": -0.40, "wanes": -0.40, "lift": 0.40,
+    "clip": -0.40, "clips": -0.40, "clipped": -0.40, "dent": -0.40, "dents": -0.40,
+    "dented": -0.40, "erode": -0.40, "erodes": -0.40, "eroded": -0.40,
+    "reduce": -0.40, "reduces": -0.40, "reduced": -0.40,
+    "diminish": -0.40, "diminishes": -0.40, "diminished": -0.40,
 }
 _REPRICE_SALIENCE = 1.3
 
