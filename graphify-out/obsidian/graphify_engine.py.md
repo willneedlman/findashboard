@@ -21,6 +21,8 @@ tags:
 - [[graphify_engine_py_load_gitignored_dirs]] - `contains` [EXTRACTED]
 - [[graphify_engine_py_node_id]] - `contains` [EXTRACTED]
 - [[graphify_engine_py_extract_python_ast]] - `contains` [EXTRACTED]
+- [[graphify_engine_py_fe_resolve_import]] - `contains` [EXTRACTED]
+- [[graphify_engine_py_extract_frontend_regex]] - `contains` [EXTRACTED]
 - [[graphify_engine_py_detect_communities]] - `contains` [EXTRACTED]
 - [[graphify_engine_py_infer_community_labels]] - `contains` [EXTRACTED]
 - [[graphify_engine_py_rebuild_graph]] - `contains` [EXTRACTED]
@@ -30,7 +32,5 @@ tags:
 - [[graphify_engine_py_cmd_diff]] - `contains` [EXTRACTED]
 - [[graphify_engine_py_cmd_save]] - `contains` [EXTRACTED]
 - [[graphify_engine_py_cmd_stats]] - `contains` [EXTRACTED]
-- [[graphify_engine_py_cmd_merge]] - `contains` [EXTRACTED]
-- [[graphify_engine_py_cmd_extract_python]] - `contains` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Group_11

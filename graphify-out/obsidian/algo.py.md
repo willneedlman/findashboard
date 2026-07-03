@@ -14,6 +14,7 @@ tags:
 ## Connections
 - [[fastapi]] - `imports` [EXTRACTED]
 - [[pydantic]] - `imports` [EXTRACTED]
+- [[cache]] - `imports` [EXTRACTED]
 - [[backend_routers_algo_py_backtestrequest]] - `contains` [EXTRACTED]
 - [[backend_routers_algo_py_signalrequest]] - `contains` [EXTRACTED]
 - [[backend_routers_algo_py_fetch_close]] - `contains` [EXTRACTED]

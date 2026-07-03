@@ -2,7 +2,7 @@
 source_file: "frontend/src/components/HelpTip.tsx"
 type: "code"
 community: "Frontend"
-location: "None"
+location: "L1"
 tags:
   - graphify/code
   - graphify/EXTRACTED
@@ -12,6 +12,7 @@ tags:
 # HelpTip.tsx
 
 ## Connections
-- [[frontend_src_components_helptip_tsx_helptip]] - `defines` [EXTRACTED]
+- [[react]] - `imports` [EXTRACTED]
+- [[react_dom]] - `imports` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

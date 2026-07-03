@@ -2,7 +2,7 @@
 source_file: "frontend/src/components/PortfolioIO.tsx"
 type: "code"
 community: "Frontend"
-location: "None"
+location: "L1"
 tags:
   - graphify/code
   - graphify/EXTRACTED
@@ -12,7 +12,11 @@ tags:
 # PortfolioIO.tsx
 
 ## Connections
-- [[frontend_src_components_portfolioio_tsx_portfolioasset]] - `defines` [EXTRACTED]
-- [[frontend_src_components_portfolioio_tsx_portfolioio]] - `defines` [EXTRACTED]
+- [[frontend_src_components_portfolioio_tsx_portfolioasset]] - `contains` [EXTRACTED]
+- [[frontend_src_components_portfolioio_tsx_downloadfile]] - `contains` [EXTRACTED]
+- [[frontend_src_components_portfolioio_tsx_parsefile]] - `contains` [EXTRACTED]
+- [[frontend_src_components_portfolioio_tsx_normalizeasset]] - `contains` [EXTRACTED]
+- [[react]] - `imports` [EXTRACTED]
+- [[frontend_src_components_portfolioio_tsx_portfolioasset]] - `renders` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

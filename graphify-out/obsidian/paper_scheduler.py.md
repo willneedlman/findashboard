@@ -20,6 +20,7 @@ tags:
 - [[fastapi]] - `imports` [EXTRACTED]
 - [[pydantic]] - `imports` [EXTRACTED]
 - [[strategies_base]] - `imports` [EXTRACTED]
+- [[routers_users]] - `imports` [EXTRACTED]
 - [[backend_routers_paper_scheduler_py_job_interval]] - `contains` [EXTRACTED]
 - [[backend_routers_paper_scheduler_py_db]] - `contains` [EXTRACTED]
 - [[backend_routers_paper_scheduler_py_init_db]] - `contains` [EXTRACTED]
@@ -31,6 +32,5 @@ tags:
 - [[backend_routers_paper_scheduler_py_place_order_sync]] - `contains` [EXTRACTED]
 - [[backend_routers_paper_scheduler_py_is_market_open]] - `contains` [EXTRACTED]
 - [[backend_routers_paper_scheduler_py_run_scheduler_loop]] - `contains` [EXTRACTED]
-- [[backend_routers_paper_scheduler_py_start_scheduler]] - `contains` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Backend

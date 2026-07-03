@@ -1,0 +1,1 @@
+var e=`ft_recent_tickers`,t=6;function n(n){if(n)try{let r=[n,...JSON.parse(localStorage.getItem(e)??`[]`).filter(e=>e!==n)].slice(0,t);localStorage.setItem(e,JSON.stringify(r))}catch{}}function r(){try{return JSON.parse(localStorage.getItem(e)??`[]`)}catch{return[]}}export{n,r as t};

@@ -2,7 +2,7 @@
 source_file: "frontend/src/pages/CorporateHub.tsx"
 type: "code"
 community: "Frontend"
-location: "None"
+location: "L1"
 tags:
   - graphify/code
   - graphify/EXTRACTED
@@ -12,11 +12,25 @@ tags:
 # CorporateHub.tsx
 
 ## Connections
-- [[frontend_src_pages_corporatehub_tsx_corporatehubcontent]] - `defines` [EXTRACTED]
-- [[frontend_src_pages_corporatehub_tsx_corporatehub]] - `defines` [EXTRACTED]
-- [[contexts_portfoliocontext]] - `imports` [EXTRACTED]
-- [[components_pagewrapper]] - `imports` [EXTRACTED]
-- [[components_tickertaginput]] - `imports` [EXTRACTED]
-- [[components_portfolioio]] - `imports` [EXTRACTED]
+- [[frontend_src_pages_corporatehub_tsx_sparkline]] - `contains` [EXTRACTED]
+- [[frontend_src_pages_corporatehub_tsx_safeurl]] - `contains` [EXTRACTED]
+- [[frontend_src_pages_corporatehub_tsx_tickerlogo]] - `contains` [EXTRACTED]
+- [[frontend_src_pages_corporatehub_tsx_fetchticker]] - `contains` [EXTRACTED]
+- [[frontend_src_pages_corporatehub_tsx_fetchinsiderticker]] - `contains` [EXTRACTED]
+- [[frontend_src_pages_corporatehub_tsx_fetchshortticker]] - `contains` [EXTRACTED]
+- [[frontend_src_pages_corporatehub_tsx_corporatehubcontent]] - `contains` [EXTRACTED]
+- [[react]] - `imports` [EXTRACTED]
+- [[react_router_dom]] - `imports` [EXTRACTED]
+- [[lucide_react]] - `imports` [EXTRACTED]
+- [[frontend_src_contexts_portfoliocontext_tsx_portfoliocontext]] - `imports` [EXTRACTED]
+- [[axios]] - `imports` [EXTRACTED]
+- [[frontend_src_components_tickertaginput_tsx_tickertaginput]] - `imports` [EXTRACTED]
+- [[frontend_src_lib_tickerlogos_ts_tickerlogos]] - `imports` [EXTRACTED]
+- [[frontend_src_hooks_useismobile_ts_useismobile]] - `imports` [EXTRACTED]
+- [[frontend_src_components_portfolioio_tsx_portfolioio]] - `imports` [EXTRACTED]
+- [[frontend_src_components_tickertaginput_tsx_tickertaginput]] - `renders` [EXTRACTED]
+- [[frontend_src_pages_corporatehub_tsx_sparkline]] - `renders` [EXTRACTED]
+- [[frontend_src_components_portfolioio_tsx_portfolioio]] - `renders` [EXTRACTED]
+- [[frontend_src_pages_corporatehub_tsx_tickerlogo]] - `renders` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

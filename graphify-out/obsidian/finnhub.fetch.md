@@ -1,8 +1,8 @@
 ---
-source_file: "backend/finnhub.py"
+source_file: "backend/sentiment/sources/finnhub.py"
 type: "code"
 community: "Backend"
-location: "155"
+location: "38"
 tags:
   - graphify/code
   - graphify/EXTRACTED

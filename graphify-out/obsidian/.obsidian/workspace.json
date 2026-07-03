@@ -11,17 +11,14 @@
             "id": "d4c703a67b3d46db",
             "type": "leaf",
             "state": {
-              "type": "canvas",
+              "type": "markdown",
               "state": {
-                "file": "graph.canvas",
-                "viewState": {
-                  "x": 4788.422425975107,
-                  "y": 1157.391091163506,
-                  "zoom": -3.4155207938917087
-                }
+                "file": "_api proxy to localhost_8080.md",
+                "mode": "source",
+                "source": false
               },
-              "icon": "lucide-layout-dashboard",
-              "title": "graph"
+              "icon": "lucide-file",
+              "title": "_api proxy to localhost_8080"
             }
           }
         ]
@@ -188,6 +185,8 @@
   },
   "active": "d4c703a67b3d46db",
   "lastOpenFiles": [
+    "__init__.py.md",
+    "graph.canvas",
     "get_twelve_market_data().md",
     "get_twelve_shares_outstanding().md",
     "get_twelve_time_series().md",
@@ -196,7 +195,6 @@
     "go_bond().md",
     "go_chain().md",
     "go_corr().md",
-    "graph.canvas",
     "_COMMUNITY_Page Wrapper Component.md",
     "_COMMUNITY_Options & Volatility Utils.md",
     "_COMMUNITY_DCF Valuation & MetricCard.md",
@@ -213,7 +211,6 @@
     "ChartPanel()_8.md",
     "TICK_9.md",
     "TOOLTIP_STYLE_10.md",
-    "LABEL_9.md",
-    "INPUT_10.md"
+    "LABEL_9.md"
   ]
 }

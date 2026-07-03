@@ -1,14 +1,14 @@
 ---
-source_file: "backend/strategies/indicators.py"
+source_file: "frontend/src/lib/indicators.ts"
 type: "code"
-community: "Backend"
-location: "81"
+community: "Frontend"
+location: "21"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/Backend
+  - community/Frontend
 ---
 
 # indicators.bollinger
 
-#graphify/code #graphify/EXTRACTED #community/Backend
+#graphify/code #graphify/EXTRACTED #community/Frontend

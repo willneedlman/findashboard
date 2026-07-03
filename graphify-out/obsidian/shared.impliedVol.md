@@ -1,0 +1,14 @@
+---
+source_file: "frontend/src/pages/strategy-builder/shared.ts"
+type: "code"
+community: "Frontend"
+location: "182"
+tags:
+  - graphify/code
+  - graphify/EXTRACTED
+  - community/Frontend
+---
+
+# shared.impliedVol
+
+#graphify/code #graphify/EXTRACTED #community/Frontend

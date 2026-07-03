@@ -18,6 +18,12 @@ tags:
 - [[validation]] - `imports` [EXTRACTED]
 - [[backend_routers_dcf_py_dcfrequest]] - `contains` [EXTRACTED]
 - [[backend_routers_dcf_py_get_fundamentals]] - `contains` [EXTRACTED]
+- [[backend_routers_dcf_py_margin_for_year]] - `contains` [EXTRACTED]
+- [[backend_routers_dcf_py_project]] - `contains` [EXTRACTED]
 - [[backend_routers_dcf_py_dcf_value]] - `contains` [EXTRACTED]
+- [[backend_routers_dcf_py_reversedcfrequest]] - `contains` [EXTRACTED]
+- [[backend_routers_dcf_py_dcf_reverse]] - `contains` [EXTRACTED]
+- [[scipy_optimize]] - `imports` [EXTRACTED]
+- [[backend_routers_dcf_py_gap]] - `contains` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Backend

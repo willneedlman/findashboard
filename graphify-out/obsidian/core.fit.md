@@ -1,8 +1,8 @@
 ---
-source_file: "ui-ux-pro-max-skill/.claude/skills/design/scripts/logo/core.py"
+source_file: "ui-ux-pro-max-skill/src/ui-ux-pro-max/scripts/core.py"
 type: "code"
 community: "Ui Ux Pro Max Skill"
-location: "55"
+location: "122"
 tags:
   - graphify/code
   - graphify/EXTRACTED

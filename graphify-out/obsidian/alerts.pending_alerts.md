@@ -2,7 +2,7 @@
 source_file: "backend/routers/alerts.py"
 type: "code"
 community: "Backend"
-location: "252"
+location: "376"
 tags:
   - graphify/code
   - graphify/EXTRACTED

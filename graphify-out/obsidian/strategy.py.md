@@ -15,6 +15,7 @@ tags:
 - [[fastapi]] - `imports` [EXTRACTED]
 - [[pydantic]] - `imports` [EXTRACTED]
 - [[validation]] - `imports` [EXTRACTED]
+- [[cache]] - `imports` [EXTRACTED]
 - [[strategies_indicators]] - `imports` [EXTRACTED]
 - [[backend_routers_strategy_py_fetch_close]] - `contains` [EXTRACTED]
 - [[backend_routers_strategy_py_compute_signal]] - `contains` [EXTRACTED]
@@ -27,9 +28,9 @@ tags:
 - [[backend_routers_strategy_py_evaluate_custom_rules]] - `contains` [EXTRACTED]
 - [[backend_routers_strategy_py_customsignalrequest]] - `contains` [EXTRACTED]
 - [[backend_routers_strategy_py_get_custom_signal]] - `contains` [EXTRACTED]
+- [[backend_routers_strategy_py_custombacktestrequest]] - `contains` [EXTRACTED]
+- [[backend_routers_strategy_py_custom_backtest]] - `contains` [EXTRACTED]
 - [[backend_routers_strategy_py_valid_strategy]] - `contains` [EXTRACTED]
-- [[backend_routers_strategy_py_validate]] - `contains` [EXTRACTED]
-- [[backend_routers_strategy_py_ind]] - `contains` [EXTRACTED]
 - [[backend_routers_strategy_py_validate]] - `contains` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Backend

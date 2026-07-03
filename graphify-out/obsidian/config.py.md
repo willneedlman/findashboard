@@ -1,18 +1,19 @@
 ---
-source_file: "orderbook_monitor/config.py"
+source_file: "backend/sentiment/config.py"
 type: "code"
-community: "Orderbook Monitor"
+community: "Backend"
 location: "L1"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/Orderbook_Monitor
+  - community/Backend
 ---
 
 # config.py
 
 ## Connections
+- [[future]] - `imports` [EXTRACTED]
 - [[dataclasses]] - `imports` [EXTRACTED]
-- [[orderbook_monitor_config_py_replayconfig]] - `contains` [EXTRACTED]
+- [[backend_sentiment_config_py_sourcespec]] - `contains` [EXTRACTED]
 
-#graphify/code #graphify/EXTRACTED #community/Orderbook_Monitor
+#graphify/code #graphify/EXTRACTED #community/Backend

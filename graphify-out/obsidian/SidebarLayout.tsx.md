@@ -2,7 +2,7 @@
 source_file: "frontend/src/components/SidebarLayout.tsx"
 type: "code"
 community: "Frontend"
-location: "None"
+location: "L1"
 tags:
   - graphify/code
   - graphify/EXTRACTED
@@ -12,7 +12,9 @@ tags:
 # SidebarLayout.tsx
 
 ## Connections
-- [[frontend_src_components_sidebarlayout_tsx_sidebarlayout]] - `defines` [EXTRACTED]
-- [[hooks_useismobile]] - `imports` [EXTRACTED]
+- [[react]] - `imports` [EXTRACTED]
+- [[frontend_src_hooks_useismobile_ts_useismobile]] - `imports` [EXTRACTED]
+- [[lucide_react]] - `imports` [EXTRACTED]
+- [[lucide_react]] - `renders` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

@@ -1,8 +1,8 @@
 ---
-source_file: "frontend/src/pages/CorrelationMatrix.tsx"
+source_file: "frontend/src/components/dashboard/widgets/CorrelationMatrix.tsx"
 type: "code"
 community: "Frontend"
-location: "None"
+location: "L1"
 tags:
   - graphify/code
   - graphify/EXTRACTED
@@ -12,13 +12,11 @@ tags:
 # CorrelationMatrix.tsx
 
 ## Connections
-- [[frontend_src_pages_correlationmatrix_tsx_correlationmatrix]] - `defines` [EXTRACTED]
-- [[components_pagewrapper]] - `imports` [EXTRACTED]
-- [[components_sidebarlayout]] - `imports` [EXTRACTED]
-- [[hooks_useapi]] - `imports` [EXTRACTED]
-- [[components_emptystate]] - `imports` [EXTRACTED]
-- [[components_tickertaginput]] - `imports` [EXTRACTED]
-- [[components_portfolioio]] - `imports` [EXTRACTED]
-- [[contexts_themecontext]] - `imports` [EXTRACTED]
+- [[frontend_src_components_dashboard_widgets_correlationmatrix_tsx_hextorgb]] - `contains` [EXTRACTED]
+- [[react]] - `imports` [EXTRACTED]
+- [[axios]] - `imports` [EXTRACTED]
+- [[tanstack_react_query]] - `imports` [EXTRACTED]
+- [[frontend_src_hooks_usedashboard_ts_usedashboard]] - `imports` [EXTRACTED]
+- [[frontend_src_contexts_themecontext_tsx_themecontext]] - `imports` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

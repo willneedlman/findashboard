@@ -1,14 +1,14 @@
 ---
 source_file: "frontend/tailwind.config.js"
 type: "code"
-community: "Tailwind CSS Config"
+community: "Frontend"
 location: "L1"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/Tailwind_CSS_Config
+  - community/Frontend
 ---
 
 # tailwind.config.js
 
-#graphify/code #graphify/EXTRACTED #community/Tailwind_CSS_Config
+#graphify/code #graphify/EXTRACTED #community/Frontend

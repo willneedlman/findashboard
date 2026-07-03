@@ -2,7 +2,7 @@
 source_file: "backend/routers/rates.py"
 type: "code"
 community: "Backend"
-location: "14"
+location: "16"
 tags:
   - graphify/code
   - graphify/EXTRACTED

@@ -2,7 +2,7 @@
 source_file: "backend/routers/strategy.py"
 type: "code"
 community: "Backend"
-location: "213"
+location: "210"
 tags:
   - graphify/code
   - graphify/EXTRACTED

@@ -1,5 +1,5 @@
 ---
-source_file: "backend/finnhub.py"
+source_file: "backend/sentiment/sources/finnhub.py"
 type: "code"
 community: "Backend"
 location: "L1"
@@ -12,18 +12,11 @@ tags:
 # finnhub.py
 
 ## Connections
-- [[requests_adapters]] - `imports` [EXTRACTED]
-- [[urllib3_util_retry]] - `imports` [EXTRACTED]
-- [[cachetools]] - `imports` [EXTRACTED]
-- [[dotenv]] - `imports` [EXTRACTED]
-- [[backend_finnhub_py_available]] - `contains` [EXTRACTED]
-- [[backend_finnhub_py_get]] - `contains` [EXTRACTED]
-- [[backend_finnhub_py_cached]] - `contains` [EXTRACTED]
-- [[backend_finnhub_py_get_quote]] - `contains` [EXTRACTED]
-- [[backend_finnhub_py_get_analyst_ratings]] - `contains` [EXTRACTED]
-- [[backend_finnhub_py_get_profile]] - `contains` [EXTRACTED]
-- [[backend_finnhub_py_fetch]] - `contains` [EXTRACTED]
-- [[backend_finnhub_py_fetch]] - `contains` [EXTRACTED]
-- [[backend_finnhub_py_fetch]] - `contains` [EXTRACTED]
+- [[future]] - `imports` [EXTRACTED]
+- [[typing]] - `imports` [EXTRACTED]
+- [[sentiment_config]] - `imports` [EXTRACTED]
+- [[sentiment_sources_base]] - `imports` [EXTRACTED]
+- [[backend_sentiment_sources_finnhub_py_raw]] - `contains` [EXTRACTED]
+- [[backend_sentiment_sources_finnhub_py_fetch]] - `contains` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Backend
