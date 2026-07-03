@@ -6,6 +6,8 @@ import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
 import TickerInput from '../components/TickerInput'
 import TickerLogo from '../components/TickerLogo'
+import { recordRecentTicker } from '../lib/recentTickers'
+import TickerLaunch from '../components/TickerLaunch'
 import useIsMobile from '../hooks/useIsMobile'
 
 
@@ -222,9 +224,10 @@ export function RelativeValuationContent() {
   const [error,   setError]   = useState<string | null>(null)
   const [data,    setData]    = useState<ValuationResponse | null>(null)
 
-  const doFetch = async (refresh = false) => {
-    const sym = (refresh ? data?.ticker : input.trim().toUpperCase()) || input.trim().toUpperCase()
+  const doFetch = async (refresh = false, symArg?: string) => {
+    const sym = (symArg ?? ((refresh ? data?.ticker : input) || input)).trim().toUpperCase()
     if (!sym) return
+    setInput(sym)
     setLoading(true)
     setError(null)
     
@@ -256,6 +259,7 @@ export function RelativeValuationContent() {
       }
 
       setData(safeData)
+      recordRecentTicker(sym)
     } catch {
       setError('Failed to fetch valuation data.')
     } finally {
@@ -264,7 +268,8 @@ export function RelativeValuationContent() {
   }
 
   useEffect(() => {
-    if (searchParams.get('ticker')) doFetch()
+    const t = searchParams.get('ticker')
+    if (t) doFetch(false, t)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const medians: Record<MetricKey, number | null> = {} as Record<MetricKey, number | null>
@@ -287,7 +292,8 @@ export function RelativeValuationContent() {
           title="Peer Comparison"
         />
 
-        {/* Search */}
+        {/* Search (the launch card owns the input until a name is loaded) */}
+        {(data || loading) && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 28, alignItems: 'center', flexWrap: 'wrap' }}>
           <TickerInput
             value={input}
@@ -343,6 +349,7 @@ export function RelativeValuationContent() {
             <span style={{ fontFamily: T.mono, fontSize: 10, color: T.neg }}>{error}</span>
           )}
         </div>
+        )}
 
         {data && (
           <>
@@ -470,10 +477,17 @@ export function RelativeValuationContent() {
           </>
         )}
 
-        {!data && !loading && (
-          <div style={{ textAlign: 'center', padding: '80px 0', color: T.muted, fontFamily: T.label, fontSize: 11 }}>
-            Enter a ticker to compare peer valuations and analyst consensus.
+        {!data && loading && (
+          <div style={{ padding: '40px 0', color: T.muted, fontFamily: 'var(--theme-mono)', fontSize: 11, fontStyle: 'italic' }}>
+            Loading peer comparison…
           </div>
+        )}
+
+        {!data && !loading && (
+          <>
+            {error && <div style={{ marginTop: 12, fontFamily: T.mono, fontSize: 11, color: T.neg }}>{error}</div>}
+            <TickerLaunch hint="Trading multiples against sector peers with analyst consensus, green where the name beats the set and red where it lags." onLoad={sym => doFetch(false, sym)} />
+          </>
         )}
       </div>
   )

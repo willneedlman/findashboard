@@ -2,11 +2,17 @@ import { T } from '../lib/theme'
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import axios from 'axios'
+import { useQuery } from '@tanstack/react-query'
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
 import TickerInput from '../components/TickerInput'
 import TickerLogo from '../components/TickerLogo'
 import useIsMobile from '../hooks/useIsMobile'
+import { fetchMarketHistory } from '../hooks/useApi'
+import { TOOLTIP_STYLE, CROSSHAIR_CURSOR } from '../components/ChartTooltip'
+import { recordRecentTicker } from '../lib/recentTickers'
+import TickerLaunch from '../components/TickerLaunch'
 
 
 const SEGMENT_COLORS = ['var(--theme-primary, #c9a84c)', '#60a5fa', 'var(--theme-positive, #22c55e)', '#f97316', '#a78bfa', '#38bdf8', '#fb7185', '#34d399', '#fbbf24', '#e879f9']
@@ -350,6 +356,124 @@ function InstitutionalPanel({ inst, loading, tab, onTab }:
   )
 }
 
+// ── Market performance (absorbed from the old Stock Analytics tool) ─────────
+// Price, rolling volatility, and drawdown-from-peak with a range selector.
+const RANGES: { key: string; years: number }[] = [
+  { key: '1Y', years: 1 }, { key: '3Y', years: 3 }, { key: '5Y', years: 5 }, { key: 'MAX', years: 25 },
+]
+const TICK_STYLE = { fontSize: 10, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'var(--theme-mono)' }
+
+function PerfChart({ data, stroke, id, fmt, height }: {
+  data: { date: string | number; value: number }[]; stroke: string; id: string; fmt: (v: number) => string; height: number
+}) {
+  const fmtAxis = (d: string | number) =>
+    typeof d === 'number'
+      ? new Date(d * 1000).toLocaleString('en-US', { month: 'short', day: 'numeric' })
+      : d.slice(0, 7)
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <AreaChart data={data}>
+        <defs>
+          <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={stroke} stopOpacity={0.4} />
+            <stop offset="100%" stopColor={stroke} stopOpacity={0.02} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.07)" />
+        <XAxis dataKey="date" tick={TICK_STYLE} tickFormatter={fmtAxis} interval="preserveStartEnd" />
+        <YAxis tick={TICK_STYLE} tickFormatter={fmt} orientation="right" domain={['auto', 'auto']} width={58} />
+        <Tooltip formatter={(v: number) => [fmt(Number(v)), '']} labelFormatter={fmtAxis} contentStyle={TOOLTIP_STYLE} cursor={CROSSHAIR_CURSOR} />
+        <Area type="monotone" dataKey="value" stroke={stroke} fill={`url(#${id})`} strokeWidth={1.5} />
+      </AreaChart>
+    </ResponsiveContainer>
+  )
+}
+
+const isoYearsAgo = (years: number) => { const d = new Date(); d.setFullYear(d.getFullYear() - years); return d.toISOString().split('T')[0] }
+
+function MarketPerformancePanel({ ticker }: { ticker: string }) {
+  const isMobile = useIsMobile()
+  const today = new Date().toISOString().split('T')[0]
+  const [range, setRange] = useState('3Y')
+  const [start, setStart] = useState(isoYearsAgo(3))
+  const [end, setEnd] = useState(today)
+  const applyPreset = (key: string) => {
+    const years = RANGES.find(r => r.key === key)?.years ?? 3
+    setRange(key); setStart(isoYearsAgo(years)); setEnd(today)
+  }
+
+  const q = useQuery({
+    queryKey: ['profile-history', ticker, start, end],
+    queryFn: () => fetchMarketHistory(ticker, start, end),
+    staleTime: 300_000, retry: 1, enabled: !!ticker && !!start && !!end,
+  })
+  const m = q.data?.metrics
+  const returnColor = m ? (m.total_return >= 0 ? 'var(--theme-positive)' : 'var(--theme-negative)') : T.text
+
+  const dateStyle: React.CSSProperties = {
+    background: 'var(--theme-bg, #0a1628)', border: `1px solid ${T.border}`, color: T.text,
+    fontFamily: T.mono, fontSize: 10, padding: '2px 5px', outline: 'none', colorScheme: 'dark',
+  }
+
+  return (
+    <div className="ft-panel">
+      <div className="ft-panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span>Market Performance</span>
+        <span style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ display: 'flex', gap: 2 }}>
+            {RANGES.map(r => (
+              <button key={r.key} onClick={() => applyPreset(r.key)} style={{
+                fontFamily: T.mono, fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', padding: '2px 8px',
+                cursor: 'pointer', border: 'none',
+                color: range === r.key ? T.gold : T.muted,
+                background: range === r.key ? 'color-mix(in srgb, var(--theme-primary) 14%, transparent)' : 'transparent',
+              }}>{r.key}</button>
+            ))}
+          </span>
+          <span style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+            <input type="date" value={start} max={end} onChange={e => { setStart(e.target.value); setRange('custom') }} aria-label="Start date" style={dateStyle} />
+            <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted }}>→</span>
+            <input type="date" value={end} min={start} max={today} onChange={e => { setEnd(e.target.value); setRange('custom') }} aria-label="End date" style={dateStyle} />
+          </span>
+        </span>
+      </div>
+      {q.isLoading && <div style={{ padding: '20px 18px', color: T.muted, fontFamily: T.mono, fontSize: 11, fontStyle: 'italic' }}>Loading price history…</div>}
+      {q.isError && <div style={{ padding: '20px 18px', color: T.muted, fontFamily: T.mono, fontSize: 11, fontStyle: 'italic' }}>Price history unavailable for this name.</div>}
+      {q.data && m && (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', borderBottom: `1px solid ${T.border}` }}>
+            {[
+              { label: range === 'custom' ? 'Total Return' : `Total Return · ${range}`, value: `${m.total_return > 0 ? '+' : ''}${m.total_return}%`, color: returnColor },
+              { label: 'Max Drawdown', value: `${m.max_drawdown}%`, color: 'var(--theme-negative)' },
+              { label: 'Ann. Volatility', value: `${m.ann_volatility}%` },
+              { label: 'Current Price', value: `$${m.current_price.toLocaleString()}`, color: T.gold },
+            ].map((stat, i) => (
+              <div key={stat.label} style={{ padding: '12px 16px', borderRight: !isMobile && i < 3 ? `1px solid ${T.border}` : 'none' }}>
+                <div style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, marginBottom: 6 }}>{stat.label}</div>
+                <div style={{ fontFamily: T.mono, fontSize: isMobile ? 16 : 20, fontWeight: 700, color: stat.color ?? T.text, lineHeight: 1.1 }}>{stat.value}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ padding: '14px 12px 6px' }}>
+            <div style={{ ...labelStyle, paddingLeft: 6 }}>Price</div>
+            <PerfChart data={q.data.price} stroke="#1f5673" id="profPrice" fmt={v => `$${v.toLocaleString()}`} height={220} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 8, padding: '6px 12px 12px' }}>
+            <div>
+              <div style={{ ...labelStyle, paddingLeft: 6 }}>30D Rolling Volatility · Annualised</div>
+              <PerfChart data={q.data.volatility.map((d: any) => ({ ...d, value: +(d.value * 100).toFixed(2) }))} stroke="#d97736" id="profVol" fmt={v => `${v}%`} height={140} />
+            </div>
+            <div>
+              <div style={{ ...labelStyle, paddingLeft: 6 }}>Peak Drawdown</div>
+              <PerfChart data={q.data.drawdown.map((d: any) => ({ ...d, value: +(d.value * 100).toFixed(2) }))} stroke="#8c2e36" id="profDd" fmt={v => `${v}%`} height={140} />
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 export function SupplyChainContent() {
   const isMobileLayout = useIsMobile()
   const [searchParams] = useSearchParams()
@@ -375,6 +499,7 @@ export function SupplyChainContent() {
     try {
       const res = await axios.get(`/api/corporate/supply-chain?ticker=${ticker}`)
       setData(res.data)
+      recordRecentTicker(ticker)
     } catch {
       setError('Could not load company data. Try a valid US equity ticker.')
     } finally {
@@ -394,7 +519,8 @@ export function SupplyChainContent() {
           title="Company Profile"
         />
 
-        {/* Search bar */}
+        {/* Search bar (the launch card owns the input until a name is loaded) */}
+        {(data || loading) && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 28, alignItems: 'center' }}>
           <TickerInput
             value={input}
@@ -421,6 +547,7 @@ export function SupplyChainContent() {
           </button>
           {error && <span style={{ fontFamily: T.mono, fontSize: 10, color: 'var(--theme-negative)' }}>{error}</span>}
         </div>
+        )}
 
         {data && (() => {
           const metrics: { label: string; value: string; color?: string }[] = [
@@ -494,6 +621,9 @@ export function SupplyChainContent() {
               <RevenuePanel title="Revenue · By Activity (Fees vs Trading)" block={data.revenue_activity} />
             )}
 
+            {/* ── Market performance (price, volatility, drawdown) ──────── */}
+            <MarketPerformancePanel ticker={data.ticker} />
+
             {/* ── Row 2: Credit quality + Analyst ratings ──────────── */}
             <div style={{ display: 'grid', gridTemplateColumns: isMobileLayout ? '1fr' : '1fr 1fr', gap: 18, alignItems: 'stretch' }}>
               <CreditPanel ticker={data.ticker} />
@@ -506,10 +636,17 @@ export function SupplyChainContent() {
           )
         })()}
 
-        {!data && !loading && (
-          <div style={{ textAlign: 'center', padding: '80px 0', color: T.muted, fontFamily: T.label, fontSize: 11 }}>
-            Enter a ticker to view revenue breakdown and company profile.
+        {!data && loading && (
+          <div style={{ padding: '40px 0', color: T.muted, fontFamily: T.mono, fontSize: 11, fontStyle: 'italic' }}>
+            Loading company profile…
           </div>
+        )}
+
+        {!data && !loading && (
+          <>
+            {error && <div style={{ marginTop: 12, fontFamily: T.mono, fontSize: 11, color: 'var(--theme-negative)' }}>{error}</div>}
+            <TickerLaunch hint="Price history, revenue mix by segment and geography, institutional ownership, credit quality, and analyst ratings for one name." onLoad={doFetch} />
+          </>
         )}
       </div>
   )
