@@ -205,14 +205,48 @@
 .mkt .statbox .sbv{font-family:var(--mono);font-size:20px;font-weight:700;letter-spacing:-0.02em}
 .mkt .statbox .sbl{font-size:11px;color:var(--muted);margin-top:3px}
 
+/* ── hero flows-map preview ─────────────────────────────────────────────── */
+.mkt .mapviz{display:block;width:100%;height:auto;background:
+  radial-gradient(420px 200px at 62% 30%,rgba(108,140,255,0.06),transparent 70%),var(--bg)}
+.mkt .lane{fill:none;stroke-linecap:round;stroke-dasharray:3 7;animation:mkt-lane 26s linear infinite}
+.mkt .lane.slow{animation-duration:38s}
+@keyframes mkt-lane{from{stroke-dashoffset:0}to{stroke-dashoffset:-200}}
+.mkt .ckring{animation:mkt-ck 3.2s var(--ease) infinite;transform-origin:center;transform-box:fill-box}
+@keyframes mkt-ck{0%,100%{opacity:0.9}50%{opacity:0.35}}
+.mkt .maplabel{font-family:var(--mono);font-size:7.5px;font-weight:700;letter-spacing:0.14em;fill:var(--muted)}
+.mkt .chokestrip{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line)}
+.mkt .chokestrip .ck{padding:10px 14px;border-right:1px solid var(--line)}
+.mkt .chokestrip .ck:last-child{border-right:none}
+.mkt .chokestrip .ckn{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:0.12em;color:var(--muted);display:flex;align-items:center;gap:6px}
+.mkt .chokestrip .ckn i{width:5px;height:5px;border-radius:50%;flex:none}
+.mkt .chokestrip .ckv{font-family:var(--mono);font-size:12.5px;color:var(--text);margin-top:4px;font-variant-numeric:tabular-nums}
+.mkt .chokestrip .ckv span{font-size:10.5px;margin-left:7px}
+
+/* ── page-specific building blocks ──────────────────────────────────────── */
+.mkt .showcase.three{grid-template-columns:repeat(3,1fr)}
+.mkt .filterchips{display:flex;flex-wrap:wrap;gap:6px;padding:11px 14px;border-bottom:1px solid var(--line)}
+.mkt .filterchips .fc{font-family:var(--mono);font-size:10px;color:var(--gold);padding:3px 9px;border:1px solid rgba(201,168,76,0.3);border-radius:6px;background:rgba(201,168,76,0.06)}
+
+/* ── six-hubs band ──────────────────────────────────────────────────────── */
+.mkt .hubband{display:grid;grid-template-columns:repeat(6,1fr);border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--surface)}
+.mkt .hubcell{padding:20px 18px;border-right:1px solid var(--line);transition:background 180ms var(--ease)}
+.mkt .hubcell:last-child{border-right:none}
+.mkt a.hubcell:hover{background:rgba(255,255,255,0.025)}
+.mkt .hubcell .hn{font-family:var(--mono);font-size:22px;font-weight:700;color:var(--gold);letter-spacing:-0.02em}
+.mkt .hubcell .hl{font-size:13px;font-weight:600;color:var(--text);margin-top:6px}
+.mkt .hubcell .ht{font-family:var(--mono);font-size:10px;color:var(--dim);margin-top:8px;line-height:1.7}
+
 @media (max-width:900px){
+  .mkt .hubband{grid-template-columns:repeat(2,1fr)}
+  .mkt .hubcell{border-bottom:1px solid var(--line)}
+  .mkt .chokestrip .ck{padding:9px 10px}
   .mkt .hero-grid,.mkt .split,.mkt .foot{grid-template-columns:1fr}
   .mkt .hero h1{font-size:40px}.mkt .phero h1{font-size:34px}
   .mkt .bento{grid-template-columns:repeat(2,1fr)}.mkt .c-wide,.mkt .c-tall,.mkt .c-3,.mkt .c-2{grid-column:span 2;grid-row:auto}
   .mkt .nav-links{display:none}
   .mkt .flow{grid-template-columns:1fr 1fr;gap:30px 0}.mkt .flow::before{display:none}
-  .mkt .showcase{grid-template-columns:1fr}
+  .mkt .showcase,.mkt .showcase.three{grid-template-columns:1fr}
   .mkt .loop{grid-template-columns:1fr 1fr}
   .mkt .statline{grid-template-columns:1fr}
 }
-@media (prefers-reduced-motion:reduce){.mkt .term.float{animation:none}.mkt .tape-track{animation:none}}
+@media (prefers-reduced-motion:reduce){.mkt .term.float{animation:none}.mkt .tape-track{animation:none}.mkt .lane{animation:none}.mkt .ckring{animation:none}}
