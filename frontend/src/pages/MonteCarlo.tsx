@@ -18,7 +18,7 @@ import EmptyState from '../components/EmptyState'
 import PortfolioIO, { type PortfolioAsset } from '../components/PortfolioIO'
 import PMImportPicker from '../components/PMImportPicker'
 import { CASH_SYMBOL } from '../lib/pmImport'
-import ConfigHeader, { Field, paramInput } from '../components/portfolio/ConfigHeader'
+import ConfigHeader, { Field, paramInput, RebalanceSelect, type RebalanceFreq } from '../components/portfolio/ConfigHeader'
 import { usePortfolio, type PortfolioHolding } from '../contexts/PortfolioContext'
 // ── GBM math ────────────────────────────────────────────────────────────────
 
@@ -256,6 +256,7 @@ export function MonteCarloContent() {
   const [cashYield, setCashYield] = useState('4.5')   // % APY earned on the un-deployed cash portion
   const [leverage, setLeverage] = useState('1')
   const [borrowRate, setBorrowRate] = useState('0')
+  const [rebalance, setRebalance] = useState<RebalanceFreq>('none')
 
 
   const updateLeg = (i: number, patch: Partial<Leg>) =>
@@ -457,13 +458,25 @@ export function MonteCarloContent() {
         else allPaths[i] = runGBM(1.0, mu, sigma, horizon, n)
       })
 
-      // Combine into weighted portfolio paths (normalized to start at 1.0)
-      const rawPortfolioPaths = Array.from({ length: Math.min(nSims, 500) }, (_, simIdx) =>
-        Array.from({ length: horizon + 1 }, (_, day) =>
-          legs.reduce((sum, leg, li) =>
-            sum + (leg.weight / totalWeight) * allPaths[li][simIdx][day], 0)
-        )
-      )
+      // Combine into portfolio paths (start 1.0). Holdings drift with each leg's
+      // simulated growth and reset to target weights every `rebalStep` trading
+      // days; 0 = never (buy & hold), 1 = constant weights.
+      const rebalStep = { none: 0, daily: 1, weekly: 5, monthly: 21, quarterly: 63, annually: 252 }[rebalance]
+      const targetW = legs.map(l => l.weight / totalWeight)
+      const rawPortfolioPaths = Array.from({ length: Math.min(nSims, 500) }, (_, simIdx) => {
+        const h = [...targetW]
+        const path = [1.0]
+        for (let day = 1; day <= horizon; day++) {
+          let v = 0
+          for (let li = 0; li < legs.length; li++) {
+            h[li] *= allPaths[li][simIdx][day] / (allPaths[li][simIdx][day - 1] || 1e-12)
+            v += h[li]
+          }
+          path.push(v)
+          if (rebalStep && day % rebalStep === 0) for (let li = 0; li < legs.length; li++) h[li] = targetW[li] * v
+        }
+        return path
+      })
       // Apply borrow-to-magnify leverage to the gross portfolio paths (static debt, floored
       // at 0 on wipeout), then risk controls, then scale to $100.
       const L = Number(leverage) || 1
@@ -556,14 +569,17 @@ export function MonteCarloContent() {
         tickerListId="mc-futures"
         tickerList={<datalist id="mc-futures">{FUTURES.map(f => <option key={f.sym} value={f.sym}>{f.label}</option>)}</datalist>}
         paramExtra={
-          <Field label="Simulation Model">
-            <select value={model} onChange={e => setModel(e.target.value as SimModel)}
-              style={{ ...paramInput, cursor: 'pointer' }}>
-              {(Object.keys(MODEL_LABELS) as SimModel[]).map(m => (
-                <option key={m} value={m}>{MODEL_LABELS[m]}</option>
-              ))}
-            </select>
-          </Field>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <Field label="Simulation Model">
+              <select value={model} onChange={e => setModel(e.target.value as SimModel)}
+                style={{ ...paramInput, cursor: 'pointer' }}>
+                {(Object.keys(MODEL_LABELS) as SimModel[]).map(m => (
+                  <option key={m} value={m}>{MODEL_LABELS[m]}</option>
+                ))}
+              </select>
+            </Field>
+            <RebalanceSelect value={rebalance} onChange={setRebalance} />
+          </div>
         }
         overflow={
           <>

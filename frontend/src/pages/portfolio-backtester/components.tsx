@@ -20,7 +20,7 @@ import PortfolioIO, { type PortfolioAsset } from '../../components/PortfolioIO'
 import PMImportPicker from '../../components/PMImportPicker'
 import { CASH_SYMBOL, type ImportResult } from '../../lib/pmImport'
 import { usePortfolio } from '../../contexts/PortfolioContext'
-import ConfigHeader from '../../components/portfolio/ConfigHeader'
+import ConfigHeader, { RebalanceSelect, type RebalanceFreq } from '../../components/portfolio/ConfigHeader'
 import HelpTip from '../../components/HelpTip'
 import { TAB_BAR, TAB_BASE, type Tab, type Asset, makeAsset, PORT_DEFAULTS, PORT_INPUT, PORT_LABEL, PORT_TICK, ALGO_STRATEGIES, ALGO_DEFAULT_PARAMS, ALGO_PARAM_LABELS, ALGO_INPUT, ALGO_LABEL, ALGO_TICK, ALGO_SECTION_DIVIDER, type BacktestResult, type SignalResult } from './shared'
 
@@ -93,6 +93,7 @@ export function PortfolioTab() {
   const [cashYield, setCashYield] = useState('4.5')   // % APY earned on the un-deployed / idle cash sleeve
   const [leverage,   setLeverage]   = useState('1')
   const [borrowRate, setBorrowRate] = useState('0')
+  const [rebalance,  setRebalance]  = useState<RebalanceFreq>('none')
 
   const { mutate, data, isPending } = useMutation({
     mutationFn: async () => {
@@ -106,6 +107,7 @@ export function PortfolioTab() {
           benchmark, start, end,
           leverage: Number(leverage) || 1,
           borrow_rate: Number(borrowRate) || 0,
+          rebalance,
         }),
         ...assets.map(a => {
           if (a.strategy === STRATEGIES[0]) return Promise.resolve(null)
@@ -281,6 +283,7 @@ export function PortfolioTab() {
         cash={{ val: cashYield, set: setCashYield }}
         start={start} setStart={setStart}
         end={end} setEnd={setEnd}
+        paramExtra={<RebalanceSelect value={rebalance} onChange={setRebalance} />}
         onRun={() => mutate()}
         isRunning={isPending}
         tickerListId="ft-futures"

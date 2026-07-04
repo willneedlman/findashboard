@@ -91,6 +91,9 @@ class BacktestRequest(BaseModel):
     borrow_rate: float = Field(default=0.0, ge=0.0, le=30.0)
     cash_weight: float = 0.0   # filled from any CASH legs (see CASH_SYMBOL)
     interval: str = "1d"       # "1d" (daily) or intraday e.g. "15m" for a 1-day curve
+    # Holdings drift with prices and reset to target weights at each boundary;
+    # "none" = buy and hold, "daily" = constant weights (the old behavior).
+    rebalance: str = "none"
 
     @model_validator(mode='after')
     def _validate(self):
@@ -106,7 +109,38 @@ class BacktestRequest(BaseModel):
             raise HTTPException(400, "No holdings provided")
         self.benchmark = validate_ticker(self.benchmark)
         validate_date(self.start); validate_date(self.end)
+        if self.rebalance not in _REBAL_FREQS:
+            raise HTTPException(400, f"rebalance must be one of {sorted(_REBAL_FREQS)}")
         return self
+
+
+_REBAL_FREQS = {"none", "daily", "weekly", "monthly", "quarterly", "annually"}
+
+
+def _rebalance_mask(index: pd.DatetimeIndex, freq: str) -> np.ndarray:
+    """True on bars where the portfolio resets to target weights (period close)."""
+    n = len(index)
+    if freq == "daily":
+        return np.ones(n, dtype=bool)
+    if freq == "none" or n == 0:
+        return np.zeros(n, dtype=bool)
+    per = index.to_period({"weekly": "W", "monthly": "M", "quarterly": "Q", "annually": "Y"}[freq])
+    mask = np.zeros(n, dtype=bool)
+    mask[:-1] = per[:-1] != per[1:]
+    return mask
+
+
+def _walk_portfolio(growth: np.ndarray, target: np.ndarray, mask: np.ndarray) -> np.ndarray:
+    """Per-bar portfolio returns from asset growth factors (T, N) with holdings
+    drifting between rebalances and resetting to `target` where mask is True."""
+    rets = np.empty(len(growth))
+    cur = target.copy()
+    for t in range(len(growth)):
+        g = growth[t]
+        v = float(cur @ g)
+        rets[t] = v - 1.0
+        cur = target if mask[t] else (cur * g / v if v > 0 else target)
+    return rets
 
 
 @router.post("/backtest")
@@ -134,12 +168,17 @@ def backtest(req: BacktestRequest):
 
     daily = raw.pct_change().dropna()
     cash_daily = (1 + _get_risk_free_rate()) ** (1 / 252) - 1   # zero-vol cash sleeve
+    # Cash rides along as an asset column so buy-and-hold lets it drift too.
+    cols, target = [], []
     if len(eq_w):
-        port = (daily[req.tickers] * (eq_w / total_w)).sum(axis=1)
-    else:
-        port = pd.Series(0.0, index=daily.index)
+        cols.append((1 + daily[req.tickers]).to_numpy())
+        target.extend(eq_w / total_w)
     if req.cash_weight > 0:
-        port = port + (req.cash_weight / total_w) * cash_daily
+        cols.append(np.full((len(daily), 1), 1 + cash_daily))
+        target.append(req.cash_weight / total_w)
+    growth = np.hstack(cols)
+    mask = _rebalance_mask(daily.index, req.rebalance)
+    port = pd.Series(_walk_portfolio(growth, np.array(target), mask), index=daily.index)
     bench = daily[req.benchmark]
 
     cum_gross = (1 + port).cumprod()
@@ -168,6 +207,7 @@ def backtest(req: BacktestRequest):
         },
         "leverage": req.leverage,
         "borrow_rate": req.borrow_rate,
+        "rebalance": req.rebalance,
         "liquidated": liquidated,
         "cumulative": [
             # Intraday needs the full timestamp so bars don't collapse onto one date.

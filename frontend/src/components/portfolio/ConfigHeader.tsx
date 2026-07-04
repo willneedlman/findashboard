@@ -94,6 +94,25 @@ export function Field({ label, children }: { label: string; children: React.Reac
   return <div><label style={SUBLABEL}>{label}</label>{children}</div>
 }
 
+export type RebalanceFreq = 'none' | 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annually'
+export const REBALANCE_LABELS: Record<RebalanceFreq, string> = {
+  none: 'Never (buy & hold)', daily: 'Daily', weekly: 'Weekly',
+  monthly: 'Monthly', quarterly: 'Quarterly', annually: 'Annually',
+}
+
+export function RebalanceSelect({ value, onChange }: { value: RebalanceFreq; onChange: (v: RebalanceFreq) => void }) {
+  return (
+    <Field label="Rebalance to Weights">
+      <select value={value} onChange={e => onChange(e.target.value as RebalanceFreq)}
+        style={{ ...paramInput, cursor: 'pointer' }}>
+        {(Object.keys(REBALANCE_LABELS) as RebalanceFreq[]).map(f => (
+          <option key={f} value={f}>{REBALANCE_LABELS[f]}</option>
+        ))}
+      </select>
+    </Field>
+  )
+}
+
 function NumberInput({ value, onChange, placeholder, step, min }:
   { value: number | string; onChange: (v: string) => void; placeholder?: string; step?: number; min?: number }) {
   return (
@@ -270,6 +289,7 @@ export default function ConfigHeader(p: Props) {
                     {(Number(p.leverage) || 1) > 1
                       ? <Field label="Borrow Rate %"><NumberInput value={p.borrowRate} onChange={p.setBorrowRate} step={0.5} min={0} /></Field>
                       : <Field label="Benchmark"><input value={p.benchmark} onChange={e => p.setBenchmark(e.target.value.toUpperCase())} onFocus={focusOn} onBlur={focusOff} style={inputBase} /></Field>}
+                    {p.paramExtra && <div style={{ gridColumn: '1 / -1' }}>{p.paramExtra}</div>}
                   </>
                 ) : (
                   <>
