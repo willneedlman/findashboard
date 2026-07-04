@@ -334,6 +334,9 @@ _LEXICON: dict[str, tuple[float, float]] = {
     # Trade / geopolitics
     "trade war": (-0.70, 1.3), "trade deal": (0.55, 1.2), "tariff": (-0.55, 1.2),
     "tariffs": (-0.55, 1.2), "sanctions": (-0.45, 1.0), "war": (-0.60, 1.2),
+    # Aftermath framing: "post-war Iran" is about what follows a war, not a war
+    # breaking out. Zero polarity claims the token so bare "war" cannot fire.
+    "post war": (0.0, 0.8), "post conflict": (0.0, 0.8), "postwar": (0.0, 0.8),
     # Sanctions EASING is de-escalation, not risk. Longest-first matching lets
     # these phrases claim the tokens before the bare bearish "sanctions" term.
     "sanctions waiver": (0.25, 1.0), "sanctions waivers": (0.25, 1.0),
@@ -422,6 +425,21 @@ _REVERSERS: frozenset[str] = frozenset({
     "overrated", "misplaced", "debunked", "dispelled", "myth", "mistaken",
 })
 _REVERSAL_FACTOR: float = 0.5
+
+# Rotation/positioning commentary ("conflict strengthens case for metals over
+# oil") carries a relative view, not a broad risk-off signal. When one of these
+# markers is present, GEOPOLITICAL context terms are damped to near zero; macro
+# terms (recession, rate cuts) keep their sign — those stay directional even
+# inside an allocation view.
+_ALLOC_MARKERS: frozenset[str] = frozenset({"favor", "favors", "favoring", "prefer", "prefers"})
+_ALLOC_MARKER_PAIRS: tuple[tuple[str, str], ...] = (
+    ("case", "for"), ("rotate", "into"), ("rotation", "into"), ("top", "picks"),
+)
+_GEO_CONTEXT_TERMS: frozenset[str] = frozenset({
+    "war", "conflict", "conflicts", "tension", "tensions", "geopolitical",
+    "sanctions", "strike", "strikes", "attack", "attacks",
+})
+_ALLOC_GEO_DAMP: float = 0.15
 
 # Directional movement verbs: + = the subject's level rises, - = falls. The
 # polarity is written for the DEFAULT subject (equities / risk assets). For a
@@ -720,6 +738,15 @@ def score_text(text: str, entities: list[Entity]) -> LexScore:
         hits = [
             h if h.contribution >= 0 else
             TermHit(h.term, -h.polarity * _REVERSAL_FACTOR, h.salience, -h.contribution * _REVERSAL_FACTOR)
+            for h in hits
+        ]
+
+    if hits and (any(t in _ALLOC_MARKERS for t in tokens) or any(
+            tokens[i] == a and tokens[i + 1] == b
+            for a, b in _ALLOC_MARKER_PAIRS for i in range(len(tokens) - 1))):
+        hits = [
+            TermHit(h.term, h.polarity * _ALLOC_GEO_DAMP, h.salience, h.contribution * _ALLOC_GEO_DAMP)
+            if any(w in _GEO_CONTEXT_TERMS for w in h.term.split()) else h
             for h in hits
         ]
 

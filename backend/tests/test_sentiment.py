@@ -110,6 +110,21 @@ def test_hyphenated_repricing_and_easing_worries(text, expected):
     assert score_text(text, extract_entities(text)).sentiment == expected
 
 
+# Reported misreads (2026-07-04): "post-war" is aftermath, not a war breaking
+# out, and rotation commentary ("case for metals over oil") is a relative view,
+# not broad risk-off. Real escalation and macro terms keep their sign.
+@pytest.mark.parametrize("text,expected", [
+    ("Mass grief at Khamenei funeral projects hardline grip on post-war Iran - Reuters", "neutral"),
+    ("Iran conflict strengthens case for power, metals over oil: strategist", "neutral"),
+    ("War breaks out between Israel and Iran", "bearish"),
+    ("Middle East conflict escalates as strikes intensify", "bearish"),
+    ("Analysts favor defensive stocks as recession looms", "bearish"),
+    ("Weak data strengthens case for rate cuts", "bullish"),
+])
+def test_aftermath_and_allocation_framing(text, expected):
+    assert score_text(text, extract_entities(text)).sentiment == expected
+
+
 def test_score_bounds_and_neutral_default():
     # No lexical signal -> exactly neutral with floor confidence.
     s = score_text("A quiet uneventful day downtown", [])
