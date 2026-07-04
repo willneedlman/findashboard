@@ -1,14 +1,14 @@
 ---
-source_file: "backend/tests/test_sentiment.py"
+source_file: "backend/sentiment/lexicon.py"
 type: "code"
 community: "Backend"
-location: "287"
+location: "748"
 tags:
   - graphify/code
   - graphify/EXTRACTED
   - community/Backend
 ---
 
-# test_sentiment.test_future_timestamp_recency_capped
+# lexicon._excess_reverses
 
 #graphify/code #graphify/EXTRACTED #community/Backend

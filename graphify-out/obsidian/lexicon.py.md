@@ -27,6 +27,9 @@ tags:
 - [[backend_sentiment_lexicon_py_match_terms]] - `contains` [EXTRACTED]
 - [[backend_sentiment_lexicon_py_rate_repricing_hits]] - `contains` [EXTRACTED]
 - [[backend_sentiment_lexicon_py_movement_hits]] - `contains` [EXTRACTED]
+- [[backend_sentiment_lexicon_py_excess_reverses]] - `contains` [EXTRACTED]
+- [[backend_sentiment_lexicon_py_is_buy_recommendation]] - `contains` [EXTRACTED]
+- [[backend_sentiment_lexicon_py_is_tape_or_move]] - `contains` [EXTRACTED]
 - [[backend_sentiment_lexicon_py_score_text]] - `contains` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Backend

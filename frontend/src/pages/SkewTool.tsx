@@ -244,3 +244,7 @@ export function SkewToolContent() {
       </SidebarLayout>
   )
 }
+
+export default function SkewTool() {
+  return <PageWrapper title="Volatility Skew"><SkewToolContent /></PageWrapper>
+}

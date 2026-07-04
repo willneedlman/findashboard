@@ -646,3 +646,7 @@ export function IVTrackerContent() {
       </div>
   )
 }
+
+export default function IVTracker() {
+  return <PageWrapper title="IV Rank & Term Structure"><IVTrackerContent /></PageWrapper>
+}

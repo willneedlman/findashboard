@@ -1820,9 +1820,9 @@
     "hash": "2b1ea2a7554cd85bc1b0c06b0201c6c360238334bb764723b4e4d6c4c83ba0d7"
   },
   "/Users/willneedlman/finance_dashboard/backend/sentiment/lexicon.py": {
-    "size": 41422,
-    "mtime_ns": 1783184880376978491,
-    "hash": "871ed367bca01f3dfbeafcdc9b84b090275a24f709f92dd1f5fdccbf4c540269"
+    "size": 44608,
+    "mtime_ns": 1783189973561271433,
+    "hash": "9973993372173353b5a8fc5b8923f7e1313a5ba919d4393a42b4c50fc8a6abda"
   },
   "/Users/willneedlman/finance_dashboard/backend/sentiment/engine.py": {
     "size": 11711,
@@ -1870,9 +1870,9 @@
     "hash": "9d645659162ab0edc8465edca8b57236d0548385e5f6d11f3a04d1931dc052e8"
   },
   "/Users/willneedlman/finance_dashboard/backend/tests/test_sentiment.py": {
-    "size": 15459,
-    "mtime_ns": 1783184893817166463,
-    "hash": "392c4d5ddc2b07218e29ea9db336e51b9dcecb44f302a59dc0642121717f3c9f"
+    "size": 16704,
+    "mtime_ns": 1783190001425670771,
+    "hash": "a26215486a7581a9066dc7016e02a8fca7d522d704d3112fc96051430bd7dec6"
   },
   "/Users/willneedlman/finance_dashboard/requirements-dev.txt": {
     "size": 136,

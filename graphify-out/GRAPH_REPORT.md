@@ -1,7 +1,7 @@
 # Graph Report - .  (2026-07-04)
 
 ## Summary
-- 2518 nodes · 4385 edges · 154 communities (110 shown, 44 thin omitted)
+- 2522 nodes · 4389 edges · 154 communities (110 shown, 44 thin omitted)
 
 ## Community Hubs (Navigation)
 - [[_COMMUNITY_Frontend|Frontend]]

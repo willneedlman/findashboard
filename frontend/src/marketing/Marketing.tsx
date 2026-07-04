@@ -697,7 +697,7 @@ const SectorStrip = () => (
 
 const TAPE_FEATURES = [
   'Global Energy Flows', 'Chart Studio', 'Dealer GEX', 'Market Maker Simulator', 'Sentiment Tracker',
-  'Options Flow', 'Implied Volatility', 'Implied Probability', 'Strategy Builder', 'Rate Engine',
+  'Options Flow', 'Volatility Skew', 'IV Rank', 'Implied Probability', 'Strategy Builder', 'Rate Engine',
   'DCF Valuation', 'Reverse DCF', 'Stock Screener', 'Monte Carlo', 'Credit Spreads',
   'Currency Matrix', 'Paper Trading', 'Trade Journal', 'Price Alerts',
 ]
@@ -1048,7 +1048,7 @@ export function OptionsPage() {
         <div className="wrap split">
           <Reveal>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-              <VPanel title="Implied Volatility" desc="IV rank and percentile, term structure, and skew.">
+              <VPanel title="Volatility Skew" desc="Put/call skew and the smile across strikes, with IV rank and term structure alongside.">
                 <SkewCurve />
               </VPanel>
               <VPanel title="Implied Probability" desc="The option-implied distribution for any expiry, with P(ITM) at every strike.">

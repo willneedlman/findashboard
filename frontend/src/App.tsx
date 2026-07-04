@@ -68,7 +68,8 @@ const SentimentTracker   = lazyWithReload(() => import('./pages/SentimentTracker
 const AlertsPage         = lazyWithReload(() => import('./pages/Alerts'))
 const EconomyMonitor     = lazyWithReload(() => import('./pages/EconomyMonitor'))
 const SectorRotation     = lazyWithReload(() => import('./pages/SectorRotation'))
-const ImpliedVolatility  = lazyWithReload(() => import('./pages/ImpliedVolatility'))
+const IVTracker          = lazyWithReload(() => import('./pages/IVTracker'))
+const SkewTool           = lazyWithReload(() => import('./pages/SkewTool'))
 const MarketMakerSimulator = lazyWithReload(() => import('./pages/MarketMakerSimulator'))
 const UnusualOptions     = lazyWithReload(() => import('./pages/UnusualOptions'))
 const Compare            = lazyWithReload(() => import('./pages/Compare'))
@@ -203,7 +204,7 @@ export default function App() {
               <Route path="/reverse-dcf" element={<ReverseDCF />} />
               <Route path="/valuation"   element={<Navigate to="/dcf" replace />} />
               <Route path="/probability" element={<ImpliedProbability />} />
-              <Route path="/skew"       element={<Navigate to="/iv-tracker?tab=skew" replace />} />
+              <Route path="/skew"       element={<SkewTool />} />
               <Route path="/fed"        element={<FedRates />} />
               <Route path="/corporate"  element={<CorporateHub />} />
               <Route path="/chain"      element={<OptionsChainScanner />} />
@@ -236,7 +237,7 @@ export default function App() {
               <Route path="/options-hub"        element={<Navigate to="/options" replace />} />
               <Route path="/macro-hub"          element={<Navigate to="/fed" replace />} />
               <Route path="/research-hub"       element={<Navigate to="/corporate" replace />} />
-              <Route path="/iv-tracker"         element={<ImpliedVolatility />} />
+              <Route path="/iv-tracker"         element={<IVTracker />} />
               <Route path="/market-maker"       element={<MarketMakerSimulator />} />
               <Route path="/fixed-income-mm"    element={<Navigate to="/market-maker?desk=fixed-income" replace />} />
               <Route path="/unusual-options"    element={<UnusualOptions />} />
