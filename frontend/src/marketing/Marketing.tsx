@@ -971,9 +971,9 @@ export function ResearchPage() {
             <div className="tags"><span className="tag">Look-through</span><span className="tag">Overlap</span><span className="tag">Concentration</span></div>
           </div></div>
           <div className="frow"><div className="idx">05</div><div>
-            <h3>Corporate Catalysts</h3>
-            <p>Upcoming catalysts per ticker with valuation, short interest, and insider context.</p>
-            <div className="tags"><span className="tag">Catalyst radar</span><span className="tag">Timeline</span></div>
+            <h3>Portfolio Earnings</h3>
+            <p>Your holdings counting down to their next report, with valuation, positioning and the wire.</p>
+            <div className="tags"><span className="tag">Countdown agenda</span><span className="tag">Earnings wire</span></div>
           </div></div>
           <div className="frow"><div className="idx">06</div><div>
             <h3>Earnings Scanner</h3>

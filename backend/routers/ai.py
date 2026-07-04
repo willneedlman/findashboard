@@ -95,26 +95,25 @@ class CorporateBriefRequest(BaseModel):
     tickers: list[str]
     rows: list[dict] = []
 
-_BRIEF_SYSTEM = """Write a concise 3-bullet terminal intelligence brief for the given tickers using the available data.
-Respond ONLY with valid JSON (no markdown):
-{
-  "bullets": [
-    "bullet covering price action or key catalyst",
-    "bullet covering valuation or analyst sentiment",
-    "bullet covering risk or macro context"
-  ],
-  "tone": "bullish|neutral|bearish|mixed"
-}"""
+_BRIEF_SYSTEM = """Write a desk brief for a watchlist of holdings heading into their earnings reports, using the available data.
+Produce EXACTLY 3 bullets. Each bullet is ONE plain-English sentence (a string, never an object or list) that sweeps across the watchlist:
+1. Report timing: which names report soonest, what is on deck.
+2. Implied-move outliers, valuation or analyst sentiment.
+3. Short-interest or positioning risk into the prints.
+Respond ONLY with valid JSON (no markdown), exactly this shape:
+{"bullets": ["sentence 1", "sentence 2", "sentence 3"], "tone": "bullish|neutral|bearish|mixed"}"""
 
 @router.post("/corporate-brief")
 def corporate_brief(req: CorporateBriefRequest):
     summaries = []
-    for row in req.rows[:5]:
+    for row in req.rows[:12]:
         tk = row.get("ticker", "")
         news = " | ".join(n.get("title", "") for n in row.get("news", [])[:2])
         summaries.append(
-            f"{tk}: change={row.get('pctChange','N/A')}% mcap={row.get('marketCap','N/A')} "
-            f"consensus={row.get('consensus','N/A')} pe={row.get('pe','N/A')} news=[{news}]"
+            f"{tk}: reports_in={row.get('daysToReport','N/A')}d implied_move={row.get('impliedMove','N/A')}% "
+            f"short_float={row.get('shortPct','N/A')} change={row.get('pctChange','N/A')}% "
+            f"mcap={row.get('marketCap','N/A')} consensus={row.get('consensus','N/A')} "
+            f"pe={row.get('pe','N/A')} news=[{news}]"
         )
     tickers_str = ", ".join(req.tickers)
     context = "\n".join(summaries) or tickers_str
@@ -124,7 +123,17 @@ def corporate_brief(req: CorporateBriefRequest):
 Available data:
 {context}"""
     raw = groq_complete(prompt, max_tokens=300, model=MODEL_FAST, system=_BRIEF_SYSTEM)
-    return parse_json(raw)
+    out = parse_json(raw)
+    # Models drift on the shape: bare array, wrong key name, list markers.
+    if isinstance(out, list):
+        out = {"bullets": out}
+    elif not isinstance(out, dict):
+        out = {}
+    bullets = out.get("bullets") or out.get("brief") or []
+    if isinstance(bullets, str):
+        bullets = [bullets]
+    bullets = [str(b).lstrip("-• ").strip() for b in bullets if str(b).strip()]
+    return {"bullets": bullets, "tone": out.get("tone") or "neutral"}
 
 
 # ── 5. Strategy risk narrative ────────────────────────────────────────────────

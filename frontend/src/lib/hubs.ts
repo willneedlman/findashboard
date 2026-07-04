@@ -43,7 +43,7 @@ export const HUBS: Hub[] = [
       { title: 'Peer Comparison',   chip: 'Peers',           desc: 'Trading multiples versus sector peers',                    route: '/relative-valuation', icon: Scale },
       { title: 'ETF Analyzer',      chip: 'ETF Analyzer',    desc: 'Look-through holdings, overlap, and concentration',        route: '/etf-analyzer',       icon: Boxes },
       { title: 'Sentiment Tracker', chip: 'Sentiment',       desc: 'AI-scored news sentiment across 7 sources',                route: '/sentiment',          icon: Brain },
-      { title: 'Corporate Catalysts', chip: 'Catalysts',     desc: 'Upcoming catalysts with valuation, short interest, and insider context', route: '/corporate', icon: CalendarClock },
+      { title: 'Portfolio Earnings', chip: 'Earnings',       desc: 'Your holdings counting down to their next report, with valuation, positioning and the wire', route: '/corporate', icon: CalendarClock },
       { title: 'Earnings Scanner', chip: 'Earnings Scan',  desc: 'Confirmed and estimated report dates with past reactions',  route: '/earnings-calendar',  icon: CalendarDays },
       { title: 'Sector Rotation',   chip: 'Sector Rotation', desc: 'GICS sector performance heatmap over time',                route: '/sector-rotation',    icon: PieChart },
       { title: 'Regression',        chip: 'Regression',      desc: 'OLS and polynomial fits with diagnostics',                 route: '/regression',         icon: Activity },

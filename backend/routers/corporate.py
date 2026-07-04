@@ -480,6 +480,109 @@ async def get_corporate_hub_insider(ticker: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/hub/earnings-detail")
+def get_corporate_hub_earnings_detail(ticker: str):
+    """Expanded-card earnings detail: next-report EPS/revenue estimates, prior-year
+    EPS, historical post-report reaction stats, and report timing. Loaded lazily
+    when a card expands; cached hard since these move at most daily."""
+    import pandas as pd
+
+    sym = ticker.strip().upper()
+    ck = f"earndetail:v1:{sym}"
+    cached = disk_get(ck)
+    if cached is not None:
+        return cached
+
+    stock = yf.Ticker(sym)
+
+    eps_est = rev_est = None
+    try:
+        cal = stock.calendar
+        if isinstance(cal, dict):
+            eps_est = cal.get("Earnings Average")
+            rev_est = cal.get("Revenue Average")
+    except Exception as e:
+        logger.warning(f"calendar estimates failed for {sym}: {e}")
+
+    timing = eps_prior = beat_rate = None
+    past_events: list = []
+    try:
+        df = stock.get_earnings_dates(limit=12)
+        if df is not None and not df.empty:
+            now = pd.Timestamp.now(tz=df.index.tz)
+            future = df[df.index > now]
+            past = df[df.index <= now].sort_index(ascending=False)
+            if not future.empty:
+                hour = future.index.min().hour
+                timing = "Before Open" if hour <= 10 else "After Close" if hour >= 15 else None
+            if "Reported EPS" in past.columns:
+                # Match the prior-year quarter by date, not by position: dropna can
+                # skip quarters and silently shift a positional lookback.
+                reported = past["Reported EPS"].dropna()
+                if not reported.empty:
+                    anchor_ts = future.index.min() if not future.empty else now
+                    diffs = abs(reported.index - (anchor_ts - pd.DateOffset(years=1)))
+                    i = int(diffs.argmin())
+                    if diffs[i] <= pd.Timedelta(days=60):
+                        eps_prior = round(float(reported.iloc[i]), 2)
+            if "Surprise(%)" in past.columns:
+                surp = past["Surprise(%)"].dropna().head(8)
+                if len(surp) >= 2:
+                    beat_rate = round(float((surp > 0).mean() * 100))
+            past_events = [(ts.date(), ts.hour) for ts in past.index[:8]]
+    except Exception as e:
+        logger.warning(f"earnings dates failed for {sym}: {e}")
+
+    hist_move = None
+    if past_events:
+        try:
+            hist = get_history(sym, period="2y")
+            if hist is not None and not hist.empty and "Close" in hist.columns:
+                closes = hist["Close"].dropna()
+                if getattr(closes.index, "tz", None) is not None:
+                    closes.index = closes.index.tz_localize(None)
+                reactions = []
+                for rd, hour in past_events:
+                    anchor = pd.Timestamp(rd)
+                    # The report-day close is pre-print for AMC reporters and
+                    # post-print for BMO; include it on the right side so the
+                    # reaction spans one session, not two.
+                    if hour >= 15:
+                        before = closes[closes.index <= anchor]
+                        after = closes[closes.index > anchor]
+                    elif hour <= 10:
+                        before = closes[closes.index < anchor]
+                        after = closes[closes.index >= anchor]
+                    else:
+                        before = closes[closes.index < anchor]
+                        after = closes[closes.index > anchor]
+                    if not before.empty and not after.empty and before.iloc[-1]:
+                        reactions.append(abs(after.iloc[0] / before.iloc[-1] - 1) * 100)
+                if reactions:
+                    hist_move = round(sum(reactions) / len(reactions), 1)
+        except Exception as e:
+            logger.warning(f"reaction history failed for {sym}: {e}")
+
+    def _num(v):
+        try:
+            f = float(v)
+            return None if f != f else f
+        except (TypeError, ValueError):
+            return None
+
+    out = {
+        "ticker": sym,
+        "reportTiming": timing,
+        "epsEst": _num(eps_est),
+        "epsPriorYear": eps_prior,
+        "revEst": _num(rev_est),
+        "histAvgMovePct": hist_move,
+        "beatRatePct": beat_rate,
+    }
+    disk_set(ck, out, ttl=43200)   # 12h
+    return out
+
+
 @router.get("/hub/analyst")
 async def get_corporate_hub_analyst(ticker: str):
     """Analyst consensus: rating distribution, mean/high/low targets, implied upside."""

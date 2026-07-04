@@ -35,9 +35,9 @@
     "hash": "1e3e06221908a1dcd4c4a170bb06449a593b8e71827c32fa22380b67e987aa3c"
   },
   "/Users/willneedlman/finance_dashboard/backend/routers/corporate.py": {
-    "size": 44181,
-    "mtime_ns": 1782932731068796593,
-    "hash": "f98424a378e4797be14651a52a5e2854df0f95d80354b3a698609afc95e07aa8"
+    "size": 47437,
+    "mtime_ns": 1783185782581677250,
+    "hash": "fa43536e94e1a844535400672d03fb2a00e70172080f389a6a1a2e6e57c5c5d2"
   },
   "/Users/willneedlman/finance_dashboard/backend/routers/correlation.py": {
     "size": 1887,
@@ -170,9 +170,9 @@
     "hash": "3461abd4dbf053f009c306405c65c47155afb83473a8faade45b9b349d559604"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/CorporateHub.tsx": {
-    "size": 43281,
-    "mtime_ns": 1783119863058025908,
-    "hash": "703726d847f93df47bf1120ea55922821b864ba12e1350a00b66a9397896f2dd"
+    "size": 43229,
+    "mtime_ns": 1783186886440160886,
+    "hash": "40f8d2f003cad61544a2f1b45aae87296cbc6aa194956e72b4a09d3e45b50a91"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/DCFValuation.tsx": {
     "size": 33116,
@@ -1055,9 +1055,9 @@
     "hash": "7360854e5950a7cbaa7345a680136a0d0e3f8fa5b5188dbdb8c958367940b32f"
   },
   "/Users/willneedlman/finance_dashboard/backend/routers/ai.py": {
-    "size": 10511,
-    "mtime_ns": 1781227649523194717,
-    "hash": "91b9d90591b96af08d502e92f42774298d2dfa504f27cfd0998c864fd0c175d1"
+    "size": 11254,
+    "mtime_ns": 1783186607000101206,
+    "hash": "7869d40561256143bd7c86f47a2edf4285190027c1ddfbb9920753fa7aadd3a2"
   },
   "/Users/willneedlman/finance_dashboard/skills-lock.json": {
     "size": 5191,
@@ -1475,9 +1475,9 @@
     "hash": "173f5e9ac04a71018786ad7816728365c51eab30da5d6825f8dad187a79b7d63"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/marketing/Marketing.tsx": {
-    "size": 86570,
-    "mtime_ns": 1783120749095811308,
-    "hash": "4b200276f9ee7023549f5a718bccd8ec899d80d63ba713c3d1542cc2c228f42e"
+    "size": 86585,
+    "mtime_ns": 1783186058204962340,
+    "hash": "d6b6a3f6a2ae706b883a103d2f32fbffe6ccbca0edc8e1838e58738e1952e8d5"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/DividendDiscount.tsx": {
     "size": 8606,
@@ -1765,9 +1765,9 @@
     "hash": "02757b34aa204a984cb11d1931b33f232b3730871632b5fab7e6237d28f771ae"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/lib/hubs.ts": {
-    "size": 11400,
-    "mtime_ns": 1783120749094800463,
-    "hash": "f8366516f89c40086025ed4dd3ca49a0f80fbe9095c7facd2b47d7ceea630bee"
+    "size": 11420,
+    "mtime_ns": 1783186039295587892,
+    "hash": "5f9bca5afe4b95cb5983fd196b6f46d161c7f01e40490d6623c629016e7a5bc9"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/lib/recents.ts": {
     "size": 628,

@@ -2,7 +2,7 @@
 source_file: "backend/routers/corporate.py"
 type: "code"
 community: "Backend"
-location: "563"
+location: "649"
 tags:
   - graphify/code
   - graphify/EXTRACTED
