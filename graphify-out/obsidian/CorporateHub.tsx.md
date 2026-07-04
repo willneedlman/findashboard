@@ -19,6 +19,7 @@ tags:
 - [[frontend_src_pages_corporatehub_tsx_fetchinsiderticker]] - `contains` [EXTRACTED]
 - [[frontend_src_pages_corporatehub_tsx_fetchshortticker]] - `contains` [EXTRACTED]
 - [[frontend_src_pages_corporatehub_tsx_corporatehubcontent]] - `contains` [EXTRACTED]
+- [[frontend_src_components_pagewrapper_tsx_pagewrapper]] - `imports` [EXTRACTED]
 - [[react]] - `imports` [EXTRACTED]
 - [[react_router_dom]] - `imports` [EXTRACTED]
 - [[lucide_react]] - `imports` [EXTRACTED]
@@ -28,9 +29,8 @@ tags:
 - [[frontend_src_lib_tickerlogos_ts_tickerlogos]] - `imports` [EXTRACTED]
 - [[frontend_src_hooks_useismobile_ts_useismobile]] - `imports` [EXTRACTED]
 - [[frontend_src_components_portfolioio_tsx_portfolioio]] - `imports` [EXTRACTED]
-- [[frontend_src_components_tickertaginput_tsx_tickertaginput]] - `renders` [EXTRACTED]
 - [[frontend_src_pages_corporatehub_tsx_sparkline]] - `renders` [EXTRACTED]
-- [[frontend_src_components_portfolioio_tsx_portfolioio]] - `renders` [EXTRACTED]
-- [[frontend_src_pages_corporatehub_tsx_tickerlogo]] - `renders` [EXTRACTED]
+- [[frontend_src_components_pagewrapper_tsx_pagewrapper]] - `renders` [EXTRACTED]
+- [[frontend_src_pages_corporatehub_tsx_corporatehubcontent]] - `renders` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

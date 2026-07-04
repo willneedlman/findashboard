@@ -2,7 +2,7 @@
 source_file: "backend/sentiment/lexicon.py"
 type: "code"
 community: "Backend"
-location: "588"
+location: "606"
 tags:
   - graphify/code
   - graphify/EXTRACTED

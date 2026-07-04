@@ -30,7 +30,7 @@ tags:
 - [[frontend_src_components_tickerlogo_tsx_tickerlogo]] - `imports` [EXTRACTED]
 - [[frontend_src_hooks_useismobile_ts_useismobile]] - `imports` [EXTRACTED]
 - [[frontend_src_contexts_portfoliocontext_tsx_portfoliocontext]] - `imports` [EXTRACTED]
-- [[frontend_src_pages_earningscalendar_tsx_hourchip]] - `renders` [EXTRACTED]
+- [[frontend_src_pages_earningscalendar_tsx_groupbody]] - `renders` [EXTRACTED]
 - [[frontend_src_pages_earningscalendar_tsx_toggle]] - `renders` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

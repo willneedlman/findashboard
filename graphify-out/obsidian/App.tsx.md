@@ -28,9 +28,9 @@ tags:
 - [[frontend_src_app_tsx_navtracker]] - `contains` [EXTRACTED]
 - [[frontend_src_app_tsx_impliedprobability]] - `contains` [EXTRACTED]
 - [[frontend_src_app_tsx_fedrates]] - `contains` [EXTRACTED]
-- [[frontend_src_app_tsx_marketcalendar]] - `contains` [EXTRACTED]
+- [[frontend_src_app_tsx_corporatehub]] - `contains` [EXTRACTED]
+- [[frontend_src_app_tsx_earningscalendar]] - `contains` [EXTRACTED]
 - [[frontend_src_app_tsx_dcfvaluation]] - `contains` [EXTRACTED]
 - [[frontend_src_app_tsx_dividenddiscount]] - `contains` [EXTRACTED]
-- [[frontend_src_app_tsx_sotp]] - `contains` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

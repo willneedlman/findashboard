@@ -26,11 +26,11 @@ tags:
 - [[frontend_src_components_expiryselect_tsx_expiryselect]] - `imports` [EXTRACTED]
 - [[frontend_src_components_dashboard_widgets_useportfolio_ts_useportfolio]] - `imports` [EXTRACTED]
 - [[lucide_react]] - `renders` [EXTRACTED]
-- [[frontend_src_components_dashboard_widgetframe_tsx_macrocatsettings]] - `renders` [EXTRACTED]
-- [[frontend_src_components_dashboard_widgetframe_tsx_creditspreadssettings]] - `renders` [EXTRACTED]
 - [[frontend_src_components_expiryselect_tsx_expiryselect]] - `renders` [EXTRACTED]
-- [[frontend_src_hooks_usedashboard_ts_usedashboard]] - `renders` [EXTRACTED]
-- [[frontend_src_components_dashboard_widgetframe_tsx_colorcheckboxes]] - `renders` [EXTRACTED]
 - [[frontend_src_components_tickertaginput_tsx_tickertaginput]] - `renders` [EXTRACTED]
+- [[frontend_src_components_dashboard_widgetframe_tsx_colorcheckboxes]] - `renders` [EXTRACTED]
+- [[frontend_src_hooks_usedashboard_ts_usedashboard]] - `renders` [EXTRACTED]
+- [[frontend_src_components_dashboard_widgetframe_tsx_yieldcheckboxes]] - `renders` [EXTRACTED]
+- [[frontend_src_components_dashboard_widgetframe_tsx_macrocatsettings]] - `renders` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

@@ -21,6 +21,8 @@ tags:
 - [[backend_routers_portfolio_py_lever_equity]] - `contains` [EXTRACTED]
 - [[backend_routers_portfolio_py_series_metrics]] - `contains` [EXTRACTED]
 - [[backend_routers_portfolio_py_backtestrequest]] - `contains` [EXTRACTED]
+- [[backend_routers_portfolio_py_rebalance_mask]] - `contains` [EXTRACTED]
+- [[backend_routers_portfolio_py_walk_portfolio]] - `contains` [EXTRACTED]
 - [[backend_routers_portfolio_py_backtest]] - `contains` [EXTRACTED]
 - [[backend_routers_portfolio_py_montecarlorequest]] - `contains` [EXTRACTED]
 - [[backend_routers_portfolio_py_monte_carlo]] - `contains` [EXTRACTED]
@@ -30,7 +32,5 @@ tags:
 - [[backend_routers_portfolio_py_holding]] - `contains` [EXTRACTED]
 - [[backend_routers_portfolio_py_stressrequest]] - `contains` [EXTRACTED]
 - [[backend_routers_portfolio_py_period_return]] - `contains` [EXTRACTED]
-- [[backend_routers_portfolio_py_stress_test]] - `contains` [EXTRACTED]
-- [[backend_routers_portfolio_py_validate]] - `contains` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Backend

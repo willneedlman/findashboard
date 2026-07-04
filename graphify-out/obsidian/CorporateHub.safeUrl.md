@@ -2,7 +2,7 @@
 source_file: "frontend/src/pages/CorporateHub.tsx"
 type: "code"
 community: "Frontend"
-location: "50"
+location: "51"
 tags:
   - graphify/code
   - graphify/EXTRACTED

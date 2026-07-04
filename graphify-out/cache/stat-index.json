@@ -65,9 +65,9 @@
     "hash": "2a9cb13a3e48bf91c18eb6de2b3b96785d0fe67a0e7f38e5ac3cb8e80f91fcba"
   },
   "/Users/willneedlman/finance_dashboard/backend/routers/portfolio.py": {
-    "size": 22701,
-    "mtime_ns": 1781727255822942738,
-    "hash": "21cdebf86758a1a0fc3ba25be64bd0349a8b20aae3cc0c6037be8e4fd2b077f1"
+    "size": 24436,
+    "mtime_ns": 1783118973031688427,
+    "hash": "04f3725fd35ef2e07dba5de89731dfb8f58e214c17e22e0d770735fbb5832d5d"
   },
   "/Users/willneedlman/finance_dashboard/backend/routers/probability.py": {
     "size": 21158,
@@ -125,9 +125,9 @@
     "hash": "190c877db466995bf1482f4a16abd06e04a89ede3119341e2a86ff96e1737b27"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/App.tsx": {
-    "size": 15763,
-    "mtime_ns": 1783109904103429111,
-    "hash": "545261b098fe0c9edc601817bb8a782692f57e54747524c6123549ea1e00158b"
+    "size": 15814,
+    "mtime_ns": 1783119702194124513,
+    "hash": "640367d1ef73b28b78c7fb166dcda5c5557b476b537009cd51c1827211e017ae"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/components/Layout.tsx": {
     "size": 26124,
@@ -170,9 +170,9 @@
     "hash": "3461abd4dbf053f009c306405c65c47155afb83473a8faade45b9b349d559604"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/CorporateHub.tsx": {
-    "size": 43108,
-    "mtime_ns": 1782971023625162900,
-    "hash": "216745e9e72ec361d4fc2e1919dda321f90d2082e429270a1048f55625719df1"
+    "size": 43281,
+    "mtime_ns": 1783119863058025908,
+    "hash": "703726d847f93df47bf1120ea55922821b864ba12e1350a00b66a9397896f2dd"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/DCFValuation.tsx": {
     "size": 33116,
@@ -200,9 +200,9 @@
     "hash": "57018eb5a75dda769717a792cfe59bb930b3fd7c73f00b76ecd6b47e8a2bde25"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/MonteCarlo.tsx": {
-    "size": 40334,
-    "mtime_ns": 1782845823241391440,
-    "hash": "017cc1379da68da576eb06c94909e768dbc35ec1f804ec6de8f5a342bad35803"
+    "size": 41243,
+    "mtime_ns": 1783119027619816190,
+    "hash": "535438179e22dff202387f7cb6145cf5885860d3a87dc1b77cb7583c29b3f2a6"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/NAVTracker.tsx": {
     "size": 17211,
@@ -600,9 +600,9 @@
     "hash": "815668e090d05a73b05f6694185d7d8aeea107ba0f06252e6759cce6994d750c"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/components/dashboard/WidgetFrame.tsx": {
-    "size": 30820,
-    "mtime_ns": 1782873307133343428,
-    "hash": "4fa4c30888d1f5130a244f34595b4977f39b10a281928e86d8bae8fccfa122b2"
+    "size": 30819,
+    "mtime_ns": 1783120749096184229,
+    "hash": "301b22d49fd1da830fca8c8a7b98785ab030e8cf58ac611e155dc0ed3b58a601"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/components/dashboard/WidgetPalette.tsx": {
     "size": 5165,
@@ -675,9 +675,9 @@
     "hash": "d0f8bc00d003313fe2716f66479862667d4df419e93f7626885462b7d9f41130"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/hooks/useDashboard.ts": {
-    "size": 31165,
-    "mtime_ns": 1782921745596384948,
-    "hash": "654a697a92db9f6ff84bcc73bec933460ae2952d0ceb992bc0a8364064c46178"
+    "size": 31164,
+    "mtime_ns": 1783120749096566609,
+    "hash": "a6a93870489b2172f47b18ca5ecf41b3f46dab8b5283ec8a000a3bed09e3656a"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/hooks/useIsMobile.ts": {
     "size": 562,
@@ -1475,9 +1475,9 @@
     "hash": "173f5e9ac04a71018786ad7816728365c51eab30da5d6825f8dad187a79b7d63"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/marketing/Marketing.tsx": {
-    "size": 86212,
-    "mtime_ns": 1783109957202063511,
-    "hash": "3f26570078011277b7e5a125fb50deb53411626c065eec4be43007c0e5c6ad95"
+    "size": 86570,
+    "mtime_ns": 1783120749095811308,
+    "hash": "4b200276f9ee7023549f5a718bccd8ec899d80d63ba713c3d1542cc2c228f42e"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/DividendDiscount.tsx": {
     "size": 8606,
@@ -1765,9 +1765,9 @@
     "hash": "02757b34aa204a984cb11d1931b33f232b3730871632b5fab7e6237d28f771ae"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/lib/hubs.ts": {
-    "size": 11203,
-    "mtime_ns": 1783109906714021732,
-    "hash": "f2604fabd903cb5712d68839070cdfaaa7bb888ba84026c967f38d87196b7df9"
+    "size": 11400,
+    "mtime_ns": 1783120749094800463,
+    "hash": "f8366516f89c40086025ed4dd3ca49a0f80fbe9095c7facd2b47d7ceea630bee"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/lib/recents.ts": {
     "size": 628,
@@ -1820,9 +1820,9 @@
     "hash": "2b1ea2a7554cd85bc1b0c06b0201c6c360238334bb764723b4e4d6c4c83ba0d7"
   },
   "/Users/willneedlman/finance_dashboard/backend/sentiment/lexicon.py": {
-    "size": 39960,
-    "mtime_ns": 1783117254546684080,
-    "hash": "a85084c8f220c669ebd47cdc764ab38204b086a83e9bb40739744beac29200d7"
+    "size": 41422,
+    "mtime_ns": 1783184880376978491,
+    "hash": "871ed367bca01f3dfbeafcdc9b84b090275a24f709f92dd1f5fdccbf4c540269"
   },
   "/Users/willneedlman/finance_dashboard/backend/sentiment/engine.py": {
     "size": 11711,
@@ -1870,9 +1870,9 @@
     "hash": "9d645659162ab0edc8465edca8b57236d0548385e5f6d11f3a04d1931dc052e8"
   },
   "/Users/willneedlman/finance_dashboard/backend/tests/test_sentiment.py": {
-    "size": 14594,
-    "mtime_ns": 1783117276832638739,
-    "hash": "c31f5f860c5812ced82ca44d8de4a704ce1ebcd64a94c4d00b4642409b1da2ae"
+    "size": 15459,
+    "mtime_ns": 1783184893817166463,
+    "hash": "392c4d5ddc2b07218e29ea9db336e51b9dcecb44f302a59dc0642121717f3c9f"
   },
   "/Users/willneedlman/finance_dashboard/requirements-dev.txt": {
     "size": 136,
@@ -1985,9 +1985,9 @@
     "hash": "6dcdb8ed76227c18a0f93d4335f7d3f2bbe90dded11070b65fde9ec35ab7e12c"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/portfolio-backtester/components.tsx": {
-    "size": 58446,
-    "mtime_ns": 1782836684768265271,
-    "hash": "d5fde972706a3bd3ed327ec239be118ec858bd97e2b2ef51766e484a461d674c"
+    "size": 58661,
+    "mtime_ns": 1783119009491004342,
+    "hash": "276b336de600ce2d08c0d20869cf66f89a4ae29050bd66ed1e5f3c46ab17e6a5"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/strategy-builder/shared.ts": {
     "size": 10915,
@@ -2060,14 +2060,14 @@
     "hash": "35faaeda83e0772a58c81f1f71cca576a609b594c74b081b8b1c0c0b085d9325"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/EarningsCalendar.tsx": {
-    "size": 16681,
-    "mtime_ns": 1782920396737019566,
-    "hash": "30fdf7893ae45ca8e282e59ba2b0d210dfe91580e8c2b3514ca7dc522efd6cf0"
+    "size": 16818,
+    "mtime_ns": 1783120749095417970,
+    "hash": "275796b9430914c14803d438763e093f0f1f1d0bc163cc8be6764d734a2a12fc"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/components/portfolio/ConfigHeader.tsx": {
-    "size": 18092,
-    "mtime_ns": 1782841146634510724,
-    "hash": "4ad24e292e7138b75db5f12b913d95e3fa1b6dfa5fcdc86c791ea11ae71bc35e"
+    "size": 18981,
+    "mtime_ns": 1783118994482252541,
+    "hash": "7255f14fd32beb829f15e57c4f5679462789c69d660f8d5328805db5dce8f29c"
   },
   "/Users/willneedlman/finance_dashboard/backend/serpapi_finance.py": {
     "size": 4388,
@@ -2200,19 +2200,14 @@
     "hash": "e8efafb876bc884e85d868d35fd382f423aa0c973dfc2e342d8138c934db7e2d"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/components/ToolTabs.tsx": {
-    "size": 1229,
-    "mtime_ns": 1782920107901570312,
-    "hash": "06c5061650c7163390eeedb054ccc9f299ef0ce39fee9501635753009e0b2827"
+    "size": 1232,
+    "mtime_ns": 1783119863057555887,
+    "hash": "48d588b8cdac84ae4f263627093348c383ff7d25c01bd074c7e59e5946f7b8e2"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/ImpliedVolatility.tsx": {
     "size": 1091,
     "mtime_ns": 1782921737989285496,
     "hash": "921ce29016023497c576459d9785758e8f37fb2c68cb9248211638f548f16ece"
-  },
-  "/Users/willneedlman/finance_dashboard/frontend/src/pages/MarketCalendar.tsx": {
-    "size": 1207,
-    "mtime_ns": 1782920415606750484,
-    "hash": "2a6e7346f870c89eb034972d7f8a3a1f0505a78c1734a9f76948611c901d24ef"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/MarketMakerSimulator.tsx": {
     "size": 1304,
