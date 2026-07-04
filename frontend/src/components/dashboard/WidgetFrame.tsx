@@ -99,7 +99,7 @@ const WIDGET_LABELS: Record<string, string> = {
   'options-pricer':     'Options Pricer',
   'delta-target':       'Delta Target',
   'watchlist':          'Watchlist',
-  'earnings-calendar':  'Earnings Calendar',
+  'earnings-calendar':  'Earnings Scanner',
   'news-feed':          'News Feed',
   'correlation-matrix': 'Correlation Matrix',
   'portfolio-summary':  'Portfolio',

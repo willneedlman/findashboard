@@ -755,7 +755,7 @@ export function Landing() {
           <motion.div variants={container} initial="hidden" animate="show">
             <motion.div className="eyebrow" variants={item}>Institutional-style analytics</motion.div>
             <motion.h1 variants={item}>Options, valuation, macro, and trading<br />in one <span className="g">terminal</span>.</motion.h1>
-            <motion.p className="lede" variants={item}>Options flow, dealer gamma, live energy flows, DCF valuation, macro rates, paper trading. 43 tools across six hubs in one dark terminal. Go from first idea to sized position.</motion.p>
+            <motion.p className="lede" variants={item}>Options flow, dealer gamma, live energy flows, DCF valuation, macro rates, paper trading. 44 tools across six hubs in one dark terminal. Go from first idea to sized position.</motion.p>
             <motion.div className="cta" variants={item}>
               <Magnetic><Link to="/app" className="btn btn-gold btn-lg">Launch Terminal →</Link></Magnetic>
               <Link to="/product/research" className="btn btn-ghost btn-lg">Explore the tools</Link>
@@ -863,12 +863,12 @@ export function Landing() {
       <section className="blk" style={{ borderTop: '1px solid var(--line)' }}><div className="wrap">
         <Reveal className="sec-head">
           <div className="eyebrow">Six hubs</div>
-          <h2>43 tools, each with one home.</h2>
+          <h2>44 tools, each with one home.</h2>
           <p>Every tool lives in exactly one hub, so you always know where to look. A command palette jumps anywhere.</p>
         </Reveal>
         <StaggerGroup className="hubband">
           {([
-            ['10', 'Research', 'Screener · Sentiment · Earnings AI', '/product/research'],
+            ['11', 'Research', 'Screener · Sentiment · Earnings AI', '/product/research'],
             ['7', 'Options', 'Dealer GEX · Flow · Implied Vol', '/product/options'],
             ['9', 'Macro', 'Rate Engine · Energy Flows · Global Markets', '/product/macro'],
             ['2', 'Charting', 'Chart Studio · Asset Overlay', '/product/charting'],
@@ -916,7 +916,7 @@ export function Landing() {
 export function ResearchPage() {
   return (
     <Shell active="research">
-      <PageHero eyebrow="Research · 10 tools" h1="Find and vet the name."
+      <PageHero eyebrow="Research · 11 tools" h1="Find and vet the name."
         lede="Screen the universe, read the company, and track the news flow. Ten tools cover discovery, single-name work, and the statistics behind the idea." />
 
       <section className="blk"><div className="wrap">
@@ -971,9 +971,14 @@ export function ResearchPage() {
             <div className="tags"><span className="tag">Look-through</span><span className="tag">Overlap</span><span className="tag">Concentration</span></div>
           </div></div>
           <div className="frow"><div className="idx">05</div><div>
-            <h3>Market Calendar</h3>
-            <p>Corporate catalysts and the earnings calendar in one view.</p>
-            <div className="tags"><span className="tag">Catalysts</span><span className="tag">Earnings dates</span></div>
+            <h3>Corporate Catalysts</h3>
+            <p>Upcoming catalysts per ticker with valuation, short interest, and insider context.</p>
+            <div className="tags"><span className="tag">Catalyst radar</span><span className="tag">Timeline</span></div>
+          </div></div>
+          <div className="frow"><div className="idx">06</div><div>
+            <h3>Earnings Scanner</h3>
+            <p>Confirmed and estimated report dates with past price reactions.</p>
+            <div className="tags"><span className="tag">Report dates</span><span className="tag">Reactions</span></div>
           </div></div>
         </div>
       </div></section>

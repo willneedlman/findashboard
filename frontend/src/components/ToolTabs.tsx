@@ -1,5 +1,5 @@
 // Shared underline tab bar for consolidated tools (Implied Volatility, Market
-// Maker Simulator, Market Calendar). Active tab in gold with an underline.
+// Maker Simulator, Implied Volatility). Active tab in gold with an underline.
 export interface ToolTab { key: string; label: string }
 
 export default function ToolTabs({ tabs, value, onChange }: { tabs: ToolTab[]; value: string; onChange: (k: string) => void }) {

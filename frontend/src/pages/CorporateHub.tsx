@@ -1,3 +1,4 @@
+import PageWrapper from '../components/PageWrapper'
 import { useState, useEffect, useRef, Fragment } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Radar, CalendarClock } from 'lucide-react'
@@ -328,7 +329,7 @@ export function CorporateHubContent() {
   )
 
   // ── Tab header (live caption + view toggle; the page title lives on the
-  // Market Calendar shell, so no wordmark here) ──
+  // page shell, so no wordmark here) ──
   const pageHeader = (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingBottom: 12, marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
       <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, letterSpacing: '0.14em', color: 'var(--theme-secondary, #8099b0)' }}>{tickers.filter(Boolean).length} TICKERS TRACKED</span>
@@ -688,4 +689,8 @@ export function CorporateHubContent() {
       </div>
     </div>
   )
+}
+
+export default function CorporateHub() {
+  return <PageWrapper title="Corporate Catalysts"><CorporateHubContent /></PageWrapper>
 }

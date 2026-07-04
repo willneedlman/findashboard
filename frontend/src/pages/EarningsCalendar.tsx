@@ -362,3 +362,7 @@ function Centered({ children, tone }: { children: React.ReactNode; tone?: string
     }}>{children}</div>
   )
 }
+
+export default function EarningsCalendar() {
+  return <PageWrapper title="Earnings Scanner"><EarningsCalendarContent /></PageWrapper>
+}

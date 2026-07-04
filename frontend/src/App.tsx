@@ -29,7 +29,8 @@ const CusipLookup        = lazyWithReload(() => import('./pages/CusipLookup'))
 const NAVTracker         = lazyWithReload(() => import('./pages/NAVTracker'))
 const ImpliedProbability = lazyWithReload(() => import('./pages/ImpliedProbability'))
 const FedRates           = lazyWithReload(() => import('./pages/FedRates'))
-const MarketCalendar     = lazyWithReload(() => import('./pages/MarketCalendar'))
+const CorporateHub       = lazyWithReload(() => import('./pages/CorporateHub'))
+const EarningsCalendar   = lazyWithReload(() => import('./pages/EarningsCalendar'))
 const DCFValuation       = lazyWithReload(() => import('./pages/DCFValuation'))
 const DividendDiscount   = lazyWithReload(() => import('./pages/DividendDiscount'))
 const SOTP               = lazyWithReload(() => import('./pages/SOTP'))
@@ -204,7 +205,7 @@ export default function App() {
               <Route path="/probability" element={<ImpliedProbability />} />
               <Route path="/skew"       element={<Navigate to="/iv-tracker?tab=skew" replace />} />
               <Route path="/fed"        element={<FedRates />} />
-              <Route path="/corporate"  element={<MarketCalendar />} />
+              <Route path="/corporate"  element={<CorporateHub />} />
               <Route path="/chain"      element={<OptionsChainScanner />} />
               <Route path="/correlation" element={<CorrelationAnalysis />} />
               <Route path="/strategy"   element={<StrategyBuilder />} />
@@ -214,7 +215,7 @@ export default function App() {
               <Route path="/settings"        element={<SettingsPage />} />
               <Route path="/screener"        element={<StockScreener />} />
               <Route path="/earnings"        element={<EarningsSummarizer />} />
-              <Route path="/earnings-calendar" element={<Navigate to="/corporate?tab=earnings" replace />} />
+              <Route path="/earnings-calendar" element={<EarningsCalendar />} />
               <Route path="/admin"           element={<AdminTester />} />
               <Route path="/stress-test"     element={<Navigate to="/admin" replace />} />
               <Route path="/sector-rotation" element={<SectorRotation />} />

@@ -151,7 +151,7 @@ export const WIDGET_LABELS: Record<WidgetType, string> = {
   'news-feed':           'News Feed',
   'watchlist':           'Watchlist',
   'macro-strip':         'Macro Strip',
-  'earnings-calendar':   'Earnings Calendar',
+  'earnings-calendar':   'Earnings Scanner',
   'options-snapshot':    'Options Snapshot',
   'portfolio-summary':   'Portfolio Summary',
   'options-pricer':      'Options Pricer',
