@@ -3,6 +3,7 @@ import { lazyWithReload } from './lib/chunkReload'
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import CommandPalette from './components/CommandPalette'
+import LoadingState from './components/LoadingState'
 import Layout from './components/Layout'
 import { ThemeProvider, useTheme } from './contexts/ThemeContext'
 import { PortfolioProvider } from './contexts/PortfolioContext'
@@ -116,7 +117,7 @@ function TerminalChrome() {
     <Layout>
       <CommandPalette />
       <AnimatePresence mode="wait">
-        <Suspense key={location.pathname} fallback={<PageLoader />}>
+        <Suspense key={location.pathname} fallback={<LoadingState />}>
           <Outlet />
         </Suspense>
       </AnimatePresence>

@@ -2,12 +2,23 @@ import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
-import MetricCard from '../components/MetricCard'
 import SidebarLayout from '../components/SidebarLayout'
+import { KpiCell } from '../components/mmCockpit'
 import { fetchNAVProxy, fetchNAVRegistry } from '../hooks/useApi'
 import EmptyState from '../components/EmptyState'
 import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection, VerdictStrip, RangeTrack } from './valuationShared'
 import { T } from '../lib/theme'
+
+const STRIP: React.CSSProperties = {
+  display: 'flex', alignItems: 'stretch', overflowX: 'auto',
+  background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
+}
+const POS = 'var(--theme-positive)', NEG = 'var(--theme-negative)'
+const BLUE = 'var(--theme-tertiary, #60a5fa)', WARN = 'var(--theme-warn)'
+const TIER_LABELS: Record<string, string> = {
+  'mstr-edgar': 'EDGAR live', 'coingecko': 'CoinGecko live', 'fund-nav': 'Fund NAV live',
+  'manual': 'Manual', 'needs-manual': 'Enter manually',
+}
 
 function ChartPanel({ label, height, children }: { label: string; height: number; children: React.ReactNode }) {
   return (
@@ -210,58 +221,25 @@ export default function NAVTracker() {
                   />
                 )
               })()}
-              <div className="metric-grid">
-                <MetricCard label={`${p.target} Price`} value={`$${data.current.target_price.toLocaleString()}`}
-                  help={`Live market price of ${p.target}. Compared against net NAV floor to determine premium or discount.`} />
-                <MetricCard label="Gross Asset / Share" value={`$${data.current.gav_per_share.toLocaleString()}`}
-                  help="Gross Asset Value per share — total asset holdings at spot, divided by shares outstanding. Does not subtract debt." />
-                <MetricCard label="True Net NAV / Share" value={`$${data.current.nav_per_share.toLocaleString()}`}
-                  help="Net Asset Value per share — holdings at spot minus gross debt and adjusted for cash, divided by shares outstanding." />
-                <MetricCard label="Implied Premium"
-                  value={`${data.current.premium > 0 ? '+' : ''}${data.current.premium}%`}
-                  deltaPositive={data.current.premium > 0}
-                  help={`How much ${p.target} market price exceeds (or trails) the True Net NAV per share.`} />
-                <MetricCard label={`${data.asset_label ?? p.asset} Spot`} value={`$${data.current.asset_spot.toLocaleString()}`}
-                  help={`Current spot price of ${data.asset_label ?? p.asset}. Drives real-time GAV and NAV calculations.`} />
-                <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderTop: '3px solid var(--theme-primary, #c9a84c)', padding: '10px 12px' }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', marginBottom: 6 }}>
-                    Total Holdings
+              {(() => {
+                const c = data.current
+                const tier = data.source_tier as string | undefined
+                const liveTier = tier === 'mstr-edgar' || tier === 'coingecko' || tier === 'fund-nav'
+                return (
+                  <div style={STRIP}>
+                    <KpiCell grow align="top" valueSize={15} label={`${p.target} Price`} value={`$${c.target_price.toLocaleString()}`} />
+                    <KpiCell grow align="top" valueSize={15} label="Gross Asset / Share" value={`$${c.gav_per_share.toLocaleString()}`} />
+                    <KpiCell grow align="top" valueSize={15} label="True Net NAV / Share" value={`$${c.nav_per_share.toLocaleString()}`} color={BLUE} />
+                    <KpiCell grow align="top" valueSize={15} label="Implied Premium" value={`${c.premium > 0 ? '+' : ''}${c.premium}%`} color={c.premium > 0 ? POS : NEG} />
+                    <KpiCell grow align="top" valueSize={15} label={`${data.asset_label ?? p.asset} Spot`} value={`$${c.asset_spot.toLocaleString()}`} />
+                    <KpiCell grow align="top" valueSize={15} label="Total Holdings" value={Number(data.holdings).toLocaleString()}
+                      sub={TIER_LABELS[tier ?? ''] ?? 'Source'} subColor={liveTier ? POS : WARN} />
+                    {data.unrealized_pnl !== 0 && (
+                      <KpiCell grow align="top" valueSize={15} label="Unrealized P&L" value={`$${data.unrealized_pnl}B`} color={data.unrealized_pnl > 0 ? POS : NEG} />
+                    )}
                   </div>
-                  <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 20, fontWeight: 700, color: 'var(--theme-text, #d7e3fc)' }}>
-                    {Number(data.holdings).toLocaleString()}
-                  </div>
-                  {(() => {
-                    const tier = data.source_tier as string | undefined
-                    const live = tier === 'mstr-edgar' || tier === 'coingecko' || tier === 'fund-nav'
-                    const labels: Record<string, string> = {
-                      'mstr-edgar': 'EDGAR live', 'coingecko': 'CoinGecko live', 'fund-nav': 'Fund NAV live',
-                      'manual': 'Manual', 'needs-manual': 'Enter manually',
-                    }
-                    return (
-                      <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                        <span style={{
-                          display: 'inline-flex', alignItems: 'center', gap: 4, alignSelf: 'flex-start',
-                          padding: '2px 7px', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
-                          textTransform: 'uppercase',
-                          background: live ? 'color-mix(in srgb, var(--theme-positive) 12%, transparent)' : 'color-mix(in srgb, var(--theme-warn) 12%, transparent)',
-                          border: `1px solid ${live ? 'color-mix(in srgb, var(--theme-positive) 35%, transparent)' : 'color-mix(in srgb, var(--theme-warn) 35%, transparent)'}`,
-                          color: live ? 'var(--theme-positive)' : 'var(--theme-warn)',
-                        }}>
-                          {labels[tier ?? ''] ?? 'Source'}
-                        </span>
-                        <span style={{ fontSize: 9, color: 'var(--theme-text-dim, rgba(255,255,255,0.28))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                          title={data.source}>{data.source}</span>
-                      </div>
-                    )
-                  })()}
-                </div>
-                {data.unrealized_pnl !== 0 && (
-                  <MetricCard label="Unrealized P&L"
-                    value={`$${data.unrealized_pnl}B`}
-                    deltaPositive={data.unrealized_pnl > 0}
-                    help="Unrealized gain or loss — (current spot − avg cost) × holdings." />
-                )}
-              </div>
+                )
+              })()}
 
               <ChartPanel label={`${p.target} Price vs Net NAV Floor`} height={288}>
                 <ResponsiveContainer width="100%" height={260}>

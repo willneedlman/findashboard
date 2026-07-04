@@ -2,7 +2,7 @@
 source_file: "frontend/src/lib/hubs.ts"
 type: "code"
 community: "Frontend"
-location: "141"
+location: "142"
 tags:
   - graphify/code
   - graphify/EXTRACTED
