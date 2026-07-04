@@ -1,1 +1,0 @@
-var e={RVI:`/logos/rvi.png`};function t(t){let n=t.toUpperCase(),r=[];return e[n]&&r.push(e[n]),r.push(`https://assets.parqet.com/logos/symbol/${t}?format=svg`),r.push(`https://images.financialmodelingprep.com/symbol/${n}.png`),r}function n(t,n=`svg`){return e[t.toUpperCase()]??`https://assets.parqet.com/logos/symbol/${t}?format=${n}`}export{n,t};
