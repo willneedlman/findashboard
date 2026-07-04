@@ -16,7 +16,7 @@ const T = {
   pos:   'var(--theme-positive, #22c55e)', neg: 'var(--theme-negative, #ef4444)',
 }
 
-interface Txn { date: string; insider: string; title: string; transaction: string; shares: number; value: number }
+interface Txn { date: string; insider: string; title: string; transaction: string; side: 'buy' | 'sell' | 'neutral'; shares: number; value: number }
 interface InsiderData { transactions: Txn[]; held_pct_institutions: number | null; held_pct_insiders: number | null }
 
 function fmtVal(v: number): string {
@@ -30,10 +30,9 @@ function fmtDate(d: string): string {
   const dt = new Date(d + 'T00:00:00')
   return isNaN(dt.getTime()) ? d : dt.toLocaleDateString('en-US', { month: 'short', day: '2-digit' })
 }
-function side(txn: string): { text: string; color: string } {
-  const t = (txn || '').toLowerCase()
-  if (t.includes('sale') || t.includes('sell') || t.includes('disposed')) return { text: 'SELL', color: T.neg }
-  if (t.includes('purchase') || t.includes('buy') || t.includes('acqui') || t.includes('grant') || t.includes('award')) return { text: 'BUY', color: T.pos }
+function side(txn: Txn): { text: string; color: string } {
+  if (txn.side === 'sell') return { text: 'SELL', color: T.neg }
+  if (txn.side === 'buy') return { text: 'BUY', color: T.pos }
   return { text: '—', color: T.muted }
 }
 
@@ -75,7 +74,7 @@ export default function InsiderWidget({ config }: { config: WidgetConfig }) {
         ) : txns.length === 0 ? (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, color: T.muted, fontFamily: T.label, fontSize: 11, textAlign: 'center' }}>No recent insider transactions.</div>
         ) : txns.map((t, i) => {
-          const s = side(t.transaction)
+          const s = side(t)
           return (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px', borderBottom: `1px solid ${T.rowBorder}` }}>
               <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, width: 42, flexShrink: 0 }}>{fmtDate(t.date)}</span>

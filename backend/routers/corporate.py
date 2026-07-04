@@ -431,6 +431,40 @@ async def get_corporate_hub_short(ticker: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _tx_side(t: str) -> str:
+    """Normalize yfinance's free-text transaction strings to one side so every
+    consumer classifies filings identically. Grants/awards/exercises are
+    'neutral' — they are not conviction buys."""
+    tl = t.lower()
+    if any(w in tl for w in ("sale", "sell", "sold", "disposi")):
+        return "sell"
+    if any(w in tl for w in ("purchase", "buy", "bought")):
+        return "buy"
+    return "neutral"
+
+
+@router.get("/hub/implied")
+def get_corporate_hub_implied(tickers: str):
+    """Options-implied move into the next report for a batch of tickers, from
+    the ATM straddle spanning the earnings date. Reuses the earnings router's
+    disk-cached helpers; worker pool stays at 2 for yfinance headroom."""
+    from concurrent.futures import ThreadPoolExecutor
+    from routers.earnings import _implied_move, _prior_report
+
+    syms = [t.strip().upper() for t in tickers.split(",") if t.strip()][:20]
+
+    def one(sym: str):
+        try:
+            im = _implied_move(sym, _prior_report(sym).get("nextDate"))
+            return sym, im.get("pct")
+        except Exception as e:
+            logger.warning(f"implied move failed for {sym}: {e}")
+            return sym, None
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        return {"implied": dict(pool.map(one, syms))}
+
+
 @router.get("/hub/insider")
 async def get_corporate_hub_insider(ticker: str):
     """Returns recent insider transactions for a ticker."""
@@ -454,6 +488,7 @@ async def get_corporate_hub_insider(ticker: str):
                         "insider": str(insider),
                         "title": str(title),
                         "transaction": str(txn_type),
+                        "side": _tx_side(str(txn_type)),
                         "shares": int(shares) if shares and not (isinstance(shares, float) and shares != shares) else 0,
                         "value": float(value) if value and not (isinstance(value, float) and value != value) else 0,
                     })

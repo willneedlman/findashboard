@@ -10,7 +10,6 @@ import useIsMobile from '../hooks/useIsMobile'
 interface TickerRow {
   ticker: string; name: string
   date: string; horizon: string
-  impliedMove: number
   pe: number | null
   pctChange: number | null
   marketCap: number | null
@@ -23,7 +22,8 @@ interface TickerRow {
 interface ShortRow { display: string; raw: number | null }
 
 interface InsiderTx {
-  date: string; insider: string; title: string; transaction: string; shares: number; value: number
+  date: string; insider: string; title: string; transaction: string
+  side: 'buy' | 'sell' | 'neutral'; shares: number; value: number
 }
 
 interface EarnDetail {
@@ -116,7 +116,6 @@ async function fetchTicker(tk: string): Promise<TickerRow> {
     const { data: d } = await axios.get(`/api/corporate/hub?ticker=${tk}`, { timeout: TIMEOUT })
     return {
       ticker: tk, name: d.company_name || tk, date: d.date || '—', horizon: d.horizon || '—',
-      impliedMove: d.implied_move ?? 4.5,
       pe: (d.forward_pe || d.estimated_pe || 0) > 0 ? (d.forward_pe || d.estimated_pe) : null,
       pctChange: d.pct_change_1d ?? null, marketCap: d.market_cap ?? null,
       consensus: d.consensus ?? null,
@@ -127,9 +126,18 @@ async function fetchTicker(tk: string): Promise<TickerRow> {
       })),
     }
   } catch {
-    return { ticker: tk, name: tk, date: '—', horizon: '—', impliedMove: 4.5, pe: null,
+    return { ticker: tk, name: tk, date: '—', horizon: '—', pe: null,
              pctChange: null, marketCap: null, consensus: null, price: null, week52Low: null,
              week52High: null, news: [], sparkline: [] }
+  }
+}
+
+async function fetchImplied(ts: string[]): Promise<Record<string, number | null>> {
+  try {
+    const { data } = await axios.get(`/api/corporate/hub/implied?tickers=${ts.join(',')}`, { timeout: 90_000 })
+    return data.implied || {}
+  } catch {
+    return Object.fromEntries(ts.map(t => [t, null]))
   }
 }
 
@@ -189,6 +197,8 @@ export function PortfolioEarningsContent() {
 
   const [rows, setRows] = useState<TickerRow[]>([])
   const [shortData, setShortData] = useState<Record<string, ShortRow>>({})
+  const [impliedData, setImpliedData] = useState<Record<string, number | null>>({})
+  const [impliedPending, setImpliedPending] = useState(false)
   const [insiderData, setInsiderData] = useState<Record<string, InsiderTx[]>>({})
   const [details, setDetails] = useState<Record<string, EarnDetail | 'loading' | 'error'>>({})
   const [isPending, setIsPending] = useState(false)
@@ -221,9 +231,19 @@ export function PortfolioEarningsContent() {
     if (fullScan) setIsPending(false)
     setAsOf(new Date())
     setInsiderPending(true)
-    const pairs = await Promise.all(ts.map(fetchInsiderTicker))
-    setInsiderData(prev => ({ ...prev, ...Object.fromEntries(pairs) }))
-    setInsiderPending(false)
+    setImpliedPending(true)
+    await Promise.all([
+      (async () => {
+        const pairs = await Promise.all(ts.map(fetchInsiderTicker))
+        setInsiderData(prev => ({ ...prev, ...Object.fromEntries(pairs) }))
+        setInsiderPending(false)
+      })(),
+      (async () => {
+        const implied = await fetchImplied(ts)
+        setImpliedData(prev => ({ ...prev, ...implied }))
+        setImpliedPending(false)
+      })(),
+    ])
   }
 
   useEffect(() => {
@@ -295,7 +315,7 @@ export function PortfolioEarningsContent() {
       const payload = {
         tickers: items.map(({ r }) => r.ticker),
         rows: items.map(({ r, days }) => ({
-          ticker: r.ticker, daysToReport: days, impliedMove: r.impliedMove,
+          ticker: r.ticker, daysToReport: days, impliedMove: impliedData[r.ticker] ?? null,
           shortPct: shortData[r.ticker]?.display ?? null,
           pctChange: r.pctChange, marketCap: r.marketCap, consensus: r.consensus, pe: r.pe,
           news: (r.news ?? []).slice(0, 2).map(n => ({ title: n.title })),
@@ -327,30 +347,26 @@ export function PortfolioEarningsContent() {
       })).filter(b => b.items.length > 0)
     }
     const sortValue = ({ r }: { r: TickerRow }) =>
-      sort === 'implied' ? r.impliedMove
+      sort === 'implied' ? (impliedData[r.ticker] ?? -1)
       : sort === 'short' ? (shortData[r.ticker]?.raw ?? -1)
       : r.pctChange == null ? -1 : Math.abs(r.pctChange)
     return [{
       title: RANKED_TITLE[sort], sub: 'Ranked', color: '#c9a84c',
       items: [...items].sort((a, b) => sortValue(b) - sortValue(a)),
     }]
-  }, [items, sort, shortData])
+  }, [items, sort, shortData, impliedData])
 
   const wireGroups = useMemo(() =>
     [...items].sort((a, b) => (a.days ?? Infinity) - (b.days ?? Infinity))
       .filter(({ r }) => r.news.length > 0),
   [items])
 
-  // yfinance transaction strings drift ("Sale", "Sale at price 100 per share.",
-  // empty for grants) — normalize before display.
-  const txKind = (t: string) => /sale|sell|sold|disposi/i.test(t) ? 'Sale' : /purchase|buy|bought/i.test(t) ? 'Purchase' : null
-
   const insiderSummary = (tk: string): { label: string; color: string } => {
     const txs = insiderData[tk]
     if (!txs || txs.length === 0) return { label: insiderPending ? '…' : 'No data', color: FAINT }
-    const kind = txs.map(x => txKind(x.transaction)).find(k => k != null)
-    if (!kind) return { label: 'Activity', color: TEXT }
-    return { label: kind, color: kind === 'Sale' ? NEG : POS }
+    const side = txs.map(x => x.side).find(s => s !== 'neutral')
+    if (!side) return { label: 'Activity', color: TEXT }
+    return side === 'sell' ? { label: 'Sale', color: NEG } : { label: 'Purchase', color: POS }
   }
 
   const insiderDetail90d = (tk: string): { text: string; color: string } => {
@@ -358,8 +374,8 @@ export function PortfolioEarningsContent() {
     const cutoff = Date.now() - 90 * 86_400_000
     const recent = txs.filter(t => { const d = new Date(`${t.date}T00:00:00`); return !isNaN(+d) && +d >= cutoff })
     if (recent.length === 0) return { text: 'No Form 4 activity filed (90d)', color: FAINT }
-    const sales = recent.filter(t => txKind(t.transaction) === 'Sale')
-    const buys = recent.filter(t => txKind(t.transaction) === 'Purchase')
+    const sales = recent.filter(t => t.side === 'sell')
+    const buys = recent.filter(t => t.side === 'buy')
     const sold = sales.length >= buys.length
     const set = sold ? sales : buys
     if (set.length === 0) return { text: `${recent.length} Form 4 filing${recent.length > 1 ? 's' : ''} (90d)`, color: FAINT }
@@ -562,9 +578,10 @@ export function PortfolioEarningsContent() {
                           {metric('IMPLIED', (
                             <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                               <span style={{ width: 44, height: 4, background: TRACK, borderRadius: 2, overflow: 'hidden', flexShrink: 0 }}>
-                                <span style={{ display: 'block', width: `${Math.min(r.impliedMove / 9 * 100, 100)}%`, height: '100%', background: BLUE }} />
+                                <span style={{ display: 'block', width: `${Math.min((impliedData[r.ticker] ?? 0) / 9 * 100, 100)}%`, height: '100%', background: BLUE }} />
                               </span>
-                              {mVal(`${r.impliedMove.toFixed(1)}%`)}
+                              {mVal(impliedData[r.ticker] != null ? `${impliedData[r.ticker]!.toFixed(1)}%`
+                                : impliedPending && !(r.ticker in impliedData) ? '…' : '—')}
                             </span>
                           ))}
                           {metric('1D', mVal(pctStr(r.pctChange), pctTone(r.pctChange)))}
@@ -637,7 +654,7 @@ export function PortfolioEarningsContent() {
                                   </thead>
                                   <tbody>
                                     {insiderData[r.ticker].map((tx, i) => {
-                                      const kind = txKind(tx.transaction)
+                                      const kind = tx.side === 'sell' ? 'Sale' : tx.side === 'buy' ? 'Purchase' : null
                                       return (
                                         <tr key={i}>
                                           <td style={{ fontFamily: MONO, fontSize: 10, color: MUTED, padding: '5px 8px', borderBottom: `1px solid ${HAIRLINE}`, whiteSpace: 'nowrap' }}>{tx.date}</td>

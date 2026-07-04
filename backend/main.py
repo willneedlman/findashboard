@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent / ".env")
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -206,6 +206,11 @@ if _DIST.exists():
     def serve_spa(full_path: str):
         # Serve real root files (favicon.svg, robots.txt, ...) when they exist;
         # otherwise fall back to index.html so client-side routes resolve.
+        # Unknown /api/* paths must 404, not serve HTML: browsers heuristically
+        # disk-cache the HTML against the API URL, which then poisons the real
+        # endpoint after it ships.
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="Not found")
         if full_path:
             candidate = (_DIST / full_path).resolve()
             if candidate.is_file() and _DIST_RESOLVED in candidate.parents:
