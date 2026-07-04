@@ -2,13 +2,13 @@
 source_file: "frontend/src/pages/CorporateHub.tsx"
 type: "code"
 community: "Frontend"
-location: "144"
+location: "135"
 tags:
   - graphify/code
   - graphify/EXTRACTED
   - community/Frontend
 ---
 
-# CorporateHub.fetchShortTicker
+# CorporateHub.fetchImplied
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

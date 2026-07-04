@@ -15,9 +15,9 @@
     "hash": "5f097cabed34c3a84300bc9ac0bc24fc296aed191af6577c55eec6107c338ea2"
   },
   "/Users/willneedlman/finance_dashboard/backend/main.py": {
-    "size": 10658,
-    "mtime_ns": 1783017171207272244,
-    "hash": "54a33f169472f6477f0e2891df9a64f6d3820c0b7f85238e7367505219cf1af6"
+    "size": 10977,
+    "mtime_ns": 1783188973137024747,
+    "hash": "bf8b4aa798b640a0a668e39d42b5a2d92de4655a54737281e7c612442edb0683"
   },
   "/Users/willneedlman/finance_dashboard/backend/math_engine.py": {
     "size": 2501,
@@ -35,9 +35,9 @@
     "hash": "1e3e06221908a1dcd4c4a170bb06449a593b8e71827c32fa22380b67e987aa3c"
   },
   "/Users/willneedlman/finance_dashboard/backend/routers/corporate.py": {
-    "size": 48532,
-    "mtime_ns": 1783187445192182069,
-    "hash": "2dd989fee0843d67b1e7f2c9d1027e4ae2ec4fd68337c039a028cf01fbad87c1"
+    "size": 49911,
+    "mtime_ns": 1783188183364864489,
+    "hash": "0a20d9e30b0475a5243ec720a7e025bebcd48f4a77324c3f6d8028860d2676f1"
   },
   "/Users/willneedlman/finance_dashboard/backend/routers/correlation.py": {
     "size": 1887,
@@ -170,9 +170,9 @@
     "hash": "3461abd4dbf053f009c306405c65c47155afb83473a8faade45b9b349d559604"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/CorporateHub.tsx": {
-    "size": 45820,
-    "mtime_ns": 1783187781269391733,
-    "hash": "6a6842db200233a1f2f91188767061144da6ef6f858c82a4a0c85636546e4081"
+    "size": 46467,
+    "mtime_ns": 1783188268332082548,
+    "hash": "eb28ef9cfc80b3d41f775b0e9d0599bf941f7ad393255b1809268a9a78b9e152"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/pages/DCFValuation.tsx": {
     "size": 33116,
@@ -1700,9 +1700,9 @@
     "hash": "fd181e8ea3a0896cf171facb9d2f7ddc2aef801375c04fdac35ada5574dd6bbf"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/components/dashboard/widgets/InsiderWidget.tsx": {
-    "size": 5362,
-    "mtime_ns": 1781707085371534804,
-    "hash": "217a3d796f34d21bb976660c2c3be5d5aed826784e0eca69d26c70d248bc0db2"
+    "size": 5202,
+    "mtime_ns": 1783188282294956702,
+    "hash": "5837a17d994e622a14f4eb8b327906db754e49bbb17915576ae3888ab7b3f80d"
   },
   "/Users/willneedlman/finance_dashboard/frontend/src/components/dashboard/widgets/ValuationWidget.tsx": {
     "size": 4644,

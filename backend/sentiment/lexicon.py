@@ -441,6 +441,30 @@ _GEO_CONTEXT_TERMS: frozenset[str] = frozenset({
 })
 _ALLOC_GEO_DAMP: float = 0.15
 
+# Bearish market-tape / move terms that can be reframed as opportunity or overdone.
+_TAPE_CONTEXT_TERMS: frozenset[str] = frozenset({
+    "crash", "market crash", "selloff", "sell-off", "sell off", "rout",
+    "meltdown", "bloodbath", "correction", "plunge", "plunges", "plummet",
+    "plummets", "slump", "slumps", "tumble", "tumbles", "slide", "slides",
+    "decline", "declines", "drop", "drops", "fall", "falls", "pullback",
+})
+
+# "Excessive"/"overextended" calling a bearish MOVE overdone is contrarian-bullish
+# ("stock's decline is excessive"). But the same word AMPLIFIES a bearish noun it
+# qualifies directly ("excessive valuation/leverage/risk"), so the reversal is
+# suppressed when one of those nouns follows immediately.
+_EXCESS_REVERSERS: frozenset[str] = frozenset({"excessive", "overextended"})
+_EXCESS_AMPLIFY_NOUNS: frozenset[str] = frozenset({
+    "valuation", "valuations", "risk", "risks", "debt", "leverage",
+    "speculation", "exuberance", "optimism", "volatility", "concern", "concerns",
+})
+
+# Buy-recommendation framing ("1 top oil stock to buy now", "buy the dip"): a
+# bearish tape term is the setup, not the signal, so it is damped to near zero.
+# A bare "buy now before the crash" carries no stock/dip anchor, so it does not
+# trigger and stays bearish.
+_BUYREC_DAMP: float = 0.06
+
 # Directional movement verbs: + = the subject's level rises, - = falls. The
 # polarity is written for the DEFAULT subject (equities / risk assets). For a
 # "bad-up" subject (yields, inflation, the VIX, unemployment, energy, gold) a
@@ -721,6 +745,31 @@ def _movement_hits(tokens: list[str], consumed: list[bool]) -> list[TermHit]:
     return hits
 
 
+def _excess_reverses(tokens: list[str]) -> bool:
+    """An 'excessive'/'overextended' that is NOT directly qualifying a bearish
+    noun — i.e. it is calling a move overdone, not amplifying a risk."""
+    n = len(tokens)
+    return any(
+        t in _EXCESS_REVERSERS and (i + 1 >= n or tokens[i + 1] not in _EXCESS_AMPLIFY_NOUNS)
+        for i, t in enumerate(tokens)
+    )
+
+
+def _is_buy_recommendation(tokens: list[str]) -> bool:
+    """A stock-pick framing: 'stock(s) ... to buy', or 'buy/buying the dip'."""
+    n = len(tokens)
+    for i, t in enumerate(tokens):
+        if t in ("buy", "buying") and any(tokens[j] in ("dip", "dips") for j in range(i + 1, min(n, i + 3))):
+            return True
+        if t in ("stock", "stocks") and any(tokens[j] in ("buy", "buying") for j in range(i + 1, min(n, i + 4))):
+            return True
+    return False
+
+
+def _is_tape_or_move(term: str) -> bool:
+    return term in _TAPE_CONTEXT_TERMS or term in _MOVEMENT
+
+
 def score_text(text: str, entities: list[Entity]) -> LexScore:
     """Pure deterministic sentiment score for one headline. See module docstring."""
     tokens = _tokenize(text)
@@ -741,12 +790,31 @@ def score_text(text: str, entities: list[Entity]) -> LexScore:
             for h in hits
         ]
 
+    # "Excessive/overextended" flips only the bearish MOVE it calls overdone, not
+    # every negative (so "excessive valuation concerns" stays bearish).
+    if hits and _excess_reverses(tokens):
+        hits = [
+            TermHit(h.term, -h.polarity * _REVERSAL_FACTOR, h.salience, -h.contribution * _REVERSAL_FACTOR)
+            if (h.contribution < 0 and _is_tape_or_move(h.term)) else h
+            for h in hits
+        ]
+
     if hits and (any(t in _ALLOC_MARKERS for t in tokens) or any(
             tokens[i] == a and tokens[i + 1] == b
             for a, b in _ALLOC_MARKER_PAIRS for i in range(len(tokens) - 1))):
         hits = [
             TermHit(h.term, h.polarity * _ALLOC_GEO_DAMP, h.salience, h.contribution * _ALLOC_GEO_DAMP)
             if any(w in _GEO_CONTEXT_TERMS for w in h.term.split()) else h
+            for h in hits
+        ]
+
+    # Buy-recommendation framing damps the bearish tape term that sets it up
+    # ("oil price crash: 1 top oil stock to buy now"). Macro terms keep their
+    # sign, matching the allocation-view rule above.
+    if hits and _is_buy_recommendation(tokens):
+        hits = [
+            TermHit(h.term, h.polarity * _BUYREC_DAMP, h.salience, h.contribution * _BUYREC_DAMP)
+            if (h.contribution < 0 and _is_tape_or_move(h.term)) else h
             for h in hits
         ]
 

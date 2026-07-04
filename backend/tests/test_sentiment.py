@@ -125,6 +125,26 @@ def test_aftermath_and_allocation_framing(text, expected):
     assert score_text(text, extract_entities(text)).sentiment == expected
 
 
+# Reported misreads (2026-07-04): a bearish MOVE called "excessive"/overdone is
+# contrarian-bullish, and a stock-pick framing ("top stock to buy now") treats a
+# tape crash as the setup, not the signal. But "excessive" still amplifies a
+# bearish noun it qualifies, a bare "buy before the crash" warning stays bearish,
+# and macro terms keep their sign under buy-rec framing.
+@pytest.mark.parametrize("text,expected", [
+    ("Jim Cramer Calls Walmart Stock's Decline Excessive", "bullish"),
+    ("The selloff looks excessive, says strategist", "bullish"),
+    ("Oil Price Crash: 1 Top Oil Stock to Buy Now", "neutral"),
+    ("1 top tech stock to buy amid the selloff", "neutral"),
+    ("Tesla shares fall on excessive valuation concerns", "bearish"),   # excessive amplifies the noun
+    ("Excessive leverage sinks regional bank", "bearish"),
+    ("Buy now before the market crash wipes out gains", "bearish"),     # warning, no stock/dip anchor
+    ("Oil prices crash to two-year low", "bearish"),
+    ("Top defensive stock to buy for the coming recession", "bearish"), # macro keeps its sign
+])
+def test_overdone_move_and_buy_recommendation_framing(text, expected):
+    assert score_text(text, extract_entities(text)).sentiment == expected
+
+
 def test_score_bounds_and_neutral_default():
     # No lexical signal -> exactly neutral with floor confidence.
     s = score_text("A quiet uneventful day downtown", [])

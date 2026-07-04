@@ -26,11 +26,11 @@ tags:
 - [[backend_routers_corporate_py_consensus_label]] - `contains` [EXTRACTED]
 - [[backend_routers_corporate_py_get_corporate_hub]] - `contains` [EXTRACTED]
 - [[backend_routers_corporate_py_get_corporate_hub_short]] - `contains` [EXTRACTED]
+- [[backend_routers_corporate_py_tx_side]] - `contains` [EXTRACTED]
+- [[backend_routers_corporate_py_get_corporate_hub_implied]] - `contains` [EXTRACTED]
 - [[backend_routers_corporate_py_get_corporate_hub_insider]] - `contains` [EXTRACTED]
 - [[backend_routers_corporate_py_get_corporate_hub_earnings_detail]] - `contains` [EXTRACTED]
 - [[backend_routers_corporate_py_get_corporate_hub_analyst]] - `contains` [EXTRACTED]
 - [[backend_routers_corporate_py_synthetic_rating]] - `contains` [EXTRACTED]
-- [[backend_routers_corporate_py_leverage_rating]] - `contains` [EXTRACTED]
-- [[backend_routers_corporate_py_altman_rating]] - `contains` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Backend
