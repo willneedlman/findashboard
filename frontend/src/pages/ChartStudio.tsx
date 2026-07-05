@@ -23,8 +23,13 @@ const TFS = ['1m', '5m', '15m', '1h', '4h', '1d', '1wk'] as const
 type TF = typeof TFS[number]
 const INTRADAY: Set<TF> = new Set(['1m', '5m', '15m', '1h', '4h'])
 
-type LaneId = 'volume' | 'rsi' | 'macd' | 'iv' | 'overlays'
-const LANE_IDS: LaneId[] = ['volume', 'rsi', 'macd', 'iv', 'overlays']
+type IndLaneId = 'volume' | 'rsi' | 'macd' | 'iv'
+type LaneId = IndLaneId | 'ov0' | 'ov1' | 'ov2' | 'ov3' | 'ov4'
+// Reorderable indicator lanes (the rail toggles / reorders these).
+const LANE_IDS: IndLaneId[] = ['volume', 'rsi', 'macd', 'iv']
+// Fixed pool of per-overlay lanes: each series set to LANE gets its own section
+// below the chart (no shared overlay lane). Pre-created so charts exist on mount.
+const OV_LANE_IDS: LaneId[] = ['ov0', 'ov1', 'ov2', 'ov3', 'ov4']
 
 // Per-layer display config: how tall the series draws (scale-margin band on
 // its hidden price scale) and whether it rides the price panel or drops into
@@ -172,7 +177,7 @@ interface State {
   candleWidth: CandleWidth
   ind: { bb: boolean; vwap: boolean; gflip: boolean; gexProfile: boolean }
   lanes: { volume: boolean; rsi: boolean; macd: boolean; iv: boolean }
-  laneOrder: LaneId[]
+  laneOrder: IndLaneId[]
   layerCfg: Record<string, Partial<LayerCfg>>
   railOpen: boolean
   inspectorOpen: boolean
@@ -189,7 +194,7 @@ type Action =
   | { type: 'event'; k: keyof State['events'] }
   | { type: 'overlay'; id: string } | { type: 'addCompare'; sym: string } | { type: 'rmCompare'; sym: string }
   | { type: 'addMA'; ma: MA } | { type: 'rmMA'; key: string }
-  | { type: 'moveLane'; id: LaneId; dir: 'up' | 'down' }
+  | { type: 'moveLane'; id: IndLaneId; dir: 'up' | 'down' }
   | { type: 'layerCfg'; id: string; patch: Partial<LayerCfg> }
   | { type: 'toggleRail' } | { type: 'toggleInspector' }
   | { type: 'param'; k: keyof Params; v: number }
@@ -243,7 +248,7 @@ const load = (): State => {
     const raw = JSON.parse(localStorage.getItem('unifiedOverlay2') || 'null')
     if (!raw) return DEFAULT
     const mas: MA[] = Array.isArray(raw.mas) ? raw.mas.filter((m: any) => (m?.kind === 'sma' || m?.kind === 'ema') && m.period >= 2) : []
-    const stored: LaneId[] = Array.isArray(raw.laneOrder) ? raw.laneOrder.filter((id: any) => LANE_IDS.includes(id)) : []
+    const stored: IndLaneId[] = Array.isArray(raw.laneOrder) ? raw.laneOrder.filter((id: any) => (LANE_IDS as string[]).includes(id)) : []
     const laneOrder = [...stored, ...LANE_IDS.filter(id => !stored.includes(id))]
     // Old shape: rsi/macd/volume lived in `ind`; lanes did not exist.
     const lanes = { ...DEFAULT.lanes, ...(raw.lanes ?? {}), ...(raw.ind?.rsi != null ? { rsi: raw.ind.rsi } : {}), ...(raw.ind?.macd != null ? { macd: raw.ind.macd } : {}), ...(raw.ind?.volume != null ? { volume: raw.ind.volume } : {}) }
@@ -419,12 +424,12 @@ function LiveClock() {
 }
 
 // ── Lanes ─────────────────────────────────────────────────────────────────────
-const LANE_DEFS = [
-  { id: 'volume' as const, h: 60, label: 'VOLUME' },
-  { id: 'rsi' as const, h: 78, label: 'RSI' },
-  { id: 'macd' as const, h: 92, label: 'MACD' },
-  { id: 'iv' as const, h: 78, label: 'IV RANK' },
-  { id: 'overlays' as const, h: 110, label: 'OVERLAY LANE' },
+const LANE_DEFS: { id: LaneId; h: number; label: string }[] = [
+  { id: 'volume', h: 60, label: 'VOLUME' },
+  { id: 'rsi', h: 78, label: 'RSI' },
+  { id: 'macd', h: 92, label: 'MACD' },
+  { id: 'iv', h: 78, label: 'IV RANK' },
+  ...OV_LANE_IDS.map(id => ({ id, h: 96, label: 'OVERLAY' })),
 ]
 
 // ── Main component ───────────────────────────────────────────────────────────
@@ -573,7 +578,7 @@ export function ChartStudioContent() {
 
   // ── Chart instances: price + 5 lanes + minimap ──
   const mainRef = useRef<HTMLDivElement>(null)
-  const laneRefs = useRef<Record<LaneId, HTMLDivElement | null>>({ volume: null, rsi: null, macd: null, iv: null, overlays: null })
+  const laneRefs = useRef<Record<LaneId, HTMLDivElement | null>>({ volume: null, rsi: null, macd: null, iv: null, ov0: null, ov1: null, ov2: null, ov3: null, ov4: null })
   const charts = useRef<{ main?: IChartApi } & Partial<Record<LaneId, IChartApi>>>({})
   const series = useRef<Record<string, ISeriesApi<any>>>({})
   // Each overlay tracks its owner chart and price scale so it can move between
@@ -787,18 +792,16 @@ export function ChartStudioContent() {
   useEffect(() => {
     const main = charts.current.main
     if (!main) return
-    const laneChart = charts.current.overlays
     const data = overlayQs.data ?? {}
     const wanted = new Set(activeOverlayDefs.map(d => d.id))
-    // First lane-placed series rides the lane's visible right axis so the lane
-    // isn't a bare pane; the rest keep hidden per-series scales.
+    // Each series set to LANE gets its OWN lane chart (own visible axis), in
+    // placement order; overflow past the pool shares the last slot.
     const lanePlaced = activeOverlayDefs.filter(d => cfgOf(d.id).place === 'lane').map(d => d.id)
     const targetFor = (id: string): { owner: IChartApi; scaleId: string } => {
-      const inLane = lanePlaced.includes(id) && !!laneChart
-      return {
-        owner: inLane ? laneChart! : main,
-        scaleId: inLane && lanePlaced[0] === id ? 'right' : `ov-${id}`,
-      }
+      const idx = lanePlaced.indexOf(id)
+      if (idx < 0) return { owner: main, scaleId: `ov-${id}` }
+      const laneChart = charts.current[OV_LANE_IDS[Math.min(idx, OV_LANE_IDS.length - 1)]]
+      return laneChart ? { owner: laneChart, scaleId: 'right' } : { owner: main, scaleId: `ov-${id}` }
     }
     for (const [id, meta] of overlaySeries.current) {
       const t = targetFor(id)
@@ -838,9 +841,12 @@ export function ChartStudioContent() {
         store.current.set(`ov:${d.id}`, toSorted(all))
       } catch (e) { console.warn('overlay layer failed', d.id, e) }
     })
-    // A lane that just gained its first series has no range yet: seed it.
-    if (laneChart && lanePlaced.length) {
-      try { const vr = main.timeScale().getVisibleRange(); if (vr) laneChart.timeScale().setVisibleRange(vr) } catch { /* no data yet */ }
+    // Lanes that just gained a series have no range yet: seed each used slot.
+    if (lanePlaced.length) {
+      try {
+        const vr = main.timeScale().getVisibleRange()
+        if (vr) for (let i = 0; i < lanePlaced.length; i++) charts.current[OV_LANE_IDS[Math.min(i, OV_LANE_IDS.length - 1)]]?.timeScale().setVisibleRange(vr)
+      } catch { /* no data yet */ }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [overlayQs.data, activeOverlayDefs, candles, layerCfg])
@@ -1011,7 +1017,8 @@ export function ChartStudioContent() {
   const pct = inspectC && inspectC.open ? ((inspectC.close - inspectC.open) / inspectC.open) * 100 : 0
   const dateOf = (t: number | null) => t == null ? '' : new Date(t * 1000).toISOString().slice(0, 10)
   const gexW = GEX_WIDTHS[cfgOf('gexprofile').size]
-  const laneOverlayCount = activeOverlayDefs.filter(d => cfgOf(d.id).place === 'lane').length
+  const lanePlacedIds = activeOverlayDefs.filter(d => cfgOf(d.id).place === 'lane').map(d => d.id)
+  const laneOverlayCount = lanePlacedIds.length
 
   const inspectorGroups: { group: string; rows: { label: string; value: string; color: string }[] }[] = useMemo(() => {
     const g: { group: string; rows: { label: string; value: string; color: string }[] }[] = []
@@ -1076,7 +1083,7 @@ export function ChartStudioContent() {
           <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '0.14em', color: 'var(--theme-secondary, #8099b0)' }}>ALPHATAPE TERMINAL</span>
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '0.1em', color: 'var(--theme-secondary, #8099b0)' }}>{overlayDefs.length + (LANE_DEFS.length - 1) + 3} TIME-SERIES FEEDS</span>
+          <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '0.1em', color: 'var(--theme-secondary, #8099b0)' }}>{overlayDefs.length + LANE_IDS.length + 3} TIME-SERIES FEEDS</span>
           <LiveClock />
         </span>
       </div>
@@ -1174,30 +1181,18 @@ export function ChartStudioContent() {
           <div style={{ padding: '11px 16px 9px', borderBottom: '1px solid var(--theme-border-faint, rgba(255,255,255,0.05))' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}><span style={eyebrow}>Sub-panel lanes</span><span style={{ fontFamily: MONO, fontSize: 8, color: 'var(--theme-secondary, #8099b0)' }}>OSC</span></div>
             {laneOrder.map((id, oi) => {
-              const cfg: Record<LaneId, { label: string; src: string; color: string; style: GlyphStyle }> = {
+              const cfg: Record<string, { label: string; src: string; color: string; style: GlyphStyle }> = {
                 volume: { label: 'Volume', src: 'OHLCV', color: '#3fb6a0', style: 'hist' },
                 rsi: { label: `RSI ${params.rsiP}`, src: 'computed', color: '#c084fc', style: 'line' },
                 macd: { label: `MACD ${params.macdF}·${params.macdS}·${params.macdSig}`, src: 'computed', color: '#60a5fa', style: 'line' },
                 iv: { label: 'IV rank', src: 'accrues', color: '#c9a84c', style: 'area' },
-                overlays: { label: 'Overlay lane', src: laneOverlayCount ? `${laneOverlayCount} SERIES` : 'auto', color: '#5b93c9', style: 'line' },
               }
               const c = cfg[id]
               return (
                 <div key={id}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    {id === 'overlays' ? (
-                      // No toggle: the lane appears when any overlay is placed
-                      // in it via its LANE chip. Row here is for ordering only.
-                      <div className="cs-row" style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '4px 0' }}>
-                        <span style={{ width: 13, flex: 'none' }} />
-                        <span style={{ width: 18, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Glyph style="line" color={c.color} /></span>
-                        <span style={{ fontFamily: SANS, fontSize: 11, whiteSpace: 'nowrap', color: laneOverlayCount ? 'var(--theme-text, #d7e3fc)' : 'var(--theme-secondary, #8099b0)' }}>{c.label}</span>
-                        <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 8, color: 'var(--theme-secondary, #8099b0)' }}>{c.src}</span>
-                      </div>
-                    ) : (
-                      <Row label={c.label} on={lanes[id]} src={c.src} color={c.color} style={c.style} onToggle={() => dispatch({ type: 'lane', k: id })} />
-                    )}
+                    <Row label={c.label} on={lanes[id]} src={c.src} color={c.color} style={c.style} onToggle={() => dispatch({ type: 'lane', k: id })} />
                   </div>
                   <button onClick={() => dispatch({ type: 'moveLane', id, dir: 'up' })} disabled={oi === 0} aria-label={`Move ${c.label} up`}
                     style={{ background: 'none', border: 'none', cursor: oi === 0 ? 'default' : 'pointer', fontFamily: MONO, fontSize: 10, color: oi === 0 ? 'var(--theme-border, #2c3d52)' : 'var(--theme-secondary, #8099b0)', padding: '0 2px' }}>↑</button>
@@ -1317,15 +1312,29 @@ export function ChartStudioContent() {
             )}
           </div>
 
-          {laneOrder.map(id => LANE_DEFS.find(l => l.id === id)!).map(lane => {
-            const on = lane.id === 'overlays' ? laneOverlayCount > 0 : lanes[lane.id]
-            const header = lane.id === 'iv'
+          {laneOrder.map(id => {
+            const lane = LANE_DEFS.find(l => l.id === id)!
+            const on = lanes[id]
+            const header = id === 'iv'
               ? <>{ivLane.kind === 'rank' ? 'IV RANK' : 'ATM IV30'}{ivLane.pts.length < 30 && <span style={{ color: 'var(--theme-secondary, #8099b0)' }}> · {ivLane.pts.length} pt{ivLane.pts.length === 1 ? '' : 's'} · accrues daily</span>}</>
-              : lane.id === 'rsi' ? `RSI ${params.rsiP}` : lane.id === 'macd' ? `MACD ${params.macdF}·${params.macdS}·${params.macdSig}` : lane.label
+              : id === 'rsi' ? `RSI ${params.rsiP}` : id === 'macd' ? `MACD ${params.macdF}·${params.macdS}·${params.macdSig}` : lane.label
             return (
-              <div key={lane.id} style={{ display: on ? 'block' : 'none', borderTop: '1px solid var(--theme-border-faint, rgba(255,255,255,0.06))', position: 'relative' }}>
+              <div key={id} style={{ display: on ? 'block' : 'none', borderTop: '1px solid var(--theme-border-faint, rgba(255,255,255,0.06))', position: 'relative' }}>
                 <span style={{ position: 'absolute', top: 4, left: 10, zIndex: 5, fontFamily: MONO, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.16em', color: 'var(--theme-secondary, #8099b0)' }}>{header}</span>
-                <div ref={el => { laneRefs.current[lane.id] = el }} style={{ width: '100%' }} />
+                <div ref={el => { laneRefs.current[id] = el }} style={{ width: '100%' }} />
+              </div>
+            )
+          })}
+
+          {/* Per-overlay lanes: each series set to LANE gets its own section. */}
+          {OV_LANE_IDS.map((slot, i) => {
+            const ovId = lanePlacedIds[i]
+            const on = i < lanePlacedIds.length
+            const header = (ovId && overlayDefs.find(d => d.id === ovId)?.label) || 'Overlay'
+            return (
+              <div key={slot} style={{ display: on ? 'block' : 'none', borderTop: '1px solid var(--theme-border-faint, rgba(255,255,255,0.06))', position: 'relative' }}>
+                <span style={{ position: 'absolute', top: 4, left: 10, zIndex: 5, fontFamily: MONO, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.16em', color: 'var(--theme-secondary, #8099b0)' }}>{header}</span>
+                <div ref={el => { laneRefs.current[slot] = el }} style={{ width: '100%' }} />
               </div>
             )
           })}
