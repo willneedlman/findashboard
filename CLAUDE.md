@@ -82,7 +82,14 @@ These are mandatory — invoke the listed skill/tool proactively without waiting
 | Design decision (color, spacing, font, layout) | `python3 ui-ux-pro-max-skill/src/ui-ux-pro-max/scripts/search.py "<topic>" --domain <domain>` |
 
 **Hook coverage** (what fires automatically without any action needed):
-- `SessionStart` → graphify diff check
+
+*User-global* (`~/.claude/settings.json` — these fire on this machine in every project, NOT checked into this repo, so a fresh clone does not get them):
+- `SessionStart` / `Stop` → graphify sync
 - `UserPromptSubmit` → intent router (injects skill hints into context)
 - `PreToolUse Edit|Write` → ui-ux guard on frontend files
 - `PostToolUse Edit|Write` → graphify AST auto-extract on `.py` files
+
+*Project-scoped* (`.claude/settings.json` — travels with the repo):
+- `Stop` → frontend typecheck (`tsc --noEmit`) when `frontend/src/**/*.ts(x)` changed; advisory, no-ops otherwise
+
+See `.claude/README.md` for the full setup inventory: the `/deploy` and `/new-tool` skills, the `frontend-test-writer` subagent, the `.mcp.json` servers (context7, github), and the installed plugins.
