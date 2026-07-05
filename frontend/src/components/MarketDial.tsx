@@ -4,6 +4,9 @@ import {
   PHASE_COLOR, PHASE_OPACITY, PHASE_TEXT, PHASE_LABEL, type MarketDef,
 } from '../lib/marketHours'
 
+// 24h dial axis position → 12-hour clock number (e.g. 0→12, 15→3).
+const hourLabel = (t: number): string => `${t % 12 || 12}`
+
 const T = {
   text: 'var(--theme-text, #d7e3fc)', gold: 'var(--theme-primary, #c9a84c)',
   muted: 'var(--theme-secondary, #8099b0)', faint: 'var(--theme-text-faint, #41556b)', dim: 'var(--theme-text-faint, #3f5268)',
@@ -63,7 +66,7 @@ export default function MarketDial({ showLegend = false }: { showLegend?: boolea
       })}
       {[0, 3, 6, 9, 12, 15, 18, 21].map(t => {
         const [x, y] = polar(288, t)
-        return <text key={t} x={x.toFixed(1)} y={(y + 5).toFixed(1)} textAnchor="middle" fontFamily={T.mono} fontSize={14} fill={T.faint}>{String(t).padStart(2, '0')}</text>
+        return <text key={t} x={x.toFixed(1)} y={(y + 5).toFixed(1)} textAnchor="middle" fontFamily={T.mono} fontSize={13} fill={T.faint}>{hourLabel(t)}</text>
       })}
       <line x1={hx1.toFixed(1)} y1={hy1.toFixed(1)} x2={hx2.toFixed(1)} y2={hy2.toFixed(1)} stroke={T.hand} strokeWidth={2.5} strokeLinecap="round" />
       <circle cx={hx2.toFixed(1)} cy={hy2.toFixed(1)} r={5} fill={T.hand} />

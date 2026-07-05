@@ -262,9 +262,11 @@ export function localTzLabel(now: Date): string {
   return name ?? Intl.DateTimeFormat().resolvedOptions().timeZone
 }
 
-// The viewer's local clock as HH:MM, for the dial hub readout.
+// The viewer's local clock as 12-hour h:mm (no leading-zero hour, no meridiem),
+// for the dial hub readout.
 export function localClock(now: Date): string {
-  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+  const h = now.getHours() % 12 || 12
+  return `${h}:${String(now.getMinutes()).padStart(2, '0')}`
 }
 
 // This market's current trading sessions mapped onto a 0..24h axis drawn in the
