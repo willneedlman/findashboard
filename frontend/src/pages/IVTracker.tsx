@@ -469,7 +469,7 @@ export function IVTrackerContent() {
 
             {/* Answer-first instrument strip: lead with the IV-rank verdict */}
             <div style={{ display: 'flex', alignItems: 'stretch', background: T.surface, border: `1px solid ${T.border}`, overflowX: 'auto' }}>
-              <KpiCell grow minWidth={150} label="IV Rank" value={ivRank == null ? '—' : `${ivRank.toFixed(0)} · ${ivLabel(ivRank)}`} color={ivLabelColor(ivRank)} valueSize={16} />
+              <KpiCell grow minWidth={110} label="IV Rank" value={ivRank == null ? '—' : ivRank.toFixed(0)} color={ivLabelColor(ivRank)} valueSize={16} sub={ivRank == null ? undefined : ivLabel(ivRank)} subColor={ivLabelColor(ivRank)} />
               <KpiCell grow label="Current IV" value={`${data.current_iv.toFixed(1)}%`} color={ivColor} />
               <KpiCell grow label="HV 30d" value={fmtPct(data.current_hv_30d)} />
               <KpiCell grow label="IV Premium" value={data.iv_premium != null ? `${data.iv_premium >= 0 ? '+' : ''}${data.iv_premium.toFixed(1)}%` : '—'} color={data.iv_premium != null ? (data.iv_premium >= 0 ? T.neg : T.pos) : undefined} />
