@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
-  MARKETS, SUN_ORDER, marketStatus, utcArcs, utcNowHours,
+  MARKETS, SUN_ORDER, marketStatus, localArcs, localNowHours, localClock, localTzLabel,
   PHASE_COLOR, PHASE_OPACITY, PHASE_TEXT, PHASE_LABEL, type MarketDef,
 } from '../lib/marketHours'
 
@@ -36,11 +36,11 @@ export default function MarketDial({ showLegend = false }: { showLegend?: boolea
   // Shared hover state (same mechanism as the Home dial): hovering a ring or a
   // legend row isolates that market on the dial and swaps the hub readout.
   const [hovered, setHovered] = useState<number | null>(null)
-  const nowH = utcNowHours(now)
+  const nowH = localNowHours(now)
   const [hx1, hy1] = polar(108, nowH)
   const [hx2, hy2] = polar(272, nowH)
-  const utc = new Date(now.getTime())
-  const utcClock = `${String(utc.getUTCHours()).padStart(2, '0')}:${String(utc.getUTCMinutes()).padStart(2, '0')}`
+  const clock = localClock(now)
+  const tzLabel = localTzLabel(now)
   const states = RINGS.map(m => marketStatus(m, now))
   const hov = hovered != null ? { m: RINGS[hovered], st: states[hovered] } : null
 
@@ -53,7 +53,7 @@ export default function MarketDial({ showLegend = false }: { showLegend?: boolea
           <g key={m.id} style={{ opacity: on ? 1 : 0.16, transition: 'opacity 140ms ease', cursor: 'pointer' }}
             onMouseEnter={() => setHovered(i)} onMouseLeave={() => setHovered(null)}>
             <circle cx={CX} cy={CY} r={r} fill="none" stroke={T.track} strokeWidth={9} />
-            {utcArcs(m, now).map((a, j) => (
+            {localArcs(m, now).map((a, j) => (
               <path key={j} d={arcPath(r, a.t0, a.t1)} fill="none"
                 stroke={PHASE_COLOR[a.phase]} strokeOpacity={PHASE_OPACITY[a.phase]} strokeWidth={9} />
             ))}
@@ -80,8 +80,8 @@ export default function MarketDial({ showLegend = false }: { showLegend?: boolea
         </>
       ) : (
         <>
-          <text x={CX} y={290} textAnchor="middle" fontFamily={T.mono} fontSize={30} fontWeight={700} fill={T.gold}>{utcClock}</text>
-          <text x={CX} y={314} textAnchor="middle" fontFamily={T.sans} fontSize={11} letterSpacing="2" fill={T.dim}>UTC · NOW</text>
+          <text x={CX} y={290} textAnchor="middle" fontFamily={T.mono} fontSize={30} fontWeight={700} fill={T.gold}>{clock}</text>
+          <text x={CX} y={314} textAnchor="middle" fontFamily={T.sans} fontSize={11} letterSpacing="2" fill={T.dim}>{tzLabel} · NOW</text>
         </>
       )}
     </svg>

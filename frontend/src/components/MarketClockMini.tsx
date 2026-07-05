@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { MARKETS, SUN_ORDER, marketStatus, utcArcs, utcNowHours, PHASE_COLOR, type MarketDef, type Phase } from '../lib/marketHours'
+import { MARKETS, SUN_ORDER, marketStatus, localArcs, localNowHours, localClock, localTzLabel, PHASE_COLOR, type MarketDef, type Phase } from '../lib/marketHours'
 
-// Home "24-hour dial" widget. Concentric per-market session rings on a shared UTC
-// axis, a gold now-needle, and a key of market chips. A single shared hover state
+// Home "24-hour dial" widget. Concentric per-market session rings on a shared axis
+// drawn in the viewer's own local timezone, a gold now-needle, and a key of market
+// chips. A single shared hover state
 // (hoveredMarket) drives ring dimming, chip highlight, and the readout — hovering
 // any ring OR its chip isolates that market everywhere. Reuses lib/marketHours.
 const T = {
@@ -45,9 +46,10 @@ export default function MarketClockMini() {
 
   const states = RINGS.map(m => marketStatus(m, now))
   const openCount = states.filter(s => s.open).length
-  const nowH = utcNowHours(now)
+  const nowH = localNowHours(now)
   const [nx, ny] = polar(198, nowH)
-  const utc = `${String(now.getUTCHours()).padStart(2, '0')}:${String(now.getUTCMinutes()).padStart(2, '0')}`
+  const clock = localClock(now)
+  const tzLabel = localTzLabel(now)
 
   const read = hovered != null
     ? {
@@ -60,7 +62,7 @@ export default function MarketClockMini() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-        <span style={{ fontFamily: T.sans, fontSize: 11, fontWeight: 700, letterSpacing: '0.2em', color: T.muted }}>24-HOUR DIAL · UTC</span>
+        <span style={{ fontFamily: T.sans, fontSize: 11, fontWeight: 700, letterSpacing: '0.2em', color: T.muted }}>24-HOUR DIAL · {tzLabel}</span>
         <span style={{ fontFamily: T.mono, fontSize: 12, color: T.muted }}><span style={{ color: PHASE_COLOR.regular, fontWeight: 700 }}>{openCount}</span>/{RINGS.length}</span>
       </div>
 
@@ -72,7 +74,7 @@ export default function MarketClockMini() {
             <g key={m.id} style={{ opacity: on ? 1 : 0.16, transition: 'opacity 140ms ease', cursor: 'pointer' }}
               onMouseEnter={() => setHovered(i)} onMouseLeave={() => setHovered(null)}>
               <circle cx={CX} cy={CY} r={r} fill="none" stroke={T.track} strokeWidth={9} />
-              {utcArcs(m, now).map((a, j) => (
+              {localArcs(m, now).map((a, j) => (
                 <path key={j} d={arcPath(r, a.t0, a.t1)} fill="none" stroke={PHASE_COLOR[a.phase]} strokeWidth={9} strokeLinecap="round" />
               ))}
               <circle cx={CX} cy={CY} r={r} fill="none" stroke="transparent" strokeWidth={13} pointerEvents="stroke" />
@@ -83,8 +85,8 @@ export default function MarketClockMini() {
         <circle cx={nx.toFixed(1)} cy={ny.toFixed(1)} r={9} fill={T.needle} opacity={0.22} />
         <circle cx={nx.toFixed(1)} cy={ny.toFixed(1)} r={5} fill={T.needle} />
         <circle cx={CX} cy={CY} r={54} fill="var(--theme-bg, #090e16)" />
-        <text x={CX} y={CY + 2} textAnchor="middle" fontFamily={T.mono} fontSize={32} fontWeight={700} fill={T.needle} style={{ fontVariantNumeric: 'tabular-nums' }}>{utc}</text>
-        <text x={CX} y={CY + 22} textAnchor="middle" fontFamily={T.mono} fontSize={10} letterSpacing="2" fill={T.muted2}>UTC · NOW</text>
+        <text x={CX} y={CY + 2} textAnchor="middle" fontFamily={T.mono} fontSize={32} fontWeight={700} fill={T.needle} style={{ fontVariantNumeric: 'tabular-nums' }}>{clock}</text>
+        <text x={CX} y={CY + 22} textAnchor="middle" fontFamily={T.mono} fontSize={10} letterSpacing="2" fill={T.muted2}>{tzLabel} · NOW</text>
       </svg>
 
       {/* Readout */}

@@ -249,22 +249,41 @@ function splitWrap(a: number, b: number): [number, number][] {
   return [[s, 1440], [0, e - 1440]]
 }
 
-// This market's current trading sessions mapped onto the 0..24h UTC axis (hours),
-// splitting any window that straddles UTC midnight. Feeds the radial dial.
-export function utcArcs(m: MarketDef, now: Date): { t0: number; t1: number; phase: Phase }[] {
+// The viewer's own UTC offset in minutes (east positive), DST-correct.
+export function localOffsetMinutes(now: Date): number {
+  return -now.getTimezoneOffset()
+}
+
+// Short label for the viewer's local timezone, e.g. "EDT", "GMT+2". Falls back
+// to the IANA zone id if the runtime yields no abbreviation.
+export function localTzLabel(now: Date): string {
+  const name = new Intl.DateTimeFormat('en-US', { timeZoneName: 'short' })
+    .formatToParts(now).find(p => p.type === 'timeZoneName')?.value
+  return name ?? Intl.DateTimeFormat().resolvedOptions().timeZone
+}
+
+// The viewer's local clock as HH:MM, for the dial hub readout.
+export function localClock(now: Date): string {
+  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+}
+
+// This market's current trading sessions mapped onto a 0..24h axis drawn in the
+// viewer's own local timezone, splitting any window that straddles local
+// midnight. Feeds the radial dial.
+export function localArcs(m: MarketDef, now: Date): { t0: number; t1: number; phase: Phase }[] {
   const lp = localParts(m.tz, now)
-  const off = tzOffsetMinutes(m.tz, now)
+  const shift = localOffsetMinutes(now) - tzOffsetMinutes(m.tz, now)   // market local-min → viewer local-min
   const out: { t0: number; t1: number; phase: Phase }[] = []
   for (const s of effectiveDaySegments(m, lp.year, lp.month, lp.day, lp.weekday)) {
     if (s.phase === 'closed') continue
-    for (const [x0, x1] of splitWrap(s.start - off, s.end - off)) out.push({ t0: x0 / 60, t1: x1 / 60, phase: s.phase })
+    for (const [x0, x1] of splitWrap(s.start + shift, s.end + shift)) out.push({ t0: x0 / 60, t1: x1 / 60, phase: s.phase })
   }
   return out
 }
 
-// Current UTC time as a fractional hour [0,24), for the dial's now-hand.
-export function utcNowHours(now: Date): number {
-  return (now.getUTCHours() + now.getUTCMinutes() / 60 + now.getUTCSeconds() / 3600) % 24
+// Current local time as a fractional hour [0,24), for the dial's now-hand.
+export function localNowHours(now: Date): number {
+  return (now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600) % 24
 }
 
 export function countdown(ms: number): string {
