@@ -26,7 +26,7 @@ _BENCHMARKS: dict[str, cd.MarketBenchmark] | None = None
 def _book() -> list[cd.Portfolio]:
     global _BOOK, _BENCHMARKS
     if _BOOK is None:
-        _BOOK = cd.generate_mock_portfolios(months=24)
+        _BOOK = cd.generate_mock_portfolios(months=60)   # 5y history for period-over-period change
         _BENCHMARKS = cd.mock_benchmarks(_BOOK)
     return _BOOK
 

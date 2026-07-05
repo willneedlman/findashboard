@@ -397,6 +397,12 @@ def risk_report(portfolios: list[Portfolio], default_threshold: float = 5.0) -> 
             "annualized_default_rate": round(ann_default, 4),
             "over_threshold": ann_default > default_threshold,
             "buckets": {k: round(v["pct"], 4) for k, v in bucket_breakdown(latest).items()},
+            "trend": [
+                {"asof": r.asof.isoformat(),
+                 "delinquency_rate_30plus": round(delinquency_rate(r), 4),
+                 "npa_ratio": round(npa_ratio(r), 4)}
+                for r in sorted(agg, key=lambda r: r.asof)
+            ],
         }
 
     by_class: list[dict] = []
