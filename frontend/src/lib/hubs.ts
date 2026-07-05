@@ -94,6 +94,7 @@ export const HUBS: Hub[] = [
     tools: [
       { title: 'Chart Studio',    chip: 'Chart Studio',    desc: 'Every time-series feed in the app on one candlestick chart', route: '/chart-studio', icon: CandlestickChart },
       { title: 'Asset Overlay',   chip: 'Asset Overlay',   desc: 'Overlay any set of assets on a single chart',                route: '/compare',      icon: GitCompare },
+      { title: 'Compare Portfolios', chip: 'Compare',      desc: 'Two to four books side by side',                             route: '/portfolio-compare', icon: Scale },
     ],
   },
   {
@@ -109,7 +110,6 @@ export const HUBS: Hub[] = [
       { title: 'Monte Carlo',              chip: 'Monte Carlo',   desc: 'GBM path simulation with VaR and CVaR',         route: '/montecarlo',        icon: Dices },
       { title: 'Market Maker Simulator',   chip: 'Market Maker',  desc: 'Quote two-sided markets and hedge — options and Treasury desks', route: '/market-maker', icon: Gauge },
       { title: 'Portfolio Manager',        chip: 'Manager',       desc: 'Holdings, P&L, and portfolio-level greeks',     route: '/portfolio-manager', icon: Briefcase },
-      { title: 'Compare Portfolios',       chip: 'Compare',       desc: 'Two to four books side by side',                route: '/portfolio-compare', icon: Scale },
       { title: 'Trade Journal',            chip: 'Trade Journal', desc: 'Entry/exit, P&L, and win-rate analytics',       route: '/trade-journal',     icon: BookOpen },
       { title: 'Price Alerts',             chip: 'Price Alerts',  desc: 'Price and percent-change notifications',        route: '/alerts',            icon: Bell },
     ],
