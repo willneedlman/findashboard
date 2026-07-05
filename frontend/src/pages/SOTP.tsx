@@ -1,15 +1,75 @@
 import { useState, useMemo } from 'react'
-import { ComposedChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts'
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
 import EmptyState from '../components/EmptyState'
 import TickerInput from '../components/TickerInput'
-import { useChartColors } from '../hooks/useChartColors'
 import {
-  INPUT, LABEL, SIDEBAR, SECTION, RailSection, PRIMARY_BTN, GHOST_BTN, READOUT_ROW, TOOLTIP_STYLE, TOOLTIP_LABEL,
-  TOOLTIP_ITEM, TOOLTIP_CURSOR, TICK, TH, TD, PANEL, STACK, fmtM, ChartPanel, VerdictStrip, upsidePrimary,
+  INPUT, LABEL, SECTION, RailSection, PRIMARY_BTN, GHOST_BTN, READOUT_ROW,
+  TH, TD, PANEL, STACK, fmtM, VerdictStrip, upsidePrimary, LabeledPanel,
 } from './valuationShared'
+
+// Gold ramp across segments so the value stack / bars read as one family.
+const RAMP: number[][] = [[216, 184, 90], [201, 168, 76], [178, 146, 63], [156, 126, 53], [134, 105, 43]]
+function ramp(i: number, n: number): string {
+  const x = (n <= 1 ? 0 : i / (n - 1)) * (RAMP.length - 1)
+  const lo = Math.floor(x), hi = Math.min(lo + 1, RAMP.length - 1), f = x - lo
+  const c = RAMP[lo].map((v, k) => Math.round(v + (RAMP[hi][k] - v) * f))
+  return `rgb(${c[0]}, ${c[1]}, ${c[2]})`
+}
+const HAIR = '1px solid var(--theme-border, rgba(255,255,255,0.08))'
+
+// 100%-width bar split by each segment's share of total implied value.
+function ValueStack({ rows, total }: { rows: { name: string; value: number }[]; total: number }) {
+  return (
+    <div>
+      <div style={{ display: 'flex', height: 44, width: '100%', border: HAIR, overflow: 'hidden' }}>
+        {rows.map((r, i) => {
+          const pct = total > 0 ? (r.value / total) * 100 : 0
+          return (
+            <div key={r.name} title={`${r.name} · ${fmtM(r.value)}`} style={{ width: `${pct}%`, background: ramp(i, rows.length), display: 'flex', alignItems: 'center', justifyContent: 'center', borderRight: i < rows.length - 1 ? '1px solid #0a1628' : 'none' }}>
+              {pct >= 4 && <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, fontWeight: 700, color: '#0a1628' }}>{pct.toFixed(1)}%</span>}
+            </div>
+          )
+        })}
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px', marginTop: 12 }}>
+        {rows.map((r, i) => (
+          <span key={r.name} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'var(--theme-mono)', fontSize: 10 }}>
+            <span style={{ width: 9, height: 9, background: ramp(i, rows.length), flex: 'none' }} />
+            <span style={{ color: 'var(--theme-text, #d7e3fc)' }}>{r.name}</span>
+            <span style={{ color: 'var(--theme-secondary, #99907e)' }}>{fmtM(r.value)}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Per-segment revenue bar (blue) over value bar (segment ramp) — the multiple's lift.
+function RevValueBars({ rows }: { rows: { name: string; revenue: number; value: number }[] }) {
+  const maxRev = Math.max(...rows.map(r => r.revenue)) || 1
+  const maxVal = Math.max(...rows.map(r => r.value)) || 1
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {rows.map((r, i) => (
+        <div key={r.name} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 92, flex: 'none', textAlign: 'right', fontFamily: 'var(--theme-sans)', fontSize: 11, color: 'var(--theme-text, #d7e3fc)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <div style={{ height: 8, width: `${(r.revenue / maxRev) * 100}%`, background: 'var(--theme-tertiary, #60a5fa)', opacity: 0.75, flex: 'none' }} />
+              <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-secondary, #99907e)', whiteSpace: 'nowrap' }}>rev {fmtM(r.revenue)}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ height: 12, width: `${(r.value / maxVal) * 100}%`, background: ramp(i, rows.length), flex: 'none' }} />
+              <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-text, #d7e3fc)', whiteSpace: 'nowrap' }}>value {fmtM(r.value)}</span>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 type Seg = { name: string; revenue: number; pct: number | null; sector?: string | null }
 type SotpData = {
@@ -19,7 +79,6 @@ type SotpData = {
 }
 
 export function SOTPContent() {
-  const cc = useChartColors()
   const [ticker, setTicker] = useState('AAPL')
   const [inputsOpen, setInputsOpen] = useState(true)
   const [data, setData] = useState<SotpData | null>(null)
@@ -215,52 +274,58 @@ export function SOTPContent() {
             </div>
           )}
 
-          <div style={PANEL}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead><tr>
-                <th style={{ ...TH, textAlign: 'left' }}>Segment</th>
-                <th style={TH}>Revenue</th><th style={TH}>% mix</th><th style={TH}>P/S</th><th style={TH}>Segment value</th>
-              </tr></thead>
-              <tbody>
-                {calc.rows.map(r => {
-                  const sel = sector[r.name]
-                  const peer = sectorPS[sel]
-                  const weighted = peer != null ? weightedMult(peer, peerWeight) : null
-                  const onBlended = blended != null && Math.abs(r.mult - blended) < 0.01
-                  const onPeer = weighted != null && Math.abs(r.mult - weighted) < 0.01
-                  const basis = onBlended ? 'Blended' : onPeer ? `${sel} · ${Math.round(peerWeight * 100)}% peer` : 'Custom'
-                  return (
-                    <tr key={r.name}>
-                      <td style={{ ...TD, textAlign: 'left', fontWeight: 700 }}>
-                        {r.name}
-                        <span style={{ display: 'block', fontWeight: 400, fontSize: 9.5, letterSpacing: '0.04em', color: 'var(--theme-secondary, #99907e)' }}>
-                          {basis}
-                        </span>
-                      </td>
-                      <td style={TD}>{fmtM(r.revenue)}</td>
-                      <td style={{ ...TD, color: 'var(--theme-secondary, #99907e)' }}>{r.pct != null ? `${r.pct}%` : '—'}</td>
-                      <td style={{ ...TD, color: 'var(--theme-primary, #c9a84c)' }}>{r.mult.toFixed(2)}x</td>
-                      <td style={TD}>{fmtM(r.value)}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+          {/* Value stack — each segment's share of total implied value */}
+          <LabeledPanel title="Value stack">
+            <ValueStack rows={calc.rows} total={calc.total} />
+          </LabeledPanel>
 
-          <ChartPanel title="Value by segment">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={calc.rows} layout="vertical" margin={{ left: 20 }}>
-                <CartesianGrid strokeDasharray="2 4" stroke="var(--theme-border, rgba(255,255,255,0.08))" />
-                <XAxis type="number" tick={TICK} tickFormatter={(v) => fmtM(v)} />
-                <YAxis type="category" dataKey="name" tick={TICK} width={120} />
-                <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL} itemStyle={TOOLTIP_ITEM} cursor={TOOLTIP_CURSOR} formatter={(v: number) => fmtM(v)} />
-                <Bar dataKey="value" name="Segment value" radius={[0, 2, 2, 0]}>
-                  {calc.rows.map((_, i) => <Cell key={i} fill={cc.c1} />)}
-                </Bar>
-              </ComposedChart>
-            </ResponsiveContainer>
-          </ChartPanel>
+          {(() => {
+            const maxVal = Math.max(...calc.rows.map(r => r.value)) || 1
+            return (
+              <div style={PANEL}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead><tr>
+                    <th style={{ ...TH, textAlign: 'left' }}>Segment</th>
+                    <th style={TH}>Revenue</th><th style={TH}>% mix</th><th style={TH}>P/S</th><th style={TH}>Segment value</th>
+                  </tr></thead>
+                  <tbody>
+                    {calc.rows.map((r, i) => {
+                      const sel = sector[r.name]
+                      const peer = sectorPS[sel]
+                      const weighted = peer != null ? weightedMult(peer, peerWeight) : null
+                      const onBlended = blended != null && Math.abs(r.mult - blended) < 0.01
+                      const onPeer = weighted != null && Math.abs(r.mult - weighted) < 0.01
+                      const basis = onBlended ? 'Blended' : onPeer ? `${sel} · ${Math.round(peerWeight * 100)}% peer` : 'Custom'
+                      return (
+                        <tr key={r.name}>
+                          <td style={{ ...TD, textAlign: 'left', fontWeight: 700 }}>
+                            {r.name}
+                            <span style={{ display: 'block', fontWeight: 400, fontSize: 9.5, letterSpacing: '0.04em', color: 'var(--theme-secondary, #99907e)' }}>
+                              {basis}
+                            </span>
+                          </td>
+                          <td style={TD}>{fmtM(r.revenue)}</td>
+                          <td style={{ ...TD, color: 'var(--theme-secondary, #99907e)' }}>{r.pct != null ? `${r.pct}%` : '—'}</td>
+                          <td style={{ ...TD, color: 'var(--theme-primary, #c9a84c)' }}>{r.mult.toFixed(2)}x</td>
+                          <td style={TD}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
+                              <div style={{ height: 8, width: 64 * (r.value / maxVal), background: ramp(i, calc.rows.length), flex: 'none' }} />
+                              <span>{fmtM(r.value)}</span>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )
+          })()}
+
+          {/* Revenue → value: the multiple's lift, per segment */}
+          <LabeledPanel title="Revenue → value" right={`at ${(calc.total / (calc.rows.reduce((a, r) => a + r.revenue, 0) || 1)).toFixed(2)}× blended P/S`}>
+            <RevValueBars rows={calc.rows} />
+          </LabeledPanel>
         </div>
       )}
     </SidebarLayout>

@@ -383,6 +383,24 @@ function VerdictCellView({ c }: { c: VerdictCell }) {
   )
 }
 
+// Titled panel with the recessed corner label tab, auto-height (for hand-built
+// DOM charts, unlike the fixed-height ChartPanel used for Recharts). Optional
+// right-aligned caption in the tab strip.
+export function LabeledPanel({ title, right, children }: { title: string; right?: string; children: React.ReactNode }) {
+  const hair = '1px solid var(--theme-border, rgba(255,255,255,0.08))'
+  return (
+    <div style={{ ...PANEL, position: 'relative', padding: '30px 16px 16px' }}>
+      <div style={{
+        position: 'absolute', top: 0, left: 0, background: 'var(--theme-surface, rgba(46,57,77,0.85))',
+        padding: '4px 10px', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase',
+        color: 'var(--theme-text, #d7e3fc)', borderRight: hair, borderBottom: hair,
+      }}>{title}</div>
+      {right && <div style={{ position: 'absolute', top: 6, right: 12, fontFamily: 'var(--theme-mono)', fontSize: 9, letterSpacing: '0.06em', color: 'var(--theme-secondary, #99907e)' }}>{right}</div>}
+      {children}
+    </div>
+  )
+}
+
 // Titled chart panel with the inset label tab used across the valuation charts.
 export function ChartPanel({ title, height = 240, children }: { title: string; height?: number; children: React.ReactNode }) {
   return (

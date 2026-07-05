@@ -97,6 +97,58 @@ function ChartPanel({ label, height, children }: { label: string; height: number
   )
 }
 
+// One-way sensitivity tornado: each driver as a horizontal bar diverging from
+// the base intrinsic value (red below base, green above), widest swing on top.
+function Tornado({ rows, base }: { rows: { label: string; range: string; lo: number; hi: number }[]; base: number }) {
+  const LABEL_W = 150
+  const lo = Math.min(base, ...rows.map(r => r.lo))
+  const hi = Math.max(base, ...rows.map(r => r.hi))
+  const pad = (hi - lo) * 0.08 || 1
+  const dMin = lo - pad, dMax = hi + pad, span = dMax - dMin || 1
+  const pct = (v: number) => ((v - dMin) / span) * 100
+  const trackX = (v: number) => `calc(${LABEL_W}px + (100% - ${LABEL_W}px) * ${pct(v) / 100})`
+  const ticks = Array.from({ length: 5 }, (_, i) => dMin + (span * i) / 4)
+  const mono = 'var(--theme-mono)'
+  return (
+    <div style={{ position: 'relative', paddingTop: 14 }}>
+      {/* base line across all rows + caption */}
+      <div style={{ position: 'absolute', top: 14, bottom: 34, left: trackX(base), width: 2, background: 'var(--theme-primary, #c9a84c)' }} />
+      <div style={{ position: 'absolute', top: 0, left: trackX(base), transform: 'translateX(-50%)', fontFamily: mono, fontSize: 9, color: 'var(--theme-primary, #c9a84c)', whiteSpace: 'nowrap' }}>base ${base.toFixed(2)}</div>
+      {rows.map((r, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', height: 30 }}>
+          <div style={{ width: LABEL_W, flex: 'none', paddingRight: 10 }}>
+            <div style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, fontWeight: 600, color: 'var(--theme-text, #d7e3fc)', lineHeight: 1.2 }}>{r.label}</div>
+            <div style={{ fontFamily: mono, fontSize: 8.5, color: 'var(--theme-secondary, #99907e)' }}>{r.range}</div>
+          </div>
+          <div style={{ position: 'relative', flex: 1, height: 13 }}>
+            {/* down half: lo → base */}
+            <div style={{ position: 'absolute', top: 0, bottom: 0, left: `${pct(r.lo)}%`, width: `${Math.max(0, pct(base) - pct(r.lo))}%`, background: 'rgba(140,46,54,0.6)' }} />
+            {/* up half: base → hi */}
+            <div style={{ position: 'absolute', top: 0, bottom: 0, left: `${pct(base)}%`, width: `${Math.max(0, pct(r.hi) - pct(base))}%`, background: 'rgba(47,107,75,0.6)' }} />
+            <span style={{ position: 'absolute', top: '50%', left: `${pct(r.lo)}%`, transform: 'translate(-102%,-50%)', fontFamily: mono, fontSize: 9, color: '#e08a83', whiteSpace: 'nowrap' }}>${r.lo.toFixed(0)}</span>
+            <span style={{ position: 'absolute', top: '50%', left: `${pct(r.hi)}%`, transform: 'translate(2%,-50%)', fontFamily: mono, fontSize: 9, color: '#6fbf8f', whiteSpace: 'nowrap' }}>${r.hi.toFixed(0)}</span>
+          </div>
+        </div>
+      ))}
+      {/* axis */}
+      <div style={{ display: 'flex', marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+        <div style={{ width: LABEL_W, flex: 'none' }} />
+        <div style={{ position: 'relative', flex: 1, height: 12 }}>
+          {ticks.map((t, i) => (
+            <span key={i} style={{ position: 'absolute', left: `${pct(t)}%`, transform: i === 0 ? 'none' : i === ticks.length - 1 ? 'translateX(-100%)' : 'translateX(-50%)', fontFamily: mono, fontSize: 9, color: 'var(--theme-secondary, #99907e)' }}>${t.toFixed(0)}</span>
+          ))}
+        </div>
+      </div>
+      {/* legend */}
+      <div style={{ display: 'flex', gap: 18, justifyContent: 'center', marginTop: 8, fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-secondary, #99907e)' }}>
+        {([['rgba(140,46,54,0.6)', 'Lower intrinsic value'], ['var(--theme-primary, #c9a84c)', 'Base case'], ['rgba(47,107,75,0.6)', 'Higher intrinsic value']] as [string, string][]).map(([c, l]) => (
+          <span key={l} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 10, height: 10, background: c }} />{l}</span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function DCFValuationContent() {
   const cc = useChartColors()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -138,6 +190,30 @@ export function DCFValuationContent() {
         }
       }
 
+      // One-way sensitivity (tornado): flex each key assumption low/high while
+      // the others hold at base, recomputing intrinsic/share via computeDCF.
+      const growthFor = (g1: number) => [...Array(3).fill(g1 / 100), ...Array(4).fill(p.rev_growth_2 / 100), ...Array(3).fill(p.rev_growth_3 / 100)]
+      const ipsWith = (o: Partial<{ wacc: number; terminal_growth: number; target_margin: number; rev_growth_1: number; tax_rate: number; capex_pct: number }>) =>
+        computeDCF(p.revenue, p.op_margin, o.target_margin ?? p.target_margin, o.tax_rate ?? p.tax_rate,
+          o.capex_pct ?? p.capex_pct, p.da_pct, p.wc_pct, growthFor(o.rev_growth_1 ?? p.rev_growth_1),
+          o.wacc ?? p.wacc, o.terminal_growth ?? p.terminal_growth, p.net_debt, p.shares).ips
+      const tornado = ([
+        { label: 'WACC',            unit: '%', d: 1.5, base: p.wacc,            calc: (x: number) => ipsWith({ wacc: x }) },
+        { label: 'Terminal growth', unit: '%', d: 1.0, base: p.terminal_growth, calc: (x: number) => ipsWith({ terminal_growth: x }) },
+        { label: 'Target margin',   unit: '%', d: 4.0, base: p.target_margin,   calc: (x: number) => ipsWith({ target_margin: x }) },
+        { label: 'Yr 1–3 growth',   unit: '%', d: 4.0, base: p.rev_growth_1,    calc: (x: number) => ipsWith({ rev_growth_1: x }) },
+        { label: 'Tax rate',        unit: '%', d: 3.0, base: p.tax_rate,        calc: (x: number) => ipsWith({ tax_rate: x }) },
+        { label: 'CapEx % rev',     unit: '%', d: 1.5, base: p.capex_pct,       calc: (x: number) => ipsWith({ capex_pct: x }) },
+      ]).map(dr => {
+        const a = dr.calc(dr.base - dr.d), b = dr.calc(dr.base + dr.d)
+        return {
+          label: dr.label,
+          range: `${(dr.base - dr.d).toFixed(1)} – ${(dr.base + dr.d).toFixed(1)}${dr.unit}`,
+          lo: Math.round(Math.min(a, b) * 100) / 100,
+          hi: Math.round(Math.max(a, b) * 100) / 100,
+        }
+      }).sort((x, y) => Math.abs(y.hi - y.lo) - Math.abs(x.hi - x.lo))
+
       let market_price: number | undefined
       try {
         const { data: hist } = await axios.get(`/api/market/history?ticker=${ticker}`)
@@ -153,6 +229,8 @@ export function DCFValuationContent() {
         intrinsic_per_share: Math.round(base.ips * 100) / 100,
         market_price,
         sensitivity,
+        tornado,
+        tornadoBase: Math.round(base.ips * 100) / 100,
         gDeltas, mDeltas,
         baseGrowth: p.rev_growth_1,
         baseMargin: p.target_margin,
@@ -479,6 +557,13 @@ export function DCFValuationContent() {
                   </ComposedChart>
                 </ResponsiveContainer>
               </ChartPanel>
+
+              {/* Value-driver tornado — one-way sensitivity of intrinsic $/share */}
+              {data.tornado && data.tornado.length > 0 && (
+                <ChartPanel label="Value Drivers — one-way sensitivity" height={252}>
+                  <Tornado rows={data.tornado} base={data.tornadoBase} />
+                </ChartPanel>
+              )}
 
               {/* Sensitivity heatmap */}
               {data.sensitivity && data.gDeltas && (

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useLayoutEffect } from 'react'
 import { ComposedChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts'
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
@@ -6,7 +6,92 @@ import SidebarLayout from '../components/SidebarLayout'
 import EmptyState from '../components/EmptyState'
 import TickerInput from '../components/TickerInput'
 import { useChartColors } from '../hooks/useChartColors'
-import { INPUT, LABEL, HINT, SIDEBAR, SECTION, RailSection, PRIMARY_BTN, GHOST_BTN, READOUT_ROW, TOOLTIP_STYLE, TOOLTIP_LABEL, TOOLTIP_ITEM, TOOLTIP_CURSOR, TICK, PANEL, STACK, fmtM, ChartPanel, VerdictStrip, type VerdictTone } from './valuationShared'
+import { INPUT, LABEL, HINT, SIDEBAR, SECTION, RailSection, PRIMARY_BTN, GHOST_BTN, READOUT_ROW, TOOLTIP_STYLE, TOOLTIP_LABEL, TOOLTIP_ITEM, TOOLTIP_CURSOR, TICK, PANEL, STACK, fmtM, ChartPanel, LabeledPanel, VerdictStrip, type VerdictTone } from './valuationShared'
+
+const MONO = 'var(--theme-mono)', SANS = 'var(--theme-sans)'
+const TXT = 'var(--theme-text, #d7e3fc)', SEC = 'var(--theme-secondary, #99907e)', GOLD = 'var(--theme-primary, #c9a84c)'
+const NEG = 'var(--theme-negative, #ef4444)', TER = 'var(--theme-tertiary, #60a5fa)'
+const HAIR = '1px solid var(--theme-border, rgba(255,255,255,0.08))'
+
+// Element width via ResizeObserver, so the hand-built SVG stays crisp (no
+// viewBox scaling of strokes/text).
+function useWidth() {
+  const ref = useRef<HTMLDivElement>(null)
+  const [w, setW] = useState(0)
+  useLayoutEffect(() => {
+    const el = ref.current; if (!el) return
+    const ro = new ResizeObserver(([e]) => setW(e.contentRect.width))
+    ro.observe(el); return () => ro.disconnect()
+  }, [])
+  return [ref, w] as const
+}
+
+// Horizontal 0→scale demand track split into undemanding / reasonable /
+// demanding zones, with current-growth and implied-growth markers.
+function DemandGauge({ current, implied, verdict }: { current: number | null; implied: number; verdict?: string | null }) {
+  const scale = Math.max(35, Math.ceil((Math.max(implied, current ?? 0) + 3) / 5) * 5)
+  const pct = (v: number) => Math.max(0, Math.min(100, (v / scale) * 100))
+  const b10 = pct(10), b20 = pct(20)
+  const implColor = verdict === 'demanding' ? NEG : verdict === 'undemanding' ? 'var(--theme-positive, #22c55e)' : GOLD
+  return (
+    <div style={{ paddingTop: 16 }}>
+      <div style={{ position: 'relative', height: 0 }}>
+        {current != null && <span style={{ position: 'absolute', top: -14, left: `${pct(current)}%`, transform: 'translateX(-50%)', whiteSpace: 'nowrap', fontFamily: MONO, fontSize: 9, color: TXT }}>current {current.toFixed(1)}%</span>}
+        <span style={{ position: 'absolute', top: -14, left: `${pct(implied)}%`, transform: 'translateX(-50%)', whiteSpace: 'nowrap', fontFamily: MONO, fontSize: 9, color: implColor }}>implied {implied.toFixed(1)}%</span>
+      </div>
+      <div style={{ position: 'relative', height: 22, display: 'flex', border: HAIR }}>
+        <div style={{ width: `${b10}%`, background: 'rgba(47,107,75,0.45)' }} />
+        <div style={{ width: `${b20 - b10}%`, background: 'rgba(201,168,76,0.40)' }} />
+        <div style={{ flex: 1, background: 'rgba(140,46,54,0.45)' }} />
+        {current != null && <div style={{ position: 'absolute', top: -3, bottom: -3, left: `${pct(current)}%`, width: 2, marginLeft: -1, background: TXT }} />}
+        <div style={{ position: 'absolute', top: -3, bottom: -3, left: `${pct(implied)}%`, width: 2, marginLeft: -1, background: implColor }} />
+      </div>
+      <div style={{ position: 'relative', height: 12, marginTop: 6, fontFamily: SANS, fontSize: 9, letterSpacing: '0.04em', color: SEC }}>
+        <span style={{ position: 'absolute', left: `${b10 / 2}%`, transform: 'translateX(-50%)', whiteSpace: 'nowrap' }}>Undemanding · &lt;10%</span>
+        <span style={{ position: 'absolute', left: `${(b10 + b20) / 2}%`, transform: 'translateX(-50%)', whiteSpace: 'nowrap' }}>Reasonable · 10–20%</span>
+        <span style={{ position: 'absolute', left: `${(b20 + 100) / 2}%`, transform: 'translateX(-50%)', whiteSpace: 'nowrap' }}>Demanding · &gt;20%</span>
+      </div>
+    </div>
+  )
+}
+
+// Two revenue trajectories from the same TTM revenue: what the price implies vs
+// the current run-rate, with the gap between them shaded.
+function ExpectationGap({ rev0, impliedG, currentG, years }: { rev0: number; impliedG: number; currentG: number; years: number }) {
+  const [ref, w] = useWidth()
+  const H = 172, PADL = 6, PADR = 52, PADT = 20, PADB = 8
+  const impl = Array.from({ length: years + 1 }, (_, t) => rev0 * Math.pow(1 + impliedG / 100, t))
+  const curr = Array.from({ length: years + 1 }, (_, t) => rev0 * Math.pow(1 + currentG / 100, t))
+  const yMax = Math.max(...impl, ...curr), yMin = Math.min(...impl, ...curr, rev0), spanY = (yMax - yMin) || 1
+  const innerW = Math.max(0, w - PADL - PADR), innerH = H - PADT - PADB
+  const X = (t: number) => PADL + (years === 0 ? 0 : t / years) * innerW
+  const Y = (v: number) => PADT + (1 - (v - yMin) / spanY) * innerH
+  const implPts = impl.map((v, t) => [X(t), Y(v)])
+  const currPts = curr.map((v, t) => [X(t), Y(v)])
+  const line = (pts: number[][]) => pts.map(p => p.join(',')).join(' ')
+  const gap = `M ${implPts.map(p => p.join(' ')).join(' L ')} L ${[...currPts].reverse().map(p => p.join(' ')).join(' L ')} Z`
+  return (
+    <div style={{ height: '100%' }}>
+      <div ref={ref} style={{ width: '100%' }}>
+        {w > 0 && (
+          <svg width={w} height={H} style={{ display: 'block' }}>
+            <path d={gap} fill={NEG} fillOpacity={0.1} />
+            <polyline points={line(currPts)} fill="none" stroke={TER} strokeWidth={2} />
+            <polyline points={line(implPts)} fill="none" stroke={NEG} strokeWidth={2} />
+            {currPts.map((p, i) => <circle key={i} cx={p[0]} cy={p[1]} r={2.5} fill={TER} />)}
+            {implPts.map((p, i) => <circle key={i} cx={p[0]} cy={p[1]} r={2.5} fill={NEG} />)}
+            <text x={implPts[years][0] + 5} y={implPts[years][1] - 4} fontFamily={MONO} fontSize={9} fill={NEG}>{fmtM(impl[years])}</text>
+            <text x={currPts[years][0] + 5} y={currPts[years][1] + 11} fontFamily={MONO} fontSize={9} fill={TER}>{fmtM(curr[years])}</text>
+          </svg>
+        )}
+      </div>
+      <div style={{ display: 'flex', gap: 18, justifyContent: 'center', marginTop: 2, fontFamily: SANS, fontSize: 9, color: SEC }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 12, height: 2, background: NEG }} />Price demands · {impliedG.toFixed(1)}%</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 12, height: 2, background: TER }} />Current run-rate · {currentG.toFixed(1)}%</span>
+      </div>
+    </div>
+  )
+}
 
 type Reverse = {
   implied_growth: number | null
@@ -169,21 +254,38 @@ export function ReverseDCFContent() {
             )
           })()}
 
-          {data.fcfs && data.fcfs.length > 0 && (
-            <ChartPanel title="Implied free cash flow path">
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={data.fcfs}>
-                  <CartesianGrid strokeDasharray="2 4" stroke="var(--theme-border, rgba(255,255,255,0.08))" />
-                  <XAxis dataKey="year" tick={TICK} tickFormatter={(y) => `Y${y}`} />
-                  <YAxis tick={TICK} tickFormatter={(v) => fmtM(v)} width={56} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL} itemStyle={TOOLTIP_ITEM} cursor={TOOLTIP_CURSOR} formatter={(v: number) => fmtM(v)} labelFormatter={(y) => `Year ${y}`} />
-                  <Bar dataKey="fcf" name="FCF" radius={[2, 2, 0, 0]}>
-                    {data.fcfs.map((_, i) => <Cell key={i} fill={cc.c1} />)}
-                  </Bar>
-                </ComposedChart>
-              </ResponsiveContainer>
-            </ChartPanel>
-          )}
+          {/* Demand gauge */}
+          <LabeledPanel title="Demand gauge">
+            <DemandGauge current={data.current_growth} implied={implied} verdict={data.verdict} />
+          </LabeledPanel>
+
+          {/* Two-up: the expectation gap + the implied FCF path */}
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'stretch' }}>
+            <div style={{ flex: '1 1 320px', minWidth: 0 }}>
+              <ChartPanel title="The expectation gap" height={200}>
+                {funda?.revenue && data.current_growth != null
+                  ? <ExpectationGap rev0={funda.revenue} impliedG={implied} currentG={data.current_growth} years={years} />
+                  : <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: MONO, fontSize: 11, color: SEC }}>Current growth unavailable</div>}
+              </ChartPanel>
+            </div>
+            {data.fcfs && data.fcfs.length > 0 && (
+              <div style={{ flex: '1 1 320px', minWidth: 0 }}>
+                <ChartPanel title="Implied free cash flow path" height={200}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={data.fcfs}>
+                      <CartesianGrid strokeDasharray="2 4" stroke="var(--theme-border, rgba(255,255,255,0.08))" />
+                      <XAxis dataKey="year" tick={TICK} tickFormatter={(y) => `Y${y}`} />
+                      <YAxis tick={TICK} tickFormatter={(v) => fmtM(v)} width={56} />
+                      <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL} itemStyle={TOOLTIP_ITEM} cursor={TOOLTIP_CURSOR} formatter={(v: number) => fmtM(v)} labelFormatter={(y) => `Year ${y}`} />
+                      <Bar dataKey="fcf" name="FCF" radius={[2, 2, 0, 0]}>
+                        {data.fcfs.map((_, i) => <Cell key={i} fill={cc.c1} />)}
+                      </Bar>
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </ChartPanel>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </SidebarLayout>

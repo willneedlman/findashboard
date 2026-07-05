@@ -4,7 +4,72 @@ import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
 import EmptyState from '../components/EmptyState'
 import TickerInput from '../components/TickerInput'
-import { INPUT, LABEL, SIDEBAR, RailSection, PRIMARY_BTN, READOUT_ROW, TH, TD, PANEL, STACK, VerdictStrip, upsidePrimary } from './valuationShared'
+import { INPUT, LABEL, RailSection, PRIMARY_BTN, READOUT_ROW, TH, TD, PANEL, STACK, VerdictStrip, upsidePrimary, LabeledPanel } from './valuationShared'
+
+const MONO = 'var(--theme-mono)', SANS = 'var(--theme-sans)'
+const TXT = 'var(--theme-text, #d7e3fc)', SEC = 'var(--theme-secondary, #99907e)', GOLD = 'var(--theme-primary, #c9a84c)'
+const BAND = 'color-mix(in srgb, var(--theme-primary, #c9a84c) 28%, transparent)'
+const HAIR = '1px solid var(--theme-border, rgba(255,255,255,0.08))'
+
+type Bar = { label: string; lo: number; hi: number; marker: number }
+
+// Football field: per-multiple implied-price range (bear–bull band) with a
+// marker at the target multiple, over a full-height market-price rule.
+function FootballField({ bars, price }: { bars: Bar[]; price: number | null }) {
+  const LABEL_W = 104
+  // Domain is anchored to the stable bear–bull bands and the market price only —
+  // NOT the target markers — so typing a target never rescales the whole chart.
+  const vals = [...bars.flatMap(b => [b.lo, b.hi]), ...(price != null ? [price] : [])].filter(v => isFinite(v))
+  const minV = Math.min(...vals), maxV = Math.max(...vals)
+  const pad = (maxV - minV) * 0.06 || 1
+  const dMin = minV - pad, span = (maxV + pad) - dMin || 1
+  const pct = (v: number) => ((v - dMin) / span) * 100
+  const xAt = (v: number) => `calc(${LABEL_W}px + (100% - ${LABEL_W}px) * ${pct(v) / 100})`
+  const ticks = Array.from({ length: 5 }, (_, i) => dMin + (span * i) / 4)
+  return (
+    <div style={{ position: 'relative' }}>
+      {price != null && <>
+        <div style={{ position: 'absolute', top: 16, bottom: 34, left: xAt(price), width: 2, marginLeft: -1, background: TXT, zIndex: 2 }} />
+        <div style={{ position: 'absolute', top: 0, left: xAt(price), transform: 'translateX(-50%)', fontFamily: MONO, fontSize: 9, color: TXT, whiteSpace: 'nowrap', zIndex: 3 }}>price ${price.toFixed(2)}</div>
+      </>}
+      <div style={{ paddingTop: 16 }}>
+        {bars.map((b, i) => {
+          const showMk = isFinite(b.marker) && b.marker > 0
+          const raw = pct(b.marker)
+          const mkPct = Math.max(1, Math.min(99, raw))         // clamp an off-scale target to the track edge
+          const offR = raw > 100, offL = raw < 0
+          const label = offR ? `$${b.marker.toFixed(2)} ↑` : offL ? `$${b.marker.toFixed(2)} ↓` : `$${b.marker.toFixed(2)}`
+          const labelLeft = mkPct > 78
+          return (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', height: 26 }}>
+              <div style={{ width: LABEL_W, flex: 'none', paddingRight: 8, fontFamily: SANS, fontSize: 11, color: TXT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.label}</div>
+              <div style={{ position: 'relative', flex: 1, height: '100%' }}>
+                <div style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: `${pct(b.lo)}%`, width: `${Math.max(0, pct(b.hi) - pct(b.lo))}%`, height: 10, background: BAND, border: `1px solid ${GOLD}`, boxSizing: 'border-box' }} />
+                {showMk && <>
+                  <div style={{ position: 'absolute', top: 3, bottom: 3, left: `${mkPct}%`, width: 3, marginLeft: -1.5, background: GOLD, opacity: offR || offL ? 0.55 : 1 }} />
+                  <span style={{ position: 'absolute', top: '50%', left: `${mkPct}%`, transform: labelLeft ? 'translate(-100%,-50%)' : 'translate(7px,-50%)', marginLeft: labelLeft ? -7 : 0, fontFamily: MONO, fontSize: 9, color: TXT, whiteSpace: 'nowrap' }}>{label}</span>
+                </>}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      <div style={{ display: 'flex', marginTop: 4, paddingTop: 6, borderTop: HAIR }}>
+        <div style={{ width: LABEL_W, flex: 'none' }} />
+        <div style={{ position: 'relative', flex: 1, height: 12 }}>
+          {ticks.map((t, i) => (
+            <span key={i} style={{ position: 'absolute', left: `${pct(t)}%`, transform: i === 0 ? 'none' : i === ticks.length - 1 ? 'translateX(-100%)' : 'translateX(-50%)', fontFamily: MONO, fontSize: 9, color: SEC }}>${t.toFixed(0)}</span>
+          ))}
+        </div>
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 18px', justifyContent: 'center', marginTop: 8, fontFamily: SANS, fontSize: 9, color: SEC }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 14, height: 8, background: BAND, border: `1px solid ${GOLD}`, boxSizing: 'border-box' }} />Implied range (bear–bull multiple)</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 3, height: 12, background: GOLD }} />At target multiple</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 2, height: 12, background: TXT }} />Market price</span>
+      </div>
+    </div>
+  )
+}
 
 type Metric = { key: string; label: string; per_share: number; current_mult: number | null; ev_based: boolean }
 type MultiplesData = {
@@ -102,6 +167,25 @@ export function MultiplesContent() {
             />
           </div>
 
+          {/* Football field — implied price ranges vs the live price */}
+          {(() => {
+            const netDebtPS = (data!.shares && data!.net_debt != null) ? data!.net_debt / data!.shares : 0
+            const impliedAt = (m: number, ps: number, ev: boolean) => ev ? m * ps - netDebtPS : m * ps
+            const bars: Bar[] = rows.out
+              .filter(r => r.current_mult != null)
+              .map(r => {
+                const cm = r.current_mult as number
+                const a = impliedAt(cm * 0.75, r.per_share, r.ev_based), b = impliedAt(cm * 1.25, r.per_share, r.ev_based)
+                return { label: r.label, lo: Math.min(a, b), hi: Math.max(a, b), marker: r.implied }
+              })
+              .filter(b => isFinite(b.lo) && isFinite(b.hi) && isFinite(b.marker) && b.hi > 0)
+            return bars.length ? (
+              <LabeledPanel title="Implied price by method">
+                <FootballField bars={bars} price={data!.price ?? null} />
+              </LabeledPanel>
+            ) : null
+          })()}
+
           <div style={PANEL}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr>
@@ -111,14 +195,12 @@ export function MultiplesContent() {
               <tbody>
                 {rows.out.map(r => (
                   <tr key={r.key}>
-                    <td style={{ ...TD, textAlign: 'left', fontWeight: 700 }}>
-                      {r.label}
-                      {r.ev_based && <span style={{ marginLeft: 6, fontSize: 8, letterSpacing: '0.1em', padding: '1px 4px', border: '1px solid var(--theme-border, rgba(255,255,255,0.16))', color: 'var(--theme-secondary, #99907e)' }}>NETS DEBT</span>}
-                    </td>
+                    <td style={{ ...TD, textAlign: 'left', fontWeight: 700 }}>{r.label}</td>
                     <td style={TD}>${r.per_share.toFixed(2)}</td>
                     <td style={{ ...TD, color: 'var(--theme-secondary, #99907e)' }}>{r.current_mult != null ? `${r.current_mult.toFixed(1)}x` : '—'}</td>
                     <td style={{ ...TD, padding: '5px 12px' }}>
-                      <input type="number" step={0.5} value={Number(r.mult.toFixed(1))}
+                      <input type="number" step={0.5} min={0} value={Number(r.mult.toFixed(1))}
+                        onFocus={e => e.target.select()}
                         onChange={e => setTarget(t => ({ ...t, [r.key]: Number(e.target.value) }))}
                         style={{ ...INPUT, width: 74, padding: '4px 6px', textAlign: 'right', color: 'var(--theme-primary, #c9a84c)' }} />
                     </td>
