@@ -9,8 +9,8 @@ export interface Theme {
   bgColor:             string   // app bg            default #101c2e
   surfaceColor:        string   // card/panel        default #0d1826
   chartNeutralColor:   string   // neutral chart fill default #4a7fa5
-  primaryFont:    string   // mono font    default JetBrains Mono
-  secondaryFont:  string   // label font   default IBM Plex Sans
+  primaryFont:    string   // mono font    default San Francisco (SF Mono via ui-monospace)
+  secondaryFont:  string   // label font   default Sora
   primaryFontUrl:   string // '' = use Google Fonts / system
   secondaryFontUrl: string
 }
@@ -49,8 +49,8 @@ export const DEFAULT_THEME: Theme = {
   bgColor:           '#101c2e',
   surfaceColor:      '#0d1826',
   chartNeutralColor: '#4a7fa5',
-  primaryFont:       'JetBrains Mono',
-  secondaryFont:     'IBM Plex Sans',
+  primaryFont:       'San Francisco',
+  secondaryFont:     'Sora',
   primaryFontUrl:    '',
   secondaryFontUrl:  '',
 }
@@ -59,24 +59,24 @@ export const DEFAULT_THEME: Theme = {
 // Monospace faces for numbers & tabular data (all monospaced so figures align),
 // chosen to be visually distinct in character rather than near-identical.
 export const MONO_FONTS = [
-  'JetBrains Mono',   // modern terminal — default
+  'JetBrains Mono',   // modern terminal
   'IBM Plex Mono',    // corporate, professional
   'Roboto Mono',      // clean, neutral
   'Fira Code',        // rounded, ligature-rich
   'Space Mono',       // retro, wide character
   'DM Mono',          // light, editorial
   'Martian Mono',     // ultra-wide condensed blocks
-  'San Francisco',    // Apple system monospace — resolves via ui-monospace in CSS
+  'San Francisco',    // Apple system monospace (SF Mono via ui-monospace) — default
 ]
 // Interface typeface — a deliberately varied set so the choices look distinct:
 // grotesque · humanist · geometric · rounded · futuristic · serif · display.
 export const SANS_FONTS = [
-  'Inter',               // neutral grotesque — clean modern default
+  'Inter',               // neutral grotesque — clean modern
   'IBM Plex Sans',       // humanist, technical
   'Space Grotesk',       // techy, mono-inspired sans
   'DM Sans',             // geometric, friendly
   'Manrope',             // semi-rounded, contemporary
-  'Sora',                // futuristic geometric
+  'Sora',                // futuristic geometric — default
   'Geist',               // minimal, Vercel-style
   'Lora',                // serif — editorial warmth
   'Fraunces',            // expressive display serif

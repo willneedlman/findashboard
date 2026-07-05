@@ -22,7 +22,7 @@ export default function MetricCard({ label, value, delta, deltaPositive, classNa
           letterSpacing: '0.14em',
           textTransform: 'uppercase',
           color: 'var(--theme-text-muted, #8099b0)',
-          fontFamily: 'var(--theme-mono, JetBrains Mono, monospace)',
+          fontFamily: 'var(--theme-mono, ui-monospace, monospace)',
           margin: 0,
         }}>{label}</p>
         {help && (
@@ -65,7 +65,7 @@ export default function MetricCard({ label, value, delta, deltaPositive, classNa
         color: 'var(--theme-text, #d7e3fc)',
         fontSize: 20,
         fontWeight: 600,
-        fontFamily: 'var(--theme-mono, JetBrains Mono, monospace)',
+        fontFamily: 'var(--theme-mono, ui-monospace, monospace)',
         fontVariantNumeric: 'tabular-nums',
         margin: 0,
         lineHeight: 1.2,

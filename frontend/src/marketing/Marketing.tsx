@@ -134,7 +134,7 @@ function BrandLockup({ markSize = 30 }: { markSize?: number }) {
       <span aria-hidden="true" style={{ width: 1, height: Math.round(markSize * 0.92), background: 'rgba(201,168,76,0.28)', margin: '0 13px' }} />
       <span style={{ display: 'block', lineHeight: 1, textAlign: 'left' }}>
         <span style={{ display: 'block', fontFamily: "'Cinzel', Georgia, serif", fontWeight: 700, fontSize: Math.round(markSize * 0.62), letterSpacing: '0.09em', color: 'var(--gold)' }}>ALPHATAPE</span>
-        <span style={{ display: 'block', fontFamily: "'IBM Plex Sans', system-ui, sans-serif", fontWeight: 700, fontSize: Math.round(markSize * 3.1) / 10, letterSpacing: '0.34em', color: 'var(--muted)', marginTop: Math.round(markSize * 0.1) }}>TERMINAL</span>
+        <span style={{ display: 'block', fontFamily: "'Sora', system-ui, sans-serif", fontWeight: 700, fontSize: Math.round(markSize * 3.1) / 10, letterSpacing: '0.34em', color: 'var(--muted)', marginTop: Math.round(markSize * 0.1) }}>TERMINAL</span>
       </span>
     </span>
   )

@@ -48,9 +48,10 @@ Three families, each with a job. All are loaded in `frontend/index.html`.
 
 - **Display (`Cinzel`, serif):** the `ALPHATAPE` wordmark and hero h1 only. Tracked,
   uppercase, gold. Do not use for body or UI.
-- **Mono (`JetBrains Mono`, `--theme-mono`):** numbers, tabular data, tickers, model
-  outputs, most tool chrome. Default workhorse, keeps figures aligned.
-- **UI sans (`IBM Plex Sans`, `--theme-sans`):** nav labels, section labels, prose,
+- **Mono (`San Francisco`, `--theme-mono`):** numbers, tabular data, tickers, model
+  outputs, most tool chrome. Emitted as `ui-monospace` (SF Mono on Apple, the
+  platform monospace elsewhere) so figures stay aligned. Default workhorse.
+- **UI sans (`Sora`, `--theme-sans`):** nav labels, section labels, prose,
   buttons.
 
 Mono and sans are user-swappable (`MONO_FONTS` / sans presets in `ThemeContext`);
@@ -92,21 +93,21 @@ consistency comes from one shared chrome:
 - **Panel:** `--theme-surface` (`#0d1826`) fill, 1px hairline border, no radius, no
   shadow. Panels separate by borders, never elevation.
 - **Header strip:** a recessed bar (`rgba(0,0,0,0.16)`, bottom hairline
-  `rgba(255,255,255,0.05)`) with the title in gold (`--theme-primary`), IBM Plex Sans,
+  `rgba(255,255,255,0.05)`) with the title in gold (`--theme-primary`), Sora,
   `9px`, weight `700`, uppercase, `letter-spacing 0.16em`. Inline controls (timeframe,
   overlays, ticker box) sit on the same strip, right-aligned. `WidgetFrame` renders
   this strip for every widget.
-- **Numbers:** JetBrains Mono with `font-variant-numeric: tabular-nums`. Gains green,
+- **Numbers:** the mono (`--theme-mono`, SF Mono) with `font-variant-numeric: tabular-nums`. Gains green,
   losses red, the value always printed alongside color.
 - **Tickers:** a transparent-PNG logo (`assets.parqet.com/logos/symbol/<SYM>?format=png`,
   the shared `TickerLogo` component) next to the symbol in watchlists, positions
   ledgers, and order tickets.
-- **Watchlist row:** logo (22px) + symbol (IBM Plex Sans, 12px, weight 600,
+- **Watchlist row:** logo (22px) + symbol (Sora, 12px, weight 600,
   `#dce3ed`) over a truncated company name (9px, `--theme-secondary`) on the left;
-  right-aligned price (JetBrains Mono, 12px) over day-change % (10px, green/red).
+  right-aligned price (mono, 12px) over day-change % (10px, green/red).
   Rows separate by a faint `rgba(255,255,255,0.04)` hairline, no columns.
-- **Index tape:** a thin full-width strip of `SYM price ±chg%` segments (JetBrains
-  Mono, 11px, tabular-nums; symbol muted, value green/red). Scrolls as a seamless
+- **Index tape:** a thin full-width strip of `SYM price ±chg%` segments (mono,
+  11px, tabular-nums; symbol muted, value green/red). Scrolls as a seamless
   marquee, pauses on hover, and freezes under `prefers-reduced-motion`. Tickers are
   configurable or loaded from a Portfolio Manager book.
 - **Trading tone:** buy/up green `#22C55E`, sell/down red `#EF4444`, labels in

@@ -90,7 +90,7 @@
   }
 
   .ft-page-title {
-    font-family: var(--theme-mono, 'JetBrains Mono', monospace);
+    font-family: var(--theme-mono, ui-monospace, monospace);
     font-size: 14px;
     font-weight: 700;
     letter-spacing: 0.18em;
@@ -128,7 +128,7 @@
   }
 
   .ft-metric-value {
-    font-family: var(--theme-mono, 'JetBrains Mono', monospace);
+    font-family: var(--theme-mono, ui-monospace, monospace);
     font-size: 20px;
     font-weight: 700;
     color: var(--theme-text, #d7e3fc);
@@ -222,7 +222,7 @@
     background: var(--theme-bg, #101c2e);
     border: 1px solid var(--theme-border, rgba(255,255,255,0.09));
     color: var(--theme-text, #d7e3fc);
-    font-family: var(--theme-mono, 'JetBrains Mono', monospace);
+    font-family: var(--theme-mono, ui-monospace, monospace);
     font-size: 11px;
     padding: 5px 8px;
     outline: none;
@@ -236,7 +236,7 @@
     background: color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent);
     border: 1px solid color-mix(in srgb, var(--theme-primary) 45%, transparent);
     color: var(--theme-primary, #c9a84c);
-    font-family: var(--theme-mono, 'JetBrains Mono', monospace);
+    font-family: var(--theme-mono, ui-monospace, monospace);
     font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.1em;
@@ -252,11 +252,11 @@
   .label-sm {
     @apply text-xs font-bold tracking-widest uppercase;
     color: var(--theme-secondary, #5e768f);
-    font-family: var(--theme-mono, 'JetBrains Mono', monospace);
+    font-family: var(--theme-mono, ui-monospace, monospace);
   }
 
   .section-header {
-    font-family: var(--theme-mono, 'JetBrains Mono', monospace);
+    font-family: var(--theme-mono, ui-monospace, monospace);
     font-size: 9px;
     font-weight: 700;
     letter-spacing: 0.18em;
@@ -269,7 +269,7 @@
   }
 
   .section-label {
-    font-family: var(--theme-mono, 'JetBrains Mono', monospace);
+    font-family: var(--theme-mono, ui-monospace, monospace);
     font-size: 10px;
     font-weight: 600;
     letter-spacing: 0.16em;
@@ -366,9 +366,10 @@
 
 /* ── Monospace fallback — one mono, for numbers/tabular data ─────────────── */
 /* The interface typeface is chosen in Settings (--theme-sans); the single mono
-   stays JetBrains Mono so figures and tables always align. */
+   defaults to the system monospace (SF Mono on Apple) so figures and tables
+   always align. */
 :root {
-  --font-mono: 'JetBrains Mono', monospace;
+  --font-mono: ui-monospace, monospace;
 }
 
 /* ── Recharts — consistent font + grid ──────────────────────────────────── */

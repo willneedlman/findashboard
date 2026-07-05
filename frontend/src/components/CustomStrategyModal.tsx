@@ -117,7 +117,7 @@ const T = {
   pos:     'var(--theme-pos, #4caf7d)',
   neg:     'var(--theme-neg, #e05c6e)',
   blue:    '#60a5fa',
-  mono:    'var(--theme-mono, "JetBrains Mono", monospace)',
+  mono:    'var(--theme-mono, ui-monospace, monospace)',
 }
 
 const inp: React.CSSProperties = {

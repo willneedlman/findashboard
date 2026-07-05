@@ -191,7 +191,7 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
     const txt = cs.getPropertyValue('--theme-secondary').trim() || '#5e768f'
     const gold = cs.getPropertyValue('--theme-primary').trim() || '#c9a84c'
     const chart = createChart(el, {
-      layout: { background: { type: ColorType.Solid, color: bg }, textColor: txt, fontFamily: "'JetBrains Mono', monospace", fontSize: 9 },
+      layout: { background: { type: ColorType.Solid, color: bg }, textColor: txt, fontFamily: "ui-monospace, monospace", fontSize: 9 },
       grid: { vertLines: { color: 'rgba(255,255,255,0.03)' }, horzLines: { color: 'rgba(255,255,255,0.03)' } },
       crosshair: { mode: CrosshairMode.Normal, vertLine: { color: `${gold}66` }, horzLine: { color: `${gold}66` } },
       rightPriceScale: { borderColor: 'rgba(255,255,255,0.06)', textColor: txt },

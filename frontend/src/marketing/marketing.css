@@ -4,8 +4,8 @@
   --bg:#0a1320; --bg2:#0b1626; --surface:#0d1826; --line:rgba(255,255,255,0.08);
   --gold:#c9a84c; --text:#e6eefc; --muted:#7e93ad; --dim:#5e768f;
   --pos:#3fb950; --neg:#f85149; --blue:#6c8cff;
-  --mono:'JetBrains Mono',ui-monospace,monospace;
-  --sans:'Inter',-apple-system,system-ui,sans-serif;
+  --mono:ui-monospace,monospace;
+  --sans:'Sora',-apple-system,system-ui,sans-serif;
   --ease:cubic-bezier(0.23,1,0.32,1);
   background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.5;
   -webkit-font-smoothing:antialiased;min-height:100vh;overflow-x:hidden;

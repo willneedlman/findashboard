@@ -302,7 +302,7 @@ const floorVal = (s: Sorted | undefined, time: number): number | null => {
 }
 
 const baseOptions = (C: Colors, h: number) => ({
-  layout: { background: { type: ColorType.Solid, color: C.bg }, textColor: C.text, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, attributionLogo: false },
+  layout: { background: { type: ColorType.Solid, color: C.bg }, textColor: C.text, fontFamily: "ui-monospace, monospace", fontSize: 10, attributionLogo: false },
   grid: { vertLines: { color: C.grid }, horzLines: { color: C.grid } },
   crosshair: {
     mode: CrosshairMode.Normal,

@@ -31,7 +31,7 @@ const PRESETS: { name: string; theme: Partial<Theme> }[] = [
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 32 }}>
-      <div style={{ fontFamily: 'var(--theme-sans, IBM Plex Sans, sans-serif)', fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', marginBottom: 12, paddingBottom: 6, borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.06))' }}>
+      <div style={{ fontFamily: 'var(--theme-sans, Sora, sans-serif)', fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', marginBottom: 12, paddingBottom: 6, borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.06))' }}>
         {title}
       </div>
       {children}
@@ -55,7 +55,7 @@ function ColorSwatch({ label, value, onChange }: { label: string; value: string;
         <input
           type="text" value={value}
           onChange={e => { if (/^#[0-9a-fA-F]{0,6}$/.test(e.target.value)) onChange(e.target.value) }}
-          style={{ background: 'var(--theme-bg, #0a1220)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-mono, JetBrains Mono, monospace)', fontSize: 11, padding: '4px 8px', width: 90, outline: 'none', letterSpacing: '0.05em' }}
+          style={{ background: 'var(--theme-bg, #0a1220)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-mono, ui-monospace, monospace)', fontSize: 11, padding: '4px 8px', width: 90, outline: 'none', letterSpacing: '0.05em' }}
         />
       </div>
     </div>

@@ -56,7 +56,7 @@ export default function TradingViewChart({ config }: { config: WidgetConfig }) {
       layout: {
         background: { type: ColorType.Solid, color: bg },
         textColor:  text,
-        fontFamily: "'JetBrains Mono', monospace",
+        fontFamily: "ui-monospace, monospace",
         fontSize:   10,
       },
       grid: {
