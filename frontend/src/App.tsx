@@ -58,6 +58,7 @@ const EarningsSummarizer = lazyWithReload(() => import('./pages/EarningsSummariz
 const PortfolioManager   = lazyWithReload(() => import('./pages/PortfolioManager'))
 const AdminTester        = lazyWithReload(() => import('./pages/AdminTester'))
 const CreditSpreads      = lazyWithReload(() => import('./pages/CreditSpreads'))
+const CreditDelinquencies = lazyWithReload(() => import('./pages/CreditDelinquencies'))
 const MarketHours        = lazyWithReload(() => import('./pages/MarketHours'))
 const CurrencyMatrix     = lazyWithReload(() => import('./pages/CurrencyMatrix'))
 const MaritimeMap        = lazyWithReload(() => import('./pages/MaritimeMap'))
@@ -223,6 +224,7 @@ export default function App() {
               <Route path="/sector-rotation" element={<SectorRotation />} />
               <Route path="/economy"             element={<EconomyMonitor />} />
               <Route path="/credit-spreads"      element={<CreditSpreads />} />
+              <Route path="/credit-delinquencies" element={<CreditDelinquencies />} />
               <Route path="/market-hours"        element={<MarketHours />} />
               <Route path="/currency"            element={<CurrencyMatrix />} />
               <Route path="/flows-map"           element={<MaritimeMap />} />
