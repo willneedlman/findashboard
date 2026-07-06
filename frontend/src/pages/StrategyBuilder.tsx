@@ -158,8 +158,14 @@ export default function StrategyBuilder() {
       const total = (multiExpiry
         ? legMeta.reduce((sum, m) => sum + legPnlAt(S, m.leg, m.iv, frontDte), 0)
         : primary.reduce((sum, leg) => sum + intrinsic(S, leg), 0)) + secondaryOffset
+      // A leg already expired at the slider date is REALIZED: its P&L is locked
+      // at the current spot (a constant), not re-priced against the x-axis. That
+      // lets a surviving longer-dated leg show its true (e.g. uncapped) payoff
+      // instead of being offset by a short leg that no longer exists.
       const tval  = showT
-        ? legMeta.reduce((sum, m) => sum + legPnlAt(S, m.leg, m.iv, tDays), 0) + secondaryOffset
+        ? legMeta.reduce((sum, m) => sum + (tDays > m.dteDays
+            ? legPnlAt(spot, m.leg, m.iv, m.dteDays)
+            : legPnlAt(S, m.leg, m.iv, tDays)), 0) + secondaryOffset
         : total
       const row: Record<string, number> = {
         price:  +S.toFixed(2),
@@ -371,9 +377,17 @@ export default function StrategyBuilder() {
                 {legs.map((leg, i) => (
                   <div key={i} style={{ background: 'var(--theme-bg, #0a1628)', border: `1px solid ${LEG_COLORS[i % LEG_COLORS.length]}44`, padding: 7 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-                      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: leg.action === 'buy' ? 'var(--theme-positive)' : 'var(--theme-negative)', textTransform: 'uppercase' }}>
-                        LEG {i + 1}
-                      </span>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: leg.action === 'buy' ? 'var(--theme-positive)' : 'var(--theme-negative)', textTransform: 'uppercase' }}>
+                          LEG {i + 1}
+                        </span>
+                        {daysFromNow > dte(leg.expiry) && (
+                          <span title="This leg has expired at the selected time; it is settled at intrinsic value."
+                            style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', border: '1px solid var(--theme-text-subtle, rgba(255,255,255,0.14))', padding: '0 4px' }}>
+                            Expired
+                          </span>
+                        )}
+                      </div>
                       <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
                         {legChains[i]?.expiries?.length > 0 && (
                           <button
@@ -763,10 +777,11 @@ export default function StrategyBuilder() {
                       )} />
                   ))}
 
-                  {/* Per-leg dashed contributions */}
-                  {primaryLegs.map((_, idx) => (
+                  {/* Per-leg dashed contributions (dimmed once the leg has expired). */}
+                  {primaryLegs.map((leg, idx) => (
                     <Line key={idx} type="monotone" dataKey={`leg${idx}`} stroke={LEG_COLORS[idx % LEG_COLORS.length]}
-                      strokeWidth={1} strokeDasharray="5 3" dot={false} name={`Leg ${idx + 1}`} legendType="none" />
+                      strokeWidth={1} strokeDasharray="5 3" dot={false} name={`Leg ${idx + 1}`} legendType="none"
+                      strokeOpacity={daysFromNow > dte(leg.expiry) ? 0.25 : 1} />
                   ))}
 
                   {/* Before-expiry P&L (Black-Scholes at the chosen day) */}
