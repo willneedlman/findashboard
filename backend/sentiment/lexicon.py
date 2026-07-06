@@ -826,6 +826,29 @@ def _is_buy_recommendation(tokens: list[str]) -> bool:
     return False
 
 
+# Contrarian "buy the dip" framing: buying/adding into a selloff is a BULLISH
+# stance, so the negative event word that is its object flips positive.
+_BUY_VERBS: frozenset[str] = frozenset({
+    "buy", "buying", "bought", "buys", "add", "adding", "accumulate",
+    "accumulating", "load", "loading", "scoop", "scooping",
+})
+_DIP_NOUNS: frozenset[str] = frozenset({
+    "dip", "dips", "panic", "selloff", "crash", "crashes", "weakness", "fear",
+    "fears", "plunge", "plunges", "rout", "pullback", "slump", "meltdown",
+    "capitulation", "bloodbath", "carnage", "washout", "dump",
+})
+_CONTRARIAN_FLIP: float = 0.7
+
+
+def _is_contrarian_buy(tokens: list[str]) -> bool:
+    """'buying/adding into the dip/panic/selloff/...' — a bullish contrarian call."""
+    n = len(tokens)
+    for i, t in enumerate(tokens):
+        if t in _BUY_VERBS and any(tokens[j] in _DIP_NOUNS for j in range(i + 1, min(n, i + 5))):
+            return True
+    return False
+
+
 def _is_tape_or_move(term: str) -> bool:
     return term in _TAPE_CONTEXT_TERMS or term in _MOVEMENT
 
@@ -882,6 +905,15 @@ def score_text(text: str, entities: list[Entity]) -> LexScore:
         hits = [
             replace(h, polarity=h.polarity * _BUYREC_DAMP, contribution=h.contribution * _BUYREC_DAMP)
             if (h.contribution < 0 and _is_tape_or_move(h.term)) else h
+            for h in hits
+        ]
+
+    # Contrarian buy ("buying the panic/dip/selloff"): the negative event being
+    # bought flips to a bullish read.
+    if hits and _is_contrarian_buy(tokens):
+        hits = [
+            replace(h, polarity=-h.polarity * _CONTRARIAN_FLIP, contribution=-h.contribution * _CONTRARIAN_FLIP)
+            if (h.contribution < 0 and any(w in _DIP_NOUNS for w in h.term.split())) else h
             for h in hits
         ]
 

@@ -362,3 +362,12 @@ def test_genuine_bearish_unaffected():
     from sentiment.lexicon import extract_entities as _ee, score_text as _st
     s = _st("Stocks plunge as inflation surges and recession fears mount", _ee(""))
     assert s.sentiment == "bearish", s
+
+
+def test_contrarian_buy_the_dip_is_bullish():
+    from sentiment.lexicon import extract_entities as _ee, score_text as _st
+    for t in ["Nebius: Why I'm Buying The Meta Compute Panic",
+              "Why I'm buying this selloff", "Buying the panic"]:
+        assert _st(t, _ee(t)).sentiment == "bullish", t
+    # A real panic with no buyer stays bearish (contrarian frame needs the buy).
+    assert _st("Market panic sends stocks tumbling", _ee("")).sentiment == "bearish"
