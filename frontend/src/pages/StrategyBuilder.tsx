@@ -137,11 +137,19 @@ export default function StrategyBuilder() {
       return { leg, dteDays, iv }
     })
     const maxDte = legMeta.reduce((m, x) => Math.max(m, x.dteDays), 0)
+    const frontDte = legMeta.reduce((m, x) => Math.min(m, x.dteDays), maxDte)
+    // A diagonal/calendar has legs on different expiries. "At expiry" then means
+    // the NEAREST expiry: legs expiring then are intrinsic, longer-dated legs are
+    // still priced by Black-Scholes (so the surviving long leg keeps its upside).
+    const multiExpiry = maxDte !== frontDte
+    const nearestExpiry = legMeta.reduce((best, x) => x.dteDays < best.dteDays ? x : best, legMeta[0])?.leg.expiry ?? ''
     const tDays = Math.min(daysFromNow, maxDte)
     const showT = maxDte > 0   // before-expiry curve only meaningful with time left
 
     const buildRow = (S: number): Record<string, number> => {
-      const total = primary.reduce((sum, leg) => sum + intrinsic(S, leg), 0) + secondaryOffset
+      const total = (multiExpiry
+        ? legMeta.reduce((sum, m) => sum + legPnlAt(S, m.leg, m.iv, frontDte), 0)
+        : primary.reduce((sum, leg) => sum + intrinsic(S, leg), 0)) + secondaryOffset
       const tval  = showT
         ? legMeta.reduce((sum, m) => sum + legPnlAt(S, m.leg, m.iv, tDays), 0) + secondaryOffset
         : total
@@ -181,7 +189,7 @@ export default function StrategyBuilder() {
       }
     }
 
-    return { rows, atm, spot, yMin, yMax, breakevens, lo, hi, pct: (spot - atm) / atm * 100, maxDte, tDays, showT }
+    return { rows, atm, spot, yMin, yMax, breakevens, lo, hi, pct: (spot - atm) / atm * 100, maxDte, tDays, showT, multiExpiry, nearestExpiry }
   }, [legs, spotOverrides, primaryTicker, daysFromNow]) // spotOverrides intentional — live updates
 
   const primaryLegs = legs.filter(l => l.ticker === primaryTicker)
@@ -669,10 +677,10 @@ export default function StrategyBuilder() {
           {/* Expiry Payoff Diagram */}
           <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', position: 'relative' }}>
             <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 10, background: 'var(--theme-surface, rgba(46,57,77,0.8))', padding: '3px 8px', borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>
-              {primaryTicker} P&L at Expiry
+              {primaryTicker} P&L at {chartData.multiExpiry ? 'Nearest Expiry' : 'Expiry'}
             </div>
             <div style={{ position: 'absolute', top: 0, right: 0, padding: '3px 8px', fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', zIndex: 10 }}>
-              per contract (×100 shares) · intrinsic only
+              per contract (×100 shares) · {chartData.multiExpiry ? `at ${fmtExpiry(chartData.nearestExpiry)}, longer legs Black-Scholes` : 'intrinsic only'}
             </div>
 
             <div style={{ paddingTop: 28, paddingLeft: 8, paddingRight: 8, paddingBottom: 0, height: 340 }}>
@@ -717,10 +725,13 @@ export default function StrategyBuilder() {
                   {/* Breakeven line */}
                   <ReferenceLine y={0} stroke="var(--theme-text-faint, rgba(255,255,255,0.2))" strokeWidth={1} strokeDasharray="4 4" />
 
-                  {/* Strike reference lines */}
-                  {[...new Set(primaryLegs.map(l => l.K))].map(K => (
+                  {/* Strike reference lines. Labels are staggered vertically by
+                      index so near-adjacent strikes (e.g. 720/721) don't overlap. */}
+                  {[...new Set(primaryLegs.map(l => l.K))].sort((a, b) => a - b).map((K, i) => (
                     <ReferenceLine key={K} x={K} stroke="color-mix(in srgb, var(--theme-primary) 30%, transparent)" strokeDasharray="3 4"
-                      label={{ value: `$${K}`, fill: 'var(--theme-primary, #c9a84c)', fontSize: 8, position: 'insideTopRight' }} />
+                      label={({ viewBox }: any) => (
+                        <text x={viewBox.x + 3} y={viewBox.y + 10 + i * 11} fill="var(--theme-primary, #c9a84c)" fontSize={8}>{`$${K}`}</text>
+                      )} />
                   ))}
 
                   {/* Spot marker */}
