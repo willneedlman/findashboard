@@ -9,11 +9,10 @@ import { Download, Plus, BarChart2 } from 'lucide-react'
 import TickerInput from '../components/TickerInput'
 import {
   C, PERIODS, StatCard, inputStyle, selectStyle, btnStyle,
-  RailGroup, RunButton, TickerTags, ToolShell, ModeToggle,
+  RailGroup, RunButton, TickerTags, ToolShell, ModeToggle, REG_MODES, type RegMode,
 } from './regressionShared'
 import MonteCarloRegression from './MonteCarloRegression'
-
-type Mode = 'ols' | 'mc'
+import ImportRegression from './ImportRegression'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -132,12 +131,13 @@ function ResidualPlot({ result }: { result: RegressionResult }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function RegressionAnalysis() {
-  const [mode, setMode] = useState<Mode>('ols')
+  const [mode, setMode] = useState<RegMode>('ols')
   if (mode === 'mc') return <MonteCarloRegression mode={mode} setMode={setMode} />
+  if (mode === 'import') return <ImportRegression mode={mode} setMode={setMode} />
   return <AssetOLS mode={mode} setMode={setMode} />
 }
 
-function AssetOLS({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void }) {
+function AssetOLS({ mode, setMode }: { mode: RegMode; setMode: (m: RegMode) => void }) {
   const [yTicker,    setYTicker]    = useState('SPY')
   const [xTickers,   setXTickers]   = useState<string[]>(['QQQ'])
   const [xInput,     setXInput]     = useState('')
@@ -170,8 +170,7 @@ function AssetOLS({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void })
 
   const rail = (
     <>
-      <ModeToggle<Mode> value={mode} onChange={setMode}
-        options={[{ id: 'ols', label: 'Asset OLS' }, { id: 'mc', label: 'Strategy MC' }]} />
+      <ModeToggle<RegMode> value={mode} onChange={setMode} options={REG_MODES} />
       <RailGroup label="Y (dependent)">
         <input value={yTicker} onChange={e => setYTicker(e.target.value.toUpperCase())} style={inputStyle} placeholder="e.g. SPY" />
       </RailGroup>

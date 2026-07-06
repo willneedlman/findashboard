@@ -1,4 +1,8 @@
 import React from 'react'
+import {
+  ScatterChart, Scatter, LineChart, Line, ReferenceLine,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from 'recharts'
 import HelpTip from '../components/HelpTip'
 import PageWrapper from '../components/PageWrapper'
 import useIsMobile from '../hooks/useIsMobile'
@@ -7,6 +11,14 @@ import useIsMobile from '../hooks/useIsMobile'
 // Correlation tools so the two split pages read as one consistent system.
 
 export const PERIODS = ['1mo', '3mo', '6mo', '1y', '2y', '3y', '5y']
+
+// The three regression tool modes, shared so every view's ModeToggle matches.
+export type RegMode = 'ols' | 'mc' | 'import'
+export const REG_MODES: { id: RegMode; label: string }[] = [
+  { id: 'ols', label: 'Asset OLS' },
+  { id: 'mc', label: 'Monte Carlo' },
+  { id: 'import', label: 'Import' },
+]
 
 export const C = {
   bg:     'var(--theme-bg)',
@@ -108,6 +120,53 @@ export function TickerTags({ tickers, onRemove, color }: { tickers: string[]; on
         </span>
       ))}
     </div>
+  )
+}
+
+// Scatter of strategy daily returns (y) vs benchmark daily returns (x) with the
+// fitted OLS line. Shared by the Monte-Carlo and Import regression views.
+export function ReturnsScatter({ x, y, line, xLabel, height = 280 }: {
+  x: number[]; y: number[]; line: { x: number; y: number }[]; xLabel: string; height?: number
+}) {
+  const pts = x.map((xi, i) => ({ x: xi, y: y[i] }))
+  const rp = (v: number) => `${(v * 100).toFixed(1)}%`
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <ScatterChart margin={{ top: 10, right: 20, left: 0, bottom: 22 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+        <XAxis dataKey="x" type="number" stroke={C.muted} tick={{ fill: C.muted, fontSize: 10 }} tickFormatter={rp}
+          label={{ value: `${xLabel} daily return`, fill: C.muted, fontSize: 11, position: 'insideBottom', offset: -10 }} />
+        <YAxis dataKey="y" type="number" stroke={C.muted} tick={{ fill: C.muted, fontSize: 10 }} tickFormatter={rp}
+          label={{ value: 'strategy daily return', fill: C.muted, fontSize: 11, angle: -90, position: 'insideLeft' }} />
+        <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ background: C.surf, border: `1px solid ${C.border}`, color: C.text, fontSize: 11 }} formatter={(v: number) => `${(v * 100).toFixed(3)}%`} />
+        <Scatter data={pts} fill={C.blue} opacity={0.22} />
+        <Scatter data={line} line={{ stroke: C.gold, strokeWidth: 2 }} fill={C.gold} shape={() => null as any} />
+      </ScatterChart>
+    </ResponsiveContainer>
+  )
+}
+
+// Rolling-beta line with a full-sample reference line. Shared by the
+// Monte-Carlo and Import views. `beta` values may be null (cash-only windows);
+// the line gaps them and the tooltip formatter tolerates null.
+export function RollingBetaChart({ data, xKey, xLabel, refValue, refLabel, height = 220 }: {
+  data: Record<string, unknown>[]; xKey: string; xLabel?: string
+  refValue: number; refLabel: string; height?: number
+}) {
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <LineChart data={data} margin={{ top: 6, right: 16, left: 0, bottom: 16 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+        <XAxis dataKey={xKey} stroke={C.muted} tick={{ fill: C.muted, fontSize: 9 }} minTickGap={40}
+          label={xLabel ? { value: xLabel, fill: C.muted, fontSize: 11, position: 'insideBottom', offset: -8 } : undefined} />
+        <YAxis stroke={C.muted} tick={{ fill: C.muted, fontSize: 10 }} domain={['auto', 'auto']} />
+        <ReferenceLine y={refValue} stroke={C.gold} strokeDasharray="4 2"
+          label={{ value: refLabel, fill: C.gold, fontSize: 10, position: 'right' }} />
+        <Tooltip contentStyle={{ background: C.surf, border: `1px solid ${C.border}`, color: C.text, fontSize: 11 }}
+          formatter={(v: unknown) => (v == null ? 'n/a' : Number(v).toFixed(3))} />
+        <Line type="monotone" dataKey="beta" stroke={C.blue} strokeWidth={1.6} dot={false} />
+      </LineChart>
+    </ResponsiveContainer>
   )
 }
 

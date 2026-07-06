@@ -1,15 +1,12 @@
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import axios from 'axios'
+import { Activity, GitBranch } from 'lucide-react'
+import HelpTip from '../components/HelpTip'
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer,
-} from 'recharts'
-import { Activity } from 'lucide-react'
-import {
-  C, PERIODS, StatCard, inputStyle, selectStyle, RailGroup, RunButton, ToolShell, ModeToggle,
+  C, PERIODS, StatCard, inputStyle, selectStyle, RailGroup, RunButton, ToolShell,
+  ModeToggle, REG_MODES, ReturnsScatter, RollingBetaChart, type RegMode,
 } from './regressionShared'
-
-type Mode = 'ols' | 'mc'
 
 interface Dist {
   mean: number; std: number; min: number; p5: number; p25: number; p50: number
@@ -24,6 +21,7 @@ interface MCResult {
     per_path: { alpha: number[]; beta: number[]; r_squared: number[] }
   }
   pooled: { alpha: number; alpha_p: number; beta: number; r_squared: number }
+  scatter: { x: number[]; y: number[]; line: { x: number; y: number }[] }
   rolling_beta: { window: number; end_idx: number[]; beta: number[]; alpha: number[] }
 }
 
@@ -78,19 +76,22 @@ function DistPanel({ title, tip, values, dist, fmt }: {
   )
 }
 
-function NumField({ label, value, onChange, step = 1, min, max }: {
-  label: string; value: number; onChange: (v: number) => void; step?: number; min?: number; max?: number
+function NumField({ label, value, onChange, step = 1, min, max, tip }: {
+  label: string; value: number; onChange: (v: number) => void
+  step?: number; min?: number; max?: number; tip?: string
 }) {
   return (
     <div style={{ marginBottom: 8 }}>
-      <div style={{ fontSize: 10, color: C.muted, marginBottom: 3 }}>{label}</div>
+      <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, display: 'flex', alignItems: 'center' }}>
+        {label}{tip && <HelpTip text={tip} width={250} />}
+      </div>
       <input type="number" value={value} step={step} min={min} max={max}
         onChange={e => onChange(Number(e.target.value))} style={inputStyle} />
     </div>
   )
 }
 
-export default function MonteCarloRegression({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void }) {
+export default function MonteCarloRegression({ mode, setMode }: { mode: RegMode; setMode: (m: RegMode) => void }) {
   const [benchmark, setBenchmark] = useState('SPY')
   const [period, setPeriod] = useState('2y')
   const [nSims, setNSims] = useState(1000)
@@ -114,8 +115,7 @@ export default function MonteCarloRegression({ mode, setMode }: { mode: Mode; se
 
   const rail = (
     <>
-      <ModeToggle<Mode> value={mode} onChange={setMode}
-        options={[{ id: 'ols', label: 'Asset OLS' }, { id: 'mc', label: 'Strategy MC' }]} />
+      <ModeToggle<RegMode> value={mode} onChange={setMode} options={REG_MODES} />
       <RailGroup label="Benchmark (X)">
         <input value={benchmark} onChange={e => setBenchmark(e.target.value.toUpperCase())} style={inputStyle} placeholder="e.g. SPY" />
       </RailGroup>
@@ -125,15 +125,22 @@ export default function MonteCarloRegression({ mode, setMode }: { mode: Mode; se
         </select>
       </RailGroup>
       <RailGroup label="Simulation">
-        <NumField label="Paths (N)" value={nSims} onChange={setNSims} step={100} min={50} max={3000} />
-        <NumField label="Horizon (days)" value={horizon} onChange={setHorizon} step={21} min={20} max={1260} />
+        <NumField label="Paths (N)" value={nSims} onChange={setNSims} step={100} min={50} max={3000}
+          tip="Number of independent simulated futures (Monte Carlo paths). Each path is regressed against its own market draw. More paths sharpen the distributions." />
+        <NumField label="Horizon (days)" value={horizon} onChange={setHorizon} step={21} min={20} max={1260}
+          tip="Trading days per path (252 is about one year). Each path's regression uses this many daily returns." />
       </RailGroup>
       <RailGroup label="Options-selling strategy">
-        <NumField label="Daily premium (bps)" value={premiumBps} onChange={setPremiumBps} step={1} min={0} max={100} />
-        <NumField label="Participation (beta)" value={participation} onChange={setParticipation} step={0.05} min={-2} max={2} />
-        <NumField label="Short gamma (convexity)" value={shortGamma} onChange={setShortGamma} step={5} min={0} max={200} />
-        <NumField label="Crash threshold (bps)" value={crashBps} onChange={setCrashBps} step={10} min={0} max={1000} />
-        <NumField label="Idiosyncratic vol (bps)" value={idioBps} onChange={setIdioBps} step={5} min={0} max={200} />
+        <NumField label="Theta (premium/day, bps)" value={premiumBps} onChange={setPremiumBps} step={1} min={0} max={100}
+          tip="Time-decay premium the book collects each day, in basis points. Selling options is being net-short optionality, so theta is the core edge and the source of alpha. 8 bps/day is roughly 20%/yr gross." />
+        <NumField label="Delta (participation)" value={participation} onChange={setParticipation} step={0.05} min={-2} max={2}
+          tip="Directional exposure to the benchmark: the intended beta. 0.45 means the book moves about 45% as much as the market on an ordinary day." />
+        <NumField label="Gamma (short, convexity)" value={shortGamma} onChange={setShortGamma} step={5} min={0} max={200}
+          tip="Negative gamma: losses accelerate (convex) once the market falls past the threshold. This is the tail cost of selling options, and it fattens the left tail and lifts realized beta on stressed paths." />
+        <NumField label="Gamma threshold (bps)" value={crashBps} onChange={setCrashBps} step={10} min={0} max={1000}
+          tip="The daily down-move past which the short-gamma convex loss kicks in. At 50 bps, moves worse than -0.5% start triggering accelerating losses." />
+        <NumField label="Idiosyncratic vol (bps)" value={idioBps} onChange={setIdioBps} step={5} min={0} max={200}
+          tip="Strategy-specific noise unrelated to the market (basis risk, execution, roll). It lowers R^2 without changing the underlying beta." />
       </RailGroup>
       <RunButton onClick={() => mutation.mutate()} disabled={!benchmark} busy={mutation.isPending} label="Run Simulation" />
     </>
@@ -152,6 +159,10 @@ export default function MonteCarloRegression({ mode, setMode }: { mode: Mode; se
 
       {r && d && (
         <>
+          <div style={{ fontSize: 11, color: C.muted, marginBottom: 14, lineHeight: '16px' }}>
+            Monte Carlo: {r.n_sims.toLocaleString()} simulated futures of the strategy, each regressed against its own
+            simulated {r.benchmark} path. The cards and distributions show how alpha, beta and R² vary across those futures.
+          </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20 }}>
             <StatCard label="Mean Alpha (ann)" value={pct(d.alpha.mean * ANN)} sub={`P(alpha>0) ${pct(d.alpha.prob_positive)}`}
               tip="Average annualized intercept across all simulated paths: the strategy's premium edge net of market exposure. P(alpha>0) is the share of futures with positive alpha." />
@@ -176,23 +187,23 @@ export default function MonteCarloRegression({ mode, setMode }: { mode: Mode; se
 
           <div style={{ background: C.surf, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16, marginBottom: 20 }}>
             <div style={{ color: C.gold, fontSize: 12, marginBottom: 2, display: 'flex', gap: 8, alignItems: 'center' }}>
+              <GitBranch size={14} /> Strategy returns vs {r.benchmark}
+            </div>
+            <div style={{ color: C.muted, fontSize: 10, marginBottom: 12 }}>
+              Daily simulated strategy returns regressed on market returns (1,500-point sample). Line slope is beta, intercept is alpha. The short-gamma tail bends the cloud below the fit on big down days.
+            </div>
+            <ReturnsScatter x={r.scatter.x} y={r.scatter.y} line={r.scatter.line} xLabel={r.benchmark} />
+          </div>
+
+          <div style={{ background: C.surf, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16, marginBottom: 20 }}>
+            <div style={{ color: C.gold, fontSize: 12, marginBottom: 2, display: 'flex', gap: 8, alignItems: 'center' }}>
               <Activity size={14} /> Rolling beta (sample path)
             </div>
             <div style={{ color: C.muted, fontSize: 10, marginBottom: 12 }}>
               {r.rolling_beta.window}-day rolling beta on one simulated future, showing intra-path regime drift.
             </div>
-            <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={roll} margin={{ top: 6, right: 16, left: 0, bottom: 16 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-                <XAxis dataKey="i" stroke={C.muted} tick={{ fill: C.muted, fontSize: 10 }}
-                  label={{ value: 'trading day', fill: C.muted, fontSize: 11, position: 'insideBottom', offset: -8 }} />
-                <YAxis stroke={C.muted} tick={{ fill: C.muted, fontSize: 10 }} domain={['auto', 'auto']} />
-                <ReferenceLine y={d.betas[0].mean} stroke={C.gold} strokeDasharray="4 2"
-                  label={{ value: 'mean beta', fill: C.gold, fontSize: 10, position: 'right' }} />
-                <Tooltip contentStyle={{ background: C.surf, border: `1px solid ${C.border}`, color: C.text, fontSize: 11 }} formatter={(v: number) => v.toFixed(3)} />
-                <Line type="monotone" dataKey="beta" stroke={C.blue} strokeWidth={1.6} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
+            <RollingBetaChart data={roll} xKey="i" xLabel="trading day"
+              refValue={d.betas[0].mean} refLabel="mean beta" />
           </div>
 
           <div style={{ background: C.surf, border: `1px solid ${C.border}`, borderRadius: 8, padding: '12px 16px', fontSize: 11, color: C.muted, fontFamily: 'var(--theme-mono)' }}>

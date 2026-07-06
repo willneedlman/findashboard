@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 
 from regression_engine import (
     RegressionInput, SimulationPathData, batch_single_factor,
-    path_regression, rolling_ols,
+    ols, path_regression, rolling_ols,
 )
 from regression_engine.strategies import short_vol_paths
 
@@ -421,9 +421,19 @@ def regression_montecarlo(req: MCRegressionRequest):
     result = path_regression(SimulationPathData(strat, market, [bench]))
     # Pooled regression over all paths stacked. Reuse the vectorized single-factor
     # path (one row of P*T points) so no (P*T, 2) design matrix is allocated.
-    pv = batch_single_factor(strat.ravel()[None, :], market.ravel())
+    flat_x, flat_y = market.ravel(), strat.ravel()
+    pv = batch_single_factor(flat_y[None, :], flat_x)
+    p_alpha, p_beta = float(pv["alpha"][0]), float(pv["beta"][0])
     window = min(T - 1, max(10, min(63, T // 3)))
     roll = rolling_ols(RegressionInput(strat[0], market[0].reshape(-1, 1), [bench]), window=window)
+
+    # Downsample the pooled (market, strategy) return cloud for a scatter of the
+    # regression itself, plus two points defining the fitted line. Sample with
+    # replacement (dup probability is negligible) to avoid materializing a full
+    # permutation of the millions-of-points population on the memory-tight VM.
+    pick = np.arange(flat_x.size) if flat_x.size <= 1500 else rng.integers(0, flat_x.size, size=1500)
+    sx = flat_x[pick]
+    lo, hi = float(flat_x.min()), float(flat_x.max())
 
     ann = float(np.sqrt(252))
     return {
@@ -437,8 +447,14 @@ def regression_montecarlo(req: MCRegressionRequest):
         },
         "distributions": result.to_dict(include_per_path=True),
         "pooled": {
-            "alpha": round(float(pv["alpha"][0]), 8), "alpha_p": round(float(pv["p_alpha"][0]), 8),
-            "beta": round(float(pv["beta"][0]), 6), "r_squared": round(float(pv["r_squared"][0]), 6),
+            "alpha": round(p_alpha, 8), "alpha_p": round(float(pv["p_alpha"][0]), 8),
+            "beta": round(p_beta, 6), "r_squared": round(float(pv["r_squared"][0]), 6),
+        },
+        "scatter": {
+            "x": [round(float(v), 6) for v in sx],
+            "y": [round(float(v), 6) for v in flat_y[pick]],
+            "line": [{"x": round(lo, 6), "y": round(p_alpha + p_beta * lo, 6)},
+                     {"x": round(hi, 6), "y": round(p_alpha + p_beta * hi, 6)}],
         },
         "rolling_beta": {
             "window": window,
@@ -484,4 +500,127 @@ def regression_rolling(req: RollingRegressionRequest):
              "alpha": round(float(a), 8), "r_squared": round(float(r), 6)}
             for e, b, a, r in zip(roll["end_idx"], roll["betas"][:, 0], roll["alpha"], roll["r_squared"])
         ],
+    }
+
+
+# ── Import real portfolio / algo-strategy returns and regress vs the market ───
+
+class ImportHolding(BaseModel):
+    ticker: str
+    weight: float = 1.0
+
+
+class ImportRegressionRequest(BaseModel):
+    source:         str                          # "portfolio" | "algo"
+    benchmark:      str = "SPY"
+    period:         str = "2y"                    # portfolio path
+    rolling_window: int = Field(default=60, ge=10, le=252)
+    holdings:       list[ImportHolding] | None = None     # portfolio path
+    ticker:         str | None = None                     # algo path
+    rules:          dict | None = None                    # algo path
+    start:          str | None = None
+    end:            str | None = None
+
+
+def _simple_returns(ticker: str, period: str) -> pd.Series:
+    df = get_history(ticker.upper().strip(), period=period)
+    if df.empty:
+        raise HTTPException(404, f"No price data for {ticker}")
+    return df["Close"].squeeze().dropna().pct_change().dropna()
+
+
+def _portfolio_returns(holdings: list[ImportHolding], period: str) -> pd.Series:
+    """Daily-rebalanced weighted return of a book (weights aggregated per ticker)."""
+    agg: dict[str, float] = {}
+    for h in holdings:
+        agg[h.ticker.upper().strip()] = agg.get(h.ticker.upper().strip(), 0.0) + h.weight
+    tickers = [t for t in agg if t]
+    if not tickers:
+        raise HTTPException(400, "No valid holdings")
+    # Keep the sign so short legs contribute negatively; normalize by gross
+    # exposure so a long/short book stays stable when net exposure is near zero.
+    w = np.array([agg[t] for t in tickers], dtype=float)
+    gross = float(np.abs(w).sum())
+    w = w / gross if gross > 0 else np.full(len(tickers), 1.0 / len(tickers))
+    df = pd.concat([_simple_returns(t, period) for t in tickers], axis=1).dropna()
+    if df.empty:
+        raise HTTPException(400, "No overlapping history across the holdings")
+    return pd.Series(df.to_numpy() @ w, index=df.index, name="Y")
+
+
+@router.post("/import")
+def regression_import(req: ImportRegressionRequest):
+    """Regress a real portfolio's or algo strategy's realized returns on the
+    benchmark. Portfolios come from the holdings book; algo strategies are the
+    saved custom-rule signals (no risk-control overlay applied here)."""
+    if req.source not in ("portfolio", "algo"):
+        raise HTTPException(400, "source must be 'portfolio' or 'algo'")
+    if req.period not in _VALID_PERIODS:
+        raise HTTPException(400, f"period must be one of {_VALID_PERIODS}")
+    bench = req.benchmark.upper().strip()
+
+    if req.source == "portfolio":
+        if not req.holdings:
+            raise HTTPException(400, "portfolio source needs holdings")
+        y = _portfolio_returns(req.holdings, req.period)
+        x = _simple_returns(bench, req.period)
+        y_name = "Portfolio"
+    else:
+        if not req.ticker or not req.rules:
+            raise HTTPException(400, "algo source needs ticker and rules")
+        import datetime
+        from .strategy import _fetch_close, evaluate_custom_rules
+        from strategies.market_context import resolve_context
+        start = req.start or "2022-01-01"
+        end = req.end or datetime.date.today().isoformat()
+        close = _fetch_close(req.ticker, start, end)
+        if len(close) < 60:
+            raise HTTPException(422, "Insufficient price history for the strategy")
+        sig = evaluate_custom_rules(close.to_numpy().astype(float), req.rules, resolve_context(req.ticker, req.rules))
+        signal = pd.Series(sig, index=close.index)
+        # Yesterday's signal earns today's move (no look-ahead).
+        y = (signal.shift(1).fillna(0.0) * close.pct_change()).dropna().rename("Y")
+        x = _fetch_close(bench, start, end).pct_change().dropna()
+        y_name = f"{req.ticker.upper().strip()} strategy"
+
+    df = pd.concat([y.rename("Y"), x.rename(bench)], axis=1).dropna()
+    if len(df) < max(10, req.rolling_window + 2):
+        raise HTTPException(400, "Too few overlapping observations to regress")
+    if float(df["Y"].std()) == 0.0:
+        raise HTTPException(400, "The strategy has no return variation over this window (always in cash?)")
+    if float(df[bench].std()) == 0.0:
+        raise HTTPException(400, "Benchmark has zero volatility over this window")
+
+    inp = RegressionInput(df["Y"].to_numpy(), df[bench].to_numpy().reshape(-1, 1), [bench])
+    o = ols(inp, with_residuals=False)
+    roll = rolling_ols(inp, window=req.rolling_window)
+    # A window where the strategy sat entirely in cash has no beta; emit null so
+    # the JSON stays valid and the chart shows a gap rather than a broken point.
+    roll_beta = [None if not np.isfinite(b) else round(float(b), 6) for b in roll["betas"][:, 0]]
+    dates = df.index.strftime("%Y-%m-%d").to_numpy()
+    return {
+        "source": req.source,
+        "y_name": y_name,
+        "benchmark": bench,
+        "observations": int(len(df)),
+        "alpha": round(o.alpha, 8),
+        "alpha_annualized": round(o.alpha * 252, 6),
+        "alpha_p": round(float(o.p_values[0]), 8),
+        "beta": round(float(o.betas[0]), 6),
+        "beta_p": round(float(o.p_values[1]), 8),
+        "r_squared": round(o.r_squared, 6),
+        "adj_r_squared": round(o.adj_r_squared, 6),
+        "scatter": {
+            "x": [round(float(v), 6) for v in df[bench].to_numpy()],
+            "y": [round(float(v), 6) for v in df["Y"].to_numpy()],
+            "line": [
+                {"x": round(float(df[bench].min()), 6), "y": round(o.alpha + float(o.betas[0]) * float(df[bench].min()), 6)},
+                {"x": round(float(df[bench].max()), 6), "y": round(o.alpha + float(o.betas[0]) * float(df[bench].max()), 6)},
+            ],
+        },
+        "rolling_beta": {
+            "window": req.rolling_window,
+            "dates": [str(dates[int(e)]) for e in roll["end_idx"]],
+            "beta": roll_beta,
+        },
     }
