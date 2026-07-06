@@ -52,6 +52,29 @@ export function StatCard({ label, value, sub, tip }: { label: string; value: str
   )
 }
 
+// Segmented control at the top of a rail, switching the whole tool's mode.
+export function ModeToggle<T extends string>(
+  { value, onChange, options }: { value: T; onChange: (v: T) => void; options: { id: T; label: string }[] },
+) {
+  return (
+    <div style={{ padding: '14px 16px', borderBottom: `1px solid ${C.border}` }}>
+      <label style={railLabel}>Mode</label>
+      <div style={{ display: 'flex', border: `1px solid ${C.border}` }}>
+        {options.map(o => {
+          const on = value === o.id
+          return (
+            <button key={o.id} onClick={() => onChange(o.id)} style={{
+              flex: 1, padding: '7px 4px', fontSize: 9.5, fontFamily: 'var(--theme-sans)', fontWeight: 700,
+              letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer', border: 'none',
+              background: on ? C.gold : 'transparent', color: on ? C.bg : C.muted,
+            }}>{o.label}</button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // One labelled group inside the rail.
 export function RailGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (

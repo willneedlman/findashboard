@@ -9,8 +9,11 @@ import { Download, Plus, BarChart2 } from 'lucide-react'
 import TickerInput from '../components/TickerInput'
 import {
   C, PERIODS, StatCard, inputStyle, selectStyle, btnStyle,
-  RailGroup, RunButton, TickerTags, ToolShell,
+  RailGroup, RunButton, TickerTags, ToolShell, ModeToggle,
 } from './regressionShared'
+import MonteCarloRegression from './MonteCarloRegression'
+
+type Mode = 'ols' | 'mc'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -129,6 +132,12 @@ function ResidualPlot({ result }: { result: RegressionResult }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function RegressionAnalysis() {
+  const [mode, setMode] = useState<Mode>('ols')
+  if (mode === 'mc') return <MonteCarloRegression mode={mode} setMode={setMode} />
+  return <AssetOLS mode={mode} setMode={setMode} />
+}
+
+function AssetOLS({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void }) {
   const [yTicker,    setYTicker]    = useState('SPY')
   const [xTickers,   setXTickers]   = useState<string[]>(['QQQ'])
   const [xInput,     setXInput]     = useState('')
@@ -161,6 +170,8 @@ export default function RegressionAnalysis() {
 
   const rail = (
     <>
+      <ModeToggle<Mode> value={mode} onChange={setMode}
+        options={[{ id: 'ols', label: 'Asset OLS' }, { id: 'mc', label: 'Strategy MC' }]} />
       <RailGroup label="Y (dependent)">
         <input value={yTicker} onChange={e => setYTicker(e.target.value.toUpperCase())} style={inputStyle} placeholder="e.g. SPY" />
       </RailGroup>
