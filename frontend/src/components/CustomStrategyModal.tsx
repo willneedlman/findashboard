@@ -7,6 +7,22 @@ export type IndicatorType =
   | 'MACD_LINE' | 'MACD_SIGNAL'
   | 'BB_UPPER' | 'BB_MID' | 'BB_LOWER'
   | 'ATR' | 'MOMENTUM'
+  | 'FUND_PE' | 'FUND_PEG' | 'FUND_EPSGROWTH' | 'FUND_NETMARGIN' | 'FUND_GROSSMARGIN'
+  | 'FUND_DEBTEQUITY' | 'FUND_DIVYIELD' | 'FUND_PB' | 'FUND_CURRENTRATIO' | 'FUND_BETA'
+  | 'VOL_RELATIVE' | 'VOL_DOLLAR'
+  | 'OPT_IV' | 'OPT_HV' | 'OPT_IVHV' | 'OPT_PUTCALL' | 'OPT_IMPLIEDMOVE'
+  | 'FLOW_HORMUZ' | 'FLOW_SUEZ' | 'FLOW_PANAMA' | 'FLOW_MALACCA'
+
+// Fundamental / liquidity / options / flow metrics resolve from a current
+// snapshot (live signal), held constant through a historical backtest. See
+// backend market_context.
+export const LIVE_TYPES: IndicatorType[] = [
+  'FUND_PE', 'FUND_PEG', 'FUND_EPSGROWTH', 'FUND_NETMARGIN', 'FUND_GROSSMARGIN',
+  'FUND_DEBTEQUITY', 'FUND_DIVYIELD', 'FUND_PB', 'FUND_CURRENTRATIO', 'FUND_BETA',
+  'VOL_RELATIVE', 'VOL_DOLLAR',
+  'OPT_IV', 'OPT_HV', 'OPT_IVHV', 'OPT_PUTCALL', 'OPT_IMPLIEDMOVE',
+  'FLOW_HORMUZ', 'FLOW_SUEZ', 'FLOW_PANAMA', 'FLOW_MALACCA',
+]
 
 export interface IndicatorRef {
   type: IndicatorType
@@ -69,13 +85,23 @@ const IND_LABELS: Record<IndicatorType, string> = {
   MACD_LINE: 'MACD Line', MACD_SIGNAL: 'MACD Signal',
   BB_UPPER: 'BB Upper', BB_MID: 'BB Mid', BB_LOWER: 'BB Lower',
   ATR: 'ATR', MOMENTUM: 'Momentum',
+  FUND_PE: 'P/E ratio', FUND_PEG: 'PEG ratio', FUND_EPSGROWTH: 'EPS growth %',
+  FUND_NETMARGIN: 'Net margin %', FUND_GROSSMARGIN: 'Gross margin %',
+  FUND_DEBTEQUITY: 'Debt / equity', FUND_DIVYIELD: 'Dividend yield %',
+  FUND_PB: 'P/B ratio', FUND_CURRENTRATIO: 'Current ratio', FUND_BETA: 'Beta',
+  VOL_RELATIVE: 'Relative volume', VOL_DOLLAR: 'Dollar volume ($M)',
+  OPT_IV: 'Implied vol % (ATM)', OPT_HV: 'Hist vol % (30d)', OPT_IVHV: 'IV / HV ratio',
+  OPT_PUTCALL: 'Put/call ratio', OPT_IMPLIEDMOVE: 'Implied move %',
+  FLOW_HORMUZ: 'Hormuz transits', FLOW_SUEZ: 'Suez transits',
+  FLOW_PANAMA: 'Panama transits', FLOW_MALACCA: 'Malacca transits',
 }
 
-const IND_TYPES: IndicatorType[] = [
-  'PRICE', 'RSI', 'SMA', 'EMA',
-  'MACD_LINE', 'MACD_SIGNAL',
-  'BB_UPPER', 'BB_MID', 'BB_LOWER',
-  'ATR', 'MOMENTUM',
+const IND_GROUPS: { label: string; types: IndicatorType[] }[] = [
+  { label: 'Technical', types: ['PRICE', 'RSI', 'SMA', 'EMA', 'MACD_LINE', 'MACD_SIGNAL', 'BB_UPPER', 'BB_MID', 'BB_LOWER', 'ATR', 'MOMENTUM'] },
+  { label: 'Fundamental (live)', types: ['FUND_PE', 'FUND_PEG', 'FUND_EPSGROWTH', 'FUND_NETMARGIN', 'FUND_GROSSMARGIN', 'FUND_DEBTEQUITY', 'FUND_DIVYIELD', 'FUND_PB', 'FUND_CURRENTRATIO', 'FUND_BETA'] },
+  { label: 'Liquidity (live)', types: ['VOL_RELATIVE', 'VOL_DOLLAR'] },
+  { label: 'Options (live)', types: ['OPT_IV', 'OPT_HV', 'OPT_IVHV', 'OPT_PUTCALL', 'OPT_IMPLIEDMOVE'] },
+  { label: 'Energy flow (live)', types: ['FLOW_HORMUZ', 'FLOW_SUEZ', 'FLOW_PANAMA', 'FLOW_MALACCA'] },
 ]
 
 const OP_LABELS: Record<OpType, string> = {
@@ -95,13 +121,16 @@ const DEFAULT_IND: Record<IndicatorType, IndicatorRef> = {
   BB_LOWER:    { type: 'BB_LOWER', period: 20, std: 2.0 },
   ATR:         { type: 'ATR', period: 14 },
   MOMENTUM:    { type: 'MOMENTUM', period: 126 },
-}
-
-const DEFAULT_RHS: Record<IndicatorType, number> = {
-  PRICE: 100, RSI: 30, SMA: 0, EMA: 0,
-  MACD_LINE: 0, MACD_SIGNAL: 0,
-  BB_UPPER: 0, BB_MID: 0, BB_LOWER: 0,
-  ATR: 1, MOMENTUM: 0,
+  FUND_PE:     { type: 'FUND_PE' }, FUND_PEG: { type: 'FUND_PEG' },
+  FUND_EPSGROWTH: { type: 'FUND_EPSGROWTH' }, FUND_NETMARGIN: { type: 'FUND_NETMARGIN' },
+  FUND_GROSSMARGIN: { type: 'FUND_GROSSMARGIN' }, FUND_DEBTEQUITY: { type: 'FUND_DEBTEQUITY' },
+  FUND_DIVYIELD: { type: 'FUND_DIVYIELD' }, FUND_PB: { type: 'FUND_PB' },
+  FUND_CURRENTRATIO: { type: 'FUND_CURRENTRATIO' }, FUND_BETA: { type: 'FUND_BETA' },
+  VOL_RELATIVE: { type: 'VOL_RELATIVE' }, VOL_DOLLAR: { type: 'VOL_DOLLAR' },
+  OPT_IV: { type: 'OPT_IV' }, OPT_HV: { type: 'OPT_HV' }, OPT_IVHV: { type: 'OPT_IVHV' },
+  OPT_PUTCALL: { type: 'OPT_PUTCALL' }, OPT_IMPLIEDMOVE: { type: 'OPT_IMPLIEDMOVE' },
+  FLOW_HORMUZ: { type: 'FLOW_HORMUZ' }, FLOW_SUEZ: { type: 'FLOW_SUEZ' },
+  FLOW_PANAMA: { type: 'FLOW_PANAMA' }, FLOW_MALACCA: { type: 'FLOW_MALACCA' },
 }
 
 // ── Theme tokens — all use CSS variables so they track the active colour preset ──
@@ -156,11 +185,19 @@ function IndicatorSelector({ value, onChange }: {
   return (
     <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
       <select value={t} onChange={e => setType(e.target.value as IndicatorType)}
-        style={{ ...sel, width: 110, flexShrink: 0 }}>
-        {IND_TYPES.map(it => (
-          <option key={it} value={it}>{IND_LABELS[it]}</option>
+        style={{ ...sel, width: 130, flexShrink: 0 }}>
+        {IND_GROUPS.map(g => (
+          <optgroup key={g.label} label={g.label}>
+            {g.types.map(it => <option key={it} value={it}>{IND_LABELS[it]}</option>)}
+          </optgroup>
         ))}
       </select>
+      {LIVE_TYPES.includes(t) && (
+        <span title="Current-snapshot value (live signal). Held constant through a historical backtest, so it is not point-in-time."
+          style={{ fontSize: 8, color: T.muted, fontFamily: T.mono, border: `1px solid ${T.border}`, padding: '1px 4px', letterSpacing: '0.06em' }}>
+          LIVE
+        </span>
+      )}
       {(t === 'RSI' || t === 'SMA' || t === 'EMA' || t === 'ATR' || t === 'MOMENTUM' ||
         t === 'BB_UPPER' || t === 'BB_MID' || t === 'BB_LOWER') && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>

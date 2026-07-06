@@ -257,11 +257,11 @@ def list_strategies():
 # ─── Custom rule strategy ─────────────────────────────────────────────────────
 
 def _eval_cond_at(cond: dict, i: int, prices: np.ndarray,
-                  cache: dict[str, np.ndarray]) -> bool:
+                  cache: dict[str, np.ndarray], context: dict | None = None) -> bool:
     def _ind(ref: dict) -> np.ndarray:
         key = repr(sorted(ref.items()))
         if key not in cache:
-            cache[key] = _get_ind(ref, prices)
+            cache[key] = _get_ind(ref, prices, context)
         return cache[key]
 
     lhs_arr = _ind(cond.get("lhs", {"type": "PRICE"}))
@@ -296,17 +296,17 @@ def _eval_cond_at(cond: dict, i: int, prices: np.ndarray,
 
 
 def _eval_group_at(group: dict, i: int, prices: np.ndarray,
-                   cache: dict) -> bool:
+                   cache: dict, context: dict | None = None) -> bool:
     conds = group.get("conditions", [])
     if not conds:
         return False
     logic   = group.get("logic", "AND")
-    results = [_eval_cond_at(c, i, prices, cache) for c in conds]
+    results = [_eval_cond_at(c, i, prices, cache, context) for c in conds]
     return all(results) if logic == "AND" else any(results)
 
 
 def _eval_block_at(block: dict, i: int, prices: np.ndarray,
-                   cache: dict) -> bool:
+                   cache: dict, context: dict | None = None) -> bool:
     groups = block.get("groups")
     # backwards compat: flat conditions → treat as single group
     if not groups:
@@ -315,12 +315,16 @@ def _eval_block_at(block: dict, i: int, prices: np.ndarray,
             return False
         groups = [{"logic": block.get("logic", "AND"), "conditions": flat}]
     top_logic = block.get("logic", "AND")
-    results   = [_eval_group_at(g, i, prices, cache) for g in groups]
+    results   = [_eval_group_at(g, i, prices, cache, context) for g in groups]
     return all(results) if top_logic == "AND" else any(results)
 
 
-def evaluate_custom_rules(prices: np.ndarray, rules: dict) -> np.ndarray:
-    """Bar-by-bar evaluation. Returns 1.0 = invested, 0.0 = cash."""
+def evaluate_custom_rules(prices: np.ndarray, rules: dict, context: dict | None = None) -> np.ndarray:
+    """Bar-by-bar evaluation. Returns 1.0 = invested, 0.0 = cash.
+
+    `context` supplies live/snapshot metrics (fundamentals, liquidity) for any
+    market-data conditions; held constant across the series (see market_context).
+    """
     n        = len(prices)
     signal   = np.zeros(n)
     cache: dict[str, np.ndarray] = {}
@@ -329,11 +333,11 @@ def evaluate_custom_rules(prices: np.ndarray, rules: dict) -> np.ndarray:
     in_trade = False
     for i in range(1, n):
         if not in_trade:
-            if _eval_block_at(buy_blk, i, prices, cache):
+            if _eval_block_at(buy_blk, i, prices, cache, context):
                 in_trade   = True
                 signal[i]  = 1.0
         else:
-            if _eval_block_at(sell_blk, i, prices, cache):
+            if _eval_block_at(sell_blk, i, prices, cache, context):
                 in_trade  = False
                 signal[i] = 0.0
             else:
@@ -369,7 +373,8 @@ def get_custom_signal(req: CustomSignalRequest):
         raise HTTPException(500, "Failed to fetch price data")
 
     prices   = close.values.astype(float)
-    sig_arr  = evaluate_custom_rules(prices, req.rules)
+    from strategies.market_context import resolve_context
+    sig_arr  = evaluate_custom_rules(prices, req.rules, resolve_context(req.ticker, req.rules))
     last_sig = float(sig_arr[-1]) if len(sig_arr) else 0.0
     invested = int(np.sum(sig_arr))
     pct      = 100 * invested / max(1, len(sig_arr))
@@ -419,7 +424,8 @@ def custom_backtest(req: CustomBacktestRequest):
     if len(close) < 60:
         raise HTTPException(422, "Insufficient price history for backtest")
     close.name = req.ticker.strip().upper()
-    sig_arr = evaluate_custom_rules(close.values.astype(float), req.rules)
+    from strategies.market_context import resolve_context
+    sig_arr = evaluate_custom_rules(close.values.astype(float), req.rules, resolve_context(req.ticker, req.rules))
     signal = pd.Series(sig_arr, index=close.index)
     signal = _apply_risk_controls(
         signal, close, req.stop_loss, req.take_profit, req.trailing_stop, req.max_hold_bars,

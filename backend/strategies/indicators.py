@@ -6,6 +6,17 @@ length, with NaN for bars where there is insufficient history.
 from __future__ import annotations
 import numpy as np
 
+# Live/snapshot metric types resolved from a market context (see
+# strategies/market_context.py), not from the price series. Kept as a literal
+# here so this module stays dependency-free; must match market_context.
+_CONTEXT_TYPES = frozenset({
+    "FUND_PE", "FUND_PEG", "FUND_EPSGROWTH", "FUND_NETMARGIN", "FUND_GROSSMARGIN",
+    "FUND_DEBTEQUITY", "FUND_DIVYIELD", "FUND_PB", "FUND_CURRENTRATIO", "FUND_BETA",
+    "VOL_RELATIVE", "VOL_DOLLAR",
+    "OPT_IV", "OPT_HV", "OPT_IVHV", "OPT_PUTCALL", "OPT_IMPLIEDMOVE",
+    "FLOW_HORMUZ", "FLOW_SUEZ", "FLOW_PANAMA", "FLOW_MALACCA",
+})
+
 
 def sma(prices: np.ndarray, period: int) -> np.ndarray:
     n = len(prices)
@@ -115,9 +126,16 @@ def momentum(prices: np.ndarray, period: int = 126) -> np.ndarray:
     return result
 
 
-def get_indicator(ind: dict, prices: np.ndarray) -> np.ndarray:
-    """Dispatch an IndicatorRef dict to the appropriate function."""
+def get_indicator(ind: dict, prices: np.ndarray, context: dict | None = None) -> np.ndarray:
+    """Dispatch an IndicatorRef dict to the appropriate function.
+
+    `context` carries resolved live/snapshot metrics (fundamentals, liquidity);
+    those types return a constant series at the current value (NaN when the metric
+    is unavailable, so the condition never fires)."""
     t = ind.get("type", "PRICE")
+    if t in _CONTEXT_TYPES:
+        val = (context or {}).get(t, float("nan"))
+        return np.full(len(prices), float(val), dtype=float)
     if t == "PRICE":       return prices.astype(float)
     if t == "RSI":         return rsi(prices, int(ind.get("period", 14)))
     if t == "SMA":         return sma(prices, int(ind.get("period", 50)))
@@ -137,6 +155,7 @@ def get_indicator(ind: dict, prices: np.ndarray) -> np.ndarray:
 def warmup_bars(ind: dict) -> int:
     """Minimum bars needed before this indicator produces a valid value."""
     t = ind.get("type", "PRICE")
+    if t in _CONTEXT_TYPES:                  return 1
     if t == "PRICE":                         return 1
     if t == "RSI":                           return int(ind.get("period", 14)) + 2
     if t in ("SMA", "BB_UPPER", "BB_MID", "BB_LOWER"): return int(ind.get("period", 20))
