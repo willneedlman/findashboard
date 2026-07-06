@@ -172,12 +172,19 @@ export default function StrategyBuilder() {
     if (spot > lo && spot < hi) prices.push(+spot.toFixed(2))
     const rows = [...new Set(prices)].sort((a, b) => a - b).map(buildRow)
 
+    // Y domain follows the NET P&L (gold total), capping unlimited upside so it
+    // stays readable, and always includes the zero line. The per-leg dashed lines
+    // can run to +/-(deep ITM) far outside this, so the axis is clamped
+    // (allowDataOverflow on the YAxis) rather than stretched to fit them.
     const allVals = rows.map(r => r.total)
     const rawMin  = Math.min(...allVals)
     const rawMax  = Math.max(...allVals)
     const maxRisk = Math.max(Math.abs(rawMin), 50)
-    const yMax    = Math.ceil(Math.min(rawMax, maxRisk * 3) * 1.12)
-    const yMin    = Math.floor(rawMin * 1.12)
+    const top     = Math.max(Math.min(rawMax, maxRisk * 3), 0)
+    const bot     = Math.min(rawMin, 0)
+    const pad     = Math.max((top - bot) * 0.08, maxRisk * 0.1)
+    const yMax    = Math.ceil(top + pad)
+    const yMin    = Math.floor(bot - pad)
 
     // Breakeven prices (zero-crossings)
     const breakevens: number[] = []
@@ -689,7 +696,7 @@ export default function StrategyBuilder() {
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.07)" />
                   <XAxis dataKey="price" type="number" domain={[chartData.lo, chartData.hi]} tick={TICK} tickFormatter={v => `$${(+v).toFixed(2)}`} interval="preserveStartEnd" allowDataOverflow />
                   <YAxis tick={TICK} tickFormatter={v => `$${v.toFixed(0)}`} orientation="right"
-                    domain={[chartData.yMin, chartData.yMax]} />
+                    domain={[chartData.yMin, chartData.yMax]} allowDataOverflow />
                   <Tooltip
                     cursor={{ stroke: 'var(--theme-text-faint, rgba(255,255,255,0.3))', strokeWidth: 1, strokeDasharray: '3 3' }}
                     content={(props) => {
@@ -737,10 +744,14 @@ export default function StrategyBuilder() {
                   {/* Spot marker */}
                   <ReferenceLine x={chartData.spot} stroke="rgba(217,119,54,0.7)" strokeWidth={1.5} strokeDasharray="4 2" />
 
-                  {/* Breakeven markers */}
+                  {/* Breakeven markers. Labels sit at the BOTTOM (strikes are at the
+                      top) so a breakeven near a strike never overlaps its label,
+                      and are staggered among themselves. */}
                   {chartData.breakevens.map((be, i) => (
                     <ReferenceLine key={i} x={be} stroke="var(--theme-text-faint, rgba(255,255,255,0.25))" strokeDasharray="2 4"
-                      label={{ value: `BE $${be}`, fill: 'var(--theme-secondary, #99907e)', fontSize: 8, position: 'insideTopLeft' }} />
+                      label={({ viewBox }: any) => (
+                        <text x={viewBox.x + 3} y={viewBox.y + viewBox.height - 6 - i * 11} fill="var(--theme-secondary, #99907e)" fontSize={8}>{`BE $${be}`}</text>
+                      )} />
                   ))}
 
                   {/* Per-leg dashed contributions */}
