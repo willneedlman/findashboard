@@ -3,7 +3,7 @@ import {
   Filter, Brain, CalendarClock, CalendarDays, FileText, Activity,
   GitCompare, PieChart, Globe, Scale, Coins, Boxes, RotateCcw, Gem,
   LineChart, BarChart2, Waves, Zap, Shuffle, Percent,
-  GitBranch, Landmark, Dices, Gauge, BookOpen, Bell, Workflow, Clock, ArrowLeftRight,
+  GitBranch, Landmark, Dices, Gauge, BookOpen, Bell, Workflow, Clock, ArrowLeftRight, Home,
   Ship, CandlestickChart,
   type LucideIcon,
 } from 'lucide-react'
@@ -81,6 +81,7 @@ export const HUBS: Hub[] = [
       { title: 'Bond Lookup',    chip: 'Lookup',         desc: 'Resolve a CUSIP or issuer to bond reference data', route: '/cusip',          icon: BookOpen },
       { title: 'Credit Spreads', chip: 'Credit Spreads', desc: 'Investment-grade and high-yield spread monitor', route: '/credit-spreads', icon: Activity },
       { title: 'Credit Delinquencies', chip: 'Delinquencies', desc: 'Delinquency buckets, default rates, NPA and roll rates across loan portfolios', route: '/credit-delinquencies', icon: Percent },
+      { title: 'Housing Market', chip: 'Housing', desc: 'Home prices, mortgage rates, affordability (HAI), supply/demand and construction', route: '/housing', icon: Home },
       { title: 'Currency Matrix', chip: 'FX Matrix',     desc: 'Spot cross-rates, forward points, cross-currency basis, and FX vol', route: '/currency', icon: ArrowLeftRight },
       { title: 'Global Energy Flows', chip: 'Energy Flows', desc: 'Live AIS vessels, energy pipelines, export terminals, and chokepoints', route: '/flows-map', icon: Ship },
       { title: 'Market Hours',   chip: 'Market Hours',   desc: 'Live global session clock across futures, US, Europe, Asia', route: '/market-hours',   icon: Clock },

@@ -25,7 +25,7 @@ from routers import (
     paper_scheduler, paper_strategies, paper,
     iv_tracker, valuation, analytics,
     earnings, leaderboard, etf, fx,
-    maritime, snapshots, credit,
+    maritime, snapshots, credit, housing,
 )
 
 @asynccontextmanager
@@ -178,6 +178,7 @@ app.include_router(alerts.router,            prefix="/api/alerts",            ta
 app.include_router(algo.router,              prefix="/api/algo",              tags=["algo"])
 app.include_router(sentiment.router,         prefix="/api/sentiment",         tags=["sentiment"])
 app.include_router(credit.router,            prefix="/api/credit",            tags=["credit"])
+app.include_router(housing.router,           prefix="/api/housing",           tags=["housing"])
 app.include_router(trading.router,           prefix="/api/trading",           tags=["trading"])
 app.include_router(filings.router,           prefix="/api/filings",           tags=["filings"])
 app.include_router(lob.router,               prefix="/api/lob",               tags=["lob"])
