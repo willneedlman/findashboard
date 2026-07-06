@@ -120,8 +120,16 @@ export default function StrategyBuilder() {
   const chartData = useMemo(() => {
     const atm   = legs.find(l => l.ticker === primaryTicker)?.K ?? 100
     const spot  = getSpot(primaryTicker)
-    const lo    = atm * 0.75
-    const hi    = atm * 1.25
+    // Focus the x-range on the strikes and current spot rather than a fixed
+    // +/-25% of the strike (which wastes most of the chart on a single option).
+    // Pad enough to show the payoff slopes; wide spreads or a dragged spot
+    // naturally widen the window.
+    const anchors = [spot, ...legs.filter(l => l.ticker === primaryTicker).map(l => l.K)].filter(v => v > 0)
+    const aLo   = Math.min(...anchors)
+    const aHi   = Math.max(...anchors)
+    const xPad  = Math.max((aHi - aLo) * 0.55, atm * 0.10)
+    const lo    = Math.max(0, aLo - xPad)
+    const hi    = aHi + xPad
     const steps = 80
 
     // Secondary tickers contribute a fixed offset at their slider price
