@@ -174,7 +174,7 @@ export default function MonteCarloRegression({ mode, setMode }: { mode: RegMode;
               tip="Number of Monte-Carlo futures regressed. Degenerate paths (zero-variance factor) are dropped." />
           </div>
 
-          <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', marginBottom: 20 }}>
+          <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', marginBottom: 20 }}>
             <DistPanel title="Alpha distribution" tip="Annualized alpha per simulated path" fmt={v => pct(v * ANN)}
               values={d.per_path.alpha.map(a => a * ANN)} dist={scale(d.alpha, ANN)} />
             <DistPanel title="Beta distribution" tip={`Market beta vs ${r.benchmark} per path`} fmt={v => v.toFixed(2)}
