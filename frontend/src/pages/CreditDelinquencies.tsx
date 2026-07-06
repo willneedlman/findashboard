@@ -67,11 +67,15 @@ const pct = (v: number, d = 2) => `${v.toFixed(d)}%`
 
 // Hoverable "?" with an explanatory popup. `placement="below"` opens downward
 // (used inside the scrollable table header, which would clip an upward popup).
-function HelpTip({ text, placement = 'top' }: { text: string; placement?: 'top' | 'below' }) {
+function HelpTip({ text, placement = 'top' }: { text: string; placement?: 'top' | 'below' | 'below-left' }) {
   const [show, setShow] = useState(false)
+  // 'below-left' anchors the popup's right edge to the icon (extends leftward) so
+  // a rightmost-column tip doesn't overflow the panel and get clipped.
   const pos: React.CSSProperties = placement === 'below'
     ? { top: 'calc(100% + 6px)', left: '50%', transform: 'translateX(-50%)' }
-    : { bottom: 'calc(100% + 6px)', left: '50%', transform: 'translateX(-50%)' }
+    : placement === 'below-left'
+      ? { top: 'calc(100% + 6px)', right: 0 }
+      : { bottom: 'calc(100% + 6px)', left: '50%', transform: 'translateX(-50%)' }
   return (
     <span style={{ position: 'relative', display: 'inline-flex', marginLeft: 5, verticalAlign: 'middle' }}
       onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
@@ -130,7 +134,7 @@ function DelinqTable({ firstLabel, rows, showLegend }: { firstLabel: string; row
             <span style={HLABEL}>Trend</span>
             <span style={{ ...HLABEL, display: 'flex', alignItems: 'center' }}>
               Delinquent mix · 30+
-              <HelpTip placement="below" text="The 30+ delinquent dollars split by stage (30-59, 60-89, 90-119 and 120+ / default) and normalized to fill the bar. Current loans are excluded so the delinquent composition is visible." />
+              <HelpTip placement="below-left" text="The 30+ delinquent dollars split by stage (30-59, 60-89, 90-119 and 120+ / default) and normalized to fill the bar. Current loans are excluded so the delinquent composition is visible." />
             </span>
           </div>
           {rows.map(r => {
