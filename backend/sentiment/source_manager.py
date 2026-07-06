@@ -110,8 +110,13 @@ def verify(items: list[ScoredArticle]) -> tuple[dict[str, float], Verification, 
         if _jaccard(shings[rep_i], shings[i]) >= config.SHINGLE_SIMILARITY:
             return True
         shared = toks[rep_i] & toks[i]
-        if len(shared) < config.PARAPHRASE_MIN_SHARED or not (shared & rare):
+        anchors = shared & rare
+        if len(shared) < config.PARAPHRASE_MIN_SHARED or not anchors:
             return False
+        # Two distinct rare anchors alone are a strong same-event signal (two
+        # reworded OPEC-output headlines share "opec"+"output" but little else).
+        if len(anchors) >= config.PARAPHRASE_STRONG_ANCHORS:
+            return True
         shorter = min(len(toks[rep_i]), len(toks[i])) or 1
         return len(shared) / shorter >= config.PARAPHRASE_RATIO
 

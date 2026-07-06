@@ -127,6 +127,9 @@ SHINGLE_SIMILARITY: float = 0.6           # Jaccard >= this => same cluster
 PARAPHRASE_RARE_DF_FRACTION: float = 0.06  # token is a "rare anchor" if it appears in <= this fraction of the batch
 PARAPHRASE_MIN_SHARED: int = 2             # min shared content tokens
 PARAPHRASE_RATIO: float = 0.4              # shared / shorter-title-length floor
+# Two DISTINCT rare anchors shared (e.g. "opec" + "output") is a strong same-event
+# signal on its own — cluster even when the rest is reworded and the ratio is low.
+PARAPHRASE_STRONG_ANCHORS: int = 2
 HIGH_IMPACT_TIER: int = 4                 # tier >= this counts toward high_impact_score
 # An "isolated spike" worth discounting is a systemic, very strongly directional
 # claim carried by a single source — the precise fake-news / manipulation guard.

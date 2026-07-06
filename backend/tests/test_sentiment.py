@@ -72,6 +72,43 @@ def test_movement_layer_and_inversion(text, expected):
     assert score_text(text, extract_entities(text)).sentiment == expected
 
 
+# Participial movement ("tumbling crude prices") + supply/demand phrasing must
+# flip the bad-up subject just like the finite form ("crude tumbles"), so the
+# equity read is disinflationary rather than reading the bare "tumbling".
+@pytest.mark.parametrize("text,expected", [
+    ("OPEC+ raises output levels again despite tumbling crude prices", "bullish"),
+    ("Oil supply glut deepens as inventories swell", "bullish"),
+    ("OPEC announces surprise output cut, oil spikes", "bearish"),
+    ("Rising oil prices stoke inflation fears", "bearish"),
+    ("Falling gasoline prices ease household budgets", "bullish"),
+])
+def test_participial_movement_and_supply_demand(text, expected):
+    assert score_text(text, extract_entities(text)).sentiment == expected
+
+
+def test_per_asset_class_inverts_price_but_aligns_growth():
+    # Same oil-price headline reads opposite for equities vs the commodity.
+    opec = score_text("OPEC+ raises output despite tumbling crude prices",
+                      extract_entities("crude oil")).by_asset_class
+    assert opec["Equities"] > 0.1        # disinflation -> bullish stocks
+    assert opec["Commodities"] < -0.1    # glut + falling crude -> bearish oil
+
+    # A growth/risk headline is NOT blindly inverted: equities and commodities
+    # move together (demand collapse).
+    rec = score_text("Recession fears grip Wall Street as growth slows",
+                     extract_entities("recession")).by_asset_class
+    assert rec["Equities"] < -0.1
+    assert rec["Commodities"] < -0.1     # recession kills oil demand -> aligned
+
+    # A rate-only move flips the equity sign (yields/rates are bad-up) but is NOT
+    # a commodity inversion, so commodities stay aligned with equities, not flipped.
+    cut = score_text("Fed cuts rates as growth cools", extract_entities("Fed")).by_asset_class
+    assert cut["Commodities"] == cut["Equities"]
+
+    # Fixed income and FX are intentionally not emitted (sign too context-dependent).
+    assert "Fixed Income" not in rec and "FX" not in rec
+
+
 # Reported misreads (2026-07-03): sanctions EASING is not risk-on-its-face, the
 # dollar's direction is ambiguous for equities, and fewer expected hikes is
 # dovish (bullish) whatever the words around it.
@@ -220,6 +257,21 @@ def test_paraphrased_headlines_cluster_on_rare_anchor():
     ]
     _factor, _stats, clusters = source_manager.verify(items)
     assert sorted(len(c) for c in clusters) == [1, 3]
+
+
+def test_two_rare_anchors_cluster_same_event_opposite_sentiment():
+    # Same OPEC-output event, opposite sentiment, low lexical overlap: the pair
+    # shares only two rare anchors ("opec" + "output") which is below the ratio
+    # floor, but two distinct rare anchors alone are a strong same-event signal,
+    # so the contradictory pair collapses to one representative (not shown twice).
+    items = [
+        _scored("Reuters", "rss:reuters", "OPEC+ raises output levels again despite tumbling crude prices", 30, 4),
+        _scored("CNBC", "rss:cnbc", "Oil slips after OPEC+ agrees to raise output targets", 62, 4),
+        _scored("Bloomberg", "rss:bbg", "Apple unveils new iPhone lineup at its fall event", 58, 3),
+    ]
+    _factor, _stats, clusters = source_manager.verify(items)
+    assert sorted(len(c) for c in clusters) == [1, 2]
+    assert set(next(c for c in clusters if len(c) == 2)) == {0, 1}
 
 
 def test_unrelated_stories_sharing_generic_words_do_not_merge():

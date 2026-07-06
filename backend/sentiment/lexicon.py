@@ -33,7 +33,7 @@ from __future__ import annotations
 import math
 import re
 import statistics
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 
 from sentiment import config
 from sentiment.schemas import Entity
@@ -492,6 +492,13 @@ _BAD_UP_TOKENS: frozenset[str] = frozenset({
     "oil", "crude", "brent", "gas", "gasoline", "gold", "rate", "rates",
     "deficit", "debt", "default", "defaults", "premium", "spread", "spreads",
 })
+# The subset of bad-up subjects that are physical commodities: only these make a
+# move read inversely for the commodity itself (rising oil = bearish equities,
+# bullish crude). Rate/yield/inflation subjects are bad-up too but are NOT
+# commodity inversions, so a rates headline must not flip the commodities view.
+_COMMODITY_SUBJECT_TOKENS: frozenset[str] = frozenset({
+    "oil", "crude", "brent", "gas", "gasoline", "gold",
+})
 # Subjects whose direction is ambiguous for equities: a falling dollar is not
 # bearish for stocks (often the opposite). Movement verbs scoped to these
 # subjects are skipped entirely rather than guessed.
@@ -532,6 +539,32 @@ _REPRICE_VERBS: dict[str, float] = {
 }
 _REPRICE_SALIENCE = 1.3
 
+# ── Commodity supply/demand events ───────────────────────────────────────────
+# Scored from the equity (disinflation) perspective: more supply eases prices,
+# so it is mildly bullish for equities; a cut, shortage, or disruption lifts
+# prices and is bearish. Each is marked commodity-inverse below so the
+# per-asset-class view flips it for oil/energy, where a glut is bearish and a
+# cut is bullish.
+_SUPPLY_DEMAND: dict[str, tuple[float, float]] = {
+    "raises output": (0.20, 0.9), "raise output": (0.20, 0.9),
+    "boosts output": (0.20, 0.9), "boost output": (0.20, 0.9),
+    "hikes output": (0.20, 0.9), "raises production": (0.20, 0.9),
+    "boosts production": (0.20, 0.9), "output boost": (0.20, 0.9),
+    "output hike": (0.20, 0.9), "production boost": (0.20, 0.9),
+    "supply glut": (0.28, 1.0), "oil glut": (0.28, 1.0), "crude glut": (0.28, 1.0),
+    "oversupply": (0.25, 1.0), "supply surplus": (0.25, 1.0),
+    "output cut": (-0.28, 1.0), "output cuts": (-0.28, 1.0),
+    "production cut": (-0.28, 1.0), "production cuts": (-0.28, 1.0),
+    "supply cut": (-0.28, 1.0), "supply cuts": (-0.28, 1.0),
+    "output curbs": (-0.26, 1.0), "supply shortage": (-0.38, 1.1),
+    "supply shortages": (-0.38, 1.1), "supply crunch": (-0.42, 1.1),
+    "supply disruption": (-0.40, 1.1), "supply disruptions": (-0.40, 1.1),
+}
+_LEXICON.update(_SUPPLY_DEMAND)
+# Phrases whose sign inverts between equities and the commodity itself (a glut is
+# disinflationary for stocks but bearish for crude; "supply shock" spikes oil).
+_COMMODITY_INVERSE_PHRASES: frozenset[str] = frozenset(_SUPPLY_DEMAND) | {"supply shock"}
+
 _MAX_PHRASE_LEN = max(len(k.split()) for k in _LEXICON)
 _TOKEN_RE = re.compile(r"[a-z0-9&]+")
 _APOSTROPHES = str.maketrans("", "", "'’ʼ`")
@@ -548,6 +581,8 @@ class TermHit:
     polarity: float       # effective signed polarity after negation/intensifier
     salience: float
     contribution: float   # polarity · salience
+    flipped: bool = False  # signed from a commodity subject/supply event: equities
+                           # and the commodity itself read this hit with opposite sign
 
 
 @dataclass(frozen=True)
@@ -559,6 +594,9 @@ class LexScore:
     sentiment: str
     raw_polarity: float
     matched: tuple[TermHit, ...]
+    # Direction re-read per asset class (equities is the primary `direction`).
+    # Commodities can move inversely to equities on the same headline.
+    by_asset_class: dict[str, float] = field(default_factory=dict)
 
 
 def extract_entities(text: str) -> list[Entity]:
@@ -660,7 +698,8 @@ def _match_terms(tokens: list[str], consumed: list[bool]) -> tuple[list[TermHit]
             )
             factor = config.INTENSIFIER_FACTOR if intensified else 1.0
             eff = max(-1.0, min(1.0, polarity * factor)) * sign
-            hits.append(TermHit(phrase, eff, salience, eff * salience))
+            hits.append(TermHit(phrase, eff, salience, eff * salience,
+                                flipped=phrase in _COMMODITY_INVERSE_PHRASES))
     return hits, consumed
 
 
@@ -730,7 +769,28 @@ def _movement_hits(tokens: list[str], consumed: list[bool]) -> list[TermHit]:
         base = _MOVEMENT.get(tok)
         if base is None:
             continue
-        bad_up = any(tokens[j] in _BAD_UP_TOKENS for j in range(max(0, i - 3), i))
+        # Backward, then (participial) forward scan for the subject. `bad_up`
+        # flips the equity sign for ANY subject that is bad when rising (yields,
+        # inflation, oil, ...). `commodity_subj` is the narrower question of
+        # whether that subject is a physical commodity — only then does the
+        # commodity itself read the move inversely to equities (rising oil is
+        # bearish stocks but bullish crude; a rising yield is NOT a commodity move).
+        bad_up = commodity_subj = False
+        for j in range(max(0, i - 3), i):
+            if tokens[j] in _BAD_UP_TOKENS:
+                bad_up = True
+                commodity_subj = commodity_subj or tokens[j] in _COMMODITY_SUBJECT_TOKENS
+        if not bad_up:
+            # Participial form ("tumbling crude prices", "rising oil", "falling
+            # yields"): the subject sits just AFTER the verb. Scan forward until a
+            # clause break so "stocks rise as oil falls" never mislabels "rise".
+            for j in range(i + 1, min(n, i + 3)):
+                if tokens[j] in _CLAUSE_BREAKS:
+                    break
+                if tokens[j] in _BAD_UP_TOKENS:
+                    bad_up = True
+                    commodity_subj = tokens[j] in _COMMODITY_SUBJECT_TOKENS
+                    break
         # Wider window than bad-up: FX headlines pad the subject with qualifiers
         # ("Dollar set for biggest weekly drop").
         fx_subject = any(tokens[j] in _FX_SUBJECT_TOKENS for j in range(max(0, i - 6), i))
@@ -741,7 +801,7 @@ def _movement_hits(tokens: list[str], consumed: list[bool]) -> list[TermHit]:
             tokens[j] in _INTENSIFIERS for j in range(i + 1, min(n, i + 3)))
         factor = config.INTENSIFIER_FACTOR if intensified else 1.0
         eff = max(-1.0, min(1.0, base * factor)) * (-1.0 if negated else 1.0) * (-1.0 if bad_up else 1.0)
-        hits.append(TermHit(tok, eff, _MOVEMENT_SALIENCE, eff * _MOVEMENT_SALIENCE))
+        hits.append(TermHit(tok, eff, _MOVEMENT_SALIENCE, eff * _MOVEMENT_SALIENCE, flipped=commodity_subj))
     return hits
 
 
@@ -770,6 +830,13 @@ def _is_tape_or_move(term: str) -> bool:
     return term in _TAPE_CONTEXT_TERMS or term in _MOVEMENT
 
 
+def _to_direction(raw: float) -> float:
+    """Map a salience-weighted mean contribution to a [-1, 1] direction via the
+    same tanh/0-100 pipeline the headline score uses."""
+    score = max(0, min(100, round(50 + 50 * math.tanh(config.TANH_GAIN * raw))))
+    return round((score - 50) / 50.0, 3)
+
+
 def score_text(text: str, entities: list[Entity]) -> LexScore:
     """Pure deterministic sentiment score for one headline. See module docstring."""
     tokens = _tokenize(text)
@@ -786,7 +853,7 @@ def score_text(text: str, entities: list[Entity]) -> LexScore:
     if hits and any(t in _REVERSERS for t in tokens):
         hits = [
             h if h.contribution >= 0 else
-            TermHit(h.term, -h.polarity * _REVERSAL_FACTOR, h.salience, -h.contribution * _REVERSAL_FACTOR)
+            replace(h, polarity=-h.polarity * _REVERSAL_FACTOR, contribution=-h.contribution * _REVERSAL_FACTOR)
             for h in hits
         ]
 
@@ -794,7 +861,7 @@ def score_text(text: str, entities: list[Entity]) -> LexScore:
     # every negative (so "excessive valuation concerns" stays bearish).
     if hits and _excess_reverses(tokens):
         hits = [
-            TermHit(h.term, -h.polarity * _REVERSAL_FACTOR, h.salience, -h.contribution * _REVERSAL_FACTOR)
+            replace(h, polarity=-h.polarity * _REVERSAL_FACTOR, contribution=-h.contribution * _REVERSAL_FACTOR)
             if (h.contribution < 0 and _is_tape_or_move(h.term)) else h
             for h in hits
         ]
@@ -803,7 +870,7 @@ def score_text(text: str, entities: list[Entity]) -> LexScore:
             tokens[i] == a and tokens[i + 1] == b
             for a, b in _ALLOC_MARKER_PAIRS for i in range(len(tokens) - 1))):
         hits = [
-            TermHit(h.term, h.polarity * _ALLOC_GEO_DAMP, h.salience, h.contribution * _ALLOC_GEO_DAMP)
+            replace(h, polarity=h.polarity * _ALLOC_GEO_DAMP, contribution=h.contribution * _ALLOC_GEO_DAMP)
             if any(w in _GEO_CONTEXT_TERMS for w in h.term.split()) else h
             for h in hits
         ]
@@ -813,7 +880,7 @@ def score_text(text: str, entities: list[Entity]) -> LexScore:
     # sign, matching the allocation-view rule above.
     if hits and _is_buy_recommendation(tokens):
         hits = [
-            TermHit(h.term, h.polarity * _BUYREC_DAMP, h.salience, h.contribution * _BUYREC_DAMP)
+            replace(h, polarity=h.polarity * _BUYREC_DAMP, contribution=h.contribution * _BUYREC_DAMP)
             if (h.contribution < 0 and _is_tape_or_move(h.term)) else h
             for h in hits
         ]
@@ -823,8 +890,22 @@ def score_text(text: str, entities: list[Entity]) -> LexScore:
 
     den = sum(h.salience for h in hits)
     raw = sum(h.contribution for h in hits) / den if den else 0.0
+    direction = _to_direction(raw)
+
+    # Per-asset-class read. `direction` is the equity (risk-asset) view; it also
+    # serves crypto (risk-on) and the macro backdrop. Commodities read a commodity
+    # move inversely (rising oil is bearish stocks, bullish crude), so recompute a
+    # direction with the commodity-flipped hits negated. Growth/risk hits carry no
+    # flip and stay aligned, so a recession is bearish for equities AND oil.
+    # Fixed income and FX are deliberately omitted: their sign versus equities is
+    # too context-dependent (safe-haven bid vs. rate repricing) to state honestly.
+    by_asset_class = {"Equities": direction, "Crypto": direction, "Macro": direction}
+    if any(h.flipped for h in hits):
+        inv_raw = sum((-h.contribution if h.flipped else h.contribution) for h in hits) / den if den else 0.0
+        by_asset_class["Commodities"] = _to_direction(inv_raw)
+    else:
+        by_asset_class["Commodities"] = direction
     score = max(0, min(100, round(50 + 50 * math.tanh(config.TANH_GAIN * raw))))
-    direction = round((score - 50) / 50.0, 3)
 
     coverage = min(1.0, len(hits) / config.CONF_COVERAGE_ETA)
     disagreement = statistics.pstdev([h.polarity for h in hits]) if len(hits) > 1 else 0.0
@@ -834,4 +915,5 @@ def score_text(text: str, entities: list[Entity]) -> LexScore:
         - config.CONF_DISAGREEMENT_COEF * disagreement)), 2)
 
     sentiment = "bullish" if direction > 0.1 else "bearish" if direction < -0.1 else "neutral"
-    return LexScore(score, direction, confidence, tier, sentiment, round(raw, 4), tuple(hits))
+    return LexScore(score, direction, confidence, tier, sentiment, round(raw, 4),
+                    tuple(hits), by_asset_class)

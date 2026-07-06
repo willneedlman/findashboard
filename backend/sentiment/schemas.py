@@ -46,6 +46,7 @@ class ScoredArticle:
     forward_looking_weight: float = 0.5  # 1.0 = predictive/speculative, 0.0 = historical
     entities: list[Entity] = field(default_factory=list)
     seen_in_sources: int = 1  # distinct feeds that carried this story (1 = unique)
+    asset_directions: dict[str, float] = field(default_factory=dict)  # per-asset-class read
 
 
 # ── Ingestion boundary ────────────────────────────────────────────────────────
@@ -107,6 +108,7 @@ class ItemOut(BaseModel):
     backward_sentiment_score: float         # score * (1 - forward_looking_weight)
     entities: list[Entity]
     seen_in_sources: int = 1                 # distinct feeds carrying this story
+    asset_directions: dict[str, float] = Field(default_factory=dict)  # per-asset-class direction
 
 
 class SourceResult(BaseModel):

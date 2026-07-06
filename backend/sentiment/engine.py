@@ -124,6 +124,7 @@ def _score_window(
                 reasoning_tag="Neutral Signal",
                 forward_looking_weight=horizon.forward_looking_weight(art.title),
                 entities=entities,
+                asset_directions=lex.by_asset_class,
             ))
     return scored, in_window
 

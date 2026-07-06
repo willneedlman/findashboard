@@ -39,6 +39,7 @@ interface ScoredItem {
   backward_sentiment_score: number
   entities:       Entity[]
   seen_in_sources?: number
+  asset_directions?: Record<string, number>  // per-asset-class direction (equities is primary)
 }
 
 interface Source {
@@ -168,14 +169,16 @@ interface HistoryResp {
 }
 
 // ── Timeframe config ──────────────────────────────────────────────────────────
-type Timeframe = '1h' | '4h' | '6h' | '24h' | '48h'
+type Timeframe = '1h' | '4h' | '6h' | '24h' | '48h' | '72h' | '168h'
 
 const TIMEFRAMES: { id: Timeframe; label: string; hours: number; desc: string }[] = [
-  { id: '1h',  label: '1H',  hours: 1,  desc: 'Breaking — last 60 min' },
-  { id: '4h',  label: '4H',  hours: 4,  desc: 'Session — last 4 hrs' },
-  { id: '6h',  label: '6H',  hours: 6,  desc: 'Extended session' },
-  { id: '24h', label: '1D',  hours: 24, desc: 'Full trading day' },
-  { id: '48h', label: '2D',  hours: 48, desc: 'Two-day picture' },
+  { id: '1h',   label: '1H',  hours: 1,   desc: 'Breaking — last 60 min' },
+  { id: '4h',   label: '4H',  hours: 4,   desc: 'Session — last 4 hrs' },
+  { id: '6h',   label: '6H',  hours: 6,   desc: 'Extended session' },
+  { id: '24h',  label: '1D',  hours: 24,  desc: 'Full trading day' },
+  { id: '48h',  label: '2D',  hours: 48,  desc: 'Two-day picture' },
+  { id: '72h',  label: '3D',  hours: 72,  desc: 'Three-day picture' },
+  { id: '168h', label: '1W',  hours: 168, desc: 'Full week' },
 ]
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -396,15 +399,22 @@ function TimeframeSelector({ active, onChange }: { active: Timeframe; onChange: 
 }
 
 // ── Asset class tag ────────────────────────────────────────────────────────────
-function AssetTag({ name, assetClass }: { name: string; assetClass: string }) {
+function AssetTag({ name, assetClass, direction }: { name: string; assetClass: string; direction?: number }) {
   const color = ASSET_CLASS_COLORS[assetClass] ?? T.muted
+  // Per-asset-class read: the same headline can be bullish for equities and
+  // bearish for the commodity it names. Show that split with a signed arrow.
+  const dir = direction ?? 0
+  const arrow = dir > 0.1 ? '↑' : dir < -0.1 ? '↓' : ''
+  const arrowColor = dir > 0.1 ? T.pos : T.neg
   return (
     <span style={{
       fontSize: 8, fontWeight: 700, fontFamily: T.mono, letterSpacing: '0.06em',
       padding: '1px 4px', border: `1px solid ${color}40`, color, background: `${color}10`,
       whiteSpace: 'nowrap',
-    }}>
+    }}
+      title={arrow ? `${assetClass}: ${dir > 0 ? 'bullish' : 'bearish'} on this headline` : assetClass}>
       {name}
+      {arrow && <span style={{ color: arrowColor, marginLeft: 2 }}>{arrow}</span>}
     </span>
   )
 }
@@ -528,7 +538,7 @@ function SourcePanel({ src, timeframeHours }: { src: Source; timeframeHours: num
                     {item.seen_in_sources} FEEDS
                   </span>
                 )}
-                {item.entities.slice(0, 3).map(e => <AssetTag key={e.name} name={e.name} assetClass={e.asset_class} />)}
+                {item.entities.slice(0, 3).map(e => <AssetTag key={e.name} name={e.name} assetClass={e.asset_class} direction={item.asset_directions?.[e.asset_class]} />)}
               </div>
             </div>
           ))}
