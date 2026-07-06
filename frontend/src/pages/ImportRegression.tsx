@@ -122,8 +122,14 @@ export default function ImportRegression({ mode, setMode }: { mode: RegMode; set
           </RailGroup>
           <RailGroup label="Backtest on">
             <TickerInput value={algoTicker} onChange={setAlgoTicker} onEnter={() => canRun && mutation.mutate()} style={inputStyle} placeholder="Ticker" />
-            <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+            {/* Native date inputs have a wide intrinsic min-width, so two never fit
+                side by side in the rail; stack them full-width. */}
+            <div style={{ marginTop: 8 }}>
+              <div style={{ fontSize: 9, color: C.muted, marginBottom: 2 }}>Start</div>
               <input type="date" value={start} onChange={e => setStart(e.target.value)} style={{ ...inputStyle, fontSize: 11 }} />
+            </div>
+            <div style={{ marginTop: 6 }}>
+              <div style={{ fontSize: 9, color: C.muted, marginBottom: 2 }}>End (optional)</div>
               <input type="date" value={end} onChange={e => setEnd(e.target.value)} style={{ ...inputStyle, fontSize: 11 }} />
             </div>
           </RailGroup>

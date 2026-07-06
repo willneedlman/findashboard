@@ -125,10 +125,8 @@ export default function MonteCarloRegression({ mode, setMode }: { mode: RegMode;
         </select>
       </RailGroup>
       <RailGroup label="Simulation">
-        <NumField label="Paths (N)" value={nSims} onChange={setNSims} step={100} min={50} max={3000}
-          tip="Number of independent simulated futures (Monte Carlo paths). Each path is regressed against its own market draw. More paths sharpen the distributions." />
-        <NumField label="Horizon (days)" value={horizon} onChange={setHorizon} step={21} min={20} max={1260}
-          tip="Trading days per path (252 is about one year). Each path's regression uses this many daily returns." />
+        <NumField label="Paths (N)" value={nSims} onChange={setNSims} step={100} min={50} max={3000} />
+        <NumField label="Horizon (days)" value={horizon} onChange={setHorizon} step={21} min={20} max={1260} />
       </RailGroup>
       <RailGroup label="Options-selling strategy">
         <NumField label="Theta (premium/day, bps)" value={premiumBps} onChange={setPremiumBps} step={1} min={0} max={100}
@@ -160,7 +158,7 @@ export default function MonteCarloRegression({ mode, setMode }: { mode: RegMode;
       {r && d && (
         <>
           <div style={{ fontSize: 11, color: C.muted, marginBottom: 14, lineHeight: '16px' }}>
-            Monte Carlo: {r.n_sims.toLocaleString()} simulated futures of the strategy, each regressed against its own
+            Options-selling strategy across {r.n_sims.toLocaleString()} Monte Carlo futures, each regressed against its own
             simulated {r.benchmark} path. The cards and distributions show how alpha, beta and R² vary across those futures.
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20 }}>

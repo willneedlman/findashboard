@@ -16,7 +16,7 @@ export const PERIODS = ['1mo', '3mo', '6mo', '1y', '2y', '3y', '5y']
 export type RegMode = 'ols' | 'mc' | 'import'
 export const REG_MODES: { id: RegMode; label: string }[] = [
   { id: 'ols', label: 'Asset OLS' },
-  { id: 'mc', label: 'Monte Carlo' },
+  { id: 'mc', label: 'Options Selling' },
   { id: 'import', label: 'Import' },
 ]
 
