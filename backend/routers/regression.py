@@ -15,7 +15,13 @@ from cache import get_history
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from regression_engine import (
+    RegressionInput, SimulationPathData, batch_single_factor,
+    path_regression, rolling_ols,
+)
+from regression_engine.strategies import short_vol_paths
 
 import matplotlib
 matplotlib.use("Agg")
@@ -365,3 +371,117 @@ def regression_quick(
         include_chart = True,
     )
     return regression_analyze(req)
+
+
+# ── Monte-Carlo strategy regression ──────────────────────────────────────────
+
+class MCRegressionRequest(BaseModel):
+    """Co-simulate a short-vol strategy against a benchmark calibrated from real
+    history, then regress every path. Defaults describe a systematic options
+    seller: collects premium, ~0.45 delta, convex losses on sharp down days."""
+    benchmark:           str   = "SPY"
+    period:              str   = "2y"
+    n_sims:              int   = Field(default=1000, ge=50, le=3000)
+    horizon_days:        int   = Field(default=252, ge=20, le=1260)
+    premium_bps:         float = Field(default=8.0,  ge=0.0, le=100.0)   # daily theta
+    participation:       float = Field(default=0.45, ge=-2.0, le=2.0)    # intended beta
+    short_gamma:         float = Field(default=20.0, ge=0.0, le=200.0)   # convex penalty
+    crash_threshold_bps: float = Field(default=50.0, ge=0.0, le=1000.0)
+    idio_bps:            float = Field(default=10.0, ge=0.0, le=200.0)
+    seed:                int | None = None
+
+
+@router.post("/montecarlo")
+def regression_montecarlo(req: MCRegressionRequest):
+    """Distribution of alpha, beta and R^2 across simulated futures of a strategy."""
+    if req.period not in _VALID_PERIODS:
+        raise HTTPException(400, f"period must be one of {_VALID_PERIODS}")
+    # Bound total simulated cells: the engine holds several (n_sims, horizon)
+    # matrices at once and the prod VM runs on a tight memory budget.
+    if req.n_sims * req.horizon_days > 1_000_000:
+        raise HTTPException(400, "n_sims x horizon_days exceeds 1,000,000; reduce one to fit memory")
+
+    bench = req.benchmark.upper().strip()
+    rets = _fetch_series(bench, req.period, use_returns=True)
+    if len(rets) < 30:
+        raise HTTPException(400, f"Too little history for {bench} to calibrate")
+    mu_d, sig_d = float(rets.mean()), float(rets.std())
+    if sig_d <= 0:
+        raise HTTPException(400, "Benchmark has zero volatility")
+
+    rng = np.random.default_rng(req.seed)
+    P, T = req.n_sims, req.horizon_days
+    market = mu_d + sig_d * rng.standard_normal((P, T))
+    strat = short_vol_paths(
+        market, premium=req.premium_bps / 1e4, participation=req.participation,
+        short_gamma=req.short_gamma, crash_threshold=req.crash_threshold_bps / 1e4,
+        idio_sigma=req.idio_bps / 1e4, rng=rng,
+    )
+
+    result = path_regression(SimulationPathData(strat, market, [bench]))
+    # Pooled regression over all paths stacked. Reuse the vectorized single-factor
+    # path (one row of P*T points) so no (P*T, 2) design matrix is allocated.
+    pv = batch_single_factor(strat.ravel()[None, :], market.ravel())
+    window = min(T - 1, max(10, min(63, T // 3)))
+    roll = rolling_ols(RegressionInput(strat[0], market[0].reshape(-1, 1), [bench]), window=window)
+
+    ann = float(np.sqrt(252))
+    return {
+        "benchmark": bench,
+        "n_sims": P,
+        "horizon_days": T,
+        "calibration": {
+            "mu_annual": round(mu_d * 252, 4),
+            "sigma_annual": round(sig_d * ann, 4),
+            "observations": int(len(rets)),
+        },
+        "distributions": result.to_dict(include_per_path=True),
+        "pooled": {
+            "alpha": round(float(pv["alpha"][0]), 8), "alpha_p": round(float(pv["p_alpha"][0]), 8),
+            "beta": round(float(pv["beta"][0]), 6), "r_squared": round(float(pv["r_squared"][0]), 6),
+        },
+        "rolling_beta": {
+            "window": window,
+            "end_idx": [int(i) for i in roll["end_idx"]],
+            "beta": [round(float(b), 6) for b in roll["betas"][:, 0]],
+            "alpha": [round(float(a), 8) for a in roll["alpha"]],
+        },
+    }
+
+
+class RollingRegressionRequest(BaseModel):
+    y_ticker:    str
+    x_ticker:    str
+    period:      str = "2y"
+    window:      int = Field(default=60, ge=10, le=252)
+    use_returns: bool = True
+
+
+@router.post("/rolling")
+def regression_rolling(req: RollingRegressionRequest):
+    """Rolling single-factor OLS (beta/alpha/R^2 over a sliding window) to expose
+    regime shifts between two tickers."""
+    if req.period not in _VALID_PERIODS:
+        raise HTTPException(400, f"period must be one of {_VALID_PERIODS}")
+
+    y = _fetch_series(req.y_ticker, req.period, req.use_returns)
+    x = _fetch_series(req.x_ticker, req.period, req.use_returns)
+    df = pd.concat([y, x], axis=1).dropna()
+    df = df.loc[:, ~df.columns.duplicated()]
+    if df.shape[1] < 2:
+        raise HTTPException(400, "y_ticker and x_ticker must be different")
+    if len(df) < req.window + 2:
+        raise HTTPException(400, f"Need > {req.window + 2} overlapping points for this window")
+
+    inp = RegressionInput(df.iloc[:, 0].to_numpy(), df.iloc[:, 1].to_numpy(), [req.x_ticker.upper()])
+    roll = rolling_ols(inp, window=req.window)
+    dates = df.index.strftime("%Y-%m-%d").to_numpy()
+    return {
+        "y_ticker": req.y_ticker.upper(), "x_ticker": req.x_ticker.upper(),
+        "period": req.period, "window": req.window, "observations": int(len(df)),
+        "series": [
+            {"date": str(dates[int(e)]), "beta": round(float(b), 6),
+             "alpha": round(float(a), 8), "r_squared": round(float(r), 6)}
+            for e, b, a, r in zip(roll["end_idx"], roll["betas"][:, 0], roll["alpha"], roll["r_squared"])
+        ],
+    }
