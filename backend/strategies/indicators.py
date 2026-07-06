@@ -149,6 +149,9 @@ def get_indicator(ind: dict, prices: np.ndarray, context: dict | None = None) ->
     if t == "BB_LOWER":    return bollinger(prices, int(ind.get("period", 20)), float(ind.get("std", 2.0)))[2]
     if t == "ATR":         return atr(prices, int(ind.get("period", 14)))
     if t == "MOMENTUM":    return momentum(prices, int(ind.get("period", 126)))
+    # Percent change over N bars, expressed as a percentage (5.0 = +5%), so a
+    # rule can compare it to a plain number ("% change 20d > 5").
+    if t == "PCT_CHANGE":  return momentum(prices, int(ind.get("period", 20))) * 100.0
     return prices.astype(float)
 
 
@@ -164,4 +167,5 @@ def warmup_bars(ind: dict) -> int:
         return int(ind.get("slow", 26)) + int(ind.get("signal_period", 9)) + 2
     if t == "ATR":                           return int(ind.get("period", 14)) + 2
     if t == "MOMENTUM":                      return int(ind.get("period", 126)) + 1
+    if t == "PCT_CHANGE":                    return int(ind.get("period", 20)) + 1
     return 30
