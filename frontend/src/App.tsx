@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { lazyWithReload } from './lib/chunkReload'
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
@@ -11,20 +11,19 @@ import { recordRecentTicker } from './lib/recentTickers'
 const TickerDrawerPanel = lazyWithReload(() => import('./components/TickerDrawer'))
 
 function TickerDrawerHost() {
-  const [sym, setSym] = useState('')
+  const [sym, setSym] = useState('')   // '' until first open; sym never resets, keeping the panel mounted for its exit animation
   const [open, setOpen] = useState(false)
-  const [loaded, setLoaded] = useState(false)
   useEffect(() => {
     const onOpen = (e: Event) => {
       const s = String((e as CustomEvent).detail ?? '').trim().toUpperCase()
       if (!s) return
-      setSym(s); setOpen(true); setLoaded(true)
+      setSym(s); setOpen(true)
       recordRecentTicker(s)
     }
     window.addEventListener('ft:ticker-drawer', onOpen)
     return () => window.removeEventListener('ft:ticker-drawer', onOpen)
   }, [])
-  if (!loaded) return null
+  if (!sym) return null
   return (
     <Suspense fallback={null}>
       <TickerDrawerPanel open={open} sym={sym} onClose={() => setOpen(false)} />
@@ -143,24 +142,36 @@ function TerminalChrome() {
     const tool = findToolByLocation(location.pathname, location.search)
     if (tool) recordRecent(tool.route)
   }, [location.pathname, location.search])
-  // Linked-ticker mode: explicit ?ticker= navigations update the shared symbol;
-  // opening a linked route without one inherits it (URL prefill does the rest).
+
+  // Linked-ticker mode. Both branches act only on pathname TRANSITIONS: DCF
+  // mirrors ?ticker= to the URL per keystroke, so reacting to same-path search
+  // churn would record partial symbols ("T", "TS") and fight cleared inputs.
+  const prevPath = useRef<string | null>(null)
+  const arriving = prevPath.current !== location.pathname
+  const sp = new URLSearchParams(location.search)
+  // Injection must happen BEFORE the page mounts — pages read ?ticker= in
+  // their state initializers, so a post-mount URL rewrite is a silent no-op.
+  // While an injection is pending we render the loader instead of the Outlet;
+  // the effect below rewrites the URL and the page then mounts once, with it.
+  const holdForInject = arriving && !sp.has('ticker')
+    && isLinkOn() && !!getLinkedTicker() && LINKED_ROUTES.has(location.pathname)
   useEffect(() => {
-    const t = (new URLSearchParams(location.search).get('ticker') || '').toUpperCase()
-    if (t && TICKER_SYM_RE.test(t)) {
-      setLinkedTicker(t)
-    } else if (isLinkOn() && LINKED_ROUTES.has(location.pathname)) {
-      const linked = getLinkedTicker()
-      if (linked) navigate(`${location.pathname}?ticker=${linked}`, { replace: true })
+    if (arriving) {
+      const t = (sp.get('ticker') || '').toUpperCase()
+      if (t && TICKER_SYM_RE.test(t)) setLinkedTicker(t)
+      else if (holdForInject) {
+        navigate(`${location.pathname}?ticker=${getLinkedTicker()}`, { replace: true })
+      }
     }
-  }, [location.pathname, location.search, navigate])
+    prevPath.current = location.pathname
+  })
   return (
     <Layout>
       <CommandPalette />
       <TickerDrawerHost />
       <AnimatePresence mode="wait">
         <Suspense key={location.pathname} fallback={<LoadingState />}>
-          <Outlet />
+          {holdForInject ? <LoadingState /> : <Outlet />}
         </Suspense>
       </AnimatePresence>
     </Layout>

@@ -12,7 +12,7 @@ export default function TickerLinkChip({ collapsed }: { collapsed: boolean }) {
       <button
         onClick={() => setLinkOn(!on)}
         title={on
-          ? `Linked ticker mode on${sym ? ` — tools open with ${sym}` : ''}. Click to unlink.`
+          ? `Linked ticker mode on${sym ? `. Tools open with ${sym}` : ''}. Click to unlink.`
           : 'Link tools to one ticker: any symbol you open follows you across tools.'}
         style={{
           width: '100%', boxSizing: 'border-box', display: 'flex', alignItems: 'center',

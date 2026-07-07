@@ -55,21 +55,29 @@ function SectionHeader({ label }: { label: string }) {
   )
 }
 
+const defaultExpiry = () => {
+  const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().split('T')[0]
+}
+
 export function ImpliedProbabilityContent() {
   const cc = useChartColors()
   const [sp] = useSearchParams()
   const urlTicker = (sp.get('ticker') || '').trim().toUpperCase()
   const [ticker, setTicker] = useState(urlTicker || 'SPY')
   const [paramsOpen, setParamsOpen] = useState(true)
-  const [expiry, setExpiry] = useState(() => {
-    const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().split('T')[0]
-  })
+  const [expiry, setExpiry] = useState(defaultExpiry)
 
   // Query (not mutation): the result is deterministic on (ticker, expiry), so
   // regenerating the same pair within the 15-min staleTime is a cache hit.
   // Arriving with ?ticker= (drawer, palette, linked mode) auto-loads it.
   const [submitted, setSubmitted] = useState<{ ticker: string; expiry: string } | null>(() =>
-    urlTicker ? { ticker: urlTicker, expiry: (() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().split('T')[0] })() } : null)
+    urlTicker ? { ticker: urlTicker, expiry: defaultExpiry() } : null)
+  // Same-route ?ticker= navigations change only the search string — no
+  // remount, so sync from the URL when it changes.
+  useEffect(() => {
+    const t = (sp.get('ticker') || '').trim().toUpperCase()
+    if (t && t !== submitted?.ticker) { setTicker(t); setSubmitted({ ticker: t, expiry }) }
+  }, [sp])  // eslint-disable-line react-hooks/exhaustive-deps
   const { data, isFetching: isPending, error: mutError, refetch } = useQuery({
     queryKey: ['implied-prob', submitted?.ticker, submitted?.expiry],
     enabled: !!submitted,

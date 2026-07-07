@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Star } from 'lucide-react'
-import axios from 'axios'
-import { fmtMarketCap } from '../lib/format'
-import { setLinkedTicker } from '../lib/tickerLink'
+import { fmtMarketCap, fmtNum } from '../lib/format'
+import { setLinkedTicker, TICKER_TOOLS, tickerToolUrl } from '../lib/tickerLink'
+import { readWatchlist, toggleWatchlist } from '../lib/watchlist'
+import { fetchTickerHub, fetchImpliedMove, fetchSnapshotSeries } from '../hooks/useApi'
 
 // Ticker overview drawer: one slide-over composing endpoints that already
 // exist (corporate hub, implied move, IV30/GEX snapshots). Opens via the
@@ -26,11 +27,6 @@ const LABEL: React.CSSProperties = {
   textTransform: 'uppercase', color: SEC,
 }
 const SECTION: React.CSSProperties = { padding: '12px 16px', borderBottom: `1px solid ${BORDER}` }
-
-const WL_KEY = 'pe_wl'
-function readWl(): string[] {
-  try { return JSON.parse(localStorage.getItem(WL_KEY) || '[]') } catch { return [] }
-}
 
 function Spark({ points }: { points: number[] }) {
   if (!points || points.length < 2) return null
@@ -60,16 +56,13 @@ function TileNote({ children }: { children: React.ReactNode }) {
   return <div style={{ fontFamily: MONO, fontSize: 10, color: SEC, letterSpacing: '0.04em' }}>{children}</div>
 }
 
-const fmtNum = (v: number | null | undefined, digits = 2, suffix = '') =>
-  v == null || Number.isNaN(v) ? '—' : `${v.toFixed(digits)}${suffix}`
-
 // Lazy-loaded by TickerDrawerHost in App.tsx (keeps axios + this UI out of the
 // critical-path index chunk); the host owns the open/close event plumbing.
 export default function TickerDrawer({ open, sym, onClose }: { open: boolean; sym: string; onClose: () => void }) {
-  const [wl, setWl] = useState<string[]>(readWl)
+  const [wl, setWl] = useState<string[]>(readWatchlist)
   const navigate = useNavigate()
 
-  useEffect(() => { if (open) setWl(readWl()) }, [open, sym])
+  useEffect(() => { if (open) setWl(readWatchlist()) }, [open, sym])
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -80,41 +73,33 @@ export default function TickerDrawer({ open, sym, onClose }: { open: boolean; sy
   const enabled = open && !!sym
   const hub = useQuery({
     queryKey: ['drawer-hub', sym], enabled,
-    queryFn: () => axios.get(`/api/corporate/hub?ticker=${sym}`).then(r => r.data),
+    queryFn: () => fetchTickerHub(sym),
   })
   const implied = useQuery({
     queryKey: ['drawer-implied', sym], enabled,
-    queryFn: () => axios.get(`/api/corporate/hub/implied?tickers=${sym}`).then(r => r.data?.implied?.[sym] ?? null),
+    queryFn: () => fetchImpliedMove(sym),
   })
   const iv = useQuery({
     queryKey: ['drawer-iv30', sym], enabled,
-    queryFn: () => axios.get(`/api/snapshots/series?kind=iv30&ticker=${sym}`).then(r => r.data),
+    queryFn: () => fetchSnapshotSeries('iv30', sym),
   })
   // compute=false: live GEX aggregates every chain (20-40s) — only show a value
   // when the daily snapshot loop (or a Dealer GEX visit) has already left one.
   const gex = useQuery({
     queryKey: ['drawer-gex', sym], enabled,
-    queryFn: () => axios.get(`/api/snapshots/series?kind=gex&ticker=${sym}&compute=false`).then(r => r.data),
+    queryFn: () => fetchSnapshotSeries('gex', sym, false),
   })
 
   const d = hub.data
   const pct: number | null = d?.pct_change_1d ?? null
   const inWl = wl.includes(sym)
-  const toggleWl = () => {
-    const next = inWl ? wl.filter(t => t !== sym) : [...wl, sym]
-    setWl(next)
-    try { localStorage.setItem(WL_KEY, JSON.stringify(next)) } catch { /* quota */ }
-  }
+  const toggleWl = () => setWl(toggleWatchlist(sym))
 
-  const openTool = (route: string) => {
+  const openTool = (tool: (typeof TICKER_TOOLS)[number]) => {
     setLinkedTicker(sym)
     onClose()
-    navigate(`${route}?ticker=${sym}`)
+    navigate(tickerToolUrl(tool, sym))
   }
-  const LINKS: [string, string][] = [
-    ['Profile', '/supply-chain'], ['Chain', '/chain'], ['Skew', '/skew'],
-    ['GEX', '/gex'], ['DCF', '/dcf'], ['Rel Val', '/relative-valuation'],
-  ]
 
   const ivPts = iv.data?.points ?? []
   const ivNow = ivPts.length ? ivPts[ivPts.length - 1]?.v : null
@@ -198,14 +183,14 @@ export default function TickerDrawer({ open, sym, onClose }: { open: boolean; sy
             {/* dealer gamma */}
             <div style={SECTION}>
               <div style={{ ...LABEL, marginBottom: 8 }}>Dealer Gamma</div>
-              {gexLast ? (
+              {gexLast && typeof gexLast.v === 'number' ? (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <Stat label="Net GEX" value={`${gexLast.v >= 0 ? '+' : ''}$${fmtNum(gexLast.v, 0)}M`}
+                  <Stat label="Net GEX" value={`${gexLast.v < 0 ? '-' : '+'}$${fmtNum(Math.abs(gexLast.v), 0)}M`}
                     color={gexLast.v >= 0 ? POS : NEG} />
                   <Stat label="As Of" value={gexLast.d ?? '—'} />
                 </div>
               ) : (
-                <TileNote>No snapshot yet — open Dealer GEX for the live profile.</TileNote>
+                <TileNote>No snapshot yet. Open Dealer GEX for the live profile.</TileNote>
               )}
             </div>
 
@@ -240,12 +225,12 @@ export default function TickerDrawer({ open, sym, onClose }: { open: boolean; sy
             <div style={{ padding: '12px 16px 18px' }}>
               <div style={{ ...LABEL, marginBottom: 8 }}>Open In</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
-                {LINKS.map(([label, route]) => (
-                  <button key={route} onClick={() => openTool(route)}
+                {TICKER_TOOLS.map(t => (
+                  <button key={t.route} onClick={() => openTool(t)}
                     style={{ background: 'var(--theme-surface, #0d1826)', border: `1px solid ${BORDER}`, cursor: 'pointer',
                       color: TEXT, fontFamily: SANS, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em',
                       textTransform: 'uppercase', padding: '7px 0' }}>
-                    {label}
+                    {t.short}
                   </button>
                 ))}
               </div>

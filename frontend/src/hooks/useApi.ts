@@ -5,6 +5,17 @@ const api = axios.create({ baseURL: '/api', timeout: 25_000 })
 export const fetchMarketHistory = (ticker: string, start?: string, end?: string) =>
   api.get('/market/history', { params: { ticker, start, end } }).then(r => r.data)
 
+// Ticker-overview drawer sources.
+export const fetchTickerHub = (ticker: string) =>
+  api.get('/corporate/hub', { params: { ticker } }).then(r => r.data)
+
+export const fetchImpliedMove = (ticker: string): Promise<number | null> =>
+  api.get('/corporate/hub/implied', { params: { tickers: ticker } })
+    .then(r => r.data?.implied?.[ticker.toUpperCase()] ?? null)
+
+export const fetchSnapshotSeries = (kind: 'iv30' | 'gex', ticker: string, compute = true) =>
+  api.get('/snapshots/series', { params: { kind, ticker, compute } }).then(r => r.data)
+
 export const priceOption = (body: object) =>
   api.post('/options/price', body).then(r => r.data)
 

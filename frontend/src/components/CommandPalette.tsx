@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { HUBS } from '../lib/hubs'
-import { setLinkedTicker } from '../lib/tickerLink'
+import { setLinkedTicker, TICKER_TOOLS, tickerToolUrl } from '../lib/tickerLink'
 
 interface Cmd { label: string; route?: string; group: string; desc?: string; action?: () => void }
 
@@ -37,18 +37,6 @@ function score(q: string, c: Cmd): number {
   return s
 }
 
-// Tools that read ?ticker= and pre-fill, for "open SYMBOL in X" commands.
-const TICKER_TARGETS: [string, string][] = [
-  ['Market Data', '/supply-chain'],
-  ['Chain Scanner', '/chain'],
-  ['Volatility Skew', '/skew'],
-  ['Dealer GEX', '/gex'],
-  ['Implied Probability', '/probability'],
-  ['DCF Valuation', '/dcf'],
-  ['Company Profile', '/supply-chain'],
-  ['Relative Valuation', '/relative-valuation'],
-  ['Corporate Calendar', '/corporate'],
-]
 const TICKER_RE = /^[A-Za-z]{1,5}$/
 
 const GOLD = 'var(--theme-primary, #c9a84c)'
@@ -67,21 +55,25 @@ export default function CommandPalette() {
   const navigate = useNavigate()
 
   const results = useMemo(() => {
-    if (!q.trim()) return COMMANDS
+    const trimmed = q.trim()
+    if (!trimmed) return COMMANDS
     const tools = COMMANDS.map(c => ({ c, s: score(q, c) })).filter(x => x.s >= 0)
       .sort((a, b) => a.s - b.s).map(x => x.c).slice(0, 40)
-    // If the query looks like a symbol, lead with the overview drawer, then
-    // append "open SYMBOL in <tool>" commands.
-    const sym = q.trim().toUpperCase()
-    const ticker: Cmd[] = TICKER_RE.test(q.trim())
-      ? [
-          { label: `${sym} — Overview`, group: 'Ticker', desc: 'Quote, vol, gamma, earnings, news',
-            action: () => { setLinkedTicker(sym); window.dispatchEvent(new CustomEvent('ft:ticker-drawer', { detail: sym })) } },
-          ...TICKER_TARGETS.map(([label, base]): Cmd => ({ label: `${sym} → ${label}`, route: `${base}?ticker=${sym}`, group: 'Open ticker' })),
-        ]
-      : []
-    return TICKER_RE.test(q.trim()) ? [...ticker.slice(0, 1), ...tools, ...ticker.slice(1)] : [...tools, ...ticker]
-  }, [q])
+    if (!TICKER_RE.test(trimmed)) return tools
+    // Symbol-shaped query: add the overview drawer + "open SYMBOL in <tool>"
+    // commands. Tool-name matches keep Enter ("DCF" must open DCF Valuation,
+    // not a drawer for a fake ticker); pure symbols lead with the Overview.
+    const sym = trimmed.toUpperCase()
+    const overview: Cmd = {
+      label: `${sym} Overview`, group: 'Ticker', desc: 'Quote, vol, gamma, earnings, news',
+      action: () => { setLinkedTicker(sym); window.dispatchEvent(new CustomEvent('ft:ticker-drawer', { detail: sym })) },
+    }
+    const targets: Cmd[] = TICKER_TOOLS.map((t): Cmd => ({
+      label: `${sym} → ${t.label}`, group: 'Open ticker',
+      action: () => { setLinkedTicker(sym); navigate(tickerToolUrl(t, sym)) },
+    }))
+    return tools.length ? [...tools, overview, ...targets] : [overview, ...targets]
+  }, [q, navigate])
 
   // Global ⌘K / Ctrl+K toggle.
   useEffect(() => {

@@ -29,18 +29,25 @@ export function OptionsChainScannerContent() {
   const [view, setView]     = useState<'calls' | 'puts' | 'chart'>('calls')
   const [expiry, setExpiry] = useState<string>('')
 
-  const { mutate, data, isPending } = useMutation({
-    mutationFn: async () => {
+  const { mutate, data, isPending } = useMutation<any, Error, string | void>({
+    // sym override: URL-driven scans pass the fresh symbol explicitly because
+    // setTicker hasn't committed yet when the effect fires.
+    mutationFn: async (sym) => {
+      const tk = sym || ticker
       const [chainResp, histResp] = await Promise.all([
-        fetchOptionsChain(ticker, expiry || undefined),
-        axios.get(`/api/market/history?ticker=${ticker}&start=2024-01-01`).catch(() => ({ data: null })),
+        fetchOptionsChain(tk, expiry || undefined),
+        axios.get(`/api/market/history?ticker=${tk}&start=2024-01-01`).catch(() => ({ data: null })),
       ])
       return { ...chainResp, spot: histResp.data?.metrics?.current_price ?? null }
     },
   })
 
-  // Auto-scan when arriving with ?ticker= (e.g. from the command palette).
-  useEffect(() => { if (sp.get('ticker')) mutate() }, [])  // eslint-disable-line react-hooks/exhaustive-deps
+  // Auto-scan on ?ticker= arrival AND on same-route ticker changes (palette,
+  // drawer, linked mode) — those change only the search string, no remount.
+  useEffect(() => {
+    const t = (sp.get('ticker') || '').trim().toUpperCase()
+    if (t) { setTicker(t); mutate(t) }
+  }, [sp])  // eslint-disable-line react-hooks/exhaustive-deps
 
   const spot: number | null = data?.spot ?? null
 

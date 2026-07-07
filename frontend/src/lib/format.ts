@@ -8,3 +8,9 @@ export function fmtMarketCap(v: number | null | undefined): string {
   if (v >= 1e6)  return `$${(v / 1e6).toFixed(0)}M`
   return `$${v.toLocaleString()}`
 }
+
+// Fixed-decimal number with an em-dash placeholder. The typeof guard also
+// rejects non-number shapes from loosely-typed API responses.
+export function fmtNum(v: unknown, digits = 2, suffix = ''): string {
+  return typeof v !== 'number' || Number.isNaN(v) ? '—' : `${v.toFixed(digits)}${suffix}`
+}

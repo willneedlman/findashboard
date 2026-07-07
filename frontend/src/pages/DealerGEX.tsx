@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Legend } from 'recharts'
@@ -49,6 +49,12 @@ export default function DealerGEX() {
   // ?ticker= (drawer, palette, linked mode) auto-loads it.
   const [submitted, setSubmitted] = useState<{ ticker: string; expiry: string } | null>(
     urlTicker ? { ticker: urlTicker, expiry: '' } : null)
+  // Same-route ?ticker= navigations (palette, drawer, linked mode) change only
+  // the search string — no remount, so sync from the URL when it changes.
+  useEffect(() => {
+    const t = (sp.get('ticker') || '').trim().toUpperCase()
+    if (t && t !== submitted?.ticker) { setTicker(t); setSubmitted({ ticker: t, expiry: '' }) }
+  }, [sp])  // eslint-disable-line react-hooks/exhaustive-deps
   const { data, isFetching: isPending, refetch } = useQuery({
     queryKey: ['dealer-gex', submitted?.ticker, submitted?.expiry],
     enabled: !!submitted,

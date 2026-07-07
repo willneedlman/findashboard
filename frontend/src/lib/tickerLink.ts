@@ -12,11 +12,28 @@ const EVT     = 'ft:ticker-link'
 
 export const TICKER_SYM_RE = /^[A-Z][A-Z0-9.\-]{0,9}$/
 
-// Routes whose pages read ?ticker= and auto-load it. /alerts also reads it but
-// only prefills the create-alert form, so injecting there would be surprising.
-export const LINKED_ROUTES = new Set([
-  '/supply-chain', '/chain', '/skew', '/dcf', '/relative-valuation', '/gex', '/probability',
-])
+// Single source for every surface that deep-links a symbol into a tool: the
+// palette's "open SYMBOL in <tool>" commands, the drawer's Open In grid, and
+// linked-route injection. `param` marks pages that read ?tickers= (comma list)
+// instead of ?ticker= — those take deep links but are excluded from injection.
+// /alerts reads ?ticker= too but only prefills the create-alert form, so it is
+// deliberately absent.
+export interface TickerTool { label: string; short: string; route: string; param?: 'tickers' }
+export const TICKER_TOOLS: TickerTool[] = [
+  { label: 'Company Profile',     short: 'Profile',  route: '/supply-chain' },
+  { label: 'Chain Scanner',       short: 'Chain',    route: '/chain' },
+  { label: 'Volatility Skew',     short: 'Skew',     route: '/skew' },
+  { label: 'Dealer GEX',          short: 'GEX',      route: '/gex' },
+  { label: 'Implied Probability', short: 'Prob',     route: '/probability' },
+  { label: 'DCF Valuation',       short: 'DCF',      route: '/dcf' },
+  { label: 'Relative Valuation',  short: 'Rel Val',  route: '/relative-valuation' },
+  { label: 'Portfolio Earnings',  short: 'Earnings', route: '/corporate', param: 'tickers' },
+]
+
+export const tickerToolUrl = (t: TickerTool, sym: string) =>
+  `${t.route}?${t.param ?? 'ticker'}=${sym}`
+
+export const LINKED_ROUTES = new Set(TICKER_TOOLS.filter(t => !t.param).map(t => t.route))
 
 function emit() { window.dispatchEvent(new Event(EVT)) }
 

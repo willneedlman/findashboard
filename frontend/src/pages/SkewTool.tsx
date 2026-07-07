@@ -75,6 +75,12 @@ export function SkewToolContent() {
   // staleTime serves from the react-query cache. Arriving with ?ticker= (e.g.
   // from the command palette) starts submitted, replacing the old auto-mutate.
   const [submitted, setSubmitted] = useState((sp.get('ticker') ?? '').trim().toUpperCase())
+  // Same-route ?ticker= navigations change only the search string — no
+  // remount, so sync from the URL when it changes.
+  useEffect(() => {
+    const t = (sp.get('ticker') ?? '').trim().toUpperCase()
+    if (t && t !== submitted) { setTicker(t); setSubmitted(t) }
+  }, [sp])  // eslint-disable-line react-hooks/exhaustive-deps
   const { data, isFetching: isPending, error, refetch } = useQuery<SkewData, Error>({
     queryKey: ['skew', submitted],
     enabled: !!submitted,
