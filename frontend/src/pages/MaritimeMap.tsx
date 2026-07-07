@@ -866,6 +866,7 @@ export function MaritimeMapContent() {
           <div style={{ width: 'min(1020px, 100%)', pointerEvents: 'auto' }}>
             <HistoryPanel C={C} chokepoints={choke.data?.chokepoints ?? []} ids={histIds} days={histDays} metric={histMetric}
               series={hist.data?.series ?? []} loading={hist.isLoading}
+              liveNow={vesselsInStrait} aisLive={vess.data?.status?.connected ?? false}
               onToggleId={id => setHistIds(ids => ids.includes(id) ? (ids.length > 1 ? ids.filter(x => x !== id) : ids) : [...ids, id].slice(-4))}
               onDays={setHistDays} onMetric={setHistMetric} onClose={() => setHistOpen(false)} />
           </div>
@@ -978,9 +979,10 @@ const chipBtn = (on: boolean, color?: string): React.CSSProperties => ({
   fontFamily: 'var(--theme-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
 })
 
-function HistoryPanel({ C, chokepoints, ids, days, metric, series, loading, onToggleId, onDays, onMetric, onClose }: {
+function HistoryPanel({ C, chokepoints, ids, days, metric, series, loading, liveNow, aisLive, onToggleId, onDays, onMetric, onClose }: {
   C: Colors; chokepoints: Chokepoint[]; ids: string[]; days: number; metric: HistMetric
   series: HistSeries[]; loading: boolean
+  liveNow: (c: { lat: number; lon: number }) => number; aisLive: boolean
   onToggleId: (id: string) => void; onDays: (d: number) => void; onMetric: (m: HistMetric) => void; onClose: () => void
 }) {
   const palette = [C.gold, C.lane, C.oilTerm, C.lngTerm, C.field, C.wind]
@@ -1010,11 +1012,21 @@ function HistoryPanel({ C, chokepoints, ids, days, metric, series, loading, onTo
     return { rows, summaries }
   }, [series, metric])
 
+  // PortWatch publishes daily transits 1-2 days behind, so the series always
+  // trails "today". Surface the latest date so the gap reads as expected.
+  const latestDate = rows.length ? String(rows[rows.length - 1].d) : null
+
   return (
     <div style={{ background: 'var(--theme-surface)', border: goldBorder(0.4) }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 14px', background: 'rgba(0,0,0,0.16)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
         <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--theme-primary)' }}>Chokepoint Transit History</span>
         <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-text-faint)' }}>IMF PortWatch, 7-day average of daily transit calls</span>
+        {latestDate && (
+          <span title="IMF PortWatch publishes daily transit counts 1-2 days in arrears, so the series ends before today."
+            style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-secondary)' }}>
+            latest {latestDate} · updates 1–2d behind
+          </span>
+        )}
         <button className="gfm-chip" onClick={onClose} style={{ ...chipBtn(false), marginLeft: 'auto' }}>Close</button>
       </div>
 
@@ -1051,7 +1063,9 @@ function HistoryPanel({ C, chokepoints, ids, days, metric, series, loading, onTo
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, padding: '10px 14px 12px' }}>
-        {summaries.map(s => (
+        {summaries.map(s => {
+          const cp = chokepoints.find(c => c.id === s.id)
+          return (
           <div key={s.id} style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
             <span style={{ width: 10, height: 10, background: colorOf(s.id), alignSelf: 'center', flex: 'none' }} />
             <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: 'var(--theme-text)' }}>{s.name}</span>
@@ -1062,8 +1076,16 @@ function HistoryPanel({ C, chokepoints, ids, days, metric, series, loading, onTo
               </span>
             )}
             <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9.5, color: 'var(--theme-text-faint)' }}>range {fmtVal(s.low, metric)}-{fmtVal(s.peak, metric)}</span>
+            {aisLive && cp && (
+              <span title="Vessels within ~1.5° of the chokepoint right now, from the live AIS stream. A real-time presence snapshot, not a PortWatch transit count."
+                style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4, fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-secondary)' }}>
+                <span style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--theme-positive, #3fb950)', border: '1px solid color-mix(in srgb, var(--theme-positive, #3fb950) 45%, transparent)', padding: '0 3px' }}>LIVE</span>
+                {liveNow(cp)} in strait now
+              </span>
+            )}
           </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
