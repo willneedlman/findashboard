@@ -504,15 +504,135 @@ def custom_backtest(req: CustomBacktestRequest):
     signal = _apply_risk_controls(
         signal, close, req.stop_loss, req.take_profit, req.trailing_stop, req.max_hold_bars,
     )
-    inst = req.instrument or {}
+    return _instrument_metrics(signal, close, req.instrument, "long", req.ticker,
+                               req.position_size, req.initial_capital)
+
+
+def _instrument_metrics(signal, close, instrument, side, ticker, position_size, capital):
+    """Metrics for one position given its resolved signal + close: modeled option
+    P&L for an option instrument, else long/short shares. Same result shape as
+    /algo/backtest. Raises 422 if an option can't be priced."""
+    from .algo import _compute_metrics, _compute_option_metrics
+    inst = instrument or {}
     if inst.get("kind") == "option":
-        # Modeled option P&L needs an implied vol; use the current ATM snapshot.
         try:
             from routers.options import options_snapshot
-            iv = options_snapshot(req.ticker).get("atm_iv")
+            iv = options_snapshot(ticker).get("atm_iv")
         except Exception:
             iv = None
         if not isinstance(iv, (int, float)) or iv <= 0:
-            raise HTTPException(422, "No implied volatility available to model options for this ticker")
-        return _compute_option_metrics(signal, close, inst, float(iv), req.position_size, req.initial_capital)
-    return _compute_metrics(signal, close, req.position_size, req.initial_capital)
+            raise HTTPException(422, f"No implied volatility available to model options for {ticker}")
+        return _compute_option_metrics(signal, close, inst, float(iv), position_size, capital)
+    return _compute_metrics(signal, close, position_size, capital, direction=side)
+
+
+# ─── Multi-position portfolio backtest ────────────────────────────────────────
+# A strategy can be a BOOK of positions, each with its own ticker, instrument
+# (shares long/short or a modeled option), rules, and capital weight. Each runs
+# through the shared engine; equity curves are weight-scaled, date-aligned, and
+# summed into one portfolio curve with per-position attribution.
+
+class PortfolioPosition(BaseModel):
+    ticker:        str
+    rules:         dict = {}
+    instrument:    dict | None = None   # {kind:"shares"|"option", ...}; None = shares
+    side:          str = "long"          # long|short (shares); options are long-only
+    weight:        float = 0.0           # % of capital; all-zero ⇒ equal weight
+    position_size: float = 100
+    stop_loss:     float | None = None
+    take_profit:   float | None = None
+    trailing_stop: float | None = None
+    max_hold_bars: int | None = None
+
+
+class PortfolioBacktestRequest(BaseModel):
+    positions:       list[PortfolioPosition]
+    start:           str = "2022-01-01"
+    end:             str | None = None
+    initial_capital: float = 10_000
+
+    @model_validator(mode="after")
+    def _validate(self):
+        if not (1 <= len(self.positions) <= 12):
+            raise ValueError("A portfolio needs 1-12 positions")
+        for p in self.positions:
+            p.ticker = validate_ticker(p.ticker)
+        validate_date(self.start)
+        if self.end:
+            validate_date(self.end)
+        return self
+
+
+@router.post("/portfolio-backtest")
+def portfolio_backtest(req: PortfolioBacktestRequest):
+    from .algo import _apply_risk_controls
+    import datetime as _dt
+    import numpy as _np
+    end = req.end or _dt.date.today().isoformat()
+
+    weights = [max(0.0, p.weight) for p in req.positions]
+    if sum(weights) <= 0:
+        weights = [100.0 / len(req.positions)] * len(req.positions)
+    tot_w = sum(weights)
+
+    legs = []   # (position, cap, result)
+    for p, w in zip(req.positions, weights):
+        cap = (w / tot_w) * req.initial_capital
+        sig_arr, close = _run_custom_rules(p.ticker, p.rules, req.start, end)
+        if close is None or len(close) < 40:
+            continue
+        signal = pd.Series(sig_arr, index=close.index)
+        signal = _apply_risk_controls(signal, close, p.stop_loss, p.take_profit, p.trailing_stop, p.max_hold_bars)
+        try:
+            res = _instrument_metrics(signal, close, p.instrument, p.side, p.ticker, p.position_size, cap)
+        except HTTPException:
+            continue
+        legs.append((p, cap, res))
+
+    if not legs:
+        raise HTTPException(422, "No position produced a backtest (check tickers, rules, and date range)")
+
+    def _series(res, key):
+        return pd.Series([pt[key] for pt in res["equity_curve"]],
+                         index=pd.to_datetime([pt["date"] for pt in res["equity_curve"]]))
+
+    eq_df = pd.concat({str(i): _series(res, "strategy") for i, (_, _, res) in enumerate(legs)}, axis=1, join="inner")
+    bm_df = pd.concat({str(i): _series(res, "benchmark") for i, (_, _, res) in enumerate(legs)}, axis=1, join="inner")
+    if eq_df.empty:
+        raise HTTPException(422, "Positions share no overlapping trading days — align their tickers or date range")
+    idle_cash = req.initial_capital - sum(cap for _, cap, _ in legs)   # capital of any dropped positions
+    port_eq = eq_df.sum(axis=1) + idle_cash
+    port_bm = bm_df.sum(axis=1) + idle_cash
+
+    n = len(port_eq)
+    daily = port_eq.pct_change()
+    total_return = float(port_eq.iloc[-1] / req.initial_capital - 1) * 100
+    ann_return = float(((port_eq.iloc[-1] / req.initial_capital) ** (252 / max(1, n)) - 1) * 100)
+    dd = (port_eq - port_eq.cummax()) / port_eq.cummax()
+    sharpe = float(daily.mean() / daily.std() * _np.sqrt(252)) if daily.std() > 0 else 0.0
+    trades_tot = sum(res["metrics"]["num_trades"] for _, _, res in legs)
+    wins_tot = sum(round(res["metrics"]["win_rate"] / 100 * res["metrics"]["num_trades"]) for _, _, res in legs)
+    win_rate = float(wins_tot / trades_tot * 100) if trades_tot else 0.0
+
+    curve = [{"date": d.strftime("%Y-%m-%d"), "strategy": round(float(sv), 2), "benchmark": round(float(bv), 2)}
+             for d, sv, bv in zip(port_eq.index, port_eq.values, port_bm.values)]
+    positions_out = [{
+        "ticker": p.ticker, "side": p.side,
+        "instrument": (p.instrument or {}).get("kind", "shares"),
+        "weight_pct": round(cap / req.initial_capital * 100, 1),
+        "return_pct": res["metrics"]["total_return"],
+        "pnl": round(float(_series(res, "strategy").iloc[-1]) - cap, 2),
+        "num_trades": res["metrics"]["num_trades"],
+    } for (p, cap, res) in legs]
+
+    return {
+        "equity_curve": curve,
+        "metrics": {
+            "total_return": round(total_return, 2), "ann_return": round(ann_return, 2),
+            "max_drawdown": round(float(dd.min() * 100), 2), "sharpe": round(sharpe, 3),
+            "num_trades": trades_tot, "win_rate": round(win_rate, 1),
+            "initial_capital": round(req.initial_capital, 2), "final_capital": round(float(port_eq.iloc[-1]), 2),
+            "total_pnl": round(float(port_eq.iloc[-1]) - req.initial_capital, 2),
+        },
+        "positions": positions_out,
+    }

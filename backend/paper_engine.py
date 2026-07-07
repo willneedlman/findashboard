@@ -245,28 +245,35 @@ def _apply_fill(acct: dict, order: dict, fill_px: float) -> None:
     if mult:
         _apply_futures_fill(acct, order, fill_px, mult)
         return
-    pos = acct["positions"].get(sym, {"qty": 0, "avg_cost": 0.0})
-    if side == "buy":
+    # Signed positions: qty > 0 long, qty < 0 short. A buy adds, a sell subtracts.
+    # Opening/adding a long needs cash; shorting generates cash (basic paper margin,
+    # no maintenance requirement). Reducing/crossing zero realizes P&L.
+    pos = acct["positions"].get(sym, {"qty": 0.0, "avg_cost": 0.0})
+    old = float(pos["qty"])
+    signed = qty if side == "buy" else -qty
+    new = old + signed
+
+    if side == "buy" and old >= 0:                      # opening or adding a long
         cost = qty * fill_px
         if cost > acct["cash"] + 1e-6:
             order["status"], order["reason"] = "rejected", "Insufficient buying power"
             return
-        acct["cash"] -= cost
-        new_qty = pos["qty"] + qty
-        pos["avg_cost"] = (pos["qty"] * pos["avg_cost"] + cost) / new_qty if new_qty else 0.0
-        pos["qty"] = new_qty
+    acct["cash"] += -qty * fill_px if side == "buy" else qty * fill_px
+
+    if old == 0 or (old > 0) == (signed > 0):           # same direction → re-average
+        denom = abs(old) + qty
+        pos["avg_cost"] = (abs(old) * pos["avg_cost"] + qty * fill_px) / denom if denom else 0.0
+    else:                                               # reducing / closing / crossing
+        closed = min(abs(old), qty)
+        acct["realized_pnl"] += (fill_px - pos["avg_cost"]) * closed * (1 if old > 0 else -1)
+        if (new > 0) != (old > 0) and abs(new) > 1e-9:  # crossed through zero
+            pos["avg_cost"] = fill_px
+
+    pos["qty"] = new
+    if abs(new) < 1e-9:
+        acct["positions"].pop(sym, None)
+    else:
         acct["positions"][sym] = pos
-    else:  # sell — long-only, no shorting
-        if qty > pos["qty"]:
-            order["status"], order["reason"] = "rejected", "Insufficient shares to sell"
-            return
-        acct["cash"] += qty * fill_px
-        acct["realized_pnl"] += (fill_px - pos["avg_cost"]) * qty
-        pos["qty"] -= qty
-        if pos["qty"] <= 0:
-            acct["positions"].pop(sym, None)
-        else:
-            acct["positions"][sym] = pos
     order["status"], order["fill_price"], order["filled_at"] = "filled", round(fill_px, 4), time.time()
 
 

@@ -254,6 +254,56 @@ def create_custom_strategy(body: CustomStrategyCreate):
     return _build_entry(safe_name)
 
 
+class PortfolioPaperPosition(BaseModel):
+    ticker:        str
+    rules:         dict
+    instrument:    dict | None = None
+    side:          str = "long"
+    weight:        float = 0.0
+    position_size: float = 100
+
+
+class PortfolioPaperCreate(BaseModel):
+    user_id:   str
+    name:      str = "portfolio"
+    positions: list[PortfolioPaperPosition]
+
+
+@router.post("/portfolio")
+def create_portfolio_paper(body: PortfolioPaperCreate, authorization: str = Header(default=""), x_session_token: str = Header(default="")):
+    """Fan a portfolio out into the paper trader: register each position as its own
+    rule strategy (rules + instrument + side) and schedule one live job per
+    position. Long/short shares and long options all trade at live prices."""
+    from routers.users import _require_owner
+    from routers.paper_scheduler import _insert_job
+    from strategies.builtin.custom_rule_strategy import CustomRuleStrategy
+    _require_owner(body.user_id, authorization, x_session_token)
+    if not (1 <= len(body.positions) <= 12):
+        raise HTTPException(400, "A portfolio needs 1-12 positions")
+
+    base = (body.name or "portfolio").strip().lower().replace(" ", "_")[:24] or "portfolio"
+    created = 0
+    for i, p in enumerate(body.positions):
+        tk = p.ticker.strip().upper()
+        if not tk:
+            continue
+        name = f"{base}_{tk}_{i}"[:40]
+        params = {"name": name, "rules": p.rules, "bull_drift": 0.0, "bear_drift": 0.0, "side": p.side}
+        if p.instrument:
+            params["instrument"] = p.instrument
+        CustomRuleStrategy().initialize(params)   # validate rules parse
+        _active[name] = {"cls": CustomRuleStrategy, "params": params, "enabled": True}
+        _loader._registry[name] = CustomRuleStrategy
+        qty = max(1, round(p.weight / 25)) if p.weight else 1   # coarse weight→size; user can tune per job
+        _insert_job(body.user_id, tk, name, params, qty)
+        created += 1
+
+    if created == 0:
+        raise HTTPException(400, "No valid positions to schedule")
+    _log.info("Scheduled portfolio '%s' as %d paper jobs", base, created)
+    return {"created": created}
+
+
 @router.post("/tick", response_model=list[SignalEventOut])
 def single_tick(body: TickRequest):
     """Feed one live data point to all enabled strategies and return signals."""

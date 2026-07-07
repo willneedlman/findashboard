@@ -389,11 +389,17 @@ async def _run_scheduler_loop() -> None:
                         )
                         notes = f"option={occ_update or job.get('open_occ') or ''} order_id={order_id}" if order_id else "option_order_failed"
                     else:
-                        side = "buy" if signal_str == "BUY" else "sell"
+                        # Short positions invert: a BUY signal opens the short
+                        # (sell-to-open), a SELL signal covers it (buy).
+                        pos_side = str(params.get("side", "long")).lower()
+                        if pos_side == "short":
+                            side = "sell" if signal_str == "BUY" else "buy"
+                        else:
+                            side = "buy" if signal_str == "BUY" else "sell"
                         order_id = await loop.run_in_executor(
                             _executor, _place_order_sync, job.get("user_id", ""), ticker, side, qty
                         )
-                        notes = f"order_id={order_id}" if order_id else "order_failed"
+                        notes = f"{pos_side} order_id={order_id}" if order_id else "order_failed"
                     _log.info("Scheduler %s %s x%d @ %.2f → %s", signal_str, ticker, qty, price, notes)
 
                 log_rows.append((
@@ -530,6 +536,21 @@ def list_jobs(user_id: str, authorization: str = Header(default=""), x_session_t
             "SELECT * FROM paper_schedule_jobs WHERE user_id=? ORDER BY created_at DESC", (user_id,)
         ).fetchall()
     return [_row_to_job(dict(r)) for r in rows]
+
+
+def _insert_job(user_id: str, ticker: str, strategy_name: str, params: dict, qty: int) -> str:
+    """Insert one enabled scheduler job and return its id. Shared by create_job
+    and the portfolio bridge (which fans a book out into one job per position)."""
+    job_id = str(uuid.uuid4())
+    now = int(time.time())
+    with _db() as conn:
+        conn.execute(
+            "INSERT INTO paper_schedule_jobs "
+            "(id,ticker,strategy_name,params_json,qty,enabled,warmed_up,created_at,user_id) "
+            "VALUES (?,?,?,?,?,1,0,?,?)",
+            (job_id, ticker.upper(), strategy_name, json.dumps(params), qty, now, user_id),
+        )
+    return job_id
 
 
 @router.post("/jobs", response_model=JobOut)

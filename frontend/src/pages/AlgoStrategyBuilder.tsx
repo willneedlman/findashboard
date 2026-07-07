@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import axios from 'axios'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
@@ -28,6 +28,21 @@ interface BacktestResult {
   instrument?: { kind: string; type: string; moneyness: number; dte: number; iv: number; modeled: boolean }
 }
 
+// A portfolio is a book of positions, each pairing a saved rule-set with its own
+// ticker, instrument, side, and capital weight. Composition persists locally.
+interface PortfolioPos {
+  id: string; strategy: string; ticker: string
+  instMode: 'underlying' | 'option'; optType: 'call' | 'put'; otmPct: number; dte: number
+  side: 'long' | 'short'; weight: number
+}
+interface PortfolioResult {
+  equity_curve: { date: string; strategy: number; benchmark: number }[]
+  metrics: BacktestResult['metrics']
+  positions: { ticker: string; side: string; instrument: string; weight_pct: number; return_pct: number; pnl: number; num_trades: number }[]
+}
+const PF_KEY = 'fdb_algo_portfolio'
+const rid = () => Math.random().toString(36).slice(2, 8)
+
 const fmtCap = (n: number) => `$${Math.abs(n) >= 1000 ? (n / 1000).toFixed(1) + 'K' : n.toFixed(0)}`
 const countConds = (def: CustomStrategyDef) => ({
   buy: def.buy.groups.reduce((s, g) => s + g.conditions.length, 0),
@@ -42,13 +57,44 @@ export function AlgoStrategyBuilderContent() {
   // Instrument: trade the underlying (default) or a modeled call/put.
   const [instMode, setInstMode] = useState<'underlying' | 'option'>('underlying')
   const [optType, setOptType] = useState<'call' | 'put'>('call')
-  const [moneyness, setMoneyness] = useState(1.0)
+  // Strike entered as % out-of-the-money (negative = in-the-money); converted to
+  // the backend's moneyness multiplier per the option side. Call OTM = strike
+  // above spot; put OTM = strike below spot.
+  const [otmPct, setOtmPct] = useState(0)
+  const optMoneyness = optType === 'call' ? 1 + otmPct / 100 : 1 - otmPct / 100
   const [dte, setDte] = useState(30)
   const [paramsOpen, setParamsOpen] = useState(true)
   const [saved, setSaved] = useState<CustomStrategyDef[]>(() => loadCustomStrategies())
   const [activeName, setActiveName] = useState<string>(() => loadCustomStrategies()[0]?.name ?? '')
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<CustomStrategyDef | null>(null)
+  const [mode, setMode] = useState<'single' | 'portfolio'>('single')
+  const [positions, setPositions] = useState<PortfolioPos[]>(() => {
+    try { return JSON.parse(localStorage.getItem(PF_KEY) || '[]') } catch { return [] }
+  })
+  useEffect(() => { localStorage.setItem(PF_KEY, JSON.stringify(positions)) }, [positions])
+  const addPosition = () => setPositions(p => [...p, {
+    id: rid(), strategy: loadCustomStrategies()[0]?.name ?? '', ticker: 'AAPL',
+    instMode: 'underlying', optType: 'call', otmPct: 0, dte: 30, side: 'long', weight: 25,
+  }])
+  const patchPosition = (id: string, patch: Partial<PortfolioPos>) =>
+    setPositions(p => p.map(x => x.id === id ? { ...x, ...patch } : x))
+  const removePosition = (id: string) => setPositions(p => p.filter(x => x.id !== id))
+
+  const posToPayload = (p: PortfolioPos) => {
+    const def = saved.find(s => s.name === p.strategy)
+    if (!def) throw new Error(`Strategy "${p.strategy}" not found`)
+    const money = p.optType === 'call' ? 1 + p.otmPct / 100 : 1 - p.otmPct / 100
+    const r = def.risk
+    return {
+      ticker: p.ticker, side: p.side, weight: p.weight,
+      rules: { buy: def.buy, sell: def.sell },
+      instrument: p.instMode === 'option' ? { kind: 'option', type: p.optType, moneyness: money, dte: p.dte } : undefined,
+      position_size: r?.sizingPct || 100,
+      stop_loss: r?.stopLossPct || undefined, take_profit: r?.takeProfitPct || undefined,
+      trailing_stop: r?.trailingStopPct || undefined, max_hold_bars: r?.maxHoldBars || undefined,
+    }
+  }
 
   const activeDef = saved.find(s => s.name === activeName) ?? null
   const refresh = () => setSaved(loadCustomStrategies())
@@ -78,7 +124,7 @@ export function AlgoStrategyBuilderContent() {
         trailing_stop: r.trailingStopPct || undefined,
         max_hold_bars: r.maxHoldBars || undefined,
         instrument: instMode === 'option'
-          ? { kind: 'option', type: optType, moneyness, dte }
+          ? { kind: 'option', type: optType, moneyness: optMoneyness, dte }
           : undefined,
       })
       return data
@@ -94,23 +140,58 @@ export function AlgoStrategyBuilderContent() {
         bull_drift: activeDef.bull_drift ?? 0,
         bear_drift: activeDef.bear_drift ?? 0,
         instrument: instMode === 'option'
-          ? { kind: 'option', type: optType, moneyness, dte }
+          ? { kind: 'option', type: optType, moneyness: optMoneyness, dte }
           : undefined,
       })
       return data
     },
   })
 
+  const runPortfolio = useMutation<PortfolioResult, Error>({
+    mutationFn: async () => {
+      if (positions.length === 0) throw new Error('Add at least one position.')
+      const { data } = await axios.post('/api/strategy/portfolio-backtest', {
+        positions: positions.map(posToPayload), start, end: end || undefined, initial_capital: 10000,
+      })
+      return data
+    },
+  })
+
+  const sendPortfolioToPaper = useMutation<{ created: number }, Error>({
+    mutationFn: async () => {
+      if (positions.length === 0) throw new Error('Add at least one position.')
+      const { data } = await axios.post('/api/paper/strategies/portfolio', {
+        name: 'portfolio', positions: positions.map(posToPayload),
+      })
+      return data
+    },
+  })
+
   const m = data?.metrics
+  const pf = runPortfolio.data
+  const R = mode === 'portfolio' ? pf : data          // active result for the current mode
+  const mR = R?.metrics
 
   return (
     <SidebarLayout sidebarWidth={230} sidebarTitle="" sidebar={<>
+      <div style={{ padding: '10px 12px 0', display: 'flex', gap: 4 }}>
+        {(['single', 'portfolio'] as const).map(md => (
+          <button key={md} onClick={() => setMode(md)} style={{
+            flex: 1, padding: '6px 0', fontFamily: 'inherit', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer',
+            background: mode === md ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)' : 'transparent',
+            border: `1px solid ${mode === md ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.12))'}`,
+            color: mode === md ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #8099b0)',
+          }}>{md === 'single' ? '1 Position' : 'Portfolio'}</button>
+        ))}
+      </div>
       <RailSection title="Backtest Parameters" open={paramsOpen} onToggle={() => setParamsOpen(o => !o)}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {mode === 'single' && (
           <div>
             <label style={LABEL}>Ticker</label>
             <TickerInput value={ticker} onChange={setTicker} onEnter={() => activeDef && runBacktest()} style={INPUT} placeholder="Ticker or company" />
           </div>
+          )}
           <div>
             <label style={LABEL}>Start</label>
             <input type="date" value={start} onChange={e => setStart(e.target.value)} style={INPUT} />
@@ -120,23 +201,25 @@ export function AlgoStrategyBuilderContent() {
             <input type="date" value={end} onChange={e => setEnd(e.target.value)} style={INPUT} />
           </div>
 
-          {/* Instrument: underlying vs modeled option */}
+          {/* Instrument: underlying vs modeled option (single-position mode only) */}
+          {mode === 'single' && (
           <div>
             <label style={LABEL}>Instrument</label>
             <div style={{ display: 'flex', gap: 4 }}>
-              {(['underlying', 'option'] as const).map(mode => (
-                <button key={mode} onClick={() => setInstMode(mode)} style={{
+              {(['underlying', 'option'] as const).map(im => (
+                <button key={im} onClick={() => setInstMode(im)} style={{
                   flex: 1, padding: '5px 0', fontFamily: 'inherit', fontSize: 9, fontWeight: 700,
                   letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer',
-                  background: instMode === mode ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)' : 'transparent',
-                  border: `1px solid ${instMode === mode ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.12))'}`,
-                  color: instMode === mode ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #8099b0)',
-                }}>{mode === 'underlying' ? 'Shares' : 'Option'}</button>
+                  background: instMode === im ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)' : 'transparent',
+                  border: `1px solid ${instMode === im ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.12))'}`,
+                  color: instMode === im ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #8099b0)',
+                }}>{im === 'underlying' ? 'Shares' : 'Option'}</button>
               ))}
             </div>
           </div>
+          )}
 
-          {instMode === 'option' && (
+          {mode === 'single' && instMode === 'option' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 8, border: '1px solid var(--theme-border, rgba(255,255,255,0.1))', background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 4%, transparent)' }}>
               <div style={{ display: 'flex', gap: 4 }}>
                 {(['call', 'put'] as const).map(ot => (
@@ -150,15 +233,19 @@ export function AlgoStrategyBuilderContent() {
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                 <div>
-                  <label style={{ ...LABEL, fontSize: 8 }}>Moneyness</label>
-                  <input type="number" value={moneyness} step={0.05} min={0.5} max={1.5}
-                    onChange={e => setMoneyness(+e.target.value || 1)} style={INPUT} />
+                  <label style={{ ...LABEL, fontSize: 8 }}>% OTM</label>
+                  <input type="number" value={otmPct} step={1} min={-50} max={50}
+                    title="Strike distance from spot. Positive = out of the money, negative = in the money, 0 = at the money."
+                    onChange={e => setOtmPct(Math.max(-50, Math.min(50, Math.round(+e.target.value || 0))))} style={INPUT} />
                 </div>
                 <div>
                   <label style={{ ...LABEL, fontSize: 8 }}>DTE (days)</label>
                   <input type="number" value={dte} step={1} min={1} max={365}
                     onChange={e => setDte(Math.max(1, +e.target.value || 30))} style={INPUT} />
                 </div>
+              </div>
+              <div style={{ fontSize: 8, color: 'var(--theme-secondary, #8099b0)', fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em' }}>
+                {otmPct === 0 ? 'At the money' : otmPct > 0 ? `${otmPct}% out of the money` : `${-otmPct}% in the money`} {optType} · strike ≈ {(optMoneyness * 100).toFixed(0)}% of spot
               </div>
               <div style={{ fontSize: 8, lineHeight: '12px', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))' }}>
                 Modeled P&L: Black-Scholes on the historical underlying at today's IV (no historical option prices). Approximate, not a real options backtest.
@@ -167,6 +254,71 @@ export function AlgoStrategyBuilderContent() {
           )}
         </div>
       </RailSection>
+
+      {mode === 'portfolio' && (
+        <RailSection title={`Positions · ${positions.length}`} open onToggle={() => {}}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {positions.length === 0 && (
+              <div style={{ fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.45))', lineHeight: '14px' }}>
+                Each position pairs a saved strategy (its rules) with a ticker, instrument, side, and weight. Build rule-sets below, then add positions.
+              </div>
+            )}
+            {positions.map(p => {
+              const btn = (on: boolean): React.CSSProperties => ({
+                flex: 1, padding: '4px 0', fontFamily: 'inherit', fontSize: 8.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', cursor: 'pointer',
+                background: on ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)' : 'transparent',
+                border: `1px solid ${on ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.12))'}`,
+                color: on ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #8099b0)',
+              })
+              return (
+                <div key={p.id} style={{ display: 'flex', flexDirection: 'column', gap: 5, padding: 7, border: '1px solid var(--theme-border, rgba(255,255,255,0.1))', background: 'var(--theme-bg, #0a1628)' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 46px 18px', gap: 4, alignItems: 'center' }}>
+                    <input value={p.ticker} placeholder="TICKER"
+                      onChange={e => patchPosition(p.id, { ticker: e.target.value.toUpperCase() })}
+                      style={{ ...INPUT, fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }} />
+                    <input type="number" value={p.weight} min={0} max={100} title="Capital weight %"
+                      onChange={e => patchPosition(p.id, { weight: Math.max(0, +e.target.value || 0) })}
+                      style={{ ...INPUT, fontSize: 11 }} />
+                    <button onClick={() => removePosition(p.id)} title="Remove"
+                      style={{ background: 'none', border: 'none', color: 'var(--theme-negative)', cursor: 'pointer', fontSize: 14 }}>×</button>
+                  </div>
+                  <select value={p.strategy} onChange={e => patchPosition(p.id, { strategy: e.target.value })}
+                    style={{ ...INPUT, fontSize: 10, cursor: 'pointer' }}>
+                    {saved.length === 0 && <option value="">— build a strategy first —</option>}
+                    {saved.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
+                  </select>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {(['long', 'short'] as const).map(sd => (
+                      <button key={sd} onClick={() => patchPosition(p.id, { side: sd })} style={btn(p.side === sd)}>{sd}</button>
+                    ))}
+                    {(['underlying', 'option'] as const).map(im => (
+                      <button key={im} onClick={() => patchPosition(p.id, { instMode: im })} style={btn(p.instMode === im)}>{im === 'underlying' ? 'Shares' : 'Option'}</button>
+                    ))}
+                  </div>
+                  {p.instMode === 'option' && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr 1fr', gap: 4 }}>
+                      <select value={p.optType} onChange={e => patchPosition(p.id, { optType: e.target.value as 'call' | 'put' })} style={{ ...INPUT, fontSize: 10, cursor: 'pointer' }}>
+                        <option value="call">call</option><option value="put">put</option>
+                      </select>
+                      <input type="number" value={p.otmPct} title="% OTM (neg = ITM)" min={-50} max={50}
+                        onChange={e => patchPosition(p.id, { otmPct: Math.max(-50, Math.min(50, Math.round(+e.target.value || 0))) })}
+                        style={{ ...INPUT, fontSize: 10 }} />
+                      <input type="number" value={p.dte} title="DTE days" min={1} max={365}
+                        onChange={e => patchPosition(p.id, { dte: Math.max(1, +e.target.value || 30) })}
+                        style={{ ...INPUT, fontSize: 10 }} />
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+            <button onClick={addPosition} style={{
+              width: '100%', background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)',
+              border: '1px dashed var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)',
+              fontFamily: 'inherit', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '6px 0', cursor: 'pointer',
+            }}>+ Add Position</button>
+          </div>
+        </RailSection>
+      )}
 
       <RailSection title={`Saved Strategies · ${saved.length}`} open onToggle={() => {}}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -206,6 +358,7 @@ export function AlgoStrategyBuilderContent() {
           border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)',
           fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', padding: '8px 0', cursor: 'pointer',
         }}>+ New Strategy</button>
+        {mode === 'single' ? (<>
         <button onClick={() => runBacktest()} disabled={!activeDef || isPending} style={{
           width: '100%', background: 'var(--theme-surface, #1f2a3d)', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))', color: activeDef ? 'var(--theme-text, #d7e3fc)' : 'var(--theme-secondary, #8099b0)',
           fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', padding: '8px 0',
@@ -220,6 +373,22 @@ export function AlgoStrategyBuilderContent() {
         }}>{sendToPaper.isPending ? 'Sending…' : '→ Send to Paper Trader'}</button>
         {sendToPaper.isSuccess && <div style={{ fontSize: 9, color: 'var(--theme-positive)', fontFamily: 'var(--theme-sans)', textAlign: 'center' }}>Imported · enable it in Paper Trading</div>}
         {sendToPaper.isError && <div style={{ fontSize: 9, color: 'var(--theme-negative)', fontFamily: 'var(--theme-sans)', textAlign: 'center' }}>{(sendToPaper.error as Error)?.message ?? 'Import failed'}</div>}
+        </>) : (<>
+        <button onClick={() => runPortfolio.mutate()} disabled={positions.length === 0 || runPortfolio.isPending} style={{
+          width: '100%', background: 'var(--theme-surface, #1f2a3d)', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))', color: positions.length ? 'var(--theme-text, #d7e3fc)' : 'var(--theme-secondary, #8099b0)',
+          fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', padding: '8px 0',
+          cursor: (positions.length === 0 || runPortfolio.isPending) ? 'default' : 'pointer', opacity: (positions.length === 0 || runPortfolio.isPending) ? 0.6 : 1,
+        }}>{runPortfolio.isPending ? 'Running…' : 'Run Portfolio'}</button>
+        {runPortfolio.isError && <div style={{ fontSize: 9, color: 'var(--theme-negative)', fontFamily: 'var(--theme-sans)', textAlign: 'center' }}>{runPortfolio.error?.message ?? 'Backtest failed'}</div>}
+
+        <button onClick={() => sendPortfolioToPaper.mutate()} disabled={positions.length === 0 || sendPortfolioToPaper.isPending} style={{
+          width: '100%', background: 'transparent', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))', color: positions.length ? 'var(--theme-secondary, #8099b0)' : 'var(--theme-text-faint, rgba(255,255,255,0.35))',
+          fontFamily: 'inherit', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '7px 0',
+          cursor: (positions.length === 0 || sendPortfolioToPaper.isPending) ? 'default' : 'pointer', opacity: (positions.length === 0 || sendPortfolioToPaper.isPending) ? 0.6 : 1,
+        }}>{sendPortfolioToPaper.isPending ? 'Sending…' : '→ Send Portfolio to Paper'}</button>
+        {sendPortfolioToPaper.isSuccess && <div style={{ fontSize: 9, color: 'var(--theme-positive)', fontFamily: 'var(--theme-sans)', textAlign: 'center' }}>Created {sendPortfolioToPaper.data?.created} job{sendPortfolioToPaper.data?.created === 1 ? '' : 's'} · enable in Paper Trading</div>}
+        {sendPortfolioToPaper.isError && <div style={{ fontSize: 9, color: 'var(--theme-negative)', fontFamily: 'var(--theme-sans)', textAlign: 'center' }}>{sendPortfolioToPaper.error?.message ?? 'Import failed'}</div>}
+        </>)}
 
         <div style={{ fontSize: 8, color: 'var(--theme-text-faint, rgba(255,255,255,0.35))', lineHeight: '13px', marginTop: 2 }}>
           Saved strategies also appear under "Custom Rule Strategy" in Monte Carlo and the Backtester.
@@ -227,31 +396,53 @@ export function AlgoStrategyBuilderContent() {
       </div>
     </>}>
 
-      {!data && (
+      {!R && (
         <EmptyState title="Algorithmic Strategy Builder"
-          hint="Build a strategy from entry/exit rules, pick a ticker, then Run Backtest. Saved strategies import into Monte Carlo and the Backtester." />
+          hint={mode === 'portfolio'
+            ? 'Add positions (each = a saved rule-set + ticker + instrument + weight), then Run Portfolio. Long/short shares and modeled options aggregate into one book.'
+            : 'Build a strategy from entry/exit rules, pick a ticker, then Run Backtest. Saved strategies import into Monte Carlo and the Backtester.'} />
       )}
 
-      {data && m && (
+      {R && mR && (
         <>
           <div style={STRIP}>
-            <KpiCell grow minWidth={150} label="Total Return" value={`${m.total_return > 0 ? '+' : ''}${m.total_return.toFixed(2)}%`} valueSize={16} color={m.total_return >= 0 ? POS : NEG} sub={activeDef?.name} />
-            <KpiCell grow label="Ann. Return" value={`${m.ann_return > 0 ? '+' : ''}${m.ann_return.toFixed(2)}%`} color={m.ann_return >= 0 ? POS : NEG} />
-            <KpiCell grow label="Max Drawdown" value={`${m.max_drawdown.toFixed(2)}%`} color={NEG} />
-            <KpiCell grow label="Sharpe" value={m.sharpe.toFixed(3)} color={m.sharpe >= 1 ? POS : undefined} />
-            <KpiCell grow label="Trades" value={String(m.num_trades)} />
-            <KpiCell grow label="Win Rate" value={`${m.win_rate.toFixed(1)}%`} color={m.win_rate >= 50 ? POS : NEG} />
-            <KpiCell grow label="Final Capital" value={fmtCap(m.final_capital)} />
-            <KpiCell grow label="P&L" value={`${m.total_pnl >= 0 ? '+' : ''}${fmtCap(m.total_pnl)}`} color={m.total_pnl >= 0 ? POS : NEG} />
+            <KpiCell grow minWidth={150} label="Total Return" value={`${mR.total_return > 0 ? '+' : ''}${mR.total_return.toFixed(2)}%`} valueSize={16} color={mR.total_return >= 0 ? POS : NEG} sub={mode === 'portfolio' ? `${pf?.positions.length ?? 0} positions` : activeDef?.name} />
+            <KpiCell grow label="Ann. Return" value={`${mR.ann_return > 0 ? '+' : ''}${mR.ann_return.toFixed(2)}%`} color={mR.ann_return >= 0 ? POS : NEG} />
+            <KpiCell grow label="Max Drawdown" value={`${mR.max_drawdown.toFixed(2)}%`} color={NEG} />
+            <KpiCell grow label="Sharpe" value={mR.sharpe.toFixed(3)} color={mR.sharpe >= 1 ? POS : undefined} />
+            <KpiCell grow label="Trades" value={String(mR.num_trades)} />
+            <KpiCell grow label="Win Rate" value={`${mR.win_rate.toFixed(1)}%`} color={mR.win_rate >= 50 ? POS : NEG} />
+            <KpiCell grow label="Final Capital" value={fmtCap(mR.final_capital)} />
+            <KpiCell grow label="P&L" value={`${mR.total_pnl >= 0 ? '+' : ''}${fmtCap(mR.total_pnl)}`} color={mR.total_pnl >= 0 ? POS : NEG} />
           </div>
 
-          {data.instrument?.modeled && (
-            <div style={{ fontSize: 10, color: 'var(--theme-primary, #c9a84c)', fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', border: '1px solid var(--theme-primary, #c9a84c)', padding: '1px 5px' }}>MODELED</span>
-              {data.instrument.type.toUpperCase()} · {data.instrument.moneyness}× spot · {data.instrument.dte} DTE · IV {data.instrument.iv}% (Black-Scholes on underlying, not real option prices)
+          {mode === 'portfolio' && pf && (
+            <div style={{ ...STRIP, flexWrap: 'wrap' }}>
+              {pf.positions.map((p, i) => (
+                <div key={i} style={{ flex: '1 1 140px', minWidth: 140, padding: '6px 10px', borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.06))' }}>
+                  <div style={{ fontSize: 10, fontFamily: 'var(--theme-mono)', fontWeight: 700, color: 'var(--theme-text, #d7e3fc)' }}>
+                    {p.ticker} <span style={{ fontSize: 8, color: p.side === 'short' ? NEG : POS, letterSpacing: '0.06em' }}>{p.side.toUpperCase()} {p.instrument === 'option' ? 'OPT' : 'SHR'}</span>
+                  </div>
+                  <div style={{ fontSize: 9, fontFamily: 'var(--theme-mono)', color: 'var(--theme-secondary, #8099b0)', marginTop: 2 }}>
+                    w {p.weight_pct}% · <span style={{ color: p.return_pct >= 0 ? POS : NEG }}>{p.return_pct >= 0 ? '+' : ''}{p.return_pct}%</span> · {p.num_trades} trades
+                  </div>
+                </div>
+              ))}
             </div>
           )}
-          {activeDef?.risk && (() => {
+
+          {mode === 'single' && data?.instrument?.modeled && (() => {
+            const im = data!.instrument!
+            const otm = Math.round((im.type === 'call' ? im.moneyness - 1 : 1 - im.moneyness) * 100)
+            const strikeLbl = otm === 0 ? 'ATM' : otm > 0 ? `${otm}% OTM` : `${-otm}% ITM`
+            return (
+            <div style={{ fontSize: 10, color: 'var(--theme-primary, #c9a84c)', fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', border: '1px solid var(--theme-primary, #c9a84c)', padding: '1px 5px' }}>MODELED</span>
+              {im.type.toUpperCase()} · {strikeLbl} · {im.dte} DTE · IV {im.iv}% (Black-Scholes on underlying, not real option prices)
+            </div>
+            )
+          })()}
+          {mode === 'single' && activeDef?.risk && (() => {
             const r = activeDef.risk
             const parts = [`size ${r.sizingPct}%`]
             if (r.stopLossPct) parts.push(`SL ${r.stopLossPct}%`)
@@ -267,7 +458,7 @@ export function AlgoStrategyBuilderContent() {
             </div>
             <div style={{ paddingTop: 30, paddingLeft: 8, paddingRight: 8, paddingBottom: 8, height: 320 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={data.equity_curve}>
+                <AreaChart data={R.equity_curve}>
                   <defs>
                     <linearGradient id="algoEq" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor={cc.primary} stopOpacity={0.22} />

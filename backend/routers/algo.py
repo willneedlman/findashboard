@@ -198,10 +198,12 @@ def _apply_risk_controls(
     return result
 
 
-def _compute_metrics(signal: pd.Series, close: pd.Series, position_size: float = 100, initial_capital: float = 10_000):
+def _compute_metrics(signal: pd.Series, close: pd.Series, position_size: float = 100,
+                     initial_capital: float = 10_000, direction: str = "long"):
     alloc = max(0.0, min(100.0, position_size)) / 100.0
+    sign = -1.0 if direction == "short" else 1.0
     daily_ret = close.pct_change()
-    strat_ret = signal.shift(1) * daily_ret * alloc
+    strat_ret = signal.shift(1) * daily_ret * alloc * sign
 
     # Equity curves — normalized to initial_capital
     equity = (1 + strat_ret.fillna(0)).cumprod() * initial_capital
