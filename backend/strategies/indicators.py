@@ -18,6 +18,12 @@ _CONTEXT_TYPES = frozenset({
     "FLOW_HORMUZ", "FLOW_SUEZ", "FLOW_PANAMA", "FLOW_MALACCA",
 })
 
+# Greeks are computed per-condition at a chosen strike level (not a single baked
+# value), so get_indicator intercepts them before the constant-context path and
+# derives them from the raw snapshot inputs (_OPT_SPOT/_OPT_IV/_OPT_DTE).
+_GREEK_TYPES = frozenset({"OPT_DELTA", "OPT_GAMMA", "OPT_THETA", "OPT_VEGA"})
+_GREEK_FIELD = {"OPT_DELTA": "delta", "OPT_GAMMA": "gamma", "OPT_THETA": "theta", "OPT_VEGA": "vega"}
+
 
 def sma(prices: np.ndarray, period: int) -> np.ndarray:
     n = len(prices)
@@ -134,6 +140,21 @@ def get_indicator(ind: dict, prices: np.ndarray, context: dict | None = None) ->
     those types return a constant series at the current value (NaN when the metric
     is unavailable, so the condition never fires)."""
     t = ind.get("type", "PRICE")
+    if t in _GREEK_TYPES:
+        # Leveled greek: computed per-condition at strike = level × spot for the
+        # chosen call/put, so it isn't pinned to ~0.5 ATM delta. Raw inputs
+        # (spot/IV/DTE) come from the live snapshot via market_context.
+        ctx = context or {}
+        spot, iv, dte = ctx.get("_OPT_SPOT"), ctx.get("_OPT_IV"), ctx.get("_OPT_DTE")
+        if not (isinstance(spot, (int, float)) and spot > 0
+                and isinstance(iv, (int, float)) and iv > 0
+                and isinstance(dte, (int, float)) and dte > 0):
+            return np.full(len(prices), float("nan"), dtype=float)
+        level = float(ind.get("level", 1.0)) or 1.0
+        opt_type = "put" if str(ind.get("opt_type", "call")).lower().startswith("p") else "call"
+        from math_engine import bs_greeks
+        g = bs_greeks(float(spot), float(spot) * level, float(dte), 4.0, float(iv), opt_type)
+        return np.full(len(prices), float(g[_GREEK_FIELD[t]]), dtype=float)
     if t in _CONTEXT_TYPES:
         val = (context or {}).get(t, float("nan"))
         return np.full(len(prices), float(val), dtype=float)

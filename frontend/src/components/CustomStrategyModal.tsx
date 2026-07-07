@@ -34,6 +34,8 @@ export interface IndicatorRef {
   signal_period?: number
   std?: number
   ticker?: string   // optional cross-ticker reference; blank = the strategy's primary symbol
+  level?: number    // greeks: strike as a multiple of spot (1.0 = ATM, 1.05 = 5% OTM call)
+  opt_type?: 'call' | 'put'   // greeks: which side the greek is measured on
 }
 
 export type OpType = 'gt' | 'lt' | 'gte' | 'lte' | 'crosses_above' | 'crosses_below'
@@ -95,7 +97,7 @@ const IND_LABELS: Record<IndicatorType, string> = {
   VOL_RELATIVE: 'Relative volume', VOL_DOLLAR: 'Dollar volume ($M)',
   OPT_IV: 'Implied vol % (ATM)', OPT_HV: 'Hist vol % (30d)', OPT_IVHV: 'IV / HV ratio',
   OPT_PUTCALL: 'Put/call ratio', OPT_IMPLIEDMOVE: 'Implied move %',
-  OPT_DELTA: 'ATM delta', OPT_GAMMA: 'ATM gamma', OPT_THETA: 'ATM theta', OPT_VEGA: 'ATM vega',
+  OPT_DELTA: 'Delta', OPT_GAMMA: 'Gamma', OPT_THETA: 'Theta', OPT_VEGA: 'Vega',
   FLOW_HORMUZ: 'Hormuz transits', FLOW_SUEZ: 'Suez transits',
   FLOW_PANAMA: 'Panama transits', FLOW_MALACCA: 'Malacca transits',
 }
@@ -135,8 +137,10 @@ const DEFAULT_IND: Record<IndicatorType, IndicatorRef> = {
   VOL_RELATIVE: { type: 'VOL_RELATIVE' }, VOL_DOLLAR: { type: 'VOL_DOLLAR' },
   OPT_IV: { type: 'OPT_IV' }, OPT_HV: { type: 'OPT_HV' }, OPT_IVHV: { type: 'OPT_IVHV' },
   OPT_PUTCALL: { type: 'OPT_PUTCALL' }, OPT_IMPLIEDMOVE: { type: 'OPT_IMPLIEDMOVE' },
-  OPT_DELTA: { type: 'OPT_DELTA' }, OPT_GAMMA: { type: 'OPT_GAMMA' },
-  OPT_THETA: { type: 'OPT_THETA' }, OPT_VEGA: { type: 'OPT_VEGA' },
+  OPT_DELTA: { type: 'OPT_DELTA', level: 1.0, opt_type: 'call' },
+  OPT_GAMMA: { type: 'OPT_GAMMA', level: 1.0, opt_type: 'call' },
+  OPT_THETA: { type: 'OPT_THETA', level: 1.0, opt_type: 'call' },
+  OPT_VEGA:  { type: 'OPT_VEGA',  level: 1.0, opt_type: 'call' },
   FLOW_HORMUZ: { type: 'FLOW_HORMUZ' }, FLOW_SUEZ: { type: 'FLOW_SUEZ' },
   FLOW_PANAMA: { type: 'FLOW_PANAMA' }, FLOW_MALACCA: { type: 'FLOW_MALACCA' },
 }
@@ -249,6 +253,23 @@ function IndicatorSelector({ value, onChange }: {
               onChange={e => set('signal_period', +e.target.value || 9)}
               style={{ ...inp, width: 40 }} />
           </div>
+        </>
+      )}
+      {(t === 'OPT_DELTA' || t === 'OPT_GAMMA' || t === 'OPT_THETA' || t === 'OPT_VEGA') && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+            <span style={{ fontSize: 8, color: T.muted, fontFamily: T.mono }}
+              title="Strike as a multiple of spot: 1.00 = ATM, 1.05 = 5% OTM call, 0.95 = 5% below spot">strike ×</span>
+            <input type="number" value={value.level ?? 1.0} min={0.5} max={1.5} step={0.05}
+              onChange={e => set('level', +e.target.value || 1)}
+              style={{ ...inp, width: 48 }} />
+          </div>
+          <select value={value.opt_type ?? 'call'}
+            onChange={e => onChange({ ...value, opt_type: e.target.value as 'call' | 'put' })}
+            style={{ ...sel, width: 58 }}>
+            <option value="call">call</option>
+            <option value="put">put</option>
+          </select>
         </>
       )}
     </div>

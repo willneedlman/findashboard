@@ -124,8 +124,10 @@ def resolve_context(ticker: str, rules: dict | None = None) -> dict[str, float]:
             iv, hv = snap.get("atm_iv"), snap.get("hv_30")
             if isinstance(iv, (int, float)) and isinstance(hv, (int, float)) and hv > 0:
                 ctx["OPT_IVHV"] = round(iv / hv, 3)
-            # ATM greeks from the current snapshot (delta ≈ 0.5 ATM call). A live
-            # value held constant across the backtest, same as the other OPT_ set.
+            # Raw inputs for leveled greeks: the engine computes delta/gamma/theta/
+            # vega per-condition at the chosen strike level + call/put (see
+            # indicators.get_indicator), so a single baked ATM value isn't stored.
+            # Live snapshot values, held constant across the backtest.
             if needed is None or (needed & _OPT_GREEKS):
                 spot, expiry = snap.get("spot"), snap.get("expiry")
                 if isinstance(iv, (int, float)) and isinstance(spot, (int, float)) and spot > 0 and expiry:
@@ -133,12 +135,9 @@ def resolve_context(ticker: str, rules: dict | None = None) -> dict[str, float]:
                         import datetime as _dt
                         dte = (_dt.date.fromisoformat(str(expiry)) - _dt.date.today()).days
                         if dte > 0:
-                            from math_engine import bs_greeks
-                            g = bs_greeks(spot, spot, dte, 4.0, iv, "call")
-                            ctx["OPT_DELTA"] = round(float(g["delta"]), 4)
-                            ctx["OPT_GAMMA"] = round(float(g["gamma"]), 5)
-                            ctx["OPT_THETA"] = round(float(g["theta"]), 4)
-                            ctx["OPT_VEGA"]  = round(float(g["vega"]), 4)
+                            ctx["_OPT_SPOT"] = float(spot)
+                            ctx["_OPT_IV"]   = float(iv)
+                            ctx["_OPT_DTE"]  = float(dte)
                     except Exception:
                         pass
         except Exception:
