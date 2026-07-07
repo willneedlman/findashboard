@@ -285,17 +285,23 @@ _OPT_MULT = 100
 
 
 def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: float,
-                            position_size: float = 100, initial_capital: float = 10_000):
-    """Modeled single-option backtest. On each entry the strategy buys a fresh
-    Black-Scholes-priced call/put (strike = moneyness × spot, fixed DTE), marks it
-    daily as time decays, and realizes it when the rules exit or it reaches expiry
-    (then rolls if still signalled). IV is held at the current snapshot value — the
-    project has no historical option prices — so this is an APPROXIMATION, labeled
-    as modeled in the UI. Benchmark stays underlying buy & hold."""
+                            position_size: float = 100, initial_capital: float = 10_000,
+                            direction: str = "long"):
+    """Modeled single-option backtest. On each entry the strategy buys (long) or
+    writes (short) a fresh Black-Scholes-priced call/put (strike = moneyness × spot,
+    fixed DTE), marks it daily as time decays, and realizes it when the rules exit
+    or it reaches expiry (then rolls if still signalled). IV is held at the current
+    snapshot value — the project has no historical option prices — so this is an
+    APPROXIMATION, labeled as modeled in the UI. A short leg mirrors the long leg's
+    dollar P&L (project convention; assignment risk is not modeled) and is floored
+    at a total loss of its capital. Benchmark stays underlying buy & hold."""
     from math_engine import bs_price
     otype = "put" if str(opt.get("type", "call")).lower().startswith("p") else "call"
     moneyness = float(opt.get("moneyness", 1.0))
     dte = max(1, int(opt.get("dte", 30)))
+    short = direction == "short"
+    entry_action = "SELL" if short else "BUY"   # short = sell-to-open
+    exit_action = "BUY" if short else "SELL"
     r = 4.0
     alloc = max(0.0, min(100.0, position_size)) / 100.0
     idx = close.index
@@ -320,7 +326,7 @@ def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: 
         if exiting:
             v = _val(i)
             cash += contracts * v * _OPT_MULT
-            trades.append({"date": idx[i].strftime("%Y-%m-%d"), "action": "SELL", "price": round(v, 2)})
+            trades.append({"date": idx[i].strftime("%Y-%m-%d"), "action": exit_action, "price": round(v, 2)})
             in_trade, contracts = False, 0.0
         if not in_trade and sig[i] == 1.0:
             strike = round(px[i] * moneyness, 2)
@@ -329,11 +335,16 @@ def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: 
             contracts = invest / (entry_val * _OPT_MULT)
             cash = cur - contracts * entry_val * _OPT_MULT
             entry_i, in_trade = i, True
-            trades.append({"date": idx[i].strftime("%Y-%m-%d"), "action": "BUY", "price": round(entry_val, 2)})
+            trades.append({"date": idx[i].strftime("%Y-%m-%d"), "action": entry_action, "price": round(entry_val, 2)})
         cur = cash + (contracts * _val(i) * _OPT_MULT if in_trade else 0.0)
         equity[i] = cur
 
     eq = pd.Series(equity, index=idx)
+    if short:
+        # Short leg: dollar P&L is the negative of the long leg's, floored at a
+        # full loss of capital. Modeled/approximate — not a true written-premium
+        # backtest (no margin, no assignment).
+        eq = (2 * initial_capital - eq).clip(lower=0.0)
     daily = eq.pct_change()
     benchmark = (1 + close.pct_change().fillna(0)).cumprod() * initial_capital
     total_return = float(eq.iloc[-1] / initial_capital - 1) * 100
@@ -341,10 +352,12 @@ def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: 
     drawdown = (eq - eq.cummax()) / eq.cummax()
     sharpe = float(daily.mean() / daily.std() * np.sqrt(252)) if daily.std() > 0 else 0.0
 
-    buys = [t for t in trades if t["action"] == "BUY"]
-    sells = [t for t in trades if t["action"] == "SELL"]
-    wins = sum(1 for b, s in zip(buys, sells) if s["price"] > b["price"])
-    num_trades = len(buys)
+    entries = [t for t in trades if t["action"] == entry_action]
+    exits = [t for t in trades if t["action"] == exit_action]
+    # A short leg profits when it buys the option back cheaper than it sold it.
+    wins = sum(1 for e, x in zip(entries, exits)
+               if (x["price"] < e["price"] if short else x["price"] > e["price"]))
+    num_trades = len(entries)
     win_rate = float(wins / num_trades * 100) if num_trades else 0.0
 
     curve = [{"date": d.strftime("%Y-%m-%d"), "strategy": round(float(sv), 2), "benchmark": round(float(bv), 2)}
@@ -359,7 +372,7 @@ def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: 
             "total_pnl": round(float(eq.iloc[-1]) - initial_capital, 2),
         },
         "trades": trades[:200],
-        "instrument": {"kind": "option", "type": otype, "moneyness": moneyness, "dte": dte, "iv": round(iv, 1), "modeled": True},
+        "instrument": {"kind": "option", "type": otype, "moneyness": moneyness, "dte": dte, "iv": round(iv, 1), "direction": direction, "modeled": True},
     }
 
 

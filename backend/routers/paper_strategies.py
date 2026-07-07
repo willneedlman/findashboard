@@ -93,6 +93,7 @@ class CustomStrategyCreate(BaseModel):
     bull_drift: float = 5.0
     bear_drift: float = -3.0
     instrument: dict | None = None   # {kind:"option", type, moneyness, dte} → scheduler trades real live options
+    side:       str = "long"          # long|short — drives direction for shares AND options
 
 class TickRequest(BaseModel):
     timestamp: float
@@ -242,6 +243,7 @@ def create_custom_strategy(body: CustomStrategyCreate):
         "rules":      body.rules,
         "bull_drift": body.bull_drift,
         "bear_drift": body.bear_drift,
+        "side":       body.side,
     }
     if body.instrument:
         params["instrument"] = body.instrument
@@ -273,7 +275,8 @@ class PortfolioPaperCreate(BaseModel):
 def create_portfolio_paper(body: PortfolioPaperCreate, authorization: str = Header(default=""), x_session_token: str = Header(default="")):
     """Fan a portfolio out into the paper trader: register each position as its own
     rule strategy (rules + instrument + side) and schedule one live job per
-    position. Long/short shares and long options all trade at live prices."""
+    position. Long/short shares and long/short options all trade at live prices
+    (a short option writes the contract sell-to-open and buys it back on exit)."""
     from routers.users import _require_owner
     from routers.paper_scheduler import _insert_job
     from strategies.builtin.custom_rule_strategy import CustomRuleStrategy

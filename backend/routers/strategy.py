@@ -465,6 +465,7 @@ class CustomBacktestRequest(BaseModel):
     position_size: float = 100
     initial_capital: float = 10_000
     instrument: dict | None = None   # {kind:"option", type:"call"|"put", moneyness, dte} → modeled option P&L
+    side: str = "long"               # long|short — drives direction for shares AND options
 
     @model_validator(mode="after")
     def _validate(self):
@@ -504,14 +505,15 @@ def custom_backtest(req: CustomBacktestRequest):
     signal = _apply_risk_controls(
         signal, close, req.stop_loss, req.take_profit, req.trailing_stop, req.max_hold_bars,
     )
-    return _instrument_metrics(signal, close, req.instrument, "long", req.ticker,
+    return _instrument_metrics(signal, close, req.instrument, req.side, req.ticker,
                                req.position_size, req.initial_capital)
 
 
 def _instrument_metrics(signal, close, instrument, side, ticker, position_size, capital):
     """Metrics for one position given its resolved signal + close: modeled option
-    P&L for an option instrument, else long/short shares. Same result shape as
-    /algo/backtest. Raises 422 if an option can't be priced."""
+    P&L for an option instrument (long buys it, short writes it), else long/short
+    shares. `side` drives direction for both. Same result shape as /algo/backtest.
+    Raises 422 if an option can't be priced."""
     from .algo import _compute_metrics, _compute_option_metrics
     inst = instrument or {}
     if inst.get("kind") == "option":
@@ -522,7 +524,7 @@ def _instrument_metrics(signal, close, instrument, side, ticker, position_size, 
             iv = None
         if not isinstance(iv, (int, float)) or iv <= 0:
             raise HTTPException(422, f"No implied volatility available to model options for {ticker}")
-        return _compute_option_metrics(signal, close, inst, float(iv), position_size, capital)
+        return _compute_option_metrics(signal, close, inst, float(iv), position_size, capital, direction=side)
     return _compute_metrics(signal, close, position_size, capital, direction=side)
 
 
@@ -535,8 +537,8 @@ def _instrument_metrics(signal, close, instrument, side, ticker, position_size, 
 class PortfolioPosition(BaseModel):
     ticker:        str
     rules:         dict = {}
-    instrument:    dict | None = None   # {kind:"shares"|"option", ...}; None = shares
-    side:          str = "long"          # long|short (shares); options are long-only
+    instrument:    dict | None = None   # {kind:"shares"|"option", type:"call"|"put", ...}; None = shares
+    side:          str = "long"          # long|short — drives direction for shares AND options
     weight:        float = 0.0           # % of capital; all-zero ⇒ equal weight
     position_size: float = 100
     stop_loss:     float | None = None
@@ -619,6 +621,7 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
     positions_out = [{
         "ticker": p.ticker, "side": p.side,
         "instrument": (p.instrument or {}).get("kind", "shares"),
+        "opt_type": (p.instrument or {}).get("type"),
         "weight_pct": round(cap / req.initial_capital * 100, 1),
         "return_pct": res["metrics"]["total_return"],
         "pnl": round(float(_series(res, "strategy").iloc[-1]) - cap, 2),

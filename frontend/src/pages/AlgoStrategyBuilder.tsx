@@ -25,7 +25,7 @@ interface BacktestResult {
     num_trades: number; win_rate: number; initial_capital: number; final_capital: number; total_pnl: number
   }
   trades: { date: string; action: string; price: number }[]
-  instrument?: { kind: string; type: string; moneyness: number; dte: number; iv: number; modeled: boolean }
+  instrument?: { kind: string; type: string; moneyness: number; dte: number; iv: number; direction?: string; modeled: boolean }
 }
 
 // A portfolio is a book of positions, each pairing a saved rule-set with its own
@@ -38,7 +38,7 @@ interface PortfolioPos {
 interface PortfolioResult {
   equity_curve: { date: string; strategy: number; benchmark: number }[]
   metrics: BacktestResult['metrics']
-  positions: { ticker: string; side: string; instrument: string; weight_pct: number; return_pct: number; pnl: number; num_trades: number }[]
+  positions: { ticker: string; side: string; instrument: string; opt_type?: string | null; weight_pct: number; return_pct: number; pnl: number; num_trades: number }[]
 }
 const PF_KEY = 'fdb_algo_portfolio'
 const rid = () => Math.random().toString(36).slice(2, 8)
@@ -63,6 +63,8 @@ export function AlgoStrategyBuilderContent() {
   const [otmPct, setOtmPct] = useState(0)
   const optMoneyness = optType === 'call' ? 1 + otmPct / 100 : 1 - otmPct / 100
   const [dte, setDte] = useState(30)
+  // Direction the BUY signal opens (single mode): long buys, short sells/writes.
+  const [side, setSide] = useState<'long' | 'short'>('long')
   const [paramsOpen, setParamsOpen] = useState(true)
   const [saved, setSaved] = useState<CustomStrategyDef[]>(() => loadCustomStrategies())
   const [activeName, setActiveName] = useState<string>(() => loadCustomStrategies()[0]?.name ?? '')
@@ -116,7 +118,7 @@ export function AlgoStrategyBuilderContent() {
       if (!activeDef) throw new Error('Select or build a strategy first.')
       const r = activeDef.risk ?? DEFAULT_RISK
       const { data } = await axios.post('/api/strategy/custom-backtest', {
-        ticker, start, end: end || undefined,
+        ticker, start, end: end || undefined, side,
         rules: { buy: activeDef.buy, sell: activeDef.sell },
         position_size: r.sizingPct || 100,
         stop_loss: r.stopLossPct || undefined,
@@ -135,7 +137,7 @@ export function AlgoStrategyBuilderContent() {
     mutationFn: async () => {
       if (!activeDef) throw new Error('Select a strategy first.')
       const { data } = await axios.post('/api/paper/strategies/custom', {
-        name: activeDef.name,
+        name: activeDef.name, side,
         rules: { buy: activeDef.buy, sell: activeDef.sell },
         bull_drift: activeDef.bull_drift ?? 0,
         bear_drift: activeDef.bear_drift ?? 0,
@@ -201,6 +203,26 @@ export function AlgoStrategyBuilderContent() {
             <input type="date" value={end} onChange={e => setEnd(e.target.value)} style={INPUT} />
           </div>
 
+          {/* Direction: what the BUY signal opens (single-position mode only) */}
+          {mode === 'single' && (
+          <div>
+            <label style={LABEL}>On BUY signal, open</label>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {([['long', 'Buy / Long'], ['short', 'Sell / Short']] as const).map(([sd, lbl]) => (
+                <button key={sd} onClick={() => setSide(sd)}
+                  title={sd === 'long' ? 'BUY signal opens a long; SELL signal closes it.' : 'BUY signal opens a short (sell/write); SELL signal covers it.'}
+                  style={{
+                    flex: 1, padding: '5px 0', fontFamily: 'inherit', fontSize: 9, fontWeight: 700,
+                    letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer',
+                    background: side === sd ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)' : 'transparent',
+                    border: `1px solid ${side === sd ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.12))'}`,
+                    color: side === sd ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #8099b0)',
+                  }}>{lbl}</button>
+              ))}
+            </div>
+          </div>
+          )}
+
           {/* Instrument: underlying vs modeled option (single-position mode only) */}
           {mode === 'single' && (
           <div>
@@ -260,7 +282,7 @@ export function AlgoStrategyBuilderContent() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {positions.length === 0 && (
               <div style={{ fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.45))', lineHeight: '14px' }}>
-                Each position pairs a saved strategy (its rules) with a ticker, instrument, side, and weight. Build rule-sets below, then add positions.
+                Each position pairs a saved strategy (its rules) with a ticker, weight, and the trade its BUY signal opens: buy/long or sell/short, in shares, calls, or puts. Build rule-sets below, then add positions.
               </div>
             )}
             {positions.map(p => {
@@ -287,27 +309,49 @@ export function AlgoStrategyBuilderContent() {
                     {saved.length === 0 && <option value="">— build a strategy first —</option>}
                     {saved.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
                   </select>
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    {(['long', 'short'] as const).map(sd => (
-                      <button key={sd} onClick={() => patchPosition(p.id, { side: sd })} style={btn(p.side === sd)}>{sd}</button>
-                    ))}
-                    {(['underlying', 'option'] as const).map(im => (
-                      <button key={im} onClick={() => patchPosition(p.id, { instMode: im })} style={btn(p.instMode === im)}>{im === 'underlying' ? 'Shares' : 'Option'}</button>
-                    ))}
+                  <div>
+                    <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)', marginBottom: 3 }}>On BUY signal, open</div>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      {([['long', 'Buy / Long'], ['short', 'Sell / Short']] as const).map(([sd, lbl]) => (
+                        <button key={sd} title={sd === 'long' ? 'BUY signal opens a long; SELL signal closes it.' : 'BUY signal opens a short; SELL signal covers it.'}
+                          onClick={() => patchPosition(p.id, { side: sd })} style={btn(p.side === sd)}>{lbl}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)', marginBottom: 3 }}>Instrument</div>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      {([['shares', 'Shares'], ['call', 'Call'], ['put', 'Put']] as const).map(([kind, lbl]) => {
+                        const on = kind === 'shares' ? p.instMode === 'underlying' : p.instMode === 'option' && p.optType === kind
+                        return (
+                          <button key={kind} onClick={() => patchPosition(p.id, kind === 'shares'
+                            ? { instMode: 'underlying' } : { instMode: 'option', optType: kind })} style={btn(on)}>{lbl}</button>
+                        )
+                      })}
+                    </div>
                   </div>
                   {p.instMode === 'option' && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr 1fr', gap: 4 }}>
-                      <select value={p.optType} onChange={e => patchPosition(p.id, { optType: e.target.value as 'call' | 'put' })} style={{ ...INPUT, fontSize: 10, cursor: 'pointer' }}>
-                        <option value="call">call</option><option value="put">put</option>
-                      </select>
-                      <input type="number" value={p.otmPct} title="% OTM (neg = ITM)" min={-50} max={50}
-                        onChange={e => patchPosition(p.id, { otmPct: Math.max(-50, Math.min(50, Math.round(+e.target.value || 0))) })}
-                        style={{ ...INPUT, fontSize: 10 }} />
-                      <input type="number" value={p.dte} title="DTE days" min={1} max={365}
-                        onChange={e => patchPosition(p.id, { dte: Math.max(1, +e.target.value || 30) })}
-                        style={{ ...INPUT, fontSize: 10 }} />
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
+                      <div>
+                        <div style={{ fontSize: 8, color: 'var(--theme-secondary, #8099b0)', marginBottom: 2 }}>% OTM (neg = ITM)</div>
+                        <input type="number" value={p.otmPct} min={-50} max={50}
+                          onChange={e => patchPosition(p.id, { otmPct: Math.max(-50, Math.min(50, Math.round(+e.target.value || 0))) })}
+                          style={{ ...INPUT, fontSize: 10 }} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 8, color: 'var(--theme-secondary, #8099b0)', marginBottom: 2 }}>DTE (days)</div>
+                        <input type="number" value={p.dte} min={1} max={365}
+                          onChange={e => patchPosition(p.id, { dte: Math.max(1, +e.target.value || 30) })}
+                          style={{ ...INPUT, fontSize: 10 }} />
+                      </div>
                     </div>
                   )}
+                  <div style={{ fontSize: 8, fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em', color: p.side === 'short' ? NEG : POS }}>
+                    {p.side === 'short' ? 'Short' : 'Long'} {p.instMode === 'option'
+                      ? `${p.otmPct === 0 ? 'ATM' : p.otmPct > 0 ? `${p.otmPct}% OTM` : `${-p.otmPct}% ITM`} ${p.optType} · ${p.dte}d`
+                      : 'shares'}
+                    {p.instMode === 'option' && p.side === 'short' && <span style={{ color: 'var(--theme-text-faint, rgba(255,255,255,0.4))' }}> · written</span>}
+                  </div>
                 </div>
               )
             })}
@@ -399,7 +443,7 @@ export function AlgoStrategyBuilderContent() {
       {!R && (
         <EmptyState title="Algorithmic Strategy Builder"
           hint={mode === 'portfolio'
-            ? 'Add positions (each = a saved rule-set + ticker + instrument + weight), then Run Portfolio. Long/short shares and modeled options aggregate into one book.'
+            ? 'Add positions (each = a saved rule-set + ticker + weight + the trade its BUY signal opens), then Run Portfolio. Long/short shares and long/short modeled options aggregate into one book.'
             : 'Build a strategy from entry/exit rules, pick a ticker, then Run Backtest. Saved strategies import into Monte Carlo and the Backtester.'} />
       )}
 
@@ -421,7 +465,7 @@ export function AlgoStrategyBuilderContent() {
               {pf.positions.map((p, i) => (
                 <div key={i} style={{ flex: '1 1 140px', minWidth: 140, padding: '6px 10px', borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.06))' }}>
                   <div style={{ fontSize: 10, fontFamily: 'var(--theme-mono)', fontWeight: 700, color: 'var(--theme-text, #d7e3fc)' }}>
-                    {p.ticker} <span style={{ fontSize: 8, color: p.side === 'short' ? NEG : POS, letterSpacing: '0.06em' }}>{p.side.toUpperCase()} {p.instrument === 'option' ? 'OPT' : 'SHR'}</span>
+                    {p.ticker} <span style={{ fontSize: 8, color: p.side === 'short' ? NEG : POS, letterSpacing: '0.06em' }}>{p.side.toUpperCase()} {p.instrument === 'option' ? (p.opt_type ? p.opt_type.toUpperCase() : 'OPT') : 'SHR'}</span>
                   </div>
                   <div style={{ fontSize: 9, fontFamily: 'var(--theme-mono)', color: 'var(--theme-secondary, #8099b0)', marginTop: 2 }}>
                     w {p.weight_pct}% · <span style={{ color: p.return_pct >= 0 ? POS : NEG }}>{p.return_pct >= 0 ? '+' : ''}{p.return_pct}%</span> · {p.num_trades} trades
@@ -438,10 +482,17 @@ export function AlgoStrategyBuilderContent() {
             return (
             <div style={{ fontSize: 10, color: 'var(--theme-primary, #c9a84c)', fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', border: '1px solid var(--theme-primary, #c9a84c)', padding: '1px 5px' }}>MODELED</span>
+              <span style={{ color: im.direction === 'short' ? NEG : POS, fontWeight: 700 }}>{im.direction === 'short' ? 'SHORT' : 'LONG'}</span>
               {im.type.toUpperCase()} · {strikeLbl} · {im.dte} DTE · IV {im.iv}% (Black-Scholes on underlying, not real option prices)
+              {im.direction === 'short' && <span style={{ color: 'var(--theme-text-faint, rgba(255,255,255,0.4))' }}>· written, mirror of the long leg</span>}
             </div>
             )
           })()}
+          {mode === 'single' && instMode === 'underlying' && (
+            <div style={{ fontSize: 10, fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em', color: side === 'short' ? NEG : POS }}>
+              {side === 'short' ? 'Short' : 'Long'} {ticker.toUpperCase()} shares
+            </div>
+          )}
           {mode === 'single' && activeDef?.risk && (() => {
             const r = activeDef.risk
             const parts = [`size ${r.sizingPct}%`]

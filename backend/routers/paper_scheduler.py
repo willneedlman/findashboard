@@ -229,13 +229,16 @@ def _resolve_option_contract(ticker: str, spec: dict, spot: float) -> str | None
 
 
 def _place_option_sync(user_id: str, ticker: str, signal: str, qty: int, spec: dict,
-                       open_occ: str | None, spot: float) -> tuple[str | None, str | None]:
-    """Trade a real option at the live chain price. On BUY, open a fresh contract;
-    on SELL, close the exact contract the job is holding. Returns (order_id,
-    new_open_occ) — new_open_occ is the OCC now held ('' when flat, None = no
-    change)."""
+                       open_occ: str | None, spot: float, side: str = "long") -> tuple[str | None, str | None]:
+    """Trade a real option at the live chain price. A long leg buys-to-open on BUY
+    and sells-to-close on SELL; a short leg writes the contract (sell-to-open) on
+    BUY and buys-to-close on SELL. Returns (order_id, new_open_occ) — new_open_occ
+    is the OCC now held ('' when flat, None = no change)."""
     if not user_id:
         return None, None
+    short = str(side).lower() == "short"
+    open_action = "sell_to_open" if short else "buy_to_open"
+    close_action = "buy_to_close" if short else "sell_to_close"
     try:
         if signal == "BUY":
             if open_occ:
@@ -243,7 +246,7 @@ def _place_option_sync(user_id: str, ticker: str, signal: str, qty: int, spec: d
             occ = _resolve_option_contract(ticker, spec, spot)
             if not occ:
                 return None, None
-            res = paper_engine.place_option_order(user_id, occ, "buy_to_open", qty, "market")
+            res = paper_engine.place_option_order(user_id, occ, open_action, qty, "market")
             if res.get("status") == "filled":
                 return str(res.get("id") or "") or None, occ
             _log.info("Scheduler option BUY not filled (%s): %s", occ, res.get("reason") or res.get("status"))
@@ -251,7 +254,7 @@ def _place_option_sync(user_id: str, ticker: str, signal: str, qty: int, spec: d
         else:  # SELL — close what we hold
             if not open_occ:
                 return None, None
-            res = paper_engine.place_option_order(user_id, open_occ, "sell_to_close", qty, "market")
+            res = paper_engine.place_option_order(user_id, open_occ, close_action, qty, "market")
             oid = str(res.get("id") or "") or None if res.get("status") == "filled" else None
             return oid, ("" if oid else None)   # clear holding once closed
     except Exception as e:
@@ -383,11 +386,12 @@ async def _run_scheduler_loop() -> None:
                 if signal_str in ("BUY", "SELL") and transition:
                     inst_spec = params.get("instrument") or {}
                     if inst_spec.get("kind") == "option":
+                        opt_side = str(params.get("side", "long")).lower()
                         order_id, occ_update = await loop.run_in_executor(
                             _executor, _place_option_sync, job.get("user_id", ""),
-                            ticker, signal_str, qty, inst_spec, job.get("open_occ"), price,
+                            ticker, signal_str, qty, inst_spec, job.get("open_occ"), price, opt_side,
                         )
-                        notes = f"option={occ_update or job.get('open_occ') or ''} order_id={order_id}" if order_id else "option_order_failed"
+                        notes = f"{opt_side} option={occ_update or job.get('open_occ') or ''} order_id={order_id}" if order_id else "option_order_failed"
                     else:
                         # Short positions invert: a BUY signal opens the short
                         # (sell-to-open), a SELL signal covers it (buy).
