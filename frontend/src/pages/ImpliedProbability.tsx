@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, ReferenceDot, Legend } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import { KpiCell } from '../components/mmCockpit'
@@ -62,11 +62,17 @@ export function ImpliedProbabilityContent() {
     const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().split('T')[0]
   })
 
-  const { mutate, data, isPending, error: mutError } = useMutation({
-    mutationFn: async () => {
+  // Query (not mutation): the result is deterministic on (ticker, expiry), so
+  // regenerating the same pair within the 15-min staleTime is a cache hit.
+  const [submitted, setSubmitted] = useState<{ ticker: string; expiry: string } | null>(null)
+  const { data, isFetching: isPending, error: mutError, refetch } = useQuery({
+    queryKey: ['implied-prob', submitted?.ticker, submitted?.expiry],
+    enabled: !!submitted,
+    retry: false,
+    queryFn: async () => {
       const [coneResp, distResp] = await Promise.allSettled([
-        axios.post('/api/prob/cone', { ticker, expiry }),
-        axios.get(`/api/prob/chain-distribution?ticker=${ticker}&expiry=${expiry}`),
+        axios.post('/api/prob/cone', { ticker: submitted!.ticker, expiry: submitted!.expiry }),
+        axios.get(`/api/prob/chain-distribution?ticker=${submitted!.ticker}&expiry=${submitted!.expiry}`),
       ])
       const cone = coneResp.status === 'fulfilled' ? coneResp.value.data : null
       const dist = distResp.status === 'fulfilled' ? distResp.value.data : null
@@ -78,6 +84,12 @@ export function ImpliedProbabilityContent() {
       return { cone, dist }
     },
   })
+  // Same params → force a refetch; with retry:false a transient failure would
+  // otherwise be stuck until the user edits an input.
+  const generate = () => {
+    if (submitted && submitted.ticker === ticker && submitted.expiry === expiry) refetch()
+    else setSubmitted({ ticker, expiry })
+  }
 
   const cone = data?.cone
   const dist = data?.dist
@@ -111,7 +123,7 @@ export function ImpliedProbabilityContent() {
           </div>
           </RailSection>
           <div style={{ padding: 12 }}>
-            <button onClick={() => mutate()} disabled={isPending} style={{
+            <button onClick={generate} disabled={isPending} style={{
               width: '100%', background: 'var(--theme-surface, #1f2a3d)', border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)',
               fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
               textTransform: 'uppercase', padding: '8px 0', cursor: isPending ? 'default' : 'pointer', opacity: isPending ? 0.6 : 1,

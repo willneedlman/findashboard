@@ -194,7 +194,7 @@ app.include_router(leaderboard.router,       prefix="/api/leaderboard",       ta
 app.include_router(maritime.router,          prefix="/api/maritime",          tags=["maritime"])
 
 
-@app.get("/api/health")
+@app.api_route("/api/health", methods=["GET", "HEAD"])
 def health_check():
     return {"status": "Terminal Backend Online", "systems": "Nominal"}
 
@@ -204,7 +204,9 @@ _DIST_RESOLVED = _DIST.resolve()
 if _DIST.exists():
     app.mount("/assets", StaticFiles(directory=str(_DIST / "assets")), name="assets")
 
-    @app.get("/{full_path:path}")
+    # HEAD included explicitly: FastAPI (unlike bare Starlette) does not add HEAD
+    # to GET routes, and uptime monitors / link unfurlers probe with HEAD.
+    @app.api_route("/{full_path:path}", methods=["GET", "HEAD"])
     def serve_spa(full_path: str):
         # Serve real root files (favicon.svg, robots.txt, ...) when they exist;
         # otherwise fall back to index.html so client-side routes resolve.

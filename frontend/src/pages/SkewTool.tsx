@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useMutation } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import {
   AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, ReferenceDot,
@@ -71,14 +71,27 @@ export function SkewToolContent() {
   const [open, setOpen] = useState(true)
   const [expiry, setExpiry] = useState('')   // selected expiry — drives the smile, metrics, and move
   const [mny, setMny] = useState(0)          // Smile Explorer cursor (% from spot)
-  const { mutate, data, isPending, error } = useMutation<SkewData, Error, void>({
-    mutationFn: () => axios.get(`/api/prob/skew?ticker=${ticker.trim().toUpperCase()}`).then(r => r.data),
-    onSuccess: (d) => setExpiry(d.front_expiry),   // default to the nearest expiry
+  // Query (not mutation) so regenerating the same ticker within the 15-min
+  // staleTime serves from the react-query cache. Arriving with ?ticker= (e.g.
+  // from the command palette) starts submitted, replacing the old auto-mutate.
+  const [submitted, setSubmitted] = useState((sp.get('ticker') ?? '').trim().toUpperCase())
+  const { data, isFetching: isPending, error, refetch } = useQuery<SkewData, Error>({
+    queryKey: ['skew', submitted],
+    enabled: !!submitted,
+    queryFn: () => axios.get(`/api/prob/skew?ticker=${submitted}`).then(r => r.data),
   })
+  // Same ticker → force a refetch (setSubmitted with an identical string is a
+  // React bail-out: no re-render, no request, stuck error states).
+  const generate = () => {
+    const next = ticker.trim().toUpperCase()
+    if (!next) return
+    if (next === submitted) refetch()
+    else setSubmitted(next)
+  }
   const skewColor = (v: number) => (v > 4 ? NEG : v > 1.5 ? 'var(--theme-warn, #d97736)' : POS)
 
-  // Auto-generate when arriving with ?ticker= (e.g. from the command palette).
-  useEffect(() => { if (sp.get('ticker')) mutate() }, [])  // eslint-disable-line react-hooks/exhaustive-deps
+  // Default to the nearest expiry whenever a new skew surface lands.
+  useEffect(() => { if (data) setExpiry(data.front_expiry) }, [data])
 
   const sel = data ? (data.term_structure.find(t => t.expiry === expiry) ?? data.term_structure[0]) : null
 
@@ -91,9 +104,9 @@ export function SkewToolContent() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div>
               <label style={LABEL}>Target Ticker</label>
-              <input value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())} onKeyDown={e => e.key === 'Enter' && mutate()} style={INPUT} />
+              <input value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())} onKeyDown={e => e.key === 'Enter' && generate()} style={INPUT} />
             </div>
-            <button onClick={() => mutate()} disabled={isPending}
+            <button onClick={generate} disabled={isPending}
               style={{ width: '100%', background: GOLD, border: `1px solid ${GOLD}`, color: 'var(--theme-bg)', fontFamily: 'inherit', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '8px 0', cursor: isPending ? 'default' : 'pointer', opacity: isPending ? 0.6 : 1 }}>
               {isPending ? 'Loading…' : 'Generate'}
             </button>

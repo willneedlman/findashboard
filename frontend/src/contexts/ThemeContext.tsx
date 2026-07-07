@@ -84,6 +84,36 @@ export const SANS_FONTS = [
   'Barlow',              // slightly condensed grotesque
 ]
 
+// Weight/italic axes per selectable family — mirrors what index.html loaded
+// before the on-demand switch, so a picked font renders identically. Families
+// without an entry (custom names) fall back to plain 400;700. Keep in sync
+// with the preload <link> in index.html (Sora + Cinzel only).
+const GOOGLE_FONT_AXES: Record<string, string> = {
+  'JetBrains Mono':      'ital,wght@0,300;0,400;0,500;0,600;0,700;1,400',
+  'IBM Plex Mono':       'wght@300;400;500;600;700',
+  'Roboto Mono':         'wght@300;400;500;600;700',
+  'Fira Code':           'wght@300;400;500;600;700',
+  'Space Mono':          'ital,wght@0,400;0,700;1,400',
+  'DM Mono':             'ital,wght@0,300;0,400;0,500;1,400',
+  'Martian Mono':        'wght@300;400;500;600;700',
+  'Inter':               'wght@300;400;500;600;700',
+  'IBM Plex Sans':       'wght@300;400;500;600;700',
+  'Space Grotesk':       'wght@300;400;500;600;700',
+  'DM Sans':             'wght@300;400;500;600;700',
+  'Manrope':             'wght@300;400;500;600;700',
+  'Geist':               'wght@300;400;500;600;700',
+  'Lora':                'ital,wght@0,400;0,500;0,600;0,700;1,400',
+  'Fraunces':            'ital,wght@0,400;0,500;0,600;0,700;1,400',
+  'Bricolage Grotesque': 'wght@400;500;600;700',
+  'Barlow':              'wght@300;400;500;600;700',
+}
+const gfUrl = (family: string) =>
+  `https://fonts.googleapis.com/css2?family=${encodeURIComponent(family)}:${GOOGLE_FONT_AXES[family] ?? 'wght@400;700'}&display=swap`
+
+// Only these load in index.html; everything else injects on selection.
+// 'San Francisco' emits as ui-monospace in CSS, so it never needs a fetch.
+const PRELOADED_FONTS = ['Sora', 'Cinzel', 'San Francisco']
+
 const STORAGE_USERS   = 'ft-users'
 const STORAGE_SESSION = 'ft-session'
 
@@ -138,17 +168,8 @@ export function applyTheme(t: Theme) {
     : `'${t.primaryFont}', monospace`
 
   // Load Google Fonts if no custom URL provided
-  const monoSrc   = t.primaryFontUrl   || `https://fonts.googleapis.com/css2?family=${encodeURIComponent(t.primaryFont)}:wght@400;700&display=swap`
-  const sansSrc   = t.secondaryFontUrl || `https://fonts.googleapis.com/css2?family=${encodeURIComponent(t.secondaryFont)}:wght@400;600;700&display=swap`
-  const builtinFonts = [
-    'JetBrains Mono', 'IBM Plex Mono', 'Roboto Mono', 'Fira Code', 'Space Mono',
-    'DM Mono', 'Martian Mono', 'Cinzel', 'Lora', 'IBM Plex Sans', 'Inter',
-    'DM Sans', 'Space Grotesk', 'Sora', 'Barlow', 'Manrope', 'Geist',
-    'Fraunces', 'Bricolage Grotesque',
-    // System/local fonts — not on Google Fonts, skip the web-font fetch.
-    // 'San Francisco' emits as ui-monospace in CSS so it resolves correctly.
-    'San Francisco',
-  ]
+  const monoSrc = t.primaryFontUrl   || gfUrl(t.primaryFont)
+  const sansSrc = t.secondaryFontUrl || gfUrl(t.secondaryFont)
 
   // Only inject <link> for Google-Fonts-style URLs
   const injectLink = (href: string, id: string) => {
@@ -157,8 +178,8 @@ export function applyTheme(t: Theme) {
     if (!el) { el = document.createElement('link'); el.id = id; el.rel = 'stylesheet'; document.head.appendChild(el) }
     if (el.href !== href) el.href = href
   }
-  if (!builtinFonts.includes(t.primaryFont)   || t.primaryFontUrl)   injectLink(monoSrc, 'ft-font-mono')
-  if (!builtinFonts.includes(t.secondaryFont) || t.secondaryFontUrl) injectLink(sansSrc, 'ft-font-sans')
+  if (!PRELOADED_FONTS.includes(t.primaryFont)   || t.primaryFontUrl)   injectLink(monoSrc, 'ft-font-mono')
+  if (!PRELOADED_FONTS.includes(t.secondaryFont) || t.secondaryFontUrl) injectLink(sansSrc, 'ft-font-sans')
 
   // Inject custom @font-face for uploaded fonts (data: or blob: URLs)
   const customFontFace = (name: string, src: string) =>

@@ -79,7 +79,6 @@ const Compare            = lazyWithReload(() => import('./pages/Compare'))
 const ResetPassword      = lazyWithReload(() => import('./pages/ResetPassword'))
 const HubLanding         = lazyWithReload(() => import('./pages/HubLanding'))
 const GlobalMarkets      = lazyWithReload(() => import('./pages/GlobalMarkets'))
-const ToolsRedesignDemo  = lazyWithReload(() => import('./pages/redesign/ToolsRedesignDemo'))
 
 function PageLoader() {
   return (
@@ -168,9 +167,6 @@ export default function App() {
 
             {/* Password reset — chrome-free, reached from the email link */}
             <Route path="/reset-password"    element={<ResetPassword />} />
-
-            {/* Tools redesign preview — chrome-free, sample data, not in nav */}
-            <Route path="/redesign"          element={<ToolsRedesignDemo />} />
 
             {/* Legal — marketing chrome (no terminal sidebar) */}
             <Route element={<MktShell />}>

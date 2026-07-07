@@ -97,7 +97,7 @@ def _yahoo_search(q: str) -> list:
 
 
 @router.get("/search")
-async def company_search(q: str):
+def company_search(q: str):
     """Resolve a company name or ticker prefix to candidate tickers (free SEC index)."""
     ql = q.strip().lower()
     if len(ql) < 2:
@@ -294,7 +294,7 @@ def _consensus_label(info: dict):
 
 
 @router.get("/hub")
-async def get_corporate_hub(ticker: str):
+def get_corporate_hub(ticker: str):
     """Fetches fundamental financial data or ETF asset structures resiliently with nested metric safeties."""
     try:
         symbol = ticker.strip().upper()
@@ -405,7 +405,7 @@ async def get_corporate_hub(ticker: str):
 
 
 @router.get("/hub/short")
-async def get_corporate_hub_short(ticker: str):
+def get_corporate_hub_short(ticker: str):
     """Returns short interest data for a ticker."""
     try:
         symbol = ticker.strip().upper()
@@ -466,7 +466,7 @@ def get_corporate_hub_implied(tickers: str):
 
 
 @router.get("/hub/insider")
-async def get_corporate_hub_insider(ticker: str):
+def get_corporate_hub_insider(ticker: str):
     """Returns recent insider transactions for a ticker."""
     try:
         symbol = ticker.strip().upper()
@@ -619,7 +619,7 @@ def get_corporate_hub_earnings_detail(ticker: str):
 
 
 @router.get("/hub/analyst")
-async def get_corporate_hub_analyst(ticker: str):
+def get_corporate_hub_analyst(ticker: str):
     """Analyst consensus: rating distribution, mean/high/low targets, implied upside."""
     try:
         symbol = ticker.strip().upper()
@@ -873,7 +873,7 @@ def get_credit(ticker: str):
 
 
 @router.get("/profile")
-async def get_corporate_profile(ticker: str):
+def get_corporate_profile(ticker: str):
     """Fetches deep corporate profile details, explicitly safeguarding executive list arrays."""
     try:
         symbol = ticker.strip().upper()
@@ -908,7 +908,7 @@ async def get_corporate_profile(ticker: str):
 
 
 @router.get("/peer-valuation")
-async def get_peer_valuation(ticker: str):
+def get_peer_valuation(ticker: str):
     """Calculates relative comps matrix with exhaustive alignment variations to completely immunize against frontend .toFixed() crashes."""
     try:
         symbol = ticker.strip().upper()
@@ -1030,7 +1030,7 @@ def _holder_rows(df, limit: int = 12) -> list:
 
 
 @router.get("/institutional")
-async def get_institutional_ownership(ticker: str):
+def get_institutional_ownership(ticker: str):
     """Institutional ownership: % held by institutions/insiders plus the top
     13F holders and mutual-fund holders (yfinance, sourced from quarterly 13Fs)."""
     symbol = ticker.strip().upper()
@@ -1074,7 +1074,7 @@ async def get_institutional_ownership(ticker: str):
 
 
 @router.get("/supply-chain")
-async def get_supply_chain(ticker: str):
+def get_supply_chain(ticker: str):
     """Company profile: basic info + product/geo revenue segments + peer list."""
     try:
         symbol = ticker.strip().upper()

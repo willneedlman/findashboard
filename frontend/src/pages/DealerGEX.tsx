@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Legend } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import { KpiCell } from '../components/mmCockpit'
@@ -41,11 +41,16 @@ export default function DealerGEX() {
   const [paramsOpen, setParamsOpen] = useState(true)
   const [expiry, setExpiry] = useState<string>('')
 
-  const { mutate, data, isPending } = useMutation({
-    mutationFn: async () => {
+  // Query (not mutation) so repeat loads of the same ticker/expiry within the
+  // 15-min staleTime serve instantly from the react-query cache.
+  const [submitted, setSubmitted] = useState<{ ticker: string; expiry: string } | null>(null)
+  const { data, isFetching: isPending, refetch } = useQuery({
+    queryKey: ['dealer-gex', submitted?.ticker, submitted?.expiry],
+    enabled: !!submitted,
+    queryFn: async () => {
       const [gex, chain] = await Promise.all([
-        fetchGEX(ticker, expiry || undefined),
-        fetchOptionsChain(ticker, expiry || undefined),
+        fetchGEX(submitted!.ticker, submitted!.expiry || undefined),
+        fetchOptionsChain(submitted!.ticker, submitted!.expiry || undefined),
       ])
       const oiMap: Record<number, { callOI: number; putOI: number }> = {}
       ;(chain.calls ?? []).forEach((c: any) => {
@@ -59,6 +64,12 @@ export default function DealerGEX() {
       return { ...gex, oiMap }
     },
   })
+  // Same params → force a refetch (setSubmitted alone would be a key no-op,
+  // stranding error states and blocking intraday refreshes).
+  const load = () => {
+    if (submitted && submitted.ticker === ticker && submitted.expiry === expiry) refetch()
+    else setSubmitted({ ticker, expiry })
+  }
 
   const spot: number | null = data?.spot ?? null
 
@@ -144,7 +155,7 @@ export default function DealerGEX() {
           </div>
           </RailSection>
           <div style={{ padding: 12 }}>
-            <button onClick={() => mutate()} disabled={isPending} style={{
+            <button onClick={load} disabled={isPending} style={{
               width: '100%', background: 'var(--theme-surface, #1f2a3d)', border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)',
               fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
               textTransform: 'uppercase', padding: '8px 0', cursor: isPending ? 'default' : 'pointer', opacity: isPending ? 0.6 : 1,

@@ -19,7 +19,9 @@ from disk_cache import disk_get, disk_set
 
 _lock = threading.Lock()
 
-_history_cache: TTLCache = TTLCache(maxsize=500, ttl=300)    # 5 min
+# maxsize caps worst-case RSS: entries are full DataFrames (~100KB each for 5y
+# daily), and the 1GB prod VM has OOM'd before. 200 ≈ 20MB ceiling.
+_history_cache: TTLCache = TTLCache(maxsize=200, ttl=300)    # 5 min
 _info_cache:    TTLCache = TTLCache(maxsize=200, ttl=900)     # 15 min
 _news_cache:    TTLCache = TTLCache(maxsize=200, ttl=300)     # 5 min
 _download_cache: TTLCache = TTLCache(maxsize=100, ttl=300)   # 5 min

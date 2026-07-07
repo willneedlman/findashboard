@@ -1,9 +1,9 @@
 """
 Regression Analysis — OLS linear, polynomial, and multi-variable regression
-on financial time-series data from yfinance.  Playwright available as a
-scraping fallback for JS-rendered data sources.
+on financial time-series data from yfinance.
 
-taste (matplotlib wrapper) + matplotlib generate downloadable chart PNGs.
+matplotlib generates the downloadable chart PNGs (imported lazily: it costs
+tens of MB of RSS, and the 1GB VM has OOM'd before).
 """
 import io, base64, logging, os, sys
 import numpy as np
@@ -23,10 +23,6 @@ from regression_engine import (
 )
 from regression_engine.strategies import short_vol_paths
 
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-
 _log = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -45,32 +41,6 @@ def _fetch_series(ticker: str, period: str, use_returns: bool) -> pd.Series:
     if use_returns:
         return np.log(closes / closes.shift(1)).dropna().rename(ticker)
     return closes.rename(ticker)
-
-
-async def _scrape_series_playwright(url: str, css_selector: str) -> list[float]:
-    """
-    Playwright fallback: navigate to a JS-rendered page, extract numeric
-    values from matching elements.  Used when yfinance lacks a series
-    (e.g. custom macro indexes on web dashboards).
-    """
-    from playwright.async_api import async_playwright
-    results: list[float] = []
-    async with async_playwright() as pw:
-        browser = await pw.chromium.launch(headless=True)
-        page = await browser.new_page()
-        try:
-            await page.goto(url, timeout=25_000)
-            await page.wait_for_selector(css_selector, timeout=10_000)
-            elements = await page.query_selector_all(css_selector)
-            for el in elements:
-                text = (await el.inner_text()).strip().replace(",", "")
-                try:
-                    results.append(float(text))
-                except ValueError:
-                    pass
-        finally:
-            await browser.close()
-    return results
 
 
 # ── OLS statistics ────────────────────────────────────────────────────────────
@@ -118,7 +88,7 @@ def _ols_stats(X: np.ndarray, y: np.ndarray, model: LinearRegression) -> dict:
     }
 
 
-# ── Chart (matplotlib / taste-palette colors) ─────────────────────────────────
+# ── Chart (matplotlib, terminal-palette colors) ───────────────────────────────
 
 _DARK_BG   = "#101c2e"
 _SURF_BG   = "#0d1826"
@@ -133,6 +103,10 @@ def _build_chart_b64(
     x_vals: list, y_vals: list, y_pred: list,
     x_label: str, y_label: str, title: str,
 ) -> str:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 5), facecolor=_DARK_BG)
 
     for ax in (ax1, ax2):
