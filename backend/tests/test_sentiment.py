@@ -371,3 +371,53 @@ def test_contrarian_buy_the_dip_is_bullish():
         assert _st(t, _ee(t)).sentiment == "bullish", t
     # A real panic with no buyer stays bearish (contrarian frame needs the buy).
     assert _st("Market panic sends stocks tumbling", _ee("")).sentiment == "bearish"
+
+
+# ── LLM corrective overlay ────────────────────────────────────────────────────
+def test_correction_disabled_is_passthrough(monkeypatch):
+    from sentiment import correction
+    monkeypatch.setenv("SENTIMENT_CORRECTION", "0")
+    monkeypatch.setenv("GROQ_API_KEY", "x")
+    items = [_scored("A", "a", "unsure headline", 40, 3, conf=0.3)]
+    assert correction.apply(items) is items
+
+
+def test_correction_overrides_only_low_confidence(monkeypatch):
+    from sentiment import correction
+    monkeypatch.setenv("SENTIMENT_CORRECTION", "1")
+    monkeypatch.setenv("GROQ_API_KEY", "x")
+    correction._cache.clear()
+    # Force a confident bullish read for whatever the batch contains.
+    monkeypatch.setattr(correction, "_call_llm",
+                        lambda titles: [correction._signed_to_fields(0.4) for _ in titles])
+
+    low = _scored("A", "a", "greater war resilience to outpace peers", 17, 3, conf=0.42)
+    high = _scored("B", "b", "clear bearish crash", 12, 3, conf=0.9)
+    out = {a.title: a for a in correction.apply([low, high])}
+
+    fixed = out["greater war resilience to outpace peers"]
+    assert fixed.corrected and fixed.sentiment == "bullish" and fixed.lexicon_direction < 0
+    assert fixed.asset_directions["Commodities"] > 0          # moved off the misfire
+    assert not out["clear bearish crash"].corrected            # above the conf ceiling: untouched
+
+
+def test_correction_falls_back_to_lexicon_on_llm_failure(monkeypatch):
+    from sentiment import correction
+    monkeypatch.setenv("SENTIMENT_CORRECTION", "1")
+    monkeypatch.setenv("GROQ_API_KEY", "x")
+    correction._cache.clear()
+    monkeypatch.setattr(correction, "_call_llm", lambda titles: [])  # provider down
+    items = [_scored("A", "a", "unsure headline", 40, 3, conf=0.3)]
+    out = correction.apply(items)
+    assert out[0].direction == items[0].direction and not out[0].corrected
+
+
+def test_correction_skips_when_llm_not_confident(monkeypatch):
+    from sentiment import correction
+    monkeypatch.setenv("SENTIMENT_CORRECTION", "1")
+    monkeypatch.setenv("GROQ_API_KEY", "x")
+    correction._cache.clear()
+    # LLM declined every item (returned None): lexicon read must stand.
+    monkeypatch.setattr(correction, "_call_llm", lambda titles: [None for _ in titles])
+    items = [_scored("A", "a", "unsure headline", 40, 3, conf=0.3)]
+    assert not correction.apply(items)[0].corrected

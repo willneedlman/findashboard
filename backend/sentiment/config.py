@@ -180,6 +180,21 @@ ENRICH_MODEL: str = "llama-3.3-70b-versatile"
 ENRICH_MAX_TOKENS: int = 4500
 ENRICH_TEMPERATURE: float = 0.0     # deterministic-as-possible; never feeds the score
 
+# ── Corrective overlay (correction.py) ────────────────────────────────────────
+# The lexicon stays the primary scorer. Only headlines it is UNSURE about (its
+# own confidence at or below the ceiling) are sent to the LLM for a direction +
+# magnitude second opinion; a confident LLM answer overrides the lexicon read
+# for those items only. Everything else keeps its deterministic score. Set
+# SENTIMENT_CORRECTION=0 to disable and fall back to pure-lexicon scoring.
+CORRECTION_ENABLED_ENV: str = "SENTIMENT_CORRECTION"
+CORRECTION_CONF_MAX: float = 0.55   # only adjudicate items the lexicon scored at/below this
+CORRECTION_MIN_CONF: float = 0.55   # LLM must be at least this sure to override the lexicon
+MAX_CORRECTION_ITEMS: int = 24      # per-refresh cap (one batched call)
+CORRECTION_MODEL: str = ENRICH_MODEL
+CORRECTION_MAX_TOKENS: int = 3000
+CORRECTION_TEMPERATURE: float = 0.0
+CORRECTION_CACHE_TTL: int = 4 * 3600  # same headline => same correction for 4h
+
 FORMULA_VERSION: str = "sentiment-v2"
 
 # Reasoning tags the enricher may assign (also used for deterministic fallback).

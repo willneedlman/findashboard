@@ -23,7 +23,7 @@ from zoneinfo import ZoneInfo
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 import json  # noqa: E402
 
-from sentiment import aggregate, audit, config, enrich, horizon, lexicon, source_manager  # noqa: E402
+from sentiment import aggregate, audit, config, correction, enrich, horizon, lexicon, source_manager  # noqa: E402
 from sentiment.reliability import Reliability  # noqa: E402
 from sentiment.schemas import ScoredArticle, SentimentSnapshot  # noqa: E402
 from sentiment.sources import fetch_market_context, fetch_source  # noqa: E402
@@ -136,6 +136,11 @@ def _compute(sample_size: int, timeframe_hours: int, now: int) -> SentimentSnaps
 
     raw_by_label, market_ctx, total_collected = _ingest(specs, per_source, now)
     scored, in_window = _score_window(specs, raw_by_label, timeframe_hours, now)
+
+    # LLM corrective overlay: adjudicate only the headlines the lexicon scored with
+    # low confidence, overriding its direction when the LLM is confident. Everything
+    # else keeps its deterministic lexicon score. Pure pass-through if disabled.
+    scored = correction.apply(scored)
 
     # Optional, non-scoring tag enrichment.
     tags = enrich.enrich(scored)

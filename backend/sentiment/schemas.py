@@ -47,6 +47,8 @@ class ScoredArticle:
     entities: list[Entity] = field(default_factory=list)
     seen_in_sources: int = 1  # distinct feeds that carried this story (1 = unique)
     asset_directions: dict[str, float] = field(default_factory=dict)  # per-asset-class read
+    corrected: bool = False  # LLM overlay overrode the lexicon direction for this item
+    lexicon_direction: float | None = None  # the lexicon's pre-correction direction (audit)
 
 
 # ── Ingestion boundary ────────────────────────────────────────────────────────
