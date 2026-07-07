@@ -306,6 +306,12 @@ const floorVal = (s: Sorted | undefined, time: number): number | null => {
   return ans >= 0 ? s.v[ans] : null
 }
 
+// Main chart height is user-draggable and persisted per-device.
+const MAIN_H_KEY = 'cs_main_height'
+const MAIN_H_MIN = 240
+const MAIN_H_MAX = 900
+const MAIN_H_DEFAULT = 360
+
 const baseOptions = (C: Colors, h: number) => ({
   layout: { background: { type: ColorType.Solid, color: C.bg }, textColor: C.text, fontFamily: "ui-monospace, monospace", fontSize: 10, attributionLogo: false },
   grid: { vertLines: { color: C.grid }, horzLines: { color: C.grid } },
@@ -590,10 +596,33 @@ export function ChartStudioContent() {
   const candleStore = useRef<Map<number, Candle>>(new Map())
   const syncing = useRef(false)
   const echoing = useRef(false)
+
+  // Draggable main-chart height (persisted). The chart is created once; height
+  // changes are pushed via applyOptions so state is never lost on resize.
+  const [mainHeight, setMainHeight] = useState<number>(() => {
+    const v = Number(localStorage.getItem(MAIN_H_KEY))
+    return v >= MAIN_H_MIN && v <= MAIN_H_MAX ? v : MAIN_H_DEFAULT
+  })
+  const [handleHover, setHandleHover] = useState(false)
+  const dragState = useRef<{ startY: number; startH: number } | null>(null)
+  const onHandleDown = (e: React.PointerEvent) => {
+    e.preventDefault()
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId) } catch { /* older browser */ }
+    dragState.current = { startY: e.clientY, startH: mainHeight }
+  }
+  const onHandleMove = (e: React.PointerEvent) => {
+    if (!dragState.current) return
+    const next = dragState.current.startH + (e.clientY - dragState.current.startY)
+    setMainHeight(Math.max(MAIN_H_MIN, Math.min(MAIN_H_MAX, Math.round(next))))
+  }
+  const onHandleUp = (e: React.PointerEvent) => {
+    dragState.current = null
+    try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId) } catch { /* not captured */ }
+  }
   useEffect(() => {
     if (!mainRef.current) return
     const main = createChart(mainRef.current, {
-      ...baseOptions(C, 360), width: mainRef.current.clientWidth,
+      ...baseOptions(C, mainHeight), width: mainRef.current.clientWidth,
       timeScale: { borderColor: C.axisBorder, timeVisible: true, secondsVisible: false, barSpacing: 9 },
       handleScroll: { mouseWheel: false, pressedMouseMove: true },
       // Native wheel zoom is sluggish: replaced by the amplified cursor-pivot
@@ -726,6 +755,14 @@ export function ChartStudioContent() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Push height changes to the existing chart (no recreation) + persist. The
+  // scale tick nudges the GEX overlay to recompute against the new pane height.
+  useEffect(() => {
+    charts.current.main?.applyOptions({ height: mainHeight })
+    localStorage.setItem(MAIN_H_KEY, String(mainHeight))
+    setScaleTick(t => t + 1)
+  }, [mainHeight])
 
   // Exact-time lookup for lane crosshair echoes (no carry-forward: a dot on a
   // sparse lane at a bar with no point would lie).
@@ -1310,6 +1347,27 @@ export function ChartStudioContent() {
                 <span style={{ fontFamily: SANS, fontSize: 11, color: 'var(--theme-secondary, #8099b0)' }}>No data for {ticker} at {tf.toUpperCase()}. Try another symbol or timeframe.</span>
               </div>
             )}
+          </div>
+
+          {/* Drag to make the chart taller/shorter; double-click resets. */}
+          <div
+            onPointerDown={onHandleDown}
+            onPointerMove={onHandleMove}
+            onPointerUp={onHandleUp}
+            onDoubleClick={() => setMainHeight(MAIN_H_DEFAULT)}
+            onMouseEnter={() => setHandleHover(true)}
+            onMouseLeave={() => setHandleHover(false)}
+            title="Drag to resize chart · double-click to reset"
+            style={{
+              height: 8, cursor: 'ns-resize', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              touchAction: 'none', userSelect: 'none', transition: 'background 0.12s',
+              background: handleHover ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 12%, transparent)' : 'var(--theme-surface, #0d1826)',
+              borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.06))',
+              borderBottom: '1px solid var(--theme-border-faint, rgba(255,255,255,0.05))',
+            }}
+          >
+            <div style={{ width: 34, height: 2, borderRadius: 2, transition: 'background 0.12s',
+              background: handleHover ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.28))' }} />
           </div>
 
           {laneOrder.map(id => {
