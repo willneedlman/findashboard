@@ -12,8 +12,21 @@ from pydantic import BaseModel, field_validator, model_validator
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from validation import validate_ticker, validate_date
-from cache import get_history, get_info
+from cache import get_history, get_info, get_download
 from strategies.indicators import get_indicator as _get_ind
+
+# ── Multi-timeframe support ───────────────────────────────────────────────────
+# A condition's indicator can run on a coarser or finer bar than the daily
+# backtest. Coarser (weekly/monthly) resamples the daily close we already have;
+# finer (intraday) fetches that yfinance interval, capped by how much history the
+# feed serves. Either way the indicator is computed on its native bars, then
+# mapped back onto the daily index (ffill) so the daily signal loop is unchanged.
+_TF_RESAMPLE = {"weekly": "W-FRI", "monthly": "ME"}          # resample daily close
+_TF_INTRADAY = {"hourly": ("1h", 725), "15min": ("15m", 55), "5min": ("5m", 55)}  # (yf interval, max lookback days)
+# Timeframe only applies to price-derived indicators; live-snapshot metrics
+# (fundamentals, options, greeks, flow) are constant across the series.
+_TF_TYPES = {"PRICE", "RSI", "SMA", "EMA", "MACD_LINE", "MACD_SIGNAL",
+             "BB_UPPER", "BB_MID", "BB_LOWER", "ATR", "MOMENTUM", "PCT_CHANGE"}
 
 router = APIRouter()
 
@@ -256,23 +269,120 @@ def list_strategies():
 
 # ─── Custom rule strategy ─────────────────────────────────────────────────────
 
-def _series_for(ref: dict, primary: str, frames: dict[str, np.ndarray],
-                cache: dict[str, np.ndarray], ctx_by_ticker: dict[str, dict], n: int) -> np.ndarray:
-    """Indicator series for one condition side, resolved against the side's own
-    ticker (a condition may reference a symbol other than the traded one; absent
-    ⇒ the strategy's primary). A referenced symbol with no data yields an all-NaN
-    series so its condition never fires."""
-    tk = str(ref.get("ticker") or primary).upper().strip()
+def _fetch_intraday_close(ticker: str, tf: str, start: str, end: str):
+    """Fetch intraday closes for a finer-than-daily timeframe, clamped to the
+    feed's history window (1h ~2yr, 15m/5m ~60d). Returns a tz-naive close Series
+    or None if unavailable."""
+    import datetime as _dt
+    yfint, maxdays = _TF_INTRADAY[tf]
+    lo = (_dt.date.today() - _dt.timedelta(days=maxdays)).isoformat()
+    s = max(start, lo)
+    if s >= end:              # range is entirely older than the feed's window
+        return None
+    df = get_download((ticker,), s, end, interval=yfint)
+    if df is None or getattr(df, "empty", True):
+        return None
+    cols = df.columns
+    if isinstance(cols, pd.MultiIndex):
+        if "Close" not in cols.get_level_values(0):
+            return None
+        close = df["Close"]
+        if isinstance(close, pd.DataFrame):
+            close = close.iloc[:, 0]
+    else:
+        if "Close" not in cols:
+            return None
+        close = df["Close"]
+    close = close.dropna()
+    return close if len(close) else None
+
+
+def _referenced_intraday(rules: dict | None, primary: str) -> set[tuple[str, str]]:
+    """(ticker, timeframe) pairs needing an intraday fetch before evaluation."""
+    out: set[tuple[str, str]] = set()
+    for block in (rules or {}).values():
+        if not isinstance(block, dict):
+            continue
+        conds = list(block.get("conditions") or [])
+        for g in (block.get("groups") or []):
+            if isinstance(g, dict):
+                conds += (g.get("conditions") or [])
+        for c in conds:
+            if not isinstance(c, dict):
+                continue
+            for side in ("lhs", "rhs_ind"):
+                ref = c.get(side) or {}
+                tf = str(ref.get("timeframe") or "daily").lower()
+                if tf in _TF_INTRADAY and ref.get("type") in _TF_TYPES:
+                    tk = str(ref.get("ticker") or primary).upper().strip()
+                    if tk:
+                        out.add((tk, tf))
+    return out
+
+
+def _prefetch_intraday(rules: dict, primary: str, start: str, end: str) -> dict:
+    out: dict[tuple[str, str], object] = {}
+    for tk, tf in _referenced_intraday(rules, primary):
+        ser = _fetch_intraday_close(tk, tf, start, end)
+        if ser is not None and len(ser):
+            out[(tk, tf)] = ser
+    return out
+
+
+def _tf_indicator(ref: dict, arr: np.ndarray, daily_index, ctx: dict | None,
+                  tf: str, tk: str, intraday: dict) -> np.ndarray:
+    """Indicator computed on its native timeframe, then mapped onto the daily
+    index (ffill) so the daily signal loop reads the latest completed bar."""
+    n = len(daily_index)
+    if tf in _TF_RESAMPLE:
+        ser = pd.Series(arr, index=daily_index)
+        coarse = ser.resample(_TF_RESAMPLE[tf]).last().dropna()
+        if coarse.empty:
+            return np.full(n, np.nan)
+        ind = _get_ind(ref, coarse.to_numpy(dtype=float), ctx)
+        return pd.Series(ind, index=coarse.index).reindex(daily_index, method="ffill").to_numpy(dtype=float)
+    if tf in _TF_INTRADAY:
+        intr = intraday.get((tk, tf))
+        if intr is None or len(intr) == 0:
+            return np.full(n, np.nan)
+        ind = _get_ind(ref, intr.to_numpy(dtype=float), ctx)
+        s = pd.Series(ind, index=pd.DatetimeIndex(intr.index))
+        if s.index.tz is not None:
+            s.index = s.index.tz_localize(None)
+        per_day = s.groupby(s.index.normalize()).last()   # last intraday reading each day
+        di = pd.DatetimeIndex(daily_index)
+        di = di.tz_localize(None) if di.tz is not None else di
+        return per_day.reindex(di.normalize(), method="ffill").to_numpy(dtype=float)
+    return _get_ind(ref, arr, ctx)
+
+
+def _resolve_series(ref: dict, tk: str, env: dict) -> np.ndarray:
+    arr = env["frames"].get(tk)
+    if arr is None:
+        return np.full(env["n"], np.nan)
+    ctx = env["ctx_by_ticker"].get(tk)
+    tf = str(ref.get("timeframe") or "daily").lower()
+    di = env.get("daily_index")
+    if tf == "daily" or di is None or ref.get("type") not in _TF_TYPES:
+        return _get_ind(ref, arr, ctx)        # unchanged daily path
+    return _tf_indicator(ref, arr, di, ctx, tf, tk, env.get("intraday") or {})
+
+
+def _series_for(ref: dict, env: dict) -> np.ndarray:
+    """Daily-aligned indicator series for one condition side, resolved against the
+    side's own ticker (blank ⇒ primary) and timeframe (blank ⇒ daily). A referenced
+    symbol with no data yields all-NaN so its condition never fires. Cached per
+    (ticker, ref); the ref cache key already folds in the timeframe field."""
+    tk = str(ref.get("ticker") or env["primary"]).upper().strip()
     key = repr((tk, sorted((k, v) for k, v in ref.items() if k != "ticker")))
+    cache = env["cache"]
     if key not in cache:
-        arr = frames.get(tk)
-        cache[key] = _get_ind(ref, arr, ctx_by_ticker.get(tk)) if arr is not None else np.full(n, np.nan)
+        cache[key] = _resolve_series(ref, tk, env)
     return cache[key]
 
 
-def _eval_cond_at(cond: dict, i: int, primary: str, frames: dict[str, np.ndarray],
-                  cache: dict[str, np.ndarray], ctx_by_ticker: dict[str, dict], n: int) -> bool:
-    lhs_arr = _series_for(cond.get("lhs", {"type": "PRICE"}), primary, frames, cache, ctx_by_ticker, n)
+def _eval_cond_at(cond: dict, i: int, env: dict) -> bool:
+    lhs_arr = _series_for(cond.get("lhs", {"type": "PRICE"}), env)
     lhs = lhs_arr[i]
     if np.isnan(lhs):
         return False
@@ -283,7 +393,7 @@ def _eval_cond_at(cond: dict, i: int, primary: str, frames: dict[str, np.ndarray
         rhs = float(cond.get("rhs_num", 0))
         prev_rhs = rhs
     else:
-        rhs_arr  = _series_for(cond.get("rhs_ind", {"type": "PRICE"}), primary, frames, cache, ctx_by_ticker, n)
+        rhs_arr  = _series_for(cond.get("rhs_ind", {"type": "PRICE"}), env)
         rhs      = rhs_arr[i]
         if np.isnan(rhs):
             return False
@@ -303,18 +413,16 @@ def _eval_cond_at(cond: dict, i: int, primary: str, frames: dict[str, np.ndarray
     return False
 
 
-def _eval_group_at(group: dict, i: int, primary: str, frames: dict, cache: dict,
-                   ctx_by_ticker: dict, n: int) -> bool:
+def _eval_group_at(group: dict, i: int, env: dict) -> bool:
     conds = group.get("conditions", [])
     if not conds:
         return False
     logic   = group.get("logic", "AND")
-    results = [_eval_cond_at(c, i, primary, frames, cache, ctx_by_ticker, n) for c in conds]
+    results = [_eval_cond_at(c, i, env) for c in conds]
     return all(results) if logic == "AND" else any(results)
 
 
-def _eval_block_at(block: dict, i: int, primary: str, frames: dict, cache: dict,
-                   ctx_by_ticker: dict, n: int) -> bool:
+def _eval_block_at(block: dict, i: int, env: dict) -> bool:
     groups = block.get("groups")
     # backwards compat: flat conditions → treat as single group
     if not groups:
@@ -323,14 +431,15 @@ def _eval_block_at(block: dict, i: int, primary: str, frames: dict, cache: dict,
             return False
         groups = [{"logic": block.get("logic", "AND"), "conditions": flat}]
     top_logic = block.get("logic", "AND")
-    results   = [_eval_group_at(g, i, primary, frames, cache, ctx_by_ticker, n) for g in groups]
+    results   = [_eval_group_at(g, i, env) for g in groups]
     return all(results) if top_logic == "AND" else any(results)
 
 
 def evaluate_custom_rules(prices: np.ndarray, rules: dict, context: dict | None = None,
                           frames: dict[str, np.ndarray] | None = None,
                           ctx_by_ticker: dict[str, dict] | None = None,
-                          primary: str | None = None) -> np.ndarray:
+                          primary: str | None = None,
+                          daily_index=None, intraday: dict | None = None) -> np.ndarray:
     """Bar-by-bar evaluation. Returns 1.0 = invested, 0.0 = cash.
 
     Single-ticker (default): pass `prices` + `context`; every condition reads that
@@ -349,17 +458,18 @@ def evaluate_custom_rules(prices: np.ndarray, rules: dict, context: dict | None 
     if ctx_by_ticker is None:
         ctx_by_ticker = {primary: context or {}}
     signal   = np.zeros(n)
-    cache: dict[str, np.ndarray] = {}
+    env = {"primary": primary, "frames": frames, "cache": {}, "ctx_by_ticker": ctx_by_ticker,
+           "n": n, "daily_index": daily_index, "intraday": intraday or {}}
     buy_blk  = rules.get("buy",  {"logic": "AND", "conditions": []})
     sell_blk = rules.get("sell", {"logic": "AND", "conditions": []})
     in_trade = False
     for i in range(1, n):
         if not in_trade:
-            if _eval_block_at(buy_blk, i, primary, frames, cache, ctx_by_ticker, n):
+            if _eval_block_at(buy_blk, i, env):
                 in_trade   = True
                 signal[i]  = 1.0
         else:
-            if _eval_block_at(sell_blk, i, primary, frames, cache, ctx_by_ticker, n):
+            if _eval_block_at(sell_blk, i, env):
                 in_trade  = False
                 signal[i] = 0.0
             else:
@@ -487,9 +597,11 @@ def _run_custom_rules(ticker: str, rules: dict, start: str, end: str):
     if index is None or primary not in frames:
         return None, None
     ctx_by_ticker = {tk: resolve_context(tk, rules) for tk in frames}
+    intraday = _prefetch_intraday(rules, primary, start, end)
     prices = frames[primary]
     sig = evaluate_custom_rules(prices, rules, frames=frames,
-                                ctx_by_ticker=ctx_by_ticker, primary=primary)
+                                ctx_by_ticker=ctx_by_ticker, primary=primary,
+                                daily_index=index, intraday=intraday)
     return sig, pd.Series(prices, index=index, name=primary)
 
 

@@ -26,6 +26,11 @@ export const LIVE_TYPES: IndicatorType[] = [
   'FLOW_HORMUZ', 'FLOW_SUEZ', 'FLOW_PANAMA', 'FLOW_MALACCA',
 ]
 
+// Bar size the indicator runs on. Daily is the default (and the backtest's own
+// step). Coarser bars resample the daily close; finer bars fetch intraday data
+// (history-limited: 1h ~2yr, 15m/5m ~60d), mapped back onto the daily backtest.
+export type Timeframe = 'daily' | 'weekly' | 'monthly' | 'hourly' | '15min' | '5min'
+
 export interface IndicatorRef {
   type: IndicatorType
   period?: number
@@ -34,9 +39,17 @@ export interface IndicatorRef {
   signal_period?: number
   std?: number
   ticker?: string   // optional cross-ticker reference; blank = the strategy's primary symbol
+  timeframe?: Timeframe   // optional; absent = daily
   level?: number    // greeks: strike as a multiple of spot (1.0 = ATM, 1.05 = 5% OTM call)
   opt_type?: 'call' | 'put'   // greeks: which side the greek is measured on
 }
+
+const TF_OPTIONS: { value: Timeframe; label: string }[] = [
+  { value: 'daily', label: 'Daily' }, { value: 'weekly', label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' }, { value: 'hourly', label: '1-Hour' },
+  { value: '15min', label: '15-Min' }, { value: '5min', label: '5-Min' },
+]
+const TF_INTRADAY: Timeframe[] = ['hourly', '15min', '5min']
 
 export type OpType = 'gt' | 'lt' | 'gte' | 'lte' | 'crosses_above' | 'crosses_below'
 
@@ -99,6 +112,15 @@ export function rulesForTicker(def: CustomStrategyDef, ticker: string): { buy: R
   const t = (ticker || '').toUpperCase().trim()
   const hit = t ? def.perTicker?.find(r => (r.ticker || '').toUpperCase().trim() === t) : undefined
   return hit ? { buy: hit.buy, sell: hit.sell } : { buy: def.buy, sell: def.sell }
+}
+
+// True if any condition runs on a non-daily bar. Backtests honor timeframes; the
+// live paper scheduler runs indicators on daily bars, so callers warn on this.
+export function usesNonDailyTimeframe(def: CustomStrategyDef): boolean {
+  const blocks: RuleBlock[] = [def.buy, def.sell, ...(def.perTicker?.flatMap(p => [p.buy, p.sell]) ?? [])]
+  const nonDaily = (r?: IndicatorRef) => !!r?.timeframe && r.timeframe !== 'daily'
+  return blocks.some(b => b.groups.some(g => g.conditions.some(c =>
+    nonDaily(c.lhs) || (c.rhs_type === 'indicator' && nonDaily(c.rhs_ind)))))
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -228,6 +250,22 @@ function IndicatorSelector({ value, onChange }: {
         placeholder="sym"
         title="Cross-ticker reference — evaluate this indicator on another symbol. Blank = the strategy's primary ticker."
         style={{ ...inp, width: 52, flexShrink: 0, textTransform: 'uppercase' }} />
+      {!LIVE_TYPES.includes(t) && (
+        <>
+          <select value={value.timeframe ?? 'daily'}
+            onChange={e => onChange({ ...value, timeframe: e.target.value === 'daily' ? undefined : e.target.value as Timeframe })}
+            title="Bar size this indicator runs on. Coarser bars resample the daily close. Intraday bars fetch that interval (history limited: 1h ~2yr, 15m/5m ~60d), so older bars have no signal."
+            style={{ ...sel, width: 84, flexShrink: 0 }}>
+            {TF_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          {TF_INTRADAY.includes(value.timeframe as Timeframe) && (
+            <span title="Intraday history is limited, so bars older than the window carry no signal."
+              style={{ fontSize: 8, color: T.gold, fontFamily: T.mono, border: `1px solid ${T.gold}55`, padding: '1px 4px', letterSpacing: '0.04em', flexShrink: 0 }}>
+              {value.timeframe === 'hourly' ? '~2yr' : '~60d'}
+            </span>
+          )}
+        </>
+      )}
       {LIVE_TYPES.includes(t) && (
         <span title="Current-snapshot value (live signal). Held constant through a historical backtest, so it is not point-in-time."
           style={{ fontSize: 8, color: T.muted, fontFamily: T.mono, border: `1px solid ${T.border}`, padding: '1px 4px', letterSpacing: '0.06em' }}>

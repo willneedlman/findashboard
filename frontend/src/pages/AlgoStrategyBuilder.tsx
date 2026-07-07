@@ -9,7 +9,7 @@ import TickerInput from '../components/TickerInput'
 import { KpiCell } from '../components/mmCockpit'
 import { useChartColors } from '../hooks/useChartColors'
 import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
-import CustomStrategyModal, { type CustomStrategyDef, DEFAULT_RISK, rulesForTicker } from '../components/CustomStrategyModal'
+import CustomStrategyModal, { type CustomStrategyDef, DEFAULT_RISK, rulesForTicker, usesNonDailyTimeframe } from '../components/CustomStrategyModal'
 import { loadCustomStrategies, saveCustomStrategy, deleteCustomStrategy } from '../utils/customStrategies'
 
 const STRIP: React.CSSProperties = {
@@ -433,6 +433,11 @@ export function AlgoStrategyBuilderContent() {
           fontFamily: 'inherit', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '7px 0',
           cursor: (!activeDef || sendToPaper.isPending) ? 'default' : 'pointer', opacity: (!activeDef || sendToPaper.isPending) ? 0.6 : 1,
         }}>{sendToPaper.isPending ? 'Sending…' : '→ Send to Paper Trader'}</button>
+        {activeDef && usesNonDailyTimeframe(activeDef) && (
+          <div style={{ fontSize: 8, color: 'var(--theme-primary, #c9a84c)', fontFamily: 'var(--theme-mono)', lineHeight: '12px', textAlign: 'center' }}>
+            Uses non-daily timeframes. Live paper runs indicators on daily bars. Timeframes apply to backtests only.
+          </div>
+        )}
         {sendToPaper.isSuccess && <div style={{ fontSize: 9, color: 'var(--theme-positive)', fontFamily: 'var(--theme-sans)', textAlign: 'center' }}>Imported · enable it in Paper Trading</div>}
         {sendToPaper.isError && <div style={{ fontSize: 9, color: 'var(--theme-negative)', fontFamily: 'var(--theme-sans)', textAlign: 'center' }}>{(sendToPaper.error as Error)?.message ?? 'Import failed'}</div>}
         </>) : (<>
@@ -448,6 +453,11 @@ export function AlgoStrategyBuilderContent() {
           fontFamily: 'inherit', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '7px 0',
           cursor: (positions.length === 0 || sendPortfolioToPaper.isPending) ? 'default' : 'pointer', opacity: (positions.length === 0 || sendPortfolioToPaper.isPending) ? 0.6 : 1,
         }}>{sendPortfolioToPaper.isPending ? 'Sending…' : '→ Send Portfolio to Paper'}</button>
+        {positions.some(p => { const d = saved.find(s => s.name === p.strategy); return !!d && usesNonDailyTimeframe(d) }) && (
+          <div style={{ fontSize: 8, color: 'var(--theme-primary, #c9a84c)', fontFamily: 'var(--theme-mono)', lineHeight: '12px', textAlign: 'center' }}>
+            Some strategies use non-daily timeframes. Live paper runs indicators on daily bars. Timeframes apply to backtests only.
+          </div>
+        )}
         {sendPortfolioToPaper.isSuccess && <div style={{ fontSize: 9, color: 'var(--theme-positive)', fontFamily: 'var(--theme-sans)', textAlign: 'center' }}>Created {sendPortfolioToPaper.data?.created} job{sendPortfolioToPaper.data?.created === 1 ? '' : 's'} · enable in Paper Trading</div>}
         {sendPortfolioToPaper.isError && <div style={{ fontSize: 9, color: 'var(--theme-negative)', fontFamily: 'var(--theme-sans)', textAlign: 'center' }}>{sendPortfolioToPaper.error?.message ?? 'Import failed'}</div>}
         </>)}
