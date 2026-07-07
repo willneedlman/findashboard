@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Star } from 'lucide-react'
+import TickerLogo from './TickerLogo'
 import { fmtMarketCap, fmtNum } from '../lib/format'
 import { setLinkedTicker, TICKER_TOOLS, tickerToolUrl } from '../lib/tickerLink'
 import { readWatchlist, toggleWatchlist } from '../lib/watchlist'
@@ -126,16 +127,19 @@ export default function TickerDrawer({ open, sym, onClose }: { open: boolean; sy
 
             {/* header */}
             <div style={{ ...SECTION, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontFamily: MONO, fontSize: 19, fontWeight: 700, color: GOLD, letterSpacing: '0.04em' }}>{sym}</span>
-                  <button onClick={toggleWl} title={inWl ? 'Remove from watchlist' : 'Add to watchlist'}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: inWl ? GOLD : SEC, display: 'flex' }}>
-                    <Star size={14} fill={inWl ? 'currentColor' : 'none'} />
-                  </button>
-                </div>
-                <div style={{ fontFamily: SANS, fontSize: 11, color: SEC, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {hub.isLoading ? 'Loading…' : d ? `${d.company_name ?? sym} · ${d.sector ?? ''}` : 'Profile unavailable'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                <TickerLogo ticker={sym} size={30} />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontFamily: MONO, fontSize: 18, fontWeight: 400, color: GOLD, letterSpacing: '0.08em' }}>{sym}</span>
+                    <button onClick={toggleWl} title={inWl ? 'Remove from watchlist' : 'Add to watchlist'}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: inWl ? GOLD : SEC, display: 'flex' }}>
+                      <Star size={14} fill={inWl ? 'currentColor' : 'none'} />
+                    </button>
+                  </div>
+                  <div style={{ fontFamily: SANS, fontSize: 11, color: SEC, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {hub.isLoading ? 'Loading…' : d ? `${d.company_name ?? sym} · ${d.sector ?? ''}` : 'Profile unavailable'}
+                  </div>
                 </div>
               </div>
               <button onClick={onClose} aria-label="Close"
@@ -147,7 +151,7 @@ export default function TickerDrawer({ open, sym, onClose }: { open: boolean; sy
             {/* quote */}
             <div style={{ ...SECTION, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontFamily: MONO, fontSize: 22, fontWeight: 700, color: TEXT }}>
+                <span style={{ fontFamily: MONO, fontSize: 22, fontWeight: 500, color: TEXT }}>
                   {d?.current_price != null ? `$${Number(d.current_price).toFixed(2)}` : hub.isLoading ? '…' : '—'}
                 </span>
                 <span style={{ fontFamily: MONO, fontSize: 12, fontWeight: 600, color: pct == null ? SEC : pct >= 0 ? POS : NEG }}>
