@@ -146,19 +146,18 @@ export default function StrategyBuilder() {
     })
     const maxDte = legMeta.reduce((m, x) => Math.max(m, x.dteDays), 0)
     const frontDte = legMeta.reduce((m, x) => Math.min(m, x.dteDays), maxDte)
-    // A diagonal/calendar has legs on different expiries. The gold "at expiry"
-    // line is the TERMINAL payoff at the FINAL expiry: legs that expired earlier
-    // are realized (locked at the current spot), and the surviving longest-dated
-    // leg is intrinsic at the terminal price — so a long leg's upside stays
-    // uncapped instead of being offset by a short leg that already settled.
+    // A diagonal/calendar has legs on different expiries. Each leg settles at the
+    // terminal price S, EXCEPT a leg the time slider has already passed, which is
+    // realized (locked at the current spot). So a surviving long leg only shows
+    // its uncapped upside once the slider is past the shorter-dated leg's expiry;
+    // before that the short is still live at S and caps the payoff.
     const multiExpiry = maxDte !== frontDte
-    const finalExpiry = legMeta.reduce((best, x) => x.dteDays > best.dteDays ? x : best, legMeta[0])?.leg.expiry ?? ''
     const tDays = Math.min(daysFromNow, maxDte)
     const showT = maxDte > 0   // before-expiry curve only meaningful with time left
 
     const buildRow = (S: number): Record<string, number> => {
       const total = (multiExpiry
-        ? legMeta.reduce((sum, m) => sum + intrinsic(m.dteDays < maxDte ? spot : S, m.leg), 0)
+        ? legMeta.reduce((sum, m) => sum + intrinsic(tDays > m.dteDays ? spot : S, m.leg), 0)
         : primary.reduce((sum, leg) => sum + intrinsic(S, leg), 0)) + secondaryOffset
       // A leg already expired at the slider date is REALIZED: its P&L is locked
       // at the current spot (a constant), not re-priced against the x-axis. That
@@ -213,7 +212,7 @@ export default function StrategyBuilder() {
       }
     }
 
-    return { rows, atm, spot, yMin, yMax, breakevens, lo, hi, pct: (spot - atm) / atm * 100, maxDte, tDays, showT, multiExpiry, finalExpiry }
+    return { rows, atm, spot, yMin, yMax, breakevens, lo, hi, pct: (spot - atm) / atm * 100, maxDte, tDays, showT, multiExpiry }
   }, [legs, spotOverrides, primaryTicker, daysFromNow]) // spotOverrides intentional — live updates
 
   const primaryLegs = legs.filter(l => l.ticker === primaryTicker)
@@ -709,10 +708,10 @@ export default function StrategyBuilder() {
           {/* Expiry Payoff Diagram */}
           <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', position: 'relative' }}>
             <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 10, background: 'var(--theme-surface, rgba(46,57,77,0.8))', padding: '3px 8px', borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>
-              {primaryTicker} P&L at {chartData.multiExpiry ? 'Final Expiry' : 'Expiry'}
+              {primaryTicker} P&L at Expiry
             </div>
             <div style={{ position: 'absolute', top: 0, right: 0, padding: '3px 8px', fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', zIndex: 10 }}>
-              per contract (×100 shares) · {chartData.multiExpiry ? `at ${fmtExpiry(chartData.finalExpiry)}, earlier legs realized at spot` : 'intrinsic only'}
+              per contract (×100 shares) · {chartData.multiExpiry ? 'expired legs (per time slider) realized at spot' : 'intrinsic only'}
             </div>
 
             <div style={{ paddingTop: 28, paddingLeft: 8, paddingRight: 8, paddingBottom: 0, height: 340 }}>
