@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Legend } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
@@ -36,14 +37,18 @@ const SELECT: React.CSSProperties = { background: 'var(--theme-bg, #0a1628)', bo
 
 export default function DealerGEX() {
   const cc = useChartColors()
-  const [ticker, setTicker] = useState('SPY')
+  const [sp] = useSearchParams()
+  const urlTicker = (sp.get('ticker') || '').trim().toUpperCase()
+  const [ticker, setTicker] = useState(urlTicker || 'SPY')
   const [nStrikes, setNStrikes] = useState(20)
   const [paramsOpen, setParamsOpen] = useState(true)
   const [expiry, setExpiry] = useState<string>('')
 
   // Query (not mutation) so repeat loads of the same ticker/expiry within the
-  // 15-min staleTime serve instantly from the react-query cache.
-  const [submitted, setSubmitted] = useState<{ ticker: string; expiry: string } | null>(null)
+  // 15-min staleTime serve instantly from the react-query cache. Arriving with
+  // ?ticker= (drawer, palette, linked mode) auto-loads it.
+  const [submitted, setSubmitted] = useState<{ ticker: string; expiry: string } | null>(
+    urlTicker ? { ticker: urlTicker, expiry: '' } : null)
   const { data, isFetching: isPending, refetch } = useQuery({
     queryKey: ['dealer-gex', submitted?.ticker, submitted?.expiry],
     enabled: !!submitted,

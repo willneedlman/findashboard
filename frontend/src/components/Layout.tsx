@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import Footer from './Footer'
 import AlphaMark from './AlphaMark'
+import TickerLinkChip from './TickerLinkChip'
 import AlertToastQueue from './AlertToastQueue'
 import { useAlertSocket, type AlertPayload } from '../hooks/useAlertSocket'
 import useIsMobile from '../hooks/useIsMobile'
@@ -200,6 +201,8 @@ export default function Layout({ children }: LayoutProps) {
             )}
           </button>
         </div>
+
+        <TickerLinkChip collapsed={collapsed} />
 
         {/* workspaces */}
         <div style={{ margin: '10px 8px 4px', padding: collapsed ? '6px 4px' : 6, background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 5%, var(--theme-surface, #0d1826))', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)' }}>

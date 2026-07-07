@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, ReferenceDot, Legend } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
@@ -56,7 +57,9 @@ function SectionHeader({ label }: { label: string }) {
 
 export function ImpliedProbabilityContent() {
   const cc = useChartColors()
-  const [ticker, setTicker] = useState('SPY')
+  const [sp] = useSearchParams()
+  const urlTicker = (sp.get('ticker') || '').trim().toUpperCase()
+  const [ticker, setTicker] = useState(urlTicker || 'SPY')
   const [paramsOpen, setParamsOpen] = useState(true)
   const [expiry, setExpiry] = useState(() => {
     const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().split('T')[0]
@@ -64,7 +67,9 @@ export function ImpliedProbabilityContent() {
 
   // Query (not mutation): the result is deterministic on (ticker, expiry), so
   // regenerating the same pair within the 15-min staleTime is a cache hit.
-  const [submitted, setSubmitted] = useState<{ ticker: string; expiry: string } | null>(null)
+  // Arriving with ?ticker= (drawer, palette, linked mode) auto-loads it.
+  const [submitted, setSubmitted] = useState<{ ticker: string; expiry: string } | null>(() =>
+    urlTicker ? { ticker: urlTicker, expiry: (() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().split('T')[0] })() } : null)
   const { data, isFetching: isPending, error: mutError, refetch } = useQuery({
     queryKey: ['implied-prob', submitted?.ticker, submitted?.expiry],
     enabled: !!submitted,

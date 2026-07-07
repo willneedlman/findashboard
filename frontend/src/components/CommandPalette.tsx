@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { HUBS } from '../lib/hubs'
+import { setLinkedTicker } from '../lib/tickerLink'
 
-interface Cmd { label: string; route: string; group: string; desc?: string }
+interface Cmd { label: string; route?: string; group: string; desc?: string; action?: () => void }
 
 const WORKSPACE: Cmd[] = [
   { label: 'Home', route: '/app', group: 'Workspace' },
@@ -41,6 +42,8 @@ const TICKER_TARGETS: [string, string][] = [
   ['Market Data', '/supply-chain'],
   ['Chain Scanner', '/chain'],
   ['Volatility Skew', '/skew'],
+  ['Dealer GEX', '/gex'],
+  ['Implied Probability', '/probability'],
   ['DCF Valuation', '/dcf'],
   ['Company Profile', '/supply-chain'],
   ['Relative Valuation', '/relative-valuation'],
@@ -67,12 +70,17 @@ export default function CommandPalette() {
     if (!q.trim()) return COMMANDS
     const tools = COMMANDS.map(c => ({ c, s: score(q, c) })).filter(x => x.s >= 0)
       .sort((a, b) => a.s - b.s).map(x => x.c).slice(0, 40)
-    // If the query looks like a symbol, append "open SYMBOL in <tool>" commands.
+    // If the query looks like a symbol, lead with the overview drawer, then
+    // append "open SYMBOL in <tool>" commands.
     const sym = q.trim().toUpperCase()
     const ticker: Cmd[] = TICKER_RE.test(q.trim())
-      ? TICKER_TARGETS.map(([label, base]) => ({ label: `${sym} → ${label}`, route: `${base}?ticker=${sym}`, group: 'Open ticker' }))
+      ? [
+          { label: `${sym} — Overview`, group: 'Ticker', desc: 'Quote, vol, gamma, earnings, news',
+            action: () => { setLinkedTicker(sym); window.dispatchEvent(new CustomEvent('ft:ticker-drawer', { detail: sym })) } },
+          ...TICKER_TARGETS.map(([label, base]): Cmd => ({ label: `${sym} → ${label}`, route: `${base}?ticker=${sym}`, group: 'Open ticker' })),
+        ]
       : []
-    return [...tools, ...ticker]
+    return TICKER_RE.test(q.trim()) ? [...ticker.slice(0, 1), ...tools, ...ticker.slice(1)] : [...tools, ...ticker]
   }, [q])
 
   // Global ⌘K / Ctrl+K toggle.
@@ -101,7 +109,8 @@ export default function CommandPalette() {
 
   const go = (c?: Cmd) => {
     if (!c) return
-    navigate(c.route)
+    if (c.action) c.action()
+    else if (c.route) navigate(c.route)
     setOpen(false)
   }
 
@@ -129,7 +138,7 @@ export default function CommandPalette() {
             <div style={{ padding: '18px 12px', color: SEC, fontFamily: MONO, fontSize: 12, textAlign: 'center' }}>No matches</div>
           )}
           {results.map((c, i) => (
-            <div key={`${c.group}:${c.route}`} onClick={() => go(c)} onMouseEnter={() => setSel(i)}
+            <div key={`${c.group}:${c.label}`} onClick={() => go(c)} onMouseEnter={() => setSel(i)}
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '8px 11px', cursor: 'pointer',
                 background: i === sel ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)' : 'transparent',
                 borderLeft: `2px solid ${i === sel ? GOLD : 'transparent'}` }}>

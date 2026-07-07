@@ -1,8 +1,36 @@
-import { Suspense, useEffect } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { lazyWithReload } from './lib/chunkReload'
-import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import CommandPalette from './components/CommandPalette'
+import { TICKER_SYM_RE, LINKED_ROUTES, setLinkedTicker, getLinkedTicker, isLinkOn } from './lib/tickerLink'
+import { recordRecentTicker } from './lib/recentTickers'
+
+// Lazy so axios + the drawer UI stay out of the critical-path index chunk;
+// the host below owns the open event and mounts it on first use.
+const TickerDrawerPanel = lazyWithReload(() => import('./components/TickerDrawer'))
+
+function TickerDrawerHost() {
+  const [sym, setSym] = useState('')
+  const [open, setOpen] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const s = String((e as CustomEvent).detail ?? '').trim().toUpperCase()
+      if (!s) return
+      setSym(s); setOpen(true); setLoaded(true)
+      recordRecentTicker(s)
+    }
+    window.addEventListener('ft:ticker-drawer', onOpen)
+    return () => window.removeEventListener('ft:ticker-drawer', onOpen)
+  }, [])
+  if (!loaded) return null
+  return (
+    <Suspense fallback={null}>
+      <TickerDrawerPanel open={open} sym={sym} onClose={() => setOpen(false)} />
+    </Suspense>
+  )
+}
 import LoadingState from './components/LoadingState'
 import Layout from './components/Layout'
 import { ThemeProvider, useTheme } from './contexts/ThemeContext'
@@ -109,14 +137,27 @@ function PageviewTracker() {
 
 function TerminalChrome() {
   const location = useLocation()
+  const navigate = useNavigate()
   // Record tool visits for the Home "Jump Back In" row.
   useEffect(() => {
     const tool = findToolByLocation(location.pathname, location.search)
     if (tool) recordRecent(tool.route)
   }, [location.pathname, location.search])
+  // Linked-ticker mode: explicit ?ticker= navigations update the shared symbol;
+  // opening a linked route without one inherits it (URL prefill does the rest).
+  useEffect(() => {
+    const t = (new URLSearchParams(location.search).get('ticker') || '').toUpperCase()
+    if (t && TICKER_SYM_RE.test(t)) {
+      setLinkedTicker(t)
+    } else if (isLinkOn() && LINKED_ROUTES.has(location.pathname)) {
+      const linked = getLinkedTicker()
+      if (linked) navigate(`${location.pathname}?ticker=${linked}`, { replace: true })
+    }
+  }, [location.pathname, location.search, navigate])
   return (
     <Layout>
       <CommandPalette />
+      <TickerDrawerHost />
       <AnimatePresence mode="wait">
         <Suspense key={location.pathname} fallback={<LoadingState />}>
           <Outlet />

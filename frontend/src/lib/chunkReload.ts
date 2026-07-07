@@ -36,7 +36,8 @@ export function reloadForChunkError(): boolean {
 // never-resolving promise, so Suspense keeps showing its normal fallback
 // (spinner) until the page reloads — no error card flash. Non-chunk errors and
 // reloads suppressed by the guard fall through to the ErrorBoundary.
-export function lazyWithReload<T extends ComponentType<unknown>>(
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- mirrors React.lazy's own constraint; ComponentType<unknown> rejects components with props
+export function lazyWithReload<T extends ComponentType<any>>(
   factory: () => Promise<{ default: T }>,
 ) {
   return lazy(() =>

@@ -23,6 +23,7 @@ const ALLOWLIST = [
   'watchlist',                     // Watchlist
   'fdb_custom_strategies',         // Custom strategies
   'ft_nav_favorites',              // Pinned nav items
+  'pe_wl',                         // Portfolio Earnings watchlist
 ]
 const ALLOW = new Set(ALLOWLIST)
 
