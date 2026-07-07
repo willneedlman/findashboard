@@ -184,6 +184,17 @@ _QUOTE_CONDITIONS = {"price_above", "price_below", "pct_change_1d_above", "pct_c
 # the RSI level (e.g. 30); for the SMA conditions it is the SMA period (e.g. 50).
 _INDICATOR_CONDITIONS = {"rsi_below", "rsi_above", "price_above_sma", "price_below_sma",
                          "price_cross_above_sma", "price_cross_below_sma"}
+# Slow-data conditions read daily/derived series (IV-rank + GEX snapshots, the
+# sentiment composite, next-earnings dates). Their inputs move on a daily-ish
+# clock, so they evaluate on a 10-min cadence and fire at most once per day.
+# sentiment_* alerts are market-wide: ticker is stored as the MARKET sentinel.
+_SLOW_CONDITIONS = {"iv_rank_above", "iv_rank_below", "price_cross_gex_flip",
+                    "sentiment_above", "sentiment_below", "earnings_within_days"}
+_SENTIMENT_CONDITIONS = {"sentiment_above", "sentiment_below"}
+_MARKET_TICKER = "MARKET"
+_SLOW_INTERVAL = 600     # seconds between slow-condition sweeps
+_SLOW_COOLDOWN = 86400   # daily-clock data → at most one fire per day
+_last_slow_sweep = 0.0
 
 
 def _evaluate(alert: dict, quotes: dict[str, dict]) -> bool:
@@ -236,6 +247,67 @@ def _indicator_triggered_sync(ticker: str, cond: str, threshold: float) -> tuple
         return False, None
 
 
+def _slow_triggered_sync(ticker: str, cond: str, threshold: float,
+                         quote: dict | None) -> tuple[bool, float | None]:
+    """Evaluate a slow-data alert. Returns (triggered, metric value) — the
+    metric is the IV rank, flip level, composite score, or days-to-earnings."""
+    try:
+        if cond in ("iv_rank_above", "iv_rank_below"):
+            from routers.snapshots import series
+            r = series(kind="iv30", ticker=ticker, compute=True)
+            rank = r.get("iv_rank")
+            if rank is None:                      # needs ~20 accrued daily points
+                return False, None
+            hit = rank > threshold if cond == "iv_rank_above" else rank < threshold
+            return hit, float(rank)
+        if cond == "price_cross_gex_flip":
+            from routers.snapshots import get_points
+            pts = get_points("gex", ticker)
+            flip = next((p.get("flip") for p in reversed(pts) if p.get("flip") is not None), None)
+            if flip is None or not quote:
+                return False, None
+            price = quote["price"]
+            pct = quote.get("pct_1d")
+            if pct is None or pct <= -100:
+                return False, float(flip)
+            prev = price / (1 + pct / 100)        # prior close, from the 1D% baseline
+            return (prev - flip) * (price - flip) < 0, float(flip)
+        if cond in _SENTIMENT_CONDITIONS:
+            from sentiment.engine import build_snapshot
+            score = float(build_snapshot(refresh=False).composite_score)
+            hit = score > threshold if cond == "sentiment_above" else score < threshold
+            return hit, round(score, 1)
+        if cond == "earnings_within_days":
+            from datetime import date
+            from routers.earnings import _prior_report
+            nd = (_prior_report(ticker) or {}).get("nextDate")
+            if not nd:
+                return False, None
+            days = (date.fromisoformat(str(nd)[:10]) - date.today()).days
+            return 0 <= days <= int(threshold), float(days)
+    except Exception as e:
+        _log.warning("slow eval %s %s: %s", ticker, cond, e)
+    return False, None
+
+
+def _warm_gex_snapshot(ticker: str) -> None:
+    """One live GEX profile (20-40s) so a flip level exists for a new alert;
+    runs in the pool, off the request path. Daily accrual takes over after.
+    Recomputes even when today's point exists but predates the flip field
+    (record_point overwrites today's point, so this can't duplicate)."""
+    try:
+        from routers.snapshots import _compute_gex, get_points, record_point
+        from datetime import date
+        pts = get_points("gex", ticker)
+        if pts and pts[-1].get("d") == date.today().isoformat() and pts[-1].get("flip") is not None:
+            return
+        p = _compute_gex(ticker)
+        if p:
+            record_point("gex", ticker, p)
+    except Exception as e:
+        _log.warning("gex warm %s: %s", ticker, e)
+
+
 async def _run_evaluation_loop():
     _log.info("Alert evaluation loop started (interval=%ds)", _EVAL_INTERVAL)
     while True:
@@ -252,7 +324,10 @@ async def _run_evaluation_loop():
             # armed alerts (cooldown elapsed) are evaluated for firing.
             alerts = await _db_fetchall("SELECT * FROM alerts WHERE active=1")
             if alerts:
-                tickers = list({a["ticker"].upper() for a in alerts})
+                global _last_slow_sweep
+                slow_due = (time.time() - _last_slow_sweep) >= _SLOW_INTERVAL
+                tickers = list({a["ticker"].upper() for a in alerts
+                                if a["ticker"].upper() != _MARKET_TICKER})
                 loop = asyncio.get_event_loop()
                 quotes = await loop.run_in_executor(
                     _EXECUTOR, _fetch_quotes_sync, tickers, session == "extended")
@@ -263,19 +338,32 @@ async def _run_evaluation_loop():
                         continue
                     tkr = alert["ticker"].upper()
                     cond = alert["condition"]
-                    if cond in _INDICATOR_CONDITIONS:
+                    value = None
+                    if cond in _SLOW_CONDITIONS:
+                        if not slow_due:
+                            continue
+                        triggered, value = await loop.run_in_executor(
+                            _EXECUTOR, _slow_triggered_sync, tkr, cond,
+                            alert["threshold"], quotes.get(tkr))
+                        if not triggered:
+                            continue
+                        price = quotes.get(tkr, {}).get("price", value or 0.0)
+                        pct = quotes.get(tkr, {}).get("pct_1d", 0.0)
+                        cooldown = now + _SLOW_COOLDOWN
+                    elif cond in _INDICATOR_CONDITIONS:
                         triggered, ind_price = await loop.run_in_executor(
                             _EXECUTOR, _indicator_triggered_sync, tkr, cond, alert["threshold"])
                         if not triggered:
                             continue
                         price = ind_price if ind_price is not None else quotes.get(tkr, {}).get("price", 0.0)
                         pct = quotes.get(tkr, {}).get("pct_1d", 0.0)
+                        cooldown = now + 3600
                     else:
                         if not _evaluate(alert, quotes):
                             continue
                         q = quotes[tkr]
                         price, pct = q["price"], q["pct_1d"]
-                    cooldown = now + 3600
+                        cooldown = now + 3600
                     await _db_execute(
                         "UPDATE alerts SET cooldown_until=? WHERE id=?",
                         (cooldown, alert["id"]),
@@ -288,12 +376,15 @@ async def _run_evaluation_loop():
                         "threshold":     alert["threshold"],
                         "current_price": price,
                         "pct_1d":        pct,
+                        "value":         value,
                         "triggered_at":  now,
                         "cooldown_until": cooldown,
                     }
                     await _ws_broadcast(alert["user_id"], payload)
                     _log.info("Alert triggered: %s %s %s (price=%.2f)",
                               alert["ticker"], alert["condition"], alert["threshold"], price)
+                if slow_due:
+                    _last_slow_sweep = time.time()
         except asyncio.CancelledError:
             _log.info("Alert evaluation loop cancelled")
             return
@@ -325,16 +416,22 @@ class AlertCreate(BaseModel):
     threshold: float
 
 
-_VALID_CONDITIONS = _QUOTE_CONDITIONS | _INDICATOR_CONDITIONS
+_VALID_CONDITIONS = _QUOTE_CONDITIONS | _INDICATOR_CONDITIONS | _SLOW_CONDITIONS
 
 
 @router.post("")
 async def create_alert(req: AlertCreate):
     if req.condition not in _VALID_CONDITIONS:
         raise HTTPException(400, f"condition must be one of {sorted(_VALID_CONDITIONS)}")
-    ticker = req.ticker.strip().upper()
-    if not ticker:
-        raise HTTPException(400, "ticker required")
+    if req.condition in _SENTIMENT_CONDITIONS:
+        ticker = _MARKET_TICKER          # market-wide: no per-ticker input
+    else:
+        ticker = req.ticker.strip().upper()
+        if not ticker:
+            raise HTTPException(400, "ticker required")
+    if req.condition == "price_cross_gex_flip":
+        # Seed a flip level now (20-40s, in the pool); daily accrual takes over.
+        _EXECUTOR.submit(_warm_gex_snapshot, ticker)
     alert_id = str(uuid.uuid4())
     now = int(time.time())
     await _db_execute(

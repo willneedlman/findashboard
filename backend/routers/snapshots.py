@@ -40,16 +40,33 @@ def get_points(kind: str, sym: str) -> list:
 
 
 def _compute_gex(sym: str) -> dict | None:
-    """Net dealer gamma exposure ($M) from the live GEX profile."""
+    """Net dealer gamma exposure ($M) from the live GEX profile, plus the
+    gamma-flip level (per-strike net sign change nearest spot) so alerts can
+    watch price/flip crosses without re-running the 20-40s profile."""
     from routers.options import dealer_gex
     d = dealer_gex(sym)
     rows = d.get("data") or []
     if not rows:
         return None
-    net = sum((r.get("call_gex") or 0) + (r.get("put_gex") or 0) for r in rows)
-    out = {"v": round(float(net), 2)}
-    if d.get("spot"):
-        out["spot"] = round(float(d["spot"]), 2)
+
+    def _net(r: dict) -> float:
+        v = r.get("net_gex")
+        return float(v) if v is not None else float((r.get("call_gex") or 0) + (r.get("put_gex") or 0))
+
+    out = {"v": round(sum(_net(r) for r in rows), 2)}
+    spot = d.get("spot")
+    if spot:
+        spot = float(spot)
+        out["spot"] = round(spot, 2)
+        srt = sorted((r for r in rows if r.get("strike") is not None), key=lambda r: r["strike"])
+        flip = None
+        for a, b in zip(srt, srt[1:]):
+            if _net(a) * _net(b) < 0:
+                cand = a["strike"] if abs(a["strike"] - spot) <= abs(b["strike"] - spot) else b["strike"]
+                if flip is None or abs(cand - spot) < abs(flip - spot):
+                    flip = cand
+        if flip is not None:
+            out["flip"] = round(float(flip), 2)
     return out
 
 
