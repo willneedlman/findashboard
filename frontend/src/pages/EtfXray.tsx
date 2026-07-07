@@ -39,6 +39,17 @@ interface XrayResult {
   overlap: { a: string; b: string; overlap: number; shared: number }[]
 }
 
+const POS = 'var(--theme-positive, #3fb950)'
+const NEG = 'var(--theme-negative, #f85149)'
+
+// Minimal inline sparkline for a fund's 1-day intraday price line.
+function Spark({ data, color, w = 74, h = 20 }: { data: number[]; color: string; w?: number; h?: number }) {
+  if (data.length < 2) return null
+  const min = Math.min(...data), max = Math.max(...data), rng = max - min || 1
+  const pts = data.map((v, i) => `${(i / (data.length - 1)) * w},${h - ((v - min) / rng) * h}`).join(' ')
+  return <svg width={w} height={h} style={{ display: 'block', flex: 'none' }} aria-hidden><polyline points={pts} fill="none" stroke={color} strokeWidth={1.2} strokeLinejoin="round" /></svg>
+}
+
 function Panel({ title, right, children, style, bodyStyle }: { title: string; right?: React.ReactNode; children: React.ReactNode; style?: React.CSSProperties; bodyStyle?: React.CSSProperties }) {
   return (
     <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, display: 'flex', flexDirection: 'column', minWidth: 0, ...style }}>
@@ -84,6 +95,26 @@ export function EtfXrayContent() {
   const ov: Record<string, Record<string, number>> = {}
   if (data) for (const o of data.overlap) { (ov[o.a] ??= {})[o.b] = o.overlap; (ov[o.b] ??= {})[o.a] = o.overlap }
   const fundList = data?.funds.map(f => f.fund) ?? []
+
+  // Per-fund 1-day intraday price line + % change for the fund pills.
+  const { data: spark } = useQuery<Record<string, { series: number[]; changePct: number }>>({
+    queryKey: ['etf-spark', fundList.join(',')],
+    enabled: fundList.length > 0,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const out: Record<string, { series: number[]; changePct: number }> = {}
+      await Promise.all(fundList.map(async f => {
+        try {
+          const r = await axios.get(`/api/market/ohlcv?ticker=${encodeURIComponent(f)}&tf=15m`)
+          const closes = (r.data.candles as { close: number }[]).map(c => c.close).filter(v => typeof v === 'number')
+          const day = closes.slice(-26)   // ~1 session of 15-min bars (6.5h)
+          if (day.length > 1) out[f] = { series: day, changePct: (day[day.length - 1] - day[0]) / day[0] * 100 }
+        } catch { /* fund without intraday data is simply omitted */ }
+      }))
+      return out
+    },
+  })
+
   const maxOverlap = data ? Math.max(0.01, ...data.overlap.map(o => o.overlap)) : 1
   const aggByTicker = useMemo(() => { const m: Record<string, string[]> = {}; if (data) for (const a of data.aggregate) m[a.ticker] = a.funds; return m }, [data])
   const hoverFunds = hover ? (aggByTicker[hover] ?? []) : []
@@ -173,12 +204,22 @@ export function EtfXrayContent() {
           {/* Selected-fund pills */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ ...EYEBROW, fontSize: 9, color: FAINT }}>Look-through of</span>
-            {data.funds.map(f => (
-              <span key={f.fund} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '3px 8px', border: `1px solid ${fundColor(f.fund)}`, background: `color-mix(in srgb, ${fundColor(f.fund)} 10%, transparent)` }}>
+            {data.funds.map(f => {
+              const sp = spark?.[f.fund]
+              const up = (sp?.changePct ?? 0) >= 0
+              return (
+              <span key={f.fund} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '4px 9px', border: `1px solid ${fundColor(f.fund)}`, background: `color-mix(in srgb, ${fundColor(f.fund)} 10%, transparent)` }}>
                 <span style={{ width: 7, height: 7, background: fundColor(f.fund) }} />
                 <span style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, color: fundColor(f.fund) }}>{f.fund}</span>
+                {sp && <Spark data={sp.series} color={up ? POS : NEG} />}
+                {sp && (
+                  <span title="1-day intraday change (15-min bars)" style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, color: up ? POS : NEG }}>
+                    {up ? '+' : ''}{sp.changePct.toFixed(2)}%
+                  </span>
+                )}
               </span>
-            ))}
+              )
+            })}
           </div>
 
           {/* KPI strip */}
