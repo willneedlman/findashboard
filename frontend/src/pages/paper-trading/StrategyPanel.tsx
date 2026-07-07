@@ -474,7 +474,7 @@ export function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy
               ↗ From Strategy Builder: <span style={{ color: T.text }}>{pendingBuilderStrategy.name}</span>
             </div>
             <div style={{ fontSize: 9, color: T.muted, fontFamily: T.mono }}>
-              {pendingBuilderStrategy.underlying} · {pendingBuilderStrategy.legs.length} legs · {pendingBuilderStrategy.orderType}
+              {pendingBuilderStrategy.underlying} · {pendingBuilderStrategy.legs.length} leg{pendingBuilderStrategy.legs.length === 1 ? '' : 's'} · {pendingBuilderStrategy.orderType}
               {' · '}saved {new Date(pendingBuilderStrategy.savedAt).toLocaleTimeString()}
             </div>
             <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 4 }}>

@@ -9,7 +9,7 @@ import { GammaScalpingContent } from '../GammaScalping'
 import CustomStrategyModal, { type CustomStrategyDef } from '../../components/CustomStrategyModal'
 import { loadCustomStrategies, saveCustomStrategy } from '../../utils/customStrategies'
 import { useTheme } from '../../contexts/ThemeContext'
-import { buildOCC, parseOCC, isOCC } from '../../lib/occ'
+import { buildOCC, parseOCC, isOCC, occUnderlying } from '../../lib/occ'
 import PaperChart, { type ChartFill } from '../../components/PaperChart'
 import { loadActivePortfolio } from '../../components/dashboard/widgets/usePortfolio'
 import { EMPTY_LEG, OPTION_STRATEGY_TEMPLATES, type LegState, type StrategyTemplate } from './optionTemplates'
@@ -152,6 +152,25 @@ export function OrderTicket({ onOrderPlaced, importTemplate, onTemplateConsumed,
 
   useEffect(() => {
     if (!importTemplate) return
+    // A single-leg strategy (e.g. Long Call) can't go through the multi-leg
+    // endpoint (it requires 2-4 legs), so route a lone imported leg to the
+    // single-option ticket instead.
+    if (importOCCLegs?.length === 1) {
+      const leg = importOCCLegs[0]
+      const parsed = parseOCC(leg.symbol)
+      if (parsed) {
+        setTab('option')
+        setOpUnderlying((importUnderlying || occUnderlying(leg.symbol)).toUpperCase())
+        setOpExpDate(parsed.expDate)
+        setOpStrike(parsed.strike)
+        setOpCallPut(parsed.callPut)
+        setOpSide(leg.side)
+        setOpQty(leg.qty)
+        onTemplateConsumed?.()
+        document.getElementById('order-ticket-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        return
+      }
+    }
     setTab('multileg')
     applyTemplate(importTemplate)
     // If real OCC symbols provided (from Strategy Builder), parse them into leg params
