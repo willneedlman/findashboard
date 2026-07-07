@@ -147,6 +147,17 @@ _BROAD_MARKET_KW = re.compile(
     re.IGNORECASE,
 )
 
+# Sports / entertainment subjects. A metaphor in one of these ("a war is waged
+# over his image", "price war for the title") can trip a cross-impact rule and
+# synthesize financial entities out of an off-topic story, so is_relevant drops
+# these unless a real financial entity or broad-market keyword is also present.
+_OFFTOPIC_RE = re.compile(
+    r'\b(world\s+cup|olympics?|super\s+bowl|champions\s+league|premier\s+league|'
+    r'la\s+liga|grand\s+slam|wimbledon|world\s+series|stanley\s+cup|'
+    r'nba\s+finals?|playoffs?|touchdown|midfielder|box\s+office|'
+    r'red\s+carpet|grammys?|oscars?|golden\s+globes?)\b', re.IGNORECASE,
+)
+
 _TIER5_KW = re.compile(
     r'\b(rate\s+(hike|cut)|interest\s+rate|monetary\s+policy|central\s+bank|'
     r'systemic\s+risk|liquidity\s+crunch|credit\s+crunch|credit\s+crisis|'
@@ -417,14 +428,40 @@ _INTENSIFIERS: frozenset[str] = frozenset({
     "sharply", "sharp", "steeply", "steep", "massively", "massive",
     "dramatically", "dramatic", "deeply", "heavily", "significantly",
 })
-# Dismissive framing: a headline that calls a bearish concern "overblown" is
-# reassuring, not bearish. When any reverser appears, negative contributions are
-# flipped to a damped positive (e.g. "inflation fears are overblown").
+# Framing that makes a bearish term reassuring, so its contribution flips to a
+# damped positive. Three families share the one flip mechanism:
+#   dismissive  — the concern is overblown ("inflation fears are overblown")
+#   defiance    — the subject withstands the bad thing ("industry defies
+#                 recession fears", "market shrugs off the selloff")
+#   beneficiary — the subject gains from the bad thing ("Apple benefits from
+#                 the memory supply shortage")
 _REVERSERS: frozenset[str] = frozenset({
+    # dismissive
     "overblown", "overdone", "unfounded", "exaggerated", "overstated",
     "overrated", "misplaced", "debunked", "dispelled", "myth", "mistaken",
+    # defiance
+    "defies", "defy", "defied", "defying",
+    "shrugs", "shrug", "shrugged", "shrugging",
+    # beneficiary
+    "benefit", "benefits", "benefiting", "benefitting", "benefited",
+    "benefitted", "beneficiary", "beneficiaries",
 })
 _REVERSAL_FACTOR: float = 0.5
+
+# De-escalation: removing a coercive measure is bullish ("lift sanctions", "scrap
+# tariffs", "end the trade war"). A removal verb before one of these coercion
+# nouns flips its bearish sign. Scoped to the nouns because the verbs are
+# bullish/neutral elsewhere — "stocks lift", "Fed drops guidance" — so they must
+# not act as blanket negators.
+_DEESCALATORS: frozenset[str] = frozenset({
+    "lift", "lifts", "lifted", "lifting", "remove", "removes", "removed",
+    "removing", "repeal", "repeals", "repealed", "scrap", "scraps", "scrapped",
+    "waive", "waives", "waived", "suspend", "suspends", "suspended",
+    "drop", "drops", "dropped", "end", "ends", "ended", "ending",
+    "rollback", "unwind", "unwinds", "unwound", "relax", "relaxes", "relaxed", "relaxing",
+})
+_RESTRICTION_TERMS: frozenset[str] = frozenset({"sanctions", "tariff", "tariffs", "trade war"})
+_DEESCALATION_WINDOW: int = 4
 
 # Rotation/positioning commentary ("conflict strengthens case for metals over
 # oil") carries a relative view, not a broad risk-off signal. When one of these
@@ -613,10 +650,22 @@ def extract_entities(text: str) -> list[Entity]:
     return [{"name": k, "asset_class": v} for k, v in found.items()]
 
 
+def _has_direct_entity(text: str) -> bool:
+    """True if the headline names an entity-map ticker/index directly, ignoring
+    the cross-impact entities synthesized from macro/geopolitical triggers."""
+    upper = text.upper()
+    return any(re.search(r'\b' + re.escape(tok) + r'\b', upper) for tok in _ENTITY_MAP)
+
+
 def is_relevant(title: str, entities: list[Entity]) -> bool:
     """True when the article touches the broad market: it names a recognized
     financial entity (direct or cross-impact) or a broad-market keyword. Articles
     with neither are off-topic noise and are dropped before scoring."""
+    # A sports/entertainment headline only reaches here via a cross-impact rule
+    # firing on a metaphor (e.g. "war" over an athlete's image). Drop it unless a
+    # ticker/index is named directly or a broad-market keyword is present.
+    if _OFFTOPIC_RE.search(title) and not _has_direct_entity(title) and not _BROAD_MARKET_KW.search(title):
+        return False
     return bool(entities) or bool(_BROAD_MARKET_KW.search(title))
 
 
@@ -689,6 +738,13 @@ def _match_terms(tokens: list[str], consumed: list[bool]) -> tuple[list[TermHit]
                 tokens[j] in _NEGATORS and not consumed[j]
                 for j in range(max(0, i - config.NEGATION_WINDOW), i)
             ) else 1.0
+            # A removal verb before a coercion noun ("lift ... sanctions") flips
+            # its bearish sign — scoped to those nouns so "stocks lift" is unaffected.
+            if sign > 0 and phrase in _RESTRICTION_TERMS and any(
+                tokens[j] in _DEESCALATORS
+                for j in range(max(0, i - _DEESCALATION_WINDOW), i)
+            ):
+                sign = -1.0
             intensified = any(
                 tokens[j] in _INTENSIFIERS
                 for j in range(max(0, i - 2), i)
