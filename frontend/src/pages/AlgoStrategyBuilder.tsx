@@ -478,6 +478,24 @@ export function AlgoStrategyBuilderContent() {
             <KpiCell grow label="P&L" value={`${mR.total_pnl >= 0 ? '+' : ''}${fmtCap(mR.total_pnl)}`} color={mR.total_pnl >= 0 ? POS : NEG} />
           </div>
 
+          {mR.num_trades === 0 && (() => {
+            const usesTickerRule = mode === 'single' && !!activeDef?.perTicker?.some(r => r.ticker.toUpperCase().trim() === ticker.toUpperCase().trim())
+            const ruleNote = mode === 'single' && activeDef?.perTicker?.length
+              ? ` This ticker uses ${usesTickerRule ? 'its ticker-specific rules' : 'the default rules'}.`
+              : ''
+            return (
+              <div style={{ fontSize: 11, fontFamily: 'var(--theme-mono)', lineHeight: 1.55, color: 'var(--theme-text, #d7e3fc)',
+                border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)',
+                background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 7%, transparent)', padding: '9px 12px' }}>
+                <span style={{ fontWeight: 700, color: 'var(--theme-primary, #c9a84c)', letterSpacing: '0.06em' }}>NO TRADES.</span>{' '}
+                {mode === 'single'
+                  ? `"${activeDef?.name}" never entered on ${ticker.toUpperCase()} over this range, so it stayed in cash.`
+                  : 'No position entered over this range, so the book stayed in cash.'}
+                {' '}The metrics are zero because nothing traded (not a load error). On the chart the flat filled line is the strategy at its starting capital; the dashed line is Buy &amp; Hold. Check the buy rules, ticker, and date range.{ruleNote}
+              </div>
+            )
+          })()}
+
           {mode === 'portfolio' && pf && (
             <div style={{ ...STRIP, flexWrap: 'wrap' }}>
               {pf.positions.map((p, i) => (
