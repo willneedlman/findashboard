@@ -964,8 +964,15 @@ export function ChartStudioContent() {
   }, [candles, tf])
   const windowKeyRef = useRef(windowKey)
   useEffect(() => { windowKeyRef.current = windowKey }, [windowKey])
+  // Auto-frame the visible span only on the FIRST candle load for a given
+  // ticker/timeframe. On subsequent ticks (a live refetch of the same series)
+  // keep the user's current zoom/pan — re-applying the span every tick reset it.
+  const framedKey = useRef('')
   useEffect(() => {
     if (!candles.length) return
+    const key = `${ticker}|${tf}`
+    if (framedKey.current === key) return   // same series → this is a tick, preserve the view
+    framedKey.current = key
     const wk = windowKeyRef.current
     const valid = spansFor(tf).some(s => s.key === wk) ? wk : (INTRADAY.has(tf) ? '1W' : '3M')
     applySpan(valid)
