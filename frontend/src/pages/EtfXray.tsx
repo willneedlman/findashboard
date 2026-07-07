@@ -65,7 +65,7 @@ function Panel({ title, right, children, style, bodyStyle }: { title: string; ri
 export function EtfXrayContent() {
   const [picked, setPicked] = useState<string[]>([])
   const [open, setOpen] = useState(true)
-  const [sort, setSort] = useState<'weight' | 'funds' | 'ticker'>('weight')
+  const [sort, setSort] = useState<'weight' | 'funds' | 'ticker' | 'change'>('weight')
   const [fundFilter, setFundFilter] = useState<string[]>([])
   const [filterMode, setFilterMode] = useState<'shared' | 'union' | 'only'>('shared')
   const [pair, setPair] = useState<[string, string] | null>(null)
@@ -126,9 +126,10 @@ export function EtfXrayContent() {
     const s = [...r]
     if (sort === 'funds') s.sort((a, b) => b.fund_count - a.fund_count || b.weight - a.weight)
     else if (sort === 'ticker') s.sort((a, b) => a.ticker.localeCompare(b.ticker))
+    else if (sort === 'change') s.sort((a, b) => (quotes?.[b.ticker]?.change_pct ?? -Infinity) - (quotes?.[a.ticker]?.change_pct ?? -Infinity))
     else s.sort((a, b) => b.weight - a.weight)
     return s
-  }, [data, fundFilter, sort, filterMode])
+  }, [data, fundFilter, sort, filterMode, quotes])
   const hovered = hover ? rows.find(r => r.ticker === hover) ?? null : null
 
   const activePair = pair ?? maxPair
@@ -221,10 +222,10 @@ export function EtfXrayContent() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ ...EYEBROW, fontSize: 8, color: SEC }}>Sort</span>
                   <div style={{ display: 'flex', border: `1px solid ${BORDER}` }}>
-                    {([['weight', 'Weight'], ['funds', 'Funds'], ['ticker', 'A–Z']] as const).map(([k, lbl]) => (
+                    {([['weight', 'Weight'], ['funds', 'Funds'], ['ticker', 'A–Z'], ['change', '1D %']] as const).map(([k, lbl], i, arr) => (
                       <button key={k} onClick={() => setSort(k)} style={{
                         background: sort === k ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 16%, transparent)' : 'transparent',
-                        border: 'none', borderRight: k !== 'ticker' ? `1px solid ${BORDER}` : 'none', cursor: 'pointer',
+                        border: 'none', borderRight: i < arr.length - 1 ? `1px solid ${BORDER}` : 'none', cursor: 'pointer',
                         color: sort === k ? GOLD : SEC, fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '4px 10px',
                       }}>{lbl}</button>
                     ))}
