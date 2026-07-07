@@ -27,9 +27,8 @@ export const LIVE_TYPES: IndicatorType[] = [
 ]
 
 // Bar size the indicator runs on. Daily is the default (and the backtest's own
-// step). Coarser bars resample the daily close; finer bars fetch intraday data
-// (history-limited: 1h ~2yr, 15m/5m ~60d), mapped back onto the daily backtest.
-export type Timeframe = 'daily' | 'weekly' | 'monthly' | 'hourly' | '15min' | '5min'
+// step). Coarser bars resample the daily close and map back onto the daily loop.
+export type Timeframe = 'daily' | 'weekly' | 'monthly'
 
 export interface IndicatorRef {
   type: IndicatorType
@@ -46,10 +45,8 @@ export interface IndicatorRef {
 
 const TF_OPTIONS: { value: Timeframe; label: string }[] = [
   { value: 'daily', label: 'Daily' }, { value: 'weekly', label: 'Weekly' },
-  { value: 'monthly', label: 'Monthly' }, { value: 'hourly', label: '1-Hour' },
-  { value: '15min', label: '15-Min' }, { value: '5min', label: '5-Min' },
+  { value: 'monthly', label: 'Monthly' },
 ]
-const TF_INTRADAY: Timeframe[] = ['hourly', '15min', '5min']
 
 export type OpType = 'gt' | 'lt' | 'gte' | 'lte' | 'crosses_above' | 'crosses_below'
 
@@ -251,20 +248,12 @@ function IndicatorSelector({ value, onChange }: {
         title="Cross-ticker reference — evaluate this indicator on another symbol. Blank = the strategy's primary ticker."
         style={{ ...inp, width: 52, flexShrink: 0, textTransform: 'uppercase' }} />
       {!LIVE_TYPES.includes(t) && (
-        <>
-          <select value={value.timeframe ?? 'daily'}
-            onChange={e => onChange({ ...value, timeframe: e.target.value === 'daily' ? undefined : e.target.value as Timeframe })}
-            title="Bar size this indicator runs on. Coarser bars resample the daily close. Intraday bars fetch that interval (history limited: 1h ~2yr, 15m/5m ~60d), so older bars have no signal."
-            style={{ ...sel, width: 84, flexShrink: 0 }}>
-            {TF_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-          {TF_INTRADAY.includes(value.timeframe as Timeframe) && (
-            <span title="Intraday history is limited, so bars older than the window carry no signal."
-              style={{ fontSize: 8, color: T.gold, fontFamily: T.mono, border: `1px solid ${T.gold}55`, padding: '1px 4px', letterSpacing: '0.04em', flexShrink: 0 }}>
-              {value.timeframe === 'hourly' ? '~2yr' : '~60d'}
-            </span>
-          )}
-        </>
+        <select value={value.timeframe ?? 'daily'}
+          onChange={e => onChange({ ...value, timeframe: e.target.value === 'daily' ? undefined : e.target.value as Timeframe })}
+          title="Bar size this indicator runs on. Weekly and monthly resample the daily close, so the period counts weeks or months."
+          style={{ ...sel, width: 84, flexShrink: 0 }}>
+          {TF_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
       )}
       {LIVE_TYPES.includes(t) && (
         <span title="Current-snapshot value (live signal). Held constant through a historical backtest, so it is not point-in-time."
