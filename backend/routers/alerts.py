@@ -8,6 +8,7 @@ Price Alert System
 - WS auth via ?token= (SHA-256 of user PIN, same as users.py)
 """
 import asyncio
+import json
 import logging
 import os
 import sqlite3
@@ -44,13 +45,19 @@ CREATE TABLE IF NOT EXISTS alerts (
     threshold     REAL NOT NULL,
     active        INTEGER NOT NULL DEFAULT 1,
     cooldown_until INTEGER NOT NULL DEFAULT 0,
-    created_at    INTEGER NOT NULL
+    created_at    INTEGER NOT NULL,
+    payload       TEXT
 );
 """
 
 def _init_db_sync():
     with sqlite3.connect(str(_DB_PATH)) as conn:
         conn.execute(_SCHEMA)
+        # Additive migration for DBs created before strategy alerts: `payload`
+        # holds the rules + ticker list for strategy_* conditions (NULL otherwise).
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(alerts)")}
+        if "payload" not in cols:
+            conn.execute("ALTER TABLE alerts ADD COLUMN payload TEXT")
         conn.commit()
 
 _init_db_sync()
@@ -191,6 +198,13 @@ _INDICATOR_CONDITIONS = {"rsi_below", "rsi_above", "price_above_sma", "price_bel
 _SLOW_CONDITIONS = {"iv_rank_above", "iv_rank_below", "price_cross_gex_flip",
                     "sentiment_above", "sentiment_below", "earnings_within_days"}
 _SENTIMENT_CONDITIONS = {"sentiment_above", "sentiment_below"}
+# Strategy-signal alerts: a saved custom strategy's entry/exit rule, swept across
+# a ticker list. Evaluated on the slow cadence (rules resolve on daily bars, so a
+# signal only flips once per day) and off the quote path (each ticker's history is
+# fetched by the rule engine, not from the shared quote batch). The `ticker` column
+# holds the strategy name for display; the real rules + tickers live in `payload`.
+_STRATEGY_CONDITIONS = {"strategy_entry", "strategy_exit"}
+_STRATEGY_MAX_TICKERS = 15   # cap the fan-out per sweep to bound the fetch cost
 _MARKET_TICKER = "MARKET"
 _SLOW_INTERVAL = 600     # seconds between slow-condition sweeps
 _SLOW_COOLDOWN = 86400   # daily-clock data → at most one fire per day
@@ -290,6 +304,43 @@ def _slow_triggered_sync(ticker: str, cond: str, threshold: float,
     return False, None
 
 
+def _strategy_triggered_sync(payload_json: str | None, cond: str) -> tuple[bool, list[str]]:
+    """Evaluate a saved strategy's entry/exit rule across its ticker list.
+
+    Runs the shared custom-rule engine over recent history for each ticker and
+    detects a fresh edge on the latest bar: entry = the buy rule flips the signal
+    0→1 (cash→invested) on the most recent bar; exit = the sell rule flips it 1→0.
+    Returns (triggered, [tickers whose rule fired this bar])."""
+    try:
+        payload = json.loads(payload_json) if payload_json else {}
+        rules = payload.get("rules") or {}
+        tickers = [str(t).strip().upper() for t in (payload.get("tickers") or []) if str(t).strip()]
+        if not rules or not tickers:
+            return False, []
+        from datetime import date, timedelta
+        from routers.strategy import _run_custom_rules
+        end = (date.today() + timedelta(days=1)).isoformat()
+        start = (date.today() - timedelta(days=420)).isoformat()  # covers up to SMA200 lookback
+        want_entry = cond == "strategy_entry"
+        fired: list[str] = []
+        for tk in tickers[:_STRATEGY_MAX_TICKERS]:
+            try:
+                sig, close = _run_custom_rules(tk, rules, start, end)
+            except Exception as e:
+                _log.warning("strategy eval %s: %s", tk, e)
+                continue
+            if sig is None or len(sig) < 2:
+                continue
+            last, prev = float(sig[-1]), float(sig[-2])
+            edge = (prev == 0.0 and last == 1.0) if want_entry else (prev == 1.0 and last == 0.0)
+            if edge:
+                fired.append(tk)
+        return bool(fired), fired
+    except Exception as e:
+        _log.warning("strategy eval (%s): %s", cond, e)
+        return False, []
+
+
 def _warm_gex_snapshot(ticker: str) -> None:
     """One live GEX profile (20-40s) so a flip level exists for a new alert;
     runs in the pool, off the request path. Daily accrual takes over after.
@@ -327,7 +378,8 @@ async def _run_evaluation_loop():
                 global _last_slow_sweep
                 slow_due = (time.time() - _last_slow_sweep) >= _SLOW_INTERVAL
                 tickers = list({a["ticker"].upper() for a in alerts
-                                if a["ticker"].upper() != _MARKET_TICKER})
+                                if a["ticker"].upper() != _MARKET_TICKER
+                                and a["condition"] not in _STRATEGY_CONDITIONS})
                 loop = asyncio.get_event_loop()
                 quotes = await loop.run_in_executor(
                     _EXECUTOR, _fetch_quotes_sync, tickers, session == "extended")
@@ -339,7 +391,18 @@ async def _run_evaluation_loop():
                     tkr = alert["ticker"].upper()
                     cond = alert["condition"]
                     value = None
-                    if cond in _SLOW_CONDITIONS:
+                    fired_tickers = None
+                    if cond in _STRATEGY_CONDITIONS:
+                        if not slow_due:
+                            continue
+                        triggered, fired_tickers = await loop.run_in_executor(
+                            _EXECUTOR, _strategy_triggered_sync, alert.get("payload"), cond)
+                        if not triggered:
+                            continue
+                        price, pct = 0.0, 0.0
+                        value = ", ".join(fired_tickers)
+                        cooldown = now + _SLOW_COOLDOWN
+                    elif cond in _SLOW_CONDITIONS:
                         if not slow_due:
                             continue
                         triggered, value = await loop.run_in_executor(
@@ -377,6 +440,7 @@ async def _run_evaluation_loop():
                         "current_price": price,
                         "pct_1d":        pct,
                         "value":         value,
+                        "fired_tickers": fired_tickers,
                         "triggered_at":  now,
                         "cooldown_until": cooldown,
                     }
@@ -414,16 +478,35 @@ class AlertCreate(BaseModel):
     ticker:    str
     condition: str   # price_above | price_below | pct_change_1d_above | pct_change_1d_below
     threshold: float
+    # strategy_entry/strategy_exit only: {"name": str, "rules": {buy, sell}, "tickers": [...]}
+    payload:   dict | None = None
 
 
-_VALID_CONDITIONS = _QUOTE_CONDITIONS | _INDICATOR_CONDITIONS | _SLOW_CONDITIONS
+_VALID_CONDITIONS = _QUOTE_CONDITIONS | _INDICATOR_CONDITIONS | _SLOW_CONDITIONS | _STRATEGY_CONDITIONS
 
 
 @router.post("")
 async def create_alert(req: AlertCreate):
     if req.condition not in _VALID_CONDITIONS:
         raise HTTPException(400, f"condition must be one of {sorted(_VALID_CONDITIONS)}")
-    if req.condition in _SENTIMENT_CONDITIONS:
+    payload_json = None
+    if req.condition in _STRATEGY_CONDITIONS:
+        p = req.payload or {}
+        rules = p.get("rules") or {}
+        raw_tickers = [str(t).strip().upper() for t in (p.get("tickers") or []) if str(t).strip()]
+        if not rules.get("buy") and not rules.get("sell"):
+            raise HTTPException(400, "strategy alert needs a rules block with buy/sell conditions")
+        if not raw_tickers:
+            raise HTTPException(400, "strategy alert needs at least one ticker")
+        seen: list[str] = []
+        for t in raw_tickers:                          # dedup, preserve order, cap
+            if t not in seen:
+                seen.append(t)
+        tickers = seen[:_STRATEGY_MAX_TICKERS]
+        name = str(p.get("name") or "Strategy").strip()[:40]
+        ticker = name or "Strategy"                    # ticker column = display name
+        payload_json = json.dumps({"name": name, "rules": rules, "tickers": tickers})
+    elif req.condition in _SENTIMENT_CONDITIONS:
         ticker = _MARKET_TICKER          # market-wide: no per-ticker input
     else:
         ticker = req.ticker.strip().upper()
@@ -435,10 +518,11 @@ async def create_alert(req: AlertCreate):
     alert_id = str(uuid.uuid4())
     now = int(time.time())
     await _db_execute(
-        "INSERT INTO alerts (id, user_id, ticker, condition, threshold, active, cooldown_until, created_at) VALUES (?,?,?,?,?,1,0,?)",
-        (alert_id, req.user_id, ticker, req.condition, req.threshold, now),
+        "INSERT INTO alerts (id, user_id, ticker, condition, threshold, active, cooldown_until, created_at, payload) VALUES (?,?,?,?,?,1,0,?,?)",
+        (alert_id, req.user_id, ticker, req.condition, req.threshold, now, payload_json),
     )
-    return {"id": alert_id, "ticker": ticker, "condition": req.condition, "threshold": req.threshold, "active": True, "cooldown_until": 0, "created_at": now}
+    return {"id": alert_id, "ticker": ticker, "condition": req.condition, "threshold": req.threshold,
+            "active": True, "cooldown_until": 0, "created_at": now, "payload": payload_json}
 
 
 # Declared before /{user_id} so "quotes" isn't captured as a user id.

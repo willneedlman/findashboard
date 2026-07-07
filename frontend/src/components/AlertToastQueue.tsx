@@ -13,6 +13,8 @@ function conditionLabel(condition: string, threshold: number): string {
     case 'price_below':          return `< $${threshold}`
     case 'pct_change_1d_above':  return `1D% > ${threshold}%`
     case 'pct_change_1d_below':  return `1D% < ${threshold}%`
+    case 'strategy_entry':        return 'Entry signal fired'
+    case 'strategy_exit':         return 'Exit signal fired'
     default:                      return `${condition} ${threshold}`
   }
 }
@@ -98,7 +100,9 @@ export default function AlertToastQueue({ alerts }: Props) {
               </div>
               <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: T.mono, marginTop: 2 }}>
                 {conditionLabel(t.condition, t.threshold)}
-                {t.current_price > 0 && ` → $${t.current_price.toFixed(2)}`}
+                {t.fired_tickers?.length
+                  ? ` → ${t.fired_tickers.join(', ')}`
+                  : t.current_price > 0 && ` → $${t.current_price.toFixed(2)}`}
               </div>
             </div>
             <button

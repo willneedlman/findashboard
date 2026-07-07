@@ -7,6 +7,8 @@ import PageHeader from '../components/PageHeader'
 import TickerInput from '../components/TickerInput'
 import useIsMobile from '../hooks/useIsMobile'
 import { useTheme } from '../contexts/ThemeContext'
+import { loadCustomStrategies } from '../utils/customStrategies'
+import type { CustomStrategyDef } from '../components/CustomStrategyModal'
 
 const CONDITIONS = [
   { value: 'price_above',           label: 'Price above $' },
@@ -25,17 +27,32 @@ const CONDITIONS = [
   { value: 'earnings_within_days',  label: 'Earnings within (days)' },
   { value: 'sentiment_above',       label: 'Market sentiment above (0-100)' },
   { value: 'sentiment_below',       label: 'Market sentiment below (0-100)' },
+  { value: 'strategy_entry',        label: 'Strategy entry signal fires' },
+  { value: 'strategy_exit',         label: 'Strategy exit signal fires' },
 ]
 
 // Market-wide conditions take no ticker; the flip cross takes no threshold.
 const noTicker = (cond: string) => cond.startsWith('sentiment')
-const noThreshold = (cond: string) => cond === 'price_cross_gex_flip'
+const noThreshold = (cond: string) => cond === 'price_cross_gex_flip' || cond.startsWith('strategy')
+// Strategy alerts run a saved custom strategy's rules across a ticker list.
+const isStrategy = (cond: string) => cond.startsWith('strategy')
+
+// Parse a free-text ticker list ("aapl, MSFT nvda") into deduped uppercase symbols.
+function parseTickerList(raw: string): string[] {
+  const out: string[] = []
+  for (const t of raw.toUpperCase().split(/[\s,]+/)) {
+    const s = t.trim()
+    if (s && /^[A-Z0-9.\-]{1,10}$/.test(s) && !out.includes(s)) out.push(s)
+  }
+  return out
+}
 // Slow-data conditions (IV rank, gamma flip, sentiment, earnings) check every
 // ~10 min and re-fire at most daily; the rest check every ~30s with a 1h cooldown.
 const isSlow = (cond: string) =>
   cond.startsWith('iv_rank') || cond.startsWith('sentiment') ||
-  cond === 'price_cross_gex_flip' || cond === 'earnings_within_days'
+  cond === 'price_cross_gex_flip' || cond === 'earnings_within_days' || cond.startsWith('strategy')
 
+interface StrategyPayload { name: string; tickers: string[]; rules: unknown }
 interface Alert {
   id:            string
   ticker:        string
@@ -44,6 +61,12 @@ interface Alert {
   active:        number
   cooldown_until: number
   created_at:    number
+  payload?:      string | null   // strategy_* only: JSON {name, rules, tickers}
+}
+
+function parseStrategyPayload(raw?: string | null): StrategyPayload | null {
+  if (!raw) return null
+  try { const p = JSON.parse(raw); return Array.isArray(p.tickers) ? p : null } catch { return null }
 }
 interface Quote { current_price: number; pct_change_1d: number | null }
 
@@ -65,6 +88,8 @@ function conditionLabel(cond: string, threshold: number): string {
     case 'earnings_within_days':  return `Earnings within ${threshold}d`
     case 'sentiment_above':       return `Sentiment > ${threshold}`
     case 'sentiment_below':       return `Sentiment < ${threshold}`
+    case 'strategy_entry':        return 'Entry signal fires'
+    case 'strategy_exit':         return 'Exit signal fires'
     default:                      return `${cond} ${threshold}`
   }
 }
@@ -114,6 +139,12 @@ export default function Alerts() {
   const [filter,    setFilter]    = useState<'all' | 'armed' | 'cooldown'>('all')
   const [notifState, setNotifState] = useState<NotificationPermission | 'unsupported'>('default')
 
+  // Saved custom strategies (localStorage) power the strategy-signal alert type.
+  const savedStrategies = useMemo<CustomStrategyDef[]>(() => loadCustomStrategies(), [])
+  const [stratName, setStratName] = useState(() => savedStrategies[0]?.name ?? '')
+  const [stratTickers, setStratTickers] = useState('')
+  const parsedStratTickers = useMemo(() => parseTickerList(stratTickers), [stratTickers])
+
   useEffect(() => {
     if (!('Notification' in window)) setNotifState('unsupported')
     else setNotifState(Notification.permission)
@@ -136,7 +167,7 @@ export default function Alerts() {
 
   const createMut = useMutation({
     mutationFn: (body: object) => axios.post('/api/alerts', body).then(r => r.data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['alerts', user?.id] }); setTicker(''); setThreshold('') },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['alerts', user?.id] }); setTicker(''); setThreshold(''); setStratTickers('') },
   })
   const deleteMut = useMutation({
     mutationFn: (id: string) => axios.delete(`/api/alerts/${id}`).then(r => r.data),
@@ -149,21 +180,32 @@ export default function Alerts() {
 
   const submit = () => {
     if (!user) return
+    if (isStrategy(condition)) {
+      const def = savedStrategies.find(s => s.name === stratName)
+      if (!def || parsedStratTickers.length === 0) return
+      createMut.mutate({
+        user_id: user.id, ticker: def.name, condition, threshold: 0,
+        payload: { name: def.name, rules: { buy: def.buy, sell: def.sell }, tickers: parsedStratTickers },
+      })
+      return
+    }
     const sym = noTicker(condition) ? 'MARKET' : ticker.trim().toUpperCase()
     const val = noThreshold(condition) ? 0 : parseFloat(threshold)
     if (!sym || isNaN(val)) return
     createMut.mutate({ user_id: user.id, ticker: sym, condition, threshold: val })
   }
-  const canSubmit = !createMut.isPending
-    && (noTicker(condition) || !!ticker)
-    && (noThreshold(condition) || !!threshold)
+  const canSubmit = !createMut.isPending && (
+    isStrategy(condition)
+      ? (!!stratName && parsedStratTickers.length > 0)
+      : (noTicker(condition) || !!ticker) && (noThreshold(condition) || !!threshold)
+  )
 
   const alerts = data?.alerts ?? []
   const now = Math.floor(Date.now() / 1000)
 
   // Live quote per watched ticker — surfaces the metric each alert tracks.
   // MARKET (sentiment) rows have no quote to fetch.
-  const tickers = useMemo(() => [...new Set(alerts.map(a => a.ticker).filter(t => t !== 'MARKET'))], [alerts])
+  const tickers = useMemo(() => [...new Set(alerts.filter(a => !isStrategy(a.condition)).map(a => a.ticker).filter(t => t !== 'MARKET'))], [alerts])
   const { data: quotes } = useQuery<Record<string, Quote>>({
     // One request to the alerts quote endpoint, which returns the same
     // extended-hours prices the eval loop fires on (so Last matches the alert).
@@ -247,7 +289,7 @@ export default function Alerts() {
             <div className="ft-panel">
               <div className="ft-panel-header">New Alert</div>
               <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {!noTicker(condition) && (
+                {!noTicker(condition) && !isStrategy(condition) && (
                   <div>
                     <label style={lbl}>Ticker</label>
                     <TickerInput value={ticker} onChange={setTicker} placeholder="Ticker or company" style={inp} onEnter={submit} />
@@ -259,6 +301,34 @@ export default function Alerts() {
                     {CONDITIONS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                   </select>
                 </div>
+                {isStrategy(condition) && (
+                  <>
+                    <div>
+                      <label style={lbl}>Strategy</label>
+                      {savedStrategies.length === 0 ? (
+                        <div style={{ fontFamily: T.mono, fontSize: 10, color: T.muted, lineHeight: 1.5, padding: '7px 10px', border: `1px solid ${T.border}`, background: T.bg }}>
+                          No saved strategies yet. Build one in the Algorithmic Strategy Builder and it shows up here.
+                        </div>
+                      ) : (
+                        <select value={stratName} onChange={e => setStratName(e.target.value)} style={{ ...inp, appearance: 'none', cursor: 'pointer' }}>
+                          {savedStrategies.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
+                        </select>
+                      )}
+                    </div>
+                    <div>
+                      <label style={lbl}>Tickers to watch</label>
+                      <input value={stratTickers} onChange={e => setStratTickers(e.target.value)} placeholder="AAPL, MSFT, NVDA" style={inp}
+                        onKeyDown={e => e.key === 'Enter' && submit()} />
+                      {parsedStratTickers.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+                          {parsedStratTickers.map(t => (
+                            <span key={t} style={{ fontFamily: T.mono, fontSize: 9, fontWeight: 700, color: T.gold, background: T.goldTint(12), border: `1px solid ${T.goldTint(30)}`, padding: '1px 5px' }}>{t}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
                 {!noThreshold(condition) && (
                   <div>
                     <label style={lbl}>{thresholdLabel(condition)}</label>
@@ -271,7 +341,9 @@ export default function Alerts() {
                   {createMut.isPending ? 'Creating…' : '+ Add Alert'}
                 </button>
                 <div style={{ fontFamily: T.label, fontSize: 9, color: T.muted, lineHeight: 1.6, marginTop: 2 }}>
-                  {isSlow(condition)
+                  {isStrategy(condition)
+                    ? `The server runs this saved strategy's ${condition === 'strategy_entry' ? 'entry' : 'exit'} rules across the tickers above on daily bars, about every 10 minutes. It fires when the ${condition === 'strategy_entry' ? 'entry' : 'exit'} signal triggers on any of them, naming which, and fires at most once per day. Build and backtest strategies in the Algorithmic Strategy Builder.`
+                    : isSlow(condition)
                     ? 'This condition reads daily data (IV rank, gamma flip, sentiment, earnings dates). The server checks it about every 10 minutes and it fires at most once per day. IV rank needs about 20 accrued daily points before it can trigger.'
                     : 'Alerts are checked server-side about every 30 seconds against the latest price. After firing, an alert enters a 1-hour cooldown before it can trigger again; rearm it manually or wait for the cooldown to clear.'}
                 </div>
@@ -296,7 +368,8 @@ export default function Alerts() {
               ) : shown.map((alert, i) => {
                 const cd = isCooldown(alert)
                 const cooldownMin = cd ? Math.ceil((alert.cooldown_until - now) / 60) : 0
-                const q = quotes?.[alert.ticker]
+                const sp = isStrategy(alert.condition) ? parseStrategyPayload(alert.payload) : null
+                const q = sp ? undefined : quotes?.[alert.ticker]
                 const isPct = alert.condition.includes('pct')
                 const readLabel = isPct ? '1D Change' : 'Last'
                 let readValue = '—', readColor = T.text
@@ -331,16 +404,17 @@ export default function Alerts() {
                         )}
                       </div>
                       <div style={{ fontFamily: T.mono, fontSize: 9, color: T.muted }}>
+                        {sp && <span style={{ color: T.text }}>Watching {sp.tickers.join(', ')} · </span>}
                         {cd
-                          ? `Cooldown ends ${new Date(alert.cooldown_until * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-                          : 'Armed'} · created {new Date(alert.created_at * 1000).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                          ? (sp ? 'Fired today, re-checks tomorrow' : `Cooldown ends ${new Date(alert.cooldown_until * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`)
+                          : 'Armed'}{!sp && ` · created ${new Date(alert.created_at * 1000).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}`}
                       </div>
                     </div>
 
                     {/* Value readout */}
                     <div style={{ flexShrink: 0, textAlign: 'right' }}>
-                      <div style={{ fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.muted, marginBottom: 3 }}>{readLabel}</div>
-                      <div style={{ fontFamily: T.mono, fontSize: 13, fontWeight: 700, color: readColor }}>{readValue}</div>
+                      <div style={{ fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.muted, marginBottom: 3 }}>{sp ? 'Watching' : readLabel}</div>
+                      <div style={{ fontFamily: T.mono, fontSize: 13, fontWeight: 700, color: sp ? T.text : readColor }}>{sp ? `${sp.tickers.length} name${sp.tickers.length === 1 ? '' : 's'}` : readValue}</div>
                     </div>
 
                     {/* Actions */}

@@ -10,6 +10,7 @@ export interface AlertPayload {
   pct_1d:        number
   triggered_at:  number
   cooldown_until: number
+  fired_tickers?: string[] | null   // strategy_* only: which tickers' signal fired
 }
 
 type Handler = (alert: AlertPayload) => void

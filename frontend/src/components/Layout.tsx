@@ -59,10 +59,10 @@ export default function Layout({ children }: LayoutProps) {
     // Fire the OS notification whenever permission is granted — not only when the
     // tab is hidden — so the user actually sees it. The in-app toast still shows.
     if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification(`Alert: ${a.ticker}`, {
-        body: `${a.condition.replace(/_/g, ' ')} ${a.threshold}${a.current_price > 0 ? ` → $${a.current_price.toFixed(2)}` : ''}`,
-        icon: '/favicon.svg',
-      })
+      const body = a.condition.startsWith('strategy')
+        ? `${a.condition === 'strategy_entry' ? 'Entry' : 'Exit'} signal fired${a.fired_tickers?.length ? ` → ${a.fired_tickers.join(', ')}` : ''}`
+        : `${a.condition.replace(/_/g, ' ')} ${a.threshold}${a.current_price > 0 ? ` → $${a.current_price.toFixed(2)}` : ''}`
+      new Notification(`Alert: ${a.ticker}`, { body, icon: '/favicon.svg' })
     }
   }, [])
   useAlertSocket(user?.id ?? null, onAlert)
