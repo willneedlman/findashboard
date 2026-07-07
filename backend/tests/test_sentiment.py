@@ -421,3 +421,22 @@ def test_correction_skips_when_llm_not_confident(monkeypatch):
     monkeypatch.setattr(correction, "_call_llm", lambda titles: [None for _ in titles])
     items = [_scored("A", "a", "unsure headline", 40, 3, conf=0.3)]
     assert not correction.apply(items)[0].corrected
+
+
+# ── Eval harness ──────────────────────────────────────────────────────────────
+def test_eval_dataset_is_well_formed():
+    from sentiment.eval import harness
+    items = harness.load_dataset()
+    assert len(items) >= 20
+    titles = [it["title"] for it in items]
+    assert len(set(titles)) == len(titles), "duplicate headline in eval set"
+    assert all(it["expected"] in {"bullish", "bearish", "neutral"} for it in items)
+
+
+def test_eval_lexicon_accuracy_floor():
+    # Regression floor: a future lexicon edit must not silently tank aggregate
+    # accuracy on the labeled set. Offline == lexicon only (no LLM).
+    from sentiment.eval import harness
+    rep = harness.evaluate(offline=True)
+    assert rep["corrected"] == 0 and rep["overlay_accuracy"] == rep["lexicon_accuracy"]
+    assert rep["lexicon_accuracy"] >= 0.5, f"lexicon accuracy regressed to {rep['lexicon_accuracy']:.0%}"

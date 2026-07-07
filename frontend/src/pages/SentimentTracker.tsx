@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { TrendingUp, History } from 'lucide-react'
+import { TrendingUp, History, Sparkles } from 'lucide-react'
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
@@ -40,6 +40,8 @@ interface ScoredItem {
   entities:       Entity[]
   seen_in_sources?: number
   asset_directions?: Record<string, number>  // per-asset-class direction (equities is primary)
+  corrected?: boolean                         // LLM overlay overrode the lexicon direction
+  lexicon_direction?: number | null           // pre-correction lexicon direction
 }
 
 interface Source {
@@ -538,6 +540,18 @@ function SourcePanel({ src, timeframeHours }: { src: Source; timeframeHours: num
                     {item.seen_in_sources} FEEDS
                   </span>
                 )}
+                {item.corrected && (() => {
+                  const lex = item.lexicon_direction
+                  const lexWord = lex == null ? 'unclear' : lex > 0.1 ? 'bullish' : lex < -0.1 ? 'bearish' : 'neutral'
+                  return (
+                    <span title={`Direction corrected by the LLM overlay. Lexicon read ${lexWord}, adjusted to ${item.sentiment} on a full-sentence read.`}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 9, padding: '1px 5px', fontFamily: T.mono, fontWeight: 700, letterSpacing: '0.06em', cursor: 'help',
+                        color: '#9d8cf0', background: 'rgba(157,140,240,0.10)', border: '1px solid rgba(157,140,240,0.30)' }}>
+                      <Sparkles size={10} strokeWidth={2.5} />
+                      CORR
+                    </span>
+                  )
+                })()}
                 {item.entities.slice(0, 3).map(e => <AssetTag key={e.name} name={e.name} assetClass={e.asset_class} direction={item.asset_directions?.[e.asset_class]} />)}
               </div>
             </div>

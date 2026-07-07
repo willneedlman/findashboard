@@ -48,6 +48,8 @@ def _item_out(a: ScoredArticle) -> ItemOut:
         entities=a.entities,
         seen_in_sources=a.seen_in_sources,
         asset_directions=a.asset_directions,
+        corrected=a.corrected,
+        lexicon_direction=a.lexicon_direction,
     )
 
 

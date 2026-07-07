@@ -111,6 +111,8 @@ class ItemOut(BaseModel):
     entities: list[Entity]
     seen_in_sources: int = 1                 # distinct feeds carrying this story
     asset_directions: dict[str, float] = Field(default_factory=dict)  # per-asset-class direction
+    corrected: bool = False                  # LLM overlay overrode the lexicon direction
+    lexicon_direction: float | None = None   # pre-correction lexicon direction (present when corrected)
 
 
 class SourceResult(BaseModel):

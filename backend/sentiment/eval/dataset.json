@@ -1,0 +1,29 @@
+{
+  "_doc": "Labeled sentiment eval set. `expected` is the broad-market / risk-asset (equity) read, matching lexicon.score_text().sentiment. Add rows as new misclassifications surface — every screenshot Will hits is a free label. `note` explains non-obvious labels only.",
+  "items": [
+    {"title": "S&P 500 closes at record high as tech leads broad rally", "expected": "bullish"},
+    {"title": "Stocks plunge as recession fears and inflation surge mount", "expected": "bearish"},
+    {"title": "Fed holds rates steady, signals patience on future moves", "expected": "neutral"},
+    {"title": "Nvidia crushes earnings and raises guidance, shares jump", "expected": "bullish"},
+    {"title": "Bank shares tumble on credit losses and default fears", "expected": "bearish"},
+    {"title": "Inflation cools more than expected, boosting rate-cut bets", "expected": "bullish", "note": "disinflation + easing odds = risk-on"},
+    {"title": "Emerging Markets Show Greater War Resilience To Outpace Advanced Economies", "expected": "bullish", "note": "resilience + outpace = positive for EM equities; lexicon misfires on bare token 'war'"},
+    {"title": "Recession fears are overblown, Goldman tells clients", "expected": "bullish", "note": "dismissive framing flips the bearish subject"},
+    {"title": "Why the sharp market selloff is a buying opportunity", "expected": "bullish", "note": "contrarian-buy framing"},
+    {"title": "Jobs report comes in not as weak as economists had feared", "expected": "bullish", "note": "negated bad news"},
+    {"title": "Oil prices surge to multi-year high on supply shock", "expected": "bearish", "note": "energy cost shock is bearish for broad equities"},
+    {"title": "Gold jumps to record as investors flee to safety", "expected": "bearish", "note": "safe-haven bid signals risk-off"},
+    {"title": "Retail sales beat forecasts, easing slowdown worries", "expected": "bullish"},
+    {"title": "Chipmaker warns of weak demand, cuts full-year outlook", "expected": "bearish"},
+    {"title": "Markets little changed as investors await Fed minutes", "expected": "neutral"},
+    {"title": "Dollar strengthens as traders trim rate-cut expectations", "expected": "bearish", "note": "fewer cuts + strong dollar = mild headwind for risk"},
+    {"title": "Tech megacaps rebound sharply after last week's rout", "expected": "bullish"},
+    {"title": "Consumer confidence slides to lowest level in two years", "expected": "bearish"},
+    {"title": "Company announces $25B buyback and dividend increase", "expected": "bullish"},
+    {"title": "Trade tensions ease as tariffs are rolled back", "expected": "bullish", "note": "removal of a restriction is risk-on"},
+    {"title": "Layoffs accelerate across the tech sector amid cost cuts", "expected": "bearish"},
+    {"title": "Bond yields spike as inflation data comes in hot", "expected": "bearish", "note": "higher yields on hot inflation pressure equities"},
+    {"title": "IMF raises global growth forecast, cites resilient demand", "expected": "bullish"},
+    {"title": "Housing starts fall as mortgage rates stay elevated", "expected": "bearish"}
+  ]
+}
