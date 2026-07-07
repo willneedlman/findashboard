@@ -549,7 +549,7 @@ export function ChartStudioContent() {
     for (const m of mas) maLines[maKey(m)] = line((m.kind === 'sma' ? smaArr : emaArr)(closes, m.period))
     return {
       maLines,
-      vwap: line(vwapArr(candles)),
+      vwap: line(vwapArr(candles, INTRADAY.has(tf))),
       bbU: line(bb.upper), bbL: line(bb.lower), bbM: line(bb.mid),
       rsi: line(rsiArr(closes, params.rsiP)),
       macd: line(mc.line), macdSig: line(mc.signal),

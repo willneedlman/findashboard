@@ -347,7 +347,7 @@ export default function PaperTradeWidget({ config }: { config: WidgetConfig }) {
       if (overlays.sma) add(smaArr(close, params.smaPeriod), '#60a5fa')
       if (overlays.ema) add(emaArr(close, params.emaPeriod), '#f59e0b')
       if (overlays.bb) { const b = bollinger(close, params.bbPeriod, params.bbMult); add(b.upper, '#a78bfa'); add(b.lower, '#a78bfa') }
-      if (overlays.vwap) add(vwapArr(candles), '#22d3ee')
+      if (overlays.vwap) add(vwapArr(candles, isIntraday(tfKey)), '#22d3ee')
     }
     if (keep) chart.timeScale().setVisibleLogicalRange(keep)
   }, [candles, overlays, params])

@@ -29,9 +29,27 @@ export function bollinger(v: number[], n = 20, k = 2) {
   return { upper, mid, lower }
 }
 
-export function vwapArr(c: Candle[]): (number | null)[] {
-  let pv = 0, vv = 0
-  return c.map(x => { const tp = (x.high + x.low + x.close) / 3; pv += tp * x.volume; vv += x.volume; return vv > 0 ? pv / vv : null })
+// Volume-weighted average price. VWAP is a per-SESSION metric: on intraday data
+// it must reset each trading day (`sessionReset`), otherwise it accumulates
+// across every loaded day and degenerates into a slow running mean. On daily+
+// bars there's no intraday session, so it runs anchored over the loaded range.
+export function vwapArr(c: Candle[], sessionReset = true): (number | null)[] {
+  const out: (number | null)[] = []
+  let pv = 0, vv = 0, day = ''
+  for (const x of c) {
+    if (sessionReset) {
+      // Reset at each new US-market calendar day (times are epoch seconds, or ms
+      // for some feeds; fall back to string parse). Approximates the RTH session.
+      const t = x.time
+      const ms = typeof t === 'number' ? (t > 1e11 ? t : t * 1000) : Date.parse(String(t))
+      const d = Number.isFinite(ms) ? new Date(ms).toLocaleDateString('en-US', { timeZone: 'America/New_York' }) : ''
+      if (d !== day) { pv = 0; vv = 0; day = d }
+    }
+    const tp = (x.high + x.low + x.close) / 3
+    pv += tp * x.volume; vv += x.volume
+    out.push(vv > 0 ? pv / vv : null)
+  }
+  return out
 }
 
 // Wilder's RSI: simple-average seed, then recursive smoothing.
