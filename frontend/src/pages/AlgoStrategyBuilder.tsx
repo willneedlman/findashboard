@@ -25,6 +25,7 @@ interface BacktestResult {
     num_trades: number; win_rate: number; initial_capital: number; final_capital: number; total_pnl: number
   }
   trades: { date: string; action: string; price: number }[]
+  instrument?: { kind: string; type: string; moneyness: number; dte: number; iv: number; modeled: boolean }
 }
 
 const fmtCap = (n: number) => `$${Math.abs(n) >= 1000 ? (n / 1000).toFixed(1) + 'K' : n.toFixed(0)}`
@@ -38,6 +39,11 @@ export function AlgoStrategyBuilderContent() {
   const [ticker, setTicker] = useState('AAPL')
   const [start, setStart] = useState('2022-01-01')
   const [end, setEnd] = useState('')
+  // Instrument: trade the underlying (default) or a modeled call/put.
+  const [instMode, setInstMode] = useState<'underlying' | 'option'>('underlying')
+  const [optType, setOptType] = useState<'call' | 'put'>('call')
+  const [moneyness, setMoneyness] = useState(1.0)
+  const [dte, setDte] = useState(30)
   const [paramsOpen, setParamsOpen] = useState(true)
   const [saved, setSaved] = useState<CustomStrategyDef[]>(() => loadCustomStrategies())
   const [activeName, setActiveName] = useState<string>(() => loadCustomStrategies()[0]?.name ?? '')
@@ -71,6 +77,9 @@ export function AlgoStrategyBuilderContent() {
         take_profit: r.takeProfitPct || undefined,
         trailing_stop: r.trailingStopPct || undefined,
         max_hold_bars: r.maxHoldBars || undefined,
+        instrument: instMode === 'option'
+          ? { kind: 'option', type: optType, moneyness, dte }
+          : undefined,
       })
       return data
     },
@@ -107,6 +116,52 @@ export function AlgoStrategyBuilderContent() {
             <label style={LABEL}>End</label>
             <input type="date" value={end} onChange={e => setEnd(e.target.value)} style={INPUT} />
           </div>
+
+          {/* Instrument: underlying vs modeled option */}
+          <div>
+            <label style={LABEL}>Instrument</label>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {(['underlying', 'option'] as const).map(mode => (
+                <button key={mode} onClick={() => setInstMode(mode)} style={{
+                  flex: 1, padding: '5px 0', fontFamily: 'inherit', fontSize: 9, fontWeight: 700,
+                  letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer',
+                  background: instMode === mode ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)' : 'transparent',
+                  border: `1px solid ${instMode === mode ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.12))'}`,
+                  color: instMode === mode ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #8099b0)',
+                }}>{mode === 'underlying' ? 'Shares' : 'Option'}</button>
+              ))}
+            </div>
+          </div>
+
+          {instMode === 'option' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 8, border: '1px solid var(--theme-border, rgba(255,255,255,0.1))', background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 4%, transparent)' }}>
+              <div style={{ display: 'flex', gap: 4 }}>
+                {(['call', 'put'] as const).map(ot => (
+                  <button key={ot} onClick={() => setOptType(ot)} style={{
+                    flex: 1, padding: '5px 0', fontFamily: 'inherit', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer',
+                    background: optType === ot ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)' : 'transparent',
+                    border: `1px solid ${optType === ot ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.12))'}`,
+                    color: optType === ot ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #8099b0)',
+                  }}>{ot}</button>
+                ))}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                <div>
+                  <label style={{ ...LABEL, fontSize: 8 }}>Moneyness</label>
+                  <input type="number" value={moneyness} step={0.05} min={0.5} max={1.5}
+                    onChange={e => setMoneyness(+e.target.value || 1)} style={INPUT} />
+                </div>
+                <div>
+                  <label style={{ ...LABEL, fontSize: 8 }}>DTE (days)</label>
+                  <input type="number" value={dte} step={1} min={1} max={365}
+                    onChange={e => setDte(Math.max(1, +e.target.value || 30))} style={INPUT} />
+                </div>
+              </div>
+              <div style={{ fontSize: 8, lineHeight: '12px', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))' }}>
+                Modeled P&L: Black-Scholes on the historical underlying at today's IV (no historical option prices). Approximate, not a real options backtest.
+              </div>
+            </div>
+          )}
         </div>
       </RailSection>
 
@@ -187,6 +242,12 @@ export function AlgoStrategyBuilderContent() {
             <KpiCell grow label="P&L" value={`${m.total_pnl >= 0 ? '+' : ''}${fmtCap(m.total_pnl)}`} color={m.total_pnl >= 0 ? POS : NEG} />
           </div>
 
+          {data.instrument?.modeled && (
+            <div style={{ fontSize: 10, color: 'var(--theme-primary, #c9a84c)', fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', border: '1px solid var(--theme-primary, #c9a84c)', padding: '1px 5px' }}>MODELED</span>
+              {data.instrument.type.toUpperCase()} · {data.instrument.moneyness}× spot · {data.instrument.dte} DTE · IV {data.instrument.iv}% (Black-Scholes on underlying, not real option prices)
+            </div>
+          )}
           {activeDef?.risk && (() => {
             const r = activeDef.risk
             const parts = [`size ${r.sizingPct}%`]

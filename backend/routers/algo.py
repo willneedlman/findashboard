@@ -279,6 +279,88 @@ def _compute_metrics(signal: pd.Series, close: pd.Series, position_size: float =
     }
 
 
+_OPT_MULT = 100
+
+
+def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: float,
+                            position_size: float = 100, initial_capital: float = 10_000):
+    """Modeled single-option backtest. On each entry the strategy buys a fresh
+    Black-Scholes-priced call/put (strike = moneyness × spot, fixed DTE), marks it
+    daily as time decays, and realizes it when the rules exit or it reaches expiry
+    (then rolls if still signalled). IV is held at the current snapshot value — the
+    project has no historical option prices — so this is an APPROXIMATION, labeled
+    as modeled in the UI. Benchmark stays underlying buy & hold."""
+    from math_engine import bs_price
+    otype = "put" if str(opt.get("type", "call")).lower().startswith("p") else "call"
+    moneyness = float(opt.get("moneyness", 1.0))
+    dte = max(1, int(opt.get("dte", 30)))
+    r = 4.0
+    alloc = max(0.0, min(100.0, position_size)) / 100.0
+    idx = close.index
+    px = close.to_numpy(dtype=float)
+    sig = signal.to_numpy(dtype=float)
+    n = len(px)
+
+    equity = np.empty(n)
+    cash = float(initial_capital)
+    cur = float(initial_capital)
+    in_trade = False
+    contracts = 0.0
+    strike = 0.0
+    entry_i = -1
+    trades: list[dict] = []
+
+    def _val(i: int) -> float:
+        return float(bs_price(px[i], strike, dte - (i - entry_i), r, iv, otype))
+
+    for i in range(n):
+        exiting = in_trade and (sig[i] == 0.0 or (i - entry_i) >= dte)
+        if exiting:
+            v = _val(i)
+            cash += contracts * v * _OPT_MULT
+            trades.append({"date": idx[i].strftime("%Y-%m-%d"), "action": "SELL", "price": round(v, 2)})
+            in_trade, contracts = False, 0.0
+        if not in_trade and sig[i] == 1.0:
+            strike = round(px[i] * moneyness, 2)
+            entry_val = max(float(bs_price(px[i], strike, dte, r, iv, otype)), 0.01)
+            invest = cur * alloc
+            contracts = invest / (entry_val * _OPT_MULT)
+            cash = cur - contracts * entry_val * _OPT_MULT
+            entry_i, in_trade = i, True
+            trades.append({"date": idx[i].strftime("%Y-%m-%d"), "action": "BUY", "price": round(entry_val, 2)})
+        cur = cash + (contracts * _val(i) * _OPT_MULT if in_trade else 0.0)
+        equity[i] = cur
+
+    eq = pd.Series(equity, index=idx)
+    daily = eq.pct_change()
+    benchmark = (1 + close.pct_change().fillna(0)).cumprod() * initial_capital
+    total_return = float(eq.iloc[-1] / initial_capital - 1) * 100
+    ann_return = float(((eq.iloc[-1] / initial_capital) ** (252 / max(1, n)) - 1) * 100)
+    drawdown = (eq - eq.cummax()) / eq.cummax()
+    sharpe = float(daily.mean() / daily.std() * np.sqrt(252)) if daily.std() > 0 else 0.0
+
+    buys = [t for t in trades if t["action"] == "BUY"]
+    sells = [t for t in trades if t["action"] == "SELL"]
+    wins = sum(1 for b, s in zip(buys, sells) if s["price"] > b["price"])
+    num_trades = len(buys)
+    win_rate = float(wins / num_trades * 100) if num_trades else 0.0
+
+    curve = [{"date": d.strftime("%Y-%m-%d"), "strategy": round(float(sv), 2), "benchmark": round(float(bv), 2)}
+             for d, sv, bv in zip(eq.index, eq.values, benchmark.values)]
+    return {
+        "equity_curve": curve,
+        "metrics": {
+            "total_return": round(total_return, 2), "ann_return": round(ann_return, 2),
+            "max_drawdown": round(float(drawdown.min() * 100), 2), "sharpe": round(sharpe, 3),
+            "num_trades": num_trades, "win_rate": round(win_rate, 1),
+            "initial_capital": round(initial_capital, 2), "final_capital": round(float(eq.iloc[-1]), 2),
+            "total_pnl": round(float(eq.iloc[-1]) - initial_capital, 2),
+        },
+        "trades": trades[:200],
+        "instrument": {"kind": "option", "type": otype, "moneyness": moneyness, "dte": dte, "iv": round(iv, 1), "modeled": True},
+    }
+
+
 @router.post("/backtest")
 def backtest(req: BacktestRequest):
     close = _fetch_close(req.ticker, req.start, req.end)

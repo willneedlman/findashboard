@@ -256,15 +256,23 @@ def list_strategies():
 
 # ─── Custom rule strategy ─────────────────────────────────────────────────────
 
-def _eval_cond_at(cond: dict, i: int, prices: np.ndarray,
-                  cache: dict[str, np.ndarray], context: dict | None = None) -> bool:
-    def _ind(ref: dict) -> np.ndarray:
-        key = repr(sorted(ref.items()))
-        if key not in cache:
-            cache[key] = _get_ind(ref, prices, context)
-        return cache[key]
+def _series_for(ref: dict, primary: str, frames: dict[str, np.ndarray],
+                cache: dict[str, np.ndarray], ctx_by_ticker: dict[str, dict], n: int) -> np.ndarray:
+    """Indicator series for one condition side, resolved against the side's own
+    ticker (a condition may reference a symbol other than the traded one; absent
+    ⇒ the strategy's primary). A referenced symbol with no data yields an all-NaN
+    series so its condition never fires."""
+    tk = str(ref.get("ticker") or primary).upper().strip()
+    key = repr((tk, sorted((k, v) for k, v in ref.items() if k != "ticker")))
+    if key not in cache:
+        arr = frames.get(tk)
+        cache[key] = _get_ind(ref, arr, ctx_by_ticker.get(tk)) if arr is not None else np.full(n, np.nan)
+    return cache[key]
 
-    lhs_arr = _ind(cond.get("lhs", {"type": "PRICE"}))
+
+def _eval_cond_at(cond: dict, i: int, primary: str, frames: dict[str, np.ndarray],
+                  cache: dict[str, np.ndarray], ctx_by_ticker: dict[str, dict], n: int) -> bool:
+    lhs_arr = _series_for(cond.get("lhs", {"type": "PRICE"}), primary, frames, cache, ctx_by_ticker, n)
     lhs = lhs_arr[i]
     if np.isnan(lhs):
         return False
@@ -275,7 +283,7 @@ def _eval_cond_at(cond: dict, i: int, prices: np.ndarray,
         rhs = float(cond.get("rhs_num", 0))
         prev_rhs = rhs
     else:
-        rhs_arr  = _ind(cond.get("rhs_ind", {"type": "PRICE"}))
+        rhs_arr  = _series_for(cond.get("rhs_ind", {"type": "PRICE"}), primary, frames, cache, ctx_by_ticker, n)
         rhs      = rhs_arr[i]
         if np.isnan(rhs):
             return False
@@ -295,18 +303,18 @@ def _eval_cond_at(cond: dict, i: int, prices: np.ndarray,
     return False
 
 
-def _eval_group_at(group: dict, i: int, prices: np.ndarray,
-                   cache: dict, context: dict | None = None) -> bool:
+def _eval_group_at(group: dict, i: int, primary: str, frames: dict, cache: dict,
+                   ctx_by_ticker: dict, n: int) -> bool:
     conds = group.get("conditions", [])
     if not conds:
         return False
     logic   = group.get("logic", "AND")
-    results = [_eval_cond_at(c, i, prices, cache, context) for c in conds]
+    results = [_eval_cond_at(c, i, primary, frames, cache, ctx_by_ticker, n) for c in conds]
     return all(results) if logic == "AND" else any(results)
 
 
-def _eval_block_at(block: dict, i: int, prices: np.ndarray,
-                   cache: dict, context: dict | None = None) -> bool:
+def _eval_block_at(block: dict, i: int, primary: str, frames: dict, cache: dict,
+                   ctx_by_ticker: dict, n: int) -> bool:
     groups = block.get("groups")
     # backwards compat: flat conditions → treat as single group
     if not groups:
@@ -315,17 +323,31 @@ def _eval_block_at(block: dict, i: int, prices: np.ndarray,
             return False
         groups = [{"logic": block.get("logic", "AND"), "conditions": flat}]
     top_logic = block.get("logic", "AND")
-    results   = [_eval_group_at(g, i, prices, cache, context) for g in groups]
+    results   = [_eval_group_at(g, i, primary, frames, cache, ctx_by_ticker, n) for g in groups]
     return all(results) if top_logic == "AND" else any(results)
 
 
-def evaluate_custom_rules(prices: np.ndarray, rules: dict, context: dict | None = None) -> np.ndarray:
+def evaluate_custom_rules(prices: np.ndarray, rules: dict, context: dict | None = None,
+                          frames: dict[str, np.ndarray] | None = None,
+                          ctx_by_ticker: dict[str, dict] | None = None,
+                          primary: str | None = None) -> np.ndarray:
     """Bar-by-bar evaluation. Returns 1.0 = invested, 0.0 = cash.
 
-    `context` supplies live/snapshot metrics (fundamentals, liquidity) for any
-    market-data conditions; held constant across the series (see market_context).
+    Single-ticker (default): pass `prices` + `context`; every condition reads that
+    one symbol. Cross-ticker: pass `frames` = {TICKER: date-aligned close array}
+    (all equal length), `ctx_by_ticker` = per-symbol live context, and `primary` =
+    the traded symbol; a condition's `ticker` field then selects its symbol.
+
+    `context`/`ctx_by_ticker` supply live snapshot metrics (fundamentals, options,
+    liquidity) held constant across the series (see market_context).
     """
     n        = len(prices)
+    if primary is None:
+        primary = "_PRIMARY_"
+    if frames is None:
+        frames = {primary: np.asarray(prices, dtype=float)}
+    if ctx_by_ticker is None:
+        ctx_by_ticker = {primary: context or {}}
     signal   = np.zeros(n)
     cache: dict[str, np.ndarray] = {}
     buy_blk  = rules.get("buy",  {"logic": "AND", "conditions": []})
@@ -333,16 +355,54 @@ def evaluate_custom_rules(prices: np.ndarray, rules: dict, context: dict | None 
     in_trade = False
     for i in range(1, n):
         if not in_trade:
-            if _eval_block_at(buy_blk, i, prices, cache, context):
+            if _eval_block_at(buy_blk, i, primary, frames, cache, ctx_by_ticker, n):
                 in_trade   = True
                 signal[i]  = 1.0
         else:
-            if _eval_block_at(sell_blk, i, prices, cache, context):
+            if _eval_block_at(sell_blk, i, primary, frames, cache, ctx_by_ticker, n):
                 in_trade  = False
                 signal[i] = 0.0
             else:
                 signal[i] = 1.0
     return signal
+
+
+def referenced_tickers(rules: dict | None, primary: str) -> list[str]:
+    """Every symbol a rule set touches: the primary plus any per-condition ticker
+    overrides. Used to fetch and date-align all needed price frames."""
+    primary = (primary or "").upper().strip()
+    out = {primary} if primary else set()
+    for block in (rules or {}).values():
+        if not isinstance(block, dict):
+            continue
+        conds = list(block.get("conditions") or [])
+        for g in (block.get("groups") or []):
+            if isinstance(g, dict):
+                conds += (g.get("conditions") or [])
+        for c in conds:
+            if not isinstance(c, dict):
+                continue
+            for side in ("lhs", "rhs_ind"):
+                tk = (c.get(side) or {}).get("ticker")
+                if tk:
+                    out.add(str(tk).upper().strip())
+    return sorted(t for t in out if t)
+
+
+def build_aligned_frames(tickers: list[str], start: str, end: str):
+    """Fetch each symbol's close and inner-join on shared trading days so every
+    frame shares one date index (cross-ticker conditions compare same-day values).
+    Returns (index, {TICKER: close_array}). Symbols with no data are dropped."""
+    series: dict[str, pd.Series] = {}
+    for tk in tickers:
+        s = _fetch_close(tk, start, end)
+        if not s.empty:
+            series[tk] = s
+    if not series:
+        return None, {}
+    df = pd.concat(series, axis=1, join="inner").dropna()
+    frames = {str(tk): df[tk].to_numpy(dtype=float) for tk in df.columns}
+    return df.index, frames
 
 
 class CustomSignalRequest(BaseModel):
@@ -363,18 +423,17 @@ class CustomSignalRequest(BaseModel):
 @router.post("/custom-signal")
 def get_custom_signal(req: CustomSignalRequest):
     try:
-        close = _fetch_close(req.ticker, req.start, req.end)
-        if close.empty:
-            raise HTTPException(404, "No price data")
+        # _run_custom_rules fetches + date-aligns every referenced symbol so
+        # cross-ticker rules behave the same here as in the algo backtest.
+        sig_arr, close = _run_custom_rules(req.ticker, req.rules, req.start, req.end)
     except HTTPException:
         raise
     except Exception:
         logger.exception("custom-signal fetch failed")
         raise HTTPException(500, "Failed to fetch price data")
+    if close is None or close.empty:
+        raise HTTPException(404, "No price data")
 
-    prices   = close.values.astype(float)
-    from strategies.market_context import resolve_context
-    sig_arr  = evaluate_custom_rules(prices, req.rules, resolve_context(req.ticker, req.rules))
     last_sig = float(sig_arr[-1]) if len(sig_arr) else 0.0
     invested = int(np.sum(sig_arr))
     pct      = 100 * invested / max(1, len(sig_arr))
@@ -405,6 +464,7 @@ class CustomBacktestRequest(BaseModel):
     max_hold_bars: int | None = None
     position_size: float = 100
     initial_capital: float = 10_000
+    instrument: dict | None = None   # {kind:"option", type:"call"|"put", moneyness, dte} → modeled option P&L
 
     @model_validator(mode="after")
     def _validate(self):
@@ -415,19 +475,44 @@ class CustomBacktestRequest(BaseModel):
         return self
 
 
+def _run_custom_rules(ticker: str, rules: dict, start: str, end: str):
+    """Fetch + date-align every symbol a rule set references, resolve each one's
+    live context, and evaluate the rules. Returns (signal_array, primary_close)
+    where primary_close is a Series indexed by the shared trading days."""
+    from strategies.market_context import resolve_context
+    primary = ticker.strip().upper()
+    tickers = referenced_tickers(rules, primary)
+    index, frames = build_aligned_frames(tickers, start, end)
+    if index is None or primary not in frames:
+        return None, None
+    ctx_by_ticker = {tk: resolve_context(tk, rules) for tk in frames}
+    prices = frames[primary]
+    sig = evaluate_custom_rules(prices, rules, frames=frames,
+                                ctx_by_ticker=ctx_by_ticker, primary=primary)
+    return sig, pd.Series(prices, index=index, name=primary)
+
+
 @router.post("/custom-backtest")
 def custom_backtest(req: CustomBacktestRequest):
-    from .algo import _apply_risk_controls, _compute_metrics
+    from .algo import _apply_risk_controls, _compute_metrics, _compute_option_metrics
     import datetime
     end = req.end or datetime.date.today().isoformat()
-    close = _fetch_close(req.ticker, req.start, end)
-    if len(close) < 60:
+    sig_arr, close = _run_custom_rules(req.ticker, req.rules, req.start, end)
+    if close is None or len(close) < 60:
         raise HTTPException(422, "Insufficient price history for backtest")
-    close.name = req.ticker.strip().upper()
-    from strategies.market_context import resolve_context
-    sig_arr = evaluate_custom_rules(close.values.astype(float), req.rules, resolve_context(req.ticker, req.rules))
     signal = pd.Series(sig_arr, index=close.index)
     signal = _apply_risk_controls(
         signal, close, req.stop_loss, req.take_profit, req.trailing_stop, req.max_hold_bars,
     )
+    inst = req.instrument or {}
+    if inst.get("kind") == "option":
+        # Modeled option P&L needs an implied vol; use the current ATM snapshot.
+        try:
+            from routers.options import options_snapshot
+            iv = options_snapshot(req.ticker).get("atm_iv")
+        except Exception:
+            iv = None
+        if not isinstance(iv, (int, float)) or iv <= 0:
+            raise HTTPException(422, "No implied volatility available to model options for this ticker")
+        return _compute_option_metrics(signal, close, inst, float(iv), req.position_size, req.initial_capital)
     return _compute_metrics(signal, close, req.position_size, req.initial_capital)

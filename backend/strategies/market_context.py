@@ -28,7 +28,9 @@ _VOL_TYPES = {"VOL_RELATIVE", "VOL_DOLLAR"}
 _OPT_FIELDS: dict[str, str] = {
     "OPT_IV": "atm_iv", "OPT_HV": "hv_30", "OPT_PUTCALL": "pc_vol", "OPT_IMPLIEDMOVE": "implied_move",
 }
-_OPT_TYPES = set(_OPT_FIELDS) | {"OPT_IVHV"}
+# ATM greeks derived from the snapshot (spot + ATM IV + expiry) via Black-Scholes.
+_OPT_GREEKS = {"OPT_DELTA", "OPT_GAMMA", "OPT_THETA", "OPT_VEGA"}
+_OPT_TYPES = set(_OPT_FIELDS) | {"OPT_IVHV"} | _OPT_GREEKS
 # Energy-flow type -> PortWatch chokepoint id; value is the latest daily transit.
 _FLOW_CHOKES: dict[str, str] = {
     "FLOW_HORMUZ": "hormuz", "FLOW_SUEZ": "suez", "FLOW_PANAMA": "panama", "FLOW_MALACCA": "malacca",
@@ -122,6 +124,23 @@ def resolve_context(ticker: str, rules: dict | None = None) -> dict[str, float]:
             iv, hv = snap.get("atm_iv"), snap.get("hv_30")
             if isinstance(iv, (int, float)) and isinstance(hv, (int, float)) and hv > 0:
                 ctx["OPT_IVHV"] = round(iv / hv, 3)
+            # ATM greeks from the current snapshot (delta ≈ 0.5 ATM call). A live
+            # value held constant across the backtest, same as the other OPT_ set.
+            if needed is None or (needed & _OPT_GREEKS):
+                spot, expiry = snap.get("spot"), snap.get("expiry")
+                if isinstance(iv, (int, float)) and isinstance(spot, (int, float)) and spot > 0 and expiry:
+                    try:
+                        import datetime as _dt
+                        dte = (_dt.date.fromisoformat(str(expiry)) - _dt.date.today()).days
+                        if dte > 0:
+                            from math_engine import bs_greeks
+                            g = bs_greeks(spot, spot, dte, 4.0, iv, "call")
+                            ctx["OPT_DELTA"] = round(float(g["delta"]), 4)
+                            ctx["OPT_GAMMA"] = round(float(g["gamma"]), 5)
+                            ctx["OPT_THETA"] = round(float(g["theta"]), 4)
+                            ctx["OPT_VEGA"]  = round(float(g["vega"]), 4)
+                    except Exception:
+                        pass
         except Exception:
             pass
 

@@ -11,6 +11,7 @@ export type IndicatorType =
   | 'FUND_DEBTEQUITY' | 'FUND_DIVYIELD' | 'FUND_PB' | 'FUND_CURRENTRATIO' | 'FUND_BETA'
   | 'VOL_RELATIVE' | 'VOL_DOLLAR'
   | 'OPT_IV' | 'OPT_HV' | 'OPT_IVHV' | 'OPT_PUTCALL' | 'OPT_IMPLIEDMOVE'
+  | 'OPT_DELTA' | 'OPT_GAMMA' | 'OPT_THETA' | 'OPT_VEGA'
   | 'FLOW_HORMUZ' | 'FLOW_SUEZ' | 'FLOW_PANAMA' | 'FLOW_MALACCA'
 
 // Fundamental / liquidity / options / flow metrics resolve from a current
@@ -21,6 +22,7 @@ export const LIVE_TYPES: IndicatorType[] = [
   'FUND_DEBTEQUITY', 'FUND_DIVYIELD', 'FUND_PB', 'FUND_CURRENTRATIO', 'FUND_BETA',
   'VOL_RELATIVE', 'VOL_DOLLAR',
   'OPT_IV', 'OPT_HV', 'OPT_IVHV', 'OPT_PUTCALL', 'OPT_IMPLIEDMOVE',
+  'OPT_DELTA', 'OPT_GAMMA', 'OPT_THETA', 'OPT_VEGA',
   'FLOW_HORMUZ', 'FLOW_SUEZ', 'FLOW_PANAMA', 'FLOW_MALACCA',
 ]
 
@@ -31,6 +33,7 @@ export interface IndicatorRef {
   slow?: number
   signal_period?: number
   std?: number
+  ticker?: string   // optional cross-ticker reference; blank = the strategy's primary symbol
 }
 
 export type OpType = 'gt' | 'lt' | 'gte' | 'lte' | 'crosses_above' | 'crosses_below'
@@ -92,6 +95,7 @@ const IND_LABELS: Record<IndicatorType, string> = {
   VOL_RELATIVE: 'Relative volume', VOL_DOLLAR: 'Dollar volume ($M)',
   OPT_IV: 'Implied vol % (ATM)', OPT_HV: 'Hist vol % (30d)', OPT_IVHV: 'IV / HV ratio',
   OPT_PUTCALL: 'Put/call ratio', OPT_IMPLIEDMOVE: 'Implied move %',
+  OPT_DELTA: 'ATM delta', OPT_GAMMA: 'ATM gamma', OPT_THETA: 'ATM theta', OPT_VEGA: 'ATM vega',
   FLOW_HORMUZ: 'Hormuz transits', FLOW_SUEZ: 'Suez transits',
   FLOW_PANAMA: 'Panama transits', FLOW_MALACCA: 'Malacca transits',
 }
@@ -101,6 +105,7 @@ const IND_GROUPS: { label: string; types: IndicatorType[] }[] = [
   { label: 'Fundamental (live)', types: ['FUND_PE', 'FUND_PEG', 'FUND_EPSGROWTH', 'FUND_NETMARGIN', 'FUND_GROSSMARGIN', 'FUND_DEBTEQUITY', 'FUND_DIVYIELD', 'FUND_PB', 'FUND_CURRENTRATIO', 'FUND_BETA'] },
   { label: 'Liquidity (live)', types: ['VOL_RELATIVE', 'VOL_DOLLAR'] },
   { label: 'Options (live)', types: ['OPT_IV', 'OPT_HV', 'OPT_IVHV', 'OPT_PUTCALL', 'OPT_IMPLIEDMOVE'] },
+  { label: 'Greeks (live)', types: ['OPT_DELTA', 'OPT_GAMMA', 'OPT_THETA', 'OPT_VEGA'] },
   { label: 'Energy flow (live)', types: ['FLOW_HORMUZ', 'FLOW_SUEZ', 'FLOW_PANAMA', 'FLOW_MALACCA'] },
 ]
 
@@ -130,6 +135,8 @@ const DEFAULT_IND: Record<IndicatorType, IndicatorRef> = {
   VOL_RELATIVE: { type: 'VOL_RELATIVE' }, VOL_DOLLAR: { type: 'VOL_DOLLAR' },
   OPT_IV: { type: 'OPT_IV' }, OPT_HV: { type: 'OPT_HV' }, OPT_IVHV: { type: 'OPT_IVHV' },
   OPT_PUTCALL: { type: 'OPT_PUTCALL' }, OPT_IMPLIEDMOVE: { type: 'OPT_IMPLIEDMOVE' },
+  OPT_DELTA: { type: 'OPT_DELTA' }, OPT_GAMMA: { type: 'OPT_GAMMA' },
+  OPT_THETA: { type: 'OPT_THETA' }, OPT_VEGA: { type: 'OPT_VEGA' },
   FLOW_HORMUZ: { type: 'FLOW_HORMUZ' }, FLOW_SUEZ: { type: 'FLOW_SUEZ' },
   FLOW_PANAMA: { type: 'FLOW_PANAMA' }, FLOW_MALACCA: { type: 'FLOW_MALACCA' },
 }
@@ -179,7 +186,7 @@ function IndicatorSelector({ value, onChange }: {
 }) {
   const t = value.type
 
-  const setType = (type: IndicatorType) => onChange(DEFAULT_IND[type])
+  const setType = (type: IndicatorType) => onChange({ ...DEFAULT_IND[type], ticker: value.ticker })
   const set = (field: keyof IndicatorRef, v: number) =>
     onChange({ ...value, [field]: v })
 
@@ -193,6 +200,12 @@ function IndicatorSelector({ value, onChange }: {
           </optgroup>
         ))}
       </select>
+      <input
+        value={value.ticker ?? ''}
+        onChange={e => onChange({ ...value, ticker: e.target.value.toUpperCase().replace(/[^A-Z0-9.\-]/g, '') || undefined })}
+        placeholder="sym"
+        title="Cross-ticker reference — evaluate this indicator on another symbol. Blank = the strategy's primary ticker."
+        style={{ ...inp, width: 52, flexShrink: 0, textTransform: 'uppercase' }} />
       {LIVE_TYPES.includes(t) && (
         <span title="Current-snapshot value (live signal). Held constant through a historical backtest, so it is not point-in-time."
           style={{ fontSize: 8, color: T.muted, fontFamily: T.mono, border: `1px solid ${T.border}`, padding: '1px 4px', letterSpacing: '0.06em' }}>
