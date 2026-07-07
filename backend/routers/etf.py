@@ -44,7 +44,8 @@ SUPPORTED: dict[str, tuple[str, str, str]] = {
     "XLRE": ("ssga", "xlre", "Real Estate"),
     "XLU":  ("ssga", "xlu",  "Utilities"),
     "XLC":  ("ssga", "xlc",  "Communication"),
-    # Other issuers — top-25 via stockanalysis.com
+    # Other issuers — full holdings via Alpha Vantage when ALPHAVANTAGE_API_KEY is
+    # set, else top-25 via stockanalysis.com (flagged partial). See _load.
     "QQQ":  ("sa", "QQQ",  "Nasdaq-100"),
     "VOO":  ("sa", "VOO",  "Vanguard S&P 500"),
     "VTI":  ("sa", "VTI",  "Vanguard Total Market"),
@@ -145,13 +146,53 @@ def _sa_holdings(ticker: str) -> dict:
             "partial": True, "total": d.get("count") or len(holdings)}
 
 
+@cached(ttl=86_400, maxsize=128)
+def _av_holdings(ticker: str) -> dict:
+    """FULL holdings for any ETF via Alpha Vantage ETF_PROFILE (free key, 25/day).
+    Complete constituents with weights — used for non-SPDR funds when a key is set,
+    otherwise the caller falls back to the top-25 source. Cached 24h to stay within
+    the free quota; returns {} on missing key / quota / error so the fallback runs."""
+    key = os.getenv("ALPHAVANTAGE_API_KEY")
+    if not key:
+        return {}
+    try:
+        resp = requests.get("https://www.alphavantage.co/query",
+                            params={"function": "ETF_PROFILE", "symbol": ticker.upper(), "apikey": key},
+                            headers=_UA, timeout=20)
+        if resp.status_code != 200:
+            return {}
+        d = resp.json() or {}
+    except Exception:
+        return {}
+    raw = d.get("holdings")
+    if not raw or "Information" in d or "Note" in d:   # quota hit / rate-limited → fall back
+        return {}
+    holdings: dict[str, dict] = {}
+    for h in raw:
+        sym = str(h.get("symbol") or "").strip().upper()
+        if not sym or sym in ("N/A", "CASH", "USD", "-"):
+            continue
+        try:
+            wt = float(h.get("weight") or 0) * 100.0   # AV returns a decimal fraction
+        except (TypeError, ValueError):
+            continue
+        if wt <= 0:
+            continue
+        holdings[sym] = {"name": str(h.get("description") or sym).strip(), "weight": round(wt, 4)}
+    if not holdings:
+        return {}
+    return {"as_of": None, "name": None, "holdings": holdings, "partial": False, "total": len(holdings)}
+
+
 def _load(fund: str) -> dict:
     """Unified holdings load for a supported fund, tagged with src/label."""
     meta = SUPPORTED.get(fund)
     if not meta:
         return {}
     src, key, label = meta
-    d = _spdr_holdings(key) if src == "ssga" else _sa_holdings(key)
+    # SPDR → SSGA (full). Others → Alpha Vantage full holdings when a key is set,
+    # else the stockanalysis top-25 (flagged partial).
+    d = _spdr_holdings(key) if src == "ssga" else (_av_holdings(key) or _sa_holdings(key))
     if d and d.get("holdings"):
         d = dict(d)
         d["label"] = label
