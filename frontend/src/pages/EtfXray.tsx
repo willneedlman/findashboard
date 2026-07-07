@@ -42,7 +42,7 @@ interface XrayResult {
 const POS = 'var(--theme-positive, #3fb950)'
 const NEG = 'var(--theme-negative, #f85149)'
 
-// Minimal inline sparkline for a fund's 1-day intraday price line.
+// Minimal inline sparkline for a holding's recent daily-close price line.
 function Spark({ data, color, w = 74, h = 20 }: { data: number[]; color: string; w?: number; h?: number }) {
   if (data.length < 2) return null
   const min = Math.min(...data), max = Math.max(...data), rng = max - min || 1
@@ -96,23 +96,14 @@ export function EtfXrayContent() {
   if (data) for (const o of data.overlap) { (ov[o.a] ??= {})[o.b] = o.overlap; (ov[o.b] ??= {})[o.a] = o.overlap }
   const fundList = data?.funds.map(f => f.fund) ?? []
 
-  // Per-fund 1-day intraday price line + % change for the fund pills.
-  const { data: spark } = useQuery<Record<string, { series: number[]; changePct: number }>>({
-    queryKey: ['etf-spark', fundList.join(',')],
-    enabled: fundList.length > 0,
+  // Per-holding 10-session sparkline + 1-day % change for the look-through list.
+  // One batched backend call covers every constituent (hundreds of names).
+  const holdingTickers = useMemo(() => data ? data.aggregate.map(a => a.ticker) : [], [data])
+  const { data: quotes } = useQuery<Record<string, { spark: number[]; change_pct: number | null }>>({
+    queryKey: ['etf-quotes', fundList.join(',')],
+    enabled: holdingTickers.length > 0,
     staleTime: 5 * 60_000,
-    queryFn: async () => {
-      const out: Record<string, { series: number[]; changePct: number }> = {}
-      await Promise.all(fundList.map(async f => {
-        try {
-          const r = await axios.get(`/api/market/ohlcv?ticker=${encodeURIComponent(f)}&tf=15m`)
-          const closes = (r.data.candles as { close: number }[]).map(c => c.close).filter(v => typeof v === 'number')
-          const day = closes.slice(-26)   // ~1 session of 15-min bars (6.5h)
-          if (day.length > 1) out[f] = { series: day, changePct: (day[day.length - 1] - day[0]) / day[0] * 100 }
-        } catch { /* fund without intraday data is simply omitted */ }
-      }))
-      return out
-    },
+    queryFn: async () => (await axios.post('/api/etf/quotes', { tickers: holdingTickers })).data.quotes,
   })
 
   const maxOverlap = data ? Math.max(0.01, ...data.overlap.map(o => o.overlap)) : 1
@@ -204,22 +195,12 @@ export function EtfXrayContent() {
           {/* Selected-fund pills */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ ...EYEBROW, fontSize: 9, color: FAINT }}>Look-through of</span>
-            {data.funds.map(f => {
-              const sp = spark?.[f.fund]
-              const up = (sp?.changePct ?? 0) >= 0
-              return (
+            {data.funds.map(f => (
               <span key={f.fund} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '4px 9px', border: `1px solid ${fundColor(f.fund)}`, background: `color-mix(in srgb, ${fundColor(f.fund)} 10%, transparent)` }}>
                 <span style={{ width: 7, height: 7, background: fundColor(f.fund) }} />
                 <span style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, color: fundColor(f.fund) }}>{f.fund}</span>
-                {sp && <Spark data={sp.series} color={up ? POS : NEG} />}
-                {sp && (
-                  <span title="1-day intraday change (15-min bars)" style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, color: up ? POS : NEG }}>
-                    {up ? '+' : ''}{sp.changePct.toFixed(2)}%
-                  </span>
-                )}
               </span>
-              )
-            })}
+            ))}
           </div>
 
           {/* KPI strip */}
@@ -235,7 +216,7 @@ export function EtfXrayContent() {
           {/* Two-column results */}
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'stretch' }}>
             {/* Left — Look-through holdings */}
-            <Panel title="Look-Through Holdings" right={`hover for per-fund weights · ${fundFilter.length === 0 ? `all ${rows.length}` : fundFilter.length === 1 ? `${rows.length} in ${fundFilter[0]}` : `${rows.length} ${filterMode === 'union' ? 'in any of' : filterMode === 'only' ? 'in only one of' : 'held by all of'} ${fundFilter.join(' + ')}`}`} style={{ flex: '1.55 1 460px' }} bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <Panel title="Look-Through Holdings" right={`10-session spark · 1-day change · ${fundFilter.length === 0 ? `all ${rows.length}` : fundFilter.length === 1 ? `${rows.length} in ${fundFilter[0]}` : `${rows.length} ${filterMode === 'union' ? 'in any of' : filterMode === 'only' ? 'in only one of' : 'held by all of'} ${fundFilter.join(' + ')}`}`} style={{ flex: '1.55 1 460px' }} bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
               <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 9, flex: 1, minHeight: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ ...EYEBROW, fontSize: 8, color: SEC }}>Sort</span>
@@ -285,7 +266,10 @@ export function EtfXrayContent() {
                       No holdings {filterMode === 'only' ? 'are unique to a single one of' : 'are shared by all of'} {fundFilter.join(' + ')}.
                     </div>
                   )}
-                  {rows.map((a, i) => (
+                  {rows.map((a, i) => {
+                    const q = quotes?.[a.ticker]
+                    const up = (q?.change_pct ?? 0) >= 0
+                    return (
                     <div key={a.ticker}
                       onMouseEnter={e => { setHover(a.ticker); setHoverPos({ x: e.clientX, y: e.clientY }) }}
                       onMouseMove={e => setHoverPos({ x: e.clientX, y: e.clientY })}
@@ -294,9 +278,16 @@ export function EtfXrayContent() {
                       <span style={{ fontFamily: MONO, fontSize: 9, color: FAINT, width: 18, flexShrink: 0, textAlign: 'right' }}>{String(i + 1).padStart(2, '0')}</span>
                       <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, color: GOLD, width: 58, flexShrink: 0 }}>{a.ticker}</span>
                       <span style={{ fontSize: 11, color: BODY, flex: 1, minWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
+                      <span style={{ width: 74, flexShrink: 0, display: 'flex', justifyContent: 'flex-end' }}>
+                        {q?.spark && q.spark.length > 1 && <Spark data={q.spark} color={up ? POS : NEG} />}
+                      </span>
+                      <span title="1-day change · 10-session sparkline" style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, width: 52, flexShrink: 0, textAlign: 'right', color: q?.change_pct == null ? FAINT : up ? POS : NEG }}>
+                        {q?.change_pct == null ? '—' : `${up ? '+' : ''}${q.change_pct.toFixed(2)}%`}
+                      </span>
                       <span style={{ display: 'flex', gap: 3, flexShrink: 0 }}>{a.funds.map(tag)}</span>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
             </Panel>

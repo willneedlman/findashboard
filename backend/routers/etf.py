@@ -18,7 +18,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from cache import cached
+from cache import cached, get_download
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -220,6 +220,43 @@ def holdings(fund: str):
     )
     return {"fund": f, "name": data["name"], "as_of": data["as_of"], "count": len(rows),
             "partial": data.get("partial", False), "total": data.get("total"), "holdings": rows}
+
+
+class QuotesRequest(BaseModel):
+    tickers: list[str] = []
+
+
+@router.post("/quotes")
+@cached(ttl=300)
+def quotes(req: QuotesRequest):
+    """Per-holding 10-session sparkline + 1-day % change for the look-through
+    list. One batched daily download for every ticker, no per-symbol calls, so
+    hundreds of constituents cost a single yfinance request (5-min cached)."""
+    import datetime as _dt
+    syms = tuple(dict.fromkeys(t.strip().upper() for t in req.tickers if t.strip()))[:600]
+    if not syms:
+        return {"quotes": {}}
+    end = (_dt.date.today() + _dt.timedelta(days=1)).isoformat()
+    start = (_dt.date.today() - _dt.timedelta(days=20)).isoformat()
+    df = get_download(syms, start, end, "1d")
+    closes = df.get("Close") if not df.empty else None
+    out: dict[str, dict] = {}
+    if closes is None:
+        return {"quotes": out}
+    single = len(syms) == 1
+    for sym in syms:
+        try:
+            s = (closes if single and sym not in closes else closes[sym]).dropna()
+            if len(s) < 2:
+                continue
+            price, prev = float(s.iloc[-1]), float(s.iloc[-2])
+            out[sym] = {
+                "spark": [round(float(v), 4) for v in s.tail(10)],
+                "change_pct": round((price / prev - 1) * 100, 2) if prev else None,
+            }
+        except Exception:
+            continue
+    return {"quotes": out}
 
 
 class XrayRequest(BaseModel):
