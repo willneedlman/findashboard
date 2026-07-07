@@ -1,1 +1,0 @@
-function e(e){return e==null?`—`:e>=0xe8d4a51000?`$${(e/0xe8d4a51000).toFixed(2)}T`:e>=1e9?`$${(e/1e9).toFixed(1)}B`:e>=1e6?`$${(e/1e6).toFixed(0)}M`:`$${e.toLocaleString()}`}export{e as t};
