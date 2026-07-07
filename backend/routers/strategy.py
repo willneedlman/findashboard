@@ -612,7 +612,7 @@ def custom_backtest(req: CustomBacktestRequest):
     end = req.end or datetime.date.today().isoformat()
     sig_arr, close = _run_custom_rules(req.ticker, req.rules, req.start, end)
     if close is None or len(close) < 60:
-        raise HTTPException(422, "Insufficient price history for backtest")
+        raise HTTPException(422, "Not enough price history for a backtest (need about 60 trading days). Use a longer date range, roughly 3 months or more.")
     signal = pd.Series(sig_arr, index=close.index)
     signal = _apply_risk_controls(
         signal, close, req.stop_loss, req.take_profit, req.trailing_stop, req.max_hold_bars,

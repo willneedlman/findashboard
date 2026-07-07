@@ -43,6 +43,15 @@ interface PortfolioResult {
 const PF_KEY = 'fdb_algo_portfolio'
 const rid = () => Math.random().toString(36).slice(2, 8)
 
+// Surface the backend's real reason (FastAPI `detail`) instead of axios's generic
+// "Request failed with status code NNN".
+function errMsg(e: unknown, fallback = 'Request failed'): string {
+  const d = (e as { response?: { data?: { detail?: unknown } }; message?: string })?.response?.data?.detail
+  if (typeof d === 'string') return d
+  if (Array.isArray(d)) return d.map((x: { msg?: string }) => x?.msg ?? String(x)).join(' · ') || fallback
+  return (e as { message?: string })?.message ?? fallback
+}
+
 const fmtCap = (n: number) => `$${Math.abs(n) >= 1000 ? (n / 1000).toFixed(1) + 'K' : n.toFixed(0)}`
 const countConds = (def: CustomStrategyDef) => ({
   buy: def.buy.groups.reduce((s, g) => s + g.conditions.length, 0),
@@ -426,7 +435,7 @@ export function AlgoStrategyBuilderContent() {
           fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', padding: '8px 0',
           cursor: (!activeDef || isPending) ? 'default' : 'pointer', opacity: (!activeDef || isPending) ? 0.6 : 1,
         }}>{isPending ? 'Running…' : 'Run Backtest'}</button>
-        {isError && <div style={{ fontSize: 9, color: 'var(--theme-negative)', fontFamily: 'var(--theme-sans)', textAlign: 'center' }}>{(error as Error)?.message ?? 'Backtest failed'}</div>}
+        {isError && <div style={{ fontSize: 9, color: 'var(--theme-negative)', fontFamily: 'var(--theme-sans)', textAlign: 'center' }}>{errMsg(error, 'Backtest failed')}</div>}
 
         <button onClick={() => sendToPaper.mutate()} disabled={!activeDef || sendToPaper.isPending} style={{
           width: '100%', background: 'transparent', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))', color: activeDef ? 'var(--theme-secondary, #8099b0)' : 'var(--theme-text-faint, rgba(255,255,255,0.35))',
@@ -439,14 +448,14 @@ export function AlgoStrategyBuilderContent() {
           </div>
         )}
         {sendToPaper.isSuccess && <div style={{ fontSize: 9, color: 'var(--theme-positive)', fontFamily: 'var(--theme-sans)', textAlign: 'center' }}>Imported · enable it in Paper Trading</div>}
-        {sendToPaper.isError && <div style={{ fontSize: 9, color: 'var(--theme-negative)', fontFamily: 'var(--theme-sans)', textAlign: 'center' }}>{(sendToPaper.error as Error)?.message ?? 'Import failed'}</div>}
+        {sendToPaper.isError && <div style={{ fontSize: 9, color: 'var(--theme-negative)', fontFamily: 'var(--theme-sans)', textAlign: 'center' }}>{errMsg(sendToPaper.error, 'Import failed')}</div>}
         </>) : (<>
         <button onClick={() => runPortfolio.mutate()} disabled={positions.length === 0 || runPortfolio.isPending} style={{
           width: '100%', background: 'var(--theme-surface, #1f2a3d)', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))', color: positions.length ? 'var(--theme-text, #d7e3fc)' : 'var(--theme-secondary, #8099b0)',
           fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', padding: '8px 0',
           cursor: (positions.length === 0 || runPortfolio.isPending) ? 'default' : 'pointer', opacity: (positions.length === 0 || runPortfolio.isPending) ? 0.6 : 1,
         }}>{runPortfolio.isPending ? 'Running…' : 'Run Portfolio'}</button>
-        {runPortfolio.isError && <div style={{ fontSize: 9, color: 'var(--theme-negative)', fontFamily: 'var(--theme-sans)', textAlign: 'center' }}>{runPortfolio.error?.message ?? 'Backtest failed'}</div>}
+        {runPortfolio.isError && <div style={{ fontSize: 9, color: 'var(--theme-negative)', fontFamily: 'var(--theme-sans)', textAlign: 'center' }}>{errMsg(runPortfolio.error, 'Backtest failed')}</div>}
 
         <button onClick={() => sendPortfolioToPaper.mutate()} disabled={positions.length === 0 || sendPortfolioToPaper.isPending} style={{
           width: '100%', background: 'transparent', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))', color: positions.length ? 'var(--theme-secondary, #8099b0)' : 'var(--theme-text-faint, rgba(255,255,255,0.35))',
@@ -459,7 +468,7 @@ export function AlgoStrategyBuilderContent() {
           </div>
         )}
         {sendPortfolioToPaper.isSuccess && <div style={{ fontSize: 9, color: 'var(--theme-positive)', fontFamily: 'var(--theme-sans)', textAlign: 'center' }}>Created {sendPortfolioToPaper.data?.created} job{sendPortfolioToPaper.data?.created === 1 ? '' : 's'} · enable in Paper Trading</div>}
-        {sendPortfolioToPaper.isError && <div style={{ fontSize: 9, color: 'var(--theme-negative)', fontFamily: 'var(--theme-sans)', textAlign: 'center' }}>{sendPortfolioToPaper.error?.message ?? 'Import failed'}</div>}
+        {sendPortfolioToPaper.isError && <div style={{ fontSize: 9, color: 'var(--theme-negative)', fontFamily: 'var(--theme-sans)', textAlign: 'center' }}>{errMsg(sendPortfolioToPaper.error, 'Import failed')}</div>}
         </>)}
 
         <div style={{ fontSize: 8, color: 'var(--theme-text-faint, rgba(255,255,255,0.35))', lineHeight: '13px', marginTop: 2 }}>
