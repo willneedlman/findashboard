@@ -93,6 +93,9 @@ export function AlgoStrategyBuilderContent() {
         rules: { buy: activeDef.buy, sell: activeDef.sell },
         bull_drift: activeDef.bull_drift ?? 0,
         bear_drift: activeDef.bear_drift ?? 0,
+        instrument: instMode === 'option'
+          ? { kind: 'option', type: optType, moneyness, dte }
+          : undefined,
       })
       return data
     },

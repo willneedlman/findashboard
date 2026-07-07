@@ -92,6 +92,7 @@ class CustomStrategyCreate(BaseModel):
     rules:      dict
     bull_drift: float = 5.0
     bear_drift: float = -3.0
+    instrument: dict | None = None   # {kind:"option", type, moneyness, dte} → scheduler trades real live options
 
 class TickRequest(BaseModel):
     timestamp: float
@@ -242,6 +243,8 @@ def create_custom_strategy(body: CustomStrategyCreate):
         "bull_drift": body.bull_drift,
         "bear_drift": body.bear_drift,
     }
+    if body.instrument:
+        params["instrument"] = body.instrument
     inst = CustomRuleStrategy()
     inst.initialize(params)
 

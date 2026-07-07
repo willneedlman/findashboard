@@ -99,6 +99,9 @@ def _init_db() -> None:
         for ddl in (
             "ALTER TABLE paper_schedule_jobs ADD COLUMN user_id TEXT DEFAULT ''",
             "ALTER TABLE paper_schedule_log  ADD COLUMN user_id TEXT DEFAULT ''",
+            # OCC symbol of the option contract a job currently holds (option
+            # instruments only) so the exit closes exactly what the entry opened.
+            "ALTER TABLE paper_schedule_jobs ADD COLUMN open_occ TEXT",
         ):
             try:
                 conn.execute(ddl)
@@ -195,6 +198,67 @@ def _place_order_sync(user_id: str, ticker: str, side: str, qty: int) -> str | N
         return None
 
 
+def _resolve_option_contract(ticker: str, spec: dict, spot: float) -> str | None:
+    """Pick a REAL contract from the live chain for an option instrument: the
+    expiry nearest today+DTE and the listed strike nearest moneyness×spot. Returns
+    an OCC symbol (which paper_engine prices off the same chain), or None if the
+    chain is unavailable."""
+    try:
+        import datetime as _dt
+        otype = "put" if str(spec.get("type", "call")).lower().startswith("p") else "call"
+        moneyness = float(spec.get("moneyness", 1.0))
+        dte = max(1, int(spec.get("dte", 30)))
+        tk = yf.Ticker(ticker)
+        exps = [e for e in (tk.options or []) if e]
+        if not exps or not spot:
+            return None
+        target = _dt.date.today() + _dt.timedelta(days=dte)
+        expiry = min(exps, key=lambda e: abs((_dt.date.fromisoformat(e) - target).days))
+        chain = tk.option_chain(expiry)
+        df = chain.calls if otype == "call" else chain.puts
+        if df is None or df.empty:
+            return None
+        strikes = [float(s) for s in df["strike"].tolist()]
+        strike = min(strikes, key=lambda s: abs(s - spot * moneyness))
+        y, m, d = expiry.split("-")
+        cp = "C" if otype == "call" else "P"
+        return f"{ticker.upper()}{y[2:]}{m}{d}{cp}{int(round(strike * 1000)):08d}"
+    except Exception as e:
+        _log.warning("Option contract resolve failed for %s: %s", ticker, e)
+        return None
+
+
+def _place_option_sync(user_id: str, ticker: str, signal: str, qty: int, spec: dict,
+                       open_occ: str | None, spot: float) -> tuple[str | None, str | None]:
+    """Trade a real option at the live chain price. On BUY, open a fresh contract;
+    on SELL, close the exact contract the job is holding. Returns (order_id,
+    new_open_occ) — new_open_occ is the OCC now held ('' when flat, None = no
+    change)."""
+    if not user_id:
+        return None, None
+    try:
+        if signal == "BUY":
+            if open_occ:
+                return None, None   # already holding a contract
+            occ = _resolve_option_contract(ticker, spec, spot)
+            if not occ:
+                return None, None
+            res = paper_engine.place_option_order(user_id, occ, "buy_to_open", qty, "market")
+            if res.get("status") == "filled":
+                return str(res.get("id") or "") or None, occ
+            _log.info("Scheduler option BUY not filled (%s): %s", occ, res.get("reason") or res.get("status"))
+            return None, None
+        else:  # SELL — close what we hold
+            if not open_occ:
+                return None, None
+            res = paper_engine.place_option_order(user_id, open_occ, "sell_to_close", qty, "market")
+            oid = str(res.get("id") or "") or None if res.get("status") == "filled" else None
+            return oid, ("" if oid else None)   # clear holding once closed
+    except Exception as e:
+        _log.warning("Paper option order failed (%s %s): %s", signal, ticker, e)
+        return None, None
+
+
 def _is_market_open() -> bool:
     """True if current time is within NYSE regular hours (09:30–16:00 ET, Mon-Fri)."""
     from zoneinfo import ZoneInfo
@@ -261,6 +325,7 @@ async def _run_scheduler_loop() -> None:
 
             log_rows: list[tuple] = []
             job_updates: list[tuple] = []
+            occ_updates: list[tuple] = []   # (open_occ, job_id) for option jobs whose holding changed
 
             for job in due_jobs:
                 job_id = job["id"]
@@ -308,14 +373,27 @@ async def _run_scheduler_loop() -> None:
 
                 order_id: str | None = None
                 notes = ""
+                occ_update: str | None = None   # new open_occ when it changes
 
-                # Execute into the job owner's own paper account
-                if signal_str in ("BUY", "SELL"):
-                    side = "buy" if signal_str == "BUY" else "sell"
-                    order_id = await loop.run_in_executor(
-                        _executor, _place_order_sync, job.get("user_id", ""), ticker, side, qty
-                    )
-                    notes = f"order_id={order_id}" if order_id else "order_failed"
+                # Execute into the job owner's own paper account — only on a
+                # signal TRANSITION. Strategies report BUY every bar while invested
+                # ("remain invested"), so acting on the raw signal would re-buy on
+                # every poll; fire only when the signal actually changes.
+                transition = signal_str != (job.get("last_signal") or "HOLD")
+                if signal_str in ("BUY", "SELL") and transition:
+                    inst_spec = params.get("instrument") or {}
+                    if inst_spec.get("kind") == "option":
+                        order_id, occ_update = await loop.run_in_executor(
+                            _executor, _place_option_sync, job.get("user_id", ""),
+                            ticker, signal_str, qty, inst_spec, job.get("open_occ"), price,
+                        )
+                        notes = f"option={occ_update or job.get('open_occ') or ''} order_id={order_id}" if order_id else "option_order_failed"
+                    else:
+                        side = "buy" if signal_str == "BUY" else "sell"
+                        order_id = await loop.run_in_executor(
+                            _executor, _place_order_sync, job.get("user_id", ""), ticker, side, qty
+                        )
+                        notes = f"order_id={order_id}" if order_id else "order_failed"
                     _log.info("Scheduler %s %s x%d @ %.2f → %s", signal_str, ticker, qty, price, notes)
 
                 log_rows.append((
@@ -323,8 +401,10 @@ async def _run_scheduler_loop() -> None:
                     signal_str, price, now_ts, order_id, notes, job.get("user_id", "")
                 ))
                 job_updates.append((signal_str, price, now_ts, job_id))
+                if occ_update is not None:
+                    occ_updates.append((occ_update, job_id))
 
-            if log_rows or job_updates:
+            if log_rows or job_updates or occ_updates:
                 with _db() as conn:
                     if log_rows:
                         conn.executemany(
@@ -338,6 +418,11 @@ async def _run_scheduler_loop() -> None:
                             "UPDATE paper_schedule_jobs "
                             "SET last_signal=?, last_price=?, last_run_ts=? WHERE id=?",
                             job_updates
+                        )
+                    if occ_updates:
+                        conn.executemany(
+                            "UPDATE paper_schedule_jobs SET open_occ=? WHERE id=?",
+                            occ_updates
                         )
                     # Prune old log rows
                     conn.execute(
@@ -453,6 +538,12 @@ def create_job(body: JobCreate, authorization: str = Header(default=""), x_sessi
     from routers.paper_strategies import _active
     if body.strategy_name not in _active:
         raise HTTPException(400, f"Unknown strategy: {body.strategy_name}")
+    # Bake the strategy's own params (rules, instrument, drifts) into the job so a
+    # scheduled custom strategy actually carries its rules — and survives restarts
+    # without depending on the in-memory registry. Job-level params (risk, qty
+    # tuning) override the registry defaults.
+    reg_params = _active[body.strategy_name].get("params", {})
+    params = {**reg_params, **body.params}
     job_id = str(uuid.uuid4())
     now    = int(time.time())
     with _db() as conn:
@@ -461,7 +552,7 @@ def create_job(body: JobCreate, authorization: str = Header(default=""), x_sessi
             "(id,ticker,strategy_name,params_json,qty,enabled,warmed_up,created_at,user_id) "
             "VALUES (?,?,?,?,?,1,0,?,?)",
             (job_id, body.ticker.upper(), body.strategy_name,
-             json.dumps(body.params), body.qty, now, body.user_id)
+             json.dumps(params), body.qty, now, body.user_id)
         )
     with _db() as conn:
         row = dict(conn.execute(
