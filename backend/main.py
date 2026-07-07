@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
+import mimetypes
 import os
 import time
 from dotenv import load_dotenv
@@ -27,6 +28,15 @@ from routers import (
     earnings, leaderboard, etf, fx,
     maritime, snapshots, credit, housing,
 )
+
+# Pin the MIME types the PWA depends on. A service worker served as anything but
+# a JS type is rejected by the browser ("unsupported MIME type"), and some hosts'
+# registries map .js to application/json or .webmanifest to octet-stream. Force
+# the correct types before any file is served, independent of the host registry.
+mimetypes.add_type("text/javascript", ".js")
+mimetypes.add_type("text/javascript", ".mjs")
+mimetypes.add_type("application/manifest+json", ".webmanifest")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

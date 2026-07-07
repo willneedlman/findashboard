@@ -29,3 +29,12 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </ErrorBoundary>
   </React.StrictMode>,
 )
+
+// PWA service worker: caches immutable hashed assets for instant repeat loads.
+// Production only — in dev the SW would intercept Vite's unhashed module graph
+// and serve stale code. Registered after load so it never delays first paint.
+if ((import.meta as { env?: { PROD?: boolean } }).env?.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {})
+  })
+}
