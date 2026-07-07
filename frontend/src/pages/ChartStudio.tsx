@@ -460,7 +460,9 @@ export function ChartStudioContent() {
 
   // ── Data ──
   const candleRefreshMs = INTRADAY.has(tf) ? 60_000 : 300_000
-  const candlesQ = useQuery({ queryKey: ['cs-candles', ticker, tf], queryFn: () => fetchCandles(ticker, tf), staleTime: candleRefreshMs, refetchInterval: candleRefreshMs, retry: 1 })
+  // refetchIntervalInBackground keeps candles ticking while the tab is not
+  // focused (react-query pauses interval refetches in the background by default).
+  const candlesQ = useQuery({ queryKey: ['cs-candles', ticker, tf], queryFn: () => fetchCandles(ticker, tf), staleTime: candleRefreshMs, refetchInterval: candleRefreshMs, refetchIntervalInBackground: true, retry: 1 })
   const eventsQ = useQuery<ChartEvents>({
     queryKey: ['cs-events', ticker],
     queryFn: () => axios.get(`/api/market/chart-events?ticker=${encodeURIComponent(ticker)}`).then(r => r.data),
