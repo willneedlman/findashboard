@@ -74,13 +74,31 @@ export const DEFAULT_RISK: StrategyRisk = {
   sizingPct: 100, stopLossPct: 0, takeProfitPct: 0, trailingStopPct: 0, maxHoldBars: 0,
 }
 
+// A per-ticker override: its own complete buy/sell signal that replaces the
+// strategy's default rules whenever a position trades this exact ticker.
+export interface TickerRuleSet {
+  id: string
+  ticker: string
+  buy: RuleBlock
+  sell: RuleBlock
+}
+
 export interface CustomStrategyDef {
   name: string
   buy: RuleBlock
   sell: RuleBlock
+  perTicker?: TickerRuleSet[]   // ticker-specific signals; default buy/sell is the fallback
   bull_drift: number
   bear_drift: number
   risk?: StrategyRisk
+}
+
+// Resolve the concrete buy/sell blocks for a traded ticker: an exact (case-
+// insensitive) per-ticker override wins, otherwise the strategy's default rules.
+export function rulesForTicker(def: CustomStrategyDef, ticker: string): { buy: RuleBlock; sell: RuleBlock } {
+  const t = (ticker || '').toUpperCase().trim()
+  const hit = t ? def.perTicker?.find(r => (r.ticker || '').toUpperCase().trim() === t) : undefined
+  return hit ? { buy: hit.buy, sell: hit.sell } : { buy: def.buy, sell: def.sell }
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -507,6 +525,16 @@ const EMPTY_BLOCK = (): RuleBlock => ({
   groups: [{ id: uid(), logic: 'AND', conditions: [] }],
 })
 
+// Deep-clone a rule block with fresh ids so a per-ticker override starts from a
+// copy of the default rather than sharing its group/condition objects.
+const cloneBlock = (b: RuleBlock): RuleBlock => ({
+  logic: b.logic,
+  groups: b.groups.map(g => ({
+    id: uid(), logic: g.logic,
+    conditions: g.conditions.map(c => ({ ...c, id: uid(), lhs: { ...c.lhs }, rhs_ind: { ...c.rhs_ind } })),
+  })),
+})
+
 const DEFAULTS: CustomStrategyDef = {
   name: '',
   buy: {
@@ -565,12 +593,33 @@ export default function CustomStrategyModal({ open, onClose, onSave, initialDef 
   const hasConditions = (block: RuleBlock) =>
     block.groups.some(g => g.conditions.length > 0)
 
+  // Per-ticker overrides. A new one is seeded from the current default rules so
+  // the user starts from what already works and edits just the differences.
+  const addTickerRule = () => u({
+    perTicker: [...(def.perTicker ?? []), {
+      id: uid(), ticker: '', buy: cloneBlock(def.buy), sell: cloneBlock(def.sell),
+    }],
+  })
+  const updateTickerRule = (id: string, patch: Partial<TickerRuleSet>) =>
+    u({ perTicker: (def.perTicker ?? []).map(r => r.id === id ? { ...r, ...patch } : r) })
+  const removeTickerRule = (id: string) =>
+    u({ perTicker: (def.perTicker ?? []).filter(r => r.id !== id) })
+
   const handleSave = () => {
     if (!def.name.trim()) { setNameError('Strategy name is required.'); return }
-    if (!hasConditions(def.buy) && !hasConditions(def.sell)) {
+    const perTicker = def.perTicker ?? []
+    // Every per-ticker rule set needs a symbol, else its rules would be lost.
+    if (perTicker.some(r => !r.ticker.trim())) {
+      setNameError('Give every ticker-specific rule set a ticker symbol, or remove it.'); return
+    }
+    const anyPerTicker = perTicker.some(r => hasConditions(r.buy) || hasConditions(r.sell))
+    if (!hasConditions(def.buy) && !hasConditions(def.sell) && !anyPerTicker) {
       setNameError('Add at least one BUY or SELL condition.'); return
     }
-    onSave({ ...def, name: def.name.trim() })
+    const dupe = perTicker.map(r => r.ticker.toUpperCase().trim())
+      .find((t, i, a) => a.indexOf(t) !== i)
+    if (dupe) { setNameError(`Ticker "${dupe}" has more than one rule set.`); return }
+    onSave({ ...def, name: def.name.trim(), perTicker: perTicker.length ? perTicker : undefined })
     onClose()
   }
 
@@ -635,6 +684,11 @@ export default function CustomStrategyModal({ open, onClose, onSave, initialDef 
             Each <span style={{ color: T.muted }}>group</span> matches <span style={{ color: T.muted }}>ALL</span> or <span style={{ color: T.muted }}>ANY</span> of its conditions; a block fires when <span style={{ color: T.muted }}>ALL</span> or <span style={{ color: T.muted }}>ANY</span> of its groups match. Add a second group to combine signals with different logic.
           </div>
 
+          {/* Default rules label */}
+          <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, fontFamily: T.mono, marginBottom: 8 }}>
+            Default rules{(def.perTicker?.length ?? 0) > 0 ? ' (tickers without their own rules below)' : ''}
+          </div>
+
           {/* BUY block */}
           <RuleBlockEditor
             label="BUY"
@@ -650,6 +704,39 @@ export default function CustomStrategyModal({ open, onClose, onSave, initialDef 
             onChange={sell => u({ sell })}
             accentColor={T.neg}
           />
+
+          {/* Per-ticker signal overrides */}
+          <div style={{ marginTop: 4, marginBottom: 16 }}>
+            <div style={{ height: 1, background: T.border, marginBottom: 12 }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.gold, fontFamily: T.mono }}>Ticker-specific signals</span>
+              <span style={{ fontSize: 8, color: T.dim, fontFamily: T.mono }}>optional</span>
+              <button onClick={addTickerRule} style={{ ...btn, marginLeft: 'auto', borderColor: `${T.gold}60`, color: T.gold }}>+ Add ticker</button>
+            </div>
+            <div style={{ fontSize: 9, color: T.dim, fontFamily: T.mono, lineHeight: 1.6, marginBottom: 10 }}>
+              Give a ticker its own buy and sell rules. A position trading that ticker uses these instead of the rules above; every other ticker falls back to the default.
+            </div>
+            {(def.perTicker ?? []).map(entry => (
+              <div key={entry.id} style={{ border: `1px solid ${T.gold}30`, background: `${T.gold}05`, padding: '10px 12px', marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <span style={{ fontSize: 8, color: T.muted, fontFamily: T.mono, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Ticker</span>
+                  <input value={entry.ticker}
+                    onChange={e => updateTickerRule(entry.id, { ticker: e.target.value.toUpperCase().replace(/[^A-Z0-9.\-]/g, '') })}
+                    placeholder="e.g. NVDA"
+                    style={{ ...inp, width: 120, textTransform: 'uppercase', fontWeight: 700 }} />
+                  <button onClick={() => removeTickerRule(entry.id)}
+                    style={{ marginLeft: 'auto', background: 'none', border: `1px solid ${T.neg}40`, color: T.neg, fontFamily: T.mono, fontSize: 8, padding: '3px 8px', cursor: 'pointer', letterSpacing: '0.06em' }}>Remove ticker</button>
+                </div>
+                <RuleBlockEditor label="BUY" block={entry.buy} onChange={buy => updateTickerRule(entry.id, { buy })} accentColor={T.pos} />
+                <RuleBlockEditor label="SELL" block={entry.sell} onChange={sell => updateTickerRule(entry.id, { sell })} accentColor={T.neg} />
+              </div>
+            ))}
+            {(def.perTicker ?? []).length === 0 && (
+              <div style={{ fontSize: 9, color: T.dim, fontFamily: T.mono, padding: '8px 10px', border: `1px dashed ${T.border}`, textAlign: 'center' }}>
+                No ticker-specific signals. The default rules above apply to every ticker.
+              </div>
+            )}
+          </div>
 
           {/* Risk management */}
           <div style={{ marginTop: 16 }}>

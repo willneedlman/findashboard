@@ -11,6 +11,7 @@ const STRIP: React.CSSProperties = {
 }
 const POS = 'var(--theme-positive)', NEG = 'var(--theme-negative)'
 import StrategySelector, { STRATEGIES, CUSTOM_STRATEGY_KEY, type StrategyParams } from '../components/StrategySelector'
+import { rulesForTicker } from '../components/CustomStrategyModal'
 import { TOOLTIP_STYLE, CROSSHAIR_CURSOR, BAR_CURSOR } from '../components/ChartTooltip'
 import { FUTURES } from '../lib/futures'
 import axios from 'axios'
@@ -337,7 +338,7 @@ export function MonteCarloContent() {
                 isCustom
                   ? axios.post('/api/strategy/custom-signal', {
                       ticker: leg.ticker, start: '2022-01-01', end: today,
-                      rules: customDef, bull_drift: customDef.bull_drift ?? 5, bear_drift: customDef.bear_drift ?? -3,
+                      rules: rulesForTicker(customDef, leg.ticker), bull_drift: customDef.bull_drift ?? 5, bear_drift: customDef.bear_drift ?? -3,
                     })
                   : axios.post('/api/strategy/signal', {
                       ticker: leg.ticker, strategy: leg.strategy,

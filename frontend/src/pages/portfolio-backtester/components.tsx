@@ -9,6 +9,7 @@ import PageWrapper from '../../components/PageWrapper'
 import { KpiCell } from '../../components/mmCockpit'
 import { useChartColors } from '../../hooks/useChartColors'
 import StrategySelector, { STRATEGIES, CUSTOM_STRATEGY_KEY, type StrategyParams } from '../../components/StrategySelector'
+import { rulesForTicker } from '../../components/CustomStrategyModal'
 import { TOOLTIP_STYLE, CROSSHAIR_CURSOR, BAR_CURSOR } from '../../components/ChartTooltip'
 import { FUTURES } from '../../lib/futures'
 import ChartTooltip from '../../components/ChartTooltip'
@@ -116,7 +117,7 @@ export function PortfolioTab() {
             if (!customDef) return Promise.resolve(null)
             return axios.post('/api/strategy/custom-signal', {
               ticker: a.ticker, start, end,
-              rules: customDef, bull_drift: customDef.bull_drift ?? 5, bear_drift: customDef.bear_drift ?? -3,
+              rules: rulesForTicker(customDef, a.ticker), bull_drift: customDef.bull_drift ?? 5, bear_drift: customDef.bear_drift ?? -3,
             }).then(r => r.data).catch(() => null)
           }
           return axios.post('/api/strategy/signal', { ticker: a.ticker, strategy: a.strategy, start, end, params: a.stratParams })

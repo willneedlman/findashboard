@@ -9,7 +9,7 @@ import TickerInput from '../components/TickerInput'
 import { KpiCell } from '../components/mmCockpit'
 import { useChartColors } from '../hooks/useChartColors'
 import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
-import CustomStrategyModal, { type CustomStrategyDef, DEFAULT_RISK } from '../components/CustomStrategyModal'
+import CustomStrategyModal, { type CustomStrategyDef, DEFAULT_RISK, rulesForTicker } from '../components/CustomStrategyModal'
 import { loadCustomStrategies, saveCustomStrategy, deleteCustomStrategy } from '../utils/customStrategies'
 
 const STRIP: React.CSSProperties = {
@@ -88,9 +88,10 @@ export function AlgoStrategyBuilderContent() {
     if (!def) throw new Error(`Strategy "${p.strategy}" not found`)
     const money = p.optType === 'call' ? 1 + p.otmPct / 100 : 1 - p.otmPct / 100
     const r = def.risk
+    const rules = rulesForTicker(def, p.ticker)   // per-ticker override, else default
     return {
       ticker: p.ticker, side: p.side, weight: p.weight,
-      rules: { buy: def.buy, sell: def.sell },
+      rules: { buy: rules.buy, sell: rules.sell },
       instrument: p.instMode === 'option' ? { kind: 'option', type: p.optType, moneyness: money, dte: p.dte } : undefined,
       position_size: r?.sizingPct || 100,
       stop_loss: r?.stopLossPct || undefined, take_profit: r?.takeProfitPct || undefined,
@@ -117,9 +118,10 @@ export function AlgoStrategyBuilderContent() {
     mutationFn: async () => {
       if (!activeDef) throw new Error('Select or build a strategy first.')
       const r = activeDef.risk ?? DEFAULT_RISK
+      const rules = rulesForTicker(activeDef, ticker)   // per-ticker override, else default
       const { data } = await axios.post('/api/strategy/custom-backtest', {
         ticker, start, end: end || undefined, side,
-        rules: { buy: activeDef.buy, sell: activeDef.sell },
+        rules: { buy: rules.buy, sell: rules.sell },
         position_size: r.sizingPct || 100,
         stop_loss: r.stopLossPct || undefined,
         take_profit: r.takeProfitPct || undefined,
@@ -136,9 +138,10 @@ export function AlgoStrategyBuilderContent() {
   const sendToPaper = useMutation<{ name: string }, Error>({
     mutationFn: async () => {
       if (!activeDef) throw new Error('Select a strategy first.')
+      const rules = rulesForTicker(activeDef, ticker)   // resolve for the current ticker
       const { data } = await axios.post('/api/paper/strategies/custom', {
         name: activeDef.name, side,
-        rules: { buy: activeDef.buy, sell: activeDef.sell },
+        rules: { buy: rules.buy, sell: rules.sell },
         bull_drift: activeDef.bull_drift ?? 0,
         bear_drift: activeDef.bear_drift ?? 0,
         instrument: instMode === 'option'
@@ -192,6 +195,11 @@ export function AlgoStrategyBuilderContent() {
           <div>
             <label style={LABEL}>Ticker</label>
             <TickerInput value={ticker} onChange={setTicker} onEnter={() => activeDef && runBacktest()} style={INPUT} placeholder="Ticker or company" />
+            {activeDef?.perTicker?.length ? (
+              <div style={{ fontSize: 8, marginTop: 3, fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em', color: activeDef.perTicker.some(r => r.ticker.toUpperCase().trim() === ticker.toUpperCase().trim()) ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-text-faint, rgba(255,255,255,0.4))' }}>
+                {activeDef.perTicker.some(r => r.ticker.toUpperCase().trim() === ticker.toUpperCase().trim()) ? `${ticker.toUpperCase()}-specific signal` : 'default signal (no rule for this ticker)'}
+              </div>
+            ) : null}
           </div>
           )}
           <div>
@@ -309,6 +317,16 @@ export function AlgoStrategyBuilderContent() {
                     {saved.length === 0 && <option value="">— build a strategy first —</option>}
                     {saved.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
                   </select>
+                  {(() => {
+                    const def = saved.find(s => s.name === p.strategy)
+                    if (!def?.perTicker?.length) return null
+                    const hit = def.perTicker.some(r => r.ticker.toUpperCase().trim() === p.ticker.toUpperCase().trim())
+                    return (
+                      <div style={{ fontSize: 8, fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em', color: hit ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-text-faint, rgba(255,255,255,0.4))' }}>
+                        {hit ? `${p.ticker.toUpperCase()}-specific signal` : 'default signal (no rule for this ticker)'}
+                      </div>
+                    )
+                  })()}
                   <div>
                     <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)', marginBottom: 3 }}>On BUY signal, open</div>
                     <div style={{ display: 'flex', gap: 4 }}>
@@ -388,7 +406,7 @@ export function AlgoStrategyBuilderContent() {
                   </span>
                 </div>
                 <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 8, color: 'var(--theme-secondary, #8099b0)', marginTop: 2, letterSpacing: '0.06em' }}>
-                  BUY {c.buy} · SELL {c.sell}
+                  BUY {c.buy} · SELL {c.sell}{def.perTicker?.length ? ` · ${def.perTicker.length} ticker${def.perTicker.length === 1 ? '' : 's'}` : ''}
                 </div>
               </div>
             )
