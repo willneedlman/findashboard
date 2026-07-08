@@ -1129,6 +1129,85 @@ def macro_calendar():
     return result
 
 
+# ── FOMC statement AI analysis ──────────────────────────────────────────────────
+import re as _re
+
+
+def _latest_fomc_statement() -> tuple[str, str] | None:
+    """(iso_date, statement_url) for the most recent past FOMC decision. The Fed's
+    press-release URL is deterministic from the meeting date, so no scraping of a
+    noisy index is needed."""
+    today = date.today()
+    past = [date.fromisoformat(d) for d in _FOMC_DATES if date.fromisoformat(d) <= today]
+    if not past:
+        return None
+    d = max(past)
+    return d.isoformat(), f"https://www.federalreserve.gov/newsevents/pressreleases/monetary{d.strftime('%Y%m%d')}a.htm"
+
+
+def _fed_doc_text(url: str) -> str:
+    """Fetch a Fed release page and return the statement body as plain text."""
+    try:
+        r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=12)
+        if r.status_code != 200:
+            return ""
+        html = _re.sub(r"<script.*?</script>|<style.*?</style>", " ", r.text, flags=_re.S)
+        txt = _re.sub(r"\s+", " ", _re.sub(r"<[^>]+>", " ", html)).strip()
+        for anchor in ("Recent indicators", "Information received", "The Committee decided"):
+            i = txt.find(anchor)
+            if i >= 0:
+                return txt[i:i + 6000]
+        return txt[:6000]
+    except Exception as e:
+        _log.warning("fed doc fetch %s: %s", url, e)
+        return ""
+
+
+@router.get("/fomc-analysis")
+@cached(ttl=6 * 3600, maxsize=2)
+def fomc_analysis():
+    """LLM read of the latest FOMC statement: hawkish/dovish score + summary.
+
+    Deterministic statement URL from the last meeting date; the LLM output is
+    isolated (a failure just returns available=false, never a wrong number)."""
+    import json
+    info = _latest_fomc_statement()
+    if not info:
+        return {"available": False}
+    d, url = info
+    text = _fed_doc_text(url)
+    if len(text) < 200:
+        return {"available": False, "date": d, "url": url}
+    prompt = (
+        "You are a monetary-policy analyst. Read this FOMC statement and classify its stance.\n"
+        "Return ONLY JSON, no markdown:\n"
+        '{"stance":"hawkish|dovish|neutral",'
+        '"score":<integer -10 to 10, negative = dovish/easing, positive = hawkish/tightening>,'
+        '"decision":"<one line: the rate decision and target range>",'
+        '"summary":"<2-3 sentence plain-English summary>",'
+        '"key_points":["<3 to 5 short takeaways>"]}\n\n'
+        f"FOMC statement:\n{text}"
+    )
+    try:
+        from ai_client import groq_chat
+        resp = groq_chat([{"role": "user", "content": prompt}], max_tokens=700, temperature=0.0)
+        raw = resp.choices[0].message.content or ""
+        clean = _re.sub(r"```[a-z]*\n?", "", raw).strip()
+        s, e = clean.find("{"), clean.rfind("}")
+        obj = json.loads(clean[s:e + 1])
+        return {
+            "available": True, "date": d, "url": url,
+            "stance": str(obj.get("stance", "neutral")).lower()[:20],
+            "score": max(-10, min(10, int(obj.get("score", 0)))),
+            "decision": str(obj.get("decision", ""))[:200],
+            "summary": str(obj.get("summary", ""))[:800],
+            "key_points": [str(x)[:200] for x in (obj.get("key_points") or [])][:6],
+        }
+    except Exception as ex:
+        _log.warning("fomc analysis failed: %s", ex)
+        return {"available": False, "date": d, "url": url}
+
+
 # ── Credit Spread Monitor ──────────────────────────────────────────────────────
 
 

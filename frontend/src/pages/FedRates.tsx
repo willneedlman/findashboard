@@ -2,6 +2,7 @@ import { T } from '../lib/theme'
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import axios from 'axios'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
   Legend, LabelList, Customized,
@@ -321,6 +322,62 @@ function InlineStat({ label, value, delta, deltaPos }: { label: string; value: s
   )
 }
 
+// ── Band 6c: FOMC statement AI read ──────────────────────────────────────────
+interface FomcRead { available: boolean; date?: string; url?: string; stance?: string; score?: number; decision?: string; summary?: string; key_points?: string[] }
+function FomcStatementRead() {
+  const { data } = useQuery<FomcRead>({
+    queryKey: ['fomc-analysis'],
+    queryFn: () => axios.get('/api/rates/fomc-analysis').then(r => r.data),
+    staleTime: 6 * 3600 * 1000,
+  })
+  if (!data?.available) return null
+  const score = Math.max(-10, Math.min(10, data.score ?? 0))
+  const stance = (data.stance || 'neutral').toLowerCase()
+  const stanceColor = stance === 'hawkish' ? T.neg : stance === 'dovish' ? T.pos : T.gold
+  const markerPct = ((score + 10) / 20) * 100
+  return (
+    <div style={band}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+        <span style={bandTitle}>FOMC Statement — AI Read</span>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          {data.date && <span style={{ fontFamily: T.mono, fontSize: 8.5, letterSpacing: '0.1em', color: T.muted }}>{data.date}</span>}
+          {data.url && <a href={data.url} target="_blank" rel="noreferrer" style={{ fontFamily: T.label, fontSize: 8.5, letterSpacing: '0.06em', color: T.muted, textDecoration: 'underline' }}>SOURCE</a>}
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 40fr) minmax(0, 60fr)', gap: 28 }} className="rate-split">
+        {/* Left: stance + hawkish-dovish scale */}
+        <div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 12 }}>
+            <span style={{ fontFamily: T.mono, fontSize: 22, fontWeight: 700, color: stanceColor, textTransform: 'capitalize' }}>{stance}</span>
+            <span style={{ fontFamily: T.mono, fontSize: 13, fontWeight: 700, color: stanceColor }}>{score > 0 ? '+' : ''}{score}</span>
+          </div>
+          <div style={{ position: 'relative', height: 8, background: `linear-gradient(90deg, ${T.pos}, ${T.gold}, ${T.neg})`, borderRadius: 4, opacity: 0.85 }}>
+            <div style={{ position: 'absolute', left: `${markerPct}%`, top: -3, transform: 'translateX(-50%)', width: 3, height: 14, background: T.text, borderRadius: 2 }} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: T.label, fontSize: 8.5, letterSpacing: '0.08em', color: T.muted, marginTop: 5 }}>
+            <span>DOVISH −10</span><span>NEUTRAL</span><span>+10 HAWKISH</span>
+          </div>
+          {data.decision && <div style={{ fontFamily: T.mono, fontSize: 11, color: T.text, marginTop: 14, lineHeight: 1.5 }}>{data.decision}</div>}
+        </div>
+        {/* Right: summary + key points */}
+        <div>
+          {data.summary && <div style={{ fontFamily: T.label, fontSize: 12.5, color: T.text, lineHeight: 1.55, marginBottom: 10 }}>{data.summary}</div>}
+          {(data.key_points ?? []).length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              {data.key_points!.map((k, i) => (
+                <div key={i} style={{ display: 'flex', gap: 8, fontFamily: T.label, fontSize: 11.5, color: T.muted, lineHeight: 1.45 }}>
+                  <span style={{ color: T.gold, flex: 'none' }}>·</span><span>{k}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ fontFamily: T.label, fontSize: 9, color: T.muted, marginTop: 10, opacity: 0.8 }}>AI-generated read of the official statement. Verify against the source.</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function FedRatesContent() {
   const [twist, setTwist] = useState(0)
 
@@ -476,6 +533,9 @@ export function FedRatesContent() {
               )}
             </div>
           </div>
+
+          {/* Band 6c — FOMC statement AI read */}
+          <FomcStatementRead />
 
           {/* Band 7 — disclaimer */}
           <div style={{ padding: '10px 24px', borderTop: `1px solid ${T.borderFaint}`, fontFamily: T.label, fontSize: 10, color: T.muted }}>
