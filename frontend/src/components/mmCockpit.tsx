@@ -177,9 +177,9 @@ export function Chips({ options, value, onPick }: { options: { label: string; va
 
 // One compact KPI cell for the unified top instrument strip. Cells sit in a row
 // separated by hairline borders; the strip reads as one instrument, not cards.
-export function KpiCell({ label, value, color, valueSize = 13, grow = false, minWidth, sub, subColor, align = 'center' }: {
+export function KpiCell({ label, value, color, valueSize = 13, grow = false, minWidth, sub, subColor, align = 'center', help }: {
   label: string; value: string; color?: string; valueSize?: number; grow?: boolean; minWidth?: number
-  sub?: string; subColor?: string; align?: 'center' | 'top'
+  sub?: string; subColor?: string; align?: 'center' | 'top'; help?: string
 }) {
   // align="top" gives every cell the same label/value baseline regardless of
   // whether it has a sub line (so a mixed strip stays aligned).
@@ -189,7 +189,7 @@ export function KpiCell({ label, value, color, valueSize = 13, grow = false, min
       padding: align === 'top' ? '11px 14px' : '6px 13px', borderRight: `1px solid ${V.border}`,
       flex: grow ? 1 : '0 0 auto', minWidth,
     }}>
-      <span style={{ ...EYEBROW, fontSize: 8 }}>{label}</span>
+      <span style={{ ...EYEBROW, fontSize: 8, ...(help ? { cursor: 'help', borderBottom: `1px dotted ${V.sec}`, alignSelf: align === 'top' ? 'flex-start' : 'center', paddingBottom: 1 } : {}) }} title={help}>{label}</span>
       <span style={{ fontFamily: V.mono, fontSize: valueSize, fontWeight: 700, color: color || V.text, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
       {sub && <span style={{ fontFamily: V.sans, fontSize: 9, color: subColor || V.sec, whiteSpace: 'nowrap', marginTop: 1 }}>{sub}</span>}
     </div>

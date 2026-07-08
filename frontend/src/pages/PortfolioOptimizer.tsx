@@ -43,7 +43,7 @@ const LOOKBACKS: { label: string; years: number }[] = [
 
 interface WeightRow { ticker: string; weight: number; risk_contribution: number }
 interface Port { return: number; vol: number; sharpe: number; weights: WeightRow[]; var_95: number; cvar_95: number; max_drawdown: number }
-interface AssetRow { ticker: string; return: number; vol: number; beta?: number | null }
+interface AssetRow { ticker: string; return: number; total_return?: number; vol: number; beta?: number | null }
 interface OptResult {
   tickers: string[]; dropped?: string[]; days: number; span: { start: string; end: string }; risk_free_rate: number; market_return?: number; long_only: boolean; return_model?: string
   portfolios: Record<string, Port>
@@ -267,8 +267,8 @@ export function PortfolioOptimizerContent() {
             <KpiCell grow label="Expected Return" value={`${sel.return >= 0 ? '+' : ''}${sel.return.toFixed(1)}%`} valueSize={22} color={sel.return >= 0 ? POS : NEG} sub={data.return_model === 'capm' ? 'CAPM · forward' : 'realized · annualized'} />
             <KpiCell grow label="Volatility" value={`${sel.vol.toFixed(1)}%`} valueSize={22} sub="annualized" />
             <KpiCell grow label="Sharpe" value={sel.sharpe.toFixed(2)} valueSize={22} color={sel.sharpe >= 1 ? POS : GOLD} sub={`rf ${data.risk_free_rate}%`} />
-            <KpiCell grow label="VaR 95%" value={`${sel.var_95.toFixed(2)}%`} valueSize={22} color={NEG} sub="1-day historical" />
-            <KpiCell grow label="CVaR 95%" value={`${sel.cvar_95.toFixed(2)}%`} valueSize={22} color={NEG} sub="expected shortfall" />
+            <KpiCell grow label="VaR 95%" value={`${sel.var_95.toFixed(2)}%`} valueSize={22} color={NEG} sub="1-day historical" help="Value at Risk. On a normal day the portfolio should not lose more than this. Read as: 95% of days lose less, 1 day in 20 loses more. Based on the actual daily returns over the window, not a bell curve." />
+            <KpiCell grow label="CVaR 95%" value={`${sel.cvar_95.toFixed(2)}%`} valueSize={22} color={NEG} sub="expected shortfall" help="Conditional VaR, or expected shortfall. On the worst 1 day in 20 (the days past VaR), this is the average loss. Always at least as large as VaR and captures how deep the tail goes." />
             <KpiCell grow label="Max Drawdown" value={`${sel.max_drawdown.toFixed(1)}%`} valueSize={22} color={NEG} sub="over window" />
           </div>
 
@@ -381,8 +381,16 @@ export function PortfolioOptimizerContent() {
                         </div>
                       ) : (
                         <div style={{ color: SEC, lineHeight: 1.5 }}>
-                          Realized compound (geometric) annualized return over the {data.days}-day window.
-                          <div style={{ color: asset.return >= 0 ? POS : NEG, fontWeight: 700, fontSize: 15, marginTop: 5 }}>E(r) = {asset.return.toFixed(1)}%</div>
+                          Expected return here is the realized return annualized (geometric),
+                          not the raw total. Total return over the window is compounded down to a
+                          per-year rate:
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 6 }}>
+                            {asset.total_return != null && (
+                              <div>Total return over {data.days}d = <span style={{ color: asset.total_return >= 0 ? POS : NEG }}>{asset.total_return.toFixed(1)}%</span></div>
+                            )}
+                            <div>E(r) = (1 + total)<sup>252 / {data.days}</sup> − 1</div>
+                            <div style={{ color: asset.return >= 0 ? POS : NEG, fontWeight: 700, fontSize: 15, marginTop: 4 }}>= {asset.return.toFixed(1)}% / yr</div>
+                          </div>
                           <div style={{ color: FAINT, fontSize: 9, marginTop: 6 }}>Beta shown for reference; it does not drive the historical return.</div>
                         </div>
                       )}

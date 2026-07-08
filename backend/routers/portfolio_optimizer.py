@@ -234,7 +234,9 @@ def optimize(req: OptimizeRequest):
 
     # Expected returns: realized (geometric, backward) or CAPM (rf + beta·ERP,
     # forward). CAPM smooths out a single asset's lucky/unlucky run.
-    hist_mu = np.expm1(np.log1p(returns.clip(lower=-0.99)).mean().to_numpy() * _TRADING_DAYS)
+    logret = np.log1p(returns.clip(lower=-0.99))
+    hist_mu = np.expm1(logret.mean().to_numpy() * _TRADING_DAYS)          # annualized
+    total_ret = np.expm1(logret.sum().to_numpy())                        # cumulative over window
     # Beta per asset over its OWN full history (computed regardless of model so the
     # popup can show it). CAPM expected return = rf + beta·(market_return − rf).
     beta_map = _betas(tickers, req.start, req.end)
@@ -276,6 +278,7 @@ def optimize(req: OptimizeRequest):
         "frontier": _frontier(mu, cov, rf, req.long_only),
         "assets": [
             {"ticker": t, "return": round(float(mu[i]) * 100, 2),
+             "total_return": round(float(total_ret[i]) * 100, 1),
              "vol": round(float(np.sqrt(cov[i, i])) * 100, 2),
              "beta": (None if np.isnan(betas[i]) else round(float(betas[i]), 2))}
             for i, t in enumerate(tickers)
