@@ -244,7 +244,7 @@ export function ImpliedProbabilityContent() {
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.045)" />
                         <XAxis type="number" tick={TICK} tickFormatter={v => `${(v * 100).toFixed(1)}%`} />
                         <YAxis type="category" dataKey="strike" tick={TICK} width={52} tickFormatter={v => `$${v}`} reversed />
-                        <Tooltip formatter={(v: number) => [`${(v * 100).toFixed(3)}%`, 'Density']} contentStyle={TOOLTIP_STYLE} />
+                        <Tooltip formatter={(v: number) => [`${(v * 100).toFixed(2)}%`, 'Probability density']} labelFormatter={(s: number) => `Strike $${s}`} contentStyle={TOOLTIP_STYLE} />
                         <ReferenceLine y={dist.modal_strike} stroke={SEC} strokeDasharray="4 4" strokeOpacity={0.5} label={{ value: 'Modal', fill: SEC, fontSize: 9 }} />
                         <Area type="monotone" dataKey="density" stroke={cc.c2} fill={cc.c2Dim} strokeWidth={2} name="Market Density" />
                         {dPoint && <ReferenceLine y={dPoint.strike} stroke={GOLD} strokeDasharray="5 3" />}
