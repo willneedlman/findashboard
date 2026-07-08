@@ -917,7 +917,11 @@ _RELEASE_TIMES = {
     "Philadelphia Fed Mfg Index": "08:30",
     "Chicago PMI": "09:45",
     "FOMC Decision": "14:00",
+    "Fed Chair Press Conference": "14:30",
+    "FOMC Minutes": "14:00",
     "Fed Beige Book": "14:00",
+    "Treasury Quarterly Refunding": "08:30",
+    "Senior Loan Officer Survey (SLOOS)": "14:00",
 }
 
 def _computed_schedule(start: date, end: date) -> list[dict]:
@@ -1076,6 +1080,15 @@ def _computed_schedule(start: date, end: date) -> list[dict]:
         # Chicago PMI: last business day
         add(_last_weekday(y, m, 4), "Chicago PMI", "sentiment", "medium", "idx")
 
+        # ── Monetary / fiscal (quarterly) ─────────────────────────────
+        if m in (2, 5, 8, 11):
+            # Treasury Quarterly Refunding: 1st Wednesday — sets upcoming auction
+            # sizes/composition; a major driver of the long end.
+            add(_nth_weekday(y, m, 2, 1), "Treasury Quarterly Refunding", "monetary", "high", "$B")
+            # Senior Loan Officer Opinion Survey (SLOOS): quarterly bank-lending
+            # conditions, ~1st Monday of the refunding months.
+            add(_nth_weekday(y, m, 0, 1), "Senior Loan Officer Survey (SLOOS)", "monetary", "medium", "")
+
     return events
 
 
@@ -1092,6 +1105,15 @@ def macro_calendar():
         if today <= d <= cutoff:
             events.append({"date": ds, "time_et": "14:00", "label": "FOMC Decision", "category": "monetary",
                            "importance": "high", "unit": "", "previous": None})
+            # Chair press conference follows the statement (~30 min later); Q&A is
+            # frequently the bigger market mover, so track it as its own event.
+            events.append({"date": ds, "time_et": "14:30", "label": "Fed Chair Press Conference",
+                           "category": "monetary", "importance": "high", "unit": "", "previous": None})
+        # FOMC Minutes: released 3 weeks (21 days) after each decision, 14:00 ET.
+        minutes = d + timedelta(days=21)
+        if today <= minutes <= cutoff:
+            events.append({"date": minutes.isoformat(), "time_et": "14:00", "label": "FOMC Minutes",
+                           "category": "monetary", "importance": "high", "unit": "", "previous": None})
 
     for ds in _BEIGE_BOOK_DATES:
         d = date.fromisoformat(ds)

@@ -915,7 +915,7 @@ const DAY_ABBR = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 // This-week calendar: the user's holdings' earnings (HELD) merged with the
 // macro/economic calendar (MACRO), chronological. Best-effort — either feed can
 // be unavailable; falls back gracefully.
-interface WeekRow { date: string; day: string; time?: string; event: string; tag: 'HELD' | 'MACRO' }
+interface WeekRow { date: string; day: string; time?: string; event: string; tag: 'HELD' | 'MACRO'; prio: number }
 function ThisWeek({ holdings, onOpen }: { holdings: string[]; onOpen: () => void }) {
   const today = useMemo(() => new Date().toISOString().slice(0, 10), [])
   const earn = useQuery<{ rows: { symbol: string; date: string; hour?: string }[] }>({
@@ -923,7 +923,7 @@ function ThisWeek({ holdings, onOpen }: { holdings: string[]; onOpen: () => void
     queryFn: () => axios.get(`/api/earnings/calendar?date=${today}&days=7`).then(r => r.data),
     staleTime: 30 * 60 * 1000, retry: 0,
   })
-  const macro = useQuery<{ events: { date: string; label: string; importance: 'high' | 'medium'; time_et?: string }[] }>({
+  const macro = useQuery<{ events: { date: string; label: string; importance: 'high' | 'medium'; time_et?: string; category?: string }[] }>({
     queryKey: ['home-macro'],
     queryFn: () => axios.get('/api/rates/macro-calendar').then(r => r.data),
     staleTime: 30 * 60 * 1000, retry: 0,
@@ -939,12 +939,15 @@ function ThisWeek({ holdings, onOpen }: { holdings: string[]; onOpen: () => void
     const earnTime = (h?: string) => h === 'bmo' ? 'BMO' : h === 'amc' ? 'AMC' : undefined
     const out: WeekRow[] = []
     for (const r of earn.data?.rows ?? [])
-      if (r.date && held.has((r.symbol || '').toUpperCase()) && within(r.date)) out.push({ date: r.date, day: dayOf(r.date), time: earnTime(r.hour), event: `${r.symbol} earnings`, tag: 'HELD' })
+      if (r.date && held.has((r.symbol || '').toUpperCase()) && within(r.date)) out.push({ date: r.date, day: dayOf(r.date), time: earnTime(r.hour), event: `${r.symbol} earnings`, tag: 'HELD', prio: 0 })
     for (const e of macro.data?.events ?? [])
-      if (e.date && within(e.date)) out.push({ date: e.date, day: dayOf(e.date), time: e.time_et ? `${e.time_et} ET` : undefined, event: e.label, tag: 'MACRO' })
-    // Chronological; HELD before MACRO on the same day.
-    out.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : (a.tag === b.tag ? 0 : a.tag === 'HELD' ? -1 : 1))
-    return out.slice(0, 6)
+      // prio: your earnings (0) > Fed/monetary incl. FOMC minutes (1) > other
+      // high-importance prints (2) > medium (3). Drives which survive the cap.
+      if (e.date && within(e.date)) out.push({ date: e.date, day: dayOf(e.date), time: e.time_et ? `${e.time_et} ET` : undefined, event: e.label, tag: 'MACRO', prio: e.category === 'monetary' ? 1 : e.importance === 'high' ? 2 : 3 })
+    // Keep the 6 most important (so a marquee event is never crowded out by routine
+    // daily releases), then show those chronologically (HELD before MACRO same day).
+    const byDate = (a: WeekRow, b: WeekRow) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.prio - b.prio
+    return [...out].sort((a, b) => a.prio - b.prio || (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)).slice(0, 6).sort(byDate)
   }, [earn.data, macro.data, held])
   return (
     <div>
