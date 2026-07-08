@@ -42,8 +42,11 @@ class OptimizeRequest(BaseModel):
         return self
 
 
-def _aligned_returns(tickers: list[str], start: str, end: str) -> tuple[pd.DataFrame, pd.Series]:
-    """Date-aligned daily simple returns + the last close per ticker (inner join)."""
+def _aligned_returns(tickers: list[str], start: str, end: str) -> tuple[pd.DataFrame, list[str]]:
+    """Date-aligned daily simple returns for the cohort of tickers that share a
+    long window. A recently-listed name would otherwise collapse the inner join
+    (intersection) to its short history and wreck the annualized figures, so any
+    ticker with far less history than the longest is dropped and reported."""
     raw = get_download(tuple(sorted(tickers)), start, end)
     if raw is None or raw.empty:
         raise HTTPException(404, "No price data for the selected tickers and range")
@@ -52,11 +55,21 @@ def _aligned_returns(tickers: list[str], start: str, end: str) -> tuple[pd.DataF
     if isinstance(raw, pd.Series):
         raw = raw.to_frame(tickers[0])
     raw = raw.dropna(how="all").dropna(axis=1, how="all")
-    returns = raw.pct_change().dropna()
+
+    # Drop short-history outliers before the intersection join.
+    spans = {t: int(raw[t].dropna().shape[0]) for t in raw.columns}
+    dropped: list[str] = []
+    if spans:
+        thresh = max(120, int(0.5 * max(spans.values())))
+        keep = [t for t in raw.columns if spans[t] >= thresh]
+        dropped = [str(t) for t in raw.columns if t not in keep]
+        if len(keep) >= 2:
+            raw = raw[keep]
+
+    returns = raw.dropna().pct_change().dropna()
     if len(returns) < 30 or returns.shape[1] < 2:
-        raise HTTPException(422, "Not enough overlapping history to optimize (need ~30+ shared days and 2+ names)")
-    last_prices = raw[returns.columns].ffill().iloc[-1]
-    return returns, last_prices
+        raise HTTPException(422, "Not enough overlapping history to optimize (need ~30+ shared days and 2+ names with a long-enough common window)")
+    return returns, dropped
 
 
 def _port_stats(w: np.ndarray, mu: np.ndarray, cov: np.ndarray, rf: float) -> dict:
@@ -169,7 +182,7 @@ def _port_payload(w, tickers, mu, cov, rf, returns):
 
 @router.post("/optimize")
 def optimize(req: OptimizeRequest):
-    returns, _last = _aligned_returns(req.tickers, req.start, req.end)
+    returns, dropped = _aligned_returns(req.tickers, req.start, req.end)
     tickers = list(returns.columns)
     rf = req.risk_free_rate / 100.0
 
@@ -199,6 +212,7 @@ def optimize(req: OptimizeRequest):
 
     return {
         "tickers": tickers,
+        "dropped": dropped,
         "days": int(len(returns)),
         "span": {"start": str(returns.index[0].date()), "end": str(returns.index[-1].date())},
         "risk_free_rate": req.risk_free_rate,

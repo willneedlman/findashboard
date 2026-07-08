@@ -44,7 +44,7 @@ const LOOKBACKS: { label: string; years: number }[] = [
 interface WeightRow { ticker: string; weight: number; risk_contribution: number }
 interface Port { return: number; vol: number; sharpe: number; weights: WeightRow[]; var_95: number; cvar_95: number; max_drawdown: number }
 interface OptResult {
-  tickers: string[]; days: number; span: { start: string; end: string }; risk_free_rate: number; long_only: boolean
+  tickers: string[]; dropped?: string[]; days: number; span: { start: string; end: string }; risk_free_rate: number; long_only: boolean
   portfolios: Record<string, Port>
   frontier: { vol: number; return: number; sharpe: number }[]
   assets: { ticker: string; return: number; vol: number }[]
@@ -228,6 +228,11 @@ export function PortfolioOptimizerContent() {
               ))}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {data.dropped && data.dropped.length > 0 && (
+                <span title="Dropped from the optimization — far less history than the rest, which would collapse the shared window and distort annualized figures." style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: NEG, cursor: 'help' }}>
+                  dropped (short history): {data.dropped.join(', ')}
+                </span>
+              )}
               <span style={{ fontFamily: MONO, fontSize: 9, color: FAINT }}>{data.days} days · {data.span.start} → {data.span.end}</span>
               <Provenance kind="live" source="yfinance · daily" />
             </div>
