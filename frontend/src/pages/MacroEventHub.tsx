@@ -81,7 +81,7 @@ function MacroEventHubContent() {
         {isLoading
           ? <><Loader2 size={12} style={{ animation: 'me-spin 0.7s linear infinite' }} /> Loading live releases</>
           : live
-            ? <><span style={{ width: 6, height: 6, borderRadius: '50%', background: T.pos, display: 'inline-block' }} /> Live from {source}. Reaction is the release-day move. Consensus is not published on this data tier.</>
+            ? <><span style={{ width: 6, height: 6, borderRadius: '50%', background: T.pos, display: 'inline-block' }} /> {data?.note ?? `Live from ${source}. Reaction is the release-day move.`}</>
             : <><span style={{ width: 6, height: 6, borderRadius: '50%', background: T.gold, display: 'inline-block' }} /> Showing bundled seed. Live feed unavailable.</>}
       </div>
 

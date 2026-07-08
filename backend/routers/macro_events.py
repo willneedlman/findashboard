@@ -80,9 +80,9 @@ def _release_dates(release_id: int) -> list[str]:
 
 
 @cache.cached(ttl=_TTL, maxsize=64)
-def _series_obs(series: str, units: str) -> list[tuple[str, float]]:
+def _series_obs(series: str, units: str, limit: int = 4) -> list[tuple[str, float]]:
     data = _fred_get("series/observations", {
-        "series_id": series, "sort_order": "desc", "limit": 4, "units": units,
+        "series_id": series, "sort_order": "desc", "limit": limit, "units": units,
     })
     out = []
     for o in data.get("observations", []):
@@ -168,6 +168,82 @@ def _direction(actual: float, previous: float) -> str:
     return "level with"
 
 
+# ── FOMC (reuses the Rate Engine's schedule + implied path) ───────────────────
+def _fomc_range() -> tuple[str | None, str | None]:
+    """(current, previous) fed funds target range from FRED. DFEDTARU/L only move
+    at meetings, so the previous distinct range is the last value that differs."""
+    up = _series_obs("DFEDTARU", "lin", limit=120)
+    lo = _series_obs("DFEDTARL", "lin", limit=120)
+    if not up or not lo:
+        return None, None
+    cur_u, cur_l = up[0][1], lo[0][1]
+    current = f"{cur_l:.2f}-{cur_u:.2f}%"
+    previous = current
+    for (_, u), (_, l) in zip(up, lo):
+        if u != cur_u or l != cur_l:
+            previous = f"{l:.2f}-{u:.2f}%"
+            break
+    return current, previous
+
+
+def _fomc_expectation(meeting_iso: str) -> str | None:
+    """Market-implied call for a meeting from the Rate Engine's futures/curve path."""
+    try:
+        from routers.rates import fed_projections
+        proj = fed_projections()
+    except Exception as ex:  # noqa: BLE001
+        logger.warning("fed_projections failed: %s", ex)
+        return None
+    ym = meeting_iso[:7]
+    m = next((x for x in proj.get("meetings", []) if x.get("date") == ym), None)
+    if not m:
+        return None
+    action, prob = max(
+        (("Hold", m.get("prob_hold", 0)), ("Cut", m.get("prob_cut", 0)), ("Hike", m.get("prob_hike", 0))),
+        key=lambda kp: kp[1],
+    )
+    return f"{action} ~{prob}%"
+
+
+def _fomc_drafts(today: str) -> tuple[list[dict], str | None]:
+    """Released (most recent) + upcoming (next) FOMC decision as event drafts."""
+    from routers.rates import _FOMC_DATES
+    current, previous = _fomc_range()
+    if current is None:
+        return [], None
+    past = sorted([d for d in _FOMC_DATES if d <= today])
+    future = sorted([d for d in _FOMC_DATES if d > today])
+    drafts: list[dict] = []
+    released_date: str | None = None
+    meta = {"key": "fomc", "name": "FOMC Rate Decision", "category": "Central Bank",
+            "impact": "High", "source": "Federal Reserve",
+            "url": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm", "time": "14:00"}
+
+    if past:
+        released_date = past[-1]
+        changed = current != previous
+        verb = "held the target range at" if not changed else f"moved the target range from {previous} to"
+        try:
+            from routers.rates import _latest_fomc_statement
+            stmt = _latest_fomc_statement()
+            url = stmt[1] if stmt and stmt[0] == released_date else meta["url"]
+        except Exception:  # noqa: BLE001
+            url = meta["url"]
+        drafts.append({"r": {**meta, "url": url}, "status": "released", "date": released_date,
+                       "actual": current, "expected": None, "previous": previous,
+                       "period": _period_label(released_date, "m"),
+                       "summary": f"The FOMC {verb} {current}."})
+    if future:
+        nxt = future[0]
+        exp = _fomc_expectation(nxt)
+        drafts.append({"r": meta, "status": "upcoming", "date": nxt,
+                       "actual": None, "expected": exp, "previous": current,
+                       "period": _period_label(nxt, "m"),
+                       "summary": f"Next FOMC decision. Current target range is {current}."
+                                  + (f" Futures imply {exp}." if exp else "")})
+    return drafts, released_date
+
+
 def _build() -> dict:
     today = date.today().isoformat()
     events: list[dict] = []
@@ -202,6 +278,12 @@ def _build() -> dict:
                            "summary": f"Next {r['name']} release covers {up_period}. "
                                       f"The prior print was {_fmt(r['fmt'], actual_v)} for {period}."})
 
+    # FOMC decisions reuse the Rate Engine's schedule + implied path.
+    fomc_drafts, fomc_released = _fomc_drafts(today)
+    drafts.extend(fomc_drafts)
+    if fomc_released:
+        released_dates.append(fomc_released)
+
     reactions = _reactions_for(released_dates)
 
     for d in drafts:
@@ -215,14 +297,14 @@ def _build() -> dict:
             "datetime": f"{d['date']}T{t}:00{_TZ}",
             "displayTime": f"{_MONTHS[int(d['date'][5:7]) - 1]} {int(d['date'][8:10])}, {d['date'][:4]} · {t} ET",
             "impact": r["impact"], "status": d["status"],
-            "actual": d["actual"], "expected": None, "previous": d["previous"],
+            "actual": d["actual"], "expected": d.get("expected"), "previous": d["previous"],
             "summary": d["summary"],
             "sourceName": r["source"], "sourceUrl": r["url"],
             "reactions": reactions.get(d["date"], []) if d["status"] == "released" else [],
         })
 
     return {"events": events, "source": "FRED", "as_of": datetime.utcnow().isoformat() + "Z",
-            "note": "Live US releases from FRED. Reaction is the release-day cross-asset move. Consensus is not published on this data tier."}
+            "note": "Live US releases from FRED plus FOMC from the Rate Engine. Reaction is the release-day cross-asset move. Economic-release consensus is not published on this tier; the FOMC call is futures-implied."}
 
 
 @router.get("")
