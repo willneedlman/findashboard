@@ -312,7 +312,7 @@ export function PortfolioOptimizerContent() {
                   <div key={w.ticker}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: MONO, fontSize: 11, marginBottom: 3 }}>
                       <span style={{ fontWeight: 700, color: GOLD }}>{w.ticker}</span>
-                      <span style={{ color: TEXT }}>{w.weight.toFixed(1)}% <span style={{ color: FAINT }}>· {w.risk_contribution.toFixed(0)}% risk</span></span>
+                      <span style={{ color: TEXT }}>{w.weight.toFixed(1)}% <span style={{ color: FAINT }}>· {w.risk_contribution.toFixed(1)}% risk</span></span>
                     </div>
                     <div style={{ height: 6, background: 'rgba(255,255,255,0.05)', position: 'relative' }}>
                       <div style={{ width: `${Math.min(100, Math.abs(w.weight))}%`, height: '100%', background: w.weight >= 0 ? GOLD : NEG }} />
