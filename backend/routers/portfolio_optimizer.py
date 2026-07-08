@@ -229,16 +229,12 @@ def optimize(req: OptimizeRequest):
     # Expected returns: realized (geometric, backward) or CAPM (rf + beta·ERP,
     # forward). CAPM smooths out a single asset's lucky/unlucky run.
     hist_mu = np.expm1(np.log1p(returns.clip(lower=-0.99)).mean().to_numpy() * _TRADING_DAYS)
-    betas = None
-    model = "historical"
-    if req.return_model == "capm":
-        capm, betas = _capm_mu(returns, rf, (req.market_return - req.risk_free_rate) / 100.0)
-        if capm is not None:
-            mu, model = capm, "capm"
-        else:
-            mu = hist_mu   # benchmark unavailable → fall back
+    # Beta is computed regardless of model so the per-asset popup can show it.
+    capm_mu, betas = _capm_mu(returns, rf, (req.market_return - req.risk_free_rate) / 100.0)
+    if req.return_model == "capm" and capm_mu is not None:
+        mu, model = capm_mu, "capm"
     else:
-        mu = hist_mu
+        mu, model = hist_mu, "historical"
 
     portfolios = {}
     for name, w in (
@@ -263,6 +259,7 @@ def optimize(req: OptimizeRequest):
         "days": int(len(returns)),
         "span": {"start": str(returns.index[0].date()), "end": str(returns.index[-1].date())},
         "risk_free_rate": req.risk_free_rate,
+        "market_return": req.market_return,
         "long_only": req.long_only,
         "return_model": model,
         "portfolios": portfolios,

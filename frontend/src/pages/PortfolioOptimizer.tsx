@@ -43,11 +43,12 @@ const LOOKBACKS: { label: string; years: number }[] = [
 
 interface WeightRow { ticker: string; weight: number; risk_contribution: number }
 interface Port { return: number; vol: number; sharpe: number; weights: WeightRow[]; var_95: number; cvar_95: number; max_drawdown: number }
+interface AssetRow { ticker: string; return: number; vol: number; beta?: number | null }
 interface OptResult {
-  tickers: string[]; dropped?: string[]; days: number; span: { start: string; end: string }; risk_free_rate: number; long_only: boolean; return_model?: string
+  tickers: string[]; dropped?: string[]; days: number; span: { start: string; end: string }; risk_free_rate: number; market_return?: number; long_only: boolean; return_model?: string
   portfolios: Record<string, Port>
   frontier: { vol: number; return: number; sharpe: number }[]
-  assets: { ticker: string; return: number; vol: number }[]
+  assets: AssetRow[]
 }
 
 const startFor = (years: number) => { const d = new Date(); d.setFullYear(d.getFullYear() - years); return d.toISOString().slice(0, 10) }
@@ -77,6 +78,7 @@ export function PortfolioOptimizerContent() {
   const [returnModel, setReturnModel] = useState<'historical' | 'capm'>('historical')
   const [marketReturn, setMarketReturn] = useState('10')
   const [selected, setSelected] = useState('max_sharpe')
+  const [asset, setAsset] = useState<AssetRow | null>(null)   // clicked frontier dot → popup
   // Per-ticker weights (%) define the CURRENT portfolio, plotted against the optimum.
   const [weights, setWeights] = useState<Record<string, number>>({})
   const [importMsg, setImportMsg] = useState('')
@@ -283,7 +285,7 @@ export function PortfolioOptimizerContent() {
                     <ZAxis range={[60, 60]} />
                     <Tooltip cursor={{ strokeDasharray: '3 3' }} content={<ChartTip />} />
                     <Scatter name="Frontier" data={data.frontier} line={{ stroke: FAINT, strokeWidth: 1 }} fill={FAINT} shape="circle" />
-                    <Scatter name="Assets" data={data.assets} fill={BLUE} shape="circle" />
+                    <Scatter name="Assets" data={data.assets} fill={BLUE} shape="circle" cursor="pointer" onClick={(pt: unknown) => { const p = (pt as { payload?: AssetRow })?.payload ?? (pt as AssetRow); if (p?.ticker) setAsset(p) }} />
                     <Scatter name="Portfolios" data={portScatter} fill={GOLD} shape="diamond">
                       {portScatter.map((p) => <Cell key={p.key} fill={p.key === selected ? GOLD : 'rgba(201,168,76,0.45)'} />)}
                     </Scatter>
@@ -292,7 +294,7 @@ export function PortfolioOptimizerContent() {
                 </ResponsiveContainer>
                 <div style={{ display: 'flex', gap: 14, padding: '4px 10px 8px', fontFamily: SANS, fontSize: 9, color: FAINT, flexWrap: 'wrap' }}>
                   <span><span style={{ color: FAINT }}>●</span> frontier</span>
-                  <span><span style={{ color: BLUE }}>●</span> each asset</span>
+                  <span><span style={{ color: BLUE }}>●</span> each asset <span style={{ color: FAINT }}>(click for β · E(r))</span></span>
                   <span><span style={{ color: GOLD }}>◆</span> portfolios</span>
                   {currentScatter.length > 0 && <span><span style={{ color: NEG }}>★</span> your portfolio</span>}
                 </div>
@@ -352,6 +354,44 @@ export function PortfolioOptimizerContent() {
               </tbody>
             </table>
           </div>
+
+          {/* Per-asset popup: beta + how E(r) is computed. */}
+          {asset && (() => {
+            const rf0 = data.risk_free_rate
+            const mkt = data.market_return ?? 10
+            const capm = data.return_model === 'capm' && asset.beta != null
+            return (
+              <div onClick={() => setAsset(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 90, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div onClick={e => e.stopPropagation()} style={{ background: SURFACE, border: `1px solid ${GOLD}`, minWidth: 300, maxWidth: '92vw' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: `1px solid ${BORDER}` }}>
+                    <span style={{ fontFamily: MONO, fontSize: 15, fontWeight: 700, color: GOLD }}>{asset.ticker}</span>
+                    <button onClick={() => setAsset(null)} aria-label="Close" style={{ background: 'none', border: 'none', color: SEC, cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>×</button>
+                  </div>
+                  <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8, fontFamily: MONO, fontSize: 11 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: SEC }}>Beta (vs SPY)</span><span style={{ color: TEXT, fontWeight: 700 }}>{asset.beta != null ? asset.beta.toFixed(2) : '—'}</span></div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: SEC }}>Volatility (annual)</span><span style={{ color: TEXT, fontWeight: 700 }}>{asset.vol.toFixed(1)}%</span></div>
+                    <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 9, marginTop: 2 }}>
+                      <div style={{ ...lbl, marginBottom: 6 }}>Expected return · {capm ? 'CAPM' : 'Historical'}</div>
+                      {capm ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, color: SEC, lineHeight: 1.5 }}>
+                          <div>E(r) = r_f + β × (E[R_m] − r_f)</div>
+                          <div>= {rf0}% + {asset.beta!.toFixed(2)} × ({mkt}% − {rf0}%)</div>
+                          <div>= {rf0}% + {asset.beta!.toFixed(2)} × {(mkt - rf0).toFixed(1)}%</div>
+                          <div style={{ color: asset.return >= 0 ? POS : NEG, fontWeight: 700, fontSize: 15, marginTop: 4 }}>= {asset.return.toFixed(1)}%</div>
+                        </div>
+                      ) : (
+                        <div style={{ color: SEC, lineHeight: 1.5 }}>
+                          Realized compound (geometric) annualized return over the {data.days}-day window.
+                          <div style={{ color: asset.return >= 0 ? POS : NEG, fontWeight: 700, fontSize: 15, marginTop: 5 }}>E(r) = {asset.return.toFixed(1)}%</div>
+                          <div style={{ color: FAINT, fontSize: 9, marginTop: 6 }}>Beta shown for reference; it does not drive the historical return.</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
         </div>
       )}
     </SidebarLayout>
