@@ -9,7 +9,8 @@ import TickerTagInput from '../components/TickerTagInput'
 import { KpiCell } from '../components/mmCockpit'
 import Provenance from '../components/Provenance'
 import PortfolioIO, { type PortfolioAsset } from '../components/PortfolioIO'
-import { usePortfolio } from '../contexts/PortfolioContext'
+import PMImportPicker from '../components/PMImportPicker'
+import { type ImportResult } from '../lib/pmImport'
 
 const GOLD = 'var(--theme-primary, #c9a84c)'
 const BLUE = 'var(--theme-tertiary, #60a5fa)'
@@ -60,7 +61,6 @@ export function PortfolioOptimizerContent() {
   // Per-ticker weights (%) define the CURRENT portfolio, plotted against the optimum.
   const [weights, setWeights] = useState<Record<string, number>>({})
   const [importMsg, setImportMsg] = useState('')
-  const { holdings } = usePortfolio()   // shared portfolio (weights), same as Monte Carlo
 
   // Auto-populate the risk-free rate from the live Treasury curve (3-month bill).
   useEffect(() => {
@@ -70,14 +70,15 @@ export function PortfolioOptimizerContent() {
     }).catch(() => { /* keep the default */ })
   }, [])
 
-  // Import the shared portfolio (the one Monte Carlo / Portfolio IO use): set the
-  // basket AND the current weights so the backend can plot it against the optimum.
-  const importPortfolio = () => {
-    const hold = (holdings ?? []).filter(h => h.ticker && Number(h.weight) > 0)
-    if (hold.length < 2) { setImportMsg('No saved portfolio found (add holdings in Monte Carlo or import a portfolio first).'); return }
-    setTickers(hold.map(h => h.ticker.toUpperCase()))
-    setWeights(Object.fromEntries(hold.map(h => [h.ticker.toUpperCase(), Number(h.weight)])))
-    setImportMsg(`Imported ${hold.length} holdings with weights.`)
+  // Load any saved Portfolio Manager portfolio (value-weighted equity legs), same
+  // as Monte Carlo / the Backtester. Sets the basket AND the weights so the current
+  // portfolio is plotted against the optimum.
+  const loadFromPM = (result: ImportResult, name: string) => {
+    const legs = result.legs.filter(l => l.ticker && l.ticker.toUpperCase() !== 'CASH')
+    if (legs.length < 2) { setImportMsg(`"${name}" needs 2+ equity holdings to optimize.`); return }
+    setTickers(legs.map(l => l.ticker.toUpperCase()))
+    setWeights(Object.fromEntries(legs.map(l => [l.ticker.toUpperCase(), l.weight])))
+    setImportMsg(`Loaded "${name}" — ${legs.length} holdings.`)
   }
   const onTickers = (t: string[]) => {
     setTickers(t)
@@ -120,12 +121,9 @@ export function PortfolioOptimizerContent() {
   return (
     <SidebarLayout sidebarWidth={230} sidebarTitle="" sidebar={<div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <label style={lbl}>Tickers · {tickers.length}</label>
-          <button onClick={importPortfolio} title="Import your saved portfolio (weights)" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: BLUE }}>Import ↓</button>
-        </div>
+        <label style={lbl}>Tickers · {tickers.length}</label>
         <TickerTagInput tickers={tickers} onChange={onTickers} placeholder="Add ticker…" maxTags={20} />
-        {importMsg && <div style={{ fontSize: 9, color: importMsg.startsWith('Imported') ? POS : FAINT, fontFamily: SANS, marginTop: 4, lineHeight: 1.4 }}>{importMsg}</div>}
+        {importMsg && <div style={{ fontSize: 9, color: importMsg.startsWith('Loaded') ? POS : FAINT, fontFamily: SANS, marginTop: 4, lineHeight: 1.4 }}>{importMsg}</div>}
       </div>
       {tickers.length > 0 && (
         <div>
@@ -153,12 +151,15 @@ export function PortfolioOptimizerContent() {
           </div>
         </div>
       )}
-      {/* Full import/export screen — CSV/JSON file + paste, same as the other tools. */}
+      {/* Load a saved Portfolio Manager portfolio + full CSV/JSON import/export. */}
       <div>
-        <label style={lbl}>Import / Export</label>
-        <PortfolioIO mode="portfolio" name="optimizer"
-          assets={tickers.map(t => ({ ticker: t, weight: weights[t] || 0 }))}
-          onImportAssets={importAssets} />
+        <label style={lbl}>Load / Import</label>
+        <PMImportPicker style={{ ...inp, appearance: 'none', cursor: 'pointer' }} onImport={loadFromPM} />
+        <div style={{ marginTop: 8 }}>
+          <PortfolioIO mode="portfolio" name="optimizer"
+            assets={tickers.map(t => ({ ticker: t, weight: weights[t] || 0 }))}
+            onImportAssets={importAssets} />
+        </div>
       </div>
       <div>
         <label style={lbl}>Lookback</label>
