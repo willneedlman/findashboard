@@ -27,6 +27,13 @@ const VIOLET = 'var(--theme-accent-violet, #c084fc)'
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
 const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #8099b0)', fontFamily: 'var(--theme-mono)' }
+// Fed prose uses fractions ("3-1/2 to 3-3/4 percent"); show plain numbers.
+// Applied on render too, so a client-cached (pre-fix) response still displays right.
+const _FRAC: Record<string, string> = { '1/8': '.125', '1/4': '.25', '3/8': '.375', '1/2': '.50', '5/8': '.625', '3/4': '.75', '7/8': '.875' }
+const decimalize = (t?: string) => (t ?? '')
+  .replace(/(\d+)[- ](1\/8|1\/4|3\/8|1\/2|5\/8|3\/4|7\/8)/g, (_m, a, f) => a + _FRAC[f])
+  .replace(/\s*percent\b/g, '%')
+
 const eyebrow: React.CSSProperties = { fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: T.muted }
 const bandTitle: React.CSSProperties = { fontFamily: T.mono, fontSize: 10, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: T.text }
 const band: React.CSSProperties = { padding: '14px 24px', borderTop: `1px solid ${T.borderFaint}` }
@@ -305,12 +312,12 @@ function SpreadsPanel({ spreads }: { spreads: any[] }) {
             <span title="Current spread" style={{ flex: 'none', width: 68, textAlign: 'right', fontFamily: T.mono, fontSize: 16, fontWeight: 700, color: pos ? T.pos : T.neg }}>
               {nowBp == null ? '—' : `${pos ? '+' : ''}${nowBp}bp`}
             </span>
-            {/* Sparkline labeled at both ends: 6mo-ago value → now */}
-            <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span title="6 months ago" style={{ flex: 'none', fontFamily: T.mono, fontSize: 9, color: T.muted, width: 24, textAlign: 'right' }}>{startBp ?? ''}</span>
-              <div style={{ flex: 1, minWidth: 0 }}><Sparkline pts={hist.map((p: any) => p.bp)} w={Math.max(50, w - 292)} /></div>
-              <span title="Now" style={{ flex: 'none', fontFamily: T.mono, fontSize: 9, fontWeight: 700, color: pos ? T.pos : T.neg, width: 24 }}>{nowBp ?? ''}</span>
+            {/* Sparkline flanked by the 6mo-ago value (left) and now (right). */}
+            <span title="6 months ago" style={{ flex: 'none', fontFamily: T.mono, fontSize: 9, color: T.muted, width: 26, textAlign: 'right' }}>{startBp ?? ''}</span>
+            <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', display: 'flex' }}>
+              <Sparkline pts={hist.map((p: any) => p.bp)} w={Math.max(40, w - 356)} />
             </div>
+            <span title="Now" style={{ flex: 'none', fontFamily: T.mono, fontSize: 9, fontWeight: 700, color: pos ? T.pos : T.neg, width: 28, textAlign: 'left' }}>{nowBp ?? ''}</span>
             <span style={{ flex: 'none', width: 118, textAlign: 'right', fontFamily: T.mono, fontSize: 9, color: T.muted, whiteSpace: 'nowrap', lineHeight: 1.5 }}>
               {change != null && (
                 <div style={{ color: steeper ? T.pos : '#c98b3a', fontWeight: 700 }} title="Change over 6 months">
@@ -372,16 +379,16 @@ function FomcStatementRead() {
           <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: T.label, fontSize: 8.5, letterSpacing: '0.08em', color: T.muted, marginTop: 5 }}>
             <span>DOVISH −10</span><span>NEUTRAL</span><span>+10 HAWKISH</span>
           </div>
-          {data.decision && <div style={{ fontFamily: T.mono, fontSize: 11, color: T.text, marginTop: 14, lineHeight: 1.5 }}>{data.decision}</div>}
+          {data.decision && <div style={{ fontFamily: T.mono, fontSize: 11, color: T.text, marginTop: 14, lineHeight: 1.5 }}>{decimalize(data.decision)}</div>}
         </div>
         {/* Right: summary + key points */}
         <div>
-          {data.summary && <div style={{ fontFamily: T.label, fontSize: 12.5, color: T.text, lineHeight: 1.55, marginBottom: 10 }}>{data.summary}</div>}
+          {data.summary && <div style={{ fontFamily: T.label, fontSize: 12.5, color: T.text, lineHeight: 1.55, marginBottom: 10 }}>{decimalize(data.summary)}</div>}
           {(data.key_points ?? []).length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
               {data.key_points!.map((k, i) => (
                 <div key={i} style={{ display: 'flex', gap: 8, fontFamily: T.label, fontSize: 11.5, color: T.muted, lineHeight: 1.45 }}>
-                  <span style={{ color: T.gold, flex: 'none' }}>·</span><span>{k}</span>
+                  <span style={{ color: T.gold, flex: 'none' }}>·</span><span>{decimalize(k)}</span>
                 </div>
               ))}
             </div>
