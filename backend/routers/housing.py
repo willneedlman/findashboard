@@ -1,7 +1,8 @@
 """Housing-market analytics API.
 
-Thin HTTP layer over housing_market. The mock cycle is deterministic, so it is
-built once per process and reused. Every metric is computed by the engine.
+Thin HTTP layer over housing_market. Real national data comes from FRED
+(housing_fred); if FRED is unavailable the engine falls back to the deterministic
+mock book. Rebuilt at most every 12h. Every metric is computed by the engine.
 """
 
 import logging
@@ -9,24 +10,40 @@ logger = logging.getLogger(__name__)
 
 import sys
 import os
+import time
 
 from fastapi import APIRouter, HTTPException, Query
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import housing_market as hm
+import housing_fred
 
 router = APIRouter()
 
 _REGIONS: list[hm.HousingSeries] | None = None
 _RATES: list[hm.MortgageRateRecord] | None = None
 _RMAP: dict = {}
+_SOURCE = "mock"
+_BUILT_AT = 0.0
+_TTL = 12 * 3600
 
 
 def _book() -> tuple[list[hm.HousingSeries], dict]:
-    global _REGIONS, _RATES, _RMAP
-    if _REGIONS is None:
-        _REGIONS, _RATES = hm.generate_mock(months=36)
+    global _REGIONS, _RATES, _RMAP, _SOURCE, _BUILT_AT
+    if _REGIONS is None or (time.time() - _BUILT_AT) > _TTL:
+        built = None
+        try:
+            built = housing_fred.build(months=40)
+        except Exception as e:
+            logger.warning("housing_fred build failed: %s", e)
+        if built:
+            _REGIONS, _RATES = built
+            _SOURCE = "FRED (St. Louis Fed)"
+        else:
+            _REGIONS, _RATES = hm.generate_mock(months=36)
+            _SOURCE = "Illustrative sample (FRED unavailable)"
         _RMAP = hm.rate_map(_RATES)
+        _BUILT_AT = time.time()
     return _REGIONS, _RMAP
 
 
@@ -43,7 +60,9 @@ def _parse_region(value: str | None) -> hm.Region | None:
 def report():
     """National-vs-regional posture (price, affordability, supply/demand) + anomaly flags."""
     regions, rmap = _book()
-    return hm.market_report(regions, rmap)
+    out = hm.market_report(regions, rmap)
+    out["source"] = _SOURCE
+    return out
 
 
 @router.get("/region/{region}")

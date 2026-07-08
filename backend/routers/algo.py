@@ -387,7 +387,10 @@ def backtest(req: BacktestRequest):
         req.stop_loss, req.take_profit,
         req.trailing_stop, req.max_hold_bars,
     )
-    return _compute_metrics(signal, close, req.position_size, req.initial_capital)
+    result = _compute_metrics(signal, close, req.position_size, req.initial_capital)
+    result["bars"] = int(len(close))
+    result["span"] = {"start": str(close.index[0].date()), "end": str(close.index[-1].date())}
+    return result
 
 
 @router.post("/signal")

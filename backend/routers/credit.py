@@ -15,20 +15,40 @@ from fastapi import APIRouter, HTTPException, Query
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import credit_delinquencies as cd
+import fred_credit
 
 router = APIRouter()
 
-# Deterministic mock book, built lazily and cached for the process lifetime.
+# The portfolio book is modeled (no free public loan-servicing data exists), but
+# the industry benchmarks each portfolio is compared against come from real FRED
+# aggregate rates when available. Built lazily and cached for the process lifetime.
 _BOOK: list[cd.Portfolio] | None = None
 _BENCHMARKS: dict[str, cd.MarketBenchmark] | None = None
+_BENCH_SOURCE = "modeled"
 
 
 def _book() -> list[cd.Portfolio]:
-    global _BOOK, _BENCHMARKS
+    global _BOOK, _BENCHMARKS, _BENCH_SOURCE
     if _BOOK is None:
         _BOOK = cd.generate_mock_portfolios(months=60)   # 5y history for period-over-period change
-        _BENCHMARKS = cd.mock_benchmarks(_BOOK)
+        real = None
+        try:
+            real = fred_credit.benchmarks()
+        except Exception as e:
+            logger.warning("fred_credit benchmarks failed: %s", e)
+        if real:
+            _BENCHMARKS = real
+            _BENCH_SOURCE = "FRED · St. Louis Fed"
+        else:
+            _BENCHMARKS = cd.mock_benchmarks(_BOOK)
+            _BENCH_SOURCE = "modeled composite"
     return _BOOK
+
+
+# Portfolios are always modeled; benchmarks are real (FRED) when available.
+def _provenance() -> dict:
+    _book()
+    return {"portfolios": "Modeled sample book", "benchmarks": _BENCH_SOURCE}
 
 
 def _parse_asset_class(value: str | None) -> cd.AssetClass | None:
@@ -58,7 +78,9 @@ def summary(threshold: float = Query(5.0, ge=0), region: str | None = None):
     reg = _parse_region(region)
     if reg is not None:
         book = [p for p in book if p.region == reg]
-    return cd.risk_report(book, default_threshold=threshold)
+    out = cd.risk_report(book, default_threshold=threshold)
+    out["provenance"] = _provenance()
+    return out
 
 
 @router.get("/portfolios")

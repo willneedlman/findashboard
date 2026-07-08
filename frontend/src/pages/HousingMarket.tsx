@@ -22,12 +22,16 @@ interface Report {
   rates: { rate_30y: number; rate_15y: number; rate_arm: number } | null
   by_region: RegionRow[]
   flags: { region: string; kind: string; detail: string; value: number }[]
+  source?: string
 }
 interface RatesResp { history: { asof: string; rate_30y: number; rate_15y: number; rate_arm: number }[] }
 
 const MARKET_COLOR: Record<string, string> = { seller: '#2f8a4e', balanced: T.gold, buyer: '#5b93c9' }
 const fmtK = (v: number) => v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v.toFixed(0)}`
 const pct = (v: number, d = 2) => `${v.toFixed(d)}%`
+// FRED does not publish some fields (foreclosure, negative equity, FICO/LTV);
+// they arrive as 0 and should read as "no data", not a real zero.
+const pctOrDash = (v: number, d = 2) => (v && v > 0 ? `${v.toFixed(d)}%` : '—')
 const signed = (v: number | null) => v == null ? 'n/a' : `${v >= 0 ? '↑' : '↓'}${Math.abs(v).toFixed(1)}%`
 
 const PANEL: React.CSSProperties = { background: T.surface, border: `1px solid ${T.border}`, marginBottom: 20, boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }
@@ -102,6 +106,7 @@ export function HousingMarketContent() {
         title="Housing Market"
         actions={data && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontFamily: T.mono, fontSize: 9, color: T.muted }}>
+            {data.source && <span style={{ color: data.source.startsWith('FRED') ? T.pos : T.warn }}>{data.source.startsWith('FRED') ? 'FRED · St. Louis Fed' : data.source}</span>}
             <span>as of {data.asof}</span>
             {data.rates && <span>30Y {pct(data.rates.rate_30y)} · 15Y {pct(data.rates.rate_15y)} · ARM {pct(data.rates.rate_arm)}</span>}
           </div>
@@ -153,15 +158,15 @@ export function HousingMarketContent() {
             <div style={{ display: 'flex', flexWrap: 'wrap', borderBottom: `1px solid ${T.border}` }}>
               <StatCell label="Single-Family Default" value={pct(national.sf_default_rate)} sub={`${signed(national.trends.sf_default_rate.yoy)} YoY`} tone={national.sf_default_rate > 1 ? T.neg : T.text}
                 help="Share of single-family home mortgages in serious delinquency or default (90+ days past due). Low and resilient historically, but ticks up as rates rise and equity thins." />
-              <StatCell label="Multifamily Default" value={pct(national.mf_default_rate)} sub={`${signed(national.trends.mf_default_rate.yoy)} YoY`} tone={national.mf_default_rate > 1.5 ? T.neg : T.text}
+              <StatCell label="Multifamily Default" value={pctOrDash(national.mf_default_rate)} sub={`${signed(national.trends.mf_default_rate.yoy)} YoY`} tone={national.mf_default_rate > 1.5 ? T.neg : T.text}
                 help="Share of multifamily (apartment) mortgages in default. More cyclical than single-family and sensitive to rising rates and refinancing stress on commercial-style loans." />
               <StatCell label="Serious Delinquency" value={pct(national.serious_delinquency)} sub="90+ days past due"
                 help="All mortgages 90 or more days past due, as a share of loans outstanding. An early warning that leads foreclosures." />
-              <StatCell label="Foreclosure Rate" value={pct(national.foreclosure_rate)} sub="in process"
+              <StatCell label="Foreclosure Rate" value={pctOrDash(national.foreclosure_rate)} sub="in process"
                 help="Mortgages actively in the foreclosure process. Lags delinquency and reflects deeper distress." />
-              <StatCell label="Negative Equity" value={pct(national.negative_equity, 1)} sub="underwater"
+              <StatCell label="Negative Equity" value={pctOrDash(national.negative_equity, 1)} sub="underwater"
                 help="Mortgaged homes worth less than the loan balance. Rises when prices fall, and limits selling or refinancing." />
-              <StatCell label="Orig. FICO / LTV" value={`${national.avg_fico.toFixed(0)} / ${national.avg_ltv.toFixed(0)}%`} sub="lending standards"
+              <StatCell label="Orig. FICO / LTV" value={national.avg_fico > 0 ? `${national.avg_fico.toFixed(0)} / ${national.avg_ltv.toFixed(0)}%` : '—'} sub="lending standards"
                 help="Average origination credit score and loan-to-value. Rising FICO with falling LTV means tighter lending standards." last />
             </div>
             <div style={{ overflowX: 'auto' }}>

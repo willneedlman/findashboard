@@ -41,6 +41,7 @@ interface Block {
 interface Summary {
   asof: string
   default_threshold: number
+  provenance?: { portfolios: string; benchmarks: string }
   total: Block | null
   by_asset_class: Block[]
   flags: { asset_class: string; annualized_default_rate: number; threshold: number }[]
@@ -272,6 +273,14 @@ export function CreditDelinquenciesContent() {
 
       {isLoading && <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.muted, fontFamily: T.mono, fontSize: 11 }}>Loading portfolios…</div>}
       {isError && <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.neg, fontFamily: T.mono, fontSize: 11 }}>Failed to load credit data.</div>}
+
+      {data?.provenance && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '8px 12px', marginBottom: 12, background: 'color-mix(in srgb, var(--theme-primary) 6%, transparent)', border: `1px solid ${T.border}`, fontFamily: T.mono, fontSize: 10, color: T.muted }}>
+          <span style={{ color: T.warn, fontWeight: 700, letterSpacing: '0.06em' }}>MODELED BOOK</span>
+          <span>Portfolio-level buckets and roll rates are a modeled sample — no free public loan-servicing data exists. Industry benchmarks are real:</span>
+          <span style={{ color: (data.provenance.benchmarks || '').startsWith('FRED') ? T.pos : T.warn, fontWeight: 700 }}>{data.provenance.benchmarks}</span>
+        </div>
+      )}
 
       {data?.total && (
         <>

@@ -1356,6 +1356,25 @@ export function ChartStudioContent() {
                 <span style={{ fontFamily: SANS, fontSize: 11, color: 'var(--theme-secondary, #8099b0)' }}>No data for {ticker} at {tf.toUpperCase()}. Try another symbol or timeframe.</span>
               </div>
             )}
+            {/* Enabled overlays that have no accrued data yet: say so rather than draw a blank lane. */}
+            {!candlesQ.isLoading && !candlesQ.isError && candles.length > 0 && (() => {
+              const notes: string[] = []
+              const ivPts = (ivHistQ.data?.points ?? []).filter((p: { v: number | null }) => p.v != null).length
+              if (lanes.iv && !ivHistQ.isLoading && ivPts < 2)
+                notes.push(`IV-rank history is still building for ${ticker} — it needs about 20 daily snapshots before this lane has a curve.`)
+              if ((ind.gflip || ind.gexProfile) && !gexQ.isLoading && !(gexQ.data?.data?.length))
+                notes.push(`Gamma / GEX needs an options chain — none is available for ${ticker} yet.`)
+              if (!notes.length) return null
+              return (
+                <div style={{ position: 'absolute', left: 8, bottom: 8, zIndex: 6, display: 'flex', flexDirection: 'column', gap: 4, maxWidth: '72%' }}>
+                  {notes.map(n => (
+                    <span key={n} style={{ fontFamily: SANS, fontSize: 9.5, lineHeight: 1.4, color: 'var(--theme-secondary, #8099b0)', background: 'color-mix(in srgb, var(--theme-bg, #101c2e) 82%, transparent)', border: '1px solid var(--theme-border, rgba(255,255,255,0.10))', padding: '3px 8px' }}>
+                      <span style={{ color: 'var(--theme-primary, #c9a84c)', fontWeight: 700 }}>· </span>{n}
+                    </span>
+                  ))}
+                </div>
+              )
+            })()}
           </div>
 
           {/* Drag to make the chart taller/shorter; double-click resets. */}

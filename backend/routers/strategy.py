@@ -543,8 +543,12 @@ def custom_backtest(req: CustomBacktestRequest):
     signal = _apply_risk_controls(
         signal, close, req.stop_loss, req.take_profit, req.trailing_stop, req.max_hold_bars,
     )
-    return _instrument_metrics(signal, close, req.instrument, req.side, req.ticker,
-                               req.position_size, req.initial_capital)
+    result = _instrument_metrics(signal, close, req.instrument, req.side, req.ticker,
+                                 req.position_size, req.initial_capital)
+    # Surface the window actually used so "history" is never ambiguous.
+    result["bars"] = int(len(close))
+    result["span"] = {"start": str(close.index[0].date()), "end": str(close.index[-1].date())}
+    return result
 
 
 def _instrument_metrics(signal, close, instrument, side, ticker, position_size, capital):

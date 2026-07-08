@@ -26,6 +26,8 @@ interface BacktestResult {
   }
   trades: { date: string; action: string; price: number }[]
   instrument?: { kind: string; type: string; moneyness: number; dte: number; iv: number; direction?: string; modeled: boolean }
+  bars?: number
+  span?: { start: string; end: string }
 }
 
 // A portfolio is a book of positions, each pairing a saved rule-set with its own
@@ -39,6 +41,8 @@ interface PortfolioResult {
   equity_curve: { date: string; strategy: number; benchmark: number }[]
   metrics: BacktestResult['metrics']
   positions: { ticker: string; side: string; instrument: string; opt_type?: string | null; weight_pct: number; return_pct: number; pnl: number; num_trades: number }[]
+  bars?: number
+  span?: { start: string; end: string }
 }
 const PF_KEY = 'fdb_algo_portfolio'
 const rid = () => Math.random().toString(36).slice(2, 8)
@@ -496,6 +500,12 @@ export function AlgoStrategyBuilderContent() {
             <KpiCell grow label="Final Capital" value={fmtCap(mR.final_capital)} />
             <KpiCell grow label="P&L" value={`${mR.total_pnl >= 0 ? '+' : ''}${fmtCap(mR.total_pnl)}`} color={mR.total_pnl >= 0 ? POS : NEG} />
           </div>
+
+          {R.bars && R.span && (
+            <div style={{ fontSize: 9, color: 'var(--theme-text-faint, #5e768f)', fontFamily: 'var(--theme-sans)', marginTop: 6, letterSpacing: '0.04em' }}>
+              Window used: {R.span.start} → {R.span.end} · {R.bars.toLocaleString()} daily bars{R.bars < 250 ? ' — short history; indicators needing a long lookback (e.g. SMA200) warm up slowly here' : ''}
+            </div>
+          )}
 
           {mR.num_trades === 0 && (() => {
             const usesTickerRule = mode === 'single' && !!activeDef?.perTicker?.some(r => r.ticker.toUpperCase().trim() === ticker.toUpperCase().trim())
