@@ -66,6 +66,7 @@ export function EtfXrayContent() {
   const [picked, setPicked] = useState<string[]>([])
   const [open, setOpen] = useState(true)
   const [sort, setSort] = useState<'weight' | 'funds' | 'ticker' | 'change'>('weight')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [fundFilter, setFundFilter] = useState<string[]>([])
   const [filterMode, setFilterMode] = useState<'shared' | 'union' | 'only'>('shared')
   const [pair, setPair] = useState<[string, string] | null>(null)
@@ -99,7 +100,7 @@ export function EtfXrayContent() {
   // Per-holding 10-session sparkline + 1-day % change for the look-through list.
   // One batched backend call covers every constituent (hundreds of names).
   const holdingTickers = useMemo(() => data ? data.aggregate.map(a => a.ticker) : [], [data])
-  const { data: quotes } = useQuery<Record<string, { spark: number[]; change_pct: number | null }>>({
+  const { data: quotes, isFetching: quotesLoading } = useQuery<Record<string, { spark: number[]; change_pct: number | null }>>({
     queryKey: ['etf-quotes', fundList.join(',')],
     enabled: holdingTickers.length > 0,
     staleTime: 5 * 60_000,
@@ -123,13 +124,21 @@ export function EtfXrayContent() {
       r = r.filter(keep)
         .map(a => ({ ...a, weight: fundFilter.reduce((sum, f) => sum + (a.by_fund[f] ?? 0), 0) / fundFilter.length }))
     }
+    const dir = sortDir === 'asc' ? 1 : -1
     const s = [...r]
-    if (sort === 'funds') s.sort((a, b) => b.fund_count - a.fund_count || b.weight - a.weight)
-    else if (sort === 'ticker') s.sort((a, b) => a.ticker.localeCompare(b.ticker))
-    else if (sort === 'change') s.sort((a, b) => (quotes?.[b.ticker]?.change_pct ?? -Infinity) - (quotes?.[a.ticker]?.change_pct ?? -Infinity))
-    else s.sort((a, b) => b.weight - a.weight)
+    if (sort === 'funds') s.sort((a, b) => dir * ((a.fund_count - b.fund_count) || (a.weight - b.weight)))
+    else if (sort === 'ticker') s.sort((a, b) => dir * a.ticker.localeCompare(b.ticker))
+    else if (sort === 'change') s.sort((a, b) => {
+      // Names without a quote yet always sort to the bottom, both directions.
+      const av = quotes?.[a.ticker]?.change_pct, bv = quotes?.[b.ticker]?.change_pct
+      if (av == null && bv == null) return 0
+      if (av == null) return 1
+      if (bv == null) return -1
+      return dir * (av - bv)
+    })
+    else s.sort((a, b) => dir * (a.weight - b.weight))
     return s
-  }, [data, fundFilter, sort, filterMode, quotes])
+  }, [data, fundFilter, sort, sortDir, filterMode, quotes])
   const hovered = hover ? rows.find(r => r.ticker === hover) ?? null : null
 
   const activePair = pair ?? maxPair
@@ -219,15 +228,18 @@ export function EtfXrayContent() {
             {/* Left — Look-through holdings */}
             <Panel title="Look-Through Holdings" right={`10-session spark · 1-day change · ${fundFilter.length === 0 ? `all ${rows.length}` : fundFilter.length === 1 ? `${rows.length} in ${fundFilter[0]}` : `${rows.length} ${filterMode === 'union' ? 'in any of' : filterMode === 'only' ? 'in only one of' : 'held by all of'} ${fundFilter.join(' + ')}`}`} style={{ flex: '1.55 1 460px' }} bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
               <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 9, flex: 1, minHeight: 0 }}>
+                <style>{'@keyframes etfspin{to{transform:rotate(360deg)}}'}</style>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ ...EYEBROW, fontSize: 8, color: SEC }}>Sort</span>
                   <div style={{ display: 'flex', border: `1px solid ${BORDER}` }}>
                     {([['weight', 'Weight'], ['funds', 'Funds'], ['ticker', 'A–Z'], ['change', '1D %']] as const).map(([k, lbl], i, arr) => (
-                      <button key={k} onClick={() => setSort(k)} style={{
-                        background: sort === k ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 16%, transparent)' : 'transparent',
-                        border: 'none', borderRight: i < arr.length - 1 ? `1px solid ${BORDER}` : 'none', cursor: 'pointer',
-                        color: sort === k ? GOLD : SEC, fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '4px 10px',
-                      }}>{lbl}</button>
+                      <button key={k} title="Click to sort; click again to reverse"
+                        onClick={() => { if (sort === k) setSortDir(d => d === 'desc' ? 'asc' : 'desc'); else { setSort(k); setSortDir(k === 'ticker' ? 'asc' : 'desc') } }}
+                        style={{
+                          background: sort === k ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 16%, transparent)' : 'transparent',
+                          border: 'none', borderRight: i < arr.length - 1 ? `1px solid ${BORDER}` : 'none', cursor: 'pointer',
+                          color: sort === k ? GOLD : SEC, fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '4px 10px',
+                        }}>{lbl}{sort === k ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}</button>
                     ))}
                   </div>
                 </div>
@@ -282,8 +294,12 @@ export function EtfXrayContent() {
                       <span style={{ width: 74, flexShrink: 0, display: 'flex', justifyContent: 'flex-end' }}>
                         {q?.spark && q.spark.length > 1 && <Spark data={q.spark} color={up ? POS : NEG} />}
                       </span>
-                      <span title="1-day change · 10-session sparkline" style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, width: 52, flexShrink: 0, textAlign: 'right', color: q?.change_pct == null ? FAINT : up ? POS : NEG }}>
-                        {q?.change_pct == null ? '—' : `${up ? '+' : ''}${q.change_pct.toFixed(2)}%`}
+                      <span title="1-day change · 10-session sparkline" style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, width: 52, flexShrink: 0, textAlign: 'right', display: 'inline-flex', justifyContent: 'flex-end', color: q?.change_pct == null ? FAINT : up ? POS : NEG }}>
+                        {q?.change_pct != null
+                          ? `${up ? '+' : ''}${q.change_pct.toFixed(2)}%`
+                          : quotesLoading
+                          ? <span aria-label="loading" style={{ display: 'inline-block', width: 9, height: 9, border: `1.5px solid ${HAIR}`, borderTopColor: GOLD, borderRadius: '50%', animation: 'etfspin 0.7s linear infinite' }} />
+                          : '—'}
                       </span>
                       <span style={{ display: 'flex', gap: 3, flexShrink: 0 }}>{a.funds.map(tag)}</span>
                     </div>
