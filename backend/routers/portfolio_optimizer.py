@@ -31,7 +31,7 @@ class OptimizeRequest(BaseModel):
     risk_free_rate: float = 4.0      # annual %, for Sharpe + tangency
     long_only: bool = True           # False allows shorts (weights in [-1, 1])
     return_model: str = "historical"  # "historical" (realized) | "capm" (forward)
-    market_premium: float = 5.5      # equity risk premium (annual %) for CAPM
+    market_return: float = 10.0      # expected market return (annual %); ERP = this − rf
     # Optional current portfolio: {ticker: weight} (any scale, normalized) → scored
     # and plotted against the optimum so the user sees where they sit.
     weights: dict[str, float] | None = None
@@ -44,11 +44,15 @@ class OptimizeRequest(BaseModel):
         return self
 
 
-def _aligned_returns(tickers: list[str], start: str, end: str) -> tuple[pd.DataFrame, list[str]]:
-    """Date-aligned daily simple returns for the cohort of tickers that share a
-    long window. A recently-listed name would otherwise collapse the inner join
-    (intersection) to its short history and wreck the annualized figures, so any
-    ticker with far less history than the longest is dropped and reported."""
+def _aligned_returns(tickers: list[str], start: str, end: str,
+                     require_long: bool = True) -> tuple[pd.DataFrame, list[str]]:
+    """Date-aligned daily simple returns for the tickers that share a window.
+
+    `require_long` (historical mode): a recently-listed name would collapse the
+    inner join to its short history and wreck the ANNUALIZED returns, so anything
+    far shorter than the longest is dropped and reported. CAPM mode sets it False —
+    expected returns come from beta there, which only needs a modest sample, so a
+    short-history name is kept (only genuinely tiny samples are dropped)."""
     raw = get_download(tuple(sorted(tickers)), start, end)
     if raw is None or raw.empty:
         raise HTTPException(404, "No price data for the selected tickers and range")
@@ -58,13 +62,14 @@ def _aligned_returns(tickers: list[str], start: str, end: str) -> tuple[pd.DataF
         raw = raw.to_frame(tickers[0])
     raw = raw.dropna(how="all").dropna(axis=1, how="all")
 
-    # Drop short-history outliers before the intersection join.
     spans = {t: int(raw[t].dropna().shape[0]) for t in raw.columns}
     dropped: list[str] = []
     if spans:
-        thresh = max(120, int(0.5 * max(spans.values())))
+        # Historical: needs a long window (floor 150d, or 40% of the longest).
+        # CAPM: keep anything with enough to estimate a beta (floor 40d).
+        thresh = max(150, int(0.4 * max(spans.values()))) if require_long else 40
         keep = [t for t in raw.columns if spans[t] >= thresh]
-        dropped = [str(t) for t in raw.columns if t not in keep]
+        dropped = [f"{t} ({spans[t]}d)" for t in raw.columns if t not in keep]
         if len(keep) >= 2:
             raw = raw[keep]
 
@@ -213,7 +218,8 @@ def _port_payload(w, tickers, mu, cov, rf, returns):
 
 @router.post("/optimize")
 def optimize(req: OptimizeRequest):
-    returns, dropped = _aligned_returns(req.tickers, req.start, req.end)
+    returns, dropped = _aligned_returns(req.tickers, req.start, req.end,
+                                        require_long=(req.return_model != "capm"))
     tickers = list(returns.columns)
     rf = req.risk_free_rate / 100.0
 
@@ -226,7 +232,7 @@ def optimize(req: OptimizeRequest):
     betas = None
     model = "historical"
     if req.return_model == "capm":
-        capm, betas = _capm_mu(returns, rf, req.market_premium / 100.0)
+        capm, betas = _capm_mu(returns, rf, (req.market_return - req.risk_free_rate) / 100.0)
         if capm is not None:
             mu, model = capm, "capm"
         else:

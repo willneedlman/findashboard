@@ -75,7 +75,7 @@ export function PortfolioOptimizerContent() {
   const [rf, setRf] = useState('4.00')
   const [longOnly, setLongOnly] = useState(true)
   const [returnModel, setReturnModel] = useState<'historical' | 'capm'>('historical')
-  const [erp, setErp] = useState('5.5')
+  const [marketReturn, setMarketReturn] = useState('10')
   const [selected, setSelected] = useState('max_sharpe')
   // Per-ticker weights (%) define the CURRENT portfolio, plotted against the optimum.
   const [weights, setWeights] = useState<Record<string, number>>({})
@@ -122,7 +122,7 @@ export function PortfolioOptimizerContent() {
     mutationFn: async () => (await axios.post('/api/portfolio-opt/optimize', {
       tickers, start: startFor(lookback), end: new Date().toISOString().slice(0, 10),
       risk_free_rate: parseFloat(rf) || 0, long_only: longOnly,
-      return_model: returnModel, market_premium: parseFloat(erp) || 5.5,
+      return_model: returnModel, market_return: parseFloat(marketReturn) || 10,
       weights: hasWeights ? weights : undefined,
     })).data,
   })
@@ -214,13 +214,14 @@ export function PortfolioOptimizerContent() {
           ))}
         </div>
         <div style={{ fontSize: 9, color: FAINT, fontFamily: SANS, marginTop: 4, lineHeight: 1.4 }}>
-          {returnModel === 'capm' ? 'rf + β × premium (β vs SPY) — forward-looking.' : 'Realized compound return over the window.'}
+          {returnModel === 'capm' ? 'rf + β × (market return − rf), β vs SPY — forward-looking.' : 'Realized compound return over the window.'}
         </div>
       </div>
       {returnModel === 'capm' && (
         <div>
-          <label style={lbl}>Equity risk premium (annual %)</label>
-          <input value={erp} onChange={e => setErp(e.target.value)} type="number" step="0.5" style={inp} />
+          <label style={lbl}>Expected market return (annual %)</label>
+          <input value={marketReturn} onChange={e => setMarketReturn(e.target.value)} type="number" step="0.5" style={inp} />
+          <div style={{ fontSize: 9, color: FAINT, fontFamily: SANS, marginTop: 3 }}>Premium = {marketReturn || '10'}% − {rf || '4'}% rf = {(( parseFloat(marketReturn) || 10) - (parseFloat(rf) || 4)).toFixed(1)}%</div>
         </div>
       )}
       <div>
