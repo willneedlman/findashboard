@@ -566,7 +566,7 @@ export default function StrategyBuilder() {
                     {/* Strikes count */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                       <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-text-dim, rgba(255,255,255,0.35))', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Strikes</span>
-                      {[5, 10, 15, 20].map(n => (
+                      {[5, 10, 15, 20, 30, 50].map(n => (
                         <button key={n} onClick={() => setStrikeCount(n)} style={{
                           fontSize: 9, padding: '2px 7px', cursor: 'pointer',
                           background: strikeCount === n ? 'color-mix(in srgb, var(--theme-primary) 15%, transparent)' : 'transparent',
