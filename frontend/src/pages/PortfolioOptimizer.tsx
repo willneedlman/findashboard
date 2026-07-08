@@ -284,7 +284,7 @@ export function PortfolioOptimizerContent() {
                     <YAxis type="number" dataKey="return" name="Return" domain={yDom} allowDataOverflow tick={{ fontFamily: MONO, fontSize: 9, fill: SEC }} tickLine={false} axisLine={{ stroke: BORDER }} width={40} tickFormatter={(v: number) => `${v.toFixed(0)}%`} label={{ value: 'Return', angle: -90, position: 'insideLeft', fontFamily: SANS, fontSize: 9, fill: FAINT }} />
                     <ZAxis range={[60, 60]} />
                     <Tooltip cursor={{ strokeDasharray: '3 3' }} content={<ChartTip />} />
-                    <Scatter name="Frontier" data={data.frontier} line={{ stroke: FAINT, strokeWidth: 1 }} fill={FAINT} shape="circle" />
+                    <Scatter name="Frontier" data={data.frontier} line={{ stroke: FAINT, strokeWidth: 1.5 }} fill="transparent" />
                     <Scatter name="Assets" data={data.assets} fill={BLUE} shape="circle" cursor="pointer" onClick={(pt: unknown) => { const p = (pt as { payload?: AssetRow })?.payload ?? (pt as AssetRow); if (p?.ticker) setAsset(p) }} />
                     <Scatter name="Portfolios" data={portScatter} fill={GOLD} shape="diamond">
                       {portScatter.map((p) => <Cell key={p.key} fill={p.key === selected ? GOLD : 'rgba(201,168,76,0.45)'} />)}
@@ -293,7 +293,7 @@ export function PortfolioOptimizerContent() {
                   </ScatterChart>
                 </ResponsiveContainer>
                 <div style={{ display: 'flex', gap: 14, padding: '4px 10px 8px', fontFamily: SANS, fontSize: 9, color: FAINT, flexWrap: 'wrap' }}>
-                  <span><span style={{ color: FAINT }}>●</span> frontier</span>
+                  <span><span style={{ color: FAINT }}>─</span> efficient frontier</span>
                   <span><span style={{ color: BLUE }}>●</span> each asset <span style={{ color: FAINT }}>(click for β · E(r))</span></span>
                   <span><span style={{ color: GOLD }}>◆</span> portfolios</span>
                   {currentScatter.length > 0 && <span><span style={{ color: NEG }}>★</span> your portfolio</span>}

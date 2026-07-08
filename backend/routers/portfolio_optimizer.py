@@ -130,9 +130,14 @@ def _risk_parity(cov):
 
 
 def _frontier(mu, cov, rf, long_only, points: int = 24):
-    """Min-variance portfolio at each of `points` target returns → (vol, ret)."""
+    """The EFFICIENT frontier: min-variance portfolio at each target return from the
+    global minimum-variance return up to the max asset return. The branch below the
+    min-variance point is inefficient (more risk for less return), so it's omitted."""
     from scipy.optimize import minimize
-    lo, hi = float(mu.min()), float(mu.max())
+    lo = float(_min_variance(cov, long_only) @ mu)   # global min-variance return
+    hi = float(mu.max())
+    if hi <= lo:
+        hi = lo + max(abs(lo) * 0.5, 0.01)
     targets = np.linspace(lo, hi, points)
     n = len(mu)
     bounds = [(0.0, 1.0)] * n if long_only else [(-1.0, 1.0)] * n
@@ -176,33 +181,34 @@ def _max_dd(daily: np.ndarray) -> float:
     return float((curve / peak - 1).min())
 
 
-def _capm_mu(returns: pd.DataFrame, rf: float, erp: float, benchmark: str = "SPY"):
-    """CAPM expected return per asset: rf + beta·ERP. Beta is measured against the
-    market (SPY) over the same window; ERP is the forward equity-risk-premium
-    assumption. Returns (mu, betas) or (None, None) if the benchmark is unavailable
-    so the caller can fall back to realized returns."""
-    import datetime as _dt
+def _betas(tickers: list[str], start: str, end: str, benchmark: str = "SPY") -> dict[str, float]:
+    """Beta of each ticker vs the market (SPY), measured over that ticker's OWN
+    full history — NOT the truncated common window, which would make betas noise
+    when a short-history name is in the basket (e.g. NFLX printing 0.07). Uses
+    pandas pairwise-complete covariance, so each beta spans its longest overlap."""
     try:
-        start = str(returns.index[0].date())
-        end = str(returns.index[-1].date() + _dt.timedelta(days=3))
-        raw = get_download((benchmark,), start, end)
+        syms = tuple(sorted(set(tickers) | {benchmark}))
+        raw = get_download(syms, start, end)
         if raw is None or raw.empty:
-            return None, None
-        if isinstance(raw.columns, pd.MultiIndex):
-            s = raw["Close"][benchmark] if benchmark in raw["Close"].columns else raw["Close"].iloc[:, 0]
-        else:
-            s = raw[benchmark] if benchmark in raw.columns else raw.iloc[:, 0]
-        rm = s.pct_change().reindex(returns.index).dropna()
-        common = returns.index.intersection(rm.index)
-        if len(common) < 30:
-            return None, None
-        rets, rmc = returns.loc[common], rm.loc[common]
-        var_m = float(rmc.var()) or 1e-9
-        betas = np.array([float(rets[t].cov(rmc)) / var_m for t in rets.columns])
-        return rf + betas * erp, betas
+            return {}
+        close = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) and "Close" in raw.columns.get_level_values(0) else raw
+        if isinstance(close, pd.Series):
+            close = close.to_frame(syms[0])
+        rets = close.pct_change()
+        if benchmark not in rets.columns:
+            return {}
+        rm = rets[benchmark]
+        out: dict[str, float] = {}
+        for t in tickers:
+            if t in rets.columns:
+                pair = pd.concat([rets[t], rm], axis=1).dropna()
+                if len(pair) >= 30:
+                    vm = float(pair.iloc[:, 1].var()) or 1e-9
+                    out[t] = float(pair.iloc[:, 0].cov(pair.iloc[:, 1])) / vm
+        return out
     except Exception as e:
-        logger.warning("CAPM mu failed: %s", e)
-        return None, None
+        logger.warning("beta computation failed: %s", e)
+        return {}
 
 
 def _port_payload(w, tickers, mu, cov, rf, returns):
@@ -229,10 +235,14 @@ def optimize(req: OptimizeRequest):
     # Expected returns: realized (geometric, backward) or CAPM (rf + beta·ERP,
     # forward). CAPM smooths out a single asset's lucky/unlucky run.
     hist_mu = np.expm1(np.log1p(returns.clip(lower=-0.99)).mean().to_numpy() * _TRADING_DAYS)
-    # Beta is computed regardless of model so the per-asset popup can show it.
-    capm_mu, betas = _capm_mu(returns, rf, (req.market_return - req.risk_free_rate) / 100.0)
-    if req.return_model == "capm" and capm_mu is not None:
-        mu, model = capm_mu, "capm"
+    # Beta per asset over its OWN full history (computed regardless of model so the
+    # popup can show it). CAPM expected return = rf + beta·(market_return − rf).
+    beta_map = _betas(tickers, req.start, req.end)
+    betas = np.array([beta_map.get(t, np.nan) for t in tickers])
+    erp = (req.market_return - req.risk_free_rate) / 100.0
+    if req.return_model == "capm" and beta_map:
+        mu = rf + np.nan_to_num(betas, nan=1.0) * erp   # unknown beta → market beta 1
+        model = "capm"
     else:
         mu, model = hist_mu, "historical"
 
@@ -267,7 +277,7 @@ def optimize(req: OptimizeRequest):
         "assets": [
             {"ticker": t, "return": round(float(mu[i]) * 100, 2),
              "vol": round(float(np.sqrt(cov[i, i])) * 100, 2),
-             "beta": round(float(betas[i]), 2) if betas is not None else None}
+             "beta": (None if np.isnan(betas[i]) else round(float(betas[i]), 2))}
             for i, t in enumerate(tickers)
         ],
     }
