@@ -63,14 +63,14 @@ def build(months: int = 40):
             rate_arm=round(fred.as_of(data["rate_arm"], d) or 0.0, 2),
         ))
 
-        sales_k = fred.as_of(data["sales"], d)            # thousands, annual rate
+        sales_a = fred.as_of(data["sales"], d)            # absolute count, annual rate
         delinq = fred.as_of(data["sf_delinq"], d) or 0.0
         snaps.append(hm.HousingMarketSnapshot(
             region=hm.Region.NATIONAL, asof=d,
             median_price=round(fred.as_of(data["median_price"], d) or 0.0, 0),
             price_per_sqft=round(fred.as_of(data["price_per_sqft"], d) or 0.0, 1),
             median_income=round(fred.as_of(data["median_income"], d) or 0.0, 0),
-            sales_volume=round((sales_k or 0.0) * 1000 / 12, 0),   # → homes/month
+            sales_volume=round((sales_a or 0.0) / 12, 0),         # annual rate → homes/month
             pending_sales=0.0,                                     # not on FRED
             days_on_market=round(fred.as_of(data["days_on_market"], d) or 0.0, 1),
             active_listings=round(fred.as_of(data["active_listings"], d) or 0.0, 0),
