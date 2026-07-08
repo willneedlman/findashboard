@@ -30,6 +30,8 @@ class OptimizeRequest(BaseModel):
     end: str = "2025-12-31"
     risk_free_rate: float = 4.0      # annual %, for Sharpe + tangency
     long_only: bool = True           # False allows shorts (weights in [-1, 1])
+    return_model: str = "historical"  # "historical" (realized) | "capm" (forward)
+    market_premium: float = 5.5      # equity risk premium (annual %) for CAPM
     # Optional current portfolio: {ticker: weight} (any scale, normalized) → scored
     # and plotted against the optimum so the user sees where they sit.
     weights: dict[str, float] | None = None
@@ -169,6 +171,35 @@ def _max_dd(daily: np.ndarray) -> float:
     return float((curve / peak - 1).min())
 
 
+def _capm_mu(returns: pd.DataFrame, rf: float, erp: float, benchmark: str = "SPY"):
+    """CAPM expected return per asset: rf + beta·ERP. Beta is measured against the
+    market (SPY) over the same window; ERP is the forward equity-risk-premium
+    assumption. Returns (mu, betas) or (None, None) if the benchmark is unavailable
+    so the caller can fall back to realized returns."""
+    import datetime as _dt
+    try:
+        start = str(returns.index[0].date())
+        end = str(returns.index[-1].date() + _dt.timedelta(days=3))
+        raw = get_download((benchmark,), start, end)
+        if raw is None or raw.empty:
+            return None, None
+        if isinstance(raw.columns, pd.MultiIndex):
+            s = raw["Close"][benchmark] if benchmark in raw["Close"].columns else raw["Close"].iloc[:, 0]
+        else:
+            s = raw[benchmark] if benchmark in raw.columns else raw.iloc[:, 0]
+        rm = s.pct_change().reindex(returns.index).dropna()
+        common = returns.index.intersection(rm.index)
+        if len(common) < 30:
+            return None, None
+        rets, rmc = returns.loc[common], rm.loc[common]
+        var_m = float(rmc.var()) or 1e-9
+        betas = np.array([float(rets[t].cov(rmc)) / var_m for t in rets.columns])
+        return rf + betas * erp, betas
+    except Exception as e:
+        logger.warning("CAPM mu failed: %s", e)
+        return None, None
+
+
 def _port_payload(w, tickers, mu, cov, rf, returns):
     stats = _port_stats(w, mu, cov, rf)
     return {
@@ -186,12 +217,22 @@ def optimize(req: OptimizeRequest):
     tickers = list(returns.columns)
     rf = req.risk_free_rate / 100.0
 
-    # Geometric (compound) annualized return per asset — the realized return.
-    # Arithmetic mean × 252 massively overstates volatile names (volatility drag),
-    # which inflated the expected-return stat and the frontier's top end.
-    mu = np.expm1(np.log1p(returns.clip(lower=-0.99)).mean().to_numpy() * _TRADING_DAYS)
     cov = returns.cov().to_numpy() * _TRADING_DAYS               # annualized covariance
     n = len(tickers)
+
+    # Expected returns: realized (geometric, backward) or CAPM (rf + beta·ERP,
+    # forward). CAPM smooths out a single asset's lucky/unlucky run.
+    hist_mu = np.expm1(np.log1p(returns.clip(lower=-0.99)).mean().to_numpy() * _TRADING_DAYS)
+    betas = None
+    model = "historical"
+    if req.return_model == "capm":
+        capm, betas = _capm_mu(returns, rf, req.market_premium / 100.0)
+        if capm is not None:
+            mu, model = capm, "capm"
+        else:
+            mu = hist_mu   # benchmark unavailable → fall back
+    else:
+        mu = hist_mu
 
     portfolios = {}
     for name, w in (
@@ -217,11 +258,13 @@ def optimize(req: OptimizeRequest):
         "span": {"start": str(returns.index[0].date()), "end": str(returns.index[-1].date())},
         "risk_free_rate": req.risk_free_rate,
         "long_only": req.long_only,
+        "return_model": model,
         "portfolios": portfolios,
         "frontier": _frontier(mu, cov, rf, req.long_only),
         "assets": [
             {"ticker": t, "return": round(float(mu[i]) * 100, 2),
-             "vol": round(float(np.sqrt(cov[i, i])) * 100, 2)}
+             "vol": round(float(np.sqrt(cov[i, i])) * 100, 2),
+             "beta": round(float(betas[i]), 2) if betas is not None else None}
             for i, t in enumerate(tickers)
         ],
     }

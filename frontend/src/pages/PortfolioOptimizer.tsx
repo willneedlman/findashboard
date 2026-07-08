@@ -44,7 +44,7 @@ const LOOKBACKS: { label: string; years: number }[] = [
 interface WeightRow { ticker: string; weight: number; risk_contribution: number }
 interface Port { return: number; vol: number; sharpe: number; weights: WeightRow[]; var_95: number; cvar_95: number; max_drawdown: number }
 interface OptResult {
-  tickers: string[]; dropped?: string[]; days: number; span: { start: string; end: string }; risk_free_rate: number; long_only: boolean
+  tickers: string[]; dropped?: string[]; days: number; span: { start: string; end: string }; risk_free_rate: number; long_only: boolean; return_model?: string
   portfolios: Record<string, Port>
   frontier: { vol: number; return: number; sharpe: number }[]
   assets: { ticker: string; return: number; vol: number }[]
@@ -74,6 +74,8 @@ export function PortfolioOptimizerContent() {
   const [lookback, setLookback] = useState(3)
   const [rf, setRf] = useState('4.00')
   const [longOnly, setLongOnly] = useState(true)
+  const [returnModel, setReturnModel] = useState<'historical' | 'capm'>('historical')
+  const [erp, setErp] = useState('5.5')
   const [selected, setSelected] = useState('max_sharpe')
   // Per-ticker weights (%) define the CURRENT portfolio, plotted against the optimum.
   const [weights, setWeights] = useState<Record<string, number>>({})
@@ -120,6 +122,7 @@ export function PortfolioOptimizerContent() {
     mutationFn: async () => (await axios.post('/api/portfolio-opt/optimize', {
       tickers, start: startFor(lookback), end: new Date().toISOString().slice(0, 10),
       risk_free_rate: parseFloat(rf) || 0, long_only: longOnly,
+      return_model: returnModel, market_premium: parseFloat(erp) || 5.5,
       weights: hasWeights ? weights : undefined,
     })).data,
   })
@@ -203,6 +206,24 @@ export function PortfolioOptimizerContent() {
         </div>
       </div>
       <div>
+        <label style={lbl}>Expected returns</label>
+        <div style={{ display: 'flex', border: `1px solid ${BORDER}` }}>
+          {([['historical', 'Historical'], ['capm', 'CAPM']] as const).map(([k, lab], i) => (
+            <button key={k} onClick={() => setReturnModel(k)} title={k === 'capm' ? 'Forward-looking: rf + beta × equity-risk-premium' : 'Realized geometric return over the window'}
+              style={{ flex: 1, background: returnModel === k ? `color-mix(in srgb, ${GOLD} 16%, transparent)` : 'transparent', border: 'none', borderRight: i === 0 ? `1px solid ${BORDER}` : 'none', cursor: 'pointer', color: returnModel === k ? GOLD : SEC, fontFamily: MONO, fontSize: 10, fontWeight: 700, padding: '6px 0' }}>{lab}</button>
+          ))}
+        </div>
+        <div style={{ fontSize: 9, color: FAINT, fontFamily: SANS, marginTop: 4, lineHeight: 1.4 }}>
+          {returnModel === 'capm' ? 'rf + β × premium (β vs SPY) — forward-looking.' : 'Realized compound return over the window.'}
+        </div>
+      </div>
+      {returnModel === 'capm' && (
+        <div>
+          <label style={lbl}>Equity risk premium (annual %)</label>
+          <input value={erp} onChange={e => setErp(e.target.value)} type="number" step="0.5" style={inp} />
+        </div>
+      )}
+      <div>
         <label style={lbl}>Risk-free rate (annual %)</label>
         <input value={rf} onChange={e => setRf(e.target.value)} type="number" step="0.25" style={inp} />
       </div>
@@ -240,7 +261,7 @@ export function PortfolioOptimizerContent() {
 
           {/* Selected-portfolio KPI strip */}
           <div style={STRIP}>
-            <KpiCell grow label="Expected Return" value={`${sel.return >= 0 ? '+' : ''}${sel.return.toFixed(1)}%`} valueSize={22} color={sel.return >= 0 ? POS : NEG} sub="annualized" />
+            <KpiCell grow label="Expected Return" value={`${sel.return >= 0 ? '+' : ''}${sel.return.toFixed(1)}%`} valueSize={22} color={sel.return >= 0 ? POS : NEG} sub={data.return_model === 'capm' ? 'CAPM · forward' : 'realized · annualized'} />
             <KpiCell grow label="Volatility" value={`${sel.vol.toFixed(1)}%`} valueSize={22} sub="annualized" />
             <KpiCell grow label="Sharpe" value={sel.sharpe.toFixed(2)} valueSize={22} color={sel.sharpe >= 1 ? POS : GOLD} sub={`rf ${data.risk_free_rate}%`} />
             <KpiCell grow label="VaR 95%" value={`${sel.var_95.toFixed(2)}%`} valueSize={22} color={NEG} sub="1-day historical" />
