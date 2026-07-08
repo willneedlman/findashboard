@@ -27,6 +27,7 @@ from routers import (
     iv_tracker, valuation, analytics,
     earnings, leaderboard, etf, fx,
     maritime, snapshots, credit, housing,
+    portfolio_optimizer,
 )
 
 # Pin the MIME types the PWA depends on. A service worker served as anything but
@@ -178,6 +179,7 @@ app.include_router(rates.router,             prefix="/api/rates",             ta
 app.include_router(snapshots.router,         prefix="/api/snapshots",         tags=["snapshots"])
 app.include_router(fx.router,                prefix="/api/fx",                tags=["fx"])
 app.include_router(correlation.router,       prefix="/api/correlation",       tags=["correlation"])
+app.include_router(portfolio_optimizer.router, prefix="/api/portfolio-opt",    tags=["portfolio-opt"])
 app.include_router(dcf.router,               prefix="/api/dcf",               tags=["dcf"])
 app.include_router(users.router,             prefix="/api/users",             tags=["users"])
 app.include_router(analytics.router,         prefix="/api/analytics",         tags=["analytics"])
