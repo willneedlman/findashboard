@@ -8,6 +8,7 @@ import EmptyState from '../components/EmptyState'
 import TickerTagInput from '../components/TickerTagInput'
 import { KpiCell } from '../components/mmCockpit'
 import Provenance from '../components/Provenance'
+import PortfolioIO, { type PortfolioAsset } from '../components/PortfolioIO'
 import { usePortfolio } from '../contexts/PortfolioContext'
 
 const GOLD = 'var(--theme-primary, #c9a84c)'
@@ -84,6 +85,14 @@ export function PortfolioOptimizerContent() {
     setWeights(w => Object.fromEntries(Object.entries(w).filter(([k]) => t.includes(k))))
     setImportMsg('')
   }
+  // Full import screen (CSV/JSON file, paste) — same PortfolioIO the other tools use.
+  const importAssets = (imported: PortfolioAsset[]) => {
+    const valid = imported.filter(a => a.ticker)
+    if (!valid.length) return
+    setTickers(valid.map(a => a.ticker.toUpperCase()))
+    setWeights(Object.fromEntries(valid.map(a => [a.ticker.toUpperCase(), Number(a.weight) || 0])))
+    setImportMsg(`Imported ${valid.length} holdings.`)
+  }
   const setWeight = (t: string, v: number) => setWeights(w => ({ ...w, [t]: Math.max(0, v) }))
   const evenWeights = () => setWeights(Object.fromEntries(tickers.map(t => [t, +(100 / tickers.length).toFixed(1)])))
   const totalW = tickers.reduce((s, t) => s + (weights[t] || 0), 0)
@@ -144,6 +153,13 @@ export function PortfolioOptimizerContent() {
           </div>
         </div>
       )}
+      {/* Full import/export screen — CSV/JSON file + paste, same as the other tools. */}
+      <div>
+        <label style={lbl}>Import / Export</label>
+        <PortfolioIO mode="portfolio" name="optimizer"
+          assets={tickers.map(t => ({ ticker: t, weight: weights[t] || 0 }))}
+          onImportAssets={importAssets} />
+      </div>
       <div>
         <label style={lbl}>Lookback</label>
         <div style={{ display: 'flex', border: `1px solid ${BORDER}` }}>
@@ -204,7 +220,9 @@ export function PortfolioOptimizerContent() {
                     <XAxis type="number" dataKey="vol" name="Volatility" unit="%" tick={{ fontFamily: MONO, fontSize: 9, fill: SEC }} tickLine={false} axisLine={{ stroke: BORDER }} label={{ value: 'Volatility (annual %)', position: 'insideBottom', offset: -12, fontFamily: SANS, fontSize: 9, fill: FAINT }} />
                     <YAxis type="number" dataKey="return" name="Return" unit="%" tick={{ fontFamily: MONO, fontSize: 9, fill: SEC }} tickLine={false} axisLine={{ stroke: BORDER }} width={38} label={{ value: 'Return', angle: -90, position: 'insideLeft', fontFamily: SANS, fontSize: 9, fill: FAINT }} />
                     <ZAxis range={[60, 60]} />
-                    <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ background: SURFACE, border: `1px solid ${GOLD}`, fontFamily: MONO, fontSize: 10 }}
+                    <Tooltip cursor={{ strokeDasharray: '3 3' }}
+                      contentStyle={{ background: SURFACE, border: `1px solid ${GOLD}`, fontFamily: MONO, fontSize: 10, color: TEXT }}
+                      itemStyle={{ color: TEXT }} labelStyle={{ color: SEC }}
                       formatter={(v: number, n: string) => [`${v.toFixed(2)}%`, n]}
                       labelFormatter={() => ''} />
                     <Scatter name="Frontier" data={data.frontier} line={{ stroke: FAINT, strokeWidth: 1 }} fill={FAINT} shape="circle" />

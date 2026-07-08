@@ -67,14 +67,19 @@ def _port_stats(w: np.ndarray, mu: np.ndarray, cov: np.ndarray, rf: float) -> di
 
 def _solve(objective, n: int, long_only: bool, extra=None):
     from scipy.optimize import minimize
-    bounds = [(0.0, 1.0)] * n if long_only else [(-1.0, 1.0)] * n
+    # Long-only: keep EVERY holding with a small positive floor rather than zeroing
+    # names out (the user asked the optimizer not to drop holdings). The floor
+    # scales down for large baskets so it stays feasible against the sum=1 budget.
+    floor = min(0.01, 0.5 / n)
+    bounds = [(floor, 1.0)] * n if long_only else [(-1.0, 1.0)] * n
     cons = [{"type": "eq", "fun": lambda w: np.sum(w) - 1.0}]
     if extra:
         cons.append(extra)
     res = minimize(objective, np.repeat(1.0 / n, n), method="SLSQP",
                    bounds=bounds, constraints=cons, options={"maxiter": 500, "ftol": 1e-9})
     w = res.x
-    w[np.abs(w) < 1e-4] = 0.0
+    if not long_only:
+        w[np.abs(w) < 1e-4] = 0.0     # clean up dust only when shorts are allowed
     s = w.sum()
     return w / s if s != 0 else np.repeat(1.0 / n, n)
 
