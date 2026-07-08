@@ -7,6 +7,7 @@ import { KpiCell } from '../components/mmCockpit'
 import { fetchBondAnalytics } from '../hooks/useApi'
 import SidebarLayout from '../components/SidebarLayout'
 import EmptyState from '../components/EmptyState'
+import Provenance from '../components/Provenance'
 import axios from 'axios'
 import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
 
@@ -165,6 +166,9 @@ export function BondAnalyticsContent() {
           )}
           {data && (
             <>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                <Provenance kind="model" source={imported ? 'ETF-derived mark · analytics computed' : 'analytics computed from your inputs'} />
+              </div>
               {/* Bond classification + metrics */}
               {(() => {
                 const typeColor = liveBondType === 'Premium Bond' ? 'var(--theme-positive)' : liveBondType === 'Discount Bond' ? 'var(--theme-negative)' : 'var(--theme-primary, #c9a84c)'
