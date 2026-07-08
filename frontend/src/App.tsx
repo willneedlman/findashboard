@@ -98,6 +98,7 @@ const PaperTrading       = lazyWithReload(() => import('./pages/PaperTrading'))
 const SentimentTracker   = lazyWithReload(() => import('./pages/SentimentTracker'))
 const AlertsPage         = lazyWithReload(() => import('./pages/Alerts'))
 const EconomyMonitor     = lazyWithReload(() => import('./pages/EconomyMonitor'))
+const MacroEventHub      = lazyWithReload(() => import('./pages/MacroEventHub'))
 const SectorRotation     = lazyWithReload(() => import('./pages/SectorRotation'))
 const IVTracker          = lazyWithReload(() => import('./pages/IVTracker'))
 const SkewTool           = lazyWithReload(() => import('./pages/SkewTool'))
@@ -274,6 +275,7 @@ export default function App() {
               <Route path="/stress-test"     element={<Navigate to="/admin" replace />} />
               <Route path="/sector-rotation" element={<SectorRotation />} />
               <Route path="/economy"             element={<EconomyMonitor />} />
+              <Route path="/macro-events"        element={<MacroEventHub />} />
               <Route path="/credit-spreads"      element={<CreditSpreads />} />
               <Route path="/credit-delinquencies" element={<CreditDelinquencies />} />
               <Route path="/housing"             element={<HousingMarket />} />

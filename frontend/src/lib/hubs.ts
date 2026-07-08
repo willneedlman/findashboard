@@ -4,7 +4,7 @@ import {
   GitCompare, PieChart, Globe, Scale, Coins, Boxes, RotateCcw, Gem,
   LineChart, BarChart2, Waves, Zap, Shuffle, Percent,
   GitBranch, Landmark, Dices, Gauge, BookOpen, Bell, Workflow, Clock, ArrowLeftRight, Home,
-  Ship, CandlestickChart,
+  Ship, CandlestickChart, Megaphone,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -76,6 +76,7 @@ export const HUBS: Hub[] = [
     tools: [
       { title: 'Rate Engine',    chip: 'Rate Engine',    desc: 'Implied FOMC path and the full yield curve',     route: '/fed',            icon: GitBranch },
       { title: 'Macro Monitor',  chip: 'Macro',          desc: 'Growth, inflation, and labor-market dashboards', route: '/economy',        icon: Compass },
+      { title: 'Event Release Hub', chip: 'Event Hub',   desc: 'CPI, FOMC, payrolls and ECB releases with the immediate cross-asset reaction', route: '/macro-events', icon: Megaphone },
       { title: 'Global Markets', chip: 'Global Markets', desc: 'World indices, FX, commodities, yields, and crypto on one board', route: '/global-markets', icon: Globe },
       { title: 'Bond Analytics', chip: 'Bonds',          desc: 'Yield-to-maturity, duration, and convexity',     route: '/bond',           icon: Landmark },
       { title: 'Bond Lookup',    chip: 'Lookup',         desc: 'Resolve a CUSIP or issuer to bond reference data', route: '/cusip',          icon: BookOpen },
