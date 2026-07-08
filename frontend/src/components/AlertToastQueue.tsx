@@ -15,6 +15,7 @@ function conditionLabel(condition: string, threshold: number): string {
     case 'pct_change_1d_below':  return `1D% < ${threshold}%`
     case 'strategy_entry':        return 'Entry signal fired'
     case 'strategy_exit':         return 'Exit signal fired'
+    case 'macro_event_within_days': return `Macro events within ${threshold}d`
     default:                      return `${condition} ${threshold}`
   }
 }

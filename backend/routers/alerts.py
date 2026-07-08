@@ -205,6 +205,18 @@ _SENTIMENT_CONDITIONS = {"sentiment_above", "sentiment_below"}
 # holds the strategy name for display; the real rules + tickers live in `payload`.
 _STRATEGY_CONDITIONS = {"strategy_entry", "strategy_exit"}
 _STRATEGY_MAX_TICKERS = 15   # cap the fan-out per sweep to bound the fetch cost
+# Macro-event alerts: a daily heads-up when a watched economic event is within N
+# days, read off /macro-calendar. Market-wide (MARKET sentinel). The filter (which
+# events) lives in payload. Default watches the marquee market-movers so routine
+# daily releases don't spam; "monetary" narrows to Fed/Treasury, "high" widens.
+_MACRO_CONDITIONS = {"macro_event_within_days"}
+_MACRO_MARQUEE = frozenset({
+    "FOMC Decision", "FOMC Minutes", "Fed Chair Press Conference", "Fed Beige Book",
+    "CPI (Headline)", "Core CPI (ex Food/Energy)", "Jobs Report (NFP)", "Unemployment Rate",
+    "PCE Price Index", "Core PCE", "GDP (Advance)", "GDP (Preliminary)", "GDP (Final)",
+    "PPI (Final Demand)", "Retail Sales", "ISM Manufacturing PMI", "ISM Services PMI",
+    "Treasury Quarterly Refunding",
+})
 _MARKET_TICKER = "MARKET"
 _SLOW_INTERVAL = 600     # seconds between slow-condition sweeps
 _SLOW_COOLDOWN = 86400   # daily-clock data → at most one fire per day
@@ -341,6 +353,46 @@ def _strategy_triggered_sync(payload_json: str | None, cond: str) -> tuple[bool,
         return False, []
 
 
+def _macro_triggered_sync(payload_json: str | None, days_ahead: float) -> tuple[bool, list[str]]:
+    """Fire when a watched macro event is within `days_ahead` days (inclusive).
+
+    Reads the shared /macro-calendar. `payload.mode` selects the watch set:
+    "marquee" (default market-movers), "monetary" (Fed/Treasury), or "high" (all
+    high-importance); an explicit `payload.labels` list overrides mode. Returns
+    (triggered, ["Label (date)", ...])."""
+    try:
+        from datetime import date
+        from routers.rates import macro_calendar
+        p = json.loads(payload_json) if payload_json else {}
+        mode = p.get("mode", "marquee")
+        labels = set(p.get("labels") or [])
+        n = max(0, int(days_ahead))
+        events = macro_calendar().get("events", [])
+        today = date.today()
+
+        def match(e: dict) -> bool:
+            if labels:
+                return e.get("label") in labels
+            if mode == "monetary":
+                return e.get("category") == "monetary"
+            if mode == "high":
+                return e.get("importance") == "high"
+            return e.get("label") in _MACRO_MARQUEE
+
+        hits: list[str] = []
+        for e in events:
+            try:
+                du = (date.fromisoformat(e["date"]) - today).days
+            except (ValueError, KeyError, TypeError):
+                continue
+            if 0 <= du <= n and match(e):
+                hits.append(f"{e['label']} ({e['date']})")
+        return bool(hits), hits[:8]
+    except Exception as e:
+        _log.warning("macro eval: %s", e)
+        return False, []
+
+
 def _warm_gex_snapshot(ticker: str) -> None:
     """One live GEX profile (20-40s) so a flip level exists for a new alert;
     runs in the pool, off the request path. Daily accrual takes over after.
@@ -392,7 +444,17 @@ async def _run_evaluation_loop():
                     cond = alert["condition"]
                     value = None
                     fired_tickers = None
-                    if cond in _STRATEGY_CONDITIONS:
+                    if cond in _MACRO_CONDITIONS:
+                        if not slow_due:
+                            continue
+                        triggered, fired_tickers = await loop.run_in_executor(
+                            _EXECUTOR, _macro_triggered_sync, alert.get("payload"), alert["threshold"])
+                        if not triggered:
+                            continue
+                        price, pct = 0.0, 0.0
+                        value = "; ".join(fired_tickers)
+                        cooldown = now + _SLOW_COOLDOWN
+                    elif cond in _STRATEGY_CONDITIONS:
                         if not slow_due:
                             continue
                         triggered, fired_tickers = await loop.run_in_executor(
@@ -482,7 +544,8 @@ class AlertCreate(BaseModel):
     payload:   dict | None = None
 
 
-_VALID_CONDITIONS = _QUOTE_CONDITIONS | _INDICATOR_CONDITIONS | _SLOW_CONDITIONS | _STRATEGY_CONDITIONS
+_VALID_CONDITIONS = _QUOTE_CONDITIONS | _INDICATOR_CONDITIONS | _SLOW_CONDITIONS | _STRATEGY_CONDITIONS | _MACRO_CONDITIONS
+_MACRO_MODES = {"marquee", "monetary", "high"}
 
 
 @router.post("")
@@ -506,6 +569,12 @@ async def create_alert(req: AlertCreate):
         name = str(p.get("name") or "Strategy").strip()[:40]
         ticker = name or "Strategy"                    # ticker column = display name
         payload_json = json.dumps({"name": name, "rules": rules, "tickers": tickers})
+    elif req.condition in _MACRO_CONDITIONS:
+        ticker = _MARKET_TICKER          # market-wide
+        p = req.payload or {}
+        mode = p.get("mode") if p.get("mode") in _MACRO_MODES else "marquee"
+        labels = [str(x)[:60] for x in (p.get("labels") or [])][:20]
+        payload_json = json.dumps({"mode": mode, "labels": labels})
     elif req.condition in _SENTIMENT_CONDITIONS:
         ticker = _MARKET_TICKER          # market-wide: no per-ticker input
     else:

@@ -75,6 +75,30 @@ def test_empty_or_malformed_payload_is_safe():
     assert alerts._strategy_triggered_sync(None, "strategy_entry") == (False, [])
 
 
+def test_macro_alert_fires_on_watched_event(monkeypatch):
+    # Mock the calendar so the test is offline and deterministic.
+    import routers.rates as rates
+    from datetime import date, timedelta
+    soon = (date.today() + timedelta(days=1)).isoformat()
+    far = (date.today() + timedelta(days=40)).isoformat()
+    events = [
+        {"date": soon, "label": "CPI (Headline)", "category": "inflation", "importance": "high"},
+        {"date": soon, "label": "Initial Jobless Claims", "category": "employment", "importance": "high"},
+        {"date": far, "label": "FOMC Decision", "category": "monetary", "importance": "high"},
+    ]
+    monkeypatch.setattr(rates, "macro_calendar", lambda: {"events": events})
+
+    # marquee within 2d: CPI is a marquee mover, jobless claims is not.
+    ok, hits = alerts._macro_triggered_sync(json.dumps({"mode": "marquee"}), 2)
+    assert ok and any("CPI" in h for h in hits) and not any("Jobless" in h for h in hits)
+    # monetary within 2d: nothing (FOMC is 40d out).
+    ok2, _ = alerts._macro_triggered_sync(json.dumps({"mode": "monetary"}), 2)
+    assert not ok2
+    # high within 2d: includes jobless claims too.
+    ok3, hits3 = alerts._macro_triggered_sync(json.dumps({"mode": "high"}), 2)
+    assert ok3 and any("Jobless" in h for h in hits3)
+
+
 def test_create_validates_rules_and_tickers():
     import asyncio
     from fastapi import HTTPException

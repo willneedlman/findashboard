@@ -29,13 +29,21 @@ const CONDITIONS = [
   { value: 'sentiment_below',       label: 'Market sentiment below (0-100)' },
   { value: 'strategy_entry',        label: 'Strategy entry signal fires' },
   { value: 'strategy_exit',         label: 'Strategy exit signal fires' },
+  { value: 'macro_event_within_days', label: 'Macro event within (days)' },
 ]
 
 // Market-wide conditions take no ticker; the flip cross takes no threshold.
-const noTicker = (cond: string) => cond.startsWith('sentiment')
+const noTicker = (cond: string) => cond.startsWith('sentiment') || cond === 'macro_event_within_days'
 const noThreshold = (cond: string) => cond === 'price_cross_gex_flip' || cond.startsWith('strategy')
 // Strategy alerts run a saved custom strategy's rules across a ticker list.
 const isStrategy = (cond: string) => cond.startsWith('strategy')
+// Macro-event alerts watch the economic calendar for upcoming releases.
+const isMacro = (cond: string) => cond === 'macro_event_within_days'
+const MACRO_MODES: { value: string; label: string; hint: string }[] = [
+  { value: 'marquee',  label: 'Major movers',  hint: 'FOMC, CPI, jobs, PCE, GDP, ISM' },
+  { value: 'monetary', label: 'Fed / Treasury', hint: 'FOMC, minutes, Beige Book, refunding' },
+  { value: 'high',     label: 'All high-impact', hint: 'every high-importance release' },
+]
 
 // Parse a free-text ticker list ("aapl, MSFT nvda") into deduped uppercase symbols.
 function parseTickerList(raw: string): string[] {
@@ -50,7 +58,8 @@ function parseTickerList(raw: string): string[] {
 // ~10 min and re-fire at most daily; the rest check every ~30s with a 1h cooldown.
 const isSlow = (cond: string) =>
   cond.startsWith('iv_rank') || cond.startsWith('sentiment') ||
-  cond === 'price_cross_gex_flip' || cond === 'earnings_within_days' || cond.startsWith('strategy')
+  cond === 'price_cross_gex_flip' || cond === 'earnings_within_days' || cond.startsWith('strategy') ||
+  cond === 'macro_event_within_days'
 
 interface StrategyPayload { name: string; tickers: string[]; rules: unknown }
 interface Alert {
@@ -61,12 +70,16 @@ interface Alert {
   active:        number
   cooldown_until: number
   created_at:    number
-  payload?:      string | null   // strategy_* only: JSON {name, rules, tickers}
+  payload?:      string | null   // strategy_* : {name,rules,tickers}; macro_* : {mode,labels}
 }
 
 function parseStrategyPayload(raw?: string | null): StrategyPayload | null {
   if (!raw) return null
   try { const p = JSON.parse(raw); return Array.isArray(p.tickers) ? p : null } catch { return null }
+}
+function parseMacroPayload(raw?: string | null): { mode: string; labels: string[] } | null {
+  if (!raw) return null
+  try { const p = JSON.parse(raw); return typeof p.mode === 'string' ? { mode: p.mode, labels: p.labels ?? [] } : null } catch { return null }
 }
 interface Quote { current_price: number; pct_change_1d: number | null }
 
@@ -90,6 +103,7 @@ function conditionLabel(cond: string, threshold: number): string {
     case 'sentiment_below':       return `Sentiment < ${threshold}`
     case 'strategy_entry':        return 'Entry signal fires'
     case 'strategy_exit':         return 'Exit signal fires'
+    case 'macro_event_within_days': return `Macro event within ${threshold}d`
     default:                      return `${cond} ${threshold}`
   }
 }
@@ -98,7 +112,7 @@ function thresholdLabel(cond: string): string {
   if (cond.startsWith('rsi')) return 'RSI level (0–100)'
   if (cond.startsWith('iv_rank')) return 'IV rank (0-100)'
   if (cond.startsWith('sentiment')) return 'Composite score (0-100)'
-  if (cond === 'earnings_within_days') return 'Days ahead'
+  if (cond === 'earnings_within_days' || cond === 'macro_event_within_days') return 'Days ahead'
   if (cond.includes('sma')) return 'SMA period (days)'
   if (cond.includes('pct')) return 'Threshold (%)'
   return 'Threshold ($)'
@@ -144,6 +158,7 @@ export default function Alerts() {
   const [stratName, setStratName] = useState(() => savedStrategies[0]?.name ?? '')
   const [stratTickers, setStratTickers] = useState('')
   const parsedStratTickers = useMemo(() => parseTickerList(stratTickers), [stratTickers])
+  const [macroMode, setMacroMode] = useState('marquee')
 
   useEffect(() => {
     if (!('Notification' in window)) setNotifState('unsupported')
@@ -187,6 +202,12 @@ export default function Alerts() {
         user_id: user.id, ticker: def.name, condition, threshold: 0,
         payload: { name: def.name, rules: { buy: def.buy, sell: def.sell }, tickers: parsedStratTickers },
       })
+      return
+    }
+    if (isMacro(condition)) {
+      const days = parseFloat(threshold)
+      if (isNaN(days)) return
+      createMut.mutate({ user_id: user.id, ticker: 'MARKET', condition, threshold: days, payload: { mode: macroMode } })
       return
     }
     const sym = noTicker(condition) ? 'MARKET' : ticker.trim().toUpperCase()
@@ -329,6 +350,23 @@ export default function Alerts() {
                     </div>
                   </>
                 )}
+                {isMacro(condition) && (
+                  <div>
+                    <label style={lbl}>Watch</label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                      {MACRO_MODES.map(mo => {
+                        const on = macroMode === mo.value
+                        return (
+                          <button key={mo.value} onClick={() => setMacroMode(mo.value)}
+                            style={{ textAlign: 'left', cursor: 'pointer', padding: '6px 9px', background: on ? T.goldTint(12) : 'transparent', border: `1px solid ${on ? T.gold : T.border}` }}>
+                            <div style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: on ? T.gold : T.text }}>{mo.label}</div>
+                            <div style={{ fontFamily: T.label, fontSize: 9, color: T.muted, marginTop: 2 }}>{mo.hint}</div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
                 {!noThreshold(condition) && (
                   <div>
                     <label style={lbl}>{thresholdLabel(condition)}</label>
@@ -341,7 +379,9 @@ export default function Alerts() {
                   {createMut.isPending ? 'Creating…' : '+ Add Alert'}
                 </button>
                 <div style={{ fontFamily: T.label, fontSize: 9, color: T.muted, lineHeight: 1.6, marginTop: 2 }}>
-                  {isStrategy(condition)
+                  {isMacro(condition)
+                    ? 'A daily heads-up when a watched economic release is within your window. Reads the macro calendar, fires at most once per day, and names what is coming. "Major movers" stays quiet between the big prints; "All high-impact" includes weekly claims.'
+                    : isStrategy(condition)
                     ? `The server runs this saved strategy's ${condition === 'strategy_entry' ? 'entry' : 'exit'} rules across the tickers above on daily bars, about every 10 minutes. It fires when the ${condition === 'strategy_entry' ? 'entry' : 'exit'} signal triggers on any of them, naming which, and fires at most once per day. Build and backtest strategies in the Algorithmic Strategy Builder.`
                     : isSlow(condition)
                     ? 'This condition reads daily data (IV rank, gamma flip, sentiment, earnings dates). The server checks it about every 10 minutes and it fires at most once per day. IV rank needs about 20 accrued daily points before it can trigger.'
@@ -369,7 +409,9 @@ export default function Alerts() {
                 const cd = isCooldown(alert)
                 const cooldownMin = cd ? Math.ceil((alert.cooldown_until - now) / 60) : 0
                 const sp = isStrategy(alert.condition) ? parseStrategyPayload(alert.payload) : null
-                const q = sp ? undefined : quotes?.[alert.ticker]
+                const mp = isMacro(alert.condition) ? parseMacroPayload(alert.payload) : null
+                const macroModeLabel = mp ? (MACRO_MODES.find(m => m.value === mp.mode)?.label ?? mp.mode) : ''
+                const q = (sp || mp) ? undefined : quotes?.[alert.ticker]
                 const isPct = alert.condition.includes('pct')
                 const readLabel = isPct ? '1D Change' : 'Last'
                 let readValue = '—', readColor = T.text
@@ -405,16 +447,17 @@ export default function Alerts() {
                       </div>
                       <div style={{ fontFamily: T.mono, fontSize: 9, color: T.muted }}>
                         {sp && <span style={{ color: T.text }}>Watching {sp.tickers.join(', ')} · </span>}
+                        {mp && <span style={{ color: T.text }}>Watching {macroModeLabel} · </span>}
                         {cd
-                          ? (sp ? 'Fired today, re-checks tomorrow' : `Cooldown ends ${new Date(alert.cooldown_until * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`)
-                          : 'Armed'}{!sp && ` · created ${new Date(alert.created_at * 1000).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}`}
+                          ? (sp || mp ? 'Fired today, re-checks tomorrow' : `Cooldown ends ${new Date(alert.cooldown_until * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`)
+                          : 'Armed'}{!sp && !mp && ` · created ${new Date(alert.created_at * 1000).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}`}
                       </div>
                     </div>
 
                     {/* Value readout */}
                     <div style={{ flexShrink: 0, textAlign: 'right' }}>
-                      <div style={{ fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.muted, marginBottom: 3 }}>{sp ? 'Watching' : readLabel}</div>
-                      <div style={{ fontFamily: T.mono, fontSize: 13, fontWeight: 700, color: sp ? T.text : readColor }}>{sp ? `${sp.tickers.length} name${sp.tickers.length === 1 ? '' : 's'}` : readValue}</div>
+                      <div style={{ fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.muted, marginBottom: 3 }}>{sp ? 'Watching' : mp ? 'Window' : readLabel}</div>
+                      <div style={{ fontFamily: T.mono, fontSize: 13, fontWeight: 700, color: (sp || mp) ? T.text : readColor }}>{sp ? `${sp.tickers.length} name${sp.tickers.length === 1 ? '' : 's'}` : mp ? `${alert.threshold}d` : readValue}</div>
                     </div>
 
                     {/* Actions */}
