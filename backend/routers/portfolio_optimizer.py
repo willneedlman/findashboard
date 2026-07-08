@@ -173,7 +173,10 @@ def optimize(req: OptimizeRequest):
     tickers = list(returns.columns)
     rf = req.risk_free_rate / 100.0
 
-    mu = returns.mean().to_numpy() * _TRADING_DAYS               # annualized return
+    # Geometric (compound) annualized return per asset — the realized return.
+    # Arithmetic mean × 252 massively overstates volatile names (volatility drag),
+    # which inflated the expected-return stat and the frontier's top end.
+    mu = np.expm1(np.log1p(returns.clip(lower=-0.99)).mean().to_numpy() * _TRADING_DAYS)
     cov = returns.cov().to_numpy() * _TRADING_DAYS               # annualized covariance
     n = len(tickers)
 

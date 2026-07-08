@@ -52,6 +52,23 @@ interface OptResult {
 
 const startFor = (years: number) => { const d = new Date(); d.setFullYear(d.getFullYear() - years); return d.toISOString().slice(0, 10) }
 
+// Names the hovered point — a ticker for asset dots, the portfolio label for the
+// diamonds/star, or "Frontier" for the frontier line.
+function ChartTip({ active, payload }: { active?: boolean; payload?: { payload: { ticker?: string; label?: string; key?: string; return?: number; vol?: number; sharpe?: number } }[] }) {
+  if (!active || !payload?.length) return null
+  const p = payload[0].payload
+  const name = p.ticker || p.label || 'Efficient frontier'
+  const color = p.key === 'current' ? NEG : p.ticker ? BLUE : GOLD
+  return (
+    <div style={{ background: SURFACE, border: `1px solid ${GOLD}`, padding: '6px 9px', fontFamily: MONO, fontSize: 10 }}>
+      <div style={{ color, fontWeight: 700, marginBottom: 2 }}>{name}</div>
+      {p.return != null && <div style={{ color: TEXT }}>Return {p.return.toFixed(1)}%</div>}
+      {p.vol != null && <div style={{ color: SEC }}>Vol {p.vol.toFixed(1)}%</div>}
+      {p.sharpe != null && <div style={{ color: SEC }}>Sharpe {p.sharpe.toFixed(2)}</div>}
+    </div>
+  )
+}
+
 export function PortfolioOptimizerContent() {
   const [tickers, setTickers] = useState<string[]>(['AAPL', 'MSFT', 'NVDA', 'TLT', 'GLD'])
   const [lookback, setLookback] = useState(3)
@@ -117,6 +134,22 @@ export function PortfolioOptimizerContent() {
   const portScatter = useMemo(() => data ? PORTFOLIOS.map(p => ({ ...data.portfolios[p.key], label: p.label, key: p.key })) : [], [data])
   const currentScatter = useMemo(() => data?.portfolios.current
     ? [{ ...data.portfolios.current, label: 'Your Portfolio', key: 'current' }] : [], [data])
+
+  // Axis domains fitted to the data (padded) so the frontier always fills the
+  // chart instead of hugging a corner of a 0-anchored axis.
+  const [xDom, yDom] = useMemo(() => {
+    const def: [[number, number], [number, number]] = [[0, 1], [0, 1]]
+    if (!data) return def
+    const pts = [...data.frontier, ...data.assets, ...portScatter, ...currentScatter]
+    if (!pts.length) return def
+    const fit = (arr: number[], clampLo?: number): [number, number] => {
+      const lo = Math.min(...arr), hi = Math.max(...arr)
+      const pad = (Math.abs(hi - lo) || Math.abs(hi) || 1) * 0.1
+      const a = lo - pad
+      return [clampLo != null ? Math.max(clampLo, a) : a, hi + pad]
+    }
+    return [fit(pts.map(p => p.vol), 0), fit(pts.map(p => p.return))]
+  }, [data, portScatter, currentScatter])
 
   return (
     <SidebarLayout sidebarWidth={230} sidebarTitle="" sidebar={<div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -218,14 +251,10 @@ export function PortfolioOptimizerContent() {
                 <ResponsiveContainer width="100%" height={300}>
                   <ScatterChart margin={{ top: 8, right: 12, bottom: 24, left: 4 }}>
                     <CartesianGrid stroke="rgba(255,255,255,0.05)" />
-                    <XAxis type="number" dataKey="vol" name="Volatility" unit="%" tick={{ fontFamily: MONO, fontSize: 9, fill: SEC }} tickLine={false} axisLine={{ stroke: BORDER }} label={{ value: 'Volatility (annual %)', position: 'insideBottom', offset: -12, fontFamily: SANS, fontSize: 9, fill: FAINT }} />
-                    <YAxis type="number" dataKey="return" name="Return" unit="%" tick={{ fontFamily: MONO, fontSize: 9, fill: SEC }} tickLine={false} axisLine={{ stroke: BORDER }} width={38} label={{ value: 'Return', angle: -90, position: 'insideLeft', fontFamily: SANS, fontSize: 9, fill: FAINT }} />
+                    <XAxis type="number" dataKey="vol" name="Volatility" domain={xDom} allowDataOverflow tick={{ fontFamily: MONO, fontSize: 9, fill: SEC }} tickLine={false} axisLine={{ stroke: BORDER }} tickFormatter={(v: number) => `${v.toFixed(0)}%`} label={{ value: 'Volatility (annual %)', position: 'insideBottom', offset: -12, fontFamily: SANS, fontSize: 9, fill: FAINT }} />
+                    <YAxis type="number" dataKey="return" name="Return" domain={yDom} allowDataOverflow tick={{ fontFamily: MONO, fontSize: 9, fill: SEC }} tickLine={false} axisLine={{ stroke: BORDER }} width={40} tickFormatter={(v: number) => `${v.toFixed(0)}%`} label={{ value: 'Return', angle: -90, position: 'insideLeft', fontFamily: SANS, fontSize: 9, fill: FAINT }} />
                     <ZAxis range={[60, 60]} />
-                    <Tooltip cursor={{ strokeDasharray: '3 3' }}
-                      contentStyle={{ background: SURFACE, border: `1px solid ${GOLD}`, fontFamily: MONO, fontSize: 10, color: TEXT }}
-                      itemStyle={{ color: TEXT }} labelStyle={{ color: SEC }}
-                      formatter={(v: number, n: string) => [`${v.toFixed(2)}%`, n]}
-                      labelFormatter={() => ''} />
+                    <Tooltip cursor={{ strokeDasharray: '3 3' }} content={<ChartTip />} />
                     <Scatter name="Frontier" data={data.frontier} line={{ stroke: FAINT, strokeWidth: 1 }} fill={FAINT} shape="circle" />
                     <Scatter name="Assets" data={data.assets} fill={BLUE} shape="circle" />
                     <Scatter name="Portfolios" data={portScatter} fill={GOLD} shape="diamond">
