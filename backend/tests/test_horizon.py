@@ -88,6 +88,15 @@ def test_count_split_strictly_above_half():
     assert fc == 1 and bc == 1  # 0.6 forward; 0.5 (no markers) counts backward
 
 
+def test_strong_forward_marker_outweighs_weak_backward():
+    # A decisive forward cue (guidance / next quarter) beats an incidental past
+    # reference, instead of splitting 50/50 on raw marker counts.
+    assert forward_looking_weight("Nvidia beat estimates but guidance points to a strong next quarter") > 0.5
+    assert forward_looking_weight("Fed warns of recession risk ahead") == 1.0
+    # A decisive backward cue still wins when forward side is only weak/absent.
+    assert forward_looking_weight("Stocks fell after data shows a slowdown") < 0.5
+
+
 def test_reported_headlines_are_backward():
     for t in [
         "Small-cap stocks enjoy their best first half in 35 years. Here's what's driving it",

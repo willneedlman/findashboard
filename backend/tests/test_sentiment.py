@@ -433,6 +433,25 @@ def test_eval_dataset_is_well_formed():
     assert all(it["expected"] in {"bullish", "bearish", "neutral"} for it in items)
 
 
+def test_signal_weighting_fades_neutral_news(monkeypatch):
+    from sentiment import aggregate
+    # A neutral article barely counts; a decisive one carries near-full weight.
+    neutral = _scored("A", "a", "neutral headline", 50, 3)          # direction 0.0
+    bearish = _scored("B", "b", "clear crash", 20, 3)               # direction -0.6
+    assert aggregate._signal_from_direction(0.0) < aggregate._signal_from_direction(0.6)
+    wn = aggregate._article_weight(neutral, 1.0)
+    wb = aggregate._article_weight(bearish, 1.0)
+    assert wb > wn * 3, "directional article should dominate a neutral one"
+
+
+def test_all_neutral_composite_stays_neutral_not_zero():
+    from sentiment import aggregate
+    # Degenerate guard: an all-neutral window must average to ~50, never 0.
+    arts = [_scored("A", "a", f"flat {i}", 50, 3) for i in range(4)]
+    comp, direction, path = aggregate.composite([], {}, arts, {})
+    assert 45 <= comp <= 55 and path == "article-level"
+
+
 def test_eval_lexicon_accuracy_floor():
     # Regression floor: a future lexicon edit must not silently tank aggregate
     # accuracy on the labeled set. Offline == lexicon only (no LLM).

@@ -24,13 +24,27 @@ def _corr(corroboration: dict[str, float], a: ScoredArticle) -> float:
     return corroboration.get(f"{a.source_key}::{a.title}", 1.0)
 
 
+def _signal_from_direction(direction: float) -> float:
+    """Neutral (|direction|~0) → SIGNAL_FLOOR; a decisive read (|direction| >=
+    SIGNAL_FULL) → 1.0. Non-zero floor keeps an all-neutral set from dividing by
+    zero. Shared by the article weight and the source-level composite so neutral
+    news and net-neutral sources both fade out."""
+    mag = min(1.0, abs(direction) / config.SIGNAL_FULL) if config.SIGNAL_FULL else 1.0
+    return config.SIGNAL_FLOOR + (1.0 - config.SIGNAL_FLOOR) * mag
+
+
+def _signal_factor(a: ScoredArticle) -> float:
+    return _signal_from_direction(a.direction)
+
+
 def _article_weight(a: ScoredArticle, corr: float) -> float:
-    """tier^EXP · confidence · recency · market_impact · corroboration."""
+    """tier^EXP · confidence · recency · market_impact · corroboration · signal."""
     return float(
         (a.macro_tier ** config.TIER_EXPONENT)
         * a.confidence
         * a.recency_weight
         * a.market_impact_weight
+        * _signal_factor(a)
         * corr
     )
 
@@ -133,7 +147,11 @@ def composite(
     n = len(qualifying)
     if n >= 2:
         base = 1.0 / n
-        effs = [base * eff_weight_by_label.get(s.label, s.weight) for s in qualifying]
+        # Fold in a per-source signal factor so a net-neutral source (avg_direction
+        # ~0, avg_score ~50) barely dilutes the composite — only sources carrying a
+        # directional read drive it.
+        effs = [base * eff_weight_by_label.get(s.label, s.weight) * _signal_from_direction(s.avg_direction)
+                for s in qualifying]
         tote = sum(effs) or 1.0
         comp = sum(s.avg_score * e for s, e in zip(qualifying, effs)) / tote
         direction = sum(s.avg_direction * s.avg_tier * e for s, e in zip(qualifying, effs)) / tote

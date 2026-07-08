@@ -80,6 +80,28 @@ SOURCE_MATRIX: tuple[SourceSpec, ...] = (
                "https://www.benzinga.com/feed"),
     SourceSpec("rss:investing-economy", "Investing.com Economy", "rss", 2, 1.0,
                "https://www.investing.com/rss/news_14.rss"),
+    # Primary / official — highest authority: a rate decision or enforcement
+    # action should move the composite hard. Low volume, high signal.
+    SourceSpec("rss:fed-press", "Federal Reserve", "rss", 1, 1.5,
+               "https://www.federalreserve.gov/feeds/press_all.xml"),
+    SourceSpec("rss:sec-press", "SEC Press", "rss", 1, 1.4,
+               "https://www.sec.gov/news/pressreleases.rss"),
+    SourceSpec("rss:ecb-press", "ECB Press", "rss", 1, 1.2,
+               "https://www.ecb.europa.eu/rss/press.html"),
+    # Quality outlets not previously covered (headline-only is fine — we only score titles).
+    SourceSpec("rss:economist", "The Economist", "rss", 1, 1.2,
+               "https://www.economist.com/finance-and-economics/rss.xml"),
+    SourceSpec("rss:ft-home", "Financial Times", "rss", 1, 1.3,
+               "https://www.ft.com/rss/home"),
+    SourceSpec("rss:axios", "Axios", "rss", 2, 1.0,
+               "https://api.axios.com/feed/"),
+    # Crypto — feeds the by_asset_class Crypto read.
+    SourceSpec("rss:coindesk", "CoinDesk", "rss", 2, 0.9,
+               "https://www.coindesk.com/arc/outboundfeeds/rss/"),
+    # Broad aggregator — surfaces Reuters/AP/Bloomberg indirectly; when:1d keeps it
+    # fresh (Google News search feeds otherwise skew stale). Dedup collapses overlap.
+    SourceSpec("rss:google-markets", "Google News Markets", "rss", 2, 1.0,
+               "https://news.google.com/rss/search?q=stock+market+OR+Federal+Reserve+OR+%22S%26P+500%22+when:1d&hl=en-US&gl=US&ceid=US:en"),
     SourceSpec("reddit:investing", "Reddit/Investing", "reddit", 3, 1.2,
                "investing", confidence_cap=0.3),
     SourceSpec("reddit:stocks", "Reddit/Stocks", "reddit", 3, 1.0,
@@ -118,6 +140,14 @@ NEGATION_WINDOW: int = 3            # tokens around a term scanned for negators
 TIER_EXPONENT: float = 1.2
 DECAY_HALFLIFE_RATIO: float = 1.0 / 3.0   # half-life = timeframe / 3
 CORROBORATION_DISCOUNT: float = 0.5       # weight multiplier for an isolated spike
+# Signal-magnitude weighting: a directionless (neutral) headline should barely
+# move the composite. Article weight is scaled by SIGNAL_FLOOR + (1-FLOOR)·
+# min(1, |direction|/SIGNAL_FULL): a |direction|>=SIGNAL_FULL item gets full weight,
+# a neutral (|direction|~0) item keeps only SIGNAL_FLOOR. The floor is deliberately
+# non-zero so an all-neutral window still averages to a real (neutral) score rather
+# than dividing by zero. Raising the floor makes neutral news matter more.
+SIGNAL_FLOOR: float = 0.15
+SIGNAL_FULL: float = 0.45
 SHINGLE_K: int = 3                        # token shingle size for dedup
 SHINGLE_SIMILARITY: float = 0.6           # Jaccard >= this => same cluster
 # Paraphrase clustering: headlines that reword the same event (different titles,
