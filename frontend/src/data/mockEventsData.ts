@@ -28,7 +28,8 @@ export interface MacroEvent {
   impact: Impact
   status: EventStatus
   actual: string | null  // null until released
-  expected: string | null // consensus, when the data tier provides it (FRED does not)
+  expected: string | null // forecast, when a free source provides one (GDPNow, futures-implied)
+  expectedLabel?: string | null // what the expected figure is (e.g. "GDPNow", "Mkt implied"); defaults to "Consensus"
   previous: string
   summary: string        // brief AI-style read, spartan voice
   sourceName: string

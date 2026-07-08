@@ -71,7 +71,7 @@ export default function EventCard({ event }: { event: MacroEvent }) {
       {/* Numbers */}
       <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', paddingBottom: 2 }}>
         <Stat label="Actual" value={event.actual ?? '—'} accent={upcoming ? T.muted : T.gold} />
-        {event.expected != null && <Stat label="Consensus" value={event.expected} />}
+        {event.expected != null && <Stat label={event.expectedLabel || 'Consensus'} value={event.expected} accent={T.blue} />}
         <Stat label="Previous" value={event.previous} />
       </div>
 

@@ -40,7 +40,7 @@ _RELEASES = [
     {"key": "pce", "name": "Core PCE Price Index", "release_id": 21, "series": "PCEPILFE", "units": "pc1", "fmt": "yoy", "freq": "m", "impact": "High", "category": "Inflation", "source": "BEA", "url": "https://www.bea.gov/data/personal-consumption-expenditures-price-index"},
     {"key": "nfp", "name": "Non-Farm Payrolls", "release_id": 50, "series": "PAYEMS", "units": "chg", "fmt": "k", "freq": "m", "impact": "High", "category": "Labor", "source": "BLS", "url": "https://www.bls.gov/ces/"},
     {"key": "unrate", "name": "Unemployment Rate", "release_id": 50, "series": "UNRATE", "units": "lin", "fmt": "pct", "freq": "m", "impact": "High", "category": "Labor", "source": "BLS", "url": "https://www.bls.gov/cps/"},
-    {"key": "gdp", "name": "Real GDP Growth", "release_id": 53, "series": "A191RL1Q225SBEA", "units": "lin", "fmt": "pct", "freq": "q", "impact": "Medium", "category": "Growth", "source": "BEA", "url": "https://www.bea.gov/data/gdp/gross-domestic-product"},
+    {"key": "gdp", "name": "Real GDP Growth", "release_id": 53, "series": "A191RL1Q225SBEA", "units": "lin", "fmt": "pct", "freq": "q", "impact": "Medium", "category": "Growth", "source": "BEA", "url": "https://www.bea.gov/data/gdp/gross-domestic-product", "nowcast": "GDPNOW", "nowcast_label": "GDPNow"},
     {"key": "indpro", "name": "Industrial Production", "release_id": 13, "series": "INDPRO", "units": "pch", "fmt": "mom", "freq": "m", "impact": "Low", "category": "Growth", "source": "Federal Reserve", "url": "https://www.federalreserve.gov/releases/g17/current/", "time": "09:15"},
 ]
 
@@ -237,7 +237,7 @@ def _fomc_drafts(today: str) -> tuple[list[dict], str | None]:
         nxt = future[0]
         exp = _fomc_expectation(nxt)
         drafts.append({"r": meta, "status": "upcoming", "date": nxt,
-                       "actual": None, "expected": exp, "previous": current,
+                       "actual": None, "expected": exp, "expected_label": "Mkt implied", "previous": current,
                        "period": _period_label(nxt, "m"),
                        "summary": f"Next FOMC decision. Current target range is {current}."
                                   + (f" Futures imply {exp}." if exp else "")})
@@ -273,10 +273,21 @@ def _build() -> dict:
                                       f"{_direction(actual_v, prev_v)} the {_fmt(r['fmt'], prev_v)} prior read."})
         if future:
             up_period = _next_period_label(obs_date, r["freq"])
+            # Some releases have a free official nowcast that maps to the next print
+            # (e.g. Atlanta Fed GDPNow for the upcoming GDP advance estimate).
+            exp = exp_label = None
+            nc_note = ""
+            if r.get("nowcast"):
+                nc = _series_obs(r["nowcast"], "lin", limit=1)
+                if nc:
+                    exp = _fmt(r["fmt"], nc[0][1])
+                    exp_label = r["nowcast_label"]
+                    nc_note = f" {exp_label} tracks {exp}."
             drafts.append({"r": r, "status": "upcoming", "date": future[0],
-                           "actual": None, "previous": _fmt(r["fmt"], actual_v), "period": up_period,
+                           "actual": None, "expected": exp, "expected_label": exp_label,
+                           "previous": _fmt(r["fmt"], actual_v), "period": up_period,
                            "summary": f"Next {r['name']} release covers {up_period}. "
-                                      f"The prior print was {_fmt(r['fmt'], actual_v)} for {period}."})
+                                      f"The prior print was {_fmt(r['fmt'], actual_v)} for {period}." + nc_note})
 
     # FOMC decisions reuse the Rate Engine's schedule + implied path.
     fomc_drafts, fomc_released = _fomc_drafts(today)
@@ -297,14 +308,15 @@ def _build() -> dict:
             "datetime": f"{d['date']}T{t}:00{_TZ}",
             "displayTime": f"{_MONTHS[int(d['date'][5:7]) - 1]} {int(d['date'][8:10])}, {d['date'][:4]} · {t} ET",
             "impact": r["impact"], "status": d["status"],
-            "actual": d["actual"], "expected": d.get("expected"), "previous": d["previous"],
+            "actual": d["actual"], "expected": d.get("expected"), "expectedLabel": d.get("expected_label"),
+            "previous": d["previous"],
             "summary": d["summary"],
             "sourceName": r["source"], "sourceUrl": r["url"],
             "reactions": reactions.get(d["date"], []) if d["status"] == "released" else [],
         })
 
     return {"events": events, "source": "FRED", "as_of": datetime.utcnow().isoformat() + "Z",
-            "note": "Live US releases from FRED plus FOMC from the Rate Engine. Reaction is the release-day cross-asset move. Economic-release consensus is not published on this tier; the FOMC call is futures-implied."}
+            "note": "Live US releases from FRED plus FOMC from the Rate Engine. Reaction is the release-day cross-asset move. Where a free official forecast exists it is shown and labeled (GDPNow for GDP, futures-implied for FOMC); paid street consensus for the monthly prints is not on this tier."}
 
 
 @router.get("")
