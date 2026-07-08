@@ -30,8 +30,9 @@ class OptimizeRequest(BaseModel):
     end: str = "2025-12-31"
     risk_free_rate: float = 4.0      # annual %, for Sharpe + tangency
     long_only: bool = True           # False allows shorts (weights in [-1, 1])
-    # Optional imported portfolio: [{ticker, shares}] → plotted against the optimum.
-    holdings: list[dict] | None = None
+    # Optional current portfolio: {ticker: weight} (any scale, normalized) → scored
+    # and plotted against the optimum so the user sees where they sit.
+    weights: dict[str, float] | None = None
 
     @model_validator(mode="after")
     def _validate(self):
@@ -163,7 +164,7 @@ def _port_payload(w, tickers, mu, cov, rf, returns):
 
 @router.post("/optimize")
 def optimize(req: OptimizeRequest):
-    returns, last_prices = _aligned_returns(req.tickers, req.start, req.end)
+    returns, _last = _aligned_returns(req.tickers, req.start, req.end)
     tickers = list(returns.columns)
     rf = req.risk_free_rate / 100.0
 
@@ -180,13 +181,13 @@ def optimize(req: OptimizeRequest):
     ):
         portfolios[name] = _port_payload(w, tickers, mu, cov, rf, returns)
 
-    # Imported portfolio: value-weight the supplied share holdings at the last
-    # close, then score it on the same frontier so the user sees where they sit.
-    if req.holdings:
-        shares = {str(h.get("ticker", "")).upper(): float(h.get("shares", 0) or 0) for h in req.holdings}
-        vals = np.array([shares.get(t, 0.0) * float(last_prices.get(t, 0.0)) for t in tickers])
-        if vals.sum() > 0:
-            portfolios["imported"] = _port_payload(vals / vals.sum(), tickers, mu, cov, rf, returns)
+    # Current portfolio: normalize the supplied weights and score them on the same
+    # frontier so the user sees where their allocation sits vs the optimum.
+    if req.weights:
+        wmap = {str(k).upper(): float(v) for k, v in req.weights.items() if v}
+        w_cur = np.array([wmap.get(t, 0.0) for t in tickers])
+        if w_cur.sum() > 0:
+            portfolios["current"] = _port_payload(w_cur / w_cur.sum(), tickers, mu, cov, rf, returns)
 
     return {
         "tickers": tickers,

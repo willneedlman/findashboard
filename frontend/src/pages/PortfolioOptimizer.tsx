@@ -8,6 +8,7 @@ import EmptyState from '../components/EmptyState'
 import TickerTagInput from '../components/TickerTagInput'
 import { KpiCell } from '../components/mmCockpit'
 import Provenance from '../components/Provenance'
+import { usePortfolio } from '../contexts/PortfolioContext'
 
 const GOLD = 'var(--theme-primary, #c9a84c)'
 const BLUE = 'var(--theme-tertiary, #60a5fa)'
@@ -55,8 +56,10 @@ export function PortfolioOptimizerContent() {
   const [rf, setRf] = useState('4.00')
   const [longOnly, setLongOnly] = useState(true)
   const [selected, setSelected] = useState('max_sharpe')
-  const [holdings, setHoldings] = useState<{ ticker: string; shares: number }[] | null>(null)
+  // Per-ticker weights (%) define the CURRENT portfolio, plotted against the optimum.
+  const [weights, setWeights] = useState<Record<string, number>>({})
   const [importMsg, setImportMsg] = useState('')
+  const { holdings } = usePortfolio()   // shared portfolio (weights), same as Monte Carlo
 
   // Auto-populate the risk-free rate from the live Treasury curve (3-month bill).
   useEffect(() => {
@@ -66,53 +69,81 @@ export function PortfolioOptimizerContent() {
     }).catch(() => { /* keep the default */ })
   }, [])
 
-  // Import the Portfolio Manager holdings: set the basket + keep the share weights
-  // so the backend can plot the imported portfolio against the optimum.
+  // Import the shared portfolio (the one Monte Carlo / Portfolio IO use): set the
+  // basket AND the current weights so the backend can plot it against the optimum.
   const importPortfolio = () => {
-    try {
-      const raw = JSON.parse(localStorage.getItem('ft-portfolio-manager') || '[]')
-      const hold = (Array.isArray(raw) ? raw : [])
-        .filter((x: { ticker?: string; shares?: number }) => x.ticker && Number(x.shares) > 0)
-        .map((x: { ticker: string; shares: number }) => ({ ticker: String(x.ticker).toUpperCase(), shares: Number(x.shares) }))
-      const uniq = [...new Map(hold.map((h: { ticker: string; shares: number }) => [h.ticker, h])).values()] as { ticker: string; shares: number }[]
-      if (uniq.length < 2) { setImportMsg('Need 2+ holdings in Portfolio Manager to import.'); return }
-      setHoldings(uniq)
-      setTickers(uniq.map(h => h.ticker))
-      setImportMsg(`Imported ${uniq.length} holdings.`)
-    } catch { setImportMsg('Could not read Portfolio Manager holdings.') }
+    const hold = (holdings ?? []).filter(h => h.ticker && Number(h.weight) > 0)
+    if (hold.length < 2) { setImportMsg('No saved portfolio found (add holdings in Monte Carlo or import a portfolio first).'); return }
+    setTickers(hold.map(h => h.ticker.toUpperCase()))
+    setWeights(Object.fromEntries(hold.map(h => [h.ticker.toUpperCase(), Number(h.weight)])))
+    setImportMsg(`Imported ${hold.length} holdings with weights.`)
   }
-  const onTickers = (t: string[]) => { setTickers(t); setHoldings(null); setImportMsg('') }
+  const onTickers = (t: string[]) => {
+    setTickers(t)
+    // Keep weights only for tickers still in the set.
+    setWeights(w => Object.fromEntries(Object.entries(w).filter(([k]) => t.includes(k))))
+    setImportMsg('')
+  }
+  const setWeight = (t: string, v: number) => setWeights(w => ({ ...w, [t]: Math.max(0, v) }))
+  const evenWeights = () => setWeights(Object.fromEntries(tickers.map(t => [t, +(100 / tickers.length).toFixed(1)])))
+  const totalW = tickers.reduce((s, t) => s + (weights[t] || 0), 0)
+  const hasWeights = totalW > 0
 
   const { mutate, data, isPending, isError, error } = useMutation<OptResult>({
     mutationFn: async () => (await axios.post('/api/portfolio-opt/optimize', {
       tickers, start: startFor(lookback), end: new Date().toISOString().slice(0, 10),
       risk_free_rate: parseFloat(rf) || 0, long_only: longOnly,
-      holdings: holdings ?? undefined,
+      weights: hasWeights ? weights : undefined,
     })).data,
   })
   const canRun = tickers.length >= 2 && !isPending
   const sel = data?.portfolios[selected]
   const errMsg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail
 
-  // Add the imported portfolio to the selectable set when the backend returns it.
-  const portList = useMemo(() => data?.portfolios.imported
-    ? [...PORTFOLIOS, { key: 'imported', label: 'Your Portfolio', blurb: 'imported from Portfolio Manager' }]
+  // Add the current portfolio to the selectable set when the backend returns it.
+  const portList = useMemo(() => data?.portfolios.current
+    ? [...PORTFOLIOS, { key: 'current', label: 'Your Portfolio', blurb: 'your current allocation' }]
     : PORTFOLIOS, [data])
-  // Scatter series: the optimal portfolios (gold), and the imported one (red) if present.
   const portScatter = useMemo(() => data ? PORTFOLIOS.map(p => ({ ...data.portfolios[p.key], label: p.label, key: p.key })) : [], [data])
-  const importedScatter = useMemo(() => data?.portfolios.imported
-    ? [{ ...data.portfolios.imported, label: 'Your Portfolio', key: 'imported' }] : [], [data])
+  const currentScatter = useMemo(() => data?.portfolios.current
+    ? [{ ...data.portfolios.current, label: 'Your Portfolio', key: 'current' }] : [], [data])
 
   return (
     <SidebarLayout sidebarWidth={230} sidebarTitle="" sidebar={<div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
           <label style={lbl}>Tickers · {tickers.length}</label>
-          <button onClick={importPortfolio} title="Import your holdings from Portfolio Manager" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: BLUE }}>Import ↓</button>
+          <button onClick={importPortfolio} title="Import your saved portfolio (weights)" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: BLUE }}>Import ↓</button>
         </div>
         <TickerTagInput tickers={tickers} onChange={onTickers} placeholder="Add ticker…" maxTags={20} />
-        {importMsg && <div style={{ fontSize: 9, color: holdings ? POS : FAINT, fontFamily: SANS, marginTop: 4 }}>{importMsg}</div>}
+        {importMsg && <div style={{ fontSize: 9, color: importMsg.startsWith('Imported') ? POS : FAINT, fontFamily: SANS, marginTop: 4, lineHeight: 1.4 }}>{importMsg}</div>}
       </div>
+      {tickers.length > 0 && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+            <label style={lbl}>Current weights · optional</label>
+            <button onClick={evenWeights} title="Set equal weights" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: BLUE }}>Even</button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {tickers.map(t => {
+              const wv = weights[t] || 0
+              return (
+                <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${BORDER}`, padding: '5px 7px' }}>
+                  <span style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, color: GOLD, width: 42, flexShrink: 0 }}>{t}</span>
+                  <div style={{ flex: 1, height: 5, background: 'rgba(255,255,255,0.06)', minWidth: 0 }}>
+                    <div style={{ width: `${hasWeights ? Math.min(100, (wv / totalW) * 100) : 0}%`, height: '100%', background: GOLD }} />
+                  </div>
+                  <input type="number" min={0} step="1" value={wv || ''} onChange={e => setWeight(t, parseFloat(e.target.value) || 0)}
+                    style={{ width: 46, background: 'var(--theme-bg)', border: `1px solid ${BORDER}`, color: TEXT, fontFamily: MONO, fontSize: 10, padding: '3px 5px', outline: 'none', textAlign: 'right' }} />
+                </div>
+              )
+            })}
+          </div>
+          <div style={{ fontSize: 9, color: FAINT, fontFamily: SANS, marginTop: 5, lineHeight: 1.5 }}>
+            {hasWeights ? `Total ${totalW.toFixed(0)}% — normalized and plotted as Your Portfolio ★` : 'Set weights (or Import) to plot your current portfolio against the optimum.'}
+          </div>
+        </div>
+      )}
       <div>
         <label style={lbl}>Lookback</label>
         <div style={{ display: 'flex', border: `1px solid ${BORDER}` }}>
@@ -143,7 +174,7 @@ export function PortfolioOptimizerContent() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
               {portList.map(p => (
-                <button key={p.key} onClick={() => setSelected(p.key)} title={p.blurb} style={{ background: selected === p.key ? `color-mix(in srgb, ${GOLD} 16%, transparent)` : 'transparent', border: `1px solid ${selected === p.key ? GOLD : p.key === 'imported' ? NEG : BORDER}`, cursor: 'pointer', color: selected === p.key ? GOLD : p.key === 'imported' ? NEG : SEC, fontFamily: MONO, fontSize: 10, fontWeight: 700, padding: '5px 10px' }}>{p.label}</button>
+                <button key={p.key} onClick={() => setSelected(p.key)} title={p.blurb} style={{ background: selected === p.key ? `color-mix(in srgb, ${GOLD} 16%, transparent)` : 'transparent', border: `1px solid ${selected === p.key ? GOLD : p.key === 'current' ? NEG : BORDER}`, cursor: 'pointer', color: selected === p.key ? GOLD : p.key === 'current' ? NEG : SEC, fontFamily: MONO, fontSize: 10, fontWeight: 700, padding: '5px 10px' }}>{p.label}</button>
               ))}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -181,14 +212,14 @@ export function PortfolioOptimizerContent() {
                     <Scatter name="Portfolios" data={portScatter} fill={GOLD} shape="diamond">
                       {portScatter.map((p) => <Cell key={p.key} fill={p.key === selected ? GOLD : 'rgba(201,168,76,0.45)'} />)}
                     </Scatter>
-                    {importedScatter.length > 0 && <Scatter name="Your Portfolio" data={importedScatter} fill={NEG} shape="star" />}
+                    {currentScatter.length > 0 && <Scatter name="Your Portfolio" data={currentScatter} fill={NEG} shape="star" />}
                   </ScatterChart>
                 </ResponsiveContainer>
                 <div style={{ display: 'flex', gap: 14, padding: '4px 10px 8px', fontFamily: SANS, fontSize: 9, color: FAINT, flexWrap: 'wrap' }}>
                   <span><span style={{ color: FAINT }}>●</span> frontier</span>
                   <span><span style={{ color: BLUE }}>●</span> each asset</span>
                   <span><span style={{ color: GOLD }}>◆</span> portfolios</span>
-                  {importedScatter.length > 0 && <span><span style={{ color: NEG }}>★</span> your portfolio</span>}
+                  {currentScatter.length > 0 && <span><span style={{ color: NEG }}>★</span> your portfolio</span>}
                 </div>
               </div>
             </div>
