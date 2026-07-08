@@ -294,15 +294,30 @@ function SpreadsPanel({ spreads }: { spreads: any[] }) {
     <div ref={ref}>
       {spreads.map((s, i) => {
         const pos = (s.current ?? 0) >= 0
+        const hist = s.history ?? []
+        const startBp = hist.length ? Math.round(hist[0].bp) : null       // 6 months ago
+        const nowBp = s.current == null ? null : Math.round(s.current)
+        const change = (nowBp != null && startBp != null) ? nowBp - startBp : null
+        const steeper = change != null && change > 0
         return (
-          <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 0', borderTop: i ? `1px solid ${T.borderFaint}` : 'none' }}>
-            <span style={{ flex: 'none', width: 56, fontFamily: T.mono, fontSize: 10, fontWeight: 700, color: '#8099b0' }}>{s.name}</span>
-            <span style={{ flex: 'none', width: 80, textAlign: 'right', fontFamily: T.mono, fontSize: 16, fontWeight: 700, color: pos ? T.pos : T.neg }}>
-              {s.current == null ? '—' : `${pos ? '+' : ''}${Math.round(s.current)}bp`}
+          <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 0', borderTop: i ? `1px solid ${T.borderFaint}` : 'none' }}>
+            <span style={{ flex: 'none', width: 52, fontFamily: T.mono, fontSize: 10, fontWeight: 700, color: '#8099b0' }}>{s.name}</span>
+            <span title="Current spread" style={{ flex: 'none', width: 68, textAlign: 'right', fontFamily: T.mono, fontSize: 16, fontWeight: 700, color: pos ? T.pos : T.neg }}>
+              {nowBp == null ? '—' : `${pos ? '+' : ''}${nowBp}bp`}
             </span>
-            <div style={{ flex: 1, minWidth: 0 }}><Sparkline pts={s.history.map((p: any) => p.bp)} w={Math.max(60, w - 248)} /></div>
-            <span style={{ flex: 'none', width: 96, textAlign: 'right', fontFamily: T.mono, fontSize: 9, color: T.muted, whiteSpace: 'nowrap' }}>
-              {s.low != null ? `${Math.round(s.low)} → ${Math.round(s.high)}` : ''}
+            {/* Sparkline labeled at both ends: 6mo-ago value → now */}
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span title="6 months ago" style={{ flex: 'none', fontFamily: T.mono, fontSize: 9, color: T.muted, width: 24, textAlign: 'right' }}>{startBp ?? ''}</span>
+              <div style={{ flex: 1, minWidth: 0 }}><Sparkline pts={hist.map((p: any) => p.bp)} w={Math.max(50, w - 292)} /></div>
+              <span title="Now" style={{ flex: 'none', fontFamily: T.mono, fontSize: 9, fontWeight: 700, color: pos ? T.pos : T.neg, width: 24 }}>{nowBp ?? ''}</span>
+            </div>
+            <span style={{ flex: 'none', width: 118, textAlign: 'right', fontFamily: T.mono, fontSize: 9, color: T.muted, whiteSpace: 'nowrap', lineHeight: 1.5 }}>
+              {change != null && (
+                <div style={{ color: steeper ? T.pos : '#c98b3a', fontWeight: 700 }} title="Change over 6 months">
+                  {steeper ? 'steeper' : 'flatter'} {change > 0 ? '+' : ''}{change}bp
+                </div>
+              )}
+              {s.low != null && <div>6M range {Math.round(s.low)}–{Math.round(s.high)}</div>}
             </span>
           </div>
         )
@@ -528,9 +543,14 @@ export function FedRatesContent() {
             <div>
               <div style={{ ...bandTitle, marginBottom: 8 }}>Curve Spreads — 6M Trend</div>
               {spreadsData?.spreads?.length ? <SpreadsPanel spreads={spreadsData.spreads} /> : <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: T.mono, fontSize: 11, color: T.muted }}>Spread history unavailable.</div>}
-              {spreadsData?.spreads?.length > 0 && spreadsData.spreads.every((s: any) => (s.current ?? 0) > 0) && (
-                <div style={{ fontFamily: T.label, fontSize: 11, color: T.muted, marginTop: 8 }}>All three spreads are positive and steepening over the last six months.</div>
-              )}
+              {spreadsData?.spreads?.length > 0 && (() => {
+                const sp = spreadsData.spreads
+                const chg = (s: any) => (s.current != null && s.history?.length) ? s.current - s.history[0].bp : 0
+                const steep = sp.filter((s: any) => chg(s) > 0).length
+                const allPos = sp.every((s: any) => (s.current ?? 0) > 0)
+                const dir = steep === sp.length ? 'all steepening' : steep === 0 ? 'all flattening' : `${steep} steepening, ${sp.length - steep} flattening`
+                return <div style={{ fontFamily: T.label, fontSize: 11, color: T.muted, marginTop: 8 }}>{allPos ? 'All three spreads are positive' : 'Spreads mixed in sign'} · {dir} over the last six months.</div>
+              })()}
             </div>
           </div>
 

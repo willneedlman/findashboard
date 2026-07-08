@@ -1145,6 +1145,20 @@ def _latest_fomc_statement() -> tuple[str, str] | None:
     return d.isoformat(), f"https://www.federalreserve.gov/newsevents/pressreleases/monetary{d.strftime('%Y%m%d')}a.htm"
 
 
+_FRAC = {"1/8": ".125", "1/4": ".25", "3/8": ".375", "1/2": ".50",
+         "5/8": ".625", "3/4": ".75", "7/8": ".875"}
+
+
+def _decimalize(text: str) -> str:
+    """Fed prose uses fractions ('3-1/2 to 3-3/4 percent'); show plain numbers
+    ('3.50 to 3.75%'). Safety net in case the model keeps the fraction form."""
+    if not text:
+        return text
+    for f, dec in _FRAC.items():
+        text = _re.sub(rf"(\d+)[- ]{_re.escape(f)}", rf"\g<1>{dec}", text)
+    return _re.sub(r"\s*percent\b", "%", text)
+
+
 def _fed_doc_text(url: str) -> str:
     """Fetch a Fed release page and return the statement body as plain text."""
     try:
@@ -1179,11 +1193,16 @@ def fomc_analysis():
     if len(text) < 200:
         return {"available": False, "date": d, "url": url}
     prompt = (
-        "You are a monetary-policy analyst. Read this FOMC statement and classify its stance.\n"
+        "You are a monetary-policy analyst. Score the FOMC statement's policy STANCE and TONE, "
+        "not just the rate action.\n"
+        "Weigh BOTH the rate decision AND the language: how it characterizes inflation "
+        "(elevated vs easing), growth and the labor market (solid vs softening), the balance of "
+        "risks, and any forward guidance. A hold can still lean hawkish or dovish from this "
+        "language — reserve a score of 0 only for a genuinely balanced statement.\n"
         "Return ONLY JSON, no markdown:\n"
         '{"stance":"hawkish|dovish|neutral",'
-        '"score":<integer -10 to 10, negative = dovish/easing, positive = hawkish/tightening>,'
-        '"decision":"<one line: the rate decision and target range>",'
+        '"score":<integer -10 to 10 for the OVERALL tone, negative = dovish/easing bias, positive = hawkish/tightening bias>,'
+        '"decision":"<one line: the rate decision and target range, using decimal percentages like 3.50% to 3.75%>",'
         '"summary":"<2-3 sentence plain-English summary>",'
         '"key_points":["<3 to 5 short takeaways>"]}\n\n'
         f"FOMC statement:\n{text}"
@@ -1199,9 +1218,9 @@ def fomc_analysis():
             "available": True, "date": d, "url": url,
             "stance": str(obj.get("stance", "neutral")).lower()[:20],
             "score": max(-10, min(10, int(obj.get("score", 0)))),
-            "decision": str(obj.get("decision", ""))[:200],
-            "summary": str(obj.get("summary", ""))[:800],
-            "key_points": [str(x)[:200] for x in (obj.get("key_points") or [])][:6],
+            "decision": _decimalize(str(obj.get("decision", ""))[:200]),
+            "summary": _decimalize(str(obj.get("summary", ""))[:800]),
+            "key_points": [_decimalize(str(x)[:200]) for x in (obj.get("key_points") or [])][:6],
         }
     except Exception as ex:
         _log.warning("fomc analysis failed: %s", ex)
