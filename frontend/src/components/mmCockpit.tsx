@@ -2,6 +2,7 @@
 // Income). Presentational only. Colors route through --theme-* tokens.
 import { useEffect, useRef, useState } from 'react'
 import { Minus, Plus, ChevronUp, ChevronDown } from 'lucide-react'
+import HelpTip from './HelpTip'
 
 const V = {
   surface: 'var(--theme-surface, #0d1826)',
@@ -189,7 +190,14 @@ export function KpiCell({ label, value, color, valueSize = 13, grow = false, min
       padding: align === 'top' ? '11px 14px' : '6px 13px', borderRight: `1px solid ${V.border}`,
       flex: grow ? 1 : '0 0 auto', minWidth,
     }}>
-      <span style={{ ...EYEBROW, fontSize: 8, ...(help ? { cursor: 'help', borderBottom: `1px dotted ${V.sec}`, alignSelf: align === 'top' ? 'flex-start' : 'center', paddingBottom: 1 } : {}) }} title={help}>{label}</span>
+      {help ? (
+        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+          <span style={{ ...EYEBROW, fontSize: 8 }}>{label}</span>
+          <HelpTip text={help} width={240} />
+        </span>
+      ) : (
+        <span style={{ ...EYEBROW, fontSize: 8 }}>{label}</span>
+      )}
       <span style={{ fontFamily: V.mono, fontSize: valueSize, fontWeight: 700, color: color || V.text, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
       {sub && <span style={{ fontFamily: V.sans, fontSize: 9, color: subColor || V.sec, whiteSpace: 'nowrap', marginTop: 1 }}>{sub}</span>}
     </div>
