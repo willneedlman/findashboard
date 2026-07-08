@@ -171,3 +171,22 @@ def apply(articles: list[ScoredArticle]) -> list[ScoredArticle]:
             asset_directions=merged, corrected=True, lexicon_direction=art.direction,
         ))
     return out
+
+
+def neutralize_floor(articles: list[ScoredArticle]) -> list[ScoredArticle]:
+    """A floor-confidence lexicon read carries no real signal, so a directional
+    label there is noise ("Equities Post Strong First Half" scored bearish). Any
+    such item the LLM overlay did NOT rescue is forced to neutral — the honest
+    read when there is no signal — so the tape stops showing false directions.
+    Runs regardless of whether the overlay is enabled."""
+    out: list[ScoredArticle] = []
+    for a in articles:
+        if not a.corrected and a.sentiment != "neutral" and a.confidence <= config.NEUTRALIZE_CONF_MAX:
+            out.append(replace(
+                a, direction=0.0, score=50, sentiment="neutral",
+                asset_directions={k: 0.0 for k in a.asset_directions},
+                lexicon_direction=a.direction,
+            ))
+        else:
+            out.append(a)
+    return out

@@ -1202,7 +1202,8 @@ def fomc_analysis():
         "Return ONLY JSON, no markdown:\n"
         '{"stance":"hawkish|dovish|neutral",'
         '"score":<integer -10 to 10 for the OVERALL tone, negative = dovish/easing bias, positive = hawkish/tightening bias>,'
-        '"decision":"<one line: the rate decision and target range, using decimal percentages like 3.50% to 3.75%>",'
+        '"decision":"<one COMPLETE sentence stating the policy action and the target range, '
+        "e.g. 'The Committee held the federal funds target range at 3.50% to 3.75%.' — never just the bare range>\","
         '"summary":"<2-3 sentence plain-English summary>",'
         '"key_points":["<3 to 5 short takeaways>"]}\n\n'
         f"FOMC statement:\n{text}"

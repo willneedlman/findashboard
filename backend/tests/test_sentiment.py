@@ -444,6 +444,18 @@ def test_signal_weighting_fades_neutral_news(monkeypatch):
     assert wb > wn * 3, "directional article should dominate a neutral one"
 
 
+def test_neutralize_floor_drops_noise_directions():
+    from sentiment import correction
+    from dataclasses import replace
+    floor = _scored("A", "a", "Equities Post Strong First Half", 20, 3, conf=0.10)  # bearish noise
+    real = _scored("B", "b", "clear crash", 20, 3, conf=0.42)                        # real bearish
+    rescued = replace(_scored("C", "c", "AI merger", 80, 3, conf=0.10), corrected=True)  # LLM-rescued
+    out = {a.title: a for a in correction.neutralize_floor([floor, real, rescued])}
+    assert out["Equities Post Strong First Half"].sentiment == "neutral"   # floor noise → neutral
+    assert out["clear crash"].sentiment == "bearish"                       # above floor → kept
+    assert out["AI merger"].sentiment != "neutral"                         # LLM-rescued → kept
+
+
 def test_all_neutral_composite_stays_neutral_not_zero():
     from sentiment import aggregate
     # Degenerate guard: an all-neutral window must average to ~50, never 0.

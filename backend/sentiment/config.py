@@ -218,8 +218,12 @@ ENRICH_TEMPERATURE: float = 0.0     # deterministic-as-possible; never feeds the
 # SENTIMENT_CORRECTION=0 to disable and fall back to pure-lexicon scoring.
 CORRECTION_ENABLED_ENV: str = "SENTIMENT_CORRECTION"
 CORRECTION_CONF_MAX: float = 0.55   # only adjudicate items the lexicon scored at/below this
-CORRECTION_MIN_CONF: float = 0.55   # LLM must be at least this sure to override the lexicon
-MAX_CORRECTION_ITEMS: int = 24      # per-refresh cap (one batched call)
+CORRECTION_MIN_CONF: float = 0.50   # LLM must be at least this sure to override the lexicon
+MAX_CORRECTION_ITEMS: int = 50      # per-refresh cap (one batched call; only uncached items)
+# Below this confidence the lexicon had no real signal, so a directional label is
+# noise — neutralize any such item the LLM did not rescue instead of showing a
+# confident-looking false direction.
+NEUTRALIZE_CONF_MAX: float = 0.12
 CORRECTION_MODEL: str = ENRICH_MODEL
 CORRECTION_MAX_TOKENS: int = 3000
 CORRECTION_TEMPERATURE: float = 0.0

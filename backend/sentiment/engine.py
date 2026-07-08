@@ -141,6 +141,9 @@ def _compute(sample_size: int, timeframe_hours: int, now: int) -> SentimentSnaps
     # low confidence, overriding its direction when the LLM is confident. Everything
     # else keeps its deterministic lexicon score. Pure pass-through if disabled.
     scored = correction.apply(scored)
+    # Safety net: any floor-confidence item the overlay didn't rescue has no real
+    # signal, so drop its (noise) direction to neutral.
+    scored = correction.neutralize_floor(scored)
 
     # Optional, non-scoring tag enrichment.
     tags = enrich.enrich(scored)
