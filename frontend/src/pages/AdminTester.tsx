@@ -378,6 +378,43 @@ export default function AdminTester() {
     try { await axios.delete(`/api/sentiment/reports/${rid}`, { headers: { 'x-admin-secret': secret } }); loadReports() } catch { /* noop */ }
   }, [secret, loadReports])
 
+  // Export as a self-contained markdown brief to hand to Claude (copy or file).
+  const [copied, setCopied] = useState(false)
+  const buildExport = useCallback(() => {
+    const L: string[] = [
+      `# Sentiment mis-score reports (${reports.length})`,
+      `Exported ${new Date().toISOString().slice(0, 16).replace('T', ' ')} from the Alphatape sentiment tracker.`,
+      '',
+      'Each item is a headline the engine scored wrong. Adjust the lexicon, the LLM correction overlay, or the horizon rules so the scored read matches "should be".',
+      '',
+    ]
+    reports.forEach((r, i) => {
+      const s = r.scored || {}
+      L.push(`## ${i + 1}. ${r.text}`)
+      L.push(`- source: ${r.source || '—'}`)
+      L.push(`- scored: ${s.sentiment} (direction ${s.direction ?? '—'}, confidence ${s.confidence != null ? Math.round(s.confidence * 100) + '%' : '—'})`)
+      L.push(`- should be: ${r.correct_sentiment || '—'}`)
+      L.push(`- reasoning tag: ${s.reasoning_tag ?? '—'} · macro tier T${s.macro_tier ?? '?'} · forward-looking ${s.forward_looking_weight != null ? Math.round(s.forward_looking_weight * 100) + '%' : '—'}`)
+      if (s.corrected) L.push(`- LLM-corrected: yes (lexicon direction ${s.lexicon_direction ?? 'null'})`)
+      if (s.asset_directions && Object.keys(s.asset_directions).length) L.push(`- asset directions: ${JSON.stringify(s.asset_directions)}`)
+      if (Array.isArray(s.entities) && s.entities.length) L.push(`- entities: ${s.entities.map((e: any) => e.name || e).join(', ')}`)
+      if (r.note) L.push(`- note: ${r.note}`)
+      if (r.url) L.push(`- url: ${r.url}`)
+      L.push('')
+    })
+    return L.join('\n')
+  }, [reports])
+  const copyExport = useCallback(async () => {
+    try { await navigator.clipboard.writeText(buildExport()); setCopied(true); setTimeout(() => setCopied(false), 1600) } catch { /* noop */ }
+  }, [buildExport])
+  const downloadExport = useCallback(() => {
+    const blob = new Blob([buildExport()], { type: 'text/markdown' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = `sentiment-reports-${new Date().toISOString().slice(0, 10)}.md`
+    a.click(); URL.revokeObjectURL(url)
+  }, [buildExport])
+
   const evictCache = useCallback(async () => {
     setMsg(''); setMsgErr(false)
     try {
@@ -1054,7 +1091,11 @@ export default function AdminTester() {
               </span>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={loadReports} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '5px 12px', cursor: 'pointer', background: 'none', color: 'var(--theme-secondary)', border: '1px solid var(--theme-border)' }}>Refresh</button>
-                {reports.length > 0 && <button onClick={clearReports} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '5px 12px', cursor: 'pointer', background: 'none', color: RED, border: `1px solid ${RED_BORDER}` }}>Clear all</button>}
+                {reports.length > 0 && <>
+                  <button onClick={copyExport} title="Copy a markdown brief to paste to Claude" style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '5px 12px', cursor: 'pointer', background: 'none', color: copied ? 'var(--theme-positive)' : 'var(--theme-primary)', border: `1px solid ${copied ? 'var(--theme-positive)' : 'var(--theme-primary)'}` }}>{copied ? 'Copied ✓' : 'Copy for Claude'}</button>
+                  <button onClick={downloadExport} title="Download the reports as a .md file" style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '5px 12px', cursor: 'pointer', background: 'none', color: 'var(--theme-secondary)', border: '1px solid var(--theme-border)' }}>Download</button>
+                  <button onClick={clearReports} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '5px 12px', cursor: 'pointer', background: 'none', color: RED, border: `1px solid ${RED_BORDER}` }}>Clear all</button>
+                </>}
               </div>
             </div>
             {reports.length === 0 && <div style={{ color: 'var(--theme-text-dim)', padding: 24, fontSize: 12 }}>No reports. Sign in as admin on the Sentiment Tracker and hit Report on a mis-scored headline.</div>}
