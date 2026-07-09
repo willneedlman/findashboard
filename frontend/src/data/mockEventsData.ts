@@ -35,6 +35,7 @@ export interface MacroEvent {
   sourceName: string
   sourceUrl: string
   reactions: MarketReaction[]
+  history?: number[]     // recent prints, oldest -> newest, for the sparkline + bars
 }
 
 export const REGIONS: { key: Region; label: string }[] = [

@@ -211,6 +211,7 @@ def _fomc_drafts(today: str) -> tuple[list[dict], str | None]:
     current, previous = _fomc_range()
     if current is None:
         return [], None
+    hist = [round(v, 3) for _, v in reversed(_series_obs("DFEDTARU", "lin", limit=8))]
     past = sorted([d for d in _FOMC_DATES if d <= today])
     future = sorted([d for d in _FOMC_DATES if d > today])
     drafts: list[dict] = []
@@ -231,14 +232,14 @@ def _fomc_drafts(today: str) -> tuple[list[dict], str | None]:
             url = meta["url"]
         drafts.append({"r": {**meta, "url": url}, "status": "released", "date": released_date,
                        "actual": current, "expected": None, "previous": previous,
-                       "period": _period_label(released_date, "m"),
+                       "period": _period_label(released_date, "m"), "history": hist,
                        "summary": f"The FOMC {verb} {current}."})
     if future:
         nxt = future[0]
         exp = _fomc_expectation(nxt)
         drafts.append({"r": meta, "status": "upcoming", "date": nxt,
                        "actual": None, "expected": exp, "expected_label": "Mkt implied", "previous": current,
-                       "period": _period_label(nxt, "m"),
+                       "period": _period_label(nxt, "m"), "history": hist,
                        "summary": f"Next FOMC decision. Current target range is {current}."
                                   + (f" Futures imply {exp}." if exp else "")})
     return drafts, released_date
@@ -256,19 +257,20 @@ def _build() -> dict:
             continue
         past = sorted([d for d in dates if d <= today])
         future = sorted([d for d in dates if d > today])
-        obs = _series_obs(r["series"], r["units"])
+        obs = _series_obs(r["series"], r["units"], limit=8)
         if not obs:
             continue
         (obs_date, actual_v), previous = obs[0], (obs[1] if len(obs) > 1 else None)
         prev_v = previous[1] if previous else actual_v
         period = _period_label(obs_date, r["freq"])
+        history = [round(v, 2) for _, v in reversed(obs)]   # oldest -> newest, for the sparkline
 
         if past:
             rel_date = past[-1]
             released_dates.append(rel_date)
             drafts.append({"r": r, "status": "released", "date": rel_date,
                            "actual": _fmt(r["fmt"], actual_v), "previous": _fmt(r["fmt"], prev_v),
-                           "period": period,
+                           "period": period, "history": history,
                            "summary": f"{r['name']} came in at {_fmt(r['fmt'], actual_v)} for {period}, "
                                       f"{_direction(actual_v, prev_v)} the {_fmt(r['fmt'], prev_v)} prior read."})
         if future:
@@ -285,7 +287,7 @@ def _build() -> dict:
                     nc_note = f" {exp_label} tracks {exp}."
             drafts.append({"r": r, "status": "upcoming", "date": future[0],
                            "actual": None, "expected": exp, "expected_label": exp_label,
-                           "previous": _fmt(r["fmt"], actual_v), "period": up_period,
+                           "previous": _fmt(r["fmt"], actual_v), "period": up_period, "history": history,
                            "summary": f"Next {r['name']} release covers {up_period}. "
                                       f"The prior print was {_fmt(r['fmt'], actual_v)} for {period}." + nc_note})
 
@@ -309,7 +311,7 @@ def _build() -> dict:
             "displayTime": f"{_MONTHS[int(d['date'][5:7]) - 1]} {int(d['date'][8:10])}, {d['date'][:4]} · {t} ET",
             "impact": r["impact"], "status": d["status"],
             "actual": d["actual"], "expected": d.get("expected"), "expectedLabel": d.get("expected_label"),
-            "previous": d["previous"],
+            "previous": d["previous"], "history": d.get("history", []),
             "summary": d["summary"],
             "sourceName": r["source"], "sourceUrl": r["url"],
             "reactions": reactions.get(d["date"], []) if d["status"] == "released" else [],

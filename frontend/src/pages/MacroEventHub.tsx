@@ -1,43 +1,39 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
-import { CalendarClock, CalendarRange, AlertTriangle, Inbox, Loader2 } from 'lucide-react'
+import { Loader2, Inbox } from 'lucide-react'
 import { T } from '../lib/theme'
 import PageWrapper from '../components/PageWrapper'
 import { MOCK_EVENTS, type MacroEvent } from '../data/mockEventsData'
-import EventCard from '../components/macroEvents/EventCard'
-import FilterBar, { type Filters } from '../components/macroEvents/FilterBar'
+import MacroToolbar, { type Filters } from '../components/macroEvents/MacroToolbar'
+import ReleaseTape, { type Section, type Sort } from '../components/macroEvents/ReleaseTape'
+import { dayKey, dayLabel, sortValue } from '../components/macroEvents/tapeUtils'
 
-interface EventsResponse { events: MacroEvent[]; source: string; as_of?: string; note?: string }
+interface EventsResponse { events: MacroEvent[]; source: string; note?: string }
+const ALERTS_KEY = 'macro-event-alerts'
 
-function SummaryStat({ icon, value, label, color }: { icon: React.ReactNode; value: number; label: string; color: string }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 11, background: T.surface, border: `1px solid ${T.border}`, padding: '13px 16px', flex: '1 1 150px' }}>
-      <span style={{ color, display: 'flex' }}>{icon}</span>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-        <span style={{ fontFamily: T.mono, fontSize: 22, fontWeight: 700, color: T.text, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
-        <span style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.muted }}>{label}</span>
-      </div>
-    </div>
-  )
+function loadAlerts(): Set<string> {
+  try { return new Set(JSON.parse(localStorage.getItem(ALERTS_KEY) || '[]')) } catch { return new Set() }
 }
 
-function Section({ icon, title, count, children }: { icon: React.ReactNode; title: string; count: number; children: React.ReactNode }) {
+function Stat({ value, label, color }: { value: number; label: string; color: string }) {
   return (
-    <section style={{ marginBottom: 26 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-        <span style={{ color: T.gold, display: 'flex' }}>{icon}</span>
-        <h2 style={{ margin: 0, fontFamily: T.label, fontSize: 12, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.text }}>{title}</h2>
-        <span style={{ fontFamily: T.mono, fontSize: 11, color: T.muted }}>({count})</span>
-        <span style={{ flex: 1, height: 1, background: T.border, marginLeft: 4 }} />
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>{children}</div>
-    </section>
+    <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6 }}>
+      <span style={{ fontFamily: T.mono, fontSize: 15, fontWeight: 700, color, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+      <span style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.muted }}>{label}</span>
+    </span>
   )
 }
 
 function MacroEventHubContent() {
-  const [filters, setFilters] = useState<Filters>({ query: '', region: 'ALL', impact: 'ALL' })
+  const [filters, setFilters] = useState<Filters>({ query: '', region: 'ALL', impact: 'ALL', from: '', to: '' })
+  const [sort, setSort] = useState<Sort>({ column: 'time', dir: 'asc' })
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [alerts, setAlerts] = useState<Set<string>>(loadAlerts)
+  const [, setTick] = useState(0)
+
+  // Countdowns re-render once a minute.
+  useEffect(() => { const id = setInterval(() => setTick(t => t + 1), 60_000); return () => clearInterval(id) }, [])
 
   const { data, isLoading } = useQuery<EventsResponse>({
     queryKey: ['macro-events'],
@@ -45,75 +41,123 @@ function MacroEventHubContent() {
     staleTime: 6 * 3600 * 1000,
   })
 
-  // Live FRED feed when it returns events, the bundled seed otherwise so the page
-  // is never empty.
   const live = (data?.events?.length ?? 0) > 0
-  const events = live ? data!.events : MOCK_EVENTS
-  const source = live ? (data!.source ?? 'FRED') : 'seed'
+  const events = useMemo(() => (live ? data!.events : MOCK_EVENTS), [live, data])
+
+  // Default range spans the currently loaded events. Derived (not stored) so it
+  // tracks the live set once it replaces the seed; a user edit sets filters.from
+  // and takes over.
+  const defaultRange = useMemo(() => {
+    if (!events.length) return { from: '', to: '' }
+    const d = events.map(e => e.datetime.slice(0, 10)).sort()
+    return { from: d[0], to: d[d.length - 1] }
+  }, [events])
+  const fromEff = filters.from || defaultRange.from
+  const toEff = filters.to || defaultRange.to
+
+  const toggleAlert = (id: string) => setAlerts(prev => {
+    const next = new Set(prev)
+    next.has(id) ? next.delete(id) : next.add(id)
+    localStorage.setItem(ALERTS_KEY, JSON.stringify([...next]))
+    return next
+  })
+
+  const onSort = (col: Sort['column']) =>
+    setSort(s => (s.column === col ? { column: col, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { column: col, dir: 'asc' }))
 
   const filtered = useMemo(() => {
     const q = filters.query.trim().toLowerCase()
+    const [lo, hi] = fromEff && toEff && fromEff > toEff ? [toEff, fromEff] : [fromEff, toEff]
     return events.filter(e => {
       if (filters.region !== 'ALL' && e.region !== filters.region) return false
       if (filters.impact !== 'ALL' && e.impact !== filters.impact) return false
-      if (q && !(`${e.name} ${e.country} ${e.category}`.toLowerCase().includes(q))) return false
+      if (q && !`${e.name} ${e.country} ${e.category}`.toLowerCase().includes(q)) return false
+      const d = e.datetime.slice(0, 10)
+      if (lo && d < lo) return false
+      if (hi && d > hi) return false
       return true
     })
-  }, [filters, events])
+  }, [events, filters, fromEff, toEff])
 
-  const upcoming = useMemo(
-    () => filtered.filter(e => e.status === 'upcoming').sort((a, b) => +new Date(a.datetime) - +new Date(b.datetime)),
-    [filtered],
-  )
-  const released = useMemo(
-    () => filtered.filter(e => e.status === 'released').sort((a, b) => +new Date(b.datetime) - +new Date(a.datetime)),
-    [filtered],
-  )
+  const sections: Section[] = useMemo(() => {
+    if (sort.column !== 'time') {
+      const dir = sort.dir === 'asc' ? 1 : -1
+      const rows = [...filtered].sort((a, b) => {
+        const va = sortValue(a, sort.column), vb = sortValue(b, sort.column)
+        return va < vb ? -dir : va > vb ? dir : 0
+      })
+      return [{ id: 'flat', label: null, rows }]
+    }
+    const up = filtered.filter(e => e.status === 'upcoming').sort((a, b) => +new Date(a.datetime) - +new Date(b.datetime))
+    const rel = filtered.filter(e => e.status === 'released').sort((a, b) => +new Date(b.datetime) - +new Date(a.datetime))
+    const out: Section[] = []
+
+    let curKey = ''
+    for (const e of up) {
+      const k = dayKey(e.datetime)
+      if (k !== curKey) { curKey = k; out.push({ id: 'up-' + k, label: dayLabel(e.datetime), sub: '', rows: [] }) }
+      out[out.length - 1].rows.push(e)
+    }
+    for (const s of out) {
+      const high = s.rows.filter(r => r.impact === 'High').length
+      s.sub = `${s.rows.length} RELEASE${s.rows.length > 1 ? 'S' : ''}${high ? ` · ${high} HIGH` : ''}`
+    }
+
+    if (rel.length) {
+      const recentKey = dayKey(rel[0].datetime)
+      const recent = rel.filter(e => dayKey(e.datetime) === recentKey)
+      const earlier = rel.filter(e => dayKey(e.datetime) !== recentKey)
+      out.push({ id: 'rel-recent', label: `RELEASED · ${dayLabel(rel[0].datetime).replace(' · ', ' ')}`, muted: true, rows: recent })
+      if (earlier.length) out.push({ id: 'rel-earlier', label: 'RELEASED · EARLIER', muted: true, perRowDate: true, rows: earlier })
+    }
+    return out
+  }, [filtered, sort])
+
+  const nextHigh = useMemo(() =>
+    events.filter(e => e.status === 'upcoming' && e.impact === 'High')
+      .sort((a, b) => +new Date(a.datetime) - +new Date(b.datetime))[0] ?? null, [events])
+
+  const stats = useMemo(() => ({
+    tracked: events.length,
+    upcoming: events.filter(e => e.status === 'upcoming').length,
+    high: events.filter(e => e.impact === 'High').length,
+  }), [events])
 
   return (
-    <PageWrapper title="Macro Event Release Hub">
-      <style>{'@keyframes me-spin{to{transform:rotate(360deg)}}'}</style>
-      <p style={{ fontFamily: T.label, fontSize: 12.5, color: T.muted, margin: '0 0 12px', maxWidth: 720, lineHeight: 1.5 }}>
-        Major US economic releases on one feed, with the print, the prior read, and the release-day cross-asset reaction. Search by name and filter by region or impact.
-      </p>
+    <PageWrapper>
+      <div style={{ overflowX: 'auto' }}>
+        <div style={{ minWidth: 1380, maxWidth: 1560, margin: '0 auto' }}>
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, paddingBottom: 14, borderBottom: `1px solid ${T.goldTint(45)}` }}>
+            <h1 className="ft-page-title" style={{ margin: 0 }}>MACRO EVENT RELEASE HUB</h1>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: T.label, fontSize: 10, color: T.muted }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: live ? T.pos : T.gold, display: 'inline-block' }} />
+              {isLoading ? 'Loading live releases' : live ? 'Live · FRED + Rate Engine' : 'Showing bundled seed'}
+            </span>
+            <span style={{ flex: 1 }} />
+            <div style={{ display: 'flex', gap: 22 }}>
+              <Stat value={stats.tracked} label="Tracked" color={T.text} />
+              <Stat value={stats.upcoming} label="Upcoming" color={T.gold} />
+              <Stat value={stats.high} label="High Impact" color={T.neg} />
+            </div>
+          </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18, fontFamily: T.label, fontSize: 10, color: T.muted }}>
-        {isLoading
-          ? <><Loader2 size={12} style={{ animation: 'me-spin 0.7s linear infinite' }} /> Loading live releases</>
-          : live
-            ? <><span style={{ width: 6, height: 6, borderRadius: '50%', background: T.pos, display: 'inline-block' }} /> {data?.note ?? `Live from ${source}. Reaction is the release-day move.`}</>
-            : <><span style={{ width: 6, height: 6, borderRadius: '50%', background: T.gold, display: 'inline-block' }} /> Showing bundled seed. Live feed unavailable.</>}
-      </div>
+          <MacroToolbar filters={{ ...filters, from: fromEff, to: toEff }} onChange={setFilters} count={filtered.length} />
 
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
-        <SummaryStat icon={<CalendarRange size={20} />} value={events.length} label="Tracked" color={T.blue} />
-        <SummaryStat icon={<CalendarClock size={20} />} value={events.filter(e => e.status === 'upcoming').length} label="Upcoming" color={T.gold} />
-        <SummaryStat icon={<AlertTriangle size={20} />} value={events.filter(e => e.impact === 'High').length} label="High Impact" color={T.neg} />
-      </div>
-
-      <FilterBar filters={filters} onChange={setFilters} count={filtered.length} />
-
-      {filtered.length === 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '56px 20px', color: T.muted, border: `1px dashed ${T.border}` }}>
-          <Inbox size={30} />
-          <span style={{ fontFamily: T.label, fontSize: 13 }}>No events match these filters.</span>
-          <button type="button" onClick={() => setFilters({ query: '', region: 'ALL', impact: 'ALL' })}
-            style={{ marginTop: 4, padding: '6px 14px', background: 'transparent', border: `1px solid ${T.goldTint(50)}`, color: T.gold, fontFamily: T.label, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-            Reset filters
-          </button>
+          {filtered.length === 0
+            ? <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '56px 20px', color: T.muted, border: `1px dashed ${T.border}`, background: T.surface }}>
+                {isLoading ? <Loader2 size={22} style={{ animation: 'me-spin 0.7s linear infinite' }} /> : <Inbox size={28} />}
+                <span style={{ fontFamily: T.label, fontSize: 13 }}>{isLoading ? 'Loading live releases…' : 'No events match these filters.'}</span>
+                {!isLoading && <button type="button" onClick={() => setFilters(f => ({ ...f, query: '', region: 'ALL', impact: 'ALL' }))}
+                  style={{ marginTop: 4, padding: '6px 14px', background: 'transparent', border: `1px solid ${T.goldTint(50)}`, color: T.gold, fontFamily: T.label, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Reset filters</button>}
+              </div>
+            : <ReleaseTape sections={sections} totalCount={filtered.length} nextHigh={nextHigh}
+                sort={sort} onSort={onSort}
+                expandedId={expandedId} onToggle={id => setExpandedId(cur => (cur === id ? null : id))}
+                alerts={alerts} onAlert={toggleAlert} />}
         </div>
-      )}
-
-      {upcoming.length > 0 && (
-        <Section icon={<CalendarClock size={15} />} title="Upcoming" count={upcoming.length}>
-          {upcoming.map(e => <EventCard key={e.id} event={e} />)}
-        </Section>
-      )}
-      {released.length > 0 && (
-        <Section icon={<CalendarRange size={15} />} title="Recent Releases" count={released.length}>
-          {released.map(e => <EventCard key={e.id} event={e} />)}
-        </Section>
-      )}
+      </div>
+      <style>{'@keyframes me-spin{to{transform:rotate(360deg)}}.mev-expand{transition:grid-template-rows 180ms cubic-bezier(0.23,1,0.32,1)}.mev-fade{transition:opacity 180ms ease}@media (prefers-reduced-motion: reduce){.mev-expand,.mev-fade{transition:none}}'}</style>
     </PageWrapper>
   )
 }
