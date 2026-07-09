@@ -48,30 +48,38 @@ class SentimentReport(BaseModel):
     note: str | None = None
 
 
-def _require_admin(secret: str) -> None:
-    from routers.users import _require_admin as _check
-    _check(secret)
+def _require_admin(x_admin_secret: str, authorization: str, x_session_token: str) -> None:
+    """Authorize by an admin *user* session (the signal behind the Admin Hub link)
+    OR the ADMIN_SECRET console header — either is sufficient."""
+    from routers.users import _require_admin as _secret_check, is_admin_token
+    if is_admin_token(authorization, x_session_token):
+        return
+    _secret_check(x_admin_secret)   # raises 403 if the secret is absent/wrong
 
 
 @router.post("/report")
-def submit_report(req: SentimentReport, x_admin_secret: str = Header(default="")) -> dict:
-    _require_admin(x_admin_secret)
+def submit_report(req: SentimentReport, x_admin_secret: str = Header(default=""),
+                  authorization: str = Header(default=""), x_session_token: str = Header(default="")) -> dict:
+    _require_admin(x_admin_secret, authorization, x_session_token)
     return reports_store.add(req.model_dump())
 
 
 @router.get("/reports")
-def list_reports(x_admin_secret: str = Header(default="")) -> dict:
-    _require_admin(x_admin_secret)
+def list_reports(x_admin_secret: str = Header(default=""),
+                 authorization: str = Header(default=""), x_session_token: str = Header(default="")) -> dict:
+    _require_admin(x_admin_secret, authorization, x_session_token)
     return {"reports": reports_store.all_reports()}
 
 
 @router.delete("/reports")
-def clear_reports(x_admin_secret: str = Header(default="")) -> dict:
-    _require_admin(x_admin_secret)
+def clear_reports(x_admin_secret: str = Header(default=""),
+                  authorization: str = Header(default=""), x_session_token: str = Header(default="")) -> dict:
+    _require_admin(x_admin_secret, authorization, x_session_token)
     return {"cleared": reports_store.clear()}
 
 
 @router.delete("/reports/{rid}")
-def delete_report(rid: str, x_admin_secret: str = Header(default="")) -> dict:
-    _require_admin(x_admin_secret)
+def delete_report(rid: str, x_admin_secret: str = Header(default=""),
+                  authorization: str = Header(default=""), x_session_token: str = Header(default="")) -> dict:
+    _require_admin(x_admin_secret, authorization, x_session_token)
     return {"deleted": reports_store.delete(rid)}

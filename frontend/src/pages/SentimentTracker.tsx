@@ -4,6 +4,9 @@ import { TrendingUp, History, Sparkles, Flag } from 'lucide-react'
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
+import { useTheme } from '../contexts/ThemeContext'
+
+const ADMIN_USERS = ['wneedlman']
 
 const T = {
   bg:      'var(--theme-bg, #060e1c)',
@@ -406,15 +409,17 @@ function TimeframeSelector({ active, onChange }: { active: Timeframe; onChange: 
 // renders when an admin secret is present in this browser tab (set by /admin).
 const SENT_COLOR: Record<string, string> = { bullish: T.pos, bearish: T.neg, neutral: T.muted }
 function ReportControl({ item, sourceLabel }: { item: ScoredItem; sourceLabel: string }) {
-  const secret = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('alphatape-admin-secret') : null
+  const { user } = useTheme()
+  const isAdmin = !!user && ADMIN_USERS.includes((user.username || '').toLowerCase())
   const [open, setOpen] = useState(false)
   const [correct, setCorrect] = useState<'bullish' | 'bearish' | 'neutral' | null>(null)
   const [note, setNote] = useState('')
   const [state, setState] = useState<'idle' | 'saving' | 'done' | 'err'>('idle')
-  if (!secret) return null
+  if (!isAdmin) return null
 
   const submit = () => {
     setState('saving')
+    const token = localStorage.getItem('ft-session-token') || ''
     axios.post('/api/sentiment/report', {
       text: item.text, url: item.url || null, source: sourceLabel, published_at: item.published_at,
       scored: {
@@ -426,7 +431,7 @@ function ReportControl({ item, sourceLabel }: { item: ScoredItem; sourceLabel: s
         asset_directions: item.asset_directions ?? {}, entities: item.entities ?? [],
       },
       correct_sentiment: correct, note: note.trim() || null,
-    }, { headers: { 'x-admin-secret': secret } })
+    }, { headers: { Authorization: `Bearer ${token}` } })
       .then(() => { setState('done'); setTimeout(() => setOpen(false), 900) })
       .catch(() => setState('err'))
   }

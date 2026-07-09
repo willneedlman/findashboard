@@ -170,6 +170,22 @@ def _require_owner(user_id: str, authorization: str, x_session_token: str):
     if not hmac.compare_digest(owner, user_id):
         raise HTTPException(403, "You may only access your own data")
 
+
+# Admin *users* (by username) — distinct from the ADMIN_SECRET console gate. This
+# is the same signal that surfaces the "Admin Hub" link in the UI.
+_ADMIN_USERNAMES = {u.strip().lower() for u in os.getenv("ADMIN_USERNAMES", "wneedlman").split(",") if u.strip()}
+
+
+def is_admin_token(authorization: str, x_session_token: str) -> bool:
+    """True if the caller's session token belongs to an admin username."""
+    token = _extract_token(authorization, x_session_token)
+    uid = _user_id_for_token(token)
+    if not uid:
+        return False
+    with _lock, _conn() as c:
+        row = c.execute("SELECT username FROM users WHERE id = ?", (uid,)).fetchone()
+    return bool(row) and (row["username"] or "").lower() in _ADMIN_USERNAMES
+
 # ── Login rate limiting (per-IP sliding window over FAILED attempts) ─────────────
 
 _LOGIN_WINDOW   = 60.0   # seconds
