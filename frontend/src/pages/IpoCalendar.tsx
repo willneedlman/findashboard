@@ -350,7 +350,8 @@ export function IpoCalendarContent() {
       case 'Price':       return { kind: 'min', value: minPrice, set: setMinPrice, placeholder: '≥ $' }
       case 'Shares':      return { kind: 'min', value: minShares, set: setMinShares, placeholder: '≥ M' }
       case 'Deal Size':   return { kind: 'min', value: minDeal, set: setMinDeal, placeholder: '≥ $M' }
-      case 'Status':      return { kind: 'select', value: status, set: setStatus, options: STATUS_FILTERS }
+      // Status lives as a prominent top-bar facet (the primary lifecycle filter),
+      // so its column menu is sort-only.
       default:            return undefined
     }
   }
@@ -369,7 +370,17 @@ export function IpoCalendarContent() {
       }}>
         <Facet label="Window" value={days} onChange={setDays}
           options={WINDOWS.map(w => ({ label: w.label, key: w.days }))} />
-        <div style={{ flex: 1 }} />
+        <Facet label="Status" value={status} onChange={setStatus} options={STATUS_FILTERS} />
+        <div style={{ flex: 1, minWidth: 180, textAlign: 'right', paddingBottom: 7, fontFamily: C.sans, fontSize: 11, color: C.muted, lineHeight: 1.5 }}>
+          {!loading && !error && (
+            <>
+              <span style={{ color: C.text, fontWeight: 700 }}>{filtered.length}</span> listing{filtered.length === 1 ? '' : 's'}
+              {' · '}<span style={{ color: C.text }}>{priced}</span> released
+              {!sort && grouped.length > 0 && <>{' · '}{fmtDate(grouped[grouped.length - 1][0])} → {fmtDate(grouped[0][0])}</>}
+              {sort && <>{' · sorted by '}<span style={{ color: C.text }}>{sort.key}</span> {sort.dir === 'asc' ? '↑' : '↓'}</>}
+            </>
+          )}
+        </div>
         {watchSet.size > 0 && (
           <Toggle label="Watchlist" active={watchOnly} onClick={() => setWatchOnly(v => !v)} />
         )}
@@ -381,16 +392,6 @@ export function IpoCalendarContent() {
           }}>Clear filters</button>
         )}
       </div>
-
-      {/* Summary */}
-      {!loading && !error && (
-        <div style={{ fontFamily: C.sans, fontSize: 11, color: C.muted, marginBottom: 10 }}>
-          <span style={{ color: C.text, fontWeight: 700 }}>{filtered.length}</span> listing{filtered.length === 1 ? '' : 's'}
-          {' · '}<span style={{ color: C.text }}>{priced}</span> released
-          {!sort && grouped.length > 0 && <>{' · '}{fmtDate(grouped[grouped.length - 1][0])} → {fmtDate(grouped[0][0])}</>}
-          {sort && <>{' · sorted by '}<span style={{ color: C.text }}>{sort.key}</span> {sort.dir === 'asc' ? '↑' : '↓'}</>}
-        </div>
-      )}
 
       {loading && <Centered>Loading IPOs…</Centered>}
       {error && <Centered tone={C.neg}>{error}</Centered>}
@@ -465,7 +466,7 @@ function GroupBody({ gdate, grows, enriched, cols, isMobile, watch }: {
           <tr key={r.symbol + r.date} style={{ borderBottom: `1px solid ${C.border}` }}>
             <td style={{ padding: '10px 14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
-                <TickerLogo ticker={r.symbol} size={22} logoUrl={e?.logo || undefined} logoOnly />
+                <TickerLogo ticker={r.symbol} size={22} logoUrl={e?.logo || undefined} />
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontFamily: C.mono, fontSize: 13, fontWeight: 600, color: C.text }}>
                     <TickerLink ticker={r.symbol} />

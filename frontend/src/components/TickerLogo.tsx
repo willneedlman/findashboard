@@ -10,13 +10,14 @@ interface TickerLogoProps {
   ticker: string
   size?: number
   logoUrl?: string   // preferred source tried before the symbol-based providers
-  logoOnly?: boolean // skip the symbol-based providers; use logoUrl or the monogram
 }
 
-export default function TickerLogo({ ticker, size = 28, logoUrl, logoOnly }: TickerLogoProps) {
-  const sources = logoOnly
-    ? (logoUrl ? [logoUrl] : [])
-    : (logoUrl ? [logoUrl, ...tickerLogoSources(ticker)] : tickerLogoSources(ticker))
+export default function TickerLogo({ ticker, size = 28, logoUrl }: TickerLogoProps) {
+  // Try the resolved (name-based logo.dev / finnhub) URL first when present, then
+  // the symbol-based CDNs (Parqet, FMP), then a monogram — so both paths together
+  // maximize coverage: logo.dev catches freshly-filed names, Parqet/FMP catch
+  // established tickers logo.dev misses (SPCX, CBRS).
+  const sources = logoUrl ? [logoUrl, ...tickerLogoSources(ticker)] : tickerLogoSources(ticker)
   const [idx, setIdx] = useState(0)
   // Reset to the first provider when the symbol changes (component is reused) or
   // when a preferred logoUrl arrives after mount (async enrichment).
