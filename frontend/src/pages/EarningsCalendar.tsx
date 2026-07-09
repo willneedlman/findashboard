@@ -29,6 +29,7 @@ interface Enriched {
 }
 
 const WINDOWS = [{ label: 'Day', days: 1 }, { label: '3 Days', days: 3 }, { label: 'Week', days: 7 }]
+const CAP_FILTERS = [{ label: 'All', min: 0 }, { label: '$2B+', min: 2e9 }, { label: '$10B+', min: 10e9 }, { label: '$100B+', min: 100e9 }]
 const HOUR_LABEL: Record<string, string> = { bmo: 'Pre', amc: 'Post', dmh: 'Mid' }
 
 function today(): string { return new Date().toISOString().slice(0, 10) }
@@ -90,6 +91,7 @@ export function EarningsCalendarContent() {
 
   const [coveredOnly, setCoveredOnly] = useState(true)
   const [watchOnly, setWatchOnly] = useState(false)
+  const [minCap, setMinCap] = useState(0)
   const [query, setQuery] = useState('')
 
   const [enriched, setEnriched] = useState<Record<string, Enriched>>({})
@@ -156,14 +158,22 @@ export function EarningsCalendarContent() {
     if (pending.length) enrichBatch(pending.slice(0, 10))
   }, [sorted, enriched, enrichBatch])
 
+  // Market-cap filter applies AFTER enrichment is driven off `sorted`, so a row
+  // filtered out here is still enriched (no deadlock) and rows appear as their
+  // cap loads and qualifies. Unknown-cap rows are held back while a filter is on.
+  const visible = useMemo(() => {
+    if (!minCap) return sorted
+    return sorted.filter(r => { const c = enriched[r.symbol]?.marketCap; return c != null && c >= minCap })
+  }, [sorted, enriched, minCap])
+
   const grouped = useMemo(() => {
     const map = new Map<string, Row[]>()
-    for (const r of sorted) {
+    for (const r of visible) {
       const k = r.date || 'unknown'
       ;(map.get(k) || map.set(k, []).get(k)!).push(r)
     }
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]))
-  }, [sorted])
+  }, [visible])
 
   const cols = isMobile
     ? ['Symbol', 'Time', 'EPS Est', 'Impl', 'React']
@@ -201,6 +211,21 @@ export function EarningsCalendarContent() {
             ))}
           </div>
         </div>
+        <div>
+          <label style={{ ...LABEL, marginBottom: 5 }}>Market Cap</label>
+          <div style={{ display: 'flex', border: `1px solid ${C.border}` }}>
+            {CAP_FILTERS.map(c => (
+              <button key={c.min} onClick={() => setMinCap(c.min)}
+                style={{
+                  background: minCap === c.min ? C.gold : 'transparent',
+                  color: minCap === c.min ? C.header : C.muted,
+                  border: 'none', borderRight: `1px solid ${C.border}`, cursor: 'pointer',
+                  fontFamily: C.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em',
+                  textTransform: 'uppercase', padding: '8px 12px', whiteSpace: 'nowrap',
+                }}>{c.label}</button>
+            ))}
+          </div>
+        </div>
         <div style={{ flex: 1, minWidth: 160 }}>
           <label htmlFor="ec-search" style={{ ...LABEL, marginBottom: 5 }}>Search</label>
           <input id="ec-search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Ticker or company"
@@ -220,7 +245,7 @@ export function EarningsCalendarContent() {
       {/* Summary */}
       {!loading && !error && (
         <div style={{ fontFamily: C.sans, fontSize: 11, color: C.muted, marginBottom: 10 }}>
-          <span style={{ color: C.text, fontWeight: 700 }}>{filtered.length}</span> reporting
+          <span style={{ color: C.text, fontWeight: 700 }}>{minCap ? visible.length : filtered.length}</span> {minCap ? 'shown' : 'reporting'}
           {' · '}<span style={{ color: C.text }}>{covered}</span> with estimates
           {' · '}{fmtDate(date)}{days > 1 ? ` → ${fmtDate(grouped[grouped.length - 1]?.[0] || date)}` : ''}
         </div>
@@ -228,11 +253,11 @@ export function EarningsCalendarContent() {
 
       {loading && <Centered>Loading earnings…</Centered>}
       {error && <Centered tone={C.neg}>{error}</Centered>}
-      {!loading && !error && filtered.length === 0 && (
+      {!loading && !error && visible.length === 0 && (
         <Centered>No companies match. Widen the window or clear filters.</Centered>
       )}
 
-      {!loading && !error && filtered.length > 0 && (
+      {!loading && !error && visible.length > 0 && (
         <div style={{ border: `1px solid ${C.border}`, overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: isMobile ? 0 : 720 }}>
             <thead>
@@ -255,7 +280,7 @@ export function EarningsCalendarContent() {
         </div>
       )}
 
-      {!loading && !error && filtered.length > 0 && (
+      {!loading && !error && visible.length > 0 && (
         <div style={{ fontFamily: C.sans, fontSize: 10, color: C.muted, marginTop: 10, lineHeight: 1.7 }}>
           Impl Move = expected move priced into the ATM straddle of the expiry spanning this report.
           Surprise = last EPS vs estimate. React = stock's one-day move on its last report.
