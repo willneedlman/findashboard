@@ -163,7 +163,7 @@ function MacroEventHubContent() {
         <div style={{ width: '100%', minWidth: 960, maxWidth: 1700, margin: '0 auto' }}>
           {/* Header */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, paddingBottom: 14, borderBottom: `1px solid ${T.goldTint(45)}` }}>
-            <h1 className="ft-page-title" style={{ margin: 0 }}>MACRO EVENT RELEASE HUB</h1>
+            <h1 className="ft-page-title" style={{ margin: 0 }}>ECONOMIC CALENDAR</h1>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: T.label, fontSize: 10, color: T.muted }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: live ? T.pos : T.gold, display: 'inline-block' }} />
               {isLoading ? 'Loading live releases' : live ? 'Live · US, EU & Asia · FRED + Investing.com' : 'Showing bundled seed'}

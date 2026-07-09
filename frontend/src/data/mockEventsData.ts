@@ -1,4 +1,4 @@
-// Seed data for the Macro Event Release Hub (Macro hub tool). A realistic set of
+// Seed data for the Economic Calendar (Macro hub tool). A realistic set of
 // recent and upcoming economic + central-bank releases so the feed is fully
 // functional before it is ever wired to the live FRED/FMP calendar. Reactions
 // are the immediate cross-asset move in the minutes after each print. Yields are
