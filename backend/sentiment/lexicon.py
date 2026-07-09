@@ -448,6 +448,27 @@ _REVERSERS: frozenset[str] = frozenset({
 })
 _REVERSAL_FACTOR: float = 0.5
 
+# Idioms the token-set reverser can't express. Both mean "the scary thing did not
+# do damage / is being defused", so they trigger the same reassuring flip:
+#   "inflation fears FAIL TO SHAKE the yield outlook"  (the fear didn't bite)
+#   "mediators try to PREVENT ... WAR"                 (de-escalation, not war)
+_FAIL_TO_HURT_RE = re.compile(
+    r'\bfail(?:s|ed|ing)?\s+to\s+'
+    r'(?:shake|rattle|dent|derail|spook|faze|dampen|deter|sink|budge|move|shift|'
+    r'unsettle|scare|rock|jolt|shatter|break|hurt|hit|weigh)\b',
+    re.IGNORECASE)
+_WAR_DEESCALATION_RE = re.compile(
+    r'\b(?:prevent(?:s|ed|ing)?|avert(?:s|ed|ing)?|avoid(?:s|ed|ing)?|'
+    r'stop(?:s|ped|ping)?|halt(?:s|ed|ing)?|de-?escalat\w+)\b'
+    r'.{0,50}?\b(?:war|conflict|escalation|hostilities)\b',
+    re.IGNORECASE)
+
+
+def _has_reverser_framing(text: str, tokens: list[str]) -> bool:
+    return (any(t in _REVERSERS for t in tokens)
+            or bool(_FAIL_TO_HURT_RE.search(text))
+            or bool(_WAR_DEESCALATION_RE.search(text)))
+
 # De-escalation: removing a coercive measure is bullish ("lift sanctions", "scrap
 # tariffs", "end the trade war"). A removal verb before one of these coercion
 # nouns flips its bearish sign. Scoped to the nouns because the verbs are
@@ -927,9 +948,10 @@ def score_text(text: str, entities: list[Entity]) -> LexScore:
     hits = lex_hits + reprice_hits + _movement_hits(tokens, consumed)
     tier = derive_tier(text, entities)
 
-    # Dismissive framing ("fears are overblown") flips bearish contributions to a
-    # damped positive so the headline does not read as bearish.
-    if hits and any(t in _REVERSERS for t in tokens):
+    # Dismissive framing ("fears are overblown"), "fail to shake" idioms, and war
+    # de-escalation flip bearish contributions to a damped positive so the headline
+    # does not read as bearish.
+    if hits and _has_reverser_framing(text, tokens):
         hits = [
             h if h.contribution >= 0 else
             replace(h, polarity=-h.polarity * _REVERSAL_FACTOR, contribution=-h.contribution * _REVERSAL_FACTOR)

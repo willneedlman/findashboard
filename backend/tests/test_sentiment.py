@@ -53,6 +53,12 @@ def test_score_text_is_deterministic():
     ("Stocks rally to record high on strong jobs report", "bullish"),
     ("Recession fears grip markets", "bearish"),
     ("Company opens new office in Denver", "neutral"),
+    # "fail to [hurt]" idiom + war de-escalation both read reassuring...
+    ("War-driven inflation fears fail to shake U.S. Treasury yield outlook", "bullish"),
+    ("Oil prices fall 2% as mediators try to prevent U.S. and Iran from returning to war", "bullish"),
+    # ...but the bare scary tokens must still score bearish (no over-flip).
+    ("Rescue talks fail as recession deepens", "bearish"),
+    ("Israel launches war on Iran, oil spikes", "bearish"),
 ])
 def test_lexicon_directions(text, expected):
     assert score_text(text, extract_entities(text)).sentiment == expected
