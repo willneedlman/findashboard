@@ -97,7 +97,9 @@ function Row({ e, zebra, expanded, onToggle, alerted, onAlert }: {
           {released ? e.actual : countdownShort(e.datetime)}
         </span>
         {/* CONSENSUS */}
-        <span style={{ ...cell, textAlign: 'right', fontSize: 12, color: e.status === 'upcoming' && e.expected ? T.text : T.muted }}>{e.expected ?? '—'}</span>
+        {e.expected
+          ? <span style={{ ...cell, textAlign: 'right', fontSize: 12, color: e.status === 'upcoming' ? T.text : T.muted }}>{e.expected}</span>
+          : <span style={{ textAlign: 'right', fontFamily: T.label, fontSize: 9.5, fontStyle: 'italic', color: T.muted, whiteSpace: 'nowrap' }}>{e.status === 'upcoming' ? 'Not released' : '—'}</span>}
         {/* PREVIOUS */}
         <span style={{ ...cell, textAlign: 'right', fontSize: 12, color: T.muted }}>{e.previous}</span>
         {/* SURPRISE */}
@@ -107,20 +109,22 @@ function Row({ e, zebra, expanded, onToggle, alerted, onAlert }: {
             </span>
           : <span style={{ ...cell, textAlign: 'right', fontSize: 11, color: T.muted }}>—</span>}
         {/* REACTION — three fixed columns of asset + colored value, no chip fills */}
-        {released
-          ? <span style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: 10, fontFamily: T.mono, fontSize: 10, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-              {[0, 1, 2].map(i => {
-                const r = e.reactions[i]
-                if (!r) return <span key={i} />
-                return (
-                  <span key={r.asset} style={{ display: 'flex', justifyContent: 'space-between', gap: 4, whiteSpace: 'nowrap' }}>
-                    <span style={{ color: T.muted }}>{reactionCode(r.asset)}</span>
-                    <span style={{ color: r.change >= 0 ? T.pos : T.neg }}>{reactionValue(r)}</span>
-                  </span>
-                )
-              })}
-            </span>
-          : <span style={{ fontFamily: T.label, fontSize: 10.5, fontStyle: 'italic', color: T.muted }}>Pending release</span>}
+        {!released
+          ? <span style={{ fontFamily: T.label, fontSize: 10.5, fontStyle: 'italic', color: T.muted }}>Not released</span>
+          : e.reactions.length
+            ? <span style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: 10, fontFamily: T.mono, fontSize: 10, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                {[0, 1, 2].map(i => {
+                  const r = e.reactions[i]
+                  if (!r) return <span key={i} />
+                  return (
+                    <span key={r.asset} style={{ display: 'flex', justifyContent: 'space-between', gap: 4, whiteSpace: 'nowrap' }}>
+                      <span style={{ color: T.muted }}>{reactionCode(r.asset)}</span>
+                      <span style={{ color: r.change >= 0 ? T.pos : T.neg }}>{reactionValue(r)}</span>
+                    </span>
+                  )
+                })}
+              </span>
+            : <span style={{ fontFamily: T.label, fontSize: 10.5, fontStyle: 'italic', color: T.muted }}>Awaiting close</span>}
         {/* HISTORY */}
         <Sparkline history={e.history} released={released} />
         {/* BELL */}
@@ -135,6 +139,11 @@ function Row({ e, zebra, expanded, onToggle, alerted, onAlert }: {
         <div style={{ overflow: 'hidden' }}>
           <div className="mev-fade" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 24, padding: '4px 16px 16px 154px', opacity: expanded ? 1 : 0 }}>
             <div>
+              {/* Full, untruncated title — the row above ellipsizes it */}
+              <div style={{ marginBottom: 8 }}>
+                <span style={{ fontFamily: T.mono, fontSize: 13, fontWeight: 700, color: T.gold }}>{e.name}</span>
+                <span style={{ fontFamily: T.label, fontSize: 10.5, color: T.muted }}> · {e.category} · {e.country} · {e.sourceName}</span>
+              </div>
               <p style={{ margin: 0, fontFamily: T.label, fontSize: 12, lineHeight: 1.6, color: T.text, maxWidth: 720 }}>{e.summary}</p>
               <a href={e.sourceUrl} target="_blank" rel="noopener noreferrer" onClick={ev => ev.stopPropagation()}
                 style={{ display: 'inline-block', marginTop: 8, fontFamily: T.label, fontSize: 10.5, fontWeight: 600, color: T.blue, textDecoration: 'none' }}>
