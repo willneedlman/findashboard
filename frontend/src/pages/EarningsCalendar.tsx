@@ -4,6 +4,7 @@ import { Star } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import TickerLogo from '../components/TickerLogo'
 import TickerLink from '../components/TickerLink'
+import ColumnFilterMenu, { type SortState, type FilterSpec } from '../components/ColumnFilterMenu'
 import useIsMobile from '../hooks/useIsMobile'
 import { usePortfolio } from '../contexts/PortfolioContext'
 
@@ -30,7 +31,6 @@ interface Enriched {
 }
 
 const WINDOWS = [{ label: 'Day', days: 1 }, { label: '3 Days', days: 3 }, { label: 'Week', days: 7 }]
-const CAP_FILTERS = [{ label: 'All', min: 0 }, { label: '$2B+', min: 2e9 }, { label: '$10B+', min: 10e9 }, { label: '$100B+', min: 100e9 }]
 const HOUR_LABEL: Record<string, string> = { bmo: 'Pre', amc: 'Post', dmh: 'Mid' }
 
 function today(): string { return new Date().toISOString().slice(0, 10) }
@@ -92,8 +92,12 @@ export function EarningsCalendarContent() {
 
   const [coveredOnly, setCoveredOnly] = useState(true)
   const [watchOnly, setWatchOnly] = useState(false)
-  const [minCap, setMinCap] = useState(0)
   const [query, setQuery] = useState('')
+  const [minCapStr, setMinCapStr] = useState('')   // in $B
+  const [hourFilter, setHourFilter] = useState('') // '', bmo, amc, dmh
+  const [sort, setSort] = useState<SortState>(null) // a user sort flattens the date grouping
+
+  const minCap = (parseFloat(minCapStr) || 0) * 1e9
 
   const [enriched, setEnriched] = useState<Record<string, Enriched>>({})
   const enrichingRef = useRef<Set<string>>(new Set())
@@ -113,13 +117,14 @@ export function EarningsCalendarContent() {
     return rows.filter(r => {
       if (coveredOnly && r.epsEstimate == null) return false
       if (watchOnly && !watchSet.has(r.symbol.toUpperCase())) return false
+      if (hourFilter && r.hour !== hourFilter) return false
       if (q) {
         const name = (enriched[r.symbol]?.companyName || '').toUpperCase()
         if (!r.symbol.toUpperCase().includes(q) && !name.includes(q)) return false
       }
       return true
     })
-  }, [rows, coveredOnly, watchOnly, watchSet, query, enriched])
+  }, [rows, coveredOnly, watchOnly, watchSet, query, hourFilter, enriched])
 
   // Enrich the visible rows in small batches so the table fills progressively
   // and no single request blocks on a long list of yfinance lookups.
@@ -167,18 +172,67 @@ export function EarningsCalendarContent() {
     return sorted.filter(r => { const c = enriched[r.symbol]?.marketCap; return c != null && c >= minCap })
   }, [sorted, enriched, minCap])
 
-  const grouped = useMemo(() => {
+  // Default groups by date; a user sort flattens to one ordered list (the '' key
+  // tells GroupBody to drop the date header).
+  const grouped = useMemo<[string, Row[]][]>(() => {
+    if (sort) {
+      const rank: Record<string, number> = { bmo: 0, dmh: 1, amc: 2 }
+      const val = (r: Row): number | string => {
+        const e = enriched[r.symbol]
+        switch (sort.key) {
+          case 'symbol':          return r.symbol
+          case 'marketCap':       return e?.marketCap ?? -1
+          case 'hour':            return rank[r.hour] ?? 3
+          case 'epsEstimate':     return r.epsEstimate ?? -1e18
+          case 'revenueEstimate': return r.revenueEstimate ?? -1
+          case 'impliedMove':     return e?.impliedMove ?? -1
+          case 'surprisePct':     return e?.surprisePct ?? -1e18
+          case 'reactionPct':     return e?.reactionPct ?? -1e18
+          case 'runSincePct':     return e?.runSincePct ?? -1e18
+          default:                return 0
+        }
+      }
+      const flat = [...visible].sort((a, b) => {
+        const av = val(a), bv = val(b)
+        const cmp = typeof av === 'string' || typeof bv === 'string'
+          ? String(av).localeCompare(String(bv))
+          : (av as number) - (bv as number)
+        return sort.dir === 'asc' ? cmp : -cmp
+      })
+      return [['', flat]]
+    }
     const map = new Map<string, Row[]>()
     for (const r of visible) {
       const k = r.date || 'unknown'
       ;(map.get(k) || map.set(k, []).get(k)!).push(r)
     }
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]))
-  }, [visible])
+  }, [visible, sort, enriched])
 
   const cols = isMobile
     ? ['Symbol', 'Time', 'EPS Est', 'Impl', 'React']
     : ['Symbol', 'Mkt Cap', 'Time', 'EPS Est', 'Rev Est', 'Impl Move', 'Surprise', 'React', 'Since']
+
+  const anyFilter = !!(query || minCapStr || hourFilter || sort)
+  const clearFilters = () => { setQuery(''); setMinCapStr(''); setHourFilter(''); setSort(null) }
+
+  const SORT_KEY: Record<string, string> = {
+    'Symbol': 'symbol', 'Mkt Cap': 'marketCap', 'Time': 'hour', 'EPS Est': 'epsEstimate',
+    'Rev Est': 'revenueEstimate', 'Impl Move': 'impliedMove', 'Impl': 'impliedMove',
+    'Surprise': 'surprisePct', 'React': 'reactionPct', 'Since': 'runSincePct',
+  }
+  const colFilterSpec = (c: string): FilterSpec | undefined => {
+    switch (c) {
+      case 'Symbol':  return { kind: 'text', value: query, set: setQuery, placeholder: 'Ticker or company' }
+      case 'Mkt Cap': return { kind: 'min', value: minCapStr, set: setMinCapStr, placeholder: '≥ $B' }
+      case 'Time':    return { kind: 'select', value: hourFilter, set: setHourFilter,
+                        options: [{ label: 'All', key: '' }, { label: 'Pre', key: 'bmo' }, { label: 'Post', key: 'amc' }, { label: 'Mid', key: 'dmh' }] }
+      default:        return undefined
+    }
+  }
+  const colMenu = (c: string, align: 'left' | 'right') => (
+    <ColumnFilterMenu align={align} sortKey={SORT_KEY[c]} sort={sort} onSort={setSort} filter={colFilterSpec(c)} />
+  )
 
   return (
     <>
@@ -212,33 +266,18 @@ export function EarningsCalendarContent() {
             ))}
           </div>
         </div>
-        <div>
-          <label style={{ ...LABEL, marginBottom: 5 }}>Market Cap</label>
-          <div style={{ display: 'flex', border: `1px solid ${C.border}` }}>
-            {CAP_FILTERS.map(c => (
-              <button key={c.min} onClick={() => setMinCap(c.min)}
-                style={{
-                  background: minCap === c.min ? C.gold : 'transparent',
-                  color: minCap === c.min ? C.header : C.muted,
-                  border: 'none', borderRight: `1px solid ${C.border}`, cursor: 'pointer',
-                  fontFamily: C.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em',
-                  textTransform: 'uppercase', padding: '8px 12px', whiteSpace: 'nowrap',
-                }}>{c.label}</button>
-            ))}
-          </div>
-        </div>
-        <div style={{ flex: 1, minWidth: 160 }}>
-          <label htmlFor="ec-search" style={{ ...LABEL, marginBottom: 5 }}>Search</label>
-          <input id="ec-search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Ticker or company"
-            style={{
-              width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`,
-              color: C.text, fontFamily: C.mono, fontSize: 13, padding: '7px 10px',
-            }} />
-        </div>
+        <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', gap: 8 }}>
           <Toggle label="Covered" active={coveredOnly} onClick={() => setCoveredOnly(v => !v)} />
           {watchSet.size > 0 && (
             <Toggle label="Watchlist" active={watchOnly} onClick={() => setWatchOnly(v => !v)} />
+          )}
+          {anyFilter && (
+            <button onClick={clearFilters} style={{
+              background: 'transparent', border: `1px solid ${C.border}`, color: C.muted, cursor: 'pointer',
+              fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
+              padding: '8px 12px', whiteSpace: 'nowrap',
+            }}>Clear filters</button>
           )}
         </div>
       </div>
@@ -248,7 +287,9 @@ export function EarningsCalendarContent() {
         <div style={{ fontFamily: C.sans, fontSize: 11, color: C.muted, marginBottom: 10 }}>
           <span style={{ color: C.text, fontWeight: 700 }}>{minCap ? visible.length : filtered.length}</span> {minCap ? 'shown' : 'reporting'}
           {' · '}<span style={{ color: C.text }}>{covered}</span> with estimates
-          {' · '}{fmtDate(date)}{days > 1 ? ` → ${fmtDate(grouped[grouped.length - 1]?.[0] || date)}` : ''}
+          {sort
+            ? <>{' · sorted by '}<span style={{ color: C.text }}>{sort.key}</span> {sort.dir === 'asc' ? '↑' : '↓'}</>
+            : <>{' · '}{fmtDate(date)}{days > 1 ? ` → ${fmtDate(grouped[grouped.length - 1]?.[0] || date)}` : ''}</>}
         </div>
       )}
 
@@ -267,14 +308,18 @@ export function EarningsCalendarContent() {
                   <th key={c} style={{
                     ...LABEL, display: 'table-cell', textAlign: i === 0 ? 'left' : 'right', padding: '9px 14px',
                     position: 'sticky', top: 0, background: C.header, borderBottom: `1px solid ${C.border}`,
-                  }}>{c}</th>
+                  }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', verticalAlign: 'middle' }}>
+                      {c}{colMenu(c, i === 0 ? 'left' : 'right')}
+                    </span>
+                  </th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {grouped.map(([gdate, grows]) => (
                 <GroupBody key={gdate} gdate={gdate} grows={grows} enriched={enriched}
-                  cols={cols.length} isMobile={isMobile} showHeader={days > 1} watch={watchSet} />
+                  cols={cols.length} isMobile={isMobile} showHeader={!sort && days > 1} watch={watchSet} />
               ))}
             </tbody>
           </table>

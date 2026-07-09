@@ -4,6 +4,7 @@ import { Star } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import TickerLogo from '../components/TickerLogo'
 import TickerLink from '../components/TickerLink'
+import ColumnFilterMenu, { type SortState, type FilterSpec } from '../components/ColumnFilterMenu'
 import useIsMobile from '../hooks/useIsMobile'
 import { usePortfolio } from '../contexts/PortfolioContext'
 
@@ -170,42 +171,6 @@ function Facet<T extends string | number>({ label, value, options, onChange }: {
   )
 }
 
-// Compact filter fields that sit under a column header. The header label is the
-// visible label; a gold border marks an active filter.
-const HFIELD: React.CSSProperties = {
-  width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`,
-  color: C.text, fontFamily: C.mono, fontSize: 11, padding: '4px 7px', outline: 'none',
-}
-
-function HeaderText({ value, onChange, placeholder, align = 'left' }: {
-  value: string; onChange: (v: string) => void; placeholder?: string; align?: 'left' | 'right'
-}) {
-  return <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-    aria-label={placeholder} style={{ ...HFIELD, textAlign: align, borderColor: value ? C.gold : C.border }} />
-}
-
-function HeaderNum({ value, onChange, placeholder }: {
-  value: string; onChange: (v: string) => void; placeholder?: string
-}) {
-  return <input type="number" inputMode="decimal" min={0} value={value} placeholder={placeholder}
-    aria-label={placeholder} onChange={e => onChange(e.target.value)}
-    style={{ ...HFIELD, textAlign: 'right', borderColor: value ? C.gold : C.border }} />
-}
-
-function HeaderSelect({ value, onChange, options }: {
-  value: string; onChange: (v: string) => void; options: { label: string; key: string }[]
-}) {
-  return (
-    <select value={value} onChange={e => onChange(e.target.value)}
-      style={{ ...HFIELD, cursor: 'pointer', fontFamily: C.sans, fontWeight: 700, fontSize: 10,
-        textTransform: 'uppercase', color: value ? C.gold : C.muted, borderColor: value ? C.gold : C.border }}>
-      {options.map(o => (
-        <option key={o.key} value={o.key} style={{ background: C.header, color: C.text, textTransform: 'none' }}>{o.label}</option>
-      ))}
-    </select>
-  )
-}
-
 function StatusChip({ status }: { status: string }) {
   const s = STATUS[status]
   if (!s) return <span style={{ color: C.dim, fontFamily: C.mono, fontSize: 11 }}>—</span>
@@ -239,6 +204,8 @@ export function IpoCalendarContent() {
   const [minPrice, setMinPrice] = useState('')
   const [minShares, setMinShares] = useState('')
   const [minDeal, setMinDeal] = useState('')
+  // A user sort flattens the date-grouped agenda into one globally ordered list.
+  const [sort, setSort] = useState<SortState>(null)
 
   const [enriched, setEnriched] = useState<Record<string, Enriched>>({})
   const enrichingRef = useRef<Set<string>>(new Set())
@@ -323,42 +290,73 @@ export function IpoCalendarContent() {
     if (pending.length) enrichBatch(pending.slice(0, 12))
   }, [sortedForEnrich, enriched, enrichBatch])
 
-  const grouped = useMemo(() => {
+  // Default view groups by date; a user sort flattens to one ordered list (the
+  // synthetic '' group key tells GroupBody to drop the date header).
+  const grouped = useMemo<[string, Row[]][]>(() => {
+    if (sort) {
+      const val = (r: Row): number | string => {
+        const e = enriched[r.symbol]
+        switch (sort.key) {
+          case 'symbol':   return r.symbol
+          case 'mktcap':   return ipoMktCap(r, e) ?? -1
+          case 'exchange': return exchangeFamily(r.exchange)
+          case 'method':   return ipoMethod(r.name, e) ?? 'zzz'
+          case 'price':    return midPrice(r.price) ?? -1
+          case 'shares':   return r.shares ?? -1
+          case 'deal':     return r.dealValue ?? -1
+          case 'status':   return STATUS[r.status]?.label ?? r.status
+          default:         return 0
+        }
+      }
+      const flat = [...filtered].sort((a, b) => {
+        const av = val(a), bv = val(b)
+        const cmp = typeof av === 'string' || typeof bv === 'string'
+          ? String(av).localeCompare(String(bv))
+          : (av as number) - (bv as number)
+        return sort.dir === 'asc' ? cmp : -cmp
+      })
+      return [['', flat]]
+    }
     const map = new Map<string, Row[]>()
     for (const r of sorted) {
       const k = r.date || 'unknown'
       ;(map.get(k) || map.set(k, []).get(k)!).push(r)
     }
     return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]))
-  }, [sorted])
+  }, [sort, filtered, sorted, enriched])
 
   const cols = isMobile
     ? ['Symbol', 'Price', 'Status']
     : ['Symbol', 'IPO Mkt Cap', 'Exchange', 'Method', 'Price', 'Shares', 'Deal Size', 'Status']
 
-  const anyFilter = !!(status || method || exchange || query || minMktCap || minPrice || minShares || minDeal || watchOnly)
+  const anyFilter = !!(status || method || exchange || query || minMktCap || minPrice || minShares || minDeal || watchOnly || sort)
   const clearFilters = () => {
     setStatus(''); setMethod(''); setExchange(''); setQuery('')
-    setMinMktCap(''); setMinPrice(''); setMinShares(''); setMinDeal(''); setWatchOnly(false)
+    setMinMktCap(''); setMinPrice(''); setMinShares(''); setMinDeal(''); setWatchOnly(false); setSort(null)
   }
 
-  // One filter control per column, rendered under its header label. Row-level
+  // Sort key per column, and the filter each column's menu exposes. Row-level
   // columns filter instantly; Method and Mkt Cap resolve as enrichment lands.
-  const colFilter = (c: string) => {
+  const SORT_KEY: Record<string, string> = {
+    'Symbol': 'symbol', 'IPO Mkt Cap': 'mktcap', 'Exchange': 'exchange', 'Method': 'method',
+    'Price': 'price', 'Shares': 'shares', 'Deal Size': 'deal', 'Status': 'status',
+  }
+  const colFilterSpec = (c: string): FilterSpec | undefined => {
     switch (c) {
-      case 'Symbol':      return <HeaderText value={query} onChange={setQuery} placeholder="Search" align="left" />
-      case 'IPO Mkt Cap': return <HeaderNum value={minMktCap} onChange={setMinMktCap} placeholder="≥ $M" />
-      case 'Exchange':    return <HeaderSelect value={exchange} onChange={setExchange}
-                            options={[{ label: 'All', key: '' }, ...exchanges.map(e => ({ label: e, key: e }))]} />
-      case 'Method':      return <HeaderSelect value={method} onChange={v => setMethod(v as '' | MethodKey)}
-                            options={[{ label: 'All', key: '' }, ...METHODS.map(m => ({ label: m.label, key: m.key }))]} />
-      case 'Price':       return <HeaderNum value={minPrice} onChange={setMinPrice} placeholder="≥ $" />
-      case 'Shares':      return <HeaderNum value={minShares} onChange={setMinShares} placeholder="≥ M" />
-      case 'Deal Size':   return <HeaderNum value={minDeal} onChange={setMinDeal} placeholder="≥ $M" />
-      case 'Status':      return <HeaderSelect value={status} onChange={setStatus} options={STATUS_FILTERS} />
-      default:            return null
+      case 'Symbol':      return { kind: 'text', value: query, set: setQuery, placeholder: 'Ticker or company' }
+      case 'IPO Mkt Cap': return { kind: 'min', value: minMktCap, set: setMinMktCap, placeholder: '≥ $M' }
+      case 'Exchange':    return { kind: 'select', value: exchange, set: setExchange, options: [{ label: 'All', key: '' }, ...exchanges.map(e => ({ label: e, key: e }))] }
+      case 'Method':      return { kind: 'select', value: method, set: v => setMethod(v as '' | MethodKey), options: [{ label: 'All', key: '' }, ...METHODS.map(m => ({ label: m.label, key: m.key }))] }
+      case 'Price':       return { kind: 'min', value: minPrice, set: setMinPrice, placeholder: '≥ $' }
+      case 'Shares':      return { kind: 'min', value: minShares, set: setMinShares, placeholder: '≥ M' }
+      case 'Deal Size':   return { kind: 'min', value: minDeal, set: setMinDeal, placeholder: '≥ $M' }
+      case 'Status':      return { kind: 'select', value: status, set: setStatus, options: STATUS_FILTERS }
+      default:            return undefined
     }
   }
+  const colMenu = (c: string, align: 'left' | 'right') => (
+    <ColumnFilterMenu align={align} sortKey={SORT_KEY[c]} sort={sort} onSort={setSort} filter={colFilterSpec(c)} />
+  )
 
   return (
     <>
@@ -389,7 +387,8 @@ export function IpoCalendarContent() {
         <div style={{ fontFamily: C.sans, fontSize: 11, color: C.muted, marginBottom: 10 }}>
           <span style={{ color: C.text, fontWeight: 700 }}>{filtered.length}</span> listing{filtered.length === 1 ? '' : 's'}
           {' · '}<span style={{ color: C.text }}>{priced}</span> released
-          {grouped.length > 0 && <>{' · '}{fmtDate(grouped[grouped.length - 1][0])} → {fmtDate(grouped[0][0])}</>}
+          {!sort && grouped.length > 0 && <>{' · '}{fmtDate(grouped[grouped.length - 1][0])} → {fmtDate(grouped[0][0])}</>}
+          {sort && <>{' · sorted by '}<span style={{ color: C.text }}>{sort.key}</span> {sort.dir === 'asc' ? '↑' : '↓'}</>}
         </div>
       )}
 
@@ -406,11 +405,12 @@ export function IpoCalendarContent() {
               <tr style={{ background: C.header }}>
                 {cols.map((c, i) => (
                   <th key={c} style={{
-                    textAlign: i === 0 ? 'left' : 'right', padding: '9px 14px', verticalAlign: 'top',
+                    ...LABEL, display: 'table-cell', textAlign: i === 0 ? 'left' : 'right', padding: '9px 14px',
                     position: 'sticky', top: 0, background: C.header, borderBottom: `1px solid ${C.border}`,
                   }}>
-                    <div style={{ ...LABEL, marginBottom: 6, textAlign: i === 0 ? 'left' : 'right' }}>{c}</div>
-                    {colFilter(c)}
+                    <span style={{ display: 'inline-flex', alignItems: 'center', verticalAlign: 'middle' }}>
+                      {c}{colMenu(c, i === 0 ? 'left' : 'right')}
+                    </span>
                   </th>
                 ))}
               </tr>
@@ -448,13 +448,15 @@ function GroupBody({ gdate, grows, enriched, cols, isMobile, watch }: {
 }) {
   return (
     <>
-      <tr>
-        <td colSpan={cols} style={{
-          background: C.bg, padding: '7px 14px', borderBottom: `1px solid ${C.border}`,
-          fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em',
-          textTransform: 'uppercase', color: C.gold,
-        }}>{fmtDate(gdate)} · {grows.length}</td>
-      </tr>
+      {gdate && (
+        <tr>
+          <td colSpan={cols} style={{
+            background: C.bg, padding: '7px 14px', borderBottom: `1px solid ${C.border}`,
+            fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em',
+            textTransform: 'uppercase', color: C.gold,
+          }}>{fmtDate(gdate)} · {grows.length}</td>
+        </tr>
+      )}
       {grows.map(r => {
         const e = enriched[r.symbol]
         const pending = !e
