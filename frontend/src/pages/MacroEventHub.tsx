@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 import { Loader2, Inbox } from 'lucide-react'
 import { T } from '../lib/theme'
+import { useTheme } from '../contexts/ThemeContext'
 import PageWrapper from '../components/PageWrapper'
 import { MOCK_EVENTS, type MacroEvent } from '../data/mockEventsData'
 import MacroToolbar, { type Filters } from '../components/macroEvents/MacroToolbar'
@@ -10,11 +11,9 @@ import ReleaseTape, { type Section, type Sort } from '../components/macroEvents/
 import { dayKey, dayLabel, sortValue } from '../components/macroEvents/tapeUtils'
 
 interface EventsResponse { events: MacroEvent[]; source: string; note?: string }
-const ALERTS_KEY = 'macro-event-alerts'
-
-function loadAlerts(): Set<string> {
-  try { return new Set(JSON.parse(localStorage.getItem(ALERTS_KEY) || '[]')) } catch { return new Set() }
-}
+interface AlertRow { id: string; condition: string; payload: string | null }
+const ALERT_DAYS = 3   // heads-up window for a tape bell
+const seriesName = (e: MacroEvent) => e.name.split(' (')[0]
 
 function Stat({ value, label, color }: { value: number; label: string; color: string }) {
   return (
@@ -29,8 +28,9 @@ function MacroEventHubContent() {
   const [filters, setFilters] = useState<Filters>({ query: '', region: 'ALL', impact: 'ALL', from: '', to: '' })
   const [sort, setSort] = useState<Sort>({ column: 'time', dir: 'asc' })
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [alerts, setAlerts] = useState<Set<string>>(loadAlerts)
   const [, setTick] = useState(0)
+  const { user } = useTheme()
+  const qc = useQueryClient()
 
   // Countdowns re-render once a minute.
   useEffect(() => { const id = setInterval(() => setTick(t => t + 1), 60_000); return () => clearInterval(id) }, [])
@@ -55,12 +55,42 @@ function MacroEventHubContent() {
   const fromEff = filters.from || defaultRange.from
   const toEff = filters.to || defaultRange.to
 
-  const toggleAlert = (id: string) => setAlerts(prev => {
-    const next = new Set(prev)
-    next.has(id) ? next.delete(id) : next.add(id)
-    localStorage.setItem(ALERTS_KEY, JSON.stringify([...next]))
-    return next
+  // Release-tape bells are real macro alerts, keyed by event series name so all
+  // rows of one series (e.g. every CPI print) share a single recurring alert.
+  const { data: alertData } = useQuery<{ alerts: AlertRow[] }>({
+    queryKey: ['alerts', user?.id],
+    queryFn: () => axios.get(`/api/alerts/${user!.id}`).then(r => r.data),
+    enabled: !!user,
   })
+  const seriesAlerts = useMemo(() => {
+    const map = new Map<string, string>()   // series name -> alert id
+    for (const a of alertData?.alerts ?? []) {
+      if (a.condition !== 'macro_event_within_days' || !a.payload) continue
+      try {
+        const p = JSON.parse(a.payload)
+        if (p.source === 'release-hub') for (const n of p.names ?? []) map.set(n, a.id)
+      } catch { /* skip malformed */ }
+    }
+    return map
+  }, [alertData])
+
+  const createMut = useMutation({
+    mutationFn: (body: object) => axios.post('/api/alerts', body).then(r => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['alerts', user?.id] }),
+  })
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => axios.delete(`/api/alerts/${id}`).then(r => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['alerts', user?.id] }),
+  })
+
+  const isAlerted = (e: MacroEvent) => seriesAlerts.has(seriesName(e))
+  const toggleAlert = (e: MacroEvent) => {
+    if (!user) return
+    const name = seriesName(e)
+    const existing = seriesAlerts.get(name)
+    if (existing) deleteMut.mutate(existing)
+    else createMut.mutate({ user_id: user.id, ticker: 'MARKET', condition: 'macro_event_within_days', threshold: ALERT_DAYS, payload: { source: 'release-hub', names: [name], label: name } })
+  }
 
   const onSort = (col: Sort['column']) =>
     setSort(s => (s.column === col ? { column: col, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { column: col, dir: 'asc' }))
@@ -154,7 +184,7 @@ function MacroEventHubContent() {
             : <ReleaseTape sections={sections} totalCount={filtered.length} nextHigh={nextHigh}
                 sort={sort} onSort={onSort}
                 expandedId={expandedId} onToggle={id => setExpandedId(cur => (cur === id ? null : id))}
-                alerts={alerts} onAlert={toggleAlert} />}
+                isAlerted={isAlerted} onAlert={toggleAlert} />}
         </div>
       </div>
       <style>{'@keyframes me-spin{to{transform:rotate(360deg)}}.mev-expand{transition:grid-template-rows 180ms cubic-bezier(0.23,1,0.32,1)}.mev-fade{transition:opacity 180ms ease}@media (prefers-reduced-motion: reduce){.mev-expand,.mev-fade{transition:none}}'}</style>

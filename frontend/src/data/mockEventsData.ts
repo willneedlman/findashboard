@@ -56,6 +56,7 @@ export const MOCK_EVENTS: MacroEvent[] = [
   // ── Upcoming ────────────────────────────────────────────────────────────────
   {
     id: 'us-cpi-jun',
+    history: [3.1, 2.9, 2.7, 2.6, 2.5, 2.4, 2.4],
     name: 'CPI Inflation (June)',
     country: 'United States', countryCode: 'US', region: 'US', category: 'Inflation',
     datetime: '2026-07-15T08:30:00-04:00', displayTime: 'Jul 15, 2026 · 08:30 ET',
@@ -67,6 +68,7 @@ export const MOCK_EVENTS: MacroEvent[] = [
   },
   {
     id: 'cn-gdp-q2',
+    history: [5.5, 5.3, 5.4, 5.2, 5.3, 5.2, 5.2],
     name: 'GDP Growth (Q2)',
     country: 'China', countryCode: 'CN', region: 'ASIA', category: 'Growth',
     datetime: '2026-07-15T10:00:00+08:00', displayTime: 'Jul 15, 2026 · 10:00 CST',
@@ -78,6 +80,7 @@ export const MOCK_EVENTS: MacroEvent[] = [
   },
   {
     id: 'uk-cpi-jun',
+    history: [4.2, 4.0, 3.8, 3.6, 3.5, 3.4, 3.4],
     name: 'CPI Inflation (June)',
     country: 'United Kingdom', countryCode: 'UK', region: 'EU', category: 'Inflation',
     datetime: '2026-07-16T07:00:00+01:00', displayTime: 'Jul 16, 2026 · 07:00 BST',
@@ -89,6 +92,7 @@ export const MOCK_EVENTS: MacroEvent[] = [
   },
   {
     id: 'eu-pmi-jul',
+    history: [48.9, 49.3, 49.8, 50.1, 50.4, 50.6, 50.6],
     name: 'Flash Composite PMI (July)',
     country: 'Eurozone', countryCode: 'EU', region: 'EU', category: 'Sentiment',
     datetime: '2026-07-23T10:00:00+02:00', displayTime: 'Jul 23, 2026 · 10:00 CET',
@@ -100,6 +104,7 @@ export const MOCK_EVENTS: MacroEvent[] = [
   },
   {
     id: 'ecb-jul',
+    history: [3.5, 3.0, 2.75, 2.5, 2.25, 2.0, 2.0],
     name: 'ECB Deposit Rate Decision',
     country: 'Eurozone', countryCode: 'EU', region: 'EU', category: 'Central Bank',
     datetime: '2026-07-24T14:15:00+02:00', displayTime: 'Jul 24, 2026 · 14:15 CET',
@@ -111,6 +116,7 @@ export const MOCK_EVENTS: MacroEvent[] = [
   },
   {
     id: 'fomc-jul',
+    history: [5.0, 4.75, 4.5, 4.5, 4.5, 4.5, 4.5],
     name: 'FOMC Rate Decision',
     country: 'United States', countryCode: 'US', region: 'US', category: 'Central Bank',
     datetime: '2026-07-29T14:00:00-04:00', displayTime: 'Jul 29, 2026 · 14:00 ET',
@@ -124,6 +130,7 @@ export const MOCK_EVENTS: MacroEvent[] = [
   // ── Released ────────────────────────────────────────────────────────────────
   {
     id: 'us-nfp-jun',
+    history: [175, 160, 142, 150, 144, 144, 147],
     name: 'Non-Farm Payrolls (June)',
     country: 'United States', countryCode: 'US', region: 'US', category: 'Labor',
     datetime: '2026-07-03T08:30:00-04:00', displayTime: 'Jul 3, 2026 · 08:30 ET',
@@ -139,6 +146,7 @@ export const MOCK_EVENTS: MacroEvent[] = [
   },
   {
     id: 'us-ism-jun',
+    history: [47.2, 47.8, 48.1, 48.3, 48.5, 48.5, 49.0],
     name: 'ISM Manufacturing PMI (June)',
     country: 'United States', countryCode: 'US', region: 'US', category: 'Growth',
     datetime: '2026-07-01T10:00:00-04:00', displayTime: 'Jul 1, 2026 · 10:00 ET',
@@ -154,6 +162,7 @@ export const MOCK_EVENTS: MacroEvent[] = [
   },
   {
     id: 'us-pce-may',
+    history: [3.0, 2.9, 2.8, 2.7, 2.6, 2.6, 2.7],
     name: 'Core PCE Price Index (May)',
     country: 'United States', countryCode: 'US', region: 'US', category: 'Inflation',
     datetime: '2026-06-27T08:30:00-04:00', displayTime: 'Jun 27, 2026 · 08:30 ET',
@@ -169,6 +178,7 @@ export const MOCK_EVENTS: MacroEvent[] = [
   },
   {
     id: 'us-gdp-q1',
+    history: [2.8, 2.1, 1.4, 0.6, -0.2, -0.2, -0.5],
     name: 'GDP Growth (Q1, Final)',
     country: 'United States', countryCode: 'US', region: 'US', category: 'Growth',
     datetime: '2026-06-26T08:30:00-04:00', displayTime: 'Jun 26, 2026 · 08:30 ET',
@@ -184,6 +194,7 @@ export const MOCK_EVENTS: MacroEvent[] = [
   },
   {
     id: 'boj-jun',
+    history: [0.1, 0.25, 0.25, 0.5, 0.5, 0.5, 0.5],
     name: 'BoJ Policy Rate Decision',
     country: 'Japan', countryCode: 'JP', region: 'ASIA', category: 'Central Bank',
     datetime: '2026-06-20T12:00:00+09:00', displayTime: 'Jun 20, 2026 · 12:00 JST',
@@ -199,6 +210,7 @@ export const MOCK_EVENTS: MacroEvent[] = [
   },
   {
     id: 'fomc-jun',
+    history: [5.0, 4.75, 4.5, 4.5, 4.5, 4.5, 4.5],
     name: 'FOMC Rate Decision + SEP',
     country: 'United States', countryCode: 'US', region: 'US', category: 'Central Bank',
     datetime: '2026-06-18T14:00:00-04:00', displayTime: 'Jun 18, 2026 · 14:00 ET',
@@ -214,6 +226,7 @@ export const MOCK_EVENTS: MacroEvent[] = [
   },
   {
     id: 'ecb-jun',
+    history: [3.25, 3.0, 2.75, 2.5, 2.25, 2.25, 2.0],
     name: 'ECB Deposit Rate Decision',
     country: 'Eurozone', countryCode: 'EU', region: 'EU', category: 'Central Bank',
     datetime: '2026-06-12T14:15:00+02:00', displayTime: 'Jun 12, 2026 · 14:15 CET',
@@ -229,6 +242,7 @@ export const MOCK_EVENTS: MacroEvent[] = [
   },
   {
     id: 'us-cpi-may',
+    history: [3.2, 3.0, 2.8, 2.6, 2.5, 2.5, 2.4],
     name: 'CPI Inflation (May)',
     country: 'United States', countryCode: 'US', region: 'US', category: 'Inflation',
     datetime: '2026-06-11T08:30:00-04:00', displayTime: 'Jun 11, 2026 · 08:30 ET',

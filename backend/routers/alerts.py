@@ -364,11 +364,30 @@ def _macro_triggered_sync(payload_json: str | None, days_ahead: float) -> tuple[
         from datetime import date
         from routers.rates import macro_calendar
         p = json.loads(payload_json) if payload_json else {}
+        n = max(0, int(days_ahead))
+        today = date.today()
+
+        # Release Tape bells watch the tape feed by base event name.
+        if p.get("source") == "release-hub":
+            from routers.macro_events import macro_events
+            names = set(p.get("names") or [])
+            hits: list[str] = []
+            for e in macro_events().get("events", []):
+                if e.get("status") != "upcoming":
+                    continue
+                if e.get("name", "").split(" (")[0] not in names:
+                    continue
+                try:
+                    du = (date.fromisoformat(e["datetime"][:10]) - today).days
+                except (ValueError, KeyError, TypeError):
+                    continue
+                if 0 <= du <= n:
+                    hits.append(f"{e['name']} ({e['datetime'][:10]})")
+            return bool(hits), hits[:8]
+
         mode = p.get("mode", "marquee")
         labels = set(p.get("labels") or [])
-        n = max(0, int(days_ahead))
         events = macro_calendar().get("events", [])
-        today = date.today()
 
         def match(e: dict) -> bool:
             if labels:
@@ -572,9 +591,15 @@ async def create_alert(req: AlertCreate):
     elif req.condition in _MACRO_CONDITIONS:
         ticker = _MARKET_TICKER          # market-wide
         p = req.payload or {}
-        mode = p.get("mode") if p.get("mode") in _MACRO_MODES else "marquee"
-        labels = [str(x)[:60] for x in (p.get("labels") or [])][:20]
-        payload_json = json.dumps({"mode": mode, "labels": labels})
+        if p.get("source") == "release-hub":
+            # Per-series alert from the Release Tape bell: watch the tape feed by
+            # base event name (recurs across each month's print).
+            names = [str(x)[:80] for x in (p.get("names") or [])][:20]
+            payload_json = json.dumps({"source": "release-hub", "names": names, "label": str(p.get("label") or "")[:80]})
+        else:
+            mode = p.get("mode") if p.get("mode") in _MACRO_MODES else "marquee"
+            labels = [str(x)[:60] for x in (p.get("labels") or [])][:20]
+            payload_json = json.dumps({"mode": mode, "labels": labels})
     elif req.condition in _SENTIMENT_CONDITIONS:
         ticker = _MARKET_TICKER          # market-wide: no per-ticker input
     else:

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Bell } from 'lucide-react'
 import { T } from '../../lib/theme'
+import HelpTip from '../HelpTip'
 import type { MacroEvent, Impact } from '../../data/mockEventsData'
 import {
   deriveSurprise, reactionCode, reactionValue, sparkPoints, historyBars,
@@ -15,16 +16,16 @@ const toneBg = (t: Tone) => (t === 'pos' ? T.posTint(12) : t === 'neg' ? T.negTi
 export interface Section { id: string; label: string | null; sub?: string; muted?: boolean; perRowDate?: boolean; rows: MacroEvent[] }
 export interface Sort { column: SortCol; dir: 'asc' | 'desc' }
 
-const COLS: { label: string; col: SortCol; align: 'left' | 'right' }[] = [
+const COLS: { label: string; col: SortCol; align: 'left' | 'right'; help?: string }[] = [
   { label: 'TIME ET', col: 'time', align: 'left' },
   { label: 'EVENT', col: 'event', align: 'left' },
   { label: 'REG', col: 'region', align: 'left' },
-  { label: 'ACTUAL', col: 'actual', align: 'right' },
-  { label: 'CONSENSUS', col: 'consensus', align: 'right' },
-  { label: 'PREVIOUS', col: 'previous', align: 'right' },
-  { label: 'SURPRISE', col: 'surprise', align: 'right' },
-  { label: 'REACTION', col: 'reaction', align: 'left' },
-  { label: 'HISTORY', col: 'history', align: 'right' },
+  { label: 'ACTUAL', col: 'actual', align: 'right', help: 'The released figure. On upcoming rows this shows the countdown to release instead.' },
+  { label: 'CONSENSUS', col: 'consensus', align: 'right', help: 'The forecast, where a free one exists: Atlanta Fed GDPNow for GDP, futures-implied for FOMC. FRED does not publish street consensus for the monthly prints, so most rows show a dash.' },
+  { label: 'PREVIOUS', col: 'previous', align: 'right', help: 'The prior period print.' },
+  { label: 'SURPRISE', col: 'surprise', align: 'right', help: 'Actual versus the number the market anchored to (consensus if present, else the prior print). BEAT/MISS for growth and jobs, COOLER/HOTTER for inflation, AS PRICED for rate decisions.' },
+  { label: 'REACTION', col: 'reaction', align: 'left', help: 'The release-day cross-asset move: S&P 500 (SPX) and the dollar (DXY) in percent, the 10-year yield in basis points.' },
+  { label: 'HISTORY', col: 'history', align: 'right', help: 'The recent print trend. Expand the row for the last several values as bars.' },
 ]
 
 function SortHeader({ label, col, align, sort, onSort }: {
@@ -153,11 +154,11 @@ function Row({ e, zebra, perRowDate, expanded, onToggle, alerted, onAlert }: {
   )
 }
 
-export default function ReleaseTape({ sections, totalCount, nextHigh, sort, onSort, expandedId, onToggle, alerts, onAlert }: {
+export default function ReleaseTape({ sections, totalCount, nextHigh, sort, onSort, expandedId, onToggle, isAlerted, onAlert }: {
   sections: Section[]; totalCount: number; nextHigh: MacroEvent | null
   sort: Sort; onSort: (c: SortCol) => void
   expandedId: string | null; onToggle: (id: string) => void
-  alerts: Set<string>; onAlert: (id: string) => void
+  isAlerted: (e: MacroEvent) => boolean; onAlert: (e: MacroEvent) => void
 }) {
   const label = { fontFamily: T.label, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' as const }
   return (
@@ -174,7 +175,12 @@ export default function ReleaseTape({ sections, totalCount, nextHigh, sort, onSo
 
       {/* Sortable column header */}
       <div style={{ display: 'grid', gridTemplateColumns: GRID, columnGap: 16, alignItems: 'center', padding: '8px 16px', borderBottom: `1px solid ${T.border}`, ...label }}>
-        {COLS.map(c => <SortHeader key={c.col} label={c.label} col={c.col} align={c.align} sort={sort} onSort={onSort} />)}
+        {COLS.map(c => (
+          <span key={c.col} style={{ display: 'inline-flex', alignItems: 'center', gap: 2, justifyContent: c.align === 'right' ? 'flex-end' : 'flex-start' }}>
+            <SortHeader label={c.label} col={c.col} align={c.align} sort={sort} onSort={onSort} />
+            {c.help && <HelpTip text={c.help} width={230} />}
+          </span>
+        ))}
         <span />
       </div>
 
@@ -190,7 +196,7 @@ export default function ReleaseTape({ sections, totalCount, nextHigh, sort, onSo
           {section.rows.map((e, i) => (
             <Row key={e.id} e={e} zebra={i % 2 === 1} perRowDate={section.perRowDate}
               expanded={expandedId === e.id} onToggle={() => onToggle(e.id)}
-              alerted={alerts.has(e.id)} onAlert={() => onAlert(e.id)} />
+              alerted={isAlerted(e)} onAlert={() => onAlert(e)} />
           ))}
         </div>
       ))}
