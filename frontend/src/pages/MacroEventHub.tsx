@@ -138,7 +138,7 @@ function MacroEventHubContent() {
       const recent = rel.filter(e => dayKey(e.datetime) === recentKey)
       const earlier = rel.filter(e => dayKey(e.datetime) !== recentKey)
       out.push({ id: 'rel-recent', label: `RELEASED · ${dayLabel(rel[0].datetime).replace(' · ', ' ')}`, muted: true, rows: recent })
-      if (earlier.length) out.push({ id: 'rel-earlier', label: 'RELEASED · EARLIER', muted: true, perRowDate: true, rows: earlier })
+      if (earlier.length) out.push({ id: 'rel-earlier', label: 'RELEASED · EARLIER', muted: true, rows: earlier })
     }
     return out
   }, [filtered, sort])

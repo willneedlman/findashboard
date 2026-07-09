@@ -114,10 +114,11 @@ export function shortDate(iso: string): string {
   return `${MON[d.getMonth()]} ${d.getDate()}`
 }
 
-export type SortCol = 'time' | 'event' | 'region' | 'actual' | 'consensus' | 'previous' | 'surprise' | 'reaction' | 'history'
+export type SortCol = 'time' | 'date' | 'event' | 'region' | 'actual' | 'consensus' | 'previous' | 'surprise' | 'reaction' | 'history'
 export function sortValue(e: MacroEvent, col: SortCol): number | string {
   switch (col) {
-    case 'time': return new Date(e.datetime).getTime()
+    case 'time':
+    case 'date': return new Date(e.datetime).getTime()
     case 'event': return e.name.toLowerCase()
     case 'region': return e.region
     case 'actual': return parseNum(e.actual) ?? -Infinity

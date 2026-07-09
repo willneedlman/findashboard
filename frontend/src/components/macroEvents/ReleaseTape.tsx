@@ -8,17 +8,18 @@ import {
   countdownShort, countdownLong, shortDate, type SortCol, type Tone,
 } from './tapeUtils'
 
-const GRID = '58px minmax(0,1fr) 38px 92px 92px 92px 110px 208px 60px 32px'
+const GRID = '52px 60px minmax(0,1fr) 36px 88px 88px 88px 106px 200px 56px 32px'
 const GAP = 13
 const IMPACT_RAIL: Record<Impact, string> = { High: T.neg, Medium: T.warn, Low: T.muted }
 const toneColor = (t: Tone) => (t === 'pos' ? T.pos : t === 'neg' ? T.neg : T.muted)
 const toneBg = (t: Tone) => (t === 'pos' ? T.posTint(12) : t === 'neg' ? T.negTint(12) : 'rgba(255,255,255,0.04)')
 
-export interface Section { id: string; label: string | null; sub?: string; muted?: boolean; perRowDate?: boolean; rows: MacroEvent[] }
+export interface Section { id: string; label: string | null; sub?: string; muted?: boolean; rows: MacroEvent[] }
 export interface Sort { column: SortCol; dir: 'asc' | 'desc' }
 
 const COLS: { label: string; col: SortCol; align: 'left' | 'right'; help?: string }[] = [
   { label: 'TIME ET', col: 'time', align: 'left' },
+  { label: 'DATE', col: 'date', align: 'left' },
   { label: 'EVENT', col: 'event', align: 'left' },
   { label: 'REG', col: 'region', align: 'left' },
   { label: 'ACTUAL', col: 'actual', align: 'right', help: 'The released figure. On upcoming rows this shows the countdown to release instead.' },
@@ -62,8 +63,8 @@ function Sparkline({ history, released }: { history?: number[]; released: boolea
   )
 }
 
-function Row({ e, zebra, perRowDate, expanded, onToggle, alerted, onAlert }: {
-  e: MacroEvent; zebra: boolean; perRowDate?: boolean
+function Row({ e, zebra, expanded, onToggle, alerted, onAlert }: {
+  e: MacroEvent; zebra: boolean
   expanded: boolean; onToggle: () => void; alerted: boolean; onAlert: () => void
 }) {
   const [hover, setHover] = useState(false)
@@ -83,12 +84,9 @@ function Row({ e, zebra, perRowDate, expanded, onToggle, alerted, onAlert }: {
         onClick={onToggle} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
         style={{ display: 'grid', gridTemplateColumns: GRID, columnGap: GAP, alignItems: 'center', padding: '11px 16px', cursor: 'pointer', fontVariantNumeric: 'tabular-nums' }}>
         {/* TIME */}
-        {perRowDate
-          ? <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ ...cell, fontSize: 12, color: T.muted }}>{time}</span>
-              <span style={{ ...cell, fontSize: 9, color: T.muted }}>{shortDate(e.datetime)}</span>
-            </div>
-          : <span style={{ ...cell, fontSize: 12, color: T.muted }}>{time}</span>}
+        <span style={{ ...cell, fontSize: 12, color: T.muted }}>{time}</span>
+        {/* DATE */}
+        <span style={{ ...cell, fontSize: 11, color: T.muted }}>{shortDate(e.datetime)}</span>
         {/* EVENT */}
         <span style={{ ...cell, fontSize: 13, fontWeight: 700, color: expanded ? T.gold : T.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {e.name}<span style={{ fontFamily: T.label, fontSize: 10, fontWeight: 400, color: T.muted }}> · {e.category} · {e.sourceName}</span>
@@ -130,7 +128,7 @@ function Row({ e, zebra, perRowDate, expanded, onToggle, alerted, onAlert }: {
       {/* Expanded detail */}
       <div className="mev-expand" style={{ display: 'grid', gridTemplateRows: expanded ? '1fr' : '0fr' }}>
         <div style={{ overflow: 'hidden' }}>
-          <div className="mev-fade" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 24, padding: '4px 16px 16px 88px', opacity: expanded ? 1 : 0 }}>
+          <div className="mev-fade" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 24, padding: '4px 16px 16px 154px', opacity: expanded ? 1 : 0 }}>
             <div>
               <p style={{ margin: 0, fontFamily: T.label, fontSize: 12, lineHeight: 1.6, color: T.text, maxWidth: 720 }}>{e.summary}</p>
               <a href={e.sourceUrl} target="_blank" rel="noopener noreferrer" onClick={ev => ev.stopPropagation()}
@@ -195,7 +193,7 @@ export default function ReleaseTape({ sections, totalCount, nextHigh, sort, onSo
             </div>
           )}
           {section.rows.map((e, i) => (
-            <Row key={e.id} e={e} zebra={i % 2 === 1} perRowDate={section.perRowDate}
+            <Row key={e.id} e={e} zebra={i % 2 === 1}
               expanded={expandedId === e.id} onToggle={() => onToggle(e.id)}
               alerted={isAlerted(e)} onAlert={() => onAlert(e)} />
           ))}
