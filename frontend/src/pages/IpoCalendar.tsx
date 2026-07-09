@@ -3,6 +3,7 @@ import axios from 'axios'
 import { Star } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import TickerLogo from '../components/TickerLogo'
+import TickerLink from '../components/TickerLink'
 import useIsMobile from '../hooks/useIsMobile'
 import { usePortfolio } from '../contexts/PortfolioContext'
 
@@ -76,7 +77,17 @@ function midPrice(p: string): number | null {
 // A SPAC/blank-check vehicle floats essentially the whole public company, so its
 // public market cap is shares offered x offer price (not the money-raised figure).
 function isSpac(name: string): boolean {
-  return /\bacquisition\b|\bblank[ -]?check\b|\bcapital corp\b|\bmerger corp\b/i.test(name || '')
+  return /\bacquisition\b|\bblank[ -]?check\b|\bcapital corp\b|\bmerger corp\b|\bspac\b/i.test(name || '')
+}
+// Listing method, inferred from the issuer name (all Finnhub gives us). SPAC and
+// ADR are name-detectable; everything else reads as a standard IPO. Kept in sync
+// with isSpac so the market-cap path and this label never disagree.
+type Method = { key: string; label: string; color: string }
+function ipoMethod(name: string): Method {
+  const n = name || ''
+  if (isSpac(n)) return { key: 'spac', label: 'SPAC', color: C.blue }
+  if (/american depositary|\bADSs?\b|\bADRs?\b/i.test(n)) return { key: 'adr', label: 'ADR', color: C.warn }
+  return { key: 'ipo', label: 'IPO', color: C.muted }
 }
 // Reliable IPO market cap, or null for "unavailable". Prospectus post-offering
 // shares x offer price when parsed; for SPACs the fully-floated public value;
@@ -97,6 +108,16 @@ const shimmer: React.CSSProperties = {
   display: 'inline-block', width: 38, height: 10, borderRadius: 2,
   background: 'linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.04) 75%)',
   backgroundSize: '200% 100%', animation: 'ipo-shimmer 1.6s infinite',
+}
+
+function MethodChip({ name }: { name: string }) {
+  const m = ipoMethod(name)
+  return (
+    <span style={{
+      fontFamily: C.sans, fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+      color: m.color, border: `1px solid ${m.color}`, borderRadius: 3, padding: '2px 6px', whiteSpace: 'nowrap',
+    }}>{m.label}</span>
+  )
 }
 
 function StatusChip({ status }: { status: string }) {
@@ -195,7 +216,7 @@ export function IpoCalendarContent() {
 
   const cols = isMobile
     ? ['Symbol', 'Price', 'Status']
-    : ['Symbol', 'IPO Mkt Cap', 'Exchange', 'Price', 'Shares', 'Deal Size', 'Status']
+    : ['Symbol', 'IPO Mkt Cap', 'Exchange', 'Method', 'Price', 'Shares', 'Deal Size', 'Status']
 
   return (
     <>
@@ -296,8 +317,10 @@ export function IpoCalendarContent() {
           Deal size = shares offered times the mid of the range. IPO Mkt Cap = post-offering shares
           outstanding from the S-1/424B prospectus times the offer price, or for a SPAC the fully-floated
           public value; it reads "unavailable" when it cannot be sourced reliably (never the money-raised
-          figure). Status: Pending is expected to price, Filed is on file with the SEC, Released has priced
-          and is trading, Withdrawn was pulled. Calendar from finnhub, share counts from SEC EDGAR.
+          figure). Method: SPAC is a blank-check/acquisition vehicle, ADR is a foreign issuer listing via
+          depositary shares, IPO is a standard offering (inferred from the issuer name). Status: Pending is
+          expected to price, Filed is on file with the SEC, Released has priced and is trading, Withdrawn was
+          pulled. Calendar from finnhub, share counts from SEC EDGAR.
         </div>
       )}
     </>
@@ -328,7 +351,7 @@ function GroupBody({ gdate, grows, enriched, cols, isMobile, watch }: {
                 <TickerLogo ticker={r.symbol} size={22} logoUrl={e?.logo || undefined} logoOnly />
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontFamily: C.mono, fontSize: 13, fontWeight: 600, color: C.text }}>
-                    {r.symbol}
+                    <TickerLink ticker={r.symbol} />
                     {watch.has(r.symbol.toUpperCase()) && (
                       <Star size={10} fill={C.gold} stroke={C.gold}
                         style={{ marginLeft: 6, verticalAlign: 'middle' }}
@@ -353,6 +376,9 @@ function GroupBody({ gdate, grows, enriched, cols, isMobile, watch }: {
             )}
             {!isMobile && (
               <td style={{ ...cell, color: C.dim }}>{r.exchange || '—'}</td>
+            )}
+            {!isMobile && (
+              <td style={{ ...cell, textAlign: 'right' }}><MethodChip name={r.name} /></td>
             )}
             <td style={{ ...cell, color: C.text }}>{fmtPrice(r.price)}</td>
             {!isMobile && (

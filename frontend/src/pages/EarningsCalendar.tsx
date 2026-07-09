@@ -3,6 +3,7 @@ import axios from 'axios'
 import { Star } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import TickerLogo from '../components/TickerLogo'
+import TickerLink from '../components/TickerLink'
 import useIsMobile from '../hooks/useIsMobile'
 import { usePortfolio } from '../contexts/PortfolioContext'
 
@@ -316,7 +317,7 @@ function GroupBody({ gdate, grows, enriched, cols, isMobile, showHeader, watch }
                 <TickerLogo ticker={r.symbol} size={22} />
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontFamily: C.mono, fontSize: 13, fontWeight: 600, color: C.text }}>
-                    {r.symbol}
+                    <TickerLink ticker={r.symbol} />
                     {watch.has(r.symbol.toUpperCase()) && (
                       <Star size={10} fill={C.gold} stroke={C.gold}
                         style={{ marginLeft: 6, verticalAlign: 'middle' }}

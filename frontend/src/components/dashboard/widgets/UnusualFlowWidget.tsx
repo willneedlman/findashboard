@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 import TickerLogo from '../../TickerLogo'
+import TickerLink from '../../TickerLink'
 
 
 interface Flow {
@@ -65,7 +66,7 @@ export default function UnusualFlowWidget({ config }: { config: WidgetConfig }) 
           return (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 10px 6px 8px', borderBottom: `1px solid rgba(255,255,255,0.04)`, borderLeft: `3px solid ${c}` }}>
               <TickerLogo ticker={f.ticker} size={16} />
-              <span style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: T.gold, width: 44, flexShrink: 0 }}>{f.ticker}</span>
+              <TickerLink ticker={f.ticker} caret={false} style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: T.gold, width: 44, flexShrink: 0 }} />
               <span style={{ fontFamily: T.label, fontSize: 8, fontWeight: 700, color: c, border: `1px solid ${c}`, padding: '0 4px', flexShrink: 0 }}>{isCall ? 'C' : 'P'}</span>
               <span style={{ ...TD, width: 42, textAlign: 'right' }}>{f.strike}</span>
               <span style={{ ...TD, fontSize: 8.5, color: T.muted, width: 42, textAlign: 'right' }}>{fmtExp(f.expiry)}</span>

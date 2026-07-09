@@ -7,6 +7,7 @@ import EmptyState from '../components/EmptyState'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
 import Tooltip from '../components/Tooltip'
+import { setLinkedTicker } from '../lib/tickerLink'
 
 const C = {
   bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))', surface: 'var(--theme-surface, #0d1826)',
@@ -134,11 +135,14 @@ const fmtMc = (b: number) => b >= 1000 ? `$${(b / 1000).toFixed(1)}T` : `$${Math
 const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`
 
 // Deep links from a screened name into the rest of the terminal.
-const ROW_LINKS: { label: string; base: string }[] = [
-  { label: 'Profile', base: '/supply-chain' },
-  { label: 'Peers',   base: '/relative-valuation' },
-  { label: 'DCF',     base: '/dcf' },
-  { label: 'Alert',   base: '/alerts' },
+// Overview has no route: it fires the same 'ft:ticker-drawer' window event the
+// command palette and <TickerLink> use, opening the slide-over in place.
+const ROW_LINKS: { label: string; base?: string; overview?: boolean }[] = [
+  { label: 'Profile',  base: '/supply-chain' },
+  { label: 'Peers',    base: '/relative-valuation' },
+  { label: 'Overview', overview: true },
+  { label: 'DCF',      base: '/dcf' },
+  { label: 'Alert',    base: '/alerts' },
 ]
 
 export default function StockScreener() {
@@ -543,9 +547,13 @@ export default function StockScreener() {
                           never steal width from the company name. Opaque backdrop, fading right. */}
                       <span className="ft-row-actions" style={{ position: 'absolute', left: 0, top: 0, bottom: 0, display: 'flex', alignItems: 'center', gap: 11, padding: '0 36px 0 24px', background: 'linear-gradient(90deg, var(--theme-surface, #0d1826), var(--theme-surface, #0d1826) calc(100% - 28px), transparent)' }}>
                         {ROW_LINKS.map(l => (
-                          <Tooltip key={l.label} label={`Open ${r.ticker} in ${l.label}`}>
+                          <Tooltip key={l.label} label={l.overview ? `${r.ticker} overview` : `Open ${r.ticker} in ${l.label}`}>
                             <span
-                              onClick={() => navigate(`${l.base}?ticker=${encodeURIComponent(r.ticker)}`)}
+                              onClick={() => {
+                                setLinkedTicker(r.ticker)
+                                if (l.overview) window.dispatchEvent(new CustomEvent('ft:ticker-drawer', { detail: r.ticker }))
+                                else navigate(`${l.base}?ticker=${encodeURIComponent(r.ticker)}`)
+                              }}
                               onMouseEnter={e => (e.currentTarget.style.color = C.gold)}
                               onMouseLeave={e => (e.currentTarget.style.color = C.dim)}
                               style={{ fontFamily: C.sans, fontSize: 10, fontWeight: 600, letterSpacing: '0.04em', color: C.dim, cursor: 'pointer', whiteSpace: 'nowrap' }}>

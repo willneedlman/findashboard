@@ -8,6 +8,7 @@ import TickerInput from '../components/TickerInput'
 import TickerLogo from '../components/TickerLogo'
 import { recordRecentTicker } from '../lib/recentTickers'
 import TickerLaunch from '../components/TickerLaunch'
+import TickerLink from '../components/TickerLink'
 import useIsMobile from '../hooks/useIsMobile'
 
 
@@ -442,7 +443,7 @@ export function RelativeValuationContent() {
                           }}
                         >
                           <td style={{ padding: '7px 10px', color: isTarget ? T.gold : T.text, fontWeight: isTarget ? 700 : 400, whiteSpace: 'nowrap' }}>
-                            {row.ticker}
+                            <TickerLink ticker={row.ticker} style={{ color: 'inherit' }} />
                           </td>
                           <td style={{ padding: '7px 10px', color: T.muted, fontSize: 10, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {row.name}
