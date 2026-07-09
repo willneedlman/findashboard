@@ -8,7 +8,8 @@ import {
   countdownShort, countdownLong, shortDate, type SortCol, type Tone,
 } from './tapeUtils'
 
-const GRID = '64px 1fr 44px 104px 104px 104px 128px 244px 72px 36px'
+const GRID = '58px minmax(0,1fr) 38px 92px 92px 92px 110px 208px 60px 32px'
+const GAP = 13
 const IMPACT_RAIL: Record<Impact, string> = { High: T.neg, Medium: T.warn, Low: T.muted }
 const toneColor = (t: Tone) => (t === 'pos' ? T.pos : t === 'neg' ? T.neg : T.muted)
 const toneBg = (t: Tone) => (t === 'pos' ? T.posTint(12) : t === 'neg' ? T.negTint(12) : 'rgba(255,255,255,0.04)')
@@ -80,7 +81,7 @@ function Row({ e, zebra, perRowDate, expanded, onToggle, alerted, onAlert }: {
     <div style={{ borderLeft: `3px solid ${rail}`, background: bg, borderBottom: `1px solid ${T.borderFaint}` }}>
       <div
         onClick={onToggle} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
-        style={{ display: 'grid', gridTemplateColumns: GRID, columnGap: 16, alignItems: 'center', padding: '11px 16px', cursor: 'pointer', fontVariantNumeric: 'tabular-nums' }}>
+        style={{ display: 'grid', gridTemplateColumns: GRID, columnGap: GAP, alignItems: 'center', padding: '11px 16px', cursor: 'pointer', fontVariantNumeric: 'tabular-nums' }}>
         {/* TIME */}
         {perRowDate
           ? <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -129,7 +130,7 @@ function Row({ e, zebra, perRowDate, expanded, onToggle, alerted, onAlert }: {
       {/* Expanded detail */}
       <div className="mev-expand" style={{ display: 'grid', gridTemplateRows: expanded ? '1fr' : '0fr' }}>
         <div style={{ overflow: 'hidden' }}>
-          <div className="mev-fade" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 24, padding: '4px 16px 16px 96px', opacity: expanded ? 1 : 0 }}>
+          <div className="mev-fade" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 24, padding: '4px 16px 16px 88px', opacity: expanded ? 1 : 0 }}>
             <div>
               <p style={{ margin: 0, fontFamily: T.label, fontSize: 12, lineHeight: 1.6, color: T.text, maxWidth: 720 }}>{e.summary}</p>
               <a href={e.sourceUrl} target="_blank" rel="noopener noreferrer" onClick={ev => ev.stopPropagation()}
@@ -174,7 +175,7 @@ export default function ReleaseTape({ sections, totalCount, nextHigh, sort, onSo
       </div>
 
       {/* Sortable column header */}
-      <div style={{ display: 'grid', gridTemplateColumns: GRID, columnGap: 16, alignItems: 'center', padding: '8px 16px', borderBottom: `1px solid ${T.border}`, ...label }}>
+      <div style={{ display: 'grid', gridTemplateColumns: GRID, columnGap: GAP, alignItems: 'center', padding: '8px 16px', borderBottom: `1px solid ${T.border}`, ...label }}>
         {COLS.map(c => (
           <span key={c.col} style={{ display: 'inline-flex', alignItems: 'center', gap: 2, justifyContent: c.align === 'right' ? 'flex-end' : 'flex-start' }}>
             <SortHeader label={c.label} col={c.col} align={c.align} sort={sort} onSort={onSort} />

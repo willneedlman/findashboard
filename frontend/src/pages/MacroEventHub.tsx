@@ -156,7 +156,7 @@ function MacroEventHubContent() {
   return (
     <PageWrapper>
       <div style={{ overflowX: 'auto' }}>
-        <div style={{ minWidth: 1380, maxWidth: 1560, margin: '0 auto' }}>
+        <div style={{ width: '100%', minWidth: 960, maxWidth: 1700, margin: '0 auto' }}>
           {/* Header */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, paddingBottom: 14, borderBottom: `1px solid ${T.goldTint(45)}` }}>
             <h1 className="ft-page-title" style={{ margin: 0 }}>MACRO EVENT RELEASE HUB</h1>
