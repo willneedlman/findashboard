@@ -12,7 +12,6 @@ rather than wrong.
 from __future__ import annotations
 
 import logging
-import re
 import threading
 import time
 
@@ -64,9 +63,3 @@ def consensus_map() -> dict[tuple[str, str, str], str]:
         if fresh:                       # keep the last good map on a failed refresh
             _cache, _cache_at = fresh, time.time()
         return _cache
-
-
-def parse_value(s: str) -> float | None:
-    """FF forecast strings ('110K', '4.2%', '0.3%', '7.32M') -> the display number."""
-    m = re.search(r"-?\d+\.?\d*", s.replace(",", ""))
-    return float(m.group()) if m else None
