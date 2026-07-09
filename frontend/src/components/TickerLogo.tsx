@@ -9,15 +9,21 @@ function tickerColor(ticker: string): string {
 interface TickerLogoProps {
   ticker: string
   size?: number
+  logoUrl?: string   // preferred source tried before the symbol-based providers
+  logoOnly?: boolean // skip the symbol-based providers; use logoUrl or the monogram
 }
 
-export default function TickerLogo({ ticker, size = 28 }: TickerLogoProps) {
-  const sources = tickerLogoSources(ticker)
+export default function TickerLogo({ ticker, size = 28, logoUrl, logoOnly }: TickerLogoProps) {
+  const sources = logoOnly
+    ? (logoUrl ? [logoUrl] : [])
+    : (logoUrl ? [logoUrl, ...tickerLogoSources(ticker)] : tickerLogoSources(ticker))
   const [idx, setIdx] = useState(0)
-  // Reset to the first provider when the symbol changes (component is reused).
-  const [prevTicker, setPrevTicker] = useState(ticker)
-  if (ticker !== prevTicker) {
-    setPrevTicker(ticker)
+  // Reset to the first provider when the symbol changes (component is reused) or
+  // when a preferred logoUrl arrives after mount (async enrichment).
+  const [prevKey, setPrevKey] = useState(`${ticker}|${logoUrl ?? ''}`)
+  const key = `${ticker}|${logoUrl ?? ''}`
+  if (key !== prevKey) {
+    setPrevKey(key)
     setIdx(0)
   }
 

@@ -4,7 +4,7 @@ import {
   GitCompare, PieChart, Globe, Scale, Coins, Boxes, RotateCcw, Gem,
   LineChart, BarChart2, Waves, Zap, Shuffle, Percent,
   GitBranch, Landmark, Dices, Gauge, BookOpen, Bell, Workflow, Clock, ArrowLeftRight, Home,
-  Ship, CandlestickChart, Megaphone,
+  Ship, CandlestickChart, Megaphone, Rocket,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -45,6 +45,7 @@ export const HUBS: Hub[] = [
       { title: 'Sentiment Tracker', chip: 'Sentiment',       desc: 'AI-scored news sentiment across 7 sources',                route: '/sentiment',          icon: Brain },
       { title: 'Portfolio Earnings', chip: 'Earnings',       desc: 'Your holdings counting down to their next report, with valuation, positioning and the wire', route: '/corporate', icon: CalendarClock },
       { title: 'Earnings Scanner', chip: 'Earnings Scan',  desc: 'Confirmed and estimated report dates with past reactions',  route: '/earnings-calendar',  icon: CalendarDays },
+      { title: 'IPO Calendar',     chip: 'IPO Calendar',   desc: 'Upcoming and recent public offerings with pricing and deal size', route: '/ipo-calendar',    icon: Rocket },
       { title: 'Sector Rotation',   chip: 'Sector Rotation', desc: 'GICS sector performance heatmap over time',                route: '/sector-rotation',    icon: PieChart },
       { title: 'Regression',        chip: 'Regression',      desc: 'OLS and polynomial fits with diagnostics',                 route: '/regression',         icon: Activity },
       { title: 'Correlation',       chip: 'Correlation',     desc: 'Correlation matrix, rolling drift, and beta',              route: '/correlation',        icon: Waves },

@@ -59,6 +59,7 @@ const ImpliedProbability = lazyWithReload(() => import('./pages/ImpliedProbabili
 const FedRates           = lazyWithReload(() => import('./pages/FedRates'))
 const CorporateHub       = lazyWithReload(() => import('./pages/CorporateHub'))
 const EarningsCalendar   = lazyWithReload(() => import('./pages/EarningsCalendar'))
+const IpoCalendar        = lazyWithReload(() => import('./pages/IpoCalendar'))
 const DCFValuation       = lazyWithReload(() => import('./pages/DCFValuation'))
 const DividendDiscount   = lazyWithReload(() => import('./pages/DividendDiscount'))
 const SOTP               = lazyWithReload(() => import('./pages/SOTP'))
@@ -271,6 +272,7 @@ export default function App() {
               <Route path="/screener"        element={<StockScreener />} />
               <Route path="/earnings"        element={<EarningsSummarizer />} />
               <Route path="/earnings-calendar" element={<EarningsCalendar />} />
+              <Route path="/ipo-calendar"    element={<IpoCalendar />} />
               <Route path="/admin"           element={<AdminTester />} />
               <Route path="/stress-test"     element={<Navigate to="/admin" replace />} />
               <Route path="/sector-rotation" element={<SectorRotation />} />

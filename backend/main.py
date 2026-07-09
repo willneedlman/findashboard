@@ -25,7 +25,7 @@ from routers import (
     filings, lob, regression, screener,
     paper_scheduler, paper_strategies, paper,
     iv_tracker, valuation, analytics,
-    earnings, leaderboard, etf, fx,
+    earnings, ipo, leaderboard, etf, fx,
     maritime, snapshots, credit, housing,
     portfolio_optimizer, macro_events,
 )
@@ -203,6 +203,7 @@ app.include_router(paper_strategies.router,  prefix="/api/paper/strategies",  ta
 app.include_router(iv_tracker.router,        prefix="/api/iv",                tags=["iv-tracker"])
 app.include_router(valuation.router,         prefix="/api/valuation",         tags=["valuation"])
 app.include_router(earnings.router,          prefix="/api/earnings",          tags=["earnings"])
+app.include_router(ipo.router,               prefix="/api/ipo",               tags=["ipo"])
 app.include_router(leaderboard.router,       prefix="/api/leaderboard",       tags=["leaderboard"])
 app.include_router(maritime.router,          prefix="/api/maritime",          tags=["maritime"])
 

@@ -38,6 +38,7 @@ _ratings_cache: TTLCache = TTLCache(maxsize=300, ttl=86400)  # 24 hr
 _profile_cache: TTLCache = TTLCache(maxsize=300, ttl=86400)  # 24 hr
 _peers_cache:   TTLCache = TTLCache(maxsize=300, ttl=86400)  # 24 hr
 _earncal_cache: TTLCache = TTLCache(maxsize=64,  ttl=3600)   # 1 hr
+_ipocal_cache:  TTLCache = TTLCache(maxsize=64,  ttl=3600)   # 1 hr
 
 
 def available() -> bool:
@@ -182,6 +183,7 @@ def get_profile(ticker: str) -> dict:
                 "sector":          p.get("finnhubIndustry"),
                 "exchange":        p.get("exchange"),
                 "marketCap":       p.get("marketCapitalization", 0) * 1_000_000,  # Finnhub returns $M
+                "logo":            p.get("logo") or None,
                 "price":           None,  # not in profile endpoint
                 "beta":            None,
                 "changePercentage":None,
@@ -223,3 +225,37 @@ def get_earnings_calendar(date_from: str, date_to: str) -> list:
             return []
 
     return _cached(_earncal_cache, key, fetch)
+
+
+def get_ipo_calendar(date_from: str, date_to: str) -> list:
+    """
+    IPOs between two ISO dates (inclusive) from Finnhub's free feed. Everything
+    the calendar view needs arrives in this one call, so there is no per-row
+    enrichment step.
+
+    Each row: symbol, name, date, exchange, price (offer range or single, as
+    given), shares, dealValue, status (expected/priced/filed/withdrawn).
+    """
+    key = f"{date_from}:{date_to}"
+
+    def fetch():
+        try:
+            d = _get("/calendar/ipo", {"from": date_from, "to": date_to})
+            rows = d.get("ipoCalendar", []) if isinstance(d, dict) else []
+            return [
+                {
+                    "symbol":     r.get("symbol"),
+                    "name":       r.get("name"),
+                    "date":       r.get("date"),
+                    "exchange":   r.get("exchange") or "",
+                    "price":      r.get("price") or "",
+                    "shares":     r.get("numberOfShares"),
+                    "dealValue":  r.get("totalSharesValue"),
+                    "status":     (r.get("status") or "").lower(),
+                }
+                for r in rows if r.get("symbol")
+            ]
+        except Exception:
+            return []
+
+    return _cached(_ipocal_cache, key, fetch)
