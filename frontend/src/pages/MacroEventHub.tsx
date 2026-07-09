@@ -150,9 +150,6 @@ function MacroEventHubContent() {
     return out
   }, [filtered, sort])
 
-  const nextHigh = useMemo(() =>
-    events.filter(e => e.status === 'upcoming' && e.impact === 'High')
-      .sort((a, b) => +new Date(a.datetime) - +new Date(b.datetime))[0] ?? null, [events])
 
   const stats = useMemo(() => ({
     tracked: events.length,
@@ -188,7 +185,7 @@ function MacroEventHubContent() {
                 {!isLoading && <button type="button" onClick={() => { setFilters(f => ({ ...f, query: '', region: 'ALL', impact: 'ALL' })); setColFilters(new Set()) }}
                   style={{ marginTop: 4, padding: '6px 14px', background: 'transparent', border: `1px solid ${T.goldTint(50)}`, color: T.gold, fontFamily: T.label, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Reset filters</button>}
               </div>
-            : <ReleaseTape sections={sections} totalCount={filtered.length} nextHigh={nextHigh}
+            : <ReleaseTape sections={sections} totalCount={filtered.length}
                 sort={sort} onSort={onSort} colFilters={colFilters} onColFilter={onColFilter}
                 expandedId={expandedId} onToggle={id => setExpandedId(cur => (cur === id ? null : id))}
                 isAlerted={isAlerted} onAlert={toggleAlert} />}

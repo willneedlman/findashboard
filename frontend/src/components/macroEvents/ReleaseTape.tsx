@@ -4,7 +4,7 @@ import { T } from '../../lib/theme'
 import type { MacroEvent, Impact } from '../../data/mockEventsData'
 import {
   deriveSurprise, reactionCode, reactionValue, sparkPoints, historyBars,
-  countdownShort, countdownLong, shortDate, type SortCol, type FilterCol, type Tone,
+  countdownShort, shortDate, type SortCol, type FilterCol, type Tone,
 } from './tapeUtils'
 
 const FILTER_COLS = new Set<SortCol>(['actual', 'consensus', 'surprise', 'reaction'])
@@ -169,8 +169,8 @@ function Row({ e, zebra, expanded, onToggle, alerted, onAlert }: {
   )
 }
 
-export default function ReleaseTape({ sections, totalCount, nextHigh, sort, onSort, colFilters, onColFilter, expandedId, onToggle, isAlerted, onAlert }: {
-  sections: Section[]; totalCount: number; nextHigh: MacroEvent | null
+export default function ReleaseTape({ sections, totalCount, sort, onSort, colFilters, onColFilter, expandedId, onToggle, isAlerted, onAlert }: {
+  sections: Section[]; totalCount: number
   sort: Sort; onSort: (c: SortCol) => void
   colFilters: Set<FilterCol>; onColFilter: (c: FilterCol) => void
   expandedId: string | null; onToggle: (id: string) => void
@@ -179,14 +179,9 @@ export default function ReleaseTape({ sections, totalCount, nextHigh, sort, onSo
   const label = { fontFamily: T.label, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' as const }
   return (
     <div style={{ background: T.surface, border: `1px solid ${T.border}`, boxShadow: '0 1px 4px rgba(0,0,0,0.25)' }}>
-      {/* Panel header + countdown */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 16px', background: 'rgba(0,0,0,0.18)', borderBottom: `1px solid ${T.borderFaint}` }}>
+      {/* Panel header */}
+      <div style={{ display: 'flex', alignItems: 'center', padding: '9px 16px', background: 'rgba(0,0,0,0.18)', borderBottom: `1px solid ${T.borderFaint}` }}>
         <span style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', color: T.muted }}>RELEASE TAPE · {totalCount} EVENTS</span>
-        {nextHigh && (
-          <span style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: T.gold, fontVariantNumeric: 'tabular-nums' }}>
-            NEXT HIGH IMPACT · {nextHigh.countryCode} {nextHigh.name.split(' (')[0]} · {countdownLong(nextHigh.datetime)}
-          </span>
-        )}
       </div>
 
       {/* Sortable column header */}
@@ -195,7 +190,7 @@ export default function ReleaseTape({ sections, totalCount, nextHigh, sort, onSo
           if (!FILTER_COLS.has(c.col)) return <SortHeader key={c.col} label={c.label} col={c.col} align={c.align} sort={sort} onSort={onSort} />
           const on = colFilters.has(c.col as FilterCol)
           return (
-            <span key={c.col} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, justifyContent: 'flex-end' }}>
+            <span key={c.col} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, justifyContent: c.align === 'right' ? 'flex-end' : 'flex-start' }}>
               <SortHeader label={c.label} col={c.col} align={c.align} sort={sort} onSort={onSort} />
               <button type="button" onClick={() => onColFilter(c.col as FilterCol)} title={FILTER_HINT[c.col]}
                 aria-pressed={on} aria-label={FILTER_HINT[c.col]}
