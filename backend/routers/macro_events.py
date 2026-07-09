@@ -21,6 +21,7 @@ from fastapi import APIRouter
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import cache  # noqa: E402
+import ff_calendar  # noqa: E402
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -56,6 +57,54 @@ _MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct",
 
 # release-day reaction: (yfinance ticker, display label, unit)
 _REACTION_ASSETS = [("SPY", "S&P 500", "%"), ("DX-Y.NYB", "DXY", "%"), ("^TNX", "US 10Y", "bp")]
+
+# Forex Factory consensus overlay: our release key -> (exact FF US titles, measure).
+# Only clean, same-measure matches are mapped so the surprise can never compare a
+# y/y print against a m/m consensus. Exact-title match; anything else stays blank.
+_FF_MAP = {
+    "nfp": ({"non-farm employment change"}, "k_signed"),
+    "unrate": ({"unemployment rate"}, "pct"),
+    "claims": ({"unemployment claims"}, "k_raw"),
+    "jolts": ({"jolts job openings"}, "m"),
+    "retail": ({"retail sales m/m"}, "mom"),
+    "durable": ({"durable goods orders m/m"}, "mom"),
+    "umich": ({"prelim uom consumer sentiment", "revised uom consumer sentiment", "uom consumer sentiment"}, "idx"),
+    "cpi": ({"cpi y/y"}, "yoy"),
+    "corecpi": ({"core cpi y/y"}, "yoy"),
+    "ppi": ({"ppi y/y"}, "yoy"),
+    "pce": ({"core pce price index y/y"}, "yoy"),
+}
+
+
+def _ff_fmt(measure: str, n: float) -> str:
+    if measure == "k_signed":
+        return f"{'+' if n >= 0 else ''}{n:.0f}K"
+    if measure == "k_raw":
+        return f"{n:.0f}K"
+    if measure == "m":
+        return f"{n:.2f}M"
+    if measure == "mom":
+        return f"{n:.1f}% m/m"
+    if measure == "yoy":
+        return f"{n:.1f}% y/y"
+    if measure == "idx":
+        return f"{n:.1f}"
+    return f"{n:.1f}%"
+
+
+def _ff_consensus(ff: dict, key: str, date10: str) -> str | None:
+    """Consensus for one of our events from the FF map, formatted to match."""
+    spec = _FF_MAP.get(key)
+    if not spec:
+        return None
+    titles, measure = spec
+    for t in titles:
+        raw = ff.get(("USD", t, date10))
+        if raw:
+            v = ff_calendar.parse_value(raw)
+            if v is not None:
+                return _ff_fmt(measure, v)
+    return None
 
 _cache_payload: dict | None = None
 _cache_at = 0.0
@@ -356,10 +405,18 @@ def _build() -> dict:
             released_dates.append(fr)
 
     reactions = _reactions_for(released_dates)
+    ff = ff_calendar.consensus_map()
 
     for d in drafts:
         r = d["r"]
         t = r.get("time", _RELEASE_TIME)
+        # Consensus: an existing forecast (GDPNow, FOMC futures) wins; otherwise
+        # fall back to the free Forex Factory consensus where the measure matches.
+        exp, exp_label = d.get("expected"), d.get("expected_label")
+        if exp is None:
+            ff_exp = _ff_consensus(ff, r["key"], d["date"])
+            if ff_exp is not None:
+                exp, exp_label = ff_exp, "consensus"
         events.append({
             "id": f"{r['key']}-{d['date']}",
             "name": f"{r['name']} ({d['period']})",
@@ -368,7 +425,7 @@ def _build() -> dict:
             "datetime": f"{d['date']}T{t}:00{_TZ}",
             "displayTime": f"{_MONTHS[int(d['date'][5:7]) - 1]} {int(d['date'][8:10])}, {d['date'][:4]} · {t} ET",
             "impact": r["impact"], "status": d["status"],
-            "actual": d["actual"], "expected": d.get("expected"), "expectedLabel": d.get("expected_label"),
+            "actual": d["actual"], "expected": exp, "expectedLabel": exp_label,
             "previous": d["previous"], "history": d.get("history", []),
             "summary": d["summary"],
             "sourceName": r["source"], "sourceUrl": r["url"],
@@ -376,7 +433,7 @@ def _build() -> dict:
         })
 
     return {"events": events, "source": "FRED", "as_of": datetime.utcnow().isoformat() + "Z",
-            "note": "Live US releases from FRED plus FOMC from the Rate Engine. Reaction is the release-day cross-asset move. Where a free official forecast exists it is shown and labeled (GDPNow for GDP, futures-implied for FOMC); paid street consensus for the monthly prints is not on this tier."}
+            "note": "Live US releases from FRED plus FOMC from the Rate Engine. Reaction is the release-day cross-asset move. Consensus comes from the free Forex Factory feed where the measure matches (GDPNow for GDP, futures-implied for FOMC); it firms up as each release nears, so further-out events may show a dash."}
 
 
 @router.get("")
