@@ -57,15 +57,13 @@ _RELEASES = [
 
 _MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
-# release-day reaction assets by country: (yfinance ticker, display label, unit)
-_ASSETS = {
-    "US": [("SPY", "S&P 500", "%"), ("DX-Y.NYB", "DXY", "%"), ("^TNX", "US 10Y", "bp")],
-    "EU": [("^STOXX50E", "EuroStoxx 50", "%"), ("EURUSD=X", "EUR/USD", "%")],
-    "DE": [("^GDAXI", "DAX", "%"), ("EURUSD=X", "EUR/USD", "%")],
-    "UK": [("^FTSE", "FTSE 100", "%"), ("GBPUSD=X", "GBP/USD", "%")],
-    "JP": [("^N225", "Nikkei 225", "%"), ("JPY=X", "USD/JPY", "%")],
-    "CN": [("000001.SS", "Shanghai", "%"), ("CNY=X", "USD/CNY", "%")],
-}
+# Release-day reaction assets: (yfinance ticker, display label, unit). We derive
+# the reaction ourselves (no calendar source provides one) as the close-to-close
+# move on the release day. One consistent global-risk set is used for EVERY event
+# — US and international alike — so the columns stay identical across the tape and
+# only three reliable tickers are ever pulled. A hot EU/Asia print still moves
+# these (US futures, the dollar, Treasury yields), so the read stays meaningful.
+_REACTION_ASSETS = [("SPY", "S&P 500", "%"), ("DX-Y.NYB", "DXY", "%"), ("^TNX", "US 10Y", "bp")]
 
 # Consensus overlay: our release key -> (measure, {exact Investing titles},
 # {exact FF titles}). Titles are matched exactly (period tag stripped) so a y/y
@@ -371,7 +369,7 @@ def _fed_event_drafts(today: str, dates: list[str], meta: dict, summary: str) ->
 
 # EU/Asia marquee events, sourced from the Investing.com multi-country calendar.
 # Matched by (currency, exact normalized title). fmt appends the basis so a value
-# reads like the US rows; reactions use the country's own index + FX (see _ASSETS).
+# reads like the US rows; reactions use the shared _REACTION_ASSETS set.
 def _i(key, name, region, country, ccode, cc, ccy, titles, category, impact, source, url, time, tzl, tzo, fmt, freq):
     return {"key": key, "name": name, "region": region, "country": country, "countryCode": ccode,
             "cc": cc, "ccy": ccy, "titles": titles, "category": category, "impact": impact,
@@ -520,16 +518,16 @@ def _build() -> dict:
     inv = investing_calendar.consensus_map()
     ff = ff_calendar.consensus_map()
 
-    # Reactions: union of each released event's regional assets, one price download.
+    # Reactions: one consistent asset set for every event, so a single small,
+    # cached price download covers the whole tape (no per-region ticker pulls).
     rel = [d for d in drafts if d["status"] == "released"]
-    tickers = {tk for d in rel for tk, _, _ in _ASSETS.get(d["r"].get("cc", "US"), _ASSETS["US"])}
+    tickers = {tk for tk, _, _ in _REACTION_ASSETS} if rel else set()
     start = (min((date.fromisoformat(d["date"]) for d in rel), default=date.today()) - timedelta(days=10)).isoformat()
     closes = _price_closes(tickers, start)
 
     for d in drafts:
         r = d["r"]
         t = r.get("time", _RELEASE_TIME)
-        cc = r.get("cc", "US")
         tz_off = r.get("tz_offset", _TZ)
         tz_lab = r.get("tz_label", "ET")
         # Consensus: an existing forecast (GDPNow, FOMC futures, intl) wins; otherwise
@@ -551,11 +549,11 @@ def _build() -> dict:
             "previous": d["previous"], "history": d.get("history", []),
             "summary": d["summary"],
             "sourceName": r["source"], "sourceUrl": r["url"],
-            "reactions": _reaction(closes, _ASSETS.get(cc, _ASSETS["US"]), d["date"]) if d["status"] == "released" else [],
+            "reactions": _reaction(closes, _REACTION_ASSETS, d["date"]) if d["status"] == "released" else [],
         })
 
     return {"events": events, "source": "FRED + Investing", "as_of": datetime.utcnow().isoformat() + "Z",
-            "note": "US releases from FRED, EU/Asia from the Investing.com calendar, FOMC from the Rate Engine. Reaction is the release-day move in each region's index + FX. Consensus is pulled from Investing.com / Forex Factory; it is only published a few days before a release, so events further out show a dash until then."}
+            "note": "US releases from FRED, EU/Asia from the Investing.com calendar, FOMC from the Rate Engine. Reaction is our own release-day close-to-close move in the S&P 500, dollar (DXY) and 10-year yield. Consensus is pulled from Investing.com / Forex Factory; it is only published a few days before a release, so events further out show a dash until then."}
 
 
 @router.get("")

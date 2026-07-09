@@ -1140,7 +1140,7 @@ export function ChartStudioContent() {
         <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <input value={tickerDraft} onChange={e => setTickerDraft(e.target.value.toUpperCase())}
             onKeyDown={e => e.key === 'Enter' && submitTicker()} spellCheck={false} aria-label="Chart symbol"
-            style={{ width: 96, height: 32, boxSizing: 'border-box', background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-border, rgba(255,255,255,0.14))', color: 'var(--theme-primary, #c9a84c)', fontFamily: MONO, fontSize: 15, fontWeight: 700, padding: '0 8px' }} />
+            style={{ width: 96, height: 32, boxSizing: 'border-box', background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-border, rgba(255,255,255,0.14))', color: 'var(--theme-primary, #c9a84c)', fontFamily: MONO, fontSize: 15, fontWeight: 400, padding: '0 8px' }} />
           <button className="cs-chip" onClick={submitTicker} style={{ height: 32, boxSizing: 'border-box', fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', padding: '0 10px', cursor: 'pointer', background: 'transparent', color: 'var(--theme-secondary, #8099b0)', border: '1px solid var(--theme-border, rgba(255,255,255,0.14))' }}>LOAD</button>
         </span>
         <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
