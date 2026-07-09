@@ -27,7 +27,9 @@ const sign = (n: number) => (n >= 0 ? '+' : '−')
 // growth/jobs are the "good" side. Rate decisions read as as-priced.
 export function deriveSurprise(e: MacroEvent): Surprise | null {
   if (e.status !== 'released' || !e.actual) return null
-  if (e.category === 'Central Bank') return { label: 'AS PRICED', value: '', tone: 'muted' }
+  // Rate decisions with a real level read as as-priced; scheduled events with no
+  // number (e.g. FOMC Minutes shows "Released") carry no surprise.
+  if (e.category === 'Central Bank') return parseNum(e.actual) == null ? null : { label: 'AS PRICED', value: '', tone: 'muted' }
   const baseline = e.expected ?? e.previous
   const a = parseNum(e.actual)
   const b = parseNum(baseline)
@@ -37,7 +39,8 @@ export function deriveSurprise(e: MacroEvent): Surprise | null {
   const d = a - b
   if (Math.abs(d) < eps) return { label: 'IN LINE', value: '', tone: 'muted' }
   const inflation = e.category === 'Inflation'
-  const good = inflation ? d < 0 : /Unemployment/i.test(e.name) ? d < 0 : d > 0
+  // Inflation and jobless claims and unemployment: lower is the "good" surprise.
+  const good = inflation ? d < 0 : /Unemployment|Claims/i.test(e.name) ? d < 0 : d > 0
   const label = inflation ? (d < 0 ? 'COOLER' : 'HOTTER') : good ? 'BEAT' : 'MISS'
   const value = unit === 'K'
     ? `${sign(d)}${Math.abs(Math.round(d))}K`

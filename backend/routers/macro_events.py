@@ -14,7 +14,7 @@ import logging
 import os
 import sys
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import requests
 from fastapi import APIRouter
@@ -42,6 +42,14 @@ _RELEASES = [
     {"key": "unrate", "name": "Unemployment Rate", "release_id": 50, "series": "UNRATE", "units": "lin", "fmt": "pct", "freq": "m", "impact": "High", "category": "Labor", "source": "BLS", "url": "https://www.bls.gov/cps/"},
     {"key": "gdp", "name": "Real GDP Growth", "release_id": 53, "series": "A191RL1Q225SBEA", "units": "lin", "fmt": "pct", "freq": "q", "impact": "Medium", "category": "Growth", "source": "BEA", "url": "https://www.bea.gov/data/gdp/gross-domestic-product", "nowcast": "GDPNOW", "nowcast_label": "GDPNow"},
     {"key": "indpro", "name": "Industrial Production", "release_id": 13, "series": "INDPRO", "units": "pch", "fmt": "mom", "freq": "m", "impact": "Low", "category": "Growth", "source": "Federal Reserve", "url": "https://www.federalreserve.gov/releases/g17/current/", "time": "09:15"},
+    {"key": "retail", "name": "Retail Sales", "release_id": 9, "series": "RSAFS", "units": "pch", "fmt": "mom", "freq": "m", "impact": "High", "category": "Growth", "source": "Census", "url": "https://www.census.gov/retail/marts/www/marts_current.pdf"},
+    {"key": "claims", "name": "Initial Jobless Claims", "release_id": 180, "series": "ICSA", "units": "lin", "fmt": "claims_k", "freq": "w", "impact": "Medium", "category": "Labor", "source": "DOL", "url": "https://www.dol.gov/ui/data.pdf"},
+    {"key": "contclaims", "name": "Continuing Claims", "release_id": 180, "series": "CCSA", "units": "lin", "fmt": "count_m", "freq": "w", "impact": "Low", "category": "Labor", "source": "DOL", "url": "https://www.dol.gov/ui/data.pdf"},
+    {"key": "jolts", "name": "JOLTS Job Openings", "release_id": 192, "series": "JTSJOL", "units": "lin", "fmt": "k_m", "freq": "m", "impact": "Medium", "category": "Labor", "source": "BLS", "url": "https://www.bls.gov/jlt/", "time": "10:00"},
+    {"key": "durable", "name": "Durable Goods Orders", "release_id": 95, "series": "DGORDER", "units": "pch", "fmt": "mom", "freq": "m", "impact": "Low", "category": "Growth", "source": "Census", "url": "https://www.census.gov/manufacturing/m3/"},
+    {"key": "housing", "name": "Housing Starts", "release_id": 27, "series": "HOUST", "units": "lin", "fmt": "k_m", "freq": "m", "impact": "Low", "category": "Growth", "source": "Census", "url": "https://www.census.gov/construction/nrc/"},
+    {"key": "umich", "name": "UMich Consumer Sentiment", "release_id": 91, "series": "UMCSENT", "units": "lin", "fmt": "idx", "freq": "m", "impact": "Low", "category": "Sentiment", "source": "UMich", "url": "http://www.sca.isr.umich.edu/", "time": "10:00"},
+    {"key": "trade", "name": "Trade Balance", "release_id": 51, "series": "BOPGSTB", "units": "lin", "fmt": "bal_b", "freq": "m", "impact": "Low", "category": "Growth", "source": "BEA", "url": "https://www.bea.gov/data/intl-trade-investment/international-trade-goods-and-services"},
 ]
 
 _MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -101,13 +109,25 @@ def _fmt(fmt: str, v: float) -> str:
         return f"{v:.1f}%"
     if fmt == "k":
         return f"{'+' if v >= 0 else ''}{v:.0f}K"
+    if fmt == "claims_k":       # weekly claims count -> "215K"
+        return f"{v / 1000:.0f}K"
+    if fmt == "count_m":        # raw count -> "1.81M" (continuing claims)
+        return f"{v / 1e6:.2f}M"
+    if fmt == "k_m":            # thousands -> "1.18M" (housing starts, JOLTS)
+        return f"{v / 1000:.2f}M"
+    if fmt == "bal_b":          # millions USD -> "-$77.6B" (trade balance)
+        return f"{'-$' if v < 0 else '$'}{abs(v) / 1000:.1f}B"
+    if fmt == "idx":            # index level -> "44.8"
+        return f"{v:.1f}"
     return f"{v:.1f}"
 
 
 def _period_label(obs_date: str, freq: str) -> str:
-    y, m, _ = obs_date.split("-")
+    y, m, d = obs_date.split("-")
     if freq == "q":
         return f"Q{(int(m) - 1) // 3 + 1} {y}"
+    if freq == "w":
+        return f"w/e {_MONTHS[int(m) - 1]} {int(d)}"
     return f"{_MONTHS[int(m) - 1]} {y}"
 
 
@@ -117,6 +137,9 @@ def _next_period_label(obs_date: str, freq: str) -> str:
     if freq == "q":
         q = (mi - 1) // 3 + 1
         return f"Q{q + 1} {yi}" if q < 4 else f"Q1 {yi + 1}"
+    if freq == "w":
+        nd = date.fromisoformat(obs_date) + timedelta(days=7)
+        return f"w/e {_MONTHS[nd.month - 1]} {nd.day}"
     return f"{_MONTHS[mi % 12]} {yi + (1 if mi == 12 else 0)}"
 
 
@@ -245,6 +268,25 @@ def _fomc_drafts(today: str) -> tuple[list[dict], str | None]:
     return drafts, released_date
 
 
+def _fed_event_drafts(today: str, dates: list[str], meta: dict, summary: str) -> tuple[list[dict], str | None]:
+    """Recent + next occurrence of a scheduled Fed event (Minutes, Beige Book).
+    Qualitative: no numeric actual/consensus, just a released-day marker + move."""
+    past = [d for d in dates if d <= today]
+    future = [d for d in dates if d > today]
+    drafts: list[dict] = []
+    released_date: str | None = None
+    if past:
+        released_date = past[-1]
+        drafts.append({"r": meta, "status": "released", "date": released_date,
+                       "actual": "Released", "expected": None, "previous": "—",
+                       "period": _period_label(released_date, "m"), "history": [], "summary": summary})
+    if future:
+        drafts.append({"r": meta, "status": "upcoming", "date": future[0],
+                       "actual": None, "expected": None, "previous": "—",
+                       "period": _period_label(future[0], "m"), "history": [], "summary": summary})
+    return drafts, released_date
+
+
 def _build() -> dict:
     today = date.today().isoformat()
     events: list[dict] = []
@@ -296,6 +338,22 @@ def _build() -> dict:
     drafts.extend(fomc_drafts)
     if fomc_released:
         released_dates.append(fomc_released)
+    from routers.rates import _FOMC_DATES, _BEIGE_BOOK_DATES
+    minutes_dates = sorted((date.fromisoformat(d) + timedelta(days=21)).isoformat() for d in _FOMC_DATES)
+    for d_dates, meta, summ in [
+        (minutes_dates,
+         {"key": "fomc-minutes", "name": "FOMC Minutes", "category": "Central Bank", "impact": "Medium",
+          "source": "Federal Reserve", "url": "https://www.federalreserve.gov/monetarypolicy/fomcminutes.htm", "time": "14:00"},
+         "Minutes from the prior FOMC meeting, with the detail behind the policy decision and the range of member views."),
+        (sorted(_BEIGE_BOOK_DATES),
+         {"key": "beige-book", "name": "Fed Beige Book", "category": "Central Bank", "impact": "Low",
+          "source": "Federal Reserve", "url": "https://www.federalreserve.gov/monetarypolicy/beige-book-default.htm", "time": "14:00"},
+         "Anecdotal read on regional economic conditions, published two weeks before each FOMC meeting."),
+    ]:
+        fd, fr = _fed_event_drafts(today, d_dates, meta, summ)
+        drafts.extend(fd)
+        if fr:
+            released_dates.append(fr)
 
     reactions = _reactions_for(released_dates)
 
