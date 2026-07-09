@@ -8,7 +8,7 @@ import PageWrapper from '../components/PageWrapper'
 import { MOCK_EVENTS, type MacroEvent } from '../data/mockEventsData'
 import MacroToolbar, { type Filters } from '../components/macroEvents/MacroToolbar'
 import ReleaseTape, { type Section, type Sort } from '../components/macroEvents/ReleaseTape'
-import { dayKey, dayLabel, sortValue } from '../components/macroEvents/tapeUtils'
+import { dayKey, dayLabel, sortValue, hasColData, type FilterCol } from '../components/macroEvents/tapeUtils'
 
 interface EventsResponse { events: MacroEvent[]; source: string; note?: string }
 interface AlertRow { id: string; condition: string; payload: string | null }
@@ -27,6 +27,7 @@ function Stat({ value, label, color }: { value: number; label: string; color: st
 function MacroEventHubContent() {
   const [filters, setFilters] = useState<Filters>({ query: '', region: 'ALL', impact: 'ALL', from: '', to: '' })
   const [sort, setSort] = useState<Sort>({ column: 'time', dir: 'asc' })
+  const [colFilters, setColFilters] = useState<Set<FilterCol>>(new Set())
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [, setTick] = useState(0)
   const { user } = useTheme()
@@ -94,6 +95,11 @@ function MacroEventHubContent() {
 
   const onSort = (col: Sort['column']) =>
     setSort(s => (s.column === col ? { column: col, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { column: col, dir: 'asc' }))
+  const onColFilter = (col: FilterCol) => setColFilters(prev => {
+    const next = new Set(prev)
+    next.has(col) ? next.delete(col) : next.add(col)
+    return next
+  })
 
   const filtered = useMemo(() => {
     const q = filters.query.trim().toLowerCase()
@@ -105,9 +111,10 @@ function MacroEventHubContent() {
       const d = e.datetime.slice(0, 10)
       if (lo && d < lo) return false
       if (hi && d > hi) return false
+      for (const col of colFilters) if (!hasColData(e, col)) return false
       return true
     })
-  }, [events, filters, fromEff, toEff])
+  }, [events, filters, fromEff, toEff, colFilters])
 
   const sections: Section[] = useMemo(() => {
     if (sort.column !== 'time') {
@@ -178,11 +185,11 @@ function MacroEventHubContent() {
             ? <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '56px 20px', color: T.muted, border: `1px dashed ${T.border}`, background: T.surface }}>
                 {isLoading ? <Loader2 size={22} style={{ animation: 'me-spin 0.7s linear infinite' }} /> : <Inbox size={28} />}
                 <span style={{ fontFamily: T.label, fontSize: 13 }}>{isLoading ? 'Loading live releases…' : 'No events match these filters.'}</span>
-                {!isLoading && <button type="button" onClick={() => setFilters(f => ({ ...f, query: '', region: 'ALL', impact: 'ALL' }))}
+                {!isLoading && <button type="button" onClick={() => { setFilters(f => ({ ...f, query: '', region: 'ALL', impact: 'ALL' })); setColFilters(new Set()) }}
                   style={{ marginTop: 4, padding: '6px 14px', background: 'transparent', border: `1px solid ${T.goldTint(50)}`, color: T.gold, fontFamily: T.label, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Reset filters</button>}
               </div>
             : <ReleaseTape sections={sections} totalCount={filtered.length} nextHigh={nextHigh}
-                sort={sort} onSort={onSort}
+                sort={sort} onSort={onSort} colFilters={colFilters} onColFilter={onColFilter}
                 expandedId={expandedId} onToggle={id => setExpandedId(cur => (cur === id ? null : id))}
                 isAlerted={isAlerted} onAlert={toggleAlert} />}
         </div>

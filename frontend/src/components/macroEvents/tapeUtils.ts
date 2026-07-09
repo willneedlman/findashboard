@@ -118,6 +118,17 @@ export function shortDate(iso: string): string {
 }
 
 export type SortCol = 'time' | 'date' | 'event' | 'region' | 'actual' | 'consensus' | 'previous' | 'surprise' | 'reaction' | 'history'
+
+// Columns that can be empty and are therefore filterable "has a value here".
+export type FilterCol = 'actual' | 'consensus' | 'surprise' | 'reaction'
+export function hasColData(e: MacroEvent, col: FilterCol): boolean {
+  switch (col) {
+    case 'actual': return e.actual != null && e.actual !== ''
+    case 'consensus': return e.expected != null && e.expected !== ''
+    case 'surprise': return deriveSurprise(e) != null
+    case 'reaction': return e.reactions.length > 0
+  }
+}
 export function sortValue(e: MacroEvent, col: SortCol): number | string {
   switch (col) {
     case 'time':

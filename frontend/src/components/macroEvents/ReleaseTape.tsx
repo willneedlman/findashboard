@@ -1,11 +1,17 @@
 import { useState } from 'react'
-import { Bell } from 'lucide-react'
+import { Bell, Filter } from 'lucide-react'
 import { T } from '../../lib/theme'
 import type { MacroEvent, Impact } from '../../data/mockEventsData'
 import {
   deriveSurprise, reactionCode, reactionValue, sparkPoints, historyBars,
-  countdownShort, countdownLong, shortDate, type SortCol, type Tone,
+  countdownShort, countdownLong, shortDate, type SortCol, type FilterCol, type Tone,
 } from './tapeUtils'
+
+const FILTER_COLS = new Set<SortCol>(['actual', 'consensus', 'surprise', 'reaction'])
+const FILTER_HINT: Record<string, string> = {
+  actual: 'Show only released events', consensus: 'Show only events with a forecast',
+  surprise: 'Show only events with a surprise', reaction: 'Show only events with a market reaction',
+}
 
 const GRID = '52px 60px minmax(0,1fr) 36px 88px 88px 88px 106px 200px 56px 32px'
 const GAP = 13
@@ -163,9 +169,10 @@ function Row({ e, zebra, expanded, onToggle, alerted, onAlert }: {
   )
 }
 
-export default function ReleaseTape({ sections, totalCount, nextHigh, sort, onSort, expandedId, onToggle, isAlerted, onAlert }: {
+export default function ReleaseTape({ sections, totalCount, nextHigh, sort, onSort, colFilters, onColFilter, expandedId, onToggle, isAlerted, onAlert }: {
   sections: Section[]; totalCount: number; nextHigh: MacroEvent | null
   sort: Sort; onSort: (c: SortCol) => void
+  colFilters: Set<FilterCol>; onColFilter: (c: FilterCol) => void
   expandedId: string | null; onToggle: (id: string) => void
   isAlerted: (e: MacroEvent) => boolean; onAlert: (e: MacroEvent) => void
 }) {
@@ -184,7 +191,20 @@ export default function ReleaseTape({ sections, totalCount, nextHigh, sort, onSo
 
       {/* Sortable column header */}
       <div style={{ display: 'grid', gridTemplateColumns: GRID, columnGap: GAP, alignItems: 'center', padding: '8px 16px', borderBottom: `1px solid ${T.border}`, ...label }}>
-        {COLS.map(c => <SortHeader key={c.col} label={c.label} col={c.col} align={c.align} sort={sort} onSort={onSort} />)}
+        {COLS.map(c => {
+          if (!FILTER_COLS.has(c.col)) return <SortHeader key={c.col} label={c.label} col={c.col} align={c.align} sort={sort} onSort={onSort} />
+          const on = colFilters.has(c.col as FilterCol)
+          return (
+            <span key={c.col} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, justifyContent: 'flex-end' }}>
+              <SortHeader label={c.label} col={c.col} align={c.align} sort={sort} onSort={onSort} />
+              <button type="button" onClick={() => onColFilter(c.col as FilterCol)} title={FILTER_HINT[c.col]}
+                aria-pressed={on} aria-label={FILTER_HINT[c.col]}
+                style={{ display: 'inline-flex', background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: on ? T.gold : T.muted, opacity: on ? 1 : 0.5 }}>
+                <Filter size={10} fill={on ? T.goldTint(35) : 'none'} />
+              </button>
+            </span>
+          )
+        })}
         <span />
       </div>
 
