@@ -166,7 +166,7 @@ function MacroEventHubContent() {
             <h1 className="ft-page-title" style={{ margin: 0 }}>MACRO EVENT RELEASE HUB</h1>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: T.label, fontSize: 10, color: T.muted }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: live ? T.pos : T.gold, display: 'inline-block' }} />
-              {isLoading ? 'Loading live releases' : live ? 'Live · FRED + Rate Engine' : 'Showing bundled seed'}
+              {isLoading ? 'Loading live releases' : live ? 'Live · US, EU & Asia · FRED + Investing.com' : 'Showing bundled seed'}
             </span>
             <span style={{ flex: 1 }} />
             <div style={{ display: 'flex', gap: 22 }}>

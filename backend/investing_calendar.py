@@ -27,6 +27,63 @@ _lock = threading.Lock()
 _cache: dict[tuple[str, str], str] = {}
 _cache_at = 0.0
 
+# US + Eurozone + Germany + UK + Japan + China (investing country ids)
+_INTL_CODES = [5, 72, 17, 4, 35, 37]
+_intl_lock = threading.Lock()
+_intl_rows: list[dict] = []
+_intl_at = 0.0
+
+
+def calendar_rows() -> list[dict]:
+    """Full rows for US/EU/Asia: {ccy, title, period, date, actual, forecast, previous}.
+    Past and future windows are fetched separately (a single wide range with
+    limit_from=0 only returns the first page). Cached, fails soft to []."""
+    global _intl_rows, _intl_at
+    with _intl_lock:
+        if _intl_rows and time.time() - _intl_at < _TTL:
+            return _intl_rows
+    today = date.today()
+    fresh = (_fetch_rows((today - timedelta(days=35)).isoformat(), today.isoformat())
+             + _fetch_rows(today.isoformat(), (today + timedelta(days=45)).isoformat()))
+    with _intl_lock:
+        if fresh:
+            _intl_rows, _intl_at = fresh, time.time()
+        return _intl_rows
+
+
+def _fetch_rows(dfrom: str, dto: str) -> list[dict]:
+    countries = "&".join(f"country%5B%5D={c}" for c in _INTL_CODES)
+    body = (f"{countries}&importance%5B%5D=2&importance%5B%5D=3&timeZone=8&timeFilter=timeRemain"
+            f"&currentTab=custom&dateFrom={dfrom}&dateTo={dto}&limit_from=0")
+    headers = {"User-Agent": _UA, "X-Requested-With": "XMLHttpRequest",
+               "Content-Type": "application/x-www-form-urlencoded",
+               "Referer": "https://www.investing.com/economic-calendar/"}
+    out: list[dict] = []
+    try:
+        r = requests.post(_URL, headers=headers, data=body, timeout=20)
+        if r.status_code != 200:
+            logger.info("Investing intl calendar -> %s", r.status_code)
+            return out
+        soup = BeautifulSoup(json.loads(r.text).get("data", ""), "html.parser")
+        for tr in soup.select("tr.js-event-item"):
+            ev = tr.select_one("td.event")
+            cur = tr.select_one("td.flagCur")
+            if not ev or not cur:
+                continue
+            raw = ev.get_text(strip=True)
+            out.append({
+                "ccy": cur.get_text(strip=True).split()[-1] if cur.get_text(strip=True) else "",
+                "title": _normalize(raw),
+                "period": _period_tag(raw),
+                "date": (tr.get("data-event-datetime", "") or "")[:10].replace("/", "-"),
+                "actual": (tr.select_one("td.act").get_text(strip=True) if tr.select_one("td.act") else ""),
+                "forecast": (tr.select_one("td.fore").get_text(strip=True) if tr.select_one("td.fore") else ""),
+                "previous": (tr.select_one("td.prev").get_text(strip=True) if tr.select_one("td.prev") else ""),
+            })
+    except Exception as ex:  # noqa: BLE001
+        logger.warning("Investing intl calendar fetch failed: %s", ex)
+    return out
+
 
 def _fetch() -> dict[tuple[str, str], str]:
     """(normalized_title, date10) -> forecast string, for US events over ~60 days."""
@@ -62,6 +119,16 @@ def _fetch() -> dict[tuple[str, str], str]:
     except Exception as ex:  # noqa: BLE001
         logger.warning("Investing calendar fetch failed: %s", ex)
     return out
+
+
+def _period_tag(title: str) -> str:
+    """The trailing period marker of a raw title: 'German CPI (YoY) (Jun)' -> 'Jun'."""
+    t = title.strip()
+    if t.endswith(")"):
+        cut = t.rfind("(")
+        if cut > 0 and len(t) - cut <= 6:
+            return t[cut + 1:-1]
+    return ""
 
 
 def _normalize(title: str) -> str:

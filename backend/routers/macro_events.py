@@ -57,8 +57,15 @@ _RELEASES = [
 
 _MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
-# release-day reaction: (yfinance ticker, display label, unit)
-_REACTION_ASSETS = [("SPY", "S&P 500", "%"), ("DX-Y.NYB", "DXY", "%"), ("^TNX", "US 10Y", "bp")]
+# release-day reaction assets by country: (yfinance ticker, display label, unit)
+_ASSETS = {
+    "US": [("SPY", "S&P 500", "%"), ("DX-Y.NYB", "DXY", "%"), ("^TNX", "US 10Y", "bp")],
+    "EU": [("^STOXX50E", "EuroStoxx 50", "%"), ("EURUSD=X", "EUR/USD", "%")],
+    "DE": [("^GDAXI", "DAX", "%"), ("EURUSD=X", "EUR/USD", "%")],
+    "UK": [("^FTSE", "FTSE 100", "%"), ("GBPUSD=X", "GBP/USD", "%")],
+    "JP": [("^N225", "Nikkei 225", "%"), ("JPY=X", "USD/JPY", "%")],
+    "CN": [("000001.SS", "Shanghai", "%"), ("CNY=X", "USD/CNY", "%")],
+}
 
 # Consensus overlay: our release key -> (measure, {exact Investing titles},
 # {exact FF titles}). Titles are matched exactly (period tag stripped) so a y/y
@@ -219,42 +226,42 @@ def _next_period_label(obs_date: str, freq: str) -> str:
 
 
 # ── release-day market reaction ───────────────────────────────────────────────
-def _reactions_for(dates: list[str]) -> dict[str, list[dict]]:
-    """Map each release date to the cross-asset move on that trading day."""
-    if not dates:
-        return {}
-    start = (min(datetime.strptime(d, "%Y-%m-%d").date() for d in dates)).replace(day=1).isoformat()
-    end = date.today().isoformat()
+def _price_closes(tickers: set[str], start: str):
+    """Batched daily closes for a set of tickers (one cached download)."""
+    if not tickers:
+        return None
     try:
-        df = cache.get_download(tuple(t for t, _, _ in _REACTION_ASSETS), start, end)
+        df = cache.get_download(tuple(sorted(tickers)), start, date.today().isoformat())
     except Exception as ex:  # noqa: BLE001
         logger.warning("reaction download failed: %s", ex)
-        return {}
+        return None
     if df is None or df.empty:
-        return {}
-    closes = df["Close"] if "Close" in df else df
-    out: dict[str, list[dict]] = {}
-    for d in dates:
-        day = datetime.strptime(d, "%Y-%m-%d").date()
-        moves: list[dict] = []
-        for ticker, label, unit in _REACTION_ASSETS:
-            if ticker not in closes:
-                continue
-            s = closes[ticker].dropna()
-            after = s[s.index.date >= day]
-            if after.empty:
-                continue
-            pos = s.index.get_loc(after.index[0])
-            if not isinstance(pos, int) or pos < 1:
-                continue
-            cur, prev = float(s.iloc[pos]), float(s.iloc[pos - 1])
-            if prev == 0:
-                continue
-            change = (cur - prev) * 100 if unit == "bp" else (cur / prev - 1) * 100
-            moves.append({"asset": label, "change": round(change, 2 if unit == "%" else 1), "unit": unit})
-        if moves:
-            out[d] = moves
-    return out
+        return None
+    return df["Close"] if "Close" in df else df
+
+
+def _reaction(closes, assets: list, date10: str) -> list[dict]:
+    """Cross-asset move on the release day for one event's asset set."""
+    if closes is None:
+        return []
+    day = datetime.strptime(date10, "%Y-%m-%d").date()
+    moves: list[dict] = []
+    for ticker, label, unit in assets:
+        if ticker not in closes:
+            continue
+        s = closes[ticker].dropna()
+        after = s[s.index.date >= day]
+        if after.empty:
+            continue
+        pos = s.index.get_loc(after.index[0])
+        if not isinstance(pos, int) or pos < 1:
+            continue
+        cur, prev = float(s.iloc[pos]), float(s.iloc[pos - 1])
+        if prev == 0:
+            continue
+        change = (cur - prev) * 100 if unit == "bp" else (cur / prev - 1) * 100
+        moves.append({"asset": label, "change": round(change, 2 if unit == "%" else 1), "unit": unit})
+    return moves
 
 
 # ── build ─────────────────────────────────────────────────────────────────────
@@ -362,10 +369,93 @@ def _fed_event_drafts(today: str, dates: list[str], meta: dict, summary: str) ->
     return drafts, released_date
 
 
+# EU/Asia marquee events, sourced from the Investing.com multi-country calendar.
+# Matched by (currency, exact normalized title). fmt appends the basis so a value
+# reads like the US rows; reactions use the country's own index + FX (see _ASSETS).
+def _i(key, name, region, country, ccode, cc, ccy, titles, category, impact, source, url, time, tzl, tzo, fmt, freq):
+    return {"key": key, "name": name, "region": region, "country": country, "countryCode": ccode,
+            "cc": cc, "ccy": ccy, "titles": titles, "category": category, "impact": impact,
+            "source": source, "url": url, "time": time, "tz_label": tzl, "tz_offset": tzo, "fmt": fmt, "freq": freq}
+
+
+_INTL = [
+    _i("eu-cpi", "Eurozone CPI", "EU", "Eurozone", "EU", "EU", "EUR", {"cpi (yoy)"}, "Inflation", "High", "Eurostat", "https://ec.europa.eu/eurostat", "11:00", "CET", "+02:00", "yoy", "m"),
+    _i("eu-gdp", "Eurozone GDP", "EU", "Eurozone", "EU", "EU", "EUR", {"gdp (qoq)"}, "Growth", "High", "Eurostat", "https://ec.europa.eu/eurostat", "11:00", "CET", "+02:00", "qoq", "q"),
+    _i("ecb", "ECB Rate Decision", "EU", "Eurozone", "EU", "EU", "EUR", {"ecb interest rate decision", "deposit facility rate"}, "Central Bank", "High", "ECB", "https://www.ecb.europa.eu/press/govcdec/html/index.en.html", "14:15", "CET", "+02:00", "pct", "m"),
+    _i("eu-unrate", "Eurozone Unemployment", "EU", "Eurozone", "EU", "EU", "EUR", {"unemployment rate"}, "Labor", "Medium", "Eurostat", "https://ec.europa.eu/eurostat", "11:00", "CET", "+02:00", "pct", "m"),
+    _i("de-cpi", "German CPI", "EU", "Germany", "DE", "DE", "EUR", {"german cpi (yoy)"}, "Inflation", "Medium", "Destatis", "https://www.destatis.de", "08:00", "CET", "+02:00", "yoy", "m"),
+    _i("de-ifo", "German ifo Business Climate", "EU", "Germany", "DE", "DE", "EUR", {"german ifo business climate index"}, "Sentiment", "Medium", "ifo Institute", "https://www.ifo.de", "10:00", "CET", "+02:00", "idx", "m"),
+    _i("uk-cpi", "UK CPI", "EU", "United Kingdom", "UK", "UK", "GBP", {"cpi (yoy)"}, "Inflation", "High", "UK ONS", "https://www.ons.gov.uk", "07:00", "BST", "+01:00", "yoy", "m"),
+    _i("uk-gdp", "UK GDP", "EU", "United Kingdom", "UK", "UK", "GBP", {"gdp (mom)"}, "Growth", "Medium", "UK ONS", "https://www.ons.gov.uk", "07:00", "BST", "+01:00", "mom", "m"),
+    _i("boe", "BoE Rate Decision", "EU", "United Kingdom", "UK", "UK", "GBP", {"boe interest rate decision"}, "Central Bank", "High", "Bank of England", "https://www.bankofengland.co.uk", "12:00", "BST", "+01:00", "pct", "m"),
+    _i("boj", "BoJ Rate Decision", "ASIA", "Japan", "JP", "JP", "JPY", {"boj interest rate decision"}, "Central Bank", "High", "Bank of Japan", "https://www.boj.or.jp/en/", "12:00", "JST", "+09:00", "pct", "m"),
+    _i("jp-cpi", "Japan Core CPI", "ASIA", "Japan", "JP", "JP", "JPY", {"national core cpi (yoy)"}, "Inflation", "Medium", "Japan Stats", "https://www.stat.go.jp/english/", "08:30", "JST", "+09:00", "yoy", "m"),
+    _i("cn-gdp", "China GDP", "ASIA", "China", "CN", "CN", "CNY", {"gdp (yoy)"}, "Growth", "High", "China NBS", "https://www.stats.gov.cn/english/", "10:00", "CST", "+08:00", "yoy", "q"),
+    _i("cn-cpi", "China CPI", "ASIA", "China", "CN", "CN", "CNY", {"cpi (yoy)"}, "Inflation", "Medium", "China NBS", "https://www.stats.gov.cn/english/", "09:30", "CST", "+08:00", "yoy", "m"),
+    _i("cn-pmi", "China Manufacturing PMI", "ASIA", "China", "CN", "CN", "CNY", {"manufacturing pmi"}, "Sentiment", "Medium", "China NBS", "https://www.stats.gov.cn/english/", "09:30", "CST", "+08:00", "idx", "m"),
+]
+
+
+def _fmt_intl(fmt: str, raw: str) -> str | None:
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    if fmt == "yoy":
+        return f"{raw} y/y"
+    if fmt == "qoq":
+        return f"{raw} q/q"
+    if fmt == "mom":
+        return f"{raw} m/m"
+    return raw
+
+
+def _intl_drafts(today: str) -> list[dict]:
+    """Recent released + next upcoming for each marquee EU/Asia event, from the
+    Investing.com calendar. Fails soft to [] (US feed is unaffected)."""
+    from collections import defaultdict
+    rows = investing_calendar.calendar_rows()
+    if not rows:
+        return []
+    by: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    for r in rows:
+        if r["date"]:
+            by[(r["ccy"], r["title"])].append(r)
+    drafts: list[dict] = []
+    for spec in _INTL:
+        matches: list[dict] = []
+        for t in spec["titles"]:
+            matches += by.get((spec["ccy"], t), [])
+        if not matches:
+            continue
+        matches.sort(key=lambda x: x["date"])
+        past = [m for m in matches if m["date"] <= today and m["actual"].strip()]
+        future = [m for m in matches if m["date"] > today]
+        if past:
+            m = past[-1]
+            period = m["period"] or _period_label(m["date"], spec["freq"])
+            drafts.append({"r": spec, "status": "released", "date": m["date"],
+                           "actual": _fmt_intl(spec["fmt"], m["actual"]),
+                           "expected": _fmt_intl(spec["fmt"], m["forecast"]),
+                           "expected_label": "consensus" if m["forecast"].strip() else None,
+                           "previous": _fmt_intl(spec["fmt"], m["previous"]) or "—",
+                           "period": period, "history": [],
+                           "summary": f"{spec['name']} for {period}, from the {spec['country']} calendar."})
+        if future:
+            m = future[0]
+            period = m["period"] or _next_period_label(m["date"], spec["freq"])
+            drafts.append({"r": spec, "status": "upcoming", "date": m["date"],
+                           "actual": None,
+                           "expected": _fmt_intl(spec["fmt"], m["forecast"]),
+                           "expected_label": "consensus" if m["forecast"].strip() else None,
+                           "previous": _fmt_intl(spec["fmt"], m["previous"]) or "—",
+                           "period": period, "history": [],
+                           "summary": f"Upcoming {spec['name']} release ({spec['country']})."})
+    return drafts
+
+
 def _build() -> dict:
     today = date.today().isoformat()
     events: list[dict] = []
-    released_dates: list[str] = []
     drafts: list[dict] = []
 
     for r in _RELEASES:
@@ -384,7 +474,6 @@ def _build() -> dict:
 
         if past:
             rel_date = past[-1]
-            released_dates.append(rel_date)
             drafts.append({"r": r, "status": "released", "date": rel_date,
                            "actual": _fmt(r["fmt"], actual_v), "previous": _fmt(r["fmt"], prev_v),
                            "period": period, "history": history,
@@ -409,10 +498,8 @@ def _build() -> dict:
                                       f"The prior print was {_fmt(r['fmt'], actual_v)} for {period}." + nc_note})
 
     # FOMC decisions reuse the Rate Engine's schedule + implied path.
-    fomc_drafts, fomc_released = _fomc_drafts(today)
+    fomc_drafts, _ = _fomc_drafts(today)
     drafts.extend(fomc_drafts)
-    if fomc_released:
-        released_dates.append(fomc_released)
     from routers.rates import _FOMC_DATES, _BEIGE_BOOK_DATES
     minutes_dates = sorted((date.fromisoformat(d) + timedelta(days=21)).isoformat() for d in _FOMC_DATES)
     for d_dates, meta, summ in [
@@ -425,19 +512,27 @@ def _build() -> dict:
           "source": "Federal Reserve", "url": "https://www.federalreserve.gov/monetarypolicy/beige-book-default.htm", "time": "14:00"},
          "Anecdotal read on regional economic conditions, published two weeks before each FOMC meeting."),
     ]:
-        fd, fr = _fed_event_drafts(today, d_dates, meta, summ)
+        fd, _ = _fed_event_drafts(today, d_dates, meta, summ)
         drafts.extend(fd)
-        if fr:
-            released_dates.append(fr)
 
-    reactions = _reactions_for(released_dates)
+    drafts.extend(_intl_drafts(today))
+
     inv = investing_calendar.consensus_map()
     ff = ff_calendar.consensus_map()
+
+    # Reactions: union of each released event's regional assets, one price download.
+    rel = [d for d in drafts if d["status"] == "released"]
+    tickers = {tk for d in rel for tk, _, _ in _ASSETS.get(d["r"].get("cc", "US"), _ASSETS["US"])}
+    start = (min((date.fromisoformat(d["date"]) for d in rel), default=date.today()) - timedelta(days=10)).isoformat()
+    closes = _price_closes(tickers, start)
 
     for d in drafts:
         r = d["r"]
         t = r.get("time", _RELEASE_TIME)
-        # Consensus: an existing forecast (GDPNow, FOMC futures) wins; otherwise
+        cc = r.get("cc", "US")
+        tz_off = r.get("tz_offset", _TZ)
+        tz_lab = r.get("tz_label", "ET")
+        # Consensus: an existing forecast (GDPNow, FOMC futures, intl) wins; otherwise
         # the free Investing.com / Forex Factory consensus where the measure matches.
         exp, exp_label = d.get("expected"), d.get("expected_label")
         if exp is None:
@@ -447,20 +542,20 @@ def _build() -> dict:
         events.append({
             "id": f"{r['key']}-{d['date']}",
             "name": f"{r['name']} ({d['period']})",
-            "country": "United States", "countryCode": "US", "region": "US",
-            "category": r["category"],
-            "datetime": f"{d['date']}T{t}:00{_TZ}",
-            "displayTime": f"{_MONTHS[int(d['date'][5:7]) - 1]} {int(d['date'][8:10])}, {d['date'][:4]} · {t} ET",
+            "country": r.get("country", "United States"), "countryCode": r.get("countryCode", "US"),
+            "region": r.get("region", "US"), "category": r["category"],
+            "datetime": f"{d['date']}T{t}:00{tz_off}",
+            "displayTime": f"{_MONTHS[int(d['date'][5:7]) - 1]} {int(d['date'][8:10])}, {d['date'][:4]} · {t} {tz_lab}",
             "impact": r["impact"], "status": d["status"],
             "actual": d["actual"], "expected": exp, "expectedLabel": exp_label,
             "previous": d["previous"], "history": d.get("history", []),
             "summary": d["summary"],
             "sourceName": r["source"], "sourceUrl": r["url"],
-            "reactions": reactions.get(d["date"], []) if d["status"] == "released" else [],
+            "reactions": _reaction(closes, _ASSETS.get(cc, _ASSETS["US"]), d["date"]) if d["status"] == "released" else [],
         })
 
-    return {"events": events, "source": "FRED", "as_of": datetime.utcnow().isoformat() + "Z",
-            "note": "Live US releases from FRED plus FOMC from the Rate Engine. Reaction is the release-day cross-asset move. Consensus is pulled from Investing.com / Forex Factory (GDPNow for GDP, futures-implied for FOMC). Street consensus is only published a few days before each release, so events further out will show a dash until then."}
+    return {"events": events, "source": "FRED + Investing", "as_of": datetime.utcnow().isoformat() + "Z",
+            "note": "US releases from FRED, EU/Asia from the Investing.com calendar, FOMC from the Rate Engine. Reaction is the release-day move in each region's index + FX. Consensus is pulled from Investing.com / Forex Factory; it is only published a few days before a release, so events further out show a dash until then."}
 
 
 @router.get("")
