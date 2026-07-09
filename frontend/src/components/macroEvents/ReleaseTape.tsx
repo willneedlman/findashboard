@@ -86,9 +86,10 @@ function Row({ e, zebra, expanded, onToggle, alerted, onAlert }: {
         <span style={{ ...cell, fontSize: 12, color: T.muted }}>{time}</span>
         {/* DATE */}
         <span style={{ ...cell, fontSize: 11, color: T.muted }}>{shortDate(e.datetime)}</span>
-        {/* EVENT */}
-        <span style={{ ...cell, fontSize: 13, fontWeight: 700, color: expanded ? T.gold : T.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {e.name}<span style={{ fontFamily: T.label, fontSize: 10, fontWeight: 400, color: T.muted }}> · {e.category} · {e.sourceName}</span>
+        {/* EVENT — truncates with ellipsis until the row is expanded, then shows in full */}
+        <span style={{ ...cell, fontSize: 13, fontWeight: 700, color: expanded ? T.gold : T.text,
+          whiteSpace: expanded ? 'normal' : 'nowrap', overflow: expanded ? 'visible' : 'hidden', textOverflow: 'ellipsis', lineHeight: expanded ? 1.35 : undefined }}>
+          {e.name}<span style={{ fontFamily: T.label, fontSize: 10, fontWeight: 400, color: T.muted }}> · {e.category} · {e.country} · {e.sourceName}</span>
         </span>
         {/* REG */}
         <span style={{ fontFamily: T.label, fontSize: 10, fontWeight: 700, color: T.muted }}>{e.countryCode}</span>
@@ -139,11 +140,6 @@ function Row({ e, zebra, expanded, onToggle, alerted, onAlert }: {
         <div style={{ overflow: 'hidden' }}>
           <div className="mev-fade" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 24, padding: '4px 16px 16px 154px', opacity: expanded ? 1 : 0 }}>
             <div>
-              {/* Full, untruncated title — the row above ellipsizes it */}
-              <div style={{ marginBottom: 8 }}>
-                <span style={{ fontFamily: T.mono, fontSize: 13, fontWeight: 700, color: T.gold }}>{e.name}</span>
-                <span style={{ fontFamily: T.label, fontSize: 10.5, color: T.muted }}> · {e.category} · {e.country} · {e.sourceName}</span>
-              </div>
               <p style={{ margin: 0, fontFamily: T.label, fontSize: 12, lineHeight: 1.6, color: T.text, maxWidth: 720 }}>{e.summary}</p>
               <a href={e.sourceUrl} target="_blank" rel="noopener noreferrer" onClick={ev => ev.stopPropagation()}
                 style={{ display: 'inline-block', marginTop: 8, fontFamily: T.label, fontSize: 10.5, fontWeight: 600, color: T.blue, textDecoration: 'none' }}>
