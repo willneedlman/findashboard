@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import sys
 import time
 from datetime import date, datetime, timedelta
@@ -22,6 +23,7 @@ from fastapi import APIRouter
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import cache  # noqa: E402
 import ff_calendar  # noqa: E402
+import investing_calendar  # noqa: E402
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -58,52 +60,76 @@ _MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct",
 # release-day reaction: (yfinance ticker, display label, unit)
 _REACTION_ASSETS = [("SPY", "S&P 500", "%"), ("DX-Y.NYB", "DXY", "%"), ("^TNX", "US 10Y", "bp")]
 
-# Forex Factory consensus overlay: our release key -> (exact FF US titles, measure).
-# Only clean, same-measure matches are mapped so the surprise can never compare a
-# y/y print against a m/m consensus. Exact-title match; anything else stays blank.
-_FF_MAP = {
-    "nfp": ({"non-farm employment change"}, "k_signed"),
-    "unrate": ({"unemployment rate"}, "pct"),
-    "claims": ({"unemployment claims"}, "k_raw"),
-    "jolts": ({"jolts job openings"}, "m"),
-    "retail": ({"retail sales m/m"}, "mom"),
-    "durable": ({"durable goods orders m/m"}, "mom"),
-    "umich": ({"prelim uom consumer sentiment", "revised uom consumer sentiment", "uom consumer sentiment"}, "idx"),
-    "cpi": ({"cpi y/y"}, "yoy"),
-    "corecpi": ({"core cpi y/y"}, "yoy"),
-    "ppi": ({"ppi y/y"}, "yoy"),
-    "pce": ({"core pce price index y/y"}, "yoy"),
+# Consensus overlay: our release key -> (measure, {exact Investing titles},
+# {exact FF titles}). Titles are matched exactly (period tag stripped) so a y/y
+# print can never take a m/m consensus. Investing is tried first (wider range +
+# explicit y/y labels), Forex Factory second; anything unmatched stays blank.
+_CONSENSUS = {
+    "cpi": ("yoy", {"cpi (yoy)"}, {"cpi y/y"}),
+    "corecpi": ("yoy", {"core cpi (yoy)"}, {"core cpi y/y"}),
+    "ppi": ("yoy", {"ppi (yoy)"}, {"ppi y/y"}),
+    "pce": ("yoy", {"core pce price index (yoy)"}, {"core pce price index y/y"}),
+    "nfp": ("k_signed", {"nonfarm payrolls"}, {"non-farm employment change"}),
+    "unrate": ("pct", {"unemployment rate"}, {"unemployment rate"}),
+    "claims": ("k_raw", {"initial jobless claims"}, {"unemployment claims"}),
+    "contclaims": ("millions", {"continuing jobless claims"}, set()),
+    "jolts": ("millions", {"jolts job openings"}, {"jolts job openings"}),
+    "retail": ("mom", {"retail sales (mom)"}, {"retail sales m/m"}),
+    "durable": ("mom", {"durable goods orders (mom)"}, {"durable goods orders m/m"}),
+    "housing": ("millions", {"housing starts"}, set()),
+    "umich": ("idx", {"michigan consumer sentiment"},
+              {"prelim uom consumer sentiment", "revised uom consumer sentiment", "uom consumer sentiment"}),
+    "trade": ("billions", {"trade balance"}, {"trade balance"}),
 }
 
 
-def _ff_fmt(measure: str, n: float) -> str:
+def _norm_consensus(measure: str, raw: str) -> str | None:
+    """A source forecast string ('218K', '1,820K', '4.2%', '1.177M', '-71.6B')
+    formatted to match our actual/previous display for that measure."""
+    s = raw.replace(",", "").strip()
+    m = re.search(r"-?\d+\.?\d*", s)
+    if not m:
+        return None
+    n = float(m.group())
+    u = s.upper()
+    if measure == "yoy":
+        return f"{n:.1f}% y/y"
+    if measure == "mom":
+        return f"{n:.1f}% m/m"
+    if measure == "pct":
+        return f"{n:.1f}%"
+    if measure == "idx":
+        return f"{n:.1f}"
     if measure == "k_signed":
         return f"{'+' if n >= 0 else ''}{n:.0f}K"
     if measure == "k_raw":
         return f"{n:.0f}K"
-    if measure == "m":
-        return f"{n:.2f}M"
-    if measure == "mom":
-        return f"{n:.1f}% m/m"
-    if measure == "yoy":
-        return f"{n:.1f}% y/y"
-    if measure == "idx":
-        return f"{n:.1f}"
-    return f"{n:.1f}%"
+    if measure == "millions":
+        val = n / 1000 if "K" in u else n
+        return f"{val:.2f}M"
+    if measure == "billions":
+        val = n / 1000 if "M" in u else n
+        return f"{'-$' if val < 0 else '$'}{abs(val):.1f}B"
+    return None
 
 
-def _ff_consensus(ff: dict, key: str, date10: str) -> str | None:
-    """Consensus for one of our events from the FF map, formatted to match."""
-    spec = _FF_MAP.get(key)
+def _consensus(inv: dict, ff: dict, key: str, date10: str) -> str | None:
+    spec = _CONSENSUS.get(key)
     if not spec:
         return None
-    titles, measure = spec
-    for t in titles:
+    measure, inv_titles, ff_titles = spec
+    for t in inv_titles:
+        raw = inv.get((t, date10))
+        if raw:
+            v = _norm_consensus(measure, raw)
+            if v:
+                return v
+    for t in ff_titles:
         raw = ff.get(("USD", t, date10))
         if raw:
-            v = ff_calendar.parse_value(raw)
-            if v is not None:
-                return _ff_fmt(measure, v)
+            v = _norm_consensus(measure, raw)
+            if v:
+                return v
     return None
 
 _cache_payload: dict | None = None
@@ -405,18 +431,19 @@ def _build() -> dict:
             released_dates.append(fr)
 
     reactions = _reactions_for(released_dates)
+    inv = investing_calendar.consensus_map()
     ff = ff_calendar.consensus_map()
 
     for d in drafts:
         r = d["r"]
         t = r.get("time", _RELEASE_TIME)
         # Consensus: an existing forecast (GDPNow, FOMC futures) wins; otherwise
-        # fall back to the free Forex Factory consensus where the measure matches.
+        # the free Investing.com / Forex Factory consensus where the measure matches.
         exp, exp_label = d.get("expected"), d.get("expected_label")
         if exp is None:
-            ff_exp = _ff_consensus(ff, r["key"], d["date"])
-            if ff_exp is not None:
-                exp, exp_label = ff_exp, "consensus"
+            c = _consensus(inv, ff, r["key"], d["date"])
+            if c is not None:
+                exp, exp_label = c, "consensus"
         events.append({
             "id": f"{r['key']}-{d['date']}",
             "name": f"{r['name']} ({d['period']})",
@@ -433,7 +460,7 @@ def _build() -> dict:
         })
 
     return {"events": events, "source": "FRED", "as_of": datetime.utcnow().isoformat() + "Z",
-            "note": "Live US releases from FRED plus FOMC from the Rate Engine. Reaction is the release-day cross-asset move. Consensus comes from the free Forex Factory feed where the measure matches (GDPNow for GDP, futures-implied for FOMC); it firms up as each release nears, so further-out events may show a dash."}
+            "note": "Live US releases from FRED plus FOMC from the Rate Engine. Reaction is the release-day cross-asset move. Consensus is pulled from Investing.com / Forex Factory (GDPNow for GDP, futures-implied for FOMC). Street consensus is only published a few days before each release, so events further out will show a dash until then."}
 
 
 @router.get("")
