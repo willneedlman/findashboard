@@ -106,12 +106,18 @@ function Row({ e, zebra, expanded, onToggle, alerted, onAlert }: {
               {surprise.label}{surprise.value ? ` ${surprise.value}` : ''}
             </span>
           : <span style={{ ...cell, textAlign: 'right', fontSize: 11, color: T.muted }}>—</span>}
-        {/* REACTION */}
+        {/* REACTION — three fixed columns of asset + colored value, no chip fills */}
         {released
-          ? <span style={{ display: 'flex', gap: 5, fontFamily: T.mono, fontSize: 10, fontWeight: 700 }}>
-              {e.reactions.slice(0, 3).map(r => {
-                const up = r.change >= 0
-                return <span key={r.asset} style={{ padding: '2px 7px', color: up ? T.pos : T.neg, background: up ? T.posTint(12) : T.negTint(12), whiteSpace: 'nowrap' }}>{reactionCode(r.asset)} {reactionValue(r)}</span>
+          ? <span style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: 10, fontFamily: T.mono, fontSize: 10, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+              {[0, 1, 2].map(i => {
+                const r = e.reactions[i]
+                if (!r) return <span key={i} />
+                return (
+                  <span key={r.asset} style={{ display: 'flex', justifyContent: 'space-between', gap: 4, whiteSpace: 'nowrap' }}>
+                    <span style={{ color: T.muted }}>{reactionCode(r.asset)}</span>
+                    <span style={{ color: r.change >= 0 ? T.pos : T.neg }}>{reactionValue(r)}</span>
+                  </span>
+                )
               })}
             </span>
           : <span style={{ fontFamily: T.label, fontSize: 10.5, fontStyle: 'italic', color: T.muted }}>Pending release</span>}
