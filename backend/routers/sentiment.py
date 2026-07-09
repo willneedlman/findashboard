@@ -9,11 +9,13 @@ import os
 import sys
 
 from dotenv import load_dotenv
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Header, Query
+from pydantic import BaseModel
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env"))
 
+from sentiment import reports as reports_store  # noqa: E402
 from sentiment.config import DEFAULT_SAMPLE_SIZE  # noqa: E402
 from sentiment.engine import build_snapshot, history_payload  # noqa: E402
 
@@ -33,3 +35,43 @@ def sentiment_snapshot(
 @router.get("/history")
 def sentiment_history() -> dict:
     return history_payload()
+
+
+# ── Admin: mis-score reports ─────────────────────────────────────────────────
+class SentimentReport(BaseModel):
+    text: str
+    url: str | None = None
+    source: str | None = None
+    published_at: int | None = None
+    scored: dict = {}              # as-scored context (sentiment/direction/conf/tier/tag/…)
+    correct_sentiment: str | None = None  # admin's read: bullish|bearish|neutral
+    note: str | None = None
+
+
+def _require_admin(secret: str) -> None:
+    from routers.users import _require_admin as _check
+    _check(secret)
+
+
+@router.post("/report")
+def submit_report(req: SentimentReport, x_admin_secret: str = Header(default="")) -> dict:
+    _require_admin(x_admin_secret)
+    return reports_store.add(req.model_dump())
+
+
+@router.get("/reports")
+def list_reports(x_admin_secret: str = Header(default="")) -> dict:
+    _require_admin(x_admin_secret)
+    return {"reports": reports_store.all_reports()}
+
+
+@router.delete("/reports")
+def clear_reports(x_admin_secret: str = Header(default="")) -> dict:
+    _require_admin(x_admin_secret)
+    return {"cleared": reports_store.clear()}
+
+
+@router.delete("/reports/{rid}")
+def delete_report(rid: str, x_admin_secret: str = Header(default="")) -> dict:
+    _require_admin(x_admin_secret)
+    return {"deleted": reports_store.delete(rid)}

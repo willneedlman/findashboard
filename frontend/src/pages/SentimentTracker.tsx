@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { TrendingUp, History, Sparkles } from 'lucide-react'
+import { TrendingUp, History, Sparkles, Flag } from 'lucide-react'
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
@@ -401,6 +401,66 @@ function TimeframeSelector({ active, onChange }: { active: Timeframe; onChange: 
 }
 
 // ── Asset class tag ────────────────────────────────────────────────────────────
+// Admin-only: flag a headline the engine scored wrong. Sends the full as-scored
+// context plus the corrected read to the sentiment report log (admin hub). Only
+// renders when an admin secret is present in this browser tab (set by /admin).
+const SENT_COLOR: Record<string, string> = { bullish: T.pos, bearish: T.neg, neutral: T.muted }
+function ReportControl({ item, sourceLabel }: { item: ScoredItem; sourceLabel: string }) {
+  const secret = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('alphatape-admin-secret') : null
+  const [open, setOpen] = useState(false)
+  const [correct, setCorrect] = useState<'bullish' | 'bearish' | 'neutral' | null>(null)
+  const [note, setNote] = useState('')
+  const [state, setState] = useState<'idle' | 'saving' | 'done' | 'err'>('idle')
+  if (!secret) return null
+
+  const submit = () => {
+    setState('saving')
+    axios.post('/api/sentiment/report', {
+      text: item.text, url: item.url || null, source: sourceLabel, published_at: item.published_at,
+      scored: {
+        sentiment: item.sentiment, score: item.score, direction: item.direction, confidence: item.confidence,
+        macro_tier: item.macro_tier, reasoning_tag: item.reasoning_tag,
+        corrected: item.corrected ?? false, lexicon_direction: item.lexicon_direction ?? null,
+        forward_looking_weight: item.forward_looking_weight,
+        forward_sentiment_score: item.forward_sentiment_score, backward_sentiment_score: item.backward_sentiment_score,
+        asset_directions: item.asset_directions ?? {}, entities: item.entities ?? [],
+      },
+      correct_sentiment: correct, note: note.trim() || null,
+    }, { headers: { 'x-admin-secret': secret } })
+      .then(() => { setState('done'); setTimeout(() => setOpen(false), 900) })
+      .catch(() => setState('err'))
+  }
+
+  const chip: React.CSSProperties = { fontSize: 8, fontWeight: 700, padding: '1px 6px', cursor: 'pointer', fontFamily: T.mono, letterSpacing: '0.06em', textTransform: 'uppercase', background: 'transparent' }
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} title="Report a mis-score (admin)"
+        style={{ ...chip, marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 3, color: T.neg, border: '1px solid color-mix(in srgb, var(--theme-negative) 40%, transparent)' }}>
+        <Flag size={9} /> Report
+      </button>
+    )
+  }
+  return (
+    <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 8, color: T.muted, fontFamily: T.label, letterSpacing: '0.1em' }}>SHOULD BE</span>
+      {(['bullish', 'bearish', 'neutral'] as const).map(s => (
+        <button key={s} onClick={() => setCorrect(s)}
+          style={{ ...chip, color: correct === s ? T.bg : SENT_COLOR[s], background: correct === s ? SENT_COLOR[s] : 'transparent', border: `1px solid ${SENT_COLOR[s]}` }}>
+          {s.slice(0, 4)}
+        </button>
+      ))}
+      <input value={note} onChange={e => setNote(e.target.value)} placeholder="why (optional)"
+        style={{ width: 120, fontSize: 9, fontFamily: T.label, padding: '2px 5px', background: T.bg, border: `1px solid ${T.border}`, color: T.text }} />
+      <button onClick={submit} disabled={!correct || state === 'saving'}
+        style={{ ...chip, color: state === 'done' ? T.pos : T.gold, border: `1px solid ${state === 'done' ? T.pos : T.gold}`, opacity: correct ? 1 : 0.45, cursor: correct ? 'pointer' : 'not-allowed' }}>
+        {state === 'saving' ? '…' : state === 'done' ? 'Sent' : state === 'err' ? 'Err' : 'Submit'}
+      </button>
+      <button onClick={() => setOpen(false)} title="Cancel"
+        style={{ fontSize: 11, color: T.muted, background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px' }}>✕</button>
+    </span>
+  )
+}
+
 function AssetTag({ name, assetClass, direction }: { name: string; assetClass: string; direction?: number }) {
   const color = ASSET_CLASS_COLORS[assetClass] ?? T.muted
   // Per-asset-class read: the same headline can be bullish for equities and
@@ -553,6 +613,7 @@ function SourcePanel({ src, timeframeHours }: { src: Source; timeframeHours: num
                   )
                 })()}
                 {item.entities.slice(0, 3).map(e => <AssetTag key={e.name} name={e.name} assetClass={e.asset_class} direction={item.asset_directions?.[e.asset_class]} />)}
+                <ReportControl item={item} sourceLabel={src.label} />
               </div>
             </div>
           ))}

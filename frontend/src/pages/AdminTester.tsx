@@ -220,7 +220,7 @@ interface UserStats {
   users: { id: string; username: string; display_name: string; email: string | null; created_at: string; last_login_at: string | null; login_count: number }[]
 }
 
-type Tab = 'traffic' | 'health' | 'users' | 'cache' | 'endpoints' | 'lob' | 'widgets' | 'regression' | 'stress' | 'algo'
+type Tab = 'traffic' | 'health' | 'users' | 'cache' | 'endpoints' | 'lob' | 'widgets' | 'regression' | 'stress' | 'algo' | 'reports'
 
 interface LOBSnapshot {
   msg: number
@@ -362,6 +362,22 @@ export default function AdminTester() {
     return () => clearInterval(id)
   }, [unlocked, tab, loadHealth])
 
+  // Sentiment mis-score reports
+  const [reports, setReports] = useState<any[]>([])
+  const loadReports = useCallback(async () => {
+    try {
+      const res = await axios.get('/api/sentiment/reports', { headers: { 'x-admin-secret': secret } })
+      setReports(res.data.reports || [])
+    } catch { setReports([]) }
+  }, [secret])
+  useEffect(() => { if (unlocked && tab === 'reports') loadReports() }, [unlocked, tab, loadReports])
+  const clearReports = useCallback(async () => {
+    try { await axios.delete('/api/sentiment/reports', { headers: { 'x-admin-secret': secret } }); loadReports() } catch { /* noop */ }
+  }, [secret, loadReports])
+  const deleteReport = useCallback(async (rid: string) => {
+    try { await axios.delete(`/api/sentiment/reports/${rid}`, { headers: { 'x-admin-secret': secret } }); loadReports() } catch { /* noop */ }
+  }, [secret, loadReports])
+
   const evictCache = useCallback(async () => {
     setMsg(''); setMsgErr(false)
     try {
@@ -458,7 +474,7 @@ export default function AdminTester() {
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 0, borderBottom: `1px solid ${RED_BORDER}`, marginBottom: 20 }}>
-          {(['traffic', 'health', 'users', 'cache', 'endpoints', 'lob', 'widgets', 'regression', 'stress', 'algo'] as Tab[]).map(t => (
+          {(['traffic', 'health', 'users', 'cache', 'endpoints', 'lob', 'widgets', 'regression', 'stress', 'algo', 'reports'] as Tab[]).map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
               background: 'none', border: 'none', borderBottom: tab === t ? `2px solid ${RED}` : '2px solid transparent',
               color: tab === t ? RED : 'var(--theme-text-dim)', fontFamily: 'var(--theme-mono)', fontSize: 10,
@@ -1029,6 +1045,44 @@ export default function AdminTester() {
           <Suspense fallback={<div style={{ color: 'var(--theme-text-dim)', padding: 32 }}>Loading…</div>}>
             <AlgoRunner />
           </Suspense>
+        )}
+        {tab === 'reports' && (
+          <div style={{ fontFamily: 'var(--theme-mono)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <span style={{ color: 'var(--theme-text-dim)', fontSize: 12 }}>
+                Sentiment mis-score reports filed from the tracker · <b style={{ color: 'var(--theme-text)' }}>{reports.length}</b>
+              </span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={loadReports} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '5px 12px', cursor: 'pointer', background: 'none', color: 'var(--theme-secondary)', border: '1px solid var(--theme-border)' }}>Refresh</button>
+                {reports.length > 0 && <button onClick={clearReports} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '5px 12px', cursor: 'pointer', background: 'none', color: RED, border: `1px solid ${RED_BORDER}` }}>Clear all</button>}
+              </div>
+            </div>
+            {reports.length === 0 && <div style={{ color: 'var(--theme-text-dim)', padding: 24, fontSize: 12 }}>No reports. Sign in as admin on the Sentiment Tracker and hit Report on a mis-scored headline.</div>}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {reports.map(r => {
+                const s = r.scored || {}
+                return (
+                  <div key={r.id} style={{ border: '1px solid var(--theme-border)', background: 'var(--theme-surface)', padding: '10px 12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+                      <span style={{ color: 'var(--theme-text)', fontSize: 12, lineHeight: '17px' }}>
+                        {r.url ? <a href={r.url} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }}>{r.text}</a> : r.text}
+                      </span>
+                      <button onClick={() => deleteReport(r.id)} title="Delete" style={{ flexShrink: 0, background: 'none', border: 'none', color: 'var(--theme-secondary)', cursor: 'pointer', fontSize: 13 }}>✕</button>
+                    </div>
+                    <div style={{ marginTop: 6, fontSize: 10.5, color: 'var(--theme-secondary)', display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                      <span>src <b style={{ color: 'var(--theme-text)' }}>{r.source || '—'}</b></span>
+                      <span>scored <b style={{ color: s.sentiment === 'bullish' ? 'var(--theme-positive)' : s.sentiment === 'bearish' ? 'var(--theme-negative)' : 'var(--theme-secondary)' }}>{s.sentiment}</b> ({typeof s.direction === 'number' ? s.direction.toFixed(2) : '—'}, conf {typeof s.confidence === 'number' ? Math.round(s.confidence * 100) : '—'}%)</span>
+                      <span style={{ color: 'var(--theme-primary)' }}>should be <b>{r.correct_sentiment || '—'}</b></span>
+                      {s.corrected && <span style={{ color: '#9d8cf0' }}>LLM-corrected (lex {s.lexicon_direction ?? '—'})</span>}
+                      <span>tag [{s.reasoning_tag}]</span>
+                      <span>T{s.macro_tier}</span>
+                    </div>
+                    {r.note && <div style={{ marginTop: 5, fontSize: 11, color: 'var(--theme-text)', fontStyle: 'italic' }}>“{r.note}”</div>}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         )}
       </div>
     </PageWrapper>
