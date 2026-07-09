@@ -170,6 +170,42 @@ function Facet<T extends string | number>({ label, value, options, onChange }: {
   )
 }
 
+// Compact filter fields that sit under a column header. The header label is the
+// visible label; a gold border marks an active filter.
+const HFIELD: React.CSSProperties = {
+  width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`,
+  color: C.text, fontFamily: C.mono, fontSize: 11, padding: '4px 7px', outline: 'none',
+}
+
+function HeaderText({ value, onChange, placeholder, align = 'left' }: {
+  value: string; onChange: (v: string) => void; placeholder?: string; align?: 'left' | 'right'
+}) {
+  return <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+    aria-label={placeholder} style={{ ...HFIELD, textAlign: align, borderColor: value ? C.gold : C.border }} />
+}
+
+function HeaderNum({ value, onChange, placeholder }: {
+  value: string; onChange: (v: string) => void; placeholder?: string
+}) {
+  return <input type="number" inputMode="decimal" min={0} value={value} placeholder={placeholder}
+    aria-label={placeholder} onChange={e => onChange(e.target.value)}
+    style={{ ...HFIELD, textAlign: 'right', borderColor: value ? C.gold : C.border }} />
+}
+
+function HeaderSelect({ value, onChange, options }: {
+  value: string; onChange: (v: string) => void; options: { label: string; key: string }[]
+}) {
+  return (
+    <select value={value} onChange={e => onChange(e.target.value)}
+      style={{ ...HFIELD, cursor: 'pointer', fontFamily: C.sans, fontWeight: 700, fontSize: 10,
+        textTransform: 'uppercase', color: value ? C.gold : C.muted, borderColor: value ? C.gold : C.border }}>
+      {options.map(o => (
+        <option key={o.key} value={o.key} style={{ background: C.header, color: C.text, textTransform: 'none' }}>{o.label}</option>
+      ))}
+    </select>
+  )
+}
+
 function StatusChip({ status }: { status: string }) {
   const s = STATUS[status]
   if (!s) return <span style={{ color: C.dim, fontFamily: C.mono, fontSize: 11 }}>—</span>
@@ -197,6 +233,12 @@ export function IpoCalendarContent() {
   const [exchange, setExchange] = useState('')
   const [watchOnly, setWatchOnly] = useState(false)
   const [query, setQuery] = useState('')
+  // Per-column numeric floors, kept as raw strings; money/shares are entered in the
+  // column's own display unit ($M, M) and scaled at compare time.
+  const [minMktCap, setMinMktCap] = useState('')
+  const [minPrice, setMinPrice] = useState('')
+  const [minShares, setMinShares] = useState('')
+  const [minDeal, setMinDeal] = useState('')
 
   const [enriched, setEnriched] = useState<Record<string, Enriched>>({})
   const enrichingRef = useRef<Set<string>>(new Set())
@@ -218,23 +260,34 @@ export function IpoCalendarContent() {
     return Array.from(seen).sort()
   }, [rows])
 
-  // Everything except the Method filter. Enrichment runs over this set, so a row's
-  // domicile (hence ADR status) still resolves even while a Method filter is active
-  // — otherwise "ADR" would never populate the rows it hides before they enrich.
-  const preMethod = useMemo(() => {
+  const minMktCapUsd = (parseFloat(minMktCap) || 0) * 1e6
+  const minPriceVal  = parseFloat(minPrice) || 0
+  const minSharesVal = (parseFloat(minShares) || 0) * 1e6
+  const minDealUsd   = (parseFloat(minDeal) || 0) * 1e6
+
+  // Row-level filters (everything computable without enrichment). Enrichment runs
+  // over this set, so the Method and Mkt Cap floors — which need enriched data —
+  // never starve the very rows they hide before those rows resolve.
+  const baseFiltered = useMemo(() => {
     const q = query.trim().toUpperCase()
     return rows.filter(r => {
       if (status && r.status !== status) return false
       if (exchange && exchangeFamily(r.exchange) !== exchange) return false
       if (watchOnly && !watchSet.has(r.symbol.toUpperCase())) return false
       if (q && !r.symbol.toUpperCase().includes(q) && !(r.name || '').toUpperCase().includes(q)) return false
+      if (minPriceVal > 0) { const p = midPrice(r.price); if (p == null || p < minPriceVal) return false }
+      if (minDealUsd > 0 && (r.dealValue == null || r.dealValue < minDealUsd)) return false
+      if (minSharesVal > 0 && (r.shares == null || r.shares < minSharesVal)) return false
       return true
     })
-  }, [rows, status, exchange, watchOnly, watchSet, query])
+  }, [rows, status, exchange, watchOnly, watchSet, query, minPriceVal, minDealUsd, minSharesVal])
 
-  const filtered = useMemo(() =>
-    method ? preMethod.filter(r => ipoMethod(r.name, enriched[r.symbol]) === method) : preMethod,
-    [preMethod, method, enriched])
+  const filtered = useMemo(() => baseFiltered.filter(r => {
+    const e = enriched[r.symbol]
+    if (method && ipoMethod(r.name, e) !== method) return false
+    if (minMktCapUsd > 0) { const cap = ipoMktCap(r, e); if (cap == null || cap < minMktCapUsd) return false }
+    return true
+  }), [baseFiltered, method, minMktCapUsd, enriched])
 
   // Newest date first (upcoming pipeline leads), largest deals first within a
   // date. Deal size is known immediately, so the sort never waits on enrichment.
@@ -244,7 +297,7 @@ export function IpoCalendarContent() {
     return d !== 0 ? d : a.symbol.localeCompare(b.symbol)
   }
   const sorted = useMemo(() => [...filtered].sort(byDateThenDeal), [filtered])
-  const sortedForEnrich = useMemo(() => [...preMethod].sort(byDateThenDeal), [preMethod])
+  const sortedForEnrich = useMemo(() => [...baseFiltered].sort(byDateThenDeal), [baseFiltered])
 
   // Post-offering shares (for the IPO market cap) + logo arrive on demand for the
   // rows on screen, in small batches so the table fills progressively rather than
@@ -283,36 +336,51 @@ export function IpoCalendarContent() {
     ? ['Symbol', 'Price', 'Status']
     : ['Symbol', 'IPO Mkt Cap', 'Exchange', 'Method', 'Price', 'Shares', 'Deal Size', 'Status']
 
+  const anyFilter = !!(status || method || exchange || query || minMktCap || minPrice || minShares || minDeal || watchOnly)
+  const clearFilters = () => {
+    setStatus(''); setMethod(''); setExchange(''); setQuery('')
+    setMinMktCap(''); setMinPrice(''); setMinShares(''); setMinDeal(''); setWatchOnly(false)
+  }
+
+  // One filter control per column, rendered under its header label. Row-level
+  // columns filter instantly; Method and Mkt Cap resolve as enrichment lands.
+  const colFilter = (c: string) => {
+    switch (c) {
+      case 'Symbol':      return <HeaderText value={query} onChange={setQuery} placeholder="Search" align="left" />
+      case 'IPO Mkt Cap': return <HeaderNum value={minMktCap} onChange={setMinMktCap} placeholder="≥ $M" />
+      case 'Exchange':    return <HeaderSelect value={exchange} onChange={setExchange}
+                            options={[{ label: 'All', key: '' }, ...exchanges.map(e => ({ label: e, key: e }))]} />
+      case 'Method':      return <HeaderSelect value={method} onChange={v => setMethod(v as '' | MethodKey)}
+                            options={[{ label: 'All', key: '' }, ...METHODS.map(m => ({ label: m.label, key: m.key }))]} />
+      case 'Price':       return <HeaderNum value={minPrice} onChange={setMinPrice} placeholder="≥ $" />
+      case 'Shares':      return <HeaderNum value={minShares} onChange={setMinShares} placeholder="≥ M" />
+      case 'Deal Size':   return <HeaderNum value={minDeal} onChange={setMinDeal} placeholder="≥ $M" />
+      case 'Status':      return <HeaderSelect value={status} onChange={setStatus} options={STATUS_FILTERS} />
+      default:            return null
+    }
+  }
+
   return (
     <>
       <style>{`@keyframes ipo-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
 
-      {/* Controls */}
+      {/* Controls: window scopes the fetch; per-column filters live in the header row */}
       <div style={{
         background: C.header, border: `1px solid ${C.border}`, padding: '14px 16px',
         display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 16, marginBottom: 14,
       }}>
         <Facet label="Window" value={days} onChange={setDays}
           options={WINDOWS.map(w => ({ label: w.label, key: w.days }))} />
-        <Facet label="Status" value={status} onChange={setStatus} options={STATUS_FILTERS} />
-        <Facet label="Method" value={method} onChange={setMethod}
-          options={[{ label: 'All', key: '' as const }, ...METHODS.map(m => ({ label: m.label, key: m.key }))]} />
-        {exchanges.length > 1 && (
-          <Facet label="Exchange" value={exchange} onChange={setExchange}
-            options={[{ label: 'All', key: '' }, ...exchanges.map(e => ({ label: e, key: e }))]} />
-        )}
-        <div style={{ flex: 1, minWidth: 160 }}>
-          <label htmlFor="ipo-search" style={{ ...LABEL, marginBottom: 5 }}>Search</label>
-          <input id="ipo-search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Ticker or company"
-            style={{
-              width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`,
-              color: C.text, fontFamily: C.mono, fontSize: 13, padding: '7px 10px',
-            }} />
-        </div>
+        <div style={{ flex: 1 }} />
         {watchSet.size > 0 && (
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Toggle label="Watchlist" active={watchOnly} onClick={() => setWatchOnly(v => !v)} />
-          </div>
+          <Toggle label="Watchlist" active={watchOnly} onClick={() => setWatchOnly(v => !v)} />
+        )}
+        {anyFilter && (
+          <button onClick={clearFilters} style={{
+            background: 'transparent', border: `1px solid ${C.border}`, color: C.muted, cursor: 'pointer',
+            fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
+            padding: '8px 12px', whiteSpace: 'nowrap',
+          }}>Clear filters</button>
         )}
       </div>
 
@@ -338,9 +406,12 @@ export function IpoCalendarContent() {
               <tr style={{ background: C.header }}>
                 {cols.map((c, i) => (
                   <th key={c} style={{
-                    ...LABEL, display: 'table-cell', textAlign: i === 0 ? 'left' : 'right', padding: '9px 14px',
+                    textAlign: i === 0 ? 'left' : 'right', padding: '9px 14px', verticalAlign: 'top',
                     position: 'sticky', top: 0, background: C.header, borderBottom: `1px solid ${C.border}`,
-                  }}>{c}</th>
+                  }}>
+                    <div style={{ ...LABEL, marginBottom: 6, textAlign: i === 0 ? 'left' : 'right' }}>{c}</div>
+                    {colFilter(c)}
+                  </th>
                 ))}
               </tr>
             </thead>
