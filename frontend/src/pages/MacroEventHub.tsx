@@ -25,7 +25,7 @@ function Stat({ value, label, color }: { value: number; label: string; color: st
 }
 
 function MacroEventHubContent() {
-  const [filters, setFilters] = useState<Filters>({ query: '', region: 'ALL', impact: 'ALL', from: '', to: '' })
+  const [filters, setFilters] = useState<Filters>({ query: '', region: 'ALL', impact: 'ALL', status: 'ALL', from: '', to: '' })
   const [sort, setSort] = useState<Sort>({ column: 'time', dir: 'asc' })
   const [colFilters, setColFilters] = useState<Set<FilterCol>>(new Set())
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -107,6 +107,7 @@ function MacroEventHubContent() {
     return events.filter(e => {
       if (filters.region !== 'ALL' && e.region !== filters.region) return false
       if (filters.impact !== 'ALL' && e.impact !== filters.impact) return false
+      if (filters.status !== 'ALL' && e.status !== filters.status) return false
       if (q && !`${e.name} ${e.country} ${e.category}`.toLowerCase().includes(q)) return false
       const d = e.datetime.slice(0, 10)
       if (lo && d < lo) return false
@@ -182,7 +183,7 @@ function MacroEventHubContent() {
             ? <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '56px 20px', color: T.muted, border: `1px dashed ${T.border}`, background: T.surface }}>
                 {isLoading ? <Loader2 size={22} style={{ animation: 'me-spin 0.7s linear infinite' }} /> : <Inbox size={28} />}
                 <span style={{ fontFamily: T.label, fontSize: 13 }}>{isLoading ? 'Loading live releases…' : 'No events match these filters.'}</span>
-                {!isLoading && <button type="button" onClick={() => { setFilters(f => ({ ...f, query: '', region: 'ALL', impact: 'ALL' })); setColFilters(new Set()) }}
+                {!isLoading && <button type="button" onClick={() => { setFilters(f => ({ ...f, query: '', region: 'ALL', impact: 'ALL', status: 'ALL' })); setColFilters(new Set()) }}
                   style={{ marginTop: 4, padding: '6px 14px', background: 'transparent', border: `1px solid ${T.goldTint(50)}`, color: T.gold, fontFamily: T.label, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Reset filters</button>}
               </div>
             : <ReleaseTape sections={sections} totalCount={filtered.length}

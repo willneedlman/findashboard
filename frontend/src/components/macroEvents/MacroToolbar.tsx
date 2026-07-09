@@ -2,10 +2,12 @@ import { Search, Calendar, X } from 'lucide-react'
 import { T } from '../../lib/theme'
 import { REGIONS, IMPACTS, type Region, type Impact } from '../../data/mockEventsData'
 
+export type StatusFilter = 'ALL' | 'released' | 'upcoming'
 export interface Filters {
   query: string
   region: Region | 'ALL'
   impact: Impact | 'ALL'
+  status: StatusFilter
   from: string   // yyyy-mm-dd
   to: string     // yyyy-mm-dd
 }
@@ -42,6 +44,9 @@ export default function MacroToolbar({ filters, onChange, count }: {
   const impactOpts: { key: Impact | 'ALL'; label: string }[] = [
     { key: 'ALL', label: 'ALL' }, { key: 'High', label: 'HIGH' }, { key: 'Medium', label: 'MED' }, { key: 'Low', label: 'LOW' },
   ]
+  const statusOpts: { key: StatusFilter; label: string }[] = [
+    { key: 'ALL', label: 'ALL' }, { key: 'released', label: 'RELEASED' }, { key: 'upcoming', label: 'UPCOMING' },
+  ]
   const dateInput: React.CSSProperties = {
     background: 'transparent', border: 'none', outline: 'none', color: T.text,
     fontFamily: T.mono, fontSize: 10.5, colorScheme: 'dark', width: 112, padding: 0,
@@ -70,6 +75,7 @@ export default function MacroToolbar({ filters, onChange, count }: {
 
       <Segmented options={regionOpts} value={filters.region} onPick={region => onChange({ ...filters, region })} />
       <Segmented options={impactOpts} value={filters.impact} onPick={impact => onChange({ ...filters, impact })} danger="High" />
+      <Segmented options={statusOpts} value={filters.status} onPick={status => onChange({ ...filters, status })} />
 
       <span style={{ fontFamily: T.mono, fontSize: 11, color: T.muted, whiteSpace: 'nowrap' }}>{count} matches</span>
     </div>
