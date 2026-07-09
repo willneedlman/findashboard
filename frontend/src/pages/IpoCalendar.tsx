@@ -22,7 +22,7 @@ interface Row {
   symbol: string; name: string; date: string; exchange: string
   price: string; shares: number | null; dealValue: number | null; status: string
 }
-interface Enriched { symbol: string; shares: number | null; logo: string | null }
+interface Enriched { symbol: string; shares: number | null; logo: string | null; foreign: boolean }
 
 const WINDOWS = [
   { label: '1 Week', days: 7 }, { label: '1 Month', days: 30 }, { label: '3 Months', days: 90 },
@@ -43,6 +43,16 @@ const STATUS_FILTERS = [
   { label: 'Released', key: 'priced' },
   { label: 'Withdrawn', key: 'withdrawn' },
 ]
+
+// Finnhub returns granular venue strings ("NASDAQ Global Select", "NYSE American");
+// collapse to a family so the filter has a handful of options, not dozens.
+function exchangeFamily(ex: string): string {
+  const e = (ex || '').toUpperCase()
+  if (e.includes('NASDAQ')) return 'NASDAQ'
+  if (e.includes('NYSE')) return 'NYSE'
+  if (e.includes('CBOE') || e.includes('BATS')) return 'CBOE'
+  return ex ? 'Other' : ''
+}
 
 function today(): string { return new Date().toISOString().slice(0, 10) }
 
@@ -79,15 +89,31 @@ function midPrice(p: string): number | null {
 function isSpac(name: string): boolean {
   return /\bacquisition\b|\bblank[ -]?check\b|\bcapital corp\b|\bmerger corp\b|\bspac\b/i.test(name || '')
 }
-// Listing method, inferred from the issuer name (all Finnhub gives us). SPAC and
-// ADR are name-detectable; everything else reads as a standard IPO. Kept in sync
-// with isSpac so the market-cap path and this label never disagree.
-type Method = { key: string; label: string; color: string }
-function ipoMethod(name: string): Method {
+// Listing method. SPAC and an explicit ADR/depositary name resolve instantly from
+// the issuer name (SPAC stays in sync with isSpac so the market-cap path agrees).
+// Foreign-issuer status — the reliable ADR tell that a name like "SK hynix" hides
+// — only lands with enrichment (SEC foreign forms + finnhub domicile), so until a
+// row is enriched its method is "pending" rather than a wrong "IPO".
+type MethodKey = 'spac' | 'adr' | 'ipo'
+const METHODS: { key: MethodKey; label: string; color: string }[] = [
+  { key: 'ipo',  label: 'IPO',  color: C.muted },
+  { key: 'spac', label: 'SPAC', color: C.blue },
+  { key: 'adr',  label: 'ADR',  color: C.warn },
+]
+const METHOD_META = Object.fromEntries(METHODS.map(m => [m.key, m])) as Record<MethodKey, typeof METHODS[number]>
+
+function nameMethod(name: string): MethodKey | null {
   const n = name || ''
-  if (isSpac(n)) return { key: 'spac', label: 'SPAC', color: C.blue }
-  if (/american depositary|\bADSs?\b|\bADRs?\b/i.test(n)) return { key: 'adr', label: 'ADR', color: C.warn }
-  return { key: 'ipo', label: 'IPO', color: C.muted }
+  if (isSpac(n)) return 'spac'
+  if (/american depositary|\bADSs?\b|\bADRs?\b/i.test(n)) return 'adr'
+  return null
+}
+// Resolved method, or null while a non-name-detectable row awaits its domicile.
+function ipoMethod(name: string, e: Enriched | undefined): MethodKey | null {
+  const nm = nameMethod(name)
+  if (nm) return nm
+  if (!e) return null                                  // pending enrichment
+  return e.foreign ? 'adr' : 'ipo'
 }
 // Reliable IPO market cap, or null for "unavailable". Prospectus post-offering
 // shares x offer price when parsed; for SPACs the fully-floated public value;
@@ -110,13 +136,37 @@ const shimmer: React.CSSProperties = {
   backgroundSize: '200% 100%', animation: 'ipo-shimmer 1.6s infinite',
 }
 
-function MethodChip({ name }: { name: string }) {
-  const m = ipoMethod(name)
+function MethodChip({ name, e }: { name: string; e: Enriched | undefined }) {
+  const key = ipoMethod(name, e)
+  if (!key) return <span style={shimmer} />            // domicile not resolved yet
+  const m = METHOD_META[key]
   return (
     <span style={{
       fontFamily: C.sans, fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
       color: m.color, border: `1px solid ${m.color}`, borderRadius: 3, padding: '2px 6px', whiteSpace: 'nowrap',
     }}>{m.label}</span>
+  )
+}
+
+function Facet<T extends string | number>({ label, value, options, onChange }: {
+  label: string; value: T; options: { label: string; key: T }[]; onChange: (k: T) => void
+}) {
+  return (
+    <div>
+      <label style={{ ...LABEL, marginBottom: 5 }}>{label}</label>
+      <div style={{ display: 'flex', border: `1px solid ${C.border}` }}>
+        {options.map(o => (
+          <button key={String(o.key)} onClick={() => onChange(o.key)}
+            style={{
+              background: value === o.key ? C.gold : 'transparent',
+              color: value === o.key ? C.header : C.muted,
+              border: 'none', borderRight: `1px solid ${C.border}`, cursor: 'pointer',
+              fontFamily: C.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em',
+              textTransform: 'uppercase', padding: '8px 12px', whiteSpace: 'nowrap',
+            }}>{o.label}</button>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -143,6 +193,8 @@ export function IpoCalendarContent() {
   const [error, setError] = useState<string | null>(null)
 
   const [status, setStatus] = useState('')
+  const [method, setMethod] = useState<'' | MethodKey>('')
+  const [exchange, setExchange] = useState('')
   const [watchOnly, setWatchOnly] = useState(false)
   const [query, setQuery] = useState('')
 
@@ -160,26 +212,39 @@ export function IpoCalendarContent() {
     return () => { cancelled = true }
   }, [days])
 
-  const filtered = useMemo(() => {
+  const exchanges = useMemo(() => {
+    const seen = new Set<string>()
+    for (const r of rows) { const f = exchangeFamily(r.exchange); if (f) seen.add(f) }
+    return Array.from(seen).sort()
+  }, [rows])
+
+  // Everything except the Method filter. Enrichment runs over this set, so a row's
+  // domicile (hence ADR status) still resolves even while a Method filter is active
+  // — otherwise "ADR" would never populate the rows it hides before they enrich.
+  const preMethod = useMemo(() => {
     const q = query.trim().toUpperCase()
     return rows.filter(r => {
       if (status && r.status !== status) return false
+      if (exchange && exchangeFamily(r.exchange) !== exchange) return false
       if (watchOnly && !watchSet.has(r.symbol.toUpperCase())) return false
       if (q && !r.symbol.toUpperCase().includes(q) && !(r.name || '').toUpperCase().includes(q)) return false
       return true
     })
-  }, [rows, status, watchOnly, watchSet, query])
+  }, [rows, status, exchange, watchOnly, watchSet, query])
+
+  const filtered = useMemo(() =>
+    method ? preMethod.filter(r => ipoMethod(r.name, enriched[r.symbol]) === method) : preMethod,
+    [preMethod, method, enriched])
 
   // Newest date first (upcoming pipeline leads), largest deals first within a
   // date. Deal size is known immediately, so the sort never waits on enrichment.
-  const sorted = useMemo(() => {
-    const val = (r: Row) => r.dealValue ?? -1
-    return [...filtered].sort((a, b) => {
-      if ((a.date || '') !== (b.date || '')) return (b.date || '').localeCompare(a.date || '')
-      const d = val(b) - val(a)
-      return d !== 0 ? d : a.symbol.localeCompare(b.symbol)
-    })
-  }, [filtered])
+  const byDateThenDeal = (a: Row, b: Row) => {
+    if ((a.date || '') !== (b.date || '')) return (b.date || '').localeCompare(a.date || '')
+    const d = (b.dealValue ?? -1) - (a.dealValue ?? -1)
+    return d !== 0 ? d : a.symbol.localeCompare(b.symbol)
+  }
+  const sorted = useMemo(() => [...filtered].sort(byDateThenDeal), [filtered])
+  const sortedForEnrich = useMemo(() => [...preMethod].sort(byDateThenDeal), [preMethod])
 
   // Post-offering shares (for the IPO market cap) + logo arrive on demand for the
   // rows on screen, in small batches so the table fills progressively rather than
@@ -194,16 +259,16 @@ export function IpoCalendarContent() {
         setEnriched(prev => ({ ...prev, ...next }))
       })
       .catch(() => {
-        setEnriched(prev => ({ ...prev, ...Object.fromEntries(items.map(i => [i.symbol, { symbol: i.symbol, shares: null, logo: null }])) }))
+        setEnriched(prev => ({ ...prev, ...Object.fromEntries(items.map(i => [i.symbol, { symbol: i.symbol, shares: null, logo: null, foreign: false }])) }))
       })
   }, [])
 
   useEffect(() => {
-    const pending = sorted
+    const pending = sortedForEnrich
       .filter(r => !(r.symbol in enriched) && !enrichingRef.current.has(r.symbol))
       .map(r => ({ symbol: r.symbol, name: r.name }))
     if (pending.length) enrichBatch(pending.slice(0, 12))
-  }, [sorted, enriched, enrichBatch])
+  }, [sortedForEnrich, enriched, enrichBatch])
 
   const grouped = useMemo(() => {
     const map = new Map<string, Row[]>()
@@ -227,36 +292,15 @@ export function IpoCalendarContent() {
         background: C.header, border: `1px solid ${C.border}`, padding: '14px 16px',
         display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 16, marginBottom: 14,
       }}>
-        <div>
-          <label style={{ ...LABEL, marginBottom: 5 }}>Window</label>
-          <div style={{ display: 'flex', border: `1px solid ${C.border}` }}>
-            {WINDOWS.map(w => (
-              <button key={w.days} onClick={() => setDays(w.days)}
-                style={{
-                  background: days === w.days ? C.gold : 'transparent',
-                  color: days === w.days ? C.header : C.muted,
-                  border: 'none', borderRight: `1px solid ${C.border}`, cursor: 'pointer',
-                  fontFamily: C.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em',
-                  textTransform: 'uppercase', padding: '8px 12px', whiteSpace: 'nowrap',
-                }}>{w.label}</button>
-            ))}
-          </div>
-        </div>
-        <div>
-          <label style={{ ...LABEL, marginBottom: 5 }}>Status</label>
-          <div style={{ display: 'flex', border: `1px solid ${C.border}` }}>
-            {STATUS_FILTERS.map(s => (
-              <button key={s.key} onClick={() => setStatus(s.key)}
-                style={{
-                  background: status === s.key ? C.gold : 'transparent',
-                  color: status === s.key ? C.header : C.muted,
-                  border: 'none', borderRight: `1px solid ${C.border}`, cursor: 'pointer',
-                  fontFamily: C.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em',
-                  textTransform: 'uppercase', padding: '8px 12px', whiteSpace: 'nowrap',
-                }}>{s.label}</button>
-            ))}
-          </div>
-        </div>
+        <Facet label="Window" value={days} onChange={setDays}
+          options={WINDOWS.map(w => ({ label: w.label, key: w.days }))} />
+        <Facet label="Status" value={status} onChange={setStatus} options={STATUS_FILTERS} />
+        <Facet label="Method" value={method} onChange={setMethod}
+          options={[{ label: 'All', key: '' as const }, ...METHODS.map(m => ({ label: m.label, key: m.key }))]} />
+        {exchanges.length > 1 && (
+          <Facet label="Exchange" value={exchange} onChange={setExchange}
+            options={[{ label: 'All', key: '' }, ...exchanges.map(e => ({ label: e, key: e }))]} />
+        )}
         <div style={{ flex: 1, minWidth: 160 }}>
           <label htmlFor="ipo-search" style={{ ...LABEL, marginBottom: 5 }}>Search</label>
           <input id="ipo-search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Ticker or company"
@@ -317,8 +361,8 @@ export function IpoCalendarContent() {
           Deal size = shares offered times the mid of the range. IPO Mkt Cap = post-offering shares
           outstanding from the S-1/424B prospectus times the offer price, or for a SPAC the fully-floated
           public value; it reads "unavailable" when it cannot be sourced reliably (never the money-raised
-          figure). Method: SPAC is a blank-check/acquisition vehicle, ADR is a foreign issuer listing via
-          depositary shares, IPO is a standard offering (inferred from the issuer name). Status: Pending is
+          figure). Method: SPAC is a blank-check/acquisition vehicle, ADR is a non-US issuer listing via
+          depositary shares (from the company's domicile), IPO is a standard offering. Status: Pending is
           expected to price, Filed is on file with the SEC, Released has priced and is trading, Withdrawn was
           pulled. Calendar from finnhub, share counts from SEC EDGAR.
         </div>
@@ -378,7 +422,7 @@ function GroupBody({ gdate, grows, enriched, cols, isMobile, watch }: {
               <td style={{ ...cell, color: C.dim }}>{r.exchange || '—'}</td>
             )}
             {!isMobile && (
-              <td style={{ ...cell, textAlign: 'right' }}><MethodChip name={r.name} /></td>
+              <td style={{ ...cell, textAlign: 'right' }}><MethodChip name={r.name} e={e} /></td>
             )}
             <td style={{ ...cell, color: C.text }}>{fmtPrice(r.price)}</td>
             {!isMobile && (
@@ -421,5 +465,5 @@ function Centered({ children, tone }: { children: React.ReactNode; tone?: string
 }
 
 export default function IpoCalendar() {
-  return <PageWrapper title="IPO Calendar"><IpoCalendarContent /></PageWrapper>
+  return <PageWrapper title="IPO Scanner"><IpoCalendarContent /></PageWrapper>
 }

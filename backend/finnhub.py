@@ -182,6 +182,7 @@ def get_profile(ticker: str) -> dict:
                 "companyName":     p.get("name"),
                 "sector":          p.get("finnhubIndustry"),
                 "exchange":        p.get("exchange"),
+                "country":         p.get("country"),  # ISO-2 domicile; foreign → ADR listing
                 "marketCap":       p.get("marketCapitalization", 0) * 1_000_000,  # Finnhub returns $M
                 "logo":            p.get("logo") or None,
                 "price":           None,  # not in profile endpoint

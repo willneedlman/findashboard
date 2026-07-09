@@ -31,6 +31,11 @@ _TIMEOUT = 20
 # buybacks and issuance. Final prospectus (424B) beats the amended/original S-1.
 _FORMS = ("424B4", "424B1", "424B3", "424B2", "F-1/A", "S-1/A", "F-1", "S-1")
 _FORM_RANK = {f: i for i, f in enumerate(_FORMS)}
+# Foreign-private-issuer forms. Their presence is a hard ADR/foreign-listing tell
+# a name like "SK hynix" hides: F-6 registers the American Depositary Shares, F-1
+# is the foreign IPO registration, 20-F/40-F/6-K are the foreign periodic reports.
+# Domestic issuers use S-1/10-K/8-K exclusively and never these.
+_FOREIGN_FORMS = {"F-1", "F-1/A", "F-3", "F-3/A", "F-4", "F-6", "F-6/A", "20-F", "40-F", "6-K"}
 
 # Post-offering share count. A prospectus states 20+ share numbers (per class,
 # pro-forma, authorized, restricted); the reliable signal is the canonical
@@ -93,22 +98,25 @@ def _cik_for(name: str, symbol: str) -> str | None:
     return str(cik).zfill(10) if cik else None
 
 
-def _prospectus_doc(name: str, symbol: str) -> str | None:
-    """Primary prospectus document URL: the final 424B if present, else the most
-    recent S-1/F-1 amendment. Full-text search points at whichever sub-document
-    matched (often an exhibit), so the primary doc is resolved from submissions."""
+def _edgar(name: str, symbol: str) -> tuple[str | None, bool]:
+    """From one submissions fetch: (primary prospectus URL, is-foreign-issuer).
+    Prospectus is the final 424B if present, else the most recent S-1/F-1
+    amendment (full-text search points at whichever sub-document matched, often
+    an exhibit, so the primary doc is resolved from submissions). Foreign is true
+    when the filing history contains any foreign-private-issuer form."""
     cik = _cik_for(name, symbol)
     if not cik:
-        return None
+        return None, False
     try:
         j = requests.get(f"https://data.sec.gov/submissions/CIK{cik}.json",
                          headers=_UA, timeout=_TIMEOUT).json()
         recent = j.get("filings", {}).get("recent", {})
     except Exception as e:
         _log.warning("edgar submissions %s: %s", cik, e)
-        return None
+        return None, False
 
     forms = recent.get("form") or []
+    foreign = any(f in _FOREIGN_FORMS for f in forms)
     best = None   # (rank, date, url); lowest rank then newest date wins
     for i, form in enumerate(forms):
         if form not in _FORM_RANK:
@@ -122,7 +130,7 @@ def _prospectus_doc(name: str, symbol: str) -> str | None:
         key = (_FORM_RANK[form], date)
         if best is None or (key[0] < best[0][0] or (key[0] == best[0][0] and key[1] > best[0][1])):
             best = (key, url)
-    return best[1] if best else None
+    return (best[1] if best else None), foreign
 
 
 def _parse_shares(html: str, floor: int) -> int | None:
@@ -142,21 +150,22 @@ def _parse_shares(html: str, floor: int) -> int | None:
     return None
 
 
-def ipo_shares(symbol: str, name: str, offered: int = 0) -> int | None:
-    """Post-offering shares outstanding for one IPO, or None if it can't be read
-    confidently. `offered` is the shares sold in the deal; a parsed count below it
-    is a summary-table fragment, not the total, so it is rejected. Cached 30 days
-    (misses too)."""
+def ipo_profile(symbol: str, name: str, offered: int = 0) -> dict:
+    """{'shares': int|None, 'foreign': bool} for one IPO from a single EDGAR pass.
+    `shares` is the post-offering count from the prospectus, or None when it can't
+    be read confidently (`offered` is the deal's share count; a parsed value below
+    it is a summary-table fragment, not the total, so it is rejected). `foreign`
+    marks a foreign private issuer (→ ADR listing). Cached 30 days (misses too)."""
     sym = (symbol or "").strip().upper()
     if not sym or not name:
-        return None
-    ck = f"ipo:shares:{sym}"
+        return {"shares": None, "foreign": False}
+    ck = f"ipo:profile:{sym}"
     cached = disk_get(ck)
     if cached is not None:
-        return cached or None            # 0 sentinel for a cached miss
+        return cached
 
     shares: int | None = None
-    url = _prospectus_doc(name, sym)
+    url, foreign = _edgar(name, sym)
     if url:
         try:
             html = requests.get(url, headers=_UA, timeout=30).text
@@ -164,5 +173,11 @@ def ipo_shares(symbol: str, name: str, offered: int = 0) -> int | None:
         except Exception as e:
             _log.warning("ipo shares %s: %s", sym, e)
 
-    disk_set(ck, shares or 0, ttl=30 * 86400)
-    return shares
+    out = {"shares": shares, "foreign": foreign}
+    disk_set(ck, out, ttl=30 * 86400)
+    return out
+
+
+def ipo_shares(symbol: str, name: str, offered: int = 0) -> int | None:
+    """Post-offering shares only. See ipo_profile for the combined lookup."""
+    return ipo_profile(symbol, name, offered)["shares"]

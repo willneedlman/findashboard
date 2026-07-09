@@ -88,15 +88,29 @@ class EnrichReq(BaseModel):
 
 def _enrich_one(row: EnrichRow) -> dict:
     sym = row.symbol.strip().upper()
-    # Post-offering shares from the prospectus (the IPO-time count, fixed) and the
-    # company logo. The client multiplies shares by the offer price for the cap.
+    # Post-offering shares from the prospectus (the IPO-time count, fixed), the
+    # company logo, and the domicile country. The client multiplies shares by the
+    # offer price for the cap, and treats a non-US domicile as an ADR listing.
     # logo.dev (name→domain) covers new listings; finnhub is a fallback for the
-    # established names it happens to have.
-    logo = logodev.logo_url(row.name, sym) or (finnhub.get_profile(sym) or {}).get("logo")
+    # established names it happens to have (and the only source of country).
+    # Two independent ADR tells: SEC foreign-issuer forms (covers names finnhub has
+    # no profile for, e.g. SK hynix via its F-6) and a non-US finnhub domicile
+    # (covers names EDGAR full-text search can't pin, e.g. Arm → GB). The finnhub
+    # profile also backstops the logo, so it is only fetched when actually needed —
+    # logo.dev came up empty, or SEC hasn't already settled foreign status.
+    prof = ipo_shares.ipo_profile(sym, row.name)
+    logo = logodev.logo_url(row.name, sym)
+    foreign = bool(prof["foreign"])
+    if not logo or not foreign:
+        p = finnhub.get_profile(sym) or {}
+        logo = logo or p.get("logo")
+        country = (p.get("country") or "").upper()
+        foreign = foreign or (bool(country) and country != "US")
     return {
         "symbol": sym,
-        "shares": ipo_shares.ipo_shares(sym, row.name),
+        "shares": prof["shares"],
         "logo": logo,
+        "foreign": foreign,
     }
 
 
