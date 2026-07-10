@@ -20,7 +20,14 @@ from strategies.indicators import get_indicator as _get_ind
 # Weekly/monthly resample the daily close we already have; the indicator is
 # computed on those bars, then mapped back onto the daily index (ffill) so the
 # daily signal loop is unchanged.
-_TF_RESAMPLE = {"daily": "D", "weekly": "W-FRI", "monthly": "ME"}
+_TF_RESAMPLE = {"5m": "5min", "15m": "15min", "30m": "30min", "1h": "1h", "hourly": "1h",
+                "daily": "D", "weekly": "W-FRI", "monthly": "ME"}
+# Approx minutes per bar, used to compare a condition's timeframe against the base
+# backtest timeframe. A condition only resamples to a STRICTLY coarser frame — a
+# same/finer frame has no finer data to compute from, so it runs on the base bars.
+_TF_MINUTES = {"5m": 5, "15m": 15, "30m": 30, "1h": 60, "hourly": 60,
+               "daily": 390, "weekly": 1950, "monthly": 8190}
+_BASE_MINUTES = {"1d": 390, "1h": 60, "30m": 30, "15m": 15, "5m": 5}
 # Timeframe only applies to price-derived indicators; live-snapshot metrics
 # (fundamentals, options, greeks, flow) are constant across the series.
 _TF_TYPES = {"PRICE", "RSI", "SMA", "EMA", "MACD_LINE", "MACD_SIGNAL",
@@ -329,9 +336,10 @@ def _resolve_series(ref: dict, tk: str, env: dict) -> np.ndarray:
     di = env.get("daily_index")
     if di is None or ref.get("type") not in _TF_TYPES:
         return _get_ind(ref, arr, ctx)
-    # On a daily base, "daily" IS the base (no resample). On an intraday base,
-    # "daily" means resample the intraday bars up to daily bars first.
-    if tf == "daily" and not env.get("intraday_base"):
+    # Resample only to a STRICTLY coarser frame than the backtest base; a same/finer
+    # frame has no finer data to compute from, so it runs on the base bars.
+    base_min = _BASE_MINUTES.get(env.get("base_tf", "1d"), 390)
+    if _TF_MINUTES.get(tf, 390) <= base_min:
         return _get_ind(ref, arr, ctx)
     return _tf_indicator(ref, arr, di, ctx, tf)
 
@@ -407,7 +415,8 @@ def evaluate_custom_rules(prices: np.ndarray, rules: dict, context: dict | None 
                           frames: dict[str, np.ndarray] | None = None,
                           ctx_by_ticker: dict[str, dict] | None = None,
                           primary: str | None = None,
-                          daily_index=None, intraday_base: bool = False) -> np.ndarray:
+                          daily_index=None, intraday_base: bool = False,
+                          base_tf: str = "1d") -> np.ndarray:
     """Bar-by-bar evaluation. Returns 1.0 = invested, 0.0 = cash.
 
     Single-ticker (default): pass `prices` + `context`; every condition reads that
@@ -427,7 +436,7 @@ def evaluate_custom_rules(prices: np.ndarray, rules: dict, context: dict | None 
         ctx_by_ticker = {primary: context or {}}
     signal   = np.zeros(n)
     env = {"primary": primary, "frames": frames, "cache": {}, "ctx_by_ticker": ctx_by_ticker,
-           "n": n, "daily_index": daily_index, "intraday_base": intraday_base}
+           "n": n, "daily_index": daily_index, "intraday_base": intraday_base, "base_tf": base_tf}
     buy_blk  = rules.get("buy",  {"logic": "AND", "conditions": []})
     sell_blk = rules.get("sell", {"logic": "AND", "conditions": []})
     in_trade = False
@@ -581,7 +590,8 @@ def _run_custom_rules(ticker: str, rules: dict, start: str, end: str, timeframe:
     prices = frames[primary]
     sig = evaluate_custom_rules(prices, rules, frames=frames,
                                 ctx_by_ticker=ctx_by_ticker, primary=primary,
-                                daily_index=index, intraday_base=_is_intraday_tf(timeframe))
+                                daily_index=index, intraday_base=_is_intraday_tf(timeframe),
+                                base_tf=(timeframe or "1d").lower())
     return sig, pd.Series(prices, index=index, name=primary)
 
 

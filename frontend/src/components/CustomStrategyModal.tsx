@@ -26,9 +26,11 @@ export const LIVE_TYPES: IndicatorType[] = [
   'FLOW_HORMUZ', 'FLOW_SUEZ', 'FLOW_PANAMA', 'FLOW_MALACCA',
 ]
 
-// Bar size the indicator runs on. Daily is the default (and the backtest's own
-// step). Coarser bars resample the daily close and map back onto the daily loop.
-export type Timeframe = 'daily' | 'weekly' | 'monthly'
+// Bar size the indicator runs on. Defaults to the backtest's own step. A frame
+// COARSER than the backtest timeframe resamples up (weekly/monthly, or e.g. 1H
+// while trading 5m); a same/finer frame just runs on the base bars. Intraday
+// frames require an intraday backtest timeframe + an Alpaca-served equity.
+export type Timeframe = '5m' | '15m' | '30m' | '1h' | 'daily' | 'weekly' | 'monthly'
 
 export interface IndicatorRef {
   type: IndicatorType
@@ -44,6 +46,8 @@ export interface IndicatorRef {
 }
 
 const TF_OPTIONS: { value: Timeframe; label: string }[] = [
+  { value: '5m', label: '5m' }, { value: '15m', label: '15m' }, { value: '30m', label: '30m' },
+  { value: '1h', label: '1H' },
   { value: 'daily', label: 'Daily' }, { value: 'weekly', label: 'Weekly' },
   { value: 'monthly', label: 'Monthly' },
 ]
@@ -250,7 +254,7 @@ function IndicatorSelector({ value, onChange }: {
       {!LIVE_TYPES.includes(t) && (
         <select value={value.timeframe ?? 'daily'}
           onChange={e => onChange({ ...value, timeframe: e.target.value === 'daily' ? undefined : e.target.value as Timeframe })}
-          title="Bar size this indicator runs on. Weekly and monthly resample the daily close, so the period counts weeks or months."
+          title="Bar size this indicator runs on. A frame coarser than the backtest timeframe resamples up (e.g. 1H trend while trading 5m); a same/finer frame runs on the backtest's own bars. Intraday frames need an intraday backtest timeframe on a US equity."
           style={{ ...sel, width: 84, flexShrink: 0 }}>
           {TF_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
