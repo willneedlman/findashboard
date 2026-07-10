@@ -170,7 +170,7 @@ export function AlgoStrategyBuilderContent() {
     mutationFn: async () => {
       if (positions.length === 0) throw new Error('Add at least one position.')
       const { data } = await axios.post('/api/strategy/portfolio-backtest', {
-        positions: positions.map(posToPayload), start, end: end || undefined, initial_capital: 10000,
+        positions: positions.map(posToPayload), start, end: end || undefined, timeframe, initial_capital: 10000,
       })
       return data
     },

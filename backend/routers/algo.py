@@ -200,8 +200,11 @@ def _apply_risk_controls(
 
 def _compute_metrics(signal: pd.Series, close: pd.Series, position_size: float = 100,
                      initial_capital: float = 10_000, direction: str = "long",
-                     bars_per_year: int = 252):
+                     bars_per_year: int = 252, intraday: bool = False):
     alloc = max(0.0, min(100.0, position_size)) / 100.0
+    # Intraday keeps the time in each label so bars within a day stay distinct
+    # (a date-only label would collapse them and break the curve / portfolio join).
+    _dfmt = "%Y-%m-%d %H:%M" if intraday else "%Y-%m-%d"
     sign = -1.0 if direction == "short" else 1.0
     daily_ret = close.pct_change()
     strat_ret = signal.shift(1) * daily_ret * alloc * sign
@@ -234,9 +237,9 @@ def _compute_metrics(signal: pd.Series, close: pd.Series, position_size: float =
 
     trades = []
     for d in buy_dates:
-        trades.append({"date": d.strftime("%Y-%m-%d"), "action": "BUY", "price": round(float(close.loc[d]), 2)})
+        trades.append({"date": d.strftime(_dfmt), "action": "BUY", "price": round(float(close.loc[d]), 2)})
     for d in sell_dates:
-        trades.append({"date": d.strftime("%Y-%m-%d"), "action": "SELL", "price": round(float(close.loc[d]), 2)})
+        trades.append({"date": d.strftime(_dfmt), "action": "SELL", "price": round(float(close.loc[d]), 2)})
     trades.sort(key=lambda x: x["date"])
 
     num_trades = len(buy_dates)
@@ -261,7 +264,7 @@ def _compute_metrics(signal: pd.Series, close: pd.Series, position_size: float =
     curve = []
     for date, sv, bv in zip(equity.index, equity.values, benchmark.values):
         curve.append({
-            "date": date.strftime("%Y-%m-%d"),
+            "date": date.strftime(_dfmt),
             "strategy": round(float(sv), 2),
             "benchmark": round(float(bv), 2),
         })
@@ -288,7 +291,7 @@ _OPT_MULT = 100
 
 def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: float,
                             position_size: float = 100, initial_capital: float = 10_000,
-                            direction: str = "long", bars_per_year: int = 252):
+                            direction: str = "long", bars_per_year: int = 252, intraday: bool = False):
     """Modeled single-option backtest. On each entry the strategy buys (long) or
     writes (short) a fresh Black-Scholes-priced call/put (strike = moneyness × spot,
     fixed DTE), marks it daily as time decays, and realizes it when the rules exit
@@ -306,6 +309,7 @@ def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: 
     exit_action = "BUY" if short else "SELL"
     r = 4.0
     alloc = max(0.0, min(100.0, position_size)) / 100.0
+    _dfmt = "%Y-%m-%d %H:%M" if intraday else "%Y-%m-%d"
     idx = close.index
     px = close.to_numpy(dtype=float)
     sig = signal.to_numpy(dtype=float)
@@ -328,7 +332,7 @@ def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: 
         if exiting:
             v = _val(i)
             cash += contracts * v * _OPT_MULT
-            trades.append({"date": idx[i].strftime("%Y-%m-%d"), "action": exit_action, "price": round(v, 2)})
+            trades.append({"date": idx[i].strftime(_dfmt), "action": exit_action, "price": round(v, 2)})
             in_trade, contracts = False, 0.0
         if not in_trade and sig[i] == 1.0:
             strike = round(px[i] * moneyness, 2)
@@ -337,7 +341,7 @@ def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: 
             contracts = invest / (entry_val * _OPT_MULT)
             cash = cur - contracts * entry_val * _OPT_MULT
             entry_i, in_trade = i, True
-            trades.append({"date": idx[i].strftime("%Y-%m-%d"), "action": entry_action, "price": round(entry_val, 2)})
+            trades.append({"date": idx[i].strftime(_dfmt), "action": entry_action, "price": round(entry_val, 2)})
         cur = cash + (contracts * _val(i) * _OPT_MULT if in_trade else 0.0)
         equity[i] = cur
 
@@ -362,7 +366,7 @@ def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: 
     num_trades = len(entries)
     win_rate = float(wins / num_trades * 100) if num_trades else 0.0
 
-    curve = [{"date": d.strftime("%Y-%m-%d"), "strategy": round(float(sv), 2), "benchmark": round(float(bv), 2)}
+    curve = [{"date": d.strftime(_dfmt), "strategy": round(float(sv), 2), "benchmark": round(float(bv), 2)}
              for d, sv, bv in zip(eq.index, eq.values, benchmark.values)]
     return {
         "equity_curve": curve,

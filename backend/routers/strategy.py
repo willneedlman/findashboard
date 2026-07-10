@@ -608,7 +608,8 @@ def custom_backtest(req: CustomBacktestRequest):
     )
     bpy = _BACKTEST_TF.get(tf, ("1d", 252))[1]
     result = _instrument_metrics(signal, close, req.instrument, req.side, req.ticker,
-                                 req.position_size, req.initial_capital, bars_per_year=bpy)
+                                 req.position_size, req.initial_capital, bars_per_year=bpy,
+                                 intraday=_is_intraday_tf(tf))
     # Surface the window + timeframe actually used so "history" is never ambiguous.
     result["bars"] = int(len(close))
     result["timeframe"] = tf
@@ -617,7 +618,7 @@ def custom_backtest(req: CustomBacktestRequest):
     return result
 
 
-def _instrument_metrics(signal, close, instrument, side, ticker, position_size, capital, bars_per_year: int = 252):
+def _instrument_metrics(signal, close, instrument, side, ticker, position_size, capital, bars_per_year: int = 252, intraday: bool = False):
     """Metrics for one position given its resolved signal + close: modeled option
     P&L for an option instrument (long buys it, short writes it), else long/short
     shares. `side` drives direction for both. Same result shape as /algo/backtest.
@@ -632,8 +633,8 @@ def _instrument_metrics(signal, close, instrument, side, ticker, position_size, 
             iv = None
         if not isinstance(iv, (int, float)) or iv <= 0:
             raise HTTPException(422, f"No implied volatility available to model options for {ticker}")
-        return _compute_option_metrics(signal, close, inst, float(iv), position_size, capital, direction=side, bars_per_year=bars_per_year)
-    return _compute_metrics(signal, close, position_size, capital, direction=side, bars_per_year=bars_per_year)
+        return _compute_option_metrics(signal, close, inst, float(iv), position_size, capital, direction=side, bars_per_year=bars_per_year, intraday=intraday)
+    return _compute_metrics(signal, close, position_size, capital, direction=side, bars_per_year=bars_per_year, intraday=intraday)
 
 
 # ─── Multi-position portfolio backtest ────────────────────────────────────────
@@ -659,6 +660,7 @@ class PortfolioBacktestRequest(BaseModel):
     positions:       list[PortfolioPosition]
     start:           str = "2022-01-01"
     end:             str | None = None
+    timeframe:       str = "1d"          # shared base bar size for every position
     initial_capital: float = 10_000
 
     @model_validator(mode="after")
@@ -670,6 +672,9 @@ class PortfolioBacktestRequest(BaseModel):
         validate_date(self.start)
         if self.end:
             validate_date(self.end)
+        self.timeframe = (self.timeframe or "1d").lower()
+        if self.timeframe not in _BACKTEST_TF:
+            raise HTTPException(422, f"Unsupported timeframe '{self.timeframe}'.")
         return self
 
 
@@ -678,7 +683,20 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
     from .algo import _apply_risk_controls
     import datetime as _dt
     import numpy as _np
+    import alpaca
     end = req.end or _dt.date.today().isoformat()
+    tf = req.timeframe
+    intraday = _is_intraday_tf(tf)
+    if intraday:
+        if not alpaca.available():
+            raise HTTPException(422, "Intraday backtesting needs a market-data key (Alpaca) configured on the server.")
+        bad = [p.ticker for p in req.positions if not alpaca.is_equity(p.ticker)]
+        if bad:
+            raise HTTPException(422, f"Intraday backtesting covers US equities/ETFs only — not available for: {', '.join(bad)}.")
+        start = _clamp_intraday_start(tf, req.start, end)
+    else:
+        start = req.start
+    bpy = _BACKTEST_TF.get(tf, ("1d", 252))[1]
 
     weights = [max(0.0, p.weight) for p in req.positions]
     if sum(weights) <= 0:
@@ -688,13 +706,14 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
     legs = []   # (position, cap, result)
     for p, w in zip(req.positions, weights):
         cap = (w / tot_w) * req.initial_capital
-        sig_arr, close = _run_custom_rules(p.ticker, p.rules, req.start, end)
+        sig_arr, close = _run_custom_rules(p.ticker, p.rules, start, end, tf)
         if close is None or len(close) < 40:
             continue
         signal = pd.Series(sig_arr, index=close.index)
         signal = _apply_risk_controls(signal, close, p.stop_loss, p.take_profit, p.trailing_stop, p.max_hold_bars)
         try:
-            res = _instrument_metrics(signal, close, p.instrument, p.side, p.ticker, p.position_size, cap)
+            res = _instrument_metrics(signal, close, p.instrument, p.side, p.ticker, p.position_size, cap,
+                                      bars_per_year=bpy, intraday=intraday)
         except HTTPException:
             continue
         legs.append((p, cap, res))
@@ -717,14 +736,15 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
     n = len(port_eq)
     daily = port_eq.pct_change()
     total_return = float(port_eq.iloc[-1] / req.initial_capital - 1) * 100
-    ann_return = float(((port_eq.iloc[-1] / req.initial_capital) ** (252 / max(1, n)) - 1) * 100)
+    ann_return = float(((port_eq.iloc[-1] / req.initial_capital) ** (bpy / max(1, n)) - 1) * 100)
     dd = (port_eq - port_eq.cummax()) / port_eq.cummax()
-    sharpe = float(daily.mean() / daily.std() * _np.sqrt(252)) if daily.std() > 0 else 0.0
+    sharpe = float(daily.mean() / daily.std() * _np.sqrt(bpy)) if daily.std() > 0 else 0.0
     trades_tot = sum(res["metrics"]["num_trades"] for _, _, res in legs)
     wins_tot = sum(round(res["metrics"]["win_rate"] / 100 * res["metrics"]["num_trades"]) for _, _, res in legs)
     win_rate = float(wins_tot / trades_tot * 100) if trades_tot else 0.0
 
-    curve = [{"date": d.strftime("%Y-%m-%d"), "strategy": round(float(sv), 2), "benchmark": round(float(bv), 2)}
+    _cfmt = "%Y-%m-%d %H:%M" if intraday else "%Y-%m-%d"
+    curve = [{"date": d.strftime(_cfmt), "strategy": round(float(sv), 2), "benchmark": round(float(bv), 2)}
              for d, sv, bv in zip(port_eq.index, port_eq.values, port_bm.values)]
     positions_out = [{
         "ticker": p.ticker, "side": p.side,
@@ -745,5 +765,6 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
             "initial_capital": round(req.initial_capital, 2), "final_capital": round(float(port_eq.iloc[-1]), 2),
             "total_pnl": round(float(port_eq.iloc[-1]) - req.initial_capital, 2),
         },
+        "timeframe": tf,
         "positions": positions_out,
     }
