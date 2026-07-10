@@ -146,13 +146,17 @@ def nowcast(baseline_calls_per_day: dict[str, float], choke_ids: list[str],
         raw_rate = cnt / (WINDOW_S / 86400)                 # crossings per day, unrounded
         base = baseline_calls_per_day.get(cid)
         vs = round((raw_rate - base) / base * 100, 1) if base else None   # delta off the raw rate
+        # A chokepoint whose center sits just outside every AIS bbox can still catch
+        # edge vessels within its 55km capture radius — if we logged crossings we
+        # demonstrably have coverage, so don't report "none" against real data.
+        covered = cid in covered_ids or cnt > 0
         out[cid] = {
             "calls_96h": cnt,
             "calls_per_day_live": round(raw_rate, 2),
             "capacity_est_dwt": round(cap) if cap else None,
             "capacity_coverage_pct": round(cap_cnt / cnt * 100) if cnt else None,
             "live_vs_baseline_pct": vs,
-            "confidence": _confidence(cid in covered_ids, connected, cnt, last_ts,
+            "confidence": _confidence(covered, connected, cnt, last_ts,
                                       activity.get(cid, 0), now),
             "as_of": _iso(last_ts),
         }

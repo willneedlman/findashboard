@@ -89,6 +89,15 @@ def test_uncovered_chokepoint_reports_none_confidence():
     assert out["confidence"] == "none"
 
 
+def test_uncovered_chokepoint_with_edge_crossings_is_not_none():
+    # bosphorus-style: center outside every bbox, but edge vessels logged crossings.
+    en.record_transit("e1", "bosphorus", "tanker", 15, 250, 44, now=NOW)
+    out = en.nowcast({}, ["bosphorus"], covered_ids=set(), connected=True,
+                     activity={}, now=NOW)["bosphorus"]
+    assert out["calls_96h"] == 1
+    assert out["confidence"] != "none"        # real data must not read as "no coverage"
+
+
 # ── confidence tiers ────────────────────────────────────────────────────────
 def test_confidence_tiers():
     assert en._confidence(False, True, 5, NOW, 5, NOW) == "none"        # no AIS bbox
