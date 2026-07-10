@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
-  MARKETS, marketStatus, todaySegments, countdown,
+  MARKETS, marketStatus, localArcs, localNowHours, countdown,
   PHASE_LABEL, PHASE_COLOR, PHASE_OPACITY, PHASE_TEXT, type MarketDef, type Region, type Phase,
 } from '../lib/marketHours'
 
@@ -31,26 +31,30 @@ function nextVerb(phase: Phase, nextPhase: Phase): string {
   return PHASE_LABEL[nextPhase].toLowerCase()
 }
 
-function TimelineBar({ m, now, localTime, holiday }: { m: MarketDef; now: Date; localTime: string; holiday?: string }) {
-  const segs = todaySegments(m, now)
-  const [h, mn] = localTime.split(':').map(Number)
-  const nowPct = ((h * 60 + mn) / 1440) * 100
+function TimelineBar({ m, now, holiday }: { m: MarketDef; now: Date; holiday?: string }) {
+  // Plot every market on the viewer's shared 24h clock (absolute time) so
+  // simultaneous opens line up across rows — e.g. Tokyo/Seoul/Sydney all open at
+  // 00:00 UTC. Reuses localArcs(), the same source of truth the dial draws from,
+  // so the two surfaces can never drift apart again. A session that straddles
+  // viewer midnight comes back as two arcs (splitWrap), rendered as two bars.
+  const arcs = localArcs(m, now)
+  const nowPct = (localNowHours(now) / 24) * 100
   return (
     <div style={{ position: 'relative', height: 16, borderRadius: 3, background: T.track, overflow: 'hidden', backgroundImage: HOUR_TICKS }}>
-      {segs.map((s, i) => s.phase === 'closed' ? null : (
+      {arcs.map((a, i) => (
         <div key={i} style={{
           position: 'absolute', top: 0, bottom: 0,
-          left: `${(s.start / 1440) * 100}%`, width: `${((s.end - s.start) / 1440) * 100}%`,
-          background: PHASE_COLOR[s.phase], opacity: PHASE_OPACITY[s.phase],
+          left: `${(a.t0 / 24) * 100}%`, width: `${((a.t1 - a.t0) / 24) * 100}%`,
+          background: PHASE_COLOR[a.phase], opacity: PHASE_OPACITY[a.phase],
         }} />
       ))}
       {holiday && (
         <span style={{
           position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
-          justifyContent: segs.length ? 'flex-end' : 'center', paddingRight: segs.length ? 8 : 0,
+          justifyContent: arcs.length ? 'flex-end' : 'center', paddingRight: arcs.length ? 8 : 0,
           fontFamily: T.sans, fontSize: 9, fontWeight: 600, letterSpacing: '0.08em',
           textTransform: 'uppercase', color: T.when, pointerEvents: 'none',
-        }}>{segs.length ? `early close · ${holiday}` : holiday}</span>
+        }}>{arcs.length ? `early close · ${holiday}` : holiday}</span>
       )}
       <div className="fdb-now-marker" style={{
         position: 'absolute', top: -2, bottom: -2, left: `${nowPct}%`, width: 2,
@@ -117,7 +121,7 @@ export default function MarketSessions({ compact = false }: { compact?: boolean 
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifySelf: 'start', fontFamily: T.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: c, border: `1px solid ${c}`, background: 'rgba(255,255,255,0.03)', padding: '3px 9px', borderRadius: 2 }}>
                     <span style={{ width: 6, height: 6, borderRadius: '50%', background: c }} />{PHASE_LABEL[st.phase]}
                   </span>
-                  <TimelineBar m={m} now={now} localTime={st.localTime} holiday={st.holiday} />
+                  <TimelineBar m={m} now={now} holiday={st.holiday} />
                   <span style={{ fontFamily: T.mono, fontSize: 12, textAlign: 'right' }}>
                     <span style={{ color: T.verb, textTransform: 'uppercase' }}>{nextVerb(st.phase, st.nextPhase)}</span>{' '}
                     <span style={{ color: T.when }}>{countdown(st.msToNext)}</span>
