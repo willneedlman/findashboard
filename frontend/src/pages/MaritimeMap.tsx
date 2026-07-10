@@ -89,11 +89,17 @@ interface HelcomFeat { coords: [number, number][]; location: string; crossings: 
 interface HistPoint { d: string; tanker: number | null; cargo: number | null; total: number | null; cap: number | null }
 interface HistSeries { id: string; name: string; points: HistPoint[] }
 type HistMetric = 'total' | 'tanker' | 'cargo' | 'cap'
+interface Nowcast {
+  calls_96h: number; calls_per_day_live: number; capacity_est_dwt: number | null
+  capacity_coverage_pct: number | null; live_vs_baseline_pct: number | null
+  confidence: 'high' | 'medium' | 'low' | 'stale' | 'none'; as_of: string | null
+}
 interface ChokeStat {
   id: string; name: string; oil_mbd: number; share_pct: number; avg7: number
   delta_pct: number | null; transits7: number; series30: number[]
   mix: { tanker: number | null; cargo: number | null; total: number | null }
   cap7: number | null; anomaly: 'high' | 'low' | null; status: 'normal' | 'watch' | 'congested'; as_of: string
+  nowcast?: Nowcast | null
 }
 interface ReplayFrame { t: number; v: [string, number, number, number, string][] }
 
@@ -818,6 +824,7 @@ export function MaritimeMapContent() {
                         Transit count 2σ {inspectedStat.anomaly === 'high' ? 'above' : 'below'} 30d mean
                       </div>
                     )}
+                    {inspectedStat?.nowcast && <NowcastBlock nc={inspectedStat.nowcast} C={C} />}
                   </>
                 )}
                 {inspected.kind === 'vessel' && (
@@ -959,6 +966,40 @@ function StatRow({ k, v }: { k: string; v: string }) {
     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
       <span style={{ fontFamily: SANS, fontSize: 11, color: SEC }}>{k}</span>
       <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 600, color: TEXT, textAlign: 'right' }}>{v}</span>
+    </div>
+  )
+}
+
+// Live AIS nowcast that bridges PortWatch's 3-4 day reporting lag. Additive: it sits
+// below the PortWatch stats and never replaces them.
+function NowcastBlock({ nc, C }: { nc: Nowcast; C: Colors }) {
+  const conf = nc.confidence
+  const confColor = conf === 'high' ? C.positive : conf === 'medium' ? GOLD
+    : conf === 'stale' ? C.negative : MUTED
+  const vs = nc.live_vs_baseline_pct
+  const capM = nc.capacity_est_dwt != null ? (nc.capacity_est_dwt / 1e6).toFixed(1) : null
+  return (
+    <div style={{ background: 'rgba(0,0,0,0.18)', border: '1px solid rgba(255,255,255,0.06)', padding: '7px 9px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+        <span style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', color: MUTED }}>LIVE AIS NOWCAST · 96H</span>
+        <span style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', color: confColor, border: `1px solid ${confColor}`, padding: '1px 5px', textTransform: 'uppercase' }}>{conf}</span>
+      </div>
+      {conf === 'none' ? (
+        <div style={{ fontFamily: SANS, fontSize: 10, color: MUTED }}>No live AIS coverage for this chokepoint.</div>
+      ) : (
+        <>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: MONO, fontSize: 10.5, color: TEXT }}>
+            <span>{nc.calls_per_day_live.toFixed(2)}/d live</span>
+            {vs != null && <span style={{ color: vs >= 0 ? C.positive : C.negative }}>{vs >= 0 ? '+' : ''}{vs.toFixed(1)}% vs PortWatch</span>}
+          </div>
+          <div style={{ fontFamily: MONO, fontSize: 9, color: MUTED, marginTop: 3 }}>
+            {nc.calls_96h} crossings{capM ? ` · ~${capM}M t transited (est)` : ''}
+          </div>
+          <div style={{ fontFamily: SANS, fontSize: 8.5, color: FAINT, marginTop: 4 }}>
+            Capacity is a draught-based estimate, not manifest tonnage.{nc.as_of ? ` Last ${new Date(nc.as_of).toLocaleTimeString()}.` : ''}
+          </div>
+        </>
+      )}
     </div>
   )
 }
