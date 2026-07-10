@@ -199,7 +199,8 @@ def _apply_risk_controls(
 
 
 def _compute_metrics(signal: pd.Series, close: pd.Series, position_size: float = 100,
-                     initial_capital: float = 10_000, direction: str = "long"):
+                     initial_capital: float = 10_000, direction: str = "long",
+                     bars_per_year: int = 252):
     alloc = max(0.0, min(100.0, position_size)) / 100.0
     sign = -1.0 if direction == "short" else 1.0
     daily_ret = close.pct_change()
@@ -212,9 +213,10 @@ def _compute_metrics(signal: pd.Series, close: pd.Series, position_size: float =
     # Total return
     total_return = float(equity.iloc[-1] / initial_capital - 1) * 100
 
-    # Annualized return
+    # Annualized return (bars_per_year scales with the backtest timeframe: 252 daily,
+    # ~1638 hourly, ~19656 for 5-minute bars, so intraday Sharpe/CAGR stay comparable).
     n_days = len(equity)
-    ann_factor = 252 / n_days
+    ann_factor = bars_per_year / n_days
     ann_return = float(((equity.iloc[-1] / initial_capital) ** ann_factor - 1) * 100)
 
     # Max drawdown
@@ -223,7 +225,7 @@ def _compute_metrics(signal: pd.Series, close: pd.Series, position_size: float =
     max_drawdown = float(drawdown.min() * 100)
 
     # Sharpe (rf=0, annualized)
-    sharpe = float(strat_ret.mean() / strat_ret.std() * np.sqrt(252)) if strat_ret.std() > 0 else 0.0
+    sharpe = float(strat_ret.mean() / strat_ret.std() * np.sqrt(bars_per_year)) if strat_ret.std() > 0 else 0.0
 
     # Trades
     position_changes = signal.diff().fillna(0)
@@ -286,7 +288,7 @@ _OPT_MULT = 100
 
 def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: float,
                             position_size: float = 100, initial_capital: float = 10_000,
-                            direction: str = "long"):
+                            direction: str = "long", bars_per_year: int = 252):
     """Modeled single-option backtest. On each entry the strategy buys (long) or
     writes (short) a fresh Black-Scholes-priced call/put (strike = moneyness × spot,
     fixed DTE), marks it daily as time decays, and realizes it when the rules exit
@@ -348,9 +350,9 @@ def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: 
     daily = eq.pct_change()
     benchmark = (1 + close.pct_change().fillna(0)).cumprod() * initial_capital
     total_return = float(eq.iloc[-1] / initial_capital - 1) * 100
-    ann_return = float(((eq.iloc[-1] / initial_capital) ** (252 / max(1, n)) - 1) * 100)
+    ann_return = float(((eq.iloc[-1] / initial_capital) ** (bars_per_year / max(1, n)) - 1) * 100)
     drawdown = (eq - eq.cummax()) / eq.cummax()
-    sharpe = float(daily.mean() / daily.std() * np.sqrt(252)) if daily.std() > 0 else 0.0
+    sharpe = float(daily.mean() / daily.std() * np.sqrt(bars_per_year)) if daily.std() > 0 else 0.0
 
     entries = [t for t in trades if t["action"] == entry_action]
     exits = [t for t in trades if t["action"] == exit_action]

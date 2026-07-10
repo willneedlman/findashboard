@@ -20,11 +20,48 @@ from strategies.indicators import get_indicator as _get_ind
 # Weekly/monthly resample the daily close we already have; the indicator is
 # computed on those bars, then mapped back onto the daily index (ffill) so the
 # daily signal loop is unchanged.
-_TF_RESAMPLE = {"weekly": "W-FRI", "monthly": "ME"}
+_TF_RESAMPLE = {"daily": "D", "weekly": "W-FRI", "monthly": "ME"}
 # Timeframe only applies to price-derived indicators; live-snapshot metrics
 # (fundamentals, options, greeks, flow) are constant across the series.
 _TF_TYPES = {"PRICE", "RSI", "SMA", "EMA", "MACD_LINE", "MACD_SIGNAL",
              "BB_UPPER", "BB_MID", "BB_LOWER", "ATR", "MOMENTUM", "PCT_CHANGE"}
+
+# ── Base backtest timeframe ───────────────────────────────────────────────────
+# Alpaca supplies deep intraday history, so a strategy can trade on sub-daily bars.
+# Each maps to (alpaca timeframe, approx bars/year for annualization, max lookback
+# days to bound intraday bar counts). '1d' is the default/unchanged daily path
+# (yfinance-backed via get_history); intraday requires an Alpaca key + equity ticker.
+_BACKTEST_TF = {
+    "1d":  ("1d",  252,   None),
+    "1h":  ("1h",  1638,  730),
+    "30m": ("30m", 3276,  180),
+    "15m": ("15m", 6552,  120),
+    "5m":  ("5m",  19656, 60),
+}
+
+
+def _is_intraday_tf(tf: "str | None") -> bool:
+    return (tf or "").lower() not in ("", "1d", "daily")
+
+
+def _clamp_intraday_start(tf: str, start: str, end: str) -> str:
+    """Bound an intraday window so a huge date range can't request years of minute
+    bars (past Alpaca's page cap, and meaningless at that granularity)."""
+    import datetime as _d
+    max_days = _BACKTEST_TF.get(tf, (None, None, 120))[2] or 120
+    floor = (_d.date.fromisoformat(end) - _d.timedelta(days=max_days)).isoformat()
+    return max(start, floor)
+
+
+def _fetch_close_tf(ticker: str, start: str, end: str, tf: str) -> pd.Series:
+    """Close series at the base timeframe. Daily uses the existing cached path;
+    intraday pulls Alpaca bars (equities only). Empty Series on miss."""
+    if not _is_intraday_tf(tf):
+        return _fetch_close(ticker, start, end)
+    import alpaca
+    atf = _BACKTEST_TF.get(tf, ("1d",))[0]
+    df = alpaca.history_df(ticker, atf, start, end)
+    return df["Close"].dropna() if not df.empty else pd.Series(dtype=float)
 
 router = APIRouter()
 
@@ -290,8 +327,12 @@ def _resolve_series(ref: dict, tk: str, env: dict) -> np.ndarray:
     ctx = env["ctx_by_ticker"].get(tk)
     tf = str(ref.get("timeframe") or "daily").lower()
     di = env.get("daily_index")
-    if tf == "daily" or di is None or ref.get("type") not in _TF_TYPES:
-        return _get_ind(ref, arr, ctx)        # unchanged daily path
+    if di is None or ref.get("type") not in _TF_TYPES:
+        return _get_ind(ref, arr, ctx)
+    # On a daily base, "daily" IS the base (no resample). On an intraday base,
+    # "daily" means resample the intraday bars up to daily bars first.
+    if tf == "daily" and not env.get("intraday_base"):
+        return _get_ind(ref, arr, ctx)
     return _tf_indicator(ref, arr, di, ctx, tf)
 
 
@@ -366,7 +407,7 @@ def evaluate_custom_rules(prices: np.ndarray, rules: dict, context: dict | None 
                           frames: dict[str, np.ndarray] | None = None,
                           ctx_by_ticker: dict[str, dict] | None = None,
                           primary: str | None = None,
-                          daily_index=None) -> np.ndarray:
+                          daily_index=None, intraday_base: bool = False) -> np.ndarray:
     """Bar-by-bar evaluation. Returns 1.0 = invested, 0.0 = cash.
 
     Single-ticker (default): pass `prices` + `context`; every condition reads that
@@ -386,7 +427,7 @@ def evaluate_custom_rules(prices: np.ndarray, rules: dict, context: dict | None 
         ctx_by_ticker = {primary: context or {}}
     signal   = np.zeros(n)
     env = {"primary": primary, "frames": frames, "cache": {}, "ctx_by_ticker": ctx_by_ticker,
-           "n": n, "daily_index": daily_index}
+           "n": n, "daily_index": daily_index, "intraday_base": intraday_base}
     buy_blk  = rules.get("buy",  {"logic": "AND", "conditions": []})
     sell_blk = rules.get("sell", {"logic": "AND", "conditions": []})
     in_trade = False
@@ -426,13 +467,14 @@ def referenced_tickers(rules: dict | None, primary: str) -> list[str]:
     return sorted(t for t in out if t)
 
 
-def build_aligned_frames(tickers: list[str], start: str, end: str):
-    """Fetch each symbol's close and inner-join on shared trading days so every
-    frame shares one date index (cross-ticker conditions compare same-day values).
-    Returns (index, {TICKER: close_array}). Symbols with no data are dropped."""
+def build_aligned_frames(tickers: list[str], start: str, end: str, timeframe: str = "1d"):
+    """Fetch each symbol's close and inner-join on shared bars so every frame shares
+    one index (cross-ticker conditions compare same-bar values). `timeframe` selects
+    the base bar size (daily or Alpaca intraday). Returns (index, {TICKER: close_array}).
+    Symbols with no data are dropped."""
     series: dict[str, pd.Series] = {}
     for tk in tickers:
-        s = _fetch_close(tk, start, end)
+        s = _fetch_close_tf(tk, start, end, timeframe)
         if not s.empty:
             series[tk] = s
     if not series:
@@ -449,11 +491,15 @@ class CustomSignalRequest(BaseModel):
     rules:      dict = {}
     bull_drift: float = 5.0
     bear_drift: float = -3.0
+    timeframe:  str = "1d"
 
     @model_validator(mode="after")
     def _validate(self):
         self.ticker = validate_ticker(self.ticker)
         validate_date(self.start); validate_date(self.end)
+        self.timeframe = (self.timeframe or "1d").lower()
+        if self.timeframe not in _BACKTEST_TF:
+            raise HTTPException(422, f"Unsupported timeframe '{self.timeframe}'.")
         return self
 
 
@@ -462,7 +508,9 @@ def get_custom_signal(req: CustomSignalRequest):
     try:
         # _run_custom_rules fetches + date-aligns every referenced symbol so
         # cross-ticker rules behave the same here as in the algo backtest.
-        sig_arr, close = _run_custom_rules(req.ticker, req.rules, req.start, req.end)
+        tf = req.timeframe
+        start = _clamp_intraday_start(tf, req.start, req.end) if _is_intraday_tf(tf) else req.start
+        sig_arr, close = _run_custom_rules(req.ticker, req.rules, start, req.end, tf)
     except HTTPException:
         raise
     except Exception:
@@ -479,7 +527,8 @@ def get_custom_signal(req: CustomSignalRequest):
     detail   = (f"Custom rules. {invested}/{len(sig_arr)} bars invested ({pct:.0f}%). "
                 f"Current: {'Invested' if last_sig else 'Cash'}. Drift {adj:+.1f}%.")
 
-    signal_list = [{"date": str(d.date()), "value": float(v)}
+    _fmt = (lambda d: d.strftime("%Y-%m-%d %H:%M")) if _is_intraday_tf(tf) else (lambda d: str(d.date()))
+    signal_list = [{"date": _fmt(d), "value": float(v)}
                    for d, v in zip(close.index, sig_arr)]
     return {"signal": signal_list, "drift_adj": round(adj, 2),
             "label": label, "detail": detail}
@@ -495,6 +544,7 @@ class CustomBacktestRequest(BaseModel):
     rules: dict = {}
     start: str = "2022-01-01"
     end: str | None = None
+    timeframe: str = "1d"            # 1d (default) | 1h | 30m | 15m | 5m — intraday needs Alpaca + an equity
     stop_loss: float | None = None
     take_profit: float | None = None
     trailing_stop: float | None = None
@@ -510,48 +560,64 @@ class CustomBacktestRequest(BaseModel):
         validate_date(self.start)
         if self.end:
             validate_date(self.end)
+        self.timeframe = (self.timeframe or "1d").lower()
+        if self.timeframe not in _BACKTEST_TF:
+            raise HTTPException(422, f"Unsupported timeframe '{self.timeframe}'. Use one of: {', '.join(_BACKTEST_TF)}.")
         return self
 
 
-def _run_custom_rules(ticker: str, rules: dict, start: str, end: str):
-    """Fetch + date-align every symbol a rule set references, resolve each one's
-    live context, and evaluate the rules. Returns (signal_array, primary_close)
-    where primary_close is a Series indexed by the shared trading days."""
+def _run_custom_rules(ticker: str, rules: dict, start: str, end: str, timeframe: str = "1d"):
+    """Fetch + align every symbol a rule set references, resolve each one's live
+    context, and evaluate the rules on the chosen base timeframe. Returns
+    (signal_array, primary_close) where primary_close is a Series indexed by the
+    shared bars."""
     from strategies.market_context import resolve_context
     primary = ticker.strip().upper()
     tickers = referenced_tickers(rules, primary)
-    index, frames = build_aligned_frames(tickers, start, end)
+    index, frames = build_aligned_frames(tickers, start, end, timeframe)
     if index is None or primary not in frames:
         return None, None
     ctx_by_ticker = {tk: resolve_context(tk, rules) for tk in frames}
     prices = frames[primary]
     sig = evaluate_custom_rules(prices, rules, frames=frames,
                                 ctx_by_ticker=ctx_by_ticker, primary=primary,
-                                daily_index=index)
+                                daily_index=index, intraday_base=_is_intraday_tf(timeframe))
     return sig, pd.Series(prices, index=index, name=primary)
 
 
 @router.post("/custom-backtest")
 def custom_backtest(req: CustomBacktestRequest):
-    from .algo import _apply_risk_controls, _compute_metrics, _compute_option_metrics
-    import datetime
+    from .algo import _apply_risk_controls
+    import datetime, alpaca
     end = req.end or datetime.date.today().isoformat()
-    sig_arr, close = _run_custom_rules(req.ticker, req.rules, req.start, end)
+    tf = req.timeframe
+    if _is_intraday_tf(tf):
+        if not alpaca.available():
+            raise HTTPException(422, "Intraday backtesting needs a market-data key (Alpaca) configured on the server.")
+        if not alpaca.is_equity(req.ticker):
+            raise HTTPException(422, f"Intraday backtesting covers US equities/ETFs only — {req.ticker} isn't available at {tf}.")
+        start = _clamp_intraday_start(tf, req.start, end)
+    else:
+        start = req.start
+    sig_arr, close = _run_custom_rules(req.ticker, req.rules, start, end, tf)
     if close is None or len(close) < 60:
-        raise HTTPException(422, "Not enough price history for a backtest (need about 60 trading days). Use a longer date range, roughly 3 months or more.")
+        raise HTTPException(422, "Not enough price history for a backtest (need about 60 bars). Use a longer date range.")
     signal = pd.Series(sig_arr, index=close.index)
     signal = _apply_risk_controls(
         signal, close, req.stop_loss, req.take_profit, req.trailing_stop, req.max_hold_bars,
     )
+    bpy = _BACKTEST_TF.get(tf, ("1d", 252))[1]
     result = _instrument_metrics(signal, close, req.instrument, req.side, req.ticker,
-                                 req.position_size, req.initial_capital)
-    # Surface the window actually used so "history" is never ambiguous.
+                                 req.position_size, req.initial_capital, bars_per_year=bpy)
+    # Surface the window + timeframe actually used so "history" is never ambiguous.
     result["bars"] = int(len(close))
-    result["span"] = {"start": str(close.index[0].date()), "end": str(close.index[-1].date())}
+    result["timeframe"] = tf
+    _fmt = (lambda d: d.strftime("%Y-%m-%d %H:%M")) if _is_intraday_tf(tf) else (lambda d: str(d.date()))
+    result["span"] = {"start": _fmt(close.index[0]), "end": _fmt(close.index[-1])}
     return result
 
 
-def _instrument_metrics(signal, close, instrument, side, ticker, position_size, capital):
+def _instrument_metrics(signal, close, instrument, side, ticker, position_size, capital, bars_per_year: int = 252):
     """Metrics for one position given its resolved signal + close: modeled option
     P&L for an option instrument (long buys it, short writes it), else long/short
     shares. `side` drives direction for both. Same result shape as /algo/backtest.
@@ -566,8 +632,8 @@ def _instrument_metrics(signal, close, instrument, side, ticker, position_size, 
             iv = None
         if not isinstance(iv, (int, float)) or iv <= 0:
             raise HTTPException(422, f"No implied volatility available to model options for {ticker}")
-        return _compute_option_metrics(signal, close, inst, float(iv), position_size, capital, direction=side)
-    return _compute_metrics(signal, close, position_size, capital, direction=side)
+        return _compute_option_metrics(signal, close, inst, float(iv), position_size, capital, direction=side, bars_per_year=bars_per_year)
+    return _compute_metrics(signal, close, position_size, capital, direction=side, bars_per_year=bars_per_year)
 
 
 # ─── Multi-position portfolio backtest ────────────────────────────────────────

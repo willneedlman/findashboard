@@ -67,6 +67,7 @@ export function AlgoStrategyBuilderContent() {
   const [ticker, setTicker] = useState('AAPL')
   const [start, setStart] = useState('2022-01-01')
   const [end, setEnd] = useState('')
+  const [timeframe, setTimeframe] = useState('1d')   // base bar size; intraday via Alpaca (equities)
   // Instrument: trade the underlying (default) or a modeled call/put.
   const [instMode, setInstMode] = useState<'underlying' | 'option'>('underlying')
   const [optType, setOptType] = useState<'call' | 'put'>('call')
@@ -133,7 +134,7 @@ export function AlgoStrategyBuilderContent() {
       const r = activeDef.risk ?? DEFAULT_RISK
       const rules = rulesForTicker(activeDef, ticker)   // per-ticker override, else default
       const { data } = await axios.post('/api/strategy/custom-backtest', {
-        ticker, start, end: end || undefined, side,
+        ticker, start, end: end || undefined, side, timeframe,
         rules: { buy: rules.buy, sell: rules.sell },
         position_size: r.sizingPct || 100,
         stop_loss: r.stopLossPct || undefined,
@@ -222,6 +223,26 @@ export function AlgoStrategyBuilderContent() {
           <div>
             <label style={LABEL}>End</label>
             <input type="date" value={end} onChange={e => setEnd(e.target.value)} style={INPUT} />
+          </div>
+          <div>
+            <label style={LABEL}>Timeframe</label>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {(['1d', '1h', '30m', '15m', '5m'] as const).map(tf => (
+                <button key={tf} onClick={() => setTimeframe(tf)}
+                  title={tf === '1d' ? 'Daily bars (full history)' : 'Intraday bars — US equities/ETFs, recent window'}
+                  style={{ flex: '1 0 auto', fontFamily: 'var(--theme-mono)', fontSize: 9.5, fontWeight: 700, padding: '5px 0', cursor: 'pointer',
+                    border: timeframe === tf ? '1px solid var(--theme-primary, #c9a84c)' : '1px solid var(--theme-border, rgba(255,255,255,0.14))',
+                    background: timeframe === tf ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)' : 'transparent',
+                    color: timeframe === tf ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #8099b0)' }}>
+                  {tf.toUpperCase()}
+                </button>
+              ))}
+            </div>
+            {timeframe !== '1d' && (
+              <div style={{ fontSize: 8, marginTop: 3, fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))' }}>
+                Intraday: US equities/ETFs, recent window (start date is clamped).
+              </div>
+            )}
           </div>
 
           {/* Direction: what the BUY signal opens (single-position mode only) */}

@@ -6,6 +6,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from cache import get_history as _cached_history, get_news as _cached_news, get_download, cached, get_info
 from validation import validate_ticker, validate_tickers, validate_date
 import serpapi_finance
+import alpaca
 
 
 router = APIRouter()
@@ -253,14 +254,22 @@ def get_history(ticker: str, start: str | None = None, end: str | None = None):
 
     df = None
     if intraday and start and end:
-        import yfinance as yf
-        try:
-            end_excl = (_dt.date.fromisoformat(end) + _dt.timedelta(days=1)).isoformat()
-            raw = yf.Ticker(ticker).history(start=start, end=end_excl, interval=yf_int)
-            if not raw.empty:
-                df = raw.rename(columns={"Close": "close"})[["close"]].dropna()
-        except Exception:
-            df = None
+        end_excl = (_dt.date.fromisoformat(end) + _dt.timedelta(days=1)).isoformat()
+        # Alpaca first for equities (real per-minute intraday, deeper than yfinance).
+        if alpaca.available() and alpaca.is_equity(ticker):
+            atf = {"5m": "5m", "15m": "15m", "30m": "30m", "60m": "1h"}.get(yf_int)
+            if atf:
+                adf = alpaca.history_df(ticker, atf, start, end_excl)
+                if not adf.empty:
+                    df = adf.rename(columns={"Close": "close"})[["close"]].dropna()
+        if df is None or df.empty:
+            import yfinance as yf
+            try:
+                raw = yf.Ticker(ticker).history(start=start, end=end_excl, interval=yf_int)
+                if not raw.empty:
+                    df = raw.rename(columns={"Close": "close"})[["close"]].dropna()
+            except Exception:
+                df = None
 
     # Daily path — also the fallback when intraday is unavailable for the window
     # (e.g. a short range older than the provider's intraday cap).
@@ -545,21 +554,44 @@ _TF = {
     "1mo": ("1mo", "max", None,    False),   # was 10y → max
 }
 
+# Alpaca intraday lookback per timeframe (days). Alpaca serves far deeper intraday
+# than yfinance, but a chart doesn't need years of 1-min bars — cap per granularity
+# so the response stays lean while still scrolling well past yfinance's caps.
+_ALPACA_LOOKBACK_DAYS = {
+    "1m": 30, "2m": 30, "3m": 30, "5m": 120, "10m": 120, "15m": 120, "30m": 120,
+    "1h": 730, "2h": 730, "4h": 730, "6h": 730, "12h": 730,
+    "1d": 3650, "1wk": 3650, "1mo": 3650,
+}
+
+
+def _alpaca_start(tf: str) -> str:
+    import datetime as _d
+    days = _ALPACA_LOOKBACK_DAYS.get(tf, 120)
+    return (_d.date.today() - _d.timedelta(days=days)).isoformat()
+
 
 @router.get("/ohlcv")
 def get_ohlcv(ticker: str, period: str = "1y", interval: str = "1d", tf: str | None = None, prepost: bool = False):
     ticker = validate_ticker(ticker)
     if tf and tf in _TF:
-        import yfinance as yf
         yf_int, yf_per, rule, intraday = _TF[tf]
-        try:
-            df = yf.Ticker(ticker).history(period=yf_per, interval=yf_int, prepost=prepost and intraday)
-        except Exception:
-            df = _pd_empty()
-        if not df.empty and rule:
-            df = df.resample(rule, label="left", closed="left").agg(
-                {"Open": "first", "High": "max", "Low": "min", "Close": "last", "Volume": "sum"}
-            ).dropna(subset=["Close"])
+        df = None
+        # Alpaca first for equities: deep, native intraday (odd frames included), so
+        # no resample needed. Falls through to yfinance when unavailable/empty.
+        if alpaca.available() and alpaca.is_equity(ticker):
+            adf = alpaca.history_df(ticker, tf, _alpaca_start(tf))
+            if not adf.empty:
+                df = adf
+        if df is None:
+            import yfinance as yf
+            try:
+                df = yf.Ticker(ticker).history(period=yf_per, interval=yf_int, prepost=prepost and intraday)
+            except Exception:
+                df = _pd_empty()
+            if not df.empty and rule:
+                df = df.resample(rule, label="left", closed="left").agg(
+                    {"Open": "first", "High": "max", "Low": "min", "Close": "last", "Volume": "sum"}
+                ).dropna(subset=["Close"])
     elif interval in _INTRADAY_PERIOD:
         intraday = True
         import yfinance as yf
@@ -636,9 +668,10 @@ def chart_events(ticker: str):
 
 @router.get("/live-quote")
 def get_live_quote(ticker: str):
-    """Freshest last price for the live chart-tick overlay — Tradier real-time for
-    equities, yfinance fast_info for futures/crypto/FX. The /ohlcv candle history
-    refreshes slowly (~1/min); this lets the forming bar tick every few seconds."""
+    """Freshest last price for the live chart-tick overlay — Alpaca IEX real-time for
+    equities (Tradier fallback), yfinance fast_info for futures/crypto/FX. The /ohlcv
+    candle history refreshes slowly (~1/min); this lets the forming bar tick every few
+    seconds."""
     ticker = validate_ticker(ticker)
     import quotes
     last = quotes.live_price(ticker)

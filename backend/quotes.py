@@ -2,7 +2,8 @@
 engine's position marks.
 
 Source order per symbol:
-  - Tradier real-time  — US equities/ETFs/options
+  - Alpaca IEX        — US equities/ETFs, real-time last trade (free, preferred)
+  - Tradier real-time — US equities/ETFs/options (fallback)
   - Binance public API — crypto (XXX-USD), no key, real-time
   - yfinance fast_info — futures (=F), FX (=X), and a catch-all fallback
 
@@ -48,6 +49,15 @@ def _crypto_price(sym: str) -> "float | None":
 
 @ttl_cache(maxsize=1024, ttl=4)   # equities/futures/FX don't move sub-second; 4s respects upstream limits
 def _slow_price(sym: str) -> "float | None":
+    # Alpaca: real-time IEX last trade for US equities/ETFs (free, preferred).
+    try:
+        import alpaca
+        if alpaca.available() and alpaca.is_equity(sym):
+            p = alpaca.get_latest_price(sym)
+            if p:
+                return float(p)
+    except Exception:
+        pass
     # Tradier: real-time, but only US equities/ETFs/options.
     try:
         import tradier
