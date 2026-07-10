@@ -715,19 +715,19 @@ export function ChartStudioContent() {
       upColor: C.pos, downColor: C.neg, borderUpColor: C.pos, borderDownColor: C.neg,
       wickUpColor: C.pos, wickDownColor: C.neg, priceLineColor: C.gold, priceLineWidth: 1,
     })
-    const bbU = main.addLineSeries({ color: `${C.text}8c`, lineWidth: 1, priceLineVisible: false, lastValueVisible: false })
-    const bbL = main.addLineSeries({ color: `${C.text}8c`, lineWidth: 1, priceLineVisible: false, lastValueVisible: false })
-    const bbM = main.addLineSeries({ color: `${C.text}59`, lineWidth: 1, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: false })
-    const vwapS = main.addLineSeries({ color: C.violet, lineWidth: 1, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: false })
+    const bbU = main.addLineSeries({ color: `${C.text}8c`, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false })
+    const bbL = main.addLineSeries({ color: `${C.text}8c`, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false })
+    const bbM = main.addLineSeries({ color: `${C.text}59`, lineWidth: 1, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false })
+    const vwapS = main.addLineSeries({ color: C.violet, lineWidth: 1, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false })
 
     const volS = laneCharts.volume?.addHistogramSeries({ priceFormat: { type: 'volume' }, priceLineVisible: false, lastValueVisible: false })
-    const rsiS = laneCharts.rsi?.addLineSeries({ color: C.violet, lineWidth: 2, priceLineVisible: false, lastValueVisible: false })
+    const rsiS = laneCharts.rsi?.addLineSeries({ color: C.violet, lineWidth: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false })
     rsiS?.createPriceLine({ price: 70, color: `${C.laneNeg}66`, lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: '' })
     rsiS?.createPriceLine({ price: 30, color: `${C.lanePos}66`, lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: '' })
     const macdHist = laneCharts.macd?.addHistogramSeries({ priceLineVisible: false, lastValueVisible: false })
-    const macdLine = laneCharts.macd?.addLineSeries({ color: C.blue, lineWidth: 2, priceLineVisible: false, lastValueVisible: false })
-    const macdSigS = laneCharts.macd?.addLineSeries({ color: C.gold, lineWidth: 1, priceLineVisible: false, lastValueVisible: false })
-    const ivS = laneCharts.iv?.addAreaSeries({ lineColor: C.gold, topColor: `${C.gold}24`, bottomColor: 'transparent', lineWidth: 2, priceLineVisible: false, lastValueVisible: false })
+    const macdLine = laneCharts.macd?.addLineSeries({ color: C.blue, lineWidth: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false })
+    const macdSigS = laneCharts.macd?.addLineSeries({ color: C.gold, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false })
+    const ivS = laneCharts.iv?.addAreaSeries({ lineColor: C.gold, topColor: `${C.gold}24`, bottomColor: 'transparent', lineWidth: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false })
     charts.current = { main, ...laneCharts }
     series.current = { candle, bbU, bbL, bbM, vwapS: vwapS!, volS: volS!, rsiS: rsiS!, macdHist: macdHist!, macdLine: macdLine!, macdSigS: macdSigS!, ivS: ivS! }
 
@@ -870,7 +870,7 @@ export function ChartStudioContent() {
       try {
         let srs = maSeries.current.get(key)
         if (!srs) {
-          srs = main.addLineSeries({ color: MA_PALETTE[i % MA_PALETTE.length], lineWidth: 2, priceLineVisible: false, lastValueVisible: false })
+          srs = main.addLineSeries({ color: MA_PALETTE[i % MA_PALETTE.length], lineWidth: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false })
           maSeries.current.set(key, srs)
         }
         srs.setData(indData?.maLines[key] ?? [])
@@ -916,7 +916,7 @@ export function ChartStudioContent() {
         if (!meta) {
           const srs = target.owner.addLineSeries({
             color: OVERLAY_PALETTE[i % OVERLAY_PALETTE.length], lineWidth: inLane ? 2 : 1,
-            priceScaleId: target.scaleId, priceLineVisible: false, lastValueVisible: false,
+            priceScaleId: target.scaleId, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
           })
           meta = { srs, owner: target.owner, scaleId: target.scaleId }
           overlaySeries.current.set(d.id, meta)

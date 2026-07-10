@@ -432,7 +432,7 @@ export function PortfolioEarningsContent() {
     : '…'
 
   return (
-    <div style={{ maxWidth: 1264, margin: '0 auto' }}>
+    <div style={{ width: '100%' }}>
       <style>{`
         @keyframes pe-spin { to { transform: rotate(360deg) } }
         @keyframes pe-pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.4 } }
