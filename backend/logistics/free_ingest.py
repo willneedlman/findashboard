@@ -204,6 +204,31 @@ def air_cargo() -> dict:
     return _resilient("logi:air_cargo:v2", HALF_DAY, fetch)   # v2: 12 hubs
 
 
+def flights() -> dict:
+    """Live positions of cargo aircraft (FedEx/UPS/DHL/Atlas/... by callsign) from
+    OpenSky state vectors. Cached 120s to respect the daily credit budget."""
+    def fetch():
+        token = _opensky_bearer()
+        if not token:
+            raise ValueError("OPENSKY_CLIENT_ID/SECRET not set (free OpenSky account)")
+        r = requests.get(f"{_OPENSKY_API}/states/all",
+                         headers={"Authorization": f"Bearer {token}"}, timeout=30)
+        r.raise_for_status()
+        # State vector: 0 icao24,1 callsign,2 origin_country,5 lon,6 lat,7 baro_alt,
+        # 8 on_ground,9 velocity,10 true_track.
+        out = []
+        for s in r.json().get("states") or []:
+            cs = (s[1] or "").strip()
+            op = CARGO_OPERATORS.get(cs[:3])
+            if not op or s[6] is None or s[5] is None or s[8]:   # cargo, airborne, positioned
+                continue
+            out.append({"icao24": s[0], "callsign": cs, "operator": op,
+                        "lat": s[6], "lon": s[5], "alt_m": s[7], "vel_ms": s[9],
+                        "heading": s[10], "origin_country": s[2]})
+        return {"flights": out, "source": "OpenSky Network (live state vectors)"}
+    return _resilient("logi:flights", 120, fetch)
+
+
 # ── 3. Domestic & Customs ───────────────────────────────────────────────────
 def inventory_sales() -> dict:
     """US total-business inventories-to-sales ratio (Census MTIS). Needs a FREE

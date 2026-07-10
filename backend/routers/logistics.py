@@ -31,6 +31,12 @@ def air_cargo_vulnerability():
     return fi.air_cargo()
 
 
+@router.get("/flights")
+def flights():
+    """Live positions of cargo aircraft for the map (OpenSky state vectors, 120s cache)."""
+    return fi.flights()
+
+
 @router.get("/freight-macro")
 def freight_macro():
     """US domestic freight: inventories-to-sales (Census MTIS) plus the Cass Freight
