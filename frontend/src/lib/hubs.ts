@@ -5,7 +5,7 @@ import {
   LineChart, BarChart2, Waves, Zap, Shuffle, Percent,
   GitBranch, Landmark, Dices, Gauge, BookOpen, Bell, Workflow, Clock, ArrowLeftRight, Home,
   Ship, CandlestickChart, Megaphone, Rocket,
-  Container, Plane, Truck,
+  Container, Plane, Truck, Fuel,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -72,8 +72,8 @@ export const HUBS: Hub[] = [
   {
     slug: 'macro',
     label: 'Macro',
-    tagline: 'Rates, growth, credit, and flows in one read.',
-    masthead: 'Rates, growth, and credit in one read, from the implied FOMC path to high-yield spreads and physical energy flows.',
+    tagline: 'Rates, growth, credit, and markets in one read.',
+    masthead: 'Rates, growth, and credit in one read, from the implied FOMC path to high-yield spreads, FX crosses, and world markets.',
     icon: Compass,
     tools: [
       { title: 'Rate Engine',    chip: 'Rate Engine',    desc: 'Implied FOMC path and the full yield curve',     route: '/fed',            icon: GitBranch },
@@ -86,7 +86,6 @@ export const HUBS: Hub[] = [
       { title: 'Credit Delinquencies', chip: 'Delinquencies', desc: 'Delinquency buckets, default rates, NPA and roll rates across loan portfolios', route: '/credit-delinquencies', icon: Percent },
       { title: 'Housing Market', chip: 'Housing', desc: 'Home prices, mortgage rates, affordability (HAI), supply/demand and construction', route: '/housing', icon: Home },
       { title: 'Currency Matrix', chip: 'FX Matrix',     desc: 'Spot cross-rates, forward points, cross-currency basis, and FX vol', route: '/currency', icon: ArrowLeftRight },
-      { title: 'Global Energy Flows', chip: 'Energy Flows', desc: 'Live AIS vessels, energy pipelines, export terminals, and chokepoints', route: '/flows-map', icon: Ship },
       { title: 'Market Hours',   chip: 'Market Hours',   desc: 'Live global session clock across futures, US, Europe, Asia', route: '/market-hours',   icon: Clock },
     ],
   },
@@ -143,6 +142,7 @@ export const HUBS: Hub[] = [
     icon: Container,
     tools: [
       { title: 'Container & Freight',      chip: 'Freight',      desc: 'Liner connectivity, container spot rates, and canal chokepoint transits', route: '/maritime-freight', icon: Ship },
+      { title: 'Energy Flows',             chip: 'Energy Flows', desc: 'Live AIS tankers, energy pipelines, export terminals, and chokepoints',   route: '/flows-map',        icon: Fuel },
       { title: 'Air Cargo Vulnerability',  chip: 'Air Cargo',    desc: 'Freighter frequency at Memphis, Louisville, Frankfurt, and Hong Kong',    route: '/air-cargo',        icon: Plane },
       { title: 'Freight Macro',            chip: 'Freight Macro', desc: 'Inventories-to-sales, Cass freight, and truck tonnage',                  route: '/freight-macro',    icon: Truck },
     ],

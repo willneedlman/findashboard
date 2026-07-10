@@ -1088,8 +1088,8 @@ export function OptionsPage() {
 export function LogisticsPage() {
   return (
     <Shell active="logistics">
-      <PageHero eyebrow="Geo-Logistics · 3 tools" h1="The physical economy, in near real time."
-        lede="Liner connectivity and container spot rates, canal chokepoint transits, air-freighter frequency at the world's cargo hubs, and US inventories and freight tonnage. Free, first-party data." />
+      <PageHero eyebrow="Geo-Logistics · 4 tools" h1="The physical economy, in near real time."
+        lede="Liner connectivity and container spot rates, live tanker and energy flows through the world's chokepoints, air-freighter frequency at the major cargo hubs, and US inventories and freight tonnage. Free, first-party data." />
       <section className="blk"><div className="wrap">
         <Reveal className="sec-head">
           <div className="eyebrow">Container &amp; Freight</div>
@@ -1118,8 +1118,8 @@ export function LogisticsPage() {
 export function MacroPage() {
   return (
     <Shell active="macro">
-      <PageHero eyebrow="Macro · 9 tools" h1="Rates, credit, and physical flows."
-        lede="The implied FOMC path, the yield curve, credit spreads, FX crosses, and live tanker traffic through the world's chokepoints. Nine tools across rates, credit, FX, energy, and world markets." />
+      <PageHero eyebrow="Macro · 11 tools" h1="Rates, credit, and world markets."
+        lede="The implied FOMC path, the yield curve, credit spreads, FX crosses, and the world's market sessions. Rates, credit, FX, and growth in one place." />
 
       <section className="blk"><div className="wrap">
         <Reveal className="sec-head">
