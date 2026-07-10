@@ -118,7 +118,7 @@ def history_df(symbol: str, tf: str, start, end=None) -> "pd.DataFrame":
     return df[["Open", "High", "Low", "Close", "Volume"]].dropna(subset=["Close"])
 
 
-@ttl_cache(maxsize=512, ttl=4)   # tight cache for the live chart-tick overlay
+@ttl_cache(maxsize=512, ttl=1)   # 1s cache — real-time chart tick; dedupes concurrent viewers per symbol
 def get_latest_quote(symbol: str) -> dict:
     """Latest NBBO-ish quote for the live tick. Returns {bid, ask, price} or {} on
     failure. `price` is the mid (or whichever side is present)."""
@@ -138,7 +138,7 @@ def get_latest_quote(symbol: str) -> dict:
     return {"bid": bid, "ask": ask, "price": price} if price else {}
 
 
-@ttl_cache(maxsize=512, ttl=4)
+@ttl_cache(maxsize=512, ttl=1)   # 1s cache so the chart tick can refresh every second
 def get_latest_price(symbol: str) -> "float | None":
     """Last trade price for the live tick; falls back to the quote mid."""
     if not available() or not is_equity(symbol):

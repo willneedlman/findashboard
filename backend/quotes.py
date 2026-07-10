@@ -87,4 +87,14 @@ def live_price(symbol: str) -> "float | None":
         p = _crypto_price(sym)
         if p:
             return p
-    return _slow_price(sym)               # else (or Binance miss): Tradier -> yfinance, 4s-cached
+    # Equities: Alpaca real-time IEX on its own 1s cache, so the chart ticks every
+    # second. Bypasses the 4s _slow_price cache (which stays slow to spare yfinance).
+    try:
+        import alpaca
+        if alpaca.available() and alpaca.is_equity(sym):
+            p = alpaca.get_latest_price(sym)
+            if p:
+                return p
+    except Exception:
+        pass
+    return _slow_price(sym)               # fallback: Tradier -> yfinance, 4s-cached

@@ -12,13 +12,11 @@ const BINANCE_WS = (import.meta as { env?: Record<string, string> }).env?.VITE_B
 // Live price for the paper chart. The forming candle is refreshed between the
 // slower full-candle fetches (/ohlcv, ~1/min).
 //
-// Two cadences, because calling series.update() faster than ~4s destabilises
-// lightweight-charts on this chart (it spams "Value is null" and stops drawing):
-//   - the visible price (onPrice -> header / spot) ticks at the data rate:
-//     sub-second for crypto via the Binance websocket, 1s via REST, 4s otherwise;
-//   - the candlestick body is updated on a safe 4s timer from the latest price.
-// So crypto's number ticks live while the bar stays render-stable. Gated on
-// `enabled` (market live).
+// Cadence: equities now have a real-time source (Alpaca IEX, 1s-cached on the
+// backend), so both the number and the forming bar tick every second — matching
+// crypto, which streams sub-second off the Binance websocket. The candle update is
+// guarded (skip null / >25% jumps) and wrapped in try/catch, so the 1s bar refresh
+// stays render-stable through candle reloads. Gated on `enabled` (market live).
 export function useLiveTick(
   ticker: string,
   enabled: boolean,
@@ -47,9 +45,9 @@ export function useLiveTick(
         series.update({ time: b.time as Time, open: b.open, high: Math.max(b.high, last), low: Math.min(b.low, last), close: last })
       } catch { /* time out of sync mid candle-reload; the next full fetch re-syncs */ }
     }
-    const candleId = window.setInterval(updateCandle, 4000)
+    const candleId = window.setInterval(updateCandle, 1000)
 
-    // Price source: REST baseline (1s crypto / 4s otherwise) feeds the fast number.
+    // Price source: REST baseline at 1s (crypto also gets the sub-second websocket below).
     const poll = async () => {
       try {
         const r = await fetch(`/api/market/live-quote?ticker=${encodeURIComponent(ticker)}`)
@@ -58,7 +56,7 @@ export function useLiveTick(
         if (typeof last === 'number') onTick(last)
       } catch { /* transient; next tick retries */ }
     }
-    const pollId = window.setInterval(poll, isCrypto(ticker) ? 1000 : 4000)
+    const pollId = window.setInterval(poll, 1000)
     poll()
 
     // Crypto: Binance websocket for sub-second number updates.
