@@ -106,9 +106,9 @@ export default function LogisticsMap() {
 
   const eyebrow: React.CSSProperties = { fontFamily: L.mono, fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: L.gold }
   const goldTint = 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)'
-  const VIEW: ['vessels' | 'flights' | 'air' | 'choke' | 'port', string, string, number][] = [
-    ['vessels', 'Cargo ships', VESSEL, vessels.length], ['flights', 'Cargo flights', FLIGHT, flights.length],
-    ['air', 'Air hubs', AIR, hubs.length], ['choke', 'Chokepoints', CHOKE, Object.keys(CHOKES).length], ['port', 'LSCI ports', PORT, econ.length],
+  const VIEW: ['vessels' | 'flights' | 'air' | 'choke' | 'port', string, number][] = [
+    ['vessels', 'Cargo ships', vessels.length], ['flights', 'Cargo flights', flights.length],
+    ['air', 'Air hubs', hubs.length], ['choke', 'Chokepoints', Object.keys(CHOKES).length], ['port', 'LSCI ports', econ.length],
   ]
 
   const stat = (label: string, val?: number | null, unit?: string, series?: number[], stale?: boolean) => (
@@ -169,11 +169,11 @@ export default function LogisticsMap() {
         <div style={{ position: 'absolute', top: 56, left: 12, bottom: 12, zIndex: 520, width: 210, display: 'flex', flexDirection: 'column', gap: 8, pointerEvents: 'none' }}>
           <div style={{ pointerEvents: 'auto', background: panel, border: `1px solid ${L.border}`, padding: '12px 12px 8px' }}>
             <div style={{ ...eyebrow, marginBottom: 6 }}>View</div>
-            {VIEW.map(([k, lbl, c, n]) => { const on = layers[k]; return (
+            {VIEW.map(([k, lbl, n]) => { const on = layers[k]; return (
               <div key={k} onClick={() => setLayers(s => ({ ...s, [k]: !s[k] }))}
-                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', cursor: 'pointer', background: on ? goldTint : 'transparent', borderLeft: on ? `2px solid ${c}` : '2px solid transparent' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Dot c={on ? c : L.faint} /><span style={{ fontFamily: L.sans, fontSize: 11.5, fontWeight: on ? 600 : 400, color: on ? L.text : L.sec }}>{lbl}</span></span>
-                <span style={{ fontFamily: L.mono, fontSize: 10, color: on ? c : L.faint }}>{n}</span>
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 9px', cursor: 'pointer', background: on ? goldTint : 'transparent', borderLeft: on ? `2px solid ${L.gold}` : '2px solid transparent' }}>
+                <span style={{ fontFamily: L.sans, fontSize: 11.5, fontWeight: on ? 600 : 400, color: on ? L.text : L.sec }}>{lbl}</span>
+                <span style={{ fontFamily: L.mono, fontSize: 10, color: on ? L.gold : L.faint }}>{n}</span>
               </div>
             )})}
           </div>
