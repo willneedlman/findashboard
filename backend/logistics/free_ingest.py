@@ -22,6 +22,7 @@ Source reality (honest, drives what actually returns data):
   - Cass / ATA     : only headline numbers in monthly press releases, no stable
                      markup — needs a pinned release URL + selector before it returns data.
 """
+import concurrent.futures
 import logging
 import os
 import re
@@ -90,16 +91,18 @@ def liner_connectivity() -> dict:
     """UNCTAD Liner Shipping Connectivity Index via the World Bank keyless mirror
     (UNCTAD's own bulk is .7z, unusable without a non-stdlib unpacker)."""
     def fetch():
-        # World Bank rejects long ;-lists (10 -> 400); 7 major shipping economies is safe.
-        r = requests.get(
-            "https://api.worldbank.org/v2/country/CN;US;DE;SG;NL;KR;JP/indicator/IS.SHP.GCNW.XQ",
-            params={"format": "json", "per_page": "100", "mrv": "1"}, headers=_UA, timeout=_TIMEOUT)
-        r.raise_for_status()
-        j = r.json()
-        rows = j[1] if isinstance(j, list) and len(j) > 1 else []
-        econ = [{"country": d["country"]["value"], "iso": d.get("countryiso3code"),
-                 "lsci": d["value"], "year": d["date"]}
-                for d in rows if d.get("value") is not None]
+        # World Bank rejects long ;-lists (10 -> 400), so batch ≤7 economies per call.
+        econ = []
+        for batch in ("CN;US;DE;SG;NL;KR;JP", "GB;BE;ES;AE;MY;IN;IT"):
+            r = requests.get(
+                f"https://api.worldbank.org/v2/country/{batch}/indicator/IS.SHP.GCNW.XQ",
+                params={"format": "json", "per_page": "100", "mrv": "1"}, headers=_UA, timeout=_TIMEOUT)
+            r.raise_for_status()
+            j = r.json()
+            rows = j[1] if isinstance(j, list) and len(j) > 1 else []
+            econ += [{"country": d["country"]["value"], "iso": d.get("countryiso3code"),
+                      "lsci": d["value"], "year": d["date"]}
+                     for d in rows if d.get("value") is not None]
         if not econ:
             raise ValueError("no LSCI values")
         return {"economies": sorted(econ, key=lambda e: -e["lsci"]),
@@ -134,7 +137,11 @@ CARGO_OPERATORS = {
     "BCS": "DHL (EAT)", "DHK": "DHL Air", "CLX": "Cargolux", "GEC": "Lufthansa Cargo",
     "CKS": "Kalitta Air", "ABX": "ABX Air", "PAC": "Polar Air Cargo", "BOX": "AirBridgeCargo",
 }
-CARGO_HUBS = {"KMEM": "Memphis", "KSDF": "Louisville", "EDDF": "Frankfurt", "VHHH": "Hong Kong"}
+CARGO_HUBS = {
+    "KMEM": "Memphis", "KSDF": "Louisville", "EDDF": "Frankfurt", "VHHH": "Hong Kong",
+    "PANC": "Anchorage", "KCVG": "Cincinnati", "EDDP": "Leipzig", "ZSPD": "Shanghai",
+    "RKSI": "Incheon", "OMDB": "Dubai", "WSSS": "Singapore", "KIND": "Indianapolis",
+}
 _os_token = {"value": None, "exp": 0.0}
 
 
@@ -154,10 +161,32 @@ def _opensky_bearer() -> "str | None":
     return _os_token["value"]
 
 
+def _hub_moves(icao: str, city: str, begin: int, end: int, headers: dict) -> "dict | None":
+    """Cargo movements at one hub. None on hard failure (drops the hub, doesn't
+    fail the whole sweep); a 404 is a legitimate empty window."""
+    by_op: dict[str, int] = {}
+    for ep in ("arrival", "departure"):
+        try:
+            r = requests.get(f"{_OPENSKY_API}/flights/{ep}",
+                             params={"airport": icao, "begin": begin, "end": end},
+                             headers=headers, timeout=_TIMEOUT)
+        except Exception:
+            return None
+        if r.status_code == 404:
+            continue
+        if r.status_code != 200:
+            return None
+        for f in r.json():
+            op = CARGO_OPERATORS.get((f.get("callsign") or "").strip()[:3])
+            if op:
+                by_op[op] = by_op.get(op, 0) + 1
+    return {"icao": icao, "city": city, "movements": sum(by_op.values()), "by_operator": by_op}
+
+
 def air_cargo() -> dict:
-    """Freighter movements (arrivals+departures) at the four cargo hubs over a
-    settled 24h window, by operator. OpenSky is community ADS-B: undercounts,
-    ~12h lag, 404 on empty windows. Gated on free OAuth2 client creds."""
+    """Freighter movements (arrivals+departures) at the cargo hubs over a settled 24h
+    window, by operator. Hubs are swept in parallel (OpenSky is slow per call).
+    Community ADS-B: undercounts, ~12h lag, 404 on empty windows. Gated on creds."""
     def fetch():
         token = _opensky_bearer()
         if not token:
@@ -165,21 +194,11 @@ def air_cargo() -> dict:
         headers = {"Authorization": f"Bearer {token}"}
         end = int(time.time()) - 12 * 3600
         begin = end - 24 * 3600
-        hubs = []
-        for icao, city in CARGO_HUBS.items():
-            by_op: dict[str, int] = {}
-            for ep in ("arrival", "departure"):
-                r = requests.get(f"{_OPENSKY_API}/flights/{ep}",
-                                 params={"airport": icao, "begin": begin, "end": end},
-                                 headers=headers, timeout=_TIMEOUT)
-                if r.status_code == 404:
-                    continue
-                r.raise_for_status()
-                for f in r.json():
-                    op = CARGO_OPERATORS.get((f.get("callsign") or "").strip()[:3])
-                    if op:
-                        by_op[op] = by_op.get(op, 0) + 1
-            hubs.append({"icao": icao, "city": city, "movements": sum(by_op.values()), "by_operator": by_op})
+        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as ex:
+            results = ex.map(lambda kv: _hub_moves(kv[0], kv[1], begin, end, headers), CARGO_HUBS.items())
+        hubs = [h for h in results if h]
+        if not hubs:
+            raise ValueError("no hub data")
         return {"window": {"begin": begin, "end": end}, "hubs": sorted(hubs, key=lambda h: -h["movements"]),
                 "source": "OpenSky Network (community ADS-B, partial, ~12h lag)"}
     return _resilient("logi:air_cargo", HALF_DAY, fetch)

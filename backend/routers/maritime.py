@@ -507,6 +507,13 @@ _AIS_BBOXES = [
     [[24.0, -98.0], [30.0, -88.0]],   # US Gulf
     [[35.0, 25.0], [41.0, 30.0]],     # Aegean / Turkish straits
     [[31.0, 120.0], [38.0, 127.0]],   # Yellow Sea / Korea approaches
+    # Container-port anchorages (for the Logistics Map's cargo-ship layer). Moderate
+    # set — the 1GB VM has OOM'd before, so these are the busiest hubs only.
+    [[33.4, -118.6], [34.2, -117.8]], # Los Angeles / Long Beach
+    [[29.8, 121.0], [31.7, 123.0]],   # Shanghai / Ningbo-Zhoushan
+    [[51.6, 3.0], [52.4, 4.8]],       # Rotterdam / Antwerp approaches
+    [[34.5, 128.5], [35.6, 129.6]],   # Busan
+    [[40.3, -74.5], [40.9, -73.7]],   # New York / New Jersey
 ]
 
 _VESSEL_TTL = 600          # drop vessels not seen in 10 min
