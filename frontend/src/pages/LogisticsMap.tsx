@@ -6,7 +6,7 @@ import Lf from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import PageWrapper from '../components/PageWrapper'
 import { readToken } from '../lib/theme'
-import { L, Spark, StaleDot } from '../components/logi'
+import { L, Spark } from '../components/logi'
 
 // Logistics Map — the full-screen supply-chain view. Layers: live cargo ships and
 // cargo flights, air-cargo hubs, all ten chokepoints, and liner-connectivity ports.
@@ -117,15 +117,15 @@ export default function LogisticsMap() {
     ['air', 'Air hubs', AIR, hubs.length], ['choke', 'Chokepoints', CHOKE, Object.keys(CHOKES).length], ['port', 'LSCI ports', PORT, econ.length],
   ]
 
-  const stat = (label: string, val?: number | null, unit?: string, series?: number[], stale?: boolean) => (
-    <div style={{ padding: '6px 0', borderBottom: `1px solid ${L.border}` }}>
-      <div style={{ fontFamily: L.mono, fontSize: 8.5, letterSpacing: '0.06em', color: L.faint, marginBottom: 2 }}>{label}<StaleDot stale={stale} /></div>
-      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8 }}>
-        <span style={{ fontFamily: L.mono, fontSize: 17, fontWeight: 700, color: L.text }}>{val != null ? val.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'}{unit && <span style={{ fontSize: 8.5, color: L.sec, fontWeight: 400 }}> {unit}</span>}</span>
-        {series && series.length > 1 && <Spark data={series} w={64} h={20} color={L.sec} />}
-      </div>
-    </div>
-  )
+  // Freight-macro (+ container spot rate) ride the docked bottom tape, energy-map style.
+  const ser = (k: string) => (idx[k]?.series ?? []).map(o => o.value)
+  const TAPE: { k: string; label: string; val?: number | null; unit: string; series: number[] }[] = [
+    { k: 'wci', label: 'DREWRY WCI', val: mf.data?.wci?.composite_usd_per_40ft, unit: '$/40ft', series: [] },
+    { k: 'inv', label: 'INV / SALES', val: fm.data?.inventory_sales?.latest?.ratio, unit: 'ratio', series: (fm.data?.inventory_sales?.series ?? []).map(p => p.ratio) },
+    { k: 'cass_s', label: 'CASS SHIPMENTS', val: idx.cass_shipments?.latest?.value, unit: 'idx', series: ser('cass_shipments') },
+    { k: 'cass_e', label: 'CASS EXPEND', val: idx.cass_expenditures?.latest?.value, unit: 'idx', series: ser('cass_expenditures') },
+    { k: 'truck', label: 'TRUCK TONNAGE', val: idx.truck_tonnage?.latest?.value, unit: 'idx', series: ser('truck_tonnage') },
+  ]
   const colHead = (a: string, b: string) => (
     <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: L.mono, fontSize: 7.5, letterSpacing: '0.08em', color: L.faint, paddingBottom: 3, marginBottom: 2, borderBottom: `1px solid ${L.border}` }}><span>{a}</span><span>{b}</span></div>
   )
@@ -146,7 +146,8 @@ export default function LogisticsMap() {
     <PageWrapper>
       <style>{`.lm-map { background: ${OCEAN}; } .lm-map .leaflet-tooltip { background: var(--theme-surface); color: var(--theme-text); border: 1px solid var(--theme-border); font-family: var(--theme-mono); font-size: 11px; }
         .lm-mk svg { transition: color .12s ease; cursor: pointer; } .lm-mk:hover svg { color: var(--theme-primary, #c9a84c) !important; }`}</style>
-      <div style={{ height: 'calc(100vh - 32px)', minHeight: 620, position: 'relative', border: `1px solid ${L.border}`, borderRadius: 6, overflow: 'hidden' }}>
+      <div style={{ height: 'calc(100vh - 32px)', minHeight: 620, display: 'flex', flexDirection: 'column', border: `1px solid ${L.border}`, borderRadius: 6, overflow: 'hidden' }}>
+        <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         <MapContainer className="lm-map" center={[30, 30]} zoom={2.3} minZoom={2} maxZoom={6} worldCopyJump preferCanvas zoomControl={false} style={{ position: 'absolute', inset: 0, height: '100%', width: '100%' }}>
           <SizeFix /><Basemap land={LAND} />
           {layers.vessels && vessels.map(v => (
@@ -227,8 +228,7 @@ export default function LogisticsMap() {
           )}
 
           <Section title="CONTAINER & FREIGHT">
-            {stat('DREWRY WCI · CONTAINER SPOT RATE', mf.data?.wci?.composite_usd_per_40ft, '$/40ft', undefined, mf.data?.wci?._stale)}
-            <div style={{ marginTop: 8 }}>
+            <div>
               {colHead('PORT', 'LSCI')}
               {econ.slice(0, 8).map(e => line(portOf(e)?.port ?? e.country, e.lsci.toFixed(1)))}
               <div style={{ fontFamily: L.sans, fontSize: 8, color: L.faint, marginTop: 3 }}>Liner Shipping Connectivity Index (higher = better connected)</div>
@@ -242,12 +242,19 @@ export default function LogisticsMap() {
             <div style={{ fontFamily: L.sans, fontSize: 8, color: L.faint, marginTop: 3 }}>Freighter arrivals + departures, last 24h (OpenSky, ~12h lag)</div>
           </Section>
 
-          <Section title="FREIGHT MACRO">
-            {stat('INVENTORIES-TO-SALES · RATIO', fm.data?.inventory_sales?.latest?.ratio, 'ratio', (fm.data?.inventory_sales?.series ?? []).map(p => p.ratio), fm.data?.inventory_sales?._stale)}
-            {stat('CASS FREIGHT SHIPMENTS · INDEX', idx.cass_shipments?.latest?.value, 'idx', (idx.cass_shipments?.series ?? []).map(o => o.value), fm.data?.freight_indices?._stale)}
-            {stat('ATA TRUCK TONNAGE · INDEX (2015=100)', idx.truck_tonnage?.latest?.value, 'idx', (idx.truck_tonnage?.series ?? []).map(o => o.value), fm.data?.freight_indices?._stale)}
-            <div style={{ fontFamily: L.sans, fontSize: 8, color: L.faint, marginTop: 4 }}>Monthly, seasonally adjusted · Census, FRED</div>
-          </Section>
+        </div>
+        </div>
+
+        {/* Docked freight-macro tape — energy-map bottom-strip style */}
+        <div style={{ height: 44, flex: 'none', display: 'grid', gridTemplateColumns: `repeat(${TAPE.length}, 1fr)`, background: 'var(--theme-surface, #0d1826)', borderTop: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 30%, transparent)' }}>
+          {TAPE.map((t, i) => (
+            <div key={t.k} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '0 14px', borderLeft: i ? '1px solid var(--theme-border-faint, rgba(255,255,255,0.05))' : 'none', minWidth: 0, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }} title="Monthly · seasonally adjusted · Census, FRED, Drewry">
+              <span style={{ fontFamily: L.mono, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.06em', color: L.faint, flex: 'none' }}>{t.label}</span>
+              <span style={{ fontFamily: L.mono, fontSize: 13, fontWeight: 700, color: L.text, flex: 'none' }}>{t.val != null ? t.val.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'}</span>
+              <span style={{ fontFamily: L.mono, fontSize: 8, color: L.sec, flex: 'none' }}>{t.unit}</span>
+              {t.series.length > 1 && <span style={{ marginLeft: 'auto', flex: 'none' }}><Spark data={t.series} w={54} h={18} color={L.sec} /></span>}
+            </div>
+          ))}
         </div>
       </div>
     </PageWrapper>
