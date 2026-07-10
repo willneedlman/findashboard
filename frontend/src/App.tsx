@@ -110,6 +110,7 @@ const Compare            = lazyWithReload(() => import('./pages/Compare'))
 const ResetPassword      = lazyWithReload(() => import('./pages/ResetPassword'))
 const HubLanding         = lazyWithReload(() => import('./pages/HubLanding'))
 const GlobalMarkets      = lazyWithReload(() => import('./pages/GlobalMarkets'))
+const LogisticsMap       = lazyWithReload(() => import('./pages/LogisticsMap'))
 const MaritimeFreight    = lazyWithReload(() => import('./pages/MaritimeFreight'))
 const AirCargo           = lazyWithReload(() => import('./pages/AirCargo'))
 const FreightMacro       = lazyWithReload(() => import('./pages/FreightMacro'))
@@ -307,6 +308,7 @@ export default function App() {
               <Route path="/unusual-options"    element={<UnusualOptions />} />
               <Route path="/compare"            element={<Compare />} />
               <Route path="/etf-analyzer"       element={<EtfXray />} />
+              <Route path="/logistics-map"      element={<LogisticsMap />} />
               <Route path="/maritime-freight"   element={<MaritimeFreight />} />
               <Route path="/air-cargo"          element={<AirCargo />} />
               <Route path="/freight-macro"      element={<FreightMacro />} />
