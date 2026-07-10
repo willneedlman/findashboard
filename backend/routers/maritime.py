@@ -29,6 +29,8 @@ except ImportError:                                   # pragma: no cover
     def disk_get(_k): return None
     def disk_set(_k, _v, ttl=0): pass
 
+import energy_nowcaster
+
 _log = logging.getLogger("maritime")
 router = APIRouter()
 
@@ -578,6 +580,59 @@ def _upsert(mmsi: str, **fields):
         _vessels[mmsi] = v
 
 
+# ── Chokepoint geofencing → live transit nowcast ────────────────────────────
+_CHOKE_RADIUS_KM = 55.0
+_ENERGY_CATS = ("tanker", "lng")
+
+
+def _haversine_km(lat1, lon1, lat2, lon2) -> float:
+    from math import radians, sin, cos, asin, sqrt
+    dlat, dlon = radians(lat2 - lat1), radians(lon2 - lon1)
+    a = sin(dlat / 2) ** 2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon / 2) ** 2
+    return 2 * 6371.0 * asin(sqrt(a))
+
+
+def _nearest_choke(lat, lon) -> "str | None":
+    """Chokepoint id whose capture radius contains (lat, lon), else None. Cheap
+    lat/lon gates keep this ~free on the position hot path (only 10 chokepoints)."""
+    if lat is None or lon is None:
+        return None
+    for c in CHOKEPOINTS:
+        if abs(lat - c["lat"]) > 0.6:
+            continue
+        dlon = abs(lon - c["lon"])
+        if dlon > 180:
+            dlon = 360 - dlon
+        if dlon > 0.9:
+            continue
+        if _haversine_km(lat, lon, c["lat"], c["lon"]) <= _CHOKE_RADIUS_KM:
+            return c["id"]
+    return None
+
+
+def _check_crossing(mmsi: str, lat, lon) -> None:
+    """Log one transit when an energy vessel enters a chokepoint radius
+    (outside->inside edge). Debounced via the vessel's stored in_choke state.
+    Category and hull dims fall back to the persistent static registry, so a vessel
+    is counted even before its next ShipStaticData broadcast."""
+    if lat is None or lon is None:
+        return                                # a coord-less ping must not reset in_choke (double-count guard)
+    cur = _nearest_choke(lat, lon)
+    with _lock:
+        v = _vessels.get(mmsi)
+        if v is None:
+            return
+        reg = _static_reg.get(mmsi) or {}
+        cat = v.get("category") or reg.get("category")
+        prev = v.get("in_choke")
+        v["in_choke"] = cur
+        draught = v.get("draught") or reg.get("draught")
+        loa = v.get("loa") or reg.get("loa")
+        beam = v.get("beam") or reg.get("beam")
+    if cur and cur != prev and cat in _ENERGY_CATS:   # new entry by a tanker/LNG carrier
+        energy_nowcaster.record_transit(mmsi, cur, cat, draught, loa, beam)
+
+
 def _on_message(_ws, raw):
     try:
         msg = json.loads(raw)
@@ -591,22 +646,31 @@ def _on_message(_ws, raw):
     name = (meta.get("ShipName") or "").strip() or None
     if mtype == "PositionReport":
         pr = (msg.get("Message") or {}).get("PositionReport") or {}
+        lat = pr.get("Latitude") or meta.get("latitude")
+        lon = pr.get("Longitude") or meta.get("longitude")
         _upsert(
-            mmsi, name=name,
-            lat=pr.get("Latitude") or meta.get("latitude"),
-            lon=pr.get("Longitude") or meta.get("longitude"),
+            mmsi, name=name, lat=lat, lon=lon,
             sog=pr.get("Sog"), cog=pr.get("Cog"),
             heading=pr.get("TrueHeading"),
             time_utc=meta.get("time_utc"),
         )
+        _check_crossing(mmsi, lat, lon)
     elif mtype == "ShipStaticData":
         sd = (msg.get("Message") or {}).get("ShipStaticData") or {}
         nm = name or (sd.get("Name") or "").strip() or None
         imo = sd.get("ImoNumber")
         cat = _classify(sd.get("Type"), nm, imo)
         dest = (sd.get("Destination") or "").strip() or None
-        _upsert(mmsi, name=nm, ship_type=sd.get("Type"), category=cat, destination=dest, imo=imo)
-        _remember(mmsi, {"category": cat, "name": nm, "destination": dest, "ship_type": sd.get("Type"), "imo": imo})
+        # Draught + hull dimensions feed the nowcaster's capacity proxy. Dimension
+        # is A/B/C/D metres from the AIS reference point: LOA = A+B, beam = C+D.
+        draught = sd.get("MaximumStaticDraught") or None
+        dim = sd.get("Dimension") or {}
+        loa = ((dim.get("A") or 0) + (dim.get("B") or 0)) or None
+        beam = ((dim.get("C") or 0) + (dim.get("D") or 0)) or None
+        _upsert(mmsi, name=nm, ship_type=sd.get("Type"), category=cat, destination=dest, imo=imo,
+                draught=draught, loa=loa, beam=beam)
+        _remember(mmsi, {"category": cat, "name": nm, "destination": dest, "ship_type": sd.get("Type"),
+                         "imo": imo, "draught": draught, "loa": loa, "beam": beam})
 
 
 def _remember(mmsi: str, profile: dict):
@@ -719,6 +783,7 @@ def _poll_vesselapi_box(box, headers) -> int:
         nm = it.get("vessel_name")
         _upsert(mmsi, name=nm, lat=la, lon=lo, sog=it.get("sog"), cog=it.get("cog"),
                 heading=it.get("heading"), category=_classify(None, nm))
+        _check_crossing(mmsi, la, lo)
         n += 1
     return n
 
@@ -943,6 +1008,8 @@ def chokepoint_stats():
     latest tanker/cargo mix, 2-sigma anomaly flag. IMF PortWatch, cached 6h."""
     cached = disk_get("pw_choke_stats")
     if cached:
+        _attach_nowcast(cached["stats"])          # merge fresh live layer over the 6h baseline
+        cached["nowcast_meta"] = _NOWCAST_META
         return cached
     mapping = _portwatch_ids()
 
@@ -986,8 +1053,74 @@ def chokepoint_stats():
         stats = [s for s in ex.map(build, CHOKEPOINTS) if s]
     out = {"stats": stats, "source": "IMF PortWatch"}
     if len(stats) == len([c for c in CHOKEPOINTS if c["id"] in mapping]):
-        disk_set("pw_choke_stats", out, ttl=6 * 3600)
+        disk_set("pw_choke_stats", out, ttl=6 * 3600)   # cache the baseline BEFORE the live merge
+    _attach_nowcast(out["stats"])
+    out["nowcast_meta"] = _NOWCAST_META
     return out
+
+
+# ── Live AIS nowcast reconciliation ─────────────────────────────────────────
+_NOWCAST_META = {
+    "window_h": 96,
+    "source": "aisstream+vesselapi",
+    "method": "live tanker/LNG chokepoint crossings; capacity is a draught x hull-dim "
+              "displacement proxy (estimate), not manifest DWT",
+}
+
+
+def _ais_covered_chokes() -> set:
+    """Chokepoint ids that fall inside at least one live AIS bounding box; the rest
+    get confidence 'none' since the stream never sees them."""
+    covered = set()
+    for c in CHOKEPOINTS:
+        for (lat1, lon1), (lat2, lon2) in _AIS_BBOXES:
+            if min(lat1, lat2) <= c["lat"] <= max(lat1, lat2) and \
+               min(lon1, lon2) <= c["lon"] <= max(lon1, lon2):
+                covered.add(c["id"])
+                break
+    return covered
+
+
+def _live_energy_activity() -> dict:
+    """Distinct energy vessels currently within each chokepoint radius — the live
+    signal that lifts nowcast confidence to high."""
+    counts: dict = {}
+    for v in _snapshot():
+        if v.get("category") not in _ENERGY_CATS:
+            continue
+        cid = _nearest_choke(v.get("lat"), v.get("lon"))
+        if cid:
+            counts[cid] = counts.get(cid, 0) + 1
+    return counts
+
+
+def _attach_nowcast(stats: list) -> dict:
+    """Merge the fresh 96h nowcast onto PortWatch stat rows (additive: existing
+    fields untouched) and return the standalone nowcast dict. PortWatch avg7 is
+    already a per-day call rate, so it is the baseline for the live-vs-baseline delta."""
+    ids = [c["id"] for c in CHOKEPOINTS]
+    baseline = {s["id"]: s["avg7"] for s in stats if s.get("avg7") is not None}
+    nc = energy_nowcaster.nowcast(
+        baseline, ids, _ais_covered_chokes(),
+        bool(_status.get("connected")), _live_energy_activity(),
+    )
+    for s in stats:
+        s["nowcast"] = nc.get(s["id"])
+    return nc
+
+
+@router.get("/energy-nowcast")
+def energy_nowcast():
+    """Standalone live AIS nowcast per chokepoint (trailing 96h), for direct polling
+    without the PortWatch baseline payload."""
+    ids = [c["id"] for c in CHOKEPOINTS]
+    blob = disk_get("pw_choke_stats") or {}
+    baseline = {s["id"]: s["avg7"] for s in blob.get("stats", []) if s.get("avg7") is not None}
+    nc = energy_nowcaster.nowcast(
+        baseline, ids, _ais_covered_chokes(),
+        bool(_status.get("connected")), _live_energy_activity(),
+    )
+    return {"nowcast": nc, "nowcast_meta": _NOWCAST_META}
 
 
 @router.get("/ports")
