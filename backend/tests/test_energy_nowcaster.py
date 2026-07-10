@@ -138,6 +138,27 @@ def test_check_crossing_ignores_non_energy_vessels(monkeypatch):
     assert calls == []
 
 
+def test_check_crossing_skips_anchored_vessel(monkeypatch):
+    from routers import maritime
+    calls = []
+    monkeypatch.setattr(maritime.energy_nowcaster, "record_transit",
+                        lambda *a, **k: calls.append(a))
+    maritime._vessels.clear()
+    maritime._vessels["555"] = {"mmsi": "555", "category": "tanker", "sog": 0.4}  # at anchor
+    maritime._check_crossing("555", 26.57, 56.25)
+    assert calls == []                                   # near-stationary = not a transit
+    maritime._vessels["556"] = {"mmsi": "556", "category": "tanker", "sog": 11.0}  # underway
+    maritime._check_crossing("556", 26.57, 56.25)
+    assert len(calls) == 1
+
+
+def test_nearest_choke_uses_tight_per_chokepoint_radius():
+    from routers import maritime
+    assert maritime._nearest_choke(26.57, 56.25) == "hormuz"   # dead centre
+    assert maritime._nearest_choke(26.72, 56.25) == "hormuz"   # ~17km, inside 30km
+    assert maritime._nearest_choke(26.95, 56.25) is None       # ~42km, outside 30km
+
+
 def test_check_crossing_coordless_ping_does_not_reset_state(monkeypatch):
     from routers import maritime
     calls = []

@@ -92,6 +92,26 @@ def record_transit(mmsi: str, choke: str, category: str,
     logger.info("nowcast transit: mmsi=%s choke=%s cat=%s dwt_est=%s", mmsi, choke, category, dwt)
 
 
+def daily_counts(choke_ids: list[str], now: float | None = None) -> dict[str, dict[str, int]]:
+    """Per-chokepoint UTC-day crossing counts over the 96h window, for bridging the
+    PortWatch history chart's trailing gap to the present day.
+    Returns {choke_id: {"YYYY-MM-DD": count}}."""
+    now = now if now is not None else time.time()
+    since = now - WINDOW_S
+    out: dict[str, dict[str, int]] = {cid: {} for cid in choke_ids}
+    try:
+        cur = _dc._conn().execute(
+            "SELECT choke, ts FROM ais_transits WHERE ts >= ?", (since,))
+        for choke, ts in cur.fetchall():
+            if choke not in out:
+                continue
+            day = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d")
+            out[choke][day] = out[choke].get(day, 0) + 1
+    except sqlite3.OperationalError as e:
+        logger.warning("daily_counts query failed: %s", e)
+    return out
+
+
 def _iso(ts: float | None) -> str | None:
     if not ts:
         return None

@@ -87,7 +87,7 @@ interface OsmPort { name: string; lat: number; lon: number; kind: string }
 interface EmodFeat { kind: string; n: string; coords?: [number, number][]; la?: number; lo?: number }
 interface HelcomFeat { coords: [number, number][]; location: string; crossings: number }
 interface HistPoint { d: string; tanker: number | null; cargo: number | null; total: number | null; cap: number | null }
-interface HistSeries { id: string; name: string; points: HistPoint[] }
+interface HistSeries { id: string; name: string; points: HistPoint[]; nowcast_days?: string[]; nowcast_daily?: Record<string, number> }
 type HistMetric = 'total' | 'tanker' | 'cargo' | 'cap'
 interface Nowcast {
   calls_96h: number; calls_per_day_live: number; capacity_est_dwt: number | null
@@ -1041,6 +1041,20 @@ function HistoryPanel({ C, chokepoints, ids, days, metric, series, loading, live
       s.points.forEach((p, i) => { (byDate[p.d] ??= { d: p.d })[s.id] = ma[i] })
       const smoothed = ma.slice(6).filter((v): v is number => v != null)
       const first = smoothed[0], last = smoothed[smoothed.length - 1]
+      // Live-AIS estimate tail: bridge PortWatch's last day to today. Anchor to the
+      // last plotted value and bend by the nowcast's relative daily momentum, so the
+      // different absolute scales never draw a false cliff. Energy metrics only.
+      if ((metric === 'total' || metric === 'tanker') && s.nowcast_days?.length && last != null) {
+        const counts = s.nowcast_daily ?? {}
+        const cvals = Object.values(counts)
+        const ref = cvals.length ? cvals.reduce((a, b) => a + b, 0) / cvals.length : 0
+        const lastD = s.points[s.points.length - 1]?.d
+        if (lastD) (byDate[lastD] ??= { d: lastD })[`${s.id}__est`] = last   // junction with the solid line
+        for (const day of s.nowcast_days) {
+          const factor = ref > 0 ? Math.min(2, Math.max(0.5, (counts[day] ?? 0) / ref)) : 1
+          ;(byDate[day] ??= { d: day })[`${s.id}__est`] = Math.round(last * factor * 10) / 10
+        }
+      }
       summaries.push({
         id: s.id, name: s.name,
         last: last ?? null,
@@ -1066,6 +1080,12 @@ function HistoryPanel({ C, chokepoints, ids, days, metric, series, loading, live
           <span title="IMF PortWatch publishes daily transit counts 1-2 days in arrears, so the series ends before today."
             style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-secondary)' }}>
             latest {latestDate} · updates 1–2d behind
+          </span>
+        )}
+        {(metric === 'total' || metric === 'tanker') && series.some(s => s.nowcast_days?.length) && (
+          <span title="The dotted tail extends PortWatch to today using live AIS chokepoint crossings, anchored to the last confirmed level and scaled by relative momentum. An estimate, not a PortWatch count."
+            style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-positive, #3fb950)' }}>
+            · · · live AIS estimate to today
           </span>
         )}
         <button className="gfm-chip" onClick={onClose} style={{ ...chipBtn(false), marginLeft: 'auto' }}>Close</button>
@@ -1098,6 +1118,7 @@ function HistoryPanel({ C, chokepoints, ids, days, metric, series, loading, live
                 formatter={(v: number, name: string) => [fmtVal(v, metric), series.find(s => s.id === name)?.name ?? name]} />
               {ids.map(id => <Line key={id} type="monotone" dataKey={id} stroke={colorOf(id)} strokeWidth={1.8} dot={false} connectNulls
                 strokeDasharray={['', '7 3', '2 3', '9 3 2 3'][ids.indexOf(id) % 4] || ''} />)}
+              {ids.map(id => <Line key={`${id}__est`} type="monotone" dataKey={`${id}__est`} stroke={colorOf(id)} strokeOpacity={0.7} strokeWidth={1.6} dot={false} connectNulls strokeDasharray="1 4" />)}
             </LineChart>
           </ResponsiveContainer>
         )}

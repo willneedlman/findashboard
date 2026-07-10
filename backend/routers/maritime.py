@@ -14,7 +14,7 @@ import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import requests
 from fastapi import APIRouter, Query
@@ -581,8 +581,17 @@ def _upsert(mmsi: str, **fields):
 
 
 # ── Chokepoint geofencing → live transit nowcast ────────────────────────────
-_CHOKE_RADIUS_KM = 55.0
 _ENERGY_CATS = ("tanker", "lng")
+# Per-chokepoint capture radius (km). Tight enough that a crossing means the vessel
+# was genuinely in the strait, not just passing within tens of km. Narrow
+# canals/straits get a small radius; wide passages a larger one. AIS Class-A
+# vessels underway report every 2-10s, so even 12km is crossed by many pings.
+_CHOKE_RADIUS_KM = {
+    "hormuz": 30, "malacca": 35, "suez": 18, "bab": 22, "panama": 14,
+    "bosphorus": 12, "danish": 18, "goodhope": 40, "gibraltar": 14, "taiwan": 45,
+}
+_DEFAULT_RADIUS_KM = 25.0
+_MIN_TRANSIT_SOG = 2.0     # kn — a transit is a moving vessel; filter anchored/waiting ships
 
 
 def _haversine_km(lat1, lon1, lat2, lon2) -> float:
@@ -593,8 +602,8 @@ def _haversine_km(lat1, lon1, lat2, lon2) -> float:
 
 
 def _nearest_choke(lat, lon) -> "str | None":
-    """Chokepoint id whose capture radius contains (lat, lon), else None. Cheap
-    lat/lon gates keep this ~free on the position hot path (only 10 chokepoints)."""
+    """Chokepoint id whose (per-chokepoint) capture radius contains (lat, lon), else
+    None. Cheap lat/lon gates keep this ~free on the position hot path."""
     if lat is None or lon is None:
         return None
     for c in CHOKEPOINTS:
@@ -605,7 +614,7 @@ def _nearest_choke(lat, lon) -> "str | None":
             dlon = 360 - dlon
         if dlon > 0.9:
             continue
-        if _haversine_km(lat, lon, c["lat"], c["lon"]) <= _CHOKE_RADIUS_KM:
+        if _haversine_km(lat, lon, c["lat"], c["lon"]) <= _CHOKE_RADIUS_KM.get(c["id"], _DEFAULT_RADIUS_KM):
             return c["id"]
     return None
 
@@ -629,7 +638,10 @@ def _check_crossing(mmsi: str, lat, lon) -> None:
         draught = v.get("draught") or reg.get("draught")
         loa = v.get("loa") or reg.get("loa")
         beam = v.get("beam") or reg.get("beam")
-    if cur and cur != prev and cat in _ENERGY_CATS:   # new entry by a tanker/LNG carrier
+        sog = v.get("sog")
+    # A transit is a moving vessel; a known near-stationary SOG means anchored/waiting.
+    moving = sog is None or sog >= _MIN_TRANSIT_SOG
+    if cur and cur != prev and cat in _ENERGY_CATS and moving:   # new entry by a moving tanker/LNG carrier
         energy_nowcaster.record_transit(mmsi, cur, cat, draught, loa, beam)
 
 
@@ -971,6 +983,7 @@ def chokepoint_history(
     key = f"pw_hist_{days}_{'_'.join(sorted(want))}"
     cached = disk_get(key)
     if cached:
+        _attach_history_nowcast(cached["series"])     # bridge the gap to today, fresh
         return cached
     mapping = _portwatch_ids()
     resolvable = [
@@ -992,8 +1005,36 @@ def chokepoint_history(
     # Only cache complete responses so one transient PortWatch failure
     # doesn't pin a missing series for the whole TTL.
     if series and len(series) == len(resolvable):
-        disk_set(key, out, ttl=6 * 3600)
+        disk_set(key, out, ttl=6 * 3600)             # cache the baseline BEFORE the live tail
+    _attach_history_nowcast(out["series"])
     return out
+
+
+def _attach_history_nowcast(series: list) -> None:
+    """Attach the trailing live-AIS crossing counts (last PortWatch day → today) to
+    each history series so the frontend can draw a dashed estimate tail. Raw daily
+    counts only — the frontend anchors them to the plotted PortWatch level."""
+    if not series:
+        return
+    daily = energy_nowcaster.daily_counts([s["id"] for s in series])
+    today = datetime.now(timezone.utc).date()
+    for s in series:
+        pts = s.get("points") or []
+        if not pts:
+            continue
+        try:
+            last = date.fromisoformat(pts[-1]["d"])
+        except (ValueError, KeyError, TypeError):
+            continue
+        gap, d = [], last + timedelta(days=1)
+        while d <= today:
+            gap.append(d.isoformat())
+            d += timedelta(days=1)
+        if not gap:
+            continue
+        counts = daily.get(s["id"], {})
+        s["nowcast_days"] = gap
+        s["nowcast_daily"] = {g: counts.get(g, 0) for g in gap}
 
 
 # Approximate global seaborne crude+products trade, Mb/d (EIA/UNCTAD scale).
