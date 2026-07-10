@@ -267,6 +267,10 @@ export default function Layout({ children }: LayoutProps) {
             <div style={{ flex: 1, minHeight: '100vh' }}>{children}</div>
             <Footer />
           </div>
+        ) : location.pathname === '/chart-studio' && collapsed ? (
+          // Sidebar collapsed → Chart Studio goes full-bleed: no gutters, no footer,
+          // maximal chart area edge-to-edge.
+          <div style={{ minHeight: '100vh' }}>{children}</div>
         ) : location.pathname === '/flows-map' || location.pathname === '/chart-studio' ? (
           // Map cockpit and Chart Studio want the full main width: gutters waste chart area.
           <div className="px-4 py-4" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>

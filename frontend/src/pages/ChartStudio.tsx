@@ -311,6 +311,10 @@ const MAIN_H_KEY = 'cs_main_height'
 const MAIN_H_MIN = 240
 const MAIN_H_MAX = 900
 const MAIN_H_DEFAULT = 360
+// Each lane below the chart is independently draggable, persisted per-device.
+const LANE_H_KEY = 'cs_lane_heights'
+const LANE_H_MIN = 48
+const LANE_H_MAX = 400
 
 const baseOptions = (C: Colors, h: number) => ({
   layout: { background: { type: ColorType.Solid, color: C.bg }, textColor: C.text, fontFamily: "ui-monospace, monospace", fontSize: 10, attributionLogo: false },
@@ -329,6 +333,21 @@ const baseOptions = (C: Colors, h: number) => ({
 const MONO = 'var(--theme-mono)'
 const SANS = 'var(--theme-sans)'
 const eyebrow: React.CSSProperties = { fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)' }
+
+// Draggable divider — same grip as the main chart's, reused per lane.
+function ResizeHandle({ onDown, onMove, onUp, onReset, title }: {
+  onDown: (e: React.PointerEvent) => void; onMove: (e: React.PointerEvent) => void
+  onUp: (e: React.PointerEvent) => void; onReset: () => void; title: string
+}) {
+  const [hover, setHover] = useState(false)
+  return (
+    <div onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onDoubleClick={onReset}
+      onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} title={title}
+      style={{ height: 7, cursor: 'ns-resize', display: 'flex', alignItems: 'center', justifyContent: 'center', touchAction: 'none', userSelect: 'none', transition: 'background 0.12s', background: hover ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 12%, transparent)' : 'transparent', borderTop: '1px solid var(--theme-border-faint, rgba(255,255,255,0.05))' }}>
+      <div style={{ width: 30, height: 2, borderRadius: 2, transition: 'background 0.12s', background: hover ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.24))' }} />
+    </div>
+  )
+}
 
 type GlyphStyle = 'line' | 'dash' | 'hist' | 'diamond' | 'area' | 'ring'
 function Glyph({ style, color }: { style: GlyphStyle; color: string }) {
@@ -621,6 +640,33 @@ export function ChartStudioContent() {
     dragState.current = null
     try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId) } catch { /* not captured */ }
   }
+  // Per-lane heights — each lane below the chart resizes just like the main chart.
+  const [laneHeights, setLaneHeights] = useState<Record<LaneId, number>>(() => {
+    const def = Object.fromEntries(LANE_DEFS.map(l => [l.id, l.h])) as Record<LaneId, number>
+    try {
+      const saved = JSON.parse(localStorage.getItem(LANE_H_KEY) || '{}')
+      for (const l of LANE_DEFS) { const v = Number(saved[l.id]); if (v >= LANE_H_MIN && v <= LANE_H_MAX) def[l.id] = v }
+    } catch { /* ignore */ }
+    return def
+  })
+  const laneHeightsRef = useRef(laneHeights); laneHeightsRef.current = laneHeights
+  const laneDrag = useRef<{ id: LaneId; startY: number; startH: number } | null>(null)
+  const onLaneDown = (id: LaneId) => (e: React.PointerEvent) => {
+    e.preventDefault()
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId) } catch { /* older browser */ }
+    laneDrag.current = { id, startY: e.clientY, startH: laneHeights[id] }
+  }
+  const onLaneMove = (e: React.PointerEvent) => {
+    if (!laneDrag.current) return
+    const { id, startY, startH } = laneDrag.current
+    const next = Math.max(LANE_H_MIN, Math.min(LANE_H_MAX, Math.round(startH + (e.clientY - startY))))
+    setLaneHeights(h => ({ ...h, [id]: next }))
+  }
+  const onLaneUp = (e: React.PointerEvent) => {
+    laneDrag.current = null
+    try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId) } catch { /* not captured */ }
+  }
+  const resetLane = (id: LaneId) => setLaneHeights(h => ({ ...h, [id]: LANE_DEFS.find(l => l.id === id)!.h }))
   useEffect(() => {
     if (!mainRef.current) return
     const main = createChart(mainRef.current, {
@@ -658,7 +704,7 @@ export function ChartStudioContent() {
       const el = laneRefs.current[lane.id]
       if (!el) continue
       laneCharts[lane.id] = createChart(el, {
-        ...baseOptions(C, lane.h), width: el.clientWidth,
+        ...baseOptions(C, laneHeightsRef.current[lane.id] ?? lane.h), width: el.clientWidth,
         timeScale: { visible: false }, rightPriceScale: { borderColor: C.axisBorder },
         // Lanes are followers: a sparse lane (one accrued GEX point) fitting
         // itself must never drag the shared range down to a single day.
@@ -765,6 +811,11 @@ export function ChartStudioContent() {
     localStorage.setItem(MAIN_H_KEY, String(mainHeight))
     setScaleTick(t => t + 1)
   }, [mainHeight])
+
+  useEffect(() => {
+    for (const lane of LANE_DEFS) charts.current[lane.id]?.applyOptions({ height: laneHeights[lane.id] })
+    try { localStorage.setItem(LANE_H_KEY, JSON.stringify(laneHeights)) } catch { /* private mode */ }
+  }, [laneHeights])
 
   // Exact-time lookup for lane crosshair echoes (no carry-forward: a dot on a
   // sparse lane at a bar with no point would lie).
@@ -1408,6 +1459,7 @@ export function ChartStudioContent() {
               <div key={id} style={{ display: on ? 'block' : 'none', borderTop: '1px solid var(--theme-border-faint, rgba(255,255,255,0.06))', position: 'relative' }}>
                 <span style={{ position: 'absolute', top: 4, left: 10, zIndex: 5, fontFamily: MONO, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.16em', color: 'var(--theme-secondary, #8099b0)' }}>{header}</span>
                 <div ref={el => { laneRefs.current[id] = el }} style={{ width: '100%' }} />
+                <ResizeHandle onDown={onLaneDown(id)} onMove={onLaneMove} onUp={onLaneUp} onReset={() => resetLane(id)} title="Drag to resize lane · double-click to reset" />
               </div>
             )
           })}
@@ -1421,6 +1473,7 @@ export function ChartStudioContent() {
               <div key={slot} style={{ display: on ? 'block' : 'none', borderTop: '1px solid var(--theme-border-faint, rgba(255,255,255,0.06))', position: 'relative' }}>
                 <span style={{ position: 'absolute', top: 4, left: 10, zIndex: 5, fontFamily: MONO, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.16em', color: 'var(--theme-secondary, #8099b0)' }}>{header}</span>
                 <div ref={el => { laneRefs.current[slot] = el }} style={{ width: '100%' }} />
+                <ResizeHandle onDown={onLaneDown(slot)} onMove={onLaneMove} onUp={onLaneUp} onReset={() => resetLane(slot)} title="Drag to resize lane · double-click to reset" />
               </div>
             )
           })}
