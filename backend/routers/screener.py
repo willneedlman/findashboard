@@ -74,6 +74,33 @@ _SEED_FIELDS = ("companyName", "sector", "industry", "country", "beta", "peRatio
                 "operatingMargin", "netMargin", "roe", "roa", "debtEquity",
                 "currentRatio", "revenueGrowth", "epsGrowth", "dividendYield")
 
+# SEC-primary fundamental ratios extracted from FactIQ (backend/data/reference.db,
+# built by scripts/build_reference_db.py). These are computed from EDGAR filings, so
+# they are fresher and more authoritative than the Finnhub seed for the same fields —
+# preferred over the seed, but still deferring to any live FMP value. Price/market
+# ratios (peRatio/pbRatio/beta/dividendYield/...) are NOT here and stay live.
+_REF_FIELDS = ("grossMargin", "operatingMargin", "netMargin", "roe", "roa",
+               "debtEquity", "currentRatio", "revenueGrowth", "epsGrowth")
+
+
+def _load_reference_fundamentals() -> dict:
+    import sqlite3
+    try:
+        path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "reference.db")
+        if not os.path.exists(path):
+            return {}
+        conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute("SELECT * FROM fundamentals").fetchall()
+        conn.close()
+        return {_norm_tk(r["ticker"]): {k: r[k] for k in _REF_FIELDS if r[k] is not None}
+                for r in rows}
+    except Exception as e:
+        logger.warning("reference.db load failed: %s", e)
+        return {}
+
+_REF_FUND = _load_reference_fundamentals()
+
 
 def _load_intl() -> "tuple[dict, dict]":
     # International tickers keep their exchange-suffix dot (SAP.DE, 7203.T), so they
@@ -593,6 +620,15 @@ def _enrich(ticker: str, base: dict, claim, want_fastinfo: bool = False) -> dict
             except Exception:
                 pass
 
+        # SEC-primary ratios (reference.db) fill missing fundamentals first, ahead of
+        # the Finnhub seed, so a name shows EDGAR-derived margins/ROE/growth whenever
+        # FMP is throttled. Live FMP/base values still take precedence.
+        ref = _REF_FUND.get(_norm_tk(ticker)) if _REF_FUND else None
+        if ref:
+            for k in _REF_FIELDS:
+                if detail.get(k) in (None, "") and base.get(k) in (None, "") and ref.get(k) is not None:
+                    detail[k] = ref[k]
+
         # Bundled US fundamentals fallback: fill any basic stat still missing after
         # the FMP path (throttled / not yet cached) so US names never show blank
         # fundamentals or sector. Live FMP/base values always take precedence.
@@ -841,6 +877,11 @@ def run_screen(req: ScreenRequest):
         want = uni_set if req.universe else _UNIVERSE
         have = {_norm_tk(c["ticker"]) for c in candidates}
         seeded = [dict(_US_FUND[t]) for t in want if t in _US_FUND and t not in have]
+        # Prefer SEC-primary ratios over the Finnhub seed values on the bulk board.
+        for r in seeded:
+            ref = _REF_FUND.get(_norm_tk(r["ticker"]))
+            if ref:
+                r.update(ref)
         if effective_sector:
             fs = effective_sector.lower()
             seeded = [r for r in seeded if (r.get("sector") or "").lower() == fs]
