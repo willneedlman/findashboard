@@ -108,7 +108,7 @@ def liner_connectivity() -> dict:
         return {"economies": sorted(econ, key=lambda e: -e["lsci"]),
                 "indicator": "Liner Shipping Connectivity Index",
                 "source": "World Bank (UNCTAD LSCI mirror)"}
-    return _resilient("logi:lsci", WEEK, fetch)
+    return _resilient("logi:lsci:v2", WEEK, fetch)   # v2: 14 economies + iso3
 
 
 def drewry_wci() -> dict:
@@ -201,7 +201,7 @@ def air_cargo() -> dict:
             raise ValueError("no hub data")
         return {"window": {"begin": begin, "end": end}, "hubs": sorted(hubs, key=lambda h: -h["movements"]),
                 "source": "OpenSky Network (community ADS-B, partial, ~12h lag)"}
-    return _resilient("logi:air_cargo", HALF_DAY, fetch)
+    return _resilient("logi:air_cargo:v2", HALF_DAY, fetch)   # v2: 12 hubs
 
 
 # ── 3. Domestic & Customs ───────────────────────────────────────────────────
