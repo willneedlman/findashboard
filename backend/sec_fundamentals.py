@@ -1,0 +1,208 @@
+"""Free income / balance / cash-flow statements from SEC EDGAR XBRL companyfacts.
+
+The FMP free tier caps fundamentals at ~250 calls/day, so the DCF/valuation engine
+sources its statement line items here first (SEC has no key and no quota) and only
+spends an FMP call when SEC is missing, corrupt, or fails the sanity guard.
+
+SEC intentionally supplies statements ONLY — price, market cap, and beta are not in
+XBRL and stay on FMP/yfinance. Returned dicts use the exact FMP field names the DCF
+engine (fmp.get_dcf_fundamentals) already reads, so it is a drop-in statement source.
+
+Data source: https://data.sec.gov/api/xbrl/companyfacts/CIK##########.json
+"""
+from __future__ import annotations
+
+import logging
+from datetime import date
+
+import requests
+
+from sec_segments import _cik_for            # single source of truth for ticker→CIK
+
+try:
+    from disk_cache import disk_get, disk_set
+except ImportError:                                   # pragma: no cover
+    def disk_get(_k): return None                     # type: ignore
+    def disk_set(_k, _v, ttl=0): pass                 # type: ignore
+
+logger = logging.getLogger(__name__)
+
+_UA = {"User-Agent": "Alphatape Research admin@alphatape.app"}
+_TIMEOUT = 15
+_CACHE_TTL = 30 * 86400                                # statements change quarterly
+
+# us-gaap concepts mapped to the FMP field names the DCF engine consumes. Ordered
+# synonyms: the first concept present in the filing wins (taxonomies vary by filer).
+_INCOME = {
+    "revenue": ["RevenueFromContractWithCustomerExcludingAssessedTax", "Revenues",
+                "RevenueFromContractWithCustomerIncludingAssessedTax", "SalesRevenueNet"],
+    "operatingIncome": ["OperatingIncomeLoss"],
+    "weightedAverageShsOutDil": ["WeightedAverageNumberOfDilutedSharesOutstanding",
+                                 "WeightedAverageNumberOfSharesOutstandingBasic"],
+    "incomeBeforeTax": [
+        "IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest",
+        "IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments"],
+    "incomeTaxExpense": ["IncomeTaxExpenseBenefit"],
+}
+_BALANCE = {   # instants
+    "cashAndCashEquivalents": ["CashAndCashEquivalentsAtCarryingValue",
+                               "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents"],
+    "totalStockholdersEquity": ["StockholdersEquity",
+                                "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"],
+}
+# totalDebt is composed (no single us-gaap tag): long-term + current portion.
+_DEBT_LT = ["LongTermDebtNoncurrent", "LongTermDebt", "LongTermDebtAndCapitalLeaseObligations"]
+_DEBT_CUR = ["LongTermDebtCurrent", "DebtCurrent"]
+_CASHFLOW = {   # durations
+    "capitalExpenditure": ["PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsToAcquireProductiveAssets"],
+    "depreciationAndAmortization": ["DepreciationDepletionAndAmortization",
+                                    "DepreciationAmortizationAndAccretionNet", "DepreciationAndAmortization"],
+    "changeInWorkingCapital": ["IncreaseDecreaseInOperatingCapital"],
+}
+# Shares are reported in "shares" units; everything else in USD.
+_SHARE_FIELDS = {"weightedAverageShsOutDil"}
+
+
+def _annual_map(us: dict, concepts: list[str], want_shares: bool, instant: bool) -> dict[int, float]:
+    """{fiscal_year: value} from annual (10-K, fp=FY) facts for the first concept
+    synonym that has data. For durations, only ~12-month periods are kept (drops
+    quarterly/cumulative facts); the latest restatement per year wins."""
+    for concept in concepts:
+        node = us.get(concept)
+        if not node:
+            continue
+        units = node.get("units", {})
+        facts = units.get("shares" if want_shares else "USD")
+        if not facts:
+            continue
+        picked: dict[int, tuple[str, float]] = {}
+        for f in facts:
+            if f.get("fp") != "FY" or not str(f.get("form", "")).startswith("10-K"):
+                continue
+            fy = f.get("fy")
+            val = f.get("val")
+            if fy is None or val is None:
+                continue
+            if not instant:
+                s, e = f.get("start"), f.get("end")
+                if not (s and e):
+                    continue
+                try:
+                    span = (date.fromisoformat(e) - date.fromisoformat(s)).days
+                except ValueError:
+                    continue
+                if span < 330 or span > 400:          # keep annual only
+                    continue
+            end = f.get("end", "")
+            prev = picked.get(fy)
+            if prev is None or end >= prev[0]:         # latest-filed restatement wins
+                picked[fy] = (end, float(val))
+        if picked:
+            return {fy: v for fy, (_e, v) in picked.items()}
+    return {}
+
+
+def _fetch_facts(sym: str) -> dict | None:
+    cik = _cik_for(sym)
+    if not cik:
+        return None
+    try:
+        r = requests.get(f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json",
+                         headers=_UA, timeout=_TIMEOUT)
+        if r.status_code == 404:
+            return None
+        r.raise_for_status()
+        return r.json().get("facts", {}).get("us-gaap")
+    except Exception as e:
+        logger.warning("SEC companyfacts failed for %s: %s", sym, e)
+        return None
+
+
+def _build(sym: str) -> dict | None:
+    """Assemble {income:[latest..], balance:{}, cashflow:{}} in FMP field-name shape,
+    or None if SEC has no usable us-gaap facts for this filer."""
+    us = _fetch_facts(sym)
+    if not us:
+        return None
+
+    income_maps = {k: _annual_map(us, c, k in _SHARE_FIELDS, instant=False) for k, c in _INCOME.items()}
+    balance_maps = {k: _annual_map(us, c, False, instant=True) for k, c in _BALANCE.items()}
+    debt_lt = _annual_map(us, _DEBT_LT, False, instant=True)
+    debt_cur = _annual_map(us, _DEBT_CUR, False, instant=True)
+    cash_maps = {k: _annual_map(us, c, False, instant=False) for k, c in _CASHFLOW.items()}
+
+    years = sorted(income_maps.get("revenue", {}).keys(), reverse=True)
+    if not years:
+        return None
+
+    income = [{k: income_maps[k].get(fy) for k in _INCOME} for fy in years]
+
+    by = years[0]                                     # latest fiscal year for point-in-time statements
+    lt = debt_lt.get(by)
+    cur = debt_cur.get(by)
+    total_debt = None
+    if lt is not None or cur is not None:
+        total_debt = (lt or 0.0) + (cur or 0.0)
+    balance = {
+        "cashAndCashEquivalents": balance_maps["cashAndCashEquivalents"].get(by),
+        "totalStockholdersEquity": balance_maps["totalStockholdersEquity"].get(by),
+        "totalDebt": total_debt,
+        # no netDebt: SEC has no such tag, so get_dcf_fundamentals derives debt−cash.
+    }
+    cashflow = {k: cash_maps[k].get(by) for k in _CASHFLOW}
+    return {"income": income, "balance": balance, "cashflow": cashflow}
+
+
+def _sane(bundle: dict | None) -> bool:
+    """A bundle is only usable if it carries every line the DCF engine actually
+    derives from. Revenue + shares alone is not enough: a filer with those but no
+    OperatingIncomeLoss (banks/insurers report no operating-income line) or no
+    capex/D&A would silently produce a 0% margin and 0 reinvestment, a badly wrong
+    valuation. Missing any of these → treat as a miss so FMP (which has them) fills
+    in. changeInWorkingCapital is intentionally excluded: it's rarely tagged and the
+    DCF already clamps its absence to a harmless default."""
+    if not bundle or not bundle.get("income"):
+        return False
+    inc = bundle["income"][0]
+    cf = bundle.get("cashflow") or {}
+    return bool(
+        (inc.get("revenue") or 0) > 0
+        and (inc.get("weightedAverageShsOutDil") or 0) > 0
+        and inc.get("operatingIncome") is not None
+        and cf.get("capitalExpenditure") is not None
+        and cf.get("depreciationAndAmortization") is not None
+    )
+
+
+def _bundle(sym: str) -> dict | None:
+    sym = sym.strip().upper()
+    dk = f"sec:fund:v1:{sym}"
+    cached = disk_get(dk)
+    if cached is not None:
+        return cached or None                         # cached {} sentinel = known-empty
+    bundle = _build(sym)
+    if not _sane(bundle):
+        disk_set(dk, {}, ttl=_CACHE_TTL)              # remember the miss, don't re-fetch for 30d
+        return None
+    disk_set(dk, bundle, ttl=_CACHE_TTL)
+    return bundle
+
+
+def statements_available(sym: str) -> bool:
+    """True when SEC can supply sane income+balance+cashflow for `sym`."""
+    return _bundle(sym) is not None
+
+
+def get_income(ticker: str, limit: int = 2) -> list:
+    b = _bundle(ticker)
+    return (b["income"][:limit] if b else [])
+
+
+def get_balance(ticker: str) -> dict:
+    b = _bundle(ticker)
+    return (b["balance"] if b else {})
+
+
+def get_cashflow(ticker: str) -> dict:
+    b = _bundle(ticker)
+    return (b["cashflow"] if b else {})

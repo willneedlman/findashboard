@@ -14,6 +14,7 @@ import re
 import time
 import threading
 import concurrent.futures
+import pandas as pd
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -229,6 +230,54 @@ def get_cashflow(ticker: str) -> dict:
         d = _get("/cash-flow-statement", {"symbol": sym, "period": "annual", "limit": 1})
         return d[0] if isinstance(d, list) and d else {}
     return _cached(_cashflow_cache, sym, fetch)
+
+
+def get_history_df(symbol: str, start: str | None = None, end: str | None = None) -> pd.DataFrame:
+    """Daily OHLCV as a yfinance-shaped frame (tz-naive DatetimeIndex; Open/High/Low/
+    Close/Volume; ascending). Fallback source for cache.get_history when yfinance is
+    contended. Close is split/dividend-adjusted (adjClose, matching yfinance
+    auto_adjust) and OHLC scaled by the same factor. Empty frame on any failure —
+    never raises into the caller."""
+    if not available():
+        return pd.DataFrame()
+    sym = (symbol or "").strip().upper()
+    if not sym:
+        return pd.DataFrame()
+    params: dict = {"symbol": sym}
+    if start:
+        params["from"] = start
+    if end:
+        params["to"] = end
+    _log.info("fmp history fallback for %s (%s→%s)", sym, start or "-", end or "-")
+    try:
+        d = _get("/historical-price-eod/full", params)
+    except Exception as e:
+        if _is_rate_limit(e):
+            _log.warning("fmp history rate-limited for %s", sym)
+        else:
+            _log.warning("fmp history failed for %s: %s", sym, e)
+        return pd.DataFrame()
+
+    rows = d.get("historical") if isinstance(d, dict) else d
+    if not isinstance(rows, list) or not rows:
+        return pd.DataFrame()
+    recs = []
+    for r in rows:
+        try:
+            close = float(r["close"])
+            adj = float(r.get("adjClose") or close)
+            factor = adj / close if close else 1.0
+            recs.append((
+                pd.Timestamp(r["date"]),
+                float(r["open"]) * factor, float(r["high"]) * factor,
+                float(r["low"]) * factor, adj, float(r.get("volume") or 0),
+            ))
+        except (KeyError, ValueError, TypeError):
+            continue
+    if not recs:
+        return pd.DataFrame()
+    return (pd.DataFrame(recs, columns=["Date", "Open", "High", "Low", "Close", "Volume"])
+            .set_index("Date").sort_index())
 
 
 def get_analyst_estimates(ticker: str, limit: int = 3) -> list:
@@ -636,9 +685,29 @@ def get_geo_segments(ticker: str) -> dict:
     return _get_segments(ticker.strip().upper(), "/revenue-geographic-segmentation", "geo")
 
 
+def _statements_first(ticker: str) -> tuple[list, dict, dict]:
+    """Income(2y) / balance / cashflow for the DCF engine, sourced SEC EDGAR first
+    (free, unmetered) and falling back to FMP only when SEC is missing or corrupt.
+    Profile / price / beta are NOT sourced here — SEC has none, so the caller keeps
+    those on FMP. Returns (income_list, balance, cashflow) in FMP field-name shape."""
+    sym = ticker.strip().upper()
+    try:
+        import sec_fundamentals
+        if sec_fundamentals.statements_available(ticker):
+            _log.info("DCF %s statements ← SEC EDGAR", sym)
+            return (sec_fundamentals.get_income(ticker, 2),
+                    sec_fundamentals.get_balance(ticker),
+                    sec_fundamentals.get_cashflow(ticker))
+    except Exception as e:
+        _log.warning("SEC statements failed for %s, using FMP: %s", sym, e)
+    _log.info("DCF %s statements ← FMP fallback (SEC missing/corrupt)", sym)
+    return get_income(ticker, 2), get_balance(ticker), get_cashflow(ticker)
+
+
 def get_dcf_fundamentals(ticker: str) -> dict:
     """
-    Fetches profile + income(2yr) + balance + cashflow in parallel (~200ms).
+    Fetches profile + statements + estimates in parallel (~200ms). Statements come
+    from SEC EDGAR first (see _statements_first), FMP only on a SEC miss.
     Returns everything the DCF Valuation Engine needs in one call.
 
     Returns
@@ -656,17 +725,13 @@ def get_dcf_fundamentals(ticker: str) -> dict:
     market_cap    int|None
     de_ratio      float   debt / equity (for WACC)
     """
-    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as ex:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as ex:
         f_profile   = ex.submit(get_profile,            ticker)
-        f_income    = ex.submit(get_income,             ticker, 2)
-        f_balance   = ex.submit(get_balance,            ticker)
-        f_cashflow  = ex.submit(get_cashflow,           ticker)
+        f_stmts     = ex.submit(_statements_first,      ticker)
         f_estimates = ex.submit(get_analyst_estimates,  ticker, 3)
 
     profile   = f_profile.result()
-    inc_list  = f_income.result()
-    balance   = f_balance.result()
-    cashflow  = f_cashflow.result()
+    inc_list, balance, cashflow = f_stmts.result()
     estimates = f_estimates.result()
 
     income = inc_list[0] if inc_list else {}
