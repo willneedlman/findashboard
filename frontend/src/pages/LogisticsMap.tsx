@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { useQuery } from '@tanstack/react-query'
-import { MapContainer, CircleMarker, Tooltip, useMap } from 'react-leaflet'
+import { MapContainer, CircleMarker, Marker, Tooltip, useMap } from 'react-leaflet'
 import Lf from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import PageWrapper from '../components/PageWrapper'
@@ -85,6 +85,12 @@ export default function LogisticsMap() {
   const AIR = readToken('--theme-tertiary', '#60a5fa'), CHOKE = readToken('--theme-primary', '#c9a84c')
   const PORT = readToken('--theme-positive', '#3fb6a0'), VESSEL = readToken('--theme-secondary', '#8099b0')
   const FLIGHT = readToken('--theme-accent-violet', '#a78bfa'), LAND = readToken('--theme-surface', '#0f1d31')
+  // Small glyph markers (ship / jet) instead of plain dots. currentColor + a CSS
+  // :hover rule gives the colour-on-hover; the jet rotates to its heading.
+  const shipIcon = Lf.divIcon({ className: 'lm-mk', iconSize: [15, 15], iconAnchor: [7.5, 7.5],
+    html: `<svg class="lm-ship" width="15" height="15" viewBox="0 0 24 24" style="color:${VESSEL}"><path fill="currentColor" d="M3 14l1.8 5h14.4L21 14H3zm3-2V8l6-4 6 4v4H6z"/></svg>` })
+  const jetIcon = (h: number) => Lf.divIcon({ className: 'lm-mk', iconSize: [16, 16], iconAnchor: [8, 8],
+    html: `<svg class="lm-jet" width="16" height="16" viewBox="0 0 24 24" style="color:${FLIGHT};transform:rotate(${h}deg)"><path fill="currentColor" d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-4.5l8 2.5z"/></svg>` })
 
   const air = useQuery<{ hubs?: Hub[] }>({ queryKey: ['lm-air'], queryFn: () => axios.get('/api/logistics/air-cargo/vulnerability').then(r => r.data), staleTime: 6 * 3600e3, retry: 1 })
   const mf = useQuery<MF>({ queryKey: ['lm-mf'], queryFn: () => axios.get('/api/logistics/maritime-freight').then(r => r.data), staleTime: 6 * 3600e3, retry: 1 })
@@ -106,9 +112,9 @@ export default function LogisticsMap() {
 
   const eyebrow: React.CSSProperties = { fontFamily: L.mono, fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: L.gold }
   const goldTint = 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)'
-  const VIEW: ['vessels' | 'flights' | 'air' | 'choke' | 'port', string, number][] = [
-    ['vessels', 'Cargo ships', vessels.length], ['flights', 'Cargo flights', flights.length],
-    ['air', 'Air hubs', hubs.length], ['choke', 'Chokepoints', Object.keys(CHOKES).length], ['port', 'LSCI ports', econ.length],
+  const VIEW: ['vessels' | 'flights' | 'air' | 'choke' | 'port', string, string, number][] = [
+    ['vessels', 'Cargo ships', VESSEL, vessels.length], ['flights', 'Cargo flights', FLIGHT, flights.length],
+    ['air', 'Air hubs', AIR, hubs.length], ['choke', 'Chokepoints', CHOKE, Object.keys(CHOKES).length], ['port', 'LSCI ports', PORT, econ.length],
   ]
 
   const stat = (label: string, val?: number | null, unit?: string, series?: number[], stale?: boolean) => (
@@ -138,15 +144,16 @@ export default function LogisticsMap() {
 
   return (
     <PageWrapper>
-      <style>{`.lm-map { background: ${OCEAN}; } .lm-map .leaflet-tooltip { background: var(--theme-surface); color: var(--theme-text); border: 1px solid var(--theme-border); font-family: var(--theme-mono); font-size: 11px; }`}</style>
+      <style>{`.lm-map { background: ${OCEAN}; } .lm-map .leaflet-tooltip { background: var(--theme-surface); color: var(--theme-text); border: 1px solid var(--theme-border); font-family: var(--theme-mono); font-size: 11px; }
+        .lm-mk svg { transition: color .12s ease; cursor: pointer; } .lm-mk:hover svg { color: var(--theme-primary, #c9a84c) !important; }`}</style>
       <div style={{ height: 'calc(100vh - 32px)', minHeight: 620, position: 'relative', border: `1px solid ${L.border}`, borderRadius: 6, overflow: 'hidden' }}>
         <MapContainer className="lm-map" center={[30, 30]} zoom={2.3} minZoom={2} maxZoom={6} worldCopyJump preferCanvas zoomControl={false} style={{ position: 'absolute', inset: 0, height: '100%', width: '100%' }}>
           <SizeFix /><Basemap land={LAND} />
           {layers.vessels && vessels.map(v => (
-            <CircleMarker key={`v-${v.mmsi}`} center={[v.lat as number, v.lon as number]} radius={2.5} pathOptions={{ color: VESSEL, fillColor: VESSEL, fillOpacity: 0.55, weight: 0 }} eventHandlers={{ click: () => setInsp({ kind: 'ship', v }) }} />
+            <Marker key={`v-${v.mmsi}`} position={[v.lat as number, v.lon as number]} icon={shipIcon} eventHandlers={{ click: () => setInsp({ kind: 'ship', v }) }} />
           ))}
           {layers.flights && flights.map(f => (
-            <CircleMarker key={`f-${f.icao24}`} center={[f.lat, f.lon]} radius={3} pathOptions={{ color: FLIGHT, fillColor: FLIGHT, fillOpacity: 0.7, weight: 0 }} eventHandlers={{ click: () => setInsp({ kind: 'flight', f }) }} />
+            <Marker key={`f-${f.icao24}`} position={[f.lat, f.lon]} icon={jetIcon(f.heading ?? 0)} eventHandlers={{ click: () => setInsp({ kind: 'flight', f }) }} />
           ))}
           {layers.port && econ.map(e => { const p = portOf(e); return p && (
             <CircleMarker key={`p-${e.iso ?? e.country}`} center={[p.lat, p.lon]} radius={radius(e.lsci, maxLsci)} pathOptions={{ color: PORT, fillColor: PORT, fillOpacity: 0.35, weight: 1 }}><Tooltip>{p.port} · LSCI {e.lsci.toFixed(1)}</Tooltip></CircleMarker>
@@ -168,12 +175,12 @@ export default function LogisticsMap() {
         {/* Left column: VIEW + LEGEND (bottom) */}
         <div style={{ position: 'absolute', top: 56, left: 12, bottom: 12, zIndex: 520, width: 210, display: 'flex', flexDirection: 'column', gap: 8, pointerEvents: 'none' }}>
           <div style={{ pointerEvents: 'auto', background: panel, border: `1px solid ${L.border}`, padding: '12px 12px 8px' }}>
-            <div style={{ ...eyebrow, marginBottom: 6 }}>View</div>
-            {VIEW.map(([k, lbl, n]) => { const on = layers[k]; return (
+            <div style={{ ...eyebrow, color: 'var(--theme-text-dim, #56708a)', marginBottom: 6 }}>View</div>
+            {VIEW.map(([k, lbl, c, n]) => { const on = layers[k]; return (
               <div key={k} onClick={() => setLayers(s => ({ ...s, [k]: !s[k] }))}
-                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 9px', cursor: 'pointer', background: on ? goldTint : 'transparent', borderLeft: on ? `2px solid ${L.gold}` : '2px solid transparent' }}>
-                <span style={{ fontFamily: L.sans, fontSize: 11.5, fontWeight: on ? 600 : 400, color: on ? L.text : L.sec }}>{lbl}</span>
-                <span style={{ fontFamily: L.mono, fontSize: 10, color: on ? L.gold : L.faint }}>{n}</span>
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 9px', cursor: 'pointer', background: on ? `color-mix(in srgb, ${c} 13%, transparent)` : 'transparent', borderLeft: on ? `2px solid ${c}` : '2px solid transparent' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Dot c={on ? c : L.faint} /><span style={{ fontFamily: L.sans, fontSize: 11.5, fontWeight: on ? 600 : 400, color: on ? L.text : L.sec }}>{lbl}</span></span>
+                <span style={{ fontFamily: L.mono, fontSize: 10, color: on ? c : L.faint }}>{n}</span>
               </div>
             )})}
           </div>
