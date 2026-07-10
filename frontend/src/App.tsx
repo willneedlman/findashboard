@@ -43,6 +43,7 @@ const Landing        = lazyWithReload(() => import('./marketing/Marketing').then
 const MktResearch    = lazyWithReload(() => import('./marketing/Marketing').then(m => ({ default: m.ResearchPage })))
 const MktOptions     = lazyWithReload(() => import('./marketing/Marketing').then(m => ({ default: m.OptionsPage })))
 const MktValuation   = lazyWithReload(() => import('./marketing/Marketing').then(m => ({ default: m.ValuationPage })))
+const MktLogistics   = lazyWithReload(() => import('./marketing/Marketing').then(m => ({ default: m.LogisticsPage })))
 const MktCharting    = lazyWithReload(() => import('./marketing/Marketing').then(m => ({ default: m.ChartingPage })))
 const MktMacro       = lazyWithReload(() => import('./marketing/Marketing').then(m => ({ default: m.MacroPage })))
 const MktTrading     = lazyWithReload(() => import('./marketing/Marketing').then(m => ({ default: m.TradingPage })))
@@ -109,6 +110,9 @@ const Compare            = lazyWithReload(() => import('./pages/Compare'))
 const ResetPassword      = lazyWithReload(() => import('./pages/ResetPassword'))
 const HubLanding         = lazyWithReload(() => import('./pages/HubLanding'))
 const GlobalMarkets      = lazyWithReload(() => import('./pages/GlobalMarkets'))
+const MaritimeFreight    = lazyWithReload(() => import('./pages/MaritimeFreight'))
+const AirCargo           = lazyWithReload(() => import('./pages/AirCargo'))
+const FreightMacro       = lazyWithReload(() => import('./pages/FreightMacro'))
 
 function PageLoader() {
   return (
@@ -215,6 +219,7 @@ export default function App() {
             <Route path="/product/research"  element={<MktResearch />} />
             <Route path="/product/options"   element={<MktOptions />} />
             <Route path="/product/valuation" element={<MktValuation />} />
+            <Route path="/product/logistics" element={<MktLogistics />} />
             <Route path="/product/charting"  element={<MktCharting />} />
             <Route path="/product/macro"     element={<MktMacro />} />
             <Route path="/product/trading"   element={<MktTrading />} />
@@ -302,6 +307,9 @@ export default function App() {
               <Route path="/unusual-options"    element={<UnusualOptions />} />
               <Route path="/compare"            element={<Compare />} />
               <Route path="/etf-analyzer"       element={<EtfXray />} />
+              <Route path="/maritime-freight"   element={<MaritimeFreight />} />
+              <Route path="/air-cargo"          element={<AirCargo />} />
+              <Route path="/freight-macro"      element={<FreightMacro />} />
               <Route path="/etf-xray"           element={<Navigate to="/etf-analyzer" replace />} />
               <Route path="*"                   element={<Navigate to="/app" replace />} />
             </Route>

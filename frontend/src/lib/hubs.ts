@@ -5,6 +5,7 @@ import {
   LineChart, BarChart2, Waves, Zap, Shuffle, Percent,
   GitBranch, Landmark, Dices, Gauge, BookOpen, Bell, Workflow, Clock, ArrowLeftRight, Home,
   Ship, CandlestickChart, Megaphone, Rocket,
+  Container, Plane, Truck,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -132,6 +133,18 @@ export const HUBS: Hub[] = [
       { title: 'Multiples',         chip: 'Multiples',   desc: 'Implied price from target P/E, EV/Sales, and more',            route: '/multiples',   icon: Scale },
       { title: 'Reverse DCF',       chip: 'Reverse DCF', desc: 'Solve for the growth the current price implies',               route: '/reverse-dcf', icon: RotateCcw },
       { title: 'NAV Tracker',       chip: 'NAV Tracker', desc: 'Premium and discount on asset-backed proxies',                 route: '/nav',         icon: Gem },
+    ],
+  },
+  {
+    slug: 'logistics',
+    label: 'Geo-Logistics',
+    tagline: 'Track the physical economy — ships, freighters, and freight tonnage.',
+    masthead: 'Follow physical trade in near real time: liner connectivity and container rates, canal chokepoint transits, air-freighter frequency at the global cargo hubs, and US inventories and freight tonnage.',
+    icon: Container,
+    tools: [
+      { title: 'Container & Freight',      chip: 'Freight',      desc: 'Liner connectivity, container spot rates, and canal chokepoint transits', route: '/maritime-freight', icon: Ship },
+      { title: 'Air Cargo Vulnerability',  chip: 'Air Cargo',    desc: 'Freighter frequency at Memphis, Louisville, Frankfurt, and Hong Kong',    route: '/air-cargo',        icon: Plane },
+      { title: 'Freight Macro',            chip: 'Freight Macro', desc: 'Inventories-to-sales, Cass freight, and truck tonnage',                  route: '/freight-macro',    icon: Truck },
     ],
   },
 ]

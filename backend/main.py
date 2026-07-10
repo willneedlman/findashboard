@@ -28,6 +28,7 @@ from routers import (
     earnings, ipo, leaderboard, etf, fx,
     maritime, snapshots, credit, housing,
     portfolio_optimizer, macro_events,
+    logistics,
 )
 
 # Pin the MIME types the PWA depends on. A service worker served as anything but
@@ -206,6 +207,7 @@ app.include_router(earnings.router,          prefix="/api/earnings",          ta
 app.include_router(ipo.router,               prefix="/api/ipo",               tags=["ipo"])
 app.include_router(leaderboard.router,       prefix="/api/leaderboard",       tags=["leaderboard"])
 app.include_router(maritime.router,          prefix="/api/maritime",          tags=["maritime"])
+app.include_router(logistics.router,         prefix="/api/logistics",         tags=["logistics"])
 
 
 @app.api_route("/api/health", methods=["GET", "HEAD"])

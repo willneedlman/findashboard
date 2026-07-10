@@ -122,7 +122,7 @@ function TiltCard({ to, className, children, item }: { to: string; className: st
 
 /* ── Shared chrome ──────────────────────────────────────────────────────── */
 
-type Active = 'research' | 'options' | 'macro' | 'charting' | 'trading' | 'valuation' | null
+type Active = 'research' | 'options' | 'macro' | 'charting' | 'trading' | 'valuation' | 'logistics' | null
 
 /** α + vertical rule + ALPHATAPE / TERMINAL lockup (matches the terminal header). */
 function BrandLockup({ markSize = 30 }: { markSize?: number }) {
@@ -147,6 +147,7 @@ const HUB_LINKS: { to: string; key: Active; label: string }[] = [
   { to: '/product/charting', key: 'charting', label: 'Charting' },
   { to: '/product/trading', key: 'trading', label: 'Trading' },
   { to: '/product/valuation', key: 'valuation', label: 'Valuation' },
+  { to: '/product/logistics', key: 'logistics', label: 'Geo-Logistics' },
 ]
 
 function Nav({ active }: { active: Active }) {
@@ -1083,6 +1084,36 @@ export function OptionsPage() {
 }
 
 /* ── Macro ──────────────────────────────────────────────────────────────── */
+
+export function LogisticsPage() {
+  return (
+    <Shell active="logistics">
+      <PageHero eyebrow="Geo-Logistics · 3 tools" h1="The physical economy, in near real time."
+        lede="Liner connectivity and container spot rates, canal chokepoint transits, air-freighter frequency at the world's cargo hubs, and US inventories and freight tonnage. Free, first-party data." />
+      <section className="blk"><div className="wrap">
+        <Reveal className="sec-head">
+          <div className="eyebrow">Container &amp; Freight</div>
+          <h2>Ships, rates, and chokepoints.</h2>
+        </Reveal>
+        <p style={{ maxWidth: 620, opacity: 0.7, lineHeight: 1.6 }}>UNCTAD liner connectivity, the Drewry World Container Index, and daily Suez and Panama transits from IMF PortWatch — the seaborne supply chain on one screen.</p>
+      </div></section>
+      <section className="blk"><div className="wrap">
+        <Reveal className="sec-head">
+          <div className="eyebrow">Air Cargo Vulnerability</div>
+          <h2>Freighters, hub by hub.</h2>
+        </Reveal>
+        <p style={{ maxWidth: 620, opacity: 0.7, lineHeight: 1.6 }}>FedEx, UPS, DHL, and Atlas Air movements at Memphis, Louisville, Frankfurt, and Hong Kong from live ADS-B — a drop in freighter frequency is an early stress signal.</p>
+      </div></section>
+      <section className="blk"><div className="wrap">
+        <Reveal className="sec-head">
+          <div className="eyebrow">Freight Macro</div>
+          <h2>The domestic freight cycle.</h2>
+        </Reveal>
+        <p style={{ maxWidth: 620, opacity: 0.7, lineHeight: 1.6 }}>US inventories-to-sales, the Cass Freight indices, and truck tonnage — the shape of North American ground-freight demand.</p>
+      </div></section>
+    </Shell>
+  )
+}
 
 export function MacroPage() {
   return (
