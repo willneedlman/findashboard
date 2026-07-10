@@ -19,6 +19,10 @@ primary_region = "iad"
   # Email an alert (to ADMIN_ALERT_EMAIL) on unhandled server errors so crashes
   # aren't silent. Off by default in dev; on in prod.
   ERROR_ALERTS = "1"
+  # From-address for transactional mail (password reset + error alerts). Sent via
+  # Resend; the RESEND_API_KEY secret must be set and alphatape.app verified in
+  # Resend (SPF/DKIM) for delivery. Without the secret, mail falls back to console.
+  EMAIL_FROM = "Alphatape Terminal <no-reply@alphatape.app>"
 
 [http_service]
   internal_port = 8080
