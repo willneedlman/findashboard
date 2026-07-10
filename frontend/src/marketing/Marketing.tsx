@@ -1088,28 +1088,21 @@ export function OptionsPage() {
 export function LogisticsPage() {
   return (
     <Shell active="logistics">
-      <PageHero eyebrow="Geo-Logistics · 4 tools" h1="The physical economy, in near real time."
-        lede="Liner connectivity and container spot rates, live tanker and energy flows through the world's chokepoints, air-freighter frequency at the major cargo hubs, and US inventories and freight tonnage. Free, first-party data." />
+      <PageHero eyebrow="Geo-Logistics · 2 maps" h1="The physical economy, in near real time."
+        lede="Two live maps of physical trade: the Logistics Map for the supply chain, and the Energy Flows Map for tankers, LNG, and pipelines. Free, first-party data." />
       <section className="blk"><div className="wrap">
         <Reveal className="sec-head">
-          <div className="eyebrow">Container &amp; Freight</div>
-          <h2>Ships, rates, and chokepoints.</h2>
+          <div className="eyebrow">Logistics Map</div>
+          <h2>The supply chain on one map.</h2>
         </Reveal>
-        <p style={{ maxWidth: 620, opacity: 0.7, lineHeight: 1.6 }}>UNCTAD liner connectivity, the Drewry World Container Index, and daily Suez and Panama transits from IMF PortWatch — the seaborne supply chain on one screen.</p>
+        <p style={{ maxWidth: 620, opacity: 0.7, lineHeight: 1.6 }}>Live cargo ships and canal chokepoints, air-freighter frequency at the world's cargo hubs, liner connectivity by port, container spot rates, and US inventories and freight tonnage — every supply-chain signal folded into a single interactive map.</p>
       </div></section>
       <section className="blk"><div className="wrap">
         <Reveal className="sec-head">
-          <div className="eyebrow">Air Cargo Vulnerability</div>
-          <h2>Freighters, hub by hub.</h2>
+          <div className="eyebrow">Energy Flows Map</div>
+          <h2>Tankers, LNG, and pipelines.</h2>
         </Reveal>
-        <p style={{ maxWidth: 620, opacity: 0.7, lineHeight: 1.6 }}>FedEx, UPS, DHL, and Atlas Air movements at Memphis, Louisville, Frankfurt, and Hong Kong from live ADS-B — a drop in freighter frequency is an early stress signal.</p>
-      </div></section>
-      <section className="blk"><div className="wrap">
-        <Reveal className="sec-head">
-          <div className="eyebrow">Freight Macro</div>
-          <h2>The domestic freight cycle.</h2>
-        </Reveal>
-        <p style={{ maxWidth: 620, opacity: 0.7, lineHeight: 1.6 }}>US inventories-to-sales, the Cass Freight indices, and truck tonnage — the shape of North American ground-freight demand.</p>
+        <p style={{ maxWidth: 620, opacity: 0.7, lineHeight: 1.6 }}>Live AIS tankers and LNG carriers through the world's energy chokepoints, export terminals, and pipeline network — with a real-time nowcast that bridges the reporting lag on chokepoint transits.</p>
       </div></section>
     </Shell>
   )

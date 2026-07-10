@@ -8,13 +8,12 @@ import PageWrapper from '../components/PageWrapper'
 import { readToken } from '../lib/theme'
 import { L, Spark, StaleDot } from '../components/logi'
 
-// Logistics Map — the geographic overview for the Geo-Logistics hub. Air-cargo
-// hubs, canal chokepoints, and liner-connectivity ports are the map's markers;
-// the non-geographic freight-macro indices ride an edge stat strip (they're US
-// national aggregates, not points). Reuses the /flows-map react-leaflet basemap.
+// Logistics Map — the single consolidated view for the Geo-Logistics hub. The map
+// carries the geographic layers (air-cargo hubs, all ten chokepoints, liner ports,
+// and live AIS vessels); a scrollable panel folds in every tabular detail from the
+// former Container & Freight / Air Cargo / Freight Macro tabs. Reuses the /flows-map
+// react-leaflet basemap and the live /api/maritime feeds for density.
 
-// OCEAN is CSS-only (map background) so a var() is fine. The Leaflet SVG colors
-// (land + markers) can't consume var() and are resolved via readToken in-component.
 const OCEAN = 'var(--theme-bg, #0b1626)'
 const COAST = 'rgba(120,150,185,0.16)'
 
@@ -22,8 +21,16 @@ const AIRPORTS: Record<string, [number, number]> = {
   KMEM: [35.04, -89.98], KSDF: [38.17, -85.74], EDDF: [50.03, 8.57], VHHH: [22.31, 113.91],
 }
 const CHOKES: Record<string, { lat: number; lon: number; name: string }> = {
+  hormuz: { lat: 26.57, lon: 56.25, name: 'Strait of Hormuz' },
+  malacca: { lat: 1.43, lon: 102.9, name: 'Strait of Malacca' },
   suez: { lat: 30.42, lon: 32.35, name: 'Suez Canal' },
+  bab: { lat: 12.58, lon: 43.33, name: 'Bab el-Mandeb' },
   panama: { lat: 9.08, lon: -79.68, name: 'Panama Canal' },
+  bosphorus: { lat: 41.12, lon: 29.07, name: 'Turkish Straits' },
+  danish: { lat: 55.70, lon: 12.70, name: 'Danish Straits' },
+  goodhope: { lat: -34.36, lon: 18.47, name: 'Cape of Good Hope' },
+  gibraltar: { lat: 35.97, lon: -5.50, name: 'Strait of Gibraltar' },
+  taiwan: { lat: 24.50, lon: 119.5, name: 'Taiwan Strait' },
 }
 const PORTS: Record<string, { lat: number; lon: number; port: string }> = {
   'China': { lat: 31.2, lon: 121.5, port: 'Shanghai' },
@@ -66,38 +73,62 @@ function Basemap({ land }: { land: string }) {
   return null
 }
 
-interface Air { hubs?: { icao: string; city: string; movements: number; by_operator: Record<string, number> }[]; _stale?: boolean }
-interface MF { lsci?: { economies?: { country: string; lsci: number }[]; _stale?: boolean }; wci?: { composite_usd_per_40ft?: number; _stale?: boolean }; chokepoints?: { chokepoints?: Record<string, { latest?: { total: number | null } }>; _stale?: boolean } }
+interface Hub { icao: string; city: string; movements: number; by_operator: Record<string, number> }
+interface Air { hubs?: Hub[]; _stale?: boolean }
+interface Econ { country: string; lsci: number }
+interface MF { lsci?: { economies?: Econ[]; _stale?: boolean }; wci?: { composite_usd_per_40ft?: number; _stale?: boolean } }
 interface FM { inventory_sales?: { latest?: { ratio: number }; series?: { ratio: number }[]; _stale?: boolean }; freight_indices?: { indices?: Record<string, { latest?: { value: number }; series?: { value: number }[] }>; _stale?: boolean } }
+interface Vessel { mmsi: string; lat?: number; lon?: number; category?: string }
+interface ChokeStat { id: string; name: string; avg7: number }
 
 function Dot({ c }: { c: string }) { return <span style={{ width: 9, height: 9, borderRadius: '50%', background: c, flex: 'none' }} /> }
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ fontFamily: L.mono, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', color: L.gold, marginBottom: 6 }}>{title}</div>
+      {children}
+    </div>
+  )
+}
 
 export default function LogisticsMap() {
-  const [layers, setLayers] = useState({ air: true, choke: true, port: true })
-  // Leaflet needs concrete colors, not CSS var() — resolved here so they track presets.
+  const [layers, setLayers] = useState({ air: true, choke: true, port: true, vessels: true })
   const AIR = readToken('--theme-tertiary', '#60a5fa')
   const CHOKE = readToken('--theme-primary', '#c9a84c')
   const PORT = readToken('--theme-positive', '#3fb6a0')
+  const VESSEL = readToken('--theme-secondary', '#8099b0')
   const LAND = readToken('--theme-surface', '#0f1d31')
+
   const air = useQuery<Air>({ queryKey: ['lm-air'], queryFn: () => axios.get('/api/logistics/air-cargo/vulnerability').then(r => r.data), staleTime: 6 * 3600e3, retry: 1 })
   const mf = useQuery<MF>({ queryKey: ['lm-mf'], queryFn: () => axios.get('/api/logistics/maritime-freight').then(r => r.data), staleTime: 6 * 3600e3, retry: 1 })
   const fm = useQuery<FM>({ queryKey: ['lm-fm'], queryFn: () => axios.get('/api/logistics/freight-macro').then(r => r.data), staleTime: 12 * 3600e3, retry: 1 })
+  const cs = useQuery<{ stats?: ChokeStat[] }>({ queryKey: ['lm-choke'], queryFn: () => axios.get('/api/maritime/chokepoint-stats').then(r => r.data), staleTime: 6 * 3600e3, retry: 1 })
+  const vq = useQuery<{ vessels?: Vessel[] }>({ queryKey: ['lm-vessels'], queryFn: () => axios.get('/api/maritime/vessels?classified_only=true').then(r => r.data), staleTime: 60e3, refetchInterval: 60e3, retry: 1 })
 
   const hubs = air.data?.hubs ?? []
   const maxAir = Math.max(1, ...hubs.map(h => h.movements))
   const econ = mf.data?.lsci?.economies ?? []
   const maxLsci = Math.max(1, ...econ.map(e => e.lsci))
-  const chokeData = mf.data?.chokepoints?.chokepoints ?? {}
-  const maxChoke = Math.max(1, ...Object.values(chokeData).map(c => c.latest?.total ?? 0))
+  const chokeAvg: Record<string, number> = Object.fromEntries((cs.data?.stats ?? []).map(s => [s.id, s.avg7]))
+  const maxChoke = Math.max(1, ...Object.values(chokeAvg))
+  // Cargo/container ships only — tankers and LNG carriers are energy and live on
+  // the Energy Flows map, not here.
+  const vessels = (vq.data?.vessels ?? []).filter(v => v.category === 'cargo' && v.lat != null && v.lon != null).slice(0, 700)
   const idx = fm.data?.freight_indices?.indices ?? {}
 
   const stat = (label: string, val?: number | null, unit?: string, series?: number[], stale?: boolean) => (
-    <div style={{ padding: '8px 0', borderBottom: `1px solid ${L.border}` }}>
-      <div style={{ fontFamily: L.mono, fontSize: 8.5, letterSpacing: '0.08em', color: L.faint, marginBottom: 3 }}>{label}<StaleDot stale={stale} /></div>
+    <div style={{ padding: '6px 0', borderBottom: `1px solid ${L.border}` }}>
+      <div style={{ fontFamily: L.mono, fontSize: 8.5, letterSpacing: '0.06em', color: L.faint, marginBottom: 2 }}>{label}<StaleDot stale={stale} /></div>
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8 }}>
-        <span style={{ fontFamily: L.mono, fontSize: 19, fontWeight: 700, color: L.text }}>{val != null ? val.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'}{unit && <span style={{ fontSize: 9, color: L.sec, fontWeight: 400 }}> {unit}</span>}</span>
-        {series && series.length > 1 && <Spark data={series} w={72} h={22} color={L.sec} />}
+        <span style={{ fontFamily: L.mono, fontSize: 17, fontWeight: 700, color: L.text }}>{val != null ? val.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'}{unit && <span style={{ fontSize: 8.5, color: L.sec, fontWeight: 400 }}> {unit}</span>}</span>
+        {series && series.length > 1 && <Spark data={series} w={64} h={20} color={L.sec} />}
       </div>
+    </div>
+  )
+  const line = (a: string, b: string) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '2px 0', fontFamily: L.mono, fontSize: 10.5 }}>
+      <span style={{ color: L.sec, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a}</span>
+      <span style={{ color: L.text, fontWeight: 700, flex: 'none' }}>{b}</span>
     </div>
   )
 
@@ -107,10 +138,10 @@ export default function LogisticsMap() {
       <div style={{ marginBottom: 10, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
         <div>
           <div style={{ fontFamily: L.mono, fontSize: 15, fontWeight: 700, letterSpacing: '0.2em', color: L.gold }}>LOGISTICS MAP</div>
-          <div style={{ fontFamily: L.sans, fontSize: 11, color: L.sec, marginTop: 5 }}>Cargo hubs, canal chokepoints, and connectivity ports — the physical trade network on one map.</div>
+          <div style={{ fontFamily: L.sans, fontSize: 11, color: L.sec, marginTop: 5 }}>Air hubs, chokepoints, connectivity ports, and live cargo ships — the supply chain on one map.</div>
         </div>
-        <div style={{ display: 'flex', gap: 6 }}>
-          {([['air', 'Air hubs', AIR], ['choke', 'Chokepoints', CHOKE], ['port', 'LSCI ports', PORT]] as const).map(([k, lbl, c]) => (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {([['vessels', 'Cargo ships', VESSEL], ['air', 'Air hubs', AIR], ['choke', 'Chokepoints', CHOKE], ['port', 'LSCI ports', PORT]] as const).map(([k, lbl, c]) => (
             <button key={k} onClick={() => setLayers(s => ({ ...s, [k]: !s[k] }))}
               style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 9px', cursor: 'pointer', background: 'transparent', border: `1px solid ${layers[k] ? c : L.border}`, color: layers[k] ? L.text : L.faint, fontFamily: L.mono, fontSize: 10, fontWeight: 700 }}>
               <Dot c={c} />{lbl}
@@ -119,18 +150,21 @@ export default function LogisticsMap() {
         </div>
       </div>
 
-      <div style={{ position: 'relative', height: '74vh', minHeight: 460, border: `1px solid ${L.border}`, borderRadius: 6, overflow: 'hidden' }}>
-        <MapContainer className="lm-map" center={[26, 30]} zoom={2.1} minZoom={2} maxZoom={6} worldCopyJump preferCanvas style={{ height: '100%', width: '100%' }}>
+      <div style={{ position: 'relative', height: '76vh', minHeight: 480, border: `1px solid ${L.border}`, borderRadius: 6, overflow: 'hidden' }}>
+        <MapContainer className="lm-map" center={[26, 40]} zoom={2.1} minZoom={2} maxZoom={6} worldCopyJump preferCanvas style={{ height: '100%', width: '100%' }}>
           <SizeFix />
           <Basemap land={LAND} />
+          {layers.vessels && vessels.map(v => (
+            <CircleMarker key={`v-${v.mmsi}`} center={[v.lat as number, v.lon as number]} radius={2} pathOptions={{ color: VESSEL, fillColor: VESSEL, fillOpacity: 0.5, weight: 0 }} />
+          ))}
           {layers.port && econ.map(e => { const p = PORTS[e.country]; return p && (
             <CircleMarker key={`p-${e.country}`} center={[p.lat, p.lon]} radius={radius(e.lsci, maxLsci)} pathOptions={{ color: PORT, fillColor: PORT, fillOpacity: 0.35, weight: 1 }}>
               <Tooltip>{p.port} · LSCI {e.lsci.toFixed(1)}</Tooltip>
             </CircleMarker>
           )})}
-          {layers.choke && Object.entries(chokeData).map(([id, c]) => { const g = CHOKES[id]; const t = c.latest?.total ?? 0; return g && (
+          {layers.choke && Object.entries(CHOKES).map(([id, g]) => { const t = chokeAvg[id] ?? 0; return (
             <CircleMarker key={`c-${id}`} center={[g.lat, g.lon]} radius={radius(t, maxChoke)} pathOptions={{ color: CHOKE, fillColor: CHOKE, fillOpacity: 0.4, weight: 1 }}>
-              <Tooltip>{g.name} · {t} transits/d</Tooltip>
+              <Tooltip>{g.name}{t ? ` · ${Math.round(t)} transits/d` : ''}</Tooltip>
             </CircleMarker>
           )})}
           {layers.air && hubs.map(h => { const a = AIRPORTS[h.icao]; return a && (
@@ -140,17 +174,31 @@ export default function LogisticsMap() {
           )})}
         </MapContainer>
 
-        {/* Freight-macro edge strip — national aggregates, not points */}
-        <div style={{ position: 'absolute', top: 12, right: 12, width: 210, background: 'color-mix(in srgb, var(--theme-surface) 94%, transparent)', border: `1px solid ${L.border}`, borderRadius: 5, padding: '10px 12px', zIndex: 500, pointerEvents: 'auto' }}>
-          <div style={{ fontFamily: L.mono, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', color: L.gold, marginBottom: 4 }}>FREIGHT MACRO</div>
-          {stat('DREWRY WCI', mf.data?.wci?.composite_usd_per_40ft, '$/40ft', undefined, mf.data?.wci?._stale)}
-          {stat('INVENTORIES / SALES', fm.data?.inventory_sales?.latest?.ratio, '', (fm.data?.inventory_sales?.series ?? []).map(p => p.ratio), fm.data?.inventory_sales?._stale)}
-          {stat('CASS SHIPMENTS', idx.cass_shipments?.latest?.value, '', (idx.cass_shipments?.series ?? []).map(o => o.value), fm.data?.freight_indices?._stale)}
-          {stat('TRUCK TONNAGE', idx.truck_tonnage?.latest?.value, '', (idx.truck_tonnage?.series ?? []).map(o => o.value), fm.data?.freight_indices?._stale)}
+        {/* Folded-in detail: every former tab's data in one scrollable panel */}
+        <div style={{ position: 'absolute', top: 12, right: 12, bottom: 12, width: 236, overflowY: 'auto', background: 'color-mix(in srgb, var(--theme-surface) 95%, transparent)', border: `1px solid ${L.border}`, borderRadius: 5, padding: '11px 13px', zIndex: 500 }}>
+          <Section title="CONTAINER & FREIGHT">
+            {stat('DREWRY WCI', mf.data?.wci?.composite_usd_per_40ft, '$/40ft', undefined, mf.data?.wci?._stale)}
+            <div style={{ marginTop: 6 }}>
+              {econ.slice(0, 6).map(e => line(PORTS[e.country]?.port ?? e.country, e.lsci.toFixed(1)))}
+              <div style={{ fontFamily: L.sans, fontSize: 8, color: L.faint, marginTop: 3 }}>Liner Shipping Connectivity Index</div>
+            </div>
+          </Section>
+
+          <Section title="AIR CARGO">
+            {hubs.map(h => { const top = Object.entries(h.by_operator).sort((a, b) => b[1] - a[1])[0]; return line(`${h.city} (${h.icao})`, `${h.movements}${top ? ` · ${top[0]}` : ''}`) })}
+            {!hubs.length && <div style={{ fontFamily: L.mono, fontSize: 10, color: L.faint }}>No freighter data.</div>}
+            <div style={{ fontFamily: L.sans, fontSize: 8, color: L.faint, marginTop: 3 }}>Freighter movements · 24h · OpenSky</div>
+          </Section>
+
+          <Section title="FREIGHT MACRO">
+            {stat('INVENTORIES / SALES', fm.data?.inventory_sales?.latest?.ratio, '', (fm.data?.inventory_sales?.series ?? []).map(p => p.ratio), fm.data?.inventory_sales?._stale)}
+            {stat('CASS SHIPMENTS', idx.cass_shipments?.latest?.value, '', (idx.cass_shipments?.series ?? []).map(o => o.value), fm.data?.freight_indices?._stale)}
+            {stat('TRUCK TONNAGE', idx.truck_tonnage?.latest?.value, '', (idx.truck_tonnage?.series ?? []).map(o => o.value), fm.data?.freight_indices?._stale)}
+          </Section>
         </div>
       </div>
       <div style={{ fontFamily: L.sans, fontSize: 9.5, color: L.faint, marginTop: 8 }}>
-        Marker size ∝ value within its layer. Air hubs (OpenSky, ~12h lag), chokepoints (IMF PortWatch), LSCI ports (World Bank/UNCTAD). Freight-macro indices are US national aggregates and ride the strip, not the map.
+        Marker size ∝ value within its layer. Live cargo ships (AIS) + chokepoints (IMF PortWatch), air hubs from OpenSky (~12h lag), LSCI ports from World Bank/UNCTAD. Freight-macro indices are US national aggregates (Census, FRED). Tankers and LNG carriers live on the Energy Flows map.
       </div>
     </PageWrapper>
   )

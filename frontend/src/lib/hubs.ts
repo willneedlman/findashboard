@@ -4,8 +4,8 @@ import {
   GitCompare, PieChart, Globe, Scale, Coins, Boxes, RotateCcw, Gem,
   LineChart, BarChart2, Waves, Zap, Shuffle, Percent,
   GitBranch, Landmark, Dices, Gauge, BookOpen, Bell, Workflow, Clock, ArrowLeftRight, Home,
-  Ship, CandlestickChart, Megaphone, Rocket,
-  Container, Plane, Truck, Fuel, MapPinned,
+  CandlestickChart, Megaphone, Rocket,
+  Container, Fuel, MapPinned,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -141,11 +141,8 @@ export const HUBS: Hub[] = [
     masthead: 'Follow physical trade in near real time: liner connectivity and container rates, canal chokepoint transits, air-freighter frequency at the global cargo hubs, and US inventories and freight tonnage.',
     icon: Container,
     tools: [
-      { title: 'Logistics Map',            chip: 'Map',          desc: 'Cargo hubs, chokepoints, and connectivity ports on one world map',        route: '/logistics-map',    icon: MapPinned },
-      { title: 'Container & Freight',      chip: 'Freight',      desc: 'Liner connectivity, container spot rates, and canal chokepoint transits', route: '/maritime-freight', icon: Ship },
-      { title: 'Energy Flows',             chip: 'Energy Flows', desc: 'Live AIS tankers, energy pipelines, export terminals, and chokepoints',   route: '/flows-map',        icon: Fuel },
-      { title: 'Air Cargo Vulnerability',  chip: 'Air Cargo',    desc: 'Freighter frequency at Memphis, Louisville, Frankfurt, and Hong Kong',    route: '/air-cargo',        icon: Plane },
-      { title: 'Freight Macro',            chip: 'Freight Macro', desc: 'Inventories-to-sales, Cass freight, and truck tonnage',                  route: '/freight-macro',    icon: Truck },
+      { title: 'Logistics Map',    chip: 'Map',          desc: 'Air hubs, chokepoints, connectivity ports, live cargo ships, and freight macro on one map', route: '/logistics-map', icon: MapPinned },
+      { title: 'Energy Flows Map', chip: 'Energy Flows', desc: 'Live AIS tankers, energy pipelines, export terminals, and chokepoints',                       route: '/flows-map',     icon: Fuel },
     ],
   },
 ]
