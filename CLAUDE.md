@@ -16,7 +16,9 @@ The user's name is **Will**. Address him by name (Will) in every response.
 
 **Design context:** `PRODUCT.md` (register, users, purpose, anti-references, principles) and `DESIGN.md` (color tokens, typography, layout, components, copy voice) at the repo root are the source of truth for this product's identity and visual system. Read them before any design work. The `/impeccable` skill loads them automatically. Keep them current when tokens or conventions change.
 
-Before making any frontend change, query the design system search engine:
+Optional — use only when a frontend change genuinely needs design guidance (a new
+page, a redesign, an unfamiliar component). Do NOT query it for small tweaks, data
+wiring, or map/panel adjustments. When it helps, the search engine is:
 
 ```bash
 python3 ui-ux-pro-max-skill/src/ui-ux-pro-max/scripts/search.py "<query>" --domain <domain>
@@ -30,7 +32,7 @@ Stacks: `react`, `nextjs`, `shadcn`, `html-tailwind` (default)
 - **Color palettes**: 161 palettes — always prefer those aligned with the dark terminal scheme (`#101c2e` base, `#c9a84c` gold, `#d7e3fc` text)
 - **Typography**: 57 font pairings — project uses JetBrains Mono; check pairings before adding any new typeface
 - **UX guidelines**: 99 rules covering accessibility, spacing, interaction states, animation
-- **Design review**: before reporting any frontend task complete, run `search.py "review" --domain ux` and verify the output passes its pre-delivery checklist
+- **Design review**: optional — only run `search.py "review" --domain ux` before delivery on a substantial new UI, not on routine tweaks
 
 **Fallback** (if directory is missing): proceed with existing conventions and note it to the user.
 
@@ -69,25 +71,23 @@ Stacks: `react`, `nextjs`, `shadcn`, `html-tailwind` (default)
 
 ## 5. Skill Auto-Invocation Rules
 
-These are mandatory — invoke the listed skill/tool proactively without waiting to be asked:
+None of these are mandatory. Prefer doing the work directly; reach for a skill only
+when it clearly adds value for the task at hand. Suggested (not required) pairings:
 
-| When | Required action |
+| When it genuinely helps | Option |
 |---|---|
-| Any frontend component/page/style change | Query `ui-ux-pro-max` before writing; invoke `/impeccable` before marking the task done |
-| UI verification (does it look right?) | Use playwright MCP: `browser_navigate` → `browser_screenshot` — do not claim success without a visual check |
-| Codebase structure question ("what calls X", "trace Y") | `/graphify query "<question>"` — never crawl raw files for structural info |
-| After editing any `.py` file | graphify auto-extracts via PostToolUse hook; no manual step needed |
-| Before any `git commit` | `/caveman-commit` for the commit message |
-| Before `git push` / opening a PR | `/code-review` to audit the diff |
-| Design decision (color, spacing, font, layout) | `python3 ui-ux-pro-max-skill/src/ui-ux-pro-max/scripts/search.py "<topic>" --domain <domain>` |
+| A substantial new UI or redesign | `ui-ux-pro-max` search / `/impeccable` — skip for tweaks, data wiring, panel/map edits |
+| Confirming a UI change actually renders | playwright MCP screenshot — worth it for real UI work |
+| A structural question ("what calls X", "trace Y") | `/graphify query "<question>"` instead of crawling files |
+| A commit message | `/caveman-commit` if you want the house style |
+| Auditing a diff before push/PR | `/code-review` when the change is nontrivial |
 
-**Hook coverage** (what fires automatically without any action needed):
+**Hook coverage** (fires automatically):
 
-*User-global* (`~/.claude/settings.json` — these fire on this machine in every project, NOT checked into this repo, so a fresh clone does not get them):
+*User-global* (`~/.claude/settings.json` — this machine, every project; not in the repo):
 - `SessionStart` / `Stop` → graphify sync
-- `UserPromptSubmit` → intent router (injects skill hints into context)
-- `PreToolUse Edit|Write` → ui-ux guard on frontend files
 - `PostToolUse Edit|Write` → graphify AST auto-extract on `.py` files
+- The `UserPromptSubmit` skill-router and `PreToolUse` ui-ux guard were **disabled 2026-07-10** — skills are now used on judgment, not auto-injected. The `semgrep` plugin was disabled too.
 
 *Project-scoped* (`.claude/settings.json` — travels with the repo):
 - `Stop` → frontend typecheck (`tsc --noEmit`) when `frontend/src/**/*.ts(x)` changed; advisory, no-ops otherwise
