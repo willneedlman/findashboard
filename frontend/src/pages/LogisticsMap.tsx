@@ -179,17 +179,24 @@ export default function LogisticsMap() {
             {VIEW.map(([k, lbl, c, n]) => { const on = layers[k]; return (
               <div key={k} onClick={() => setLayers(s => ({ ...s, [k]: !s[k] }))}
                 style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 9px', cursor: 'pointer', background: on ? `color-mix(in srgb, ${c} 13%, transparent)` : 'transparent', borderLeft: on ? `2px solid ${c}` : '2px solid transparent' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Dot c={on ? c : L.faint} /><span style={{ fontFamily: L.sans, fontSize: 11.5, fontWeight: on ? 600 : 400, color: on ? L.text : L.sec }}>{lbl}</span></span>
+                <span style={{ fontFamily: L.sans, fontSize: 11.5, fontWeight: on ? 600 : 400, color: on ? L.text : L.sec }}>{lbl}</span>
                 <span style={{ fontFamily: L.mono, fontSize: 10, color: on ? c : L.faint }}>{n}</span>
               </div>
             )})}
           </div>
-          <div style={{ marginTop: 'auto', pointerEvents: 'auto', background: panel, border: `1px solid ${L.border}`, padding: '10px 13px' }}>
-            <div style={{ fontFamily: L.mono, fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', color: L.text, marginBottom: 7 }}>LEGEND</div>
-            {([['Cargo ship', VESSEL], ['Cargo flight', FLIGHT], ['Air cargo hub', AIR], ['Chokepoint', CHOKE], ['Connectivity port', PORT]] as const).map(([lbl, c]) => (
-              <div key={lbl} style={{ display: 'flex', alignItems: 'center', gap: 8, lineHeight: '17px' }}><Dot c={c} /><span style={{ fontFamily: L.sans, fontSize: 10.5, color: L.sec }}>{lbl}</span></div>
+          <div style={{ marginTop: 'auto', pointerEvents: 'auto', background: panel, border: `1px solid ${L.border}`, padding: '13px 16px' }}>
+            <div style={{ fontFamily: L.mono, fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', color: L.text, marginBottom: 9 }}>LEGEND</div>
+            {([['Cargo ship', VESSEL, 'ship'], ['Cargo flight', FLIGHT, 'jet'], ['Air cargo hub', AIR, 'dot'], ['Chokepoint', CHOKE, 'dot'], ['Connectivity port', PORT, 'dot']] as [string, string, 'ship' | 'jet' | 'dot'][]).map(([lbl, c, t]) => (
+              <div key={lbl} style={{ display: 'flex', alignItems: 'center', gap: 9, lineHeight: '22px' }}>
+                <span style={{ width: 16, display: 'flex', justifyContent: 'center', flex: 'none' }}>
+                  {t === 'ship' ? <svg width="15" height="15" viewBox="0 0 24 24" style={{ color: c }}><path fill="currentColor" d="M3 14l1.8 5h14.4L21 14H3zm3-2V8l6-4 6 4v4H6z" /></svg>
+                    : t === 'jet' ? <svg width="15" height="15" viewBox="0 0 24 24" style={{ color: c }}><path fill="currentColor" d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-4.5l8 2.5z" /></svg>
+                      : <Dot c={c} />}
+                </span>
+                <span style={{ fontFamily: L.sans, fontSize: 11.5, color: L.sec }}>{lbl}</span>
+              </div>
             ))}
-            <div style={{ fontFamily: L.sans, fontSize: 8, color: L.faint, marginTop: 6, lineHeight: 1.4 }}>Marker size ∝ value in layer. Click a ship or flight to inspect.</div>
+            <div style={{ fontFamily: L.sans, fontSize: 8.5, color: L.faint, marginTop: 8, lineHeight: 1.5 }}>Marker size ∝ value in layer. Click a ship or flight to inspect.</div>
           </div>
         </div>
 
