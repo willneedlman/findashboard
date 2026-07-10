@@ -235,11 +235,11 @@ const SANS = 'var(--theme-sans)'
 const GOLD = 'var(--theme-primary, #c9a84c)'
 const TEXT = 'var(--theme-text, #d7e3fc)'
 const SEC = 'var(--theme-secondary, #8099b0)'
-const MUTED = '#56708a'
-const FAINT = '#3f5670'
+const MUTED = 'var(--theme-text-dim, #56708a)'
+const FAINT = 'var(--theme-text-faint, #3f5670)'
 const panelBg = (a = 0.94) => `color-mix(in srgb, var(--theme-surface, #0d1826) ${Math.round(a * 100)}%, transparent)`
 const goldBorder = (a = 0.35) => `1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) ${Math.round(a * 100)}%, transparent)`
-const neutralBorder = '1px solid rgba(255,255,255,0.10)'
+const neutralBorder = '1px solid var(--theme-border, rgba(255,255,255,0.10))'
 const eyebrow: React.CSSProperties = { fontFamily: MONO, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.18em', color: MUTED }
 
 function Sparkline({ data, w = 44, h = 15, color }: { data: number[]; w?: number; h?: number; color: string }) {
@@ -527,7 +527,7 @@ export function MaritimeMapContent() {
       <style>{`
         .gfm-map { background: var(--theme-bg); }
         .gfm-chip:hover { border-color: ${GOLD} !important; color: ${TEXT} !important; }
-        .gfm-row:hover { background: rgba(255,255,255,0.04); }
+        .gfm-row:hover { background: var(--theme-hover, rgba(255,255,255,0.04)); }
         .gfm-cpcell { container-type: inline-size; overflow: hidden; }
         @container (max-width: 225px) { .gfm-spark { display: none; } }
         @container (max-width: 285px) { .gfm-spark-long { display: none; } }
@@ -677,7 +677,7 @@ export function MaritimeMapContent() {
               )
             })}
           </div>
-          <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '8px 14px' }} />
+          <div style={{ height: 1, background: 'var(--theme-border-faint, rgba(255,255,255,0.06))', margin: '8px 14px' }} />
           <div style={{ padding: '4px 14px 12px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
               <span style={eyebrow}>Fine tune</span>
@@ -691,7 +691,7 @@ export function MaritimeMapContent() {
               return (
                 <div key={fk} className="gfm-row" onClick={() => setOverrides(o => ({ ...o, [fk]: !on }))}
                   style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '5px 0', cursor: 'pointer' }}>
-                  <span style={{ width: 12, height: 12, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', background: on ? GOLD : 'transparent', border: on ? `1px solid ${GOLD}` : '1px solid rgba(255,255,255,0.22)', color: 'var(--theme-bg, #101c2e)', fontSize: 9, fontWeight: 800 }}>{on ? '✓' : ''}</span>
+                  <span style={{ width: 12, height: 12, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', background: on ? GOLD : 'transparent', border: on ? `1px solid ${GOLD}` : '1px solid var(--theme-border, rgba(255,255,255,0.22))', color: 'var(--theme-bg, #101c2e)', fontSize: 9, fontWeight: 800 }}>{on ? '✓' : ''}</span>
                   <span style={{ fontFamily: SANS, fontSize: 11, color: on ? TEXT : SEC }}>{label}</span>
                   <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 8, letterSpacing: '0.08em', color: src === 'Z+' ? GOLD : FAINT }}>{src}</span>
                 </div>
@@ -734,7 +734,7 @@ export function MaritimeMapContent() {
               }}
               placeholder="Search ports, vessels, terminals"
               style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontFamily: SANS, fontSize: 12.5, color: TEXT }} />
-            <span style={{ fontFamily: MONO, fontSize: 9, color: SEC, border: '1px solid rgba(255,255,255,0.14)', padding: '1px 6px' }}>/</span>
+            <span style={{ fontFamily: MONO, fontSize: 9, color: SEC, border: '1px solid var(--theme-border, rgba(255,255,255,0.14))', padding: '1px 6px' }}>/</span>
           </div>
           {searchOpen && results.length > 0 && (
             <div style={{ marginTop: 4, background: panelBg(0.96), border: neutralBorder, maxHeight: 280, overflowY: 'auto' }}>
@@ -757,8 +757,8 @@ export function MaritimeMapContent() {
               return (
                 <button key={p.key} onClick={() => { setPreset(p.key); setOverrides({}) }} style={{
                   fontFamily: MONO, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.12em', padding: '5px 13px', cursor: 'pointer',
-                  background: on ? GOLD : panelBg(0.92), color: on ? '#0a0e16' : SEC,
-                  border: on ? `1px solid ${GOLD}` : '1px solid rgba(255,255,255,0.14)',
+                  background: on ? GOLD : panelBg(0.92), color: on ? 'var(--theme-bg, #0a0e16)' : SEC,
+                  border: on ? `1px solid ${GOLD}` : '1px solid var(--theme-border, rgba(255,255,255,0.14))',
                 }}>{p.pill}</button>
               )
             })}
@@ -792,7 +792,7 @@ export function MaritimeMapContent() {
           <motion.div key={`${inspected.kind}-${inspected.id}`}
             initial={reduced ? false : { opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.25, ease: [0.23, 1, 0.32, 1] }}
             style={{ marginTop: 3, pointerEvents: 'auto', overflowY: 'auto', background: panelBg(0.96), border: goldBorder(0.4) }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', background: 'rgba(0,0,0,0.2)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', background: 'rgba(0,0,0,0.2)', borderBottom: '1px solid var(--theme-border-faint, rgba(255,255,255,0.05))' }}>
               <span style={{ fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: GOLD }}>Inspector</span>
               <button onClick={() => setInspected(null)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: MONO, fontSize: 12, color: MUTED }}>x</button>
             </div>
@@ -814,7 +814,7 @@ export function MaritimeMapContent() {
                     <StatRow k="Transits (7d avg)" v={inspectedStat ? `${inspectedStat.avg7.toFixed(1)}/d` : '…'} />
                     <StatRow k="Mix (latest day)" v={inspectedStat?.mix ? `${inspectedStat.mix.tanker ?? 0} tanker · ${inspectedStat.mix.cargo ?? 0} cargo` : '…'} />
                     {inspectedStat && (
-                      <div style={{ background: 'rgba(0,0,0,0.18)', border: '1px solid rgba(255,255,255,0.06)', padding: '6px 8px' }}>
+                      <div style={{ background: 'rgba(0,0,0,0.18)', border: '1px solid var(--theme-border-faint, rgba(255,255,255,0.06))', padding: '6px 8px' }}>
                         <Sparkline data={inspectedStat.series30} w={252} h={36} color={C.spark} />
                         <div style={{ fontFamily: MONO, fontSize: 8, color: MUTED, marginTop: 3 }}>TRANSIT CALLS · 30D · PORTWATCH</div>
                       </div>
@@ -846,11 +846,11 @@ export function MaritimeMapContent() {
               <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
                 {inspected.kind === 'choke' ? (
                   <>
-                    <button onClick={() => navigate('/alerts')} style={{ flex: 1, padding: 7, cursor: 'pointer', background: GOLD, color: '#0a0e16', border: 'none', fontFamily: SANS, fontSize: 11, fontWeight: 600 }}>Set alert</button>
+                    <button onClick={() => navigate('/alerts')} style={{ flex: 1, padding: 7, cursor: 'pointer', background: GOLD, color: 'var(--theme-bg, #0a0e16)', border: 'none', fontFamily: SANS, fontSize: 11, fontWeight: 600 }}>Set alert</button>
                     <button onClick={() => openHistoryFor(inspected.id)} style={{ flex: 1, padding: 7, cursor: 'pointer', background: 'transparent', color: GOLD, border: goldBorder(0.45), fontFamily: SANS, fontSize: 11, fontWeight: 600 }}>Open history</button>
                   </>
                 ) : (
-                  <button onClick={() => togglePin(inspected)} style={{ flex: 1, padding: 7, cursor: 'pointer', background: isPinned(inspected) ? GOLD : 'transparent', color: isPinned(inspected) ? '#0a0e16' : GOLD, border: goldBorder(0.45), fontFamily: SANS, fontSize: 11, fontWeight: 600 }}>
+                  <button onClick={() => togglePin(inspected)} style={{ flex: 1, padding: 7, cursor: 'pointer', background: isPinned(inspected) ? GOLD : 'transparent', color: isPinned(inspected) ? 'var(--theme-bg, #0a0e16)' : GOLD, border: goldBorder(0.45), fontFamily: SANS, fontSize: 11, fontWeight: 600 }}>
                     {isPinned(inspected) ? 'Unpin callout' : 'Pin callout'}
                   </button>
                 )}
@@ -892,8 +892,8 @@ export function MaritimeMapContent() {
                   <button onClick={() => setReplay(r => ({ ...r, playing: !r.playing, t: r.t >= 1 ? 0 : r.t }))}
                     style={{ width: 26, height: 26, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: GOLD, border: 'none' }}>
                     {replay.playing
-                      ? <span style={{ display: 'flex', gap: 2 }}><span style={{ width: 3, height: 10, background: '#0a0e16' }} /><span style={{ width: 3, height: 10, background: '#0a0e16' }} /></span>
-                      : <span style={{ width: 0, height: 0, borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderLeft: '8px solid #0a0e16' }} />}
+                      ? <span style={{ display: 'flex', gap: 2 }}><span style={{ width: 3, height: 10, background: 'var(--theme-bg, #0a0e16)' }} /><span style={{ width: 3, height: 10, background: 'var(--theme-bg, #0a0e16)' }} /></span>
+                      : <span style={{ width: 0, height: 0, borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderLeft: '8px solid var(--theme-bg, #0a0e16)' }} />}
                   </button>
                   <span style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', color: GOLD }}>
                     {replayVessels ? `${replayVessels.time.toISOString().slice(11, 16)} UTC` : 'REPLAY'}
@@ -903,8 +903,8 @@ export function MaritimeMapContent() {
                     {([1, 8, 32] as const).map(s => (
                       <button key={s} onClick={() => setReplay(r => ({ ...r, speed: s }))} style={{
                         fontFamily: MONO, fontSize: 9, fontWeight: 700, padding: '3px 8px', cursor: 'pointer',
-                        background: replay.speed === s ? GOLD : 'transparent', color: replay.speed === s ? '#0a0e16' : SEC,
-                        border: replay.speed === s ? `1px solid ${GOLD}` : '1px solid rgba(255,255,255,0.14)',
+                        background: replay.speed === s ? GOLD : 'transparent', color: replay.speed === s ? 'var(--theme-bg, #0a0e16)' : SEC,
+                        border: replay.speed === s ? `1px solid ${GOLD}` : '1px solid var(--theme-border, rgba(255,255,255,0.14))',
                       }}>{s}×</button>
                     ))}
                     <button onClick={() => setReplay(r => ({ ...r, open: false, playing: false }))} style={{ fontFamily: MONO, fontSize: 10, padding: '3px 9px', cursor: 'pointer', background: 'transparent', color: MUTED, border: neutralBorder }}>x</button>
@@ -942,7 +942,7 @@ export function MaritimeMapContent() {
           return (
             <div key={id} onClick={() => { if (c) flyTo({ kind: 'choke', id: c.id, name: c.name, lat: c.lat, lon: c.lon }) }}
               className="gfm-row gfm-cpcell"
-              style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '0 14px', cursor: 'pointer', borderLeft: i ? '1px solid rgba(255,255,255,0.05)' : 'none', fontVariantNumeric: 'tabular-nums', minWidth: 0, whiteSpace: 'nowrap' }}>
+              style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '0 14px', cursor: 'pointer', borderLeft: i ? '1px solid var(--theme-border-faint, rgba(255,255,255,0.05))' : 'none', fontVariantNumeric: 'tabular-nums', minWidth: 0, whiteSpace: 'nowrap' }}>
               <span style={{ fontFamily: MONO, fontSize: 9.5, fontWeight: 700, color: TEXT, flex: 'none' }}>{short}</span>
               <span style={{ fontFamily: MONO, fontSize: 13, fontWeight: 700, color: TEXT, flex: 'none' }}>{c?.oil_mbd.toFixed(1) ?? '—'}</span>
               {s?.delta_pct != null && (
@@ -979,7 +979,7 @@ function NowcastBlock({ nc, C }: { nc: Nowcast; C: Colors }) {
   const vs = nc.live_vs_baseline_pct
   const capM = nc.capacity_est_dwt != null ? (nc.capacity_est_dwt / 1e6).toFixed(1) : null
   return (
-    <div style={{ background: 'rgba(0,0,0,0.18)', border: '1px solid rgba(255,255,255,0.06)', padding: '7px 9px' }}>
+    <div style={{ background: 'rgba(0,0,0,0.18)', border: '1px solid var(--theme-border-faint, rgba(255,255,255,0.06))', padding: '7px 9px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
         <span style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', color: MUTED }}>LIVE AIS NOWCAST · 96H</span>
         <span style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', color: confColor, border: `1px solid ${confColor}`, padding: '1px 5px', textTransform: 'uppercase' }}>{conf}</span>
@@ -1073,7 +1073,7 @@ function HistoryPanel({ C, chokepoints, ids, days, metric, series, loading, live
 
   return (
     <div style={{ background: 'var(--theme-surface)', border: goldBorder(0.4) }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 14px', background: 'rgba(0,0,0,0.16)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 14px', background: 'rgba(0,0,0,0.16)', borderBottom: '1px solid var(--theme-border-faint, rgba(255,255,255,0.05))' }}>
         <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--theme-primary)' }}>Chokepoint Transit History</span>
         <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-text-faint)' }}>IMF PortWatch, 7-day average of daily transit calls</span>
         {latestDate && (
@@ -1107,7 +1107,7 @@ function HistoryPanel({ C, chokepoints, ids, days, metric, series, loading, live
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={rows} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-              <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
+              <CartesianGrid stroke="var(--theme-border-faint, rgba(255,255,255,0.05))" vertical={false} />
               <XAxis dataKey="d" tick={{ fill: 'var(--theme-secondary)', fontSize: 9.5, fontFamily: 'var(--theme-mono)' }}
                 tickFormatter={(d: string) => days >= 365 ? d.slice(0, 7) : d.slice(5)} minTickGap={42} axisLine={{ stroke: 'var(--theme-border)' }} tickLine={false} />
               <YAxis tick={{ fill: 'var(--theme-secondary)', fontSize: 9.5, fontFamily: 'var(--theme-mono)' }} width={44}
