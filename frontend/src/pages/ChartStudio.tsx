@@ -1167,7 +1167,7 @@ export function ChartStudioContent() {
 
 
   return (
-    <div style={{ maxWidth: 1680, minWidth: 1180, margin: '0 auto', background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))' }}>
+    <div style={{ width: '100%', minWidth: 1180, background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))' }}>
       <style>{`
         .cs-row:hover { background: var(--theme-hover, rgba(255,255,255,0.04)); }
         .cs-chip:hover { border-color: var(--theme-primary, #c9a84c) !important; color: var(--theme-text, #d7e3fc) !important; }
