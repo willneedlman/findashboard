@@ -2,6 +2,7 @@ import { useState } from 'react'
 import axios from 'axios'
 import { useQuery } from '@tanstack/react-query'
 import PageWrapper from '../components/PageWrapper'
+import AssetChartModal from '../components/AssetChartModal'
 import useIsMobile from '../hooks/useIsMobile'
 
 // Global Markets board (hifi handoff "2a"): a pinnable Spotlight of benchmark
@@ -94,7 +95,7 @@ const loadFavs = (): string[] => {
 
 function Star({ on, onClick, label }: { on: boolean; onClick: () => void; label: string }) {
   return (
-    <button onClick={onClick} aria-label={label} aria-pressed={on}
+    <button onClick={e => { e.stopPropagation(); onClick() }} aria-label={label} aria-pressed={on}
       style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 14, lineHeight: 1, color: on ? GOLD : 'color-mix(in srgb, var(--theme-secondary, #8099b0) 55%, transparent)', width: 20, flex: 'none', textAlign: 'left' }}>
       {on ? '★' : '☆'}
     </button>
@@ -102,7 +103,7 @@ function Star({ on, onClick, label }: { on: boolean; onClick: () => void; label:
 }
 
 // ── Spotlight card ────────────────────────────────────────────────────────────
-function SpotlightCard({ row, group, yields, onUnpin }: { row: Row; group: string; yields: boolean; onUnpin: () => void }) {
+function SpotlightCard({ row, group, yields, onUnpin, onOpen }: { row: Row; group: string; yields: boolean; onUnpin: () => void; onOpen: () => void }) {
   const up = (row.change_pct ?? 0) >= 0
   const c = row.change_pct == null ? 'var(--theme-secondary, #5f7893)' : up ? POS : NEG
   const pts = row.spark
@@ -114,7 +115,9 @@ function SpotlightCard({ row, group, yields, onUnpin }: { row: Row; group: strin
     area = `0,44 ${line} 140,44`
   }
   return (
-    <div style={{ position: 'relative', overflow: 'hidden', background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 6%, var(--theme-surface, #0d1826))', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 28%, transparent)', borderRadius: 5, padding: '13px 14px 15px' }}>
+    <div onClick={onOpen} role="button" tabIndex={0} aria-label={`Open ${row.label} chart`}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen() } }}
+      style={{ position: 'relative', overflow: 'hidden', cursor: 'pointer', background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 6%, var(--theme-surface, #0d1826))', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 28%, transparent)', borderRadius: 5, padding: '13px 14px 15px' }}>
       {line && (
         <svg viewBox="0 0 140 44" preserveAspectRatio="none" aria-hidden="true"
           style={{ position: 'absolute', right: 0, bottom: 0, width: '56%', height: 38, pointerEvents: 'none', WebkitMaskImage: 'linear-gradient(90deg, transparent, #000 45%)', maskImage: 'linear-gradient(90deg, transparent, #000 45%)' }}>
@@ -122,8 +125,8 @@ function SpotlightCard({ row, group, yields, onUnpin }: { row: Row; group: strin
           <polyline points={line} fill="none" stroke={c} strokeWidth={1.3} opacity={0.55} />
         </svg>
       )}
-      <button onClick={onUnpin} aria-label={`Unpin ${row.label}`}
-        style={{ position: 'absolute', top: 8, right: 9, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 14, color: GOLD, lineHeight: 1 }}>★</button>
+      <button onClick={e => { e.stopPropagation(); onUnpin() }} aria-label={`Unpin ${row.label}`}
+        style={{ position: 'absolute', top: 8, right: 9, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 14, color: GOLD, lineHeight: 1, zIndex: 1 }}>★</button>
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 11, paddingRight: 18, minWidth: 0 }}>
         <AssetIcon symbol={row.symbol} small />
         <span style={{ fontFamily: MONO, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--theme-secondary, #8aa0ba)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.label}</span>
@@ -140,7 +143,7 @@ function SpotlightCard({ row, group, yields, onUnpin }: { row: Row; group: strin
 }
 
 // ── Asset-class table (flat editorial) ───────────────────────────────────────
-function GroupTable({ name, rows, favs, onToggle }: { name: string; rows: Row[]; favs: string[]; onToggle: (sym: string) => void }) {
+function GroupTable({ name, rows, favs, onToggle, onOpen }: { name: string; rows: Row[]; favs: string[]; onToggle: (sym: string) => void; onOpen: (r: Row, yields: boolean) => void }) {
   const yields = name === 'US Yields'
   return (
     <div>
@@ -153,8 +156,10 @@ function GroupTable({ name, rows, favs, onToggle }: { name: string; rows: Row[];
         const up = (r.change_pct ?? 0) >= 0
         const c = r.change_pct == null ? 'var(--theme-secondary, #5f7893)' : up ? POS : NEG
         return (
-          <div key={r.symbol} className="gm-row"
-            style={{ display: 'grid', gridTemplateColumns: '20px auto minmax(0,1fr) auto auto', alignItems: 'center', gap: 10, padding: '6px 4px', borderBottom: '1px solid var(--theme-border-faint, rgba(255,255,255,0.05))', transition: 'background 0.12s' }}>
+          <div key={r.symbol} className="gm-row" onClick={() => onOpen(r, yields)}
+            role="button" tabIndex={0} aria-label={`Open ${r.label} chart`}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(r, yields) } }}
+            style={{ display: 'grid', gridTemplateColumns: '20px auto minmax(0,1fr) auto auto', alignItems: 'center', gap: 10, padding: '6px 4px', borderBottom: '1px solid var(--theme-border-faint, rgba(255,255,255,0.05))', transition: 'background 0.12s', cursor: 'pointer' }}>
             <Star on={on} onClick={() => onToggle(r.symbol)} label={`${on ? 'Unpin' : 'Pin'} ${r.label}`} />
             <AssetIcon symbol={r.symbol} />
             <span style={{ fontFamily: SANS, fontSize: 13, color: 'var(--theme-text, #c6d4e6)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.label}</span>
@@ -177,6 +182,7 @@ export default function GlobalMarkets() {
   const today = new Date().toISOString().split('T')[0]
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0])   // '' = latest prints
   const [favs, setFavs] = useState<string[]>(loadFavs)
+  const [chart, setChart] = useState<{ row: Row; yields: boolean } | null>(null)
   const toggleFav = (sym: string) => setFavs(prev => {
     const next = prev.includes(sym) ? prev.filter(s => s !== sym) : [...prev, sym]
     try { localStorage.setItem(FAV_KEY, JSON.stringify(next)) } catch { /* private mode */ }
@@ -251,7 +257,7 @@ export default function GlobalMarkets() {
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: `repeat(${isMobile ? 2 : 6}, 1fr)`, gap: 12, marginBottom: 26 }}>
                 {spotlight.map(r => (
-                  <SpotlightCard key={r.symbol} row={r} group={groupOf[r.symbol] ?? ''} yields={groupOf[r.symbol] === 'US Yields'} onUnpin={() => toggleFav(r.symbol)} />
+                  <SpotlightCard key={r.symbol} row={r} group={groupOf[r.symbol] ?? ''} yields={groupOf[r.symbol] === 'US Yields'} onUnpin={() => toggleFav(r.symbol)} onOpen={() => setChart({ row: r, yields: groupOf[r.symbol] === 'US Yields' })} />
                 ))}
               </div>
             )}
@@ -259,21 +265,22 @@ export default function GlobalMarkets() {
             {/* Full board: fixed column stacks per the handoff */}
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 26 }}>
               <div style={colStack}>
-                <GroupTable name="Americas" rows={byName['Americas'] ?? []} favs={favs} onToggle={toggleFav} />
-                <GroupTable name="FX" rows={byName['FX'] ?? []} favs={favs} onToggle={toggleFav} />
+                <GroupTable name="Americas" rows={byName['Americas'] ?? []} favs={favs} onToggle={toggleFav} onOpen={(r, y) => setChart({ row: r, yields: y })} />
+                <GroupTable name="FX" rows={byName['FX'] ?? []} favs={favs} onToggle={toggleFav} onOpen={(r, y) => setChart({ row: r, yields: y })} />
               </div>
               <div style={colStack}>
-                <GroupTable name="Europe" rows={byName['Europe'] ?? []} favs={favs} onToggle={toggleFav} />
-                <GroupTable name="Commodities" rows={byName['Commodities'] ?? []} favs={favs} onToggle={toggleFav} />
+                <GroupTable name="Europe" rows={byName['Europe'] ?? []} favs={favs} onToggle={toggleFav} onOpen={(r, y) => setChart({ row: r, yields: y })} />
+                <GroupTable name="Commodities" rows={byName['Commodities'] ?? []} favs={favs} onToggle={toggleFav} onOpen={(r, y) => setChart({ row: r, yields: y })} />
               </div>
               <div style={colStack}>
-                <GroupTable name="Asia-Pacific" rows={byName['Asia-Pacific'] ?? []} favs={favs} onToggle={toggleFav} />
-                <GroupTable name="US Yields" rows={byName['US Yields'] ?? []} favs={favs} onToggle={toggleFav} />
-                <GroupTable name="Crypto" rows={byName['Crypto'] ?? []} favs={favs} onToggle={toggleFav} />
+                <GroupTable name="Asia-Pacific" rows={byName['Asia-Pacific'] ?? []} favs={favs} onToggle={toggleFav} onOpen={(r, y) => setChart({ row: r, yields: y })} />
+                <GroupTable name="US Yields" rows={byName['US Yields'] ?? []} favs={favs} onToggle={toggleFav} onOpen={(r, y) => setChart({ row: r, yields: y })} />
+                <GroupTable name="Crypto" rows={byName['Crypto'] ?? []} favs={favs} onToggle={toggleFav} onOpen={(r, y) => setChart({ row: r, yields: y })} />
               </div>
             </div>
           </>
         )}
+        {chart && <AssetChartModal row={chart.row} yields={chart.yields} onClose={() => setChart(null)} />}
       </div>
     </PageWrapper>
   )
