@@ -62,20 +62,6 @@ const useStagger = (): { container: Variants; item: Variants } => {
   }
 }
 
-// Numbers that count up from zero when scrolled into view.
-function CountUp({ to, suffix = '', prefix = '', className }: { to: number; suffix?: string; prefix?: string; className?: string }) {
-  const reduce = useReducedMotion()
-  const ref = useRef<HTMLSpanElement>(null)
-  const inView = useInView(ref, { once: true, margin: '-60px' })
-  const [val, setVal] = useState(reduce ? to : 0)
-  useEffect(() => {
-    if (!inView || reduce) { setVal(to); return }
-    const controls = animate(0, to, { duration: 1.1, ease: EASE, onUpdate: v => setVal(Math.round(v)) })
-    return () => controls.stop()
-  }, [inView, to, reduce])
-  return <span ref={ref} className={className}>{prefix}{val}{suffix}</span>
-}
-
 // Magnetic hover: element eases toward the cursor with spring momentum (decorative,
 // desktop-pointer only, touch never fires mousemove). Disabled under reduced motion.
 function Magnetic({ children, strength = 0.35 }: { children: React.ReactNode; strength?: number }) {
@@ -771,10 +757,10 @@ export function Landing() {
       </header>
 
       <Reveal className="strip" y={0}><div className="strip-in">
-        <div className="stat"><div className="n g"><CountUp to={43} /></div><div className="l">analytics tools</div></div>
-        <div className="stat"><div className="n"><CountUp to={6} /></div><div className="l">workspace hubs</div></div>
-        <div className="stat"><div className="n"><CountUp to={20} suffix="+" /></div><div className="l">feeds on one chart</div></div>
-        <div className="stat"><div className="n"><CountUp to={100} suffix="%" /></div><div className="l">browser-based</div></div>
+        <div className="stat"><div className="n g">Full</div><div className="l">analytics stack</div></div>
+        <div className="stat"><div className="n">Every</div><div className="l">workspace hub</div></div>
+        <div className="stat"><div className="n">Live</div><div className="l">feeds, one chart</div></div>
+        <div className="stat"><div className="n">Zero</div><div className="l">install</div></div>
       </div></Reveal>
 
       <section className="blk" id="tools"><div className="wrap">
