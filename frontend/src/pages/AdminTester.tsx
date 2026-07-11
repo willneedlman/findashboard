@@ -220,7 +220,7 @@ interface UserStats {
   users: { id: string; username: string; display_name: string; email: string | null; created_at: string; last_login_at: string | null; login_count: number }[]
 }
 
-type Tab = 'traffic' | 'health' | 'users' | 'cache' | 'endpoints' | 'lob' | 'widgets' | 'regression' | 'stress' | 'algo' | 'reports'
+type Tab = 'traffic' | 'health' | 'users' | 'cache' | 'endpoints' | 'lob' | 'widgets' | 'regression' | 'stress' | 'algo' | 'reports' | 'market'
 
 interface LOBSnapshot {
   msg: number
@@ -266,6 +266,22 @@ export default function AdminTester() {
   const [epMethod, setEpMethod] = useState('GET')
   const [epResult, setEpResult] = useState('')
   const [epLoading, setEpLoading] = useState(false)
+
+  // Market Sizing tab — free-form BCC Research test harness.
+  const [mktQuery, setMktQuery] = useState('semiconductor market size and forecast')
+  const [mktCount, setMktCount] = useState(5)
+  const [mktResult, setMktResult] = useState<any[] | null>(null)
+  const [mktLoading, setMktLoading] = useState(false)
+  const [mktErr, setMktErr] = useState('')
+  const runMarket = async () => {
+    setMktLoading(true); setMktErr('')
+    try {
+      const res = await axios.get('/api/bcc/market-size', { params: { query: mktQuery, count: mktCount } })
+      setMktResult(res.data.reports || [])
+    } catch (e: any) {
+      setMktErr(e?.response?.data?.detail || 'Search failed'); setMktResult(null)
+    } finally { setMktLoading(false) }
+  }
 
   // LOB replay
   const [lobCsv, setLobCsv] = useState('')
@@ -511,7 +527,7 @@ export default function AdminTester() {
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 0, borderBottom: `1px solid ${RED_BORDER}`, marginBottom: 20 }}>
-          {(['traffic', 'health', 'users', 'cache', 'endpoints', 'lob', 'widgets', 'regression', 'stress', 'algo', 'reports'] as Tab[]).map(t => (
+          {(['traffic', 'health', 'users', 'cache', 'endpoints', 'lob', 'widgets', 'regression', 'stress', 'algo', 'reports', 'market'] as Tab[]).map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
               background: 'none', border: 'none', borderBottom: tab === t ? `2px solid ${RED}` : '2px solid transparent',
               color: tab === t ? RED : 'var(--theme-text-dim)', fontFamily: 'var(--theme-mono)', fontSize: 10,
@@ -1122,6 +1138,36 @@ export default function AdminTester() {
                   </div>
                 )
               })}
+            </div>
+          </div>
+        )}
+
+        {tab === 'market' && (
+          <div style={{ fontFamily: 'var(--theme-mono)' }}>
+            <div style={{ color: 'var(--theme-text-dim)', fontSize: 11, marginBottom: 12 }}>
+              Free-form BCC Research market-sizing search (public MCP). Same backend the Company Profile panel uses.
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+              <input value={mktQuery} onChange={e => setMktQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && runMarket()} placeholder="e.g. AI in drug discovery" style={{ ...inp, minWidth: 320, flex: 1 }} />
+              <input type="number" min={1} max={20} value={mktCount} onChange={e => setMktCount(Math.max(1, Math.min(20, +e.target.value || 5)))} style={{ ...inp, width: 70, flex: 'none' }} />
+              <button onClick={runMarket} disabled={mktLoading || !mktQuery.trim()} style={btn(!mktLoading && !!mktQuery.trim())}>{mktLoading ? '…' : 'Search'}</button>
+            </div>
+            {mktErr && <div style={{ color: RED, fontSize: 11, marginBottom: 10 }}>{mktErr}</div>}
+            {mktResult && mktResult.length === 0 && <div style={{ color: 'var(--theme-text-dim)', padding: 20, fontSize: 12 }}>No reports for this query.</div>}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {(mktResult || []).map((r, i) => (
+                <div key={i} style={{ border: '1px solid var(--theme-border)', background: 'var(--theme-surface)', padding: '10px 12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                    <a href={r.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--theme-text)', fontSize: 12, fontWeight: 700 }}>{r.heading} ↗</a>
+                    <span style={{ color: 'var(--theme-secondary)', fontSize: 10, whiteSpace: 'nowrap' }}>score {r.score ?? '—'}</span>
+                  </div>
+                  <div style={{ marginTop: 5, fontSize: 10.5, color: 'var(--theme-secondary)', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <span>{r.category}</span><span>{r.published}</span><span>{r.report_code}</span>
+                    {r.headline && <span style={{ color: 'var(--theme-primary)' }}>{r.headline.from} → {r.headline.to} by {r.headline.to_year} · {r.headline.cagr}% CAGR</span>}
+                  </div>
+                  {r.highlights && <div style={{ marginTop: 6, fontSize: 11, color: 'var(--theme-text-dim)', lineHeight: 1.5 }}>{r.highlights}</div>}
+                </div>
+              ))}
             </div>
           </div>
         )}

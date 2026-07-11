@@ -13,6 +13,10 @@ export const fetchChokepointExposure = () =>
 export const fetchTradeFlows = (params: object) =>
   api.get('/comtrade/flows', { params }).then(r => r.data)
 
+// BCC Research market sizing (public MCP semantic search).
+export const fetchMarketSize = (query: string, count = 5) =>
+  api.get('/bcc/market-size', { params: { query, count } }).then(r => r.data)
+
 // Factor decomposition: regress a book's returns on market/rates/credit/oil/dollar.
 export const fetchFactorDecomposition = (body: object) =>
   api.post('/portfolio/factor-decomposition', body).then(r => r.data)
