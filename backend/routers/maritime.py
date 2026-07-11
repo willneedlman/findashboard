@@ -1376,21 +1376,27 @@ def chokepoint_exposure():
                 })
                 a = agg.setdefault(tkr, {
                     "ticker": tkr, "group": _EXP_GROUPS[gkey], "group_key": gkey,
-                    "direction": direction, "score": 0.0, "chokepoints": [],
+                    "direction": direction, "score": 0.0, "chokepoints": [], "drivers": [],
                     **quote.get(tkr, {"price": None, "change_pct": None, "spark": []}),
                 })
                 a["score"] += disruption * direction
                 a["chokepoints"].append(meta["name"])
+                a["drivers"].append({
+                    "strait": meta["name"], "status": (stat or {}).get("status") or "normal",
+                    "direction": direction, "contribution": round(disruption * direction, 1),
+                })
         choke_cards.append({
             "id": cid, "name": meta["name"], "oil_mbd": meta["oil_mbd"],
             "status": (stat or {}).get("status"), "delta_pct": (stat or {}).get("delta_pct"),
             "share_pct": (stat or {}).get("share_pct"), "disruption": round(disruption, 1),
+            "series30": (stat or {}).get("series30") or [],
             "exposures": exposures,
         })
 
     for a in agg.values():
         a["score"] = round(a["score"], 1)
         a["links"] = len(a["chokepoints"])
+        a["drivers"].sort(key=lambda d: abs(d["contribution"]), reverse=True)
     # Rank: active disruption first (|score| desc), breadth as the calm-market
     # tiebreak so the board is never empty.
     leaders = sorted(agg.values(), key=lambda x: (abs(x["score"]), x["links"]), reverse=True)
