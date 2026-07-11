@@ -82,9 +82,9 @@ const PreviewTag = () => (
 
 function GhostChart({ title, hint, keys, label }: { title: string; hint: string; keys?: string[]; label: string }) {
   return (
-    <div style={{ position: 'relative', flex: 1, minHeight: 220, border: `1px solid ${BORDER}`, padding: '30px 16px 12px', boxSizing: 'border-box' }}>
+    <div style={{ position: 'relative', flex: 1, minHeight: 220, border: `1px solid ${BORDER}`, padding: '30px 16px 12px', boxSizing: 'border-box', overflow: 'hidden' }}>
       <PanelLabel label={label} /><PreviewTag />
-      <svg viewBox="0 0 1000 330" preserveAspectRatio="none" style={{ display: 'block', position: 'absolute', inset: '30px 16px 12px', width: 'auto', height: 'auto' }}>
+      <svg viewBox="0 0 1000 330" preserveAspectRatio="none" style={{ display: 'block', position: 'absolute', top: 30, right: 16, bottom: 12, left: 16, width: 'auto', height: 'auto' }}>
         {[66, 132, 198, 264].map(y => <line key={y} x1="0" y1={y} x2="1000" y2={y} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />)}
         <path d="M30 40 C 340 62 620 150 975 296" fill="none" stroke="color-mix(in srgb, var(--theme-text, #d7e3fc) 16%, transparent)" strokeWidth="2" strokeDasharray="7 7" vectorEffect="non-scaling-stroke" />
       </svg>
