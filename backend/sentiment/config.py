@@ -133,6 +133,10 @@ CONF_COVERAGE_COEF: float = 0.50
 CONF_DISAGREEMENT_COEF: float = 0.30
 CONF_COVERAGE_ETA: float = 4.0      # matched terms for full coverage
 MIN_CONFIDENCE: float = 0.10
+# A few phrases are decisive enough that a single occurrence is a confident read
+# ("debt bubble", "growth engine"). Floor their confidence above CORRECTION_CONF_MAX
+# so the deterministic lexicon read is trusted and the LLM overlay leaves it alone.
+DECISIVE_CONF_FLOOR: float = 0.60
 INTENSIFIER_FACTOR: float = 1.5
 NEGATION_WINDOW: int = 3            # tokens around a term scanned for negators
 

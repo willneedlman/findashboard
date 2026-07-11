@@ -48,6 +48,20 @@ def test_score_text_is_deterministic():
 
 
 @pytest.mark.parametrize("text,expected", [
+    # Decisive phrases the lexicon used to miss (both fell to neutral and were
+    # then mis-corrected by the LLM overlay). They now read directionally AND
+    # clear the correction ceiling, so the overlay leaves the clear signal alone.
+    ("Is the AI Data Center Boom Creating a Debt Bubble? Here's What Investors Need to Know.", "bearish"),
+    ("Chevron May Have Unlocked a Powerful New Growth Engine", "bullish"),
+])
+def test_decisive_phrases_score_and_skip_overlay(text, expected):
+    from sentiment import config
+    r = score_text(text, extract_entities(text))
+    assert r.sentiment == expected
+    assert r.confidence > config.CORRECTION_CONF_MAX   # trusted; not sent to the LLM overlay
+
+
+@pytest.mark.parametrize("text,expected", [
     ("Fed signals rate hike", "bearish"),
     ("Fed cuts rates as inflation cools", "bullish"),
     ("Stocks rally to record high on strong jobs report", "bullish"),

@@ -342,6 +342,12 @@ _LEXICON: dict[str, tuple[float, float]] = {
     "recession": (-0.85, 1.5), "soft landing hopes": (0.65, 1.3), "economic growth": (0.50, 1.2),
     "gdp growth": (0.50, 1.2), "expansion": (0.40, 1.1), "slowdown": (-0.50, 1.2),
     "contraction": (-0.60, 1.2), "downturn": (-0.60, 1.2), "growth scare": (-0.60, 1.2),
+    # Corporate-growth framing: a company "unlocking" a "growth engine/driver" is a
+    # bullish story, distinct from macro GDP growth above.
+    "growth engine": (0.55, 1.2), "growth driver": (0.48, 1.1), "new growth engine": (0.58, 1.2),
+    "unlocks growth": (0.55, 1.2), "unlock growth": (0.52, 1.1), "unlocked growth": (0.55, 1.2),
+    "unlocks value": (0.50, 1.1), "unlock value": (0.48, 1.1),
+    "unlocks": (0.40, 1.0), "unlock": (0.38, 1.0), "unlocked": (0.40, 1.0), "unlocking": (0.38, 1.0),
     # Trade / geopolitics
     "trade war": (-0.70, 1.3), "trade deal": (0.55, 1.2), "tariff": (-0.55, 1.2),
     "tariffs": (-0.55, 1.2), "sanctions": (-0.45, 1.0), "war": (-0.60, 1.2),
@@ -370,6 +376,13 @@ _LEXICON: dict[str, tuple[float, float]] = {
     "downgrade": (-0.45, 1.0), "credit crunch": (-0.75, 1.3), "liquidity crunch": (-0.75, 1.3),
     "bank failure": (-0.80, 1.4), "bank run": (-0.80, 1.4), "systemic risk": (-0.80, 1.4),
     "contagion": (-0.70, 1.3),
+    # Bubbles: in market headlines a "bubble" framing is a warning, even as a
+    # rhetorical question ("Is X a debt bubble?"). Longest-first lets the specific
+    # phrases claim the tokens before bare "bubble".
+    "debt bubble": (-0.68, 1.4), "credit bubble": (-0.62, 1.3), "asset bubble": (-0.58, 1.3),
+    "housing bubble": (-0.58, 1.3), "everything bubble": (-0.62, 1.3), "market bubble": (-0.58, 1.3),
+    "bubble territory": (-0.58, 1.3), "bubble bursts": (-0.80, 1.4), "bubble burst": (-0.80, 1.4),
+    "bubble": (-0.45, 1.2),
     # Earnings / corporate
     "earnings beat": (0.70, 1.0), "beats earnings": (0.70, 1.0), "earnings beats": (0.70, 1.0),
     "beats estimates": (0.65, 0.9), "tops estimates": (0.65, 0.9), "tops expectations": (0.60, 0.9),
@@ -622,6 +635,17 @@ _LEXICON.update(_SUPPLY_DEMAND)
 # Phrases whose sign inverts between equities and the commodity itself (a glut is
 # disinflationary for stocks but bearish for crude; "supply shock" spikes oil).
 _COMMODITY_INVERSE_PHRASES: frozenset[str] = frozenset(_SUPPLY_DEMAND) | {"supply shock"}
+
+# Decisive phrases: unambiguous enough that a single occurrence is a high-confidence
+# read. score_text floors their confidence so the deterministic call stands and the
+# LLM overlay does not re-adjudicate a clear signal (bubble warnings, growth stories).
+_DECISIVE_TERMS: frozenset[str] = frozenset({
+    "debt bubble", "credit bubble", "asset bubble", "housing bubble",
+    "everything bubble", "market bubble", "bubble territory",
+    "bubble bursts", "bubble burst",
+    "growth engine", "new growth engine",
+    "unlocks growth", "unlock growth", "unlocked growth",
+})
 
 _MAX_PHRASE_LEN = max(len(k.split()) for k in _LEXICON)
 _TOKEN_RE = re.compile(r"[a-z0-9&]+")
@@ -1023,6 +1047,11 @@ def score_text(text: str, entities: list[Entity]) -> LexScore:
         config.CONF_BASE
         + config.CONF_COVERAGE_COEF * coverage
         - config.CONF_DISAGREEMENT_COEF * disagreement)), 2)
+    # An unambiguous, decisive phrase is a confident read on its own — a single
+    # "debt bubble" or "growth engine" hit should not sit below the correction
+    # ceiling where a compositional LLM re-read could overrule the clear signal.
+    if any(h.term in _DECISIVE_TERMS for h in hits):
+        confidence = max(confidence, config.DECISIVE_CONF_FLOOR)
 
     sentiment = "bullish" if direction > 0.1 else "bearish" if direction < -0.1 else "neutral"
     return LexScore(score, direction, confidence, tier, sentiment, round(raw, 4),
