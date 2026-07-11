@@ -1,66 +1,96 @@
-import LegalPage, { Section, P, UL } from './LegalPage'
+import LegalPage, { Section, UL } from './LegalPage'
 
 export default function DataSources() {
   return (
-    <LegalPage title="Data Sources" lastUpdated="June 2026">
-      <Section title="Market Data">
-        <P><strong>Yahoo Finance (via yfinance open-source library)</strong></P>
+    <LegalPage title="Data Sources" lastUpdated="July 2026">
+      <Section title="Prices and market data">
         <UL items={[
-          'Price history, OHLCV data, options chains, earnings dates',
-          'Data is sourced from Yahoo Finance and subject to Yahoo\'s terms of service',
-          'May be delayed 15–20 minutes for real-time quotes',
-          'https://finance.yahoo.com',
+          'Yahoo Finance (yfinance)',
+          'Alpaca (IEX)',
+          'Alpha Vantage',
+          'Financial Modeling Prep (FMP)',
+          'Finnhub',
+          'Nasdaq',
+          'CoinGecko',
+          'Binance.US',
         ]} />
       </Section>
 
-      <Section title="Fundamental Data">
-        <P><strong>Financial Modeling Prep (FMP)</strong></P>
+      <Section title="Fundamentals and filings">
         <UL items={[
-          'Income statements, balance sheets, cash flow statements',
-          'Analyst estimates, consensus ratings, price targets',
-          'Real-time quotes and market cap data',
-          'FMP API key required for full functionality — some features degrade gracefully without it',
-          'https://financialmodelingprep.com',
+          'SEC EDGAR',
+          'Financial Modeling Prep (FMP)',
+          'Aswath Damodaran industry dataset',
         ]} />
       </Section>
 
-      <Section title="Interest Rate Data">
-        <P><strong>Federal Reserve Bank of St. Louis (FRED)</strong></P>
+      <Section title="Rates, macro, and economic data">
         <UL items={[
-          'Federal Funds Rate (DTB3 series)',
-          'Data is official U.S. Federal Reserve data and is publicly available',
-          'https://fred.stlouisfed.org',
-        ]} />
-        <P><strong>Yahoo Finance (via yfinance)</strong></P>
-        <UL items={[
-          'Treasury yield data (^IRX, ^FVX, ^TNX, ^TYX)',
-          '1Y, 5Y, 10Y, 30Y Treasury yields',
+          'Federal Reserve Bank of St. Louis (FRED)',
+          'US Treasury',
+          'Federal Reserve',
+          'Bureau of Labor Statistics (BLS)',
+          'Bureau of Economic Analysis (BEA)',
+          'US Census Bureau',
+          'European Central Bank (ECB)',
         ]} />
       </Section>
 
-      <Section title="Chart Widgets">
-        <P><strong>TradingView</strong></P>
+      <Section title="Options">
         <UL items={[
-          'Advanced chart embeds via TradingView\'s free widget API',
-          'TradingView branding is displayed as required by their free-tier terms',
-          'Chart data is served directly from TradingView\'s infrastructure',
-          'Removal of TradingView branding requires a paid TradingView plan',
-          'https://www.tradingview.com',
+          'Yahoo Finance (option chains)',
         ]} />
       </Section>
 
-      <Section title="Company Logos">
-        <P><strong>Parqet Logo CDN</strong></P>
+      <Section title="Fixed income and bonds">
         <UL items={[
-          'Company logos are sourced from assets.parqet.com',
-          'Used for visual identification purposes only',
-          'Logos are trademarks of their respective companies',
+          'OpenFIGI',
+          'SEC EDGAR',
+          'US Treasury',
+          'SSGA (State Street)',
+          'Alpha Vantage',
+          'FINRA TRACE',
         ]} />
       </Section>
 
-      <Section title="Data Limitations">
-        <P>All data providers may experience outages, rate limiting, or data gaps. Where primary data is unavailable, the Platform may display backstop/fallback values or N/A. Users should always verify critical data against their primary broker or a licensed data vendor before making trading decisions.</P>
-        <P>Cryptocurrency data (e.g., BTC-USD) is sourced from Yahoo Finance and may differ from exchange-specific prices due to the fragmented nature of crypto markets.</P>
+      <Section title="Geo-Logistics and maritime">
+        <UL items={[
+          'IMF PortWatch',
+          'aisstream.io',
+          'VesselAPI',
+          'Kystverket',
+          'OpenSky Network',
+          'World Bank (LSCI)',
+          'Drewry',
+          'US Census Bureau',
+          'Natural Earth',
+          'Global Energy Monitor',
+          'NGA World Port Index',
+          'OpenStreetMap (Overpass)',
+          'HELCOM',
+        ]} />
+      </Section>
+
+      <Section title="News and sentiment">
+        <UL items={[
+          'MarketWatch, CNBC, WSJ, NYT, Financial Times, The Economist',
+          'BBC, The Guardian, Yahoo Finance, Axios, Nasdaq, CoinDesk',
+          'Reuters and AP (via Google News)',
+          'Federal Reserve, SEC, and ECB press feeds',
+          'Reddit',
+          'Finnhub',
+          'Groq and Cerebras (LLM correction)',
+        ]} />
+      </Section>
+
+      <Section title="Charts and logos">
+        <UL items={[
+          'lightweight-charts',
+          'Recharts',
+          'TradingView',
+          'logo.dev',
+          'Parqet',
+        ]} />
       </Section>
     </LegalPage>
   )
