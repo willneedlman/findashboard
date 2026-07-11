@@ -111,6 +111,7 @@ const ResetPassword      = lazyWithReload(() => import('./pages/ResetPassword'))
 const HubLanding         = lazyWithReload(() => import('./pages/HubLanding'))
 const GlobalMarkets      = lazyWithReload(() => import('./pages/GlobalMarkets'))
 const LogisticsMap       = lazyWithReload(() => import('./pages/LogisticsMap'))
+const ChokepointExposure = lazyWithReload(() => import('./pages/ChokepointExposure'))
 
 function PageLoader() {
   return (
@@ -306,6 +307,7 @@ export default function App() {
               <Route path="/compare"            element={<Compare />} />
               <Route path="/etf-analyzer"       element={<EtfXray />} />
               <Route path="/logistics-map"      element={<LogisticsMap />} />
+              <Route path="/chokepoint-exposure" element={<ChokepointExposure />} />
               <Route path="/maritime-freight"   element={<Navigate to="/logistics-map" replace />} />
               <Route path="/air-cargo"          element={<Navigate to="/logistics-map" replace />} />
               <Route path="/freight-macro"      element={<Navigate to="/logistics-map" replace />} />

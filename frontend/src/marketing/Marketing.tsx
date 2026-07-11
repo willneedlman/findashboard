@@ -1127,8 +1127,8 @@ const FreightTrend = () => (
 export function LogisticsPage() {
   return (
     <Shell active="logistics">
-      <PageHero eyebrow="Geo-Logistics · 2 maps" h1="The physical economy, in near real time."
-        lede="Two live maps of physical trade, built entirely on free first-party data. Cargo ships and canal chokepoints on the Logistics Map, tankers and LNG on the Energy Flows Map." />
+      <PageHero eyebrow="Geo-Logistics · 3 tools" h1="The physical economy, in near real time."
+        lede="Two live maps of physical trade and the equity exposure behind them, built entirely on free first-party data. Cargo ships and chokepoints on the Logistics Map, tankers and LNG on the Energy Flows Map, and the names each stressed chokepoint moves." />
 
       <section className="blk"><div className="wrap">
         <Reveal className="sec-head">
@@ -1175,9 +1175,32 @@ export function LogisticsPage() {
         </div>
       </div></section>
 
+      <section className="blk" style={{ borderTop: '1px solid var(--line)', background: 'var(--bg2)' }}>
+        <div className="wrap split">
+          <Reveal>
+            <div className="eyebrow">Chokepoint Exposure</div>
+            <h2 style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-0.02em', margin: '12px 0 14px' }}>From a stressed strait to the names that move.</h2>
+            <p style={{ color: 'var(--muted)', fontSize: 15.5, lineHeight: 1.65 }}>Live transit stress at each chokepoint mapped to the listed names it tends to move. When a strait congests or reroutes, tanker day-rates and crude firm while refiners and Asia-trade names get pressured. Names rank by exposure to today's disruption, and each one opens straight into the research tools.</p>
+            <div className="cta" style={{ marginTop: 24 }}><Link to="/app" className="btn btn-ghost btn-lg">Open the board →</Link></div>
+          </Reveal>
+          <Reveal delay={0.12}>
+            <VPanel title="Most-exposed names" tags={['Tailwind / headwind', 'Live quotes', 'One-click research']}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--mono)', fontSize: 11.5 }}>
+                <thead><tr>{['Name', 'Basket', 'Signal'].map((h, i) => <th key={h} style={{ ...miniTh, textAlign: i === 0 ? 'left' : 'right' }}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {([['ZIM', 'Container liners', 'Tailwind', 'pos'], ['LMT', 'Defense', 'Tailwind', 'pos'], ['FRO', 'Tankers', 'Tailwind', 'pos'], ['TSM', 'Semiconductors', 'Headwind', 'neg'], ['VLO', 'Refiners', 'Headwind', 'neg']] as [string, string, string, string][]).map(([n, b, s, cls]) => (
+                    <tr key={n}><td style={{ padding: '6px 2px', color: 'var(--text)', fontWeight: 700 }}>{n}</td><td style={{ padding: '6px 2px', textAlign: 'right', color: 'var(--muted)' }}>{b}</td><td className={cls} style={{ padding: '6px 2px', textAlign: 'right' }}>{s}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </VPanel>
+          </Reveal>
+        </div>
+      </section>
+
       <section className="blk"><div className="wrap">
         <div className="final">
-          <h2>Both maps, in the terminal.</h2>
+          <h2>Two maps and the exposure board, in the terminal.</h2>
           <Link to="/app" className="btn btn-gold btn-lg">Launch Terminal →</Link>
         </div>
       </div></section>

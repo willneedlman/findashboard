@@ -5,7 +5,7 @@ import {
   LineChart, BarChart2, Waves, Zap, Shuffle, Percent,
   GitBranch, Landmark, Dices, Gauge, BookOpen, Bell, Workflow, Clock, ArrowLeftRight, Home,
   CandlestickChart, Megaphone, Rocket,
-  Container, Fuel, MapPinned,
+  Container, Fuel, MapPinned, Waypoints,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -143,6 +143,7 @@ export const HUBS: Hub[] = [
     tools: [
       { title: 'Logistics Map',    chip: 'Logistics',    desc: 'Air hubs, chokepoints, connectivity ports, live cargo ships, and freight macro on one map', route: '/logistics-map', icon: MapPinned },
       { title: 'Energy Flows Map', chip: 'Energy Flows', desc: 'Live AIS tankers, energy pipelines, export terminals, and chokepoints',                       route: '/flows-map',     icon: Fuel },
+      { title: 'Chokepoint Exposure', chip: 'Exposure',  desc: 'Live chokepoint stress mapped to the tankers, oil, refiners, and shippers it moves',         route: '/chokepoint-exposure', icon: Waypoints },
     ],
   },
 ]

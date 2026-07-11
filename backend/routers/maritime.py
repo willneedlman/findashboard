@@ -1246,3 +1246,154 @@ def vessels(classified_only: bool = Query(False, description="drop vessels whose
     except Exception:
         pass
     return {"vessels": v, "count": len(v), "status": status}
+
+
+# ── Chokepoint → equity exposure ─────────────────────────────────────────────
+# Which listed names move when a chokepoint is disrupted. Curated, not derived:
+# a hand-built map is honest and auditable, and there is no free feed that scores
+# single-name chokepoint sensitivity. `dir` is the tendency when the chokepoint
+# is DISRUPTED (transits drop / rerouting): +1 benefits (tanker day-rates, crude,
+# defense), -1 pressured (feedstock/logistics cost, Asia-trade names).
+_EXP_GROUPS = {
+    "tanker":   "Tankers",
+    "oil":      "Oil majors & E&P",
+    "refiner":  "Refiners",
+    "lng":      "LNG",
+    "defense":  "Defense",
+    "semi":     "Semiconductors",
+    "liner":    "Container liners",
+}
+# Reusable exposure baskets, referenced per chokepoint below.
+_TANKERS = [("FRO", 1), ("STNG", 1), ("INSW", 1), ("DHT", 1), ("ASC", 1)]
+_OILMAJ  = [("XOM", 1), ("CVX", 1), ("COP", 1), ("OXY", 1)]
+_REFINE  = [("VLO", -1), ("MPC", -1), ("PSX", -1)]
+_DEFENSE = [("LMT", 1), ("RTX", 1), ("NOC", 1)]
+_LNG     = [("LNG", 1)]
+_SEMI    = [("TSM", -1), ("NVDA", -1), ("AVGO", -1)]
+_LINER   = [("ZIM", 1)]
+
+# chokepoint id → { group: [(ticker, dir), ...] }
+CHOKEPOINT_EXPOSURE: dict[str, dict[str, list]] = {
+    "hormuz":    {"tanker": _TANKERS, "oil": _OILMAJ, "defense": _DEFENSE, "refiner": _REFINE},
+    "malacca":   {"tanker": _TANKERS, "oil": _OILMAJ, "lng": _LNG, "semi": _SEMI},
+    "suez":      {"tanker": _TANKERS, "liner": _LINER, "refiner": _REFINE},
+    "bab":       {"tanker": _TANKERS, "liner": _LINER, "defense": _DEFENSE, "refiner": _REFINE},
+    "panama":    {"liner": _LINER, "lng": _LNG},
+    "bosphorus": {"tanker": _TANKERS, "oil": _OILMAJ},
+    "danish":    {"tanker": _TANKERS, "oil": _OILMAJ},
+    "goodhope":  {"tanker": _TANKERS, "liner": _LINER},
+    "gibraltar": {"tanker": _TANKERS, "refiner": _REFINE},
+    "taiwan":    {"semi": _SEMI, "defense": _DEFENSE, "liner": _LINER},
+}
+_EXP_NOTE = {
+    "tanker": "day-rates rise on rerouting and longer ton-miles",
+    "oil": "crude tightens when Gulf supply is at risk",
+    "refiner": "feedstock cost and logistics risk rise",
+    "lng": "cargoes reroute and prices tighten",
+    "defense": "geopolitical tension lifts order expectations",
+    "semi": "Asia trade and fab logistics at risk",
+    "liner": "box rates spike on rerouting and blank sailings",
+}
+
+
+def _choke_disruption(stat: dict) -> float:
+    """Non-negative disruption magnitude from a chokepoint-stats row. Congestion
+    (transits dropping vs the prior week) is the disruptive signal; a rising
+    count is not. Scaled so a flat/normal chokepoint contributes 0."""
+    d = stat.get("delta_pct")
+    base = max(0.0, -(d or 0.0))                      # % transit drop wk/wk
+    if stat.get("status") == "congested":
+        base += 5.0
+    if stat.get("anomaly") == "low":
+        base += 3.0
+    return round(base, 1)
+
+
+@router.get("/exposure")
+def chokepoint_exposure():
+    """Live chokepoint stress mapped to the listed names it tends to move.
+
+    Joins the curated CHOKEPOINT_EXPOSURE map to /chokepoint-stats (IMF
+    PortWatch + AIS nowcast) and enriches each name with a live daily quote.
+    `leaders` ranks names by net exposure to today's disruption so a name sitting
+    behind several stressed chokepoints floats up. When no chokepoint is under
+    stress every disruption is 0 and leaders fall back to exposure breadth."""
+    from cache import get_download
+
+    stats = {s["id"]: s for s in chokepoint_stats().get("stats", [])}
+
+    # Collect every unique ticker for one batched quote download.
+    syms = sorted({t for groups in CHOKEPOINT_EXPOSURE.values()
+                   for basket in groups.values() for t, _ in basket})
+    import datetime as _dt
+    end = (_dt.date.today() + _dt.timedelta(days=1)).isoformat()
+    start = (_dt.date.today() - _dt.timedelta(days=20)).isoformat()
+    quote: dict[str, dict] = {}
+    try:
+        df = get_download(tuple(syms), start, end, "1d")
+        closes = df.get("Close") if not df.empty else None
+        if closes is not None:
+            for sym in syms:
+                try:
+                    s = closes[sym].dropna() if sym in closes else None
+                    if s is None or len(s) < 2:
+                        continue
+                    price, prev = float(s.iloc[-1]), float(s.iloc[-2])
+                    quote[sym] = {
+                        "price": round(price, 2),
+                        "change_pct": round((price / prev - 1) * 100, 2) if prev else None,
+                        "spark": [round(float(v), 2) for v in s.tail(10)],
+                    }
+                except Exception:
+                    continue
+    except Exception:
+        pass
+
+    # Per-ticker aggregate score across every chokepoint it sits behind.
+    agg: dict[str, dict] = {}
+    choke_cards = []
+    for meta in CHOKEPOINTS:
+        cid = meta["id"]
+        groups = CHOKEPOINT_EXPOSURE.get(cid)
+        stat = stats.get(cid)
+        if not groups:
+            continue
+        disruption = _choke_disruption(stat) if stat else 0.0
+        exposures = []
+        for gkey, basket in groups.items():
+            for tkr, direction in basket:
+                exposures.append({
+                    "ticker": tkr, "group": _EXP_GROUPS[gkey], "group_key": gkey,
+                    "direction": direction, "note": _EXP_NOTE[gkey],
+                    **quote.get(tkr, {"price": None, "change_pct": None, "spark": []}),
+                })
+                a = agg.setdefault(tkr, {
+                    "ticker": tkr, "group": _EXP_GROUPS[gkey], "group_key": gkey,
+                    "direction": direction, "score": 0.0, "chokepoints": [],
+                    **quote.get(tkr, {"price": None, "change_pct": None, "spark": []}),
+                })
+                a["score"] += disruption * direction
+                a["chokepoints"].append(meta["name"])
+        choke_cards.append({
+            "id": cid, "name": meta["name"], "oil_mbd": meta["oil_mbd"],
+            "status": (stat or {}).get("status"), "delta_pct": (stat or {}).get("delta_pct"),
+            "share_pct": (stat or {}).get("share_pct"), "disruption": round(disruption, 1),
+            "exposures": exposures,
+        })
+
+    for a in agg.values():
+        a["score"] = round(a["score"], 1)
+        a["links"] = len(a["chokepoints"])
+    # Rank: active disruption first (|score| desc), breadth as the calm-market
+    # tiebreak so the board is never empty.
+    leaders = sorted(agg.values(), key=lambda x: (abs(x["score"]), x["links"]), reverse=True)
+    # Stressed chokepoints float to the top of the card list.
+    choke_cards.sort(key=lambda c: c["disruption"], reverse=True)
+
+    return {
+        "chokepoints": choke_cards,
+        "leaders": leaders,
+        "any_stress": any(c["disruption"] > 0 for c in choke_cards),
+        "priced": len(quote),
+        "source": "curated exposure map + IMF PortWatch + yfinance",
+    }

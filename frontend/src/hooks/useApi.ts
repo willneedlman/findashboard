@@ -5,6 +5,10 @@ const api = axios.create({ baseURL: '/api', timeout: 25_000 })
 export const fetchMarketHistory = (ticker: string, start?: string, end?: string) =>
   api.get('/market/history', { params: { ticker, start, end } }).then(r => r.data)
 
+// Chokepoint Exposure: live chokepoint stress mapped to exposed equities.
+export const fetchChokepointExposure = () =>
+  api.get('/maritime/exposure').then(r => r.data)
+
 // Ticker-overview drawer sources.
 export const fetchTickerHub = (ticker: string) =>
   api.get('/corporate/hub', { params: { ticker } }).then(r => r.data)
