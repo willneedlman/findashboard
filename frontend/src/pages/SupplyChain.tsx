@@ -456,12 +456,12 @@ function MarketPerformancePanel({ ticker }: { ticker: string }) {
           </div>
           <div style={{ padding: '14px 12px 6px' }}>
             <div style={{ ...labelStyle, paddingLeft: 6 }}>Price</div>
-            <PerfChart data={q.data.price} stroke="#1f5673" id="profPrice" fmt={v => `$${v.toLocaleString()}`} height={220} />
+            <PerfChart data={q.data.price} stroke="var(--theme-primary, #c9a84c)" id="profPrice" fmt={v => `$${v.toLocaleString()}`} height={220} />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 8, padding: '6px 12px 12px' }}>
             <div>
               <div style={{ ...labelStyle, paddingLeft: 6 }}>30D Rolling Volatility · Annualised</div>
-              <PerfChart data={q.data.volatility.map((d: any) => ({ ...d, value: +(d.value * 100).toFixed(2) }))} stroke="#d97736" id="profVol" fmt={v => `${v}%`} height={140} />
+              <PerfChart data={q.data.volatility.map((d: any) => ({ ...d, value: +(d.value * 100).toFixed(2) }))} stroke="var(--theme-tertiary, #60a5fa)" id="profVol" fmt={v => `${v}%`} height={140} />
             </div>
             <div>
               <div style={{ ...labelStyle, paddingLeft: 6 }}>Peak Drawdown</div>

@@ -196,7 +196,7 @@ export function OptionsChainScannerContent() {
                               <td style={{ ...TD, color: 'var(--theme-secondary, #99907e)' }}>{row.ask?.toFixed(2) ?? '—'}</td>
                               <td style={TD}>{row.volume?.toLocaleString() ?? '—'}</td>
                               <td style={TD}>{row.openInterest?.toLocaleString() ?? '—'}</td>
-                              <td style={{ ...TD, color: row.impliedVolatility > 0.5 ? '#d97736' : 'var(--theme-text, #d7e3fc)' }}>
+                              <td style={{ ...TD, color: row.impliedVolatility > 0.5 ? 'var(--theme-warn, #d97736)' : 'var(--theme-text, #d7e3fc)' }}>
                                 {(row.impliedVolatility * 100)?.toFixed(1)}%
                               </td>
                             </tr>

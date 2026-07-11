@@ -219,7 +219,7 @@ export default function DealerGEX() {
                         return (
                           <g>
                             <rect x={x} y={viewBox.y - 20} width={62} height={14} fill="rgba(30,20,10,0.82)" rx={2} />
-                            <text x={x + 3} y={viewBox.y - 10} fill="#d97736" fontSize={9} fontFamily="var(--theme-mono)">{`Flip $${flipLevel}`}</text>
+                            <text x={x + 3} y={viewBox.y - 10} fill="var(--theme-warn, #d97736)" fontSize={9} fontFamily="var(--theme-mono)">{`Flip $${flipLevel}`}</text>
                           </g>
                         )
                       }} />}

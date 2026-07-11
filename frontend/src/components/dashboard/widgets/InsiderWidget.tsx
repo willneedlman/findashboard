@@ -57,7 +57,7 @@ export default function InsiderWidget({ config }: { config: WidgetConfig }) {
       <div style={{ padding: '10px 12px', borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
         <div style={{ marginBottom: 6 }}><span style={cap}>Ownership</span></div>
         <div style={{ display: 'flex', height: 8, overflow: 'hidden', border: `1px solid ${T.border}` }}>
-          <div style={{ width: `${inst ?? 0}%`, background: '#1f5673' }} />
+          <div style={{ width: `${inst ?? 0}%`, background: 'var(--theme-tertiary, #1f5673)' }} />
           <div style={{ width: `${retail ?? 0}%`, background: 'rgba(255,255,255,0.12)' }} />
           <div style={{ width: `${insider ?? 0}%`, background: T.gold }} />
         </div>
