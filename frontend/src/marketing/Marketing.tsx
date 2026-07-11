@@ -1339,8 +1339,8 @@ export function ChartingPage() {
 export function TradingPage() {
   return (
     <Shell active="trading">
-      <PageHero eyebrow="Trading · 9 tools" h1="Build, test, execute, and track."
-        lede="Compose a strategy, test it against history, run it on a simulated desk, and track every trade and holding. Nine tools cover the loop from rules to reviewed result." />
+      <PageHero eyebrow="Trading · 10 tools" h1="Build, test, execute, and track."
+        lede="Compose a strategy, test it against history, run it on a simulated desk, and track every trade and holding. Ten tools cover the loop from rules to reviewed result." />
 
       <section className="blk"><div className="wrap">
         <Reveal className="sec-head">
@@ -1401,7 +1401,7 @@ export function TradingPage() {
 
       <section className="blk"><div className="wrap">
         <div className="final">
-          <h2>All nine trading tools, in the terminal.</h2>
+          <h2>All ten trading tools, in the terminal.</h2>
           <Link to="/app" className="btn btn-gold btn-lg">Launch Terminal →</Link>
         </div>
       </div></section>

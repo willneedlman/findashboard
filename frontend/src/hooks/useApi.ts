@@ -9,6 +9,10 @@ export const fetchMarketHistory = (ticker: string, start?: string, end?: string)
 export const fetchChokepointExposure = () =>
   api.get('/maritime/exposure').then(r => r.data)
 
+// Factor decomposition: regress a book's returns on market/rates/credit/oil/dollar.
+export const fetchFactorDecomposition = (body: object) =>
+  api.post('/portfolio/factor-decomposition', body).then(r => r.data)
+
 // Ticker-overview drawer sources.
 export const fetchTickerHub = (ticker: string) =>
   api.get('/corporate/hub', { params: { ticker } }).then(r => r.data)

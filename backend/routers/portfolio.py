@@ -345,6 +345,150 @@ class CompareRequest(BaseModel):
         return self
 
 
+# ── Factor / risk decomposition ─────────────────────────────────────────────
+# Return-based factor proxies. All liquid ETFs so one batched download covers
+# them, and betas read in return space (a market beta near 1, a duration beta,
+# a credit beta, an oil beta, a dollar beta). Factors are correlated, so betas
+# are PARTIAL exposures holding the others fixed — that is the point.
+_FACTORS = [
+    ("Market", "SPY"),
+    ("Rates", "TLT"),
+    ("Credit", "HYG"),
+    ("Oil", "USO"),
+    ("Dollar", "UUP"),
+]
+
+
+class FactorHolding(BaseModel):
+    ticker: str
+    shares: float | None = None
+    weight: float | None = None      # percent, used directly when shares absent
+
+
+class FactorRequest(BaseModel):
+    holdings: list[FactorHolding] = Field(..., min_length=1, max_length=100)
+    lookback_days: int = Field(365, ge=90, le=1825)
+
+
+@router.post("/factor-decomposition")
+def factor_decomposition(req: FactorRequest):
+    """Regress a book's daily returns on market, rates, credit, oil, and dollar
+    factors. Returns partial factor betas with t-stats, each factor's share of
+    return variance, the idiosyncratic remainder, and concentration stats.
+
+    Weights come from `weight` when given (paste mode); otherwise from
+    shares x last close (the saved Portfolio Manager book)."""
+    holds: dict[str, FactorHolding] = {}
+    for h in req.holdings:
+        sym = validate_ticker(h.ticker)
+        if sym.upper() == "CASH":
+            continue
+        holds[sym] = h                                    # dedup, last wins
+    if not holds:
+        raise HTTPException(400, "No priceable holdings")
+
+    tickers = sorted(holds)
+    factor_syms = [s for _, s in _FACTORS]
+    union = tuple(sorted(set(tickers) | set(factor_syms)))
+    import datetime as _dt
+    end = (_dt.date.today() + _dt.timedelta(days=1)).isoformat()
+    start = (_dt.date.today() - _dt.timedelta(days=req.lookback_days + 10)).isoformat()
+    try:
+        dl = get_download(union, start, end)
+        raw = dl["Close"] if isinstance(dl.columns, pd.MultiIndex) and "Close" in dl.columns.get_level_values(0) else dl
+        if isinstance(raw, pd.Series):
+            raw = raw.to_frame(union[0])
+        if raw.index.tz is not None:
+            raw.index = raw.index.tz_convert(None)
+    except Exception:
+        logger.exception("factor download failed"); raise HTTPException(500, "Internal server error")
+    raw = raw.dropna(how="all")
+    if raw.empty:
+        raise HTTPException(404, "No price data")
+
+    priced = [t for t in tickers if t in raw.columns and raw[t].notna().sum() > 20]
+    dropped = [t for t in tickers if t not in priced]
+    if not priced:
+        raise HTTPException(404, "None of the holdings could be priced")
+
+    # Weights: direct percent, else market value from the latest close.
+    use_weight = all(holds[t].weight is not None for t in priced)
+    if use_weight:
+        mv = {t: max(0.0, float(holds[t].weight or 0)) for t in priced}
+    else:
+        mv = {}
+        for t in priced:
+            last = float(raw[t].dropna().iloc[-1])
+            mv[t] = max(0.0, float(holds[t].shares or 0)) * last
+    total = sum(mv.values())
+    if total <= 0:
+        raise HTTPException(400, "Holdings have zero total value")
+    weights = {t: mv[t] / total for t in priced}
+
+    daily = raw.pct_change().dropna(how="all")
+    port = sum(daily[t].fillna(0.0) * weights[t] for t in priced)
+    fac_cols = [(lbl, s) for lbl, s in _FACTORS if s in daily.columns and daily[s].notna().sum() > 20]
+    frame = pd.concat([port.rename("port")] + [daily[s].rename(s) for _, s in fac_cols], axis=1).dropna()
+    if len(frame) < 60:
+        raise HTTPException(422, "Not enough overlapping history for a stable fit")
+
+    y = frame["port"].to_numpy()
+    X = frame[[s for _, s in fac_cols]].to_numpy()
+    n, k = X.shape
+    Xa = np.column_stack([np.ones(n), X])
+    beta, *_ = np.linalg.lstsq(Xa, y, rcond=None)
+    resid = y - Xa @ beta
+    sse = float(resid @ resid)
+    sst = float(((y - y.mean()) ** 2).sum())
+    r2 = 1.0 - sse / sst if sst > 0 else 0.0
+    dof = max(n - k - 1, 1)
+    mse = sse / dof
+    try:
+        se = np.sqrt(np.diag(mse * np.linalg.inv(Xa.T @ Xa)))
+    except np.linalg.LinAlgError:
+        se = np.full(k + 1, float("nan"))
+    var_p = float(np.var(y, ddof=1)) or 1e-12
+
+    factors = []
+    for i, (lbl, s) in enumerate(fac_cols):
+        b = float(beta[i + 1])
+        cov = float(np.cov(X[:, i], y, ddof=1)[0, 1])
+        contrib = b * cov / var_p                          # sums to R^2 across factors
+        t = b / se[i + 1] if se[i + 1] and not np.isnan(se[i + 1]) else None
+        factors.append({
+            "factor": lbl, "proxy": s, "beta": round(b, 3),
+            "t_stat": round(t, 2) if t is not None else None,
+            "risk_pct": round(contrib * 100, 1),
+        })
+    factors.sort(key=lambda f: abs(f["risk_pct"]), reverse=True)
+
+    ann_vol = float(np.std(y, ddof=1)) * (252 ** 0.5)
+    hhi = sum(w * w for w in weights.values())
+    top = sorted(({"ticker": t, "weight": round(weights[t] * 100, 1)} for t in priced),
+                 key=lambda x: x["weight"], reverse=True)
+
+    return {
+        "factors": factors,
+        "r_squared": round(r2, 3),
+        "systematic_pct": round(r2 * 100, 1),
+        "idiosyncratic_pct": round((1 - r2) * 100, 1),
+        "ann_vol_pct": round(ann_vol * 100, 1),
+        "alpha_ann_pct": round(float(beta[0]) * 252 * 100, 2),
+        "concentration": {
+            "holdings": len(priced),
+            "hhi": round(hhi, 4),
+            "effective_n": round(1 / hhi, 1) if hhi else None,
+            "top_weight": top[0]["weight"] if top else None,
+            "top": top,
+        },
+        "observations": n,
+        "lookback_days": req.lookback_days,
+        "weighting": "direct" if use_weight else "market value",
+        "dropped": dropped,
+        "source": "yfinance factor ETFs (SPY/TLT/HYG/USO/UUP)",
+    }
+
+
 @router.post("/compare")
 def compare(req: CompareRequest):
     """Leveraged equity curves + metrics for 2-4 portfolios on a common date range."""

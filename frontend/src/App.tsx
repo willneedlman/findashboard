@@ -72,6 +72,7 @@ const CorrelationAnalysis = lazyWithReload(() => import('./pages/CorrelationAnal
 const PortfolioBacktester = lazyWithReload(() => import('./pages/PortfolioBacktester'))
 const MonteCarlo         = lazyWithReload(() => import('./pages/MonteCarlo'))
 const PortfolioOptimizer = lazyWithReload(() => import('./pages/PortfolioOptimizer'))
+const FactorDecomposition = lazyWithReload(() => import('./pages/FactorDecomposition'))
 const PortfolioCompare   = lazyWithReload(() => import('./pages/PortfolioCompare'))
 const StrategyBuilder    = lazyWithReload(() => import('./pages/StrategyBuilder'))
 const AlgoStrategyBuilder = lazyWithReload(() => import('./pages/AlgoStrategyBuilder'))
@@ -252,6 +253,7 @@ export default function App() {
               <Route path="/backtest"         element={<PortfolioBacktester />} />
               <Route path="/montecarlo"       element={<MonteCarlo />} />
               <Route path="/portfolio-optimizer" element={<PortfolioOptimizer />} />
+              <Route path="/factor-decomposition" element={<FactorDecomposition />} />
               <Route path="/portfolio-compare" element={<PortfolioCompare />} />
               <Route path="/portfolio"        element={<Navigate to="/backtest" replace />} />
               <Route path="/portfolio-skills" element={<Navigate to="/backtest" replace />} />
