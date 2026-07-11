@@ -1148,7 +1148,7 @@ export function LogisticsPage() {
             <div className="cta" style={{ marginTop: 24 }}><Link to="/app" className="btn btn-ghost btn-lg">Open the map →</Link></div>
           </Reveal>
           <Reveal delay={0.12}>
-            <VPanel title="Canal chokepoint transits" tags={['PortWatch', '30-day history', 'Congestion']}>
+            <VPanel title="Chokepoint transits" tags={['PortWatch', '30-day history', 'Congestion']}>
               <TransitTable />
             </VPanel>
           </Reveal>

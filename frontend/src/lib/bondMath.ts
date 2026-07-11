@@ -26,7 +26,9 @@ export function solveBondYtm(
   marketPrice: number | null | undefined,
 ): number | null {
   if (couponRate == null || !maturityYears || maturityYears <= 0 || marketPrice == null || marketPrice <= 0) return null
-  const target = (marketPrice / 100) * FACE
+  // Round the price to a whole unit of face exactly as deriveFor() does before
+  // calling /api/bond, so this inline YTM equals the detail panel's to the cent.
+  const target = Math.round((marketPrice / 100) * FACE)
   const mat = Math.max(1, Math.round(maturityYears))
   let lo = 0, hi = 200
   if (priceAtYtm(couponRate, mat, hi) > target) return null // price too low to solve in band
