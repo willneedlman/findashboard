@@ -658,6 +658,8 @@ def pairs_analysis(
     entry_z: float = Query(2.0, ge=0.5, le=4.0),
     exit_z: float = Query(0.5, ge=0.0, le=3.0),
     z_window: int = Query(60, ge=10, le=250),
+    costs_bps: float = Query(5.0, ge=0.0, le=100.0),
+    hedge_method: str = Query("ols"),
 ):
     """Cointegration test, mean-reversion half-life, and a z-score backtest for a
     pair. The spread is log(A) - beta*log(B) with beta the OLS hedge ratio; the
@@ -693,8 +695,11 @@ def pairs_analysis(
 
     # Backtest: position in {-1,0,+1} on the spread, entered at |z|>=entry,
     # exited inside exit. dspread is the spread's daily change (the pair P&L per
-    # unit long A / short beta*B). Position lags one day (no lookahead).
+    # unit long A / short beta*B). Position lags one day (no lookahead). Each
+    # round-trip nets transaction costs: 2 legs, entered and exited, at costs_bps.
+    dates = [str(d.date()) for d in df.index]
     dspread = np.diff(spread)
+    trip_cost = 2 * 2 * (costs_bps / 1e4)           # 2 legs x (entry + exit)
     pos = np.zeros(len(z))
     cur = 0
     for i in range(len(z)):
@@ -707,25 +712,64 @@ def pairs_analysis(
         elif abs(zi) <= exit_z:
             cur = 0
         pos[i] = cur
-    pnl = pos[:-1] * dspread                        # position held into next day's move
-    valid = ~np.isnan(pnl)
-    pnl = pnl[valid]
-    total = float(np.nansum(pnl))
-    sharpe = float(np.mean(pnl) / np.std(pnl) * np.sqrt(252)) if pnl.size and np.std(pnl) > 0 else None
-    exposure = float(np.mean(np.abs(pos[:-1][valid]))) if pnl.size else 0.0
-    # Trades and win rate: count closed round-trips.
-    trades, wins, entry_cum = 0, 0, 0.0
-    prev = 0.0
-    for i in range(len(pos) - 1):
-        if not valid[i]:
-            continue
-        if prev != 0 and pos[i] != prev:            # position closed (or flipped)
-            trades += 1
-            if entry_cum > 0: wins += 1
-            entry_cum = 0.0
-        if pos[i] != 0:
-            entry_cum += pnl[i] if i < len(pnl) else 0.0
-        prev = pos[i]
+    gross = pos[:-1] * dspread                       # gross daily P&L (position into next move)
+
+    # Walk the position path: record each round-trip, net costs at close, and
+    # build a daily net-equity curve.
+    equity = np.zeros(len(df))
+    trade_recs, markers = [], []
+    open_i, open_side, open_cum = None, 0, 0.0
+    running = 0.0
+
+    def _close(exit_i):
+        nonlocal running
+        cost = trip_cost
+        net = open_cum - cost
+        running_local = net
+        trade_recs.append({
+            "n": len(trade_recs) + 1,
+            "entered": dates[open_i], "exited": dates[exit_i],
+            "side": "long" if open_side > 0 else "short",
+            "z_in": round(float(z[open_i]), 2), "z_out": round(float(z[exit_i]), 2),
+            "days": exit_i - open_i,
+            "pnl": round(net, 4), "open": False,
+        })
+        markers.append({"date": dates[open_i], "z": round(float(z[open_i]), 3),
+                        "side": "long" if open_side > 0 else "short", "kind": "entry"})
+        markers.append({"date": dates[exit_i], "z": round(float(z[exit_i]), 3), "kind": "exit"})
+        return running_local
+
+    for i in range(len(df)):
+        if i > 0:
+            running += gross[i - 1] if (i - 1) < len(gross) and not np.isnan(gross[i - 1]) else 0.0
+        prev = pos[i - 1] if i > 0 else 0.0
+        if pos[i] != prev:
+            if prev != 0 and open_i is not None:      # a position just closed/flipped
+                net = _close(i)
+                running += -trip_cost                 # book the round-trip cost into equity
+                open_i = None; open_cum = 0.0
+            if pos[i] != 0:                            # a new position opened
+                open_i, open_side, open_cum = i, pos[i], 0.0
+        if pos[i] != 0 and i > 0 and (i - 1) < len(gross) and not np.isnan(gross[i - 1]):
+            open_cum += gross[i - 1]
+        equity[i] = running
+    if open_i is not None:                             # mark an open position in the log
+        trade_recs.append({
+            "n": len(trade_recs) + 1, "entered": dates[open_i], "exited": None,
+            "side": "long" if open_side > 0 else "short",
+            "z_in": round(float(z[open_i]), 2), "z_out": None,
+            "days": len(df) - 1 - open_i, "pnl": round(open_cum, 4), "open": True,
+        })
+        markers.append({"date": dates[open_i], "z": round(float(z[open_i]), 3),
+                        "side": "long" if open_side > 0 else "short", "kind": "entry"})
+
+    valid = ~np.isnan(gross)
+    gnet = gross[valid]
+    total = float(equity[-1])
+    sharpe = float(np.mean(gnet) / np.std(gnet) * np.sqrt(252)) if gnet.size and np.std(gnet) > 0 else None
+    exposure = float(np.mean(np.abs(pos[:-1][valid]))) if gnet.size else 0.0
+    closed = [t for t in trade_recs if not t["open"]]
+    wins = sum(1 for t in closed if t["pnl"] > 0)
 
     z_now = next((float(v) for v in z[::-1] if not np.isnan(v)), None)
     signal = "flat"
@@ -733,12 +777,16 @@ def pairs_analysis(
         if z_now >= entry_z: signal = "short_spread"
         elif z_now <= -entry_z: signal = "long_spread"
 
-    # Downsample the spread/z series to ~250 points for the chart.
+    # Downsample the z / equity / normalized-legs series to ~250 points.
+    a_px = df[a].to_numpy(); b_px = df[b].to_numpy()
+    a_norm = a_px / a_px[0] * 100; b_norm = b_px / b_px[0] * 100
     step = max(1, len(df) // 250)
-    series = [
-        {"date": str(df.index[i].date()), "z": round(float(z[i]), 3) if not np.isnan(z[i]) else None}
-        for i in range(0, len(df), step)
-    ]
+    idxs = list(range(0, len(df), step))
+    if idxs[-1] != len(df) - 1:
+        idxs.append(len(df) - 1)
+    series = [{"date": dates[i], "z": round(float(z[i]), 3) if not np.isnan(z[i]) else None} for i in idxs]
+    equity_series = [{"date": dates[i], "v": round(float(equity[i]) * 100, 3)} for i in idxs]   # % of gross
+    legs_series = [{"date": dates[i], "a": round(float(a_norm[i]), 2), "b": round(float(b_norm[i]), 2)} for i in idxs]
 
     return {
         "a": a, "b": b, "hedge_ratio": round(float(beta), 4), "correlation": round(corr, 3) if corr is not None else None,
@@ -746,14 +794,23 @@ def pairs_analysis(
         "half_life_days": half_life,
         "zscore": {"current": round(z_now, 2) if z_now is not None else None, "entry": entry_z, "exit": exit_z, "window": z_window},
         "signal": signal,
+        "hedge_method": "ols",
+        "costs_bps": costs_bps,
+        "last": {"a": round(float(a_px[-1]), 2), "b": round(float(b_px[-1]), 2)},
+        "leg_return": {"a": round(float(a_norm[-1] - 100), 1), "b": round(float(b_norm[-1] - 100), 1)},
         "backtest": {
             "sharpe": round(sharpe, 2) if sharpe is not None else None,
             "total_spread_return": round(total, 4),
-            "trades": trades,
-            "win_rate": round(wins / trades * 100, 1) if trades else None,
+            "trades": len(closed),
+            "wins": wins,
+            "win_rate": round(wins / len(closed) * 100, 1) if closed else None,
             "exposure_pct": round(exposure * 100, 1),
         },
+        "trades": trade_recs,
+        "markers": markers,
         "series": series,
+        "equity": equity_series,
+        "legs": legs_series,
         "observations": len(df),
         "lookback_days": lookback_days,
         "source": "yfinance closes; OLS hedge ratio, numpy ADF + OU half-life",
