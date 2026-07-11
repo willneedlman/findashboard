@@ -9,6 +9,10 @@ export const fetchMarketHistory = (ticker: string, start?: string, end?: string)
 export const fetchChokepointExposure = () =>
   api.get('/maritime/exposure').then(r => r.data)
 
+// UN Comtrade bilateral trade flows.
+export const fetchTradeFlows = (params: object) =>
+  api.get('/comtrade/flows', { params }).then(r => r.data)
+
 // Factor decomposition: regress a book's returns on market/rates/credit/oil/dollar.
 export const fetchFactorDecomposition = (body: object) =>
   api.post('/portfolio/factor-decomposition', body).then(r => r.data)

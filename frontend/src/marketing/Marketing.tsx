@@ -1127,8 +1127,8 @@ const FreightTrend = () => (
 export function LogisticsPage() {
   return (
     <Shell active="logistics">
-      <PageHero eyebrow="Geo-Logistics · 3 tools" h1="The physical economy, in near real time."
-        lede="Two live maps of physical trade and the equity exposure behind them, built entirely on free first-party data. Cargo ships and chokepoints on the Logistics Map, tankers and LNG on the Energy Flows Map, and the names each stressed chokepoint moves." />
+      <PageHero eyebrow="Geo-Logistics · 4 tools" h1="The physical economy, in near real time."
+        lede="Two live maps of physical trade, the equity exposure behind them, and the bilateral trade flows underneath, built entirely on free first-party data. Cargo ships and chokepoints, tankers and LNG, the names each stressed chokepoint moves, and who trades what with whom." />
 
       <section className="blk"><div className="wrap">
         <Reveal className="sec-head">

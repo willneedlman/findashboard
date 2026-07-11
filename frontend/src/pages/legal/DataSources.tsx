@@ -57,6 +57,7 @@ export default function DataSources() {
       <Section title="Geo-Logistics and maritime">
         <UL items={[
           'IMF PortWatch',
+          'UN Comtrade',
           'aisstream.io',
           'VesselAPI',
           'Kystverket',
