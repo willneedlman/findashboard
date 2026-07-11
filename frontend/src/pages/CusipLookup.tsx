@@ -4,6 +4,7 @@ import { useMutation } from '@tanstack/react-query'
 import PageWrapper from '../components/PageWrapper'
 import TickerLogo from '../components/TickerLogo'
 import { issuerTicker } from '../lib/issuerTickers'
+import { solveBondYtm } from '../lib/bondMath'
 import { fetchBondByCusip, fetchBondAnalytics, searchBondsByIssuer, resolveCusipBatch } from '../hooks/useApi'
 import {
   INPUT, EYEBROW, PANEL, PRIMARY_BTN, TitleBar, TitleAction, VerdictStrip, MetricCard,
@@ -137,19 +138,29 @@ function LayoutToggle({ layout, setView }: { layout: 'A' | 'B'; setView: (l: 'A'
 }
 
 function CandidateCard({ b, onClick }: { b: ResolvedBond; onClick: () => void }) {
+  const ytm = solveBondYtm(b.coupon_rate, b.years_to_maturity, b.market_price)
   return (
     <div role="button" tabIndex={0} onClick={onClick}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } }}
       style={{ background: SURFACE, border: `1px solid ${BORDER}`, padding: '13px 14px', cursor: 'pointer',
         display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <span style={{ fontFamily: MONO, fontSize: 16, fontWeight: 600, color: G }}>{num(b.coupon_rate, '%')}</span>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+        <span style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
+          <span style={{ fontFamily: MONO, fontSize: 16, fontWeight: 600, color: TEXT }}>{num(b.coupon_rate, '%')}</span>
+          <span style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', color: SEC }}>CPN</span>
+        </span>
         <ScaleBadge s={scaleOf(b)} />
       </div>
       <div style={{ fontFamily: SANS, fontSize: 12, fontWeight: 600, color: TEXT }}>Due {b.maturity_date || '—'}</div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: `1px solid ${HAIR}`, paddingTop: 6, fontFamily: MONO, fontSize: 10, color: SEC }}>
-        <span>{b.years_to_maturity != null ? `${b.years_to_maturity} yrs` : '—'}</span>
-        <span style={{ color: b.market_price != null ? TEXT : SEC }}>{b.market_price != null ? `@ ${b.market_price}` : '—'}</span>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', borderTop: `1px solid ${HAIR}`, paddingTop: 6 }}>
+        <span style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
+          <span style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', color: SEC }}>YTM</span>
+          <span style={{ fontFamily: MONO, fontSize: 13, fontWeight: 600, color: ytm != null ? G : SEC }}>{ytm != null ? `${ytm}%` : '—'}</span>
+        </span>
+        <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, fontFamily: MONO, fontSize: 10, color: SEC }}>
+          <span style={{ color: b.market_price != null ? TEXT : SEC }}>{b.market_price != null ? `@ ${b.market_price}` : '—'}</span>
+          <span>{b.years_to_maturity != null ? `${b.years_to_maturity} yrs` : '—'}</span>
+        </span>
       </div>
     </div>
   )
