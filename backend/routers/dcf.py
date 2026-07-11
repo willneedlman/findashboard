@@ -7,10 +7,31 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import fmp
 import damodaran
+import factset
 from cache import get_info
 from validation import validate_ticker
 
 router = APIRouter()
+
+
+# FactSet Financial Highlights (real statements + forward consensus estimates) is
+# the highest-quality source when the key is entitled and the ticker is covered.
+# It overrides the statement-derived fields on top of the FMP/yfinance base, which
+# still supplies beta, live price, and market cap that this endpoint does not carry.
+@router.get("/fundamentals")
+def get_fundamentals(ticker: str):
+    base = _base_fundamentals(ticker)
+    if factset.available():
+        try:
+            fs = factset.get_dcf_fundamentals(ticker)
+            if fs and fs.get("revenue"):
+                for k in ("revenue", "op_margin", "shares", "net_debt", "rev_growth", "capex_pct", "de_ratio"):
+                    if fs.get(k) is not None:
+                        base[k] = fs[k]
+                base["assumptions_source"] = fs["assumptions_source"]
+        except Exception:
+            logger.info("FactSet fundamentals unavailable for %s, using base source", ticker)
+    return base
 
 
 class DCFRequest(BaseModel):
@@ -31,8 +52,7 @@ class DCFRequest(BaseModel):
     da_pct: float = 4.0
 
 
-@router.get("/fundamentals")
-def get_fundamentals(ticker: str):
+def _base_fundamentals(ticker: str):
     ticker = validate_ticker(ticker)
     # FMP path — fast (~200ms), real financial statement data
     if fmp.available():

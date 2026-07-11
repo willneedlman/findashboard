@@ -225,6 +225,24 @@ def multiples(ticker: str):
     book_ps  = info.get("bookValue")                          # per share
     revenue  = (info.get("totalRevenue") or 0) / 1e6          # $M
     ebitda   = (info.get("ebitda") or 0) / 1e6                # $M
+    src = None
+
+    # FactSet override: real diluted EPS (latest actual + next-year consensus),
+    # book value, revenue, and EBITDA, all higher quality than the yfinance fields.
+    import factset
+    if factset.available():
+        try:
+            fin = factset.financial_highlights(sym)
+            if fin:
+                if factset.latest_actual(fin, "EPS (Diluted)"): eps = factset.latest_actual(fin, "EPS (Diluted)")
+                if factset.next_estimate(fin, "EPS (Diluted)"): eps_fwd = factset.next_estimate(fin, "EPS (Diluted)")
+                if factset.latest_actual(fin, "Book Value Per Share"): book_ps = factset.latest_actual(fin, "Book Value Per Share")
+                if factset.latest_actual(fin, "Revenue"): revenue = factset.latest_actual(fin, "Revenue")
+                if factset.latest_actual(fin, "EBITDA"): ebitda = factset.latest_actual(fin, "EBITDA")
+                src = "FactSet"
+        except Exception:
+            pass
+
     sales_ps  = revenue / shares if shares else None
     ebitda_ps = ebitda / shares if shares else None
     ev = (price * shares + net_debt) if (price and shares) else None
@@ -254,4 +272,5 @@ def multiples(ticker: str):
         "shares":   round(shares, 1),
         "net_debt": round(net_debt, 1),
         "metrics":  metrics,
+        "source":   src,
     }

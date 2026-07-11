@@ -13,6 +13,7 @@ import { fetchMarketHistory } from '../hooks/useApi'
 import { TOOLTIP_STYLE, CROSSHAIR_CURSOR } from '../components/ChartTooltip'
 import { recordRecentTicker } from '../lib/recentTickers'
 import TickerLaunch from '../components/TickerLaunch'
+import FactSetFinancials from '../components/FactSetFinancials'
 
 
 const SEGMENT_COLORS = ['var(--theme-primary, #c9a84c)', '#60a5fa', 'var(--theme-positive, #22c55e)', '#f97316', '#a78bfa', '#38bdf8', '#fb7185', '#34d399', '#fbbf24', '#e879f9']
@@ -585,6 +586,9 @@ export function SupplyChainContent() {
                 ))}
               </div>
             </div>
+
+            {/* ── FactSet financials + forward estimates (hidden when uncovered) ── */}
+            <FactSetFinancials ticker={data.ticker} />
 
             {/* ── Row 1: About + Peers · Revenue by Segment · by Geography ── */}
             <div style={{ display: 'grid', gridTemplateColumns: isMobileLayout ? '1fr' : '1fr 1fr 1fr', gap: 18, alignItems: 'stretch' }}>
