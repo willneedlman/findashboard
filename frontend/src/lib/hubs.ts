@@ -114,6 +114,7 @@ export const HUBS: Hub[] = [
       { title: 'Monte Carlo',              chip: 'Monte Carlo',   desc: 'GBM path simulation with VaR and CVaR',         route: '/montecarlo',        icon: Dices },
       { title: 'Portfolio Optimizer',      chip: 'Optimizer',     desc: 'Efficient frontier, max-Sharpe, risk parity, and per-holding risk', route: '/portfolio-optimizer', icon: PieChart },
       { title: 'Factor Decomposition',     chip: 'Factors',       desc: 'Regress your book on market, rates, credit, oil, and dollar factors', route: '/factor-decomposition', icon: Layers },
+      { title: 'Pairs Trader',             chip: 'Pairs',         desc: 'Cointegration, mean-reversion half-life, and a z-score spread backtest', route: '/pairs-trader',        icon: Shuffle },
       { title: 'Market Maker Simulator',   chip: 'Market Maker',  desc: 'Quote two-sided markets and hedge — options and Treasury desks', route: '/market-maker', icon: Gauge },
       { title: 'Portfolio Manager',        chip: 'Manager',       desc: 'Holdings, P&L, and portfolio-level greeks',     route: '/portfolio-manager', icon: Briefcase },
       { title: 'Trade Journal',            chip: 'Trade Journal', desc: 'Entry/exit, P&L, and win-rate analytics',       route: '/trade-journal',     icon: BookOpen },

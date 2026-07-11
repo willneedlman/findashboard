@@ -598,3 +598,163 @@ def regression_import(req: ImportRegressionRequest):
             "beta": roll_beta,
         },
     }
+
+
+# ── Pairs / spread trading (cointegration + z-score) ────────────────────────
+# statsmodels is not installed, so the ADF t-stat and the OU half-life are
+# computed directly with numpy. Critical values are the standard Dickey-Fuller
+# constants (constant, no trend); the spread is a fitted residual so treat the
+# test as indicative, not a formal Engle-Granger with corrected criticals.
+_DF_CRIT = {"1%": -3.43, "5%": -2.86, "10%": -2.57}
+
+
+def _ols_beta_se(X: np.ndarray, y: np.ndarray):
+    """Return (coefs, std_errors) for y = X b with X already including a const."""
+    b, *_ = np.linalg.lstsq(X, y, rcond=None)
+    resid = y - X @ b
+    n, k = X.shape
+    dof = max(n - k, 1)
+    s2 = float(resid @ resid) / dof
+    try:
+        se = np.sqrt(np.diag(s2 * np.linalg.inv(X.T @ X)))
+    except np.linalg.LinAlgError:
+        se = np.full(k, float("nan"))
+    return b, se, resid
+
+
+def _adf_tstat(y: np.ndarray, lags: int = 1):
+    """ADF regression Δy = c + γ y_{t-1} + Σ φ_i Δy_{t-i}; return γ's t-stat."""
+    dy = np.diff(y)
+    n = len(dy)
+    if n <= lags + 3:
+        return None
+    yl = y[lags:-1] if lags else y[:-1]
+    rows = n - lags
+    cols = [np.ones(rows), y[lags:len(y) - 1]]
+    for i in range(1, lags + 1):
+        cols.append(dy[lags - i:len(dy) - i])
+    X = np.column_stack(cols)
+    target = dy[lags:]
+    b, se, _ = _ols_beta_se(X, target)
+    gamma, se_g = b[1], se[1]
+    return float(gamma / se_g) if se_g and not np.isnan(se_g) else None
+
+
+def _half_life(spread: np.ndarray):
+    """OU mean-reversion half-life from Δs = c + λ s_{t-1}. None if not reverting."""
+    s_lag = spread[:-1]; ds = np.diff(spread)
+    X = np.column_stack([np.ones(len(s_lag)), s_lag])
+    b, _, _ = _ols_beta_se(X, ds)
+    lam = b[1]
+    if lam >= 0:
+        return None
+    return round(float(-np.log(2) / lam), 1)
+
+
+@router.get("/pairs")
+def pairs_analysis(
+    a: str = Query(...), b: str = Query(...),
+    lookback_days: int = Query(365, ge=90, le=1825),
+    entry_z: float = Query(2.0, ge=0.5, le=4.0),
+    exit_z: float = Query(0.5, ge=0.0, le=3.0),
+    z_window: int = Query(60, ge=10, le=250),
+):
+    """Cointegration test, mean-reversion half-life, and a z-score backtest for a
+    pair. The spread is log(A) - beta*log(B) with beta the OLS hedge ratio; the
+    backtest goes long the spread below -entry_z, short above +entry_z, and flat
+    inside exit_z, with a rolling z-window to limit lookahead."""
+    a = a.upper().strip(); b = b.upper().strip()
+    if not a or not b or a == b:
+        raise HTTPException(400, "Provide two distinct tickers")
+    period = "6mo" if lookback_days <= 190 else "1y" if lookback_days <= 380 else "2y" if lookback_days <= 760 else "5y"
+    ca = _fetch_series(a, period, use_returns=False)
+    cb = _fetch_series(b, period, use_returns=False)
+    df = pd.concat([ca, cb], axis=1).dropna()
+    if len(df) > lookback_days:
+        df = df.iloc[-lookback_days:]
+    if len(df) < max(60, z_window + 20):
+        raise HTTPException(422, "Not enough overlapping history for this pair")
+
+    la = np.log(df[a].to_numpy()); lb = np.log(df[b].to_numpy())
+    X = np.column_stack([np.ones(len(lb)), lb])
+    (alpha, beta), _, _ = _ols_beta_se(X, la)
+    spread = la - (alpha + beta * lb)
+
+    ra = np.diff(la); rb = np.diff(lb)
+    corr = float(np.corrcoef(ra, rb)[0, 1]) if len(ra) > 2 else None
+    adf_t = _adf_tstat(spread, lags=1)
+    stationary = adf_t is not None and adf_t < _DF_CRIT["5%"]
+    half_life = _half_life(spread)
+
+    sp = pd.Series(spread, index=df.index)
+    roll_mean = sp.rolling(z_window).mean()
+    roll_std = sp.rolling(z_window).std(ddof=0)
+    z = ((sp - roll_mean) / roll_std).to_numpy()
+
+    # Backtest: position in {-1,0,+1} on the spread, entered at |z|>=entry,
+    # exited inside exit. dspread is the spread's daily change (the pair P&L per
+    # unit long A / short beta*B). Position lags one day (no lookahead).
+    dspread = np.diff(spread)
+    pos = np.zeros(len(z))
+    cur = 0
+    for i in range(len(z)):
+        zi = z[i]
+        if np.isnan(zi):
+            pos[i] = 0; continue
+        if cur == 0:
+            if zi >= entry_z: cur = -1
+            elif zi <= -entry_z: cur = 1
+        elif abs(zi) <= exit_z:
+            cur = 0
+        pos[i] = cur
+    pnl = pos[:-1] * dspread                        # position held into next day's move
+    valid = ~np.isnan(pnl)
+    pnl = pnl[valid]
+    total = float(np.nansum(pnl))
+    sharpe = float(np.mean(pnl) / np.std(pnl) * np.sqrt(252)) if pnl.size and np.std(pnl) > 0 else None
+    exposure = float(np.mean(np.abs(pos[:-1][valid]))) if pnl.size else 0.0
+    # Trades and win rate: count closed round-trips.
+    trades, wins, entry_cum = 0, 0, 0.0
+    prev = 0.0
+    for i in range(len(pos) - 1):
+        if not valid[i]:
+            continue
+        if prev != 0 and pos[i] != prev:            # position closed (or flipped)
+            trades += 1
+            if entry_cum > 0: wins += 1
+            entry_cum = 0.0
+        if pos[i] != 0:
+            entry_cum += pnl[i] if i < len(pnl) else 0.0
+        prev = pos[i]
+
+    z_now = next((float(v) for v in z[::-1] if not np.isnan(v)), None)
+    signal = "flat"
+    if z_now is not None:
+        if z_now >= entry_z: signal = "short_spread"
+        elif z_now <= -entry_z: signal = "long_spread"
+
+    # Downsample the spread/z series to ~250 points for the chart.
+    step = max(1, len(df) // 250)
+    series = [
+        {"date": str(df.index[i].date()), "z": round(float(z[i]), 3) if not np.isnan(z[i]) else None}
+        for i in range(0, len(df), step)
+    ]
+
+    return {
+        "a": a, "b": b, "hedge_ratio": round(float(beta), 4), "correlation": round(corr, 3) if corr is not None else None,
+        "adf": {"stat": round(adf_t, 3) if adf_t is not None else None, "crit_5": _DF_CRIT["5%"], "stationary": bool(stationary)},
+        "half_life_days": half_life,
+        "zscore": {"current": round(z_now, 2) if z_now is not None else None, "entry": entry_z, "exit": exit_z, "window": z_window},
+        "signal": signal,
+        "backtest": {
+            "sharpe": round(sharpe, 2) if sharpe is not None else None,
+            "total_spread_return": round(total, 4),
+            "trades": trades,
+            "win_rate": round(wins / trades * 100, 1) if trades else None,
+            "exposure_pct": round(exposure * 100, 1),
+        },
+        "series": series,
+        "observations": len(df),
+        "lookback_days": lookback_days,
+        "source": "yfinance closes; OLS hedge ratio, numpy ADF + OU half-life",
+    }

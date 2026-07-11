@@ -13,6 +13,10 @@ export const fetchChokepointExposure = () =>
 export const fetchFactorDecomposition = (body: object) =>
   api.post('/portfolio/factor-decomposition', body).then(r => r.data)
 
+// Pairs trader: cointegration, half-life, z-score backtest for a pair.
+export const fetchPairsAnalysis = (params: object) =>
+  api.get('/regression/pairs', { params }).then(r => r.data)
+
 // Ticker-overview drawer sources.
 export const fetchTickerHub = (ticker: string) =>
   api.get('/corporate/hub', { params: { ticker } }).then(r => r.data)
