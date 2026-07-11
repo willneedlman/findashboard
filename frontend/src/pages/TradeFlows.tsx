@@ -6,6 +6,7 @@ import LoadingState from '../components/LoadingState'
 import { SELECT, LABEL } from './valuationShared'
 import { fetchTradeFlows } from '../hooks/useApi'
 import { T } from '../lib/theme'
+import { ISO_GEO, projectWorld, WORLD_DOT_PATH } from '../lib/worldDotMap'
 import { MONO, SANS, mix, seg, Panel, KpiStrip } from './cockpitKit'
 
 interface Partner { partner: string | null; iso: string | null; value: number | null; net_wgt: number | null; qty: number | null; unit: string | null }
@@ -126,29 +127,60 @@ function Results({ d, cmdLabel, countryLabel }: { d: Resp; cmdLabel: string; cou
 }
 
 function FlowOverview({ d, partners, selected, onSelect, countryLabel, cmdLabel }: { d: Resp; partners: Partner[]; selected: number; onSelect: (i: number) => void; countryLabel: string; cmdLabel: string }) {
-  const shown = partners.slice(0, 6)
-  const max = Math.max(1, ...shown.map(p => p.value ?? 0))
+  const originGeo = ISO_GEO[d.reporter_iso ?? ''] ?? ISO_GEO.USA
+  const origin = projectWorld(originGeo[0], originGeo[1])
+  const indices = Array.from({ length: Math.min(12, partners.length) }, (_, i) => i)
+  if (selected >= 12 && partners[selected]?.iso && ISO_GEO[partners[selected].iso as string] && indices.length) indices[indices.length - 1] = selected
+  const routes = indices.flatMap(i => {
+    const partner = partners[i]
+    const geo = partner?.iso ? ISO_GEO[partner.iso] : undefined
+    return partner && geo ? [{ partner, index: i, point: projectWorld(geo[0], geo[1]) }] : []
+  })
+  const max = Math.max(1, ...routes.map(r => r.partner.value ?? 0))
+  const pathFor = (x: number, y: number) => {
+    const lift = Math.min(48, Math.abs(x - origin.x) * 0.13 + 10)
+    const cx = (origin.x + x) / 2
+    const cy = Math.max(14, Math.min(origin.y, y) - lift)
+    return d.flow === 'Imports'
+      ? `M${x},${y} Q${cx},${cy} ${origin.x},${origin.y}`
+      : `M${origin.x},${origin.y} Q${cx},${cy} ${x},${y}`
+  }
   return (
     <Panel label="Bilateral Flow Map" meta="click a partner to drill it" style={{ flex: 1, minWidth: 0, height: 386, padding: '38px 14px 12px', boxSizing: 'border-box' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', height: '100%', alignItems: 'center', gap: 16 }}>
-        <div style={{ alignSelf: 'stretch', display: 'flex', flexDirection: 'column', justifyContent: 'center', paddingRight: 14, borderRight: `1px solid ${T.borderFaint}` }}>
-          <div style={{ fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted }}>{d.reporter_iso ?? 'Reporter'}</div>
-          <div style={{ fontFamily: MONO, fontSize: 17, fontWeight: 700, color: T.gold, marginTop: 5 }}>{countryLabel}</div>
-          <div style={{ fontFamily: MONO, fontSize: 9, color: T.muted, lineHeight: 1.5, marginTop: 6 }}>{d.flow} · {cmdLabel}<br />{d.period}</div>
-          <div style={{ fontFamily: MONO, fontSize: 22, fontWeight: 700, color: T.text, marginTop: 15 }}>{fmtUsd(d.total?.value)}</div>
-          <div style={{ fontFamily: MONO, fontSize: 8.5, color: T.textDim }}>reported total value</div>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 7, minWidth: 0 }}>
-          {shown.map((p, i) => {
-            const on = i === selected
-            const width = Math.max(4, ((p.value ?? 0) / max) * 100)
-            const share = d.total?.value ? (p.value ?? 0) / d.total.value * 100 : null
-            return <button key={`${p.iso ?? p.partner}-${i}`} onClick={() => onSelect(i)} style={{ display: 'grid', gridTemplateColumns: '112px 1fr 74px', alignItems: 'center', gap: 9, width: '100%', padding: '4px 6px', background: on ? mix(T.gold, 7) : 'transparent', color: T.text, border: `1px solid ${on ? mix(T.gold, 55) : 'transparent'}`, cursor: 'pointer', textAlign: 'left' }}>
-              <span style={{ minWidth: 0 }}><span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: MONO, fontSize: 10, fontWeight: 700 }}>{p.partner ?? p.iso ?? '?'}</span><span style={{ fontFamily: MONO, fontSize: 8, color: T.textDim }}>{p.iso ?? '—'}</span></span>
-              <span style={{ display: 'block', position: 'relative', height: 8, background: mix(T.text, 6) }}><span style={{ display: 'block', width: `${width}%`, height: '100%', background: on ? T.gold : mix(T.blue, 65) }} /></span>
-              <span style={{ textAlign: 'right' }}><span style={{ display: 'block', fontFamily: MONO, fontSize: 10, fontWeight: 700 }}>{fmtUsd(p.value)}</span><span style={{ fontFamily: MONO, fontSize: 8, color: T.muted }}>{share != null ? `${share.toFixed(1)}%` : '—'}</span></span>
-            </button>
+      <div style={{ position: 'relative', height: '100%' }}>
+        <svg width="100%" height="100%" viewBox="0 0 660 250" preserveAspectRatio="none" style={{ display: 'block', overflow: 'visible' }}>
+          <defs>
+            <marker id="trade-arrow" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0,0 L5,2.5 L0,5 Z" fill={mix(T.blue, 78)} /></marker>
+            <marker id="trade-arrow-selected" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill={T.gold} /></marker>
+          </defs>
+          <path d={WORLD_DOT_PATH} fill={mix(T.text, 12)} />
+          {routes.filter(r => r.index !== selected).map(r => {
+            const weight = 0.8 + Math.sqrt((r.partner.value ?? 0) / max) * 3.7
+            return <path key={`route-${r.index}`} d={pathFor(r.point.x, r.point.y)} fill="none" stroke={mix(T.blue, 58)} strokeWidth={weight} strokeLinecap="round" markerEnd="url(#trade-arrow)" />
           })}
+          {routes.filter(r => r.index === selected).map(r => <path key={`route-${r.index}`} d={pathFor(r.point.x, r.point.y)} fill="none" stroke={T.gold} strokeWidth={5} strokeLinecap="round" markerEnd="url(#trade-arrow-selected)" />)}
+          {routes.map(r => {
+            const on = r.index === selected
+            const radius = 2.8 + Math.sqrt((r.partner.value ?? 0) / max) * 3.4
+            const anchor = r.point.x > 540 ? 'end' : 'start'
+            const labelX = r.point.x + (anchor === 'end' ? -8 : 8)
+            return <g key={`node-${r.index}`} role="button" aria-label={`${r.partner.partner ?? r.partner.iso}, ${fmtUsd(r.partner.value)}`} tabIndex={0} onClick={() => onSelect(r.index)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onSelect(r.index) }} style={{ cursor: 'pointer', outline: 'none' }}>
+              <circle cx={r.point.x} cy={r.point.y} r={radius + 5} fill="transparent"><title>{r.partner.partner} · {fmtUsd(r.partner.value)}</title></circle>
+              {on && <circle cx={r.point.x} cy={r.point.y} r={radius + 3} fill="none" stroke={T.gold} strokeWidth={1} />}
+              <circle cx={r.point.x} cy={r.point.y} r={radius} fill={on ? T.gold : T.blue} stroke={T.bg} strokeWidth={1.5} />
+              {(r.index < 5 || on) && <text x={labelX} y={r.point.y - (on ? 14 : 6)} textAnchor={anchor} fill={on ? T.gold : mix(T.text, 78)} stroke={T.bg} strokeWidth={3} paintOrder="stroke" fontFamily={MONO} fontSize={on ? 8.5 : 7.5} fontWeight={700}>{on ? r.partner.partner : r.partner.iso}</text>}
+              {on && <text x={labelX} y={r.point.y - 3} textAnchor={anchor} fill={mix(T.text, 72)} stroke={T.bg} strokeWidth={3} paintOrder="stroke" fontFamily={MONO} fontSize={7.5}>{fmtUsd(r.partner.value)}</text>}
+            </g>
+          })}
+          <rect x={origin.x - 5} y={origin.y - 5} width={10} height={10} fill={T.gold} stroke={T.bg} strokeWidth={2} />
+          <rect x={origin.x - 9} y={origin.y - 9} width={18} height={18} fill="none" stroke={mix(T.gold, 75)} strokeWidth={1} />
+          <text x={origin.x + (origin.x > 540 ? -13 : 13)} y={origin.y - 7} textAnchor={origin.x > 540 ? 'end' : 'start'} fill={T.gold} stroke={T.bg} strokeWidth={3} paintOrder="stroke" fontFamily={MONO} fontSize={9} fontWeight={700}>{countryLabel}</text>
+          <text x={origin.x + (origin.x > 540 ? -13 : 13)} y={origin.y + 5} textAnchor={origin.x > 540 ? 'end' : 'start'} fill={mix(T.text, 66)} stroke={T.bg} strokeWidth={3} paintOrder="stroke" fontFamily={MONO} fontSize={7.5}>{d.flow} · {cmdLabel} · {d.period}</text>
+        </svg>
+        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', gap: 12, paddingTop: 7, borderTop: `1px solid ${T.borderFaint}`, fontFamily: MONO, fontSize: 8.5, color: T.muted }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 18, height: 3, background: T.gold }} />selected route</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 18, height: 2, background: T.blue }} />partner flow</span>
+          <span style={{ marginLeft: 'auto' }}>top {routes.length} mapped partners · width = trade value</span>
         </div>
       </div>
     </Panel>

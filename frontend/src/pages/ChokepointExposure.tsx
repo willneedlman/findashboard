@@ -7,6 +7,7 @@ import ErrorState from '../components/ErrorState'
 import TickerLink from '../components/TickerLink'
 import { fetchChokepointExposure } from '../hooks/useApi'
 import { T } from '../lib/theme'
+import { WORLD_DOT_PATH } from '../lib/worldDotMap'
 import { MONO, SANS, mix, chg, signed, Panel, KpiStrip } from './cockpitKit'
 
 interface Driver { strait: string; status: string; direction: number; contribution: number }
@@ -16,40 +17,6 @@ interface ChokeCard { id: string; name: string; oil_mbd: number; status: string 
 interface Leader extends Quote { ticker: string; group: string; group_key: string; direction: number; score: number; chokepoints: string[]; links: number; drivers: Driver[] }
 interface Resp { chokepoints: ChokeCard[]; leaders: Leader[]; any_stress: boolean; priced: number; source: string }
 
-// Fixed dot-map layout (design coordinates, not a navigation chart). Lifted from
-// the handoff mock — a coarse land bitmap rendered as a dot grid.
-const W = [
-  '        ##########      ####            #######################   ',
-  '      ###############   #####     ###  ###########################',
-  '      ################   ####  #  ################################',
-  '       ###############           ################################ ',
-  '        ##############         ##  ###############################',
-  '         #############        ################################    ',
-  '          ###########         #############################  ##   ',
-  '           ##########         ###  ##################### ##  #    ',
-  '            ########          ###########################         ',
-  '            ######            ##########################          ',
-  '             ####             ##########################          ',
-  '              ####            ############# ##  ####  ##### #     ',
-  '               ####           #############  ##   ####  #         ',
-  '                 #####        ##########  #   #    ##  ###        ',
-  '                 ########     ########          ###  ###   ###    ',
-  '                 #########    ########           ########  ####   ',
-  '                 #########     #######            #####     ##    ',
-  '                 #########     ######                             ',
-  '                  #######      #####                  #######     ',
-  '                  ######       #####                 #########    ',
-  '                  #####        ###                    #######     ',
-  '                  #####        ##                      ####       ',
-  '                   ###                                        #   ',
-  '                   ###                                        #   ',
-  '                   ##                                             ',
-]
-const MAP_DOTS = (() => {
-  let d = ''
-  W.forEach((row, r) => { for (let c = 0; c < row.length; c++) if (row[c] === '#') { const x = c * 10 + 5, y = r * 10 + 8; d += `M${x - 2.6},${y} a2.6,2.6 0 1,0 5.2,0 a2.6,2.6 0 1,0 -5.2,0 ` } })
-  return d
-})()
 const STRAIT_POS: Record<string, { x: number; y: number; labelX: number; labelY: number; lab: 'l' | 'r' }> = {
   taiwan: { x: 555, y: 103, labelX: 564, labelY: 100, lab: 'r' },
   malacca: { x: 519, y: 144, labelX: 528, labelY: 142, lab: 'r' },
@@ -130,7 +97,7 @@ function Board({ data }: { data: Resp }) {
         <Panel label="Transit Stress Map" meta="click a strait to drill it · 5m refresh" style={{ flex: 1, minWidth: 0, padding: '32px 10px 8px' }}>
           <div style={{ position: 'relative' }}>
             <svg width="100%" height="336" viewBox="0 0 660 250" preserveAspectRatio="none" style={{ display: 'block' }}>
-              <path d={MAP_DOTS} fill={mix(T.text, 14)} />
+              <path d={WORLD_DOT_PATH} fill={mix(T.text, 14)} />
               {straits.map(c => {
                 const pos = STRAIT_POS[c.id]; if (!pos) return null
                 return <line key={c.id} x1={pos.x} y1={pos.y} x2={pos.labelX} y2={pos.labelY} stroke={c.id === strait ? mix(T.gold, 65) : mix(T.text, 28)} strokeWidth={0.65} />
