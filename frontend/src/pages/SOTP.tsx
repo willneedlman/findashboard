@@ -246,7 +246,9 @@ export function SOTPContent() {
 
       {!data && !error && (
         <EmptyState title="Sum-of-the-Parts"
-          hint="Value each business segment on its own P/S multiple, then sum to an equity value. Enter a ticker and Load segments." />
+          hint="Value each business segment on its own P/S multiple, then sum to an equity value. Enter a ticker and Load segments."
+          keys={['Enter']} kpis={['Equity Value', 'Per Share', 'Upside', 'Segments']}
+          preview="table" previewLabel="Segment Valuation" columns={['Segment', 'Revenue', 'Multiple', 'Value']} />
       )}
 
       {data && !data.segments.length && (

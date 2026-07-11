@@ -267,7 +267,9 @@ export function BondAnalyticsContent() {
             </div>
           )}
           {!data && (
-            <EmptyState title="Bond Analytics" hint="Enter face value, coupon rate, market price and maturity, then press Analyze Bond." />
+            <EmptyState title="Bond Analytics" hint="Enter face value, coupon rate, market price and maturity, then press Analyze Bond."
+              keys={['Enter']} kpis={['Yield to Maturity', 'Duration', 'Convexity', 'Current Yield', 'Accrued']}
+              preview="chart" previewLabel="Price / Yield Curve" />
           )}
       </SidebarLayout>
   )

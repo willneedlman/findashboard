@@ -197,7 +197,7 @@ export default function Layout({ children }: LayoutProps) {
               {!collapsed && <span style={{ fontSize: 12 }}>Search…</span>}
             </span>
             {!collapsed && (
-              <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, fontWeight: 700, color: 'var(--theme-text-faint, #5e768f)', border: '1px solid var(--theme-border, rgba(255,255,255,0.1))', padding: '0 5px' }}>
+              <span style={{ fontFamily: '-apple-system, "Segoe UI", system-ui, sans-serif', fontSize: 10, fontWeight: 600, letterSpacing: '0.05em', lineHeight: '14px', color: 'var(--theme-secondary, #8099b0)', border: '1px solid var(--theme-border, rgba(255,255,255,0.1))', padding: '1px 6px' }}>
                 {/Mac/i.test(navigator.platform) ? '⌘K' : 'Ctrl K'}
               </span>
             )}

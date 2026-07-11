@@ -462,7 +462,9 @@ export function DCFValuationContent() {
       </>}>
 
           {!data && (
-            <EmptyState title="DCF Valuation Engine" hint="Enter a ticker and press Auto-Fill, or enter assumptions manually, then press Run DCF." />
+            <EmptyState title="DCF Valuation Engine" hint="Enter a ticker and press Auto-Fill, or enter assumptions manually, then press Run DCF."
+              keys={['Enter']} kpis={['Fair Value', 'Upside', 'WACC', 'Terminal Value', 'Implied Growth']}
+              preview="chart" previewLabel="Projected Free Cash Flow" />
           )}
 
           {data && (

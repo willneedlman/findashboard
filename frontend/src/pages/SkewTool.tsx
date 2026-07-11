@@ -113,7 +113,7 @@ export function SkewToolContent() {
               <input value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())} onKeyDown={e => e.key === 'Enter' && generate()} style={INPUT} />
             </div>
             <button onClick={generate} disabled={isPending}
-              style={{ width: '100%', background: GOLD, border: `1px solid ${GOLD}`, color: 'var(--theme-bg)', fontFamily: 'inherit', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '8px 0', cursor: isPending ? 'default' : 'pointer', opacity: isPending ? 0.6 : 1 }}>
+              style={{ width: '100%', background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)', border: `1px solid ${GOLD}`, color: GOLD, fontFamily: 'inherit', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '8px 0', cursor: isPending ? 'default' : 'pointer', opacity: isPending ? 0.6 : 1 }}>
               {isPending ? 'Loading…' : 'Generate'}
             </button>
             {data && sel && (
