@@ -30,7 +30,7 @@ const COMMODITIES: [string, string][] = [
   ['1001', 'Wheat'], ['1005', 'Maize (corn)'], ['1201', 'Soybeans'], ['8542', 'Semiconductors (ICs)'],
   ['8703', 'Cars'], ['3004', 'Pharmaceuticals'], ['7208', 'Flat-rolled steel'], ['8471', 'Computers'],
 ]
-const YEARS = Array.from({ length: 9 }, (_, i) => String(2024 - i))
+const YEARS = Array.from({ length: 10 }, (_, i) => String(2025 - i))
 
 const fmtUsd = (v: number | null | undefined) => {
   if (v == null) return '—'
@@ -46,7 +46,7 @@ const fmtWt = (kg: number | null | undefined) => {
 export default function TradeFlows() {
   const [reporter, setReporter] = useState(842)
   const [cmd, setCmd] = useState('2709')
-  const [year, setYear] = useState('2023')
+  const [year, setYear] = useState('2024')
   const [flow, setFlow] = useState<'X' | 'M'>('X')
 
   const cmdLabel = COMMODITIES.find(c => c[0] === cmd)?.[1] ?? cmd
