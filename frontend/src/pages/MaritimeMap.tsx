@@ -1050,11 +1050,20 @@ function HistoryPanel({ C, chokepoints, ids, days, metric, series, loading, live
       const cvals = Object.values(counts)
       const totalCrossings = cvals.reduce((a, b) => a + b, 0)
       if ((metric === 'total' || metric === 'tanker') && s.nowcast_days?.length && last != null && totalCrossings > 0) {
-        const ref = totalCrossings / cvals.length
+        // Momentum ref averages only the COVERED (non-zero) days, so the pre-window
+        // gap days (structural zeros, before AIS has coverage) don't deflate it and
+        // make a covered day spike to the cap. The daily ratio is then damped and
+        // TIGHTLY clamped, so the tail only nudges the last confirmed level (±20%)
+        // instead of drawing a cliff far outside the series' own range. Zero-count
+        // (pre-coverage) days bridge flat at the last level.
+        const covered = cvals.filter(v => v > 0)
+        const ref = covered.reduce((a, b) => a + b, 0) / covered.length
         const lastD = s.points[s.points.length - 1]?.d
         if (lastD) (byDate[lastD] ??= { d: lastD })[`${s.id}__est`] = last   // junction with the solid line
         for (const day of s.nowcast_days) {
-          const factor = Math.min(2, Math.max(0.5, (counts[day] ?? 0) / ref))
+          const c = counts[day] ?? 0
+          const raw = c > 0 ? c / ref : 1
+          const factor = Math.min(1.2, Math.max(0.85, 1 + 0.4 * (raw - 1)))
           ;(byDate[day] ??= { d: day })[`${s.id}__est`] = Math.round(last * factor * 10) / 10
         }
       }
