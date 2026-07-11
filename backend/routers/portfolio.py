@@ -467,8 +467,53 @@ def factor_decomposition(req: FactorRequest):
     top = sorted(({"ticker": t, "weight": round(weights[t] * 100, 1)} for t in priced),
                  key=lambda x: x["weight"], reverse=True)
 
+    # Rolling 60-day factor betas: refit the multivariate OLS on each trailing
+    # window so the drift in each exposure is visible. Downsampled to ~180 pts.
+    fdates = [str(d.date()) for d in frame.index]
+    roll_win = min(60, max(20, n // 4))
+    keys = [lbl.lower() for lbl, _ in fac_cols]
+    rolling: dict[str, list] = {k: [] for k in keys}
+    for e in range(roll_win, n + 1):
+        sl = slice(e - roll_win, e)
+        Xr = np.column_stack([np.ones(roll_win), X[sl]])
+        try:
+            br, *_ = np.linalg.lstsq(Xr, y[sl], rcond=None)
+        except np.linalg.LinAlgError:
+            continue
+        for j, k in enumerate(keys):
+            rolling[k].append({"date": fdates[e - 1], "beta": round(float(br[j + 1]), 3)})
+    rstep = max(1, (n - roll_win) // 180)
+    rolling = {k: v[::rstep] for k, v in rolling.items()}
+
+    # Per-holding regression on the same factors: betas, idiosyncratic share, and
+    # each name's share of book return variance (weight x cov(name, book)/var).
+    holdings_detail = []
+    for t in priced:
+        ri = daily[t].reindex(frame.index).fillna(0.0).to_numpy()
+        Xi = np.column_stack([np.ones(n), X])
+        try:
+            bi, *_ = np.linalg.lstsq(Xi, ri, rcond=None)
+        except np.linalg.LinAlgError:
+            continue
+        resi = ri - Xi @ bi
+        ssei = float(resi @ resi); ssti = float(((ri - ri.mean()) ** 2).sum())
+        r2i = 1 - ssei / ssti if ssti > 0 else 0.0
+        cov_ip = float(np.cov(ri, y, ddof=1)[0, 1])
+        holdings_detail.append({
+            "ticker": t, "weight": round(weights[t] * 100, 1),
+            "betas": {k: round(float(bi[j + 1]), 3) for j, k in enumerate(keys)},
+            "idiosyncratic_pct": round((1 - r2i) * 100),
+            "book_var_share_pct": round(weights[t] * cov_ip / var_p * 100, 1),
+        })
+    holdings_detail.sort(key=lambda h: h["weight"], reverse=True)
+    book_betas = {f["factor"].lower(): f["beta"] for f in factors}
+
     return {
         "factors": factors,
+        "rolling": rolling,
+        "holdings_detail": holdings_detail,
+        "book_betas": book_betas,
+        "roll_window": roll_win,
         "r_squared": round(r2, 3),
         "systematic_pct": round(r2 * 100, 1),
         "idiosyncratic_pct": round((1 - r2) * 100, 1),

@@ -10,6 +10,7 @@ import TickerLink from '../components/TickerLink'
 import { INPUT, LABEL, SIDEBAR } from './valuationShared'
 import { fetchPairsAnalysis } from '../hooks/useApi'
 import { T } from '../lib/theme'
+import { MONO, SANS, mix, chg, signed, InfoTip, Panel, seg } from './cockpitKit'
 
 interface Trade { n: number; entered: string; exited: string | null; side: string; z_in: number; z_out: number | null; days: number; pnl: number; open: boolean }
 interface Marker { date: string; z: number; side?: string; kind: string }
@@ -29,52 +30,9 @@ interface Resp {
   observations: number; lookback_days: number; source: string
 }
 
-const MONO = 'var(--theme-mono)'
-const SANS = 'var(--theme-sans)'
-const mix = (tok: string, pct: number) => `color-mix(in srgb, ${tok} ${pct}%, transparent)`
 const PRESETS = ['XOM/CVX', 'KO/PEP', 'V/MA', 'GLD/SLV', 'XLE/USO', 'MS/GS']
 const SIG = { long_spread: 'LONG SPREAD', short_spread: 'SHORT SPREAD', flat: 'IN RANGE' }
-
-// ── ⓘ tooltip ────────────────────────────────────────────────────────────────
-function InfoTip({ title, body, source }: { title: string; body: string; source: string }) {
-  const [open, setOpen] = useState(false)
-  return (
-    <span style={{ position: 'relative', display: 'inline-flex' }} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
-      <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 12, height: 12, flexShrink: 0, border: `1px solid ${open ? T.gold : mix(T.muted, 55)}`, fontFamily: MONO, fontSize: 8, fontWeight: 700, color: open ? T.gold : T.muted, cursor: 'help', lineHeight: 1 }}>i</span>
-      {open && (
-        <span style={{ position: 'absolute', left: -8, top: 'calc(100% + 8px)', width: 272, zIndex: 20, background: T.surface, border: `1px solid ${mix(T.gold, 45)}`, boxShadow: '0 10px 26px rgba(0,0,0,0.55)', padding: '12px 14px', boxSizing: 'border-box', textAlign: 'left', pointerEvents: 'none' }}>
-          <span style={{ position: 'absolute', top: -5, left: 14, width: 8, height: 8, background: T.surface, borderLeft: `1px solid ${mix(T.gold, 45)}`, borderTop: `1px solid ${mix(T.gold, 45)}`, transform: 'rotate(45deg)' }} />
-          <span style={{ display: 'block', fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: T.gold, marginBottom: 6 }}>{title}</span>
-          <span style={{ display: 'block', fontFamily: SANS, fontSize: 11.5, color: T.text, lineHeight: 1.6 }}>{body}</span>
-          <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 9, paddingTop: 8, borderTop: `1px solid ${T.borderFaint}` }}>
-            <span style={{ fontFamily: MONO, fontSize: 9, color: T.muted }}>{source}</span>
-            <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color: T.gold }}>FULL METHOD ↗</span>
-          </span>
-        </span>
-      )}
-    </span>
-  )
-}
-
-// ── panel chrome ─────────────────────────────────────────────────────────────
-function Panel({ label, meta, children, style }: { label: string; meta?: React.ReactNode; children: React.ReactNode; style?: React.CSSProperties }) {
-  return (
-    <div style={{ position: 'relative', border: `1px solid ${T.border}`, paddingTop: 30, ...style }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, background: T.surface, padding: '4px 10px', fontFamily: SANS, fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.text, borderRight: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}` }}>{label}</div>
-      {meta != null && <div style={{ position: 'absolute', top: 6, right: 12, fontFamily: MONO, fontSize: 9, color: T.muted }}>{meta}</div>}
-      {children}
-    </div>
-  )
-}
-
-const seg = (on: boolean, disabled = false): React.CSSProperties => ({
-  flex: 1, textAlign: 'center', fontFamily: MONO, fontSize: 10, fontWeight: on ? 700 : 400, padding: '5px 0',
-  cursor: disabled ? 'not-allowed' : 'pointer', background: on ? mix(T.gold, 14) : 'transparent',
-  color: on ? T.gold : T.muted, border: `1px solid ${on ? T.gold : T.border}`, opacity: disabled ? 0.45 : 1,
-})
 const railSection: React.CSSProperties = { padding: '12px 0 13px', borderBottom: `1px solid ${T.border}` }
-const chg = (v: number | null | undefined) => (v == null ? T.muted : v > 0 ? T.pos : v < 0 ? T.neg : T.muted)
-const signed = (v: number, d = 2) => `${v > 0 ? '+' : ''}${v.toFixed(d)}`
 
 export default function PairsTrader() {
   const [a, setA] = useState('XOM')
