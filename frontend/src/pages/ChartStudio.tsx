@@ -706,9 +706,17 @@ export function ChartStudioContent() {
       laneCharts[lane.id] = createChart(el, {
         ...baseOptions(C, laneHeightsRef.current[lane.id] ?? lane.h), width: el.clientWidth,
         timeScale: { visible: false }, rightPriceScale: { borderColor: C.axisBorder },
-        // Lanes are followers: a sparse lane (one accrued GEX point) fitting
-        // itself must never drag the shared range down to a single day.
-        handleScroll: false as any, handleScale: false as any,
+        // Lanes follow the price panel on TIME (a sparse lane fitting itself must
+        // never drag the shared range down to a single day), so all time-scale
+        // interaction stays off. The PRICE axis is the lane's own: dragging it
+        // rescales the value range in place (tile height is unchanged), and a
+        // double-click on the axis restores autoscale.
+        handleScroll: false as any,
+        handleScale: {
+          mouseWheel: false, pinch: false,
+          axisPressedMouseMove: { time: false, price: true },
+          axisDoubleClickReset: { time: false, price: true },
+        },
       })
     }
     const candle = main.addCandlestickSeries({
