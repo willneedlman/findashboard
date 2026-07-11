@@ -1,6 +1,7 @@
 // Shared cockpit primitives for the redesigned tool screens (Pairs Trader,
 // Factor Decomposition, Chokepoint Exposure). Token-driven so both themes hold.
-import { useState } from 'react'
+import { useState, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { T } from '../lib/theme'
 
 export const MONO = 'var(--theme-mono)'
@@ -10,23 +11,35 @@ export const chg = (v: number | null | undefined) => (v == null ? T.muted : v > 
 export const signed = (v: number, d = 2) => `${v > 0 ? '+' : ''}${v.toFixed(d)}`
 
 // ⓘ trigger + hover popover. Body should interpret the CURRENT value, not just
-// define the term.
-export function InfoTip({ title, body, source, align = 'left' }: { title: string; body: string; source: string; align?: 'left' | 'right' }) {
-  const [open, setOpen] = useState(false)
+// define the term. The popover renders in a portal with fixed positioning,
+// clamped to the viewport, so it never gets clipped by a narrow rail's overflow
+// or run off the screen edge. `align` is accepted for compat but positioning is
+// automatic.
+const TIP_W = 272
+export function InfoTip({ title, body, source }: { title: string; body: string; source: string; align?: 'left' | 'right' }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  const [pos, setPos] = useState<{ top: number; left: number; caret: number } | null>(null)
+  const show = () => {
+    const r = ref.current?.getBoundingClientRect()
+    if (!r) return
+    const pad = 8
+    const left = Math.max(pad, Math.min(r.left - 8, window.innerWidth - TIP_W - pad))
+    const caret = Math.max(8, Math.min(r.left + r.width / 2 - left - 4, TIP_W - 16))
+    setPos({ top: r.bottom + 8, left, caret })
+  }
   return (
-    <span style={{ position: 'relative', display: 'inline-flex' }} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
-      <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 12, height: 12, flexShrink: 0, border: `1px solid ${open ? T.gold : mix(T.muted, 55)}`, fontFamily: MONO, fontSize: 8, fontWeight: 700, color: open ? T.gold : T.muted, cursor: 'help', lineHeight: 1 }}>i</span>
-      {open && (
-        <span style={{ position: 'absolute', [align === 'right' ? 'right' : 'left']: -8, top: 'calc(100% + 8px)', width: 272, zIndex: 20, background: T.surface, border: `1px solid ${mix(T.gold, 45)}`, boxShadow: '0 10px 26px rgba(0,0,0,0.55)', padding: '12px 14px', boxSizing: 'border-box', textAlign: 'left', pointerEvents: 'none' } as React.CSSProperties}>
-          <span style={{ position: 'absolute', top: -5, [align === 'right' ? 'right' : 'left']: 14, width: 8, height: 8, background: T.surface, borderLeft: `1px solid ${mix(T.gold, 45)}`, borderTop: `1px solid ${mix(T.gold, 45)}`, transform: 'rotate(45deg)' } as React.CSSProperties} />
+    <span ref={ref} style={{ display: 'inline-flex' }} onMouseEnter={show} onMouseLeave={() => setPos(null)}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 12, height: 12, flexShrink: 0, border: `1px solid ${pos ? T.gold : mix(T.muted, 55)}`, fontFamily: MONO, fontSize: 8, fontWeight: 700, color: pos ? T.gold : T.muted, cursor: 'help', lineHeight: 1 }}>i</span>
+      {pos && createPortal(
+        <div style={{ position: 'fixed', top: pos.top, left: pos.left, width: TIP_W, zIndex: 1000, background: T.surface, border: `1px solid ${mix(T.gold, 45)}`, boxShadow: '0 10px 26px rgba(0,0,0,0.55)', padding: '12px 14px', boxSizing: 'border-box', textAlign: 'left', pointerEvents: 'none' }}>
+          <span style={{ position: 'absolute', top: -5, left: pos.caret, width: 8, height: 8, background: T.surface, borderLeft: `1px solid ${mix(T.gold, 45)}`, borderTop: `1px solid ${mix(T.gold, 45)}`, transform: 'rotate(45deg)' }} />
           <span style={{ display: 'block', fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: T.gold, marginBottom: 6 }}>{title}</span>
           <span style={{ display: 'block', fontFamily: SANS, fontSize: 11.5, color: T.text, lineHeight: 1.6 }}>{body}</span>
           <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 9, paddingTop: 8, borderTop: `1px solid ${T.borderFaint}` }}>
             <span style={{ fontFamily: MONO, fontSize: 9, color: T.muted }}>{source}</span>
             <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color: T.gold }}>FULL METHOD ↗</span>
           </span>
-        </span>
-      )}
+        </div>, document.body)}
     </span>
   )
 }
