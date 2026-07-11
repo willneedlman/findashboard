@@ -1,8 +1,9 @@
 import { useRef, useState, useEffect } from 'react'
 import { Link, Outlet } from 'react-router-dom'
 import { motion, useReducedMotion, useScroll, useTransform, useSpring, useMotionValue, useInView, animate, type Variants } from 'framer-motion'
-import { Calculator, GitBranch, BarChart3, BookOpen, Bell, Activity, Clock, ArrowLeftRight, Landmark, Terminal, Workflow } from 'lucide-react'
+import { Calculator, GitBranch, BarChart3, BookOpen, Bell, Activity, Clock, ArrowLeftRight, Landmark, Terminal, Workflow, Ship, Plane, Fuel, Container, Waypoints, Gauge, Boxes } from 'lucide-react'
 import AlphaMark from '../components/AlphaMark'
+import { HUBS } from '../lib/hubs'
 import './marketing.css'
 
 /* ── Motion layer (strong ease-out, reduced-motion aware) ── */
@@ -199,7 +200,7 @@ const LaunchCTAs = ({ secondary }: { secondary?: { to: string; label: string } }
   </div>
 )
 
-/* Page hero shared by the six hub pages. */
+/* Page hero shared by the hub pages. */
 function PageHero({ eyebrow, h1, lede, back }: { eyebrow: string; h1: string; lede: string; back?: string }) {
   return (
     <header className="phero"><div className="wrap">
@@ -804,10 +805,10 @@ export function Landing() {
             <PortfolioViz />
           </TiltCard>
           <TiltCard className="card c-wide" to="/product/macro" item={item}>
-            <div className="k">Macro &amp; rates</div><h3>Rates, credit, and physical flows.</h3>
-            <p>The implied FOMC path, the yield curve, credit spreads, FX crosses, and live tanker traffic through the world's chokepoints.</p>
+            <div className="k">Macro &amp; rates</div><h3>Rates, credit, and world markets.</h3>
+            <p>The implied FOMC path, the yield curve, credit spreads, FX crosses, and a live global session clock across every market.</p>
             <MacroViz />
-            <div className="tags"><span className="tag">Rate Engine</span><span className="tag">Credit spreads</span><span className="tag">Currency matrix</span><span className="tag">Energy flows</span></div>
+            <div className="tags"><span className="tag">Rate Engine</span><span className="tag">Credit spreads</span><span className="tag">Currency matrix</span><span className="tag">Market hours</span></div>
           </TiltCard>
           <TiltCard className="card c-2" to="/product/options" item={item}>
             <div className="k">Options intelligence</div><h3>Flow, gamma, and volatility.</h3>
@@ -849,21 +850,22 @@ export function Landing() {
 
       <section className="blk" style={{ borderTop: '1px solid var(--line)' }}><div className="wrap">
         <Reveal className="sec-head">
-          <div className="eyebrow">Six hubs</div>
-          <h2>44 tools, each with one home.</h2>
+          <div className="eyebrow">Seven hubs</div>
+          <h2>{HUBS.reduce((a, h) => a + h.tools.length, 0)} tools, each with one home.</h2>
           <p>Every tool lives in exactly one hub, so you always know where to look. A command palette jumps anywhere.</p>
         </Reveal>
         <StaggerGroup className="hubband">
           {([
-            ['11', 'Research', 'Screener · Sentiment · Earnings AI', '/product/research'],
-            ['7', 'Options', 'Dealer GEX · Flow · Implied Vol', '/product/options'],
-            ['9', 'Macro', 'Rate Engine · Energy Flows · Global Markets', '/product/macro'],
-            ['2', 'Charting', 'Chart Studio · Asset Overlay', '/product/charting'],
-            ['9', 'Trading', 'Paper Trading · MM Sim · Journal', '/product/trading'],
-            ['6', 'Valuation', 'DCF · Reverse DCF · Multiples', '/product/valuation'],
-          ] as [string, string, string, string][]).map(([n, l, t, to]) => (
-            <MLink key={l} to={to} className="hubcell" variants={item}>
-              <div className="hn">{n}</div>
+            ['research', 'Research', 'Screener · Sentiment · Earnings AI'],
+            ['options', 'Options', 'Dealer GEX · Flow · Implied Vol'],
+            ['macro', 'Macro', 'Rate Engine · Global Markets · Credit'],
+            ['charting', 'Charting', 'Chart Studio · Asset Overlay · Compare'],
+            ['trading', 'Trading', 'Paper Trading · MM Sim · Journal'],
+            ['valuation', 'Valuation', 'DCF · Reverse DCF · Multiples'],
+            ['logistics', 'Geo-Logistics', 'Logistics Map · Energy Flows'],
+          ] as [string, string, string][]).map(([slug, l, t]) => (
+            <MLink key={slug} to={`/product/${slug}`} className="hubcell" variants={item}>
+              <div className="hn">{HUBS.find(h => h.slug === slug)?.tools.length ?? 0}</div>
               <div className="hl">{l}</div>
               <div className="ht">{t}</div>
             </MLink>
@@ -903,8 +905,8 @@ export function Landing() {
 export function ResearchPage() {
   return (
     <Shell active="research">
-      <PageHero eyebrow="Research · 11 tools" h1="Find and vet the name."
-        lede="Screen the universe, read the company, and track the news flow. Ten tools cover discovery, single-name work, and the statistics behind the idea." />
+      <PageHero eyebrow="Research · 12 tools" h1="Find and vet the name."
+        lede="Screen the universe, read the company, and track the news flow. Twelve tools cover discovery, single-name work, and the statistics behind the idea." />
 
       <section className="blk"><div className="wrap">
         <Reveal className="sec-head">
@@ -990,7 +992,7 @@ export function ResearchPage() {
 
       <section className="blk"><div className="wrap">
         <div className="final">
-          <h2>All ten research tools, in the terminal.</h2>
+          <h2>All twelve research tools, in the terminal.</h2>
           <Link to="/app" className="btn btn-gold btn-lg">Launch Terminal →</Link>
         </div>
       </div></section>
@@ -1003,8 +1005,8 @@ export function ResearchPage() {
 export function OptionsPage() {
   return (
     <Shell active="options">
-      <PageHero eyebrow="Options · 7 tools" h1="Options flow, gamma, and volatility."
-        lede="Seven tools on the options chain: large-trade activity, dealer hedging pressure, volatility levels, and the cost of premium." />
+      <PageHero eyebrow="Options · 8 tools" h1="Options flow, gamma, and volatility."
+        lede="Eight tools on the options chain: large-trade activity, dealer hedging pressure, volatility levels, and the cost of premium." />
 
       <section className="blk"><div className="wrap">
         <Reveal className="sec-head">
@@ -1061,7 +1063,7 @@ export function OptionsPage() {
 
       <section className="blk"><div className="wrap">
         <div className="final">
-          <h2>All seven options tools, in the terminal.</h2>
+          <h2>All eight options tools, in the terminal.</h2>
           <Link to="/app" className="btn btn-gold btn-lg">Launch Terminal →</Link>
         </div>
       </div></section>
@@ -1071,24 +1073,113 @@ export function OptionsPage() {
 
 /* ── Macro ──────────────────────────────────────────────────────────────── */
 
+/* Canal and strait transit counts with congestion status, mirroring PortWatch. */
+const TransitTable = () => {
+  const rows: [string, string, string, 'pos' | 'neg'][] = [
+    ['Hormuz', '21.0 Mb/d', 'Open', 'pos'],
+    ['Malacca', '23.0 Mb/d', 'Open', 'pos'],
+    ['Suez', '9.2 Mb/d', 'Recovering', 'pos'],
+    ['Bab el-Mandeb', '4.1 Mb/d', 'Diverted', 'neg'],
+    ['Panama', '1.0 Mt/d', 'Draft-limited', 'neg'],
+  ]
+  return (
+    <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--mono)', fontSize: 11.5 }}>
+      <thead><tr>{['Chokepoint', 'Transit', 'Status'].map((h, i) => <th key={h} style={{ ...miniTh, textAlign: i === 0 ? 'left' : 'right' }}>{h}</th>)}</tr></thead>
+      <tbody>
+        {rows.map(([c, v, s, d]) => (
+          <tr key={c}><td style={{ padding: '6px 2px', color: 'var(--text)', fontWeight: 700 }}>{c}</td><td style={{ padding: '6px 2px', textAlign: 'right', color: 'var(--muted)' }}>{v}</td><td className={d} style={{ padding: '6px 2px', textAlign: 'right' }}>{s}</td></tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+/* Liner connectivity index by port (World Bank LSCI), leader normalized to 100. */
+const ConnectivityBars = () => {
+  const rows: [string, number][] = [['Shanghai', 100], ['Singapore', 97], ['Rotterdam', 88], ['Antwerp', 84], ['Busan', 80], ['LA/LB', 71]]
+  return (
+    <svg viewBox="0 0 240 96" style={vizBox} role="img" aria-label="Liner connectivity index by port">
+      {rows.map(([l, v], i) => {
+        const y = 6 + i * 15, w = (v / 100) * 150
+        return (
+          <g key={l}>
+            <text x="0" y={y + 8} style={{ fontFamily: 'var(--mono)', fontSize: 8, fill: 'var(--dim)' }}>{l}</text>
+            <rect x="56" y={y} width={w} height="9" rx="1.5" fill="#c9a84c" opacity={i === 0 ? 0.9 : 0.5} />
+            <text x={56 + w + 4} y={y + 8} style={{ fontFamily: 'var(--mono)', fontSize: 8, fill: 'var(--muted)' }}>{v}</text>
+          </g>
+        )
+      })}
+    </svg>
+  )
+}
+
+/* Container spot rate (Drewry, gold) over US freight tonnage (FRED, blue). */
+const FreightTrend = () => (
+  <svg viewBox="0 0 240 96" style={vizBox} role="img" aria-label="Container spot rate over US freight tonnage">
+    <line x1="0" y1="80" x2="240" y2="80" stroke="rgba(255,255,255,0.08)" />
+    <path d="M8,60 L40,58 L72,50 L104,54 L136,40 L168,34 L200,30 L232,26 L232,80 L8,80 Z" fill="rgba(201,168,76,0.10)" />
+    <polyline points="8,60 40,58 72,50 104,54 136,40 168,34 200,30 232,26" fill="none" stroke="#c9a84c" strokeWidth="1.7" strokeLinejoin="round" />
+    <polyline points="8,72 40,70 72,71 104,66 136,64 168,60 200,62 232,58" fill="none" stroke="#6c8cff" strokeWidth="1.4" strokeLinejoin="round" />
+    <text x="8" y="20" style={{ fontFamily: 'var(--mono)', fontSize: 8.5, fill: 'var(--dim)' }}>Drewry WCI · US freight tonnage</text>
+  </svg>
+)
+
 export function LogisticsPage() {
   return (
     <Shell active="logistics">
       <PageHero eyebrow="Geo-Logistics · 2 maps" h1="The physical economy, in near real time."
-        lede="Two live maps of physical trade: the Logistics Map for the supply chain, and the Energy Flows Map for tankers, LNG, and pipelines. Free, first-party data." />
-      <section className="blk"><div className="wrap">
-        <Reveal className="sec-head">
-          <div className="eyebrow">Logistics Map</div>
-          <h2>The supply chain on one map.</h2>
-        </Reveal>
-        <p style={{ maxWidth: 620, opacity: 0.7, lineHeight: 1.6 }}>Live cargo ships and canal chokepoints, air-freighter frequency at the world's cargo hubs, liner connectivity by port, container spot rates, and US inventories and freight tonnage — every supply-chain signal folded into a single interactive map.</p>
-      </div></section>
+        lede="Two live maps of physical trade, built entirely on free first-party data. Cargo ships and canal chokepoints on the Logistics Map, tankers and LNG on the Energy Flows Map." />
+
       <section className="blk"><div className="wrap">
         <Reveal className="sec-head">
           <div className="eyebrow">Energy Flows Map</div>
-          <h2>Tankers, LNG, and pipelines.</h2>
+          <h2>Tankers, LNG, and pipelines through the chokepoints.</h2>
+          <p>Live AIS tankers and LNG carriers on real geography, the pipeline network, export terminals, and the world's energy chokepoints. A real-time nowcast bridges the reporting lag on transits, and a 24-hour replay scrubs vessel movement.</p>
         </Reveal>
-        <p style={{ maxWidth: 620, opacity: 0.7, lineHeight: 1.6 }}>Live AIS tankers and LNG carriers through the world's energy chokepoints, export terminals, and pipeline network — with a real-time nowcast that bridges the reporting lag on chokepoint transits.</p>
+        <Reveal><FlowsMapPreview float={false} /></Reveal>
+      </div></section>
+
+      <section className="blk" style={{ borderTop: '1px solid var(--line)', background: 'var(--bg2)' }}>
+        <div className="wrap split">
+          <Reveal>
+            <div className="eyebrow">Logistics Map</div>
+            <h2 style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-0.02em', margin: '12px 0 14px' }}>The supply chain on one map.</h2>
+            <p style={{ color: 'var(--muted)', fontSize: 15.5, lineHeight: 1.65 }}>Live cargo ships and canal chokepoints, air-freighter frequency at the world's cargo hubs, liner connectivity by port, container spot rates, and US inventories and freight tonnage. Every supply-chain signal folds into one interactive map.</p>
+            <div className="cta" style={{ marginTop: 24 }}><Link to="/app" className="btn btn-ghost btn-lg">Open the map →</Link></div>
+          </Reveal>
+          <Reveal delay={0.12}>
+            <VPanel title="Canal chokepoint transits" tags={['PortWatch', '30-day history', 'Congestion']}>
+              <TransitTable />
+            </VPanel>
+          </Reveal>
+        </div>
+      </section>
+
+      <section className="blk"><div className="wrap">
+        <div className="showcase" style={{ marginBottom: 18 }}>
+          <VPanel title="Liner connectivity" desc="Port connectivity index from the World Bank LSCI, ranked across the major container hubs.">
+            <ConnectivityBars />
+          </VPanel>
+          <VPanel title="Container spot rates" desc="Drewry World Container Index against US freight tonnage, a read on physical demand.">
+            <FreightTrend />
+          </VPanel>
+        </div>
+        <div className="modgrid">
+          <Mod icon={Ship} title="Live vessels">AIS cargo and tanker positions on real geography, updated continuously.</Mod>
+          <Mod icon={Waypoints} title="Chokepoint transits">Daily canal and strait transit counts from IMF PortWatch, with congestion status and a 30-day history.</Mod>
+          <Mod icon={Plane} title="Air freight">Freighter frequency at the world's cargo hubs, from live OpenSky flight data.</Mod>
+          <Mod icon={Container} title="Liner connectivity">Port connectivity across the major container hubs, from the World Bank LSCI.</Mod>
+          <Mod icon={Gauge} title="Container rates">Drewry World Container Index spot rates by lane.</Mod>
+          <Mod icon={Boxes} title="Freight and inventories">US freight tonnage and business inventories, from Census and FRED.</Mod>
+          <Mod icon={Fuel} title="Energy nowcast">A real-time AIS nowcast that bridges the reporting lag on chokepoint oil and LNG transits.</Mod>
+        </div>
+      </div></section>
+
+      <section className="blk"><div className="wrap">
+        <div className="final">
+          <h2>Both maps, in the terminal.</h2>
+          <Link to="/app" className="btn btn-gold btn-lg">Launch Terminal →</Link>
+        </div>
       </div></section>
     </Shell>
   )
@@ -1130,21 +1221,7 @@ export function MacroPage() {
         </div>
       </div></section>
 
-      <section className="blk" style={{ borderTop: '1px solid var(--line)', background: 'var(--bg2)' }}>
-        <div className="wrap split">
-          <Reveal>
-            <div className="eyebrow">Global Energy Flows</div>
-            <h2 style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-0.02em', margin: '12px 0 14px' }}>Live tankers, pipelines, and chokepoints.</h2>
-            <p style={{ color: 'var(--muted)', fontSize: 15.5, lineHeight: 1.65 }}>A live map of AIS vessel positions, energy pipelines, export terminals, and the world's shipping chokepoints. Transit counts per chokepoint come from IMF PortWatch, with a 30-day history and congestion status. A 24-hour replay scrubs vessel movement.</p>
-            <div className="cta" style={{ marginTop: 24 }}><Link to="/app" className="btn btn-ghost btn-lg">Open the map →</Link></div>
-          </Reveal>
-          <Reveal delay={0.12}>
-            <FlowsMapPreview float={false} />
-          </Reveal>
-        </div>
-      </section>
-
-      <section className="blk"><div className="wrap">
+      <section className="blk" style={{ borderTop: '1px solid var(--line)', background: 'var(--bg2)' }}><div className="wrap">
         <div className="showcase" style={{ marginBottom: 18 }}>
           <VPanel title="Currency Matrix" desc="Spot cross-rates, forward points, cross-currency basis, and FX vol.">
             <FxGrid />
@@ -1171,7 +1248,7 @@ export function MacroPage() {
 
       <section className="blk"><div className="wrap">
         <div className="final">
-          <h2>All nine macro tools, in the terminal.</h2>
+          <h2>All eleven macro tools, in the terminal.</h2>
           <Link to="/app" className="btn btn-gold btn-lg">Launch Terminal →</Link>
         </div>
       </div></section>
@@ -1184,8 +1261,8 @@ export function MacroPage() {
 export function ChartingPage() {
   return (
     <Shell active="charting">
-      <PageHero eyebrow="Charting · 2 tools" h1="Plot any series on one timeline."
-        lede="Two chart surfaces: a candlestick studio that overlays any data series in the app, and multi-asset comparison." />
+      <PageHero eyebrow="Charting · 3 tools" h1="Plot any series on one timeline."
+        lede="Three charting surfaces: a candlestick studio that overlays any data series in the app, multi-asset comparison, and side-by-side portfolio comparison." />
 
       <section className="blk"><div className="wrap">
         <Reveal className="sec-head">
@@ -1208,6 +1285,11 @@ export function ChartingPage() {
             <p>Any set of assets rebased to a common start and drawn on one chart. The clean way to compare a stock, an index, and a commodity.</p>
             <div className="tags"><span className="tag">Rebased to 100</span><span className="tag">Multi-asset</span></div>
           </div></div>
+          <div className="frow"><div className="idx">03</div><div>
+            <h3>Compare Portfolios</h3>
+            <p>Two to four books drawn together on one chart, so you can see which one is carrying the return and which is carrying the risk.</p>
+            <div className="tags"><span className="tag">2 to 4 books</span><span className="tag">Return vs risk</span></div>
+          </div></div>
         </div>
         <div className="showcase" style={{ marginTop: 40 }}>
           <VPanel title="Asset Overlay" desc="Two assets from a common base of 100.">
@@ -1221,7 +1303,7 @@ export function ChartingPage() {
 
       <section className="blk"><div className="wrap">
         <div className="final">
-          <h2>Both chart surfaces, in the terminal.</h2>
+          <h2>All three charting tools, in the terminal.</h2>
           <Link to="/app" className="btn btn-gold btn-lg">Launch Terminal →</Link>
         </div>
       </div></section>
