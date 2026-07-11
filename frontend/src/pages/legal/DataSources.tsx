@@ -19,7 +19,6 @@ export default function DataSources() {
       <Section title="Fundamentals and filings">
         <UL items={[
           'FactSet (Overview API)',
-          'BCC Research (market sizing)',
           'SEC EDGAR',
           'Financial Modeling Prep (FMP)',
           'Aswath Damodaran industry dataset',
