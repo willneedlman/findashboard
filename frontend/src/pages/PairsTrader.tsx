@@ -42,12 +42,13 @@ export default function PairsTrader() {
   const [exitZ, setExitZ] = useState('0.5')
   const [zWindow, setZWindow] = useState('60')
   const [costs, setCosts] = useState('5')
+  const [hedge, setHedge] = useState('ols')
 
   const m = useMutation<Resp>({
     mutationFn: () => fetchPairsAnalysis({
       a: a.trim().toUpperCase(), b: b.trim().toUpperCase(), lookback_days: lookback,
       entry_z: Number(entryZ) || 2, exit_z: Number(exitZ) || 0.5, z_window: Number(zWindow) || 60,
-      costs_bps: Number(costs) || 0,
+      costs_bps: Number(costs) || 0, hedge_method: hedge,
     }),
   })
   const run = () => m.mutate()
@@ -73,6 +74,18 @@ export default function PairsTrader() {
             const on = `${a}/${b}` === p
             return <button key={p} onClick={() => applyPreset(p)} style={{ fontFamily: MONO, fontSize: 9.5, padding: '5px 0', cursor: 'pointer', background: on ? mix(T.gold, 10) : 'transparent', color: on ? T.gold : T.muted, border: `1px solid ${on ? T.gold : T.border}` }}>{p}</button>
           })}
+        </div>
+      </div>
+
+      <div style={{ ...railSection, padding: '12px 12px 13px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 7 }}>
+          <span style={LABEL as React.CSSProperties}>Hedge method</span>
+          <InfoTip title="Hedge ratio method" body={`How β between the legs is fit. OLS is one static β over the full window. ROLL refits β on a trailing window so it drifts. KALMAN filters β as a random walk and trades the one-step innovation — the fastest to adapt.`} source="log(A) on log(B)" />
+        </div>
+        <div style={{ display: 'flex', gap: 5 }}>
+          {([['ols', 'OLS'], ['roll', 'ROLL'], ['kalman', 'KALMAN']] as [string, string][]).map(([k, l]) => (
+            <button key={k} onClick={() => { setHedge(k); if (m.data) setTimeout(run, 0) }} style={seg(hedge === k)}>{l}</button>
+          ))}
         </div>
       </div>
 
@@ -119,8 +132,17 @@ export default function PairsTrader() {
   )
 }
 
+const HEDGE_LABEL: Record<string, string> = { ols: 'OLS', roll: 'ROLL', kalman: 'KALMAN' }
+const HEDGE_DESC: Record<string, string> = { ols: 'OLS · full window', roll: 'ROLL · trailing β', kalman: 'KALMAN · filtered β' }
+const HEDGE_TIP: Record<string, string> = {
+  ols: 'from a single OLS fit over the whole window',
+  roll: 'the latest value of a β that refits on a trailing window',
+  kalman: 'the latest filtered β from a Kalman random-walk fit',
+}
+
 function Cockpit({ d }: { d: Resp }) {
   const z = d.zscore
+  const hm = d.hedge_method
   const weeks = d.half_life_days != null ? Math.round(d.half_life_days / 5) : null
   const kpis = [
     { label: 'Correlation', value: d.correlation != null ? d.correlation.toFixed(2) : '—', vc: T.text, sub: 'daily log returns',
@@ -129,8 +151,8 @@ function Cockpit({ d }: { d: Resp }) {
       tip: { title: 'Cointegration (ADF)', body: `Whether the spread is statistically mean-reverting. ADF ${d.adf.stat} against the ${d.adf.crit_5} 5% critical: ${d.adf.stationary ? 'below it, so the spread is stationary — a tradeable pair.' : 'above it, so the mean-reversion is weak. Size down or shorten the window.'}`, source: 'Augmented Dickey-Fuller on the fitted spread' } },
     { label: 'Half-life', value: d.half_life_days != null ? `${d.half_life_days}d` : '—', vc: T.text, sub: 'mean reversion',
       tip: { title: 'Mean-reversion half-life', body: `How long the spread typically takes to close half its gap back to the mean. ${d.half_life_days} days ≈ ${weeks} trading weeks — trades here are multi-week holds, so the ${z.window}-day z window fits.`, source: 'From the OU fit of the spread' } },
-    { label: 'Hedge ratio', value: `β ${d.hedge_ratio.toFixed(2)}`, vc: T.text, sub: 'OLS, full window',
-      tip: { title: 'Hedge ratio', body: `${d.hedge_ratio.toFixed(2)} units of ${d.b} shorted per 1 unit of ${d.a}, from the full-window OLS fit. Sizing the short leg at β keeps the pair dollar-balanced so only the spread is exposed.`, source: 'OLS on log prices' } },
+    { label: 'Hedge ratio', value: `β ${d.hedge_ratio.toFixed(2)}`, vc: T.text, sub: HEDGE_DESC[hm] ?? hm,
+      tip: { title: 'Hedge ratio', body: `${d.hedge_ratio.toFixed(2)} units of ${d.b} shorted per 1 unit of ${d.a}, ${HEDGE_TIP[hm] ?? ''}. Sizing the short leg at β keeps the pair dollar-balanced so only the spread is exposed.`, source: `${HEDGE_LABEL[hm] ?? hm} on log prices` } },
     { label: 'Current z', value: z.current != null ? z.current.toFixed(2) : '—', vc: z.current != null && Math.abs(z.current) >= z.entry ? T.gold : T.text, sub: SIG[d.signal].toLowerCase(),
       tip: { title: 'Current z-score', body: `How many rolling standard deviations the spread sits from its ${z.window}-day mean. At ${z.current}, it is ${Math.abs(z.current ?? 0) >= z.entry ? 'past' : 'inside'} the ±${z.entry} band — ${d.signal === 'flat' ? 'no entry right now.' : `a ${d.signal.replace('_', '-')} signal.`}`, source: `Rolling ${z.window}-day z-score` } },
     { label: 'Sharpe', value: d.backtest.sharpe != null ? d.backtest.sharpe.toFixed(2) : '—', vc: (d.backtest.sharpe ?? 0) > 0 ? T.pos : T.neg, sub: `${d.backtest.trades} trades · net of costs`,
@@ -172,7 +194,7 @@ function Cockpit({ d }: { d: Resp }) {
       </div>
 
       {/* Z-score chart */}
-      <Panel label="Spread Z-Score · Trades Marked" meta={`${z.window}-day z window · ${d.observations} closes · OLS hedge β ${d.hedge_ratio.toFixed(2)}`} style={{ padding: '30px 12px 8px' }}>
+      <Panel label="Spread Z-Score · Trades Marked" meta={`${z.window}-day z window · ${d.observations} closes · ${HEDGE_LABEL[hm] ?? hm} hedge β ${d.hedge_ratio.toFixed(2)}`} style={{ padding: '30px 12px 8px' }}>
         <div style={{ height: 236 }}>
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={zData} margin={{ top: 6, right: 10, bottom: 0, left: -20 }}>

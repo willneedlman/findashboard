@@ -640,6 +640,61 @@ def _adf_tstat(y: np.ndarray, lags: int = 1):
     return float(gamma / se_g) if se_g and not np.isnan(se_g) else None
 
 
+def _rolling_hedge(la: np.ndarray, lb: np.ndarray, win: int):
+    """Time-varying hedge ratio from a trailing-window OLS of la on lb. Leading
+    points (before a full window) reuse the first fitted beta. Returns
+    (spread, beta_series) where spread_t = la_t - (alpha_t + beta_t*lb_t)."""
+    n = len(la)
+    beta = np.full(n, np.nan); alpha = np.full(n, np.nan)
+    for t in range(n):
+        s = max(0, t - win + 1)
+        m = t - s + 1
+        if m < 20:
+            continue
+        Xw = np.column_stack([np.ones(m), lb[s:t + 1]])
+        try:
+            b, *_ = np.linalg.lstsq(Xw, la[s:t + 1], rcond=None)
+        except np.linalg.LinAlgError:
+            continue
+        alpha[t], beta[t] = b[0], b[1]
+    first = next((i for i in range(n) if not np.isnan(beta[i])), None)
+    if first is None:
+        raise HTTPException(422, "Not enough history for a rolling hedge fit")
+    beta[:first] = beta[first]; alpha[:first] = alpha[first]
+    return la - (alpha + beta * lb), beta
+
+
+def _kalman_hedge(la: np.ndarray, lb: np.ndarray):
+    """Kalman-filter hedge ratio (Chan's dynamic pairs setup): the state
+    [slope, intercept] follows a random walk and is updated on each close. The
+    spread is the one-step measurement innovation (no lookahead); the reported
+    beta is the latest filtered slope. Warm-started from an OLS fit on the head."""
+    n = len(la)
+    warm = min(60, n)
+    Xw = np.column_stack([lb[:warm], np.ones(warm)])
+    try:
+        b0, *_ = np.linalg.lstsq(Xw, la[:warm], rcond=None)
+    except np.linalg.LinAlgError:
+        b0 = np.array([1.0, 0.0])
+    state = np.array([b0[0], b0[1]], dtype=float)
+    resid0 = la[:warm] - Xw @ b0
+    Ve = max(1e-6, float(np.var(resid0)))              # observation variance
+    delta = 1e-4
+    Vw = delta / (1 - delta)                            # state-drift variance
+    P = np.zeros((2, 2))
+    betas = np.full(n, np.nan); e = np.full(n, np.nan)
+    for t in range(n):
+        x = np.array([lb[t], 1.0])
+        R = P + Vw * np.eye(2)                          # predicted state cov
+        et = float(la[t] - x @ state)                  # innovation = spread
+        Q = float(x @ R @ x + Ve)
+        K = R @ x / Q                                   # Kalman gain
+        state = state + K * et
+        P = R - np.outer(K, x @ R)
+        betas[t] = state[0]; e[t] = et
+    return e, betas
+
+
 def _half_life(spread: np.ndarray):
     """OU mean-reversion half-life from Δs = c + λ s_{t-1}. None if not reverting."""
     s_lag = spread[:-1]; ds = np.diff(spread)
@@ -678,9 +733,20 @@ def pairs_analysis(
         raise HTTPException(422, "Not enough overlapping history for this pair")
 
     la = np.log(df[a].to_numpy()); lb = np.log(df[b].to_numpy())
-    X = np.column_stack([np.ones(len(lb)), lb])
-    (alpha, beta), _, _ = _ols_beta_se(X, la)
-    spread = la - (alpha + beta * lb)
+    method = hedge_method.lower()
+    if method == "roll":
+        hwin = min(120, max(40, len(la) // 5))
+        spread, beta_series = _rolling_hedge(la, lb, hwin)
+        beta = float(beta_series[-1])
+    elif method == "kalman":
+        spread, beta_series = _kalman_hedge(la, lb)
+        beta = float(beta_series[-1])
+    else:
+        method = "ols"
+        X = np.column_stack([np.ones(len(lb)), lb])
+        (alpha, beta_ols), _, _ = _ols_beta_se(X, la)
+        beta = float(beta_ols)
+        spread = la - (alpha + beta * lb)
 
     ra = np.diff(la); rb = np.diff(lb)
     corr = float(np.corrcoef(ra, rb)[0, 1]) if len(ra) > 2 else None
@@ -794,7 +860,7 @@ def pairs_analysis(
         "half_life_days": half_life,
         "zscore": {"current": round(z_now, 2) if z_now is not None else None, "entry": entry_z, "exit": exit_z, "window": z_window},
         "signal": signal,
-        "hedge_method": "ols",
+        "hedge_method": method,
         "costs_bps": costs_bps,
         "last": {"a": round(float(a_px[-1]), 2), "b": round(float(b_px[-1]), 2)},
         "leg_return": {"a": round(float(a_norm[-1] - 100), 1), "b": round(float(b_norm[-1] - 100), 1)},
