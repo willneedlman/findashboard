@@ -1044,14 +1044,17 @@ function HistoryPanel({ C, chokepoints, ids, days, metric, series, loading, live
       // Live-AIS estimate tail: bridge PortWatch's last day to today. Anchor to the
       // last plotted value and bend by the nowcast's relative daily momentum, so the
       // different absolute scales never draw a false cliff. Energy metrics only.
-      if ((metric === 'total' || metric === 'tanker') && s.nowcast_days?.length && last != null) {
-        const counts = s.nowcast_daily ?? {}
-        const cvals = Object.values(counts)
-        const ref = cvals.length ? cvals.reduce((a, b) => a + b, 0) / cvals.length : 0
+      // Zero crossings means the feed is dark (no coverage), NOT zero traffic — so
+      // we draw nothing rather than a flat carry-forward that reads as a real level.
+      const counts = s.nowcast_daily ?? {}
+      const cvals = Object.values(counts)
+      const totalCrossings = cvals.reduce((a, b) => a + b, 0)
+      if ((metric === 'total' || metric === 'tanker') && s.nowcast_days?.length && last != null && totalCrossings > 0) {
+        const ref = totalCrossings / cvals.length
         const lastD = s.points[s.points.length - 1]?.d
         if (lastD) (byDate[lastD] ??= { d: lastD })[`${s.id}__est`] = last   // junction with the solid line
         for (const day of s.nowcast_days) {
-          const factor = ref > 0 ? Math.min(2, Math.max(0.5, (counts[day] ?? 0) / ref)) : 1
+          const factor = Math.min(2, Math.max(0.5, (counts[day] ?? 0) / ref))
           ;(byDate[day] ??= { d: day })[`${s.id}__est`] = Math.round(last * factor * 10) / 10
         }
       }
@@ -1082,7 +1085,7 @@ function HistoryPanel({ C, chokepoints, ids, days, metric, series, loading, live
             latest {latestDate} · updates 1–2d behind
           </span>
         )}
-        {(metric === 'total' || metric === 'tanker') && series.some(s => s.nowcast_days?.length) && (
+        {(metric === 'total' || metric === 'tanker') && series.some(s => s.nowcast_daily && Object.values(s.nowcast_daily).reduce((a, b) => a + b, 0) > 0) && (
           <span title="The dotted tail extends PortWatch to today using live AIS chokepoint crossings, anchored to the last confirmed level and scaled by relative momentum. An estimate, not a PortWatch count."
             style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-positive, #3fb950)' }}>
             · · · live AIS estimate to today

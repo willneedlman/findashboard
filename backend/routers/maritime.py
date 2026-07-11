@@ -1040,8 +1040,15 @@ def _attach_history_nowcast(series: list) -> None:
         if not gap:
             continue
         counts = daily.get(s["id"], {})
+        gap_counts = {g: counts.get(g, 0) for g in gap}
+        # No live crossings over the gap means the AIS feed is dark for this
+        # chokepoint (no coverage), not that traffic fell to zero. Skip the
+        # estimate so the chart never draws a flat carry-forward that reads as a
+        # confirmed level. A real signal (>=1 crossing) re-enables the tail.
+        if sum(gap_counts.values()) <= 0:
+            continue
         s["nowcast_days"] = gap
-        s["nowcast_daily"] = {g: counts.get(g, 0) for g in gap}
+        s["nowcast_daily"] = gap_counts
 
 
 # Approximate global seaborne crude+products trade, Mb/d (EIA/UNCTAD scale).
