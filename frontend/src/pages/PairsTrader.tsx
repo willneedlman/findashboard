@@ -42,13 +42,12 @@ export default function PairsTrader() {
   const [exitZ, setExitZ] = useState('0.5')
   const [zWindow, setZWindow] = useState('60')
   const [costs, setCosts] = useState('5')
-  const [hedge, setHedge] = useState('ols')
 
   const m = useMutation<Resp>({
     mutationFn: () => fetchPairsAnalysis({
       a: a.trim().toUpperCase(), b: b.trim().toUpperCase(), lookback_days: lookback,
       entry_z: Number(entryZ) || 2, exit_z: Number(exitZ) || 0.5, z_window: Number(zWindow) || 60,
-      costs_bps: Number(costs) || 0, hedge_method: hedge,
+      costs_bps: Number(costs) || 0,
     }),
   })
   const run = () => m.mutate()
@@ -74,18 +73,6 @@ export default function PairsTrader() {
             const on = `${a}/${b}` === p
             return <button key={p} onClick={() => applyPreset(p)} style={{ fontFamily: MONO, fontSize: 9.5, padding: '5px 0', cursor: 'pointer', background: on ? mix(T.gold, 10) : 'transparent', color: on ? T.gold : T.muted, border: `1px solid ${on ? T.gold : T.border}` }}>{p}</button>
           })}
-        </div>
-      </div>
-
-      <div style={{ ...railSection, padding: '12px 12px 13px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 7 }}>
-          <span style={LABEL as React.CSSProperties}>Hedge method</span>
-          <InfoTip title="Hedge ratio method" body={`How β between the legs is fit. OLS regresses ${a} on ${b} over the full window — one static β. Rolling and Kalman track a drifting β and are coming once the API supports them.`} source="OLS on log prices" />
-        </div>
-        <div style={{ display: 'flex', gap: 5 }}>
-          <button onClick={() => setHedge('ols')} style={seg(hedge === 'ols')}>OLS</button>
-          <button disabled style={seg(false, true)}>ROLL</button>
-          <button disabled style={seg(false, true)}>KALMAN</button>
         </div>
       </div>
 
