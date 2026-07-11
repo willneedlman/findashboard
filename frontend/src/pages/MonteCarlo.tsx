@@ -618,7 +618,9 @@ export function MonteCarloContent() {
       <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
 
           {!data && !isPending && (
-            <EmptyState title="Monte Carlo Simulator" hint="Add legs, set parameters, then press Run Simulation." />
+            <EmptyState title="Monte Carlo Simulator" hint="Add legs, set parameters, then press Run Simulation."
+              keys={['Enter']} kpis={['Median', 'P5', 'P95', 'Prob Profit', 'Expected']}
+              preview="chart" previewLabel="Simulated Paths" />
           )}
 
           {data && (

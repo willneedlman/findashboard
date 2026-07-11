@@ -302,7 +302,9 @@ export default function DealerGEX() {
             </>
           )}
           {!data && !isPending && (
-            <EmptyState title="Dealer GEX" hint="Enter a ticker and press Load GEX." />
+            <EmptyState title="Dealer GEX" hint="Enter a ticker and press Load GEX."
+              keys={['Enter']} kpis={['Net GEX', 'Gamma Flip', 'Call Wall', 'Put Wall', 'Spot']}
+              preview="chart" previewLabel="Gamma by Strike" />
           )}
         </SidebarLayout>
     </PageWrapper>

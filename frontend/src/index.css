@@ -38,6 +38,22 @@
     font: inherit;
   }
 
+  /* Terminal skin for native date/time inputs and selects: dark popups + mono text
+     + a themed calendar icon, so they stop reading Bootstrap-ish next to the custom
+     mono inputs. (color-scheme darkens the native picker/dropdown chrome.) */
+  input[type="date"], input[type="time"], input[type="datetime-local"],
+  input[type="month"], input[type="week"], select {
+    color-scheme: dark;
+    font-family: var(--theme-mono);
+  }
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="time"]::-webkit-calendar-picker-indicator,
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.62) sepia(0.18);
+    opacity: 0.55;
+    cursor: pointer;
+  }
+
   input[type=number]::-webkit-inner-spin-button,
   input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
   input[type=number] { -moz-appearance: textfield; }

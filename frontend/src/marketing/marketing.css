@@ -6,6 +6,7 @@
   --pos:#3fb950; --neg:#f85149; --blue:#6c8cff;
   --mono:ui-monospace,monospace;
   --sans:'Sora',-apple-system,system-ui,sans-serif;
+  --display:'Space Grotesk','Sora',-apple-system,system-ui,sans-serif;
   --ease:cubic-bezier(0.23,1,0.32,1);
   background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.5;
   -webkit-font-smoothing:antialiased;min-height:100vh;overflow-x:hidden;
@@ -48,7 +49,7 @@
   background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
   background-size:46px 46px;mask-image:radial-gradient(680px 380px at 70% 20%,#000,transparent 72%)}
 .mkt .hero-grid{display:grid;grid-template-columns:1.04fr 1.12fr;gap:48px;align-items:center}
-.mkt .hero h1{font-family:var(--mono);font-weight:600;font-size:52px;line-height:1.04;letter-spacing:-0.025em;margin:18px 0 0}
+.mkt .hero h1{font-family:var(--display);font-weight:700;font-size:52px;line-height:1.05;letter-spacing:-0.02em;margin:18px 0 0}
 .mkt .hero .lede{font-size:17px;color:var(--muted);margin:22px 0 30px;max-width:520px}
 .mkt .cta{display:flex;gap:12px;flex-wrap:wrap}
 .mkt .trust{margin-top:26px;font-family:var(--mono);font-size:11px;letter-spacing:0.06em;color:var(--dim)}
@@ -58,7 +59,7 @@
 .mkt .phero{position:relative;padding:72px 0 40px;overflow:hidden;border-bottom:1px solid var(--line)}
 .mkt .phero::before{content:"";position:absolute;inset:0;z-index:-1;
   background:radial-gradient(700px 360px at 20% -20%,rgba(201,168,76,0.10),transparent 60%)}
-.mkt .phero h1{font-family:var(--mono);font-weight:600;font-size:42px;line-height:1.08;letter-spacing:-0.025em;margin:16px 0 0;max-width:760px}
+.mkt .phero h1{font-family:var(--display);font-weight:700;font-size:42px;line-height:1.08;letter-spacing:-0.02em;margin:16px 0 0;max-width:760px}
 .mkt .phero .lede{font-size:17px;color:var(--muted);margin:20px 0 0;max-width:600px}
 .mkt .phero .cta{margin-top:28px}
 

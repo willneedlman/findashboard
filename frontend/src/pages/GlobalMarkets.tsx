@@ -3,6 +3,7 @@ import axios from 'axios'
 import { useQuery } from '@tanstack/react-query'
 import PageWrapper from '../components/PageWrapper'
 import AssetChartModal from '../components/AssetChartModal'
+import { BoardSkeleton } from '../components/Skeleton'
 import useIsMobile from '../hooks/useIsMobile'
 
 // Global Markets board (hifi handoff "2a"): a pinnable Spotlight of benchmark
@@ -240,7 +241,7 @@ export default function GlobalMarkets() {
           </div>
         </div>
 
-        {q.isLoading && <div style={{ padding: '32px 0', color: 'var(--theme-secondary, #5f7893)', fontFamily: MONO, fontSize: 11, fontStyle: 'italic' }}>Loading the board…</div>}
+        {q.isLoading && <BoardSkeleton isMobile={isMobile} />}
         {q.isError && <div style={{ padding: '32px 0', color: 'var(--theme-secondary, #5f7893)', fontFamily: MONO, fontSize: 11, fontStyle: 'italic' }}>The board is unavailable. Retry shortly.</div>}
 
         {q.data && (

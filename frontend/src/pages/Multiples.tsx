@@ -146,7 +146,9 @@ export function MultiplesContent() {
 
       {!data && !error && (
         <EmptyState title="Multiples Valuation"
-          hint="Set a target multiple on any line to see the share price it implies. Enter a ticker and Load multiples." />
+          hint="Set a target multiple on any line to see the share price it implies. Enter a ticker and Load multiples."
+          keys={['Enter']} kpis={['Implied Price', 'Upside', 'P/E', 'EV/EBITDA', 'P/S']}
+          preview="table" previewLabel="Valuation Multiples" columns={['Metric', 'Current', 'Target', 'Implied Price']} />
       )}
 
       {data && !data.metrics.length && (

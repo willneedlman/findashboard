@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import PageWrapper from '../components/PageWrapper'
@@ -106,11 +106,11 @@ function BondCard({ cusip, bond, onClick, saved }: { cusip: string; bond?: Resol
         <span style={{ fontFamily: MONO, fontSize: 12, color: G, letterSpacing: '0.04em' }}>{saved ? '★ ' : ''}{cusip}</span>
         {s && <ScaleBadge s={s} />}
       </div>
-      <div style={{ fontFamily: SANS, fontSize: 13, fontWeight: 600, color: TEXT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {bond?.name ? bond.name : cusip}
+      <div style={{ fontFamily: SANS, fontSize: 13, fontWeight: 600, color: bond?.name ? TEXT : SEC, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {bond?.name || 'Resolving…'}
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: `1px solid ${HAIR}`, paddingTop: 6, fontFamily: MONO, fontSize: 10, color: SEC }}>
-        <span>{bond?.coupon_rate != null ? `${bond.coupon_rate}%` : '—'} · {bond?.maturity_date || '—'}</span>
+        <span>{bond ? `${bond.coupon_rate != null ? bond.coupon_rate + '%' : '—'} · ${bond.maturity_date || '—'}` : 'Recent lookup'}</span>
       </div>
     </div>
   )
@@ -198,6 +198,17 @@ export default function CusipLookup() {
     try { localStorage.setItem(RECENTS_KEY, JSON.stringify(next)) } catch { /* */ }
     return next
   })
+
+  // Resolve recent cusips on mount so the RECENT cards show issuer names, not raw
+  // ids with placeholder dashes.
+  useEffect(() => {
+    let alive = true
+    recents.forEach(cu => {
+      if (cache[cu]) return
+      fetchBondByCusip(cu).then(r => { if (alive && r?.found) setCache(c => ({ ...c, [r.cusip]: r })) }).catch(() => {})
+    })
+    return () => { alive = false }
+  }, [recents]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // CUSIP path: resolve identity + price, then derive analytics.
   const cusipMut = useMutation({
@@ -299,7 +310,7 @@ export default function CusipLookup() {
               style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none', color: TEXT, fontFamily: MONO, fontSize: 14 }} />
             {query && <button onClick={clear} aria-label="Clear" style={{ background: 'none', border: 'none', cursor: 'pointer', color: SEC, display: 'flex', padding: 0 }}>✕</button>}
           </div>
-          <button onClick={onSubmit} disabled={isPending} style={{ ...PRIMARY_BTN, padding: '0 26px', height: 46, opacity: isPending ? 0.6 : 1 }}>
+          <button onClick={onSubmit} disabled={isPending} style={{ ...PRIMARY_BTN, padding: '0 26px', height: 46, width: 'auto', flex: '0 0 auto', opacity: isPending ? 0.6 : 1 }}>
             {isPending ? 'Resolving…' : 'Look up'}
           </button>
         </div>

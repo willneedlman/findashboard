@@ -181,7 +181,9 @@ export default function NAVTracker() {
       </>}>
 
           {!data && !isPending && (
-            <EmptyState title="NAV Proxy Tracker" hint="Pick a preset company or enter holdings, then press Calculate NAV." />
+            <EmptyState title="NAV Proxy Tracker" hint="Pick a preset company or enter holdings, then press Calculate NAV."
+              keys={['Enter']} kpis={['Price', 'True Net NAV', 'Premium', 'Holdings', 'Spot']}
+              preview="chart" previewLabel="Price vs Net NAV Floor" />
           )}
 
           {data && (
