@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import PageWrapper from '../components/PageWrapper'
@@ -50,10 +50,17 @@ const MAP_DOTS = (() => {
   W.forEach((row, r) => { for (let c = 0; c < row.length; c++) if (row[c] === '#') { const x = c * 10 + 5, y = r * 10 + 8; d += `M${x - 2.6},${y} a2.6,2.6 0 1,0 5.2,0 a2.6,2.6 0 1,0 -5.2,0 ` } })
   return d
 })()
-const STRAIT_POS: Record<string, { x: number; y: number; lab: 'l' | 'r' }> = {
-  taiwan: { x: 555, y: 103, lab: 'r' }, malacca: { x: 519, y: 144, lab: 'r' }, hormuz: { x: 439, y: 98, lab: 'r' },
-  bab: { x: 415, y: 125, lab: 'l' }, suez: { x: 395, y: 92, lab: 'l' }, bosphorus: { x: 388, y: 70, lab: 'l' },
-  gibraltar: { x: 325, y: 80, lab: 'l' }, danish: { x: 355, y: 41, lab: 'r' }, panama: { x: 189, y: 132, lab: 'l' }, goodhope: { x: 369, y: 215, lab: 'r' },
+const STRAIT_POS: Record<string, { x: number; y: number; labelX: number; labelY: number; lab: 'l' | 'r' }> = {
+  taiwan: { x: 555, y: 103, labelX: 564, labelY: 100, lab: 'r' },
+  malacca: { x: 519, y: 144, labelX: 528, labelY: 142, lab: 'r' },
+  hormuz: { x: 439, y: 98, labelX: 448, labelY: 89, lab: 'r' },
+  bab: { x: 415, y: 125, labelX: 407, labelY: 130, lab: 'l' },
+  suez: { x: 395, y: 92, labelX: 385, labelY: 109, lab: 'l' },
+  bosphorus: { x: 388, y: 70, labelX: 379, labelY: 61, lab: 'l' },
+  gibraltar: { x: 325, y: 80, labelX: 316, labelY: 86, lab: 'l' },
+  danish: { x: 355, y: 41, labelX: 364, labelY: 35, lab: 'r' },
+  panama: { x: 189, y: 132, labelX: 181, labelY: 129, lab: 'l' },
+  goodhope: { x: 369, y: 215, labelX: 378, labelY: 210, lab: 'r' },
 }
 const statusColor = (s: string | null) => (s === 'congested' ? T.neg : s === 'watch' ? T.gold : T.muted)
 
@@ -124,21 +131,27 @@ function Board({ data }: { data: Resp }) {
           <div style={{ position: 'relative' }}>
             <svg width="100%" height="336" viewBox="0 0 660 250" preserveAspectRatio="none" style={{ display: 'block' }}>
               <path d={MAP_DOTS} fill={mix(T.text, 14)} />
+              {straits.map(c => {
+                const pos = STRAIT_POS[c.id]; if (!pos) return null
+                return <line key={c.id} x1={pos.x} y1={pos.y} x2={pos.labelX} y2={pos.labelY} stroke={c.id === strait ? mix(T.gold, 65) : mix(T.text, 28)} strokeWidth={0.65} />
+              })}
             </svg>
             {straits.map(c => {
               const pos = STRAIT_POS[c.id]; if (!pos) return null
               const color = statusColor(c.status)
               const on = c.id === strait
               return (
-                <div key={c.id} style={{ position: 'absolute', left: `${pos.x / 660 * 100}%`, top: `${pos.y / 250 * 100}%`, width: 0, height: 0 }}>
-                  <div onClick={() => setStrait(c.id)} title={c.name} style={{ position: 'absolute', left: 0, top: 0, transform: 'translate(-50%,-50%)', width: 9, height: 9, background: color, boxShadow: `0 0 0 2px ${T.bg}`, cursor: 'pointer', zIndex: 2 }} />
-                  {c.status === 'congested' && <div style={{ position: 'absolute', left: 0, top: 0, margin: '-9px 0 0 -9px', width: 18, height: 18, border: `1px solid ${T.neg}`, animation: 'at-choke-pulse 1.8s ease-out infinite' }} />}
-                  {on && <div style={{ position: 'absolute', left: 0, top: 0, margin: '-8px 0 0 -8px', width: 16, height: 16, border: `1px solid ${T.gold}` }} />}
-                  <div style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', whiteSpace: 'nowrap', zIndex: 2, ...(pos.lab === 'r' ? { left: 12 } : { right: 12, textAlign: 'right' as const }) }}>
+                <Fragment key={c.id}>
+                  <div style={{ position: 'absolute', left: `${pos.x / 660 * 100}%`, top: `${pos.y / 250 * 100}%`, width: 0, height: 0 }}>
+                    <div onClick={() => setStrait(c.id)} title={c.name} style={{ position: 'absolute', left: 0, top: 0, transform: 'translate(-50%,-50%)', width: 9, height: 9, background: color, boxShadow: `0 0 0 2px ${T.bg}`, cursor: 'pointer', zIndex: 2 }} />
+                    {c.status === 'congested' && <div style={{ position: 'absolute', left: 0, top: 0, margin: '-9px 0 0 -9px', width: 18, height: 18, border: `1px solid ${T.neg}`, animation: 'at-choke-pulse 1.8s ease-out infinite' }} />}
+                    {on && <div style={{ position: 'absolute', left: 0, top: 0, margin: '-8px 0 0 -8px', width: 16, height: 16, border: `1px solid ${T.gold}` }} />}
+                  </div>
+                  <div style={{ position: 'absolute', left: `${pos.labelX / 660 * 100}%`, top: `${pos.labelY / 250 * 100}%`, transform: `translate(${pos.lab === 'r' ? '0' : '-100%'}, -50%)`, whiteSpace: 'nowrap', textAlign: pos.lab === 'l' ? 'right' : 'left', zIndex: 2 }}>
                     <div style={{ fontFamily: MONO, fontSize: 9.5, fontWeight: 700, color: mix(T.text, 85) }}>{c.name.replace('Strait of ', '').replace(' + SUMED', '')}</div>
                     <div style={{ fontFamily: MONO, fontSize: 8.5, color }}>{c.oil_mbd} Mb/d · {c.delta_pct != null ? signed(c.delta_pct, 1) + '%' : '—'}</div>
                   </div>
-                </div>
+                </Fragment>
               )
             })}
           </div>
