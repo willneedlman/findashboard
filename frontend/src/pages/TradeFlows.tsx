@@ -137,7 +137,7 @@ function Results({ d, cmdLabel, countryLabel }: { d: Resp; cmdLabel: string; cou
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <KpiStrip cells={kpis} />
       <div style={{ display: 'flex', gap: 10 }}>
-        <FlowOverview d={d} partners={partners} selected={selected} onSelect={setSelected} countryLabel={countryLabel} cmdLabel={cmdLabel} />
+        <FlowOverview d={d} partners={partners} selected={selected} onSelect={setSelected} countryLabel={countryLabel} cmdLabel={cmdLabel} searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
         {selectedPartner && <PartnerDock partner={selectedPartner} rank={selected + 1} total={d.total?.value} flow={d.flow} countryLabel={countryLabel} baseYear={baseYear} />}
       </div>
       <PartnerTable partners={filteredPartners} total={d.total?.value} maxVal={maxVal} selectedPartner={selectedPartner} onSelect={handleSelectPartner} source={d.source} searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
@@ -145,7 +145,7 @@ function Results({ d, cmdLabel, countryLabel }: { d: Resp; cmdLabel: string; cou
   )
 }
 
-function FlowOverview({ d, partners, selected, onSelect, countryLabel, cmdLabel }: { d: Resp; partners: Partner[]; selected: number; onSelect: (i: number) => void; countryLabel: string; cmdLabel: string }) {
+function FlowOverview({ d, partners, selected, onSelect, countryLabel, cmdLabel, searchQuery, setSearchQuery }: { d: Resp; partners: Partner[]; selected: number; onSelect: (i: number) => void; countryLabel: string; cmdLabel: string; searchQuery: string; setSearchQuery: (q: string) => void }) {
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
@@ -305,6 +305,13 @@ function FlowOverview({ d, partners, selected, onSelect, countryLabel, cmdLabel 
       ? `M${x},${y} Q${cx},${cy} ${origin.x},${origin.y}`
       : `M${origin.x},${origin.y} Q${cx},${cy} ${x},${y}`
   }
+
+  const matchesQuery = (r: { partner: Partner }) => {
+    if (!searchQuery) return true
+    const q = searchQuery.toLowerCase().trim()
+    return (r.partner.partner ?? '').toLowerCase().includes(q) ||
+           (r.partner.iso ?? '').toLowerCase().includes(q)
+  }
   return (
     <Panel label="Bilateral Flow Map" meta="click a partner to drill it · drag to pan · scroll to zoom · double click to reset" style={{ flex: 1, minWidth: 0, height: 386, padding: '38px 14px 12px', boxSizing: 'border-box' }}>
       <div style={{ position: 'relative', height: '100%', overflow: 'hidden' }}>
@@ -382,6 +389,44 @@ function FlowOverview({ d, partners, selected, onSelect, countryLabel, cmdLabel 
             ⟲
           </button>
         </div>
+        
+        {/* Floating search/filter input in bottom-left */}
+        <div style={{ position: 'absolute', left: 12, bottom: 28, zIndex: 10, display: 'flex', alignItems: 'center', gap: 6, background: mix(T.surface, 85), border: `1px solid ${mix(T.gold, 35)}`, padding: '4px 8px', borderRadius: 2, boxShadow: '0 4px 12px rgba(0,0,0,0.5)', width: 156, boxSizing: 'border-box' }}>
+          <span style={{ color: T.gold, fontFamily: MONO, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.05em' }}>FIND:</span>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Type country..."
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: T.text,
+              fontFamily: MONO,
+              fontSize: 9,
+              outline: 'none',
+              width: 100,
+              padding: 0
+            }}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: T.gold,
+                cursor: 'pointer',
+                fontFamily: MONO,
+                fontSize: 9,
+                padding: '0 2px'
+              }}
+            >
+              [X]
+            </button>
+          )}
+        </div>
+
         <svg
           width="100%"
           height="100%"
@@ -412,11 +457,16 @@ function FlowOverview({ d, partners, selected, onSelect, countryLabel, cmdLabel 
             <path d={WORLD_DOT_PATH} fill={mix(T.text, 12)} />
             {routes.filter(r => r.index !== selected).map(r => {
               const weight = 0.4 + Math.sqrt((r.partner.value ?? 0) / max) * 1.6
-              return <path key={`route-${r.index}`} d={pathFor(r.point.x, r.point.y)} fill="none" stroke={mix(T.blue, 42)} strokeOpacity={0.65} strokeWidth={weight / zoom} strokeLinecap="round" markerEnd="url(#trade-arrow)" />
+              const match = matchesQuery(r)
+              return <path key={`route-${r.index}`} d={pathFor(r.point.x, r.point.y)} fill="none" stroke={mix(T.blue, 42)} strokeOpacity={match ? 0.65 : 0.08} strokeWidth={weight / zoom} strokeLinecap="round" markerEnd="url(#trade-arrow)" />
             })}
-            {routes.filter(r => r.index === selected).map(r => <path key={`route-${r.index}`} d={pathFor(r.point.x, r.point.y)} fill="none" stroke={mix(T.gold, 88)} strokeWidth={2.2 / zoom} strokeLinecap="round" markerEnd="url(#trade-arrow-selected)" />)}
+            {routes.filter(r => r.index === selected).map(r => {
+              const match = matchesQuery(r)
+              return <path key={`route-${r.index}`} d={pathFor(r.point.x, r.point.y)} fill="none" stroke={mix(T.gold, 88)} strokeOpacity={match ? 1.0 : 0.1} strokeWidth={2.2 / zoom} strokeLinecap="round" markerEnd="url(#trade-arrow-selected)" />
+            })}
             {routes.slice().sort((a, b) => Number(a.index === selected) - Number(b.index === selected)).map(r => {
               const on = r.index === selected
+              const match = matchesQuery(r)
               const radius = 2.8 + Math.sqrt((r.partner.value ?? 0) / max) * 3.4
               const anchor = r.point.x > 540 ? 'end' : 'start'
               const labelOffset = 8 / zoom
@@ -430,9 +480,9 @@ function FlowOverview({ d, partners, selected, onSelect, countryLabel, cmdLabel 
                   tabIndex={0}
                   onClick={() => onSelect(r.index)}
                   onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onSelect(r.index) }}
-                  style={{ cursor: 'pointer', outline: 'none', transform: 'none' }}
+                  style={{ cursor: 'pointer', outline: 'none', transform: 'none', opacity: match || on ? 1.0 : 0.15 }}
                 >
-                  <circle cx={r.point.x} cy={r.point.y} r={Math.max(6 / zoom, radius + 2.2 / zoom)} fill="transparent" pointerEvents="all">
+                  <circle cx={r.point.x} cy={r.point.y} r={Math.max(6 / zoom, radius + 2.2 / zoom)} fill="transparent" pointerEvents={match ? 'all' : 'none'}>
                     <title>{r.partner.partner} · {fmtUsd(r.partner.value)}</title>
                   </circle>
                   {on && <circle cx={r.point.x} cy={r.point.y} r={radius + 3 / zoom} fill="none" stroke={T.gold} strokeWidth={1 / zoom} pointerEvents="none" />}
