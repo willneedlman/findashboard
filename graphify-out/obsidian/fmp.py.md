@@ -29,8 +29,8 @@ tags:
 - [[backend_fmp_py_get_balance]] - `contains` [EXTRACTED]
 - [[backend_fmp_py_get_fundamentals]] - `contains` [EXTRACTED]
 - [[backend_fmp_py_get_cashflow]] - `contains` [EXTRACTED]
+- [[backend_fmp_py_get_history_df]] - `contains` [EXTRACTED]
 - [[backend_fmp_py_get_analyst_estimates]] - `contains` [EXTRACTED]
 - [[backend_fmp_py_get_analyst_ratings]] - `contains` [EXTRACTED]
-- [[backend_fmp_py_get_quote]] - `contains` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Backend

@@ -2,7 +2,7 @@
 source_file: "backend/quotes.py"
 type: "code"
 community: "Backend"
-location: "50"
+location: "51"
 tags:
   - graphify/code
   - graphify/EXTRACTED

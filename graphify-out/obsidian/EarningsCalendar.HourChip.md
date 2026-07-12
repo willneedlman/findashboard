@@ -2,7 +2,7 @@
 source_file: "frontend/src/pages/EarningsCalendar.tsx"
 type: "code"
 community: "Frontend"
-location: "67"
+location: "69"
 tags:
   - graphify/code
   - graphify/EXTRACTED

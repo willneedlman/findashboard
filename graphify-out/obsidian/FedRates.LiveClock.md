@@ -2,7 +2,7 @@
 source_file: "frontend/src/pages/FedRates.tsx"
 type: "code"
 community: "Frontend"
-location: "49"
+location: "57"
 tags:
   - graphify/code
   - graphify/EXTRACTED

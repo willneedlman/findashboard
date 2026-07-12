@@ -18,6 +18,8 @@ tags:
 - [[axios]] - `imports` [EXTRACTED]
 - [[frontend_src_hooks_usedashboard_ts_usedashboard]] - `imports` [EXTRACTED]
 - [[frontend_src_components_tickerlogo_tsx_tickerlogo]] - `imports` [EXTRACTED]
+- [[frontend_src_components_tickerlink_tsx_tickerlink]] - `imports` [EXTRACTED]
+- [[frontend_src_components_tickerlink_tsx_tickerlink]] - `renders` [EXTRACTED]
 - [[frontend_src_components_tickerlogo_tsx_tickerlogo]] - `renders` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

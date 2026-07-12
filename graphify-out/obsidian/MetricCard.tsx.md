@@ -1,21 +1,18 @@
 ---
 source_file: "frontend/src/components/MetricCard.tsx"
 type: "code"
-community: "DCF Valuation & MetricCard"
+community: "Frontend"
 location: "L1"
 tags:
   - graphify/code
   - graphify/EXTRACTED
-  - community/DCF_Valuation__MetricCard
+  - community/Frontend
 ---
 
 # MetricCard.tsx
 
 ## Connections
-- [[DCFValuation.tsx]] - `imports_from` [EXTRACTED]
-- [[MetricCardProps]] - `contains` [EXTRACTED]
-- [[MonteCarlo.tsx]] - `imports_from` [EXTRACTED]
-- [[NAVTracker.tsx]] - `imports_from` [EXTRACTED]
-- [[PortfolioBacktester.tsx]] - `imports_from` [EXTRACTED]
+- [[clsx]] - `imports` [EXTRACTED]
+- [[react]] - `imports` [EXTRACTED]
 
-#graphify/code #graphify/EXTRACTED #community/DCF_Valuation__MetricCard
+#graphify/code #graphify/EXTRACTED #community/Frontend

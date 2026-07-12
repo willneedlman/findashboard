@@ -2,7 +2,7 @@
 source_file: "frontend/src/pages/CusipLookup.tsx"
 type: "code"
 community: "Frontend"
-location: "123"
+location: "124"
 tags:
   - graphify/code
   - graphify/EXTRACTED

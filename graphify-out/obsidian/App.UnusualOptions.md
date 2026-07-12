@@ -2,7 +2,7 @@
 source_file: "frontend/src/App.tsx"
 type: "code"
 community: "Frontend"
-location: "74"
+location: "110"
 tags:
   - graphify/code
   - graphify/EXTRACTED

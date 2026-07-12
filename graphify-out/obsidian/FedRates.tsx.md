@@ -23,14 +23,14 @@ tags:
 - [[frontend_src_pages_fedrates_tsx_sparkline]] - `contains` [EXTRACTED]
 - [[frontend_src_pages_fedrates_tsx_spreadspanel]] - `contains` [EXTRACTED]
 - [[frontend_src_pages_fedrates_tsx_inlinestat]] - `contains` [EXTRACTED]
+- [[frontend_src_pages_fedrates_tsx_fomcstatementread]] - `contains` [EXTRACTED]
 - [[frontend_src_pages_fedrates_tsx_fedratescontent]] - `contains` [EXTRACTED]
 - [[frontend_src_lib_theme_ts_theme]] - `imports` [EXTRACTED]
 - [[react]] - `imports` [EXTRACTED]
 - [[react_router_dom]] - `imports` [EXTRACTED]
 - [[tanstack_react_query]] - `imports` [EXTRACTED]
+- [[axios]] - `imports` [EXTRACTED]
 - [[frontend_src_components_pagewrapper_tsx_pagewrapper]] - `imports` [EXTRACTED]
 - [[frontend_src_hooks_useapi_ts_useapi]] - `imports` [EXTRACTED]
-- [[frontend_src_components_charttooltip_tsx_charttooltip]] - `imports` [EXTRACTED]
-- [[frontend_src_pages_fedrates_tsx_dotplot]] - `renders` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

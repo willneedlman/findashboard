@@ -2,7 +2,7 @@
 source_file: "backend/routers/market.py"
 type: "code"
 community: "Backend"
-location: "670"
+location: "703"
 tags:
   - graphify/code
   - graphify/EXTRACTED

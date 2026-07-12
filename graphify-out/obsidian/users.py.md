@@ -30,7 +30,7 @@ tags:
 - [[backend_routers_users_py_user_id_for_token]] - `contains` [EXTRACTED]
 - [[backend_routers_users_py_extract_token]] - `contains` [EXTRACTED]
 - [[backend_routers_users_py_require_owner]] - `contains` [EXTRACTED]
+- [[backend_routers_users_py_is_admin_token]] - `contains` [EXTRACTED]
 - [[backend_routers_users_py_client_ip]] - `contains` [EXTRACTED]
-- [[backend_routers_users_py_check_login_rate]] - `contains` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Backend

@@ -2,7 +2,7 @@
 source_file: "frontend/src/components/CustomStrategyModal.tsx"
 type: "code"
 community: "Frontend"
-location: "22"
+location: "57"
 tags:
   - graphify/code
   - graphify/EXTRACTED

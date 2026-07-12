@@ -26,6 +26,8 @@ tags:
 - [[frontend_src_components_mmcockpit_tsx_segmented]] - `contains` [EXTRACTED]
 - [[react]] - `imports` [EXTRACTED]
 - [[lucide_react]] - `imports` [EXTRACTED]
+- [[frontend_src_components_helptip_tsx_helptip]] - `imports` [EXTRACTED]
 - [[lucide_react]] - `renders` [EXTRACTED]
+- [[frontend_src_components_helptip_tsx_helptip]] - `renders` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

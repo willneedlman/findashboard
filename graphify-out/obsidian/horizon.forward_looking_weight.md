@@ -2,7 +2,7 @@
 source_file: "backend/sentiment/horizon.py"
 type: "code"
 community: "Backend"
-location: "51"
+location: "68"
 tags:
   - graphify/code
   - graphify/EXTRACTED

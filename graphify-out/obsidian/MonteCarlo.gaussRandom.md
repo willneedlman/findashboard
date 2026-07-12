@@ -2,7 +2,7 @@
 source_file: "frontend/src/pages/MonteCarlo.tsx"
 type: "code"
 community: "Frontend"
-location: "34"
+location: "35"
 tags:
   - graphify/code
   - graphify/EXTRACTED

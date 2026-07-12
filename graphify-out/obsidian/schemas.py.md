@@ -1,5 +1,5 @@
 ---
-source_file: "backend/sentiment/schemas.py"
+source_file: "backend/regression_engine/schemas.py"
 type: "code"
 community: "Backend"
 location: "L1"
@@ -14,21 +14,21 @@ tags:
 ## Connections
 - [[future]] - `imports` [EXTRACTED]
 - [[dataclasses]] - `imports` [EXTRACTED]
-- [[typing]] - `imports` [EXTRACTED]
-- [[pydantic]] - `imports` [EXTRACTED]
-- [[backend_sentiment_schemas_py_scoredarticle]] - `contains` [EXTRACTED]
-- [[backend_sentiment_schemas_py_rawarticle]] - `contains` [EXTRACTED]
-- [[backend_sentiment_schemas_py_itemout]] - `contains` [EXTRACTED]
-- [[backend_sentiment_schemas_py_sourceresult]] - `contains` [EXTRACTED]
-- [[backend_sentiment_schemas_py_sourcehealth]] - `contains` [EXTRACTED]
-- [[backend_sentiment_schemas_py_confidenceinterval]] - `contains` [EXTRACTED]
-- [[backend_sentiment_schemas_py_verification]] - `contains` [EXTRACTED]
-- [[backend_sentiment_schemas_py_auditinfo]] - `contains` [EXTRACTED]
-- [[backend_sentiment_schemas_py_momentum]] - `contains` [EXTRACTED]
-- [[backend_sentiment_schemas_py_velocity]] - `contains` [EXTRACTED]
-- [[backend_sentiment_schemas_py_sentimentsnapshot]] - `contains` [EXTRACTED]
-- [[backend_sentiment_schemas_py_non_empty_title]] - `contains` [EXTRACTED]
-- [[backend_sentiment_schemas_py_coerce_ts]] - `contains` [EXTRACTED]
-- [[backend_sentiment_schemas_py_coerce_engagement]] - `contains` [EXTRACTED]
+- [[backend_regression_engine_schemas_py_regressioninput]] - `contains` [EXTRACTED]
+- [[backend_regression_engine_schemas_py_simulationpathdata]] - `contains` [EXTRACTED]
+- [[backend_regression_engine_schemas_py_regressionoutputs]] - `contains` [EXTRACTED]
+- [[backend_regression_engine_schemas_py_distributionstats]] - `contains` [EXTRACTED]
+- [[backend_regression_engine_schemas_py_pathregressionresult]] - `contains` [EXTRACTED]
+- [[backend_regression_engine_schemas_py_post_init]] - `contains` [EXTRACTED]
+- [[backend_regression_engine_schemas_py_post_init]] - `contains` [EXTRACTED]
+- [[backend_regression_engine_schemas_py_n_paths]] - `contains` [EXTRACTED]
+- [[backend_regression_engine_schemas_py_horizon]] - `contains` [EXTRACTED]
+- [[backend_regression_engine_schemas_py_n_factors]] - `contains` [EXTRACTED]
+- [[backend_regression_engine_schemas_py_shared]] - `contains` [EXTRACTED]
+- [[backend_regression_engine_schemas_py_single_factor]] - `contains` [EXTRACTED]
+- [[backend_regression_engine_schemas_py_to_dict]] - `contains` [EXTRACTED]
+- [[backend_regression_engine_schemas_py_from_samples]] - `contains` [EXTRACTED]
+- [[backend_regression_engine_schemas_py_to_dict]] - `contains` [EXTRACTED]
+- [[backend_regression_engine_schemas_py_to_dict]] - `contains` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Backend

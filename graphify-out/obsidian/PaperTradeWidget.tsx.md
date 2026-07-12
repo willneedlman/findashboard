@@ -27,8 +27,8 @@ tags:
 - [[frontend_src_lib_indicators_ts_indicators]] - `imports` [EXTRACTED]
 - [[frontend_src_lib_marketsession_ts_marketsession]] - `imports` [EXTRACTED]
 - [[frontend_src_lib_uselivetick_ts_uselivetick]] - `imports` [EXTRACTED]
-- [[lightweight_charts]] - `renders` [EXTRACTED]
 - [[lucide_react]] - `renders` [EXTRACTED]
+- [[lightweight_charts]] - `renders` [EXTRACTED]
 - [[frontend_src_components_expiryselect_tsx_expiryselect]] - `renders` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

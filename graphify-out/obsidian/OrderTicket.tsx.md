@@ -29,8 +29,8 @@ tags:
 - [[frontend_src_components_dashboard_widgets_useportfolio_ts_useportfolio]] - `imports` [EXTRACTED]
 - [[frontend_src_pages_paper_trading_optiontemplates_ts_optiontemplates]] - `imports` [EXTRACTED]
 - [[frontend_src_pages_paper_trading_shared_tsx_shared]] - `imports` [EXTRACTED]
-- [[frontend_src_pages_paper_trading_orderticket_tsx_legrow]] - `renders` [EXTRACTED]
-- [[frontend_src_components_expiryselect_tsx_expiryselect]] - `renders` [EXTRACTED]
 - [[frontend_src_components_helptip_tsx_helptip]] - `renders` [EXTRACTED]
+- [[frontend_src_components_expiryselect_tsx_expiryselect]] - `renders` [EXTRACTED]
+- [[frontend_src_pages_paper_trading_orderticket_tsx_legrow]] - `renders` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

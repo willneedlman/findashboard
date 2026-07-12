@@ -24,6 +24,7 @@ tags:
 - [[backend_routers_market_py_compare_assets]] - `contains` [EXTRACTED]
 - [[backend_routers_market_py_daily_pe_from_backlog]] - `contains` [EXTRACTED]
 - [[backend_routers_market_py_fundamental_series]] - `contains` [EXTRACTED]
+- [[backend_routers_market_py_alpaca_start]] - `contains` [EXTRACTED]
 - [[backend_routers_market_py_get_ohlcv]] - `contains` [EXTRACTED]
 - [[backend_routers_market_py_chart_events]] - `contains` [EXTRACTED]
 - [[backend_routers_market_py_get_live_quote]] - `contains` [EXTRACTED]
@@ -31,6 +32,5 @@ tags:
 - [[backend_routers_market_py_get_news]] - `contains` [EXTRACTED]
 - [[datetime]] - `imports` [EXTRACTED]
 - [[cachetools]] - `imports` [EXTRACTED]
-- [[cache]] - `imports` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Backend

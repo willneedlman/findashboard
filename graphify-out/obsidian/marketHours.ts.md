@@ -31,6 +31,6 @@ tags:
 - [[frontend_src_lib_markethours_ts_sun_order]] - `contains` [EXTRACTED]
 - [[frontend_src_lib_markethours_ts_tzoffsetminutes]] - `contains` [EXTRACTED]
 - [[frontend_src_lib_markethours_ts_splitwrap]] - `contains` [EXTRACTED]
-- [[frontend_src_lib_markethours_ts_utcarcs]] - `contains` [EXTRACTED]
+- [[frontend_src_lib_markethours_ts_localoffsetminutes]] - `contains` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

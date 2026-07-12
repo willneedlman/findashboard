@@ -27,9 +27,9 @@ tags:
 - [[frontend_src_components_tickerlogo_tsx_tickerlogo]] - `imports` [EXTRACTED]
 - [[frontend_src_lib_format_ts_format]] - `imports` [EXTRACTED]
 - [[frontend_src_hooks_useismobile_ts_useismobile]] - `imports` [EXTRACTED]
-- [[frontend_src_pages_corporatehub_tsx_sparkline]] - `renders` [EXTRACTED]
 - [[frontend_src_components_tickerlogo_tsx_tickerlogo]] - `renders` [EXTRACTED]
 - [[frontend_src_components_pagewrapper_tsx_pagewrapper]] - `renders` [EXTRACTED]
+- [[frontend_src_pages_corporatehub_tsx_sparkline]] - `renders` [EXTRACTED]
 - [[frontend_src_pages_corporatehub_tsx_portfolioearningscontent]] - `renders` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

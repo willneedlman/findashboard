@@ -2,7 +2,7 @@
 source_file: "backend/strategies/indicators.py"
 type: "code"
 community: "Backend"
-location: "32"
+location: "50"
 tags:
   - graphify/code
   - graphify/EXTRACTED

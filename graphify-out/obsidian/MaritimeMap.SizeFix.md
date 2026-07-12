@@ -2,7 +2,7 @@
 source_file: "frontend/src/pages/MaritimeMap.tsx"
 type: "code"
 community: "Frontend"
-location: "130"
+location: "136"
 tags:
   - graphify/code
   - graphify/EXTRACTED

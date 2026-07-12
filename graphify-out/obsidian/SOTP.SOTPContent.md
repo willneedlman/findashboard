@@ -2,7 +2,7 @@
 source_file: "frontend/src/pages/SOTP.tsx"
 type: "code"
 community: "Frontend"
-location: "21"
+location: "81"
 tags:
   - graphify/code
   - graphify/EXTRACTED

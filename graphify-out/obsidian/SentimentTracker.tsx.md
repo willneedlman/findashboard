@@ -23,6 +23,7 @@ tags:
 - [[frontend_src_pages_sentimenttracker_tsx_bullbearbar]] - `contains` [EXTRACTED]
 - [[frontend_src_pages_sentimenttracker_tsx_velocitybadge]] - `contains` [EXTRACTED]
 - [[frontend_src_pages_sentimenttracker_tsx_timeframeselector]] - `contains` [EXTRACTED]
+- [[frontend_src_pages_sentimenttracker_tsx_reportcontrol]] - `contains` [EXTRACTED]
 - [[frontend_src_pages_sentimenttracker_tsx_assettag]] - `contains` [EXTRACTED]
 - [[frontend_src_pages_sentimenttracker_tsx_scorebar]] - `contains` [EXTRACTED]
 - [[frontend_src_pages_sentimenttracker_tsx_sourcepanel]] - `contains` [EXTRACTED]
@@ -31,6 +32,5 @@ tags:
 - [[tanstack_react_query]] - `imports` [EXTRACTED]
 - [[lucide_react]] - `imports` [EXTRACTED]
 - [[axios]] - `imports` [EXTRACTED]
-- [[frontend_src_components_pagewrapper_tsx_pagewrapper]] - `imports` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

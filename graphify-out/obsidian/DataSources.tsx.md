@@ -12,6 +12,7 @@ tags:
 # DataSources.tsx
 
 ## Connections
-- [[frontend_src_pages_legal_datasource_datasources]] - `contains` [EXTRACTED]
+- [[frontend_src_pages_legal_legalpage_tsx_legalpage]] - `imports` [EXTRACTED]
+- [[frontend_src_pages_legal_legalpage_tsx_legalpage]] - `renders` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

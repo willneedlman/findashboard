@@ -22,6 +22,7 @@ tags:
 - [[frontend_src_pages_maritimemap_tsx_sparkline]] - `contains` [EXTRACTED]
 - [[frontend_src_pages_maritimemap_tsx_maritimemapcontent]] - `contains` [EXTRACTED]
 - [[frontend_src_pages_maritimemap_tsx_statrow]] - `contains` [EXTRACTED]
+- [[frontend_src_pages_maritimemap_tsx_nowcastblock]] - `contains` [EXTRACTED]
 - [[frontend_src_pages_maritimemap_tsx_historypanel]] - `contains` [EXTRACTED]
 - [[react]] - `imports` [EXTRACTED]
 - [[tanstack_react_query]] - `imports` [EXTRACTED]
@@ -31,6 +32,5 @@ tags:
 - [[recharts]] - `imports` [EXTRACTED]
 - [[framer_motion]] - `imports` [EXTRACTED]
 - [[leaflet]] - `imports` [EXTRACTED]
-- [[frontend_src_components_pagewrapper_tsx_pagewrapper]] - `imports` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

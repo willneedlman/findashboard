@@ -2,7 +2,7 @@
 source_file: "frontend/src/marketing/Marketing.tsx"
 type: "code"
 community: "Frontend"
-location: "164"
+location: "152"
 tags:
   - graphify/code
   - graphify/EXTRACTED

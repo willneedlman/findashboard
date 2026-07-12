@@ -2,7 +2,7 @@
 source_file: "frontend/src/components/Skeleton.tsx"
 type: "code"
 community: "Frontend"
-location: "None"
+location: "L1"
 tags:
   - graphify/code
   - graphify/EXTRACTED
@@ -12,9 +12,9 @@ tags:
 # Skeleton.tsx
 
 ## Connections
-- [[frontend_src_components_skeleton_tsx_skeleton]] - `defines` [EXTRACTED]
-- [[frontend_src_components_skeleton_tsx_skeletonmetricrow]] - `defines` [EXTRACTED]
-- [[frontend_src_components_skeleton_tsx_skeletonchart]] - `defines` [EXTRACTED]
-- [[frontend_src_components_skeleton_tsx_skeletontable]] - `defines` [EXTRACTED]
+- [[frontend_src_components_skeleton_tsx_skel]] - `contains` [EXTRACTED]
+- [[frontend_src_components_skeleton_tsx_boardskeleton]] - `contains` [EXTRACTED]
+- [[react]] - `imports` [EXTRACTED]
+- [[frontend_src_components_skeleton_tsx_skel]] - `renders` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

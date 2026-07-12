@@ -16,7 +16,6 @@ tags:
 - [[frontend_src_marketing_marketing_tsx_reveal]] - `contains` [EXTRACTED]
 - [[frontend_src_marketing_marketing_tsx_staggergroup]] - `contains` [EXTRACTED]
 - [[frontend_src_marketing_marketing_tsx_usestagger]] - `contains` [EXTRACTED]
-- [[frontend_src_marketing_marketing_tsx_countup]] - `contains` [EXTRACTED]
 - [[frontend_src_marketing_marketing_tsx_magnetic]] - `contains` [EXTRACTED]
 - [[frontend_src_marketing_marketing_tsx_tiltcard]] - `contains` [EXTRACTED]
 - [[frontend_src_marketing_marketing_tsx_brandlockup]] - `contains` [EXTRACTED]
@@ -32,5 +31,6 @@ tags:
 - [[frontend_src_marketing_marketing_tsx_gammaprofile]] - `contains` [EXTRACTED]
 - [[frontend_src_marketing_marketing_tsx_skewcurve]] - `contains` [EXTRACTED]
 - [[frontend_src_marketing_marketing_tsx_probdist]] - `contains` [EXTRACTED]
+- [[frontend_src_marketing_marketing_tsx_sensitivitygrid]] - `contains` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

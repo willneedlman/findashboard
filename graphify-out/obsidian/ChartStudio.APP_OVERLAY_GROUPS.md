@@ -2,7 +2,7 @@
 source_file: "frontend/src/pages/ChartStudio.tsx"
 type: "code"
 community: "Frontend"
-location: "117"
+location: "122"
 tags:
   - graphify/code
   - graphify/EXTRACTED

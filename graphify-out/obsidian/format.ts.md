@@ -13,5 +13,6 @@ tags:
 
 ## Connections
 - [[frontend_src_lib_format_ts_fmtmarketcap]] - `contains` [EXTRACTED]
+- [[frontend_src_lib_format_ts_fmtnum]] - `contains` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

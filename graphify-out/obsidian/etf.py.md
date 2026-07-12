@@ -17,9 +17,12 @@ tags:
 - [[cache]] - `imports` [EXTRACTED]
 - [[backend_routers_etf_py_spdr_holdings]] - `contains` [EXTRACTED]
 - [[backend_routers_etf_py_sa_holdings]] - `contains` [EXTRACTED]
+- [[backend_routers_etf_py_av_holdings]] - `contains` [EXTRACTED]
 - [[backend_routers_etf_py_load]] - `contains` [EXTRACTED]
 - [[backend_routers_etf_py_supported]] - `contains` [EXTRACTED]
 - [[backend_routers_etf_py_holdings]] - `contains` [EXTRACTED]
+- [[backend_routers_etf_py_quotesrequest]] - `contains` [EXTRACTED]
+- [[backend_routers_etf_py_quotes]] - `contains` [EXTRACTED]
 - [[backend_routers_etf_py_xrayrequest]] - `contains` [EXTRACTED]
 - [[backend_routers_etf_py_xray]] - `contains` [EXTRACTED]
 

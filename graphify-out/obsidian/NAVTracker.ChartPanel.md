@@ -2,7 +2,7 @@
 source_file: "frontend/src/pages/NAVTracker.tsx"
 type: "code"
 community: "Frontend"
-location: "12"
+location: "23"
 tags:
   - graphify/code
   - graphify/EXTRACTED

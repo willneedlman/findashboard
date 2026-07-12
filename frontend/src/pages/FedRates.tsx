@@ -432,6 +432,13 @@ export function FedRatesContent() {
     adjusted: twist !== 0 ? +Math.max(0.1, (curveData.curve[t] ?? 0) + (twist / 100) * (TWIST_W[t] ?? 0.1)).toFixed(3) : null,
   })) : []
 
+  const getTenorVal = (tenor: string) => {
+    if (!curveData) return 0
+    if (twist === 0) return curveData.curve[tenor] ?? 0
+    const weight = TWIST_W[tenor] ?? 0.1
+    return Math.max(0.1, (curveData.curve[tenor] ?? 0) + (twist / 100) * weight)
+  }
+
   // Header inline stats for the fed-path band.
   const m0 = adjustedMeetings[0]
   const yEnd = adjustedMeetings.find((m: any) => m.date.startsWith('2027-01')) ?? adjustedMeetings[4]
@@ -514,7 +521,34 @@ export function FedRatesContent() {
           <div style={band}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 18, flexWrap: 'wrap', marginBottom: 6 }}>
               <span style={bandTitle}>US Treasury Yield Curve</span>
-              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'baseline' }}>
+                {/* Spreads */}
+                <div style={{ display: 'flex', gap: 12, marginRight: 8, borderRight: `1px solid ${T.borderFaint}`, paddingRight: 12 }}>
+                  {(() => {
+                    const ten10Y = getTenorVal('10Y')
+                    const ten2Y = getTenorVal('2Y')
+                    const ten3M = getTenorVal('3M')
+                    const spread10Y2Y = ten10Y - ten2Y
+                    const spread10Y3M = ten10Y - ten3M
+                    return (
+                      <>
+                        <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4 }}>
+                          <span style={{ fontFamily: T.mono, fontSize: 8.5, color: T.gold }}>10Y-2Y</span>
+                          <span style={{ fontFamily: T.mono, fontSize: 11.5, fontWeight: 700, color: spread10Y2Y >= 0 ? T.pos : T.neg }}>
+                            {(spread10Y2Y * 100).toFixed(0)}bp
+                          </span>
+                        </span>
+                        <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4 }}>
+                          <span style={{ fontFamily: T.mono, fontSize: 8.5, color: T.gold }}>10Y-3M</span>
+                          <span style={{ fontFamily: T.mono, fontSize: 11.5, fontWeight: 700, color: spread10Y3M >= 0 ? T.pos : T.neg }}>
+                            {(spread10Y3M * 100).toFixed(0)}bp
+                          </span>
+                        </span>
+                      </>
+                    )
+                  })()}
+                </div>
+                {/* Tenors */}
                 {adjustedCurve.map(a => {
                   const d = twist ? Math.round((a.adjusted - a.current) * 100) : null
                   return (

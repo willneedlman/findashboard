@@ -2,7 +2,7 @@
 source_file: "backend/routers/paper_scheduler.py"
 type: "code"
 community: "Backend"
-location: "407"
+location: "502"
 tags:
   - graphify/code
   - graphify/EXTRACTED

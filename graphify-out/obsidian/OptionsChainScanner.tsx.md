@@ -26,11 +26,11 @@ tags:
 - [[frontend_src_hooks_usechartcolors_ts_usechartcolors]] - `imports` [EXTRACTED]
 - [[frontend_src_pages_valuationshared_tsx_valuationshared]] - `imports` [EXTRACTED]
 - [[recharts]] - `renders` [EXTRACTED]
-- [[frontend_src_components_pagewrapper_tsx_pagewrapper]] - `renders` [EXTRACTED]
 - [[frontend_src_pages_valuationshared_tsx_valuationshared]] - `renders` [EXTRACTED]
-- [[frontend_src_components_emptystate_tsx_emptystate]] - `renders` [EXTRACTED]
 - [[frontend_src_components_sidebarlayout_tsx_sidebarlayout]] - `renders` [EXTRACTED]
-- [[frontend_src_components_mmcockpit_tsx_mmcockpit]] - `renders` [EXTRACTED]
 - [[frontend_src_pages_optionschainscanner_tsx_optionschainscannercontent]] - `renders` [EXTRACTED]
+- [[frontend_src_components_pagewrapper_tsx_pagewrapper]] - `renders` [EXTRACTED]
+- [[frontend_src_components_mmcockpit_tsx_mmcockpit]] - `renders` [EXTRACTED]
+- [[frontend_src_components_emptystate_tsx_emptystate]] - `renders` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

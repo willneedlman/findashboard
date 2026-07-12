@@ -25,6 +25,7 @@ tags:
 - [[backend_routers_snapshots_py_start_snapshot_loop]] - `contains` [EXTRACTED]
 - [[backend_routers_snapshots_py_stop_snapshot_loop]] - `contains` [EXTRACTED]
 - [[routers_options]] - `imports` [EXTRACTED]
+- [[backend_routers_snapshots_py_net]] - `contains` [EXTRACTED]
 - [[cache]] - `imports` [EXTRACTED]
 - [[backend_routers_snapshots_py_atm_iv]] - `contains` [EXTRACTED]
 

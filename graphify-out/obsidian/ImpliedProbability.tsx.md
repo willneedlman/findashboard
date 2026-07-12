@@ -17,6 +17,7 @@ tags:
 - [[frontend_src_pages_impliedprobability_tsx_sectionheader]] - `contains` [EXTRACTED]
 - [[frontend_src_pages_impliedprobability_tsx_impliedprobabilitycontent]] - `contains` [EXTRACTED]
 - [[react]] - `imports` [EXTRACTED]
+- [[react_router_dom]] - `imports` [EXTRACTED]
 - [[tanstack_react_query]] - `imports` [EXTRACTED]
 - [[recharts]] - `imports` [EXTRACTED]
 - [[frontend_src_components_pagewrapper_tsx_pagewrapper]] - `imports` [EXTRACTED]
@@ -27,10 +28,9 @@ tags:
 - [[frontend_src_components_expiryselect_tsx_expiryselect]] - `imports` [EXTRACTED]
 - [[frontend_src_hooks_usechartcolors_ts_usechartcolors]] - `imports` [EXTRACTED]
 - [[frontend_src_pages_valuationshared_tsx_valuationshared]] - `imports` [EXTRACTED]
-- [[frontend_src_components_sidebarlayout_tsx_sidebarlayout]] - `renders` [EXTRACTED]
-- [[frontend_src_pages_impliedprobability_tsx_chartpanel]] - `renders` [EXTRACTED]
 - [[recharts]] - `renders` [EXTRACTED]
-- [[frontend_src_pages_valuationshared_tsx_valuationshared]] - `renders` [EXTRACTED]
+- [[frontend_src_components_sidebarlayout_tsx_sidebarlayout]] - `renders` [EXTRACTED]
 - [[frontend_src_components_pagewrapper_tsx_pagewrapper]] - `renders` [EXTRACTED]
+- [[frontend_src_pages_impliedprobability_tsx_sectionheader]] - `renders` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

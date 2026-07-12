@@ -2,7 +2,7 @@
 source_file: "frontend/src/pages/DCFValuation.tsx"
 type: "code"
 community: "Frontend"
-location: "100"
+location: "152"
 tags:
   - graphify/code
   - graphify/EXTRACTED

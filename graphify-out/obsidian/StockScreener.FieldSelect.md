@@ -2,7 +2,7 @@
 source_file: "frontend/src/pages/StockScreener.tsx"
 type: "code"
 community: "Frontend"
-location: "120"
+location: "121"
 tags:
   - graphify/code
   - graphify/EXTRACTED

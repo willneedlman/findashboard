@@ -2,7 +2,7 @@
 source_file: "frontend/src/components/CommandPalette.tsx"
 type: "code"
 community: "Frontend"
-location: "22"
+location: "23"
 tags:
   - graphify/code
   - graphify/EXTRACTED

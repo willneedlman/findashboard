@@ -2,7 +2,7 @@
 source_file: "frontend/src/pages/SupplyChain.tsx"
 type: "code"
 community: "Frontend"
-location: "111"
+location: "112"
 tags:
   - graphify/code
   - graphify/EXTRACTED

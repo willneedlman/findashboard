@@ -2,7 +2,7 @@
 source_file: "frontend/src/contexts/ThemeContext.tsx"
 type: "code"
 community: "Frontend"
-location: "438"
+location: "459"
 tags:
   - graphify/code
   - graphify/EXTRACTED

@@ -2,7 +2,7 @@
 source_file: "frontend/src/pages/RelativeValuation.tsx"
 type: "code"
 community: "Frontend"
-location: "219"
+location: "220"
 tags:
   - graphify/code
   - graphify/EXTRACTED

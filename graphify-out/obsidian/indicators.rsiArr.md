@@ -2,7 +2,7 @@
 source_file: "frontend/src/lib/indicators.ts"
 type: "code"
 community: "Frontend"
-location: "38"
+location: "56"
 tags:
   - graphify/code
   - graphify/EXTRACTED

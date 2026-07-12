@@ -22,11 +22,11 @@ tags:
 - [[frontend_src_components_pagewrapper_tsx_pagewrapper]] - `imports` [EXTRACTED]
 - [[frontend_src_hooks_useismobile_ts_useismobile]] - `imports` [EXTRACTED]
 - [[axios]] - `imports` [EXTRACTED]
-- [[frontend_src_pages_settings_tsx_colorswatch]] - `renders` [EXTRACTED]
-- [[frontend_src_pages_settings_tsx_section]] - `renders` [EXTRACTED]
-- [[frontend_src_pages_settings_tsx_fontselector]] - `renders` [EXTRACTED]
-- [[frontend_src_components_pagewrapper_tsx_pagewrapper]] - `renders` [EXTRACTED]
-- [[frontend_src_pages_settings_tsx_authpanel]] - `renders` [EXTRACTED]
 - [[frontend_src_pages_settings_tsx_adminpanel]] - `renders` [EXTRACTED]
+- [[frontend_src_pages_settings_tsx_authpanel]] - `renders` [EXTRACTED]
+- [[frontend_src_pages_settings_tsx_section]] - `renders` [EXTRACTED]
+- [[frontend_src_pages_settings_tsx_colorswatch]] - `renders` [EXTRACTED]
+- [[frontend_src_components_pagewrapper_tsx_pagewrapper]] - `renders` [EXTRACTED]
+- [[frontend_src_pages_settings_tsx_fontselector]] - `renders` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

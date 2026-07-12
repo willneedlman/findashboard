@@ -24,6 +24,7 @@ tags:
 - [[backend_tests_test_horizon_py_test_horizon_composites_separate_the_signals]] - `contains` [EXTRACTED]
 - [[backend_tests_test_horizon_py_test_horizon_composites_empty_is_neutral]] - `contains` [EXTRACTED]
 - [[backend_tests_test_horizon_py_test_count_split_strictly_above_half]] - `contains` [EXTRACTED]
+- [[backend_tests_test_horizon_py_test_strong_forward_marker_outweighs_weak_backward]] - `contains` [EXTRACTED]
 - [[backend_tests_test_horizon_py_test_reported_headlines_are_backward]] - `contains` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Backend

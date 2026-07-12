@@ -28,9 +28,9 @@ tags:
 - [[backend_routers_portfolio_py_monte_carlo]] - `contains` [EXTRACTED]
 - [[backend_routers_portfolio_py_compareportfolio]] - `contains` [EXTRACTED]
 - [[backend_routers_portfolio_py_comparerequest]] - `contains` [EXTRACTED]
+- [[backend_routers_portfolio_py_factorholding]] - `contains` [EXTRACTED]
+- [[backend_routers_portfolio_py_factorrequest]] - `contains` [EXTRACTED]
+- [[backend_routers_portfolio_py_factor_decomposition]] - `contains` [EXTRACTED]
 - [[backend_routers_portfolio_py_compare]] - `contains` [EXTRACTED]
-- [[backend_routers_portfolio_py_holding]] - `contains` [EXTRACTED]
-- [[backend_routers_portfolio_py_stressrequest]] - `contains` [EXTRACTED]
-- [[backend_routers_portfolio_py_period_return]] - `contains` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Backend

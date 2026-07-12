@@ -12,6 +12,7 @@ tags:
 # AlgoStrategyBuilder.tsx
 
 ## Connections
+- [[frontend_src_pages_algostrategybuilder_tsx_errmsg]] - `contains` [EXTRACTED]
 - [[frontend_src_pages_algostrategybuilder_tsx_algostrategybuildercontent]] - `contains` [EXTRACTED]
 - [[react]] - `imports` [EXTRACTED]
 - [[tanstack_react_query]] - `imports` [EXTRACTED]
@@ -26,11 +27,10 @@ tags:
 - [[frontend_src_pages_valuationshared_tsx_valuationshared]] - `imports` [EXTRACTED]
 - [[frontend_src_components_customstrategymodal_tsx_customstrategymodal]] - `imports` [EXTRACTED]
 - [[frontend_src_utils_customstrategies_ts_customstrategies]] - `imports` [EXTRACTED]
-- [[frontend_src_components_sidebarlayout_tsx_sidebarlayout]] - `renders` [EXTRACTED]
 - [[recharts]] - `renders` [EXTRACTED]
-- [[frontend_src_components_customstrategymodal_tsx_customstrategymodal]] - `renders` [EXTRACTED]
+- [[frontend_src_components_pagewrapper_tsx_pagewrapper]] - `renders` [EXTRACTED]
 - [[frontend_src_pages_algostrategybuilder_tsx_algostrategybuildercontent]] - `renders` [EXTRACTED]
-- [[frontend_src_components_tickerinput_tsx_tickerinput]] - `renders` [EXTRACTED]
-- [[frontend_src_components_mmcockpit_tsx_mmcockpit]] - `renders` [EXTRACTED]
+- [[frontend_src_pages_valuationshared_tsx_valuationshared]] - `renders` [EXTRACTED]
+- [[frontend_src_components_sidebarlayout_tsx_sidebarlayout]] - `renders` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

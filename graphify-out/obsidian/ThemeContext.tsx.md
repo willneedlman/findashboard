@@ -26,7 +26,7 @@ tags:
 - [[frontend_src_contexts_themecontext_tsx_themeprovider]] - `contains` [EXTRACTED]
 - [[frontend_src_contexts_themecontext_tsx_usetheme]] - `contains` [EXTRACTED]
 - [[react]] - `imports` [EXTRACTED]
-- [[frontend_src_contexts_themecontext_tsx_theme]] - `renders` [EXTRACTED]
 - [[frontend_src_contexts_themecontext_tsx_user]] - `renders` [EXTRACTED]
+- [[frontend_src_contexts_themecontext_tsx_theme]] - `renders` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

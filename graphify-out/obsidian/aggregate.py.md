@@ -18,6 +18,8 @@ tags:
 - [[sentiment_config]] - `imports` [EXTRACTED]
 - [[sentiment_schemas]] - `imports` [EXTRACTED]
 - [[backend_sentiment_aggregate_py_corr]] - `contains` [EXTRACTED]
+- [[backend_sentiment_aggregate_py_signal_from_direction]] - `contains` [EXTRACTED]
+- [[backend_sentiment_aggregate_py_signal_factor]] - `contains` [EXTRACTED]
 - [[backend_sentiment_aggregate_py_article_weight]] - `contains` [EXTRACTED]
 - [[backend_sentiment_aggregate_py_item_out]] - `contains` [EXTRACTED]
 - [[backend_sentiment_aggregate_py_horizon_composites]] - `contains` [EXTRACTED]
@@ -30,6 +32,5 @@ tags:
 - [[backend_sentiment_aggregate_py_momentum]] - `contains` [EXTRACTED]
 - [[backend_sentiment_aggregate_py_velocity]] - `contains` [EXTRACTED]
 - [[backend_sentiment_aggregate_py_baseline]] - `contains` [EXTRACTED]
-- [[backend_sentiment_aggregate_py_w]] - `contains` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Backend

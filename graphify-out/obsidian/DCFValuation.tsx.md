@@ -16,6 +16,7 @@ tags:
 - [[frontend_src_pages_dcfvaluation_tsx_heatcolor]] - `contains` [EXTRACTED]
 - [[frontend_src_pages_dcfvaluation_tsx_computedcf]] - `contains` [EXTRACTED]
 - [[frontend_src_pages_dcfvaluation_tsx_chartpanel]] - `contains` [EXTRACTED]
+- [[frontend_src_pages_dcfvaluation_tsx_tornado]] - `contains` [EXTRACTED]
 - [[frontend_src_pages_dcfvaluation_tsx_dcfvaluationcontent]] - `contains` [EXTRACTED]
 - [[react]] - `imports` [EXTRACTED]
 - [[react_router_dom]] - `imports` [EXTRACTED]
@@ -29,8 +30,7 @@ tags:
 - [[frontend_src_hooks_usechartcolors_ts_usechartcolors]] - `imports` [EXTRACTED]
 - [[frontend_src_pages_valuationshared_tsx_valuationshared]] - `imports` [EXTRACTED]
 - [[frontend_src_lib_theme_ts_theme]] - `imports` [EXTRACTED]
+- [[frontend_src_pages_valuationshared_tsx_valuationshared]] - `renders` [EXTRACTED]
 - [[recharts]] - `renders` [EXTRACTED]
-- [[frontend_src_components_sidebarlayout_tsx_sidebarlayout]] - `renders` [EXTRACTED]
-- [[frontend_src_components_pagewrapper_tsx_pagewrapper]] - `renders` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

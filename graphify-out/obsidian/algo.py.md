@@ -22,7 +22,10 @@ tags:
 - [[backend_routers_algo_py_compute_signal]] - `contains` [EXTRACTED]
 - [[backend_routers_algo_py_apply_risk_controls]] - `contains` [EXTRACTED]
 - [[backend_routers_algo_py_compute_metrics]] - `contains` [EXTRACTED]
+- [[backend_routers_algo_py_compute_option_metrics]] - `contains` [EXTRACTED]
 - [[backend_routers_algo_py_backtest]] - `contains` [EXTRACTED]
 - [[backend_routers_algo_py_signal]] - `contains` [EXTRACTED]
+- [[math_engine]] - `imports` [EXTRACTED]
+- [[backend_routers_algo_py_val]] - `contains` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Backend

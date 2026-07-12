@@ -2,7 +2,7 @@
 source_file: "frontend/src/components/MarketDial.tsx"
 type: "code"
 community: "Frontend"
-location: "32"
+location: "35"
 tags:
   - graphify/code
   - graphify/EXTRACTED

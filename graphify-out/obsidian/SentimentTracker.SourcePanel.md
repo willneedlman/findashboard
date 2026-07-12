@@ -2,7 +2,7 @@
 source_file: "frontend/src/pages/SentimentTracker.tsx"
 type: "code"
 community: "Frontend"
-location: "428"
+location: "505"
 tags:
   - graphify/code
   - graphify/EXTRACTED

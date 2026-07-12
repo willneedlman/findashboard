@@ -16,6 +16,7 @@ tags:
 - [[frontend_src_pages_chartstudio_tsx_app_overlays]] - `contains` [EXTRACTED]
 - [[frontend_src_pages_chartstudio_tsx_reducer]] - `contains` [EXTRACTED]
 - [[frontend_src_pages_chartstudio_tsx_chartcolors]] - `contains` [EXTRACTED]
+- [[frontend_src_pages_chartstudio_tsx_resizehandle]] - `contains` [EXTRACTED]
 - [[frontend_src_pages_chartstudio_tsx_glyph]] - `contains` [EXTRACTED]
 - [[frontend_src_pages_chartstudio_tsx_row]] - `contains` [EXTRACTED]
 - [[frontend_src_pages_chartstudio_tsx_cfgchips]] - `contains` [EXTRACTED]
@@ -30,7 +31,6 @@ tags:
 - [[frontend_src_components_pagewrapper_tsx_pagewrapper]] - `imports` [EXTRACTED]
 - [[frontend_src_lib_theme_ts_theme]] - `imports` [EXTRACTED]
 - [[frontend_src_lib_indicators_ts_indicators]] - `imports` [EXTRACTED]
-- [[lucide_react]] - `renders` [EXTRACTED]
-- [[frontend_src_pages_chartstudio_tsx_cfgchips]] - `renders` [EXTRACTED]
+- [[frontend_src_components_pagewrapper_tsx_pagewrapper]] - `renders` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

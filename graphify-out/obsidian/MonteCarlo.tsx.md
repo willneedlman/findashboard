@@ -31,6 +31,6 @@ tags:
 - [[frontend_src_components_mmcockpit_tsx_mmcockpit]] - `imports` [EXTRACTED]
 - [[frontend_src_hooks_usechartcolors_ts_usechartcolors]] - `imports` [EXTRACTED]
 - [[frontend_src_components_strategyselector_tsx_strategyselector]] - `imports` [EXTRACTED]
-- [[frontend_src_components_charttooltip_tsx_charttooltip]] - `imports` [EXTRACTED]
+- [[frontend_src_components_customstrategymodal_tsx_customstrategymodal]] - `imports` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

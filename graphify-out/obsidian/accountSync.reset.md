@@ -2,7 +2,7 @@
 source_file: "frontend/src/lib/accountSync.ts"
 type: "code"
 community: "Frontend"
-location: "101"
+location: "102"
 tags:
   - graphify/code
   - graphify/EXTRACTED

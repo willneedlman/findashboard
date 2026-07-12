@@ -2,7 +2,7 @@
 source_file: "backend/routers/maritime.py"
 type: "code"
 community: "Backend"
-location: "612"
+location: "695"
 tags:
   - graphify/code
   - graphify/EXTRACTED

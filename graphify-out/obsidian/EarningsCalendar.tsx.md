@@ -28,9 +28,9 @@ tags:
 - [[lucide_react]] - `imports` [EXTRACTED]
 - [[frontend_src_components_pagewrapper_tsx_pagewrapper]] - `imports` [EXTRACTED]
 - [[frontend_src_components_tickerlogo_tsx_tickerlogo]] - `imports` [EXTRACTED]
+- [[frontend_src_components_tickerlink_tsx_tickerlink]] - `imports` [EXTRACTED]
+- [[frontend_src_components_columnfiltermenu_tsx_columnfiltermenu]] - `imports` [EXTRACTED]
 - [[frontend_src_hooks_useismobile_ts_useismobile]] - `imports` [EXTRACTED]
 - [[frontend_src_contexts_portfoliocontext_tsx_portfoliocontext]] - `imports` [EXTRACTED]
-- [[frontend_src_pages_earningscalendar_tsx_groupbody]] - `renders` [EXTRACTED]
-- [[frontend_src_pages_earningscalendar_tsx_toggle]] - `renders` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Frontend

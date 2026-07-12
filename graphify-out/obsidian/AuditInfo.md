@@ -2,7 +2,7 @@
 source_file: "backend/sentiment/schemas.py"
 type: "code"
 community: "Backend"
-location: "151"
+location: "157"
 tags:
   - graphify/code
   - graphify/EXTRACTED

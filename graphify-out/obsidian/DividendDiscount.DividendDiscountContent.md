@@ -2,7 +2,7 @@
 source_file: "frontend/src/pages/DividendDiscount.tsx"
 type: "code"
 community: "Frontend"
-location: "19"
+location: "120"
 tags:
   - graphify/code
   - graphify/EXTRACTED

@@ -26,11 +26,11 @@ tags:
 - [[backend_routers_alerts_py_fetch_quotes_sync]] - `contains` [EXTRACTED]
 - [[backend_routers_alerts_py_evaluate]] - `contains` [EXTRACTED]
 - [[backend_routers_alerts_py_indicator_triggered_sync]] - `contains` [EXTRACTED]
+- [[backend_routers_alerts_py_slow_triggered_sync]] - `contains` [EXTRACTED]
+- [[backend_routers_alerts_py_strategy_triggered_sync]] - `contains` [EXTRACTED]
+- [[backend_routers_alerts_py_macro_triggered_sync]] - `contains` [EXTRACTED]
+- [[backend_routers_alerts_py_warm_gex_snapshot]] - `contains` [EXTRACTED]
 - [[backend_routers_alerts_py_run_evaluation_loop]] - `contains` [EXTRACTED]
 - [[backend_routers_alerts_py_start_evaluation_loop]] - `contains` [EXTRACTED]
-- [[backend_routers_alerts_py_stop_evaluation_loop]] - `contains` [EXTRACTED]
-- [[backend_routers_alerts_py_alertcreate]] - `contains` [EXTRACTED]
-- [[backend_routers_alerts_py_create_alert]] - `contains` [EXTRACTED]
-- [[backend_routers_alerts_py_alert_quotes]] - `contains` [EXTRACTED]
 
 #graphify/code #graphify/EXTRACTED #community/Backend
