@@ -47,9 +47,9 @@ export function InfoTip({ title, body, source }: { title: string; body: string; 
 // Bordered output panel: tab label pinned top-left, optional meta top-right.
 export function Panel({ label, meta, children, style, labelColor }: { label: string; meta?: React.ReactNode; children: React.ReactNode; style?: React.CSSProperties; labelColor?: string }) {
   return (
-    <div style={{ position: 'relative', border: `1px solid ${T.border}`, paddingTop: 30, ...style }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, background: T.surface, padding: '4px 10px', fontFamily: SANS, fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: labelColor ?? T.text, borderRight: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}` }}>{label}</div>
-      {meta != null && <div style={{ position: 'absolute', top: 6, right: 12, fontFamily: MONO, fontSize: 9, color: T.muted }}>{meta}</div>}
+    <div style={{ position: 'relative', border: `1px solid ${T.border}`, paddingTop: label ? 30 : 10, ...style }}>
+      {label && <div style={{ position: 'absolute', top: 0, left: 0, background: T.surface, padding: '4px 10px', fontFamily: SANS, fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: labelColor ?? T.text, borderRight: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}` }}>{label}</div>}
+      {meta != null && <div style={{ position: 'absolute', top: label ? 6 : 10, right: 12, fontFamily: MONO, fontSize: 9, color: T.muted }}>{meta}</div>}
       {children}
     </div>
   )

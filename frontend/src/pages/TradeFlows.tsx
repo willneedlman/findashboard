@@ -80,7 +80,7 @@ function QueryBar({ reporter, setReporter, cmd, setCmd, year, setYear, flow, set
   run: () => void; loading: boolean; dirty: boolean
 }) {
   return (
-    <Panel label="Trade Query" meta="UN Comtrade · annual bilateral flows" style={{ padding: '36px 12px 10px' }}>
+    <Panel label="" meta="UN Comtrade · annual bilateral flows" style={{ padding: '12px 12px 10px' }}>
       <div style={{ display: 'grid', gridTemplateColumns: '1.15fr 1.35fr 0.6fr 1fr auto', alignItems: 'end', gap: 8 }}>
         <label><span style={{ ...LABEL, display: 'block', marginBottom: 5 }}>Reporter country</span><select value={reporter} onChange={e => setReporter(Number(e.target.value))} style={{ ...SELECT, width: '100%' }}>{COUNTRIES.map(([c, n]) => <option key={c} value={c}>{n}</option>)}</select></label>
         <label><span style={{ ...LABEL, display: 'block', marginBottom: 5 }}>Commodity</span><select value={cmd} onChange={e => setCmd(e.target.value)} style={{ ...SELECT, width: '100%' }}>{COMMODITIES.map(([c, n]) => <option key={c} value={c}>{n}</option>)}</select></label>
@@ -574,47 +574,47 @@ function PartnerTable({ partners, total, maxVal, selectedPartner, onSelect, sour
   partners: Partner[]; total: number | null | undefined; maxVal: number; selectedPartner: Partner | null;
   onSelect: (p: Partner) => void; source?: string; searchQuery: string; setSearchQuery: (q: string) => void
 }) {
-  const searchInput = (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 8 }}>
-      <span style={{ color: T.muted, fontSize: 9, fontFamily: MONO }}>Filter:</span>
-      <input
-        type="text"
-        value={searchQuery}
-        onChange={e => setSearchQuery(e.target.value)}
-        placeholder="Search..."
-        style={{
-          background: T.bg,
-          border: `1px solid ${T.border}`,
-          color: T.text,
-          fontFamily: MONO,
-          fontSize: 9,
-          padding: '2px 6px',
-          outline: 'none',
-          width: 120,
-          boxSizing: 'border-box'
-        }}
-      />
-      {searchQuery && (
-        <button
-          onClick={() => setSearchQuery('')}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: T.muted,
-            cursor: 'pointer',
-            fontFamily: MONO,
-            fontSize: 9,
-            padding: 0
-          }}
-        >
-          [x]
-        </button>
-      )}
-    </div>
-  )
-
   return (
-    <Panel label="Top Trading Partners" meta={<div style={{ display: 'flex', alignItems: 'center' }}>{searchInput}<span>{source ?? 'UN Comtrade'} · click a row</span></div>} style={{ padding: '30px 0 0' }}>
+    <Panel label="Top Trading Partners" meta={`${source ?? 'UN Comtrade'} · click a row`} style={{ padding: '30px 0 0' }}>
+      {/* Prominent Search Filter Bar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: mix(T.text, 3), borderBottom: `1px solid ${T.borderFaint}` }}>
+        <span style={{ color: T.gold, fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Filter Partners</span>
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          placeholder="Type partner country name or 3-letter ISO code to instantly search..."
+          style={{
+            flex: 1,
+            background: T.bg,
+            border: `1px solid ${T.border}`,
+            color: T.text,
+            fontFamily: MONO,
+            fontSize: 10,
+            padding: '4px 8px',
+            outline: 'none',
+            boxSizing: 'border-box'
+          }}
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery('')}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: T.muted,
+              cursor: 'pointer',
+              fontFamily: MONO,
+              fontSize: 10,
+              padding: '0 4px',
+              textTransform: 'uppercase'
+            }}
+          >
+            [Clear]
+          </button>
+        )}
+      </div>
+
       <div style={{ overflowX: 'auto', maxHeight: 360, overflowY: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: MONO, fontSize: 11.5 }}><thead><tr>{['#', 'Partner', 'ISO', 'Value', '', 'Tonnage', 'Share'].map((h, i) => <th key={i} style={{ position: 'sticky', top: 0, zIndex: 1, background: T.surface, textAlign: i >= 3 && i !== 4 ? 'right' : 'left', padding: '7px 12px', fontSize: 8.5, letterSpacing: '0.1em', color: T.muted, textTransform: 'uppercase', borderBottom: `1px solid ${T.border}`, whiteSpace: 'nowrap' }}>{h}</th>)}</tr></thead>
         <tbody>{partners.map((p, i) => { const share = total ? (p.value ?? 0) / total * 100 : null; const on = selectedPartner && p.iso === selectedPartner.iso && p.partner === selectedPartner.partner; return <tr key={`${p.iso ?? p.partner}-${i}`} onClick={() => onSelect(p)} style={{ borderBottom: `1px solid ${mix(T.text, 4)}`, background: on ? mix(T.gold, 6) : 'transparent', cursor: 'pointer' }}><td style={{ padding: '6px 12px', color: T.textDim }}>{String(i + 1).padStart(2, '0')}</td><td style={{ padding: '6px 12px', color: on ? T.gold : T.text, fontWeight: 700, whiteSpace: 'nowrap' }}>{p.partner ?? p.iso ?? '?'}</td><td style={{ padding: '6px 12px', color: T.muted }}>{p.iso ?? '—'}</td><td style={{ padding: '6px 12px', textAlign: 'right', color: T.text, whiteSpace: 'nowrap' }}>{fmtUsd(p.value)}</td><td style={{ padding: '6px 12px', width: '30%', minWidth: 120 }}><div style={{ height: 7, background: T.bg }}><div style={{ height: '100%', width: `${((p.value ?? 0) / maxVal) * 100}%`, background: on ? T.gold : mix(T.blue, 70) }} /></div></td><td style={{ padding: '6px 12px', textAlign: 'right', color: T.muted, whiteSpace: 'nowrap' }}>{fmtWt(p.net_wgt)}</td><td style={{ padding: '6px 12px', textAlign: 'right', color: T.muted }}>{share != null ? `${share.toFixed(1)}%` : '—'}</td></tr> })}</tbody>
       </table></div>
