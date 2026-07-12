@@ -1060,7 +1060,7 @@ function HistoryPanel({ C, chokepoints, ids, days, metric, series, loading, nowc
 
   const { rows, summaries } = useMemo(() => {
     const byDate: Record<string, Record<string, number | string | null>> = {}
-    const summaries: { id: string; name: string; last: number | null; delta: number | null; peak: number | null; low: number | null }[] = []
+    const summaries: { id: string; name: string; last: number | null; delta: number | null; peak: number | null; low: number | null; liveAvailable: boolean }[] = []
     for (const s of series) {
       const vals = s.points.map(p => p[metric])
       const ma: (number | null)[] = s.points.map((_, i) => {
@@ -1103,6 +1103,7 @@ function HistoryPanel({ C, chokepoints, ids, days, metric, series, loading, nowc
         delta: first && last != null ? ((last - first) / first) * 100 : null,
         peak: smoothed.length ? Math.max(...smoothed) : null,
         low: smoothed.length ? Math.min(...smoothed) : null,
+        liveAvailable: Boolean(s.nowcast_days?.length && totalCrossings > 0),
       })
     }
     const rows = Object.values(byDate).sort((a, b) => String(a.d).localeCompare(String(b.d))).slice(6)
@@ -1111,7 +1112,7 @@ function HistoryPanel({ C, chokepoints, ids, days, metric, series, loading, nowc
 
   const confirmedDates = series.flatMap(s => s.points.map(p => p.d)).sort()
   const latestDate = confirmedDates.length ? confirmedDates[confirmedDates.length - 1] : null
-  const hasLiveTail = series.some(s => Object.values(s.nowcast_daily ?? {}).some(v => v.total > 0))
+  const hasLiveTail = summaries.some(s => s.liveAvailable)
 
   return (
     <div style={{ background: 'var(--theme-surface)', border: goldBorder(0.4) }}>
@@ -1130,6 +1131,12 @@ function HistoryPanel({ C, chokepoints, ids, days, metric, series, loading, nowc
             · · · live AIS tail {nowcastMeta?.as_of ? `through ${nowcastMeta.as_of}` : ''}
           </span>
         )}
+        {!hasLiveTail && (
+          <span title="No recent classified AIS crossings are available for this selection. Confirmed PortWatch history remains visible."
+            style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-secondary)' }}>
+            live AIS data unavailable
+          </span>
+        )}
         <button className="gfm-chip" onClick={onClose} style={{ ...chipBtn(false), marginLeft: 'auto' }}>Close</button>
       </div>
 
@@ -1145,7 +1152,7 @@ function HistoryPanel({ C, chokepoints, ids, days, metric, series, loading, nowc
         {loading ? (
           <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-secondary)' }}>Loading transit history…</div>
         ) : rows.length === 0 ? (
-          <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-secondary)' }}>No PortWatch data for this selection.</div>
+          <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-secondary)' }}>Data unavailable. PortWatch returned no history for this selection.</div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={rows} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
@@ -1173,6 +1180,9 @@ function HistoryPanel({ C, chokepoints, ids, days, metric, series, loading, nowc
           <div key={s.id} style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
             <span style={{ width: 10, height: 10, background: colorOf(s.id), alignSelf: 'center', flex: 'none' }} />
             <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, color: 'var(--theme-text)' }}>{s.name}</span>
+            {s.last == null ? (
+              <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-secondary)' }}>data unavailable</span>
+            ) : <>
             <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 12, fontWeight: 700, color: 'var(--theme-text)' }}>{fmtVal(s.last, metric)}<span style={{ fontSize: 9, color: 'var(--theme-secondary)', fontWeight: 400 }}>{metric === 'cap' ? ' dwt/d' : '/d'}</span></span>
             {s.delta != null && (
               <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 700, color: s.delta >= 0 ? 'var(--theme-positive, #3fb950)' : 'var(--theme-negative, #f85149)' }}>
@@ -1180,6 +1190,11 @@ function HistoryPanel({ C, chokepoints, ids, days, metric, series, loading, nowc
               </span>
             )}
             <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9.5, color: 'var(--theme-text-faint)' }}>range {fmtVal(s.low, metric)}-{fmtVal(s.peak, metric)}</span>
+            </>}
+            {!s.liveAvailable && (
+              <span title="No recent classified AIS crossings are available for this chokepoint, so a live estimate cannot be drawn."
+                style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-secondary)' }}>live AIS data unavailable</span>
+            )}
             {aisLive && cp && (
               <span title="Vessels within ~1.5° of the chokepoint right now, from the live AIS stream. A real-time presence snapshot, not a PortWatch transit count."
                 style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4, fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-secondary)' }}>
