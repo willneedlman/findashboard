@@ -352,13 +352,17 @@ export function MaritimeMapContent() {
   const vess = useQuery<{ vessels: Vessel[]; count: number; status: { key_present: boolean; connected: boolean } }>({
     queryKey: ['mar-vessels'], queryFn: () => axios.get('/api/maritime/vessels').then(r => r.data), refetchInterval: 12000, staleTime: 8000,
   })
+  // PortWatch transit data is daily; the backend caches it 1h, so poll hourly to
+  // surface a newly-published day in the chokepoint strip, inspector and alerts
+  // without waiting for a remount. (Live vessel layer above already polls at 12s.)
   const statsQ = useQuery<{ stats: ChokeStat[] }>({
-    queryKey: ['choke-stats'], queryFn: () => axios.get('/api/maritime/chokepoint-stats').then(r => r.data), staleTime: 6 * 3600 * 1000,
+    queryKey: ['choke-stats'], queryFn: () => axios.get('/api/maritime/chokepoint-stats').then(r => r.data),
+    staleTime: 3600 * 1000, refetchInterval: 3600 * 1000,
   })
   const hist = useQuery<{ series: HistSeries[] }>({
     queryKey: ['choke-hist', histIds.join(','), histDays],
     queryFn: () => axios.get(`/api/maritime/chokepoint-history?ids=${histIds.join(',')}&days=${histDays}`).then(r => r.data),
-    enabled: histOpen && histIds.length > 0, staleTime: 6 * 3600 * 1000,
+    enabled: histOpen && histIds.length > 0, staleTime: 3600 * 1000, refetchInterval: 3600 * 1000,
   })
   const replayQ = useQuery<{ frames: ReplayFrame[]; interval_s: number }>({
     queryKey: ['ais-replay'], queryFn: () => axios.get('/api/maritime/vessel-history').then(r => r.data),

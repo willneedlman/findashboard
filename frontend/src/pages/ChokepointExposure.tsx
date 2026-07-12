@@ -55,7 +55,10 @@ function Spark({ data, color, w = 60, h = 16 }: { data: number[]; color: string;
 }
 
 export default function ChokepointExposure() {
-  const { data, isLoading, error, refetch } = useQuery<Resp>({ queryKey: ['chokepoint-exposure'], queryFn: fetchChokepointExposure, staleTime: 300_000 })
+  // Backend caches the PortWatch baseline 1h; poll hourly so a newly-published
+  // day (and the live nowcast layer) surface promptly, consistent with the map.
+  const HOUR_MS = 3_600_000
+  const { data, isLoading, error, refetch } = useQuery<Resp>({ queryKey: ['chokepoint-exposure'], queryFn: fetchChokepointExposure, staleTime: HOUR_MS, refetchInterval: HOUR_MS, refetchOnWindowFocus: false })
   return (
     <PageWrapper title="Chokepoint Exposure">
       {isLoading ? <LoadingState label="Mapping chokepoint stress to exposed names" />

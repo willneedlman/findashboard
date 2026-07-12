@@ -27,6 +27,8 @@ gcloud auth login/
 .cache/
 backend/.cache/
 *.db
+# bounded, pre-built supplier DB shipped with the app
+!data/veridion_nodes.db
 .playwright-mcp/
 .zshrc
 smoke-test.png

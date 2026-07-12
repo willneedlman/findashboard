@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { useQuery } from '@tanstack/react-query'
-import { MapContainer, CircleMarker, Marker, Tooltip, useMap } from 'react-leaflet'
+import { MapContainer, CircleMarker, Marker, Polyline, Tooltip, useMap } from 'react-leaflet'
 import Lf from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import PageWrapper from '../components/PageWrapper'
@@ -38,6 +38,28 @@ const PORTS: Record<string, { lat: number; lon: number; port: string }> = {
   IND: { lat: 18.95, lon: 72.95, port: 'Nhava Sheva' }, ITA: { lat: 38.43, lon: 15.9, port: 'Gioia Tauro' },
 }
 
+// Country centroids (ISO-3 -> [lat, lon]) for drawing macro trade-flow links.
+// Any partner without a centroid is simply skipped, so partial coverage is safe.
+const COUNTRY_CENTROIDS: Record<string, [number, number]> = {
+  USA: [39.8, -98.6], CAN: [56.1, -106.3], MEX: [23.6, -102.5], CHN: [35.9, 104.2], JPN: [36.2, 138.3],
+  KOR: [35.9, 127.8], DEU: [51.2, 10.4], GBR: [54.0, -2.0], FRA: [46.2, 2.2], NLD: [52.1, 5.3],
+  BEL: [50.5, 4.5], ITA: [41.9, 12.6], ESP: [40.5, -3.7], IRL: [53.4, -8.2], CHE: [46.8, 8.2],
+  SWE: [60.1, 18.6], NOR: [60.5, 8.5], POL: [51.9, 19.1], AUT: [47.5, 14.5], TUR: [39.0, 35.2],
+  RUS: [61.5, 105.3], IND: [21.1, 78.0], BRA: [-14.2, -51.9], ARG: [-38.4, -63.6], AUS: [-25.3, 133.8],
+  IDN: [-0.8, 113.9], THA: [15.9, 100.9], VNM: [14.1, 108.3], MYS: [4.2, 101.9], SGP: [1.35, 103.8],
+  PHL: [12.9, 121.8], SAU: [23.9, 45.1], ARE: [23.4, 53.8], ISR: [31.0, 34.9], EGY: [26.8, 30.8],
+  ZAF: [-30.6, 22.9], NGA: [9.1, 8.7], CHL: [-35.7, -71.5], COL: [4.6, -74.3], PER: [-9.2, -75.0],
+  NZL: [-40.9, 174.9], TWN: [23.7, 121.0], HKG: [22.3, 114.2], DNK: [56.3, 9.5], FIN: [61.9, 25.7],
+  PRT: [39.4, -8.2], GRC: [39.1, 21.8], CZE: [49.8, 15.5], HUN: [47.2, 19.5], ROU: [45.9, 25.0],
+  UKR: [48.4, 31.2], PAK: [30.4, 69.3], BGD: [23.7, 90.4], KWT: [29.3, 47.5], QAT: [25.3, 51.2],
+  IRQ: [33.2, 43.7], KAZ: [48.0, 66.9], CRI: [9.7, -83.8], SVK: [48.7, 19.7], SVN: [46.1, 14.8],
+}
+// M49 reporter code -> label for the flows control.
+const REPORTERS: [string, string][] = [
+  ['842', 'USA'], ['156', 'China'], ['276', 'Germany'], ['392', 'Japan'],
+  ['826', 'UK'], ['250', 'France'], ['484', 'Mexico'], ['124', 'Canada'],
+]
+
 const radius = (v: number, max: number, min = 6, cap = 22) => max > 0 && v > 0 ? min + Math.sqrt(v / max) * (cap - min) : min
 
 function SizeFix() {
@@ -72,6 +94,11 @@ interface FM { inventory_sales?: { latest?: { ratio: number }; series?: { ratio:
 interface Vessel { mmsi: string; lat?: number; lon?: number; category?: string; name?: string; destination?: string; sog?: number; heading?: number; cog?: number }
 interface Flight { icao24: string; callsign: string; operator: string; lat: number; lon: number; alt_m?: number; vel_ms?: number; heading?: number; origin_country?: string }
 type Insp = { kind: 'ship'; v: Vessel } | { kind: 'flight'; f: Flight }
+interface FlowVec { from_iso: string; to_iso: string; partner: string; value: number }
+interface MacroFlows { available: boolean; reporter_iso?: string; period?: string; flow?: string; max_value?: number; vectors?: FlowVec[] }
+interface SupplierFeature { type: 'Feature'; geometry: { type: 'Point'; coordinates: [number, number] }; properties: { company_name: string | null; company_industry: string | null; product_names: string | null } }
+interface SupplierFC { type: string; features?: SupplierFeature[]; count: number; available: boolean }
+interface Facets { industries?: string[]; products?: string[]; available: boolean }
 
 const panel = 'color-mix(in srgb, var(--theme-surface) 95%, transparent)'
 function Dot({ c }: { c: string }) { return <span style={{ width: 9, height: 9, borderRadius: '50%', background: c, flex: 'none' }} /> }
@@ -80,11 +107,16 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 export default function LogisticsMap() {
-  const [layers, setLayers] = useState({ vessels: true, flights: true, air: true, choke: true, port: true })
+  const [layers, setLayers] = useState({ vessels: true, flights: true, air: true, choke: true, port: true, flows: true, suppliers: true })
   const [insp, setInsp] = useState<Insp | null>(null)
+  const [reporter, setReporter] = useState('842')
+  const [flowDir, setFlowDir] = useState<'X' | 'M'>('X')
+  const [supIndustry, setSupIndustry] = useState('')
+  const [supProduct, setSupProduct] = useState('')
   const AIR = readToken('--theme-tertiary', '#60a5fa'), CHOKE = readToken('--theme-primary', '#c9a84c')
   const PORT = readToken('--theme-positive', '#3fb6a0'), VESSEL = readToken('--theme-secondary', '#8099b0')
   const FLIGHT = readToken('--theme-accent-violet', '#a78bfa'), LAND = readToken('--theme-surface', '#0f1d31')
+  const FLOW = readToken('--theme-accent-rose', '#fb7185'), SUPPLIER = readToken('--theme-accent-cyan', '#22d3ee')
   // Small glyph markers (ship / jet) instead of plain dots. currentColor + a CSS
   // :hover rule gives the colour-on-hover; the jet rotates to its heading.
   const shipIcon = Lf.divIcon({ className: 'lm-mk', iconSize: [15, 15], iconAnchor: [7.5, 7.5],
@@ -98,7 +130,18 @@ export default function LogisticsMap() {
   const cs = useQuery<{ stats?: { id: string; avg7: number }[] }>({ queryKey: ['lm-choke'], queryFn: () => axios.get('/api/maritime/chokepoint-stats').then(r => r.data), staleTime: 6 * 3600e3, retry: 1 })
   const vq = useQuery<{ vessels?: Vessel[] }>({ queryKey: ['lm-vessels'], queryFn: () => axios.get('/api/maritime/vessels?classified_only=true').then(r => r.data), staleTime: 60e3, refetchInterval: 60e3, retry: 1 })
   const fq = useQuery<{ flights?: Flight[] }>({ queryKey: ['lm-flights'], queryFn: () => axios.get('/api/logistics/flights').then(r => r.data), staleTime: 120e3, refetchInterval: 120e3, retry: 1 })
+  const flowsQ = useQuery<MacroFlows>({ queryKey: ['lm-flows', reporter, flowDir], queryFn: () => axios.get(`/api/logistics/macro-flows?reporter=${reporter}&flow=${flowDir}&top=40`).then(r => r.data), staleTime: 24 * 3600e3, retry: 1 })
+  const facetsQ = useQuery<Facets>({ queryKey: ['lm-facets'], queryFn: () => axios.get('/api/logistics/supplier-facets').then(r => r.data), staleTime: 24 * 3600e3, retry: 1 })
+  const supQ = useQuery<SupplierFC>({
+    queryKey: ['lm-suppliers', supIndustry, supProduct],
+    queryFn: () => { const p = new URLSearchParams({ limit: '4000' }); if (supIndustry) p.set('industry', supIndustry); if (supProduct) p.set('product_keyword', supProduct); return axios.get(`/api/logistics/supplier-nodes?${p.toString()}`).then(r => r.data) },
+    staleTime: 6 * 3600e3, retry: 1,
+  })
 
+  const flows = flowsQ.data?.available ? (flowsQ.data.vectors ?? []) : []
+  const maxFlow = flowsQ.data?.max_value || Math.max(1, ...flows.map(f => f.value))
+  const supFeatures = supQ.data?.features ?? []
+  const facetInds = facetsQ.data?.industries ?? []
   const hubs = air.data?.hubs ?? []
   const maxAir = Math.max(1, ...hubs.map(h => h.movements))
   const econ = mf.data?.lsci?.economies ?? []
@@ -112,10 +155,13 @@ export default function LogisticsMap() {
 
   const eyebrow: React.CSSProperties = { fontFamily: L.mono, fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: L.gold }
   const goldTint = 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)'
-  const VIEW: ['vessels' | 'flights' | 'air' | 'choke' | 'port', string, string, number][] = [
+  const VIEW: ['vessels' | 'flights' | 'air' | 'choke' | 'port' | 'flows' | 'suppliers', string, string, number][] = [
+    ['flows', 'Trade flows', FLOW, flows.length], ['suppliers', 'Suppliers', SUPPLIER, supFeatures.length],
     ['vessels', 'Cargo ships', VESSEL, vessels.length], ['flights', 'Cargo flights', FLIGHT, flights.length],
     ['air', 'Air hubs', AIR, hubs.length], ['choke', 'Chokepoints', CHOKE, Object.keys(CHOKES).length], ['port', 'LSCI ports', PORT, econ.length],
   ]
+  const selStyle: React.CSSProperties = { flex: 1, minWidth: 0, background: 'var(--theme-bg, #0b1626)', color: L.text, border: `1px solid ${L.border}`, borderRadius: 3, fontFamily: L.mono, fontSize: 10, padding: '4px 6px' }
+  const selLbl: React.CSSProperties = { display: 'block', fontFamily: L.sans, fontSize: 9, color: L.faint, marginBottom: 3 }
 
   // Freight-macro (+ container spot rate) ride the docked bottom tape, energy-map style.
   const ser = (k: string) => (idx[k]?.series ?? []).map(o => o.value)
@@ -150,6 +196,25 @@ export default function LogisticsMap() {
         <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         <MapContainer className="lm-map" center={[30, 30]} zoom={2.3} minZoom={2} maxZoom={6} worldCopyJump preferCanvas zoomControl={false} style={{ position: 'absolute', inset: 0, height: '100%', width: '100%' }}>
           <SizeFix /><Basemap land={LAND} />
+          {layers.flows && flows.map((v, i) => {
+            const a = COUNTRY_CENTROIDS[v.from_iso], b = COUNTRY_CENTROIDS[v.to_iso]
+            if (!a || !b) return null
+            const r = v.value / (maxFlow || 1)
+            return (
+              <Polyline key={`fl-${i}`} positions={[a, b]} pathOptions={{ color: FLOW, weight: 0.6 + r * 3.4, opacity: 0.2 + r * 0.55 }}>
+                <Tooltip>{v.from_iso} → {v.to_iso} · ${(v.value / 1e9).toFixed(1)}B</Tooltip>
+              </Polyline>
+            )
+          })}
+          {layers.suppliers && supFeatures.map((f, i) => (
+            <CircleMarker key={`s-${i}`} center={[f.geometry.coordinates[1], f.geometry.coordinates[0]]} radius={2.5} pathOptions={{ color: SUPPLIER, fillColor: SUPPLIER, fillOpacity: 0.9, weight: 0.5 }}>
+              <Tooltip>
+                <div style={{ fontWeight: 700 }}>{f.properties.company_name || '—'}</div>
+                <div>{f.properties.company_industry || '—'}</div>
+                {f.properties.product_names && <div style={{ opacity: 0.8 }}>{String(f.properties.product_names).slice(0, 80)}</div>}
+              </Tooltip>
+            </CircleMarker>
+          ))}
           {layers.vessels && vessels.map(v => (
             <Marker key={`v-${v.mmsi}`} position={[v.lat as number, v.lon as number]} icon={shipIcon} eventHandlers={{ click: () => setInsp({ kind: 'ship', v }) }} />
           ))}
@@ -185,9 +250,28 @@ export default function LogisticsMap() {
               </div>
             )})}
           </div>
+          <div style={{ pointerEvents: 'auto', background: panel, border: `1px solid ${L.border}`, padding: '12px 12px 11px' }}>
+            <div style={{ ...eyebrow, color: 'var(--theme-text-dim, #56708a)', marginBottom: 8 }}>Filters</div>
+            <label style={selLbl}>Trade flows</label>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 9 }}>
+              <select value={reporter} onChange={e => setReporter(e.target.value)} style={selStyle}>
+                {REPORTERS.map(([c, n]) => <option key={c} value={c}>{n}</option>)}
+              </select>
+              <select value={flowDir} onChange={e => setFlowDir(e.target.value as 'X' | 'M')} style={{ ...selStyle, flex: 'none', width: 82 }}>
+                <option value="X">Exports</option><option value="M">Imports</option>
+              </select>
+            </div>
+            <label style={selLbl}>Suppliers · product class</label>
+            <select value={supIndustry} onChange={e => setSupIndustry(e.target.value)} style={{ ...selStyle, width: '100%', marginBottom: 6 }}>
+              <option value="">{facetInds.length ? 'All industries' : 'No data yet'}</option>
+              {facetInds.map(i => <option key={i} value={i}>{i}</option>)}
+            </select>
+            <input value={supProduct} onChange={e => setSupProduct(e.target.value)} placeholder="product keyword…" style={{ ...selStyle, width: '100%' }} />
+            {supQ.data && !supQ.data.available && <div style={{ fontFamily: L.sans, fontSize: 8.5, color: L.faint, marginTop: 7, lineHeight: 1.5 }}>Supplier data not yet ingested — run the Veridion ETL with a valid DEWEY_API_KEY.</div>}
+          </div>
           <div style={{ marginTop: 'auto', pointerEvents: 'auto', background: panel, border: `1px solid ${L.border}`, padding: '13px 16px' }}>
             <div style={{ fontFamily: L.mono, fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', color: L.text, marginBottom: 9 }}>LEGEND</div>
-            {([['Cargo ship', VESSEL, 'ship'], ['Cargo flight', FLIGHT, 'jet'], ['Air cargo hub', AIR, 'dot'], ['Chokepoint', CHOKE, 'dot'], ['Connectivity port', PORT, 'dot']] as [string, string, 'ship' | 'jet' | 'dot'][]).map(([lbl, c, t]) => (
+            {([['Trade flow', FLOW, 'dot'], ['Supplier node', SUPPLIER, 'dot'], ['Cargo ship', VESSEL, 'ship'], ['Cargo flight', FLIGHT, 'jet'], ['Air cargo hub', AIR, 'dot'], ['Chokepoint', CHOKE, 'dot'], ['Connectivity port', PORT, 'dot']] as [string, string, 'ship' | 'jet' | 'dot'][]).map(([lbl, c, t]) => (
               <div key={lbl} style={{ display: 'flex', alignItems: 'center', gap: 9, lineHeight: '22px' }}>
                 <span style={{ width: 16, display: 'flex', justifyContent: 'center', flex: 'none' }}>
                   {t === 'ship' ? <svg width="15" height="15" viewBox="0 0 24 24" style={{ color: c }}><path fill="currentColor" d="M3 14l1.8 5h14.4L21 14H3zm3-2V8l6-4 6 4v4H6z" /></svg>

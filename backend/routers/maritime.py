@@ -1012,7 +1012,7 @@ def chokepoint_history(
     # Only cache complete responses so one transient PortWatch failure
     # doesn't pin a missing series for the whole TTL.
     if series and len(series) == len(resolvable):
-        disk_set(key, out, ttl=6 * 3600)             # cache the baseline BEFORE the live tail
+        disk_set(key, out, ttl=3600)                 # cache the baseline BEFORE the live tail
     _attach_history_nowcast(out["series"])
     return out
 
@@ -1060,7 +1060,7 @@ _SEABORNE_OIL_MBD = 78.0
 def chokepoint_stats():
     """Per-chokepoint transit stats for the cockpit strip, inspector and
     alert widgets: 7d avg calls + delta vs prior 7d, 30d daily series,
-    latest tanker/cargo mix, 2-sigma anomaly flag. IMF PortWatch, cached 6h."""
+    latest tanker/cargo mix, 2-sigma anomaly flag. IMF PortWatch, cached 1h."""
     cached = disk_get("pw_choke_stats")
     if cached:
         _attach_nowcast(cached["stats"])          # merge fresh live layer over the 6h baseline
@@ -1094,10 +1094,16 @@ def chokepoint_stats():
                  "watch" if anomaly == "high" or (delta is not None and delta >= 8) else "normal"
         latest = rows[-1]
         caps = [p["cap"] for p in rows[-7:] if p["cap"] is not None]
+        # Tanker-only baseline: the live AIS nowcast counts energy vessels
+        # (tanker+LNG) only, so its delta must compare against PortWatch tankers,
+        # not n_total — otherwise the delta is structurally negative and useless.
+        tanks = [p["tanker"] for p in rows[-7:] if p["tanker"] is not None]
+        tanker_avg7 = sum(tanks) / len(tanks) if tanks else None
         return {
             "id": meta["id"], "name": meta["name"], "oil_mbd": meta["oil_mbd"],
             "share_pct": round(meta["oil_mbd"] / _SEABORNE_OIL_MBD * 100),
             "avg7": round(avg7, 1), "delta_pct": round(delta, 1) if delta is not None else None,
+            "tanker_avg7": round(tanker_avg7, 1) if tanker_avg7 else None,
             "transits7": sum(last7), "series30": s30,
             "mix": {"tanker": latest["tanker"], "cargo": latest["cargo"], "total": latest["total"]},
             "cap7": round(sum(caps) / len(caps)) if caps else None,
@@ -1108,7 +1114,10 @@ def chokepoint_stats():
         stats = [s for s in ex.map(build, CHOKEPOINTS) if s]
     out = {"stats": stats, "source": "IMF PortWatch"}
     if len(stats) == len([c for c in CHOKEPOINTS if c["id"] in mapping]):
-        disk_set("pw_choke_stats", out, ttl=6 * 3600)   # cache the baseline BEFORE the live merge
+        # PortWatch publishes a new day at most ~once/24h; a 1h TTL surfaces that
+        # new day within the hour instead of up to 6h late. Shorter buys nothing
+        # (source unchanged) and only hammers the free ArcGIS feed.
+        disk_set("pw_choke_stats", out, ttl=3600)       # cache the baseline BEFORE the live merge
     _attach_nowcast(out["stats"])
     out["nowcast_meta"] = _NOWCAST_META
     return out
@@ -1151,10 +1160,11 @@ def _live_energy_activity() -> dict:
 
 def _attach_nowcast(stats: list) -> dict:
     """Merge the fresh 96h nowcast onto PortWatch stat rows (additive: existing
-    fields untouched) and return the standalone nowcast dict. PortWatch avg7 is
-    already a per-day call rate, so it is the baseline for the live-vs-baseline delta."""
+    fields untouched) and return the standalone nowcast dict. The baseline is
+    PortWatch's tanker calls/day (tanker_avg7), matching the energy-only live
+    count so live_vs_baseline_pct is a like-for-like delta, not an artifact."""
     ids = [c["id"] for c in CHOKEPOINTS]
-    baseline = {s["id"]: s["avg7"] for s in stats if s.get("avg7") is not None}
+    baseline = {s["id"]: s["tanker_avg7"] for s in stats if s.get("tanker_avg7")}
     nc = energy_nowcaster.nowcast(
         baseline, ids, _ais_covered_chokes(),
         bool(_status.get("connected")), _live_energy_activity(),
@@ -1170,7 +1180,7 @@ def energy_nowcast():
     without the PortWatch baseline payload."""
     ids = [c["id"] for c in CHOKEPOINTS]
     blob = disk_get("pw_choke_stats") or {}
-    baseline = {s["id"]: s["avg7"] for s in blob.get("stats", []) if s.get("avg7") is not None}
+    baseline = {s["id"]: s["tanker_avg7"] for s in blob.get("stats", []) if s.get("tanker_avg7")}
     nc = energy_nowcaster.nowcast(
         baseline, ids, _ais_covered_chokes(),
         bool(_status.get("connected")), _live_energy_activity(),
@@ -1303,16 +1313,37 @@ _EXP_NOTE = {
 }
 
 
+# Live-nowcast contribution to disruption. Only trusted tiers count; a noise
+# floor absorbs the residual AIS-undercount bias (we see fewer tankers than
+# PortWatch even in normal conditions), and the excess is scaled + capped so the
+# noisier live layer can freshen the score without ever dominating PortWatch.
+_NOWCAST_W = {"high": 1.0, "medium": 0.5}
+_LIVE_DROP_FLOOR = 15.0   # ignore live drops shallower than this (% below tanker baseline)
+_LIVE_SCALE = 0.2         # excess-% → disruption points
+_LIVE_CAP = 12.0          # max points the live layer may add
+
+
 def _choke_disruption(stat: dict) -> float:
     """Non-negative disruption magnitude from a chokepoint-stats row. Congestion
     (transits dropping vs the prior week) is the disruptive signal; a rising
-    count is not. Scaled so a flat/normal chokepoint contributes 0."""
+    count is not. Scaled so a flat/normal chokepoint contributes 0.
+
+    PortWatch (delta/status/anomaly) is the stable base; a trusted live-AIS drop
+    off the tanker baseline adds a fresh component so a today disruption surfaces
+    before PortWatch publishes it (its feed lags ~4-7d)."""
     d = stat.get("delta_pct")
     base = max(0.0, -(d or 0.0))                      # % transit drop wk/wk
     if stat.get("status") == "congested":
         base += 5.0
     if stat.get("anomaly") == "low":
         base += 3.0
+
+    nc = stat.get("nowcast") or {}
+    w = _NOWCAST_W.get(nc.get("confidence"), 0.0)
+    live = nc.get("live_vs_baseline_pct")
+    if w and live is not None and -live > _LIVE_DROP_FLOOR:
+        base += min((-live - _LIVE_DROP_FLOOR) * _LIVE_SCALE * w, _LIVE_CAP)
+
     return round(base, 1)
 
 
