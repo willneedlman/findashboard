@@ -61,8 +61,11 @@ def _init_schema(conn: sqlite3.Connection) -> None:
 
 
 def _index(conn: sqlite3.Connection) -> None:
+    # Spatial index: serves the map's bbox viewport range query. The industry
+    # index still helps exact/prefix lookups; product_names is substring-only
+    # (LIKE '%x%' can't use a b-tree) so it is intentionally left unindexed.
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_latlon   ON supplier_nodes(latitude, longitude)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_industry ON supplier_nodes(company_industry)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_product  ON supplier_nodes(product_names)")
     conn.commit()
 
 

@@ -123,13 +123,23 @@ def macro_flows(
 def supplier_nodes(
     product_keyword: str | None = Query(None, description="substring filter on normalized product names"),
     industry: str | None = Query(None, description="substring filter on core industry"),
-    limit: int = Query(5000, ge=1, le=20000),
+    bbox: str | None = Query(None, description="viewport filter 'south,west,north,east' — returns local density"),
+    limit: int = Query(6000, ge=1, le=20000),
 ):
     """Geocoded Veridion manufacturers as a GeoJSON FeatureCollection for the
-    supplier-nodes map layer. Reads the bounded, pre-built data/veridion_nodes.db;
-    returns an empty collection with available:false until the offline ETL
-    (logistics.ingest_veridion) has been run with a valid DEWEY_API_KEY."""
-    return veridion.nodes_geojson(product_keyword, industry, limit)
+    supplier-nodes map layer. With a bbox the map loads only the current viewport
+    (local density) instead of a global sample. Reads the bounded, pre-built
+    data/veridion_nodes.db; returns an empty collection with available:false until
+    the offline ETL (logistics.ingest_veridion) has been run with a valid key."""
+    box = None
+    if bbox:
+        try:
+            p = [float(x) for x in bbox.split(",")]
+            if len(p) == 4:
+                box = (min(p[0], p[2]), min(p[1], p[3]), max(p[0], p[2]), max(p[1], p[3]))
+        except ValueError:
+            box = None
+    return veridion.nodes_geojson(product_keyword, industry, box, limit)
 
 
 @router.get("/supplier-facets")

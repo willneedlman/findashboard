@@ -234,7 +234,10 @@ def _ro_conn() -> "sqlite3.Connection | None":
 
 
 def query_nodes(product_keyword: "str | None" = None, industry: "str | None" = None,
-                limit: int = 5000) -> list:
+                bbox: "tuple | None" = None, limit: int = 5000) -> list:
+    """Nodes matching the filters. ``bbox`` is (south, west, north, east); the
+    latitude range predicate is served by idx_latlon so viewport queries stay
+    fast and return local density instead of a global sample."""
     conn = _ro_conn()
     if conn is None:
         return []
@@ -242,6 +245,10 @@ def query_nodes(product_keyword: "str | None" = None, industry: "str | None" = N
         q = ("SELECT company_name, latitude, longitude, company_industry, product_names "
              "FROM supplier_nodes WHERE 1=1")
         args: list = []
+        if bbox:
+            s, w, n, e = bbox
+            q += " AND latitude BETWEEN ? AND ? AND longitude BETWEEN ? AND ?"
+            args += [s, n, w, e]
         if industry:
             q += " AND company_industry LIKE ?"
             args.append(f"%{industry}%")
@@ -260,12 +267,12 @@ def query_nodes(product_keyword: "str | None" = None, industry: "str | None" = N
 
 
 def nodes_geojson(product_keyword: "str | None" = None, industry: "str | None" = None,
-                  limit: int = 5000) -> dict:
+                  bbox: "tuple | None" = None, limit: int = 5000) -> dict:
     """A GeoJSON FeatureCollection of matching geocoded suppliers. Always valid,
     even before the ETL has been run — ``available`` reports whether the bundled
     DB exists so the UI can show a 'not yet ingested' state instead of breaking."""
     feats = []
-    for n in query_nodes(product_keyword, industry, limit):
+    for n in query_nodes(product_keyword, industry, bbox, limit):
         feats.append({
             "type": "Feature",
             "geometry": {"type": "Point", "coordinates": [n["longitude"], n["latitude"]]},

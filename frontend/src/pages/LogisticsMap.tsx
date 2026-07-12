@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
 import { useQuery } from '@tanstack/react-query'
-import { MapContainer, CircleMarker, Marker, Polyline, Tooltip, useMap } from 'react-leaflet'
+import { MapContainer, CircleMarker, Marker, Polyline, Tooltip, useMap, useMapEvents } from 'react-leaflet'
 import Lf from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import PageWrapper from '../components/PageWrapper'
@@ -87,6 +87,18 @@ function Basemap({ land }: { land: string }) {
   return null
 }
 
+// Reports the map's viewport (debounced) so the supplier layer loads only what's
+// on screen — local density instead of a global 6k sample.
+function BoundsWatch({ onChange }: { onChange: (b: [number, number, number, number]) => void }) {
+  const tmr = useRef<number | undefined>(undefined)
+  const emit = (m: Lf.Map) => { const b = m.getBounds(); onChange([b.getSouth(), b.getWest(), b.getNorth(), b.getEast()]) }
+  const map = useMapEvents({
+    moveend: (e) => { window.clearTimeout(tmr.current); tmr.current = window.setTimeout(() => emit(e.target as Lf.Map), 350) },
+  })
+  useEffect(() => { emit(map); return () => window.clearTimeout(tmr.current) }, [])  // initial bounds on mount
+  return null
+}
+
 interface Hub { icao: string; city: string; movements: number; by_operator: Record<string, number> }
 interface Econ { country: string; lsci: number; iso?: string }
 interface MF { lsci?: { economies?: Econ[]; _stale?: boolean }; wci?: { composite_usd_per_40ft?: number; _stale?: boolean } }
@@ -113,6 +125,7 @@ export default function LogisticsMap() {
   const [flowDir, setFlowDir] = useState<'X' | 'M'>('X')
   const [supIndustry, setSupIndustry] = useState('')
   const [supProduct, setSupProduct] = useState('')
+  const [bbox, setBbox] = useState<[number, number, number, number] | null>(null)
   const AIR = readToken('--theme-tertiary', '#60a5fa'), CHOKE = readToken('--theme-primary', '#c9a84c')
   const PORT = readToken('--theme-positive', '#3fb6a0'), VESSEL = readToken('--theme-secondary', '#8099b0')
   const FLIGHT = readToken('--theme-accent-violet', '#a78bfa'), LAND = readToken('--theme-surface', '#0f1d31')
@@ -132,9 +145,11 @@ export default function LogisticsMap() {
   const fq = useQuery<{ flights?: Flight[] }>({ queryKey: ['lm-flights'], queryFn: () => axios.get('/api/logistics/flights').then(r => r.data), staleTime: 120e3, refetchInterval: 120e3, retry: 1 })
   const flowsQ = useQuery<MacroFlows>({ queryKey: ['lm-flows', reporter, flowDir], queryFn: () => axios.get(`/api/logistics/macro-flows?reporter=${reporter}&flow=${flowDir}&top=40`).then(r => r.data), staleTime: 24 * 3600e3, retry: 1 })
   const facetsQ = useQuery<Facets>({ queryKey: ['lm-facets'], queryFn: () => axios.get('/api/logistics/supplier-facets').then(r => r.data), staleTime: 24 * 3600e3, retry: 1 })
+  const bboxParam = bbox ? bbox.join(',') : null
   const supQ = useQuery<SupplierFC>({
-    queryKey: ['lm-suppliers', supIndustry, supProduct],
-    queryFn: () => { const p = new URLSearchParams({ limit: '4000' }); if (supIndustry) p.set('industry', supIndustry); if (supProduct) p.set('product_keyword', supProduct); return axios.get(`/api/logistics/supplier-nodes?${p.toString()}`).then(r => r.data) },
+    queryKey: ['lm-suppliers', supIndustry, supProduct, bboxParam],
+    queryFn: () => { const p = new URLSearchParams({ limit: '6000' }); if (supIndustry) p.set('industry', supIndustry); if (supProduct) p.set('product_keyword', supProduct); if (bboxParam) p.set('bbox', bboxParam); return axios.get(`/api/logistics/supplier-nodes?${p.toString()}`).then(r => r.data) },
+    enabled: layers.suppliers && !!bbox,
     staleTime: 6 * 3600e3, retry: 1,
   })
 
@@ -195,7 +210,7 @@ export default function LogisticsMap() {
       <div style={{ height: 'calc(100vh - 32px)', minHeight: 620, display: 'flex', flexDirection: 'column', border: `1px solid ${L.border}`, borderRadius: 6, overflow: 'hidden' }}>
         <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         <MapContainer className="lm-map" center={[30, 30]} zoom={2.3} minZoom={2} maxZoom={6} worldCopyJump preferCanvas zoomControl={false} style={{ position: 'absolute', inset: 0, height: '100%', width: '100%' }}>
-          <SizeFix /><Basemap land={LAND} />
+          <SizeFix /><Basemap land={LAND} /><BoundsWatch onChange={setBbox} />
           {layers.flows && flows.map((v, i) => {
             const a = COUNTRY_CENTROIDS[v.from_iso], b = COUNTRY_CENTROIDS[v.to_iso]
             if (!a || !b) return null
