@@ -76,6 +76,59 @@ function Board({ data }: { data: Resp }) {
   const [open, setOpen] = useState<string | null>(pressured[0]?.ticker ?? data.leaders[0]?.ticker ?? null)
   const navigate = useNavigate()
 
+  const [zoom, setZoom] = useState(1)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState(false)
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
+
+  const getSVGCoords = (clientX: number, clientY: number, currentTarget: SVGSVGElement) => {
+    const rect = currentTarget.getBoundingClientRect()
+    return {
+      x: (clientX - rect.left) / rect.width * 660,
+      y: (clientY - rect.top) / rect.height * 250,
+    }
+  }
+
+  const handleMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (e.button !== 0) return
+    setIsDragging(true)
+    const coords = getSVGCoords(e.clientX, e.clientY, e.currentTarget)
+    setDragStart({ x: coords.x - pan.x, y: coords.y - pan.y })
+  }
+
+  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!isDragging) return
+    const coords = getSVGCoords(e.clientX, e.clientY, e.currentTarget)
+    setPan({ x: coords.x - dragStart.x, y: coords.y - dragStart.y })
+  }
+
+  const handleMouseUp = () => setIsDragging(false)
+  const handleMouseLeave = () => setIsDragging(false)
+
+  const handleWheel = (e: React.WheelEvent<SVGSVGElement>) => {
+    e.preventDefault()
+    const zoomFactor = 1.15
+    const nextZoom = e.deltaY < 0 ? Math.min(6, zoom * zoomFactor) : Math.max(1, zoom / zoomFactor)
+    
+    if (nextZoom <= 1.05) {
+      setZoom(1)
+      setPan({ x: 0, y: 0 })
+      return
+    }
+
+    const coords = getSVGCoords(e.clientX, e.clientY, e.currentTarget)
+    const nextPanX = coords.x - (coords.x - pan.x) * (nextZoom / zoom)
+    const nextPanY = coords.y - (coords.y - pan.y) * (nextZoom / zoom)
+    
+    setZoom(nextZoom)
+    setPan({ x: nextPanX, y: nextPanY })
+  }
+
+  const handleDoubleClick = () => {
+    setZoom(1)
+    setPan({ x: 0, y: 0 })
+  }
+
   const sel = straits.find(c => c.id === strait)
   const kpis = [
     { label: 'Chokepoints', value: String(straits.length), tip: { title: 'Chokepoints tracked', body: `The ${straits.length} maritime straits and canals the tool watches. Each is scored for transit stress from IMF PortWatch and the live AIS nowcast.`, source: 'IMF PortWatch + AIS' } },
@@ -94,33 +147,90 @@ function Board({ data }: { data: Resp }) {
 
       {/* Map + drill dock */}
       <div style={{ display: 'flex', gap: 10 }}>
-        <Panel label="Transit Stress Map" meta="click a strait to drill it · 5m refresh" style={{ flex: 1, minWidth: 0, padding: '32px 10px 8px' }}>
-          <div style={{ position: 'relative' }}>
-            <svg width="100%" height="336" viewBox="0 0 660 250" preserveAspectRatio="none" style={{ display: 'block' }}>
-              <path d={WORLD_DOT_PATH} fill={mix(T.text, 14)} />
-              {straits.map(c => {
-                const pos = STRAIT_POS[c.id]; if (!pos) return null
-                return <line key={c.id} x1={pos.x} y1={pos.y} x2={pos.labelX} y2={pos.labelY} stroke={c.id === strait ? mix(T.gold, 65) : mix(T.text, 28)} strokeWidth={0.65} />
-              })}
+        <Panel label="Transit Stress Map" meta="click a strait to drill it · drag to pan · scroll to zoom · double click to reset" style={{ flex: 1, minWidth: 0, padding: '32px 10px 8px' }}>
+          <div style={{ position: 'relative', overflow: 'hidden' }}>
+            <svg
+              width="100%"
+              height="336"
+              viewBox="0 0 660 250"
+              preserveAspectRatio="none"
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseLeave}
+              onWheel={handleWheel}
+              onDoubleClick={handleDoubleClick}
+              style={{
+                display: 'block',
+                userSelect: 'none',
+                cursor: isDragging ? 'grabbing' : zoom > 1 ? 'grab' : 'default'
+              }}
+            >
+              <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
+                <path d={WORLD_DOT_PATH} fill={mix(T.text, 14)} />
+                {straits.slice().sort((a, b) => Number(a.id === strait) - Number(b.id === strait)).map(c => {
+                  const pos = STRAIT_POS[c.id]; if (!pos) return null
+                  const color = statusColor(c.status)
+                  const on = c.id === strait
+                  return (
+                    <g
+                      key={c.id}
+                      onClick={() => setStrait(c.id)}
+                      style={{ cursor: 'pointer', outline: 'none', transform: 'none' }}
+                    >
+                      <line x1={pos.x} y1={pos.y} x2={pos.labelX} y2={pos.labelY} stroke={on ? mix(T.gold, 65) : mix(T.text, 28)} strokeWidth={0.65 / zoom} pointerEvents="none" />
+                      {on && <rect x={pos.x - 8 / zoom} y={pos.y - 8 / zoom} width={16 / zoom} height={16 / zoom} fill="none" stroke={T.gold} strokeWidth={1 / zoom} pointerEvents="none" />}
+                      {c.status === 'congested' && (
+                        <rect
+                          x={pos.x - 9 / zoom}
+                          y={pos.y - 9 / zoom}
+                          width={18 / zoom}
+                          height={18 / zoom}
+                          fill="none"
+                          stroke={T.neg}
+                          strokeWidth={1 / zoom}
+                          pointerEvents="none"
+                          style={{ transformOrigin: `${pos.x}px ${pos.y}px`, animation: 'at-choke-pulse 1.8s ease-out infinite' }}
+                        />
+                      )}
+                      <rect x={pos.x - 4.5 / zoom} y={pos.y - 4.5 / zoom} width={9 / zoom} height={9 / zoom} fill={color} stroke={T.bg} strokeWidth={2 / zoom} pointerEvents="none" />
+                      <rect x={pos.x - 12 / zoom} y={pos.y - 12 / zoom} width={24 / zoom} height={24 / zoom} fill="transparent" pointerEvents="all">
+                        <title>{c.name}</title>
+                      </rect>
+                      <text
+                        x={pos.labelX}
+                        y={pos.labelY - 3 / zoom}
+                        textAnchor={pos.lab === 'r' ? 'start' : 'end'}
+                        fill={mix(T.text, 85)}
+                        stroke={T.bg}
+                        strokeWidth={3 / zoom}
+                        paintOrder="stroke"
+                        fontFamily={MONO}
+                        fontSize={9.5 / zoom}
+                        fontWeight={700}
+                        pointerEvents="none"
+                      >
+                        {c.name.replace('Strait of ', '').replace(' + SUMED', '')}
+                      </text>
+                      <text
+                        x={pos.labelX}
+                        y={pos.labelY + 7 / zoom}
+                        textAnchor={pos.lab === 'r' ? 'start' : 'end'}
+                        fill={color}
+                        stroke={T.bg}
+                        strokeWidth={3 / zoom}
+                        paintOrder="stroke"
+                        fontFamily={MONO}
+                        fontSize={8.5 / zoom}
+                        pointerEvents="none"
+                      >
+                        {`${c.oil_mbd} Mb/d · ${c.delta_pct != null ? signed(c.delta_pct, 1) + '%' : '—'}`}
+                      </text>
+                    </g>
+                  )
+                })}
+              </g>
             </svg>
-            {straits.map(c => {
-              const pos = STRAIT_POS[c.id]; if (!pos) return null
-              const color = statusColor(c.status)
-              const on = c.id === strait
-              return (
-                <Fragment key={c.id}>
-                  <div style={{ position: 'absolute', left: `${pos.x / 660 * 100}%`, top: `${pos.y / 250 * 100}%`, width: 0, height: 0 }}>
-                    <div onClick={() => setStrait(c.id)} title={c.name} style={{ position: 'absolute', left: 0, top: 0, transform: 'translate(-50%,-50%)', width: 9, height: 9, background: color, boxShadow: `0 0 0 2px ${T.bg}`, cursor: 'pointer', zIndex: 2 }} />
-                    {c.status === 'congested' && <div style={{ position: 'absolute', left: 0, top: 0, margin: '-9px 0 0 -9px', width: 18, height: 18, border: `1px solid ${T.neg}`, animation: 'at-choke-pulse 1.8s ease-out infinite' }} />}
-                    {on && <div style={{ position: 'absolute', left: 0, top: 0, margin: '-8px 0 0 -8px', width: 16, height: 16, border: `1px solid ${T.gold}` }} />}
-                  </div>
-                  <div style={{ position: 'absolute', left: `${pos.labelX / 660 * 100}%`, top: `${pos.labelY / 250 * 100}%`, transform: `translate(${pos.lab === 'r' ? '0' : '-100%'}, -50%)`, whiteSpace: 'nowrap', textAlign: pos.lab === 'l' ? 'right' : 'left', zIndex: 2 }}>
-                    <div style={{ fontFamily: MONO, fontSize: 9.5, fontWeight: 700, color: mix(T.text, 85) }}>{c.name.replace('Strait of ', '').replace(' + SUMED', '')}</div>
-                    <div style={{ fontFamily: MONO, fontSize: 8.5, color }}>{c.oil_mbd} Mb/d · {c.delta_pct != null ? signed(c.delta_pct, 1) + '%' : '—'}</div>
-                  </div>
-                </Fragment>
-              )
-            })}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 6, paddingTop: 7, borderTop: `1px solid ${T.borderFaint}` }}>
             {([['congested', T.neg], ['watch', T.gold], ['normal', T.muted]] as [string, string][]).map(([l, c]) => (

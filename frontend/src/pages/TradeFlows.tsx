@@ -127,12 +127,62 @@ function Results({ d, cmdLabel, countryLabel }: { d: Resp; cmdLabel: string; cou
 }
 
 function FlowOverview({ d, partners, selected, onSelect, countryLabel, cmdLabel }: { d: Resp; partners: Partner[]; selected: number; onSelect: (i: number) => void; countryLabel: string; cmdLabel: string }) {
+  const [zoom, setZoom] = useState(1)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState(false)
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
+
+  const getSVGCoords = (clientX: number, clientY: number, currentTarget: SVGSVGElement) => {
+    const rect = currentTarget.getBoundingClientRect()
+    return {
+      x: (clientX - rect.left) / rect.width * 660,
+      y: (clientY - rect.top) / rect.height * 250,
+    }
+  }
+
+  const handleMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (e.button !== 0) return
+    setIsDragging(true)
+    const coords = getSVGCoords(e.clientX, e.clientY, e.currentTarget)
+    setDragStart({ x: coords.x - pan.x, y: coords.y - pan.y })
+  }
+
+  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!isDragging) return
+    const coords = getSVGCoords(e.clientX, e.clientY, e.currentTarget)
+    setPan({ x: coords.x - dragStart.x, y: coords.y - dragStart.y })
+  }
+
+  const handleMouseUp = () => setIsDragging(false)
+  const handleMouseLeave = () => setIsDragging(false)
+
+  const handleWheel = (e: React.WheelEvent<SVGSVGElement>) => {
+    e.preventDefault()
+    const zoomFactor = 1.15
+    const nextZoom = e.deltaY < 0 ? Math.min(6, zoom * zoomFactor) : Math.max(1, zoom / zoomFactor)
+    
+    if (nextZoom <= 1.05) {
+      setZoom(1)
+      setPan({ x: 0, y: 0 })
+      return
+    }
+
+    const coords = getSVGCoords(e.clientX, e.clientY, e.currentTarget)
+    const nextPanX = coords.x - (coords.x - pan.x) * (nextZoom / zoom)
+    const nextPanY = coords.y - (coords.y - pan.y) * (nextZoom / zoom)
+    
+    setZoom(nextZoom)
+    setPan({ x: nextPanX, y: nextPanY })
+  }
+
+  const handleDoubleClick = () => {
+    setZoom(1)
+    setPan({ x: 0, y: 0 })
+  }
+
   const originGeo = ISO_GEO[d.reporter_iso ?? ''] ?? ISO_GEO.USA
   const origin = projectWorld(originGeo[0], originGeo[1])
-  const indices = Array.from({ length: Math.min(12, partners.length) }, (_, i) => i)
-  if (selected >= 12 && partners[selected]?.iso && ISO_GEO[partners[selected].iso as string] && indices.length) indices[indices.length - 1] = selected
-  const routes = indices.flatMap(i => {
-    const partner = partners[i]
+  const routes = partners.flatMap((partner, i) => {
     const geo = partner?.iso ? ISO_GEO[partner.iso] : undefined
     return partner && geo ? [{ partner, index: i, point: projectWorld(geo[0], geo[1]) }] : []
   })
@@ -146,41 +196,103 @@ function FlowOverview({ d, partners, selected, onSelect, countryLabel, cmdLabel 
       : `M${origin.x},${origin.y} Q${cx},${cy} ${x},${y}`
   }
   return (
-    <Panel label="Bilateral Flow Map" meta="click a partner to drill it" style={{ flex: 1, minWidth: 0, height: 386, padding: '38px 14px 12px', boxSizing: 'border-box' }}>
-      <div style={{ position: 'relative', height: '100%' }}>
-        <svg width="100%" height="100%" viewBox="0 0 660 250" preserveAspectRatio="none" style={{ display: 'block', overflow: 'visible' }}>
+    <Panel label="Bilateral Flow Map" meta="click a partner to drill it · drag to pan · scroll to zoom · double click to reset" style={{ flex: 1, minWidth: 0, height: 386, padding: '38px 14px 12px', boxSizing: 'border-box' }}>
+      <div style={{ position: 'relative', height: '100%', overflow: 'hidden' }}>
+        <svg
+          width="100%"
+          height="100%"
+          viewBox="0 0 660 250"
+          preserveAspectRatio="none"
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseLeave}
+          onWheel={handleWheel}
+          onDoubleClick={handleDoubleClick}
+          style={{
+            display: 'block',
+            overflow: 'visible',
+            userSelect: 'none',
+            cursor: isDragging ? 'grabbing' : zoom > 1 ? 'grab' : 'default'
+          }}
+        >
           <defs>
-            <marker id="trade-arrow" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0,0 L5,2.5 L0,5 Z" fill={mix(T.blue, 78)} /></marker>
-            <marker id="trade-arrow-selected" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill={T.gold} /></marker>
+            <marker id="trade-arrow" markerUnits="userSpaceOnUse" markerWidth="2.5" markerHeight="2.5" refX="2.0" refY="1.25" orient="auto"><path d="M0,0 L2.5,1.25 L0,2.5 Z" fill={mix(T.blue, 38)} opacity={0.7} /></marker>
+            <marker id="trade-arrow-selected" markerUnits="userSpaceOnUse" markerWidth="3.2" markerHeight="3.2" refX="2.8" refY="1.6" orient="auto"><path d="M0,0 L3.2,1.6 L0,3.2 Z" fill={mix(T.gold, 82)} /></marker>
           </defs>
-          <path d={WORLD_DOT_PATH} fill={mix(T.text, 12)} />
-          {routes.filter(r => r.index !== selected).map(r => {
-            const weight = 0.8 + Math.sqrt((r.partner.value ?? 0) / max) * 3.7
-            return <path key={`route-${r.index}`} d={pathFor(r.point.x, r.point.y)} fill="none" stroke={mix(T.blue, 58)} strokeWidth={weight} strokeLinecap="round" markerEnd="url(#trade-arrow)" />
-          })}
-          {routes.filter(r => r.index === selected).map(r => <path key={`route-${r.index}`} d={pathFor(r.point.x, r.point.y)} fill="none" stroke={T.gold} strokeWidth={5} strokeLinecap="round" markerEnd="url(#trade-arrow-selected)" />)}
-          {routes.map(r => {
-            const on = r.index === selected
-            const radius = 2.8 + Math.sqrt((r.partner.value ?? 0) / max) * 3.4
-            const anchor = r.point.x > 540 ? 'end' : 'start'
-            const labelX = r.point.x + (anchor === 'end' ? -8 : 8)
-            return <g key={`node-${r.index}`} role="button" aria-label={`${r.partner.partner ?? r.partner.iso}, ${fmtUsd(r.partner.value)}`} tabIndex={0} onClick={() => onSelect(r.index)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onSelect(r.index) }} style={{ cursor: 'pointer', outline: 'none' }}>
-              <circle cx={r.point.x} cy={r.point.y} r={radius + 5} fill="transparent"><title>{r.partner.partner} · {fmtUsd(r.partner.value)}</title></circle>
-              {on && <circle cx={r.point.x} cy={r.point.y} r={radius + 3} fill="none" stroke={T.gold} strokeWidth={1} />}
-              <circle cx={r.point.x} cy={r.point.y} r={radius} fill={on ? T.gold : T.blue} stroke={T.bg} strokeWidth={1.5} />
-              {(r.index < 5 || on) && <text x={labelX} y={r.point.y - (on ? 14 : 6)} textAnchor={anchor} fill={on ? T.gold : mix(T.text, 78)} stroke={T.bg} strokeWidth={3} paintOrder="stroke" fontFamily={MONO} fontSize={on ? 8.5 : 7.5} fontWeight={700}>{on ? r.partner.partner : r.partner.iso}</text>}
-              {on && <text x={labelX} y={r.point.y - 3} textAnchor={anchor} fill={mix(T.text, 72)} stroke={T.bg} strokeWidth={3} paintOrder="stroke" fontFamily={MONO} fontSize={7.5}>{fmtUsd(r.partner.value)}</text>}
-            </g>
-          })}
-          <rect x={origin.x - 5} y={origin.y - 5} width={10} height={10} fill={T.gold} stroke={T.bg} strokeWidth={2} />
-          <rect x={origin.x - 9} y={origin.y - 9} width={18} height={18} fill="none" stroke={mix(T.gold, 75)} strokeWidth={1} />
-          <text x={origin.x + (origin.x > 540 ? -13 : 13)} y={origin.y - 7} textAnchor={origin.x > 540 ? 'end' : 'start'} fill={T.gold} stroke={T.bg} strokeWidth={3} paintOrder="stroke" fontFamily={MONO} fontSize={9} fontWeight={700}>{countryLabel}</text>
-          <text x={origin.x + (origin.x > 540 ? -13 : 13)} y={origin.y + 5} textAnchor={origin.x > 540 ? 'end' : 'start'} fill={mix(T.text, 66)} stroke={T.bg} strokeWidth={3} paintOrder="stroke" fontFamily={MONO} fontSize={7.5}>{d.flow} · {cmdLabel} · {d.period}</text>
+          <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
+            <path d={WORLD_DOT_PATH} fill={mix(T.text, 12)} />
+            {routes.filter(r => r.index !== selected).map(r => {
+              const weight = 0.4 + Math.sqrt((r.partner.value ?? 0) / max) * 1.6
+              return <path key={`route-${r.index}`} d={pathFor(r.point.x, r.point.y)} fill="none" stroke={mix(T.blue, 42)} strokeOpacity={0.65} strokeWidth={weight / zoom} strokeLinecap="round" markerEnd="url(#trade-arrow)" />
+            })}
+            {routes.filter(r => r.index === selected).map(r => <path key={`route-${r.index}`} d={pathFor(r.point.x, r.point.y)} fill="none" stroke={mix(T.gold, 88)} strokeWidth={2.2 / zoom} strokeLinecap="round" markerEnd="url(#trade-arrow-selected)" />)}
+            {routes.slice().sort((a, b) => Number(a.index === selected) - Number(b.index === selected)).map(r => {
+              const on = r.index === selected
+              const radius = 2.8 + Math.sqrt((r.partner.value ?? 0) / max) * 3.4
+              const anchor = r.point.x > 540 ? 'end' : 'start'
+              const labelOffset = 8 / zoom
+              const labelX = r.point.x + (anchor === 'end' ? -labelOffset : labelOffset)
+              const labelY = r.point.y - 2 / zoom
+              return (
+                <g
+                  key={`node-${r.index}`}
+                  role="button"
+                  aria-label={`${r.partner.partner ?? r.partner.iso}, ${fmtUsd(r.partner.value)}`}
+                  tabIndex={0}
+                  onClick={() => onSelect(r.index)}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onSelect(r.index) }}
+                  style={{ cursor: 'pointer', outline: 'none', transform: 'none' }}
+                >
+                  <circle cx={r.point.x} cy={r.point.y} r={Math.max(6 / zoom, radius + 2.2 / zoom)} fill="transparent" pointerEvents="all">
+                    <title>{r.partner.partner} · {fmtUsd(r.partner.value)}</title>
+                  </circle>
+                  {on && <circle cx={r.point.x} cy={r.point.y} r={radius + 3 / zoom} fill="none" stroke={T.gold} strokeWidth={1 / zoom} pointerEvents="none" />}
+                  <circle cx={r.point.x} cy={r.point.y} r={radius} fill={on ? T.gold : T.blue} stroke={T.bg} strokeWidth={1.5 / zoom} pointerEvents="none" />
+                  <text
+                    x={labelX}
+                    y={labelY}
+                    textAnchor={anchor}
+                    fill={on ? T.gold : mix(T.text, 55)}
+                    stroke={T.bg}
+                    strokeWidth={3 / zoom}
+                    paintOrder="stroke"
+                    fontFamily={MONO}
+                    fontSize={on ? 8.5 / zoom : 6.8 / zoom}
+                    fontWeight={700}
+                    pointerEvents="none"
+                  >
+                    {on ? r.partner.partner : r.partner.iso}
+                  </text>
+                  {on && (
+                    <text
+                      x={labelX}
+                      y={labelY + 9 / zoom}
+                      textAnchor={anchor}
+                      fill={mix(T.text, 72)}
+                      stroke={T.bg}
+                      strokeWidth={3 / zoom}
+                      paintOrder="stroke"
+                      fontFamily={MONO}
+                      fontSize={7.5 / zoom}
+                      pointerEvents="none"
+                    >
+                      {fmtUsd(r.partner.value)}
+                    </text>
+                  )}
+                </g>
+              )
+            })}
+            <rect x={origin.x - 5 / zoom} y={origin.y - 5 / zoom} width={10 / zoom} height={10 / zoom} fill={T.gold} stroke={T.bg} strokeWidth={2 / zoom} />
+            <rect x={origin.x - 9 / zoom} y={origin.y - 9 / zoom} width={18 / zoom} height={18 / zoom} fill="none" stroke={mix(T.gold, 75)} strokeWidth={1 / zoom} />
+            <text x={origin.x + (origin.x > 540 ? -13 / zoom : 13 / zoom)} y={origin.y - 7 / zoom} textAnchor={origin.x > 540 ? 'end' : 'start'} fill={T.gold} stroke={T.bg} strokeWidth={3 / zoom} paintOrder="stroke" fontFamily={MONO} fontSize={9 / zoom} fontWeight={700}>{countryLabel}</text>
+            <text x={origin.x + (origin.x > 540 ? -13 / zoom : 13 / zoom)} y={origin.y + 5 / zoom} textAnchor={origin.x > 540 ? 'end' : 'start'} fill={mix(T.text, 66)} stroke={T.bg} strokeWidth={3 / zoom} paintOrder="stroke" fontFamily={MONO} fontSize={7.5 / zoom}>{d.flow} · {cmdLabel} · {d.period}</text>
+          </g>
         </svg>
         <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', gap: 12, paddingTop: 7, borderTop: `1px solid ${T.borderFaint}`, fontFamily: MONO, fontSize: 8.5, color: T.muted }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 18, height: 3, background: T.gold }} />selected route</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 18, height: 2, background: T.blue }} />partner flow</span>
-          <span style={{ marginLeft: 'auto' }}>top {routes.length} mapped partners · width = trade value</span>
+          <span style={{ marginLeft: 'auto' }}>{routes.length} mapped partners · width = trade value</span>
         </div>
       </div>
     </Panel>
