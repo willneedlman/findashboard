@@ -142,7 +142,7 @@ export default function HubLanding() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
               <span style={{ width: 22, height: 2, background: F.gold }} />
               <span style={{ fontFamily: F.mono, fontSize: 15, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: F.gold }}>{hub.label} Hub</span>
-              <span style={{ fontFamily: F.mono, fontSize: 12, color: F.muted, letterSpacing: '0.1em' }}>{String(hubIndex).padStart(2, '0')} / 06</span>
+              <span style={{ fontFamily: F.mono, fontSize: 12, color: F.muted, letterSpacing: '0.1em' }}>{String(hubIndex).padStart(2, '0')} / {String(HUBS.length).padStart(2, '0')}</span>
             </div>
             <p style={{ margin: '14px 0 0', fontFamily: F.sans, fontSize: 13.5, color: F.sec, lineHeight: 1.55, maxWidth: 560 }}>{hub.masthead}</p>
           </div>
