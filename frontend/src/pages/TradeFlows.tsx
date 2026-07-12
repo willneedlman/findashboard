@@ -314,6 +314,43 @@ function FlowOverview({ d, partners, selected, onSelect, countryLabel, cmdLabel,
   }
   return (
     <Panel label="Bilateral Flow Map" meta="click a partner to drill it · drag to pan · scroll to zoom · double click to reset" style={{ flex: 1, minWidth: 0, height: 386, padding: '38px 14px 12px', boxSizing: 'border-box' }}>
+      {/* Floating search/filter input in bottom-left - outside overflow hidden wrapper */}
+      <div style={{ position: 'absolute', left: 8, bottom: 30, zIndex: 10, display: 'flex', alignItems: 'center', gap: 6, background: mix(T.surface, 85), border: `1px solid ${mix(T.gold, 35)}`, padding: '4px 6px', borderRadius: 2, boxShadow: '0 4px 12px rgba(0,0,0,0.5)', width: 110, boxSizing: 'border-box' }}>
+        <span style={{ color: T.gold, fontFamily: MONO, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.05em' }}>FIND:</span>
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          placeholder="Search..."
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: T.text,
+            fontFamily: MONO,
+            fontSize: 9,
+            outline: 'none',
+            width: 62,
+            padding: 0
+          }}
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery('')}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: T.gold,
+              cursor: 'pointer',
+              fontFamily: MONO,
+              fontSize: 9,
+              padding: '0 2px'
+            }}
+          >
+            [X]
+          </button>
+        )}
+      </div>
+
       <div style={{ position: 'relative', height: '100%', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', right: 10, top: 10, display: 'flex', flexDirection: 'column', gap: 6, zIndex: 10 }}>
           <button
@@ -388,43 +425,6 @@ function FlowOverview({ d, partners, selected, onSelect, countryLabel, cmdLabel,
           >
             ⟲
           </button>
-        </div>
-        
-        {/* Floating search/filter input in bottom-left */}
-        <div style={{ position: 'absolute', left: 6, bottom: 28, zIndex: 10, display: 'flex', alignItems: 'center', gap: 6, background: mix(T.surface, 85), border: `1px solid ${mix(T.gold, 35)}`, padding: '4px 6px', borderRadius: 2, boxShadow: '0 4px 12px rgba(0,0,0,0.5)', width: 110, boxSizing: 'border-box' }}>
-          <span style={{ color: T.gold, fontFamily: MONO, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.05em' }}>FIND:</span>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search..."
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: T.text,
-              fontFamily: MONO,
-              fontSize: 9,
-              outline: 'none',
-              width: 62,
-              padding: 0
-            }}
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: T.gold,
-                cursor: 'pointer',
-                fontFamily: MONO,
-                fontSize: 9,
-                padding: '0 2px'
-              }}
-            >
-              [X]
-            </button>
-          )}
         </div>
 
         <svg
