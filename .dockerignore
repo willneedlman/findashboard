@@ -42,3 +42,4 @@ frontend/dist
 # supplier DB is COPYed into the image, so keep just that file in the build context.
 data/*
 !data/veridion_nodes.db
+!data/port_performance.db
