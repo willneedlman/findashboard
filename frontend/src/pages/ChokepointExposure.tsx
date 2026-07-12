@@ -81,6 +81,12 @@ function Board({ data }: { data: Resp }) {
   const [isDragging, setIsDragging] = useState(false)
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
 
+  // Touch gesture state
+  const [touchStartDist, setTouchStartDist] = useState<number | null>(null)
+  const [touchStartZoom, setTouchStartZoom] = useState<number>(1)
+  const [touchStartPan, setTouchStartPan] = useState({ x: 0, y: 0 })
+  const [touchStartMid, setTouchStartMid] = useState({ x: 0, y: 0 })
+
   const getSVGCoords = (clientX: number, clientY: number, currentTarget: SVGSVGElement) => {
     const rect = currentTarget.getBoundingClientRect()
     return {
@@ -129,6 +135,91 @@ function Board({ data }: { data: Resp }) {
     setPan({ x: 0, y: 0 })
   }
 
+  // Touch handlers for mobile / trackpad finger pinching & panning
+  const handleTouchStart = (e: React.TouchEvent<SVGSVGElement>) => {
+    if (e.touches.length === 1) {
+      setIsDragging(true)
+      const touch = e.touches[0]
+      const coords = getSVGCoords(touch.clientX, touch.clientY, e.currentTarget)
+      setDragStart({ x: coords.x - pan.x, y: coords.y - pan.y })
+    } else if (e.touches.length === 2) {
+      setIsDragging(false)
+      const t1 = e.touches[0]
+      const t2 = e.touches[1]
+      const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY)
+      setTouchStartDist(dist)
+      setTouchStartZoom(zoom)
+      setTouchStartPan(pan)
+      
+      const midClientX = (t1.clientX + t2.clientX) / 2
+      const midClientY = (t1.clientY + t2.clientY) / 2
+      const coords = getSVGCoords(midClientX, midClientY, e.currentTarget)
+      setTouchStartMid(coords)
+    }
+  }
+
+  const handleTouchMove = (e: React.TouchEvent<SVGSVGElement>) => {
+    if (e.touches.length === 1 && isDragging) {
+      const touch = e.touches[0]
+      const coords = getSVGCoords(touch.clientX, touch.clientY, e.currentTarget)
+      setPan({ x: coords.x - dragStart.x, y: coords.y - dragStart.y })
+    } else if (e.touches.length === 2 && touchStartDist !== null) {
+      const t1 = e.touches[0]
+      const t2 = e.touches[1]
+      const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY)
+      const ratio = dist / touchStartDist
+      const nextZoom = Math.max(1, Math.min(6, touchStartZoom * ratio))
+      
+      if (nextZoom <= 1.05) {
+        setZoom(1)
+        setPan({ x: 0, y: 0 })
+        return
+      }
+      
+      const nextPanX = touchStartMid.x - (touchStartMid.x - touchStartPan.x) * (nextZoom / touchStartZoom)
+      const nextPanY = touchStartMid.y - (touchStartMid.y - touchStartPan.y) * (nextZoom / touchStartZoom)
+      
+      setZoom(nextZoom)
+      setPan({ x: nextPanX, y: nextPanY })
+    }
+  }
+
+  const handleTouchEnd = () => {
+    setIsDragging(false)
+    setTouchStartDist(null)
+  }
+
+  // Button-driven zoom controls (centered on the screen viewbox)
+  const handleZoomIn = () => {
+    const nextZoom = Math.min(6, zoom * 1.3)
+    const centerX = 330
+    const centerY = 125
+    const nextPanX = centerX - (centerX - pan.x) * (nextZoom / zoom)
+    const nextPanY = centerY - (centerY - pan.y) * (nextZoom / zoom)
+    setZoom(nextZoom)
+    setPan({ x: nextPanX, y: nextPanY })
+  }
+
+  const handleZoomOut = () => {
+    const nextZoom = Math.max(1, zoom / 1.3)
+    if (nextZoom <= 1.05) {
+      setZoom(1)
+      setPan({ x: 0, y: 0 })
+      return
+    }
+    const centerX = 330
+    const centerY = 125
+    const nextPanX = centerX - (centerX - pan.x) * (nextZoom / zoom)
+    const nextPanY = centerY - (centerY - pan.y) * (nextZoom / zoom)
+    setZoom(nextZoom)
+    setPan({ x: nextPanX, y: nextPanY })
+  }
+
+  const handleReset = () => {
+    setZoom(1)
+    setPan({ x: 0, y: 0 })
+  }
+
   const sel = straits.find(c => c.id === strait)
   const kpis = [
     { label: 'Chokepoints', value: String(straits.length), tip: { title: 'Chokepoints tracked', body: `The ${straits.length} maritime straits and canals the tool watches. Each is scored for transit stress from IMF PortWatch and the live AIS nowcast.`, source: 'IMF PortWatch + AIS' } },
@@ -149,23 +240,101 @@ function Board({ data }: { data: Resp }) {
       <div style={{ display: 'flex', gap: 10 }}>
         <Panel label="Transit Stress Map" meta="click a strait to drill it · drag to pan · scroll to zoom · double click to reset" style={{ flex: 1, minWidth: 0, padding: '32px 10px 8px' }}>
           <div style={{ position: 'relative', overflow: 'hidden' }}>
-            <svg
-              width="100%"
-              height="336"
-              viewBox="0 0 660 250"
-              preserveAspectRatio="none"
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseLeave}
-              onWheel={handleWheel}
-              onDoubleClick={handleDoubleClick}
-              style={{
-                display: 'block',
-                userSelect: 'none',
-                cursor: isDragging ? 'grabbing' : zoom > 1 ? 'grab' : 'default'
-              }}
-            >
+        <div style={{ position: 'absolute', right: 10, top: 10, display: 'flex', flexDirection: 'column', gap: 6, zIndex: 10 }}>
+          <button
+            onClick={handleZoomIn}
+            title="Zoom In"
+            style={{
+              width: 26,
+              height: 26,
+              background: T.surface,
+              border: `1px solid ${mix(T.gold, 35)}`,
+              color: T.gold,
+              fontFamily: MONO,
+              fontSize: 14,
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 0,
+              outline: 'none',
+              boxShadow: `0 2px 4px rgba(0,0,0,0.5)`,
+              borderRadius: 2
+            }}
+          >
+            +
+          </button>
+          <button
+            onClick={handleZoomOut}
+            title="Zoom Out"
+            style={{
+              width: 26,
+              height: 26,
+              background: T.surface,
+              border: `1px solid ${mix(T.gold, 35)}`,
+              color: T.gold,
+              fontFamily: MONO,
+              fontSize: 14,
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 0,
+              outline: 'none',
+              boxShadow: `0 2px 4px rgba(0,0,0,0.5)`,
+              borderRadius: 2
+            }}
+          >
+            -
+          </button>
+          <button
+            onClick={handleReset}
+            title="Reset View"
+            style={{
+              width: 26,
+              height: 26,
+              background: T.surface,
+              border: `1px solid ${mix(T.gold, 35)}`,
+              color: T.gold,
+              fontFamily: MONO,
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 0,
+              outline: 'none',
+              boxShadow: `0 2px 4px rgba(0,0,0,0.5)`,
+              borderRadius: 2
+            }}
+          >
+            ⟲
+          </button>
+        </div>
+        <svg
+          width="100%"
+          height="336"
+          viewBox="0 0 660 250"
+          preserveAspectRatio="none"
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseLeave}
+          onWheel={handleWheel}
+          onDoubleClick={handleDoubleClick}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onTouchCancel={handleTouchEnd}
+          style={{
+            display: 'block',
+            userSelect: 'none',
+            cursor: isDragging ? 'grabbing' : zoom > 1 ? 'grab' : 'default'
+          }}
+        >
               <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
                 <path d={WORLD_DOT_PATH} fill={mix(T.text, 14)} />
                 {straits.slice().sort((a, b) => Number(a.id === strait) - Number(b.id === strait)).map(c => {
