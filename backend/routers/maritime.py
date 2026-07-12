@@ -30,6 +30,7 @@ except ImportError:                                   # pragma: no cover
     def disk_set(_k, _v, ttl=0): pass
 
 import energy_nowcaster
+from logistics import port_performance
 
 _log = logging.getLogger("maritime")
 router = APIRouter()
@@ -627,7 +628,7 @@ def _nearest_choke(lat, lon) -> "str | None":
 
 
 def _check_crossing(mmsi: str, lat, lon) -> None:
-    """Log one transit when an energy vessel enters a chokepoint radius
+    """Log one transit when a classified vessel enters a chokepoint radius
     (outside->inside edge). Debounced via the vessel's stored in_choke state.
     Category and hull dims fall back to the persistent static registry, so a vessel
     is counted even before its next ShipStaticData broadcast."""
@@ -648,7 +649,7 @@ def _check_crossing(mmsi: str, lat, lon) -> None:
         sog = v.get("sog")
     # A transit is a moving vessel; a known near-stationary SOG means anchored/waiting.
     moving = sog is None or sog >= _MIN_TRANSIT_SOG
-    if cur and cur != prev and cat in _ENERGY_CATS and moving:   # new entry by a moving tanker/LNG carrier
+    if cur and cur != prev and cat in {"tanker", "lng", "cargo"} and moving:
         energy_nowcaster.record_transit(mmsi, cur, cat, draught, loa, beam)
 
 
@@ -990,8 +991,9 @@ def chokepoint_history(
     key = f"pw_hist_{days}_{'_'.join(sorted(want))}"
     cached = disk_get(key)
     if cached:
-        _attach_history_nowcast(cached["series"])     # bridge the gap to today, fresh
-        return cached
+        out = {**cached, "series": [dict(s) for s in cached["series"]]}
+        out["nowcast_meta"] = _attach_history_nowcast(out["series"])
+        return out
     mapping = _portwatch_ids()
     resolvable = [
         (cid, mapping[cid], meta) for cid in want
@@ -1013,18 +1015,19 @@ def chokepoint_history(
     # doesn't pin a missing series for the whole TTL.
     if series and len(series) == len(resolvable):
         disk_set(key, out, ttl=3600)                 # cache the baseline BEFORE the live tail
-    _attach_history_nowcast(out["series"])
+    out["nowcast_meta"] = _attach_history_nowcast(out["series"])
     return out
 
 
-def _attach_history_nowcast(series: list) -> None:
+def _attach_history_nowcast(series: list) -> dict:
     """Attach the trailing live-AIS crossing counts (last PortWatch day → today) to
     each history series so the frontend can draw a dashed estimate tail. Raw daily
     counts only — the frontend anchors them to the plotted PortWatch level."""
     if not series:
-        return
+        return {"window_h": 14 * 24, "as_of": None}
     daily = energy_nowcaster.daily_counts([s["id"] for s in series])
     today = datetime.now(timezone.utc).date()
+    last_seen = None
     for s in series:
         pts = s.get("points") or []
         if not pts:
@@ -1040,15 +1043,20 @@ def _attach_history_nowcast(series: list) -> None:
         if not gap:
             continue
         counts = daily.get(s["id"], {})
-        gap_counts = {g: counts.get(g, 0) for g in gap}
+        gap_counts = {g: counts.get(g, {"total": 0, "tanker": 0, "cargo": 0, "cap": 0.0}) for g in gap}
         # No live crossings over the gap means the AIS feed is dark for this
         # chokepoint (no coverage), not that traffic fell to zero. Skip the
         # estimate so the chart never draws a flat carry-forward that reads as a
         # confirmed level. A real signal (>=1 crossing) re-enables the tail.
-        if sum(gap_counts.values()) <= 0:
+        if sum(v["total"] for v in gap_counts.values()) <= 0:
             continue
         s["nowcast_days"] = gap
         s["nowcast_daily"] = gap_counts
+        observed = [day for day, values in counts.items() if values["total"] > 0]
+        if observed:
+            latest = max(observed)
+            last_seen = max(last_seen, latest) if last_seen else latest
+    return {"window_h": 14 * 24, "as_of": last_seen}
 
 
 # Approximate global seaborne crude+products trade, Mb/d (EIA/UNCTAD scale).
@@ -1209,6 +1217,20 @@ def lng(bbox: str | None = Query(None, description="south,west,north,east")):
 @router.get("/world-ports")
 def world_ports(bbox: str | None = Query(None, description="south,west,north,east; omit for large harbours only")):
     return get_world_ports(bbox)
+
+
+@router.get("/port-performance")
+def port_performance_snapshot(
+    bbox: str | None = Query(None, description="south,west,north,east"),
+    limit: int = Query(1200, ge=1, le=2500),
+):
+    """Latest Dewey import/export performance by port. Offline-ingested only."""
+    return port_performance.latest_ports(bbox, limit)
+
+
+@router.get("/port-performance/{port_id}/history")
+def port_performance_history(port_id: str, days: int = Query(180, ge=7, le=730)):
+    return port_performance.history(port_id, days)
 
 
 @router.get("/helcom")

@@ -82,12 +82,14 @@ interface Port { name: string; country: string; lat: number; lon: number; kind: 
 interface Pipeline { name: string; substance: string; coords: [number, number][] }
 interface LngTerm { n: string; la: number; lo: number; st: string; ie: string; cap: number | null }
 interface WpiPort { n: string; la: number; lo: number; c: string; s: string; cppi?: number }
+interface DeweyPort { port_id: string; name: string; country: string | null; latitude: number; longitude: number; latest_date: string; import_performance_hours: number | null; import_change_pct: number | null; import_flag: string | null; import_teu: number | null; export_performance_hours: number | null; export_change_pct: number | null; export_flag: string | null; export_teu: number | null; monthly_performance_hours: number | null; monthly_vessels: number | null; monthly_teu: number | null }
 interface Facility { n: string; la: number; lo: number; k: string; x?: string | number }
 interface OsmPort { name: string; lat: number; lon: number; kind: string }
 interface EmodFeat { kind: string; n: string; coords?: [number, number][]; la?: number; lo?: number }
 interface HelcomFeat { coords: [number, number][]; location: string; crossings: number }
 interface HistPoint { d: string; tanker: number | null; cargo: number | null; total: number | null; cap: number | null }
-interface HistSeries { id: string; name: string; points: HistPoint[]; nowcast_days?: string[]; nowcast_daily?: Record<string, number> }
+interface HistNowcastPoint { total: number; tanker: number; cargo: number; cap: number }
+interface HistSeries { id: string; name: string; points: HistPoint[]; nowcast_days?: string[]; nowcast_daily?: Record<string, HistNowcastPoint> }
 type HistMetric = 'total' | 'tanker' | 'cargo' | 'cap'
 interface Nowcast {
   calls_96h: number; calls_per_day_live: number; capacity_est_dwt: number | null
@@ -359,10 +361,15 @@ export function MaritimeMapContent() {
     queryKey: ['choke-stats'], queryFn: () => axios.get('/api/maritime/chokepoint-stats').then(r => r.data),
     staleTime: 3600 * 1000, refetchInterval: 3600 * 1000,
   })
-  const hist = useQuery<{ series: HistSeries[] }>({
+  const hist = useQuery<{ series: HistSeries[]; nowcast_meta?: { window_h: number; as_of: string | null } }>({
     queryKey: ['choke-hist', histIds.join(','), histDays],
     queryFn: () => axios.get(`/api/maritime/chokepoint-history?ids=${histIds.join(',')}&days=${histDays}`).then(r => r.data),
-    enabled: histOpen && histIds.length > 0, staleTime: 3600 * 1000, refetchInterval: 3600 * 1000,
+    enabled: histOpen && histIds.length > 0, staleTime: 30 * 1000, refetchInterval: 60 * 1000,
+  })
+  const portPerfQ = useQuery<{ ports: DeweyPort[]; available: boolean; refresh?: string; frequency?: string }>({
+    queryKey: ['port-performance', view?.bbox],
+    queryFn: () => axios.get(`/api/maritime/port-performance${view?.bbox ? `?bbox=${view.bbox}` : ''}`).then(r => r.data),
+    enabled: vis.wpi, staleTime: 60 * 60 * 1000, refetchInterval: 60 * 60 * 1000,
   })
   const replayQ = useQuery<{ frames: ReplayFrame[]; interval_s: number }>({
     queryKey: ['ais-replay'], queryFn: () => axios.get('/api/maritime/vessel-history').then(r => r.data),
@@ -394,6 +401,7 @@ export function MaritimeMapContent() {
   const facBy = (k: string) => cull(fac.filter(f => f.k === k), f => f.la, f => f.lo, 300)
   const refs = cull(fac.filter(f => f.k === 'refinery' || f.k === 'processing'), f => f.la, f => f.lo, 300)
   const wpiShown = cull(wpiPorts, p => p.la, p => p.lo, 600)
+  const deweyPorts = cull(portPerfQ.data?.ports ?? [], p => p.latitude, p => p.longitude, 600)
   const platformsShown = cull(osmPlatforms, p => p.lat, p => p.lon, 300)
   const emodPlatforms = cull(emod.filter(f => f.kind === 'platform' && f.la != null), f => f.la!, f => f.lo!, 300)
   const emodWind = cull(emod.filter(f => f.kind === 'windfarm' && f.la != null), f => f.la!, f => f.lo!, 300)
@@ -629,6 +637,21 @@ export function MaritimeMapContent() {
 
           {/* World ports (WPI) — hollow squares sized by harbour size */}
           {vis.wpi && wpiShown.map((p, i) => <Marker key={`wpi-${i}`} position={[p.la, p.lo]} icon={wpiIcon(p.s, C.wpi)}><Tooltip>{p.n}{p.c ? ` · ${p.c}` : ''}{p.s ? ` · ${p.s} harbour` : ''}{p.cppi ? ` · CPPI #${p.cppi}/405` : ''} · WPI</Tooltip></Marker>)}
+
+          {/* Dewey operational ports — daily import/export data is distinct from
+              energy throughput, but gives each energy route a current port-side
+              congestion and container-flow signal. */}
+          {vis.wpi && deweyPorts.map(p => {
+            const change = p.import_change_pct ?? p.export_change_pct
+            const color = change != null && change > 0.1 ? C.negative : change != null && change < -0.1 ? C.positive : C.spark
+            const imp = p.import_performance_hours != null ? `Import ${p.import_performance_hours.toFixed(1)}h` : null
+            const exp = p.export_performance_hours != null ? `Export ${p.export_performance_hours.toFixed(1)}h` : null
+            const metric = [imp, exp].filter(Boolean).join(' · ') || 'Port performance available'
+            return <CircleMarker key={`dewey-${p.port_id}`} center={[p.latitude, p.longitude]} radius={4.5} pathOptions={{ color, fillColor: color, fillOpacity: 0.35, weight: 1.5 }}
+              eventHandlers={{ click: () => { suppressMapClick.current = Date.now(); setInspected({ kind: 'port', id: p.port_id, name: `${p.name}${p.country ? ` (${p.country})` : ''}`, lat: p.latitude, lon: p.longitude, metric }) } }}>
+              <Tooltip><b>{p.name}</b>{p.country ? ` · ${p.country}` : ''}<br />{metric}<br />As of {p.latest_date} · Dewey Data</Tooltip>
+            </CircleMarker>
+          })}
 
           {/* Chokepoints — pulsing gold rings, click to inspect */}
           {vis.chokepoints && choke.data?.chokepoints.map(c => (
@@ -877,6 +900,7 @@ export function MaritimeMapContent() {
           <div style={{ width: 'min(1020px, 100%)', pointerEvents: 'auto' }}>
             <HistoryPanel C={C} chokepoints={choke.data?.chokepoints ?? []} ids={histIds} days={histDays} metric={histMetric}
               series={hist.data?.series ?? []} loading={hist.isLoading}
+              nowcastMeta={hist.data?.nowcast_meta}
               liveNow={vesselsInStrait} aisLive={vess.data?.status?.connected ?? false}
               onToggleId={id => setHistIds(ids => ids.includes(id) ? (ids.length > 1 ? ids.filter(x => x !== id) : ids) : [...ids, id].slice(-4))}
               onDays={setHistDays} onMetric={setHistMetric} onClose={() => setHistOpen(false)} />
@@ -1024,9 +1048,10 @@ const chipBtn = (on: boolean, color?: string): React.CSSProperties => ({
   fontFamily: 'var(--theme-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
 })
 
-function HistoryPanel({ C, chokepoints, ids, days, metric, series, loading, liveNow, aisLive, onToggleId, onDays, onMetric, onClose }: {
+function HistoryPanel({ C, chokepoints, ids, days, metric, series, loading, nowcastMeta, liveNow, aisLive, onToggleId, onDays, onMetric, onClose }: {
   C: Colors; chokepoints: Chokepoint[]; ids: string[]; days: number; metric: HistMetric
   series: HistSeries[]; loading: boolean
+  nowcastMeta?: { window_h: number; as_of: string | null }
   liveNow: (c: { lat: number; lon: number }) => number; aisLive: boolean
   onToggleId: (id: string) => void; onDays: (d: number) => void; onMetric: (m: HistMetric) => void; onClose: () => void
 }) {
@@ -1045,30 +1070,23 @@ function HistoryPanel({ C, chokepoints, ids, days, metric, series, loading, live
       s.points.forEach((p, i) => { (byDate[p.d] ??= { d: p.d })[s.id] = ma[i] })
       const smoothed = ma.slice(6).filter((v): v is number => v != null)
       const first = smoothed[0], last = smoothed[smoothed.length - 1]
-      // Live-AIS estimate tail: bridge PortWatch's last day to today. Anchor to the
-      // last plotted value and bend by the nowcast's relative daily momentum, so the
-      // different absolute scales never draw a false cliff. Energy metrics only.
-      // Zero crossings means the feed is dark (no coverage), NOT zero traffic — so
-      // we draw nothing rather than a flat carry-forward that reads as a real level.
       const counts = s.nowcast_daily ?? {}
-      const cvals = Object.values(counts)
-      const totalCrossings = cvals.reduce((a, b) => a + b, 0)
-      if ((metric === 'total' || metric === 'tanker') && s.nowcast_days?.length && last != null && totalCrossings > 0) {
-        // Momentum ref averages only the COVERED (non-zero) days, so the pre-window
-        // gap days (structural zeros, before AIS has coverage) don't deflate it and
-        // make a covered day spike to the cap. The daily ratio is then damped and
-        // TIGHTLY clamped, so the tail only nudges the last confirmed level (±20%)
-        // instead of drawing a cliff far outside the series' own range. Zero-count
-        // (pre-coverage) days bridge flat at the last level.
-        const covered = cvals.filter(v => v > 0)
-        const ref = covered.reduce((a, b) => a + b, 0) / covered.length
+      const totalCrossings = Object.values(counts).reduce((sum, v) => sum + v.total, 0)
+      if (s.nowcast_days?.length && last != null && totalCrossings > 0) {
         const lastD = s.points[s.points.length - 1]?.d
-        if (lastD) (byDate[lastD] ??= { d: lastD })[`${s.id}__est`] = last   // junction with the solid line
+        const key: keyof HistNowcastPoint = metric === 'cap' ? 'cap' : metric
+        const prior = Object.entries(counts)
+          .filter(([day, v]) => day <= (lastD ?? '') && v[key] > 0)
+          .slice(-7)
+          .map(([, v]) => v[key])
+        const scale = prior.length ? last / (prior.reduce((a, b) => a + b, 0) / prior.length) : null
+        if (lastD && scale != null) (byDate[lastD] ??= { d: lastD })[`${s.id}__est`] = last
         for (const day of s.nowcast_days) {
-          const c = counts[day] ?? 0
-          const raw = c > 0 ? c / ref : 1
-          const factor = Math.min(1.2, Math.max(0.85, 1 + 0.4 * (raw - 1)))
-          ;(byDate[day] ??= { d: day })[`${s.id}__est`] = Math.round(last * factor * 10) / 10
+          if (scale == null) continue
+          const window = Object.entries(counts).filter(([d]) => d <= day).slice(-7).map(([, v]) => v[key])
+          if (!window.length || window.every(v => v === 0)) continue
+          const estimated = (window.reduce((a, b) => a + b, 0) / window.length) * scale
+          ;(byDate[day] ??= { d: day })[`${s.id}__est`] = Math.round(estimated * 10) / 10
         }
       }
       summaries.push({
@@ -1083,9 +1101,9 @@ function HistoryPanel({ C, chokepoints, ids, days, metric, series, loading, live
     return { rows, summaries }
   }, [series, metric])
 
-  // PortWatch publishes daily transits 1-2 days behind, so the series always
-  // trails "today". Surface the latest date so the gap reads as expected.
-  const latestDate = rows.length ? String(rows[rows.length - 1].d) : null
+  const confirmedDates = series.flatMap(s => s.points.map(p => p.d)).sort()
+  const latestDate = confirmedDates.length ? confirmedDates[confirmedDates.length - 1] : null
+  const hasLiveTail = series.some(s => Object.values(s.nowcast_daily ?? {}).some(v => v.total > 0))
 
   return (
     <div style={{ background: 'var(--theme-surface)', border: goldBorder(0.4) }}>
@@ -1093,15 +1111,15 @@ function HistoryPanel({ C, chokepoints, ids, days, metric, series, loading, live
         <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--theme-primary)' }}>Chokepoint Transit History</span>
         <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, color: 'var(--theme-text-faint)' }}>IMF PortWatch, 7-day average of daily transit calls</span>
         {latestDate && (
-          <span title="IMF PortWatch publishes daily transit counts 1-2 days in arrears, so the series ends before today."
+          <span title="The last confirmed PortWatch observation. The dotted AIS tail continues from this point when coverage is available."
             style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-secondary)' }}>
-            latest {latestDate} · updates 1–2d behind
+            confirmed {latestDate}
           </span>
         )}
-        {(metric === 'total' || metric === 'tanker') && series.some(s => s.nowcast_daily && Object.values(s.nowcast_daily).reduce((a, b) => a + b, 0) > 0) && (
-          <span title="The dotted tail extends PortWatch to today using live AIS chokepoint crossings, anchored to the last confirmed level and scaled by relative momentum. An estimate, not a PortWatch count."
+        {hasLiveTail && (
+          <span title="The dotted tail uses a 14-day AIS crossing window, calibrated to the last confirmed PortWatch seven-day average. It is an estimate, not a PortWatch count."
             style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-positive, #3fb950)' }}>
-            · · · live AIS estimate to today
+            · · · live AIS tail {nowcastMeta?.as_of ? `through ${nowcastMeta.as_of}` : ''}
           </span>
         )}
         <button className="gfm-chip" onClick={onClose} style={{ ...chipBtn(false), marginLeft: 'auto' }}>Close</button>

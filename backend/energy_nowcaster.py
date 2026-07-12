@@ -26,7 +26,8 @@ import disk_cache as _dc
 
 logger = logging.getLogger("energy_nowcaster")
 
-WINDOW_S = 96 * 3600                       # trailing nowcast window (96h)
+WINDOW_S = 96 * 3600                       # trailing energy-nowcast window (96h)
+HISTORY_WINDOW_S = 14 * 86400              # PortWatch overlap for the live history bridge
 
 # Block coefficient by cargo class: how "boxy" the hull is. Tankers are full-formed
 # (~0.80-0.85); LNG carriers are finer (~0.72-0.76). Displacement ~= L*B*T*Cb*rho.
@@ -67,9 +68,10 @@ _ensure_table()
 
 def record_transit(mmsi: str, choke: str, category: str,
                    draught=None, loa=None, beam=None, now: float | None = None) -> None:
-    """Log one chokepoint crossing by an energy vessel and prune the 96h window.
+    """Log one classified chokepoint crossing and prune the retained history.
     Called by the maritime crossing detector on each outside->inside edge; never
-    raises into the caller.
+    raises into the caller. Cargo rows support transit history only. The energy
+    nowcast query below remains restricted to tanker and LNG rows.
 
     NOTE (documented hook): load-state (laden/ballast) inference is intentionally
     out of scope — AIS static draught is crew-set and unreliable. A future pass can
@@ -84,7 +86,7 @@ def record_transit(mmsi: str, choke: str, category: str,
                 "INSERT INTO ais_transits (mmsi, choke, ts, category, dwt_est) VALUES (?, ?, ?, ?, ?)",
                 (str(mmsi), choke, now, category, dwt),
             )
-            c.execute("DELETE FROM ais_transits WHERE ts < ?", (now - WINDOW_S,))
+            c.execute("DELETE FROM ais_transits WHERE ts < ?", (now - HISTORY_WINDOW_S,))
             c.commit()
     except sqlite3.OperationalError as e:
         logger.warning("record_transit failed for %s@%s: %s", mmsi, choke, e)
@@ -92,21 +94,30 @@ def record_transit(mmsi: str, choke: str, category: str,
     logger.info("nowcast transit: mmsi=%s choke=%s cat=%s dwt_est=%s", mmsi, choke, category, dwt)
 
 
-def daily_counts(choke_ids: list[str], now: float | None = None) -> dict[str, dict[str, int]]:
-    """Per-chokepoint UTC-day crossing counts over the 96h window, for bridging the
-    PortWatch history chart's trailing gap to the present day.
-    Returns {choke_id: {"YYYY-MM-DD": count}}."""
+def daily_counts(choke_ids: list[str], now: float | None = None) -> dict[str, dict[str, dict]]:
+    """Per-day AIS crossings by vessel class for the PortWatch history bridge.
+
+    Retains 14 days so the browser can calibrate live counts to PortWatch's
+    final confirmed seven-day average without creating an artificial cliff.
+    """
     now = now if now is not None else time.time()
-    since = now - WINDOW_S
-    out: dict[str, dict[str, int]] = {cid: {} for cid in choke_ids}
+    since = now - HISTORY_WINDOW_S
+    out: dict[str, dict[str, dict]] = {cid: {} for cid in choke_ids}
     try:
         cur = _dc._conn().execute(
-            "SELECT choke, ts FROM ais_transits WHERE ts >= ?", (since,))
-        for choke, ts in cur.fetchall():
+            "SELECT choke, ts, category, dwt_est FROM ais_transits WHERE ts >= ?", (since,))
+        for choke, ts, category, dwt_est in cur.fetchall():
             if choke not in out:
                 continue
             day = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d")
-            out[choke][day] = out[choke].get(day, 0) + 1
+            bucket = out[choke].setdefault(day, {"total": 0, "tanker": 0, "cargo": 0, "cap": 0.0})
+            bucket["total"] += 1
+            if category in ("tanker", "lng"):
+                bucket["tanker"] += 1
+                if dwt_est:
+                    bucket["cap"] += float(dwt_est)
+            elif category == "cargo":
+                bucket["cargo"] += 1
     except sqlite3.OperationalError as e:
         logger.warning("daily_counts query failed: %s", e)
     return out
@@ -152,7 +163,7 @@ def nowcast(baseline_calls_per_day: dict[str, float], choke_ids: list[str],
     try:
         cur = _dc._conn().execute(
             "SELECT choke, COUNT(*), SUM(dwt_est), MAX(ts), COUNT(dwt_est) "
-            "FROM ais_transits WHERE ts >= ? GROUP BY choke",
+            "FROM ais_transits WHERE ts >= ? AND category IN ('tanker', 'lng') GROUP BY choke",
             (since,),
         )
         for choke, cnt, cap, last_ts, cap_cnt in cur.fetchall():

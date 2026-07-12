@@ -127,7 +127,7 @@ def test_check_crossing_debounces_and_filters(monkeypatch):
     assert calls[0][1] == "hormuz"
 
 
-def test_check_crossing_ignores_non_energy_vessels(monkeypatch):
+def test_check_crossing_records_cargo_for_history_without_affecting_energy_nowcast(monkeypatch):
     from routers import maritime
     calls = []
     monkeypatch.setattr(maritime.energy_nowcaster, "record_transit",
@@ -135,7 +135,19 @@ def test_check_crossing_ignores_non_energy_vessels(monkeypatch):
     maritime._vessels.clear()
     maritime._vessels["888"] = {"mmsi": "888", "category": "cargo"}
     maritime._check_crossing("888", 26.57, 56.25)   # a container ship over Hormuz
-    assert calls == []
+    assert len(calls) == 1
+    assert calls[0][2] == "cargo"
+
+
+def test_daily_counts_keep_vessel_class_breakdown():
+    en.record_transit("t", "hormuz", "tanker", 20, 300, 55, now=NOW)
+    en.record_transit("c", "hormuz", "cargo", None, None, None, now=NOW)
+    day = __import__("datetime").datetime.fromtimestamp(NOW, tz=__import__("datetime").timezone.utc).strftime("%Y-%m-%d")
+    got = en.daily_counts(["hormuz"], now=NOW)["hormuz"][day]
+    assert got["total"] == 2
+    assert got["tanker"] == 1
+    assert got["cargo"] == 1
+    assert got["cap"] > 0
 
 
 def test_check_crossing_skips_anchored_vessel(monkeypatch):
