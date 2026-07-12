@@ -1,6 +1,6 @@
 // Shared cockpit primitives for the redesigned tool screens (Pairs Trader,
 // Factor Decomposition, Chokepoint Exposure). Token-driven so both themes hold.
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { T } from '../lib/theme'
 
@@ -18,8 +18,11 @@ export const signed = (v: number, d = 2) => `${v > 0 ? '+' : ''}${v.toFixed(d)}`
 const TIP_W = 272
 export function InfoTip({ title, body, source }: { title: string; body: string; source: string; align?: 'left' | 'right' }) {
   const ref = useRef<HTMLSpanElement>(null)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [pos, setPos] = useState<{ top: number; left: number; caret: number } | null>(null)
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
   const show = () => {
+    if (timer.current) { clearTimeout(timer.current); timer.current = null }
     const r = ref.current?.getBoundingClientRect()
     if (!r) return
     const pad = 8
@@ -27,17 +30,21 @@ export function InfoTip({ title, body, source }: { title: string; body: string; 
     const caret = Math.max(8, Math.min(r.left + r.width / 2 - left - 4, TIP_W - 16))
     setPos({ top: r.bottom + 8, left, caret })
   }
+  const hide = () => {
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = setTimeout(() => setPos(null), 140)
+  }
   return (
-    <span ref={ref} style={{ display: 'inline-flex' }} onMouseEnter={show} onMouseLeave={() => setPos(null)}>
+    <span ref={ref} style={{ display: 'inline-flex' }} onMouseEnter={show} onMouseLeave={hide}>
       <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 12, height: 12, flexShrink: 0, border: `1px solid ${pos ? T.gold : mix(T.muted, 55)}`, fontFamily: MONO, fontSize: 8, fontWeight: 700, color: pos ? T.gold : T.muted, cursor: 'help', lineHeight: 1 }}>i</span>
       {pos && createPortal(
-        <div style={{ position: 'fixed', top: pos.top, left: pos.left, width: TIP_W, zIndex: 1000, background: T.surface, border: `1px solid ${mix(T.gold, 45)}`, boxShadow: '0 10px 26px rgba(0,0,0,0.55)', padding: '12px 14px', boxSizing: 'border-box', textAlign: 'left', pointerEvents: 'none' }}>
+        <div onMouseEnter={show} onMouseLeave={hide} style={{ position: 'fixed', top: pos.top, left: pos.left, width: TIP_W, zIndex: 1000, background: T.surface, border: `1px solid ${mix(T.gold, 45)}`, boxShadow: '0 10px 26px rgba(0,0,0,0.55)', padding: '12px 14px', boxSizing: 'border-box', textAlign: 'left' }}>
+          <span style={{ position: 'absolute', top: -9, left: 0, right: 0, height: 9 }} />
           <span style={{ position: 'absolute', top: -5, left: pos.caret, width: 8, height: 8, background: T.surface, borderLeft: `1px solid ${mix(T.gold, 45)}`, borderTop: `1px solid ${mix(T.gold, 45)}`, transform: 'rotate(45deg)' }} />
           <span style={{ display: 'block', fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: T.gold, marginBottom: 6 }}>{title}</span>
           <span style={{ display: 'block', fontFamily: SANS, fontSize: 11.5, color: T.text, lineHeight: 1.6 }}>{body}</span>
-          <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 9, paddingTop: 8, borderTop: `1px solid ${T.borderFaint}` }}>
+          <span style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', marginTop: 9, paddingTop: 8, borderTop: `1px solid ${T.borderFaint}` }}>
             <span style={{ fontFamily: MONO, fontSize: 9, color: T.muted }}>{source}</span>
-            <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color: T.gold }}>FULL METHOD ↗</span>
           </span>
         </div>, document.body)}
     </span>
