@@ -16,7 +16,8 @@ from typing import Any
 from sentiment import config
 from sentiment.config import SourceSpec
 from sentiment.schemas import (
-    ConfidenceInterval, ItemOut, Momentum, ScoredArticle, SourceResult, Velocity,
+    BreakingItem, ConfidenceInterval, ItemOut, Momentum, ScoredArticle,
+    SourceResult, Velocity,
 )
 
 
@@ -182,6 +183,57 @@ def high_impact(all_scored: list[ScoredArticle]) -> tuple[float | None, int]:
     w = sum(a.confidence * a.recency_weight for a in hi) or 1.0
     score = sum(a.score * a.confidence * a.recency_weight for a in hi) / w
     return round(score, 1), len(hi)
+
+
+def breaking(
+    all_scored: list[ScoredArticle],
+    specs_by_label: dict[str, SourceSpec],
+) -> list[BreakingItem]:
+    """Cross-source 'what is moving right now': the freshest, most directional,
+    highest-impact headlines, ranked by urgency independently of the per-source
+    stream and the composite.
+
+    Urgency = |direction| · confidence · market_impact · sqrt(tier) · recency,
+    boosted by corroboration (extra feeds) and by a wire/alert source. An item
+    must be fresh (age <= BREAKING_MAX_AGE_H), carry a real direction and clear a
+    confidence floor to qualify — neutral wire filler never breaks. This is a
+    view only; it does not change any scored value.
+    """
+    ranked: list[tuple[float, ScoredArticle, bool]] = []
+    for a in all_scored:
+        if a.age_hours is None or a.age_hours > config.BREAKING_MAX_AGE_H:
+            continue
+        if abs(a.direction) < config.BREAKING_MIN_DIRECTION:
+            continue
+        if a.confidence < config.BREAKING_MIN_CONFIDENCE:
+            continue
+        spec = specs_by_label.get(a.source_label)
+        is_wire = bool(spec and spec.breaking)
+        recency = max(0.0, 1.0 - a.age_hours / config.BREAKING_MAX_AGE_H)
+        corr_boost = 1.0 + config.BREAKING_CORROBORATION_COEF * (a.seen_in_sources - 1)
+        wire_boost = config.BREAKING_WIRE_BONUS if is_wire else 1.0
+        urgency = (
+            abs(a.direction)
+            * a.confidence
+            * a.market_impact_weight
+            * math.sqrt(a.macro_tier)
+            * (0.4 + 0.6 * recency)
+            * corr_boost
+            * wire_boost
+        )
+        ranked.append((urgency, a, is_wire))
+    ranked.sort(key=lambda t: (t[0], -t[1].age_hours), reverse=True)
+    out: list[BreakingItem] = []
+    for urgency, a, is_wire in ranked[: config.BREAKING_LIMIT]:
+        out.append(BreakingItem(
+            text=a.title, url=a.url, source_label=a.source_label,
+            published_at=a.published_at, age_hours=a.age_hours,
+            sentiment=a.sentiment, score=a.score, direction=a.direction,
+            macro_tier=a.macro_tier, confidence=a.confidence,
+            seen_in_sources=a.seen_in_sources, reasoning_tag=a.reasoning_tag,
+            entities=a.entities, wire=is_wire, urgency=round(urgency, 3),
+        ))
+    return out
 
 
 def label_for(comp: float) -> str:

@@ -62,6 +62,24 @@ interface Source {
   items:         ScoredItem[]
 }
 
+interface BreakingItem {
+  text:            string
+  url:             string
+  source_label:    string
+  published_at:    number
+  age_hours:       number
+  sentiment:       string
+  score:           number
+  direction:       number
+  macro_tier:      number
+  confidence:      number
+  seen_in_sources: number
+  reasoning_tag:   string
+  entities:        Entity[]
+  wire:            boolean
+  urgency:         number
+}
+
 interface Velocity {
   delta:       number
   velocity_hr: number
@@ -111,6 +129,7 @@ interface Snapshot {
   backward_composite?: number
   forward_count?:      number
   backward_count?:     number
+  breaking?:           BreakingItem[]
 }
 
 interface MktEntry {
@@ -213,6 +232,70 @@ function tierColor(t: number): string {
 }
 function confOpacity(c: number): number {
   return 0.45 + c * 0.55
+}
+
+// Cross-source "what is moving right now" strip. Ranked by the backend's urgency
+// score (freshness × conviction × impact × corroboration), independent of the
+// per-source stream. Wire/alert feeds get a WIRE tag. This is a view of the same
+// scored headlines — it never changes the composite.
+function BreakingStrip({ items }: { items: BreakingItem[] }) {
+  const newest = Math.min(...items.map(i => i.age_hours))
+  const windowLabel = newest < 1 ? `${Math.max(1, Math.round(newest * 60))}m` : `${newest.toFixed(0)}h`
+  return (
+    <div style={{ background: T.surface, border: '1px solid rgba(232,147,90,0.30)', marginBottom: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderBottom: '1px solid rgba(232,147,90,0.18)', background: 'rgba(232,147,90,0.06)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#e8935a', boxShadow: '0 0 0 3px rgba(232,147,90,0.18)' }} />
+          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#e8935a', fontFamily: T.mono }}>Breaking</span>
+        </div>
+        <span style={{ fontSize: 9, color: T.muted, fontFamily: T.mono }}>{items.length} cross-source · freshest {windowLabel}</span>
+      </div>
+      <div style={{ padding: '4px 8px 8px' }}>
+        {items.map((item, i) => (
+          <div key={i} style={{
+            display: 'flex', alignItems: 'flex-start', gap: 8, padding: '7px 6px', marginTop: 4,
+            background: sentimentBg(item.score), borderBottom: i < items.length - 1 ? `1px solid ${T.border}` : 'none',
+          }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: sentimentColor(item.score), fontFamily: T.mono, flexShrink: 0, width: 14, textAlign: 'center', marginTop: 1 }}>
+              {item.direction > 0 ? '↑' : item.direction < 0 ? '↓' : '·'}
+            </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ fontSize: 11.5, color: T.text, fontFamily: T.mono, lineHeight: '15px' }}>
+                {item.url
+                  ? <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>{item.text}</a>
+                  : item.text}
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                <span style={{ fontSize: 9, padding: '1px 5px', fontFamily: T.mono, fontWeight: 700,
+                  color: item.age_hours < 1 ? T.pos : T.gold,
+                  background: item.age_hours < 1 ? 'rgba(134,239,172,0.09)' : 'rgba(255,255,255,0.04)',
+                  border: `1px solid ${item.age_hours < 1 ? 'rgba(134,239,172,0.22)' : T.border}` }}>
+                  {ageLabel(item.age_hours)}
+                </span>
+                {item.wire && (
+                  <span title="Carried by a wire/alert feed" style={{ fontSize: 9, padding: '1px 5px', fontFamily: T.mono, fontWeight: 700, letterSpacing: '0.08em', color: '#e8935a', background: 'rgba(232,147,90,0.10)', border: '1px solid rgba(232,147,90,0.30)' }}>
+                    WIRE
+                  </span>
+                )}
+                <span style={{ fontSize: 9, color: T.muted, fontFamily: T.mono }}>{item.source_label}</span>
+                <span style={{ fontSize: 9, padding: '1px 5px', fontFamily: T.mono, fontWeight: 700, letterSpacing: '0.06em', background: `${tierColor(item.macro_tier)}15`, color: tierColor(item.macro_tier), border: `1px solid ${tierColor(item.macro_tier)}40` }}>
+                  T{item.macro_tier}
+                </span>
+                {item.seen_in_sources > 1 && (
+                  <span title={`Corroborated — carried by ${item.seen_in_sources} feeds`} style={{ fontSize: 9, padding: '1px 5px', fontFamily: T.mono, fontWeight: 700, letterSpacing: '0.06em', color: T.pos, background: 'rgba(134,239,172,0.09)', border: '1px solid rgba(134,239,172,0.22)' }}>
+                    {item.seen_in_sources} FEEDS
+                  </span>
+                )}
+                <span style={{ fontSize: 9, padding: '1px 5px', fontFamily: T.mono, color: T.muted, background: 'var(--theme-hover, rgba(255,255,255,0.03))', border: `1px solid ${T.border}` }}>
+                  [{item.reasoning_tag}]
+                </span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 const ASSET_CLASS_COLORS: Record<string, string> = {
@@ -1199,6 +1282,11 @@ export default function SentimentTracker() {
 
       {data && (
         <>
+          {/* Breaking — cross-source urgent headlines */}
+          {data.breaking && data.breaking.length > 0 && (
+            <BreakingStrip items={data.breaking} />
+          )}
+
           {/* Headline horizon filter */}
           <div style={{ background: T.surface, border: `1px solid ${T.border}`, padding: '10px 14px', marginBottom: 14, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, fontFamily: T.mono }}>Filter Headlines By Horizon</span>

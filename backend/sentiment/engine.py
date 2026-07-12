@@ -180,6 +180,7 @@ def _compute(sample_size: int, timeframe_hours: int, now: int) -> SentimentSnaps
     fwd_comp, bwd_comp, fwd_count, bwd_count = aggregate.horizon_composites(scored, corroboration)
     bull, bear, neutral, bull_pct, bear_pct = aggregate.breakdown(scored)
     hi_score, hi_count = aggregate.high_impact(scored)
+    breaking_items = aggregate.breaking(scored, specs_by_label)
     session_conf = round(min(1.0, in_window / max(1, config.MIN_SIGNAL_HEADLINES)), 2)
 
     health = [_reliability.health(s.key, s.label, s.authority) for s in specs]
@@ -211,6 +212,7 @@ def _compute(sample_size: int, timeframe_hours: int, now: int) -> SentimentSnaps
         forward_composite=fwd_comp, backward_composite=bwd_comp,
         forward_count=fwd_count, backward_count=bwd_count,
         high_impact_score=hi_score, high_impact_count=hi_count if hi_score is not None else None,
+        breaking=breaking_items,
         momentum=momentum, market_context=market_ctx or None,
         source_health=health,
         confidence_interval=aggregate.confidence_interval(comp, session_conf, degraded_fraction),

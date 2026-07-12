@@ -30,6 +30,9 @@ class SourceSpec:
     relevance:      Asset-class relevance to broad equities in 0..1. Every
                     current source is broad-market financial, so 1.0.
     whitelisted:    Only whitelisted sources are ingested.
+    breaking:       Wire / real-time alert feed. Its items get a freshness boost
+                    in the cross-source Breaking ranker (breaking() in aggregate).
+                    Does NOT change how the composite is scored.
     """
 
     key: str
@@ -41,6 +44,7 @@ class SourceSpec:
     confidence_cap: float = 1.0
     relevance: float = 1.0
     whitelisted: bool = True
+    breaking: bool = False
 
 
 SOURCE_MATRIX: tuple[SourceSpec, ...] = (
@@ -102,6 +106,19 @@ SOURCE_MATRIX: tuple[SourceSpec, ...] = (
     # fresh (Google News search feeds otherwise skew stale). Dedup collapses overlap.
     SourceSpec("rss:google-markets", "Google News Markets", "rss", 2, 1.0,
                "https://news.google.com/rss/search?q=stock+market+OR+Federal+Reserve+OR+%22S%26P+500%22+when:1d&hl=en-US&gl=US&ceid=US:en"),
+    # Wire / real-time alert feeds — low-latency breaking flashes. Marked
+    # breaking=True so the Breaking ranker floats their freshest items; they score
+    # into the composite like any other tier-1/2 source.
+    SourceSpec("rss:mw-realtime", "MarketWatch Real-time", "rss", 1, 1.4,
+               "https://feeds.marketwatch.com/marketwatch/realtimeheadlines/", breaking=True),
+    SourceSpec("rss:mw-bulletins", "MarketWatch Bulletins", "rss", 1, 1.5,
+               "https://feeds.marketwatch.com/marketwatch/bulletins/", breaking=True),
+    # Fresh 1h market window (not a literal "breaking" keyword match — most wire
+    # flashes never contain that word). when:1h keeps it to the newest items;
+    # dedup collapses any overlap with google-markets (when:1d).
+    SourceSpec("rss:google-breaking", "Google News Breaking", "rss", 2, 1.0,
+               "https://news.google.com/rss/search?q=(stock+market+OR+Federal+Reserve+OR+economy+OR+%22S%26P+500%22+OR+earnings+OR+inflation)+when:1h&hl=en-US&gl=US&ceid=US:en",
+               breaking=True),
     SourceSpec("reddit:investing", "Reddit/Investing", "reddit", 3, 1.2,
                "investing", confidence_cap=0.3),
     SourceSpec("reddit:stocks", "Reddit/Stocks", "reddit", 3, 1.0,
@@ -165,6 +182,18 @@ PARAPHRASE_RATIO: float = 0.4              # shared / shorter-title-length floor
 # signal on its own — cluster even when the rest is reworded and the ratio is low.
 PARAPHRASE_STRONG_ANCHORS: int = 2
 HIGH_IMPACT_TIER: int = 4                 # tier >= this counts toward high_impact_score
+# ── Breaking headlines ranker (aggregate.breaking) ────────────────────────────
+# A cross-source "what's moving right now" strip, ranked separately from the
+# per-source stream and the composite. An item qualifies only if it is fresh AND
+# carries a real direction (neutral wire filler never breaks). Urgency ranks by
+# conviction × confidence × impact × recency, boosted by corroboration and by a
+# wire/alert source. None of this feeds the composite score.
+BREAKING_MAX_AGE_H: float = 3.0           # only headlines this fresh are eligible
+BREAKING_MIN_DIRECTION: float = 0.12      # drop near-neutral items (no real signal)
+BREAKING_MIN_CONFIDENCE: float = 0.25     # drop low-conviction reads
+BREAKING_LIMIT: int = 8                   # max items in the strip
+BREAKING_WIRE_BONUS: float = 1.25         # urgency multiplier for a breaking-flagged source
+BREAKING_CORROBORATION_COEF: float = 0.15 # per extra feed carrying the story
 # An "isolated spike" worth discounting is a systemic, very strongly directional
 # claim carried by a single source — the precise fake-news / manipulation guard.
 # Kept narrow so ordinary strong coverage is not broadly suppressed.

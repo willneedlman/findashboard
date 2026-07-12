@@ -177,6 +177,27 @@ class Velocity(BaseModel):
     points_used: int
 
 
+class BreakingItem(BaseModel):
+    """One entry in the cross-source Breaking strip: a fresh, directional,
+    market-moving headline ranked by urgency (not by source)."""
+
+    text: str
+    url: str
+    source_label: str
+    published_at: int
+    age_hours: float
+    sentiment: str
+    score: int
+    direction: float
+    macro_tier: int
+    confidence: float
+    seen_in_sources: int
+    reasoning_tag: str
+    entities: list[Entity]
+    wire: bool          # carried by a breaking-flagged wire/alert source
+    urgency: float      # rank score; higher = more market-moving right now
+
+
 # ── Output: top-level snapshot ────────────────────────────────────────────────
 class SentimentSnapshot(BaseModel):
     # Legacy contract — always present.
@@ -212,6 +233,7 @@ class SentimentSnapshot(BaseModel):
     high_impact_count: int | None = None
     momentum: Momentum | None = None
     velocity: Velocity | None = None
+    breaking: list[BreakingItem] = Field(default_factory=list)  # cross-source urgent headlines
     market_context: dict[str, Any] | None = None
     baseline_score: float | None = None
     baseline_std: float | None = None
