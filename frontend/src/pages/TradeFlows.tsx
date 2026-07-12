@@ -315,7 +315,7 @@ function FlowOverview({ d, partners, selected, onSelect, countryLabel, cmdLabel,
   return (
     <Panel label="Bilateral Flow Map" meta="click a partner to drill it · drag to pan · scroll to zoom · double click to reset" style={{ flex: 1, minWidth: 0, height: 386, padding: '38px 14px 12px', boxSizing: 'border-box' }}>
       {/* Floating search/filter input in bottom-left - outside overflow hidden wrapper */}
-      <div style={{ position: 'absolute', left: 8, bottom: 30, zIndex: 10, display: 'flex', alignItems: 'center', gap: 6, background: mix(T.surface, 85), border: `1px solid ${mix(T.gold, 35)}`, padding: '4px 6px', borderRadius: 2, boxShadow: '0 4px 12px rgba(0,0,0,0.5)', width: 110, boxSizing: 'border-box' }}>
+      <div style={{ position: 'absolute', left: 8, bottom: 42, zIndex: 10, display: 'flex', alignItems: 'center', gap: 6, background: mix(T.surface, 85), border: `1px solid ${mix(T.gold, 35)}`, padding: '4px 6px', borderRadius: 2, boxShadow: '0 4px 12px rgba(0,0,0,0.5)', width: 110, boxSizing: 'border-box' }}>
         <span style={{ color: T.gold, fontFamily: MONO, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.05em' }}>FIND:</span>
         <input
           type="text"
