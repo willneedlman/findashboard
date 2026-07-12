@@ -50,6 +50,20 @@ def _article_weight(a: ScoredArticle, corr: float) -> float:
     )
 
 
+def _source_qualifies(scored: list[ScoredArticle]) -> bool:
+    """A source qualifies with enough distinct headlines to be a stable average,
+    OR when it carries a single high-impact, strongly directional headline. A
+    breaking macro/geopolitical shock (T>=HIGH_IMPACT_TIER, |direction| large) is
+    signal on its own and should move the composite, not be held out as thin."""
+    if len({a.title for a in scored}) >= config.MIN_SOURCE_HEADLINES:
+        return True
+    return any(
+        a.macro_tier >= config.HIGH_IMPACT_TIER
+        and abs(a.direction) >= config.HIGH_IMPACT_QUALIFY_DIRECTION
+        for a in scored
+    )
+
+
 def _item_out(a: ScoredArticle) -> ItemOut:
     fw = a.forward_looking_weight
     return ItemOut(
@@ -127,7 +141,7 @@ def build_sources(
             avg_conf=round(sum(a.confidence for a in scored) / n, 2),
             avg_tier=round(sum(a.macro_tier for a in scored) / n, 1),
             avg_age_h=round(sum(a.age_hours for a in scored) / n, 1),
-            count=n, qualifies=len({a.title for a in scored}) >= config.MIN_SOURCE_HEADLINES,
+            count=n, qualifies=_source_qualifies(scored),
             asset_groups=groups, items=[_item_out(a) for a in scored],
         ))
     return results

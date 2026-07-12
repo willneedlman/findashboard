@@ -113,6 +113,9 @@ def test_participial_movement_and_supply_demand(text, expected):
     ("Israel launches airstrikes on Iran nuclear sites", "bearish"),
     ("Iran retaliates with missile barrage on Tel Aviv", "bearish"),
     ("Houthi drone attack hits tanker in Red Sea", "bearish"),
+    ("Iran declares Strait of Hormuz closed as vessel hit", "bearish"),
+    ("Iran seizes oil tanker in the Gulf", "bearish"),
+    ("US launches more strikes after Iran vows retaliation", "bearish"),
     ("Russia invades neighbor as conflict widens", "bearish"),
     ("Israel and Iran agree ceasefire", "bullish"),
     ("Ukraine and Russia sign peace deal", "bullish"),
@@ -350,6 +353,26 @@ def test_aggregate_is_deterministic():
     c1 = aggregate.composite(aggregate.build_sources(sbs, specs, {}), eff, flat, {})
     c2 = aggregate.composite(aggregate.build_sources(sbs, specs, {}), eff, flat, {})
     assert c1 == c2
+
+
+# A source with a single high-impact, strongly directional headline (a breaking
+# shock) qualifies despite being below MIN_SOURCE_HEADLINES, so it is not held out
+# of the composite. Thin + neutral / weakly-directional sources still do not.
+def test_high_impact_single_headline_qualifies():
+    strong = aggregate.build_sources(
+        {"CNBC Markets": [_scored("CNBC Markets", "rss:cnbc", "US launches airstrikes on Iran", 19, 4)]},
+        {"CNBC Markets": SOURCE_BY_LABEL["CNBC Markets"]}, {})
+    assert strong[0].qualifies is True
+
+    thin_neutral = aggregate.build_sources(
+        {"CNBC Markets": [_scored("CNBC Markets", "rss:cnbc", "markets little changed", 51, 2)]},
+        {"CNBC Markets": SOURCE_BY_LABEL["CNBC Markets"]}, {})
+    assert thin_neutral[0].qualifies is False
+
+    weak_macro = aggregate.build_sources(
+        {"CNBC Markets": [_scored("CNBC Markets", "rss:cnbc", "minor border skirmish", 42, 4)]},
+        {"CNBC Markets": SOURCE_BY_LABEL["CNBC Markets"]}, {})
+    assert weak_macro[0].qualifies is False
 
 
 # ── Engine without the LLM still yields a real composite ──────────────────────

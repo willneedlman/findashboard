@@ -213,6 +213,11 @@ SINGLE_STOCK_IMPACT_CAP: float = 0.45
 # ── Window / qualification thresholds ─────────────────────────────────────────
 MIN_SIGNAL_HEADLINES: int = 10      # in-window articles for full session confidence
 MIN_SOURCE_HEADLINES: int = 2       # unique headlines for a source to "qualify"
+# Exception to the volume rule: a single high-impact, strongly directional
+# headline (a breaking macro/geopolitical shock) is signal on its own, so it
+# qualifies its source even below MIN_SOURCE_HEADLINES — otherwise a lone
+# "airstrikes on Iran" flash from one feed is held out of the composite as "thin".
+HIGH_IMPACT_QUALIFY_DIRECTION: float = 0.4   # |direction| a T>=HIGH_IMPACT_TIER item needs to qualify alone
 DEFAULT_SAMPLE_SIZE: int = 900
 PER_SOURCE_SCORE_CAP: int = 18      # top-N in-window items scored per source (payload bound)
 BASELINE_WINDOW: int = 48

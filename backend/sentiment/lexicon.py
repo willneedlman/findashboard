@@ -112,7 +112,8 @@ _CROSS_IMPACT_RULES: list[tuple[re.Pattern[str], list[tuple[str, str]]]] = [
                 r'INVAS\w+|INVADE\w*|'
                 r'NUCLEAR\s+(?:THREAT|STRIKE|SITES?|FACILIT\w+|ENRICHMENT|PROGRAM)|'
                 r'STRIKES?\s+(?:ON|AGAINST)\b|'
-                r'STRAIT\s+OF\s+HORMUZ|RED\s+SEA|HEZBOLLAH|HAMAS|HOUTHI\w*|'
+                r'STRAIT\s+OF\s+HORMUZ|HORMUZ|RED\s+SEA|BLOCKADE|TANKER|'
+                r'AVENGE[SD]?\b|RETALIAT\w+|HEZBOLLAH|HAMAS|HOUTHI\w*|'
                 r'CEASE\s?FIRE|TRUCE|DE.?ESCALAT\w+|PEACE\s+(?:DEAL|AGREEMENT|TALKS|ACCORD)|'
                 r'UKRAINE|GAZA|MIDDLE\s+EAST\s+(?:WAR|CONFLICT|TENSION|CRISIS))\b'),
      [("SPX", "Equities"), ("XAU", "Commodities"), ("WTI", "Commodities"), ("UST10Y", "Fixed Income")]),
@@ -397,6 +398,20 @@ _LEXICON: dict[str, tuple[float, float]] = {
     "retaliatory strike": (-0.52, 1.1), "nuclear strike": (-0.75, 1.4), "nuclear threat": (-0.55, 1.1),
     "escalation": (-0.40, 1.0), "escalates": (-0.35, 0.9), "escalating": (-0.35, 0.9),
     "warfare": (-0.55, 1.2), "hostilities": (-0.45, 1.0),
+    # Oil chokepoint + shipping shock — a Strait of Hormuz closure or tanker attack
+    # is among the largest energy supply shocks there is, so score it hard.
+    "hormuz closed": (-0.62, 1.3), "closes hormuz": (-0.62, 1.3), "close hormuz": (-0.60, 1.2),
+    "hormuz closure": (-0.62, 1.3), "blockade": (-0.50, 1.1), "naval blockade": (-0.55, 1.2),
+    "tanker hit": (-0.50, 1.1), "tanker attack": (-0.52, 1.1), "tanker attacked": (-0.52, 1.1),
+    "tanker seized": (-0.45, 1.0), "vessel hit": (-0.48, 1.0), "vessel seized": (-0.45, 1.0),
+    "ship hit": (-0.45, 1.0), "ship seized": (-0.45, 1.0), "seizes tanker": (-0.45, 1.0),
+    "seizes oil tanker": (-0.48, 1.0), "seized oil tanker": (-0.48, 1.0), "oil tanker seized": (-0.48, 1.0),
+    # Repeat strikes and retaliation vows are escalation, not resolution.
+    "launches strikes": (-0.52, 1.2), "launched strikes": (-0.52, 1.2), "launch strikes": (-0.50, 1.1),
+    "more strikes": (-0.45, 1.0), "further strikes": (-0.45, 1.0), "fresh strikes": (-0.45, 1.0),
+    "retaliatory strikes": (-0.52, 1.1), "vows to avenge": (-0.48, 1.1), "pledges to avenge": (-0.48, 1.1),
+    "vows retaliation": (-0.45, 1.0), "vows revenge": (-0.45, 1.0), "threatens retaliation": (-0.45, 1.0),
+    "avenge": (-0.35, 0.9), "retaliation": (-0.35, 0.9), "retaliate": (-0.35, 0.9), "retaliates": (-0.35, 0.9),
     # De-escalation — bullish (mirror of the sanctions-relief handling above).
     "ceasefire": (0.45, 1.1), "cease fire": (0.45, 1.1), "truce": (0.40, 1.0),
     "de escalation": (0.42, 1.0), "de escalate": (0.38, 0.9), "de escalates": (0.38, 0.9),
