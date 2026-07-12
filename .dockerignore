@@ -18,3 +18,22 @@ ui-ux-pro-max-skill
 *.md
 !README.md
 app.py
+
+# Dev tooling / agent caches — never used by the Docker build (frontend/ and
+# backend/ are the only paths COPYed). Excluding these cuts the build context
+# from ~524 MB to well under 50 MB, so every deploy uploads far less.
+.claude
+.aider*
+.serena
+.codex
+.agents
+.obsidian
+design-mockups
+frontend/dist
+**/node_modules
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.DS_Store
+.vscode
+.idea
