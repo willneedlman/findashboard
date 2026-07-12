@@ -391,13 +391,13 @@ function FlowOverview({ d, partners, selected, onSelect, countryLabel, cmdLabel,
         </div>
         
         {/* Floating search/filter input in bottom-left */}
-        <div style={{ position: 'absolute', left: 12, bottom: 28, zIndex: 10, display: 'flex', alignItems: 'center', gap: 6, background: mix(T.surface, 85), border: `1px solid ${mix(T.gold, 35)}`, padding: '4px 8px', borderRadius: 2, boxShadow: '0 4px 12px rgba(0,0,0,0.5)', width: 156, boxSizing: 'border-box' }}>
+        <div style={{ position: 'absolute', left: 6, bottom: 28, zIndex: 10, display: 'flex', alignItems: 'center', gap: 6, background: mix(T.surface, 85), border: `1px solid ${mix(T.gold, 35)}`, padding: '4px 6px', borderRadius: 2, boxShadow: '0 4px 12px rgba(0,0,0,0.5)', width: 110, boxSizing: 'border-box' }}>
           <span style={{ color: T.gold, fontFamily: MONO, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.05em' }}>FIND:</span>
           <input
             type="text"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Type country..."
+            placeholder="Search..."
             style={{
               background: 'transparent',
               border: 'none',
@@ -405,7 +405,7 @@ function FlowOverview({ d, partners, selected, onSelect, countryLabel, cmdLabel,
               fontFamily: MONO,
               fontSize: 9,
               outline: 'none',
-              width: 100,
+              width: 62,
               padding: 0
             }}
           />
