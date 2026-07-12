@@ -164,6 +164,12 @@ def test_history_bridge_keeps_ais_overlap_for_calibration(monkeypatch):
     assert series[0]["nowcast_daily"] == rows
 
 
+def test_ais_stream_covers_expanded_chokepoints():
+    from routers import maritime
+    covered = maritime._ais_covered_chokes()
+    assert {"bosphorus", "goodhope", "gibraltar", "taiwan"} <= covered
+
+
 def test_check_crossing_skips_anchored_vessel(monkeypatch):
     from routers import maritime
     calls = []

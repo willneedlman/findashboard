@@ -507,6 +507,10 @@ _AIS_BBOXES = [
     [[53.0, 3.0], [58.0, 14.0]],      # North Sea / Danish straits
     [[24.0, -98.0], [30.0, -88.0]],   # US Gulf
     [[35.0, 25.0], [41.0, 30.0]],     # Aegean / Turkish straits
+    [[40.6, 28.0], [41.7, 30.0]],     # Bosphorus / Turkish Straits core
+    [[34.8, -7.2], [37.2, -3.8]],     # Strait of Gibraltar
+    [[-36.5, 16.5], [-32.0, 21.5]],   # Cape of Good Hope
+    [[22.0, 118.0], [27.0, 122.0]],   # Taiwan Strait
     [[31.0, 120.0], [38.0, 127.0]],   # Yellow Sea / Korea approaches
     # Container-port anchorages (for the Logistics Map's cargo-ship layer). Moderate
     # set — the 1GB VM has OOM'd before, so these are the busiest hubs only.
