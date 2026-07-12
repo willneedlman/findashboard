@@ -1,157 +1,33 @@
-"""Credit delinquency & default API.
+"""Real aggregate credit stress and consumer-spend API.
 
-Thin HTTP layer over credit_delinquencies. The mock book is deterministic, so
-it is built once per process and reused. Every metric is computed by the engine.
+The previous modeled loan portfolios, delinquency buckets, and roll rates were
+removed. This route serves only observed FRED bank-loan series plus an optional
+offline SafeGraph merchant-spend aggregate.
 """
+from __future__ import annotations
 
 import logging
-logger = logging.getLogger(__name__)
-
-import sys
 import os
-from datetime import date
+import sys
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-import credit_delinquencies as cd
+import consumer_spend
 import fred_credit
 
+
+logger = logging.getLogger(__name__)
 router = APIRouter()
-
-# The portfolio book is modeled (no free public loan-servicing data exists), but
-# the industry benchmarks each portfolio is compared against come from real FRED
-# aggregate rates when available. Built lazily and cached for the process lifetime.
-_BOOK: list[cd.Portfolio] | None = None
-_BENCHMARKS: dict[str, cd.MarketBenchmark] | None = None
-_BENCH_SOURCE = "modeled"
-
-
-def _book() -> list[cd.Portfolio]:
-    global _BOOK, _BENCHMARKS, _BENCH_SOURCE
-    if _BOOK is None:
-        _BOOK = cd.generate_mock_portfolios(months=60)   # 5y history for period-over-period change
-        real = None
-        try:
-            real = fred_credit.benchmarks()
-        except Exception as e:
-            logger.warning("fred_credit benchmarks failed: %s", e)
-        if real:
-            _BENCHMARKS = real
-            _BENCH_SOURCE = "FRED · St. Louis Fed"
-        else:
-            _BENCHMARKS = cd.mock_benchmarks(_BOOK)
-            _BENCH_SOURCE = "modeled composite"
-    return _BOOK
-
-
-# Portfolios are always modeled; benchmarks are real (FRED) when available.
-def _provenance() -> dict:
-    _book()
-    return {"portfolios": "Modeled sample book", "benchmarks": _BENCH_SOURCE}
-
-
-def _parse_asset_class(value: str | None) -> cd.AssetClass | None:
-    if not value:
-        return None
-    try:
-        return cd.AssetClass(value)
-    except ValueError:
-        raise HTTPException(400, f"Unknown asset_class '{value}'. "
-                                 f"Valid: {[a.value for a in cd.AssetClass]}")
-
-
-def _parse_region(value: str | None) -> cd.Region | None:
-    if not value:
-        return None
-    try:
-        return cd.Region(value)
-    except ValueError:
-        raise HTTPException(400, f"Unknown region '{value}'. "
-                                 f"Valid: {[r.value for r in cd.Region]}")
 
 
 @router.get("/summary")
-def summary(threshold: float = Query(5.0, ge=0), region: str | None = None):
-    """Book-wide risk posture with asset-class rollups and threshold flags."""
-    book = _book()
-    reg = _parse_region(region)
-    if reg is not None:
-        book = [p for p in book if p.region == reg]
-    out = cd.risk_report(book, default_threshold=threshold)
-    out["provenance"] = _provenance()
-    return out
-
-
-@router.get("/portfolios")
-def portfolios(asset_class: str | None = None, region: str | None = None):
-    """Lightweight list of portfolios with their current headline metrics."""
-    ac = _parse_asset_class(asset_class)
-    reg = _parse_region(region)
-    out = []
-    for p in _book():
-        if ac is not None and p.asset_class != ac:
-            continue
-        if reg is not None and p.region != reg:
-            continue
-        latest = p.latest
-        if latest is None:
-            continue
-        out.append({
-            "portfolio_id": p.portfolio_id,
-            "name": p.name,
-            "product": p.product.value,
-            "product_label": cd.PRODUCT_LABEL[p.product],
-            "asset_class": p.asset_class.value,
-            "region": p.region.value,
-            "outstanding": round(latest.outstanding, 2),
-            "delinquency_rate_30plus": round(cd.delinquency_rate(latest), 4),
-            "npa_ratio": round(cd.npa_ratio(latest), 4),
-            "annualized_default_rate": round(cd.annualized_default_rate(p.records), 4),
-        })
-    return {"count": len(out), "portfolios": sorted(out, key=lambda x: -x["annualized_default_rate"])}
-
-
-@router.get("/portfolio/{portfolio_id}")
-def portfolio_detail(portfolio_id: str):
-    """Full metrics, roll rates, 24-month trend and benchmark for one book."""
-    match = next((p for p in _book() if p.portfolio_id == portfolio_id), None)
-    if match is None:
-        raise HTTPException(404, f"Portfolio '{portfolio_id}' not found")
-    benchmark = (_BENCHMARKS or {}).get(match.asset_class.value)
-    return cd.portfolio_summary(match, benchmark=benchmark)
-
-
-@router.get("/roll-rates")
-def roll_rates(asset_class: str | None = None, region: str | None = None):
-    """Average bucket-to-bucket roll probabilities for the selected slice."""
-    ac = _parse_asset_class(asset_class)
-    reg = _parse_region(region)
-    records = cd.filter_records(
-        [r for p in _book() for r in p.records], asset_class=ac, region=reg,
-    )
-    if not records:
-        raise HTTPException(404, "No records for that selection")
-    agg = cd.aggregate_records(records, "selection")
+def summary():
+    asset_classes = fred_credit.market_series()
+    spend = consumer_spend.summary()
     return {
-        "asset_class": ac.value if ac else "all",
-        "region": reg.value if reg else "all",
-        "roll_rates": {k: round(v, 4) for k, v in cd.roll_rates(agg).items()},
-    }
-
-
-@router.get("/benchmarks")
-def benchmarks():
-    """Industry composite delinquency/default/NPA per asset class."""
-    _book()
-    return {
-        k: {
-            "asset_class": b.asset_class.value,
-            "period": b.period,
-            "delinquency_rate": b.delinquency_rate,
-            "default_rate": b.default_rate,
-            "npa_ratio": b.npa_ratio,
-            "source": b.source,
-        }
-        for k, b in (_BENCHMARKS or {}).items()
+        "available": bool(asset_classes), "source": "FRED · St. Louis Fed",
+        "as_of": max((item["asof"] for item in asset_classes), default=None),
+        "asset_classes": asset_classes, "consumer_spend": spend,
+        "method_note": "Bank-industry aggregate rates. No modeled portfolios, loan buckets, or roll rates.",
     }

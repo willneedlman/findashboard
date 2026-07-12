@@ -25,6 +25,7 @@ interface Report {
   source?: string
 }
 interface RatesResp { history: { asof: string; rate_30y: number; rate_15y: number; rate_arm: number }[] }
+interface RentResp { available: boolean; source: string; as_of?: string; reason?: string; national?: { listings: number; median_rent: number; median_rent_per_sqft: number | null; median_rent_1br: number | null; median_rent_2br: number | null }; states?: { state: string; listings: number; median_rent: number; median_rent_per_sqft: number | null; median_rent_1br: number | null; median_rent_2br: number | null }[] }
 
 const MARKET_COLOR: Record<string, string> = { seller: '#2f8a4e', balanced: T.gold, buyer: '#5b93c9' }
 const fmtK = (v: number) => v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v.toFixed(0)}`
@@ -86,6 +87,22 @@ function PanelHead({ title, right }: { title: string; right?: React.ReactNode })
   )
 }
 
+function RentalMarket({ rent }: { rent?: RentResp }) {
+  return <div style={PANEL}>
+    <PanelHead title="Rental Market" right={<span style={{ fontFamily: T.mono, fontSize: 8, color: T.muted }}>{rent?.as_of ? `RentHub snapshot ${rent.as_of}` : 'RentHub'}</span>} />
+    {!rent?.available ? <div style={{ padding: '18px 14px', fontFamily: T.mono, fontSize: 10, color: T.muted }}>Data unavailable. RentHub snapshot has not been ingested.</div> : <>
+      <div style={{ display: 'flex', flexWrap: 'wrap', borderBottom: `1px solid ${T.border}` }}>
+        <StatCell label="Active Listings" value={rent.national?.listings.toLocaleString() ?? '—'} sub="snapshot coverage" />
+        <StatCell label="Median Asking Rent" value={rent.national ? fmtK(rent.national.median_rent) : '—'} sub="all units" />
+        <StatCell label="Median Rent / Sq Ft" value={rent.national?.median_rent_per_sqft ? `$${rent.national.median_rent_per_sqft.toFixed(2)}` : '—'} sub="where reported" />
+        <StatCell label="One Bedroom" value={rent.national?.median_rent_1br ? fmtK(rent.national.median_rent_1br) : '—'} sub="median asking rent" />
+        <StatCell label="Two Bedroom" value={rent.national?.median_rent_2br ? fmtK(rent.national.median_rent_2br) : '—'} sub="median asking rent" last />
+      </div>
+      <div style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr><th style={{ ...th, textAlign: 'left' }}>State</th><th style={th}>Listings</th><th style={th}>Median rent</th><th style={th}>Rent / sq ft</th><th style={th}>1BR</th><th style={th}>2BR</th></tr></thead><tbody>{rent.states?.map(s => <tr key={s.state}><td style={{ ...td, textAlign: 'left', fontFamily: T.label, fontWeight: 700 }}>{s.state}</td><td style={td}>{s.listings.toLocaleString()}</td><td style={td}>{fmtK(s.median_rent)}</td><td style={td}>{s.median_rent_per_sqft ? `$${s.median_rent_per_sqft.toFixed(2)}` : '—'}</td><td style={td}>{s.median_rent_1br ? fmtK(s.median_rent_1br) : '—'}</td><td style={td}>{s.median_rent_2br ? fmtK(s.median_rent_2br) : '—'}</td></tr>)}</tbody></table></div>
+    </>}
+  </div>
+}
+
 export function HousingMarketContent() {
   const { data, isLoading, isError } = useQuery<Report>({
     queryKey: ['housing-report'],
@@ -96,6 +113,9 @@ export function HousingMarketContent() {
     queryKey: ['housing-rates'],
     queryFn: () => axios.get('/api/housing/rates').then(r => r.data),
     staleTime: 3_600_000, retry: 1,
+  })
+  const { data: rent } = useQuery<RentResp>({
+    queryKey: ['housing-rent'], queryFn: () => axios.get('/api/housing/rent').then(r => r.data), staleTime: 12 * 3600e3, retry: 1,
   })
 
   const national = data?.by_region.find(r => r.region === 'national')
@@ -115,6 +135,8 @@ export function HousingMarketContent() {
 
       {isLoading && <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.muted, fontFamily: T.mono, fontSize: 11 }}>Loading housing data…</div>}
       {isError && <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.neg, fontFamily: T.mono, fontSize: 11 }}>Failed to load housing data.</div>}
+      {!isLoading && !isError && <RentalMarket rent={rent} />}
+      {data && !national && <div style={{ ...PANEL, padding: '18px 14px', fontFamily: T.mono, fontSize: 10, color: T.muted }}>Data unavailable. FRED housing series could not be loaded.</div>}
 
       {data && national && (
         <>

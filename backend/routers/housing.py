@@ -1,9 +1,4 @@
-"""Housing-market analytics API.
-
-Thin HTTP layer over housing_market. Real national data comes from FRED
-(housing_fred); if FRED is unavailable the engine falls back to the deterministic
-mock book. Rebuilt at most every 12h. Every metric is computed by the engine.
-"""
+"""Housing-market analytics API backed by observed FRED and RentHub data."""
 
 import logging
 logger = logging.getLogger(__name__)
@@ -17,13 +12,14 @@ from fastapi import APIRouter, HTTPException, Query
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import housing_market as hm
 import housing_fred
+import renthub
 
 router = APIRouter()
 
 _REGIONS: list[hm.HousingSeries] | None = None
 _RATES: list[hm.MortgageRateRecord] | None = None
 _RMAP: dict = {}
-_SOURCE = "mock"
+_SOURCE = "unavailable"
 _BUILT_AT = 0.0
 _TTL = 12 * 3600
 
@@ -40,8 +36,8 @@ def _book() -> tuple[list[hm.HousingSeries], dict]:
             _REGIONS, _RATES = built
             _SOURCE = "FRED (St. Louis Fed)"
         else:
-            _REGIONS, _RATES = hm.generate_mock(months=36)
-            _SOURCE = "Illustrative sample (FRED unavailable)"
+            _REGIONS, _RATES = [], []
+            _SOURCE = "FRED unavailable"
         _RMAP = hm.rate_map(_RATES)
         _BUILT_AT = time.time()
     return _REGIONS, _RMAP
@@ -60,8 +56,12 @@ def _parse_region(value: str | None) -> hm.Region | None:
 def report():
     """National-vs-regional posture (price, affordability, supply/demand) + anomaly flags."""
     regions, rmap = _book()
+    if not regions:
+        return {"available": False, "source": _SOURCE, "asof": None, "rates": None,
+                "by_region": [], "flags": []}
     out = hm.market_report(regions, rmap)
     out["source"] = _SOURCE
+    out["available"] = bool(regions)
     return out
 
 
@@ -86,6 +86,12 @@ def rates():
             for r in sorted((_RATES or []), key=lambda r: r.asof)
         ],
     }
+
+
+@router.get("/rent")
+def rent_snapshot():
+    """Latest offline RentHub listing snapshot, independent of FRED availability."""
+    return renthub.snapshot()
 
 
 @router.get("/construction")

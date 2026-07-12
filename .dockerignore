@@ -43,3 +43,5 @@ frontend/dist
 data/*
 !data/veridion_nodes.db
 !data/port_performance.db
+!data/renthub_snapshot.db
+!data/consumer_spend.db

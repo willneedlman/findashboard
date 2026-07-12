@@ -1,51 +1,51 @@
-"""Real industry delinquency benchmarks from FRED for the Credit Delinquencies tool.
+"""Real industry delinquency benchmarks from FRED for the Credit Stress tool.
 
-Portfolio-level loan-servicing data (aging buckets, roll rates) has no free public
-source, so the tool's portfolios stay modeled. But the industry benchmark each
-portfolio is compared against CAN be real: FRED publishes aggregate delinquency
-and charge-off rates by loan category, quarterly, for all commercial banks. This
-maps each asset class to its closest FRED series so the comparison line is live.
+FRED publishes aggregate delinquency and charge-off rates by loan category,
+quarterly, for all commercial banks. This module intentionally contains no
+portfolio simulation, aging buckets, or modeled roll rates.
 
     delinquency = DR*ACBS series (30+ DPD, %) · charge-off = COR*ACBS (annualized, %)
 """
 from __future__ import annotations
 
 import fred_client as fred
-import credit_delinquencies as cd
-
-AC = cd.AssetClass
-
-# asset class -> (delinquency series, charge-off series), all commercial banks:
+# label -> (delinquency series, charge-off series), all commercial banks:
 #   DRCCLACBS/CORCCACBS      credit card
 #   DRCLACBS/CORCLACBS       consumer (all consumer loans)
 #   DRSFRMACBS/CORSFRMACBS   single-family residential mortgage
 #   DRCRELEXFACBS/CORCREXFACBS  commercial real estate (ex farmland)
 #   DRBLACBS/CORBLACBS       business loans
-_MAP: dict = {
-    AC.CREDIT_CARD:    ("DRCCLACBS", "CORCCACBS"),
-    AC.CONSUMER:       ("DRCLACBS", "CORCLACBS"),
-    AC.RESIDENTIAL_RE: ("DRSFRMACBS", "CORSFRMACBS"),
-    AC.CRE:            ("DRCRELEXFACBS", "CORCREXFACBS"),
-    AC.CORPORATE:      ("DRBLACBS", "CORBLACBS"),
+_MAP: dict[str, tuple[str, str]] = {
+    "credit_card": ("DRCCLACBS", "CORCCACBS"),
+    "consumer": ("DRCLACBS", "CORCLACBS"),
+    "residential_re": ("DRSFRMACBS", "CORSFRMACBS"),
+    "commercial_re": ("DRCRELEXFACBS", "CORCREXFACBS"),
+    "business": ("DRBLACBS", "CORBLACBS"),
+}
+
+_LABELS = {
+    "credit_card": "Credit cards", "consumer": "Consumer loans",
+    "residential_re": "Residential mortgages", "commercial_re": "Commercial real estate",
+    "business": "Business loans",
 }
 
 
-def benchmarks() -> dict[str, cd.MarketBenchmark] | None:
-    """Real per-asset-class benchmarks from FRED, or None if unavailable."""
+def market_series(months: int = 36) -> list[dict]:
+    """Real bank-loan delinquency and charge-off histories, by FRED category."""
     if not fred.available():
-        return None
-    out: dict[str, cd.MarketBenchmark] = {}
-    for ac, (d_id, c_id) in _MAP.items():
-        d = fred.latest(d_id)
-        if not d:
+        return []
+    out = []
+    for asset_class, (delinq_id, chargeoff_id) in _MAP.items():
+        delinq = fred.series(delinq_id, months=months)
+        chargeoffs = dict(fred.series(chargeoff_id, months=months))
+        if not delinq:
             continue
-        c = fred.latest(c_id)
-        out[ac.value] = cd.MarketBenchmark(
-            asset_class=ac, period=d[0].strftime("%Y-%m"),
-            delinquency_rate=round(d[1], 3),
-            default_rate=round(c[1], 3) if c else 0.0,
-            # FRED has no NPA series; ~90+ DPD is roughly half of 30+ DPD.
-            npa_ratio=round(d[1] * 0.55, 3),
-            source="FRED · St. Louis Fed",
-        )
-    return out or None
+        trend = [{"asof": d.isoformat(), "delinquency_rate": round(v, 3),
+                  "chargeoff_rate": round(chargeoffs[d], 3) if d in chargeoffs else None}
+                 for d, v in delinq]
+        latest = trend[-1]
+        out.append({"asset_class": asset_class, "label": _LABELS[asset_class],
+                    "asof": latest["asof"], "delinquency_rate": latest["delinquency_rate"],
+                    "chargeoff_rate": latest["chargeoff_rate"], "trend": trend,
+                    "source": "FRED · St. Louis Fed"})
+    return out
