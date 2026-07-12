@@ -4,10 +4,9 @@ Thin wrappers over logistics.free_ingest — every ingest function already cache
 aggressively, degrades to stale-on-failure, and never raises, so the routes stay
 one-liners. Mounted at /api/logistics.
 
-macro-flows (UN Comtrade bilateral trade -> ISO-3 vectors) and supplier-nodes
-(Veridion manufacturers -> GeoJSON) power the network map's two overlay layers.
+supplier-nodes (Veridion manufacturers -> GeoJSON) powers the Logistics Map's
+supplier layer. Bilateral trade flows live in the Trade Flows tool (/api/comtrade).
 """
-import datetime
 import logging
 import os
 import sys
@@ -15,7 +14,6 @@ import sys
 from fastapi import APIRouter, Query
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-import comtrade  # noqa: E402
 from logistics import free_ingest as fi  # noqa: E402
 from logistics import veridion  # noqa: E402
 
@@ -53,69 +51,6 @@ def freight_macro():
     return {
         "inventory_sales": fi.inventory_sales(),
         "freight_indices": fi.freight_indices(),
-    }
-
-
-def _fnum(v):
-    try:
-        return float(v)
-    except (TypeError, ValueError):
-        return None
-
-
-@router.get("/macro-flows")
-def macro_flows(
-    reporter: str = Query("842", description="M49 reporter country code (default 842=USA)"),
-    period: str | None = Query(None, description="4-digit year; default = most recent year with data"),
-    cmd: str = Query("TOTAL", description="HS commodity code, or TOTAL for all goods"),
-    flow: str = Query("X", description="X exports, M imports"),
-    top: int = Query(40, ge=1, le=200, description="max partner vectors returned"),
-):
-    """UN Comtrade bilateral trade for one reporter, as reporter->partner vectors
-    keyed by ISO-3 for the macro-flows map layer. Comtrade's public preview needs
-    no key. Falls back across recent years when no period is given, and returns
-    {available:false} (never an error) when Comtrade is unreachable/empty."""
-    if flow not in ("X", "M"):
-        flow = "X"
-    # Preview data lags ~1-2 years; try the requested year, else the most recent.
-    candidates = [period] if period else [str(datetime.date.today().year - n) for n in (1, 2, 3)]
-    rows, used = None, None
-    for per in candidates:
-        if not (per and per.isdigit() and len(per) == 4):
-            continue
-        rows = comtrade.flows(reporter, per, cmd, flow)
-        if rows:
-            used = per
-            break
-    if not rows:
-        return {"available": False, "reporter_iso": comtrade.area_iso(reporter), "vectors": []}
-
-    r_iso = comtrade.area_iso(int(reporter)) or comtrade.area_iso(reporter)
-    vectors = []
-    for r in rows:
-        pc = r.get("partnerCode")
-        if pc in (0, None):                                # 0 = World aggregate, skip
-            continue
-        val = _fnum(r.get("primaryValue"))
-        p_iso = comtrade.area_iso(pc)
-        if not val or not p_iso or not r_iso:
-            continue
-        vectors.append({
-            "from_iso": r_iso, "to_iso": p_iso,
-            "from_m49": int(reporter) if str(reporter).isdigit() else reporter, "to_m49": pc,
-            "partner": comtrade.area_name(pc), "value": val,
-            "net_wgt": _fnum(r.get("netWgt")),
-        })
-    vectors.sort(key=lambda x: -x["value"])
-    vectors = vectors[:top]
-    return {
-        "available": True,
-        "reporter": comtrade.area_name(int(reporter)) if str(reporter).isdigit() else reporter,
-        "reporter_iso": r_iso, "period": used,
-        "flow": "Exports" if flow == "X" else "Imports", "cmd_code": cmd,
-        "max_value": max((v["value"] for v in vectors), default=0),
-        "vectors": vectors,
-        "source": "UN Comtrade (public preview)",
     }
 
 
