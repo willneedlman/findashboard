@@ -150,6 +150,20 @@ def test_daily_counts_keep_vessel_class_breakdown():
     assert got["cap"] > 0
 
 
+def test_history_bridge_keeps_ais_overlap_for_calibration(monkeypatch):
+    from routers import maritime
+    rows = {
+        "2026-07-01": {"total": 8, "tanker": 3, "cargo": 5, "cap": 0},
+        "2026-07-05": {"total": 10, "tanker": 4, "cargo": 6, "cap": 0},
+        "2026-07-10": {"total": 9, "tanker": 3, "cargo": 6, "cap": 0},
+    }
+    monkeypatch.setattr(maritime.energy_nowcaster, "daily_counts", lambda _ids: {"danish": rows})
+    series = [{"id": "danish", "points": [{"d": "2026-07-05", "total": 42}]}]
+    maritime._attach_history_nowcast(series)
+    assert series[0]["nowcast_days"][-1] == "2026-07-12"
+    assert series[0]["nowcast_daily"] == rows
+
+
 def test_check_crossing_skips_anchored_vessel(monkeypatch):
     from routers import maritime
     calls = []

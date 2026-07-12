@@ -1079,13 +1079,21 @@ function HistoryPanel({ C, chokepoints, ids, days, metric, series, loading, nowc
           .filter(([day, v]) => day <= (lastD ?? '') && v[key] > 0)
           .slice(-7)
           .map(([, v]) => v[key])
-        const scale = prior.length ? last / (prior.reduce((a, b) => a + b, 0) / prior.length) : null
+        // A newly deployed stream may begin after PortWatch's last confirmed day,
+        // leaving no overlap yet. Use observed post-gap AIS days as a bounded
+        // temporary anchor so the chart is live from day one, then automatically
+        // switch to the stronger overlap calibration once seven days accumulate.
+        const observed = Object.values(counts).map(v => v[key]).filter(v => v > 0)
+        const reference = prior.length ? prior : observed
+        const scale = reference.length ? last / (reference.reduce((a, b) => a + b, 0) / reference.length) : null
+        const hasOverlap = prior.length > 0
         if (lastD && scale != null) (byDate[lastD] ??= { d: lastD })[`${s.id}__est`] = last
         for (const day of s.nowcast_days) {
           if (scale == null) continue
           const window = Object.entries(counts).filter(([d]) => d <= day).slice(-7).map(([, v]) => v[key])
           if (!window.length || window.every(v => v === 0)) continue
-          const estimated = (window.reduce((a, b) => a + b, 0) / window.length) * scale
+          const raw = (window.reduce((a, b) => a + b, 0) / window.length) * scale
+          const estimated = hasOverlap ? raw : Math.max(last * 0.8, Math.min(last * 1.2, raw))
           ;(byDate[day] ??= { d: day })[`${s.id}__est`] = Math.round(estimated * 10) / 10
         }
       }

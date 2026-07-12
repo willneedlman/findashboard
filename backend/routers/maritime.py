@@ -1051,7 +1051,10 @@ def _attach_history_nowcast(series: list) -> dict:
         if sum(v["total"] for v in gap_counts.values()) <= 0:
             continue
         s["nowcast_days"] = gap
-        s["nowcast_daily"] = gap_counts
+        # Keep the complete 14-day AIS window, not only the post-PortWatch gap.
+        # The chart uses the overlapping pre-gap days to calibrate the live tail
+        # to PortWatch's final confirmed seven-day average.
+        s["nowcast_daily"] = counts
         observed = [day for day, values in counts.items() if values["total"] > 0]
         if observed:
             latest = max(observed)
