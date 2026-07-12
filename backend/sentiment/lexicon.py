@@ -105,7 +105,16 @@ _CROSS_IMPACT_RULES: list[tuple[re.Pattern[str], list[tuple[str, str]]]] = [
      [("XAU", "Commodities"), ("SPX", "Equities"), ("UST10Y", "Fixed Income")]),
     (re.compile(r'\b(TREASURY\s+YIELD|BOND\s+YIELD|10.YEAR\s+YIELD|YIELD\s+(SURGE|SPIKE|RISE|INVERSION|CURVE))\b'),
      [("UST10Y", "Fixed Income"), ("SPX", "Equities")]),
-    (re.compile(r'\b(WAR|CONFLICT|GEOPOLIT|MILITARY\s+(STRIKE|ACTION|TENSION)|NUCLEAR\s+THREAT|UKRAINE|MIDDLE\s+EAST\s+WAR)\b'),
+    (re.compile(r'\b(WAR(?:FARE)?|CONFLICT|HOSTILITIES|GEOPOLIT|'
+                r'MILITARY\s+(?:STRIKE|ACTION|TENSION|OFFENSIVE|OPERATION|INCURSION)|'
+                r'AIR\s?STRIKES?|MISSILE(?:S)?|BALLISTIC\s+MISSILE|'
+                r'DRONE\s+(?:STRIKE|ATTACK)|ROCKET\s+(?:ATTACK|FIRE|BARRAGE)|SHELLING|BOMBARDMENT|BOMBING|'
+                r'INVAS\w+|INVADE\w*|'
+                r'NUCLEAR\s+(?:THREAT|STRIKE|SITES?|FACILIT\w+|ENRICHMENT|PROGRAM)|'
+                r'STRIKES?\s+(?:ON|AGAINST)\b|'
+                r'STRAIT\s+OF\s+HORMUZ|RED\s+SEA|HEZBOLLAH|HAMAS|HOUTHI\w*|'
+                r'CEASE\s?FIRE|TRUCE|DE.?ESCALAT\w+|PEACE\s+(?:DEAL|AGREEMENT|TALKS|ACCORD)|'
+                r'UKRAINE|GAZA|MIDDLE\s+EAST\s+(?:WAR|CONFLICT|TENSION|CRISIS))\b'),
      [("SPX", "Equities"), ("XAU", "Commodities"), ("WTI", "Commodities"), ("UST10Y", "Fixed Income")]),
     (re.compile(r'\b(CHINA\s+(ECONOMY|SLOWDOWN|CRISIS|GROWTH|TRADE|MARKET)|YUAN\s+(DEVALUE|WEAKEN|CRASH)|EM\s+CRISIS)\b'),
      [("SPX", "Equities"), ("Trade", "Macro"), ("USD/CNY", "FX")]),
@@ -371,6 +380,28 @@ _LEXICON: dict[str, tuple[float, float]] = {
     "shortage": (-0.40, 1.0), "safe haven": (-0.30, 0.9), "safe havens": (-0.30, 0.9),
     "safe haven bid": (-0.40, 1.0), "boosts safe havens": (-0.45, 1.0),
     "flight to safety": (-0.50, 1.1),
+    # Military escalation — risk-off for equities (the by_asset_class layer inverts
+    # these to bullish for oil/gold). This is the primary attack-report vocabulary
+    # markets react to, which bare "war"/"conflict" missed, so strikes on Iran and
+    # the like now score directional instead of being dropped as neutral noise.
+    # Keys are space-joined (the tokenizer drops hyphens): "de-escalation" -> "de escalation".
+    "airstrike": (-0.55, 1.2), "airstrikes": (-0.55, 1.2), "air strike": (-0.55, 1.2),
+    "air strikes": (-0.55, 1.2), "airstrikes on": (-0.58, 1.2), "strikes on": (-0.38, 0.9),
+    "missile strike": (-0.55, 1.2), "missile attack": (-0.55, 1.2), "missile barrage": (-0.55, 1.2),
+    "missile launch": (-0.45, 1.0), "ballistic missile": (-0.50, 1.1),
+    "drone strike": (-0.50, 1.1), "drone attack": (-0.50, 1.1), "rocket attack": (-0.50, 1.1),
+    "shelling": (-0.45, 1.0), "bombardment": (-0.50, 1.1), "bombing": (-0.50, 1.1),
+    "invasion": (-0.55, 1.2), "invade": (-0.50, 1.1), "invades": (-0.50, 1.1), "invaded": (-0.50, 1.1),
+    "military strike": (-0.55, 1.2), "military action": (-0.45, 1.0), "military offensive": (-0.50, 1.1),
+    "military operation": (-0.40, 1.0), "military incursion": (-0.45, 1.0),
+    "retaliatory strike": (-0.52, 1.1), "nuclear strike": (-0.75, 1.4), "nuclear threat": (-0.55, 1.1),
+    "escalation": (-0.40, 1.0), "escalates": (-0.35, 0.9), "escalating": (-0.35, 0.9),
+    "warfare": (-0.55, 1.2), "hostilities": (-0.45, 1.0),
+    # De-escalation — bullish (mirror of the sanctions-relief handling above).
+    "ceasefire": (0.45, 1.1), "cease fire": (0.45, 1.1), "truce": (0.40, 1.0),
+    "de escalation": (0.42, 1.0), "de escalate": (0.38, 0.9), "de escalates": (0.38, 0.9),
+    "de escalating": (0.38, 0.9), "peace deal": (0.48, 1.1), "peace agreement": (0.48, 1.1),
+    "peace talks": (0.30, 0.9),
     # Credit / systemic
     "default": (-0.70, 1.3), "debt ceiling": (-0.40, 1.1), "credit downgrade": (-0.55, 1.2),
     "downgrade": (-0.45, 1.0), "credit crunch": (-0.75, 1.3), "liquidity crunch": (-0.75, 1.3),

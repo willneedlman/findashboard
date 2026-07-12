@@ -19,7 +19,7 @@ import pytest
 
 from sentiment import aggregate, source_manager
 from sentiment.config import SOURCE_BY_LABEL
-from sentiment.lexicon import extract_entities, score_text
+from sentiment.lexicon import extract_entities, is_relevant, score_text
 from sentiment.reliability import Reliability
 from sentiment.schemas import ScoredArticle
 from sentiment.sources.base import FetchOutcome, _coerce
@@ -104,6 +104,34 @@ def test_movement_layer_and_inversion(text, expected):
 ])
 def test_participial_movement_and_supply_demand(text, expected):
     assert score_text(text, extract_entities(text)).sentiment == expected
+
+
+# Geopolitical shock reports (strikes, missiles, invasion) are market-moving but
+# name no ticker, so the relevance gate used to drop them before scoring. They
+# must now be relevant AND read risk-off; de-escalation must read risk-on.
+@pytest.mark.parametrize("text,expected", [
+    ("Israel launches airstrikes on Iran nuclear sites", "bearish"),
+    ("Iran retaliates with missile barrage on Tel Aviv", "bearish"),
+    ("Houthi drone attack hits tanker in Red Sea", "bearish"),
+    ("Russia invades neighbor as conflict widens", "bearish"),
+    ("Israel and Iran agree ceasefire", "bullish"),
+    ("Ukraine and Russia sign peace deal", "bullish"),
+])
+def test_geopolitical_shock_relevant_and_directional(text, expected):
+    ents = extract_entities(text)
+    assert is_relevant(text, ents), f"dropped as off-topic: {text}"
+    assert score_text(text, ents).sentiment == expected
+
+
+# The escalation vocabulary must not read risk-off in non-military uses of the
+# same words (labor strikes, "strike a deal", "strikes gold").
+@pytest.mark.parametrize("text", [
+    "Boeing workers strike enters third week",
+    "Apple and Google strike a deal on search",
+    "Netflix strikes gold with new hit series",
+])
+def test_non_military_strike_not_risk_off(text):
+    assert score_text(text, extract_entities(text)).sentiment != "bearish"
 
 
 def test_per_asset_class_inverts_price_but_aligns_growth():
