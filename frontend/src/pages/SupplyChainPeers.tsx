@@ -16,8 +16,15 @@ interface Peer {
   industry: string | null
   business_category: string | null
   country: string | null
+  city: string | null
   revenue: number | null
+  revenue_type: string | null
   employees: number | null
+  year_founded: number | null
+  brief: string | null
+  core_offerings: string[]
+  supply_chain_focus: string[]
+  target_markets: string[]
   score: number
   shared_focus: string[]
   shared_markets: string[]
@@ -34,6 +41,14 @@ interface PeersResp {
     exchange: string | null
     industry: string | null
     business_category: string | null
+    country: string | null
+    city: string | null
+    revenue: number | null
+    revenue_type: string | null
+    employees: number | null
+    year_founded: number | null
+    brief: string | null
+    core_offerings: string[]
     supply_chain_focus: string[]
     target_markets: string[]
   }
@@ -87,9 +102,9 @@ function Toggle<T extends string>({ value, selected, onClick, children }: { valu
   return <button onClick={() => onClick(value)} style={{ background: active ? 'rgba(96,165,250,0.14)' : 'transparent', color: active ? T.text : T.muted, border: 'none', borderLeft: active ? `2px solid ${BLUE}` : '2px solid transparent', padding: '7px 10px', fontFamily: T.mono, fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>{children}</button>
 }
 
-function CompanyNode({ peer, side, color, dimmed, onHover, onOpen }: { peer: Peer; side: Side; color: string; dimmed: boolean; onHover: (peer: Peer | null) => void; onOpen: (symbol: string) => void }) {
+function CompanyNode({ peer, side, color, dimmed, selected, onHover, onSelect }: { peer: Peer; side: Side; color: string; dimmed: boolean; selected: boolean; onHover: (peer: Peer | null) => void; onSelect: (peer: Peer) => void }) {
   const ticker = peer.symbol ?? peer.exchange_tickers[0]
-  return <button onMouseEnter={() => onHover(peer)} onMouseLeave={() => onHover(null)} onClick={() => ticker && onOpen(ticker)} disabled={!ticker} style={{ width: '100%', minHeight: 49, textAlign: side === 'sourcing' ? 'right' : 'left', background: PANEL, border: `1px solid color-mix(in srgb, ${color} 46%, var(--theme-border, rgba(255,255,255,0.12)))`, borderRight: side === 'sourcing' ? `3px solid ${color}` : undefined, borderLeft: side === 'markets' ? `3px solid ${color}` : undefined, padding: '8px 10px', cursor: ticker ? 'pointer' : 'default', opacity: dimmed ? 0.24 : 1, transition: 'opacity 0.14s, transform 0.14s', overflow: 'hidden' }}>
+  return <button onMouseEnter={() => onHover(peer)} onMouseLeave={() => onHover(null)} onClick={() => onSelect(peer)} style={{ width: '100%', minHeight: 49, textAlign: side === 'sourcing' ? 'right' : 'left', background: selected ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, var(--theme-surface, #0d1826))' : PANEL, border: `1px solid color-mix(in srgb, ${color} 46%, var(--theme-border, rgba(255,255,255,0.12)))`, borderRight: side === 'sourcing' ? `3px solid ${color}` : undefined, borderLeft: side === 'markets' ? `3px solid ${color}` : undefined, padding: '8px 10px', cursor: 'pointer', opacity: dimmed ? 0.24 : 1, transition: 'opacity 0.14s, transform 0.14s', overflow: 'hidden' }}>
     <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: side === 'sourcing' ? 'flex-end' : 'flex-start', gap: 7, minWidth: 0 }}>
       {side === 'markets' && ticker && <span style={{ color, fontFamily: T.mono, fontSize: 10, fontWeight: 800, flexShrink: 0 }}>{ticker}</span>}
       <span style={{ fontFamily: T.label, fontSize: 11, fontWeight: 700, color: T.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{peer.name}</span>
@@ -102,6 +117,7 @@ function CompanyNode({ peer, side, color, dimmed, onHover, onOpen }: { peer: Pee
 function SupplyMap({ data, onOpen }: { data: PeersResp; onOpen: (ticker: string) => void }) {
   const [sortMode, setSortMode] = useState<SortMode>('score')
   const [hovered, setHovered] = useState<Peer | null>(null)
+  const [selected, setSelected] = useState<Peer | null>(null)
   const peers = data.peers ?? []
   const layout = useMemo(() => {
     const sorted = sortPeers(peers, sortMode)
@@ -112,7 +128,7 @@ function SupplyMap({ data, onOpen }: { data: PeersResp; onOpen: (ticker: string)
   }, [peers, sortMode])
   const shown = [...layout.sourcing, ...layout.markets]
   const maxScore = Math.max(...shown.map(p => p.score), 1)
-  const focus = hovered
+  const focus = hovered ?? selected
 
   return <>
     <div className="ft-panel" style={{ overflow: 'hidden' }}>
@@ -143,7 +159,7 @@ function SupplyMap({ data, onOpen }: { data: PeersResp; onOpen: (ticker: string)
           </svg>
           <section style={{ zIndex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 7, marginBottom: 12 }}><span style={{ fontFamily: T.label, fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', color: GOLD }}>SOURCING OVERLAP</span><ArrowLeft size={13} color={GOLD} /></div>
-            <div style={{ display: 'grid', gap: 7 }}>{layout.sourcing.length ? layout.sourcing.map(p => <CompanyNode key={p.name} peer={p} side="sourcing" color={nodeColor(p)} dimmed={!!focus && focus !== p} onHover={setHovered} onOpen={onOpen} />) : <Unavailable label="No sourcing overlap available" />}</div>
+            <div style={{ display: 'grid', gap: 7 }}>{layout.sourcing.length ? layout.sourcing.map(p => <CompanyNode key={p.name} peer={p} side="sourcing" color={nodeColor(p)} dimmed={!!focus && focus !== p} selected={selected === p} onHover={setHovered} onSelect={setSelected} />) : <Unavailable label="No sourcing overlap available" />}</div>
           </section>
           <section style={{ alignSelf: 'center', zIndex: 1 }}>
             <div style={{ background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, var(--theme-surface, #0d1826))', border: `1px solid ${GOLD}`, padding: '22px 18px', textAlign: 'center', boxShadow: '0 0 0 6px rgba(201,168,76,0.045)' }}>
@@ -155,7 +171,7 @@ function SupplyMap({ data, onOpen }: { data: PeersResp; onOpen: (ticker: string)
           </section>
           <section style={{ zIndex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 12 }}><ArrowRight size={13} color={BLUE} /><span style={{ fontFamily: T.label, fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', color: BLUE }}>MARKET OVERLAP</span></div>
-            <div style={{ display: 'grid', gap: 7 }}>{layout.markets.length ? layout.markets.map(p => <CompanyNode key={p.name} peer={p} side="markets" color={nodeColor(p)} dimmed={!!focus && focus !== p} onHover={setHovered} onOpen={onOpen} />) : <Unavailable label="No market overlap available" />}</div>
+            <div style={{ display: 'grid', gap: 7 }}>{layout.markets.length ? layout.markets.map(p => <CompanyNode key={p.name} peer={p} side="markets" color={nodeColor(p)} dimmed={!!focus && focus !== p} selected={selected === p} onHover={setHovered} onSelect={setSelected} />) : <Unavailable label="No market overlap available" />}</div>
           </section>
         </div>
       </div>
@@ -165,12 +181,32 @@ function SupplyMap({ data, onOpen }: { data: PeersResp; onOpen: (ticker: string)
       </div>
     </div>
     <div className="ft-panel" style={{ marginTop: 14 }}>
-      <div className="ft-panel-header">{focus ? `${focus.name} · overlap detail` : 'Map methodology'}</div>
+      <div className="ft-panel-header">{focus ? `${focus.name} · company detail` : 'Select a company'}</div>
       <div style={{ padding: '13px 16px', fontFamily: T.mono, fontSize: 10.5, color: T.muted, lineHeight: 1.65 }}>
-        {focus ? <><span style={{ color: T.text, fontWeight: 700 }}>Match score {focus.score}</span> · {fmtBn(focus.revenue)}{focus.employees != null ? ` · ${focus.employees.toLocaleString()} employees` : ''}<br /><span style={{ color: GOLD }}>Sourcing:</span> {focus.shared_focus.join(', ') || 'Data unavailable'} &nbsp; <span style={{ color: BLUE }}>Markets:</span> {focus.shared_markets.join(', ') || 'Data unavailable'}</> : <>This is an overlap map built from Veridion firmographic categories, supply-chain focus, end markets, and industry. Hover a firm to inspect the underlying attributes; select a ticker to open its company profile.</>}
+        {focus ? <CompanyDetail peer={focus} onOpen={onOpen} /> : <>Click a company to keep its brief, products and services, sourcing focus, end markets, and operating facts visible here.</>}
       </div>
     </div>
   </>
+}
+
+function DetailTags({ label, values, color }: { label: string; values: string[]; color: string }) {
+  return <div style={{ marginTop: 13 }}><div style={{ color, fontFamily: T.label, fontSize: 9, fontWeight: 800, letterSpacing: '0.11em', marginBottom: 6 }}>{label}</div><div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>{values.length ? values.map(value => <span key={value} style={{ padding: '3px 6px', border: `1px solid color-mix(in srgb, ${color} 42%, transparent)`, color: T.text, fontSize: 9.5 }}>{value}</span>) : <span>Data unavailable</span>}</div></div>
+}
+
+function CompanyDetail({ peer, onOpen }: { peer: Peer; onOpen: (ticker: string) => void }) {
+  const ticker = peer.symbol ?? peer.exchange_tickers[0]
+  const location = [peer.city, peer.country].filter(Boolean).join(', ') || 'Location unavailable'
+  return <div>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap' }}>
+      <div><span style={{ color: T.text, fontFamily: T.label, fontSize: 14, fontWeight: 800 }}>{peer.name}</span>{ticker && <span style={{ color: GOLD, fontWeight: 800, marginLeft: 8 }}>{ticker}</span>}<div style={{ marginTop: 4 }}>{peer.industry ?? 'Industry unavailable'}{peer.business_category ? ` · ${peer.business_category}` : ''}</div></div>
+      {ticker && <button onClick={() => onOpen(ticker)} style={{ background: 'transparent', border: `1px solid ${GOLD}`, color: GOLD, fontFamily: T.mono, fontSize: 9.5, fontWeight: 800, padding: '6px 9px', cursor: 'pointer' }}>OPEN PROFILE</button>}
+    </div>
+    {peer.brief ? <p style={{ margin: '13px 0 0', color: T.text, fontFamily: T.label, fontSize: 12, lineHeight: 1.55, maxWidth: 980 }}>{peer.brief}</p> : <p style={{ margin: '13px 0 0' }}>Company brief unavailable.</p>}
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px 18px', marginTop: 13 }}><span>{fmtBn(peer.revenue)}{peer.revenue_type ? ` · ${peer.revenue_type}` : ''}</span><span>{peer.employees != null ? `${peer.employees.toLocaleString()} employees` : 'Headcount unavailable'}</span><span>{peer.year_founded ? `Founded ${peer.year_founded}` : 'Founding year unavailable'}</span><span>{location}</span><span>Match score {peer.score}</span></div>
+    <DetailTags label="PRODUCTS & SERVICES · PROVIDES / SELLS" values={peer.core_offerings} color={GOLD} />
+    <DetailTags label="SOURCING FOCUS · BUYS / RELIES ON" values={peer.supply_chain_focus} color={GOLD} />
+    <DetailTags label="END MARKETS · SELLS INTO" values={peer.target_markets} color={BLUE} />
+  </div>
 }
 
 function Unavailable({ label }: { label: string }) {
@@ -190,7 +226,7 @@ export function SupplyChainPeersContent() {
     if (!ticker) return
     setLoading(true); setData(null); setNotFound(null)
     try {
-      const response = await axios.get<PeersResp>(`/api/corporate/peers-by-tags?ticker=${encodeURIComponent(ticker)}`)
+      const response = await axios.get<PeersResp>(`/api/corporate/peers-by-tags?ticker=${encodeURIComponent(ticker)}&limit=60`)
       if (response.data.matched) { setData(response.data); recordRecentTicker(ticker) }
       else setNotFound(ticker)
     } catch { setNotFound(ticker) } finally { setLoading(false) }

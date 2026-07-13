@@ -1175,7 +1175,7 @@ def get_peers_by_tags(ticker: str, limit: int = 24):
     firmographic tags (sourcing focus, end-markets, industry). Read-only DB."""
     from logistics import company_fundamentals
     lim = max(1, min(limit, 60))
-    ck = f"peers_tags:{ticker.strip().upper()}:{lim}"
+    ck = f"peers_tags:v2:{ticker.strip().upper()}:{lim}"
     cached = disk_get(ck)
     if cached is not None:
         return cached

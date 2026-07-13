@@ -104,7 +104,8 @@ def peers_by_tags(ticker: str, limit: int = 24) -> dict:
 
         rows = conn.execute(
             "SELECT veridion_id, name, exchange_tickers, main_industry, business_category, "
-            "country, revenue, employees, supply_chain_focus, target_markets FROM companies"
+            "country, city, revenue, revenue_type, employees, year_founded, description, "
+            "core_offerings, supply_chain_focus, target_markets FROM companies"
         ).fetchall()
 
     scored = []
@@ -126,8 +127,15 @@ def peers_by_tags(ticker: str, limit: int = 24) -> dict:
             "industry": r["main_industry"],
             "business_category": r["business_category"],
             "country": r["country"],
+            "city": r["city"],
             "revenue": r["revenue"],
+            "revenue_type": r["revenue_type"],
             "employees": r["employees"],
+            "year_founded": r["year_founded"],
+            "brief": r["description"],
+            "core_offerings": _split(r["core_offerings"]),
+            "supply_chain_focus": _split(r["supply_chain_focus"]),
+            "target_markets": _split(r["target_markets"]),
             "score": score,
             "shared_focus": shared_focus,
             "shared_markets": shared_markets,
@@ -146,6 +154,14 @@ def peers_by_tags(ticker: str, limit: int = 24) -> dict:
             "exchange": exchange,
             "industry": base_industry,
             "business_category": base_category,
+            "country": base["country"],
+            "city": base["city"],
+            "revenue": base["revenue"],
+            "revenue_type": base["revenue_type"],
+            "employees": base["employees"],
+            "year_founded": base["year_founded"],
+            "brief": base["description"],
+            "core_offerings": _split(base["core_offerings"]),
             "supply_chain_focus": sorted(base_focus),
             "target_markets": sorted(base_markets),
         },
