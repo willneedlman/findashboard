@@ -144,6 +144,7 @@ def peers_by_tags(ticker: str, limit: int = 24) -> dict:
         }))
 
     scored.sort(key=lambda t: (-t[0], -t[1]))
+    returned = [p for _, _, p in scored[:limit]]
     return {
         "available": True,
         "matched": True,
@@ -166,5 +167,6 @@ def peers_by_tags(ticker: str, limit: int = 24) -> dict:
             "target_markets": sorted(base_markets),
         },
         "count": len(scored),
-        "peers": [p for _, _, p in scored[:limit]],
+        "returned": len(returned),
+        "peers": returned,
     }

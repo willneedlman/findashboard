@@ -1174,8 +1174,8 @@ def get_peers_by_tags(ticker: str, limit: int = 24):
     """Supply-chain peer/counterparty set for one name, ranked by shared Veridion
     firmographic tags (sourcing focus, end-markets, industry). Read-only DB."""
     from logistics import company_fundamentals
-    lim = max(1, min(limit, 60))
-    ck = f"peers_tags:v2:{ticker.strip().upper()}:{lim}"
+    lim = max(1, min(limit, 600))
+    ck = f"peers_tags:v3:{ticker.strip().upper()}:{lim}"
     cached = disk_get(ck)
     if cached is not None:
         return cached

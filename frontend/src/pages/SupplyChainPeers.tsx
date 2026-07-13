@@ -53,6 +53,7 @@ interface PeersResp {
     target_markets: string[]
   }
   count?: number
+  returned?: number
   peers?: Peer[]
 }
 
@@ -62,6 +63,7 @@ type Side = 'sourcing' | 'markets'
 const GOLD = 'var(--theme-primary, #c9a84c)'
 const BLUE = 'var(--theme-tertiary, #60a5fa)'
 const PANEL = 'var(--theme-surface, #0d1826)'
+const MAX_MAP_NODES = 12
 
 const fmtBn = (value: number | null) => value == null ? 'Size unavailable'
   : Math.abs(value) >= 1e9 ? `$${(value / 1e9).toFixed(1)}B revenue`
@@ -118,6 +120,7 @@ function SupplyMap({ data, onOpen }: { data: PeersResp; onOpen: (ticker: string)
   const [sortMode, setSortMode] = useState<SortMode>('score')
   const [hovered, setHovered] = useState<Peer | null>(null)
   const [selected, setSelected] = useState<Peer | null>(null)
+  const [expandedSide, setExpandedSide] = useState<Side | null>(null)
   const peers = data.peers ?? []
   const layout = useMemo(() => {
     const sorted = sortPeers(peers, sortMode)
@@ -126,14 +129,15 @@ function SupplyMap({ data, onOpen }: { data: PeersResp; onOpen: (ticker: string)
       markets: sorted.filter(p => peerSide(p) === 'markets'),
     }
   }, [peers, sortMode])
-  const shown = [...layout.sourcing, ...layout.markets]
+  const mapped = { sourcing: layout.sourcing.slice(0, MAX_MAP_NODES), markets: layout.markets.slice(0, MAX_MAP_NODES) }
+  const shown = [...mapped.sourcing, ...mapped.markets]
   const maxScore = Math.max(...shown.map(p => p.score), 1)
   const focus = hovered ?? selected
 
   return <>
     <div className="ft-panel" style={{ overflow: 'hidden' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '9px 14px', borderBottom: `1px solid ${T.border}`, background: 'rgba(255,255,255,0.012)', flexWrap: 'wrap' }}>
-        <span style={{ color: T.muted, fontFamily: T.mono, fontSize: 9, fontWeight: 400 }}>{data.count ?? peers.length} matched firms · Veridion firmographics</span>
+        <span style={{ color: T.muted, fontFamily: T.mono, fontSize: 9, fontWeight: 400 }}>{data.returned ?? peers.length} shown of {data.count ?? peers.length} matched firms · Veridion firmographics</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span style={{ color: T.muted, fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em' }}>SORT</span>
           <div style={{ display: 'flex', border: `1px solid ${T.border}` }}>
@@ -146,20 +150,21 @@ function SupplyMap({ data, onOpen }: { data: PeersResp; onOpen: (ticker: string)
       <div style={{ overflowX: 'auto' }}>
         <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'minmax(240px, 1fr) minmax(230px, 0.72fr) minmax(240px, 1fr)', gap: 42, minWidth: 900, padding: '26px 30px 30px', minHeight: 560 }}>
           <svg aria-hidden="true" viewBox="0 0 100 100" style={{ position: 'absolute', inset: '26px 30px 30px', width: 'calc(100% - 60px)', height: 'calc(100% - 56px)', overflow: 'visible', pointerEvents: 'none' }} preserveAspectRatio="none">
-            {layout.sourcing.map((peer, i) => {
-              const y = ((i + 0.5) / Math.max(layout.sourcing.length, 1)) * 100
+            {mapped.sourcing.map((peer, i) => {
+              const y = ((i + 0.5) / Math.max(mapped.sourcing.length, 1)) * 100
               const width = 0.7 + (peer.score / maxScore) * 2.8
               return <path key={peer.name} d={`M 32 ${y} C 42 ${y}, 43 50, 48 50`} stroke={nodeColor(peer)} strokeWidth={width} opacity={focus && focus !== peer ? 0.12 : 0.42} fill="none" />
             })}
-            {layout.markets.map((peer, i) => {
-              const y = ((i + 0.5) / Math.max(layout.markets.length, 1)) * 100
+            {mapped.markets.map((peer, i) => {
+              const y = ((i + 0.5) / Math.max(mapped.markets.length, 1)) * 100
               const width = 0.7 + (peer.score / maxScore) * 2.8
               return <path key={peer.name} d={`M 52 50 C 57 50, 58 ${y}, 68 ${y}`} stroke={nodeColor(peer)} strokeWidth={width} opacity={focus && focus !== peer ? 0.12 : 0.42} fill="none" />
             })}
           </svg>
           <section style={{ zIndex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 7, marginBottom: 12 }}><span style={{ fontFamily: T.label, fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', color: GOLD }}>SOURCING OVERLAP</span><ArrowLeft size={13} color={GOLD} /></div>
-            <div style={{ display: 'grid', gap: 7 }}>{layout.sourcing.length ? layout.sourcing.map(p => <CompanyNode key={p.name} peer={p} side="sourcing" color={nodeColor(p)} dimmed={!!focus && focus !== p} selected={selected === p} onHover={setHovered} onSelect={setSelected} />) : <Unavailable label="No sourcing overlap available" />}</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 7, marginBottom: 12 }}><span style={{ fontFamily: T.label, fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', color: GOLD }}>SHARED SOURCING</span><ArrowLeft size={13} color={GOLD} /></div>
+            <div style={{ display: 'grid', gap: 7 }}>{mapped.sourcing.length ? mapped.sourcing.map(p => <CompanyNode key={p.name} peer={p} side="sourcing" color={nodeColor(p)} dimmed={!!focus && focus !== p} selected={selected === p} onHover={setHovered} onSelect={setSelected} />) : <Unavailable label="No shared sourcing attributes" />}</div>
+            {layout.sourcing.length > MAX_MAP_NODES && <button onClick={() => setExpandedSide(expandedSide === 'sourcing' ? null : 'sourcing')} style={{ width: '100%', marginTop: 8, padding: '8px 10px', background: 'transparent', border: `1px dashed ${T.border}`, color: GOLD, fontFamily: T.mono, fontSize: 9.5, fontWeight: 800, cursor: 'pointer' }}>{expandedSide === 'sourcing' ? 'HIDE FULL LIST' : `VIEW ${layout.sourcing.length - MAX_MAP_NODES} MORE`}</button>}
           </section>
           <section style={{ alignSelf: 'center', zIndex: 1 }}>
             <div style={{ background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, var(--theme-surface, #0d1826))', border: `1px solid ${GOLD}`, padding: '22px 18px', textAlign: 'center', boxShadow: '0 0 0 6px rgba(201,168,76,0.045)' }}>
@@ -170,16 +175,18 @@ function SupplyMap({ data, onOpen }: { data: PeersResp; onOpen: (ticker: string)
             </div>
           </section>
           <section style={{ zIndex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 12 }}><ArrowRight size={13} color={BLUE} /><span style={{ fontFamily: T.label, fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', color: BLUE }}>MARKET OVERLAP</span></div>
-            <div style={{ display: 'grid', gap: 7 }}>{layout.markets.length ? layout.markets.map(p => <CompanyNode key={p.name} peer={p} side="markets" color={nodeColor(p)} dimmed={!!focus && focus !== p} selected={selected === p} onHover={setHovered} onSelect={setSelected} />) : <Unavailable label="No market overlap available" />}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 12 }}><ArrowRight size={13} color={BLUE} /><span style={{ fontFamily: T.label, fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', color: BLUE }}>SHARED END MARKETS</span></div>
+            <div style={{ display: 'grid', gap: 7 }}>{mapped.markets.length ? mapped.markets.map(p => <CompanyNode key={p.name} peer={p} side="markets" color={nodeColor(p)} dimmed={!!focus && focus !== p} selected={selected === p} onHover={setHovered} onSelect={setSelected} />) : <Unavailable label="No shared end-market attributes" />}</div>
+            {layout.markets.length > MAX_MAP_NODES && <button onClick={() => setExpandedSide(expandedSide === 'markets' ? null : 'markets')} style={{ width: '100%', marginTop: 8, padding: '8px 10px', background: 'transparent', border: `1px dashed ${T.border}`, color: BLUE, fontFamily: T.mono, fontSize: 9.5, fontWeight: 800, cursor: 'pointer' }}>{expandedSide === 'markets' ? 'HIDE FULL LIST' : `VIEW ${layout.markets.length - MAX_MAP_NODES} MORE`}</button>}
           </section>
         </div>
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '11px 14px', borderTop: `1px solid ${T.border}`, background: 'rgba(255,255,255,0.012)', flexWrap: 'wrap' }}>
         <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.muted }}>Link width represents Veridion match score; it is not reported transaction exposure.</span>
-        <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.muted }}>Sourcing and market labels indicate shared attributes, not verified supplier/customer links.</span>
+        <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.muted }}>Shared sourcing and end-market tags are similarity signals, not verified supplier/customer links.</span>
       </div>
     </div>
+    {expandedSide && <MatchList side={expandedSide} peers={layout[expandedSide]} selected={selected} onSelect={setSelected} onHover={setHovered} />}
     <div className="ft-panel" style={{ marginTop: 14 }}>
       <div className="ft-panel-header">{focus ? `${focus.name} · company detail` : 'Select a company'}</div>
       <div style={{ padding: '13px 16px', fontFamily: T.mono, fontSize: 10.5, color: T.muted, lineHeight: 1.65 }}>
@@ -187,6 +194,15 @@ function SupplyMap({ data, onOpen }: { data: PeersResp; onOpen: (ticker: string)
       </div>
     </div>
   </>
+}
+
+function MatchList({ side, peers, selected, onSelect, onHover }: { side: Side; peers: Peer[]; selected: Peer | null; onSelect: (peer: Peer) => void; onHover: (peer: Peer | null) => void }) {
+  const color = side === 'sourcing' ? GOLD : BLUE
+  const label = side === 'sourcing' ? 'All shared sourcing matches' : 'All shared end-market matches'
+  return <div className="ft-panel" style={{ marginTop: 14 }}>
+    <div className="ft-panel-header" style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}><span>{label}</span><span style={{ color: T.muted, fontFamily: T.mono, fontSize: 9, fontWeight: 400 }}>{peers.length} firms</span></div>
+    <div style={{ maxHeight: 420, overflowY: 'auto', padding: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 7 }}>{peers.map(peer => <CompanyNode key={peer.name} peer={peer} side={side} color={color} dimmed={false} selected={selected === peer} onHover={onHover} onSelect={onSelect} />)}</div>
+  </div>
 }
 
 function DetailTags({ label, values, color }: { label: string; values: string[]; color: string }) {
@@ -226,7 +242,7 @@ export function SupplyChainPeersContent() {
     if (!ticker) return
     setLoading(true); setData(null); setNotFound(null)
     try {
-      const response = await axios.get<PeersResp>(`/api/corporate/peers-by-tags?ticker=${encodeURIComponent(ticker)}&limit=60`)
+      const response = await axios.get<PeersResp>(`/api/corporate/peers-by-tags?ticker=${encodeURIComponent(ticker)}&limit=600`)
       if (response.data.matched) { setData(response.data); recordRecentTicker(ticker) }
       else setNotFound(ticker)
     } catch { setNotFound(ticker) } finally { setLoading(false) }
