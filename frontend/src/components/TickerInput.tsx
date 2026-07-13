@@ -101,7 +101,7 @@ export default function TickerInput({
   // With an empty field and nothing matched, offer recently viewed symbols.
   const showRecents = open && matches.length === 0 && text.trim() === '' && recents.length > 0
   return (
-    <div style={{ position: 'relative', flex: style?.flex }}>
+    <div style={{ position: 'relative', minWidth: 0, flex: style?.flex }}>
       <input
         value={text}
         onChange={e => onType(e.target.value)}

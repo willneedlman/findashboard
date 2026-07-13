@@ -44,6 +44,11 @@ def _pretty_company(name: str) -> str:
     return name.title().replace("'S", "'s")
 
 
+def _sec_company_name(ticker: str) -> str | None:
+    symbol = ticker.strip().upper()
+    return next((title for listed, title in _company_index() if listed == symbol), None)
+
+
 # Yahoo exchange codes that are US-listed (incl. OTC ADRs) — used to rank a US
 # ADR above the foreign primary so e.g. "nestle" resolves to NSRGY, not NESN.SW.
 _YH_US_EX = {"NYQ", "NMS", "NGM", "NCM", "NYE", "ASE", "PCX", "BTS", "BATS",
@@ -1192,17 +1197,19 @@ def get_supply_chain(ticker: str):
 
 
 @router.get("/peers-by-tags")
-def get_peers_by_tags(ticker: str, limit: int = 24):
+def get_peers_by_tags(ticker: str, limit: int = 24, company_name: str = ""):
     """Supply-chain peer/counterparty set for one name, ranked by shared Veridion
     firmographic tags (sourcing focus, end-markets, industry). Read-only DB."""
     from logistics import company_fundamentals
     lim = max(1, min(limit, 600))
-    ck = f"peers_tags:v3:{ticker.strip().upper()}:{lim}"
+    symbol = ticker.strip().upper()
+    canonical_name = company_name.strip() or _sec_company_name(symbol)
+    ck = f"peers_tags:v5:{symbol}:{_norm_company(canonical_name or '')}:{lim}"
     cached = disk_get(ck)
     if cached is not None:
         return cached
     try:
-        result = company_fundamentals.peers_by_tags(ticker, limit=lim)
+        result = company_fundamentals.peers_by_tags(symbol, limit=lim, expected_name=canonical_name)
         if result.get("matched"):
             disk_set(ck, result, ttl=7 * 24 * 3600)
         return result

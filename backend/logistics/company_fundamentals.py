@@ -11,6 +11,7 @@ exchange ticker, keyed by a bare-and-qualified ticker index.
 from __future__ import annotations
 
 import os
+import re
 import sqlite3
 
 
@@ -19,6 +20,11 @@ _DB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "
 # When a bare symbol resolves to more than one listing, the (US-centric) Company
 # Profile page wants the US listing. Lower rank wins.
 _US_EXCHANGES = ("NASDAQ", "NYSE", "NYSEARCA", "NYSEAMERICAN", "AMEX", "BATS", "CBOE", "OTCMKTS")
+_IDENTITY_NOISE = {
+    "inc", "incorporated", "corp", "corporation", "company", "co", "ltd",
+    "limited", "llc", "plc", "ag", "sa", "se", "nv", "holdings", "holding",
+    "group", "the", "adr", "com", "usa", "us",
+}
 
 
 def available() -> bool:
@@ -59,17 +65,36 @@ def _primary_symbol(exchange_tickers: list) -> str | None:
     return best.upper() if best else None
 
 
-def _resolve(conn: sqlite3.Connection, symbol: str):
-    """(company row, matched exchange) for a bare symbol, or (None, None)."""
+def _identity_key(name: str | None) -> str:
+    tokens = re.sub(r"[^a-z0-9 ]", " ", (name or "").lower()).split()
+    return "".join(token for token in tokens if token not in _IDENTITY_NOISE)
+
+
+def _identity_matches(candidate: str | None, expected: str | None) -> bool:
+    """Match issuer names after removing legal and listing noise."""
+    if not expected:
+        return True
+    candidate_key = _identity_key(candidate)
+    expected_key = _identity_key(expected)
+    if not candidate_key or not expected_key:
+        return False
+    return candidate_key == expected_key
+
+
+def _resolve(conn: sqlite3.Connection, symbol: str, expected_name: str | None = None):
+    """Resolve a bare U.S. symbol without falling through to a foreign collision."""
     rows = conn.execute(
         "SELECT DISTINCT veridion_id, exchange FROM ticker_index WHERE symbol = ?",
         (symbol,),
     ).fetchall()
     if not rows:
         return None, None
-    best = min(rows, key=lambda r: _exchange_rank(r["exchange"]))
-    c = conn.execute("SELECT * FROM companies WHERE veridion_id = ?", (best["veridion_id"],)).fetchone()
-    return c, best["exchange"]
+    us_rows = [row for row in rows if _exchange_rank(row["exchange"]) < len(_US_EXCHANGES)]
+    for best in sorted(us_rows, key=lambda row: _exchange_rank(row["exchange"])):
+        company = conn.execute("SELECT * FROM companies WHERE veridion_id = ?", (best["veridion_id"],)).fetchone()
+        if company is not None and _identity_matches(company["name"], expected_name):
+            return company, best["exchange"]
+    return None, None
 
 
 # Overlap weights: a shared sourcing focus is the strongest supply-chain signal,
@@ -77,7 +102,7 @@ def _resolve(conn: sqlite3.Connection, symbol: str):
 _W_FOCUS, _W_MARKET, _W_INDUSTRY, _W_CATEGORY = 3, 2, 3, 2
 
 
-def peers_by_tags(ticker: str, limit: int = 24) -> dict:
+def peers_by_tags(ticker: str, limit: int = 24, expected_name: str | None = None) -> dict:
     """Rank the tickered universe by firmographic overlap with one name.
 
     Companies are scored on shared supply-chain-focus and target-market tags plus
@@ -92,7 +117,7 @@ def peers_by_tags(ticker: str, limit: int = 24) -> dict:
         return {"available": True, "matched": False, "ticker": ticker}
 
     with _conn() as conn:
-        base, exchange = _resolve(conn, symbol)
+        base, exchange = _resolve(conn, symbol, expected_name)
         if base is None:
             return {"available": True, "matched": False, "ticker": symbol}
 

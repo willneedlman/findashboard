@@ -420,14 +420,16 @@ export function SupplyChainPeersContent() {
     if (!ticker) return
     setLoading(true); setData(null); setVerified([])
     try {
-      const [peersResult, relationshipsResult, profileResult] = await Promise.allSettled([
-        axios.get<PeersResp>(`/api/corporate/peers-by-tags?ticker=${encodeURIComponent(ticker)}&limit=600`),
+      const [relationshipsResult, profileResult] = await Promise.allSettled([
         axios.get<VerifiedRelationshipsResp>(`/api/corporate/verified-supply-chain-relationships?ticker=${encodeURIComponent(ticker)}`),
         axios.get<CompanyProfileResp>(`/api/corporate/supply-chain?ticker=${encodeURIComponent(ticker)}`),
       ])
-      const peers = peersResult.status === 'fulfilled' ? peersResult.value.data : null
       const relationships = relationshipsResult.status === 'fulfilled' ? relationshipsResult.value.data : null
       const profile = profileResult.status === 'fulfilled' ? profileResult.value.data : null
+      const canonicalName = profile?.name || relationships?.company_name || ''
+      const peers = await axios.get<PeersResp>(`/api/corporate/peers-by-tags?ticker=${encodeURIComponent(ticker)}&company_name=${encodeURIComponent(canonicalName)}&limit=600`)
+        .then(response => response.data)
+        .catch(() => null)
       const clean = (value?: string | null) => value && value !== 'N/A' ? value : null
       const productNames = profile?.product_segments.latest?.map(segment => segment.name) ?? []
       const marketNames = profile?.geo_segments.latest?.map(segment => segment.name) ?? []
@@ -437,7 +439,7 @@ export function SupplyChainPeersContent() {
       const dataSources = Array.from(new Set([...(profile?.profile_sources ?? []), ...segmentSources]))
       const existingBase = peers?.matched ? peers.base : undefined
       const enrichedBase: NonNullable<PeersResp['base']> = {
-        name: existingBase?.name && existingBase.name !== ticker ? existingBase.name : profile?.name || relationships?.company_name || ticker,
+        name: profile?.name || relationships?.company_name || existingBase?.name || ticker,
         exchange: existingBase?.exchange ?? null,
         industry: existingBase?.industry ?? clean(profile?.industry),
         business_category: existingBase?.business_category ?? clean(profile?.sector),
@@ -456,7 +458,7 @@ export function SupplyChainPeersContent() {
       setVerified(relationships?.relationships ?? [])
       setData({
         available: peers?.available ?? false,
-        matched: true,
+        matched: peers?.matched ?? false,
         ticker,
         base: enrichedBase,
         count: peers?.count ?? 0,
@@ -477,9 +479,15 @@ export function SupplyChainPeersContent() {
   return <div>
     <PageHeader title="Supply Chain Map" />
     <div style={{ maxWidth: 1320 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: 300, maxWidth: '100%', margin: '0 0 18px', padding: '6px 8px 6px 10px', background: 'var(--theme-surface, #0d1826)', border: `1px solid ${T.border}` }}>
+      <div
+        onMouseDown={event => {
+          if ((event.target as HTMLElement).closest('button')) return
+          event.currentTarget.querySelector('input')?.focus()
+        }}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, width: 240, maxWidth: '100%', margin: '0 0 18px', padding: '6px 8px 6px 10px', background: 'var(--theme-surface, #0d1826)', border: `1px solid ${T.border}`, cursor: 'text' }}
+      >
         <Search size={14} color={GOLD} />
-        <TickerInput value={search} onChange={setSearch} onEnter={() => doFetch(search)} onSelect={doFetch} placeholder="Search" aria-label="Search company" style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', color: T.text, fontFamily: T.mono, fontSize: 11, fontWeight: 700 }} />
+        <TickerInput value={search} onChange={setSearch} onEnter={() => doFetch(search)} onSelect={doFetch} placeholder="Search" aria-label="Search company" style={{ width: '100%', flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', color: T.text, fontFamily: T.mono, fontSize: 11, fontWeight: 700 }} />
         <button onClick={() => doFetch(search)} disabled={!search.trim() || loading} style={{ background: 'transparent', border: 'none', color: search.trim() ? GOLD : T.muted, fontFamily: T.mono, fontSize: 9, fontWeight: 800, cursor: search.trim() ? 'pointer' : 'default' }}>GO</button>
       </div>
       {data?.base && !loading && <SupplyMap data={data} verified={verified} onOpen={openProfile} />}
