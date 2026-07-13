@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Search } from 'lucide-react'
 import { T } from '../lib/theme'
 import { getRecentTickers } from '../lib/recentTickers'
+import TickerInput from './TickerInput'
 
 const POPULAR = ['AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL', 'TSLA', 'JPM']
 
@@ -28,9 +29,8 @@ export default function TickerLaunch({ hint, onLoad }: { hint: string; onLoad: (
       <div style={{ padding: '30px 34px 28px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)', paddingBottom: 10 }}>
           <Search size={16} style={{ color: T.gold, flexShrink: 0 }} />
-          <input autoFocus value={v} onChange={e => setV(e.target.value.toUpperCase())}
-            onKeyDown={e => e.key === 'Enter' && go()} spellCheck={false} aria-label="Ticker"
-            placeholder="Ticker or company"
+          <TickerInput autoFocus value={v} onChange={setV} onEnter={() => go()} onSelect={go}
+            aria-label="Ticker or company" placeholder="Ticker or company"
             style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none', color: T.text, fontFamily: T.mono, fontSize: 19, fontWeight: 700, letterSpacing: '0.06em' }} />
           <button onClick={() => go()}
             style={{ height: 30, boxSizing: 'border-box', background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 16%, transparent)', border: `1px solid ${T.gold}60`, color: T.gold, fontFamily: T.mono, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', padding: '0 16px', cursor: 'pointer' }}>

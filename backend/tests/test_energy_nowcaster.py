@@ -139,6 +139,23 @@ def test_check_crossing_records_cargo_for_history_without_affecting_energy_nowca
     assert calls[0][2] == "cargo"
 
 
+def test_static_message_backfills_already_observed_entry(monkeypatch):
+    from routers import maritime
+    calls = []
+    monkeypatch.setattr(maritime.energy_nowcaster, "record_transit",
+                        lambda *a, **k: calls.append(a))
+    maritime._vessels.clear()
+    maritime._static_reg.clear()
+    maritime._vessels["static-late"] = {
+        "mmsi": "static-late", "in_choke": "hormuz", "category": "tanker",
+        "sog": 12, "draught": 20, "loa": 300, "beam": 55,
+    }
+    maritime._record_classified_chokepoint("static-late")
+    maritime._record_classified_chokepoint("static-late")
+    assert len(calls) == 1
+    assert calls[0][1:3] == ("hormuz", "tanker")
+
+
 def test_daily_counts_keep_vessel_class_breakdown():
     en.record_transit("t", "hormuz", "tanker", 20, 300, 55, now=NOW)
     en.record_transit("c", "hormuz", "cargo", None, None, None, now=NOW)
@@ -160,7 +177,7 @@ def test_history_bridge_keeps_ais_overlap_for_calibration(monkeypatch):
     monkeypatch.setattr(maritime.energy_nowcaster, "daily_counts", lambda _ids: {"danish": rows})
     series = [{"id": "danish", "points": [{"d": "2026-07-05", "total": 42}]}]
     maritime._attach_history_nowcast(series)
-    assert series[0]["nowcast_days"][-1] == "2026-07-12"
+    assert series[0]["nowcast_days"][-1] == maritime.datetime.now(maritime.timezone.utc).date().isoformat()
     assert series[0]["nowcast_daily"] == rows
 
 

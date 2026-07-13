@@ -14,6 +14,7 @@ interface Props {
   value: string
   onChange: (symbol: string) => void
   onEnter?: () => void
+  onSelect?: (symbol: string) => void
   placeholder?: string
   style?: React.CSSProperties
   autoFocus?: boolean
@@ -28,7 +29,7 @@ interface Props {
 const TICKER_RE = /^(\^?[A-Za-z]{1,5}(\.[A-Za-z])?|[A-Za-z0-9]{1,4}=F)$/
 
 export default function TickerInput({
-  value, onChange, onEnter, placeholder = 'Ticker or company',
+  value, onChange, onEnter, onSelect, placeholder = 'Ticker or company',
   style, autoFocus, disabled, onFocus, onBlur, 'aria-label': ariaLabel,
 }: Props) {
   const [text, setText] = useState(value)
@@ -62,6 +63,7 @@ export default function TickerInput({
   const pick = (m: Match) => {
     setText(m.ticker); onChange(m.ticker); recordRecentTicker(m.ticker)
     setOpen(false); setMatches([])
+    onSelect?.(m.ticker)
   }
 
   // Quick-pick a remembered symbol — same effect as typing it and pressing Enter.

@@ -647,6 +647,8 @@ def _check_crossing(mmsi: str, lat, lon) -> None:
         cat = v.get("category") or reg.get("category")
         prev = v.get("in_choke")
         v["in_choke"] = cur
+        if cur != prev:
+            v.pop("transit_recorded_choke", None)
         draught = v.get("draught") or reg.get("draught")
         loa = v.get("loa") or reg.get("loa")
         beam = v.get("beam") or reg.get("beam")
@@ -655,6 +657,32 @@ def _check_crossing(mmsi: str, lat, lon) -> None:
     moving = sog is None or sog >= _MIN_TRANSIT_SOG
     if cur and cur != prev and cat in {"tanker", "lng", "cargo"} and moving:
         energy_nowcaster.record_transit(mmsi, cur, cat, draught, loa, beam)
+        with _lock:
+            if mmsi in _vessels:
+                _vessels[mmsi]["transit_recorded_choke"] = cur
+
+
+def _record_classified_chokepoint(mmsi: str) -> None:
+    """Backfill an entry observed before its AIS static message arrived.
+
+    AIS position reports commonly precede ShipStaticData. Without this pass, the
+    vessel becomes visible and classified on the map but its already-observed
+    entry is lost because the following position is still inside the same choke.
+    """
+    with _lock:
+        vessel = _vessels.get(mmsi)
+        if not vessel:
+            return
+        choke = vessel.get("in_choke")
+        category = vessel.get("category") or (_static_reg.get(mmsi) or {}).get("category")
+        moving = vessel.get("sog") is None or vessel.get("sog", 0) >= _MIN_TRANSIT_SOG
+        if not choke or category not in {"tanker", "lng", "cargo"} or not moving or vessel.get("transit_recorded_choke") == choke:
+            return
+        draught = vessel.get("draught") or (_static_reg.get(mmsi) or {}).get("draught")
+        loa = vessel.get("loa") or (_static_reg.get(mmsi) or {}).get("loa")
+        beam = vessel.get("beam") or (_static_reg.get(mmsi) or {}).get("beam")
+        vessel["transit_recorded_choke"] = choke
+    energy_nowcaster.record_transit(mmsi, choke, category, draught, loa, beam)
 
 
 def _on_message(_ws, raw):
@@ -695,6 +723,7 @@ def _on_message(_ws, raw):
                 draught=draught, loa=loa, beam=beam)
         _remember(mmsi, {"category": cat, "name": nm, "destination": dest, "ship_type": sd.get("Type"),
                          "imo": imo, "draught": draught, "loa": loa, "beam": beam})
+        _record_classified_chokepoint(mmsi)
 
 
 def _remember(mmsi: str, profile: dict):
