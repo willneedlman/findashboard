@@ -97,7 +97,7 @@ const CurrencyMatrix     = lazyWithReload(() => import('./pages/CurrencyMatrix')
 const MaritimeMap        = lazyWithReload(() => import('./pages/MaritimeMap'))
 const RelativeValuation  = lazyWithReload(() => import('./pages/RelativeValuation'))
 const SupplyChain        = lazyWithReload(() => import('./pages/SupplyChain'))
-const SupplyChainPeers   = lazyWithReload(() => import('./pages/SupplyChainPeers'))
+const SupplyChainMap     = lazyWithReload(() => import('./pages/SupplyChainPeers'))
 const TradeJournal       = lazyWithReload(() => import('./pages/TradeJournal'))
 const PaperTrading       = lazyWithReload(() => import('./pages/PaperTrading'))
 const SentimentTracker   = lazyWithReload(() => import('./pages/SentimentTracker'))
@@ -296,7 +296,7 @@ export default function App() {
               <Route path="/flows-map"           element={<MaritimeMap />} />
               <Route path="/relative-valuation"  element={<RelativeValuation />} />
               <Route path="/supply-chain"        element={<SupplyChain />} />
-              <Route path="/supply-chain-peers"  element={<SupplyChainPeers />} />
+              <Route path="/supply-chain-peers"  element={<SupplyChainMap />} />
               <Route path="/gamma-scalping"      element={<Navigate to="/paper-trading" replace />} />
               <Route path="/trade-journal"       element={<TradeJournal />} />
               <Route path="/paper-trading"       element={<PaperTrading />} />

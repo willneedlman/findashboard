@@ -1,6 +1,7 @@
-import { useState } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
+import { ArrowLeft, ArrowRight, MapPinned, Search } from 'lucide-react'
 import { T } from '../lib/theme'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
@@ -22,6 +23,7 @@ interface Peer {
   same_industry: boolean
   same_category: boolean
 }
+
 interface PeersResp {
   available: boolean
   matched: boolean
@@ -38,74 +40,155 @@ interface PeersResp {
   peers?: Peer[]
 }
 
+type ColorMode = 'score' | 'sourcing' | 'markets'
+type SortMode = 'score' | 'name' | 'revenue'
+type Side = 'sourcing' | 'markets'
+
 const GOLD = 'var(--theme-primary, #c9a84c)'
 const BLUE = 'var(--theme-tertiary, #60a5fa)'
-const labelStyle: React.CSSProperties = {
-  fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em',
-  textTransform: 'uppercase', color: T.muted, marginBottom: 10,
+const PANEL = 'var(--theme-surface, #0d1826)'
+
+const fmtBn = (value: number | null) => value == null ? 'Size unavailable'
+  : Math.abs(value) >= 1e9 ? `$${(value / 1e9).toFixed(1)}B revenue`
+  : Math.abs(value) >= 1e6 ? `$${(value / 1e6).toFixed(0)}M revenue`
+  : `$${value.toLocaleString()} revenue`
+
+function overlapCount(peer: Peer, side: Side) {
+  return side === 'sourcing'
+    ? peer.shared_focus.length + (peer.same_category ? 1 : 0)
+    : peer.shared_markets.length
 }
 
-const fmtBn = (v: number | null) => v == null ? '—'
-  : Math.abs(v) >= 1e9 ? `$${(v / 1e9).toFixed(1)}B`
-  : Math.abs(v) >= 1e6 ? `$${(v / 1e6).toFixed(0)}M`
-  : `$${v.toLocaleString()}`
-const fmtEmp = (v: number | null) => v == null ? '—' : v.toLocaleString()
-
-function Chip({ text, color }: { text: string; color: string }) {
-  return (
-    <span style={{ fontFamily: T.mono, fontSize: 10, fontWeight: 700, color,
-      border: `1px solid color-mix(in srgb, ${color} 45%, transparent)`, borderRadius: 3, padding: '2px 7px', whiteSpace: 'nowrap' }}>
-      {text}
-    </span>
-  )
+function peerSide(peer: Peer): Side {
+  return overlapCount(peer, 'sourcing') >= overlapCount(peer, 'markets') ? 'sourcing' : 'markets'
 }
 
-function PeerRow({ p, maxScore, onOpen }: { p: Peer; maxScore: number; onOpen: (s: string) => void }) {
-  const clickable = !!p.symbol
-  const sub = [p.industry, p.country].filter(Boolean).join(' · ')
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: '38px 1fr auto', gap: 14, alignItems: 'start',
-      padding: '12px 0', borderBottom: `1px solid var(--theme-hover, rgba(255,255,255,0.04))` }}>
-      {/* score meter */}
-      <div style={{ paddingTop: 2 }}>
-        <div style={{ fontFamily: T.mono, fontSize: 13, fontWeight: 700, color: T.text, lineHeight: 1 }}>{p.score}</div>
-        <div style={{ height: 3, background: 'var(--theme-hover, rgba(255,255,255,0.06))', marginTop: 5 }}>
-          <div style={{ height: '100%', width: `${Math.round((p.score / maxScore) * 100)}%`, background: GOLD }} />
-        </div>
+function sortPeers(peers: Peer[], sort: SortMode) {
+  return [...peers].sort((a, b) => {
+    if (sort === 'name') return a.name.localeCompare(b.name)
+    if (sort === 'revenue') return (b.revenue ?? -1) - (a.revenue ?? -1)
+    return b.score - a.score
+  })
+}
+
+function nodeColor(peer: Peer, mode: ColorMode) {
+  if (mode === 'sourcing') return overlapCount(peer, 'sourcing') > 0 ? GOLD : T.muted
+  if (mode === 'markets') return overlapCount(peer, 'markets') > 0 ? BLUE : T.muted
+  if (peer.score >= 8) return GOLD
+  if (peer.score >= 5) return BLUE
+  return T.muted
+}
+
+function tags(peer: Peer, side: Side) {
+  const values = side === 'sourcing' ? peer.shared_focus : peer.shared_markets
+  return values.slice(0, 2).join(' · ') || (side === 'sourcing' && peer.same_category ? 'Shared category' : 'Industry overlap')
+}
+
+function Toggle<T extends string>({ value, selected, onClick, children }: { value: T; selected: T; onClick: (value: T) => void; children: React.ReactNode }) {
+  const active = value === selected
+  return <button onClick={() => onClick(value)} style={{ background: active ? 'rgba(96,165,250,0.14)' : 'transparent', color: active ? T.text : T.muted, border: 'none', borderLeft: active ? `2px solid ${BLUE}` : '2px solid transparent', padding: '7px 10px', fontFamily: T.mono, fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>{children}</button>
+}
+
+function CompanyNode({ peer, side, color, dimmed, onHover, onOpen }: { peer: Peer; side: Side; color: string; dimmed: boolean; onHover: (peer: Peer | null) => void; onOpen: (symbol: string) => void }) {
+  const ticker = peer.symbol ?? peer.exchange_tickers[0]
+  return <button onMouseEnter={() => onHover(peer)} onMouseLeave={() => onHover(null)} onClick={() => ticker && onOpen(ticker)} disabled={!ticker} style={{ width: '100%', minHeight: 49, textAlign: side === 'sourcing' ? 'right' : 'left', background: PANEL, border: `1px solid color-mix(in srgb, ${color} 46%, var(--theme-border, rgba(255,255,255,0.12)))`, borderRight: side === 'sourcing' ? `3px solid ${color}` : undefined, borderLeft: side === 'markets' ? `3px solid ${color}` : undefined, padding: '8px 10px', cursor: ticker ? 'pointer' : 'default', opacity: dimmed ? 0.24 : 1, transition: 'opacity 0.14s, transform 0.14s', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: side === 'sourcing' ? 'flex-end' : 'flex-start', gap: 7, minWidth: 0 }}>
+      {side === 'markets' && ticker && <span style={{ color, fontFamily: T.mono, fontSize: 10, fontWeight: 800, flexShrink: 0 }}>{ticker}</span>}
+      <span style={{ fontFamily: T.label, fontSize: 11, fontWeight: 700, color: T.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{peer.name}</span>
+      {side === 'sourcing' && ticker && <span style={{ color, fontFamily: T.mono, fontSize: 10, fontWeight: 800, flexShrink: 0 }}>{ticker}</span>}
+    </div>
+    <div style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tags(peer, side)}</div>
+  </button>
+}
+
+function SupplyMap({ data, onOpen }: { data: PeersResp; onOpen: (ticker: string) => void }) {
+  const [colorMode, setColorMode] = useState<ColorMode>('score')
+  const [sortMode, setSortMode] = useState<SortMode>('score')
+  const [hovered, setHovered] = useState<Peer | null>(null)
+  const peers = data.peers ?? []
+  const layout = useMemo(() => {
+    const sorted = sortPeers(peers, sortMode)
+    return {
+      sourcing: sorted.filter(p => peerSide(p) === 'sourcing').slice(0, 10),
+      markets: sorted.filter(p => peerSide(p) === 'markets').slice(0, 10),
+    }
+  }, [peers, sortMode])
+  const shown = [...layout.sourcing, ...layout.markets]
+  const maxScore = Math.max(...shown.map(p => p.score), 1)
+  const focus = hovered
+
+  return <>
+    <div className="ft-panel" style={{ overflow: 'hidden' }}>
+      <div className="ft-panel-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <span>Counterparty Overlap Map</span>
+        <span style={{ color: T.muted, fontFamily: T.mono, fontSize: 9, fontWeight: 400 }}>{data.count ?? peers.length} matched firms · Veridion firmographics</span>
       </div>
-
-      {/* identity + shared tags */}
-      <div style={{ minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-          {clickable ? (
-            <button onClick={() => onOpen(p.symbol!)}
-              style={{ fontFamily: T.mono, fontSize: 13, fontWeight: 700, letterSpacing: '0.04em', color: GOLD, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-              onMouseEnter={e => (e.currentTarget.style.textDecoration = 'underline')}
-              onMouseLeave={e => (e.currentTarget.style.textDecoration = 'none')}>
-              {p.symbol}
-            </button>
-          ) : (
-            <span style={{ fontFamily: T.mono, fontSize: 12, color: T.muted }}>—</span>
-          )}
-          <span style={{ fontFamily: T.label, fontSize: 12.5, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
-        </div>
-        {sub && <div style={{ fontFamily: T.mono, fontSize: 10, color: T.muted, marginTop: 3 }}>{sub}</div>}
-        {(p.same_industry || p.shared_focus.length > 0 || p.shared_markets.length > 0) && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 8 }}>
-            {p.same_industry && <Chip text="same industry" color={T.text} />}
-            {p.shared_focus.map(t => <Chip key={`f-${t}`} text={t} color={GOLD} />)}
-            {p.shared_markets.map(t => <Chip key={`m-${t}`} text={t} color={BLUE} />)}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '9px 14px', borderBottom: `1px solid ${T.border}`, background: 'rgba(255,255,255,0.012)', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ color: T.muted, fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em' }}>COLOR</span>
+          <div style={{ display: 'flex', border: `1px solid ${T.border}` }}>
+            <Toggle value="score" selected={colorMode} onClick={setColorMode}>MATCH SCORE</Toggle>
+            <Toggle value="sourcing" selected={colorMode} onClick={setColorMode}>SOURCING</Toggle>
+            <Toggle value="markets" selected={colorMode} onClick={setColorMode}>MARKETS</Toggle>
           </div>
-        )}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ color: T.muted, fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em' }}>SORT</span>
+          <div style={{ display: 'flex', border: `1px solid ${T.border}` }}>
+            <Toggle value="score" selected={sortMode} onClick={setSortMode}>SCORE</Toggle>
+            <Toggle value="revenue" selected={sortMode} onClick={setSortMode}>REVENUE</Toggle>
+            <Toggle value="name" selected={sortMode} onClick={setSortMode}>NAME</Toggle>
+          </div>
+        </div>
       </div>
-
-      {/* size */}
-      <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-        <div style={{ fontFamily: T.mono, fontSize: 13, fontWeight: 700, color: T.text }}>{fmtBn(p.revenue)}</div>
-        <div style={{ fontFamily: T.mono, fontSize: 10, color: T.muted, marginTop: 3 }}>{fmtEmp(p.employees)} emp</div>
+      <div style={{ overflowX: 'auto' }}>
+        <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'minmax(240px, 1fr) minmax(230px, 0.72fr) minmax(240px, 1fr)', gap: 42, minWidth: 900, padding: '26px 30px 30px', minHeight: 560 }}>
+          <svg aria-hidden="true" viewBox="0 0 100 100" style={{ position: 'absolute', inset: '26px 30px 30px', width: 'calc(100% - 60px)', height: 'calc(100% - 56px)', overflow: 'visible', pointerEvents: 'none' }} preserveAspectRatio="none">
+            {layout.sourcing.map((peer, i) => {
+              const y = ((i + 0.5) / Math.max(layout.sourcing.length, 1)) * 100
+              const width = 0.7 + (peer.score / maxScore) * 2.8
+              return <path key={peer.name} d={`M 32 ${y} C 42 ${y}, 43 50, 48 50`} stroke={nodeColor(peer, colorMode)} strokeWidth={width} opacity={focus && focus !== peer ? 0.12 : 0.42} fill="none" />
+            })}
+            {layout.markets.map((peer, i) => {
+              const y = ((i + 0.5) / Math.max(layout.markets.length, 1)) * 100
+              const width = 0.7 + (peer.score / maxScore) * 2.8
+              return <path key={peer.name} d={`M 52 50 C 57 50, 58 ${y}, 68 ${y}`} stroke={nodeColor(peer, colorMode)} strokeWidth={width} opacity={focus && focus !== peer ? 0.12 : 0.42} fill="none" />
+            })}
+          </svg>
+          <section style={{ zIndex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 7, marginBottom: 12 }}><span style={{ fontFamily: T.label, fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', color: GOLD }}>SOURCING OVERLAP</span><ArrowLeft size={13} color={GOLD} /></div>
+            <div style={{ display: 'grid', gap: 7 }}>{layout.sourcing.length ? layout.sourcing.map(p => <CompanyNode key={p.name} peer={p} side="sourcing" color={nodeColor(p, colorMode)} dimmed={!!focus && focus !== p} onHover={setHovered} onOpen={onOpen} />) : <Unavailable label="No sourcing overlap available" />}</div>
+          </section>
+          <section style={{ alignSelf: 'center', zIndex: 1 }}>
+            <div style={{ background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, var(--theme-surface, #0d1826))', border: `1px solid ${GOLD}`, padding: '22px 18px', textAlign: 'center', boxShadow: '0 0 0 6px rgba(201,168,76,0.045)' }}>
+              <MapPinned size={20} color={GOLD} style={{ marginBottom: 9 }} />
+              <div style={{ fontFamily: T.label, fontSize: 15, fontWeight: 800, color: T.text, lineHeight: 1.25 }}>{data.base?.name}</div>
+              <div style={{ fontFamily: T.mono, fontSize: 11, color: GOLD, fontWeight: 800, marginTop: 7 }}>{data.ticker}</div>
+              <div style={{ borderTop: `1px solid color-mix(in srgb, ${GOLD} 34%, transparent)`, marginTop: 14, paddingTop: 12, fontFamily: T.mono, fontSize: 9, color: T.muted, lineHeight: 1.55 }}>{data.base?.industry ?? 'Industry data unavailable'}{data.base?.business_category ? ` · ${data.base.business_category}` : ''}</div>
+            </div>
+          </section>
+          <section style={{ zIndex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 12 }}><ArrowRight size={13} color={BLUE} /><span style={{ fontFamily: T.label, fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', color: BLUE }}>MARKET OVERLAP</span></div>
+            <div style={{ display: 'grid', gap: 7 }}>{layout.markets.length ? layout.markets.map(p => <CompanyNode key={p.name} peer={p} side="markets" color={nodeColor(p, colorMode)} dimmed={!!focus && focus !== p} onHover={setHovered} onOpen={onOpen} />) : <Unavailable label="No market overlap available" />}</div>
+          </section>
+        </div>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '11px 14px', borderTop: `1px solid ${T.border}`, background: 'rgba(255,255,255,0.012)', flexWrap: 'wrap' }}>
+        <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.muted }}>Link width represents Veridion match score; it is not reported transaction exposure.</span>
+        <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.muted }}>Sourcing and market labels indicate shared attributes, not verified supplier/customer links.</span>
       </div>
     </div>
-  )
+    <div className="ft-panel" style={{ marginTop: 14 }}>
+      <div className="ft-panel-header">{focus ? `${focus.name} · overlap detail` : 'Map methodology'}</div>
+      <div style={{ padding: '13px 16px', fontFamily: T.mono, fontSize: 10.5, color: T.muted, lineHeight: 1.65 }}>
+        {focus ? <><span style={{ color: T.text, fontWeight: 700 }}>Match score {focus.score}</span> · {fmtBn(focus.revenue)}{focus.employees != null ? ` · ${focus.employees.toLocaleString()} employees` : ''}<br /><span style={{ color: GOLD }}>Sourcing:</span> {focus.shared_focus.join(', ') || 'Data unavailable'} &nbsp; <span style={{ color: BLUE }}>Markets:</span> {focus.shared_markets.join(', ') || 'Data unavailable'}</> : <>This is an overlap map built from Veridion firmographic categories, supply-chain focus, end markets, and industry. Hover a firm to inspect the underlying attributes; select a ticker to open its company profile.</>}
+      </div>
+    </div>
+  </>
+}
+
+function Unavailable({ label }: { label: string }) {
+  return <div style={{ padding: '16px 12px', border: `1px dashed ${T.border}`, fontFamily: T.mono, fontSize: 10, color: T.muted, textAlign: 'center' }}>{label}</div>
 }
 
 export function SupplyChainPeersContent() {
@@ -115,101 +198,35 @@ export function SupplyChainPeersContent() {
   const [data, setData] = useState<PeersResp | null>(null)
   const [notFound, setNotFound] = useState<string | null>(null)
 
-  const doFetch = async (sym: string) => {
-    const ticker = sym.trim().toUpperCase()
+  const doFetch = async (symbol: string) => {
+    const ticker = symbol.trim().toUpperCase()
     if (!ticker) return
     setLoading(true); setData(null); setNotFound(null)
     try {
-      const res = await axios.get<PeersResp>(`/api/corporate/peers-by-tags?ticker=${encodeURIComponent(ticker)}`)
-      if (res.data.matched) { setData(res.data); recordRecentTicker(ticker) }
+      const response = await axios.get<PeersResp>(`/api/corporate/peers-by-tags?ticker=${encodeURIComponent(ticker)}`)
+      if (response.data.matched) { setData(response.data); recordRecentTicker(ticker) }
       else setNotFound(ticker)
-    } catch {
-      setNotFound(ticker)
-    } finally {
-      setLoading(false)
-    }
+    } catch { setNotFound(ticker) } finally { setLoading(false) }
   }
 
-  const openProfile = (s: string) => navigate(`/supply-chain?ticker=${encodeURIComponent(s)}`)
-  const maxScore = data?.peers?.length ? Math.max(...data.peers.map(p => p.score)) : 1
+  const openProfile = (ticker: string) => navigate(`/supply-chain?ticker=${encodeURIComponent(ticker)}`)
+  const initialTicker = searchParams.get('ticker')
+  useEffect(() => {
+    if (initialTicker && !data && !loading && !notFound) void doFetch(initialTicker)
+  }, [initialTicker])
 
-  return (
-    <div>
-      <PageHeader title="Supply Chain Peers" />
-      <div style={{ maxWidth: 1100 }}>
-        {data && data.base && (
-          <>
-            {/* base company + its tags */}
-            <div className="ft-panel" style={{ marginBottom: 18 }}>
-              <div className="ft-panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                <span>{data.base.name}{data.base.exchange ? ` · ${data.base.exchange}:${data.ticker}` : ''}</span>
-                <span style={{ fontFamily: T.mono, fontSize: 9, fontWeight: 400, color: T.muted }}>via Veridion</span>
-              </div>
-              <div style={{ padding: '16px 18px' }}>
-                {data.base.industry && (
-                  <div style={{ fontFamily: T.mono, fontSize: 12, color: T.text, marginBottom: 12 }}>
-                    {data.base.industry}{data.base.business_category ? ` · ${data.base.business_category}` : ''}
-                  </div>
-                )}
-                {data.base.supply_chain_focus.length > 0 && (
-                  <div style={{ marginBottom: 10 }}>
-                    <div style={{ ...labelStyle, marginBottom: 6 }}>Sourcing Focus</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>{data.base.supply_chain_focus.map(t => <Chip key={t} text={t} color={GOLD} />)}</div>
-                  </div>
-                )}
-                {data.base.target_markets.length > 0 && (
-                  <div>
-                    <div style={{ ...labelStyle, marginBottom: 6 }}>Target Markets</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>{data.base.target_markets.map(t => <Chip key={t} text={t} color={BLUE} />)}</div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* ranked peers */}
-            <div className="ft-panel">
-              <div className="ft-panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                <span>Ranked Peers</span>
-                <span style={{ fontFamily: T.mono, fontSize: 9, fontWeight: 400, color: T.muted }}>
-                  {data.count} matched · shared sourcing + end-markets + industry
-                </span>
-              </div>
-              <div style={{ padding: '4px 18px 8px' }}>
-                {data.peers && data.peers.length > 0 ? (
-                  data.peers.map(p => <PeerRow key={p.name} p={p} maxScore={maxScore} onOpen={openProfile} />)
-                ) : (
-                  <div style={{ padding: '24px 0', color: T.muted, fontFamily: T.mono, fontSize: 11, fontStyle: 'italic' }}>
-                    No firmographic overlap found for this name.
-                  </div>
-                )}
-              </div>
-            </div>
-          </>
-        )}
-
-        {loading && (
-          <div style={{ padding: '40px 0', color: T.muted, fontFamily: T.mono, fontSize: 11, fontStyle: 'italic' }}>
-            Ranking peers…
-          </div>
-        )}
-
-        {!loading && !data && (
-          <>
-            {notFound && (
-              <div style={{ marginBottom: 12, fontFamily: T.mono, fontSize: 11.5, color: T.muted, lineHeight: 1.6, maxWidth: 620 }}>
-                No Veridion firmographic coverage for <span style={{ color: T.text, fontWeight: 700 }}>{notFound}</span>.
-                Coverage skews to small- and mid-cap and international names; most US mega-caps are not in the set.
-              </div>
-            )}
-            <TickerLaunch
-              hint="Enter a ticker to rank its supply-chain peers and counterparties by shared sourcing focus, end-markets, and industry, drawn from Veridion firmographics."
-              onLoad={doFetch}
-            />
-          </>
-        )}
-      </div>
+  return <div>
+    <PageHeader title="Supply Chain Map" />
+    <div style={{ maxWidth: 1320 }}>
+      <div style={{ display: 'flex', gap: 11, alignItems: 'flex-start', margin: '0 0 18px', color: T.muted, fontFamily: T.label, fontSize: 12, lineHeight: 1.6 }}><Search size={15} style={{ color: GOLD, marginTop: 2, flexShrink: 0 }} /> Counterparties fan out from the focal company by observed sourcing and end-market overlap.</div>
+      {data?.base && <SupplyMap data={data} onOpen={openProfile} />}
+      {loading && <div style={{ padding: '42px 0', color: T.muted, fontFamily: T.mono, fontSize: 11, fontStyle: 'italic' }}>Mapping firmographic overlap…</div>}
+      {!loading && !data && <>
+        {notFound && <div style={{ marginBottom: 12, fontFamily: T.mono, fontSize: 11.5, color: T.muted, lineHeight: 1.6, maxWidth: 640 }}>No Veridion firmographic coverage for <span style={{ color: T.text, fontWeight: 700 }}>{notFound}</span>. Data unavailable for this company.</div>}
+        <TickerLaunch hint="Enter a ticker or company name to map firms that share sourcing focus, end markets, and industry attributes. The map does not infer direct supplier or customer relationships." onLoad={doFetch} />
+      </>}
     </div>
-  )
+  </div>
 }
 
 export default function SupplyChainPeers() {

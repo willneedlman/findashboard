@@ -40,7 +40,6 @@ export const HUBS: Hub[] = [
     tools: [
       { title: 'Stock Screener',    chip: 'Screener',        desc: '25+ fundamental and technical filters across the universe', route: '/screener',           icon: Filter },
       { title: 'Company Profile',   chip: 'Company Profile', desc: 'Price history, revenue mix, ownership, and credit for one name', route: '/supply-chain',  icon: Globe },
-      { title: 'Supply Chain Peers', chip: 'Supply Peers',   desc: 'Rank a company\'s supply-chain peers and counterparties by shared sourcing, end-markets, and industry', route: '/supply-chain-peers', icon: Waypoints },
       { title: 'Earnings AI',       chip: 'Earnings AI',     desc: 'Call transcripts and filing summaries on demand',          route: '/earnings',           icon: FileText },
       { title: 'Peer Comparison',   chip: 'Peers',           desc: 'Trading multiples versus sector peers',                    route: '/relative-valuation', icon: Scale },
       { title: 'ETF Analyzer',      chip: 'ETF Analyzer',    desc: 'Look-through holdings, overlap, and concentration',        route: '/etf-analyzer',       icon: Boxes },
@@ -145,6 +144,7 @@ export const HUBS: Hub[] = [
     icon: Container,
     tools: [
       { title: 'Logistics Map',    chip: 'Logistics',    desc: 'Air hubs, chokepoints, connectivity ports, live cargo ships, and freight macro on one map', route: '/logistics-map', icon: MapPinned },
+      { title: 'Supply Chain Map', chip: 'Supply Map',   desc: 'Map a company\'s sourcing and end-market overlap across peer firms', route: '/supply-chain-peers', icon: Waypoints },
       { title: 'Energy Flows Map', chip: 'Energy Flows', desc: 'Live AIS tankers, energy pipelines, export terminals, and chokepoints',                       route: '/flows-map',     icon: Fuel },
       { title: 'Chokepoint Exposure', chip: 'Exposure',  desc: 'Live chokepoint stress mapped to the tankers, oil, refiners, and shippers it moves',         route: '/chokepoint-exposure', icon: Waypoints },
       { title: 'Trade Flows',      chip: 'Trade Flows', desc: 'Bilateral trade by commodity and country: top partners, tonnage, and world share', route: '/trade-flows',         icon: ArrowLeftRight },
