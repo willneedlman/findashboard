@@ -31,7 +31,7 @@ export default function TickerLaunch({ hint, onLoad }: { hint: string; onLoad: (
           <Search size={16} style={{ color: T.gold, flexShrink: 0 }} />
           <TickerInput autoFocus value={v} onChange={setV} onEnter={() => go()} onSelect={go}
             aria-label="Ticker or company" placeholder="Ticker or company"
-            style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none', color: T.text, fontFamily: T.mono, fontSize: 19, fontWeight: 700, letterSpacing: '0.06em' }} />
+            style={{ flex: 1, width: '100%', minWidth: 0, background: 'transparent', border: 'none', outline: 'none', color: T.text, fontFamily: T.mono, fontSize: 19, fontWeight: 700, letterSpacing: '0.06em' }} />
           <button onClick={() => go()}
             style={{ height: 30, boxSizing: 'border-box', background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 16%, transparent)', border: `1px solid ${T.gold}60`, color: T.gold, fontFamily: T.mono, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', padding: '0 16px', cursor: 'pointer' }}>
             LOAD
