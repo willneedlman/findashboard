@@ -10,6 +10,7 @@ twice with identical arguments yields an identical result.
 from __future__ import annotations
 
 import math
+import re
 import statistics
 from typing import Any
 
@@ -199,6 +200,14 @@ def high_impact(all_scored: list[ScoredArticle]) -> tuple[float | None, int]:
     return round(score, 1), len(hi)
 
 
+_ROUNDUP_RE = re.compile("|".join(config.BREAKING_ROUNDUP_PATTERNS), re.IGNORECASE)
+
+
+def _is_roundup(title: str) -> bool:
+    """A scheduled market recap / roundup column, not a breaking event."""
+    return bool(_ROUNDUP_RE.search(title or ""))
+
+
 def breaking(
     all_scored: list[ScoredArticle],
     specs_by_label: dict[str, SourceSpec],
@@ -220,6 +229,8 @@ def breaking(
         if abs(a.direction) < config.BREAKING_MIN_DIRECTION:
             continue
         if a.confidence < config.BREAKING_MIN_CONFIDENCE:
+            continue
+        if _is_roundup(a.title):
             continue
         spec = specs_by_label.get(a.source_label)
         is_wire = bool(spec and spec.breaking)

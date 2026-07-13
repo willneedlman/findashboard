@@ -199,6 +199,18 @@ BREAKING_CORROBORATION_COEF: float = 0.15 # per extra feed carrying the story
 # Kept narrow so ordinary strong coverage is not broadly suppressed.
 SPIKE_TIER: int = 5
 SPIKE_DIRECTION: float = 0.6
+# Scheduled market recaps and roundup columns carry a direction (indexes "close
+# lower", country stocks "higher at close of trade", "Stock Market Today", the
+# "Weekly Market Update") but report no breaking event, so they are held out of
+# the Breaking strip. View-only: these still count in the composite. Matched
+# case-insensitively against the headline in aggregate.breaking().
+BREAKING_ROUNDUP_PATTERNS: tuple[str, ...] = (
+    r"\bat close of trade\b",
+    r"\bmarket\s+(?:today|update|wrap|recap|roundup)\b",
+    r"\bclos(?:e|es|ed|ing)\s+(?:higher|lower|mixed|flat)\b",
+    r"\bstocks?\s+(?:higher|lower|mixed|flat)\s+at\s+close\b",
+    r"\bindex\s+(?:up|down)\s+[\d.]",
+)
 
 # ── Relevance / scope ─────────────────────────────────────────────────────────
 # A broad-market sentiment gauge only counts articles that touch the market:

@@ -375,6 +375,25 @@ def test_high_impact_single_headline_qualifies():
     assert weak_macro[0].qualifies is False
 
 
+# Scheduled market recaps carry a direction but are not breaking events, so the
+# Breaking strip holds them out while keeping genuine geopolitical/market shocks.
+def test_breaking_excludes_market_roundups():
+    roundups = [
+        "Crypto Market Today, July 13: Crypto Slides on Renewed Inflation Fears",
+        "The Weekly Market Update - 7/13/26: Fragile Peace Talks Remain a Market Risk",
+        "Stock Market Today: Dow, Nasdaq Close Lower As Oil Prices Spike",
+        "Mexico stocks lower at close of trade; S&P/BMV IPC down 0.79%",
+        "Russia stocks higher at close of trade; MOEX Russia Index up 0.65%",
+    ]
+    breaking_events = [
+        "President Trump Moves to Reinstate a Blockade of the Strait of Hormuz as Oil Prices Jump Above $79",
+        "Trump reinstates Iran port blockade and vows 20% charge on cargo passing through Hormuz",
+        "US launches airstrikes on Iran",
+    ]
+    assert all(aggregate._is_roundup(t) for t in roundups)
+    assert not any(aggregate._is_roundup(t) for t in breaking_events)
+
+
 # ── Engine without the LLM still yields a real composite ──────────────────────
 def _fake_fetch(spec, limit):
     titles = ["Stocks rally to record high", "Fed cuts rates as inflation cools",
