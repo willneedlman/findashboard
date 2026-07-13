@@ -206,8 +206,9 @@ SPIKE_DIRECTION: float = 0.6
 # case-insensitively against the headline in aggregate.breaking().
 BREAKING_ROUNDUP_PATTERNS: tuple[str, ...] = (
     r"\bat close of trade\b",
-    r"\bmarket\s+(?:today|update|wrap|recap|roundup)\b",
-    r"\bclos(?:e|es|ed|ing)\s+(?:higher|lower|mixed|flat)\b",
+    r"\b(?:market|markets|sector|stocks?)\s+(?:today|update|wrap|recap|roundup)\b",
+    r"\broundup\b",
+    r"\b(?:clos(?:e|es|ed|ing)|end(?:s|ed)|finish(?:es|ed))\s+(?:\w+\s+)?(?:higher|lower|mixed|flat)\b",
     r"\bstocks?\s+(?:higher|lower|mixed|flat)\s+at\s+close\b",
     r"\bindex\s+(?:up|down)\s+[\d.]",
 )
