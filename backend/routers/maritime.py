@@ -594,6 +594,7 @@ def _upsert(mmsi: str, **fields):
 
 # ── Chokepoint geofencing → live transit nowcast ────────────────────────────
 _ENERGY_CATS = ("tanker", "lng")
+_TRANSIT_CATS = {"tanker", "lng", "cargo"}   # categories that count as a chokepoint transit
 # Per-chokepoint capture radius (km). Tight enough that a crossing means the vessel
 # was genuinely in the strait, not just passing within tens of km. Narrow
 # canals/straits get a small radius; wide passages a larger one. AIS Class-A
@@ -653,13 +654,13 @@ def _check_crossing(mmsi: str, lat, lon) -> None:
         loa = v.get("loa") or reg.get("loa")
         beam = v.get("beam") or reg.get("beam")
         sog = v.get("sog")
-    # A transit is a moving vessel; a known near-stationary SOG means anchored/waiting.
-    moving = sog is None or sog >= _MIN_TRANSIT_SOG
-    if cur and cur != prev and cat in {"tanker", "lng", "cargo"} and moving:
+        # A transit is a moving vessel; a known near-stationary SOG means anchored/waiting.
+        moving = sog is None or sog >= _MIN_TRANSIT_SOG
+        do_record = bool(cur and cur != prev and cat in _TRANSIT_CATS and moving)
+        if do_record:
+            v["transit_recorded_choke"] = cur   # claim the guard atomically before releasing the lock
+    if do_record:
         energy_nowcaster.record_transit(mmsi, cur, cat, draught, loa, beam)
-        with _lock:
-            if mmsi in _vessels:
-                _vessels[mmsi]["transit_recorded_choke"] = cur
 
 
 def _record_classified_chokepoint(mmsi: str) -> None:
@@ -676,7 +677,7 @@ def _record_classified_chokepoint(mmsi: str) -> None:
         choke = vessel.get("in_choke")
         category = vessel.get("category") or (_static_reg.get(mmsi) or {}).get("category")
         moving = vessel.get("sog") is None or vessel.get("sog", 0) >= _MIN_TRANSIT_SOG
-        if not choke or category not in {"tanker", "lng", "cargo"} or not moving or vessel.get("transit_recorded_choke") == choke:
+        if not choke or category not in _TRANSIT_CATS or not moving or vessel.get("transit_recorded_choke") == choke:
             return
         draught = vessel.get("draught") or (_static_reg.get(mmsi) or {}).get("draught")
         loa = vessel.get("loa") or (_static_reg.get(mmsi) or {}).get("loa")

@@ -11,7 +11,6 @@ Series (all free, national):
     MORTGAGE30US/15US/5US  30y / 15y / 5-1 ARM, weekly
     MSPUS                  median sales price, quarterly ($)
     EXHOSLUSM495S          existing-home sales, monthly (thousands, SAAR)
-    MSACSR                 months' supply, monthly
     ACTLISCOUUS            active listings, monthly (Realtor.com)
     MEDDAYONMARUS          median days on market, monthly (Realtor.com)
     MEDLISPRIPERSQUFEEUS   median list price / sqft, monthly (Realtor.com)
@@ -31,7 +30,7 @@ _log = logging.getLogger(__name__)
 
 _SERIES = {
     "rate_30y": "MORTGAGE30US", "rate_15y": "MORTGAGE15US", "rate_arm": "MORTGAGE5US",
-    "median_price": "MSPUS", "sales": "EXHOSLUSM495S", "months_supply": "MSACSR",
+    "median_price": "MSPUS", "sales": "EXHOSLUSM495S",
     "active_listings": "ACTLISCOUUS", "days_on_market": "MEDDAYONMARUS",
     "price_per_sqft": "MEDLISPRIPERSQUFEEUS", "median_income": "MEHOINUSA646N",
     "sf_delinq": "DRSFRMACBS",

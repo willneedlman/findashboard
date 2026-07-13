@@ -43,6 +43,9 @@ function buildColors() {
 const VLABEL: Record<string, string> = { tanker: 'Crude Tanker', lng: 'LNG / Gas Carrier', cargo: 'Cargo / Dry Bulk', other: 'Vessel' }
 const HEAVY_MIN_ZOOM = 3.5
 const DETAIL_MIN_ZOOM = 5
+// Dewey PERFORMANCE_CHANGE is a fraction (0.25 = a 25% swing in 7-day port
+// performance). Color a port only on a notable move so most ports stay neutral.
+const DEWEY_CHANGE_HL = 0.25
 
 // Curated major shipping lanes (illustrative, grouped under vessel toggles).
 const LANES: { type: 'tanker' | 'lng' | 'cargo'; pts: [number, number][] }[] = [
@@ -652,7 +655,7 @@ export function MaritimeMapContent() {
               congestion and container-flow signal. */}
           {vis.wpi && deweyPorts.map(p => {
             const change = p.import_change_pct ?? p.export_change_pct
-            const color = change != null && change > 0.1 ? C.negative : change != null && change < -0.1 ? C.positive : C.spark
+            const color = change != null && change > DEWEY_CHANGE_HL ? C.negative : change != null && change < -DEWEY_CHANGE_HL ? C.positive : C.spark
             const imp = p.import_performance_hours != null ? `Import ${p.import_performance_hours.toFixed(1)}h` : null
             const exp = p.export_performance_hours != null ? `Export ${p.export_performance_hours.toFixed(1)}h` : null
             const metric = [imp, exp].filter(Boolean).join(' · ') || 'Port performance available'

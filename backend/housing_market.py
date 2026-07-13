@@ -158,11 +158,13 @@ def affordability_index(snap: HousingMarketSnapshot, rate_30y: float,
 
 
 def supply_demand_spread(snap: HousingMarketSnapshot) -> dict:
-    """Sales-to-listings balance. sell_through > ~0.33 (supply < 3 months) is a
-    seller's market; higher favors sellers more."""
+    """Sales-to-listings balance. months_of_supply is active inventory / monthly
+    sales. The listing count is Realtor.com active listings, which run below NAR's
+    total inventory, so the bands sit ~1 month under NAR's classic 4/6-month rule:
+    under 3 months favors sellers, 3-5 is balanced, over 5 favors buyers."""
     st = snap.sell_through
     mos = snap.months_of_supply
-    market = "seller" if mos < 4 else "buyer" if mos > 6 else "balanced"
+    market = "seller" if mos < 3 else "buyer" if mos > 5 else "balanced"
     return {"sell_through": round(st, 4), "months_of_supply": round(mos, 2), "market": market}
 
 

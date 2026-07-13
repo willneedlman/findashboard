@@ -114,16 +114,18 @@ const BLUE = 'var(--theme-tertiary, #60a5fa)'
 const PANEL = 'var(--theme-surface, #0d1826)'
 const MAX_MAP_NODES = 12
 
-const fmtBn = (value: number | null) => value == null ? 'Size unavailable'
-  : Math.abs(value) >= 1e9 ? `$${(value / 1e9).toFixed(1)}B revenue`
-  : Math.abs(value) >= 1e6 ? `$${(value / 1e6).toFixed(0)}M revenue`
-  : `$${value.toLocaleString()} revenue`
+const cur = (currency?: string | null) => !currency || currency === 'USD' ? '$' : `${currency} `
 
-const fmtCompact = (value: number) => Math.abs(value) >= 1e9
-  ? `$${(value / 1e9).toFixed(1)}B`
+const fmtBn = (value: number | null, currency?: string | null) => value == null ? 'Size unavailable'
+  : Math.abs(value) >= 1e9 ? `${cur(currency)}${(value / 1e9).toFixed(1)}B revenue`
+  : Math.abs(value) >= 1e6 ? `${cur(currency)}${(value / 1e6).toFixed(0)}M revenue`
+  : `${cur(currency)}${value.toLocaleString()} revenue`
+
+const fmtCompact = (value: number, currency?: string | null) => Math.abs(value) >= 1e9
+  ? `${cur(currency)}${(value / 1e9).toFixed(1)}B`
   : Math.abs(value) >= 1e6
-    ? `$${(value / 1e6).toFixed(0)}M`
-    : `$${value.toLocaleString()}`
+    ? `${cur(currency)}${(value / 1e6).toFixed(0)}M`
+    : `${cur(currency)}${value.toLocaleString()}`
 
 function overlapCount(peer: Peer, side: Side) {
   return side === 'sourcing'
@@ -139,7 +141,13 @@ function peerSide(peer: Peer): Side {
 function sortPeers(peers: Peer[], sort: SortMode) {
   return [...peers].sort((a, b) => {
     if (sort === 'name') return a.name.localeCompare(b.name)
-    if (sort === 'revenue') return (b.revenue ?? -1) - (a.revenue ?? -1)
+    if (sort === 'revenue') {
+      // Firm revenue and end-market geography slices are different magnitudes,
+      // so rank each group internally rather than interleaving the two.
+      const at = a.end_market ? 1 : 0, bt = b.end_market ? 1 : 0
+      if (at !== bt) return at - bt
+      return (b.revenue ?? -1) - (a.revenue ?? -1)
+    }
     return b.score - a.score
   })
 }
@@ -162,7 +170,7 @@ function tags(peer: Peer, side: Side) {
 function tileMetric(peer: Peer, sortMode: SortMode) {
   if (peer.end_market) {
     return sortMode === 'revenue'
-      ? `REPORTED REVENUE ${fmtCompact(peer.end_market.value)} · ${peer.end_market.pct.toFixed(1)}% SHARE`
+      ? `REPORTED REVENUE ${fmtCompact(peer.end_market.value, peer.end_market.currency)} · ${peer.end_market.pct.toFixed(1)}% SHARE`
       : `REPORTED REVENUE SHARE ${peer.end_market.pct.toFixed(1)}%`
   }
   if (sortMode === 'revenue') {
@@ -284,7 +292,7 @@ function SupplyMap({ data, verified, onOpen }: { data: PeersResp; verified: Veri
   return <>
     <div className="ft-panel" style={{ overflow: 'hidden' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '9px 14px', borderBottom: `1px solid ${T.border}`, background: 'rgba(255,255,255,0.012)', flexWrap: 'wrap' }}>
-        <span style={{ color: T.muted, fontFamily: T.mono, fontSize: 9, fontWeight: 400 }}>{verified.length} verified relationships · {data.profile?.geo_segments.latest?.length ?? 0} reported end markets · {data.returned ?? 0} similarity matches</span>
+        <span style={{ color: T.muted, fontFamily: T.mono, fontSize: 9, fontWeight: 400 }}>{verified.length} verified relationships · {data.profile?.geo_segments.latest?.length ?? 0} reported end markets · {data.returned ?? 0} similarity matches{!data.matched && data.base ? <span style={{ color: GOLD }} title="The firmographics database name did not match this ticker's identity, so similarity peers are withheld to avoid a wrong-company match."> · similarity withheld (name match unverified)</span> : ''}</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span style={{ color: T.muted, fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em' }}>SORT</span>
           <div style={{ display: 'flex', border: `1px solid ${T.border}` }}>
