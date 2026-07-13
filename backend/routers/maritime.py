@@ -1437,6 +1437,42 @@ def _choke_disruption(stat: dict) -> float:
     return round(base, 1)
 
 
+def _series30_with_live(stat: dict, daily: dict) -> tuple[list, int | None]:
+    """Extend the 30-day PortWatch transit series with AIS-estimated points for the
+    days PortWatch has not published yet, calibrated to the PortWatch total level.
+
+    PortWatch counts all vessel calls; the AIS layer sees energy + cargo only, so
+    the live days are scaled by the PortWatch-to-AIS ratio over their overlap.
+    `daily` is this chokepoint's AIS day->counts map. Returns (series, live_from)
+    where live_from indexes the first live point, or None when no trusted supplement
+    exists (matching the freshness gate)."""
+    series = list(stat.get("series30") or [])
+    nc = stat.get("nowcast") or {}
+    base_as_of = stat.get("as_of")
+    if not series or not base_as_of or nc.get("confidence") not in ("high", "medium"):
+        return series, None
+    if not daily:
+        return series, None
+
+    def ais_total(day: str) -> int:
+        b = daily[day]
+        return (b.get("total") or 0) or (b.get("tanker", 0) + b.get("cargo", 0))
+
+    days = [d for d in sorted(daily) if ais_total(d) > 0]
+    gap = [d for d in days if d > base_as_of]
+    if not gap:
+        return series, None
+    ref = [d for d in days if d <= base_as_of] or days      # calibrate on overlap
+    ref_ais = sum(ais_total(d) for d in ref) / len(ref)
+    if ref_ais <= 0:
+        return series, None
+    tail = series[-7:] or series
+    scale = (sum(tail) / len(tail)) / ref_ais
+    live_from = len(series)
+    series.extend(round(ais_total(d) * scale, 1) for d in gap)
+    return series, live_from
+
+
 @router.get("/exposure")
 def chokepoint_exposure():
     """Live chokepoint stress mapped to the listed names it tends to move.
@@ -1477,6 +1513,9 @@ def chokepoint_exposure():
     except Exception:
         pass
 
+    # One AIS-daily query for every chokepoint, reused to supplement each series.
+    daily_all = energy_nowcaster.daily_counts([c["id"] for c in CHOKEPOINTS])
+
     # Per-ticker aggregate score across every chokepoint it sits behind.
     agg: dict[str, dict] = {}
     choke_cards = []
@@ -1507,11 +1546,12 @@ def chokepoint_exposure():
                     "strait": meta["name"], "status": (stat or {}).get("status") or "normal",
                     "direction": direction, "contribution": round(disruption * direction, 1),
                 })
+        series30, series30_live_from = _series30_with_live(stat, daily_all.get(cid, {})) if stat else ([], None)
         choke_cards.append({
             "id": cid, "name": meta["name"], "oil_mbd": meta["oil_mbd"],
             "status": (stat or {}).get("status"), "delta_pct": (stat or {}).get("delta_pct"),
             "share_pct": (stat or {}).get("share_pct"), "disruption": round(disruption, 1),
-            "series30": (stat or {}).get("series30") or [],
+            "series30": series30, "series30_live_from": series30_live_from,
             **freshness,
             "exposures": exposures,
         })
@@ -1531,7 +1571,7 @@ def chokepoint_exposure():
         "leaders": leaders,
         "any_stress": any(c["disruption"] > 0 for c in choke_cards),
         "priced": len(quote),
-        "outdated_count": sum(1 for c in choke_cards if c["baseline_outdated"]),
+        "outdated_count": sum(1 for c in choke_cards if c["baseline_outdated"] and not c["live_reliable"]),
         "freshness_threshold_days": _BASELINE_STALE_DAYS,
         "source": "curated exposure map + IMF PortWatch + yfinance",
     }

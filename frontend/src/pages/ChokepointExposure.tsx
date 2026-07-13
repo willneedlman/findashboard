@@ -13,7 +13,7 @@ import { MONO, SANS, mix, chg, signed, Panel, KpiStrip } from './cockpitKit'
 interface Driver { strait: string; status: string; direction: number; contribution: number }
 interface Quote { price: number | null; change_pct: number | null; spark: number[] }
 interface Exposure extends Quote { ticker: string; group: string; group_key: string; direction: number; note: string }
-interface ChokeCard { id: string; name: string; oil_mbd: number; status: string | null; delta_pct: number | null; share_pct: number | null; disruption: number; series30: number[]; baseline_as_of: string | null; baseline_age_days: number | null; baseline_outdated: boolean; live_as_of: string | null; live_confidence: string; live_reliable: boolean; exposures: Exposure[] }
+interface ChokeCard { id: string; name: string; oil_mbd: number; status: string | null; delta_pct: number | null; share_pct: number | null; disruption: number; series30: number[]; series30_live_from: number | null; baseline_as_of: string | null; baseline_age_days: number | null; baseline_outdated: boolean; live_as_of: string | null; live_confidence: string; live_reliable: boolean; exposures: Exposure[] }
 interface Leader extends Quote { ticker: string; group: string; group_key: string; direction: number; score: number; chokepoints: string[]; links: number; drivers: Driver[] }
 interface Resp { chokepoints: ChokeCard[]; leaders: Leader[]; any_stress: boolean; priced: number; outdated_count: number; freshness_threshold_days: number; source: string }
 
@@ -48,12 +48,20 @@ const BRIEF: Record<string, (t: string) => string> = {
 const BASKETS = ['All', 'Tankers', 'Container liners', 'Semiconductors', 'Defense', 'Refiners', 'LNG', 'Oil majors & E&P']
 
 const pct = (v: number | null) => (v == null ? '—' : `${signed(v, 2)}%`)
-function Spark({ data, color, w = 60, h = 16 }: { data: number[]; color: string; w?: number; h?: number }) {
+function Spark({ data, color, w = 60, h = 16, liveFrom }: { data: number[]; color: string; w?: number; h?: number; liveFrom?: number | null }) {
   const pts = (data || []).filter(v => v != null)
   if (pts.length < 2) return null
   const mn = Math.min(...pts), mx = Math.max(...pts), rng = mx - mn || 1
-  const d = pts.map((v, i) => `${(i / (pts.length - 1) * w).toFixed(1)},${(h - (v - mn) / rng * h).toFixed(1)}`).join(' ')
-  return <svg width={w} height={h} style={{ display: 'block' }}><polyline points={d} fill="none" stroke={color} strokeWidth={1.2} /></svg>
+  const xy = (v: number, i: number) => `${(i / (pts.length - 1) * w).toFixed(1)},${(h - (v - mn) / rng * h).toFixed(1)}`
+  // The AIS-supplemented tail (live_from onward) draws as a gold dashed segment,
+  // joined to the last PortWatch point, so the live estimate reads distinctly.
+  const lf = liveFrom != null && liveFrom > 0 && liveFrom < pts.length ? liveFrom : null
+  const base = pts.slice(0, lf ?? pts.length).map((v, i) => xy(v, i)).join(' ')
+  const live = lf != null ? pts.slice(lf - 1).map((v, i) => xy(v, lf - 1 + i)).join(' ') : ''
+  return <svg width={w} height={h} style={{ display: 'block' }}>
+    <polyline points={base} fill="none" stroke={color} strokeWidth={1.2} />
+    {live && <polyline points={live} fill="none" stroke={T.gold} strokeWidth={1.2} strokeDasharray="2.5 2" />}
+  </svg>
 }
 
 export default function ChokepointExposure() {
@@ -236,7 +244,9 @@ function Board({ data }: { data: Resp }) {
 
   const rows = data.leaders.filter(l => (basket === 'All' || l.group === basket) && (dir === 'all' || (dir === 'tailwind' ? l.score > 0 : l.score < 0)))
   const maxScore = Math.max(1, ...data.leaders.map(l => Math.abs(l.score)))
-  const outdated = straits.filter(c => c.baseline_outdated)
+  // Only warn where a stale PortWatch baseline has no reliable live AIS to fill it.
+  // A stale baseline that live AIS is supplementing is not a data gap.
+  const outdated = straits.filter(c => c.baseline_outdated && !c.live_reliable)
   const oldestConfirmed = outdated
     .filter(c => c.baseline_as_of)
     .sort((a, b) => (a.baseline_as_of ?? '').localeCompare(b.baseline_as_of ?? ''))[0]?.baseline_as_of
@@ -249,7 +259,7 @@ function Board({ data }: { data: Resp }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, border: `1px solid ${mix(T.gold, 55)}`, background: mix(T.gold, 8), padding: '8px 11px' }}>
           <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', color: T.gold, whiteSpace: 'nowrap' }}>DATA FRESHNESS WARNING</span>
           <span style={{ fontFamily: MONO, fontSize: 9, color: T.muted, lineHeight: 1.45 }}>
-            {outdated.length} of {straits.length} PortWatch transit baselines are more than {data.freshness_threshold_days} days old{oldestConfirmed ? `. The oldest is confirmed only through ${oldestConfirmed}` : ''}. Live AIS supplements the disruption score only where its confidence is reliable.
+            {outdated.length} of {straits.length} straits have a PortWatch baseline more than {data.freshness_threshold_days} days old with no reliable live AIS to fill the gap{oldestConfirmed ? `. The oldest is confirmed only through ${oldestConfirmed}` : ''}. Elsewhere, live AIS supplements the disruption score.
           </span>
         </div>
       )}
@@ -496,7 +506,12 @@ function DrillDock({ c, navigate }: { c: ChokeCard; navigate: (p: string) => voi
       </div>
       <div style={{ marginTop: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: MONO, fontSize: 9, color: T.muted }}><span>30-day transits</span><span style={{ color: falling ? T.neg : T.pos }}>{falling ? 'falling' : 'steady'}</span></div>
-        <div style={{ marginTop: 4 }}><Spark data={c.series30} color={falling ? T.neg : T.pos} w={272} h={44} /></div>
+        <div style={{ marginTop: 4 }}><Spark data={c.series30} color={falling ? T.neg : T.pos} w={272} h={44} liveFrom={c.series30_live_from} /></div>
+        {c.series30_live_from != null && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, fontFamily: MONO, fontSize: 8, color: T.gold }}>
+            <span style={{ width: 12, height: 0, borderTop: `1.4px dashed ${T.gold}` }} />live AIS estimate{c.live_as_of ? ` · as of ${c.live_as_of.slice(0, 10)}` : ''}
+          </div>
+        )}
       </div>
       <div style={{ marginTop: 8 }}>
         {stats.map(([k, v, cc]) => (
