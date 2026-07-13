@@ -255,7 +255,7 @@ export default function ConfigHeader(p: Props) {
       ) : (
         <div style={{ display: 'flex', alignItems: 'stretch', flexWrap: 'wrap' }}>
           {/* Holdings + strategy */}
-          <div style={{ flex: 1.7, minWidth: 420, padding: '14px 16px', borderRight: `1px solid ${T.border}` }}>
+          <div style={{ flex: 1.7, minWidth: 'min(420px, 100%)', padding: '14px 16px', borderRight: `1px solid ${T.border}` }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
               <span style={SECTION}>{leftLabel}</span>
               <span style={{ fontFamily: T.mono, fontSize: 10, color: T.faint }}>{p.holdings.length} {noun}{p.holdings.length === 1 ? '' : 's'}</span>
@@ -277,7 +277,7 @@ export default function ConfigHeader(p: Props) {
           </div>
 
           {/* Window / parameters + risk */}
-          <div style={{ flex: 1, minWidth: 300, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ flex: 1, minWidth: 'min(300px, 100%)', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div>
               <span style={SECTION}>{isBT ? 'Window' : 'Parameters'}</span>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>

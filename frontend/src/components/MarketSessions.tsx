@@ -3,6 +3,7 @@ import {
   MARKETS, marketStatus, localArcs, localNowHours, countdown,
   PHASE_LABEL, PHASE_COLOR, PHASE_OPACITY, PHASE_TEXT, type MarketDef, type Region, type Phase,
 } from '../lib/marketHours'
+import useIsMobile from '../hooks/useIsMobile'
 
 const T = {
   bg: 'var(--theme-bg, #101c2e)', track: 'color-mix(in srgb, var(--theme-bg, #101c2e) 55%, #000 45%)',
@@ -115,8 +116,9 @@ function TimelineBar({ m, now, holiday }: { m: MarketDef; now: Date; holiday?: s
 
 export default function MarketSessions({ compact = false }: { compact?: boolean }) {
   const now = useNow(1000)
+  const isMobile = useIsMobile()
 
-  if (compact) {
+  if (compact || isMobile) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         {REGIONS.map(region => (

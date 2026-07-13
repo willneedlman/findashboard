@@ -155,7 +155,7 @@ function Facet<T extends string | number>({ label, value, options, onChange }: {
   return (
     <div>
       <label style={{ ...LABEL, marginBottom: 5 }}>{label}</label>
-      <div style={{ display: 'flex', border: `1px solid ${C.border}` }}>
+      <div style={{ display: 'flex', maxWidth: '100%', overflowX: 'auto', border: `1px solid ${C.border}` }}>
         {options.map(o => (
           <button key={String(o.key)} onClick={() => onChange(o.key)}
             style={{

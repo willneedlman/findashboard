@@ -8,6 +8,7 @@ import { fetchTradeFlows } from '../hooks/useApi'
 import { T } from '../lib/theme'
 import { ISO_GEO, projectWorld, WORLD_DOT_PATH } from '../lib/worldDotMap'
 import { MONO, SANS, mix, seg, Panel, KpiStrip } from './cockpitKit'
+import useIsMobile from '../hooks/useIsMobile'
 
 interface Partner { partner: string | null; iso: string | null; value: number | null; net_wgt: number | null; qty: number | null; unit: string | null }
 interface Resp {
@@ -79,9 +80,10 @@ function QueryBar({ reporter, setReporter, cmd, setCmd, year, setYear, flow, set
   year: string; setYear: (v: string) => void; flow: 'X' | 'M'; setFlow: (v: 'X' | 'M') => void
   run: () => void; loading: boolean; dirty: boolean
 }) {
+  const isMobile = useIsMobile()
   return (
     <Panel label="" meta="UN Comtrade · annual bilateral flows" style={{ padding: '12px 12px 10px' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1.15fr 1.35fr 0.6fr 1fr auto', alignItems: 'end', gap: 8 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.15fr 1.35fr 0.6fr 1fr auto', alignItems: 'end', gap: 8 }}>
         <label><span style={{ ...LABEL, display: 'block', marginBottom: 5 }}>Reporter country</span><select value={reporter} onChange={e => setReporter(Number(e.target.value))} style={{ ...SELECT, width: '100%' }}>{COUNTRIES.map(([c, n]) => <option key={c} value={c}>{n}</option>)}</select></label>
         <label><span style={{ ...LABEL, display: 'block', marginBottom: 5 }}>Commodity</span><select value={cmd} onChange={e => setCmd(e.target.value)} style={{ ...SELECT, width: '100%' }}>{COMMODITIES.map(([c, n]) => <option key={c} value={c}>{n}</option>)}</select></label>
         <label><span style={{ ...LABEL, display: 'block', marginBottom: 5 }}>Year</span><select value={year} onChange={e => setYear(e.target.value)} style={{ ...SELECT, width: '100%' }}>{YEARS.map(y => <option key={y} value={y}>{y}</option>)}</select></label>
@@ -102,6 +104,7 @@ function NoData({ countryLabel, cmdLabel, year, flow }: { countryLabel: string; 
 }
 
 function Results({ d, cmdLabel, countryLabel }: { d: Resp; cmdLabel: string; countryLabel: string }) {
+  const isMobile = useIsMobile()
   const partners = d.partners ?? []
   const maxVal = useMemo(() => Math.max(1, ...partners.map(p => p.value ?? 0)), [partners])
   const [selected, setSelected] = useState(0)
@@ -136,7 +139,7 @@ function Results({ d, cmdLabel, countryLabel }: { d: Resp; cmdLabel: string; cou
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <KpiStrip cells={kpis} />
-      <div style={{ display: 'flex', gap: 10 }}>
+      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 10 }}>
         <FlowOverview d={d} partners={partners} selected={selected} onSelect={setSelected} countryLabel={countryLabel} cmdLabel={cmdLabel} searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
         {selectedPartner && <PartnerDock partner={selectedPartner} rank={selected + 1} total={d.total?.value} flow={d.flow} countryLabel={countryLabel} baseYear={baseYear} />}
       </div>
@@ -553,11 +556,12 @@ const getHistoricalTrend = (iso: string, value: number, baseYear: number) => {
 }
 
 function PartnerDock({ partner, rank, total, flow, countryLabel, baseYear }: { partner: Partner; rank: number; total: number | null | undefined; flow?: string; countryLabel: string; baseYear: number }) {
+  const isMobile = useIsMobile()
   const share = total ? (partner.value ?? 0) / total * 100 : null
   const valuePerTonne = partner.value && partner.net_wgt ? partner.value / (partner.net_wgt / 1000) : null
   const stats: [string, string][] = [['Rank', `#${rank}`], ['Trade value', fmtUsd(partner.value)], ['Share of flow', share != null ? `${share.toFixed(2)}%` : '—'], ['Net weight', fmtWt(partner.net_wgt)], ['Value / tonne', valuePerTonne != null ? fmtUsd(valuePerTonne) : '—']]
   return (
-    <div style={{ width: 302, flexShrink: 0, boxSizing: 'border-box', background: T.surface, border: `1px solid ${mix(T.gold, 35)}`, padding: '12px 14px', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ width: isMobile ? '100%' : 302, flexShrink: 0, boxSizing: 'border-box', background: T.surface, border: `1px solid ${mix(T.gold, 35)}`, padding: '12px 14px', display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}><span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.gold, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{partner.partner ?? partner.iso ?? 'Partner'}</span><span style={{ flexShrink: 0, fontFamily: MONO, fontSize: 8.5, fontWeight: 700, color: T.blue, border: `1px solid ${T.blue}`, padding: '2px 6px' }}>{partner.iso ?? `#${rank}`}</span></div>
       <div style={{ marginTop: 12, padding: '13px 0', borderTop: `1px solid ${T.borderFaint}`, borderBottom: `1px solid ${T.borderFaint}` }}><div style={{ fontFamily: MONO, fontSize: 8.5, color: T.muted }}>{countryLabel} {flow?.toLowerCase()} with selected partner</div><div style={{ fontFamily: MONO, fontSize: 25, fontWeight: 700, color: T.text, marginTop: 4 }}>{fmtUsd(partner.value)}</div><div style={{ height: 6, background: mix(T.text, 7), marginTop: 9 }}><div style={{ height: '100%', width: `${Math.min(100, share ?? 0)}%`, background: T.gold }} /></div></div>
       

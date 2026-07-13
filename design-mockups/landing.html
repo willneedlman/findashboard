@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Alphatape Terminal — the whole desk, in one terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a1320; --bg2:#0b1626; --surface:#0d1826; --line:rgba(255,255,255,0.08);
+    --gold:#c9a84c; --text:#e6eefc; --muted:#7e93ad; --dim:#5e768f;
+    --pos:#3fb950; --neg:#f85149; --blue:#6c8cff;
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+    --sans:'Inter',-apple-system,system-ui,sans-serif;
+    --ease:cubic-bezier(0.23,1,0.32,1);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.5;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 28px}
+  .mono{font-family:var(--mono)}
+  .eyebrow{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:0.22em;text-transform:uppercase;color:var(--gold)}
+
+  /* ---------- nav ---------- */
+  nav{position:sticky;top:0;z-index:40;backdrop-filter:blur(10px);background:rgba(10,19,32,0.72);border-bottom:1px solid var(--line)}
+  .nav-in{max-width:1180px;margin:0 auto;padding:14px 28px;display:flex;align-items:center;justify-content:space-between}
+  .brand{font-family:var(--mono);font-size:14px;font-weight:700;letter-spacing:0.14em;color:var(--gold)}
+  .brand span{color:var(--dim);font-size:10px;letter-spacing:0.24em}
+  .nav-links{display:flex;align-items:center;gap:28px}
+  .nav-links a{font-size:13px;color:var(--muted);transition:color 150ms var(--ease)}
+  .nav-links a:hover{color:var(--text)}
+  .btn{font-family:var(--sans);font-size:13px;font-weight:600;padding:9px 16px;border-radius:8px;cursor:pointer;border:1px solid transparent;
+    transition:transform 90ms var(--ease),background 150ms var(--ease),box-shadow 150ms var(--ease);display:inline-flex;align-items:center;gap:7px}
+  .btn:active{transform:scale(0.97)}
+  .btn-gold{background:var(--gold);color:#1a1505;box-shadow:0 6px 20px -8px rgba(201,168,76,0.6)}
+  .btn-gold:hover{background:#d8b95e}
+  .btn-ghost{background:rgba(255,255,255,0.04);color:var(--text);border-color:var(--line)}
+  .btn-ghost:hover{background:rgba(255,255,255,0.08)}
+  .btn-lg{padding:13px 22px;font-size:14px;border-radius:9px}
+
+  /* ---------- hero ---------- */
+  .hero{position:relative;padding:84px 0 72px;overflow:hidden}
+  .hero::before{content:"";position:absolute;inset:0;z-index:-2;
+    background:radial-gradient(900px 460px at 78% -8%, rgba(108,140,255,0.10), transparent 60%),
+               radial-gradient(760px 420px at 6% 4%, rgba(201,168,76,0.08), transparent 58%)}
+  .hero::after{content:"";position:absolute;inset:0;z-index:-1;opacity:0.5;
+    background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+    background-size:46px 46px;mask-image:radial-gradient(680px 380px at 70% 20%,#000,transparent 72%)}
+  .hero-grid{display:grid;grid-template-columns:1.04fr 1.12fr;gap:48px;align-items:center}
+  .hero h1{font-family:var(--mono);font-weight:600;font-size:52px;line-height:1.04;letter-spacing:-0.025em;margin:18px 0 0}
+  .hero h1 .g{color:var(--gold)}
+  .hero .lede{font-size:17px;color:var(--muted);margin:22px 0 30px;max-width:520px}
+  .hero .cta{display:flex;gap:12px;flex-wrap:wrap}
+  .trust{margin-top:26px;font-family:var(--mono);font-size:11px;letter-spacing:0.06em;color:var(--dim)}
+  .trust b{color:var(--muted);font-weight:600}
+
+  /* ---------- hero terminal panel ---------- */
+  .term{background:linear-gradient(180deg,rgba(255,255,255,0.04),transparent 80px),var(--surface);
+    border:1px solid var(--line);border-radius:12px;overflow:hidden;
+    box-shadow:0 1px 0 rgba(255,255,255,0.05) inset,0 40px 80px -36px rgba(0,0,0,0.8);animation:float 7s ease-in-out infinite}
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
+  .term .tbar{display:flex;align-items:center;gap:7px;padding:10px 13px;border-bottom:1px solid var(--line)}
+  .term .tbar i{width:9px;height:9px;border-radius:50%;background:#27384f}
+  .term .tbar .name{margin-left:8px;font-family:var(--mono);font-size:10px;letter-spacing:0.14em;color:var(--dim);text-transform:uppercase}
+  .term .thead{display:flex;justify-content:space-between;align-items:baseline;padding:11px 14px;border-bottom:1px solid var(--line)}
+  .term .thead .t{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--gold)}
+  .term .thead .live{font-family:var(--mono);font-size:9px;color:var(--muted);display:flex;align-items:center;gap:5px}
+  .term .thead .live::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--pos);box-shadow:0 0 0 3px rgba(63,185,80,0.18)}
+  .term table{width:100%;border-collapse:collapse;font-family:var(--mono)}
+  .term th{font-size:8.5px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);padding:8px 14px;text-align:right;border-bottom:1px solid var(--line)}
+  .term th:first-child{text-align:left}
+  .term td{font-size:11.5px;padding:7px 14px;text-align:right;border-bottom:1px solid rgba(255,255,255,0.04)}
+  .term td:first-child{text-align:left;font-weight:700;color:var(--text)}
+  .term tr:last-child td{border-bottom:none}
+  .pos{color:var(--pos)} .neg{color:var(--neg)}
+  .bar7{display:inline-block;width:42px;height:4px;border-radius:3px;background:rgba(255,255,255,0.08);vertical-align:middle;overflow:hidden}
+  .bar7 i{display:block;height:100%;background:linear-gradient(90deg,var(--blue),var(--pos))}
+
+  /* ---------- strip ---------- */
+  .strip{border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--bg2)}
+  .strip-in{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap;padding:22px 28px;max-width:1180px;margin:0 auto}
+  .stat .n{font-family:var(--mono);font-size:26px;font-weight:700;letter-spacing:-0.02em}
+  .stat .n .g{color:var(--gold)}
+  .stat .l{font-size:12px;color:var(--muted);margin-top:2px}
+
+  /* ---------- sections ---------- */
+  section.blk{padding:80px 0}
+  .sec-head{max-width:680px;margin-bottom:40px}
+  .sec-head h2{font-size:34px;font-weight:700;letter-spacing:-0.02em;margin:12px 0 0}
+  .sec-head p{font-size:16px;color:var(--muted);margin-top:14px}
+
+  /* bento */
+  .bento{display:grid;grid-template-columns:repeat(6,1fr);grid-auto-rows:minmax(150px,auto);gap:16px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px;position:relative;overflow:hidden;
+    transition:transform 220ms var(--ease),border-color 220ms var(--ease),box-shadow 220ms var(--ease)}
+  .card:hover{transform:translateY(-3px);border-color:rgba(255,255,255,0.16);box-shadow:0 24px 50px -28px rgba(0,0,0,0.8)}
+  .card .k{font-family:var(--mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--gold)}
+  .card h3{font-size:19px;font-weight:600;letter-spacing:-0.01em;margin:12px 0 8px}
+  .card p{font-size:13.5px;color:var(--muted);line-height:1.6}
+  .card .tags{margin-top:14px;display:flex;flex-wrap:wrap;gap:6px}
+  .tag{font-family:var(--mono);font-size:10px;color:var(--muted);padding:3px 8px;border:1px solid var(--line);border-radius:6px}
+  .c-wide{grid-column:span 4} .c-tall{grid-column:span 2;grid-row:span 2} .c-2{grid-column:span 2} .c-3{grid-column:span 3}
+  .glow-gold::after,.glow-blue::after{content:"";position:absolute;width:240px;height:240px;border-radius:50%;filter:blur(60px);z-index:0;opacity:.5;top:-80px;right:-60px}
+  .glow-gold::after{background:rgba(201,168,76,0.18)} .glow-blue::after{background:rgba(108,140,255,0.16)}
+  .card>*{position:relative;z-index:1}
+  .mini{margin-top:16px;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--bg)}
+  .mini .row{display:flex;justify-content:space-between;padding:7px 11px;font-family:var(--mono);font-size:11px;border-bottom:1px solid rgba(255,255,255,0.04)}
+  .mini .row:last-child{border-bottom:none}
+  .mini .row span:first-child{color:var(--text);font-weight:600}
+
+  /* depth highlight */
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center}
+
+  /* final cta */
+  .final{position:relative;border:1px solid var(--line);border-radius:20px;padding:64px 40px;text-align:center;overflow:hidden;background:var(--surface)}
+  .final::before{content:"";position:absolute;inset:0;z-index:0;background:radial-gradient(600px 300px at 50% -20%,rgba(201,168,76,0.16),transparent 60%)}
+  .final>*{position:relative;z-index:1}
+  .final h2{font-family:var(--mono);font-size:38px;font-weight:600;letter-spacing:-0.025em}
+  .final p{color:var(--muted);font-size:16px;margin:16px auto 28px;max-width:520px}
+
+  /* footer */
+  footer{border-top:1px solid var(--line);margin-top:80px;padding:48px 0 60px}
+  .foot{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:32px}
+  .foot .col h4{font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--dim);margin-bottom:14px}
+  .foot .col a{display:block;font-size:13px;color:var(--muted);padding:5px 0;transition:color 150ms var(--ease)}
+  .foot .col a:hover{color:var(--text)}
+  .foot .disc{font-size:11.5px;color:var(--dim);margin-top:14px;max-width:280px;line-height:1.6}
+
+  /* scroll reveal */
+  .rv{opacity:0;transform:translateY(16px);transition:opacity 600ms var(--ease),transform 600ms var(--ease)}
+  .rv.in{opacity:1;transform:none}
+  @media (prefers-reduced-motion:reduce){.rv{opacity:1;transform:none;transition:none}.term{animation:none}}
+  @media (max-width:900px){.hero-grid,.split,.foot{grid-template-columns:1fr}.hero h1{font-size:40px}.bento{grid-template-columns:repeat(2,1fr)}.c-wide,.c-tall,.c-3,.c-2{grid-column:span 2;grid-row:auto}.nav-links{display:none}}
+</style>
+</head>
+<body>
+  <nav>
+    <div class="nav-in">
+      <div class="brand">ALPHATAPE <span>TERMINAL</span></div>
+      <div class="nav-links">
+        <a href="#tools">Tools</a><a href="#options">Options</a><a href="#depth">Valuation</a><a href="#">Pricing</a>
+        <a href="#" class="btn btn-gold">Launch Terminal →</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <header class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <div class="eyebrow">Bloomberg-grade · retail price</div>
+        <h1>The whole desk,<br>in one <span class="g">terminal</span>.</h1>
+        <p class="lede">Options flow, dealer gamma, DCF valuation, macro rates, backtesting and paper trading — 40+ institutional-grade tools in a single dark terminal. Real-time data, no five-figure seat.</p>
+        <div class="cta">
+          <a href="#" class="btn btn-gold btn-lg">Launch Terminal →</a>
+          <a href="#tools" class="btn btn-ghost btn-lg">Explore the tools</a>
+        </div>
+        <div class="trust">Live market data via <b>Tradier</b> · <b>FMP</b> · <b>yfinance</b> · <b>FRED</b></div>
+      </div>
+
+      <div class="term">
+        <div class="tbar"><i></i><i></i><i></i><span class="name">unusual options flow</span></div>
+        <div class="thead"><span class="t">Live Flow · top premium</span><span class="live">streaming</span></div>
+        <table>
+          <thead><tr><th>Contract</th><th>Vol</th><th>Vol/OI</th><th>IV</th><th>Premium</th></tr></thead>
+          <tbody>
+            <tr><td>NVDA 1300C 0DTE</td><td>41,208</td><td class="pos">8.4</td><td>62.1</td><td>$18.4M</td></tr>
+            <tr><td>SPY 605C 2DTE</td><td>22,510</td><td class="pos">3.1</td><td>11.8</td><td>$9.1M</td></tr>
+            <tr><td>TSLA 400P 9DTE</td><td>9,940</td><td class="neg">2.0</td><td>54.3</td><td>$6.2M</td></tr>
+            <tr><td>AAPL 230C 16DTE</td><td>7,330</td><td class="pos">1.9</td><td>24.6</td><td>$4.0M</td></tr>
+            <tr><td>MSFT 500C 23DTE</td><td>5,120</td><td class="pos">2.7</td><td>21.0</td><td>$3.3M</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </header>
+
+  <!-- STAT STRIP -->
+  <div class="strip">
+    <div class="strip-in">
+      <div class="stat"><div class="n"><span class="g">40+</span></div><div class="l">analytics tools</div></div>
+      <div class="stat"><div class="n">8</div><div class="l">options modules</div></div>
+      <div class="stat"><div class="n">5</div><div class="l">asset-class views</div></div>
+      <div class="stat"><div class="n">&lt;200<span class="mono" style="font-size:14px">ms</span></div><div class="l">data refresh</div></div>
+      <div class="stat"><div class="n">$0</div><div class="l">terminal seat fee</div></div>
+    </div>
+  </div>
+
+  <!-- BENTO -->
+  <section class="blk" id="tools">
+    <div class="wrap">
+      <div class="sec-head rv">
+        <div class="eyebrow">One terminal, every workflow</div>
+        <h2>Built like a trading desk, not a toy dashboard.</h2>
+        <p>Each module is a real analytical surface with live data — not a static chart. Move from a macro thesis to an options structure to a paper fill without leaving the terminal.</p>
+      </div>
+      <div class="bento">
+        <div class="card c-tall glow-gold rv" id="options">
+          <div class="k">Options intelligence</div>
+          <h3>See the flow before it moves price.</h3>
+          <p>Unusual options activity, dealer gamma exposure, IV rank, implied probability, and a full market-maker simulator.</p>
+          <div class="mini">
+            <div class="row"><span>Dealer GEX</span><span class="pos mono">+2.1B</span></div>
+            <div class="row"><span>IV Rank · SPX</span><span class="mono">18%</span></div>
+            <div class="row"><span>Put/Call</span><span class="neg mono">0.92</span></div>
+          </div>
+          <div class="tags"><span class="tag">GEX</span><span class="tag">Unusual flow</span><span class="tag">IV surface</span><span class="tag">MM sim</span></div>
+        </div>
+        <div class="card c-2 rv">
+          <div class="k">Valuation</div>
+          <h3>DCF that fills its own gaps.</h3>
+          <p>Reverse-DCF, relative comps, and industry fallbacks when company data is thin.</p>
+        </div>
+        <div class="card c-2 glow-blue rv">
+          <div class="k">Portfolio &amp; risk</div>
+          <h3>Backtest, stress, simulate.</h3>
+          <p>Monte Carlo paths, historical stress scenarios, factor exposure.</p>
+        </div>
+        <div class="card c-wide rv">
+          <div class="k">Macro &amp; rates</div>
+          <h3>Top-down context, wired into every ticker.</h3>
+          <p>Fed-path probabilities, credit spreads, the yield curve and sector rotation — the regime backdrop for every trade you size.</p>
+          <div class="tags"><span class="tag">Fed path</span><span class="tag">Credit spreads</span><span class="tag">Yield curve</span><span class="tag">Sector rotation</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DEPTH HIGHLIGHT -->
+  <section class="blk" id="depth" style="border-top:1px solid var(--line);background:var(--bg2)">
+    <div class="wrap split">
+      <div class="rv">
+        <div class="eyebrow">Signal, not noise</div>
+        <h2 style="font-size:32px;font-weight:700;letter-spacing:-0.02em;margin:12px 0 14px">Catch the print the moment it hits the tape.</h2>
+        <p style="color:var(--muted);font-size:15.5px;line-height:1.65">The flow scanner sweeps liquid chains for volume spikes and volume/open-interest surges, ranks by traded premium, and flags freshly-opened positioning. Sort by DTE, moneyness, or premium and drill straight into the contract.</p>
+        <div class="cta" style="margin-top:24px"><a href="#" class="btn btn-ghost btn-lg">Open Options Flow →</a></div>
+      </div>
+      <div class="term rv" style="animation:none">
+        <div class="tbar"><i></i><i></i><i></i><span class="name">portfolio · risk</span></div>
+        <div class="thead"><span class="t">Net Liq $1,284,930</span><span class="live">+0.66% today</span></div>
+        <table>
+          <thead><tr><th>Symbol</th><th>Day%</th><th>Value</th><th>Weight</th></tr></thead>
+          <tbody>
+            <tr><td>NVDA</td><td class="pos">+2.14</td><td>$260,128</td><td><span class="bar7"><i style="width:100%"></i></span></td></tr>
+            <tr><td>MSFT</td><td class="pos">+0.88</td><td>$149,436</td><td><span class="bar7"><i style="width:57%"></i></span></td></tr>
+            <tr><td>AAPL</td><td class="neg">-0.42</td><td>$146,470</td><td><span class="bar7"><i style="width:56%"></i></span></td></tr>
+            <tr><td>SPY</td><td class="pos">+0.31</td><td>$108,819</td><td><span class="bar7"><i style="width:42%"></i></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- FINAL CTA -->
+  <section class="blk"><div class="wrap">
+    <div class="final rv">
+      <div class="eyebrow">No seat fee. No gatekeeping.</div>
+      <h2>Stop renting a terminal.</h2>
+      <p>Get the analytical firepower of an institutional desk in a terminal that runs in your browser. Bring your own thesis.</p>
+      <a href="#" class="btn btn-gold btn-lg">Launch Terminal →</a>
+    </div>
+  </div></section>
+
+  <!-- FOOTER -->
+  <footer><div class="wrap foot">
+    <div class="col">
+      <div class="brand" style="margin-bottom:14px">ALPHATAPE <span>TERMINAL</span></div>
+      <p class="disc">Institutional-grade market analytics for independent traders. Not investment advice — for research and educational use only.</p>
+    </div>
+    <div class="col"><h4>Product</h4><a href="#">Options</a><a href="#">Valuation</a><a href="#">Portfolio</a><a href="#">Macro</a></div>
+    <div class="col"><h4>Company</h4><a href="#">About</a><a href="#">Changelog</a><a href="#">Data sources</a><a href="#">Contact</a></div>
+    <div class="col"><h4>Legal</h4><a href="#">Privacy</a><a href="#">Terms</a><a href="#">Risk disclosure</a></div>
+  </div></footer>
+
+<script>
+  const io=new IntersectionObserver((es)=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}}),{threshold:0.15});
+  document.querySelectorAll('.rv').forEach(el=>io.observe(el));
+</script>
+</body>
+</html>

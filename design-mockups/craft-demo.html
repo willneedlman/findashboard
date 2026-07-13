@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Craft layer demo — motion & interaction (look unchanged)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#101c2e; --surface:#0d1826; --border:rgba(255,255,255,0.08);
+    --gold:#c9a84c; --text:#d7e3fc; --muted:#5e768f;
+    --pos:#3fb950; --neg:#f85149;
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+    --sans:'Inter',-apple-system,system-ui,sans-serif;
+    /* Emil's curves — only used when .craft is on */
+    --ease-out:cubic-bezier(0.23,1,0.32,1);
+    --ease-in-out:cubic-bezier(0.77,0,0.175,1);
+    --ease-drawer:cubic-bezier(0.32,0.72,0,1);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#0a1320;color:var(--text);font-family:var(--mono);font-size:13px;
+    -webkit-font-smoothing:antialiased;padding:22px}
+
+  /* ---------- demo control bar ---------- */
+  .bar{max-width:1080px;margin:0 auto 18px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  .bar h1{font-family:var(--sans);font-size:15px;font-weight:600}
+  .bar h1 small{display:block;color:var(--muted);font-weight:400;font-size:12px;margin-top:2px}
+  .switch{display:flex;align-items:center;gap:10px;font-family:var(--sans);font-size:12px;color:var(--muted)}
+  .switch b{color:var(--text)}
+  .toggle{position:relative;width:46px;height:24px;border-radius:999px;background:#1b2c44;border:1px solid var(--border);cursor:pointer;flex:none}
+  .toggle::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:var(--muted)}
+  body.craft .toggle{background:rgba(201,168,76,0.25);border-color:rgba(201,168,76,0.5)}
+  body.craft .toggle::after{left:24px;background:var(--gold)}
+  /* the toggle itself uses the craft easing so the demo control feels right too */
+  body.craft .toggle, body.craft .toggle::after{transition:background 240ms var(--ease-out), left 240ms var(--ease-out), border-color 240ms var(--ease-out)}
+  .hint{max-width:1080px;margin:0 auto 16px;font-family:var(--sans);font-size:12px;color:var(--muted);line-height:1.6}
+  .hint code{font-family:var(--mono);color:#9fb3d1;background:rgba(255,255,255,0.04);padding:1px 5px;border-radius:4px}
+
+  /* ---------- app shell (current terminal look — identical in both modes) ---------- */
+  .shell{max-width:1080px;margin:0 auto;display:grid;grid-template-columns:188px 1fr;
+    border:1px solid var(--border);background:var(--surface);min-height:520px}
+  nav{border-right:1px solid var(--border);padding:10px 8px;background:var(--bg)}
+  .brand{font-size:10px;font-weight:700;letter-spacing:0.16em;color:var(--gold);padding:8px 10px 14px}
+  .nav-item{display:flex;align-items:center;gap:9px;padding:8px 10px;color:var(--muted);
+    font-size:11.5px;letter-spacing:0.02em;cursor:pointer;border-left:2px solid transparent}
+  .nav-item .ic{width:8px;height:8px;border:1px solid currentColor;border-radius:1px;flex:none}
+  .nav-item:hover{background:rgba(255,255,255,0.03);color:var(--text)}
+  .nav-item.active{color:var(--gold);border-left-color:var(--gold);background:rgba(201,168,76,0.06)}
+  body.craft .nav-item{transition:background 150ms var(--ease-out), color 150ms var(--ease-out)}
+
+  main{padding:16px 18px}
+  .head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .head .ttl{font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--gold)}
+  .head .ts{font-size:10px;color:var(--muted)}
+
+  .tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:14px}
+  .tab{position:relative;padding:8px 14px;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;
+    color:var(--muted);cursor:pointer;background:none;border:none;font-family:var(--mono)}
+  .tab.active{color:var(--text)}
+  .tab .uline{position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--gold);transform:scaleX(0)}
+  .tab.active .uline{transform:scaleX(1)}
+  body.craft .tab{transition:color 140ms var(--ease-out)}
+  body.craft .tab .uline{transition:transform 220ms var(--ease-out);transform-origin:center}
+
+  .panel{min-height:200px}
+  .panel-view{display:none}
+  .panel-view.on{display:block}
+  body.craft .panel-view.on{animation:fadeUp 260ms var(--ease-out)}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  /* buttons */
+  .btns{display:flex;gap:9px;margin-bottom:16px;flex-wrap:wrap}
+  button.b{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;
+    padding:8px 14px;cursor:pointer;border:1px solid var(--border);background:rgba(255,255,255,0.03);color:var(--text);outline:none}
+  button.b.primary{background:rgba(201,168,76,0.12);border-color:rgba(201,168,76,0.45);color:var(--gold)}
+  button.b:hover{background:rgba(255,255,255,0.07)}
+  button.b.primary:hover{background:rgba(201,168,76,0.2)}
+  body.craft button.b{transition:background 140ms var(--ease-out), transform 90ms var(--ease-out), box-shadow 140ms var(--ease-out)}
+  body.craft button.b:active{transform:scale(0.97)}
+  body.craft button.b:focus-visible{box-shadow:0 0 0 2px #0a1320, 0 0 0 4px rgba(201,168,76,0.6)}
+
+  /* table */
+  table{width:100%;border-collapse:collapse}
+  th{font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);
+    padding:7px 10px;text-align:right;border-bottom:1px solid var(--border)}
+  th:first-child{text-align:left}
+  td{font-size:12px;padding:7px 10px;text-align:right;border-bottom:1px solid rgba(255,255,255,0.05)}
+  td:first-child{text-align:left;font-weight:700}
+  tbody tr{cursor:pointer}
+  tbody tr:hover{background:rgba(255,255,255,0.04)}
+  body.craft tbody tr{transition:background 130ms var(--ease-out)}
+  .pos{color:var(--pos)} .neg{color:var(--neg)}
+
+  /* modal */
+  .scrim{position:fixed;inset:0;background:rgba(5,10,18,0.6);display:none;align-items:center;justify-content:center;z-index:50;opacity:0}
+  .scrim.open{display:flex}
+  .modal{width:360px;background:var(--surface);border:1px solid var(--border);padding:18px}
+  .modal h3{font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--gold);margin-bottom:10px}
+  .modal p{font-family:var(--sans);font-size:13px;color:var(--text);line-height:1.6;margin-bottom:16px}
+  /* base: appears instantly (no craft). craft: scrim fades, modal scales up from 0.96 */
+  body.craft .scrim{transition:opacity 200ms var(--ease-out)}
+  body.craft .scrim.open{opacity:1}
+  body.craft .scrim.open .modal{animation:modalIn 240ms var(--ease-out)}
+  @keyframes modalIn{from{opacity:0;transform:scale(0.96)}to{opacity:1;transform:none}}
+  body:not(.craft) .scrim.open{opacity:1}
+
+  /* toast */
+  .toast{position:fixed;right:22px;bottom:22px;background:var(--surface);border:1px solid rgba(201,168,76,0.4);
+    color:var(--text);font-size:12px;padding:11px 14px;z-index:60;display:flex;align-items:center;gap:9px;
+    transform:translateY(140%);opacity:0;pointer-events:none}
+  .toast .dot{width:7px;height:7px;border-radius:50%;background:var(--pos)}
+  .toast.show{transform:translateY(0);opacity:1}
+  body.craft .toast{transition:transform 300ms var(--ease-out), opacity 300ms var(--ease-out)}
+  /* base: snaps in with weak linear feel */
+  body:not(.craft) .toast{transition:transform 150ms linear, opacity 150ms linear}
+
+  @media (prefers-reduced-motion: reduce){
+    body.craft *{animation-duration:0.01ms !important;transition-duration:0.01ms !important}
+  }
+</style>
+</head>
+<body>
+  <div class="bar">
+    <h1>Craft layer demo<small>Same terminal look in both states — only flow, easing &amp; transitions change.</small></h1>
+    <div class="switch">Craft layer <b id="state">OFF</b>
+      <div class="toggle" id="toggle" role="switch" aria-checked="false" tabindex="0"></div>
+    </div>
+  </div>
+  <div class="hint">Flip the toggle, then: hover the nav &amp; rows, click the tabs, press the buttons (watch the press + focus ring via <code>Tab</code> key), open the modal, fire a toast. OFF = typical defaults. ON = Emil's <code>ease-out</code> curve, specified-property transitions, <code>:active</code> press, scale-from-nothing entrances, <code>:focus-visible</code> rings, reduced-motion aware.</div>
+
+  <div class="shell">
+    <nav>
+      <div class="brand">FINANCE OS</div>
+      <div class="nav-item active"><span class="ic"></span>Overview</div>
+      <div class="nav-item"><span class="ic"></span>Options Flow</div>
+      <div class="nav-item"><span class="ic"></span>DCF Valuation</div>
+      <div class="nav-item"><span class="ic"></span>Screener</div>
+      <div class="nav-item"><span class="ic"></span>Paper Trading</div>
+      <div class="nav-item"><span class="ic"></span>Settings</div>
+    </nav>
+    <main>
+      <div class="head"><span class="ttl">Portfolio Overview</span><span class="ts">11:42:18 ET</span></div>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="0">Positions<span class="uline"></span></button>
+        <button class="tab" data-tab="1">Activity<span class="uline"></span></button>
+        <button class="tab" data-tab="2">Allocation<span class="uline"></span></button>
+      </div>
+
+      <div class="btns">
+        <button class="b primary" onclick="toast()">Run Scan</button>
+        <button class="b" onclick="openModal()">Position Details</button>
+        <button class="b" onclick="toast()">Export</button>
+      </div>
+
+      <div class="panel">
+        <div class="panel-view on" data-view="0">
+          <table>
+            <thead><tr><th>Symbol</th><th>Qty</th><th>Last</th><th>Day%</th><th>Value</th></tr></thead>
+            <tbody>
+              <tr><td>NVDA</td><td>220</td><td>1,182.40</td><td class="pos">+2.14</td><td>260,128</td></tr>
+              <tr><td>MSFT</td><td>300</td><td>498.12</td><td class="pos">+0.88</td><td>149,436</td></tr>
+              <tr><td>AAPL</td><td>640</td><td>228.86</td><td class="neg">-0.42</td><td>146,470</td></tr>
+              <tr><td>SPY</td><td>180</td><td>604.55</td><td class="pos">+0.31</td><td>108,819</td></tr>
+              <tr><td>TSLA</td><td>150</td><td>412.07</td><td class="neg">-1.93</td><td>61,810</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="panel-view" data-view="1">
+          <table>
+            <thead><tr><th>Time</th><th>Action</th><th>Symbol</th><th>Qty</th><th>Price</th></tr></thead>
+            <tbody>
+              <tr><td>11:31</td><td class="pos">BUY</td><td>NVDA</td><td>20</td><td>1,180.10</td></tr>
+              <tr><td>10:58</td><td class="neg">SELL</td><td>TSLA</td><td>40</td><td>415.20</td></tr>
+              <tr><td>10:12</td><td class="pos">BUY</td><td>SPY</td><td>30</td><td>603.90</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="panel-view" data-view="2">
+          <table>
+            <thead><tr><th>Sector</th><th>Weight</th><th>Day%</th></tr></thead>
+            <tbody>
+              <tr><td>Technology</td><td>52.1</td><td class="pos">+1.10</td></tr>
+              <tr><td>Index ETF</td><td>8.5</td><td class="pos">+0.31</td></tr>
+              <tr><td>Consumer</td><td>4.8</td><td class="neg">-1.93</td></tr>
+              <tr><td>Cash</td><td>12.0</td><td>—</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div class="scrim" id="scrim" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+      <h3>NVDA · Position</h3>
+      <p>220 shares @ avg 1,041.18. Unrealized +$30,866 (+13.5%). Day +$5,470. Weight 20.2% of book.</p>
+      <button class="b primary" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+
+  <div class="toast" id="t"><span class="dot"></span>Scan queued — 15 tickers, 2 expiries.</div>
+
+<script>
+  const body=document.body, toggle=document.getElementById('toggle'), state=document.getElementById('state');
+  function setCraft(on){body.classList.toggle('craft',on);toggle.setAttribute('aria-checked',on);state.textContent=on?'ON':'OFF';}
+  toggle.addEventListener('click',()=>setCraft(!body.classList.contains('craft')));
+  toggle.addEventListener('keydown',e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();setCraft(!body.classList.contains('craft'));}});
+
+  document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    const i=t.dataset.tab;
+    document.querySelectorAll('.panel-view').forEach(v=>v.classList.toggle('on',v.dataset.view===i));
+  }));
+  document.querySelectorAll('.nav-item').forEach(n=>n.addEventListener('click',()=>{
+    document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));n.classList.add('active');
+  }));
+
+  const scrim=document.getElementById('scrim');
+  window.openModal=()=>scrim.classList.add('open');
+  window.closeModal=()=>scrim.classList.remove('open');
+
+  let tid;const tEl=document.getElementById('t');
+  window.toast=()=>{tEl.classList.remove('show');void tEl.offsetWidth;tEl.classList.add('show');clearTimeout(tid);tid=setTimeout(()=>tEl.classList.remove('show'),2600);};
+</script>
+</body>
+</html>

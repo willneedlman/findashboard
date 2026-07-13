@@ -535,7 +535,7 @@ export function MaritimeMapContent() {
   return (
     // Fill the viewport (Layout adds 16px py gutters): the disclaimer footer
     // lands below the fold and only appears on scroll.
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 32px)', minHeight: 680, border: '1px solid var(--theme-border)' }}>
+    <div className="gfm-shell" style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 32px)', minHeight: 680, border: '1px solid var(--theme-border)' }}>
       <style>{`
         .gfm-map { background: var(--theme-bg); }
         .gfm-chip:hover { border-color: ${GOLD} !important; color: ${TEXT} !important; }
@@ -561,6 +561,15 @@ export function MaritimeMapContent() {
         .leaflet-control-attribution { background: color-mix(in srgb, var(--theme-bg) 72%, transparent) !important; color: var(--theme-secondary) !important; font-size: 9px; }
         .leaflet-control-attribution a { color: var(--theme-primary) !important; }
         @keyframes gfm-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+        @media (max-width: 767px) {
+          .gfm-shell { height: calc(100dvh - 118px) !important; min-height: 560px !important; }
+          .gfm-search { left: 12px !important; right: 12px !important; top: 58px !important; }
+          .gfm-left-rail { display: none !important; }
+          .gfm-right-rail { width: min(296px, calc(100% - 24px)) !important; top: 164px !important; right: 12px !important; bottom: 64px !important; }
+          .gfm-bottom-chrome { left: 12px !important; right: 12px !important; bottom: 12px !important; }
+          .gfm-cp-strip { display: flex !important; overflow-x: auto; overscroll-behavior-inline: contain; }
+          .gfm-cp-strip > * { min-width: 142px !important; }
+        }
       `}</style>
 
       {/* ── Map region with floating chrome ── */}
@@ -689,7 +698,7 @@ export function MaritimeMapContent() {
         {/* ── Left column: view panel on top, legend pinned to the bottom.
              One flex column so the two can never overlap on short screens —
              each scrolls internally instead. ── */}
-        <div style={{ position: 'absolute', top: 62, left: 14, bottom: 14, zIndex: 520, width: 218, display: 'flex', flexDirection: 'column', gap: 8, pointerEvents: 'none' }}>
+        <div className="gfm-left-rail" style={{ position: 'absolute', top: 62, left: 14, bottom: 14, zIndex: 520, width: 218, display: 'flex', flexDirection: 'column', gap: 8, pointerEvents: 'none' }}>
         <motion.div {...mv(0.05)} style={{ flex: '0 1 auto', minHeight: 0, overflowY: 'auto', pointerEvents: 'auto', background: panelBg(), border: neutralBorder }}>
           <div style={{ padding: '12px 14px 4px' }}>
             <div style={{ ...eyebrow, marginBottom: 6 }}>View</div>
@@ -746,7 +755,7 @@ export function MaritimeMapContent() {
         </div>
 
         {/* ── Search command bar + mode pills (left offset clears the brand chip) ── */}
-        <div style={{ position: 'absolute', top: 14, left: 348, right: 324, zIndex: 540, display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
+        <div className="gfm-search" style={{ position: 'absolute', top: 14, left: 348, right: 324, zIndex: 540, display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
         <motion.div {...mv(0.1)} style={{ width: 'min(520px, 100%)', pointerEvents: 'auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 13px', background: panelBg(), border: goldBorder(0.4) }}>
             <span style={{ fontFamily: MONO, fontSize: 12, color: GOLD }}>&gt;</span>
@@ -794,7 +803,7 @@ export function MaritimeMapContent() {
         </div>
 
         {/* ── Alert widgets + inspector (one column so heights never collide) ── */}
-        <div style={{ position: 'absolute', top: 14, right: 14, bottom: 14, zIndex: 530, width: 296, display: 'flex', flexDirection: 'column', gap: 7, pointerEvents: 'none' }}>
+        <div className="gfm-right-rail" style={{ position: 'absolute', top: 14, right: 14, bottom: 14, zIndex: 530, width: 296, display: 'flex', flexDirection: 'column', gap: 7, pointerEvents: 'none' }}>
           {alerts.map((a, i) => {
             const congested = a.status === 'congested'
             const accent = congested ? C.negative : GOLD
@@ -894,7 +903,7 @@ export function MaritimeMapContent() {
 
         {/* ── Bottom chrome: scrubber + history center, replay right. Offset
              past the left column so it can never slide under the legend. ── */}
-        <div style={{ position: 'absolute', left: 246, right: 14, bottom: 14, zIndex: 540, display: 'flex', alignItems: 'flex-end', gap: 10, pointerEvents: 'none' }}>
+        <div className="gfm-bottom-chrome" style={{ position: 'absolute', left: 246, right: 14, bottom: 14, zIndex: 540, display: 'flex', alignItems: 'flex-end', gap: 10, pointerEvents: 'none' }}>
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
         {histOpen && (
           <div style={{ width: 'min(1020px, 100%)', pointerEvents: 'auto' }}>
@@ -961,7 +970,7 @@ export function MaritimeMapContent() {
       </div>
 
       {/* ── Docked chokepoint strip ── */}
-      <div style={{ height: 46, flex: 'none', display: 'grid', gridTemplateColumns: `repeat(${STRIP_IDS.length}, 1fr)`, background: 'var(--theme-surface, #0d1826)', borderTop: goldBorder(0.3) }}>
+      <div className="gfm-cp-strip" style={{ height: 46, flex: 'none', display: 'grid', gridTemplateColumns: `repeat(${STRIP_IDS.length}, 1fr)`, background: 'var(--theme-surface, #0d1826)', borderTop: goldBorder(0.3) }}>
         {STRIP_IDS.map((id, i) => {
           const s = statById.get(id)
           const c = choke.data?.chokepoints.find(c => c.id === id)

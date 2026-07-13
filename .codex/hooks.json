@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 '/Users/willneedlman/finance_dashboard/.codex/hooks/frontend_typecheck.py'",
+            "timeout": 130
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Valuation — Alphatape Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <nav><div class="nav-in">
+    <a class="brand" href="index.html">ALPHATAPE <span>TERMINAL</span></a>
+    <div class="nav-links">
+      <a href="options.html">Options</a><a href="valuation.html">Valuation</a><a href="portfolio.html">Portfolio</a>
+      <a href="macro.html">Macro</a><a href="trading.html">Trading</a><a href="pricing.html">Pricing</a>
+      <a href="#" class="btn btn-gold">Launch Terminal →</a>
+    </div>
+  </div></nav>
+
+  <header class="phero"><div class="wrap rv">
+    <div class="eyebrow">Valuation</div>
+    <h1>Know what it's worth,<br>not just what it costs.</h1>
+    <p class="lede">Full discounted-cash-flow models, peer comps, and reverse-DCF — fed by real financial statements. When company data is thin, the model backstops itself with industry averages so you always get an answer.</p>
+    <div class="cta"><a href="#" class="btn btn-gold btn-lg">Launch Terminal →</a><a href="pricing.html" class="btn btn-ghost btn-lg">See pricing</a></div>
+  </div></header>
+
+  <section class="blk"><div class="wrap split" style="align-items:start">
+    <div>
+      <div class="flist" style="border-top:none">
+        <div class="frow rv"><div class="idx">01</div><div>
+          <h3>DCF Valuation <span class="badge">Smart fallback</span></h3>
+          <p>Project free cash flow, set WACC and terminal growth, and get intrinsic value per share. Fundamentals auto-pull from FMP with a yfinance fallback — and when beta or margins are missing, the model fills them from Damodaran industry data instead of guessing.</p>
+          <div class="tags"><span class="tag">FCF model</span><span class="tag">WACC</span><span class="tag">Damodaran fallback</span></div>
+        </div></div>
+        <div class="frow rv"><div class="idx">02</div><div>
+          <h3>Relative Valuation</h3>
+          <p>Peer comparison across P/E, EV/EBITDA, EV/Sales and P/B against sector medians — green where a name beats the peer set, red where it lags.</p>
+          <div class="tags"><span class="tag">Peer comps</span><span class="tag">Sector medians</span></div>
+        </div></div>
+        <div class="frow rv"><div class="idx">03</div><div>
+          <h3>Reverse DCF</h3>
+          <p>Flip the model: solve for the revenue growth and margins the current price already implies, and judge whether the market's expectations are reasonable.</p>
+          <div class="tags"><span class="tag">Implied growth</span><span class="tag">Expectations</span></div>
+        </div></div>
+        <div class="frow rv"><div class="idx">04</div><div>
+          <h3>Corporate Hub</h3>
+          <p>Financial statements, revenue by segment and geography, company profile and peers — the qualitative context behind the numbers.</p>
+          <div class="tags"><span class="tag">Statements</span><span class="tag">Segments</span></div>
+        </div></div>
+      </div>
+    </div>
+    <div class="term rv" style="position:sticky;top:90px">
+      <div class="tbar"><i></i><i></i><i></i><span class="name">dcf · NVDA</span></div>
+      <div class="thead"><span class="t">Intrinsic value</span><span class="live">FMP + fallback</span></div>
+      <table>
+        <tbody>
+          <tr><td>Revenue (TTM)</td><td>$148.5B</td></tr>
+          <tr><td>Op. margin</td><td>61.2%</td></tr>
+          <tr><td>WACC</td><td>9.4%</td></tr>
+          <tr><td>Terminal g</td><td>2.5%</td></tr>
+          <tr><td>Beta <span class="mono" style="color:var(--dim)">(Damodaran)</span></td><td>1.49</td></tr>
+          <tr><td>Intrinsic / share</td><td class="pos">$1,206</td></tr>
+          <tr><td>Market price</td><td>$1,182</td></tr>
+          <tr><td>Upside</td><td class="pos">+2.0%</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div></section>
+
+  <section class="blk"><div class="wrap">
+    <div class="final rv">
+      <div class="eyebrow">Always an answer</div>
+      <h2>Valuation that doesn't stall on missing data.</h2>
+      <p>Real statements when they exist, industry averages when they don't — every model resolves.</p>
+      <a href="#" class="btn btn-gold btn-lg">Launch Terminal →</a>
+    </div>
+  </div></section>
+
+  <footer><div class="wrap foot">
+    <div class="col"><a class="brand" href="index.html" style="display:inline-block;margin-bottom:14px">ALPHATAPE <span>TERMINAL</span></a>
+      <p class="disc">Institutional-grade market analytics for independent traders. Not investment advice — for research and educational use only.</p></div>
+    <div class="col"><h4>Product</h4><a href="options.html">Options</a><a href="valuation.html">Valuation</a><a href="portfolio.html">Portfolio</a><a href="macro.html">Macro</a><a href="trading.html">Trading</a></div>
+    <div class="col"><h4>Company</h4><a href="#">About</a><a href="#">Changelog</a><a href="#">Data sources</a><a href="#">Contact</a></div>
+    <div class="col"><h4>Legal</h4><a href="#">Privacy</a><a href="#">Terms</a><a href="#">Risk disclosure</a></div>
+  </div></footer>
+  <script src="site.js"></script>
+</body>
+</html>

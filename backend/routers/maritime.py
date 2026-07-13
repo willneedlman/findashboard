@@ -1379,6 +1379,37 @@ _NOWCAST_W = {"high": 1.0, "medium": 0.5}
 _LIVE_DROP_FLOOR = 15.0   # ignore live drops shallower than this (% below tanker baseline)
 _LIVE_SCALE = 0.2         # excess-% → disruption points
 _LIVE_CAP = 12.0          # max points the live layer may add
+_BASELINE_STALE_DAYS = 3
+
+
+def _date_age_days(value: str | None) -> int | None:
+    if not value:
+        return None
+    try:
+        observed = date.fromisoformat(value[:10])
+    except (TypeError, ValueError):
+        return None
+    return max(0, (date.today() - observed).days)
+
+
+def _choke_freshness(stat: dict | None) -> dict:
+    stat = stat or {}
+    baseline_as_of = stat.get("as_of")
+    baseline_age_days = _date_age_days(baseline_as_of)
+    nowcast = stat.get("nowcast") or {}
+    live_as_of = nowcast.get("as_of")
+    live_age_days = _date_age_days(live_as_of)
+    live_confidence = nowcast.get("confidence") or "none"
+    live_reliable = live_confidence in {"high", "medium"} and live_age_days is not None and live_age_days <= 1
+    baseline_outdated = baseline_age_days is None or baseline_age_days > _BASELINE_STALE_DAYS
+    return {
+        "baseline_as_of": baseline_as_of,
+        "baseline_age_days": baseline_age_days,
+        "baseline_outdated": baseline_outdated,
+        "live_as_of": live_as_of,
+        "live_confidence": live_confidence,
+        "live_reliable": live_reliable,
+    }
 
 
 def _choke_disruption(stat: dict) -> float:
@@ -1452,6 +1483,7 @@ def chokepoint_exposure():
         cid = meta["id"]
         groups = CHOKEPOINT_EXPOSURE.get(cid)
         stat = stats.get(cid)
+        freshness = _choke_freshness(stat)
         if not groups:
             continue
         disruption = _choke_disruption(stat) if stat else 0.0
@@ -1479,6 +1511,7 @@ def chokepoint_exposure():
             "status": (stat or {}).get("status"), "delta_pct": (stat or {}).get("delta_pct"),
             "share_pct": (stat or {}).get("share_pct"), "disruption": round(disruption, 1),
             "series30": (stat or {}).get("series30") or [],
+            **freshness,
             "exposures": exposures,
         })
 
@@ -1497,5 +1530,7 @@ def chokepoint_exposure():
         "leaders": leaders,
         "any_stress": any(c["disruption"] > 0 for c in choke_cards),
         "priced": len(quote),
+        "outdated_count": sum(1 for c in choke_cards if c["baseline_outdated"]),
+        "freshness_threshold_days": _BASELINE_STALE_DAYS,
         "source": "curated exposure map + IMF PortWatch + yfinance",
     }

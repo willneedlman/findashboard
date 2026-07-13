@@ -1,19 +1,19 @@
-"""Real aggregate credit stress and consumer-spend API.
+"""Real aggregate credit-stress API.
 
 The previous modeled loan portfolios, delinquency buckets, and roll rates were
-removed. This route serves only observed FRED bank-loan series plus an optional
-offline SafeGraph merchant-spend aggregate.
+removed. This route serves observed Federal Reserve bank-loan, financial-stress,
+and lending-standards series.
 """
 from __future__ import annotations
 
 import logging
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import APIRouter
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-import consumer_spend
 import fred_credit
 
 
@@ -23,11 +23,17 @@ router = APIRouter()
 
 @router.get("/summary")
 def summary():
-    asset_classes = fred_credit.market_series()
-    spend = consumer_spend.summary()
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        asset_future = pool.submit(fred_credit.market_series)
+        stress_future = pool.submit(fred_credit.stress_indicators)
+        asset_classes = asset_future.result()
+        stress_indicators = stress_future.result()
+    all_dates = [item["asof"] for item in asset_classes] + [item["asof"] for item in stress_indicators]
     return {
-        "available": bool(asset_classes), "source": "FRED · St. Louis Fed",
-        "as_of": max((item["asof"] for item in asset_classes), default=None),
-        "asset_classes": asset_classes, "consumer_spend": spend,
-        "method_note": "Bank-industry aggregate rates. No modeled portfolios, loan buckets, or roll rates.",
+        "available": bool(asset_classes or stress_indicators),
+        "source": "Federal Reserve via FRED",
+        "as_of": max(all_dates, default=None),
+        "asset_classes": asset_classes,
+        "stress_indicators": stress_indicators,
+        "method_note": "Observed Federal Reserve aggregates only. No modeled portfolios, loan buckets, roll rates, or merchant-spend proxies.",
     }

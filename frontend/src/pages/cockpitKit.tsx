@@ -54,9 +54,9 @@ export function InfoTip({ title, body, source }: { title: string; body: string; 
 // Bordered output panel: tab label pinned top-left, optional meta top-right.
 export function Panel({ label, meta, children, style, labelColor }: { label: string; meta?: React.ReactNode; children: React.ReactNode; style?: React.CSSProperties; labelColor?: string }) {
   return (
-    <div style={{ position: 'relative', border: `1px solid ${T.border}`, paddingTop: label ? 30 : 10, ...style }}>
-      {label && <div style={{ position: 'absolute', top: 0, left: 0, background: T.surface, padding: '4px 10px', fontFamily: SANS, fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: labelColor ?? T.text, borderRight: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}` }}>{label}</div>}
-      {meta != null && <div style={{ position: 'absolute', top: label ? 6 : 10, right: 12, fontFamily: MONO, fontSize: 9, color: T.muted }}>{meta}</div>}
+    <div className="ft-cockpit-panel" style={{ position: 'relative', border: `1px solid ${T.border}`, paddingTop: label ? 30 : 10, ...style }}>
+      {label && <div className="ft-cockpit-panel-label" style={{ position: 'absolute', top: 0, left: 0, background: T.surface, padding: '4px 10px', fontFamily: SANS, fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: labelColor ?? T.text, borderRight: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}` }}>{label}</div>}
+      {meta != null && <div className="ft-cockpit-panel-meta" style={{ position: 'absolute', top: label ? 6 : 10, right: 12, fontFamily: MONO, fontSize: 9, color: T.muted }}>{meta}</div>}
       {children}
     </div>
   )
@@ -73,9 +73,9 @@ export interface KpiCellSpec { label: string; value: string; vc?: string; sub?: 
 // KPI strip: flex row with ⓘ per cell.
 export function KpiStrip({ cells }: { cells: KpiCellSpec[] }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'stretch', background: T.hover, border: `1px solid ${T.border}` }}>
+    <div className="ft-kpi-strip" style={{ display: 'flex', alignItems: 'stretch', background: T.hover, border: `1px solid ${T.border}` }}>
       {cells.map((k, i) => (
-        <div key={k.label} style={{ flex: 1, padding: '10px 14px', borderLeft: i ? `1px solid ${T.borderFaint}` : 'none' }}>
+        <div className="ft-kpi-cell" key={k.label} style={{ flex: 1, padding: '10px 14px', borderLeft: i ? `1px solid ${T.borderFaint}` : 'none' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <span style={{ fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, whiteSpace: 'nowrap' }}>{k.label}</span>
             {k.tip && <InfoTip {...k.tip} />}

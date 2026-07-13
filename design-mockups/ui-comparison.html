@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>UI Comparison — ui-ux-pro-max vs taste/emil</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a1320; --term-surface:#0d1826; --term-border:rgba(255,255,255,0.08);
+    --gold:#c9a84c; --text:#d7e3fc; --muted:#5e768f;
+    --term-pos:#3fb950; --term-neg:#f85149;
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+    --sans:'Inter',-apple-system,system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);padding:40px 32px 64px;
+    -webkit-font-smoothing:antialiased;}
+  .page-head{max-width:1240px;margin:0 auto 28px}
+  .page-head h1{font-size:18px;font-weight:600;letter-spacing:-0.01em}
+  .page-head p{color:var(--muted);font-size:13px;margin-top:4px}
+  .grid{max-width:1240px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:28px;align-items:start}
+  .col-label{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+  .col-label .tag{font-size:10px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;
+    padding:4px 9px;border-radius:5px}
+  .col-label.a .tag{background:rgba(201,168,76,0.12);color:var(--gold);border:1px solid rgba(201,168,76,0.3)}
+  .col-label.b .tag{background:rgba(52,211,153,0.12);color:#34d399;border:1px solid rgba(52,211,153,0.3)}
+  .col-label .name{font-size:13px;color:var(--muted)}
+  .notes{margin-top:14px;font-size:11.5px;line-height:1.65;color:var(--muted)}
+  .notes b{color:#9fb3d1;font-weight:600}
+  .cap{max-width:1240px;margin:36px auto 0;color:var(--muted);font-size:11px;text-align:center;opacity:.7}
+
+  /* ============================ VERSION A — ui-ux-pro-max (current terminal) ============================ */
+  .term{background:var(--term-surface);border:1px solid var(--term-border);font-family:var(--mono)}
+  .term .hdr{display:flex;justify-content:space-between;align-items:baseline;
+    padding:11px 14px;border-bottom:1px solid var(--term-border)}
+  .term .hdr .ttl{font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--gold)}
+  .term .hdr .ts{font-size:10px;color:var(--muted)}
+  .term .kpis{display:flex}
+  .term .kpi{flex:1;padding:11px 14px;border-right:1px solid var(--term-border)}
+  .term .kpi:last-child{border-right:none}
+  .term .kpi .lab{font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+  .term .kpi .val{font-size:18px;font-weight:700;letter-spacing:-0.01em}
+  .term .kpi .sub{font-size:10px;margin-top:4px}
+  .term table{width:100%;border-collapse:collapse;border-top:1px solid var(--term-border)}
+  .term th{font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);
+    padding:8px 14px;text-align:right;border-bottom:1px solid var(--term-border)}
+  .term th:first-child{text-align:left}
+  .term td{font-size:12px;padding:7px 14px;text-align:right;border-bottom:1px solid var(--term-border)}
+  .term td:first-child{text-align:left;font-weight:700}
+  .term tr:nth-child(even) td{background:rgba(255,255,255,0.015)}
+  .pos{color:var(--term-pos)} .neg{color:var(--term-neg)}
+
+  /* ============================ VERSION B — taste + emil (proposed) ============================ */
+  .tk{background:linear-gradient(180deg,#10203400,#0c1827 60%),#0e1c2e;border:1px solid rgba(255,255,255,0.07);
+    border-radius:16px;overflow:hidden;
+    box-shadow:0 1px 0 rgba(255,255,255,0.05) inset, 0 18px 50px -12px rgba(0,0,0,0.55);
+    font-family:var(--sans)}
+  .tk .hdr{display:flex;justify-content:space-between;align-items:flex-start;padding:18px 20px 16px}
+  .tk .hdr .ttl{font-size:15px;font-weight:600;letter-spacing:-0.01em}
+  .tk .hdr .sub2{font-size:12px;color:var(--muted);margin-top:3px}
+  .tk .live{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:500;color:#9fb3d1;
+    background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);padding:5px 10px;border-radius:999px}
+  .tk .live .dot{width:6px;height:6px;border-radius:50%;background:#34d399;box-shadow:0 0 0 3px rgba(52,211,153,0.18)}
+  .tk .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:0 20px 18px}
+  .tk .kpi{background:rgba(255,255,255,0.022);border:1px solid rgba(255,255,255,0.05);border-radius:11px;padding:13px 14px}
+  .tk .kpi .lab{font-size:11px;font-weight:500;color:var(--muted);margin-bottom:8px}
+  .tk .kpi .val{font-family:var(--mono);font-size:19px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-0.02em}
+  .tk .chip{display:inline-flex;align-items:center;gap:3px;font-family:var(--mono);font-size:11px;font-weight:600;
+    padding:2px 7px;border-radius:6px;margin-top:8px;font-variant-numeric:tabular-nums}
+  .chip-pos{color:#34d399;background:rgba(52,211,153,0.1)}
+  .chip-neg{color:#fb7185;background:rgba(251,113,133,0.1)}
+  .tk .tbl{padding:4px 8px 8px}
+  .tk .trow{display:grid;grid-template-columns:1.5fr 0.8fr 1fr 0.9fr 1.1fr 1.2fr;align-items:center;
+    padding:11px 12px;border-radius:10px;transition:background 160ms cubic-bezier(0.23,1,0.32,1)}
+  .tk .trow.head{padding:6px 12px 8px}
+  .tk .trow.head span{font-size:11px;font-weight:500;color:var(--muted)}
+  .tk .trow:not(.head):hover{background:rgba(255,255,255,0.03)}
+  .tk .trow span{text-align:right;font-family:var(--mono);font-size:13px;font-variant-numeric:tabular-nums}
+  .tk .trow span.l{text-align:left}
+  .tk .tkr{display:flex;align-items:center;gap:10px;font-family:var(--sans);font-weight:600;font-size:13px}
+  .tk .mono-chip{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;font-family:var(--sans);
+    font-size:11px;font-weight:700;color:#0a1320;background:linear-gradient(160deg,#dfe9ff,#9fb3d1)}
+  .tk .wt{display:flex;align-items:center;gap:8px;justify-content:flex-end}
+  .tk .wt .bar{width:46px;height:5px;border-radius:3px;background:rgba(255,255,255,0.07);overflow:hidden}
+  .tk .wt .bar i{display:block;height:100%;border-radius:3px;background:linear-gradient(90deg,#6c8cff,#34d399)}
+  .day-pos{color:#34d399} .day-neg{color:#fb7185}
+</style>
+</head>
+<body>
+  <div class="page-head">
+    <h1>Portfolio Overview — same panel, two design systems</h1>
+    <p>Identical data and layout. Left: your current ui-ux-pro-max terminal language. Right: the same panel re-crafted under emil-design-eng (Emil Kowalski) taste rules.</p>
+  </div>
+
+  <div class="grid">
+    <!-- ============ A ============ -->
+    <div>
+      <div class="col-label a">
+        <span class="tag">A · Current</span><span class="name">ui-ux-pro-max — dense terminal</span>
+      </div>
+      <div class="term">
+        <div class="hdr"><span class="ttl">PORTFOLIO OVERVIEW</span><span class="ts">11:42:18 ET</span></div>
+        <div class="kpis">
+          <div class="kpi"><div class="lab">Net Liq</div><div class="val">$1,284,930</div><div class="sub pos">+0.66%</div></div>
+          <div class="kpi"><div class="lab">Day P&amp;L</div><div class="val pos">+$8,412</div><div class="sub pos">▲ 0.66%</div></div>
+          <div class="kpi"><div class="lab">Total Ret</div><div class="val pos">+18.4%</div><div class="sub" style="color:var(--muted)">since incep</div></div>
+          <div class="kpi"><div class="lab">Buying Pwr</div><div class="val">$342,180</div><div class="sub" style="color:var(--muted)">cash 12%</div></div>
+        </div>
+        <table>
+          <thead><tr><th>Symbol</th><th>Qty</th><th>Last</th><th>Day%</th><th>Value</th><th>Wt%</th></tr></thead>
+          <tbody>
+            <tr><td>NVDA</td><td>220</td><td>1,182.40</td><td class="pos">+2.14</td><td>260,128</td><td>20.2</td></tr>
+            <tr><td>MSFT</td><td>300</td><td>498.12</td><td class="pos">+0.88</td><td>149,436</td><td>11.6</td></tr>
+            <tr><td>AAPL</td><td>640</td><td>228.86</td><td class="neg">-0.42</td><td>146,470</td><td>11.4</td></tr>
+            <tr><td>SPY</td><td>180</td><td>604.55</td><td class="pos">+0.31</td><td>108,819</td><td>8.5</td></tr>
+            <tr><td>TSLA</td><td>150</td><td>412.07</td><td class="neg">-1.93</td><td>61,810</td><td>4.8</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="notes">
+        <b>Language:</b> JetBrains Mono throughout · uppercase micro-labels · 1px hairline dividers · sharp corners ·
+        zebra rows · maximal density. <b>Strength:</b> scannable, Bloomberg-grade, info per pixel. <b>Trade-off:</b> flat
+        hierarchy, every element shouts equally, little breathing room.
+      </div>
+    </div>
+
+    <!-- ============ B ============ -->
+    <div>
+      <div class="col-label b">
+        <span class="tag">B · Proposed</span><span class="name">emil-design-eng — crafted product UI</span>
+      </div>
+      <div class="tk">
+        <div class="hdr">
+          <div><div class="ttl">Portfolio Overview</div><div class="sub2">5 positions · updated 11:42 ET</div></div>
+          <span class="live"><span class="dot"></span>Live</span>
+        </div>
+        <div class="kpis">
+          <div class="kpi"><div class="lab">Net liquidity</div><div class="val">$1,284,930</div><span class="chip chip-pos">▲ 0.66%</span></div>
+          <div class="kpi"><div class="lab">Day P&amp;L</div><div class="val" style="color:#34d399">+$8,412</div><span class="chip chip-pos">▲ $0.66%</span></div>
+          <div class="kpi"><div class="lab">Total return</div><div class="val">+18.4%</div><span class="chip chip-pos">since inception</span></div>
+          <div class="kpi"><div class="lab">Buying power</div><div class="val">$342,180</div><span class="chip" style="color:var(--muted);background:rgba(255,255,255,0.04)">12% cash</span></div>
+        </div>
+        <div class="tbl">
+          <div class="trow head"><span class="l">Symbol</span><span>Qty</span><span>Last</span><span>Day</span><span>Value</span><span>Weight</span></div>
+          <div class="trow"><span class="l"><span class="tkr"><span class="mono-chip">N</span>NVDA</span></span><span>220</span><span>1,182.40</span><span class="day-pos">+2.14%</span><span>$260,128</span><span class="wt">20.2%<span class="bar"><i style="width:100%"></i></span></span></div>
+          <div class="trow"><span class="l"><span class="tkr"><span class="mono-chip">M</span>MSFT</span></span><span>300</span><span>498.12</span><span class="day-pos">+0.88%</span><span>$149,436</span><span class="wt">11.6%<span class="bar"><i style="width:57%"></i></span></span></div>
+          <div class="trow"><span class="l"><span class="tkr"><span class="mono-chip">A</span>AAPL</span></span><span>640</span><span>228.86</span><span class="day-neg">-0.42%</span><span>$146,470</span><span class="wt">11.4%<span class="bar"><i style="width:56%"></i></span></span></div>
+          <div class="trow"><span class="l"><span class="tkr"><span class="mono-chip">S</span>SPY</span></span><span>180</span><span>604.55</span><span class="day-pos">+0.31%</span><span>$108,819</span><span class="wt">8.5%<span class="bar"><i style="width:42%"></i></span></span></div>
+          <div class="trow"><span class="l"><span class="tkr"><span class="mono-chip">T</span>TSLA</span></span><span>150</span><span>412.07</span><span class="day-neg">-1.93%</span><span>$61,810</span><span class="wt">4.8%<span class="bar"><i style="width:24%"></i></span></span></div>
+        </div>
+      </div>
+      <div class="notes">
+        <b>Language:</b> Inter for labels, mono only for numbers (tabular) · calibrated emerald/rose chips · soft 16px radius,
+        inset highlight + ambient shadow · weight bars · row hover with custom easing. <b>Strength:</b> clear hierarchy, feels
+        premium, brand kept dark. <b>Trade-off:</b> ~30% less data per screen; more vertical space.
+      </div>
+    </div>
+  </div>
+
+  <div class="cap">Static screenshot — Version B also implies row-hover, press states, and 200ms ease-out transitions per emil-design-eng. Mockup only; not wired into the app.</div>
+</body>
+</html>

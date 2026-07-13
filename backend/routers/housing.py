@@ -89,9 +89,9 @@ def rates():
 
 
 @router.get("/rent")
-def rent_snapshot():
+def rent_snapshot(limit: int = Query(51, ge=1, le=60)):
     """Latest offline RentHub listing snapshot, independent of FRED availability."""
-    return renthub.snapshot()
+    return renthub.snapshot(limit=limit)
 
 
 @router.get("/construction")

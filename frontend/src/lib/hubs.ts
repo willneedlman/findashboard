@@ -83,7 +83,7 @@ export const HUBS: Hub[] = [
       { title: 'Bond Analytics', chip: 'Bonds',          desc: 'Yield-to-maturity, duration, and convexity',     route: '/bond',           icon: Landmark },
       { title: 'Bond Lookup',    chip: 'Lookup',         desc: 'Resolve a CUSIP or issuer to bond reference data', route: '/cusip',          icon: BookOpen },
       { title: 'Credit Spreads', chip: 'Credit Spreads', desc: 'Investment-grade and high-yield spread monitor', route: '/credit-spreads', icon: Activity },
-      { title: 'Credit Stress', chip: 'Credit Stress', desc: 'Observed bank delinquencies, charge-offs, and merchant-spend activity', route: '/credit-delinquencies', icon: Percent },
+      { title: 'Credit Stress', chip: 'Credit Stress', desc: 'Financial stress, bank lending standards, delinquencies, and charge-offs from Federal Reserve sources', route: '/credit-delinquencies', icon: Percent },
       { title: 'Housing Market', chip: 'Housing', desc: 'Home prices, mortgage rates, affordability, supply/demand, construction, and rental listings', route: '/housing', icon: Home },
       { title: 'Currency Matrix', chip: 'FX Matrix',     desc: 'Spot cross-rates, forward points, cross-currency basis, and FX vol', route: '/currency', icon: ArrowLeftRight },
       { title: 'Market Hours',   chip: 'Market Hours',   desc: 'Live global session clock across futures, US, Europe, Asia', route: '/market-hours',   icon: Clock },

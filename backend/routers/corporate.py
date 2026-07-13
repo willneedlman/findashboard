@@ -1083,9 +1083,28 @@ def get_supply_chain(ticker: str):
         except Exception:
             info = {}
 
+        import fmp as _fmp
+        fmp_profile = {}
+        try:
+            if _fmp.available():
+                fmp_profile = _fmp.get_profile(symbol) or {}
+        except Exception:
+            pass
+
+        def profile_value(*keys):
+            for key in keys:
+                value = info.get(key)
+                if value not in (None, "", "N/A"):
+                    return value
+                value = fmp_profile.get(key)
+                if value not in (None, "", "N/A"):
+                    return value
+            return None
+
         price = safe_float(info, ["currentPrice", "previousClose", "navPrice"]) or None
         mcap  = safe_float(info, ["marketCap", "totalAssets"]) or None
-        emp   = info.get("fullTimeEmployees")
+        revenue = safe_float(info, ["totalRevenue"]) or safe_float(fmp_profile, ["revenue"]) or None
+        emp   = profile_value("fullTimeEmployees", "employees")
         pe      = info.get("trailingPE")
         eps     = info.get("trailingEps")
         rev_g   = info.get("revenueGrowth")            # fraction, e.g. 0.051
@@ -1101,7 +1120,6 @@ def get_supply_chain(ticker: str):
         elif _holder_num(div_raw) and div_raw > 0:
             div_y = round(div_raw * 100, 2) if div_raw < 1 else round(div_raw, 2)
 
-        import fmp as _fmp
         product_segments = dict(_fmp.EMPTY_SEGMENTS)
         geo_segments     = dict(_fmp.EMPTY_SEGMENTS)
         try:
@@ -1148,12 +1166,15 @@ def get_supply_chain(ticker: str):
 
         return {
             "ticker":           symbol,
-            "name":             info.get("longName") or info.get("shortName") or symbol,
-            "sector":           info.get("sector") or "N/A",
-            "industry":         info.get("industry") or "N/A",
-            "description":      info.get("longBusinessSummary") or "",
+            "name":             profile_value("longName", "shortName", "companyName") or symbol,
+            "sector":           profile_value("sector") or "N/A",
+            "industry":         profile_value("industry") or "N/A",
+            "description":      profile_value("longBusinessSummary", "description") or "",
+            "country":          profile_value("country"),
+            "city":             profile_value("city"),
             "price":            float(price) if price else None,
             "market_cap":       float(mcap) if mcap else None,
+            "revenue":          float(revenue) if revenue else None,
             "employees":        int(emp) if emp else None,
             "pe_ratio":         round(float(pe), 1) if _holder_num(pe) and pe > 0 else None,
             "eps_ttm":          round(float(eps), 2) if _holder_num(eps) else None,
@@ -1163,6 +1184,7 @@ def get_supply_chain(ticker: str):
             "geo_segments":     geo_segments,
             "revenue_activity": revenue_activity,
             "peers":            peers,
+            "profile_sources":  [source for source, present in (("Yahoo Finance", bool(info)), ("Financial Modeling Prep", bool(fmp_profile))) if present],
         }
     except Exception as e:
         logger.error(f"Error in supply chain endpoint: {e}")
@@ -1187,3 +1209,17 @@ def get_peers_by_tags(ticker: str, limit: int = 24):
     except Exception as e:
         logger.error(f"Error in peers-by-tags endpoint: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/public-company-evidence")
+def get_public_company_evidence(ticker: str, company_name: str = ""):
+    """Free public records, labelled separately from map similarity data."""
+    from logistics.public_enrichment import get_public_company_evidence as evidence
+    return evidence(ticker, company_name)
+
+
+@router.get("/verified-supply-chain-relationships")
+def get_verified_supply_chain_relationships(ticker: str):
+    """First-party public supplier, buyer, and operating-partner disclosures."""
+    from logistics.verified_relationships import relationships_for_ticker
+    return relationships_for_ticker(ticker)

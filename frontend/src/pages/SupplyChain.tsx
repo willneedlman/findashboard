@@ -12,7 +12,7 @@ import useIsMobile from '../hooks/useIsMobile'
 import { fetchMarketHistory } from '../hooks/useApi'
 import { TOOLTIP_STYLE, CROSSHAIR_CURSOR } from '../components/ChartTooltip'
 import { recordRecentTicker } from '../lib/recentTickers'
-import TickerLaunch from '../components/TickerLaunch'
+import EmptyState from '../components/EmptyState'
 import FactSetFinancials from '../components/FactSetFinancials'
 
 
@@ -520,8 +520,7 @@ export function SupplyChainContent() {
           title="Company Profile"
         />
 
-        {/* Search bar (the launch card owns the input until a name is loaded) */}
-        {(data || loading) && (
+        {/* Search remains available while the output preview is empty. */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 28, alignItems: 'center' }}>
           <TickerInput
             value={input}
@@ -548,7 +547,6 @@ export function SupplyChainContent() {
           </button>
           {error && <span style={{ fontFamily: T.mono, fontSize: 10, color: 'var(--theme-negative)' }}>{error}</span>}
         </div>
-        )}
 
         {data && (() => {
           const metrics: { label: string; value: string; color?: string }[] = [
@@ -641,15 +639,28 @@ export function SupplyChainContent() {
         })()}
 
         {!data && loading && (
-          <div style={{ padding: '40px 0', color: T.muted, fontFamily: T.mono, fontSize: 11, fontStyle: 'italic' }}>
-            Loading company profile…
-          </div>
+          <EmptyState
+            title="Loading Company Profile"
+            hint="Assembling financials, revenue mix, ownership, and market performance."
+            kpis={['Price', 'Market Cap', 'P/E', 'Rev Growth', 'Employees']}
+            preview="table"
+            previewLabel="Revenue Profile"
+            columns={['Segment', 'Revenue', 'Share', 'YoY']}
+          />
         )}
 
         {!data && !loading && (
           <>
             {error && <div style={{ marginTop: 12, fontFamily: T.mono, fontSize: 11, color: 'var(--theme-negative)' }}>{error}</div>}
-            <TickerLaunch hint="Price history, revenue mix by segment and geography, institutional ownership, credit quality, and analyst ratings for one name." onLoad={doFetch} />
+            <EmptyState
+              title="Company Profile"
+              hint="Search a ticker or company to load financials, revenue mix, ownership, and market performance."
+              keys={['Enter']}
+              kpis={['Price', 'Market Cap', 'P/E', 'Rev Growth', 'Employees']}
+              preview="table"
+              previewLabel="Revenue Profile"
+              columns={['Segment', 'Revenue', 'Share', 'YoY']}
+            />
           </>
         )}
       </div>

@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Alphatape Terminal — the whole desk, in one terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <nav><div class="nav-in">
+    <a class="brand" href="index.html">ALPHATAPE <span>TERMINAL</span></a>
+    <div class="nav-links">
+      <a href="options.html">Options</a>
+      <a href="valuation.html">Valuation</a>
+      <a href="portfolio.html">Portfolio</a>
+      <a href="macro.html">Macro</a>
+      <a href="trading.html">Trading</a>
+      <a href="pricing.html">Pricing</a>
+      <a href="#" class="btn btn-gold">Launch Terminal →</a>
+    </div>
+  </div></nav>
+
+  <header class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <div class="eyebrow">Bloomberg-grade · retail price</div>
+        <h1>The whole desk,<br>in one <span class="g">terminal</span>.</h1>
+        <p class="lede">Options flow, dealer gamma, DCF valuation, macro rates, backtesting and paper trading — 40+ institutional-grade tools in a single dark terminal. Real-time data, no five-figure seat.</p>
+        <div class="cta">
+          <a href="#" class="btn btn-gold btn-lg">Launch Terminal →</a>
+          <a href="options.html" class="btn btn-ghost btn-lg">Explore the tools</a>
+        </div>
+        <div class="trust">Live market data via <b>Tradier</b> · <b>FMP</b> · <b>yfinance</b> · <b>FRED</b></div>
+      </div>
+      <div class="term float">
+        <div class="tbar"><i></i><i></i><i></i><span class="name">unusual options flow</span></div>
+        <div class="thead"><span class="t">Live Flow · top premium</span><span class="live">streaming</span></div>
+        <table>
+          <thead><tr><th>Contract</th><th>Vol</th><th>Vol/OI</th><th>IV</th><th>Premium</th></tr></thead>
+          <tbody>
+            <tr><td>NVDA 1300C 0DTE</td><td>41,208</td><td class="pos">8.4</td><td>62.1</td><td>$18.4M</td></tr>
+            <tr><td>SPY 605C 2DTE</td><td>22,510</td><td class="pos">3.1</td><td>11.8</td><td>$9.1M</td></tr>
+            <tr><td>TSLA 400P 9DTE</td><td>9,940</td><td class="neg">2.0</td><td>54.3</td><td>$6.2M</td></tr>
+            <tr><td>AAPL 230C 16DTE</td><td>7,330</td><td class="pos">1.9</td><td>24.6</td><td>$4.0M</td></tr>
+            <tr><td>MSFT 500C 23DTE</td><td>5,120</td><td class="pos">2.7</td><td>21.0</td><td>$3.3M</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </header>
+
+  <div class="strip"><div class="strip-in">
+    <div class="stat"><div class="n"><span class="g">40+</span></div><div class="l">analytics tools</div></div>
+    <div class="stat"><div class="n">8</div><div class="l">options modules</div></div>
+    <div class="stat"><div class="n">5</div><div class="l">asset-class views</div></div>
+    <div class="stat"><div class="n">&lt;200<span class="mono" style="font-size:14px">ms</span></div><div class="l">data refresh</div></div>
+    <div class="stat"><div class="n">$0</div><div class="l">terminal seat fee</div></div>
+  </div></div>
+
+  <section class="blk" id="tools"><div class="wrap">
+    <div class="sec-head rv">
+      <div class="eyebrow">One terminal, every workflow</div>
+      <h2>Built like a trading desk, not a toy dashboard.</h2>
+      <p>Each module is a real analytical surface with live data — not a static chart. Move from a macro thesis to an options structure to a paper fill without leaving the terminal.</p>
+    </div>
+    <div class="bento">
+      <a class="card c-tall glow-gold rv" href="options.html">
+        <div class="k">Options intelligence</div>
+        <h3>See the flow before it moves price.</h3>
+        <p>Unusual options activity, dealer gamma exposure, IV rank, implied probability, and a full market-maker simulator.</p>
+        <div class="mini">
+          <div class="row"><span>Dealer GEX</span><span class="pos mono">+2.1B</span></div>
+          <div class="row"><span>IV Rank · SPX</span><span class="mono">18%</span></div>
+          <div class="row"><span>Put/Call</span><span class="neg mono">0.92</span></div>
+        </div>
+        <div class="tags"><span class="tag">GEX</span><span class="tag">Unusual flow</span><span class="tag">IV surface</span><span class="tag">MM sim</span></div>
+      </a>
+      <a class="card c-2 rv" href="valuation.html">
+        <div class="k">Valuation</div><h3>DCF that fills its own gaps.</h3>
+        <p>Reverse-DCF, relative comps, and industry fallbacks when company data is thin.</p>
+      </a>
+      <a class="card c-2 glow-blue rv" href="portfolio.html">
+        <div class="k">Portfolio &amp; risk</div><h3>Backtest, stress, simulate.</h3>
+        <p>Monte Carlo paths, historical stress scenarios, factor exposure.</p>
+      </a>
+      <a class="card c-wide rv" href="macro.html">
+        <div class="k">Macro &amp; rates</div><h3>Top-down context, wired into every ticker.</h3>
+        <p>Fed-path probabilities, credit spreads, the yield curve and sector rotation — the regime backdrop for every trade you size.</p>
+        <div class="tags"><span class="tag">Fed path</span><span class="tag">Credit spreads</span><span class="tag">Yield curve</span><span class="tag">Sector rotation</span></div>
+      </a>
+    </div>
+  </div></section>
+
+  <section class="blk" id="depth" style="border-top:1px solid var(--line);background:var(--bg2)">
+    <div class="wrap split">
+      <div class="rv">
+        <div class="eyebrow">Signal, not noise</div>
+        <h2 style="font-size:32px;font-weight:700;letter-spacing:-0.02em;margin:12px 0 14px">Catch the print the moment it hits the tape.</h2>
+        <p style="color:var(--muted);font-size:15.5px;line-height:1.65">The flow scanner sweeps liquid chains for volume spikes and volume/open-interest surges, ranks by traded premium, and flags freshly-opened positioning. Sort by DTE, moneyness, or premium and drill straight into the contract.</p>
+        <div class="cta" style="margin-top:24px"><a href="options.html" class="btn btn-ghost btn-lg">Open Options →</a></div>
+      </div>
+      <div class="term rv">
+        <div class="tbar"><i></i><i></i><i></i><span class="name">portfolio · risk</span></div>
+        <div class="thead"><span class="t">Net Liq $1,284,930</span><span class="live">+0.66% today</span></div>
+        <table>
+          <thead><tr><th>Symbol</th><th>Day%</th><th>Value</th><th>Weight</th></tr></thead>
+          <tbody>
+            <tr><td>NVDA</td><td class="pos">+2.14</td><td>$260,128</td><td><span class="bar7"><i style="width:100%"></i></span></td></tr>
+            <tr><td>MSFT</td><td class="pos">+0.88</td><td>$149,436</td><td><span class="bar7"><i style="width:57%"></i></span></td></tr>
+            <tr><td>AAPL</td><td class="neg">-0.42</td><td>$146,470</td><td><span class="bar7"><i style="width:56%"></i></span></td></tr>
+            <tr><td>SPY</td><td class="pos">+0.31</td><td>$108,819</td><td><span class="bar7"><i style="width:42%"></i></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="blk"><div class="wrap">
+    <div class="final rv">
+      <div class="eyebrow">No seat fee. No gatekeeping.</div>
+      <h2>Stop renting a terminal.</h2>
+      <p>Get the analytical firepower of an institutional desk in a terminal that runs in your browser. Bring your own thesis.</p>
+      <a href="#" class="btn btn-gold btn-lg">Launch Terminal →</a>
+    </div>
+  </div></section>
+
+  <footer><div class="wrap foot">
+    <div class="col">
+      <a class="brand" href="index.html" style="display:inline-block;margin-bottom:14px">ALPHATAPE <span>TERMINAL</span></a>
+      <p class="disc">Institutional-grade market analytics for independent traders. Not investment advice — for research and educational use only.</p>
+    </div>
+    <div class="col"><h4>Product</h4><a href="options.html">Options</a><a href="valuation.html">Valuation</a><a href="portfolio.html">Portfolio</a><a href="macro.html">Macro</a><a href="trading.html">Trading</a></div>
+    <div class="col"><h4>Company</h4><a href="#">About</a><a href="#">Changelog</a><a href="#">Data sources</a><a href="#">Contact</a></div>
+    <div class="col"><h4>Legal</h4><a href="#">Privacy</a><a href="#">Terms</a><a href="#">Risk disclosure</a></div>
+  </div></footer>
+  <script src="site.js"></script>
+</body>
+</html>

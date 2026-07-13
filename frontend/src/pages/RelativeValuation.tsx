@@ -7,7 +7,7 @@ import PageHeader from '../components/PageHeader'
 import TickerInput from '../components/TickerInput'
 import TickerLogo from '../components/TickerLogo'
 import { recordRecentTicker } from '../lib/recentTickers'
-import TickerLaunch from '../components/TickerLaunch'
+import EmptyState from '../components/EmptyState'
 import TickerLink from '../components/TickerLink'
 import useIsMobile from '../hooks/useIsMobile'
 
@@ -293,8 +293,7 @@ export function RelativeValuationContent() {
           title="Peer Comparison"
         />
 
-        {/* Search (the launch card owns the input until a name is loaded) */}
-        {(data || loading) && (
+        {/* Search remains available while the output preview is empty. */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 28, alignItems: 'center', flexWrap: 'wrap' }}>
           <TickerInput
             value={input}
@@ -350,7 +349,6 @@ export function RelativeValuationContent() {
             <span style={{ fontFamily: T.mono, fontSize: 10, color: T.neg }}>{error}</span>
           )}
         </div>
-        )}
 
         {data && (
           <>
@@ -479,15 +477,28 @@ export function RelativeValuationContent() {
         )}
 
         {!data && loading && (
-          <div style={{ padding: '40px 0', color: T.muted, fontFamily: 'var(--theme-mono)', fontSize: 11, fontStyle: 'italic' }}>
-            Loading peer comparison…
-          </div>
+          <EmptyState
+            title="Loading Peer Comparison"
+            hint="Building the peer set and normalizing valuation, growth, and analyst data."
+            kpis={['Target', 'Peer Median', 'Sector', 'Analyst View', 'Upside']}
+            preview="table"
+            previewLabel="Valuation Comparison"
+            columns={['Company', 'P/E', 'EV/EBITDA', 'P/S', 'ROE']}
+          />
         )}
 
         {!data && !loading && (
           <>
             {error && <div style={{ marginTop: 12, fontFamily: T.mono, fontSize: 11, color: T.neg }}>{error}</div>}
-            <TickerLaunch hint="Trading multiples against sector peers with analyst consensus, green where the name beats the set and red where it lags." onLoad={sym => doFetch(false, sym)} />
+            <EmptyState
+              title="Peer Comparison"
+              hint="Search a ticker or company to compare valuation, growth, and analyst expectations."
+              keys={['Enter']}
+              kpis={['Target', 'Peer Median', 'Sector', 'Analyst View', 'Upside']}
+              preview="table"
+              previewLabel="Valuation Comparison"
+              columns={['Company', 'P/E', 'EV/EBITDA', 'P/S', 'ROE']}
+            />
           </>
         )}
       </div>

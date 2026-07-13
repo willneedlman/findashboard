@@ -78,13 +78,13 @@ export default function Layout({ children }: LayoutProps) {
   // ── Mobile ──
   if (isMobile) {
     return (
-      <div className="flex flex-col h-screen overflow-hidden">
+      <div className="ft-mobile-shell flex flex-col overflow-hidden">
         <a href="#main-content" className="skip-link">Skip to content</a>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', height: 52, flexShrink: 0, background: 'var(--theme-bg, #060e1c)', borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)', position: 'sticky', top: 0, zIndex: 40 }}>
+        <div className="ft-mobile-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, background: 'var(--theme-bg, #060e1c)', borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)', position: 'sticky', top: 0, zIndex: 40 }}>
           <Link to="/app" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 8 }}>
             <AlphaMark size={22} color="var(--theme-primary, #c9a84c)" />
-            <div style={{ fontFamily: 'Cinzel, Georgia, serif', color: 'var(--theme-primary, #c9a84c)', fontSize: 15, fontWeight: 700, letterSpacing: '0.08em' }}>
-              ALPHATAPE <span style={{ color: 'var(--theme-secondary, #5e768f)', fontSize: 10, letterSpacing: '0.2em', fontFamily: 'var(--theme-sans)', fontWeight: 600 }}>TERMINAL</span>
+            <div className="ft-mobile-brand" style={{ fontFamily: 'Cinzel, Georgia, serif', color: 'var(--theme-primary, #c9a84c)', fontSize: 15, fontWeight: 700, letterSpacing: '0.08em' }}>
+              ALPHATAPE <span className="ft-mobile-brand-suffix" style={{ color: 'var(--theme-secondary, #5e768f)', fontSize: 10, letterSpacing: '0.2em', fontFamily: 'var(--theme-sans)', fontWeight: 600 }}>TERMINAL</span>
             </div>
           </Link>
           <button onClick={() => setDrawerOpen(true)} aria-label="Open menu" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-primary, #c9a84c)', padding: 0, minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -92,9 +92,9 @@ export default function Layout({ children }: LayoutProps) {
           </button>
         </div>
 
-        <main id="main-content" style={{ flex: 1, overflowY: 'auto', background: 'var(--theme-bg, #0a1628)' }}>
-          <div style={{ padding: location.pathname === '/dashboard' ? '16px 14px 200px' : '16px 14px', display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
-            <div style={{ flex: 1 }}>{children}</div>
+        <main id="main-content" className="ft-mobile-main" style={{ flex: 1, overflowY: 'auto', background: 'var(--theme-bg, #0a1628)' }}>
+          <div className={`ft-mobile-content${location.pathname === '/dashboard' ? ' ft-mobile-dashboard' : ''}`} style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
+            <div className="ft-mobile-page" style={{ flex: 1, minWidth: 0 }}>{children}</div>
             {location.pathname !== '/dashboard' && <Footer />}
           </div>
         </main>

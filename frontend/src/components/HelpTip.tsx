@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useId, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
 
 interface HelpTipProps {
@@ -10,38 +10,52 @@ interface HelpTipProps {
 
 export default function HelpTip({ text, width = 220, position = 'top', anchor = 'right' }: HelpTipProps) {
   const [open, setOpen] = useState(false)
-  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null)
+  const [coords, setCoords] = useState<{ top: number; left: number; width: number } | null>(null)
   const btnRef = useRef<HTMLButtonElement>(null)
   const tipRef = useRef<HTMLDivElement>(null)
+  const tipId = useId()
 
   const calcCoords = useCallback(() => {
     if (!btnRef.current) return
     const r = btnRef.current.getBoundingClientRect()
     const gap = 8
+    const margin = 12
+    const viewportWidth = window.innerWidth
+    const viewportHeight = window.innerHeight
+    const popupWidth = Math.min(width, viewportWidth - margin * 2)
+    const popupHeight = Math.min(tipRef.current?.offsetHeight ?? 120, viewportHeight - margin * 2)
     let top = 0
     let left = 0
+    let resolvedPosition = position
 
-    if (position === 'top') {
-      top = r.top - gap
-      left = anchor === 'left' ? r.left : r.right - width
-    } else if (position === 'bottom') {
-      top = r.bottom + gap
-      left = anchor === 'left' ? r.left : r.right - width
-    } else if (position === 'right') {
-      top = r.top + r.height / 2
-      left = r.right + gap
-    } else {
-      top = r.top + r.height / 2
-      left = r.left - width - gap
+    if (position === 'top' && r.top - gap - popupHeight < margin) {
+      resolvedPosition = 'bottom'
+    } else if (position === 'bottom' && r.bottom + gap + popupHeight > viewportHeight - margin) {
+      resolvedPosition = 'top'
+    } else if (position === 'right' && r.right + gap + popupWidth > viewportWidth - margin) {
+      resolvedPosition = 'left'
+    } else if (position === 'left' && r.left - gap - popupWidth < margin) {
+      resolvedPosition = 'right'
     }
 
-    // clamp so tip stays inside viewport
-    const vw = window.innerWidth
-    const vh = window.innerHeight
-    left = Math.max(8, Math.min(left, vw - width - 8))
-    top = Math.max(8, Math.min(top, vh - 8))
+    if (resolvedPosition === 'top') {
+      top = r.top - gap - popupHeight
+      left = anchor === 'left' ? r.left : r.right - popupWidth
+    } else if (resolvedPosition === 'bottom') {
+      top = r.bottom + gap
+      left = anchor === 'left' ? r.left : r.right - popupWidth
+    } else if (resolvedPosition === 'right') {
+      top = r.top + r.height / 2 - popupHeight / 2
+      left = r.right + gap
+    } else {
+      top = r.top + r.height / 2 - popupHeight / 2
+      left = r.left - popupWidth - gap
+    }
 
-    setCoords({ top, left })
+    left = Math.max(margin, Math.min(left, viewportWidth - popupWidth - margin))
+    top = Math.max(margin, Math.min(top, viewportHeight - popupHeight - margin))
+
+    setCoords({ top, left, width: popupWidth })
   }, [position, anchor, width])
 
   useEffect(() => {
@@ -53,37 +67,50 @@ export default function HelpTip({ text, width = 220, position = 'top', anchor = 
         tipRef.current && !tipRef.current.contains(e.target as Node)
       ) setOpen(false)
     }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        setOpen(false)
+        btnRef.current?.focus()
+      }
+    }
     document.addEventListener('mousedown', onClose)
+    document.addEventListener('keydown', onKeyDown)
     window.addEventListener('scroll', calcCoords, true)
     window.addEventListener('resize', calcCoords)
     return () => {
       document.removeEventListener('mousedown', onClose)
+      document.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('scroll', calcCoords, true)
       window.removeEventListener('resize', calcCoords)
     }
   }, [open, calcCoords])
 
-  const translateY = (position === 'right' || position === 'left') ? '-50%' : position === 'top' ? '-100%' : '0'
+  useLayoutEffect(() => {
+    if (!open || !coords || !tipRef.current) return
+    const frame = window.requestAnimationFrame(calcCoords)
+    return () => window.cancelAnimationFrame(frame)
+  }, [open, coords?.width, calcCoords])
 
   const tipStyle: React.CSSProperties = {
     position: 'fixed',
-    zIndex: 9999,
+    zIndex: 1200,
     top: coords?.top ?? 0,
     left: coords?.left ?? 0,
-    transform: `translateY(${translateY})`,
     background: 'var(--theme-surface, #0d1826)',
-    border: '1px solid color-mix(in srgb, var(--theme-primary) 35%, transparent)',
-    padding: '8px 10px',
-    width,
-    fontSize: 10,
-    lineHeight: 1.55,
+    border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
+    boxShadow: '0 10px 30px rgba(0,0,0,0.42)',
+    padding: '10px 12px',
+    width: coords?.width ?? width,
+    maxHeight: 'calc(100vh - 24px)',
+    overflowY: 'auto',
+    fontSize: 10.5,
+    lineHeight: 1.6,
     color: 'var(--theme-text, #d7e3fc)',
     fontFamily: 'var(--theme-sans)',
     fontWeight: 400,
     letterSpacing: 0,
     textTransform: 'none',
-    boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
-    pointerEvents: 'none',
+    pointerEvents: 'auto',
   }
 
   return (
@@ -92,9 +119,12 @@ export default function HelpTip({ text, width = 220, position = 'top', anchor = 
         ref={btnRef}
         type="button"
         onClick={() => setOpen(o => !o)}
+        aria-label={open ? 'Close help' : 'Open help'}
+        aria-expanded={open}
+        aria-describedby={open ? tipId : undefined}
         style={{
           width: 14, height: 14,
-          borderRadius: '50%',
+          borderRadius: 0,
           background: open ? 'color-mix(in srgb, var(--theme-primary) 25%, transparent)' : 'color-mix(in srgb, var(--theme-primary) 12%, transparent)',
           border: '1px solid color-mix(in srgb, var(--theme-primary) 40%, transparent)',
           color: 'var(--theme-primary, #c9a84c)',
@@ -110,12 +140,11 @@ export default function HelpTip({ text, width = 220, position = 'top', anchor = 
           flexShrink: 0,
           transition: 'background 0.15s',
         }}
-        title="Help"
       >
         ?
       </button>
       {open && coords && createPortal(
-        <div ref={tipRef} style={tipStyle}>{text}</div>,
+        <div id={tipId} ref={tipRef} role="tooltip" style={tipStyle}>{text}</div>,
         document.body
       )}
     </span>

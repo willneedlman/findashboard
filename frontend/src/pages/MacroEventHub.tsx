@@ -9,6 +9,7 @@ import { MOCK_EVENTS, type MacroEvent } from '../data/mockEventsData'
 import MacroToolbar, { type Filters } from '../components/macroEvents/MacroToolbar'
 import ReleaseTape, { type Section, type Sort } from '../components/macroEvents/ReleaseTape'
 import { dayKey, dayLabel, sortValue, hasColData, type FilterCol } from '../components/macroEvents/tapeUtils'
+import useIsMobile from '../hooks/useIsMobile'
 
 interface EventsResponse { events: MacroEvent[]; source: string; note?: string }
 interface AlertRow { id: string; condition: string; payload: string | null }
@@ -25,6 +26,7 @@ function Stat({ value, label, color }: { value: number; label: string; color: st
 }
 
 function MacroEventHubContent() {
+  const isMobile = useIsMobile()
   const [filters, setFilters] = useState<Filters>({ query: '', region: 'ALL', impact: 'ALL', status: 'ALL', from: '', to: '' })
   const [sort, setSort] = useState<Sort>({ column: 'time', dir: 'asc' })
   const [colFilters, setColFilters] = useState<Set<FilterCol>>(new Set())
@@ -160,17 +162,17 @@ function MacroEventHubContent() {
 
   return (
     <PageWrapper>
-      <div style={{ overflowX: 'auto' }}>
-        <div style={{ width: '100%', minWidth: 960, maxWidth: 1700, margin: '0 auto' }}>
+      <div>
+        <div style={{ width: '100%', minWidth: 0, maxWidth: 1700, margin: '0 auto' }}>
           {/* Header */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, paddingBottom: 14, borderBottom: `1px solid ${T.goldTint(45)}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: isMobile ? 8 : 16, paddingBottom: 14, borderBottom: `1px solid ${T.goldTint(45)}` }}>
             <h1 className="ft-page-title" style={{ margin: 0 }}>ECONOMIC CALENDAR</h1>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: T.label, fontSize: 10, color: T.muted }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: live ? T.pos : T.gold, display: 'inline-block' }} />
               {isLoading ? 'Loading live releases' : live ? 'Live · US, EU & Asia · FRED + Investing.com' : 'Showing bundled seed'}
             </span>
-            <span style={{ flex: 1 }} />
-            <div style={{ display: 'flex', gap: 22 }}>
+            {!isMobile && <span style={{ flex: 1 }} />}
+            <div style={{ display: 'flex', width: isMobile ? '100%' : 'auto', justifyContent: isMobile ? 'space-between' : 'initial', gap: isMobile ? 8 : 22 }}>
               <Stat value={stats.tracked} label="Tracked" color={T.text} />
               <Stat value={stats.upcoming} label="Upcoming" color={T.gold} />
               <Stat value={stats.high} label="High Impact" color={T.neg} />
@@ -186,10 +188,10 @@ function MacroEventHubContent() {
                 {!isLoading && <button type="button" onClick={() => { setFilters(f => ({ ...f, query: '', region: 'ALL', impact: 'ALL', status: 'ALL' })); setColFilters(new Set()) }}
                   style={{ marginTop: 4, padding: '6px 14px', background: 'transparent', border: `1px solid ${T.goldTint(50)}`, color: T.gold, fontFamily: T.label, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Reset filters</button>}
               </div>
-            : <ReleaseTape sections={sections} totalCount={filtered.length}
+            : <div style={{ overflowX: 'auto' }}><div style={{ minWidth: isMobile ? 840 : 0 }}><ReleaseTape sections={sections} totalCount={filtered.length}
                 sort={sort} onSort={onSort} colFilters={colFilters} onColFilter={onColFilter}
                 expandedId={expandedId} onToggle={id => setExpandedId(cur => (cur === id ? null : id))}
-                isAlerted={isAlerted} onAlert={toggleAlert} />}
+                isAlerted={isAlerted} onAlert={toggleAlert} /></div></div>}
         </div>
       </div>
       <style>{'@keyframes me-spin{to{transform:rotate(360deg)}}.mev-expand{transition:grid-template-rows 180ms cubic-bezier(0.23,1,0.32,1)}.mev-fade{transition:opacity 180ms ease}@media (prefers-reduced-motion: reduce){.mev-expand,.mev-fade{transition:none}}'}</style>

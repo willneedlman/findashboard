@@ -13,9 +13,9 @@ import { MONO, SANS, mix, chg, signed, Panel, KpiStrip } from './cockpitKit'
 interface Driver { strait: string; status: string; direction: number; contribution: number }
 interface Quote { price: number | null; change_pct: number | null; spark: number[] }
 interface Exposure extends Quote { ticker: string; group: string; group_key: string; direction: number; note: string }
-interface ChokeCard { id: string; name: string; oil_mbd: number; status: string | null; delta_pct: number | null; share_pct: number | null; disruption: number; series30: number[]; exposures: Exposure[] }
+interface ChokeCard { id: string; name: string; oil_mbd: number; status: string | null; delta_pct: number | null; share_pct: number | null; disruption: number; series30: number[]; baseline_as_of: string | null; baseline_age_days: number | null; baseline_outdated: boolean; live_as_of: string | null; live_confidence: string; live_reliable: boolean; exposures: Exposure[] }
 interface Leader extends Quote { ticker: string; group: string; group_key: string; direction: number; score: number; chokepoints: string[]; links: number; drivers: Driver[] }
-interface Resp { chokepoints: ChokeCard[]; leaders: Leader[]; any_stress: boolean; priced: number; source: string }
+interface Resp { chokepoints: ChokeCard[]; leaders: Leader[]; any_stress: boolean; priced: number; outdated_count: number; freshness_threshold_days: number; source: string }
 
 const STRAIT_POS: Record<string, { x: number; y: number; labelX: number; labelY: number; lab: 'l' | 'r' }> = {
   taiwan: { x: 555, y: 103, labelX: 564, labelY: 100, lab: 'r' },
@@ -234,10 +234,23 @@ function Board({ data }: { data: Resp }) {
 
   const rows = data.leaders.filter(l => (basket === 'All' || l.group === basket) && (dir === 'all' || (dir === 'tailwind' ? l.score > 0 : l.score < 0)))
   const maxScore = Math.max(1, ...data.leaders.map(l => Math.abs(l.score)))
+  const outdated = straits.filter(c => c.baseline_outdated)
+  const oldestConfirmed = outdated
+    .filter(c => c.baseline_as_of)
+    .sort((a, b) => (a.baseline_as_of ?? '').localeCompare(b.baseline_as_of ?? ''))[0]?.baseline_as_of
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <KpiStrip cells={kpis} />
+
+      {outdated.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, border: `1px solid ${mix(T.gold, 55)}`, background: mix(T.gold, 8), padding: '8px 11px' }}>
+          <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', color: T.gold, whiteSpace: 'nowrap' }}>DATA FRESHNESS WARNING</span>
+          <span style={{ fontFamily: MONO, fontSize: 9, color: T.muted, lineHeight: 1.45 }}>
+            {outdated.length} of {straits.length} PortWatch transit baselines are more than {data.freshness_threshold_days} days old{oldestConfirmed ? `; the oldest is confirmed only through ${oldestConfirmed}` : ''}. Live AIS supplements the disruption score only where its confidence is reliable.
+          </span>
+        </div>
+      )}
 
       {/* Map + drill dock */}
       <div style={{ display: 'flex', gap: 10 }}>
@@ -367,8 +380,14 @@ function Board({ data }: { data: Resp }) {
                       )}
                       <rect x={pos.x - 4.5 / zoom} y={pos.y - 4.5 / zoom} width={9 / zoom} height={9 / zoom} fill={color} stroke={T.bg} strokeWidth={2 / zoom} pointerEvents="none" />
                       <rect x={pos.x - 12 / zoom} y={pos.y - 12 / zoom} width={24 / zoom} height={24 / zoom} fill="transparent" pointerEvents="all">
-                        <title>{c.name}</title>
+                        <title>{`${c.name} · PortWatch confirmed through ${c.baseline_as_of ?? 'unknown'}${c.baseline_outdated ? ' · OUTDATED' : ''}`}</title>
                       </rect>
+                      {c.baseline_outdated && (
+                        <g pointerEvents="none">
+                          <circle cx={pos.x + 6 / zoom} cy={pos.y - 6 / zoom} r={4.2 / zoom} fill={T.gold} stroke={T.bg} strokeWidth={1.2 / zoom} />
+                          <text x={pos.x + 6 / zoom} y={pos.y - 4.2 / zoom} textAnchor="middle" fill={T.bg} fontFamily={MONO} fontSize={5.5 / zoom} fontWeight={900}>!</text>
+                        </g>
+                      )}
                       <text
                         x={pos.labelX}
                         y={pos.labelY - 3 / zoom}
@@ -396,7 +415,7 @@ function Board({ data }: { data: Resp }) {
                         fontSize={8.5 / zoom}
                         pointerEvents="none"
                       >
-                        {`${c.oil_mbd} Mb/d · ${c.delta_pct != null ? signed(c.delta_pct, 1) + '%' : '—'}`}
+                        {`${c.oil_mbd} Mb/d · ${c.delta_pct != null ? signed(c.delta_pct, 1) + '%' : '—'}${c.baseline_outdated ? ` · ${c.baseline_age_days ?? '?'}D OLD` : ''}`}
                       </text>
                     </g>
                   )
@@ -408,6 +427,7 @@ function Board({ data }: { data: Resp }) {
             {([['congested', T.neg], ['watch', T.gold], ['normal', T.muted]] as [string, string][]).map(([l, c]) => (
               <span key={l} style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: MONO, fontSize: 9, color: T.muted }}><span style={{ width: 9, height: 9, background: c }} />{l}</span>
             ))}
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: MONO, fontSize: 9, color: T.gold }}><span style={{ width: 11, height: 11, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: T.gold, color: T.bg, fontSize: 8, fontWeight: 900 }}>!</span>outdated baseline</span>
             <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 9, color: T.textDim }}>Mb/d = seaborne oil transit · deltas vs prior week</span>
           </div>
         </Panel>
@@ -460,6 +480,15 @@ function DrillDock({ c, navigate }: { c: ChokeCard; navigate: (p: string) => voi
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.gold }}>{c.name}</span>
         <span style={{ fontFamily: MONO, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.12em', color, border: `1px solid ${color}`, padding: '2px 6px' }}>{(c.status ?? 'normal').toUpperCase()} {c.delta_pct != null ? signed(c.delta_pct, 1) + '%' : ''}</span>
+      </div>
+      <div style={{ marginTop: 9, border: `1px solid ${c.baseline_outdated ? mix(T.gold, 65) : T.border}`, background: c.baseline_outdated ? mix(T.gold, 9) : 'transparent', padding: '7px 8px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontFamily: MONO, fontSize: 8.5, fontWeight: 800, letterSpacing: '0.08em', color: c.baseline_outdated ? T.gold : T.pos }}>
+          <span>{c.baseline_outdated ? 'OUTDATED PORTWATCH BASELINE' : 'CURRENT PORTWATCH BASELINE'}</span>
+          <span>{c.baseline_age_days == null ? 'AGE UNKNOWN' : `${c.baseline_age_days}D OLD`}</span>
+        </div>
+        <div style={{ marginTop: 4, fontFamily: MONO, fontSize: 8.5, color: T.muted, lineHeight: 1.45 }}>
+          Confirmed through {c.baseline_as_of ?? 'an unknown date'}. {c.live_reliable ? `Live AIS supplement: ${c.live_confidence}, as of ${c.live_as_of}.` : `No reliable live AIS replacement${c.live_confidence && c.live_confidence !== 'none' ? ` (${c.live_confidence} confidence)` : ''}.`}
+        </div>
       </div>
       <div style={{ marginTop: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: MONO, fontSize: 9, color: T.muted }}><span>30-day transits</span><span style={{ color: falling ? T.neg : T.pos }}>{falling ? 'falling' : 'steady'}</span></div>

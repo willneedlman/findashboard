@@ -8,6 +8,7 @@ import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
 import Tooltip from '../components/Tooltip'
 import { setLinkedTicker } from '../lib/tickerLink'
+import useIsMobile from '../hooks/useIsMobile'
 
 const C = {
   bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))', surface: 'var(--theme-surface, #0d1826)',
@@ -147,6 +148,7 @@ const ROW_LINKS: { label: string; base?: string; overview?: boolean }[] = [
 
 export default function StockScreener() {
   const navigate = useNavigate()
+  const isMobile = useIsMobile()
   const [filters, setFilters]   = useState<FilterRow[]>(() => toRows(DEFAULT_PRESET))
   const [sector,   setSector]   = useState('')
   const [exchange, setExchange] = useState('')
@@ -312,10 +314,10 @@ export default function StockScreener() {
 
   return (
     <PageWrapper>
-      <div style={{ height: 'calc(100dvh - 36px)', display: 'flex', flexDirection: 'column', background: C.bg, border: `1px solid ${C.border}` }}>
+      <div style={{ height: isMobile ? 'auto' : 'calc(100dvh - 36px)', minHeight: isMobile ? 'calc(100dvh - 96px)' : undefined, display: 'flex', flexDirection: 'column', background: C.bg, border: `1px solid ${C.border}` }}>
 
         {/* title bar */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '15px 24px', borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 22%, transparent)', flex: 'none' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', padding: isMobile ? '12px' : '15px 24px', borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 22%, transparent)', flex: 'none' }}>
           <span style={{ fontFamily: C.sans, fontSize: 14, fontWeight: 700, letterSpacing: '0.22em', textTransform: 'uppercase', color: C.gold }}>Stock Screener</span>
           <span style={{ fontFamily: C.mono, fontSize: 10, letterSpacing: '0.04em', color: C.dim }}>
             {universeLabel.toUpperCase()} · {data ? `${data.total} MATCHES` : 'READY'} · {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
@@ -325,7 +327,7 @@ export default function StockScreener() {
         <div style={{ display: 'flex', alignItems: 'stretch', flex: 1, minHeight: 0 }}>
 
           {/* ── Screen Library rail ── */}
-          <div className="ft-rail" style={{ width: railCollapsed ? 54 : 272, flex: 'none', borderRight: `1px solid ${C.border}`, background: C.surface, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {!isMobile && <div className="ft-rail" style={{ width: railCollapsed ? 54 : 272, flex: 'none', borderRight: `1px solid ${C.border}`, background: C.surface, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {railCollapsed ? (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px 0', gap: 14, height: '100%' }}>
                 <span onClick={() => setRailCollapsed(false)} title="Expand library" style={{ ...railBtn, width: 30, height: 30, border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)', color: C.gold, fontSize: 14 }}>»</span>
@@ -362,14 +364,20 @@ export default function StockScreener() {
                 </div>
               </div>
             )}
-          </div>
+          </div>}
 
           {/* ── Results pane ── */}
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
 
             {/* screen header + scope + filters */}
-            <div style={{ padding: '16px 24px', borderBottom: `1px solid ${C.border}`, flex: 'none' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+            <div style={{ padding: isMobile ? 12 : '16px 24px', borderBottom: `1px solid ${C.border}`, flex: 'none' }}>
+              {isMobile && <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                <select value={activeScreenId} onChange={e => { const preset = PRESETS.find(item => item.id === e.target.value); if (preset) applyPreset(preset) }} style={{ ...SELECT, flex: 1, minWidth: 0 }} aria-label="Saved screen">
+                  {PRESETS.map(preset => <option key={preset.id} value={preset.id}>{preset.name}</option>)}
+                </select>
+                <button onClick={newScreen} style={{ flex: 'none', padding: '7px 11px', background: 'none', border: `1px solid ${C.border}`, color: C.gold, fontFamily: C.sans, fontSize: 10, cursor: 'pointer' }}>New</button>
+              </div>}
+              <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'flex-start', justifyContent: 'space-between', gap: isMobile ? 10 : 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
                   {railCollapsed && <span onClick={() => setRailCollapsed(false)} title="Show library" style={{ ...railBtn, width: 28, height: 28, border: '1px solid var(--theme-border, rgba(255,255,255,0.12))', color: 'var(--theme-text-muted, #9fb0c7)', fontSize: 13, flex: 'none' }}>☰</span>}
                   <div style={{ minWidth: 0 }}>
@@ -379,9 +387,9 @@ export default function StockScreener() {
                     </div>
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 9, flex: 'none' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 9, flex: 'none', width: isMobile ? '100%' : undefined, minWidth: 0 }}>
                   <input value={textFilter} onChange={e => setTextFilter(e.target.value)} placeholder="Filter by ticker / name / sector…"
-                    style={{ background: C.surface, border: '1px solid var(--theme-border, rgba(255,255,255,0.13))', color: C.text, fontFamily: C.sans, fontSize: 11, padding: '7px 12px', minWidth: 230, outline: 'none' }} onFocus={focus} onBlur={blur} />
+                    style={{ background: C.surface, border: '1px solid var(--theme-border, rgba(255,255,255,0.13))', color: C.text, fontFamily: C.sans, fontSize: 11, padding: '7px 12px', minWidth: isMobile ? 0 : 230, flex: isMobile ? 1 : undefined, outline: 'none' }} onFocus={focus} onBlur={blur} />
                   <div style={{ position: 'relative' }}>
                     <button onClick={() => setColPanelOpen(o => !o)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-text-muted, #9fb0c7)', background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 7%, transparent)', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))', padding: '7px 12px', cursor: 'pointer' }}>
                       Columns <span style={{ color: C.dim, fontSize: 9 }}>▾</span>

@@ -16,6 +16,7 @@ graphify-out/obsidian/
 graphify-out/graph.json
 graphify-out/GRAPH_REPORT.md
 graphify-out/.graphify_*.json
+graphify-out/[0-9]*/
 
 # Vite build output
 frontend/dist/

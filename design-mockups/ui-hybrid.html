@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Hybrid mockup — current density + emil craft layer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a1320; --surface:#0d1826; --border:rgba(255,255,255,0.08);
+    --gold:#c9a84c; --text:#d7e3fc; --muted:#5e768f;
+    --term-pos:#3fb950; --term-neg:#f85149;
+    --pos:#34d399; --neg:#fb7185;
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+    --sans:'Inter',-apple-system,system-ui,sans-serif;
+    --ease-out:cubic-bezier(0.23,1,0.32,1);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);padding:40px 32px 64px;-webkit-font-smoothing:antialiased}
+  .page-head{max-width:1240px;margin:0 auto 28px}
+  .page-head h1{font-size:18px;font-weight:600;letter-spacing:-0.01em}
+  .page-head p{color:var(--muted);font-size:13px;margin-top:4px}
+  .grid{max-width:1240px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:28px;align-items:start}
+  .col-label{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+  .col-label .tag{font-size:10px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;padding:4px 9px;border-radius:5px}
+  .col-label.a .tag{background:rgba(94,118,143,0.14);color:#9fb3d1;border:1px solid rgba(159,179,209,0.22)}
+  .col-label.h .tag{background:rgba(201,168,76,0.14);color:var(--gold);border:1px solid rgba(201,168,76,0.32)}
+  .col-label .name{font-size:13px;color:var(--muted)}
+  .notes{margin-top:14px;font-size:11.5px;line-height:1.7;color:var(--muted)}
+  .notes b{color:#9fb3d1;font-weight:600}
+  .cap{max-width:1240px;margin:36px auto 0;color:var(--muted);font-size:11px;text-align:center;opacity:.7}
+
+  /* ===================== A — CURRENT (terminal) ===================== */
+  .term{background:var(--surface);border:1px solid var(--border);font-family:var(--mono)}
+  .term .hdr{display:flex;justify-content:space-between;align-items:baseline;padding:11px 14px;border-bottom:1px solid var(--border)}
+  .term .hdr .ttl{font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--gold)}
+  .term .hdr .ts{font-size:10px;color:var(--muted)}
+  .term .kpis{display:flex}
+  .term .kpi{flex:1;padding:11px 14px;border-right:1px solid var(--border)}
+  .term .kpi:last-child{border-right:none}
+  .term .kpi .lab{font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+  .term .kpi .val{font-size:18px;font-weight:700;letter-spacing:-0.01em}
+  .term .kpi .sub{font-size:10px;margin-top:4px}
+  .term table{width:100%;border-collapse:collapse;border-top:1px solid var(--border)}
+  .term th{font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);padding:8px 14px;text-align:right;border-bottom:1px solid var(--border)}
+  .term th:first-child{text-align:left}
+  .term td{font-size:12px;padding:7px 14px;text-align:right;border-bottom:1px solid var(--border)}
+  .term td:first-child{text-align:left;font-weight:700}
+  .term tr:nth-child(even) td{background:rgba(255,255,255,0.015)}
+  .tpos{color:var(--term-pos)} .tneg{color:var(--term-neg)}
+
+  /* ===================== H — HYBRID (density + craft) ===================== */
+  .hy{background:linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0) 70px),var(--surface);
+    border:1px solid var(--border);border-radius:10px;overflow:hidden;
+    box-shadow:0 1px 0 rgba(255,255,255,0.05) inset, 0 14px 36px -16px rgba(0,0,0,0.6)}
+  .hy .hdr{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border)}
+  .hy .hdr .left{display:flex;align-items:center;gap:9px}
+  .hy .hdr .acc{width:3px;height:14px;border-radius:2px;background:var(--gold)}
+  .hy .hdr .ttl{font-family:var(--sans);font-size:13px;font-weight:600;letter-spacing:-0.01em}
+  .hy .hdr .right{display:flex;align-items:center;gap:10px}
+  .hy .hdr .ts{font-family:var(--mono);font-size:10px;color:var(--muted)}
+  .hy .hdr .live{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:500;color:#9fb3d1}
+  .hy .hdr .live .dot{width:6px;height:6px;border-radius:50%;background:var(--pos);box-shadow:0 0 0 3px rgba(52,211,153,0.16)}
+  .hy .kpis{display:flex;border-bottom:1px solid var(--border)}
+  .hy .kpi{flex:1;padding:12px 16px;border-right:1px solid rgba(255,255,255,0.05)}
+  .hy .kpi:last-child{border-right:none}
+  .hy .kpi .lab{font-family:var(--sans);font-size:10.5px;font-weight:500;color:var(--muted);margin-bottom:7px}
+  .hy .kpi .val{font-family:var(--mono);font-size:18px;font-weight:600;letter-spacing:-0.02em;font-variant-numeric:tabular-nums}
+  .hy .chip{display:inline-flex;align-items:center;gap:3px;font-family:var(--mono);font-size:10px;font-weight:600;
+    padding:2px 6px;border-radius:5px;margin-top:6px;font-variant-numeric:tabular-nums}
+  .chip-pos{color:var(--pos);background:rgba(52,211,153,0.1)}
+  .chip-mut{color:var(--muted);background:rgba(255,255,255,0.04)}
+  .hy table{width:100%;border-collapse:collapse}
+  .hy th{font-family:var(--sans);font-size:10.5px;font-weight:500;color:var(--muted);padding:9px 16px;text-align:right;border-bottom:1px solid var(--border)}
+  .hy th:first-child{text-align:left}
+  .hy td{font-family:var(--mono);font-size:12.5px;padding:8px 16px;text-align:right;font-variant-numeric:tabular-nums;border-bottom:1px solid rgba(255,255,255,0.05)}
+  .hy tbody tr{transition:background 160ms var(--ease-out)}
+  .hy tbody tr:hover{background:rgba(255,255,255,0.03)}
+  .hy tbody tr:last-child td{border-bottom:none}
+  .hy .tkr{display:flex;align-items:center;gap:9px;font-family:var(--sans);font-weight:600;font-size:12.5px}
+  .hy .mc{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;font-size:10px;font-weight:700;color:#0a1320;background:linear-gradient(160deg,#dfe9ff,#9fb3d1)}
+  .hy .wt{display:inline-flex;align-items:center;gap:7px;justify-content:flex-end}
+  .hy .bar{width:38px;height:4px;border-radius:3px;background:rgba(255,255,255,0.07);overflow:hidden}
+  .hy .bar i{display:block;height:100%;border-radius:3px;background:linear-gradient(90deg,#6c8cff,var(--pos))}
+  .hpos{color:var(--pos)} .hneg{color:var(--neg)}
+</style>
+</head>
+<body>
+  <div class="page-head">
+    <h1>Hybrid — current density, emil craft layer</h1>
+    <p>Same data, same row count, same compactness as your terminal. The only change is the craft: type pairing, calibrated color, depth, and interaction states.</p>
+  </div>
+
+  <div class="grid">
+    <!-- A current -->
+    <div>
+      <div class="col-label a"><span class="tag">A · Current</span><span class="name">ui-ux-pro-max terminal</span></div>
+      <div class="term">
+        <div class="hdr"><span class="ttl">PORTFOLIO OVERVIEW</span><span class="ts">11:42:18 ET</span></div>
+        <div class="kpis">
+          <div class="kpi"><div class="lab">Net Liq</div><div class="val">$1,284,930</div><div class="sub tpos">+0.66%</div></div>
+          <div class="kpi"><div class="lab">Day P&amp;L</div><div class="val tpos">+$8,412</div><div class="sub tpos">▲ 0.66%</div></div>
+          <div class="kpi"><div class="lab">Total Ret</div><div class="val tpos">+18.4%</div><div class="sub" style="color:var(--muted)">since incep</div></div>
+          <div class="kpi"><div class="lab">Buying Pwr</div><div class="val">$342,180</div><div class="sub" style="color:var(--muted)">cash 12%</div></div>
+        </div>
+        <table>
+          <thead><tr><th>Symbol</th><th>Qty</th><th>Last</th><th>Day%</th><th>Value</th><th>Wt%</th></tr></thead>
+          <tbody>
+            <tr><td>NVDA</td><td>220</td><td>1,182.40</td><td class="tpos">+2.14</td><td>260,128</td><td>20.2</td></tr>
+            <tr><td>MSFT</td><td>300</td><td>498.12</td><td class="tpos">+0.88</td><td>149,436</td><td>11.6</td></tr>
+            <tr><td>AAPL</td><td>640</td><td>228.86</td><td class="tneg">-0.42</td><td>146,470</td><td>11.4</td></tr>
+            <tr><td>SPY</td><td>180</td><td>604.55</td><td class="tpos">+0.31</td><td>108,819</td><td>8.5</td></tr>
+            <tr><td>TSLA</td><td>150</td><td>412.07</td><td class="tneg">-1.93</td><td>61,810</td><td>4.8</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="notes"><b>As-is.</b> All-mono, uppercase, gold, sharp, zebra. Maximum density, flat hierarchy.</div>
+    </div>
+
+    <!-- H hybrid -->
+    <div>
+      <div class="col-label h"><span class="tag">H · Hybrid (ship this)</span><span class="name">same density + craft</span></div>
+      <div class="hy">
+        <div class="hdr">
+          <div class="left"><span class="acc"></span><span class="ttl">Portfolio Overview</span></div>
+          <div class="right"><span class="live"><span class="dot"></span>Live</span><span class="ts">11:42:18 ET</span></div>
+        </div>
+        <div class="kpis">
+          <div class="kpi"><div class="lab">Net liquidity</div><div class="val">$1,284,930</div><span class="chip chip-pos">▲ 0.66%</span></div>
+          <div class="kpi"><div class="lab">Day P&amp;L</div><div class="val hpos">+$8,412</div><span class="chip chip-pos">▲ 0.66%</span></div>
+          <div class="kpi"><div class="lab">Total return</div><div class="val hpos">+18.4%</div><span class="chip chip-mut">since incep</span></div>
+          <div class="kpi"><div class="lab">Buying power</div><div class="val">$342,180</div><span class="chip chip-mut">12% cash</span></div>
+        </div>
+        <table>
+          <thead><tr><th>Symbol</th><th>Qty</th><th>Last</th><th>Day%</th><th>Value</th><th>Weight</th></tr></thead>
+          <tbody>
+            <tr><td><span class="tkr"><span class="mc">N</span>NVDA</span></td><td>220</td><td>1,182.40</td><td class="hpos">+2.14</td><td>$260,128</td><td><span class="wt">20.2<span class="bar"><i style="width:100%"></i></span></span></td></tr>
+            <tr><td><span class="tkr"><span class="mc">M</span>MSFT</span></td><td>300</td><td>498.12</td><td class="hpos">+0.88</td><td>$149,436</td><td><span class="wt">11.6<span class="bar"><i style="width:57%"></i></span></span></td></tr>
+            <tr><td><span class="tkr"><span class="mc">A</span>AAPL</span></td><td>640</td><td>228.86</td><td class="hneg">-0.42</td><td>$146,470</td><td><span class="wt">11.4<span class="bar"><i style="width:56%"></i></span></span></td></tr>
+            <tr><td><span class="tkr"><span class="mc">S</span>SPY</span></td><td>180</td><td>604.55</td><td class="hpos">+0.31</td><td>$108,819</td><td><span class="wt">8.5<span class="bar"><i style="width:42%"></i></span></span></td></tr>
+            <tr><td><span class="tkr"><span class="mc">T</span>TSLA</span></td><td>150</td><td>412.07</td><td class="hneg">-1.93</td><td>$61,810</td><td><span class="wt">4.8<span class="bar"><i style="width:24%"></i></span></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="notes">
+        <b>The craft diff (what actually changed):</b> labels → Inter (numbers stay mono, tabular) · gold reduced to one
+        accent tick · green/red → calibrated emerald/rose chips · soft 10px outer radius + inset highlight + ambient shadow ·
+        monogram tiles &amp; inline weight bars · row hover with 160ms ease-out. Same rows, same density.
+      </div>
+    </div>
+  </div>
+
+  <div class="cap">Static screenshot — hybrid also implies row hover, button :active press, and ease-out transitions. Mockup only; not wired into the app.</div>
+</body>
+</html>

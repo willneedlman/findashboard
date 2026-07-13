@@ -1175,7 +1175,7 @@ export function ChartStudioContent() {
 
 
   return (
-    <div style={{ width: '100%', minWidth: 1180, background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))' }}>
+    <div className="cs-shell" style={{ width: '100%', minWidth: 1180, background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))' }}>
       <style>{`
         .cs-row:hover { background: var(--theme-hover, rgba(255,255,255,0.04)); }
         .cs-chip:hover { border-color: var(--theme-primary, #c9a84c) !important; color: var(--theme-text, #d7e3fc) !important; }
@@ -1229,7 +1229,7 @@ export function ChartStudioContent() {
       </div>
 
       {/* ── Body: rail | chart | inspector ── */}
-      <div style={{ display: 'flex', alignItems: 'stretch' }}>
+      <div className="cs-workspace" style={{ display: 'flex', alignItems: 'stretch' }}>
         {/* Left rail */}
         {!railOpen ? (
           <button onClick={() => dispatch({ type: 'toggleRail' })} aria-label="Expand layer rail"
@@ -1238,7 +1238,7 @@ export function ChartStudioContent() {
             <span style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, letterSpacing: '0.18em', color: 'var(--theme-secondary, #8099b0)', writingMode: 'vertical-rl' }}>LAYERS</span>
           </button>
         ) : (
-        <div style={{ width: 236, flex: 'none', background: 'var(--theme-surface, #0d1826)', borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+        <div className="cs-layer-rail" style={{ width: 236, flex: 'none', background: 'var(--theme-surface, #0d1826)', borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
           <div style={{ padding: '11px 16px 9px', borderBottom: '1px solid var(--theme-border-faint, rgba(255,255,255,0.05))' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
               <span style={eyebrow}>Price overlays</span>
@@ -1496,7 +1496,7 @@ export function ChartStudioContent() {
             <span style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, letterSpacing: '0.18em', color: 'var(--theme-secondary, #8099b0)', writingMode: 'vertical-rl' }}>READOUT</span>
           </button>
         ) : (
-        <div style={{ width: 188, flex: 'none', background: 'var(--theme-surface, #0d1826)', borderLeft: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+        <div className="cs-inspector" style={{ width: 188, flex: 'none', background: 'var(--theme-surface, #0d1826)', borderLeft: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
           <div style={{ padding: '10px 12px 8px', borderBottom: '1px solid rgba(201,168,76,0.3)', background: 'rgba(201,168,76,0.05)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--theme-secondary, #8099b0)' }}>READOUT AT CROSSHAIR</span>

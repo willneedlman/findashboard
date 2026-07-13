@@ -55,9 +55,9 @@ function Message({ title, hint, keys, overlay }: { title: string; hint: string; 
 // Ghost KPI strip — real labels, muted placeholder bars.
 function GhostKpis({ labels }: { labels: string[] }) {
   return (
-    <div style={{ display: 'flex', background: 'var(--theme-hover, rgba(0,0,0,0.12))', border: `1px solid ${BORDER}` }}>
+    <div className="ft-ghost-kpis" style={{ display: 'grid', gridTemplateColumns: `repeat(${labels.length}, minmax(0, 1fr))`, background: 'var(--theme-hover, rgba(0,0,0,0.12))', border: `1px solid ${BORDER}` }}>
       {labels.map((label, i) => (
-        <div key={i} style={{ flex: 1, padding: '11px 16px', borderLeft: i === 0 ? 'none' : `1px solid ${BORDER}` }}>
+        <div className="ft-ghost-kpi" key={i} style={{ minWidth: 0, padding: '11px 16px', borderLeft: i === 0 ? 'none' : `1px solid ${BORDER}` }}>
           <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: SEC }}>{label}</div>
           <div style={{ height: 15, width: 48 + (i * 13) % 40, background: 'color-mix(in srgb, var(--theme-text, #d7e3fc) 9%, transparent)', marginTop: 7 }} />
         </div>
@@ -68,7 +68,7 @@ function GhostKpis({ labels }: { labels: string[] }) {
 
 function PanelLabel({ label }: { label: string }) {
   return (
-    <div style={{
+    <div className="ft-empty-cockpit" style={{
       position: 'absolute', top: 0, left: 0, background: 'var(--theme-surface, #0d1826)', padding: '4px 10px',
       fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: TXT,
       borderRight: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}`,

@@ -1,76 +1,214 @@
 import axios from 'axios'
 import { useQuery } from '@tanstack/react-query'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { T } from '../lib/theme'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
+import EmptyState from '../components/EmptyState'
+import HelpTip from '../components/HelpTip'
+import useIsMobile from '../hooks/useIsMobile'
 
+interface CreditPoint { asof: string; delinquency_rate: number; chargeoff_rate: number | null }
 interface CreditClass {
-  asset_class: string; label: string; asof: string; delinquency_rate: number; chargeoff_rate: number | null
-  trend: { asof: string; delinquency_rate: number; chargeoff_rate: number | null }[]
+  asset_class: string
+  label: string
+  asof: string
+  delinquency_rate: number
+  chargeoff_rate: number | null
+  trend: CreditPoint[]
 }
-interface Spend { available: boolean; source: string; as_of?: string; coverage_note?: string; reason?: string; national?: { total_spend: number; transactions: number; online_spend: number; spend_change_pct: number | null }; categories?: { category: string; total_spend: number; transactions: number; online_spend: number; spend_change_pct: number | null }[] }
-interface Summary { available: boolean; as_of: string | null; asset_classes: CreditClass[]; consumer_spend: Spend; method_note: string }
+interface StressPoint { asof: string; value: number }
+interface StressIndicator {
+  key: string
+  label: string
+  asof: string
+  value: number
+  previous: number | null
+  unit: 'index' | 'percent'
+  frequency: string
+  interpretation: string
+  trend: StressPoint[]
+  source: string
+}
+interface Summary {
+  available: boolean
+  source: string
+  as_of: string | null
+  asset_classes: CreditClass[]
+  stress_indicators: StressIndicator[]
+  method_note: string
+}
 
-const PANEL: React.CSSProperties = { background: T.surface, border: `1px solid ${T.border}`, marginBottom: 18 }
-const fmtPct = (v: number | null | undefined) => v == null ? 'data unavailable' : `${v.toFixed(2)}%`
-const fmtMoney = (v: number | null | undefined) => v == null ? 'data unavailable' : v >= 1e9 ? `$${(v / 1e9).toFixed(1)}B` : v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : `$${(v / 1e3).toFixed(0)}k`
+const GOLD = 'var(--theme-primary, #c9a84c)'
+const BLUE = 'var(--theme-tertiary, #60a5fa)'
+const ORANGE = '#d07b34'
+const PURPLE = '#c084fc'
+const PANEL: React.CSSProperties = { background: T.surface, border: `1px solid ${T.border}` }
+const COLORS = [GOLD, BLUE, ORANGE, PURPLE, '#34d399']
+const axisTick = { fontFamily: T.mono, fontSize: 8, fill: T.muted }
+const tooltipStyle = { background: T.surface, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.mono, fontSize: 10, padding: '8px 10px' }
 
-function Head({ children, right }: { children: React.ReactNode; right?: React.ReactNode }) {
-  return <div style={{ padding: '8px 14px', background: 'rgba(0,0,0,0.18)', borderBottom: `1px solid ${T.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-    <span style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted }}>{children}</span>{right}
+function ageLabel(date: string | null | undefined) {
+  if (!date) return ''
+  const days = Math.max(0, Math.floor((Date.now() - new Date(`${date}T00:00:00`).getTime()) / 86_400_000))
+  return days <= 1 ? 'current' : `${days}d old`
+}
+
+function fmtPct(value: number, digits = 2) {
+  return `${value.toFixed(digits)}%`
+}
+
+function indicatorValue(indicator: StressIndicator) {
+  return indicator.unit === 'percent' ? fmtPct(indicator.value, 1) : indicator.value.toFixed(3)
+}
+
+function indicatorTone(indicator: StressIndicator) {
+  if (indicator.unit === 'index') return indicator.value > 0 ? T.neg : T.pos
+  return indicator.value > 20 ? T.neg : indicator.value > 0 ? GOLD : T.pos
+}
+
+function indicatorState(indicator: StressIndicator) {
+  if (indicator.unit === 'index') return indicator.value > 0 ? 'above-average stress' : 'below-average stress'
+  return indicator.value > 0 ? 'net tightening' : 'net easing'
+}
+
+function PanelHead({ title, meta, help }: { title: string; meta?: string; help?: string }) {
+  return <div style={{ minHeight: 36, padding: '0 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, borderBottom: `1px solid ${T.border}`, background: 'rgba(255,255,255,0.012)' }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', fontFamily: T.label, fontSize: 9, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.text }}>{title}{help && <HelpTip text={help} width={300} position="bottom" anchor="left" />}</span>
+    {meta && <span style={{ fontFamily: T.mono, fontSize: 8.5, color: T.muted }}>{meta}</span>}
   </div>
 }
 
-function Unavailable({ text }: { text: string }) {
-  return <div style={{ padding: '18px 14px', fontFamily: T.mono, fontSize: 10, color: T.muted }}>{text}</div>
+function StressMetric({ indicator, last }: { indicator: StressIndicator; last: boolean }) {
+  return <div style={{ minWidth: 190, padding: '14px 16px', borderRight: last ? 'none' : `1px solid ${T.border}` }}>
+    <div style={{ minHeight: 24, fontFamily: T.label, fontSize: 8.5, fontWeight: 800, letterSpacing: '0.1em', lineHeight: 1.35, textTransform: 'uppercase', color: T.muted }}>{indicator.label}</div>
+    <div style={{ marginTop: 5, fontFamily: T.mono, fontSize: 22, fontWeight: 800, lineHeight: 1, color: indicatorTone(indicator), fontVariantNumeric: 'tabular-nums' }}>{indicatorValue(indicator)}</div>
+    <div style={{ marginTop: 6, fontFamily: T.mono, fontSize: 8.5, color: T.muted }}>{indicatorState(indicator)}</div>
+    <div style={{ marginTop: 3, fontFamily: T.mono, fontSize: 8, color: T.textDim }}>{indicator.frequency} · {indicator.asof} · {ageLabel(indicator.asof)}</div>
+  </div>
+}
+
+function CreditCard({ item, color }: { item: CreditClass; color: string }) {
+  const previous = item.trend.length > 1 ? item.trend[item.trend.length - 2].delinquency_rate : null
+  const change = previous == null ? null : item.delinquency_rate - previous
+  return <div style={{ padding: '14px 15px', border: `1px solid ${T.border}`, background: 'rgba(255,255,255,0.012)' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+      <span style={{ fontFamily: T.label, fontSize: 9, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.text }}>{item.label}</span>
+      <span style={{ width: 8, height: 8, background: color }} />
+    </div>
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 9, marginTop: 12 }}>
+      <span style={{ fontFamily: T.mono, fontSize: 25, fontWeight: 800, color: item.delinquency_rate >= 3 ? T.neg : T.text }}>{fmtPct(item.delinquency_rate)}</span>
+      <span style={{ fontFamily: T.mono, fontSize: 8.5, color: T.muted }}>delinquent</span>
+    </div>
+    <div style={{ minHeight: 28, marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: '4px 12px', fontFamily: T.mono, fontSize: 8.5, color: T.muted }}>
+      {change != null && <span style={{ color: change > 0 ? T.neg : T.pos }}>{change >= 0 ? '+' : '−'}{Math.abs(change).toFixed(2)} pts QoQ</span>}
+      {item.chargeoff_rate != null && <span>{fmtPct(item.chargeoff_rate)} charge-off</span>}
+    </div>
+    <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${T.borderFaint}`, fontFamily: T.mono, fontSize: 8, color: T.textDim }}>FRED · {item.asof}</div>
+  </div>
+}
+
+function mergeSeries(indicators: StressIndicator[]) {
+  const byDate: Record<string, Record<string, string | number>> = {}
+  for (const indicator of indicators) {
+    for (const point of indicator.trend) {
+      byDate[point.asof] = { ...(byDate[point.asof] ?? { asof: point.asof }), [indicator.key]: point.value }
+    }
+  }
+  return Object.values(byDate).sort((a, b) => String(a.asof).localeCompare(String(b.asof)))
 }
 
 export function CreditDelinquenciesContent() {
-  const { data, isLoading, isError } = useQuery<Summary>({ queryKey: ['credit-summary'], queryFn: () => axios.get('/api/credit/summary').then(r => r.data), staleTime: 12 * 3600e3, retry: 1 })
+  const isMobile = useIsMobile()
+  const { data, isLoading, isError } = useQuery<Summary>({ queryKey: ['credit-summary-v2'], queryFn: () => axios.get('/api/credit/summary').then(response => response.data), staleTime: 12 * 3_600_000, retry: 1 })
+  const indicators = data?.stress_indicators ?? []
+  const marketIndicators = indicators.filter(item => item.unit === 'index')
+  const lendingIndicators = indicators.filter(item => item.unit === 'percent')
   const classes = data?.asset_classes ?? []
-  const spend = data?.consumer_spend
-  const chartByDate = classes.reduce<Record<string, Record<string, string | number | null>>>((byDate, creditClass) => {
-    for (const point of creditClass.trend) {
-      byDate[point.asof] = { ...(byDate[point.asof] ?? { asof: point.asof }), [creditClass.asset_class]: point.delinquency_rate }
-    }
-    return byDate
+  const marketRows = mergeSeries(marketIndicators)
+  const lendingRows = mergeSeries(lendingIndicators)
+  const creditRows = classes.reduce<Record<string, Record<string, string | number>>>((rows, item) => {
+    for (const point of item.trend) rows[point.asof] = { ...(rows[point.asof] ?? { asof: point.asof }), [item.asset_class]: point.delinquency_rate }
+    return rows
   }, {})
-  const chartRows = Object.values(chartByDate).sort((a, b) => String(a.asof).localeCompare(String(b.asof)))
-  const colors = [T.gold, '#5b93c9', '#d07b34', '#c084fc', T.pos]
+  const creditChart = Object.values(creditRows).sort((a, b) => String(a.asof).localeCompare(String(b.asof)))
 
   return <div style={{ width: '100%' }}>
-    <PageHeader title="Credit Stress" actions={data?.as_of ? <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted }}>FRED confirmed through {data.as_of}</span> : undefined} />
-    {isLoading && <Unavailable text="Loading real bank credit data…" />}
-    {isError && <Unavailable text="Data unavailable. Credit sources could not be reached." />}
-    {data && <>
-      <div style={{ ...PANEL, padding: '10px 14px', fontFamily: T.mono, fontSize: 10, color: T.muted }}>{data.method_note}</div>
-      <div style={PANEL}>
-        <Head right={<span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted }}>30+ DPD and annualized charge-offs</span>}>Bank credit stress</Head>
-        {!data.available ? <Unavailable text="Data unavailable. FRED bank-loan series are not configured." /> : <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(185px, 1fr))', borderBottom: `1px solid ${T.border}` }}>
-            {classes.map((c, i) => <div key={c.asset_class} style={{ padding: '13px 15px', borderRight: i < classes.length - 1 ? `1px solid ${T.border}` : undefined }}>
-              <div style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, color: T.muted, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{c.label}</div>
-              <div style={{ marginTop: 6, fontFamily: T.mono, fontSize: 19, fontWeight: 700, color: c.delinquency_rate >= 3 ? T.neg : T.text }}>{fmtPct(c.delinquency_rate)}</div>
-              <div style={{ marginTop: 4, fontFamily: T.mono, fontSize: 9, color: T.muted }}>30+ DPD · C/O {fmtPct(c.chargeoff_rate)}</div>
-            </div>)}
-          </div>
-          <div style={{ height: 240, padding: 14 }}><ResponsiveContainer width="100%" height="100%"><LineChart data={chartRows} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}><CartesianGrid stroke="var(--theme-border-faint, rgba(255,255,255,0.05))" vertical={false} /><XAxis dataKey="asof" tick={{ fontFamily: T.mono, fontSize: 9, fill: T.muted }} tickFormatter={v => String(v).slice(0, 7)} tickLine={false} axisLine={false} /><YAxis tick={{ fontFamily: T.mono, fontSize: 9, fill: T.muted }} tickFormatter={v => `${v}%`} tickLine={false} axisLine={false} width={36} /><Tooltip contentStyle={{ background: T.surface, border: `1px solid ${T.border}`, fontFamily: T.mono, fontSize: 10 }} formatter={(v: number, n: string) => [fmtPct(v), classes.find(c => c.asset_class === n)?.label ?? n]} />{classes.map((c, i) => <Line key={c.asset_class} type="monotone" dataKey={c.asset_class} stroke={colors[i]} strokeWidth={1.8} dot={false} connectNulls isAnimationActive={false} />)}</LineChart></ResponsiveContainer></div>
-        </>}
+    <PageHeader title="Credit Stress" actions={data?.as_of ? <div style={{ display: 'flex', gap: 10, fontFamily: T.mono, fontSize: 8.5, color: T.muted }}><span style={{ color: T.pos }}>{data.source}</span><span>latest observation {data.as_of} · {ageLabel(data.as_of)}</span></div> : undefined} />
+
+    {isLoading && <EmptyState title="Loading Credit Stress" hint="Assembling financial stress, lending standards, delinquency, and charge-off observations." kpis={['Financial Stress', 'Financial Conditions', 'C&I Standards', 'Card Standards']} preview="chart" previewLabel="Credit Conditions" />}
+    {isError && <EmptyState title="Credit Stress Unavailable" hint="Federal Reserve series could not be reached. No modeled or simulated fallback is shown." kpis={['Financial Stress', 'Financial Conditions', 'C&I Standards', 'Card Standards']} preview="chart" previewLabel="Credit Conditions" />}
+    {data && !data.available && <EmptyState title="Credit Stress Unavailable" hint="A FRED API key is required to load the observed Federal Reserve series." kpis={['Financial Stress', 'Financial Conditions', 'C&I Standards', 'Card Standards']} preview="chart" previewLabel="Credit Conditions" />}
+
+    {data?.available && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {!!indicators.length && <section style={PANEL}>
+        <PanelHead title="System Credit Pulse" meta="observed Federal Reserve series · positive values indicate tightening or stress" />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>{indicators.map((indicator, index) => <StressMetric key={indicator.key} indicator={indicator} last={index === indicators.length - 1} />)}</div>
+      </section>}
+
+      {(marketIndicators.length > 0 || lendingIndicators.length > 0) && <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16 }}>
+        {marketIndicators.length > 0 && <section style={PANEL}>
+          <PanelHead title="Market Financial Stress" meta="weekly · zero = historical average" help="Composite Federal Reserve stress indexes. Zero is the historical average; positive values mean more stress and negative values mean less. Values are indexes, not percentages." />
+          <div style={{ padding: '15px 12px 8px' }}><ResponsiveContainer width="100%" height={245}>
+            <LineChart data={marketRows} margin={{ left: 2, right: 12, top: 8, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--theme-hover, rgba(255,255,255,0.04))" />
+              <XAxis dataKey="asof" tick={axisTick} tickLine={false} axisLine={false} tickFormatter={value => String(value).slice(0, 7)} interval="preserveStartEnd" minTickGap={45} />
+              <YAxis tick={axisTick} tickLine={false} axisLine={false} width={38} />
+              <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: GOLD }} formatter={(value: number, name: string) => [Number(value).toFixed(3), marketIndicators.find(item => item.key === name)?.label ?? name]} />
+              {marketIndicators.map((indicator, index) => <Line key={indicator.key} type="monotone" dataKey={indicator.key} stroke={COLORS[index]} strokeWidth={1.7} dot={false} connectNulls isAnimationActive={false} />)}
+            </LineChart>
+          </ResponsiveContainer></div>
+          <div style={legendStyle}>{marketIndicators.map((indicator, index) => <Legend key={indicator.key} color={COLORS[index]} label={indicator.label} />)}</div>
+        </section>}
+
+        {lendingIndicators.length > 0 && <section style={PANEL}>
+          <PanelHead title="Bank Lending Standards" meta="SLOOS · quarterly · net % tightening" help="Net share of surveyed banks tightening standards. Positive means more banks tightened than eased; negative means more eased. It is not a delinquency or rejection rate." />
+          <div style={{ padding: '15px 12px 8px' }}><ResponsiveContainer width="100%" height={245}>
+            <LineChart data={lendingRows} margin={{ left: 2, right: 12, top: 8, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--theme-hover, rgba(255,255,255,0.04))" />
+              <XAxis dataKey="asof" tick={axisTick} tickLine={false} axisLine={false} tickFormatter={value => String(value).slice(0, 7)} interval="preserveStartEnd" minTickGap={45} />
+              <YAxis tick={axisTick} tickLine={false} axisLine={false} tickFormatter={value => `${value}%`} width={40} />
+              <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: GOLD }} formatter={(value: number, name: string) => [`${Number(value).toFixed(1)}%`, lendingIndicators.find(item => item.key === name)?.label ?? name]} />
+              {lendingIndicators.map((indicator, index) => <Line key={indicator.key} type="monotone" dataKey={indicator.key} stroke={COLORS[index + 2]} strokeWidth={1.7} dot={false} connectNulls isAnimationActive={false} />)}
+            </LineChart>
+          </ResponsiveContainer></div>
+          <div style={legendStyle}>{lendingIndicators.map((indicator, index) => <Legend key={indicator.key} color={COLORS[index + 2]} label={indicator.label} />)}</div>
+        </section>}
+      </div>}
+
+      {!!classes.length && <section style={PANEL}>
+        <PanelHead title="Bank Credit Health" meta="all commercial banks · quarterly · 30+ days past due" />
+        <div style={{ padding: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(205px, 1fr))', gap: 8 }}>{classes.map((item, index) => <CreditCard key={item.asset_class} item={item} color={COLORS[index]} />)}</div>
+      </section>}
+
+      {!!creditChart.length && <section style={PANEL}>
+        <PanelHead title="Delinquency Trend by Loan Category" meta="36-month observation window" />
+        <div style={{ padding: '15px 12px 8px' }}><ResponsiveContainer width="100%" height={280}>
+          <LineChart data={creditChart} margin={{ left: 2, right: 12, top: 8, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--theme-hover, rgba(255,255,255,0.04))" />
+            <XAxis dataKey="asof" tick={axisTick} tickLine={false} axisLine={false} tickFormatter={value => String(value).slice(0, 7)} interval="preserveStartEnd" minTickGap={45} />
+            <YAxis tick={axisTick} tickLine={false} axisLine={false} tickFormatter={value => `${value}%`} width={38} />
+            <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: GOLD }} formatter={(value: number, name: string) => [fmtPct(Number(value)), classes.find(item => item.asset_class === name)?.label ?? name]} />
+            {classes.map((item, index) => <Line key={item.asset_class} type="monotone" dataKey={item.asset_class} stroke={COLORS[index]} strokeWidth={1.7} dot={false} connectNulls isAnimationActive={false} />)}
+          </LineChart>
+        </ResponsiveContainer></div>
+        <div style={legendStyle}>{classes.map((item, index) => <Legend key={item.asset_class} color={COLORS[index]} label={item.label} />)}</div>
+      </section>}
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', padding: '0 2px', fontFamily: T.mono, fontSize: 8.5, color: T.textDim }}>
+        <span>{data.method_note}</span>
+        <span>Sources: St. Louis Fed · Chicago Fed · Federal Reserve Board SLOOS · FRED bank aggregates</span>
       </div>
-      <div style={PANEL}><Head right={spend?.as_of ? <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted }}>snapshot {spend.as_of}</span> : undefined}>Consumer spend pulse</Head>
-        {!spend?.available ? <Unavailable text="Data unavailable. SafeGraph Spend Patterns has not been ingested." /> : <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', borderBottom: `1px solid ${T.border}` }}>
-            <Metric label="Merchant spend" value={fmtMoney(spend.national?.total_spend)} /><Metric label="Transactions" value={spend.national?.transactions?.toLocaleString() ?? 'data unavailable'} /><Metric label="Online spend" value={fmtMoney(spend.national?.online_spend)} /><Metric label="MoM spend" value={fmtPct(spend.national?.spend_change_pct)} />
-          </div>
-          <div style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr>{['Merchant category', 'Spend', 'Transactions', 'Online spend', 'MoM'].map(h => <th key={h} style={{ textAlign: h === 'Merchant category' ? 'left' : 'right', padding: '9px 14px', fontFamily: T.label, fontSize: 9, color: T.muted, letterSpacing: '0.1em', textTransform: 'uppercase', borderBottom: `1px solid ${T.border}` }}>{h}</th>)}</tr></thead><tbody>{spend.categories?.map(c => <tr key={c.category}><td style={cell('left')}>{c.category}</td><td style={cell()}>{fmtMoney(c.total_spend)}</td><td style={cell()}>{c.transactions.toLocaleString()}</td><td style={cell()}>{fmtMoney(c.online_spend)}</td><td style={{ ...cell(), color: (c.spend_change_pct ?? 0) >= 0 ? T.pos : T.neg }}>{fmtPct(c.spend_change_pct)}</td></tr>)}</tbody></table></div>
-          <div style={{ padding: '9px 14px', fontFamily: T.mono, fontSize: 9, color: T.muted }}>{spend.coverage_note}</div>
-        </>}
-      </div>
-    </>}
+    </div>}
   </div>
 }
 
-function Metric({ label, value }: { label: string; value: string }) { return <div style={{ padding: '13px 15px' }}><div style={{ fontFamily: T.label, fontSize: 9, color: T.muted, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{label}</div><div style={{ marginTop: 6, fontFamily: T.mono, fontSize: 18, fontWeight: 700, color: T.text }}>{value}</div></div> }
-function cell(align: 'left' | 'right' = 'right'): React.CSSProperties { return { padding: '10px 14px', textAlign: align, fontFamily: T.mono, fontSize: 11, color: T.text, borderBottom: `1px solid ${T.borderFaint}`, fontVariantNumeric: 'tabular-nums' } }
-export default function CreditDelinquencies() { return <PageWrapper><CreditDelinquenciesContent /></PageWrapper> }
+function Legend({ color, label }: { color: string; label: string }) {
+  return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ width: 14, height: 2, background: color }} /><span>{label}</span></span>
+}
+
+const legendStyle: React.CSSProperties = { minHeight: 34, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap', borderTop: `1px solid ${T.border}`, color: T.muted, fontFamily: T.mono, fontSize: 8.5 }
+
+export default function CreditDelinquencies() {
+  return <PageWrapper><CreditDelinquenciesContent /></PageWrapper>
+}

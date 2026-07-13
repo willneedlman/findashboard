@@ -22,6 +22,7 @@ Series (all free, national):
 from __future__ import annotations
 
 import logging
+from datetime import date
 
 import fred_client as fred
 import housing_market as hm
@@ -49,6 +50,8 @@ def build(months: int = 40):
         return None
 
     axis = hm._month_ends(months)
+    if axis and axis[-1] > date.today():
+        axis[-1] = date.today()
     rates: list[hm.MortgageRateRecord] = []
     snaps: list[hm.HousingMarketSnapshot] = []
     cons: list[hm.ConstructionActivity] = []
@@ -80,12 +83,16 @@ def build(months: int = 40):
             mf_default_rate=0.0, foreclosure_rate=0.0, negative_equity=0.0,
             avg_ltv=0.0, avg_fico=0.0,
         ))
-        cons.append(hm.ConstructionActivity(
-            region=hm.Region.NATIONAL, asof=d,
-            housing_starts=round((fred.as_of(data["starts"], d) or 0.0) * 1000, 0),
-            building_permits=round((fred.as_of(data["permits"], d) or 0.0) * 1000, 0),
-            completions=round((fred.as_of(data["completions"], d) or 0.0) * 1000, 0),
-        ))
+        starts = fred.as_of(data["starts"], d)
+        permits = fred.as_of(data["permits"], d)
+        completions = fred.as_of(data["completions"], d)
+        if any(value is not None for value in (starts, permits, completions)):
+            cons.append(hm.ConstructionActivity(
+                region=hm.Region.NATIONAL, asof=d,
+                housing_starts=round((starts or 0.0) * 1000, 0),
+                building_permits=round((permits or 0.0) * 1000, 0),
+                completions=round((completions or 0.0) * 1000, 0),
+            ))
 
     if len(snaps) < 6:
         _log.warning("housing_fred: only %d months assembled, falling back", len(snaps))
