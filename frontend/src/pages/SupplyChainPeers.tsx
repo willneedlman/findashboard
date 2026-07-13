@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
-import { ArrowLeft, ArrowRight, MapPinned, Search } from 'lucide-react'
+import { ArrowLeft, ArrowRight, MapPinned, Search, X } from 'lucide-react'
 import { T } from '../lib/theme'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
@@ -341,14 +341,35 @@ function SupplyMap({ data, verified, onOpen }: { data: PeersResp; verified: Veri
         <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.muted }}>Company revenue is firm-level, not relationship sales. End markets are not named buyers. Similarity signals do not establish a commercial relationship.</span>
       </div>
       <div style={{ borderTop: `1px solid ${T.border}` }}>
-      <div className="ft-panel-header">{focus ? `${focus.name} · company detail` : `${data.base?.name ?? data.ticker} · company detail`}</div>
+      <div className="ft-panel-header">{`${data.base?.name ?? data.ticker} · company detail`}</div>
       <div style={{ padding: '13px 16px', fontFamily: T.mono, fontSize: 10.5, color: T.muted, lineHeight: 1.65 }}>
-        {focus ? <CompanyDetail peer={focus} onOpen={onOpen} /> : <BaseCompanyDetail data={data} onOpen={onOpen} />}
+        <BaseCompanyDetail data={data} onOpen={onOpen} />
       </div>
       </div>
     </div>
     {expandedSide && <MatchList side={expandedSide} peers={layout[expandedSide]} sortMode={sortMode} selected={selected} onSelect={setSelected} onHover={setHovered} />}
+    {selected && <PeerDetailModal peer={selected} onOpen={onOpen} onClose={() => setSelected(null)} />}
   </>
+}
+
+function PeerDetailModal({ peer, onOpen, onClose }: { peer: Peer; onOpen: (ticker: string) => void; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+  return <div onClick={onClose} role="dialog" aria-modal="true" aria-label={`${peer.name} detail`}
+    style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.62)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '8vh 20px 24px', overflowY: 'auto' }}>
+    <div onClick={e => e.stopPropagation()} style={{ maxWidth: 760, width: '100%', background: 'var(--theme-bg, #101c2e)', border: `1px solid ${T.border}`, boxShadow: '0 24px 60px rgba(0,0,0,0.5)' }}>
+      <div className="ft-panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+        <span>{peer.name} · company detail</span>
+        <button onClick={onClose} aria-label="Close" style={{ background: 'transparent', border: 'none', color: T.muted, cursor: 'pointer', display: 'inline-flex', padding: 2 }}><X size={15} /></button>
+      </div>
+      <div style={{ padding: '14px 16px', fontFamily: T.mono, fontSize: 10.5, color: T.muted, lineHeight: 1.65 }}>
+        <CompanyDetail peer={peer} onOpen={onOpen} />
+      </div>
+    </div>
+  </div>
 }
 
 function MatchList({ side, peers, sortMode, selected, onSelect, onHover }: { side: Side; peers: Peer[]; sortMode: SortMode; selected: Peer | null; onSelect: (peer: Peer) => void; onHover: (peer: Peer | null) => void }) {
