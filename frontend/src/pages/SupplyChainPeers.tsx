@@ -241,11 +241,11 @@ export function SupplyChainPeersContent() {
   return <div>
     <PageHeader title="Supply Chain Map" />
     <div style={{ maxWidth: 1320 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 9, maxWidth: 510, margin: '0 0 18px', padding: '7px 9px', background: 'var(--theme-surface, #0d1826)', border: `1px solid ${T.border}` }}>
-        <Search size={15} color={GOLD} />
-        <TickerInput value={search} onChange={setSearch} onEnter={() => doFetch(search)} onSelect={doFetch} placeholder="Search ticker or company" aria-label="Search company" style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', color: T.text, fontFamily: T.mono, fontSize: 12, fontWeight: 700 }} />
-        <button onClick={() => doFetch(search)} disabled={!search.trim() || loading} style={{ background: 'transparent', border: 'none', color: search.trim() ? GOLD : T.muted, fontFamily: T.mono, fontSize: 10, fontWeight: 800, cursor: search.trim() ? 'pointer' : 'default' }}>MAP</button>
-      </div>
+      {data?.base && <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: 300, maxWidth: '100%', margin: '0 0 18px', padding: '6px 8px 6px 10px', background: 'var(--theme-surface, #0d1826)', border: `1px solid ${T.border}` }}>
+        <Search size={14} color={GOLD} />
+        <TickerInput value={search} onChange={setSearch} onEnter={() => doFetch(search)} onSelect={doFetch} placeholder="Search" aria-label="Search company" style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', color: T.text, fontFamily: T.mono, fontSize: 11, fontWeight: 700 }} />
+        <button onClick={() => doFetch(search)} disabled={!search.trim() || loading} style={{ background: 'transparent', border: 'none', color: search.trim() ? GOLD : T.muted, fontFamily: T.mono, fontSize: 9, fontWeight: 800, cursor: search.trim() ? 'pointer' : 'default' }}>GO</button>
+      </div>}
       {data?.base && <SupplyMap data={data} onOpen={openProfile} />}
       {loading && <div style={{ padding: '42px 0', color: T.muted, fontFamily: T.mono, fontSize: 11, fontStyle: 'italic' }}>Mapping firmographic overlap…</div>}
       {!loading && !data && <>
