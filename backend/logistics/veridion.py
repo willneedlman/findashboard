@@ -110,6 +110,36 @@ def get_file_list(product_url: str, start_date: "str | None" = None,
     return files
 
 
+def download_to_tmp(url: str, suffix: str = ".parquet", timeout: int = 600, attempts: int = 3) -> "str | None":
+    """Stream a partition URL to a temp file (1 MB blocks) with retry/backoff on
+    Dewey's flaky pre-signed download host. Returns the temp path, or None on
+    failure (caller unlinks the path when done)."""
+    import tempfile
+    tmp_path = None
+    for attempt in range(1, attempts + 1):
+        try:
+            with requests.get(url, headers={"X-API-KEY": _key()}, stream=True, timeout=timeout) as r:
+                r.raise_for_status()
+                fd, tmp_path = tempfile.mkstemp(suffix=suffix)
+                with os.fdopen(fd, "wb") as fh:
+                    for block in r.iter_content(chunk_size=1 << 20):
+                        if block:
+                            fh.write(block)
+            return tmp_path
+        except Exception as e:
+            logger.warning("Veridion download attempt %s/%s failed: %s", attempt, attempts, e)
+            if tmp_path and os.path.exists(tmp_path):
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+                tmp_path = None
+            if attempt == attempts:
+                return None
+            time.sleep(2 * attempt)
+    return None
+
+
 def stream_partition(link, chunksize: int = 100_000, timeout: int = 600):
     """Yield normalized pandas chunks from one partition. Streams the file to a
     temp path (1 MB blocks) then reads it batched — Veridion ships snappy Parquet,

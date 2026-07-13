@@ -3,6 +3,11 @@
 // dashboards, scans, holdings). Keyed by uppercased symbol; values are public paths.
 export const LOGO_OVERRIDES: Record<string, string> = {
   RVI: '/logos/rvi.png',
+  // Symbol CDNs return a valid but wrong-brand image for SPCX (Parqet serves an
+  // unrelated "AXS" mark), so onError never fires and the fallback can't kick in.
+  // A local override wins ahead of the CDNs. Add more here when a name shows the
+  // wrong logo everywhere.
+  SPCX: '/logos/spcx.svg',
 }
 
 // Ordered logo candidates: override, then Parqet (clean SVGs for major listings),

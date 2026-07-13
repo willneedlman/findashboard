@@ -45,3 +45,4 @@ data/*
 !data/port_performance.db
 !data/renthub_snapshot.db
 !data/consumer_spend.db
+!data/supply_chain.db

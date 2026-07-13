@@ -29,6 +29,7 @@ backend/.cache/
 *.db
 # bounded, pre-built supplier DB shipped with the app
 !data/veridion_nodes.db
+!data/supply_chain.db
 .playwright-mcp/
 .zshrc
 smoke-test.png

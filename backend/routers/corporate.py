@@ -1167,3 +1167,36 @@ def get_supply_chain(ticker: str):
     except Exception as e:
         logger.error(f"Error in supply chain endpoint: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/private-fundamentals")
+def get_private_fundamentals(ticker: str):
+    """Veridion firmographics for one name: revenue, headcount, founding year,
+    industry, HQ, offerings, and sourcing/market tags from the bundled
+    read-only supply_chain.db. Returns matched=False when the name is absent."""
+    from logistics import company_fundamentals
+    try:
+        return company_fundamentals.by_ticker(ticker)
+    except Exception as e:
+        logger.error(f"Error in private-fundamentals endpoint: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/peers-by-tags")
+def get_peers_by_tags(ticker: str, limit: int = 24):
+    """Supply-chain peer/counterparty set for one name, ranked by shared Veridion
+    firmographic tags (sourcing focus, end-markets, industry). Read-only DB."""
+    from logistics import company_fundamentals
+    lim = max(1, min(limit, 60))
+    ck = f"peers_tags:{ticker.strip().upper()}:{lim}"
+    cached = disk_get(ck)
+    if cached is not None:
+        return cached
+    try:
+        result = company_fundamentals.peers_by_tags(ticker, limit=lim)
+        if result.get("matched"):
+            disk_set(ck, result, ttl=7 * 24 * 3600)
+        return result
+    except Exception as e:
+        logger.error(f"Error in peers-by-tags endpoint: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

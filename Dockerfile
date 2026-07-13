@@ -31,6 +31,7 @@ COPY data/veridion_nodes.db /app/data/veridion_nodes.db
 COPY data/port_performance.db /app/data/port_performance.db
 COPY data/renthub_snapshot.db /app/data/renthub_snapshot.db
 COPY data/consumer_spend.db /app/data/consumer_spend.db
+COPY data/supply_chain.db /app/data/supply_chain.db
 
 # Built React app
 COPY --from=frontend-build /frontend/dist /app/frontend/dist
