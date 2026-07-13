@@ -3,8 +3,8 @@
 Extracts the companies that carry a public EXCHANGE_TICKER, with their
 fundamentals (revenue, employees, year founded, industry, location, description,
 offerings, sourcing/market tags), plus a ticker index for fast symbol lookup.
-This is the foundation for the Company Profile private-fundamentals block and the
-Supply Chain Analysis tool. Runs offline; ships a small read-only DB.
+This is the foundation for the Supply Chain Peers tool (tag-overlap peer
+ranking). Runs offline; ships a small read-only DB.
 
   cd backend
   DEWEY_API_KEY=... python -m logistics.ingest_supply_chain --max-files 96

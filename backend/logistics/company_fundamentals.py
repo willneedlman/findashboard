@@ -72,51 +72,6 @@ def _resolve(conn: sqlite3.Connection, symbol: str):
     return c, best["exchange"]
 
 
-def by_ticker(ticker: str) -> dict:
-    """Firmographics for one exchange ticker, or an unmatched marker.
-
-    Resolves the bare symbol against the ticker index, preferring a US listing
-    when the same symbol trades on several exchanges, then returns the company
-    record. Shapes list-valued fields into arrays for the frontend.
-    """
-    if not available():
-        return {"available": False, "matched": False, "ticker": ticker}
-
-    symbol = (ticker or "").strip().upper()
-    if not symbol:
-        return {"available": True, "matched": False, "ticker": ticker}
-
-    with _conn() as conn:
-        c, exchange = _resolve(conn, symbol)
-
-    if c is None:
-        return {"available": True, "matched": False, "ticker": symbol}
-
-    return {
-        "available": True,
-        "matched": True,
-        "source": "Veridion",
-        "ticker": symbol,
-        "exchange": exchange,
-        "name": c["name"],
-        "revenue": c["revenue"],
-        "revenue_type": c["revenue_type"],
-        "employees": c["employees"],
-        "year_founded": c["year_founded"],
-        "main_industry": c["main_industry"],
-        "business_category": c["business_category"],
-        "country": c["country"],
-        "city": c["city"],
-        "latitude": c["latitude"],
-        "longitude": c["longitude"],
-        "description": c["description"],
-        "core_offerings": _split(c["core_offerings"]),
-        "supply_chain_focus": _split(c["supply_chain_focus"]),
-        "target_markets": _split(c["target_markets"]),
-        "exchange_tickers": _split(c["exchange_tickers"]),
-    }
-
-
 # Overlap weights: a shared sourcing focus is the strongest supply-chain signal,
 # then shared end-markets, then being in the same industry / category.
 _W_FOCUS, _W_MARKET, _W_INDUSTRY, _W_CATEGORY = 3, 2, 3, 2

@@ -34,16 +34,14 @@ interface SegBlock {
 // Where the breakdown came from — shown as a small provenance chip.
 function SourceChip({ source }: { source?: string }) {
   if (!source) return null
-  const s = source.toLowerCase()
-  const meta =
-    s === 'sec'      ? { label: 'SEC EDGAR', c: 'var(--theme-tertiary, #60a5fa)', title: 'Sourced from SEC EDGAR 10-K (FMP fallback)' }
-  : s === 'veridion' ? { label: 'Veridion',  c: 'var(--theme-positive, #22c55e)', title: 'Firmographics sourced from Veridion' }
-  :                    { label: 'FMP',       c: 'var(--theme-primary, #c9a84c)',  title: 'Sourced from Financial Modeling Prep' }
+  const sec = source === 'sec'
+  const label = sec ? 'SEC EDGAR' : 'FMP'
+  const c = sec ? 'var(--theme-tertiary, #60a5fa)' : 'var(--theme-primary, #c9a84c)'
   return (
-    <span title={meta.title}
+    <span title={sec ? 'Sourced from SEC EDGAR 10-K (FMP fallback)' : 'Sourced from Financial Modeling Prep'}
       style={{ fontFamily: T.mono, fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
-        color: meta.c, border: `1px solid color-mix(in srgb, ${meta.c} 45%, transparent)`, borderRadius: 3, padding: '1px 5px', whiteSpace: 'nowrap' }}>
-      via {meta.label}
+        color: c, border: `1px solid color-mix(in srgb, ${c} 45%, transparent)`, borderRadius: 3, padding: '1px 5px', whiteSpace: 'nowrap' }}>
+      via {label}
     </span>
   )
 }
@@ -622,9 +620,6 @@ export function SupplyChainContent() {
               <RevenuePanel title="Revenue · By Geography" block={data.geo_segments} />
             </div>
 
-            {/* Private-company firmographics (Veridion); self-hides when unmatched */}
-            <PrivateFundamentalsPanel ticker={data.ticker} />
-
             {/* Bank fees-vs-trading mix, only when reported */}
             {data.revenue_activity && data.revenue_activity.latest.length > 0 && (
               <RevenuePanel title="Revenue · By Activity (Fees vs Trading)" block={data.revenue_activity} />
@@ -680,86 +675,6 @@ interface Credit {
   debt_to_ebitda: number | null; net_debt: number | null; altman_z: number | null
   altman_zone: 'safe' | 'grey' | 'distress' | null; current_ratio: number | null
 }
-interface PrivateFundamentals {
-  available: boolean; matched: boolean; source?: string
-  name?: string; exchange?: string | null
-  revenue?: number | null; revenue_type?: string | null
-  employees?: number | null; year_founded?: number | null
-  main_industry?: string | null; business_category?: string | null
-  country?: string | null; city?: string | null
-  description?: string | null
-  core_offerings?: string[]; supply_chain_focus?: string[]; target_markets?: string[]
-}
-
-// Firmographic chips (offerings, sourcing, markets). Renders nothing when empty.
-function TagRow({ label, tags }: { label: string; tags?: string[] }) {
-  if (!tags || tags.length === 0) return null
-  return (
-    <div style={{ marginTop: 14 }}>
-      <div style={{ ...labelStyle, marginBottom: 8 }}>{label}</div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        {tags.map((t, i) => (
-          <span key={i} style={{ fontFamily: T.mono, fontSize: 11, color: T.text, background: 'var(--theme-hover, rgba(255,255,255,0.04))', border: `1px solid ${T.border}`, padding: '4px 10px' }}>{t}</span>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-// Private-company fundamentals from the bundled Veridion firmographics DB. Only a
-// subset of names carry this data, so the whole panel silently no-ops when the
-// ticker is not matched — the rest of the profile is unaffected.
-function PrivateFundamentalsPanel({ ticker }: { ticker: string }) {
-  const [d, setD] = useState<PrivateFundamentals | null>(null)
-  useEffect(() => {
-    let live = true
-    setD(null)
-    axios.get(`/api/corporate/private-fundamentals?ticker=${encodeURIComponent(ticker)}`)
-      .then(r => { if (live) setD(r.data) })
-      .catch(() => { if (live) setD(null) })
-    return () => { live = false }
-  }, [ticker])
-  if (!d || !d.matched) return null
-
-  const hq = [d.city, d.country].filter(Boolean).join(', ') || null
-  const revType = d.revenue_type ? ` (${d.revenue_type.toLowerCase()})` : ''
-  const stat = (label: string, value: string) => (
-    <div>
-      <div style={{ ...labelStyle, marginBottom: 4 }}>{label}</div>
-      <div style={{ fontFamily: T.mono, fontSize: 15, fontWeight: 700, color: T.text }}>{value}</div>
-    </div>
-  )
-  return (
-    <div className="ft-panel">
-      <div className="ft-panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>Company Fundamentals<SourceChip source={d.source} /></span>
-        {d.main_industry && <span style={{ fontFamily: T.mono, fontSize: 9, fontWeight: 400, letterSpacing: 0, color: T.muted }}>{d.main_industry}</span>}
-      </div>
-      <div style={{ padding: '16px 18px' }}>
-        {d.name && (
-          <div style={{ fontFamily: T.mono, fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 14 }}>
-            {d.name}
-            {d.exchange && <span style={{ color: T.muted, fontWeight: 400 }}> · {d.exchange}:{ticker}</span>}
-          </div>
-        )}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 16 }}>
-          {stat('Revenue', d.revenue != null ? fmtBn(d.revenue) + revType : '—')}
-          {stat('Employees', d.employees != null ? d.employees.toLocaleString() : '—')}
-          {stat('Founded', d.year_founded != null ? String(d.year_founded) : '—')}
-          {stat('Category', d.business_category || '—')}
-          {stat('Headquarters', hq || '—')}
-        </div>
-        {d.description && (
-          <p style={{ fontFamily: T.label, fontSize: 12, lineHeight: 1.6, color: T.muted, marginTop: 16, marginBottom: 0 }}>{d.description}</p>
-        )}
-        <TagRow label="Core Offerings" tags={d.core_offerings} />
-        <TagRow label="Supply Chain Focus" tags={d.supply_chain_focus} />
-        <TagRow label="Target Markets" tags={d.target_markets} />
-      </div>
-    </div>
-  )
-}
-
 function CreditPanel({ ticker }: { ticker: string }) {
   const [d, setD] = useState<Credit | null>(null)
   const [state, setState] = useState<'loading' | 'ok' | 'err'>('loading')
