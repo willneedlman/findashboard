@@ -1086,6 +1086,7 @@ function HistoryPanel({ C, chokepoints, ids, days, metric, series, loading, nowc
         const key: keyof HistNowcastPoint = metric === 'cap' ? 'cap' : metric
         const prior = Object.entries(counts)
           .filter(([day, v]) => day <= (lastD ?? '') && v[key] > 0)
+          .sort(([a], [b]) => a.localeCompare(b))
           .slice(-7)
           .map(([, v]) => v[key])
         // A newly deployed stream may begin after PortWatch's last confirmed day,
@@ -1099,7 +1100,7 @@ function HistoryPanel({ C, chokepoints, ids, days, metric, series, loading, nowc
         if (lastD && scale != null) (byDate[lastD] ??= { d: lastD })[`${s.id}__est`] = last
         for (const day of s.nowcast_days) {
           if (scale == null) continue
-          const window = Object.entries(counts).filter(([d]) => d <= day).slice(-7).map(([, v]) => v[key])
+          const window = Object.entries(counts).filter(([d]) => d <= day).sort(([a], [b]) => a.localeCompare(b)).slice(-7).map(([, v]) => v[key])
           if (!window.length || window.every(v => v === 0)) continue
           const raw = (window.reduce((a, b) => a + b, 0) / window.length) * scale
           const estimated = hasOverlap ? raw : Math.max(last * 0.8, Math.min(last * 1.2, raw))

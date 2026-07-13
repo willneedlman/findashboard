@@ -101,7 +101,7 @@ function CreditCard({ item, color }: { item: CreditClass; color: string }) {
       <span style={{ fontFamily: T.mono, fontSize: 8.5, color: T.muted }}>delinquent</span>
     </div>
     <div style={{ minHeight: 28, marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: '4px 12px', fontFamily: T.mono, fontSize: 8.5, color: T.muted }}>
-      {change != null && <span style={{ color: change > 0 ? T.neg : T.pos }}>{change >= 0 ? '+' : '−'}{Math.abs(change).toFixed(2)} pts QoQ</span>}
+      {change != null && <span style={{ color: change > 0 ? T.neg : T.pos }}>{change >= 0 ? '+' : '-'}{Math.abs(change).toFixed(2)} pts QoQ</span>}
       {item.chargeoff_rate != null && <span>{fmtPct(item.chargeoff_rate)} charge-off</span>}
     </div>
     <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${T.borderFaint}`, fontFamily: T.mono, fontSize: 8, color: T.textDim }}>FRED · {item.asof}</div>

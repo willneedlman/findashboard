@@ -36,7 +36,8 @@ function nextVerb(phase: Phase, nextPhase: Phase): string {
 // wall-clock time in the viewer's zone — same axis as the 00..24 scale above.
 function hoverTime(pct: number): string {
   const hours = (pct / 100) * 24
-  const hh = Math.floor(hours) % 24
+  if (hours >= 24) return '24:00'
+  const hh = Math.floor(hours)
   const mm = Math.floor(hours * 60) % 60
   return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`
 }

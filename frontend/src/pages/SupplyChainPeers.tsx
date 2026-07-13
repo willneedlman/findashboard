@@ -300,12 +300,12 @@ function SupplyMap({ data, verified, onOpen }: { data: PeersResp; verified: Veri
             {mapped.sourcing.map((peer, i) => {
               const y = ((i + 0.5) / Math.max(mapped.sourcing.length, 1)) * 100
               const width = 0.7 + (peer.score / maxScore) * 2.8
-              return <path key={peer.name} d={`M 32 ${y} C 42 ${y}, 43 50, 48 50`} stroke={nodeColor(peer)} strokeWidth={width} opacity={focus && focus !== peer ? 0.12 : 0.42} fill="none" />
+              return <path key={`${peer.name}-${i}`} d={`M 32 ${y} C 42 ${y}, 43 50, 48 50`} stroke={nodeColor(peer)} strokeWidth={width} opacity={focus && focus !== peer ? 0.12 : 0.42} fill="none" />
             })}
             {mapped.markets.map((peer, i) => {
               const y = ((i + 0.5) / Math.max(mapped.markets.length, 1)) * 100
               const width = 0.7 + (peer.score / maxScore) * 2.8
-              return <path key={peer.name} d={`M 52 50 C 57 50, 58 ${y}, 68 ${y}`} stroke={nodeColor(peer)} strokeWidth={width} opacity={focus && focus !== peer ? 0.12 : 0.42} fill="none" />
+              return <path key={`${peer.name}-${i}`} d={`M 52 50 C 57 50, 58 ${y}, 68 ${y}`} stroke={nodeColor(peer)} strokeWidth={width} opacity={focus && focus !== peer ? 0.12 : 0.42} fill="none" />
             })}
           </svg>
           <section style={{ zIndex: 1 }}>
@@ -348,7 +348,7 @@ function MatchList({ side, peers, sortMode, selected, onSelect, onHover }: { sid
   const label = side === 'sourcing' ? 'All shared sourcing matches' : 'All shared end-market matches'
   return <div className="ft-panel" style={{ marginTop: 14 }}>
     <div className="ft-panel-header" style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}><span>{label}</span><span style={{ color: T.muted, fontFamily: T.mono, fontSize: 9, fontWeight: 400 }}>{peers.length} firms</span></div>
-    <div style={{ maxHeight: 420, overflowY: 'auto', padding: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 7 }}>{peers.map(peer => <CompanyNode key={peer.name} peer={peer} side={side} color={color} sortMode={sortMode} dimmed={false} selected={selected === peer} onHover={onHover} onSelect={onSelect} />)}</div>
+    <div style={{ maxHeight: 420, overflowY: 'auto', padding: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 7 }}>{peers.map((peer, i) => <CompanyNode key={`${peer.name}-${peer.symbol ?? i}`} peer={peer} side={side} color={color} sortMode={sortMode} dimmed={false} selected={selected === peer} onHover={onHover} onSelect={onSelect} />)}</div>
   </div>
 }
 
@@ -363,7 +363,7 @@ function CompanyDetail({ peer, onOpen }: { peer: Peer; onOpen: (ticker: string) 
     <div><span style={{ color: T.text, fontFamily: T.label, fontSize: 14, fontWeight: 800 }}>{peer.name}</span><span style={{ color: BLUE, fontWeight: 800, marginLeft: 8 }}>END MARKET</span><div style={{ marginTop: 4, color: BLUE }}>Reported revenue geography</div></div>
     <p style={{ margin: '12px 0 0', color: T.text, fontFamily: T.label, fontSize: 12, lineHeight: 1.55, maxWidth: 980 }}>{peer.brief}</p>
     <div style={{ marginTop: 10, color: BLUE, fontFamily: T.mono, fontSize: 9.5, fontWeight: 800 }}>{peer.end_market.source.toUpperCase()} · FY{peer.end_market.fiscal_year ?? '—'} · {peer.end_market.pct.toFixed(1)}% OF REVENUE</div>
-    <div style={{ marginTop: 6, color: T.muted, fontFamily: T.mono, fontSize: 9 }}>This disclosure identifies where revenue is generated; it does not identify an individual customer.</div>
+    <div style={{ marginTop: 6, color: T.muted, fontFamily: T.mono, fontSize: 9 }}>This disclosure identifies where revenue is generated. It does not identify an individual customer.</div>
   </div>
   if (peer.verified) return <div>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap' }}>

@@ -55,6 +55,8 @@ def main() -> int:
     if not key:
         raise SystemExit("DEWEY_API_KEY not set")
     files = _files(key)
+    if not files:
+        raise SystemExit("Dewey returned no RentHub files")
     as_of = args.latest_date or max(f["file_name"][:10] for f in files)
     selected = [f for f in files if f["file_name"].startswith(as_of)]
     if not selected:

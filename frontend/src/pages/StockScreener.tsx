@@ -379,7 +379,7 @@ export default function StockScreener() {
               </div>}
               <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'flex-start', justifyContent: 'space-between', gap: isMobile ? 10 : 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-                  {railCollapsed && <span onClick={() => setRailCollapsed(false)} title="Show library" style={{ ...railBtn, width: 28, height: 28, border: '1px solid var(--theme-border, rgba(255,255,255,0.12))', color: 'var(--theme-text-muted, #9fb0c7)', fontSize: 13, flex: 'none' }}>☰</span>}
+                  {!isMobile && railCollapsed && <span onClick={() => setRailCollapsed(false)} title="Show library" style={{ ...railBtn, width: 28, height: 28, border: '1px solid var(--theme-border, rgba(255,255,255,0.12))', color: 'var(--theme-text-muted, #9fb0c7)', fontSize: 13, flex: 'none' }}>☰</span>}
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontFamily: C.sans, fontSize: 16, fontWeight: 600, color: C.emph }}>{activePreset?.name ?? 'Custom Screen'}</div>
                     <div style={{ fontFamily: C.sans, fontSize: 11, color: C.muted, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>

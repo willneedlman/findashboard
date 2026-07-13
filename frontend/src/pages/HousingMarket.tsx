@@ -78,7 +78,7 @@ const MARKET_COLOR: Record<string, string> = { seller: '#34d399', balanced: GOLD
 const money = (value: number | null | undefined) => value == null ? 'Data unavailable' : MONEY.format(value)
 const number = (value: number | null | undefined) => value == null ? 'Data unavailable' : NUMBER.format(value)
 const pct = (value: number | null | undefined, digits = 2) => value == null || value <= 0 ? 'Data unavailable' : `${value.toFixed(digits)}%`
-const signed = (value: number | null) => value == null ? 'trend unavailable' : `${value >= 0 ? '+' : '−'}${Math.abs(value).toFixed(1)}% YoY`
+const signed = (value: number | null) => value == null ? 'trend unavailable' : `${value >= 0 ? '+' : '-'}${Math.abs(value).toFixed(1)}% YoY`
 
 function ageLabel(date?: string) {
   if (!date) return 'date unavailable'
@@ -145,7 +145,7 @@ function RentalMarket({ rent, loading }: { rent?: RentResp; loading: boolean }) 
               <td style={rentCell}>{state.median_rent_per_sqft != null ? `$${state.median_rent_per_sqft.toFixed(2)}` : 'Data unavailable'}</td>
               <td style={rentCell}>{money(state.median_rent_1br)}</td>
               <td style={rentCell}>{money(state.median_rent_2br)}</td>
-              <td style={{ ...rentCell, color: premium != null && premium >= 0 ? T.muted : T.pos }}>{premium == null ? 'Data unavailable' : `${premium >= 0 ? '+' : '−'}${money(Math.abs(premium))}`}</td>
+              <td style={{ ...rentCell, color: premium != null && premium >= 0 ? T.muted : T.pos }}>{premium == null ? 'Data unavailable' : `${premium >= 0 ? '+' : '-'}${money(Math.abs(premium))}`}</td>
             </tr>
           })}</tbody>
         </table>

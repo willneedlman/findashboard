@@ -515,6 +515,7 @@
   .ft-kpi-strip,
   .housing-metric-grid { grid-template-columns: 1fr !important; }
   .ft-kpi-cell:nth-child(2) { border-top: 1px solid var(--theme-border-faint, rgba(255, 255, 255, 0.06)); }
+  .ft-kpi-cell:nth-child(even) { border-left: 0 !important; }
   .ft-mobile-header { padding-right: 8px; padding-left: 10px; }
   .ft-mobile-brand { font-size: 13px !important; }
   .ft-mobile-content { padding-right: 8px; padding-left: 8px; }

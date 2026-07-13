@@ -1222,11 +1222,19 @@ def get_peers_by_tags(ticker: str, limit: int = 24, company_name: str = ""):
 def get_public_company_evidence(ticker: str, company_name: str = ""):
     """Free public records, labelled separately from map similarity data."""
     from logistics.public_enrichment import get_public_company_evidence as evidence
-    return evidence(ticker, company_name)
+    try:
+        return evidence(ticker, company_name)
+    except Exception as e:
+        logger.error(f"Error in public-company-evidence endpoint: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/verified-supply-chain-relationships")
 def get_verified_supply_chain_relationships(ticker: str):
     """First-party public supplier, buyer, and operating-partner disclosures."""
     from logistics.verified_relationships import relationships_for_ticker
-    return relationships_for_ticker(ticker)
+    try:
+        return relationships_for_ticker(ticker)
+    except Exception as e:
+        logger.error(f"Error in verified-supply-chain-relationships endpoint: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

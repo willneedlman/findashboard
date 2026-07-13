@@ -247,7 +247,7 @@ function Board({ data }: { data: Resp }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, border: `1px solid ${mix(T.gold, 55)}`, background: mix(T.gold, 8), padding: '8px 11px' }}>
           <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', color: T.gold, whiteSpace: 'nowrap' }}>DATA FRESHNESS WARNING</span>
           <span style={{ fontFamily: MONO, fontSize: 9, color: T.muted, lineHeight: 1.45 }}>
-            {outdated.length} of {straits.length} PortWatch transit baselines are more than {data.freshness_threshold_days} days old{oldestConfirmed ? `; the oldest is confirmed only through ${oldestConfirmed}` : ''}. Live AIS supplements the disruption score only where its confidence is reliable.
+            {outdated.length} of {straits.length} PortWatch transit baselines are more than {data.freshness_threshold_days} days old{oldestConfirmed ? `. The oldest is confirmed only through ${oldestConfirmed}` : ''}. Live AIS supplements the disruption score only where its confidence is reliable.
           </span>
         </div>
       )}

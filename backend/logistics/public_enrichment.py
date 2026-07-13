@@ -127,11 +127,11 @@ def _usaspending_record(company_name: str) -> dict:
         return _source("usaspending", "USAspending.gov", "available", url="https://www.usaspending.gov/search", facts={
             "recipient": recipient,
             "uei": str(uei) if uei else None,
-            "evidence": "Listed federal-award recipient; this indicates government sales, not commercial buyers.",
+            "evidence": "Listed federal-award recipient. This indicates government sales, not commercial buyers.",
         })
     except Exception as exc:
         logger.warning("public evidence USAspending record failed for %s: %s", company_name, exc)
-        return _source("usaspending", "USAspending.gov", "unavailable", message="USAspending.gov did not respond; no government-buyer data is shown.")
+        return _source("usaspending", "USAspending.gov", "unavailable", message="USAspending.gov did not respond. No government-buyer data is shown.")
 
 
 def get_public_company_evidence(ticker: str, company_name: str = "") -> dict:
@@ -160,7 +160,7 @@ def get_public_company_evidence(ticker: str, company_name: str = "") -> dict:
         "ticker": symbol,
         "company_name": entity_name,
         "sources": [sec, gleif, usaspending],
-        "disclaimer": "Public filings and entity records identify the company; they do not establish supplier, buyer, or transaction relationships.",
+        "disclaimer": "Public filings and entity records identify the company. They do not establish supplier, buyer, or transaction relationships.",
     }
     disk_set(cache_key, payload, ttl=24 * 3600)
     return payload
