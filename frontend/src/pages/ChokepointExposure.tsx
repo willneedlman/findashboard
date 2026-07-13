@@ -18,16 +18,18 @@ interface Leader extends Quote { ticker: string; group: string; group_key: strin
 interface Resp { chokepoints: ChokeCard[]; leaders: Leader[]; any_stress: boolean; priced: number; outdated_count: number; freshness_threshold_days: number; source: string }
 
 const STRAIT_POS: Record<string, { x: number; y: number; labelX: number; labelY: number; lab: 'l' | 'r' }> = {
-  taiwan: { x: 555, y: 103, labelX: 564, labelY: 100, lab: 'r' },
-  malacca: { x: 519, y: 144, labelX: 528, labelY: 142, lab: 'r' },
-  hormuz: { x: 439, y: 98, labelX: 448, labelY: 89, lab: 'r' },
-  bab: { x: 415, y: 125, labelX: 407, labelY: 130, lab: 'l' },
-  suez: { x: 395, y: 92, labelX: 385, labelY: 109, lab: 'l' },
-  bosphorus: { x: 388, y: 70, labelX: 379, labelY: 61, lab: 'l' },
-  gibraltar: { x: 325, y: 80, labelX: 316, labelY: 86, lab: 'l' },
-  danish: { x: 355, y: 41, labelX: 364, labelY: 35, lab: 'r' },
-  panama: { x: 189, y: 132, labelX: 181, labelY: 129, lab: 'l' },
-  goodhope: { x: 369, y: 215, labelX: 378, labelY: 210, lab: 'r' },
+  // Markers sit on their geographic position; labels fan into distinct lanes so
+  // the crowded Mediterranean / Middle-East cluster does not overlap.
+  taiwan: { x: 555, y: 103, labelX: 570, labelY: 104, lab: 'r' },
+  malacca: { x: 519, y: 144, labelX: 534, labelY: 152, lab: 'r' },
+  hormuz: { x: 439, y: 98, labelX: 462, labelY: 92, lab: 'r' },
+  bab: { x: 415, y: 125, labelX: 400, labelY: 152, lab: 'l' },
+  suez: { x: 395, y: 92, labelX: 372, labelY: 120, lab: 'l' },
+  bosphorus: { x: 388, y: 70, labelX: 412, labelY: 46, lab: 'r' },
+  gibraltar: { x: 325, y: 80, labelX: 296, labelY: 84, lab: 'l' },
+  danish: { x: 355, y: 41, labelX: 350, labelY: 22, lab: 'l' },
+  panama: { x: 189, y: 132, labelX: 176, labelY: 128, lab: 'l' },
+  goodhope: { x: 369, y: 215, labelX: 382, labelY: 214, lab: 'r' },
 }
 const statusColor = (s: string | null) => (s === 'congested' ? T.neg : s === 'watch' ? T.gold : T.muted)
 
@@ -332,7 +334,6 @@ function Board({ data }: { data: Resp }) {
         </div>
         <svg
           width="100%"
-          height="336"
           viewBox="0 0 660 250"
           preserveAspectRatio="none"
           onMouseDown={handleMouseDown}
@@ -347,6 +348,9 @@ function Board({ data }: { data: Resp }) {
           onTouchCancel={handleTouchEnd}
           style={{
             display: 'block',
+            width: '100%',
+            height: 'auto',
+            aspectRatio: '660 / 250',
             userSelect: 'none',
             cursor: isDragging ? 'grabbing' : zoom > 1 ? 'grab' : 'default'
           }}
