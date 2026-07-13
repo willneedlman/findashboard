@@ -8,7 +8,7 @@ import PageWrapper from '../components/PageWrapper'
 import { readToken } from '../lib/theme'
 import { L, Spark } from '../components/logi'
 
-// Logistics Map — the full-screen supply-chain view. Layers: live cargo ships and
+// Freight Map — the full-screen supply-chain view. Layers: live cargo ships and
 // cargo flights, air-cargo hubs, all ten chokepoints, and liner-connectivity ports.
 // A VIEW sidebar + legend mirror the Energy Flows map; ships and flights are
 // clickable into an inspector. Tankers/LNG are energy and live on the Energy map.
@@ -222,7 +222,7 @@ export default function LogisticsMap() {
 
         {/* Top-left: title + live count */}
         <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 520, display: 'flex', alignItems: 'center', gap: 12, padding: '8px 13px', background: panel, border: `1px solid ${L.border}` }}>
-          <span style={{ fontFamily: L.mono, fontSize: 13, fontWeight: 700, letterSpacing: '0.18em', color: L.gold }}>LOGISTICS MAP</span>
+          <span style={{ fontFamily: L.mono, fontSize: 13, fontWeight: 700, letterSpacing: '0.18em', color: L.gold }}>FREIGHT MAP</span>
           <span style={{ fontFamily: L.mono, fontSize: 9, color: L.pos }}>● LIVE · {flights.length} flights · {vessels.length} ships</span>
         </div>
 

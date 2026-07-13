@@ -149,6 +149,7 @@ function Results({ d, cmdLabel, countryLabel }: { d: Resp; cmdLabel: string; cou
 }
 
 function FlowOverview({ d, partners, selected, onSelect, countryLabel, cmdLabel, searchQuery, setSearchQuery }: { d: Resp; partners: Partner[]; selected: number; onSelect: (i: number) => void; countryLabel: string; cmdLabel: string; searchQuery: string; setSearchQuery: (q: string) => void }) {
+  const isMobile = useIsMobile()
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
@@ -162,9 +163,12 @@ function FlowOverview({ d, partners, selected, onSelect, countryLabel, cmdLabel,
 
   const getSVGCoords = (clientX: number, clientY: number, currentTarget: SVGSVGElement) => {
     const rect = currentTarget.getBoundingClientRect()
+    const scale = Math.min(rect.width / 660, rect.height / 250)
+    const offsetX = (rect.width - 660 * scale) / 2
+    const offsetY = (rect.height - 250 * scale) / 2
     return {
-      x: (clientX - rect.left) / rect.width * 660,
-      y: (clientY - rect.top) / rect.height * 250,
+      x: (clientX - rect.left - offsetX) / scale,
+      y: (clientY - rect.top - offsetY) / scale,
     }
   }
 
@@ -316,7 +320,7 @@ function FlowOverview({ d, partners, selected, onSelect, countryLabel, cmdLabel,
            (r.partner.iso ?? '').toLowerCase().includes(q)
   }
   return (
-    <Panel label="Bilateral Flow Map" meta="click a partner to drill it · drag to pan · scroll to zoom · double click to reset" style={{ flex: 1, minWidth: 0, height: 386, padding: '38px 14px 12px', boxSizing: 'border-box' }}>
+    <Panel label="Bilateral Flow Map" meta="click a partner to drill it · drag to pan · scroll to zoom · double click to reset" style={{ flex: 1, minWidth: 0, height: isMobile ? 386 : 'clamp(386px, calc(38vw - 100px), 560px)', padding: '38px 14px 12px', boxSizing: 'border-box' }}>
       {/* Floating search/filter input in bottom-left - outside overflow hidden wrapper */}
       <div style={{ position: 'absolute', left: 8, bottom: 42, zIndex: 10, display: 'flex', alignItems: 'center', gap: 6, background: mix(T.surface, 85), border: `1px solid ${mix(T.gold, 35)}`, padding: '4px 6px', borderRadius: 2, boxShadow: '0 4px 12px rgba(0,0,0,0.5)', width: 110, boxSizing: 'border-box' }}>
         <span style={{ color: T.gold, fontFamily: MONO, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.05em' }}>FIND:</span>
@@ -434,7 +438,7 @@ function FlowOverview({ d, partners, selected, onSelect, countryLabel, cmdLabel,
           width="100%"
           height="100%"
           viewBox="0 0 660 250"
-          preserveAspectRatio="none"
+          preserveAspectRatio="xMidYMid meet"
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
@@ -449,6 +453,7 @@ function FlowOverview({ d, partners, selected, onSelect, countryLabel, cmdLabel,
             display: 'block',
             overflow: 'visible',
             userSelect: 'none',
+            touchAction: 'none',
             cursor: isDragging ? 'grabbing' : zoom > 1 ? 'grab' : 'default'
           }}
         >

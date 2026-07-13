@@ -862,7 +862,7 @@ export function Landing() {
             ['charting', 'Charting', 'Chart Studio · Asset Overlay · Compare'],
             ['trading', 'Trading', 'Paper Trading · MM Sim · Journal'],
             ['valuation', 'Valuation', 'DCF · Reverse DCF · Multiples'],
-            ['logistics', 'Geo-Logistics', 'Logistics Map · Energy Flows'],
+            ['logistics', 'Geo-Logistics', 'Freight Map · Energy Flows'],
           ] as [string, string, string][]).map(([slug, l, t]) => (
             <MLink key={slug} to={`/product/${slug}`} className="hubcell" variants={item}>
               <div className="hn">{HUBS.find(h => h.slug === slug)?.tools.length ?? 0}</div>
@@ -1142,7 +1142,7 @@ export function LogisticsPage() {
       <section className="blk" style={{ borderTop: '1px solid var(--line)', background: 'var(--bg2)' }}>
         <div className="wrap split">
           <Reveal>
-            <div className="eyebrow">Logistics Map</div>
+            <div className="eyebrow">Freight Map</div>
             <h2 style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-0.02em', margin: '12px 0 14px' }}>The supply chain on one map.</h2>
             <p style={{ color: 'var(--muted)', fontSize: 15.5, lineHeight: 1.65 }}>Live cargo ships and canal chokepoints, air-freighter frequency at the world's cargo hubs, liner connectivity by port, container spot rates, and US inventories and freight tonnage. Every supply-chain signal folds into one interactive map.</p>
             <div className="cta" style={{ marginTop: 24 }}><Link to="/app" className="btn btn-ghost btn-lg">Open the map →</Link></div>

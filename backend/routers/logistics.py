@@ -4,7 +4,7 @@ Thin wrappers over logistics.free_ingest — every ingest function already cache
 aggressively, degrades to stale-on-failure, and never raises, so the routes stay
 one-liners. Mounted at /api/logistics.
 
-supplier-nodes (Veridion manufacturers -> GeoJSON) powers the Logistics Map's
+supplier-nodes (Veridion manufacturers -> GeoJSON) powers the Freight Map's
 supplier layer. Bilateral trade flows live in the Trade Flows tool (/api/comtrade).
 """
 import logging

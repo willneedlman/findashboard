@@ -512,7 +512,7 @@ _AIS_BBOXES = [
     [[-36.5, 16.5], [-32.0, 21.5]],   # Cape of Good Hope
     [[22.0, 118.0], [27.0, 122.0]],   # Taiwan Strait
     [[31.0, 120.0], [38.0, 127.0]],   # Yellow Sea / Korea approaches
-    # Container-port anchorages (for the Logistics Map's cargo-ship layer). Moderate
+    # Container-port anchorages (for the Freight Map's cargo-ship layer). Moderate
     # set — the 1GB VM has OOM'd before, so these are the busiest hubs only.
     [[33.4, -118.6], [34.2, -117.8]], # Los Angeles / Long Beach
     [[29.8, 121.0], [31.7, 123.0]],   # Shanghai / Ningbo-Zhoushan
