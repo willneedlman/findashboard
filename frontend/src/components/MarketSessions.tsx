@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type MouseEvent } from 'react'
 import {
   MARKETS, marketStatus, localArcs, localNowHours, countdown,
   PHASE_LABEL, PHASE_COLOR, PHASE_OPACITY, PHASE_TEXT, type MarketDef, type Region, type Phase,
@@ -31,6 +31,37 @@ function nextVerb(phase: Phase, nextPhase: Phase): string {
   return PHASE_LABEL[nextPhase].toLowerCase()
 }
 
+// The bar spans the viewer's local 24h clock, so an x-fraction maps straight to a
+// wall-clock time in the viewer's zone — same axis as the 00..24 scale above.
+function hoverTime(pct: number): string {
+  const hours = (pct / 100) * 24
+  const hh = Math.floor(hours) % 24
+  const mm = Math.floor(hours * 60) % 60
+  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`
+}
+
+// Phase key for the timeline colors. pre and after share one swatch (same fill).
+const LEGEND: { label: string; phase: Phase }[] = [
+  { label: 'Open', phase: 'regular' },
+  { label: 'Pre / After-hours', phase: 'pre' },
+  { label: 'Overnight', phase: 'overnight' },
+  { label: 'Lunch break', phase: 'break' },
+  { label: 'Closed', phase: 'closed' },
+]
+
+function PhaseLegend() {
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'center' }}>
+      {LEGEND.map(({ label, phase }) => (
+        <span key={label} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: T.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.muted }}>
+          <span style={{ width: 10, height: 10, borderRadius: 2, background: PHASE_COLOR[phase], opacity: PHASE_OPACITY[phase], flex: 'none' }} />
+          {label}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 function TimelineBar({ m, now, holiday }: { m: MarketDef; now: Date; holiday?: string }) {
   // Plot every market on the viewer's shared 24h clock (absolute time) so
   // simultaneous opens line up across rows — e.g. Tokyo/Seoul/Sydney all open at
@@ -39,27 +70,45 @@ function TimelineBar({ m, now, holiday }: { m: MarketDef; now: Date; holiday?: s
   // viewer midnight comes back as two arcs (splitWrap), rendered as two bars.
   const arcs = localArcs(m, now)
   const nowPct = (localNowHours(now) / 24) * 100
+  const [hover, setHover] = useState<number | null>(null)
+  const onMove = (e: MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    setHover(Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100)))
+  }
   return (
-    <div style={{ position: 'relative', height: 16, borderRadius: 3, background: T.track, overflow: 'hidden', backgroundImage: HOUR_TICKS }}>
-      {arcs.map((a, i) => (
-        <div key={i} style={{
-          position: 'absolute', top: 0, bottom: 0,
-          left: `${(a.t0 / 24) * 100}%`, width: `${((a.t1 - a.t0) / 24) * 100}%`,
-          background: PHASE_COLOR[a.phase], opacity: PHASE_OPACITY[a.phase],
+    <div style={{ position: 'relative' }} onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+      <div style={{ position: 'relative', height: 16, borderRadius: 3, background: T.track, overflow: 'hidden', backgroundImage: HOUR_TICKS }}>
+        {arcs.map((a, i) => (
+          <div key={i} style={{
+            position: 'absolute', top: 0, bottom: 0,
+            left: `${(a.t0 / 24) * 100}%`, width: `${((a.t1 - a.t0) / 24) * 100}%`,
+            background: PHASE_COLOR[a.phase], opacity: PHASE_OPACITY[a.phase],
+          }} />
+        ))}
+        {holiday && (
+          <span style={{
+            position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
+            justifyContent: arcs.length ? 'flex-end' : 'center', paddingRight: arcs.length ? 8 : 0,
+            fontFamily: T.sans, fontSize: 9, fontWeight: 600, letterSpacing: '0.08em',
+            textTransform: 'uppercase', color: T.when, pointerEvents: 'none',
+          }}>{arcs.length ? `early close · ${holiday}` : holiday}</span>
+        )}
+        <div className="fdb-now-marker" style={{
+          position: 'absolute', top: -2, bottom: -2, left: `${nowPct}%`, width: 2,
+          background: '#f4f8ff', boxShadow: '0 0 8px 1px rgba(244,248,255,0.8)',
         }} />
-      ))}
-      {holiday && (
-        <span style={{
-          position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
-          justifyContent: arcs.length ? 'flex-end' : 'center', paddingRight: arcs.length ? 8 : 0,
-          fontFamily: T.sans, fontSize: 9, fontWeight: 600, letterSpacing: '0.08em',
-          textTransform: 'uppercase', color: T.when, pointerEvents: 'none',
-        }}>{arcs.length ? `early close · ${holiday}` : holiday}</span>
+        {hover !== null && (
+          <div style={{ position: 'absolute', top: 0, bottom: 0, left: `${hover}%`, width: 1, background: 'rgba(244,248,255,0.55)', pointerEvents: 'none' }} />
+        )}
+      </div>
+      {hover !== null && (
+        <div style={{
+          position: 'absolute', bottom: 'calc(100% + 4px)', left: `${hover}%`, transform: 'translateX(-50%)',
+          fontFamily: T.mono, fontSize: 10, fontWeight: 700, color: T.text, background: T.track,
+          border: `1px solid ${T.border}`, borderRadius: 3, padding: '1px 5px', whiteSpace: 'nowrap',
+          pointerEvents: 'none', zIndex: 5,
+        }}>{hoverTime(hover)}</div>
       )}
-      <div className="fdb-now-marker" style={{
-        position: 'absolute', top: -2, bottom: -2, left: `${nowPct}%`, width: 2,
-        background: '#f4f8ff', boxShadow: '0 0 8px 1px rgba(244,248,255,0.8)',
-      }} />
     </div>
   )
 }
@@ -101,6 +150,13 @@ export default function MarketSessions({ compact = false }: { compact?: boolean 
         <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: T.mono, fontSize: 10, color: T.scale, letterSpacing: '0.05em' }}>
           {['00', '04', '08', '12', '16', '20', '24'].map(h => <span key={h}>{h}</span>)}
         </div>
+        <span />
+      </div>
+
+      {/* Phase color key, aligned under the timeline bars */}
+      <div style={{ display: 'grid', gridTemplateColumns: GRID, alignItems: 'center', gap: 14, marginBottom: 16 }}>
+        <span /><span /><span />
+        <PhaseLegend />
         <span />
       </div>
 
