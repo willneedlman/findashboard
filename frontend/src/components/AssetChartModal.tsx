@@ -21,7 +21,7 @@ const TFS: { k: string; days?: number; window?: '10m' | '30m' | '1h' }[] = [
   { k: '3M', days: 93 }, { k: '1Y', days: 366 }, { k: '5Y', days: 1826 },
 ] as const
 
-interface Row { label: string; symbol: string; price: number | null; change_pct: number | null }
+interface Row { label: string; symbol: string; quote_symbol?: string; price: number | null; change_pct: number | null }
 interface HistPoint { date: string | number; value: number }
 interface Hist { price: HistPoint[]; metrics: { total_return: number; current_price: number }; meta?: { intraday?: boolean; as_of?: string | null; window?: string | null } }
 
@@ -50,18 +50,19 @@ export default function AssetChartModal({ row, yields, onClose }: { row: Row; yi
     let cancel = false
     setLoading(true); setErr(false)
     const selected = TFS.find(t => t.k === tf)!
+    const ticker = row.quote_symbol ?? row.symbol
     const params = selected.window
-      ? { ticker: row.symbol, window: selected.window }
+      ? { ticker, window: selected.window }
       : (() => {
           const end = new Date()
           const start = new Date(end.getTime() - selected.days! * 86400000)
-          return { ticker: row.symbol, start: iso(start), end: iso(end) }
+          return { ticker, start: iso(start), end: iso(end) }
         })()
     axios.get<Hist>('/api/market/history', { params })
       .then(r => { if (!cancel) { setData(r.data); setLoading(false) } })
       .catch(() => { if (!cancel) { setErr(true); setLoading(false); setData(null) } })
     return () => { cancel = true }
-  }, [tf, row.symbol, refreshKey])
+  }, [tf, row.symbol, row.quote_symbol, refreshKey])
 
   useEffect(() => {
     if (!['10M', '30M', '1H', '1D'].includes(tf)) return
@@ -112,7 +113,7 @@ export default function AssetChartModal({ row, yields, onClose }: { row: Row; yi
   const cur = data?.metrics?.current_price
   const up = (ret ?? 0) >= 0
   const retColor = ret == null ? 'var(--theme-secondary, #5f7893)' : up ? 'var(--theme-positive, #3fb6a0)' : 'var(--theme-negative, #cf4b3f)'
-  const sourceStatus = data?.meta?.intraday ? 'INTRADAY' : data ? 'EOD' : 'LOADING'
+  const sourceStatus = data?.meta?.intraday ? 'LATEST' : data ? 'EOD' : 'LOADING'
 
   return (
     <div onClick={onClose} role="dialog" aria-modal="true" aria-label={`${row.label} chart`}

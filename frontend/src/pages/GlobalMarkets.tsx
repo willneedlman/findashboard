@@ -9,7 +9,7 @@ import { formatLocalTime, localDateInputValue, localTimeZone } from '../lib/time
 
 // Global Markets board (hifi handoff "2a"): a pinnable Spotlight of benchmark
 // cards over flat editorial tables — indices by region, FX, commodities, US
-// yields, and crypto. One cached backend call, refreshed every 5 minutes.
+// yields, and crypto. Yahoo-backed latest data refreshes once per minute.
 
 const MONO = 'var(--theme-mono)'
 const SANS = 'var(--theme-sans)'
@@ -17,8 +17,8 @@ const GOLD = 'var(--theme-primary, #c9a84c)'
 const POS = 'var(--theme-positive, #3fb6a0)'
 const NEG = 'var(--theme-negative, #cf4b3f)'
 
-interface Row { label: string; symbol: string; price: number | null; change_pct: number | null; change_abs: number | null; spark: number[]; status: 'intraday' | 'delayed' | 'end_of_day' | 'unavailable'; as_of: string | null }
-interface Board { sections: { name: string; rows: Row[] }[]; as_of: string; date: string | null; window: MarketWindow; refresh_seconds: number }
+interface Row { label: string; symbol: string; quote_symbol?: string; is_cme_proxy?: boolean; price: number | null; change_pct: number | null; change_abs: number | null; spark: number[]; status: 'intraday' | 'delayed' | 'end_of_day' | 'unavailable'; as_of: string | null }
+interface Board { sections: { name: string; rows: Row[] }[]; as_of: string; date: string | null; window: MarketWindow; refresh_seconds: number; americas_mode: 'cash_indices' | 'cme_futures' }
 type MarketWindow = '10m' | '30m' | '1h' | '1d' | '1w' | '1m' | 'ytd'
 const WINDOWS: { key: MarketWindow; label: string }[] = [
   { key: '10m', label: '10M' }, { key: '30m', label: '30M' }, { key: '1h', label: '1H' },
@@ -36,7 +36,7 @@ const FLAGS: Record<string, string[]> = {
   'DX-Y.NYB': ['us'], 'EURUSD=X': ['eu', 'us'], 'JPY=X': ['us', 'jp'], 'GBPUSD=X': ['gb', 'us'],
   'CNY=X': ['us', 'cn'], 'CHF=X': ['us', 'ch'], 'AUDUSD=X': ['au', 'us'], 'CAD=X': ['us', 'ca'],
   'MXN=X': ['us', 'mx'], 'INR=X': ['us', 'in'],
-  '^IRX': ['us'], '2YY=F': ['us'], '^FVX': ['us'], '^TNX': ['us'], '^TYX': ['us'],
+  '^IRX': ['us'], 'FRED:DGS2': ['us'], '^FVX': ['us'], '^TNX': ['us'], '^TYX': ['us'],
 }
 const COMMODITY_CHIP: Record<string, string> = {
   'CL=F': '#d07b34', 'BZ=F': '#d07b34', 'NG=F': '#d07b34',
@@ -143,7 +143,7 @@ function SpotlightCard({ row, group, yields, onUnpin, onOpen }: { row: Row; grou
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 7 }}>
         <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, color: c }}>{changeText(row, yields)}</span>
-        <span style={{ fontFamily: SANS, fontSize: 10, color: 'var(--theme-secondary, #5f7893)' }}>{group} · {row.status === 'intraday' ? 'INTRADAY' : row.status === 'delayed' ? 'DELAYED' : row.status === 'end_of_day' ? 'EOD' : 'NO PRINT'}</span>
+        <span style={{ fontFamily: SANS, fontSize: 10, color: 'var(--theme-secondary, #5f7893)' }}>{row.is_cme_proxy ? 'CME futures proxy' : group}</span>
       </div>
     </div>
   )
@@ -169,13 +169,16 @@ function GroupTable({ name, rows, window, favs, onToggle, onOpen }: { name: stri
             style={{ display: 'grid', gridTemplateColumns: '20px auto minmax(0,1fr) auto auto', alignItems: 'center', gap: 10, padding: '6px 4px', borderBottom: '1px solid var(--theme-border-faint, rgba(255,255,255,0.05))', transition: 'background 0.12s', cursor: 'pointer' }}>
             <Star on={on} onClick={() => onToggle(r.symbol)} label={`${on ? 'Unpin' : 'Pin'} ${r.label}`} />
             <AssetIcon symbol={r.symbol} />
-            <span style={{ fontFamily: SANS, fontSize: 13, color: 'var(--theme-text, #c6d4e6)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.label}</span>
+            <span style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
+              <span style={{ fontFamily: SANS, fontSize: 13, color: 'var(--theme-text, #c6d4e6)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.label}</span>
+              {r.is_cme_proxy && <span title="CME futures proxy used while the U.S. cash session is closed" style={{ flex: 'none', fontFamily: MONO, fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--theme-tertiary, #60a5fa)' }}>CME</span>}
+            </span>
             <span style={{ fontFamily: MONO, fontSize: 13, fontWeight: 700, color: 'var(--theme-text, #e6edf7)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
               {r.price == null ? '—' : `${fmtPrice(r.price)}${yields ? '%' : ''}`}
             </span>
             <span title={`${r.label} · ${changeText(r, yields)}`}
               style={{ fontFamily: MONO, fontSize: 10.5, fontWeight: 700, textAlign: 'right', minWidth: 56, padding: '2px 7px', borderRadius: 3, color: c, background: r.change_pct == null ? 'transparent' : up ? 'color-mix(in srgb, var(--theme-positive, #3fb6a0) 13%, transparent)' : 'color-mix(in srgb, var(--theme-negative, #cf4b3f) 13%, transparent)' }}>
-              {changeText(r, yields)} <span style={{ fontSize: 7.5, letterSpacing: '0.06em', color: 'var(--theme-secondary, #5f7893)' }}>{r.status === 'intraday' ? 'INTRA' : r.status === 'delayed' ? 'DELAY' : r.status === 'end_of_day' ? 'EOD' : 'N/A'}</span>
+              {changeText(r, yields)}
             </span>
           </div>
         )
@@ -200,8 +203,8 @@ export default function GlobalMarkets() {
   const q = useQuery<Board>({
     queryKey: ['global-board', date, window],
     queryFn: () => axios.get('/api/market/global-board', { params: { ...(date ? { date } : {}), window } }).then(r => r.data),
-    staleTime: date ? 300_000 : window === '10m' || window === '30m' || window === '1h' || window === '1d' ? 60_000 : 300_000,
-    refetchInterval: date ? false : window === '10m' || window === '30m' || window === '1h' || window === '1d' ? 60_000 : 300_000,
+    staleTime: date ? 300_000 : 60_000,
+    refetchInterval: date ? false : 60_000,
     refetchIntervalInBackground: false,
     retry: 1,
   })
@@ -250,8 +253,8 @@ export default function GlobalMarkets() {
                 style={{ border: 'none', background: window === item.key ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 16%, transparent)' : 'transparent', color: window === item.key ? GOLD : 'var(--theme-secondary, #8099b0)', cursor: 'pointer', padding: '4px 6px', fontFamily: MONO, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.04em' }}>{item.label}</button>)}
             </span>}
             <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontFamily: MONO, fontSize: 9.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #56708a)' }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: date ? 'var(--theme-secondary, #56708a)' : POS, boxShadow: date ? 'none' : `0 0 8px ${POS}`, flex: 'none' }} />
-              {date ? `Session ${date} · EOD snapshot · dash = no print` : asOf ? `Updated ${asOf} local · ${q.data?.refresh_seconds ?? 60}s refresh` : 'Loading'}
+              <span style={{ padding: '3px 5px', border: `1px solid ${date ? 'var(--theme-border, rgba(255,255,255,0.14))' : 'color-mix(in srgb, var(--theme-tertiary, #60a5fa) 45%, transparent)'}`, color: date ? 'var(--theme-secondary, #8099b0)' : 'var(--theme-tertiary, #60a5fa)', background: date ? 'transparent' : 'color-mix(in srgb, var(--theme-tertiary, #60a5fa) 8%, transparent)' }}>{date ? 'EOD' : 'LATEST'}</span>
+              {date ? `Session ${date} · completed session` : asOf ? `${q.data?.americas_mode === 'cme_futures' ? 'CME futures proxies · ' : ''}Yahoo best-effort · updated ${asOf} local · 60s refresh` : 'Loading'}
             </span>
           </div>
         </div>

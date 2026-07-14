@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import datetime as _dt
+from zoneinfo import ZoneInfo
 from fastapi import APIRouter, HTTPException
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -41,7 +42,7 @@ GLOBAL_MARKETS_BOARD: list[tuple[str, str, str]] = [
     ("Commodities", "Silver", "SI=F"), ("Commodities", "Copper", "HG=F"),
     ("Commodities", "Platinum", "PL=F"), ("Commodities", "Wheat", "ZW=F"),
     ("Commodities", "Corn", "ZC=F"), ("Commodities", "Soybeans", "ZS=F"),
-    ("US Yields", "13-week", "^IRX"), ("US Yields", "2-year", "2YY=F"),
+    ("US Yields", "13-week", "^IRX"), ("US Yields", "2-year", "FRED:DGS2"),
     ("US Yields", "5-year", "^FVX"), ("US Yields", "10-year", "^TNX"),
     ("US Yields", "30-year", "^TYX"),
     ("Crypto", "Bitcoin", "BTC-USD"), ("Crypto", "Ethereum", "ETH-USD"),
@@ -49,6 +50,21 @@ GLOBAL_MARKETS_BOARD: list[tuple[str, str, str]] = [
 ]
 _GLOBAL_SECTIONS = ["Americas", "Europe", "Asia-Pacific", "FX", "Commodities", "US Yields", "Crypto"]
 _GLOBAL_WINDOWS = {"10m", "30m", "1h", "1d", "1w", "1m", "ytd"}
+_GLOBAL_FRED_SERIES = {"FRED:DGS2": "DGS2"}
+_CME_FUTURES_PROXIES = {
+    "^GSPC": ("S&P 500 Futures", "ES=F"),
+    "^IXIC": ("Nasdaq 100 Futures", "NQ=F"),
+    "^DJI": ("Dow Futures", "YM=F"),
+    "^RUT": ("Russell 2000 Futures", "RTY=F"),
+}
+
+
+def _us_cash_session_open(now_utc: _dt.datetime) -> bool:
+    eastern = now_utc.astimezone(ZoneInfo("America/New_York"))
+    if eastern.weekday() >= 5:
+        return False
+    current = eastern.hour * 60 + eastern.minute
+    return 9 * 60 + 30 <= current < 16 * 60
 
 
 def _global_window(window: str, now):
@@ -90,8 +106,17 @@ def global_board(date: str | None = None, window: str = "1d"):
     if window not in _GLOBAL_WINDOWS:
         raise HTTPException(400, "unsupported performance window")
 
-    now = _dt.datetime.now(_dt.timezone.utc).replace(tzinfo=None)
-    syms = tuple(s for _, _, s in GLOBAL_MARKETS_BOARD)
+    now_utc = _dt.datetime.now(_dt.timezone.utc)
+    now = now_utc.replace(tzinfo=None)
+    use_cme_futures = target is None and not _us_cash_session_open(now_utc)
+    active_board = []
+    for section, label, symbol in GLOBAL_MARKETS_BOARD:
+        if use_cme_futures and symbol in _CME_FUTURES_PROXIES:
+            proxy_label, quote_symbol = _CME_FUTURES_PROXIES[symbol]
+            active_board.append((section, proxy_label, quote_symbol, symbol, True))
+        else:
+            active_board.append((section, label, symbol, symbol, False))
+    syms = tuple(quote_symbol for _, _, quote_symbol, _, _ in active_board if quote_symbol not in _GLOBAL_FRED_SERIES)
     if target:
         start = (target - _dt.timedelta(days=20)).isoformat()
         end = (target + _dt.timedelta(days=1)).isoformat()
@@ -104,11 +129,30 @@ def global_board(date: str | None = None, window: str = "1d"):
         df = get_download(syms, fetch_start, fetch_end, interval, cache_ttl=60 if intraday else 300)
 
     closes = df.get("Close") if not df.empty else None
+    fred_series: dict[str, pd.Series] = {}
+    try:
+        import fred as _fred
+        for symbol, series_id in _GLOBAL_FRED_SERIES.items():
+            observations = _fred.observations(series_id, 300)
+            if observations:
+                fred_series[symbol] = pd.Series(
+                    [observation["value"] for observation in observations],
+                    index=pd.to_datetime([observation["date"] for observation in observations]),
+                    dtype=float,
+                )
+    except Exception:
+        pass
     sections: dict[str, list] = {s: [] for s in _GLOBAL_SECTIONS}
-    for section, label, sym in GLOBAL_MARKETS_BOARD:
-        series = closes[sym].dropna() if closes is not None and sym in closes else pd.Series(dtype=float)
+    for section, label, quote_symbol, canonical_symbol, is_cme_proxy in active_board:
+        if quote_symbol in fred_series:
+            series = fred_series[quote_symbol]
+        elif closes is not None and quote_symbol in closes:
+            series = closes[quote_symbol].dropna()
+        else:
+            series = pd.Series(dtype=float)
         row = {
-            "label": label, "symbol": sym, "price": None, "change_pct": None,
+            "label": label, "symbol": canonical_symbol, "quote_symbol": quote_symbol,
+            "is_cme_proxy": is_cme_proxy, "price": None, "change_pct": None,
             "change_abs": None, "spark": [], "status": "unavailable", "as_of": None,
         }
         if not series.empty:
@@ -125,12 +169,13 @@ def global_board(date: str | None = None, window: str = "1d"):
                         price, base, source = None, None, before
                 else:
                     price = float(series.iloc[-1])
-                    prior = series[series.index <= pd.Timestamp(reference_at)]
-                    base = float(prior.iloc[-1]) if not prior.empty else None
                     source = series
                     last_at = pd.Timestamp(series.index[-1])
                     if last_at.tzinfo is not None:
                         last_at = last_at.tz_convert("UTC").tz_localize(None)
+                    has_window = last_at > pd.Timestamp(reference_at)
+                    prior = series[series.index <= pd.Timestamp(reference_at)] if has_window else pd.Series(dtype=float)
+                    base = float(prior.iloc[-1]) if not prior.empty else None
                     row["status"] = "intraday" if intraday and now - last_at <= _dt.timedelta(minutes=20) else "delayed" if intraday else "end_of_day"
                     row["as_of"] = _iso_timestamp(last_at)
                 row["price"] = round(price, 4) if price is not None else None
@@ -147,6 +192,7 @@ def global_board(date: str | None = None, window: str = "1d"):
         "date": target.isoformat() if target else None,
         "window": "1d" if target else window,
         "refresh_seconds": 60 if intraday and not target else 300,
+        "americas_mode": "cme_futures" if use_cme_futures else "cash_indices",
     }
 
 
@@ -345,7 +391,7 @@ def get_history(ticker: str, start: str | None = None, end: str | None = None, w
         "price": [{"date": _lbl(d), "value": round(float(v), 4)} for d, v in prices.items()],
         "volatility": [{"date": _lbl(d), "value": round(float(v), 4)} for d, v in rolling_vol.dropna().items()],
         "drawdown": [{"date": _lbl(d), "value": round(float(v), 4)} for d, v in drawdown.items()],
-        "meta": {"interval": yf_int, "intraday": intraday, "vol_window": int(win), "window": window, "as_of": _iso_timestamp(prices.index[-1])},
+        "meta": {"interval": yf_int, "intraday": intraday, "vol_window": int(win), "window": window, "as_of": _iso_timestamp(prices.index[-1]), "source": "Yahoo Finance", "data_status": "latest" if intraday else "end_of_day"},
     }
 
 
