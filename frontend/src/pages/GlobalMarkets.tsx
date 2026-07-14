@@ -229,12 +229,12 @@ export default function GlobalMarkets() {
       <div style={{ background: 'var(--theme-surface, #0a1424)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 22%, transparent)', borderRadius: 6, padding: isMobile ? '20px 16px 24px' : '26px 26px 30px' }}>
 
         {/* Header bar */}
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, paddingBottom: 13, marginBottom: 18, borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)' }}>
-          <div>
-            <div style={{ fontFamily: MONO, fontSize: 15, fontWeight: 700, letterSpacing: '0.22em', color: GOLD }}>GLOBAL MARKETS</div>
-            <div style={{ fontFamily: MONO, fontSize: 10, color: 'var(--theme-secondary, #5f7893)', marginTop: 7 }}>Pinned benchmarks · change is measured from the selected interval · displayed in {zone}</div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, whiteSpace: 'nowrap', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 11, paddingBottom: 13, marginBottom: 18, borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+            <div style={{ minWidth: 240 }}>
+              <div style={{ fontFamily: MONO, fontSize: 15, fontWeight: 700, letterSpacing: '0.22em', color: GOLD }}>GLOBAL MARKETS</div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12, whiteSpace: 'nowrap', flexWrap: 'wrap' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-secondary, #56708a)' }}>Session</span>
               <input type="date" value={date} max={today} onChange={e => setDate(e.target.value)} aria-label="Session date"
@@ -252,9 +252,13 @@ export default function GlobalMarkets() {
               {WINDOWS.map(item => <button key={item.key} onClick={() => setWindow(item.key)} aria-pressed={window === item.key}
                 style={{ border: 'none', background: window === item.key ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 16%, transparent)' : 'transparent', color: window === item.key ? GOLD : 'var(--theme-secondary, #8099b0)', cursor: 'pointer', padding: '4px 6px', fontFamily: MONO, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.04em' }}>{item.label}</button>)}
             </span>}
-            <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontFamily: MONO, fontSize: 9.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #56708a)' }}>
-              <span style={{ padding: '3px 5px', border: `1px solid ${date ? 'var(--theme-border, rgba(255,255,255,0.14))' : 'color-mix(in srgb, var(--theme-tertiary, #60a5fa) 45%, transparent)'}`, color: date ? 'var(--theme-secondary, #8099b0)' : 'var(--theme-tertiary, #60a5fa)', background: date ? 'transparent' : 'color-mix(in srgb, var(--theme-tertiary, #60a5fa) 8%, transparent)' }}>{date ? 'SESSION CLOSE' : 'MARKET DATA'}</span>
-              {date ? `Session ${date} · completed session` : asOf ? `${q.data?.americas_mode === 'cme_futures' ? 'CME futures proxies · ' : ''}Yahoo Finance · as of ${asOf} local · refreshes every 60s` : 'Loading'}
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap' }}>
+            <span style={{ fontFamily: MONO, fontSize: 10, color: 'var(--theme-secondary, #5f7893)' }}>Pinned benchmarks · change is measured from the selected interval · displayed in {zone}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0, fontFamily: MONO, fontSize: 9.5, letterSpacing: '0.12em', lineHeight: 1.45, textTransform: 'uppercase', color: 'var(--theme-secondary, #56708a)', textAlign: 'right' }}>
+              <span style={{ flex: '0 0 auto', padding: '3px 5px', border: `1px solid ${date ? 'var(--theme-border, rgba(255,255,255,0.14))' : 'color-mix(in srgb, var(--theme-tertiary, #60a5fa) 45%, transparent)'}`, color: date ? 'var(--theme-secondary, #8099b0)' : 'var(--theme-tertiary, #60a5fa)', background: date ? 'transparent' : 'color-mix(in srgb, var(--theme-tertiary, #60a5fa) 8%, transparent)' }}>{date ? 'SESSION CLOSE' : 'MARKET DATA'}</span>
+              <span>{date ? `Session ${date} · completed session` : asOf ? `${q.data?.americas_mode === 'cme_futures' ? 'CME futures proxies · ' : ''}Yahoo Finance · as of ${asOf} local · refreshes every 60s` : 'Loading'}</span>
             </span>
           </div>
         </div>
