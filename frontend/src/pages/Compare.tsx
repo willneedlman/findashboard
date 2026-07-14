@@ -7,6 +7,7 @@ import {
 } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
+import EmptyState from '../components/EmptyState'
 import useIsMobile from '../hooks/useIsMobile'
 
 
@@ -137,14 +138,14 @@ function CompareTooltip({ active, payload, label, norm, overlaySet, ratioUnits }
 
 export function CompareContent() {
   const isMobile = useIsMobile()
-  const [assets, setAssets]     = useState<string[]>(['SPY', 'QQQ', 'BTC-USD'])
+  const [assets, setAssets]     = useState<string[]>([])
   const [overlays, setOverlays] = useState<string[]>([])
   const [ratios, setRatios]     = useState<Ratio[]>([])
   const [colors, setColors]     = useState<Record<string, string>>({})
   const [period, setPeriod]     = useState<Period>('1y')
   const [norm, setNorm]         = useState<Norm>('indexed')
   const [hidden, setHidden]     = useState<Set<string>>(new Set())
-  const [focus, setFocus]       = useState('SPY')
+  const [focus, setFocus]       = useState('')
   const [tech, setTech]         = useState({ sma50: false, sma200: false, ema20: false, bb: false })
   const [open, setOpen]         = useState({ assets: true, technicals: false, ratios: false, macro: false })
   const [aDraft, setADraft]     = useState('')
@@ -317,6 +318,11 @@ export function CompareContent() {
 
           <div style={{ background: T.surface, border: `1px solid ${T.border}`, padding: '14px 12px 6px', position: 'relative', minHeight: 440 }}>
             {isError && <div style={{ fontFamily: T.mono, fontSize: 12, color: T.neg, padding: 40, textAlign: 'center' }}>Could not load data. Check the symbols and try again.</div>}
+            {!isError && !isFetching && !data && (
+              <EmptyState title="Asset Comparison" hint="Add one or more assets to compare price performance, technicals and valuation overlays."
+                keys={['Enter']} kpis={['Return', 'Relative Return', 'Volatility', 'Period']}
+                preview="chart" previewLabel="Relative Performance" />
+            )}
             {!isError && data && (
               <>
                 {isFetching && <div style={{ position: 'absolute', top: 10, right: 14, fontFamily: T.mono, fontSize: 10, color: T.gold, zIndex: 2 }}>updating…</div>}

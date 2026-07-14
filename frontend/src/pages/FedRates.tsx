@@ -10,6 +10,7 @@ import {
 import PageWrapper from '../components/PageWrapper'
 import { fetchYieldCurve, fetchFedProjections, fetchSepDots, fetchCurveSpreads } from '../hooks/useApi'
 import { TOOLTIP_STYLE, CROSSHAIR_CURSOR } from '../components/ChartTooltip'
+import { formatLocalTime, localTimeZone } from '../lib/time'
 
 // Weight models — how a front-end funds shock decays across meetings / tenors.
 const FED_WEIGHTS = [1.0, 0.9, 0.7, 0.5, 0.3, 0.1]
@@ -51,7 +52,7 @@ function useWidth<E extends HTMLElement>() {
   return [ref, w] as const
 }
 
-const fmtClock = () => new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'America/New_York' }).format(new Date())
+const fmtClock = () => formatLocalTime(new Date(), { second: '2-digit' })
 
 // Isolated so the 1s tick doesn't re-render the charts / dot plot.
 function LiveClock() {
@@ -60,7 +61,7 @@ function LiveClock() {
   return (
     <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
       <span style={{ width: 5, height: 5, borderRadius: '50%', background: T.pos }} />
-      <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted }}>LIVE · {clock} ET</span>
+      <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted }}>LIVE · {clock} {localTimeZone()}</span>
     </span>
   )
 }

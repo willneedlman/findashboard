@@ -126,7 +126,9 @@ export default function PairsTrader() {
         {m.isPending ? <LoadingState label="Testing cointegration and backtesting the spread" />
           : m.error ? <ErrorState message={(m.error as any)?.response?.data?.detail || 'Could not analyze this pair.'} onRetry={run} />
           : m.data ? <Cockpit d={m.data} />
-          : <EmptyState title="Trade the spread, not the direction." hint="Test two names for cointegration, measure the mean-reversion half-life, and backtest a z-score entry. Enter a pair or pick a preset and run." keys={['Cointegration', 'Half-life', 'Z-score backtest']} />}
+          : <EmptyState title="Pairs Trader" hint="Enter a pair or pick a preset to test cointegration, mean reversion and z-score entries."
+            keys={['Cointegration', 'Half-life', 'Z-score backtest']} kpis={['Cointegration', 'Half-life', 'Z-Score', 'Sharpe']}
+            preview="chart" previewLabel="Spread Z-Score" />}
       </SidebarLayout>
     </PageWrapper>
   )

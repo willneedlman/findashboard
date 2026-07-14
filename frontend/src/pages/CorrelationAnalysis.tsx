@@ -6,6 +6,7 @@ import {
   CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
 import { TrendingUp, Plus, BarChart2, LayoutGrid } from 'lucide-react'
+import EmptyState from '../components/EmptyState'
 import {
   C, PERIODS, StatCard, inputStyle, selectStyle, btnStyle,
   RailGroup, RunButton, TickerTags, ToolShell,
@@ -258,9 +259,9 @@ export default function CorrelationAnalysis() {
       )}
 
       {!r && !mutation.isPending && (
-        <div style={{ textAlign: 'center', color: C.muted, padding: '60px 24px', fontSize: 13, border: `1px dashed ${C.border}` }}>
-          Add 2+ assets, then click <span style={{ color: C.gold }}>Run Correlation</span>.
-        </div>
+        <EmptyState title="Correlation" hint="Add two or more assets, then run the correlation analysis."
+          keys={['Enter']} kpis={['Avg |Corr|', 'Strongest Pair', 'Most Negative', 'Observations']}
+          preview="table" previewLabel="Correlation Matrix" columns={['Asset Pair', 'Correlation', 'Beta', 'R²']} />
       )}
     </ToolShell>
   )

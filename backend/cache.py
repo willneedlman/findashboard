@@ -47,6 +47,7 @@ _history_cache: TTLCache = TTLCache(maxsize=200, ttl=300)    # 5 min
 _info_cache:    TTLCache = TTLCache(maxsize=200, ttl=900)     # 15 min
 _news_cache:    TTLCache = TTLCache(maxsize=200, ttl=300)     # 5 min
 _download_cache: TTLCache = TTLCache(maxsize=100, ttl=300)   # 5 min
+_download_live_cache: TTLCache = TTLCache(maxsize=24, ttl=60)
 
 # period -> lookback days, for converting a yfinance period into the explicit
 # from/to range the FMP / AlphaVantage fallbacks require.
@@ -215,11 +216,12 @@ def get_news(ticker: str) -> list:
     return news
 
 
-def get_download(tickers: tuple, start: str, end: str, interval: str = "1d") -> pd.DataFrame:
+def get_download(tickers: tuple, start: str, end: str, interval: str = "1d", cache_ttl: int = 300) -> pd.DataFrame:
+    cache = _download_live_cache if cache_ttl <= 60 else _download_cache
     key = (tickers, start, end, interval)
     with _lock:
-        if key in _download_cache:
-            return _download_cache[key]
+        if key in cache:
+            return cache[key]
 
     def _do():
         df = yf.download(list(tickers), start=start, end=end, interval=interval, auto_adjust=True, progress=False)
@@ -236,5 +238,5 @@ def get_download(tickers: tuple, start: str, end: str, interval: str = "1d") -> 
         df = pd.DataFrame()
     if not df.empty:                      # don't cache transient failures
         with _lock:
-            _download_cache[key] = df
+            cache[key] = df
     return df

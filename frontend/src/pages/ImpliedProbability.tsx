@@ -63,7 +63,7 @@ export function ImpliedProbabilityContent() {
   const cc = useChartColors()
   const [sp] = useSearchParams()
   const urlTicker = (sp.get('ticker') || '').trim().toUpperCase()
-  const [ticker, setTicker] = useState(urlTicker || 'SPY')
+  const [ticker, setTicker] = useState(urlTicker)
   const [paramsOpen, setParamsOpen] = useState(true)
   const [expiry, setExpiry] = useState(defaultExpiry)
 

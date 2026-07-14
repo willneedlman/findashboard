@@ -7,6 +7,7 @@ import {
 } from 'recharts'
 import { Download, Plus, BarChart2 } from 'lucide-react'
 import TickerInput from '../components/TickerInput'
+import EmptyState from '../components/EmptyState'
 import {
   C, PERIODS, StatCard, inputStyle, selectStyle, btnStyle,
   RailGroup, RunButton, TickerTags, ToolShell, ModeToggle, REG_MODES, type RegMode,
@@ -284,9 +285,9 @@ function AssetOLS({ mode, setMode }: { mode: RegMode; setMode: (m: RegMode) => v
       )}
 
       {!r && !mutation.isPending && (
-        <div style={{ textAlign: 'center', color: C.muted, padding: '60px 24px', fontSize: 13, border: `1px dashed ${C.border}` }}>
-          Set a dependent ticker and one or more predictors, then click <span style={{ color: C.gold }}>Run Regression</span>.
-        </div>
+        <EmptyState title="Regression" hint="Set a dependent ticker and one or more predictors, then run the regression."
+          keys={['Enter']} kpis={['R²', 'Adj R²', 'Beta', 'Alpha', 'Observations']}
+          preview="table" previewLabel="Regression Coefficients" columns={['Feature', 'Coefficient', 't-stat', 'p-value']} />
       )}
     </ToolShell>
   )

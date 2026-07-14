@@ -93,7 +93,9 @@ export default function FactorDecomposition() {
         {m.isPending ? <LoadingState label="Regressing the book on its factors" />
           : m.error ? <ErrorState message={(m.error as any)?.response?.data?.detail || 'Could not decompose the book.'} onRetry={() => m.mutate()} />
           : m.data ? <Results d={m.data} />
-          : <EmptyState title="What is your book actually exposed to?" hint="Regress your portfolio's daily returns on market, rates, credit, oil, and dollar factors, watch each beta drift, and drill any holding. Load a saved book or enter weights." keys={['Market', 'Rates', 'Credit', 'Oil', 'Dollar']} />}
+          : <EmptyState title="Factor Decomposition" hint="Load a saved book or enter weights to measure factor exposure and beta drift."
+            keys={['Market', 'Rates', 'Credit', 'Oil', 'Dollar']} kpis={['Market', 'Rates', 'Credit', 'Oil', 'Dollar']}
+            preview="chart" previewLabel="Factor Exposure" />}
       </SidebarLayout>
     </PageWrapper>
   )

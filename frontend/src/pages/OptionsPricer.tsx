@@ -3,6 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts'
 import { X } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
+import EmptyState from '../components/EmptyState'
 import { KpiCell } from '../components/mmCockpit'
 import SidebarLayout from '../components/SidebarLayout'
 import TickerInput from '../components/TickerInput'
@@ -268,10 +269,6 @@ export function OptionsPricerContent() {
   })
 
   const runAll = (p: Params) => { calcPrice(p); calcPayoff(p); calcSurface(p) }
-  useEffect(() => { runAll(params) }, [])
-
-  // Price the strategy the first time the user opens multi-leg mode.
-  useEffect(() => { if (mode === 'multi' && !multiData) runMulti() }, [mode])
 
   // Apply the term-matched rate whenever it changes, unless the user has pinned
   // the rate by editing it themselves. Skip when it already matches to avoid a
@@ -282,7 +279,7 @@ export function OptionsPricerContent() {
     if (rate == null || rUserEdited.current) return
     const rPct = Math.round(rate * 1000) / 10
     if (rPct === params.r) return
-    setParams(p => { const next = { ...p, r: rPct }; runAll(next); return next })
+    setParams(p => ({ ...p, r: rPct }))
   }, [rfQuery.data])
 
   const recalc = () => runAll(params)
@@ -460,7 +457,13 @@ export function OptionsPricerContent() {
           </div>
         </>}>
 
-          {mode === 'single' && (<>
+          {mode === 'single' && !priceData && !pricePending && (
+            <EmptyState title="Options Pricer" hint="Set your contract assumptions or load a listed option, then calculate its premium and Greeks."
+              kpis={['Premium', 'Delta', 'Gamma', 'Theta', 'Vega']}
+              preview="chart" previewLabel="Greeks by Spot" />
+          )}
+
+          {mode === 'single' && priceData && (<>
           {/* Premium + Greeks */}
           {priceData && (<>
             <div style={STRIP}>
@@ -535,6 +538,12 @@ export function OptionsPricerContent() {
 
           {mode === 'multi' && multiData && (
             <MultiResults data={multiData} view={view} setView={setView} />
+          )}
+
+          {mode === 'multi' && !multiData && !multiPending && (
+            <EmptyState title="Multi-Leg Options Pricer" hint="Set the strategy legs, then calculate the combined premium, Greeks and payoff."
+              kpis={['Net Premium', 'Delta', 'Gamma', 'Theta', 'Vega']}
+              preview="chart" previewLabel="Strategy Payoff" />
           )}
 
         </SidebarLayout>

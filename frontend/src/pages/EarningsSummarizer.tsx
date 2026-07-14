@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
+import EmptyState from '../components/EmptyState'
 import TickerTagInput from '../components/TickerTagInput'
 import useIsMobile from '../hooks/useIsMobile'
 import { useAnalysis } from '../context/AnalysisContext'
@@ -457,9 +458,9 @@ export default function EarningsSummarizer() {
           )}
 
           {!inProgress && streamedResults.length === 0 && !error && (
-            <div style={{ textAlign: 'center', padding: '64px 24px', fontFamily: C.sans, fontSize: 12, color: C.dim, border: `1px dashed ${C.border}` }}>
-              Add tickers in the panel, then press Analyze to generate AI-powered earnings notes.
-            </div>
+            <EmptyState title="Earnings Notes" hint="Add tickers, then analyze their latest filings and earnings commentary."
+              kpis={['Filing', 'Key Metric', 'Guidance', 'Tone']}
+              preview="table" previewLabel="Earnings Notes" columns={['Ticker', 'Filing', 'Key Read', 'Tone']} />
           )}
         </div>
       </div>

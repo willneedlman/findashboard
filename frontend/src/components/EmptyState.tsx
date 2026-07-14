@@ -19,7 +19,7 @@ export interface EmptyStateProps {
   kpis?: string[]                       // ghost KPI-strip labels (enables the cockpit)
   preview?: 'chart' | 'table'           // ghost output preview (enables the cockpit)
   columns?: string[]                    // table header labels when preview='table'
-  previewLabel?: string                 // corner label on the preview panel
+  previewLabel?: string
 }
 
 function KeyBadge({ children }: { children: React.ReactNode }) {
@@ -66,25 +66,10 @@ function GhostKpis({ labels }: { labels: string[] }) {
   )
 }
 
-function PanelLabel({ label }: { label: string }) {
+function GhostChart({ title, hint, keys }: { title: string; hint: string; keys?: string[] }) {
   return (
-    <div className="ft-empty-cockpit" style={{
-      position: 'absolute', top: 0, left: 0, background: 'var(--theme-surface, #0d1826)', padding: '4px 10px',
-      fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: TXT,
-      borderRight: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}`,
-    }}>{label}</div>
-  )
-}
-
-const PreviewTag = () => (
-  <div style={{ position: 'absolute', top: 6, right: 12, fontFamily: MONO, fontSize: 9, letterSpacing: '0.06em', color: SEC }}>output preview</div>
-)
-
-function GhostChart({ title, hint, keys, label }: { title: string; hint: string; keys?: string[]; label: string }) {
-  return (
-    <div style={{ position: 'relative', flex: 1, minHeight: 220, border: `1px solid ${BORDER}`, padding: '30px 16px 12px', boxSizing: 'border-box', overflow: 'hidden' }}>
-      <PanelLabel label={label} /><PreviewTag />
-      <svg viewBox="0 0 1000 330" preserveAspectRatio="none" style={{ display: 'block', position: 'absolute', top: 30, right: 16, bottom: 12, left: 16, width: 'auto', height: 'auto' }}>
+    <div style={{ position: 'relative', flex: 1, minHeight: 220, border: `1px solid ${BORDER}`, padding: '16px', boxSizing: 'border-box', overflow: 'hidden' }}>
+      <svg viewBox="0 0 1000 330" preserveAspectRatio="none" style={{ display: 'block', position: 'absolute', inset: 16, width: 'auto', height: 'auto' }}>
         {[66, 132, 198, 264].map(y => <line key={y} x1="0" y1={y} x2="1000" y2={y} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />)}
         <path d="M30 40 C 340 62 620 150 975 296" fill="none" stroke="color-mix(in srgb, var(--theme-text, #d7e3fc) 16%, transparent)" strokeWidth="2" strokeDasharray="7 7" vectorEffect="non-scaling-stroke" />
       </svg>
@@ -93,10 +78,9 @@ function GhostChart({ title, hint, keys, label }: { title: string; hint: string;
   )
 }
 
-function GhostTable({ title, hint, keys, label, columns }: { title: string; hint: string; keys?: string[]; label: string; columns: string[] }) {
+function GhostTable({ title, hint, keys, columns }: { title: string; hint: string; keys?: string[]; columns: string[] }) {
   return (
-    <div style={{ position: 'relative', flex: 1, minHeight: 220, border: `1px solid ${BORDER}`, padding: '30px 0 0', boxSizing: 'border-box', overflow: 'hidden' }}>
-      <PanelLabel label={label} /><PreviewTag />
+    <div style={{ position: 'relative', flex: 1, minHeight: 220, border: `1px solid ${BORDER}`, padding: '12px 0 0', boxSizing: 'border-box', overflow: 'hidden' }}>
       <div style={{ display: 'flex', padding: '0 16px 8px', borderBottom: `1px solid ${BORDER}` }}>
         {columns.map((c, i) => (
           <div key={i} style={{ flex: 1, fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: SEC, textAlign: i === 0 ? 'left' : 'right' }}>{c}</div>
@@ -111,14 +95,14 @@ function GhostTable({ title, hint, keys, label, columns }: { title: string; hint
           ))}
         </div>
       ))}
-      <div style={{ position: 'absolute', inset: '30px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ position: 'absolute', inset: '12px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Message title={title} hint={hint} keys={keys} />
       </div>
     </div>
   )
 }
 
-export default function EmptyState({ title, hint, keys, kpis, preview, columns, previewLabel }: EmptyStateProps) {
+export default function EmptyState({ title, hint, keys, kpis, preview, columns }: EmptyStateProps) {
   const cockpit = !!(kpis?.length || preview)
   if (!cockpit) {
     // Clean centered message — no caret, no fake ghost when the tool gives no config.
@@ -138,8 +122,8 @@ export default function EmptyState({ title, hint, keys, kpis, preview, columns, 
     }}>
       {kpis?.length ? <GhostKpis labels={kpis} /> : null}
       {preview === 'table'
-        ? <GhostTable title={title} hint={hint} keys={keys} label={previewLabel ?? 'Output'} columns={columns ?? ['', '', '', '']} />
-        : <GhostChart title={title} hint={hint} keys={keys} label={previewLabel ?? 'Output'} />}
+        ? <GhostTable title={title} hint={hint} keys={keys} columns={columns ?? ['', '', '', '']} />
+        : <GhostChart title={title} hint={hint} keys={keys} />}
     </div>
   )
 }

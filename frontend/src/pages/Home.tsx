@@ -14,6 +14,7 @@ import { HUBS, ALL_TOOLS } from '../lib/hubs'
 import { getRecents } from '../lib/recents'
 import { wordMatch, tickerFromQuery } from '../lib/search'
 import { getRecentTickers, recordRecentTicker } from '../lib/recentTickers'
+import { formatLocalTime, localTimeZone } from '../lib/time'
 
 const F = {
   gold: 'var(--theme-primary, #c9a84c)',
@@ -89,21 +90,21 @@ function Tape({ segments, source, onSource }: { segments: { sym: string; price: 
   const Seg = ({ s, k }: { s: typeof segments[number]; k: string }) => {
     const color = s.pct == null ? F.muted : s.pct >= 0 ? F.pos : F.neg
     return (
-      <span key={k} style={{ display: 'inline-flex', alignItems: 'baseline', gap: 7, flexShrink: 0 }}>
+      <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, flexShrink: 0, lineHeight: 1 }}>
         <span style={{ color: F.muted, letterSpacing: '0.04em' }}>{s.sym}</span>
         <span style={{ color }}>{s.price}{s.pct != null && ` ${s.pct >= 0 ? '+' : ''}${s.pct.toFixed(2)}%`}</span>
       </span>
     )
   }
   const Run = ({ p }: { p: string }) => (
-    <div style={{ display: 'inline-flex', gap: 26, paddingRight: 26 }}>
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 24, padding: '0 24px 0 14px' }}>
       {segments.map((s, i) => <Seg key={`${p}-${i}`} s={s} k={`${p}-${i}`} />)}
     </div>
   )
   return (
-    <div style={{ borderBottom: `1px solid ${F.borderFaint}`, background: F.topbar, height: 30, display: 'flex', alignItems: 'center' }}>
+    <div style={{ borderBottom: `1px solid ${F.borderFaint}`, background: F.topbar, height: 26, display: 'flex', alignItems: 'center' }}>
       <style>{`@keyframes home-tape{from{transform:translate3d(0,0,0)}to{transform:translate3d(-50%,0,0)}}`}</style>
-      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', height: '100%' }}>
+      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', height: '100%', maskImage: 'linear-gradient(90deg, transparent, #000 12px, #000 calc(100% - 12px), transparent)', WebkitMaskImage: 'linear-gradient(90deg, transparent, #000 12px, #000 calc(100% - 12px), transparent)' }}>
         {segments.length === 0 ? (
           <span style={{ paddingLeft: 14, fontFamily: F.mono, fontSize: 11, color: F.muted }}>—</span>
         ) : prefersReducedMotion ? (
@@ -114,7 +115,7 @@ function Tape({ segments, source, onSource }: { segments: { sym: string; price: 
           <div
             onMouseEnter={e => (e.currentTarget.style.animationPlayState = 'paused')}
             onMouseLeave={e => (e.currentTarget.style.animationPlayState = 'running')}
-            style={{ display: 'inline-flex', whiteSpace: 'nowrap', willChange: 'transform', backfaceVisibility: 'hidden', background: F.topbar, animation: 'home-tape 46s linear infinite', fontFamily: F.mono, fontSize: 11, fontVariantNumeric: 'tabular-nums', paddingLeft: 14 }}
+            style={{ display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap', willChange: 'transform', backfaceVisibility: 'hidden', background: F.topbar, animation: 'home-tape 46s linear infinite', fontFamily: F.mono, fontSize: 10, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}
           >
             <Run p="a" /><Run p="b" />
           </div>
@@ -660,7 +661,7 @@ export default function Home() {
   const recentTickers = useMemo(() => getRecentTickers(), [])
 
   const overviewCols = isMobile ? '1fr' : '0.82fr 0.98fr 1.12fr'
-  const utcStamp = new Date().toLocaleTimeString('en-GB', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit' })
+  const localStamp = formatLocalTime(new Date())
 
   // Holdings rows for Overview column 1 (dollar value + day change), largest first.
   const holdingRows = useMemo(
@@ -756,7 +757,7 @@ export default function Home() {
           ) : (
             <>
               {/* ── Overview: 3-column divided region ── */}
-              <SectionLabel icon={LayoutGrid} label="Overview" note={`as of ${utcStamp} UTC`} />
+              <SectionLabel icon={LayoutGrid} label="Overview" note={`as of ${localStamp} ${localTimeZone()}`} />
               <div style={{ display: 'grid', gridTemplateColumns: overviewCols }}>
                 {/* Column 1 — Portfolio + Holdings */}
                 <div style={{ padding: isMobile ? '20px 0' : '4px 34px 4px 0' }}>

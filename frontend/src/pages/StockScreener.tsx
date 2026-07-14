@@ -164,7 +164,6 @@ export default function StockScreener() {
   const [localSort, setLocalSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: DEFAULT_PRESET.sortBy, dir: DEFAULT_PRESET.sortDir })
   const [textFilter, setTextFilter] = useState('')
   const [activeScreenId, setActiveScreenId] = useState<string>(DEFAULT_PRESET.id)
-  const [runNonce, setRunNonce] = useState(0)   // bumped to (re-)run a screen, even the active one
   const [railCollapsed, setRailCollapsed] = useState(() => localStorage.getItem('screenerRailCollapsed') === '1')
   const [editingFilterId, setEditingFilterId] = useState<number | null>(null)
   const [density, setDensity] = useState<'roomy' | 'compact'>('roomy')
@@ -188,7 +187,7 @@ export default function StockScreener() {
   ]
   const universeGroups = [...new Set(universes.map(u => u.group))]
 
-  const { mutate, data, isPending, error } = useMutation({
+  const { mutate, data, isPending, error, reset } = useMutation({
     mutationFn: () => axios.post('/api/screener/run', {
       filters: filters.filter(f => f.value !== '').map(f => ({
         field: f.field, operator: f.operator,
@@ -202,9 +201,7 @@ export default function StockScreener() {
     }).then(r => r.data),
   })
 
-  // Run on mount and whenever a screen is (re-)selected — the nonce bumps even when
-  // the same preset is re-clicked, so a reset re-runs instead of showing stale rows.
-  useEffect(() => { mutate() }, [runNonce]) // eslint-disable-line react-hooks/exhaustive-deps
+  const runScreen = () => mutate()
 
   useEffect(() => { if (data) { setLocalSort({ key: sortBy, dir: sortDir }); setTextFilter('') } }, [data]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -215,7 +212,7 @@ export default function StockScreener() {
     setSortBy(p.sortBy); setSortDir(p.sortDir); setSortParam(p.sortParam ?? '1M')
     setEditingFilterId(null)
     setActiveScreenId(p.id)
-    setRunNonce(n => n + 1)   // run, even if this preset was already active
+    reset()
   }
 
   // "+ New Screen": start a blank custom screen with one filter ready to edit.
@@ -226,7 +223,7 @@ export default function StockScreener() {
     setSortBy('marketCap'); setSortDir('desc')
     setActiveScreenId('custom-' + id)
     setEditingFilterId(id)
-    setRunNonce(n => n + 1)
+    reset()
   }
 
   const addFilter = () => {
@@ -440,7 +437,7 @@ export default function StockScreener() {
                 <select value={exchange} onChange={e => setExchange(e.target.value)} style={scopeSelect} title="Exchange">
                   <option value="">All Exchanges</option>{exchanges.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
-                <button onClick={() => mutate()} disabled={isPending}
+                <button onClick={runScreen} disabled={isPending}
                   style={{ marginLeft: 'auto', fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.gold, background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 12%, transparent)', border: `1px solid ${C.gold}`, padding: '7px 16px', cursor: isPending ? 'default' : 'pointer', opacity: isPending ? 0.6 : 1 }}>
                   {isPending ? 'Screening…' : 'Run'}
                 </button>
@@ -471,11 +468,11 @@ export default function StockScreener() {
                     {OPERATORS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                   <input type="number" value={editingFilter.value} placeholder="Value" autoFocus style={{ ...INPUT, width: 90, flex: 'none' }}
-                    onChange={e => patchFilter(editingFilter.id, { value: e.target.value })} onKeyDown={e => { if (e.key === 'Enter') { setEditingFilterId(null); mutate() } }} />
+                    onChange={e => patchFilter(editingFilter.id, { value: e.target.value })} onKeyDown={e => { if (e.key === 'Enter') { setEditingFilterId(null); runScreen() } }} />
                   {editingFilter.operator === 'between' && (
                     <input type="number" value={editingFilter.value2} placeholder="To" style={{ ...INPUT, width: 90, flex: 'none' }} onChange={e => patchFilter(editingFilter.id, { value2: e.target.value })} />
                   )}
-                  <button onClick={() => { setEditingFilterId(null); mutate() }}
+                  <button onClick={() => { setEditingFilterId(null); runScreen() }}
                     style={{ flex: 'none', background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)', border: `1px solid ${C.gold}`, color: C.gold, fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '6px 14px', cursor: 'pointer' }}>
                     Apply
                   </button>
@@ -489,13 +486,15 @@ export default function StockScreener() {
                 <ErrorState
                   title="Screen failed"
                   message={(error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Screen failed. Check FMP_API_KEY is configured.'}
-                  onRetry={() => mutate()}
+                  onRetry={runScreen}
                 />
               </div>
             ) : !data && isPending ? (
               <div style={{ padding: 24 }}><LoadingState label="Screening" /></div>
             ) : !data ? (
-              <div style={{ padding: 24 }}><EmptyState title="Stock Screener" hint="Pick a screen from the library or set filters, then Run." /></div>
+              <div style={{ padding: 24 }}><EmptyState title="Stock Screener" hint="Pick a screen from the library or set filters, then run the screen."
+                kpis={['Matches', 'Avg P/E', 'Median Growth', 'Avg Margin', 'Market Cap']}
+                preview="table" previewLabel="Screen Results" columns={['Company', 'Sector', 'P/E', 'Growth']} /></div>
             ) : (
               <>
                 {/* summary stats band */}

@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import datetime as _dt
 from fastapi import APIRouter, HTTPException
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -47,19 +48,37 @@ GLOBAL_MARKETS_BOARD: list[tuple[str, str, str]] = [
     ("Crypto", "Solana", "SOL-USD"),
 ]
 _GLOBAL_SECTIONS = ["Americas", "Europe", "Asia-Pacific", "FX", "Commodities", "US Yields", "Crypto"]
+_GLOBAL_WINDOWS = {"10m", "30m", "1h", "1d", "1w", "1m", "ytd"}
+
+
+def _global_window(window: str, now):
+    if window == "10m": return now - _dt.timedelta(minutes=10), "1m", True
+    if window == "30m": return now - _dt.timedelta(minutes=30), "1m", True
+    if window == "1h":  return now - _dt.timedelta(hours=1), "1m", True
+    if window == "1d":  return now - _dt.timedelta(days=1), "5m", True
+    if window == "1w":  return now - _dt.timedelta(days=7), "1d", False
+    if window == "1m":  return now - _dt.timedelta(days=31), "1d", False
+    return _dt.datetime(now.year, 1, 1), "1d", False
+
+
+def _iso_timestamp(value) -> str | None:
+    if value is None:
+        return None
+    stamp = pd.Timestamp(value)
+    if stamp.tzinfo is None:
+        stamp = stamp.tz_localize("UTC")
+    return stamp.isoformat()
 
 
 @router.get("/global-board")
-@cached(ttl=300)
-def global_board(date: str | None = None):
-    """Global Markets tool: indices, FX, commodities, yields, crypto with a
-    10-session sparkline each. One batched download, no per-symbol calls.
+@cached(ttl=60)
+def global_board(date: str | None = None, window: str = "1d"):
+    """Global Markets board with a consistent performance window.
 
-    With ?date=YYYY-MM-DD, each row shows that session's close and change.
-    Markets with no print on that date (closed, or not yet settled) keep their
-    row but return null price/change so the UI shows a dash: pick today before
-    the US close and US indices dash while Asia and crypto have values."""
-    import datetime as _dt
+    The current board uses the freshest intraday bars available for 10m through
+    1d. Longer windows use daily closes. A dated session always remains an
+    end-of-day snapshot so it cannot be mistaken for live data.
+    """
     target = None
     if date:
         try:
@@ -68,81 +87,66 @@ def global_board(date: str | None = None):
             raise HTTPException(400, "date must be YYYY-MM-DD")
         if target > _dt.date.today():
             raise HTTPException(400, "date cannot be in the future")
-    anchor = target or _dt.date.today()
-    end = (anchor + _dt.timedelta(days=1)).isoformat()
-    start = (anchor - _dt.timedelta(days=20)).isoformat()
+    if window not in _GLOBAL_WINDOWS:
+        raise HTTPException(400, "unsupported performance window")
+
+    now = _dt.datetime.now(_dt.timezone.utc).replace(tzinfo=None)
     syms = tuple(s for _, _, s in GLOBAL_MARKETS_BOARD)
-    df = get_download(syms, start, end, "1d")
+    if target:
+        start = (target - _dt.timedelta(days=20)).isoformat()
+        end = (target + _dt.timedelta(days=1)).isoformat()
+        df = get_download(syms, start, end, "1d")
+        reference_at, interval, intraday = None, "1d", False
+    else:
+        reference_at, interval, intraday = _global_window(window, now)
+        fetch_start = (reference_at.date() - _dt.timedelta(days=1)).isoformat() if intraday else reference_at.date().isoformat()
+        fetch_end = (now.date() + _dt.timedelta(days=1)).isoformat()
+        df = get_download(syms, fetch_start, fetch_end, interval, cache_ttl=60 if intraday else 300)
+
     closes = df.get("Close") if not df.empty else None
     sections: dict[str, list] = {s: [] for s in _GLOBAL_SECTIONS}
-    # Yahoo's daily-bar feed lags for non-US indices (Asia's completed session
-    # can be missing for hours). For today's session, rows with no daily bar
-    # get patched from one batched intraday download instead of dashing.
-    pending: list[tuple[dict, pd.Series, str]] = []
     for section, label, sym in GLOBAL_MARKETS_BOARD:
-        try:
-            s = closes[sym].dropna() if closes is not None and sym in closes else None
-            if s is None or s.empty:
-                continue
-            if target is not None:
-                on_day = s[[d == target for d in s.index.date]]
-                before = s[[d < target for d in s.index.date]]
-                if on_day.empty:
-                    row = {
-                        "label": label, "symbol": sym, "price": None,
-                        "change_pct": None, "change_abs": None,
-                        "spark": [round(float(v), 4) for v in before.tail(10)],
-                    }
-                    sections[section].append(row)
-                    if target == _dt.date.today():
-                        pending.append((row, before, sym))
-                    continue
-                price = float(on_day.iloc[-1])
-                prev = float(before.iloc[-1]) if not before.empty else None
-                spark_src = s[[d <= target for d in s.index.date]]
-            else:
-                price = float(s.iloc[-1])
-                prev = float(s.iloc[-2]) if len(s) >= 2 else None
-                spark_src = s
-            pct = round((price / prev - 1) * 100, 2) if prev else None
-            chg = round(price - prev, 4) if prev is not None else None
-            sections[section].append({
-                "label": label, "symbol": sym, "price": round(price, 4),
-                "change_pct": pct, "change_abs": chg,
-                "spark": [round(float(v), 4) for v in spark_src.tail(10)],
-            })
-        except Exception:
-            continue
-    if pending:
-        try:
-            intr = get_download(
-                tuple(sym for _, _, sym in pending),
-                (anchor - _dt.timedelta(days=1)).isoformat(), end, "60m",
-            )
-            icloses = intr.get("Close") if not intr.empty else None
-            for row, before, sym in pending:
-                if icloses is None:
-                    break
-                bars = icloses[sym] if sym in icloses else (
-                    icloses if len(pending) == 1 else None)
-                if bars is None:
-                    continue
-                bars = bars.dropna()
-                bars = bars[[d.date() == target for d in bars.index]]
-                if bars.empty:
-                    continue
-                price = float(bars.iloc[-1])
-                prev = float(before.iloc[-1]) if not before.empty else None
-                row["price"] = round(price, 4)
-                row["change_pct"] = round((price / prev - 1) * 100, 2) if prev else None
-                row["change_abs"] = round(price - prev, 4) if prev is not None else None
-                row["spark"] = [round(float(v), 4) for v in before.tail(9)] + [round(price, 4)]
-        except Exception:
-            pass
+        series = closes[sym].dropna() if closes is not None and sym in closes else pd.Series(dtype=float)
+        row = {
+            "label": label, "symbol": sym, "price": None, "change_pct": None,
+            "change_abs": None, "spark": [], "status": "unavailable", "as_of": None,
+        }
+        if not series.empty:
+            try:
+                if target:
+                    on_day = series[[d.date() == target for d in series.index]]
+                    before = series[[d.date() < target for d in series.index]]
+                    if not on_day.empty:
+                        price, base = float(on_day.iloc[-1]), float(before.iloc[-1]) if not before.empty else None
+                        source = series[[d.date() <= target for d in series.index]]
+                        row["status"] = "end_of_day"
+                        row["as_of"] = _iso_timestamp(on_day.index[-1])
+                    else:
+                        price, base, source = None, None, before
+                else:
+                    price = float(series.iloc[-1])
+                    prior = series[series.index <= pd.Timestamp(reference_at)]
+                    base = float(prior.iloc[-1]) if not prior.empty else None
+                    source = series
+                    last_at = pd.Timestamp(series.index[-1])
+                    if last_at.tzinfo is not None:
+                        last_at = last_at.tz_convert("UTC").tz_localize(None)
+                    row["status"] = "intraday" if intraday and now - last_at <= _dt.timedelta(minutes=20) else "delayed" if intraday else "end_of_day"
+                    row["as_of"] = _iso_timestamp(last_at)
+                row["price"] = round(price, 4) if price is not None else None
+                row["change_abs"] = round(price - base, 4) if price is not None and base is not None else None
+                row["change_pct"] = round((price / base - 1) * 100, 2) if price is not None and base else None
+                row["spark"] = [round(float(v), 4) for v in source.tail(10)]
+            except Exception:
+                pass
+        sections[section].append(row)
+
     return {
-        "sections": [{"name": n, "rows": sections[n]} for n in _GLOBAL_SECTIONS if sections[n]],
-        "as_of": pd.Timestamp.utcnow().isoformat(),
+        "sections": [{"name": n, "rows": sections[n]} for n in _GLOBAL_SECTIONS],
+        "as_of": _dt.datetime.now(_dt.timezone.utc).isoformat(),
         "date": target.isoformat() if target else None,
+        "window": "1d" if target else window,
+        "refresh_seconds": 60 if intraday and not target else 300,
     }
 
 
@@ -227,6 +231,13 @@ def _get_history(ticker: str) -> pd.DataFrame:
 # for annualising vol, bars-per-trading-day, is_intraday). yfinance intraday caps:
 # 5m ~60d, 30m ~60d, 60m ~730d — every branch stays inside its cap.
 _TRADING_DAYS = 252
+_INTRADAY_HISTORY_WINDOWS = {
+    "10m": 10,
+    "30m": 30,
+    "1h": 60,
+}
+
+
 def _history_resolution(span_days: "int | None"):
     if span_days is None or span_days > 90:
         return ("1d", _TRADING_DAYS, 1, False)
@@ -238,9 +249,12 @@ def _history_resolution(span_days: "int | None"):
 
 
 @router.get("/history")
-def get_history(ticker: str, start: str | None = None, end: str | None = None):
-    import datetime as _dt
+def get_history(ticker: str, start: str | None = None, end: str | None = None, window: str | None = None):
     ticker = validate_ticker(ticker)
+    if window and (start or end):
+        raise HTTPException(400, "window cannot be combined with start or end")
+    if window and window not in _INTRADAY_HISTORY_WINDOWS:
+        raise HTTPException(400, "unsupported intraday window")
     if start: validate_date(start)
     if end:   validate_date(end)
 
@@ -253,7 +267,22 @@ def get_history(ticker: str, start: str | None = None, end: str | None = None):
     yf_int, bars_per_year, bars_per_day, intraday = _history_resolution(span_days)
 
     df = None
-    if intraday and start and end:
+    if window:
+        end_at = _dt.datetime.now(_dt.timezone.utc)
+        start_at = end_at - _dt.timedelta(minutes=_INTRADAY_HISTORY_WINDOWS[window])
+        yf_int, bars_per_year, bars_per_day, intraday = "1m", 390 * _TRADING_DAYS, 390, True
+        import yfinance as yf
+        try:
+            raw = yf.Ticker(ticker).history(start=start_at, end=end_at + _dt.timedelta(minutes=1), interval=yf_int, auto_adjust=True)
+            if not raw.empty:
+                df = raw.rename(columns={"Close": "close"})[["close"]].dropna()
+                if df.index.tz is not None:
+                    df.index = df.index.tz_convert("UTC")
+        except Exception:
+            df = None
+        if df is None or df.empty:
+            raise HTTPException(404, "No intraday data in requested window")
+    elif intraday and start and end:
         end_excl = (_dt.date.fromisoformat(end) + _dt.timedelta(days=1)).isoformat()
         # Alpaca first for equities (real per-minute intraday, deeper than yfinance).
         if alpaca.available() and alpaca.is_equity(ticker):
@@ -316,7 +345,7 @@ def get_history(ticker: str, start: str | None = None, end: str | None = None):
         "price": [{"date": _lbl(d), "value": round(float(v), 4)} for d, v in prices.items()],
         "volatility": [{"date": _lbl(d), "value": round(float(v), 4)} for d, v in rolling_vol.dropna().items()],
         "drawdown": [{"date": _lbl(d), "value": round(float(v), 4)} for d, v in drawdown.items()],
-        "meta": {"interval": yf_int, "intraday": intraday, "vol_window": int(win)},
+        "meta": {"interval": yf_int, "intraday": intraday, "vol_window": int(win), "window": window, "as_of": _iso_timestamp(prices.index[-1])},
     }
 
 

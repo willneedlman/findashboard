@@ -64,7 +64,7 @@ export default function Layout({ children }: LayoutProps) {
         : a.condition.startsWith('strategy')
         ? `${a.condition === 'strategy_entry' ? 'Entry' : 'Exit'} signal fired${a.fired_tickers?.length ? ` → ${a.fired_tickers.join(', ')}` : ''}`
         : `${a.condition.replace(/_/g, ' ')} ${a.threshold}${a.current_price > 0 ? ` → $${a.current_price.toFixed(2)}` : ''}`
-      new Notification(`Alert: ${a.ticker}`, { body, icon: '/favicon.svg' })
+      new Notification(`Alert: ${a.ticker}`, { body, icon: '/favicon.svg?v=12' })
     }
   }, [])
   useAlertSocket(user?.id ?? null, onAlert)
@@ -82,7 +82,7 @@ export default function Layout({ children }: LayoutProps) {
         <a href="#main-content" className="skip-link">Skip to content</a>
         <div className="ft-mobile-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, background: 'var(--theme-bg, #060e1c)', borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)', position: 'sticky', top: 0, zIndex: 40 }}>
           <Link to="/app" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <AlphaMark size={22} color="var(--theme-primary, #c9a84c)" />
+            <AlphaMark size={24} />
             <div className="ft-mobile-brand" style={{ fontFamily: 'Cinzel, Georgia, serif', color: 'var(--theme-primary, #c9a84c)', fontSize: 15, fontWeight: 700, letterSpacing: '0.08em' }}>
               ALPHATAPE <span className="ft-mobile-brand-suffix" style={{ color: 'var(--theme-secondary, #5e768f)', fontSize: 10, letterSpacing: '0.2em', fontFamily: 'var(--theme-sans)', fontWeight: 600 }}>TERMINAL</span>
             </div>
@@ -160,18 +160,18 @@ export default function Layout({ children }: LayoutProps) {
       <a href="#main-content" className="skip-link">Skip to content</a>
       <AlertToastQueue alerts={pendingAlerts} />
       <motion.aside
-        animate={{ width: collapsed ? 64 : 204 }}
+        animate={{ width: collapsed ? 64 : 220 }}
         transition={{ duration: 0.22, ease: 'easeInOut' }}
         className="flex-shrink-0 flex flex-col overflow-hidden"
         style={{ minWidth: 0, background: 'var(--theme-bg, #060e1c)', borderRightWidth: 1, borderRightStyle: 'solid', borderRightColor: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 19%, transparent)' }}
       >
         {/* brand (→ home) + collapse chevron */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: collapsed ? 2 : 10, justifyContent: 'flex-start', padding: collapsed ? '0 4px 0 14px' : '0 14px', minHeight: 70, borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 12%, transparent)' }}>
-          <button onClick={() => navigate('/app')} aria-label="Home" title="Home" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
-            <AlphaMark size={30} color="var(--theme-primary, #c9a84c)" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: collapsed ? 2 : 11, justifyContent: 'flex-start', padding: collapsed ? '0 4px 0 13px' : '0 14px', minHeight: 76, borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 16%, transparent)' }}>
+          <button onClick={() => navigate('/app')} aria-label="Home" title="Home" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 2 }}>
+            <AlphaMark size={36} />
             {!collapsed && (
-              <span style={{ display: 'block', paddingLeft: 10, borderLeft: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 34%, transparent)', textAlign: 'left' }}>
-                <span style={{ fontFamily: 'Cinzel, Georgia, serif', fontSize: 15, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--theme-primary, #c9a84c)', display: 'block', lineHeight: 1.05 }}>ALPHATAPE</span>
+              <span style={{ display: 'block', paddingLeft: 6, borderLeft: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 42%, transparent)', textAlign: 'left' }}>
+                <span style={{ fontFamily: 'Cinzel, Georgia, serif', fontSize: 16, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--theme-primary, #c9a84c)', display: 'block', lineHeight: 1.05 }}>ALPHATAPE</span>
                 <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', display: 'block' }}>Terminal</span>
               </span>
             )}

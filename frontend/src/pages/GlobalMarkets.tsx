@@ -5,6 +5,7 @@ import PageWrapper from '../components/PageWrapper'
 import AssetChartModal from '../components/AssetChartModal'
 import { BoardSkeleton } from '../components/Skeleton'
 import useIsMobile from '../hooks/useIsMobile'
+import { formatLocalTime, localDateInputValue, localTimeZone } from '../lib/time'
 
 // Global Markets board (hifi handoff "2a"): a pinnable Spotlight of benchmark
 // cards over flat editorial tables — indices by region, FX, commodities, US
@@ -16,8 +17,13 @@ const GOLD = 'var(--theme-primary, #c9a84c)'
 const POS = 'var(--theme-positive, #3fb6a0)'
 const NEG = 'var(--theme-negative, #cf4b3f)'
 
-interface Row { label: string; symbol: string; price: number | null; change_pct: number | null; change_abs: number | null; spark: number[] }
-interface Board { sections: { name: string; rows: Row[] }[]; as_of: string; date: string | null }
+interface Row { label: string; symbol: string; price: number | null; change_pct: number | null; change_abs: number | null; spark: number[]; status: 'intraday' | 'delayed' | 'end_of_day' | 'unavailable'; as_of: string | null }
+interface Board { sections: { name: string; rows: Row[] }[]; as_of: string; date: string | null; window: MarketWindow; refresh_seconds: number }
+type MarketWindow = '10m' | '30m' | '1h' | '1d' | '1w' | '1m' | 'ytd'
+const WINDOWS: { key: MarketWindow; label: string }[] = [
+  { key: '10m', label: '10M' }, { key: '30m', label: '30M' }, { key: '1h', label: '1H' },
+  { key: '1d', label: '1D' }, { key: '1w', label: '1W' }, { key: '1m', label: '1M' }, { key: 'ytd', label: 'YTD' },
+]
 
 // ── Asset icons (flags via flagcdn, same source as the Currency Matrix) ──────
 const FLAGS: Record<string, string[]> = {
@@ -137,20 +143,20 @@ function SpotlightCard({ row, group, yields, onUnpin, onOpen }: { row: Row; grou
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 7 }}>
         <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, color: c }}>{changeText(row, yields)}</span>
-        <span style={{ fontFamily: SANS, fontSize: 10, color: 'var(--theme-secondary, #5f7893)' }}>{group}</span>
+        <span style={{ fontFamily: SANS, fontSize: 10, color: 'var(--theme-secondary, #5f7893)' }}>{group} · {row.status === 'intraday' ? 'INTRADAY' : row.status === 'delayed' ? 'DELAYED' : row.status === 'end_of_day' ? 'EOD' : 'NO PRINT'}</span>
       </div>
     </div>
   )
 }
 
 // ── Asset-class table (flat editorial) ───────────────────────────────────────
-function GroupTable({ name, rows, favs, onToggle, onOpen }: { name: string; rows: Row[]; favs: string[]; onToggle: (sym: string) => void; onOpen: (r: Row, yields: boolean) => void }) {
+function GroupTable({ name, rows, window, favs, onToggle, onOpen }: { name: string; rows: Row[]; window: MarketWindow; favs: string[]; onToggle: (sym: string) => void; onOpen: (r: Row, yields: boolean) => void }) {
   const yields = name === 'US Yields'
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '0 2px 7px', borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 32%, transparent)' }}>
         <span style={{ fontFamily: MONO, fontSize: 10.5, fontWeight: 700, letterSpacing: '0.17em', color: GOLD }}>{name.toUpperCase()}</span>
-        <span style={{ fontFamily: MONO, fontSize: 9, color: 'var(--theme-secondary, #4f6a86)' }}>{rows.length}</span>
+        <span style={{ fontFamily: MONO, fontSize: 9, color: 'var(--theme-secondary, #4f6a86)' }}>{rows.length} · Δ {window.toUpperCase()}</span>
       </div>
       {rows.map(r => {
         const on = favs.includes(r.symbol)
@@ -169,7 +175,7 @@ function GroupTable({ name, rows, favs, onToggle, onOpen }: { name: string; rows
             </span>
             <span title={`${r.label} · ${changeText(r, yields)}`}
               style={{ fontFamily: MONO, fontSize: 10.5, fontWeight: 700, textAlign: 'right', minWidth: 56, padding: '2px 7px', borderRadius: 3, color: c, background: r.change_pct == null ? 'transparent' : up ? 'color-mix(in srgb, var(--theme-positive, #3fb6a0) 13%, transparent)' : 'color-mix(in srgb, var(--theme-negative, #cf4b3f) 13%, transparent)' }}>
-              {changeText(r, yields)}
+              {changeText(r, yields)} <span style={{ fontSize: 7.5, letterSpacing: '0.06em', color: 'var(--theme-secondary, #5f7893)' }}>{r.status === 'intraday' ? 'INTRA' : r.status === 'delayed' ? 'DELAY' : r.status === 'end_of_day' ? 'EOD' : 'N/A'}</span>
             </span>
           </div>
         )
@@ -180,8 +186,9 @@ function GroupTable({ name, rows, favs, onToggle, onOpen }: { name: string; rows
 
 export default function GlobalMarkets() {
   const isMobile = useIsMobile()
-  const today = new Date().toISOString().split('T')[0]
-  const [date, setDate] = useState(() => new Date().toISOString().split('T')[0])   // '' = latest prints
+  const today = localDateInputValue()
+  const [date, setDate] = useState('')
+  const [window, setWindow] = useState<MarketWindow>('1d')
   const [favs, setFavs] = useState<string[]>(loadFavs)
   const [chart, setChart] = useState<{ row: Row; yields: boolean } | null>(null)
   const toggleFav = (sym: string) => setFavs(prev => {
@@ -191,9 +198,12 @@ export default function GlobalMarkets() {
   })
 
   const q = useQuery<Board>({
-    queryKey: ['global-board', date],
-    queryFn: () => axios.get(`/api/market/global-board${date ? `?date=${date}` : ''}`).then(r => r.data),
-    staleTime: 300_000, refetchInterval: !date || date === today ? 300_000 : false, retry: 1,
+    queryKey: ['global-board', date, window],
+    queryFn: () => axios.get('/api/market/global-board', { params: { ...(date ? { date } : {}), window } }).then(r => r.data),
+    staleTime: date ? 300_000 : window === '10m' || window === '30m' || window === '1h' || window === '1d' ? 60_000 : 300_000,
+    refetchInterval: date ? false : window === '10m' || window === '30m' || window === '1h' || window === '1d' ? 60_000 : 300_000,
+    refetchIntervalInBackground: false,
+    retry: 1,
   })
 
   const sections = q.data?.sections ?? []
@@ -203,7 +213,8 @@ export default function GlobalMarkets() {
   const rowBySym: Record<string, Row> = {}
   for (const s of sections) for (const r of s.rows) rowBySym[r.symbol] = r
   const spotlight = favs.map(sym => rowBySym[sym]).filter(Boolean) as Row[]
-  const asOf = q.data ? new Date(q.data.as_of).toLocaleTimeString('en-GB', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit' }) : null
+  const asOf = q.data ? formatLocalTime(q.data.as_of) : null
+  const zone = localTimeZone()
 
   // Equal-height stacks: the shorter columns absorb slack between their groups
   // (space-between adds to the 22px minimum gap) so all three bottoms align.
@@ -218,7 +229,7 @@ export default function GlobalMarkets() {
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, paddingBottom: 13, marginBottom: 18, borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)' }}>
           <div>
             <div style={{ fontFamily: MONO, fontSize: 15, fontWeight: 700, letterSpacing: '0.22em', color: GOLD }}>GLOBAL MARKETS</div>
-            <div style={{ fontFamily: MONO, fontSize: 10, color: 'var(--theme-secondary, #5f7893)', marginTop: 7 }}>Your pinned assets up top · star rows below to customize</div>
+            <div style={{ fontFamily: MONO, fontSize: 10, color: 'var(--theme-secondary, #5f7893)', marginTop: 7 }}>Pinned benchmarks · change is measured from the selected interval · displayed in {zone}</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, whiteSpace: 'nowrap', flexWrap: 'wrap' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -234,15 +245,19 @@ export default function GlobalMarkets() {
                   style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: MONO, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.08em', color: GOLD }}>LATEST</button>
               )}
             </span>
+            {!date && <span style={{ display: 'flex', alignItems: 'center', gap: 2, padding: 2, border: '1px solid var(--theme-border, rgba(255,255,255,0.14))', background: 'var(--theme-bg, #101c2e)' }}>
+              {WINDOWS.map(item => <button key={item.key} onClick={() => setWindow(item.key)} aria-pressed={window === item.key}
+                style={{ border: 'none', background: window === item.key ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 16%, transparent)' : 'transparent', color: window === item.key ? GOLD : 'var(--theme-secondary, #8099b0)', cursor: 'pointer', padding: '4px 6px', fontFamily: MONO, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.04em' }}>{item.label}</button>)}
+            </span>}
             <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontFamily: MONO, fontSize: 9.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #56708a)' }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: date ? 'var(--theme-secondary, #56708a)' : POS, boxShadow: date ? 'none' : `0 0 8px ${POS}`, flex: 'none' }} />
-              {date ? `Session ${date} · dash = no print` : asOf ? `As of ${asOf} UTC · refresh 5m` : 'Loading'}
+              {date ? `Session ${date} · EOD snapshot · dash = no print` : asOf ? `Updated ${asOf} local · ${q.data?.refresh_seconds ?? 60}s refresh` : 'Loading'}
             </span>
           </div>
         </div>
 
         {q.isLoading && <BoardSkeleton isMobile={isMobile} />}
-        {q.isError && <div style={{ padding: '32px 0', color: 'var(--theme-secondary, #5f7893)', fontFamily: MONO, fontSize: 11, fontStyle: 'italic' }}>The board is unavailable. Retry shortly.</div>}
+        {q.isError && <div style={{ padding: '32px 0', color: 'var(--theme-secondary, #5f7893)', fontFamily: MONO, fontSize: 11, fontStyle: 'italic' }}>The board is unavailable. <button onClick={() => q.refetch()} style={{ marginLeft: 6, background: 'transparent', border: `1px solid ${GOLD}`, color: GOLD, fontFamily: MONO, fontSize: 9, cursor: 'pointer', padding: '3px 6px' }}>RETRY</button></div>}
 
         {q.data && (
           <>
@@ -266,17 +281,17 @@ export default function GlobalMarkets() {
             {/* Full board: fixed column stacks per the handoff */}
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 26 }}>
               <div style={colStack}>
-                <GroupTable name="Americas" rows={byName['Americas'] ?? []} favs={favs} onToggle={toggleFav} onOpen={(r, y) => setChart({ row: r, yields: y })} />
-                <GroupTable name="FX" rows={byName['FX'] ?? []} favs={favs} onToggle={toggleFav} onOpen={(r, y) => setChart({ row: r, yields: y })} />
+                <GroupTable name="Americas" rows={byName['Americas'] ?? []} window={q.data.window} favs={favs} onToggle={toggleFav} onOpen={(r, y) => setChart({ row: r, yields: y })} />
+                <GroupTable name="FX" rows={byName['FX'] ?? []} window={q.data.window} favs={favs} onToggle={toggleFav} onOpen={(r, y) => setChart({ row: r, yields: y })} />
               </div>
               <div style={colStack}>
-                <GroupTable name="Europe" rows={byName['Europe'] ?? []} favs={favs} onToggle={toggleFav} onOpen={(r, y) => setChart({ row: r, yields: y })} />
-                <GroupTable name="Commodities" rows={byName['Commodities'] ?? []} favs={favs} onToggle={toggleFav} onOpen={(r, y) => setChart({ row: r, yields: y })} />
+                <GroupTable name="Europe" rows={byName['Europe'] ?? []} window={q.data.window} favs={favs} onToggle={toggleFav} onOpen={(r, y) => setChart({ row: r, yields: y })} />
+                <GroupTable name="Commodities" rows={byName['Commodities'] ?? []} window={q.data.window} favs={favs} onToggle={toggleFav} onOpen={(r, y) => setChart({ row: r, yields: y })} />
               </div>
               <div style={colStack}>
-                <GroupTable name="Asia-Pacific" rows={byName['Asia-Pacific'] ?? []} favs={favs} onToggle={toggleFav} onOpen={(r, y) => setChart({ row: r, yields: y })} />
-                <GroupTable name="US Yields" rows={byName['US Yields'] ?? []} favs={favs} onToggle={toggleFav} onOpen={(r, y) => setChart({ row: r, yields: y })} />
-                <GroupTable name="Crypto" rows={byName['Crypto'] ?? []} favs={favs} onToggle={toggleFav} onOpen={(r, y) => setChart({ row: r, yields: y })} />
+                <GroupTable name="Asia-Pacific" rows={byName['Asia-Pacific'] ?? []} window={q.data.window} favs={favs} onToggle={toggleFav} onOpen={(r, y) => setChart({ row: r, yields: y })} />
+                <GroupTable name="US Yields" rows={byName['US Yields'] ?? []} window={q.data.window} favs={favs} onToggle={toggleFav} onOpen={(r, y) => setChart({ row: r, yields: y })} />
+                <GroupTable name="Crypto" rows={byName['Crypto'] ?? []} window={q.data.window} favs={favs} onToggle={toggleFav} onOpen={(r, y) => setChart({ row: r, yields: y })} />
               </div>
             </div>
           </>

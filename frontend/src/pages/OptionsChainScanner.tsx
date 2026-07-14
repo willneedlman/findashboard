@@ -23,7 +23,7 @@ const SELECT: React.CSSProperties = { background: 'var(--theme-bg, #0a1628)', bo
 export function OptionsChainScannerContent() {
   const cc = useChartColors()
   const [sp] = useSearchParams()
-  const [ticker, setTicker] = useState((sp.get('ticker') || 'SPY').toUpperCase())
+  const [ticker, setTicker] = useState((sp.get('ticker') ?? '').toUpperCase())
   const [topN, setTopN]     = useState(12)
   const [paramsOpen, setParamsOpen] = useState(true)
   const [view, setView]     = useState<'calls' | 'puts' | 'chart'>('calls')

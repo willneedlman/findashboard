@@ -470,7 +470,7 @@ export function OptionsMarketMakerContent() {
       {!f || !g ? (
         <div style={{ padding: 24, fontFamily: T.mono, color: T.muted }}>Starting desk…</div>
       ) : (
-        <div style={{ maxWidth: 1340, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <HeaderBar tool="Options MM Simulator" running={f.running} />
 
           {/* Unified top instrument strip: KPI cells + inline risk meter */}

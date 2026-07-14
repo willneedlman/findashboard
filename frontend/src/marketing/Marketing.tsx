@@ -3,7 +3,7 @@ import { Link, Outlet } from 'react-router-dom'
 import { motion, useReducedMotion, useScroll, useTransform, useSpring, useMotionValue, useInView, animate, type Variants } from 'framer-motion'
 import { Calculator, GitBranch, BarChart3, BookOpen, Bell, Activity, Clock, ArrowLeftRight, Landmark, Terminal, Workflow, Ship, Plane, Fuel, Container, Waypoints, Gauge, Boxes } from 'lucide-react'
 import AlphaMark from '../components/AlphaMark'
-import { HUBS } from '../lib/hubs'
+import { ALL_TOOLS, HUBS } from '../lib/hubs'
 import './marketing.css'
 
 /* ── Motion layer (strong ease-out, reduced-motion aware) ── */
@@ -758,8 +758,8 @@ export function Landing() {
       </header>
 
       <Reveal className="strip" y={0}><div className="strip-in">
-        <div className="stat"><div className="n g">Full</div><div className="l">analytics stack</div></div>
-        <div className="stat"><div className="n">Every</div><div className="l">workspace hub</div></div>
+        <div className="stat"><div className="n g">{ALL_TOOLS.length}</div><div className="l">analysis tools</div></div>
+        <div className="stat"><div className="n">{HUBS.length}</div><div className="l">workspace hubs</div></div>
         <div className="stat"><div className="n">Live</div><div className="l">feeds, one chart</div></div>
         <div className="stat"><div className="n">Zero</div><div className="l">install</div></div>
       </div></Reveal>

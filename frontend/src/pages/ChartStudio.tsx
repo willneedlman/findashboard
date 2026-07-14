@@ -9,6 +9,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import { readToken } from '../lib/theme'
 import { smaArr, emaArr, bollinger, vwapArr, rsiArr, macdArr, hvArr } from '../lib/indicators'
+import { formatLocalTime, localTimeZone } from '../lib/time'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface Candle { time: number; open: number; high: number; low: number; close: number; volume: number }
@@ -316,8 +317,18 @@ const LANE_H_KEY = 'cs_lane_heights'
 const LANE_H_MIN = 48
 const LANE_H_MAX = 400
 
+const formatChartTime = (time: Time) => {
+  const date = typeof time === 'number'
+    ? new Date(time * 1000)
+    : typeof time === 'string'
+      ? new Date(`${time}T00:00:00`)
+      : new Date(time.year, time.month - 1, time.day)
+  return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
+}
+
 const baseOptions = (C: Colors, h: number) => ({
   layout: { background: { type: ColorType.Solid, color: C.bg }, textColor: C.text, fontFamily: "ui-monospace, monospace", fontSize: 10, attributionLogo: false },
+  localization: { timeFormatter: (time: Time) => formatChartTime(time) },
   grid: { vertLines: { color: C.grid }, horzLines: { color: C.grid } },
   crosshair: {
     mode: CrosshairMode.Normal,
@@ -325,7 +336,7 @@ const baseOptions = (C: Colors, h: number) => ({
     horzLine: { color: `${C.gold}66`, labelBackgroundColor: C.surface },
   },
   rightPriceScale: { borderColor: C.axisBorder },
-  timeScale: { borderColor: C.axisBorder },
+  timeScale: { borderColor: C.axisBorder, tickMarkFormatter: (time: Time) => formatChartTime(time) },
   height: h,
 })
 
@@ -436,14 +447,14 @@ function Seg<T extends string>({ options, value, onChange, ariaLabel }: { option
   )
 }
 
-const fmtClockET = () => new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'America/New_York' }).format(new Date())
+const fmtClockLocal = () => formatLocalTime(new Date(), { second: '2-digit' })
 function LiveClock() {
-  const [clock, setClock] = useState(fmtClockET)
-  useEffect(() => { const id = setInterval(() => setClock(fmtClockET()), 1000); return () => clearInterval(id) }, [])
+  const [clock, setClock] = useState(fmtClockLocal)
+  useEffect(() => { const id = setInterval(() => setClock(fmtClockLocal()), 1000); return () => clearInterval(id) }, [])
   return (
     <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
       <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#2e9a62', boxShadow: '0 0 6px #2e9a62' }} />
-      <span style={{ fontFamily: MONO, fontSize: 9, color: 'var(--theme-secondary, #8099b0)' }}>LIVE · {clock} ET</span>
+      <span style={{ fontFamily: MONO, fontSize: 9, color: 'var(--theme-secondary, #8099b0)' }}>LIVE · {clock} {localTimeZone()}</span>
     </span>
   )
 }
@@ -671,7 +682,7 @@ export function ChartStudioContent() {
     if (!mainRef.current) return
     const main = createChart(mainRef.current, {
       ...baseOptions(C, mainHeight), width: mainRef.current.clientWidth,
-      timeScale: { borderColor: C.axisBorder, timeVisible: true, secondsVisible: false, barSpacing: 9 },
+      timeScale: { borderColor: C.axisBorder, timeVisible: true, secondsVisible: false, barSpacing: 9, tickMarkFormatter: (time: Time) => formatChartTime(time) },
       handleScroll: { mouseWheel: false, pressedMouseMove: true },
       // Native wheel zoom is sluggish: replaced by the amplified cursor-pivot
       // handler below (same pattern as PaperChart, higher coefficient).

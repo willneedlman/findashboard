@@ -3,6 +3,7 @@ import axios from 'axios'
 import { createChart, ColorType, CrosshairMode } from 'lightweight-charts'
 import type { IChartApi, ISeriesApi, Time } from 'lightweight-charts'
 import { readToken } from '../lib/theme'
+import { formatLocalDateTime, localTimeZone } from '../lib/time'
 
 // Click-to-chart popup for the Global Markets board. Reuses /api/market/history,
 // which already resolves the Yahoo symbol forms used here (^GSPC, CL=F, BTC-USD…)
@@ -12,25 +13,34 @@ import { readToken } from '../lib/theme'
 const MONO = 'var(--theme-mono)'
 const GOLD = 'var(--theme-primary, #c9a84c)'
 
-// Lookback per timeframe. Spans of ≤90 days resolve to intraday bars on the
-// backend; 1Y/5Y fall to daily. 1D uses a 1-day span so the last session always
-// carries a bar even mid-morning.
-const TFS = [
+// Short windows use exact intraday lookbacks. Longer windows retain the existing
+// date-based history route, which resolves to intraday or daily bars as needed.
+const TFS: { k: string; days?: number; window?: '10m' | '30m' | '1h' }[] = [
+  { k: '10M', window: '10m' }, { k: '30M', window: '30m' }, { k: '1H', window: '1h' },
   { k: '1D', days: 1 }, { k: '1W', days: 7 }, { k: '1M', days: 31 },
   { k: '3M', days: 93 }, { k: '1Y', days: 366 }, { k: '5Y', days: 1826 },
 ] as const
 
 interface Row { label: string; symbol: string; price: number | null; change_pct: number | null }
 interface HistPoint { date: string | number; value: number }
-interface Hist { price: HistPoint[]; metrics: { total_return: number; current_price: number } }
+interface Hist { price: HistPoint[]; metrics: { total_return: number; current_price: number }; meta?: { intraday?: boolean; as_of?: string | null; window?: string | null } }
 
 const iso = (d: Date) => d.toISOString().split('T')[0]
+const formatChartTime = (time: Time) => {
+  const date = typeof time === 'number'
+    ? new Date(time * 1000)
+    : typeof time === 'string'
+      ? new Date(`${time}T00:00:00`)
+      : new Date(time.year, time.month - 1, time.day)
+  return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
+}
 
 export default function AssetChartModal({ row, yields, onClose }: { row: Row; yields?: boolean; onClose: () => void }) {
-  const [tf, setTf] = useState<string>('1M')
+  const [tf, setTf] = useState<string>('1D')
   const [data, setData] = useState<Hist | null>(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
   const wrapRef = useRef<HTMLDivElement | null>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const seriesRef = useRef<ISeriesApi<'Area'> | null>(null)
@@ -39,14 +49,25 @@ export default function AssetChartModal({ row, yields, onClose }: { row: Row; yi
   useEffect(() => {
     let cancel = false
     setLoading(true); setErr(false)
-    const days = TFS.find(t => t.k === tf)!.days
-    const end = new Date()
-    const start = new Date(end.getTime() - days * 86400000)
-    axios.get<Hist>('/api/market/history', { params: { ticker: row.symbol, start: iso(start), end: iso(end) } })
+    const selected = TFS.find(t => t.k === tf)!
+    const params = selected.window
+      ? { ticker: row.symbol, window: selected.window }
+      : (() => {
+          const end = new Date()
+          const start = new Date(end.getTime() - selected.days! * 86400000)
+          return { ticker: row.symbol, start: iso(start), end: iso(end) }
+        })()
+    axios.get<Hist>('/api/market/history', { params })
       .then(r => { if (!cancel) { setData(r.data); setLoading(false) } })
       .catch(() => { if (!cancel) { setErr(true); setLoading(false); setData(null) } })
     return () => { cancel = true }
-  }, [tf, row.symbol])
+  }, [tf, row.symbol, refreshKey])
+
+  useEffect(() => {
+    if (!['10M', '30M', '1H', '1D'].includes(tf)) return
+    const id = window.setInterval(() => setRefreshKey(v => v + 1), 60_000)
+    return () => window.clearInterval(id)
+  }, [tf])
 
   // Build the chart once.
   useEffect(() => {
@@ -57,7 +78,8 @@ export default function AssetChartModal({ row, yields, onClose }: { row: Row; yi
       grid: { vertLines: { color: 'rgba(255,255,255,0.03)' }, horzLines: { color: 'rgba(255,255,255,0.03)' } },
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: { borderColor: 'rgba(255,255,255,0.06)' },
-      timeScale: { borderColor: 'rgba(255,255,255,0.06)', timeVisible: true, fixLeftEdge: true, rightOffset: 3 },
+      localization: { timeFormatter: (time: Time) => formatChartTime(time) },
+      timeScale: { borderColor: 'rgba(255,255,255,0.06)', timeVisible: true, fixLeftEdge: true, rightOffset: 3, tickMarkFormatter: (time: Time) => formatChartTime(time) },
       width: el.clientWidth, height: el.clientHeight,
     })
     const pos = readToken('--theme-positive', '#3fb6a0')
@@ -90,6 +112,7 @@ export default function AssetChartModal({ row, yields, onClose }: { row: Row; yi
   const cur = data?.metrics?.current_price
   const up = (ret ?? 0) >= 0
   const retColor = ret == null ? 'var(--theme-secondary, #5f7893)' : up ? 'var(--theme-positive, #3fb6a0)' : 'var(--theme-negative, #cf4b3f)'
+  const sourceStatus = data?.meta?.intraday ? 'INTRADAY' : data ? 'EOD' : 'LOADING'
 
   return (
     <div onClick={onClose} role="dialog" aria-modal="true" aria-label={`${row.label} chart`}
@@ -111,6 +134,7 @@ export default function AssetChartModal({ row, yields, onClose }: { row: Row; yi
                 {up ? '+' : ''}{ret.toFixed(2)}% <span style={{ color: 'var(--theme-secondary, #5f7893)', fontWeight: 400 }}>{tf}</span>
               </span>
             )}
+            <span style={{ fontFamily: MONO, fontSize: 8.5, letterSpacing: '0.08em', color: 'var(--theme-secondary, #5f7893)' }}>{sourceStatus} · {localTimeZone()}</span>
           </div>
           <div style={{ display: 'flex', gap: 3, marginLeft: 'auto' }}>
             {TFS.map(t => (
@@ -133,6 +157,7 @@ export default function AssetChartModal({ row, yields, onClose }: { row: Row; yi
               {err ? 'No chart data' : 'Loading…'}
             </div>
           )}
+          {!loading && !err && data?.meta?.as_of && <div style={{ position: 'absolute', left: 12, bottom: 8, fontFamily: MONO, fontSize: 8.5, color: 'var(--theme-secondary, #5f7893)', pointerEvents: 'none' }}>As of {formatLocalDateTime(data.meta.as_of)} local</div>}
         </div>
       </div>
     </div>

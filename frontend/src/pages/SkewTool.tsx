@@ -67,7 +67,7 @@ const caption = (text: string) => <span style={{ fontFamily: MONO, fontSize: 9, 
 
 export function SkewToolContent() {
   const [sp] = useSearchParams()
-  const [ticker, setTicker] = useState((sp.get('ticker') || 'SPY').toUpperCase())
+  const [ticker, setTicker] = useState((sp.get('ticker') ?? '').toUpperCase())
   const [open, setOpen] = useState(true)
   const [expiry, setExpiry] = useState('')   // selected expiry — drives the smile, metrics, and move
   const [mny, setMny] = useState(0)          // Smile Explorer cursor (% from spot)

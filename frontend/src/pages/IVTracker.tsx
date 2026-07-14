@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import PageWrapper from '../components/PageWrapper'
+import EmptyState from '../components/EmptyState'
 import { Widget, KpiCell } from '../components/mmCockpit'
 import {
   ComposedChart, Line, Area, XAxis, YAxis,
@@ -623,15 +624,9 @@ export function IVTrackerContent() {
 
         {/* ── Empty state ── */}
         {!data && !loading && (
-          <div style={{ ...PANEL, padding: '40px 20px', textAlign: 'center' }}>
-            
-            <div style={{ fontSize: 10, color: T.muted, fontFamily: T.mono }}>
-              Enter a ticker, select expiry + strike, then press LOAD.
-            </div>
-            <div style={{ fontSize: 8, color: T.dim, fontFamily: T.mono, marginTop: 6 }}>
-              Expirations and strikes populate automatically from yfinance option chains.
-            </div>
-          </div>
+          <EmptyState title="Implied Volatility Tracker" hint="Enter a ticker, select an expiry and strike, then load its IV history."
+            keys={['Enter']} kpis={['IV Rank', 'IV Percentile', 'ATM IV', 'Implied Move', 'Open Interest']}
+            preview="chart" previewLabel="IV History" />
         )}
 
         {loading && (

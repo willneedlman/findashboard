@@ -9,6 +9,7 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import PageWrapper from '../components/PageWrapper'
 import { readToken } from '../lib/theme'
+import { formatLocalTime, localTimeZone } from '../lib/time'
 
 // Leaflet SVG/canvas can't consume CSS var(), so resolve theme tokens to concrete
 // values at runtime (recomputed on preset change). Semantic categories map to the
@@ -254,7 +255,7 @@ function Sparkline({ data, w = 44, h = 15, color }: { data: number[]; w?: number
   return <svg width={w} height={h} style={{ display: 'block' }}><polyline points={pts} fill="none" stroke={color} strokeWidth={1.4} /></svg>
 }
 
-const fmtClockET = () => new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/New_York' }).format(new Date()) + ' ET'
+const fmtClockLocal = () => `${formatLocalTime(new Date())} ${localTimeZone()}`
 
 export function MaritimeMapContent() {
   const [C, setC] = useState<Colors>(buildColors)
@@ -278,7 +279,7 @@ export function MaritimeMapContent() {
   const [inspected, setInspected] = useState<Entity | null>(null)
   const [focus, setFocus] = useState<{ lat: number; lon: number; zoom: number } | null>(null)
   const [view, setView] = useState<{ bbox: string; zoom: number } | null>(null)
-  const [clock, setClock] = useState(fmtClockET)
+  const [clock, setClock] = useState(fmtClockLocal)
   const [query, setQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchIdx, setSearchIdx] = useState(0)
@@ -294,7 +295,7 @@ export function MaritimeMapContent() {
     localStorage.setItem('flowsCockpit', JSON.stringify({ preset, overrides, pinned }))
   }, [preset, overrides, pinned])
   useEffect(() => {
-    const id = setInterval(() => setClock(fmtClockET()), 30_000)
+    const id = setInterval(() => setClock(fmtClockLocal()), 30_000)
     return () => clearInterval(id)
   }, [])
 

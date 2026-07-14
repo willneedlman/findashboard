@@ -171,7 +171,9 @@ export function PortfolioCompareContent() {
           </div>
         )}
         {!r && !m.isPending && (
-          <EmptyState title="Compare Portfolios" hint="Define 2-4 portfolios (each with its own assets and leverage), then press Compare." />
+          <EmptyState title="Compare Portfolios" hint="Define two to four portfolios, then compare return, risk and drawdown."
+            kpis={['Return', 'Volatility', 'Sharpe', 'Max Drawdown']}
+            preview="chart" previewLabel="Growth Comparison" />
         )}
         {r && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>

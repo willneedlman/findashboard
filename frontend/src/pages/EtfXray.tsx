@@ -197,7 +197,9 @@ export function EtfXrayContent() {
         {isError && <div style={{ fontSize: 9, color: 'var(--theme-negative)', fontFamily: SANS, textAlign: 'center' }}>{(error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Analysis failed'}</div>}
       </div>
     </>}>
-      {!data && !isPending && <EmptyState title="ETF Analyzer" hint="Pick one or more ETFs and run the analysis: what you own, where the funds overlap, and how concentrated each is. With two or more, you also get the pairwise overlap matrix and shared names." />}
+      {!data && !isPending && <EmptyState title="ETF Analyzer" hint="Pick one or more ETFs to inspect holdings, overlap and concentration."
+        kpis={['Holdings', 'Top 10 Weight', 'Overlap', 'Concentration']}
+        preview="table" previewLabel="Holdings Look-Through" columns={['Holding', 'Weight', 'Funds', 'Overlap']} />}
       {isPending && <EmptyState title="Reading holdings…" hint="Pulling each fund's holdings." />}
 
       {data && (

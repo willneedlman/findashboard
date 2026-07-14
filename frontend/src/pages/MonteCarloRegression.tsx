@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query'
 import axios from 'axios'
 import { Activity, GitBranch } from 'lucide-react'
 import HelpTip from '../components/HelpTip'
+import EmptyState from '../components/EmptyState'
 import {
   C, PERIODS, StatCard, inputStyle, selectStyle, RailGroup, RunButton, ToolShell,
   ModeToggle, REG_MODES, ReturnsScatter, RollingBetaChart, type RegMode,
@@ -213,10 +214,9 @@ export default function MonteCarloRegression({ mode, setMode }: { mode: RegMode;
       )}
 
       {!r && !mutation.isPending && (
-        <div style={{ textAlign: 'center', color: C.muted, padding: '60px 24px', fontSize: 13, border: `1px dashed ${C.border}` }}>
-          Set a benchmark and strategy parameters, then click <span style={{ color: C.gold }}>Run Simulation</span> to see the
-          alpha, beta and R² distributions across {nSims.toLocaleString()} simulated futures.
-        </div>
+        <EmptyState title="Monte Carlo Regression" hint={`Set a benchmark and strategy parameters, then run ${nSims.toLocaleString()} simulated futures.`}
+          kpis={['Mean Alpha', 'Mean Beta', 'Mean R²', 'Paths']}
+          preview="chart" previewLabel="Alpha Distribution" />
       )}
     </ToolShell>
   )

@@ -40,16 +40,6 @@ export default function StrategyBuilder() {
   const setChain = (i: number, patch: Partial<LegChain>) =>
     setLegChains(c => ({ ...c, [i]: { ...c[i], ...patch } }))
 
-  // On mount: fetch spot for default ticker and rescale initial preset strikes
-  useEffect(() => {
-    axios.get(`/api/options/chain?ticker=${DEFAULT_TICKER}`).then(res => {
-      const spot: number | null = res.data.spot ?? null
-      if (!spot) return
-      setSpotOverrides(s => ({ ...s, [DEFAULT_TICKER]: spot }))
-      setLegs(prev => scalePreset(PRESETS['Long Call'].map((l, i) => ({ ...prev[i], ...l })), spot))
-    }).catch(() => {})
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
   // Fetch full options chain for a leg — populates contract picker
   const fetchSpotForLeg = async (i: number) => {
     const tk = legs[i].ticker.trim().toUpperCase()

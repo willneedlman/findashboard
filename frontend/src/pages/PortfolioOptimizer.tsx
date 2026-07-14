@@ -240,7 +240,9 @@ export function PortfolioOptimizerContent() {
       {tickers.length < 2 && <div style={{ fontSize: 9, color: FAINT, fontFamily: SANS, textAlign: 'center' }}>Enter at least 2 tickers.</div>}
       {isError && <div style={{ fontSize: 9, color: NEG, fontFamily: SANS, textAlign: 'center', lineHeight: 1.4 }}>{errMsg ?? 'Optimization failed'}</div>}
     </div>}>
-      {!data && !isPending && <EmptyState title="Portfolio Optimizer" hint="Enter a basket of tickers and optimize. You get the max-Sharpe, minimum-variance, risk-parity and equal-weight portfolios, the efficient frontier, per-holding risk contribution, and tail risk (VaR/CVaR)." />}
+      {!data && !isPending && <EmptyState title="Portfolio Optimizer" hint="Enter a basket of tickers, then compare optimized allocations and portfolio risk."
+        kpis={['Return', 'Volatility', 'Sharpe', 'VaR', 'CVaR']}
+        preview="chart" previewLabel="Efficient Frontier" />}
       {isPending && <EmptyState title="Optimizing…" hint="Fetching aligned history and solving the frontier." />}
 
       {data && sel && (

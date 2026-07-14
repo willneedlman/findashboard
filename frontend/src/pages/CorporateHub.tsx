@@ -1,4 +1,5 @@
 import PageWrapper from '../components/PageWrapper'
+import EmptyState from '../components/EmptyState'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { usePortfolio } from '../contexts/PortfolioContext'
@@ -38,7 +39,6 @@ type MenuKey = 'sort' | 'window' | 'add' | null
 
 const TIMEOUT = 10_000
 const WL_KEY = 'pe_wl'
-const DEFAULT_TICKERS = ['NVDA', 'AAPL', 'SLS', 'MSTR', 'TOST', 'VST', 'OWL', 'AMZN']
 
 // Handoff hexes are the fallbacks so custom themes restyle the page coherently.
 const GOLD    = 'var(--theme-primary, #c9a84c)'
@@ -177,11 +177,7 @@ export function PortfolioEarningsContent() {
   const [watchlist, setWatchlistRaw] = useState<string[]>(() => {
     const raw = searchParams.get('tickers')
     if (raw) return raw.split(',').map(t => t.trim().toUpperCase()).filter(Boolean)
-    try {
-      const saved = JSON.parse(localStorage.getItem(WL_KEY) || 'null')
-      if (Array.isArray(saved) && saved.length) return saved
-    } catch { /* fall through */ }
-    return portfolioTickers.length > 0 ? portfolioTickers : DEFAULT_TICKERS
+    return []
   })
   const setWatchlist = (ts: string[]) => {
     setWatchlistRaw(ts)
@@ -213,7 +209,6 @@ export function PortfolioEarningsContent() {
   const [addResults, setAddResults] = useState<{ ticker: string; name: string }[]>([])
   const addInputRef = useRef<HTMLInputElement>(null)
   const hasMounted = useRef(false)
-  const portfolioUsed = useRef(false)
 
   // Rows merge instead of replacing so an add that resolves while a full scan
   // is in flight is not clobbered; display filters rows to the live watchlist.
@@ -251,16 +246,6 @@ export function PortfolioEarningsContent() {
     hasMounted.current = true
     loadTickers(watchlist, true)
   }, []) // eslint-disable-line
-
-  // If the portfolio loads after mount (server sync) and nothing else pinned a
-  // list (URL param or saved watchlist), adopt it once.
-  useEffect(() => {
-    if (portfolioUsed.current || portfolioTickers.length === 0) return
-    if (searchParams.get('tickers') || localStorage.getItem(WL_KEY)) return
-    portfolioUsed.current = true
-    setWatchlist(portfolioTickers)
-    loadTickers(portfolioTickers, true)
-  }, [portfolioTickers]) // eslint-disable-line
 
   useEffect(() => {
     if (openMenu !== 'add') { setAddQuery(''); setAddResults([]) }
@@ -525,6 +510,11 @@ export function PortfolioEarningsContent() {
         {openMenu && <div onClick={() => setOpenMenu(null)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />}
 
         {/* Main grid */}
+        {!isPending && rows.length === 0 ? (
+          <EmptyState title="Portfolio Earnings" hint="Add holdings or import your portfolio to monitor upcoming earnings, positioning and the wire."
+            kpis={['Next Report', 'Implied Move', 'Short Interest', 'Consensus', 'Market Cap']}
+            preview="table" previewLabel="Earnings Watchlist" columns={['Ticker', 'Report Date', 'Implied Move', 'Consensus']} />
+        ) : (
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 356px', gap: 24, alignItems: 'start' }}>
 
           {/* Agenda */}
@@ -763,6 +753,7 @@ export function PortfolioEarningsContent() {
 
           </div>
         </div>
+        )}
       </div>
     </div>
   )

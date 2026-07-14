@@ -39,7 +39,7 @@ export default function DealerGEX() {
   const cc = useChartColors()
   const [sp] = useSearchParams()
   const urlTicker = (sp.get('ticker') || '').trim().toUpperCase()
-  const [ticker, setTicker] = useState(urlTicker || 'SPY')
+  const [ticker, setTicker] = useState(urlTicker)
   const [nStrikes, setNStrikes] = useState(20)
   const [paramsOpen, setParamsOpen] = useState(true)
   const [expiry, setExpiry] = useState<string>('')

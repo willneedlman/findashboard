@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query'
 import axios from 'axios'
 import { Activity, GitBranch } from 'lucide-react'
 import TickerInput from '../components/TickerInput'
+import EmptyState from '../components/EmptyState'
 import { loadCustomStrategies } from '../utils/customStrategies'
 import {
   C, PERIODS, StatCard, inputStyle, selectStyle, railLabel,
@@ -211,10 +212,9 @@ export default function ImportRegression({ mode, setMode }: { mode: RegMode; set
       )}
 
       {!r && !mutation.isPending && (
-        <div style={{ textAlign: 'center', color: C.muted, padding: '60px 24px', fontSize: 13, border: `1px dashed ${C.border}` }}>
-          Import a <span style={{ color: C.gold }}>portfolio</span> or a saved <span style={{ color: C.gold }}>algo strategy</span> and
-          regress its realized returns against the market.
-        </div>
+        <EmptyState title="Imported Regression" hint="Select a portfolio or saved strategy, then regress its realized returns against the market."
+          kpis={['Beta', 'Alpha', 'R²', 'Observations']}
+          preview="chart" previewLabel="Returns vs Market" />
       )}
     </ToolShell>
   )
