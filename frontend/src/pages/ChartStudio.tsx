@@ -740,6 +740,15 @@ export function ChartStudioContent() {
     const vwapS = main.addLineSeries({ color: C.violet, lineWidth: 1, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false })
 
     const volS = laneCharts.volume?.addHistogramSeries({ priceFormat: { type: 'volume' }, priceLineVisible: false, lastValueVisible: false })
+    // Volume bars always start at 0 — the default autoscale pads a chunk of the
+    // range below the smallest bar too, which dips the axis into negative territory.
+    volS?.applyOptions({
+      autoscaleInfoProvider: (original: () => { priceRange: { minValue: number; maxValue: number } } | null) => {
+        const res = original()
+        if (!res) return res
+        return { ...res, priceRange: { ...res.priceRange, minValue: 0 } }
+      },
+    } as any)
     const rsiS = laneCharts.rsi?.addLineSeries({ color: C.violet, lineWidth: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false })
     rsiS?.createPriceLine({ price: 70, color: `${C.laneNeg}66`, lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: '' })
     rsiS?.createPriceLine({ price: 30, color: `${C.lanePos}66`, lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: '' })
