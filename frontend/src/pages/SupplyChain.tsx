@@ -556,17 +556,32 @@ function MarketPerformancePanel({ ticker }: { ticker: string }) {
   )
 }
 
+// Small colored tag — plan/filing markers on a transaction, role/status on a deal.
+const badgeStyle = (color: string): React.CSSProperties => ({
+  background: `color-mix(in srgb, ${color} 14%, transparent)`, color, padding: '1px 4px', borderRadius: 2,
+  fontFamily: T.mono, fontSize: 7.5, fontWeight: 800, letterSpacing: '0.02em',
+})
+
 function InsiderPanel({ data, loading }: { data: any; loading: boolean }) {
   const isMobile = useIsMobile()
   const hasData = data && data.transactions && data.transactions.length > 0
   const txns = data?.transactions ?? []
   const returns = data?.average_returns ?? []
+  const buys = txns.filter((t: any) => t.side === 'buy').length
+  const sells = txns.filter((t: any) => t.side === 'sell').length
 
   return (
     <div className="ft-panel">
       <div className="ft-panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span>Insider Transactions</span>
-        {data && <SourceChip source={data.source} />}
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          Insider Transactions
+          {data && <SourceChip source={data.source} />}
+        </span>
+        {hasData && (
+          <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted }}>
+            {txns.length} in view · {buys} buy{buys === 1 ? '' : 's'} / {sells} sell{sells === 1 ? '' : 's'}
+          </span>
+        )}
       </div>
       <div style={{ padding: '18px 20px' }}>
         {loading ? (
@@ -574,73 +589,67 @@ function InsiderPanel({ data, loading }: { data: any; loading: boolean }) {
         ) : !hasData ? (
           <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11, fontStyle: 'italic' }}>No insider transactions reported.</div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2.2fr 1fr', gap: 32, alignItems: 'start' }}>
-            {/* Transactions list */}
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1.6fr', gap: 32, alignItems: 'start' }}>
+            {/* The answer: does this issuer's insider buying/selling precede a move? */}
             <div>
-              <div style={{ display: 'grid', gridTemplateColumns: '80px 1.5fr 1fr 1fr 90px', gap: 12, paddingBottom: 6, borderBottom: `1px solid ${T.border}`, fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: T.muted }}>
-                <span>Date</span>
-                <span>Insider</span>
-                <span>Title</span>
-                <span>Type</span>
-                <span style={{ textAlign: 'right' }}>Value</span>
-              </div>
-              <div style={{ maxHeight: 360, overflowY: 'auto', marginTop: 6 }}>
+              <div style={{ ...labelStyle, marginBottom: 12 }}>Avg Excess Return After Transaction</div>
+              {returns.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {returns.map((r: any, i: number) => (
+                    <div key={i}>
+                      <div style={{ fontFamily: T.label, fontSize: 11.5, fontWeight: 700, color: T.text, marginBottom: 7 }}>{r.txn_type}</div>
+                      <div style={{ display: 'flex', gap: 20 }}>
+                        {([['3M', r.avg_return_3m], ['6M', r.avg_return_6m], ['12M', r.avg_return_12m]] as const).map(([lbl, val]) => (
+                          <div key={lbl}>
+                            <div style={{ fontFamily: T.mono, fontSize: 8, color: T.muted, letterSpacing: '0.1em', marginBottom: 3 }}>{lbl}</div>
+                            <div style={{ fontFamily: T.mono, fontSize: 15, fontWeight: 700, color: val >= 0 ? POS : NEG }}>{val >= 0 ? '+' : ''}{val.toFixed(2)}%</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 10.5, fontStyle: 'italic' }}>Returns performance study unavailable.</div>
+              )}
+            </div>
+
+            {/* Recent transactions, most detail on demand */}
+            <div>
+              <div style={{ ...labelStyle, marginBottom: 6 }}>Recent Transactions</div>
+              <div style={{ maxHeight: 360, overflowY: 'auto' }}>
                 {txns.map((t: any, i: number) => {
                   const isPlan = t.is_10b51 || t.transaction?.includes('Rule 10b5-1')
                   const is144 = t.is_form144 || t.transaction?.includes('Form 144')
                   const isAmend = t.is_amendment
-                  
                   let typeColor = T.muted
-                  if (t.side === 'buy') typeColor = 'var(--theme-positive, #22c55e)'
-                  if (t.side === 'sell') typeColor = 'var(--theme-negative, #ef4444)'
+                  if (t.side === 'buy') typeColor = POS
+                  if (t.side === 'sell') typeColor = NEG
                   if (isPlan) typeColor = 'var(--theme-tertiary, #60a5fa)'
-
                   return (
-                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '80px 1.5fr 1fr 1fr 90px', gap: 12, padding: '8px 0', borderBottom: i === txns.length - 1 ? 'none' : `1px solid var(--theme-hover, rgba(255,255,255,0.03))`, alignItems: 'center' }}>
-                      <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.muted }}>{t.date}</span>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontFamily: T.label, fontSize: 11, fontWeight: 700, color: T.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.insider}</div>
-                        {(isPlan || is144 || isAmend) && (
-                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 2 }}>
-                            {isPlan && <span style={{ background: 'rgba(96,165,250,0.12)', color: 'var(--theme-tertiary, #60a5fa)', padding: '1px 4px', borderRadius: 2, fontFamily: T.mono, fontSize: 7.5, fontWeight: 800 }}>10B5-1</span>}
-                            {is144 && <span style={{ background: 'rgba(239,68,68,0.12)', color: 'var(--theme-negative, #ef4444)', padding: '1px 4px', borderRadius: 2, fontFamily: T.mono, fontSize: 7.5, fontWeight: 800 }}>FORM 144</span>}
-                            {isAmend && <span style={{ background: 'rgba(201,168,76,0.12)', color: 'var(--theme-primary, #c9a84c)', padding: '1px 4px', borderRadius: 2, fontFamily: T.mono, fontSize: 7.5, fontWeight: 800 }}>AMEND</span>}
+                    <div key={i} style={{ padding: '8px 0', borderBottom: i === txns.length - 1 ? 'none' : `1px solid var(--theme-hover, rgba(255,255,255,0.04))` }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontFamily: T.label, fontSize: 11, fontWeight: 700, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {t.insider}{t.title && <span style={{ color: T.muted, fontWeight: 400 }}> · {t.title}</span>}
                           </div>
-                        )}
+                          <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 3, flexWrap: 'wrap' }}>
+                            <span style={{ fontFamily: T.mono, fontSize: 8.5, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: typeColor }}>{t.transaction}</span>
+                            {isPlan && <span style={badgeStyle('var(--theme-tertiary, #60a5fa)')}>10B5-1</span>}
+                            {is144 && <span style={badgeStyle(NEG)}>FORM 144</span>}
+                            {isAmend && <span style={badgeStyle(AMBER)}>AMEND</span>}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                          <div style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: T.text }}>{fmtCap(t.value)}</div>
+                          <div style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, marginTop: 1 }}>{t.date}</div>
+                        </div>
                       </div>
-                      <span style={{ fontFamily: T.label, fontSize: 10.5, color: T.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title || '—'}</span>
-                      <span style={{ fontFamily: T.label, fontSize: 8.5, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: typeColor }}>{t.transaction}</span>
-                      <span style={{ fontFamily: T.mono, fontSize: 11, color: T.text, textAlign: 'right' }}>{fmtCap(t.value)}</span>
                     </div>
                   )
                 })}
               </div>
             </div>
-
-            {/* Average Returns Table */}
-            {returns.length > 0 ? (
-              <div style={{ background: 'rgba(255,255,255,0.015)', border: `1px solid ${T.border}`, padding: 14 }}>
-                <div style={{ fontFamily: T.label, fontSize: 9, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.gold, marginBottom: 12 }}>Avg Excess Returns</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1fr', gap: 8, paddingBottom: 6, borderBottom: `1px solid ${T.border}`, fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.muted }}>
-                  <span>Txn Type</span>
-                  <span style={{ textAlign: 'right' }}>3M</span>
-                  <span style={{ textAlign: 'right' }}>6M</span>
-                  <span style={{ textAlign: 'right' }}>12M</span>
-                </div>
-                <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {returns.map((r: any, i: number) => (
-                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1fr', gap: 8, fontFamily: T.mono, fontSize: 9.5, color: T.text }}>
-                      <span style={{ fontFamily: T.label, fontSize: 10, color: T.muted, fontWeight: 700 }}>{r.txn_type}</span>
-                      <span style={{ textAlign: 'right', color: r.avg_return_3m >= 0 ? 'var(--theme-positive, #22c55e)' : 'var(--theme-negative, #ef4444)' }}>{r.avg_return_3m >= 0 ? '+' : ''}{r.avg_return_3m.toFixed(2)}%</span>
-                      <span style={{ textAlign: 'right', color: r.avg_return_6m >= 0 ? 'var(--theme-positive, #22c55e)' : 'var(--theme-negative, #ef4444)' }}>{r.avg_return_6m >= 0 ? '+' : ''}{r.avg_return_6m.toFixed(2)}%</span>
-                      <span style={{ textAlign: 'right', color: r.avg_return_12m >= 0 ? 'var(--theme-positive, #22c55e)' : 'var(--theme-negative, #ef4444)' }}>{r.avg_return_12m >= 0 ? '+' : ''}{r.avg_return_12m.toFixed(2)}%</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div style={{ border: `1px solid ${T.border}`, padding: 14, color: T.muted, fontFamily: T.mono, fontSize: 9.5, fontStyle: 'italic', textAlign: 'center' }}>Returns performance study unavailable.</div>
-            )}
           </div>
         )}
       </div>
@@ -649,15 +658,22 @@ function InsiderPanel({ data, loading }: { data: any; loading: boolean }) {
 }
 
 function DealsPanel({ data, loading }: { data: any; loading: boolean }) {
-  const isMobile = useIsMobile()
   const hasData = data && data.deals && data.deals.length > 0
   const deals = data?.deals ?? []
+  const totalValue = deals.reduce((s: number, d: any) => s + (d.deal_value > 0 ? d.deal_value : 0), 0)
 
   return (
     <div className="ft-panel">
       <div className="ft-panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span>SDC Deals M&A Tracking</span>
-        {data && <SourceChip source={data.source} />}
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          SDC Deals M&A Tracking
+          {data && <SourceChip source={data.source} />}
+        </span>
+        {hasData && (
+          <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted }}>
+            {deals.length} deal{deals.length === 1 ? '' : 's'}{totalValue > 0 ? ` · $${totalValue.toFixed(1)}M combined` : ''}
+          </span>
+        )}
       </div>
       <div style={{ padding: '18px 20px' }}>
         {loading ? (
@@ -666,40 +682,34 @@ function DealsPanel({ data, loading }: { data: any; loading: boolean }) {
           <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11, fontStyle: 'italic' }}>No reported M&A activity.</div>
         ) : (
           <div>
-            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '90px 1.2fr 1.2fr 1fr 1fr 90px', gap: 14, paddingBottom: 6, borderBottom: `1px solid ${T.border}`, fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: T.muted }}>
-              <span>Announced</span>
-              <span>Acquirer</span>
-              <span>Target</span>
-              <span>Role</span>
-              <span>Status</span>
-              <span style={{ textAlign: 'right' }}>Deal Value</span>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', marginTop: 6 }}>
-              {deals.map((d: any, i: number) => {
-                const statusColor = d.deal_status === 'Completed' ? 'var(--theme-positive, #22c55e)' : 'var(--theme-tertiary, #60a5fa)'
-                
-                return (
-                  <div key={i} style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '90px 1.2fr 1.2fr 1fr 1fr 90px', gap: 14, padding: '10px 0', borderBottom: i === deals.length - 1 ? 'none' : `1px solid var(--theme-hover, rgba(255,255,255,0.03))`, alignItems: 'center' }}>
-                    <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.muted }}>{d.date_announced}</span>
-                    <span style={{ fontFamily: T.label, fontSize: 11, fontWeight: 700, color: T.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {d.acquirer_name} {d.acquirer_ticker ? `(${d.acquirer_ticker})` : ''}
-                    </span>
-                    <span style={{ fontFamily: T.label, fontSize: 11, fontWeight: 700, color: T.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {d.target_name} {d.target_ticker ? `(${d.target_ticker})` : ''}
-                    </span>
-                    <span style={{ fontFamily: T.label, fontSize: 8.5, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: d.role === 'acquirer' ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-tertiary, #60a5fa)' }}>
-                      {d.role}
-                    </span>
-                    <span style={{ fontFamily: T.label, fontSize: 8.5, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: statusColor }}>
-                      {d.deal_status}
-                    </span>
-                    <span style={{ fontFamily: T.mono, fontSize: 11, color: T.text, textAlign: 'right' }}>
-                      {d.deal_value > 0 ? `$${(d.deal_value).toFixed(1)}M` : '—'}
-                    </span>
+            {deals.map((d: any, i: number) => {
+              const statusColor = d.deal_status === 'Completed' ? POS : 'var(--theme-tertiary, #60a5fa)'
+              const roleColor = d.role === 'acquirer' ? AMBER : 'var(--theme-tertiary, #60a5fa)'
+              return (
+                <div key={i} style={{ padding: '10px 0', borderBottom: i === deals.length - 1 ? 'none' : `1px solid var(--theme-hover, rgba(255,255,255,0.04))` }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontFamily: T.label, fontSize: 11.5, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <span style={{ fontWeight: 700 }}>{d.acquirer_name}</span>{d.acquirer_ticker && <span style={{ color: T.muted }}> ({d.acquirer_ticker})</span>}
+                        <span style={{ color: T.muted, margin: '0 6px' }}>→</span>
+                        <span style={{ fontWeight: 700 }}>{d.target_name}</span>{d.target_ticker && <span style={{ color: T.muted }}> ({d.target_ticker})</span>}
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 4, flexWrap: 'wrap' }}>
+                        <span style={badgeStyle(roleColor)}>{d.role.toUpperCase()}</span>
+                        <span style={badgeStyle(statusColor)}>{(d.deal_status || '').toUpperCase()}</span>
+                        <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted }}>{d.date_announced}</span>
+                      </div>
+                    </div>
+                    <div style={{ fontFamily: T.mono, fontSize: 13, fontWeight: 700, color: T.gold, textAlign: 'right', flexShrink: 0 }}>
+                      {d.deal_value > 0 ? `$${d.deal_value.toFixed(1)}M` : '—'}
+                    </div>
                   </div>
-                )
-              })}
-            </div>
+                  {d.deal_terms && (
+                    <div style={{ fontFamily: T.label, fontSize: 10, color: T.muted, marginTop: 5, lineHeight: 1.4 }}>{d.deal_terms}</div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         )}
       </div>
