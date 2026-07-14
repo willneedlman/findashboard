@@ -35,6 +35,14 @@ const formatChartTime = (time: Time) => {
   return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
+const formatChartAxisTime = (time: Time) => {
+  if (typeof time !== 'number') {
+    const date = typeof time === 'string' ? new Date(`${time}T00:00:00`) : new Date(time.year, time.month - 1, time.day)
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  }
+  return new Date(time * 1000).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })
+}
+
 export default function AssetChartModal({ row, yields, onClose }: { row: Row; yields?: boolean; onClose: () => void }) {
   const [tf, setTf] = useState<string>('1D')
   const [data, setData] = useState<Hist | null>(null)
@@ -80,7 +88,7 @@ export default function AssetChartModal({ row, yields, onClose }: { row: Row; yi
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: { borderColor: 'rgba(255,255,255,0.06)' },
       localization: { timeFormatter: (time: Time) => formatChartTime(time) },
-      timeScale: { borderColor: 'rgba(255,255,255,0.06)', timeVisible: true, fixLeftEdge: true, rightOffset: 3, tickMarkFormatter: (time: Time) => formatChartTime(time) },
+      timeScale: { borderColor: 'rgba(255,255,255,0.06)', timeVisible: true, fixLeftEdge: true, rightOffset: 3, tickMarkFormatter: (time: Time) => formatChartAxisTime(time) },
       width: el.clientWidth, height: el.clientHeight,
     })
     const pos = readToken('--theme-positive', '#3fb6a0')
@@ -113,7 +121,7 @@ export default function AssetChartModal({ row, yields, onClose }: { row: Row; yi
   const cur = data?.metrics?.current_price
   const up = (ret ?? 0) >= 0
   const retColor = ret == null ? 'var(--theme-secondary, #5f7893)' : up ? 'var(--theme-positive, #3fb6a0)' : 'var(--theme-negative, #cf4b3f)'
-  const sourceStatus = data?.meta?.intraday ? 'LATEST' : data ? 'EOD' : 'LOADING'
+  const sourceStatus = data?.meta?.intraday ? 'MARKET DATA' : data ? 'SESSION DATA' : 'LOADING'
 
   return (
     <div onClick={onClose} role="dialog" aria-modal="true" aria-label={`${row.label} chart`}

@@ -166,7 +166,7 @@ function GroupTable({ name, rows, window, favs, onToggle, onOpen }: { name: stri
           <div key={r.symbol} className="gm-row" onClick={() => onOpen(r, yields)}
             role="button" tabIndex={0} aria-label={`Open ${r.label} chart`}
             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(r, yields) } }}
-            style={{ display: 'grid', gridTemplateColumns: '20px auto minmax(0,1fr) auto auto', alignItems: 'center', gap: 10, padding: '6px 4px', borderBottom: '1px solid var(--theme-border-faint, rgba(255,255,255,0.05))', transition: 'background 0.12s', cursor: 'pointer' }}>
+            style={{ display: 'grid', gridTemplateColumns: '20px 48px minmax(0,1fr) auto auto', alignItems: 'center', gap: 10, padding: '6px 4px', borderBottom: '1px solid var(--theme-border-faint, rgba(255,255,255,0.05))', transition: 'background 0.12s', cursor: 'pointer' }}>
             <Star on={on} onClick={() => onToggle(r.symbol)} label={`${on ? 'Unpin' : 'Pin'} ${r.label}`} />
             <AssetIcon symbol={r.symbol} />
             <span style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
@@ -253,8 +253,8 @@ export default function GlobalMarkets() {
                 style={{ border: 'none', background: window === item.key ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 16%, transparent)' : 'transparent', color: window === item.key ? GOLD : 'var(--theme-secondary, #8099b0)', cursor: 'pointer', padding: '4px 6px', fontFamily: MONO, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.04em' }}>{item.label}</button>)}
             </span>}
             <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontFamily: MONO, fontSize: 9.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #56708a)' }}>
-              <span style={{ padding: '3px 5px', border: `1px solid ${date ? 'var(--theme-border, rgba(255,255,255,0.14))' : 'color-mix(in srgb, var(--theme-tertiary, #60a5fa) 45%, transparent)'}`, color: date ? 'var(--theme-secondary, #8099b0)' : 'var(--theme-tertiary, #60a5fa)', background: date ? 'transparent' : 'color-mix(in srgb, var(--theme-tertiary, #60a5fa) 8%, transparent)' }}>{date ? 'EOD' : 'LATEST'}</span>
-              {date ? `Session ${date} · completed session` : asOf ? `${q.data?.americas_mode === 'cme_futures' ? 'CME futures proxies · ' : ''}Yahoo best-effort · updated ${asOf} local · 60s refresh` : 'Loading'}
+              <span style={{ padding: '3px 5px', border: `1px solid ${date ? 'var(--theme-border, rgba(255,255,255,0.14))' : 'color-mix(in srgb, var(--theme-tertiary, #60a5fa) 45%, transparent)'}`, color: date ? 'var(--theme-secondary, #8099b0)' : 'var(--theme-tertiary, #60a5fa)', background: date ? 'transparent' : 'color-mix(in srgb, var(--theme-tertiary, #60a5fa) 8%, transparent)' }}>{date ? 'SESSION CLOSE' : 'MARKET DATA'}</span>
+              {date ? `Session ${date} · completed session` : asOf ? `${q.data?.americas_mode === 'cme_futures' ? 'CME futures proxies · ' : ''}Yahoo Finance · as of ${asOf} local · refreshes every 60s` : 'Loading'}
             </span>
           </div>
         </div>
