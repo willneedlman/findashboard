@@ -106,7 +106,8 @@ interface VerifiedRelationshipsResp {
   disclaimer: string
 }
 
-type SortMode = 'score' | 'name' | 'revenue'
+type SortMode = 'score' | 'name' | 'revenue' | 'source'
+type SourceFilter = 'all' | 'verified' | 'reported' | 'similarity'
 type Side = 'sourcing' | 'markets'
 
 const GOLD = 'var(--theme-primary, #c9a84c)'
@@ -147,6 +148,16 @@ function sortPeers(peers: Peer[], sort: SortMode) {
       const at = a.end_market ? 1 : 0, bt = b.end_market ? 1 : 0
       if (at !== bt) return at - bt
       return (b.revenue ?? -1) - (a.revenue ?? -1)
+    }
+    if (sort === 'source') {
+      const getRank = (p: Peer) => {
+        if (p.verified) return 0
+        if (p.end_market) return 1
+        return 2
+      }
+      const ra = getRank(a), rb = getRank(b)
+      if (ra !== rb) return ra - rb
+      return b.score - a.score
     }
     return b.score - a.score
   })
@@ -266,7 +277,8 @@ function endMarketPeers(profile?: CompanyProfileResp): Peer[] {
 }
 
 function SupplyMap({ data, verified, onOpen }: { data: PeersResp; verified: VerifiedRelationship[]; onOpen: (ticker: string) => void }) {
-  const [sortMode, setSortMode] = useState<SortMode>('score')
+  const [sortMode, setSortMode] = useState<SortMode>('source')
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all')
   const [hovered, setHovered] = useState<Peer | null>(null)
   const [selected, setSelected] = useState<Peer | null>(null)
   const [expandedSide, setExpandedSide] = useState<Side | null>(null)
@@ -275,8 +287,17 @@ function SupplyMap({ data, verified, onOpen }: { data: PeersResp; verified: Veri
     const reportedMarkets = endMarketPeers(data.profile)
     const verifiedKeys = new Set(verifiedPeers.flatMap(peer => [peer.symbol, peer.name.toLowerCase()].filter(Boolean)))
     const similarityPeers = (data.peers ?? []).filter(peer => !verifiedKeys.has(peer.symbol) && !verifiedKeys.has(peer.name.toLowerCase()))
-    return [...verifiedPeers, ...reportedMarkets, ...similarityPeers]
-  }, [data.peers, data.profile, verified])
+    
+    let all = [...verifiedPeers, ...reportedMarkets, ...similarityPeers]
+    if (sourceFilter === 'verified') {
+      all = all.filter(p => p.verified)
+    } else if (sourceFilter === 'reported') {
+      all = all.filter(p => p.end_market)
+    } else if (sourceFilter === 'similarity') {
+      all = all.filter(p => !p.verified && !p.end_market)
+    }
+    return all
+  }, [data.peers, data.profile, verified, sourceFilter])
   const layout = useMemo(() => {
     const sorted = sortPeers(peers, sortMode)
     return {
@@ -293,12 +314,27 @@ function SupplyMap({ data, verified, onOpen }: { data: PeersResp; verified: Veri
     <div className="ft-panel" style={{ overflow: 'hidden' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '9px 14px', borderBottom: `1px solid ${T.border}`, background: 'rgba(255,255,255,0.012)', flexWrap: 'wrap' }}>
         <span style={{ color: T.muted, fontFamily: T.mono, fontSize: 9, fontWeight: 400 }}>{verified.length} verified relationships · {data.profile?.geo_segments.latest?.length ?? 0} reported end markets · {data.returned ?? 0} similarity matches{!data.matched && data.base ? <span style={{ color: GOLD }} title="The firmographics database name did not match this ticker's identity, so similarity peers are withheld to avoid a wrong-company match."> · similarity withheld (name match unverified)</span> : ''}</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <span style={{ color: T.muted, fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em' }}>SORT</span>
-          <div style={{ display: 'flex', border: `1px solid ${T.border}` }}>
-            <Toggle value="score" selected={sortMode} onClick={setSortMode}>SCORE</Toggle>
-            <Toggle value="revenue" selected={sortMode} onClick={setSortMode}>REVENUE</Toggle>
-            <Toggle value="name" selected={sortMode} onClick={setSortMode}>NAME</Toggle>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
+          {/* Filter */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ color: T.muted, fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em' }}>FILTER</span>
+            <div style={{ display: 'flex', border: `1px solid ${T.border}` }}>
+              <Toggle value="all" selected={sourceFilter} onClick={setSourceFilter}>ALL</Toggle>
+              <Toggle value="verified" selected={sourceFilter} onClick={setSourceFilter}>VERIFIED</Toggle>
+              <Toggle value="reported" selected={sourceFilter} onClick={setSourceFilter}>REPORTED</Toggle>
+              <Toggle value="similarity" selected={sourceFilter} onClick={setSourceFilter}>SIMILARITY</Toggle>
+            </div>
+          </div>
+
+          {/* Sort */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ color: T.muted, fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em' }}>SORT</span>
+            <div style={{ display: 'flex', border: `1px solid ${T.border}` }}>
+              <Toggle value="source" selected={sortMode} onClick={setSortMode}>SOURCE</Toggle>
+              <Toggle value="score" selected={sortMode} onClick={setSortMode}>SCORE</Toggle>
+              <Toggle value="revenue" selected={sortMode} onClick={setSortMode}>REVENUE</Toggle>
+              <Toggle value="name" selected={sortMode} onClick={setSortMode}>NAME</Toggle>
+            </div>
           </div>
         </div>
       </div>
