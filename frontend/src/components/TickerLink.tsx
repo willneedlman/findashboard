@@ -32,7 +32,7 @@ const go = (url: string) => (sym: string, nav: ReturnType<typeof useNavigate>) =
 
 // Routes mirror TICKER_TOOLS in lib/tickerLink; "Peers" is the relative-valuation grid.
 const ACTIONS: Action[] = [
-  { key: 'profile',  label: 'Company Profile', icon: UserRound, run: go('/supply-chain') },
+  { key: 'profile',  label: 'Company Profile', icon: UserRound, run: go('/company-profile') },
   { key: 'peers',    label: 'Peers',           icon: Users,     run: go('/relative-valuation') },
   { key: 'overview', label: 'Overview',        icon: PanelRight,
     run: sym => { setLinkedTicker(sym); window.dispatchEvent(new CustomEvent(DRAWER_EVENT, { detail: sym })) } },

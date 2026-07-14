@@ -245,7 +245,7 @@ export default function App() {
               <Route path="/app"        element={<Home />} />
               <Route path="/hub/portfolio" element={<Navigate to="/hub/trading" replace />} />
               <Route path="/hub/:slug"  element={<HubLanding />} />
-              <Route path="/market"     element={<RedirectWithSearch to="/supply-chain" />} />
+              <Route path="/market"     element={<RedirectWithSearch to="/company-profile" />} />
               <Route path="/global-markets" element={<GlobalMarkets />} />
               <Route path="/chart-studio" element={<ChartStudio />} />
               <Route path="/options"    element={<OptionsPricer />} />
@@ -296,7 +296,8 @@ export default function App() {
               <Route path="/currency"            element={<CurrencyMatrix />} />
               <Route path="/flows-map"           element={<MaritimeMap />} />
               <Route path="/relative-valuation"  element={<RelativeValuation />} />
-              <Route path="/supply-chain"        element={<SupplyChain />} />
+              <Route path="/company-profile"     element={<SupplyChain />} />
+              <Route path="/supply-chain"        element={<RedirectWithSearch to="/company-profile" />} />
               <Route path="/supply-chain-peers"  element={<SupplyChainMap />} />
               <Route path="/gamma-scalping"      element={<Navigate to="/paper-trading" replace />} />
               <Route path="/trade-journal"       element={<TradeJournal />} />

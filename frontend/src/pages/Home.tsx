@@ -529,7 +529,7 @@ function TickerDashboard({ sym }: { sym: string }) {
 function TickerJumpTiles({ sym, isMobile }: { sym: string; isMobile: boolean }) {
   const navigate = useNavigate()
   const tiles = [
-    { icon: Globe, title: 'Company profile', sub: 'Price history, revenue mix & credit', route: `/supply-chain?ticker=${sym}` },
+    { icon: Globe, title: 'Company profile', sub: 'Price history, revenue mix & credit', route: `/company-profile?ticker=${sym}` },
     { icon: Calculator, title: 'DCF valuation', sub: 'Intrinsic value & upside', route: `/dcf?ticker=${sym}` },
     { icon: Scale, title: 'Peer comparison', sub: 'Multiples vs sector peers', route: `/relative-valuation?ticker=${sym}` },
     { icon: TrendingUp, title: 'Chart Studio', sub: 'Candles with every overlay', route: '/chart-studio' },
@@ -655,7 +655,7 @@ export default function Home() {
     else if (e.key === 'ArrowUp') { e.preventDefault(); setSelIdx(i => Math.max(-1, i - 1)) }
     else if (e.key === 'Enter') {
       if (selIdx >= 0 && navRoutes[selIdx]) navigate(navRoutes[selIdx])
-      else if (dashSym) navigate(`/supply-chain?ticker=${dashSym}`)
+      else if (dashSym) navigate(`/company-profile?ticker=${dashSym}`)
     }
   }
   const recentTickers = useMemo(() => getRecentTickers(), [])

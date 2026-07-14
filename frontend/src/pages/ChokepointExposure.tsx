@@ -570,7 +570,7 @@ function LeaderRow({ l, rank, maxScore, open, onToggle, navigate }: { l: Leader;
           <div style={{ flex: 1.35, minWidth: 0 }}>
             <div style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: T.gold }}>Exposure briefing · {l.ticker}</div>
             <div style={{ fontFamily: SANS, fontSize: 11.5, color: T.muted, lineHeight: 1.65, marginTop: 7 }}>{brief}</div>
-            <div onClick={() => navigate(`/supply-chain?ticker=${l.ticker}`)} style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color: T.gold, marginTop: 9, cursor: 'pointer' }}>OPEN {l.ticker} IN RESEARCH ↗</div>
+            <div onClick={() => navigate(`/company-profile?ticker=${l.ticker}`)} style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color: T.gold, marginTop: 9, cursor: 'pointer' }}>OPEN {l.ticker} IN RESEARCH ↗</div>
           </div>
           <div style={{ width: 308, flexShrink: 0 }}>
             <div style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: T.muted }}>Drivers · direction × disruption</div>

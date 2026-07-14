@@ -139,7 +139,7 @@ const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`
 // Overview has no route: it fires the same 'ft:ticker-drawer' window event the
 // command palette and <TickerLink> use, opening the slide-over in place.
 const ROW_LINKS: { label: string; base?: string; overview?: boolean }[] = [
-  { label: 'Profile',  base: '/supply-chain' },
+  { label: 'Profile',  base: '/company-profile' },
   { label: 'Peers',    base: '/relative-valuation' },
   { label: 'Overview', overview: true },
   { label: 'DCF',      base: '/dcf' },
