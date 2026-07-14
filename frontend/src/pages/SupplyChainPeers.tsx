@@ -344,12 +344,12 @@ function SupplyMap({ data, verified, onOpen }: { data: PeersResp; verified: Veri
             {mapped.sourcing.map((peer, i) => {
               const y = ((i + 0.5) / Math.max(mapped.sourcing.length, 1)) * 100
               const width = 0.7 + (peer.score / maxScore) * 2.8
-              return <path key={`${peer.name}-${i}`} d={`M 32 ${y} C 42 ${y}, 43 50, 48 50`} stroke={nodeColor(peer)} strokeWidth={width} opacity={focus && focus !== peer ? 0.12 : 0.42} fill="none" />
+              return <path key={`${peer.name}-${i}`} d={`M 32.5 ${y} C 36 ${y}, 37 50, 40 50`} stroke={nodeColor(peer)} strokeWidth={width} opacity={focus && focus !== peer ? 0.12 : 0.42} fill="none" />
             })}
             {mapped.markets.map((peer, i) => {
               const y = ((i + 0.5) / Math.max(mapped.markets.length, 1)) * 100
               const width = 0.7 + (peer.score / maxScore) * 2.8
-              return <path key={`${peer.name}-${i}`} d={`M 52 50 C 57 50, 58 ${y}, 68 ${y}`} stroke={nodeColor(peer)} strokeWidth={width} opacity={focus && focus !== peer ? 0.12 : 0.42} fill="none" />
+              return <path key={`${peer.name}-${i}`} d={`M 60 50 C 63 50, 64 ${y}, 67.5 ${y}`} stroke={nodeColor(peer)} strokeWidth={width} opacity={focus && focus !== peer ? 0.12 : 0.42} fill="none" />
             })}
           </svg>
           <section style={{ zIndex: 1 }}>
@@ -579,8 +579,8 @@ function EmptyMap({ label }: { label: string }) {
       <div style={{ position: 'absolute', top: 6, right: 12, color: T.muted, fontFamily: T.mono, fontSize: 9, letterSpacing: '0.06em', zIndex: 3 }}>output preview</div>
       <div className="scm-map-grid scm-empty-grid" style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'minmax(210px, 1fr) minmax(340px, 0.98fr) minmax(210px, 1fr)', gap: 30, minWidth: 860, padding: '46px 28px 22px', minHeight: 300, boxSizing: 'border-box', alignItems: 'center' }}>
         <svg aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: '46px 28px 22px', width: 'calc(100% - 56px)', height: 'calc(100% - 68px)', pointerEvents: 'none' }}>
-          {[18, 39, 61, 82].map(y => <path key={`left-${y}`} d={`M 27 ${y} C 40 ${y}, 42 50, 48 50`} fill="none" stroke={ghost} strokeWidth="1.1" />)}
-          {[25, 50, 75].map(y => <path key={`right-${y}`} d={`M 52 50 C 58 50, 60 ${y}, 73 ${y}`} fill="none" stroke={ghost} strokeWidth="1.1" />)}
+          {[18, 39, 61, 82].map(y => <path key={`left-${y}`} d={`M 32.5 ${y} C 36 ${y}, 37 50, 40 50`} fill="none" stroke={ghost} strokeWidth="1.1" />)}
+          {[25, 50, 75].map(y => <path key={`right-${y}`} d={`M 60 50 C 63 50, 64 ${y}, 67.5 ${y}`} fill="none" stroke={ghost} strokeWidth="1.1" />)}
         </svg>
         <section style={{ zIndex: 1 }}>
           <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 7, marginBottom: 10, color: T.muted, fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.11em', textTransform: 'uppercase' }}>Suppliers / sourcing <ArrowLeft size={12} /></div>
