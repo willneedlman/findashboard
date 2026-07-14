@@ -340,6 +340,24 @@ const baseOptions = (C: Colors, h: number) => ({
   height: h,
 })
 
+// Volume histogram, shared by its lane and its price-panel-overlay placement.
+// Bars always start at 0 — the default autoscale pads a chunk of the range
+// below the smallest bar too, which dips the axis into negative territory.
+function addVolumeSeries(owner: IChartApi, priceScaleId?: string) {
+  const srs = owner.addHistogramSeries({
+    priceFormat: { type: 'volume' }, priceLineVisible: false, lastValueVisible: false,
+    ...(priceScaleId ? { priceScaleId } : {}),
+  })
+  srs.applyOptions({
+    autoscaleInfoProvider: (original: () => { priceRange: { minValue: number; maxValue: number } } | null) => {
+      const res = original()
+      if (!res) return res
+      return { ...res, priceRange: { ...res.priceRange, minValue: 0 } }
+    },
+  } as any)
+  return srs
+}
+
 // ── UI primitives ────────────────────────────────────────────────────────────
 const MONO = 'var(--theme-mono)'
 const SANS = 'var(--theme-sans)'
@@ -388,8 +406,8 @@ function Row({ label, on, src, color, style, onToggle }: {
 
 // Compact per-layer controls shown under an active row: scale-band size on the
 // price panel, and where the series draws (price panel vs the overlay lane).
-function CfgChips({ label, cfg, showPlace, onPatch }: {
-  label: string; cfg: LayerCfg; showPlace: boolean; onPatch: (p: Partial<LayerCfg>) => void
+function CfgChips({ label, cfg, showPlace, showSize = true, onPatch }: {
+  label: string; cfg: LayerCfg; showPlace: boolean; showSize?: boolean; onPatch: (p: Partial<LayerCfg>) => void
 }) {
   const chip = (on: boolean): React.CSSProperties => ({
     fontFamily: MONO, fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', padding: '1px 5px', cursor: 'pointer',
@@ -399,7 +417,7 @@ function CfgChips({ label, cfg, showPlace, onPatch }: {
   })
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 0 4px 40px' }}>
-      {(!showPlace || cfg.place === 'chart') && (['S', 'M', 'L'] as LayerSize[]).map(s => (
+      {showSize && (!showPlace || cfg.place === 'chart') && (['S', 'M', 'L'] as LayerSize[]).map(s => (
         <button key={s} onClick={() => onPatch({ size: s })} aria-label={`${label} size ${s}`} style={chip(cfg.size === s)}>{s}</button>
       ))}
       {showPlace && (
@@ -473,6 +491,9 @@ export function ChartStudioContent() {
   const [state, dispatch] = useReducer(reducer, undefined, load)
   const { ticker, assetClass, tf, candleWidth, ind, lanes, laneOrder, layerCfg, railOpen, inspectorOpen, mas, events, overlays, compares, params } = state
   const cfgOf = (id: string): LayerCfg => ({ size: 'M', place: 'chart', ...layerCfg[id] })
+  // Volume defaults to its own lane (unlike other overlays, which default to
+  // the chart) so existing layouts don't change until a user opts in.
+  const volPlace: 'chart' | 'lane' = layerCfg.volume?.place === 'chart' ? 'chart' : 'lane'
   const [tickerDraft, setTickerDraft] = useState(ticker)
   const [compareDraft, setCompareDraft] = useState('')
   const [maDraft, setMaDraft] = useState<MA>({ kind: 'ema', period: 21 })
@@ -622,6 +643,9 @@ export function ChartStudioContent() {
   // Each overlay tracks its owner chart and price scale so it can move between
   // the price panel and the overlay lane when the user changes placement.
   const overlaySeries = useRef<Map<string, { srs: ISeriesApi<'Line'>; owner: IChartApi; scaleId: string }>>(new Map())
+  // Volume's own owner chart, tracked the same way so it can move between the
+  // price panel and its dedicated lane.
+  const volOwner = useRef<IChartApi | null>(null)
   const maSeries = useRef<Map<string, ISeriesApi<'Line'>>>(new Map())
   const flipLine = useRef<IPriceLine | null>(null)
   const store = useRef<Map<string, Sorted>>(new Map())
@@ -739,16 +763,15 @@ export function ChartStudioContent() {
     const bbM = main.addLineSeries({ color: `${C.text}59`, lineWidth: 1, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false })
     const vwapS = main.addLineSeries({ color: C.violet, lineWidth: 1, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false })
 
-    const volS = laneCharts.volume?.addHistogramSeries({ priceFormat: { type: 'volume' }, priceLineVisible: false, lastValueVisible: false })
-    // Volume bars always start at 0 — the default autoscale pads a chunk of the
-    // range below the smallest bar too, which dips the axis into negative territory.
-    volS?.applyOptions({
-      autoscaleInfoProvider: (original: () => { priceRange: { minValue: number; maxValue: number } } | null) => {
-        const res = original()
-        if (!res) return res
-        return { ...res, priceRange: { ...res.priceRange, minValue: 0 } }
-      },
-    } as any)
+    // Volume starts on whichever owner is already configured (persisted
+    // layerCfg), so a returning 'chart'-placement user doesn't pay a
+    // create-on-lane/remove/recreate-on-chart cycle on every page load.
+    const volInitOwner = volPlace === 'chart' ? main : laneCharts.volume
+    const volS = volInitOwner && addVolumeSeries(volInitOwner, volPlace === 'chart' ? 'volume' : undefined)
+    if (volS && volInitOwner) {
+      volOwner.current = volInitOwner
+      if (volPlace === 'chart') volInitOwner.priceScale('volume').applyOptions({ visible: false, scaleMargins: { top: 0.8, bottom: 0 } })
+    }
     const rsiS = laneCharts.rsi?.addLineSeries({ color: C.violet, lineWidth: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false })
     rsiS?.createPriceLine({ price: 70, color: `${C.laneNeg}66`, lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: '' })
     rsiS?.createPriceLine({ price: 30, color: `${C.lanePos}66`, lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: '' })
@@ -781,11 +804,15 @@ export function ChartStudioContent() {
     // mouse move, so echoes must be guarded (like range sync) or the handlers
     // feed back — clearing the crosshair on the very lane being hovered, which
     // flickers against the native one on every mousemove.
-    const laneSeriesFor: Partial<Record<LaneId, ISeriesApi<any>>> = { volume: volS, rsi: rsiS, macd: macdLine, iv: ivS }
+    // volume is looked up live (series.current.volS) rather than captured here,
+    // since placement changes swap it to a new series on a different owner —
+    // a stale reference would silently stop echoing the lane's crosshair dot
+    // even after the user switches back to 'lane' placement.
+    const laneSeriesFor: Partial<Record<LaneId, ISeriesApi<any>>> = { rsi: rsiS, macd: macdLine, iv: ivS }
     const echoLanes = (t: number | undefined, exclude?: LaneId) => {
       for (const lane of LANE_DEFS) {
         if (lane.id === exclude) continue
-        const ch = laneCharts[lane.id]; const ls = laneSeriesFor[lane.id]
+        const ch = laneCharts[lane.id]; const ls = lane.id === 'volume' ? series.current.volS : laneSeriesFor[lane.id]
         if (!ch || !ls) continue
         try {
           const v = t != null ? floorValExact(store.current.get(`lane:${lane.id}`), t) : null
@@ -827,7 +854,7 @@ export function ChartStudioContent() {
       ro.disconnect()
       wheelEl.removeEventListener('wheel', onWheel)
       main.remove(); laneList.forEach(c => c.remove())
-      charts.current = {}; series.current = {}; overlaySeries.current.clear(); maSeries.current.clear(); flipLine.current = null
+      charts.current = {}; series.current = {}; overlaySeries.current.clear(); maSeries.current.clear(); flipLine.current = null; volOwner.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -857,11 +884,32 @@ export function ChartStudioContent() {
   // ── Candles + indicators + lanes into series ──
   useEffect(() => {
     const s = series.current
-    if (!s.candle || !candles.length) return
+    const main = charts.current.main
+    if (!s.candle || !main || !candles.length) return
     try {
       s.candle.setData(candles.map(c => ({ time: c.time as Time, open: c.open, high: c.high, low: c.low, close: c.close })))
       candleStore.current = new Map(candles.map(c => [c.time, c]))
       store.current.set('close', toSorted(candles.map(c => ({ time: c.time, value: c.close }))))
+
+      // Volume rides the price panel (own hidden price scale, bottom band) or
+      // its dedicated lane below — move the series between owners when the
+      // user toggles placement, same pattern the overlay lanes use.
+      const volLane = charts.current.volume
+      const target = volPlace === 'chart' ? main : volLane
+      if (target && volOwner.current !== target) {
+        if (s.volS && volOwner.current) {
+          try { volOwner.current.removeSeries(s.volS) } catch { /* torn down */ }
+        }
+        s.volS = addVolumeSeries(target, volPlace === 'chart' ? 'volume' : undefined)
+        // Only the price-panel placement needs a margin override — a small
+        // hidden band at the bottom so bars don't collide with candles. The
+        // lane's own scale is never touched, so switching back to 'lane'
+        // always lands on its untouched default appearance.
+        if (volPlace === 'chart') {
+          target.priceScale('volume').applyOptions({ visible: false, scaleMargins: { top: 0.8, bottom: 0 } })
+        }
+        volOwner.current = target
+      }
       s.volS.setData(lanes.volume ? candles.map(c => ({ time: c.time as Time, value: c.volume, color: c.close >= c.open ? `${C.lanePos}80` : `${C.laneNeg}80` })) : [])
       store.current.set('lane:volume', lanes.volume ? toSorted(candles.map(c => ({ time: c.time, value: c.volume }))) : { t: [], v: [] })
       if (indData) {
@@ -880,7 +928,7 @@ export function ChartStudioContent() {
       }
       charts.current.main?.timeScale().applyOptions({ timeVisible: INTRADAY.has(tf) })
     } catch (e) { console.warn('candle/indicator render failed', e) }
-  }, [candles, indData, ind, lanes.volume, lanes.rsi, lanes.macd, mas, tf, C])
+  }, [candles, indData, ind, lanes.volume, lanes.rsi, lanes.macd, mas, tf, C, volPlace])
 
   // ── MA series lifecycle ──
   useEffect(() => {
@@ -1324,6 +1372,10 @@ export function ChartStudioContent() {
                   <button onClick={() => dispatch({ type: 'moveLane', id, dir: 'down' })} disabled={oi === laneOrder.length - 1} aria-label={`Move ${c.label} down`}
                     style={{ background: 'none', border: 'none', cursor: oi === laneOrder.length - 1 ? 'default' : 'pointer', fontFamily: MONO, fontSize: 10, color: oi === laneOrder.length - 1 ? 'var(--theme-border, #2c3d52)' : 'var(--theme-secondary, #8099b0)', padding: '0 2px' }}>↓</button>
                 </div>
+                {id === 'volume' && lanes.volume && (
+                  <CfgChips label="Volume" cfg={{ size: 'M', place: volPlace }} showPlace showSize={false}
+                    onPatch={p => dispatch({ type: 'layerCfg', id: 'volume', patch: p })} />
+                )}
                 {id === 'rsi' && lanes.rsi && (
                   <div style={paramRow}><NumParam label="LEN" value={params.rsiP} min={2} max={100} onChange={setParam('rsiP')} /></div>
                 )}
@@ -1479,7 +1531,10 @@ export function ChartStudioContent() {
 
           {laneOrder.map(id => {
             const lane = LANE_DEFS.find(l => l.id === id)!
-            const on = lanes[id]
+            // Volume's lane row is hidden while it's riding the price panel
+            // instead — the underlying lane chart stays mounted (so switching
+            // back doesn't need to recreate it) but has nothing to show.
+            const on = id === 'volume' ? (lanes.volume && volPlace !== 'chart') : lanes[id]
             const header = id === 'iv'
               ? <>{ivLane.kind === 'rank' ? 'IV RANK' : 'ATM IV30'}{ivLane.pts.length < 30 && <span style={{ color: 'var(--theme-secondary, #8099b0)' }}> · {ivLane.pts.length} pt{ivLane.pts.length === 1 ? '' : 's'} · accrues daily</span>}</>
               : id === 'rsi' ? `RSI ${params.rsiP}` : id === 'macd' ? `MACD ${params.macdF}·${params.macdS}·${params.macdSig}` : lane.label
