@@ -38,11 +38,12 @@ frontend/dist
 .vscode
 .idea
 
-# data/ holds a ~100MB local full-build backup + runtime caches; only the bundled
-# supplier DB is COPYed into the image, so keep just that file in the build context.
+# data/ holds multi-GB WRDS/LSEG source CSV exports + runtime caches; only the
+# compact, already-ingested serving stores are COPYed into the image.
 data/*
 !data/veridion_nodes.db
 !data/port_performance.db
 !data/renthub_snapshot.db
 !data/consumer_spend.db
 !data/supply_chain.db
+!data/corporate.db
