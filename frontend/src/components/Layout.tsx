@@ -166,12 +166,12 @@ export default function Layout({ children }: LayoutProps) {
         style={{ minWidth: 0, background: 'var(--theme-bg, #060e1c)', borderRightWidth: 1, borderRightStyle: 'solid', borderRightColor: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 19%, transparent)' }}
       >
         {/* brand (→ home) + collapse chevron */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: collapsed ? 2 : 9, justifyContent: 'flex-start', padding: collapsed ? '0 4px 0 16px' : '0 14px', minHeight: 64, borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 12%, transparent)' }}>
-          <button onClick={() => navigate('/app')} aria-label="Home" title="Home" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 9 }}>
-            <AlphaMark size={24} color="var(--theme-primary, #c9a84c)" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: collapsed ? 2 : 10, justifyContent: 'flex-start', padding: collapsed ? '0 4px 0 14px' : '0 14px', minHeight: 70, borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 12%, transparent)' }}>
+          <button onClick={() => navigate('/app')} aria-label="Home" title="Home" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <AlphaMark size={30} color="var(--theme-primary, #c9a84c)" />
             {!collapsed && (
-              <span style={{ display: 'block', paddingLeft: 9, borderLeft: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 28%, transparent)', textAlign: 'left' }}>
-                <span style={{ fontFamily: 'Cinzel, Georgia, serif', fontSize: 14, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--theme-primary, #c9a84c)', display: 'block', lineHeight: 1.05 }}>ALPHATAPE</span>
+              <span style={{ display: 'block', paddingLeft: 10, borderLeft: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 34%, transparent)', textAlign: 'left' }}>
+                <span style={{ fontFamily: 'Cinzel, Georgia, serif', fontSize: 15, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--theme-primary, #c9a84c)', display: 'block', lineHeight: 1.05 }}>ALPHATAPE</span>
                 <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--theme-secondary, #5e768f)', display: 'block' }}>Terminal</span>
               </span>
             )}
