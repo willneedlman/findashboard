@@ -112,8 +112,10 @@ def _lookup_openfigi(cusip: str):
 
 
 def _holding_to_bond(h: dict, issuer: str) -> dict:
-    """Shape an ETF-holdings record into a resolved-bond row. Each carries a real
-    CUSIP and price mark, so the picked bond yields a real YTM (not at par)."""
+    """Shape an ETF-holdings or WRDS-TRACE record into a resolved-bond row.
+    ETF-holdings entries carry real coupon/maturity terms, so they yield a real
+    YTM; WRDS-TRACE-only entries (h["source"] == "wrds-trace") carry a price but
+    no terms — coupon_rate/maturity_date stay None and YTM cannot be solved."""
     mat = h.get("maturity_date")
     years = None
     if mat:
@@ -122,7 +124,7 @@ def _holding_to_bond(h: dict, issuer: str) -> dict:
         except ValueError:
             pass
     return {
-        "found": True, "source": "etf-holding",
+        "found": True, "source": h.get("source") or "etf-holding",
         "cusip": h.get("cusip", ""),
         "name": issuer,
         "description": h.get("name") or None,

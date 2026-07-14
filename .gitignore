@@ -56,3 +56,5 @@ smoke-test.png
 **/skills/redesign-existing-projects
 **/skills/stitch-design-taste
 backend/data/cache/
+*.csv
+data/*.csv

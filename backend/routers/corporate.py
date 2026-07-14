@@ -5,7 +5,8 @@ from fastapi import APIRouter, HTTPException
 import yfinance as yf
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from cache import get_history, get_info
+from cache import get_history, get_info, cached
+import corporate_db
 try:
     import fmp
 except ImportError:                                   # pragma: no cover
@@ -209,7 +210,7 @@ def _get_peers_for_ticker(ticker: str, sector: str) -> list:
     if "financial" in sec_lower: return [p for p in PEER_GROUPS["FIN"] if p != sym]
     return [p for p in PEER_GROUPS["CONS"] if p != sym]
 
-def safe_float(d, keys, default=0.0) -> float:
+def safe_float(d, keys, default=None):
     """Defensive helper to safely capture and cast numerical properties."""
     if not d or not isinstance(d, dict):
         return default
@@ -333,8 +334,8 @@ def get_corporate_hub(ticker: str):
             try:
                 t_pct_1d = round(float(info["regularMarketChangePercent"]), 3)
             except Exception:
-                t_pct_1d = round((t_price - t_prev) / t_prev * 100, 3) if t_prev else None
-        elif t_price and t_prev and t_prev > 0:
+                t_pct_1d = round((t_price - t_prev) / t_prev * 100, 3) if (t_price is not None and t_prev) else None
+        elif t_price is not None and t_prev and t_prev > 0:
             t_pct_1d = round((t_price - t_prev) / t_prev * 100, 3)
         else:
             t_pct_1d = None
@@ -470,11 +471,78 @@ def get_corporate_hub_implied(tickers: str):
         return {"implied": dict(pool.map(one, syms))}
 
 
+@cached(ttl=43200, persist=True)
+def _lseg_insider_data(symbol: str):
+    """Raw LSEG insider transactions + returns + ownership rollup for a ticker,
+    or None when the ticker has no LSEG coverage at all. This is build-time ETL
+    output (refreshed on a schedule, not per-request), so it's cached the same
+    way the yfinance fallback below caches its own quarterly data. A ticker can
+    have rollup data with zero transactions (or vice versa), so "covered" means
+    either is present — not just transactions."""
+    tx_rows = corporate_db.query(
+        "SELECT * FROM lseg_insider_transactions WHERE ticker = ? ORDER BY date DESC LIMIT 20", (symbol,)
+    )
+    ret_rows = corporate_db.query("SELECT * FROM lseg_insider_returns WHERE ticker = ?", (symbol,))
+    rollup = corporate_db.query_one("SELECT * FROM lseg_ownership_rollup WHERE ticker = ?", (symbol,))
+    if not tx_rows and not rollup:
+        return None
+    return {
+        "transactions": [dict(r) for r in tx_rows],
+        "returns": [dict(r) for r in ret_rows],
+        "rollup": dict(rollup) if rollup else None,
+    }
+
+
 @router.get("/hub/insider")
 def get_corporate_hub_insider(ticker: str):
-    """Returns recent insider transactions for a ticker."""
+    """Returns recent insider transactions for a ticker, using LSEG tables with yfinance fallback."""
     try:
         symbol = ticker.strip().upper()
+
+        lseg = _lseg_insider_data(symbol)
+        if lseg:
+            transactions = []
+            for r in lseg["transactions"]:
+                cls = r["txn_classification"] or ""
+                transactions.append({
+                    "date": r["date"],
+                    "insider": r["insider_name"],
+                    "title": r["title"],
+                    "transaction": cls,
+                    "side": "sell" if "Sell" in cls or "Filing" in cls or "Form 144" in cls else ("buy" if "Buy" in cls or "Acquisition" in cls else "neutral"),
+                    "shares": r["shares"],
+                    "value": r["value"],
+                    "is_amendment": r["is_amendment"],
+                    "is_form144": r["is_form144"],
+                    "is_10b51": r["is_10b51"]
+                })
+            avg_returns = [
+                {
+                    "txn_type": r["txn_type"],
+                    "avg_return_3m": r["avg_return_3m"],
+                    "avg_return_6m": r["avg_return_6m"],
+                    "avg_return_12m": r["avg_return_12m"],
+                }
+                for r in lseg["returns"]
+            ]
+            rollup = lseg["rollup"] or {}
+            passive_pct = rollup.get("passive_pct")
+            active_pct = rollup.get("active_pct")
+            insider_pct = rollup.get("insider_pct")
+            held_pct_inst = (passive_pct + active_pct) / 100.0 if (passive_pct is not None and active_pct is not None) else None
+            held_pct_ins = insider_pct / 100.0 if insider_pct is not None else None
+            return {
+                "ticker": symbol,
+                "transactions": transactions,
+                "held_pct_institutions": held_pct_inst,
+                "held_pct_insiders": held_pct_ins,
+                "passive_pct": passive_pct,
+                "active_pct": active_pct,
+                "average_returns": avg_returns,
+                "source": "LSEG"
+            }
+
+        # Fallback to yfinance if not covered by LSEG
         stock = yf.Ticker(symbol)
         transactions = []
         try:
@@ -514,6 +582,7 @@ def get_corporate_hub_insider(ticker: str):
             "transactions": transactions,
             "held_pct_institutions": round(float(inst_pct), 4) if isinstance(inst_pct, (int, float)) else None,
             "held_pct_insiders": round(float(insider_pct), 4) if isinstance(insider_pct, (int, float)) else None,
+            "source": "yfinance"
         }
     except Exception as e:
         logger.error(f"Error fetching insider data for {ticker}: {e}")
@@ -1040,11 +1109,66 @@ def _holder_rows(df, limit: int = 12) -> list:
     return out
 
 
+@cached(ttl=43200, persist=True)
+def _lseg_institutional_data(symbol: str):
+    """Raw LSEG institutional/fund holdings + ownership rollup for a ticker, or
+    None when uncovered. Same "either table counts as covered" rule as
+    _lseg_insider_data — a ticker with rollup percentages but no individual
+    holder rows (or vice versa) must not fall through to yfinance and silently
+    drop the LSEG data that does exist."""
+    hold_rows = corporate_db.query(
+        "SELECT * FROM lseg_institutional_holdings WHERE ticker = ? ORDER BY shares DESC", (symbol,)
+    )
+    rollup = corporate_db.query_one("SELECT * FROM lseg_ownership_rollup WHERE ticker = ?", (symbol,))
+    if not hold_rows and not rollup:
+        return None
+    return {
+        "holdings": [dict(r) for r in hold_rows],
+        "rollup": dict(rollup) if rollup else None,
+    }
+
+
 @router.get("/institutional")
 def get_institutional_ownership(ticker: str):
     """Institutional ownership: % held by institutions/insiders plus the top
-    13F holders and mutual-fund holders (yfinance, sourced from quarterly 13Fs)."""
+    holders and fund holders, using LSEG ownership tables with yfinance fallback."""
     symbol = ticker.strip().upper()
+
+    lseg = _lseg_institutional_data(symbol)
+    if lseg:
+        holders, funds = [], []
+        for r in lseg["holdings"]:
+            hold_dict = {
+                "holder": r["holder_name"],
+                "shares": r["shares"],
+                "value": r["value"],
+                "pct_out": r["pct_out"],
+                "date": r["date"],
+                "change_shares": r["change_shares"],
+                "investment_style": r["investment_style"]
+            }
+            if (r["holder_type"] or "").strip().lower() == "institutional":
+                holders.append(hold_dict)
+            else:
+                funds.append(hold_dict)
+        rollup = lseg["rollup"] or {}
+        passive_pct = rollup.get("passive_pct")
+        active_pct = rollup.get("active_pct")
+        insider_pct = rollup.get("insider_pct")
+        held_pct_inst = (passive_pct + active_pct) / 100.0 if (passive_pct is not None and active_pct is not None) else None
+        held_pct_ins = insider_pct / 100.0 if insider_pct is not None else None
+        return {
+            "ticker": symbol,
+            "pct_institutions": held_pct_inst,
+            "pct_insiders": held_pct_ins,
+            "passive_pct": passive_pct,
+            "active_pct": active_pct,
+            "holders": holders,
+            "funds": funds,
+            "source": "LSEG"
+        }
+
+    # Fallback to yfinance
     cache_key = f"instown:v1:{symbol}"
     cached = disk_get(cache_key)
     if cached:
@@ -1081,6 +1205,46 @@ def get_institutional_ownership(ticker: str):
         return result
     except Exception as e:
         logger.error(f"Error fetching institutional ownership for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@cached(ttl=43200, persist=True)
+def _sdc_deals_data(symbol: str):
+    rows = corporate_db.query(
+        "SELECT * FROM sdc_deals WHERE acquirer_ticker = ? OR target_ticker = ? ORDER BY date_announced DESC",
+        (symbol, symbol)
+    )
+    return [dict(r) for r in rows]
+
+
+@router.get("/deals")
+def get_sdc_deals(ticker: str):
+    """Returns announced/completed M&A deals from SDC Deals where the ticker
+    is either the target or the acquirer."""
+    symbol = ticker.strip().upper()
+    try:
+        deals = []
+        for r in _sdc_deals_data(symbol):
+            deals.append({
+                "deal_id": r["deal_id"],
+                "date_announced": r["date_announced"],
+                "date_completed": r["date_completed"],
+                "acquirer_ticker": r["acquirer_ticker"],
+                "acquirer_name": r["acquirer_name"],
+                "target_ticker": r["target_ticker"],
+                "target_name": r["target_name"],
+                "deal_value": r["deal_value"],
+                "deal_terms": r["deal_terms"],
+                "deal_status": r["deal_status"],
+                "role": "acquirer" if r["acquirer_ticker"] == symbol else "target"
+            })
+        return {
+            "ticker": symbol,
+            "deals": deals,
+            "source": "SDC"
+        }
+    except Exception as e:
+        logger.error(f"Error fetching SDC deals for {symbol}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

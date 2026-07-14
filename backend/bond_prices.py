@@ -33,6 +33,8 @@ except ImportError:                                   # pragma: no cover
     def disk_get(_k): return None
     def disk_set(_k, _v, ttl=0): pass
 
+import corporate_db
+
 
 def _num(v):
     try:
@@ -229,21 +231,76 @@ def _etf_price_map() -> dict:
     return {}
 
 
+def _wrds_trace_price(cusip: str) -> dict | None:
+    """Latest WRDS TRACE last-sale print for a CUSIP, or None when unavailable."""
+    row = corporate_db.query_one(
+        "SELECT price, trade_date, issuer_name FROM wrds_trace WHERE cusip = ?", (cusip,)
+    )
+    if not row:
+        return None
+    return {
+        "market_price": round(float(row["price"]), 3),
+        "price_source": f"WRDS TRACE (last trade, {row['trade_date']})",
+        "price_as_of": row["trade_date"],
+        "name": row["issuer_name"],
+        "issuer": _issuer_of(row["issuer_name"]) if row["issuer_name"] else None,
+        "source": "wrds-trace",
+    }
+
+
+def _wrds_trace_all_bonds() -> dict:
+    """Returns all bonds in wrds_trace as a dictionary keyed by CUSIP. WRDS TRACE
+    carries a price but no bond terms, so these entries are tagged
+    source='wrds-trace' (no coupon_rate/maturity_date) rather than the
+    'etf-holding' label real ETF-sourced entries get — see bond.py's
+    _holding_to_bond, which reads this tag instead of assuming ETF provenance."""
+    rows = corporate_db.query("SELECT cusip, price, trade_date, issuer_name FROM wrds_trace")
+    out = {}
+    for row in rows:
+        cusip, price, trade_date, issuer_name = row["cusip"], row["price"], row["trade_date"], row["issuer_name"]
+        out[cusip] = {
+            "cusip": cusip,
+            "name": issuer_name,
+            "issuer": _issuer_of(issuer_name) if issuer_name else None,
+            "market_price": price,
+            "price_source": f"WRDS TRACE (last trade, {trade_date})",
+            "price_as_of": trade_date,
+            "source": "wrds-trace",
+        }
+    return out
+
+
 def search_issuers(q: str, max_entities: int = 12, max_bonds: int = 40) -> list:
     """Issuer-name -> that issuer's bonds, grouped by legal entity, sourced from
-    the ETF holdings index (local, no rate limits, and each bond carries a real
-    price mark). A query matches when every token appears in the holding name, so
-    'goldman sachs' finds GOLDMAN SACHS GROUP INC and its subsidiaries."""
+    the ETF holdings index and WRDS TRACE database. A query matches when every token
+    appears in the holding name."""
     toks = [t for t in re.split(r"\s+", q.strip().upper()) if t]
     if not toks:
         return []
     groups: dict = {}
+    
+    # 1. Search ETF holdings
     for h in _etf_price_map().values():
         nm = (h.get("name") or "").upper()
         issuer = h.get("issuer")
         if not nm or not issuer or not all(t in nm for t in toks):
             continue
-        groups.setdefault(issuer, {})[h["cusip"]] = h        # dedup by cusip
+        groups.setdefault(issuer, {})[h["cusip"]] = h
+        
+    # 2. Search WRDS TRACE bonds
+    for h in _wrds_trace_all_bonds().values():
+        nm = (h.get("name") or "").upper()
+        issuer = h.get("issuer")
+        if not nm or not issuer or not all(t in nm for t in toks):
+            continue
+        existing = groups.setdefault(issuer, {}).get(h["cusip"])
+        if existing:
+            existing["market_price"] = h["market_price"]
+            existing["price_source"] = h["price_source"]
+            existing["price_as_of"] = h["price_as_of"]
+        else:
+            groups[issuer][h["cusip"]] = h
+
     issuers = []
     for issuer, bonds in groups.items():
         rows = sorted(bonds.values(), key=lambda x: x.get("maturity_date") or "")
@@ -383,18 +440,18 @@ def _trace_price(cusip: str):
 
 
 def price_for_cusip(cusip: str):
-    """Real TRACE last trade first (when FINRA creds are set), then daily ETF mark,
-    then N-PORT monthly mark. Cached 12h including misses so a CUSIP with no free
-    price isn't re-fetched repeatedly. TRACE prints carry a short TTL of their own."""
+    """Real TRACE last trade first (when FINRA creds are set), then WRDS BTDS batch mark,
+    then daily ETF mark, then N-PORT monthly mark. Cached 12h including misses so a CUSIP
+    with no free price isn't re-fetched repeatedly. TRACE prints carry a short TTL of their own."""
     cu = cusip.strip().upper()
     ck = f"bondpx:v4:{cu}"
     cached = disk_get(ck)
     if cached is not None:
         return cached or None
+
+    # 1. Live FINRA TRACE
     trace = _trace_price(cu)
     if trace:
-        # TRACE carries only a price; backfill coupon/maturity/name from the ETF
-        # holding so downstream YTM still solves (bond.py needs both to compute it).
         ref = _etf_price_map().get(cu)
         if ref:
             for k in ("coupon_rate", "maturity_date", "name", "issuer"):
@@ -402,6 +459,19 @@ def price_for_cusip(cusip: str):
                     trace[k] = ref[k]
         disk_set(ck, trace, ttl=900)                  # 15 min — it's a live-ish print
         return trace
+
+    # 2. WRDS BTDS Batch Mark
+    wrds = _wrds_trace_price(cu)
+    if wrds:
+        ref = _etf_price_map().get(cu)
+        if ref:
+            for k in ("coupon_rate", "maturity_date", "name", "issuer"):
+                if wrds.get(k) is None and ref.get(k) is not None:
+                    wrds[k] = ref[k]
+        disk_set(ck, wrds, ttl=43200)                 # 12h
+        return wrds
+
+    # 3. SPDR ETF daily or SEC N-PORT monthly
     px = _etf_price_map().get(cu) or _nport_price(cu)
     disk_set(ck, px or {}, ttl=43200)
     return px

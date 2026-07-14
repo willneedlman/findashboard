@@ -10,10 +10,11 @@ interface Props {
 
 /** AlphaTape brand mark — geometric A+T monogram, rendered as a stroked vector. */
 export default function AlphaMark({ size = 32, tile = false, color = 'var(--theme-primary, #c9a84c)', title = 'AlphaTape', className, style }: Props) {
+  const strokeColor = tile ? '#c9a84c' : color
   const referenceMark = (
     <>
       <clipPath id="alphatape-mark-clip"><rect x="0" y="0" width="100" height="83" /></clipPath>
-      <g transform="translate(50 0) scale(1.08 1) translate(-50 0)" clipPath="url(#alphatape-mark-clip)" fill="none" stroke={color} strokeWidth={tile ? 10 : 7.5} strokeLinejoin="miter" strokeMiterlimit="12" strokeLinecap="butt" shapeRendering="geometricPrecision">
+      <g transform="translate(50 0) scale(1.08 1) translate(-50 0)" clipPath="url(#alphatape-mark-clip)" fill="none" stroke={strokeColor} strokeWidth={tile ? 10 : 7.5} strokeLinejoin="miter" strokeMiterlimit="12" strokeLinecap="butt" shapeRendering="geometricPrecision">
         <path d="M23 90 L50 17 L77 90" />
         <path d="M36 56 L64 56" />
         <path d="M50 56 L50 90" />
