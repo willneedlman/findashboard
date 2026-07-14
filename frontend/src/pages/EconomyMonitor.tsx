@@ -55,7 +55,9 @@ export function EconomyMonitorContent() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['rates-economy'],
     queryFn:  () => axios.get('/api/rates/economy').then(r => r.data as EconData),
-    staleTime: 60 * 60 * 1000,
+    staleTime: 5 * 60_000,
+    refetchInterval: 5 * 60_000,
+    refetchIntervalInBackground: false,
     retry: 1,
   })
   const { data: spf } = useQuery<SpfResponse>({

@@ -22,10 +22,11 @@ _log = logging.getLogger("rates")
 router = APIRouter()
 
 # Background warmer: keeps the curve + Fed-path caches populated so user
-# requests rarely pay the cold path. Both TTLs are 1h and the warmer cannot
-# force a rebuild before expiry, so a short interval bounds the stale gap:
-# worst case one request pays the ~3s parallel rebuild within 20min of expiry.
-_WARM_INTERVAL = 20 * 60
+# requests rarely pay the cold path. The curve cache TTL is 5 min (below), so
+# the warmer must run more often than that or the cache goes cold between
+# warms and requests pay the full rebuild anyway — defeating the point of
+# warming it at all.
+_WARM_INTERVAL = 4 * 60
 _warm_stop = threading.Event()
 _warm_thread = None
 
@@ -57,9 +58,14 @@ def stop_curve_warmer():
 
 BACKSTOP = {"FF": 4.33, "1Y": 3.78, "2Y": 4.03, "5Y": 4.16, "10Y": 4.46, "20Y": 4.72, "30Y": 4.98}
 
-_CURVE_DISK_TTL = 3600   # 1 hour
+_CURVE_DISK_TTL = 300    # 5 min — yields/futures move through the trading day
 _CACHE_VERSION = "v12"    # bump to invalidate stale caches (adds the 1D overlay)
-_rates_cache: TTLCache = TTLCache(maxsize=10, ttl=3600)
+_rates_cache: TTLCache = TTLCache(maxsize=10, ttl=300)
+# Separate, longer-lived cache for the risk-free rate: short T-bills don't move
+# enough intraday to need 5-min freshness, and risk_free_rate() sits on the hot
+# options-pricing path — a shared 5-min TTL would make its (occasionally slow,
+# multi-fallback) cold path run 12x more often for no user-visible benefit.
+_rf_cache: TTLCache = TTLCache(maxsize=2, ttl=3600)
 _rates_lock = threading.Lock()
 
 # Authoritative U.S. Treasury daily par yield curve — every standard tenor, no
@@ -404,7 +410,7 @@ def yield_curve():
 
     cache_key = f"rates:curve:{_CACHE_VERSION}"
     if asof:
-        # Real curve + overlays — cache for the full hour.
+        # Real curve + overlays — cache briefly so intraday moves show up.
         with _rates_lock:
             _rates_cache[cache_key] = result
         disk_set(cache_key, result, ttl=_CURVE_DISK_TTL)
@@ -433,8 +439,8 @@ def risk_free_rate(days: int | None = None):
             pass
 
     with _rates_lock:
-        if "rf" in _rates_cache:
-            return _rates_cache["rf"]
+        if "rf" in _rf_cache:
+            return _rf_cache["rf"]
 
     rate = None
 
@@ -522,7 +528,7 @@ def risk_free_rate(days: int | None = None):
 
     result = {"rate": rate}
     with _rates_lock:
-        _rates_cache["rf"] = result
+        _rf_cache["rf"] = result
     return result
 
 
@@ -623,13 +629,16 @@ def _curve_implied_path(upcoming: list[date], current_rate: float | None) -> lis
 
 
 @router.get("/fed-projections")
-@cached(ttl=3600, maxsize=1)
+@cached(ttl=300, maxsize=1)
 def fed_projections():
     """Market-implied Fed funds path + per-meeting hike/hold/cut probabilities.
 
     Layered, all from free data: a Treasury-curve-implied expected path (FRED) is
     the always-available backbone; CME ZQ fed-funds futures override per meeting
-    when available for true market-implied pricing. No hardcoded probabilities."""
+    when available for true market-implied pricing. No hardcoded probabilities.
+    Cached 5 min — matches the ZQ futures quote's own cache TTL (cache.py's
+    get_history), so meeting odds track intraday futures moves rather than
+    sticking on a stale hourly snapshot."""
     today = date.today()
     upcoming = [d for d in (date.fromisoformat(x) for x in _FOMC_DATES) if d >= today][:8]
     current_rate = _current_ffr()
@@ -783,7 +792,7 @@ _SPREAD_DEFS = [
 
 
 @router.get("/curve-spreads")
-@cached(ttl=3600, maxsize=1)
+@cached(ttl=300, maxsize=1)
 def curve_spreads():
     """Current level and ~6-month daily trend for the three headline curve
     spreads, in basis points. Built from the same yfinance anchor closes the
@@ -1404,7 +1413,7 @@ def _curve_at(close: pd.DataFrame, target_date) -> dict:
 
 
 @router.get("/yield-curve-history")
-@cached(ttl=3600, maxsize=1)
+@cached(ttl=300, maxsize=1)
 def yield_curve_history():
     start = (date.today() - timedelta(days=400)).isoformat()
     end   = date.today().isoformat()
@@ -1446,14 +1455,18 @@ def yield_curve_history():
 
 
 # ── Economy monitor: unemployment + inflation (FRED) ──────────────────────────
-_ECON_DISK_TTL = 6 * 3600   # FRED macro series update monthly; 6h is plenty
+# Each series only prints once a month, but a print can land at any point during
+# the day (e.g. CPI at 8:30am ET) — a long TTL risks serving a pre-release cache
+# for hours after fresh data is already on FRED, so this stays short rather than
+# matching the series' own update cadence.
+_ECON_DISK_TTL = 15 * 60
 
 
 @router.get("/economy")
 def economy():
     """Unemployment + inflation dashboard from FRED: jobless rate, nonfarm payroll
     monthly change, and CPI / Core CPI / PCE year-over-year, each with a 24-month
-    trend. Cached on disk (monthly data)."""
+    trend. Cached on disk 15 min so a same-day release shows up quickly."""
     ckey = f"economy:{_CACHE_VERSION}"
     cached_val = disk_get(ckey)
     if cached_val is not None:

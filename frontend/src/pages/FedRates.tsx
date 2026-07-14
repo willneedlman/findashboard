@@ -404,10 +404,15 @@ function FomcStatementRead() {
 export function FedRatesContent() {
   const [twist, setTwist] = useState(0)
 
-  const { data: curveData, isError: curveErr } = useQuery({ queryKey: ['yield-curve'], queryFn: fetchYieldCurve })
-  const { data: fedData, isError: fedErr } = useQuery({ queryKey: ['fed-projections'], queryFn: fetchFedProjections })
+  // Yields, futures-implied odds, and spreads all move through the trading day —
+  // poll every minute so an open tab tracks them without a manual refresh. The
+  // backend caches each at 5 min (matching its own upstream data's refresh rate),
+  // so this just picks up that cache turning over as soon as it happens.
+  const LIVE = { staleTime: 60_000, refetchInterval: 60_000, refetchIntervalInBackground: false }
+  const { data: curveData, isError: curveErr } = useQuery({ queryKey: ['yield-curve'], queryFn: fetchYieldCurve, ...LIVE })
+  const { data: fedData, isError: fedErr } = useQuery({ queryKey: ['fed-projections'], queryFn: fetchFedProjections, ...LIVE })
   const { data: sepData } = useQuery({ queryKey: ['sep-dots'], queryFn: fetchSepDots })
-  const { data: spreadsData } = useQuery({ queryKey: ['curve-spreads'], queryFn: fetchCurveSpreads })
+  const { data: spreadsData } = useQuery({ queryKey: ['curve-spreads'], queryFn: fetchCurveSpreads, ...LIVE })
 
   const ready = !!curveData && !!fedData
   const failed = curveErr || fedErr
