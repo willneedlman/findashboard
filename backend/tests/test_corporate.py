@@ -39,21 +39,24 @@ def test_get_corporate_hub_insider_fallback():
 
 
 def test_get_institutional_ownership_lseg():
-    # Test institutional endpoint with LSEG data (AAPL)
+    # AAPL: the LSEG export has no per-holder identity for institutional
+    # holdings (only a security-level ownership rollup), so real named
+    # holders come from yfinance; LSEG's passive/active split is merged in
+    # separately when available.
     response = client.get("/api/corporate/institutional?ticker=AAPL")
     assert response.status_code == 200
     data = response.json()
     assert data["ticker"] == "AAPL"
-    assert data["source"] == "LSEG"
+    assert data["source"] == "yfinance"
     assert "passive_pct" in data
     assert "active_pct" in data
     assert len(data["holders"]) > 0
-    assert len(data["funds"]) >= 0
-    
-    # Check holders keys
-    first_holder = data["holders"][0]
-    assert "change_shares" in first_holder
-    assert "investment_style" in first_holder
+
+    # Regression guard: a prior bug read the security's own name (from a
+    # security-level rollup file) as if it were the holder's name, so every
+    # row came back mislabeled "APPLE INC" instead of a real institution.
+    for h in data["holders"]:
+        assert h["holder"] != "APPLE INC"
 
 
 def test_get_institutional_ownership_fallback():

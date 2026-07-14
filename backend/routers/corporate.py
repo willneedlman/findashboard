@@ -1110,12 +1110,12 @@ def _holder_rows(df, limit: int = 12) -> list:
 
 
 @cached(ttl=43200, persist=True)
-def _lseg_institutional_data(symbol: str):
+def _lseg_institutional_data_v2(symbol: str):
     """Raw LSEG institutional/fund holdings + ownership rollup for a ticker, or
-    None when uncovered. Same "either table counts as covered" rule as
-    _lseg_insider_data — a ticker with rollup percentages but no individual
-    holder rows (or vice versa) must not fall through to yfinance and silently
-    drop the LSEG data that does exist."""
+    None when neither exists. The caller (get_institutional_ownership) decides
+    what counts as "covered" — named holdings require actual holder rows, but
+    the rollup (passive/active split) is real and useful even alone, so it's
+    always returned here rather than filtered out early."""
     hold_rows = corporate_db.query(
         "SELECT * FROM lseg_institutional_holdings WHERE ticker = ? ORDER BY shares DESC", (symbol,)
     )
@@ -1131,11 +1131,22 @@ def _lseg_institutional_data(symbol: str):
 @router.get("/institutional")
 def get_institutional_ownership(ticker: str):
     """Institutional ownership: % held by institutions/insiders plus the top
-    holders and fund holders, using LSEG ownership tables with yfinance fallback."""
+    holders and fund holders, using LSEG ownership tables with yfinance fallback.
+
+    The LSEG holdings export only carries real named holders for a subset of
+    tickers — most rows are a security-level rollup with no per-holder detail
+    at all. Only claim source=LSEG (and skip yfinance's real named holders)
+    when LSEG actually has named holdings; otherwise fall through to yfinance
+    for holders/funds but still merge in LSEG's passive/active split when
+    that rollup exists, since it's real data yfinance doesn't have."""
     symbol = ticker.strip().upper()
 
-    lseg = _lseg_institutional_data(symbol)
-    if lseg:
+    lseg = _lseg_institutional_data_v2(symbol)
+    lseg_rollup = (lseg or {}).get("rollup") or {}
+    lseg_passive_pct = lseg_rollup.get("passive_pct")
+    lseg_active_pct = lseg_rollup.get("active_pct")
+
+    if lseg and lseg["holdings"]:
         holders, funds = [], []
         for r in lseg["holdings"]:
             hold_dict = {
@@ -1151,27 +1162,26 @@ def get_institutional_ownership(ticker: str):
                 holders.append(hold_dict)
             else:
                 funds.append(hold_dict)
-        rollup = lseg["rollup"] or {}
-        passive_pct = rollup.get("passive_pct")
-        active_pct = rollup.get("active_pct")
-        insider_pct = rollup.get("insider_pct")
-        held_pct_inst = (passive_pct + active_pct) / 100.0 if (passive_pct is not None and active_pct is not None) else None
+        insider_pct = lseg_rollup.get("insider_pct")
+        held_pct_inst = (lseg_passive_pct + lseg_active_pct) / 100.0 if (lseg_passive_pct is not None and lseg_active_pct is not None) else None
         held_pct_ins = insider_pct / 100.0 if insider_pct is not None else None
         return {
             "ticker": symbol,
             "pct_institutions": held_pct_inst,
             "pct_insiders": held_pct_ins,
-            "passive_pct": passive_pct,
-            "active_pct": active_pct,
+            "passive_pct": lseg_passive_pct,
+            "active_pct": lseg_active_pct,
             "holders": holders,
             "funds": funds,
             "source": "LSEG"
         }
 
-    # Fallback to yfinance
+    # Fallback to yfinance for named holders
     cache_key = f"instown:v1:{symbol}"
     cached = disk_get(cache_key)
     if cached:
+        cached["passive_pct"] = lseg_passive_pct
+        cached["active_pct"] = lseg_active_pct
         return cached
     try:
         stock = yf.Ticker(symbol)
@@ -1201,7 +1211,11 @@ def get_institutional_ownership(ticker: str):
             "source":           "yfinance",
         }
         # 13F data is quarterly — cache hard so we don't re-hit yfinance per view.
+        # passive_pct/active_pct are cached separately (LSEG) so they're not
+        # baked into this stale-tolerant blob and always reflect the latest ingest.
         disk_set(cache_key, result, ttl=43200)   # 12h
+        result["passive_pct"] = lseg_passive_pct
+        result["active_pct"] = lseg_active_pct
         return result
     except Exception as e:
         logger.error(f"Error fetching institutional ownership for {symbol}: {e}")

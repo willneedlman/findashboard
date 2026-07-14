@@ -524,13 +524,18 @@ def main() -> None:
             for r in reader:
                 ticker = (r.get("ticker") or r.get("Ticker Symbol") or "").strip().upper()
                 
-                # Resolve manager name
+                # Resolve manager name. "stkname" is the SECURITY's own name (e.g.
+                # a security-level rollup export carries it on every row for that
+                # ticker), never a holder's — treating it as a holder-name fallback
+                # mislabeled every row as the company itself. A row with no real
+                # per-holder identity (no holder_name/manager_name/mgrno) isn't
+                # holder data at all, so it's skipped rather than fabricated.
                 mgr_no = str(r.get("mgrno") or "").strip()
-                holder_name = (r.get("holder_name") or r.get("manager_name") or r.get("stkname") or "").strip()
+                holder_name = (r.get("holder_name") or r.get("manager_name") or "").strip()
                 if not holder_name and mgr_no:
                     holder_name = _MGR_NAMES.get(mgr_no, f"Institutional Manager #{mgr_no}")
                 if not holder_name:
-                    holder_name = "Unknown Institution"
+                    continue
                 
                 # Calculate total shares from voting authorities if single shares field is missing
                 shares_val = r.get("shares") or "0"
@@ -617,12 +622,19 @@ def main() -> None:
         conn.execute("DELETE FROM lseg_ownership_rollup")
         with open(rollup_csv, "r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
+            # Each ticker has one row per (report date x holding category) — a full
+            # multi-year history, not one row per ticker. Summing every row (as
+            # this used to) adds up years of quarterly snapshots into one
+            # impossible >100% figure. Keep only the latest report date per
+            # ticker, accumulating across categories (passive/active/insider)
+            # within that one date only.
             aggregates = {}
             for r in reader:
                 ticker = (r.get("ticker") or r.get("ticsym") or r.get("Ticker Symbol") or "").strip().upper()
                 if not ticker:
                     continue
-                
+
+                report_date = (r.get("reportdate") or r.get("rdate") or r.get("Report Date") or "").strip()
                 hldg = str(r.get("hldgtype") or r.get("Holding Category") or "").strip().upper()
                 pct_str = r.get("pctshareoutstanding") or r.get("Percent of Shares Outstanding") or "0"
                 try:
@@ -631,23 +643,27 @@ def main() -> None:
                     pct = 0.0
                 if pct > 0.0 and pct <= 1.0:
                     pct = pct * 100.0
-                    
-                if ticker not in aggregates:
-                    aggregates[ticker] = {"passive": 0.0, "active": 0.0, "insider": 0.0}
-                
+
+                entry = aggregates.get(ticker)
+                if entry is None or report_date > entry["date"]:
+                    entry = {"date": report_date, "passive": 0.0, "active": 0.0, "insider": 0.0}
+                    aggregates[ticker] = entry
+                elif report_date < entry["date"]:
+                    continue  # older snapshot than the latest already captured
+
                 if "PASS" in hldg or hldg == "P" or "INDEX" in hldg:
-                    aggregates[ticker]["passive"] += pct
+                    entry["passive"] += pct
                 elif "ACT" in hldg or hldg == "A":
-                    aggregates[ticker]["active"] += pct
+                    entry["active"] += pct
                 elif "INS" in hldg or hldg == "I" or "DIR" in hldg:
-                    aggregates[ticker]["insider"] += pct
+                    entry["insider"] += pct
                 else:
                     if hldg == "1":
-                        aggregates[ticker]["passive"] += pct
+                        entry["passive"] += pct
                     elif hldg == "2":
-                        aggregates[ticker]["active"] += pct
+                        entry["active"] += pct
                     elif hldg == "3":
-                        aggregates[ticker]["insider"] += pct
+                        entry["insider"] += pct
 
             rows = []
             for ticker, data in aggregates.items():

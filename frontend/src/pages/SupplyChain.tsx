@@ -9,7 +9,7 @@ import PageHeader from '../components/PageHeader'
 import TickerInput from '../components/TickerInput'
 import TickerLogo from '../components/TickerLogo'
 import useIsMobile from '../hooks/useIsMobile'
-import { fetchMarketHistory, fetchBetaSuite, fetchCustomerLinks } from '../hooks/useApi'
+import { fetchMarketHistory, fetchBetaSuite } from '../hooks/useApi'
 import { TOOLTIP_STYLE, CROSSHAIR_CURSOR } from '../components/ChartTooltip'
 import { recordRecentTicker } from '../lib/recentTickers'
 import EmptyState from '../components/EmptyState'
@@ -350,7 +350,7 @@ function InstitutionalPanel({ inst, loading, tab, onTab }:
         ) : !hasData ? (
           <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11, fontStyle: 'italic' }}>No institutional ownership reported.</div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '200px 1fr 1fr', gap: 32, alignItems: 'start' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '200px minmax(0, 1fr) minmax(0, 1fr)', gap: 32, alignItems: 'start' }}>
             {/* Summary stats + provenance */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               {[
@@ -556,106 +556,11 @@ function MarketPerformancePanel({ ticker }: { ticker: string }) {
   )
 }
 
-// Small colored tag — plan/filing markers on a transaction, role/status on a deal.
+// Small colored tag — role/status markers on a deal.
 const badgeStyle = (color: string): React.CSSProperties => ({
   background: `color-mix(in srgb, ${color} 14%, transparent)`, color, padding: '1px 4px', borderRadius: 2,
   fontFamily: T.mono, fontSize: 7.5, fontWeight: 800, letterSpacing: '0.02em',
 })
-
-function InsiderPanel({ data, loading }: { data: any; loading: boolean }) {
-  const isMobile = useIsMobile()
-  const hasData = data && data.transactions && data.transactions.length > 0
-  const txns = data?.transactions ?? []
-  const returns = data?.average_returns ?? []
-  const buys = txns.filter((t: any) => t.side === 'buy').length
-  const sells = txns.filter((t: any) => t.side === 'sell').length
-
-  return (
-    <div className="ft-panel">
-      <div className="ft-panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          Insider Transactions
-          {data && <SourceChip source={data.source} />}
-        </span>
-        {hasData && (
-          <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted }}>
-            {txns.length} in view · {buys} buy{buys === 1 ? '' : 's'} / {sells} sell{sells === 1 ? '' : 's'}
-          </span>
-        )}
-      </div>
-      <div style={{ padding: '18px 20px' }}>
-        {loading ? (
-          <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11, fontStyle: 'italic' }}>Loading insider data…</div>
-        ) : !hasData ? (
-          <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11, fontStyle: 'italic' }}>No insider transactions reported.</div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1.6fr', gap: 32, alignItems: 'start' }}>
-            {/* The answer: does this issuer's insider buying/selling precede a move? */}
-            <div>
-              <div style={{ ...labelStyle, marginBottom: 12 }}>Avg Excess Return After Transaction</div>
-              {returns.length > 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {returns.map((r: any, i: number) => (
-                    <div key={i}>
-                      <div style={{ fontFamily: T.label, fontSize: 11.5, fontWeight: 700, color: T.text, marginBottom: 7 }}>{r.txn_type}</div>
-                      <div style={{ display: 'flex', gap: 20 }}>
-                        {([['3M', r.avg_return_3m], ['6M', r.avg_return_6m], ['12M', r.avg_return_12m]] as const).map(([lbl, val]) => (
-                          <div key={lbl}>
-                            <div style={{ fontFamily: T.mono, fontSize: 8, color: T.muted, letterSpacing: '0.1em', marginBottom: 3 }}>{lbl}</div>
-                            <div style={{ fontFamily: T.mono, fontSize: 15, fontWeight: 700, color: val >= 0 ? POS : NEG }}>{val >= 0 ? '+' : ''}{val.toFixed(2)}%</div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 10.5, fontStyle: 'italic' }}>Returns performance study unavailable.</div>
-              )}
-            </div>
-
-            {/* Recent transactions, most detail on demand */}
-            <div>
-              <div style={{ ...labelStyle, marginBottom: 6 }}>Recent Transactions</div>
-              <div style={{ maxHeight: 360, overflowY: 'auto' }}>
-                {txns.map((t: any, i: number) => {
-                  const isPlan = t.is_10b51 || t.transaction?.includes('Rule 10b5-1')
-                  const is144 = t.is_form144 || t.transaction?.includes('Form 144')
-                  const isAmend = t.is_amendment
-                  let typeColor = T.muted
-                  if (t.side === 'buy') typeColor = POS
-                  if (t.side === 'sell') typeColor = NEG
-                  if (isPlan) typeColor = 'var(--theme-tertiary, #60a5fa)'
-                  return (
-                    <div key={i} style={{ padding: '8px 0', borderBottom: i === txns.length - 1 ? 'none' : `1px solid var(--theme-hover, rgba(255,255,255,0.04))` }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ fontFamily: T.label, fontSize: 11, fontWeight: 700, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {t.insider}{t.title && <span style={{ color: T.muted, fontWeight: 400 }}> · {t.title}</span>}
-                          </div>
-                          <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 3, flexWrap: 'wrap' }}>
-                            <span style={{ fontFamily: T.mono, fontSize: 8.5, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: typeColor }}>{t.transaction}</span>
-                            {isPlan && <span style={badgeStyle('var(--theme-tertiary, #60a5fa)')}>10B5-1</span>}
-                            {is144 && <span style={badgeStyle(NEG)}>FORM 144</span>}
-                            {isAmend && <span style={badgeStyle(AMBER)}>AMEND</span>}
-                          </div>
-                        </div>
-                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                          <div style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: T.text }}>{fmtCap(t.value)}</div>
-                          <div style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, marginTop: 1 }}>{t.date}</div>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
 
 function DealsPanel({ data, loading }: { data: any; loading: boolean }) {
   const hasData = data && data.deals && data.deals.length > 0
@@ -728,8 +633,6 @@ export function SupplyChainContent() {
   const [instLoading, setInstLoading] = useState(false)
   const [instTab, setInstTab] = useState<'holders' | 'funds'>('holders')
 
-  const [insider, setInsider] = useState<any>(null)
-  const [insiderLoading, setInsiderLoading] = useState(false)
   const [deals, setDeals] = useState<any>(null)
   const [dealsLoading, setDealsLoading] = useState(false)
 
@@ -759,10 +662,6 @@ export function SupplyChainContent() {
     setInst(null); setInstLoading(true)
     axios.get(`/api/corporate/institutional?ticker=${ticker}`)
       .then(r => setInst(r.data)).catch(() => setInst(null)).finally(() => setInstLoading(false))
-
-    setInsider(null); setInsiderLoading(true)
-    axios.get(`/api/corporate/hub/insider?ticker=${ticker}`)
-      .then(r => setInsider(r.data)).catch(() => setInsider(null)).finally(() => setInsiderLoading(false))
 
     setDeals(null); setDealsLoading(true)
     axios.get(`/api/corporate/deals?ticker=${ticker}`)
@@ -906,16 +805,10 @@ export function SupplyChainContent() {
               <AnalystPanel ticker={data.ticker} />
             </div>
 
-            {/* ── Disclosed Customer Concentration ────────── */}
-            <CustomerConcentrationPanel ticker={data.ticker} onSelectTicker={doFetch} />
-
             {/* ── Row 3: Institutional ownership (full width) ────────── */}
             <InstitutionalPanel inst={inst} loading={instLoading} tab={instTab} onTab={setInstTab} />
 
-            {/* ── Row 4: Insider Transactions (full width) ────────── */}
-            <InsiderPanel data={insider} loading={insiderLoading} />
-
-            {/* ── Row 5: SDC Deals M&A (full width) ────────── */}
+            {/* ── Row 4: SDC Deals M&A (full width) ────────── */}
             <DealsPanel data={deals} loading={dealsLoading} />
           </div>
           )
@@ -962,125 +855,6 @@ function ratingColor(r: string | null): string {
   return r.startsWith('BB') ? AMBER : NEG
 }
 const fmtBn = (v: number | null) => v == null ? '—' : Math.abs(v) >= 1e9 ? `$${(v / 1e9).toFixed(1)}B` : Math.abs(v) >= 1e6 ? `$${(v / 1e6).toFixed(0)}M` : `$${v.toLocaleString()}`
-
-
-function CustomerConcentrationPanel({ ticker, onSelectTicker }: { ticker: string, onSelectTicker: (sym: string) => void }) {
-  const isMobile = useIsMobile()
-  const { data, isLoading } = useQuery({
-    queryKey: ['customer-links', ticker],
-    queryFn: () => fetchCustomerLinks(ticker),
-    enabled: !!ticker,
-    staleTime: 300_000,
-  })
-
-  if (isLoading) {
-    return (
-      <div className="ft-panel">
-        <div className="ft-panel-header">Disclosed Customer Concentration</div>
-        <div style={{ padding: '16px 18px', color: T.muted, fontFamily: T.mono, fontSize: 11 }}>Loading…</div>
-      </div>
-    )
-  }
-
-  const customers = data?.customers || []
-  const suppliers = data?.suppliers || []
-
-  return (
-    <div className="ft-panel" style={{ display: 'flex', flexDirection: 'column' }}>
-      <div className="ft-panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
-        <span>Disclosed Customer Concentration</span>
-        <span style={{ fontSize: 9, color: T.muted, fontWeight: 'normal', textTransform: 'none', fontFamily: T.mono }}>
-          FAS 131 / ASC 280 Disclosures (Customers representing &gt;10% of revenue)
-        </span>
-      </div>
-      <div style={{ padding: '16px 18px', flex: 1 }}>
-        {customers.length === 0 && suppliers.length === 0 ? (
-          <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11, lineHeight: 1.5 }}>
-            No material customer segment disclosures found for this ticker in recent years (disclosures are only mandated for customers representing &gt;10% of total revenue).
-          </div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 24 }}>
-            {/* Customers (Who this company sells to) */}
-            <div>
-              <div style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: T.gold, marginBottom: 12, borderBottom: `1px solid ${T.border}`, paddingBottom: 6 }}>
-                Disclosed Customers (Revenue Concentration Risk)
-              </div>
-              {customers.length === 0 ? (
-                <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 10.5 }}>No customers disclosed.</div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {customers.map((c: any, i: number) => (
-                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', background: 'rgba(255, 255, 255, 0.02)', border: `1px solid ${T.border}` }}>
-                      <div>
-                        {c.customer_ticker ? (
-                          <button onClick={() => onSelectTicker(c.customer_ticker)} style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: T.gold, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline' }}>
-                            {c.customer_ticker}
-                          </button>
-                        ) : (
-                          <span style={{ fontFamily: T.label, fontSize: 11, color: T.text }}>{c.customer_name}</span>
-                        )}
-                        {c.customer_ticker && <span style={{ fontFamily: T.label, fontSize: 9.5, color: T.muted, marginLeft: 6 }}>({c.customer_name})</span>}
-                      </div>
-                      <div style={{ fontFamily: T.mono, fontSize: 11, textAlign: 'right', display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <span style={{ color: T.text }}>
-                          {c.pct_of_revenue != null
-                            ? `${c.pct_of_revenue}%`
-                            : (c.customer_sales != null ? `$${c.customer_sales.toFixed(1)}M` : '—')}
-                        </span>
-                        <span style={{ color: T.muted, fontSize: 9.5, marginLeft: 4 }}>FY{c.fiscal_year}</span>
-                        <HelpTip text={
-                          c.pct_of_revenue != null
-                            ? `${c.customer_name} represented ${c.pct_of_revenue}% of this company's revenue in FY${c.fiscal_year}`
-                            : `Disclosed sales to ${c.customer_name} were $${c.customer_sales ? c.customer_sales.toFixed(1) : '—'}M in FY${c.fiscal_year}`
-                        } width={180} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Suppliers (Who sells to this company) */}
-            <div>
-              <div style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: T.gold, marginBottom: 12, borderBottom: `1px solid ${T.border}`, paddingBottom: 6 }}>
-                Disclosed Supplier To (Downstream Dependency)
-              </div>
-              {suppliers.length === 0 ? (
-                <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 10.5 }}>No suppliers disclosed.</div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {suppliers.map((s: any, i: number) => (
-                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', background: 'rgba(255, 255, 255, 0.02)', border: `1px solid ${T.border}` }}>
-                      <div>
-                        <button onClick={() => onSelectTicker(s.supplier_ticker)} style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: T.gold, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline' }}>
-                          {s.supplier_ticker}
-                        </button>
-                        <span style={{ fontFamily: T.label, fontSize: 9.5, color: T.muted, marginLeft: 6 }}>({s.supplier_name})</span>
-                      </div>
-                      <div style={{ fontFamily: T.mono, fontSize: 11, textAlign: 'right', display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <span style={{ color: T.text }}>
-                          {s.pct_of_revenue != null
-                            ? `${s.pct_of_revenue}%`
-                            : (s.customer_sales != null ? `$${s.customer_sales.toFixed(1)}M` : '—')}
-                        </span>
-                        <span style={{ color: T.muted, fontSize: 9.5, marginLeft: 4 }}>FY{s.fiscal_year}</span>
-                        <HelpTip text={
-                          s.pct_of_revenue != null
-                            ? `This company represented ${s.pct_of_revenue}% of ${s.supplier_name}'s revenue in FY${s.fiscal_year}`
-                            : `This company represented $${s.customer_sales ? s.customer_sales.toFixed(1) : '—'}M of ${s.supplier_name}'s sales in FY${s.fiscal_year}`
-                        } width={180} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
 
 
 interface Credit {

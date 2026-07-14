@@ -309,9 +309,15 @@ function RangeLabels({ labels }: { labels: RangeLabel[] }) {
       setLefts(items.map(it => it.left))
     }
     compute()
+    // Labels are measured with whatever font is painted at mount — if the custom
+    // mono webfont is still loading, that's a narrower fallback face, so the
+    // computed gaps undershoot once the real (usually wider) font swaps in.
+    // Recompute once fonts finish loading to catch that width change.
+    let cancelled = false
+    document.fonts?.ready?.then(() => { if (!cancelled) compute() })
     const ro = new ResizeObserver(compute)
     if (containerRef.current) ro.observe(containerRef.current)
-    return () => ro.disconnect()
+    return () => { cancelled = true; ro.disconnect() }
   }, [labels])
 
   return (

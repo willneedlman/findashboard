@@ -101,7 +101,3 @@ export const fetchCurveSpreads = () =>
 export const fetchCorrelation = (body: object) =>
   api.post('/correlation/matrix', body).then(r => r.data)
 
-// Disclosed customer relationships from Compustat segment data
-export const fetchCustomerLinks = (ticker: string) =>
-  api.get('/logistics/customer-links', { params: { ticker } }).then(r => r.data)
-
