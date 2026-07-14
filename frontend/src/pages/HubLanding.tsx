@@ -105,8 +105,8 @@ export default function HubLanding() {
               onClick={() => navigate('/dashboard')}
               style={{ display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0, background: F.gold, border: 'none', padding: '7px 12px', cursor: 'pointer' }}
             >
-              <LayoutGrid size={13} style={{ color: '#101c2e' }} />
-              <span style={{ fontFamily: F.sans, fontSize: 11.5, fontWeight: 700, color: '#101c2e', whiteSpace: 'nowrap' }}>My Dashboard</span>
+              <LayoutGrid size={13} style={{ color: 'var(--theme-bg, #101c2e)' }} />
+              <span style={{ fontFamily: F.sans, fontSize: 11.5, fontWeight: 700, color: 'var(--theme-bg, #101c2e)', whiteSpace: 'nowrap' }}>My Dashboard</span>
             </button>
           </div>
         </div>
