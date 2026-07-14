@@ -87,6 +87,7 @@ export const HUBS: Hub[] = [
       { title: 'Housing Market', chip: 'Housing', desc: 'Home prices, mortgage rates, affordability, supply/demand, construction, and rental listings', route: '/housing', icon: Home },
       { title: 'Currency Matrix', chip: 'FX Matrix',     desc: 'Spot cross-rates, forward points, cross-currency basis, and FX vol', route: '/currency', icon: ArrowLeftRight },
       { title: 'Market Hours',   chip: 'Market Hours',   desc: 'Live global session clock across futures, US, Europe, Asia', route: '/market-hours',   icon: Clock },
+      { title: 'Trader Positioning', chip: 'Positioning', desc: 'CFTC positioning across commodities, rates, FX, and equity-index futures', route: '/trader-positioning', icon: BarChart2 },
     ],
   },
   {

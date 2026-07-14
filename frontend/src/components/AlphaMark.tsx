@@ -1,5 +1,3 @@
-import { ALPHA_PATH } from './alphaMarkPath'
-
 interface Props {
   size?: number
   /** Render inside the navy app-icon tile (rounded square). */
@@ -10,8 +8,15 @@ interface Props {
   style?: React.CSSProperties
 }
 
-/** AlphaTape brand mark — the gold serif alpha (α). Vector path, no font dependency. */
+/** AlphaTape brand mark — geometric A+T monogram, rendered as a stroked vector. */
 export default function AlphaMark({ size = 32, tile = false, color = 'var(--theme-primary, #c9a84c)', title = 'AlphaTape', className, style }: Props) {
+  const mark = (
+    <g fill="none" stroke={color} strokeWidth={tile ? 11 : 7.5} strokeLinejoin="round" strokeLinecap="round">
+      <path d="M25 82 L50 20 L75 82" />
+      <path d="M36 56 L64 56" />
+      <path d="M50 56 L50 82" />
+    </g>
+  )
   return (
     <svg width={size} height={size} viewBox="0 0 100 100" role="img" aria-label={title} className={className} style={style}>
       {tile && (
@@ -25,10 +30,9 @@ export default function AlphaMark({ size = 32, tile = false, color = 'var(--them
           <rect x="0.5" y="0.5" width="99" height="99" rx="22" fill="url(#alphatile)" stroke="color-mix(in srgb, var(--theme-primary) 16%, transparent)" />
         </>
       )}
-      {/* color set via CSS `fill` so it can resolve a CSS var (theme preset) */}
       {tile
-        ? <path d={ALPHA_PATH} style={{ fill: color }} />
-        : <g transform="translate(50 50) scale(1.5) translate(-50 -50)"><path d={ALPHA_PATH} style={{ fill: color }} /></g>}
+        ? <g transform="translate(50 50) scale(0.62) translate(-50 -50)">{mark}</g>
+        : mark}
     </svg>
   )
 }

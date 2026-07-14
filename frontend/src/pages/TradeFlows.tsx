@@ -59,7 +59,6 @@ export default function TradeFlows() {
     queryFn: () => fetchTradeFlows({ reporter: request.reporter, period: request.year, cmd: request.cmd, flow: request.flow }),
     staleTime: 300_000,
   })
-
   const run = () => dirty ? setRequest({ reporter, cmd, year, flow }) : q.refetch()
 
   return (

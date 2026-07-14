@@ -116,6 +116,7 @@ const GlobalMarkets      = lazyWithReload(() => import('./pages/GlobalMarkets'))
 const LogisticsMap       = lazyWithReload(() => import('./pages/LogisticsMap'))
 const ChokepointExposure = lazyWithReload(() => import('./pages/ChokepointExposure'))
 const TradeFlows = lazyWithReload(() => import('./pages/TradeFlows'))
+const TraderPositioning = lazyWithReload(() => import('./pages/TraderPositioning'))
 
 function PageLoader() {
   return (
@@ -316,6 +317,7 @@ export default function App() {
               <Route path="/logistics-map"      element={<LogisticsMap />} />
               <Route path="/chokepoint-exposure" element={<ChokepointExposure />} />
               <Route path="/trade-flows"        element={<TradeFlows />} />
+              <Route path="/trader-positioning" element={<TraderPositioning />} />
               <Route path="/maritime-freight"   element={<Navigate to="/logistics-map" replace />} />
               <Route path="/air-cargo"          element={<Navigate to="/logistics-map" replace />} />
               <Route path="/freight-macro"      element={<Navigate to="/logistics-map" replace />} />

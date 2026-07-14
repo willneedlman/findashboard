@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { useQuery } from '@tanstack/react-query'
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { T } from '../lib/theme'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
@@ -38,6 +38,8 @@ interface Summary {
   stress_indicators: StressIndicator[]
   method_note: string
 }
+interface FdicBank { name: string | null; cert: string | number | null; assets: number | null; deposits: number | null; roa: number | null; nim: number | null; net_chargeoffs: number | null; as_of: string }
+interface FdicResponse { available: boolean; banks?: FdicBank[]; source: string; as_of?: string | null }
 
 const GOLD = 'var(--theme-primary, #c9a84c)'
 const BLUE = 'var(--theme-tertiary, #60a5fa)'
@@ -46,7 +48,7 @@ const PURPLE = '#c084fc'
 const PANEL: React.CSSProperties = { background: T.surface, border: `1px solid ${T.border}` }
 const COLORS = [GOLD, BLUE, ORANGE, PURPLE, '#34d399']
 const axisTick = { fontFamily: T.mono, fontSize: 8, fill: T.muted }
-const tooltipStyle = { background: T.surface, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.mono, fontSize: 10, padding: '8px 10px' }
+const tooltipStyle: React.CSSProperties = { backgroundColor: T.bg, border: '1px solid color-mix(in srgb, var(--theme-primary) 32%, var(--theme-border))', color: T.text, boxShadow: 'none', fontFamily: T.mono, fontSize: 10, padding: '8px 10px' }
 
 function ageLabel(date: string | null | undefined) {
   if (!date) return ''
@@ -56,6 +58,13 @@ function ageLabel(date: string | null | undefined) {
 
 function fmtPct(value: number, digits = 2) {
   return `${value.toFixed(digits)}%`
+}
+
+function fmtBankBalance(value: number | null) {
+  if (value == null) return '—'
+  const billions = value / 1_000_000
+  if (billions >= 1_000) return `$${(billions / 1_000).toFixed(2)}T`
+  return `$${billions.toFixed(billions >= 100 ? 0 : 1)}B`
 }
 
 function indicatorValue(indicator: StressIndicator) {
@@ -121,6 +130,7 @@ function mergeSeries(indicators: StressIndicator[]) {
 export function CreditDelinquenciesContent() {
   const isMobile = useIsMobile()
   const { data, isLoading, isError } = useQuery<Summary>({ queryKey: ['credit-summary-v2'], queryFn: () => axios.get('/api/credit/summary').then(response => response.data), staleTime: 12 * 3_600_000, retry: 1 })
+  const { data: fdic } = useQuery<FdicResponse>({ queryKey: ['fdic-bank-system'], queryFn: () => axios.get('/api/official/fdic').then(response => response.data), staleTime: 24 * 3_600_000, retry: 1 })
   const indicators = data?.stress_indicators ?? []
   const marketIndicators = indicators.filter(item => item.unit === 'index')
   const lendingIndicators = indicators.filter(item => item.unit === 'percent')
@@ -195,12 +205,54 @@ export function CreditDelinquenciesContent() {
         <div style={legendStyle}>{classes.map((item, index) => <Legend key={item.asset_class} color={COLORS[index]} label={item.label} />)}</div>
       </section>}
 
+      {fdic?.available && <FdicPanel data={fdic} />}
+
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', padding: '0 2px', fontFamily: T.mono, fontSize: 8.5, color: T.textDim }}>
         <span>{data.method_note}</span>
         <span>Sources: St. Louis Fed · Chicago Fed · Federal Reserve Board SLOOS · FRED bank aggregates</span>
       </div>
     </div>}
   </div>
+}
+
+function FdicPanel({ data }: { data: FdicResponse }) {
+  const banks = data.banks ?? []
+  const totalAssets = banks.reduce((sum, bank) => sum + (bank.assets ?? 0), 0)
+  const topFourAssets = banks.slice(0, 4).reduce((sum, bank) => sum + (bank.assets ?? 0), 0)
+  const totalDeposits = banks.reduce((sum, bank) => sum + (bank.deposits ?? 0), 0)
+  const weighted = (field: 'roa' | 'nim' | 'net_chargeoffs') => {
+    const eligible = banks.filter(bank => bank.assets != null && bank[field] != null)
+    const assets = eligible.reduce((sum, bank) => sum + (bank.assets ?? 0), 0)
+    return assets ? eligible.reduce((sum, bank) => sum + (bank.assets ?? 0) * (bank[field] ?? 0), 0) / assets : null
+  }
+  const asOf = data.as_of && /^\d{8}$/.test(data.as_of) ? `${data.as_of.slice(0, 4)} Q${Math.ceil(Number(data.as_of.slice(4, 6)) / 3)}` : data.as_of ?? 'latest filing'
+  const nco = weighted('net_chargeoffs')
+  const crossSection = [...banks].sort((a, b) => (b.net_chargeoffs ?? -Infinity) - (a.net_chargeoffs ?? -Infinity)).map(bank => ({
+    ...bank,
+    short_name: (bank.name ?? '—').replace(' NATIONAL ASSN', '').replace(' BANK NA', '').replace(' BANK USA', '').replace(' BANK&TRUST CO', ''),
+  }))
+  const summary = [
+    { label: 'Asset-weighted NCO', value: nco == null ? '—' : `${nco.toFixed(2)}%`, note: 'credit-loss rate in tracked group', tone: nco != null && nco > 1 ? T.neg : T.text },
+    { label: 'Asset-weighted ROA', value: weighted('roa') == null ? '—' : `${weighted('roa')!.toFixed(2)}%`, note: 'reported profitability', tone: T.pos },
+    { label: 'Deposit funding', value: totalAssets ? `${(totalDeposits / totalAssets * 100).toFixed(1)}%` : '—', note: 'deposits as share of assets', tone: T.blue },
+    { label: 'Top-four concentration', value: totalAssets ? `${(topFourAssets / totalAssets * 100).toFixed(1)}%` : '—', note: 'assets in tracked group', tone: T.text },
+  ]
+  const columns = [
+    { label: 'Institution' },
+    { label: 'Total deposits' },
+    { label: 'Total assets' },
+    { label: 'NCO', help: 'Net charge-offs. Loans written off after recoveries.' },
+    { label: 'ROA', help: 'Return on assets. Annualized profitability.' },
+    { label: 'NIM', help: 'Net interest margin. Annualized net interest income.' },
+  ]
+  return <section style={PANEL}>
+    <PanelHead title="FDIC credit stress cross-section" meta={`Call Reports · ${asOf}`} />
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(165px, 1fr))', borderBottom: `1px solid ${T.border}` }}>{summary.map((item, index) => <div key={item.label} style={{ minHeight: 76, padding: '11px 14px', borderRight: index === summary.length - 1 ? 'none' : `1px solid ${T.border}` }}><div style={{ fontFamily: T.label, fontSize: 8, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.muted }}>{item.label}</div><div style={{ marginTop: 5, fontFamily: T.mono, fontSize: 17, fontWeight: 800, color: item.tone, fontVariantNumeric: 'tabular-nums' }}>{item.value}</div><div style={{ marginTop: 4, fontFamily: T.mono, fontSize: 8, color: T.textDim }}>{item.note}</div></div>)}</div>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(560px, 1fr))' }}>
+      <div style={{ minWidth: 0, padding: '12px 8px 8px', borderRight: `1px solid ${T.border}` }}><div style={{ padding: '0 6px 8px', fontFamily: T.label, fontSize: 8, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.muted }}>Net charge-off dispersion</div><ResponsiveContainer width="100%" height={290}><BarChart layout="vertical" data={crossSection} margin={{ top: 4, right: 18, left: 2, bottom: 2 }}><CartesianGrid strokeDasharray="2 4" stroke={T.borderFaint} horizontal={false} /><XAxis type="number" tick={axisTick} tickLine={false} axisLine={false} tickFormatter={value => `${Number(value).toFixed(1)}%`} /><YAxis type="category" dataKey="short_name" tick={axisTick} tickLine={false} axisLine={false} width={122} /><Tooltip contentStyle={tooltipStyle} labelStyle={{ color: GOLD }} formatter={(value: number, name: string) => [name === 'net_chargeoffs' ? `${value.toFixed(2)}%` : value, name === 'net_chargeoffs' ? 'Net charge-offs' : name]} /><ReferenceLine x={nco ?? 0} stroke={T.gold} strokeDasharray="4 3" /><Bar dataKey="net_chargeoffs" radius={[0, 2, 2, 0]}>{crossSection.map(bank => <Cell key={bank.cert} fill={(bank.net_chargeoffs ?? 0) > (nco ?? Infinity) ? T.neg : T.blue} />)}</Bar></BarChart></ResponsiveContainer><div style={{ padding: '4px 6px 0', fontFamily: T.mono, fontSize: 8, color: T.textDim }}>Gold marker: asset-weighted NCO for the tracked group.</div></div>
+      <div style={{ minWidth: 0, overflowX: 'auto' }}><div style={{ minWidth: 680 }}><div style={{ padding: '12px 14px 8px', fontFamily: T.label, fontSize: 8, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.muted }}>Institutional stress matrix</div><table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: T.mono, fontSize: 9.5 }}><thead><tr>{columns.map((column, index) => <th key={column.label} style={{ padding: '7px 14px', color: T.muted, fontSize: 8, fontWeight: 800, letterSpacing: '0.1em', textAlign: index === 0 ? 'left' : 'right', textTransform: 'uppercase', borderBottom: `1px solid ${T.border}` }}><span style={{ display: 'inline-flex', alignItems: 'center' }}>{column.label}{column.help && <HelpTip text={column.help} width={180} position="bottom" anchor="right" />}</span></th>)}</tr></thead><tbody>{crossSection.map(bank => <tr key={`${bank.cert}-${bank.name}`} style={{ borderBottom: `1px solid ${T.borderFaint}` }}><td style={{ padding: '8px 14px', color: T.text, fontWeight: 700, whiteSpace: 'nowrap' }}>{bank.short_name}</td><td style={{ padding: '8px 14px', color: T.text, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtBankBalance(bank.deposits)}</td><td style={{ padding: '8px 14px', color: T.text, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtBankBalance(bank.assets)}</td><td style={{ padding: '8px 14px', color: bank.net_chargeoffs != null && bank.net_chargeoffs > (nco ?? Infinity) ? T.neg : T.text, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{bank.net_chargeoffs == null ? '—' : `${bank.net_chargeoffs.toFixed(2)}%`}</td><td style={{ padding: '8px 14px', color: T.text, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{bank.roa == null ? '—' : `${bank.roa.toFixed(2)}%`}</td><td style={{ padding: '8px 14px', color: T.text, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{bank.nim == null ? '—' : `${bank.nim.toFixed(2)}%`}</td></tr>)}</tbody></table></div></div>
+    </div>
+  </section>
 }
 
 function Legend({ color, label }: { color: string; label: string }) {

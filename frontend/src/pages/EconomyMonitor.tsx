@@ -12,6 +12,7 @@ const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #5e768f)', fontFamily:
 const FED_TARGET = 2.0
 
 type Pt = { d: string; v: number }
+type SpfResponse = { available: boolean; forecasts?: { key: string; label: string; description: string; unit: string; median: number; horizon: string }[]; horizon?: string; survey_period?: string; forecast_period?: string; source: string }
 type EconData = {
   unemployment: { value: number | null; prev: number | null; date: string | null; trend: Pt[] }
   payrolls:     { value: number | null; date: string | null; trend: Pt[] }
@@ -55,6 +56,12 @@ export function EconomyMonitorContent() {
     queryKey: ['rates-economy'],
     queryFn:  () => axios.get('/api/rates/economy').then(r => r.data as EconData),
     staleTime: 60 * 60 * 1000,
+    retry: 1,
+  })
+  const { data: spf } = useQuery<SpfResponse>({
+    queryKey: ['spf-forecasts'],
+    queryFn: () => axios.get('/api/official/spf').then(r => r.data),
+    staleTime: 24 * 3_600_000,
     retry: 1,
   })
 
@@ -137,6 +144,16 @@ export function EconomyMonitorContent() {
           </ResponsiveContainer>
         </Panel>
       </div>
+
+      {spf?.available && <Panel title="Professional Forecast Baseline" note={`Philadelphia Fed SPF · ${spf.horizon ?? 'annualized % change'}`}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(165px, 1fr))', margin: '-12px -8px -8px' }}>
+          {(spf.forecasts ?? []).map((forecast, index) => <div key={forecast.key} style={{ minHeight: 62, padding: '13px 16px', borderRight: index === (spf.forecasts?.length ?? 0) - 1 ? 'none' : `1px solid ${T.border}`, borderTop: `1px solid ${T.borderFaint}` }}>
+            <div style={{ fontFamily: T.label, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.muted }}>{forecast.label}</div>
+            <div style={{ marginTop: 7, fontFamily: T.mono, fontSize: 20, fontWeight: 700, lineHeight: 1, color: T.blue, fontVariantNumeric: 'tabular-nums' }}>{forecast.median.toFixed(1)}%</div>
+          </div>)}
+        </div>
+        <div style={{ padding: '9px 8px 1px', fontFamily: T.mono, fontSize: 8.5, lineHeight: 1.45, color: T.textDim }}>Latest survey: {spf.survey_period ?? 'latest quarter'} · Forecast period: {spf.forecast_period ?? 'four quarters ahead'}. Annualized % change expresses the pace that a quarter's change would imply if sustained for a full year. These are forecasts, not observed releases.</div>
+      </Panel>}
 
       <div style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, textAlign: 'right' }}>
         Source: FRED (St. Louis Fed) · UNRATE, PAYEMS, CPIAUCSL, CPILFESL, PCEPI

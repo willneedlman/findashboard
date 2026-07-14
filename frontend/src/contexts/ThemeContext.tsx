@@ -9,7 +9,7 @@ export interface Theme {
   bgColor:             string   // app bg            default #101c2e
   surfaceColor:        string   // card/panel        default #0d1826
   chartNeutralColor:   string   // neutral chart fill default #4a7fa5
-  primaryFont:    string   // mono font    default San Francisco (SF Mono via ui-monospace)
+  primaryFont:    string   // data font    default Hanken Grotesk
   secondaryFont:  string   // label font   default Sora
   primaryFontUrl:   string // '' = use Google Fonts / system
   secondaryFontUrl: string
@@ -49,7 +49,7 @@ export const DEFAULT_THEME: Theme = {
   bgColor:           '#101c2e',
   surfaceColor:      '#0d1826',
   chartNeutralColor: '#4a7fa5',
-  primaryFont:       'San Francisco',
+  primaryFont:       'Hanken Grotesk',
   secondaryFont:     'Sora',
   primaryFontUrl:    '',
   secondaryFontUrl:  '',
@@ -59,6 +59,7 @@ export const DEFAULT_THEME: Theme = {
 // Monospace faces for numbers & tabular data (all monospaced so figures align),
 // chosen to be visually distinct in character rather than near-identical.
 export const MONO_FONTS = [
+  'Hanken Grotesk',  // humanist grotesk with tabular figures — default
   'JetBrains Mono',   // modern terminal
   'IBM Plex Mono',    // corporate, professional
   'Roboto Mono',      // clean, neutral
@@ -66,7 +67,7 @@ export const MONO_FONTS = [
   'Space Mono',       // retro, wide character
   'DM Mono',          // light, editorial
   'Martian Mono',     // ultra-wide condensed blocks
-  'San Francisco',    // Apple system monospace (SF Mono via ui-monospace) — default
+  'San Francisco',    // Apple system monospace (SF Mono via ui-monospace)
 ]
 // Interface typeface — a deliberately varied set so the choices look distinct:
 // grotesque · humanist · geometric · rounded · futuristic · serif · display.
@@ -89,6 +90,7 @@ export const SANS_FONTS = [
 // without an entry (custom names) fall back to plain 400;700. Keep in sync
 // with the preload <link> in index.html (Sora + Cinzel only).
 const GOOGLE_FONT_AXES: Record<string, string> = {
+  'Hanken Grotesk':     'wght@400;500;600;700',
   'JetBrains Mono':      'ital,wght@0,300;0,400;0,500;0,600;0,700;1,400',
   'IBM Plex Mono':       'wght@300;400;500;600;700',
   'Roboto Mono':         'wght@300;400;500;600;700',
@@ -112,7 +114,7 @@ const gfUrl = (family: string) =>
 
 // Only these load in index.html; everything else injects on selection.
 // 'San Francisco' emits as ui-monospace in CSS, so it never needs a fetch.
-const PRELOADED_FONTS = ['Sora', 'Cinzel', 'San Francisco']
+const PRELOADED_FONTS = ['Sora', 'Cinzel', 'San Francisco', 'Hanken Grotesk']
 
 const STORAGE_USERS   = 'ft-users'
 const STORAGE_SESSION = 'ft-session'
@@ -165,7 +167,7 @@ export function applyTheme(t: Theme) {
   // In CSS it must be emitted as the generic keyword ui-monospace (no quotes).
   const monoFamily = t.primaryFont === 'San Francisco'
     ? 'ui-monospace, monospace'
-    : `'${t.primaryFont}', monospace`
+    : `'${t.primaryFont}', sans-serif`
 
   // Load Google Fonts if no custom URL provided
   const monoSrc = t.primaryFontUrl   || gfUrl(t.primaryFont)

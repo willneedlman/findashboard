@@ -551,12 +551,11 @@
   opacity: 1 !important;
 }
 
-/* ── Monospace fallback — one mono, for numbers/tabular data ─────────────── */
-/* The interface typeface is chosen in Settings (--theme-sans); the single mono
-   defaults to the system monospace (SF Mono on Apple) so figures and tables
-   always align. */
+/* ── Data font fallback — figures and tabular data ───────────────────────── */
+/* Hanken Grotesk supplies the default figures. Components use tabular-nums
+   where columns need alignment. */
 :root {
-  --font-mono: ui-monospace, monospace;
+  --font-mono: 'Hanken Grotesk', sans-serif;
 }
 
 /* ── Recharts — consistent font + grid ──────────────────────────────────── */
@@ -572,11 +571,21 @@
 .recharts-cartesian-grid-vertical line { stroke: rgba(255,255,255,0.05) !important; }
 .recharts-tooltip-wrapper { font-family: var(--theme-mono, var(--font-mono)) !important; }
 .recharts-default-tooltip {
-  background-color: var(--theme-surface, #0d1826) !important;
-  border: 1px solid color-mix(in srgb, var(--theme-primary) 25%, transparent) !important;
+  background-color: color-mix(in srgb, var(--theme-bg, #101c2e) 88%, var(--theme-tertiary, #60a5fa) 12%) !important;
+  border: 1px solid color-mix(in srgb, var(--theme-primary) 32%, var(--theme-border)) !important;
   border-radius: 0 !important;
+  box-shadow: none !important;
+  color: var(--theme-text, #d7e3fc) !important;
   font-family: var(--theme-mono, var(--font-mono)) !important;
   font-size: 10px !important;
+}
+.recharts-default-tooltip .recharts-tooltip-label {
+  color: var(--theme-tertiary, #60a5fa) !important;
+}
+.recharts-default-tooltip .recharts-tooltip-item,
+.recharts-default-tooltip .recharts-tooltip-item-name,
+.recharts-default-tooltip .recharts-tooltip-item-value {
+  color: var(--theme-text, #d7e3fc) !important;
 }
 /* Legend text inherits theme secondary color */
 .recharts-legend-wrapper,

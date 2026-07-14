@@ -48,11 +48,13 @@ Three families, each with a job. All are loaded in `frontend/index.html`.
 
 - **Display (`Cinzel`, serif):** the `ALPHATAPE` wordmark and hero h1 only. Tracked,
   uppercase, gold. Do not use for body or UI.
-- **Mono (`San Francisco`, `--theme-mono`):** numbers, tabular data, tickers, model
-  outputs, most tool chrome. Emitted as `ui-monospace` (SF Mono on Apple, the
-  platform monospace elsewhere) so figures stay aligned. Default workhorse.
+- **Data (`Hanken Grotesk`, `--theme-mono`):** numbers, tabular data, tickers, model
+  outputs, and most tool chrome. It is proportional, with tabular figures applied so
+  dense columns remain aligned. SF Mono remains selectable in Settings.
 - **UI sans (`Sora`, `--theme-sans`):** nav labels, section labels, prose,
   buttons.
+
+The brand mark is a gold, stroked A+T monogram: a geometric A with an inscribed T.
 
 Mono and sans are user-swappable (`MONO_FONTS` / sans presets in `ThemeContext`);
 design against the defaults. Labels and eyebrows are small, uppercase, letter-spaced
@@ -97,7 +99,7 @@ consistency comes from one shared chrome:
   `9px`, weight `700`, uppercase, `letter-spacing 0.16em`. Inline controls (timeframe,
   overlays, ticker box) sit on the same strip, right-aligned. `WidgetFrame` renders
   this strip for every widget.
-- **Numbers:** the mono (`--theme-mono`, SF Mono) with `font-variant-numeric: tabular-nums`. Gains green,
+- **Numbers:** the data face (`--theme-mono`, Hanken Grotesk) with `font-variant-numeric: tabular-nums`. Gains green,
   losses red, the value always printed alongside color.
 - **Tickers:** a transparent-PNG logo (`assets.parqet.com/logos/symbol/<SYM>?format=png`,
   the shared `TickerLogo` component) next to the symbol in watchlists, positions

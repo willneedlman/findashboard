@@ -43,7 +43,6 @@ function MacroEventHubContent() {
     queryFn: async () => (await axios.get('/api/macro-events')).data,
     staleTime: 6 * 3600 * 1000,
   })
-
   const live = (data?.events?.length ?? 0) > 0
   const events = useMemo(() => (live ? data!.events : MOCK_EVENTS), [live, data])
 
