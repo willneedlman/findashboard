@@ -3,15 +3,40 @@ logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-import sys, os
+import sys, os, datetime as _dt
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import fmp
 import damodaran
 import factset
+import factor_models as fm
 from cache import get_info
 from validation import validate_ticker
 
 router = APIRouter()
+
+
+def _resolve_beta(ticker: str, vendor_beta, sector, industry) -> tuple[float, str]:
+    """Beta priority chain: computed CAPM beta (regressed against Ken French
+    Mkt-RF over the trailing 3 years) -> vendor beta -> Damodaran
+    sector/industry fallback. Only drops to Damodaran when there isn't
+    enough price history to regress at all (e.g. a recent IPO)."""
+    try:
+        start = (_dt.date.today() - _dt.timedelta(days=3 * 365)).isoformat()
+        end = _dt.date.today().isoformat()
+        returns = fm.stock_returns(ticker, start, end, "daily")
+        if len(returns) >= 20:
+            fit = fm.capm(returns, fm.get_factors("daily"))
+            if fit.get("available"):
+                return max(0.1, float(fit["betas"]["mktrf"])), "computed CAPM"
+    except Exception:
+        logger.warning("computed beta failed for %s, falling back", ticker, exc_info=True)
+
+    if vendor_beta:
+        return max(0.1, float(vendor_beta)), "vendor"
+
+    dmd = damodaran.lookup(sector, industry)
+    tag = dmd["name"] if dmd.get("matched") else "market avg"
+    return max(0.1, float(dmd["beta"])), f"Damodaran {dmd['updated']} — {tag}"
 
 
 # FactSet Financial Highlights (real statements + forward consensus estimates) is
@@ -57,7 +82,12 @@ def _base_fundamentals(ticker: str):
     # FMP path — fast (~200ms), real financial statement data
     if fmp.available():
         try:
-            return fmp.get_dcf_fundamentals(ticker)
+            data = fmp.get_dcf_fundamentals(ticker)
+            info = get_info(ticker)          # cheap/cached — for sector/industry Damodaran lookup only
+            beta, source = _resolve_beta(ticker, data.get("beta"), info.get("sector"), info.get("industry"))
+            data["beta"] = round(beta, 2)
+            data["assumptions_source"] = source
+            return data
         except Exception:
             pass  # fall through to yfinance
 
@@ -81,18 +111,16 @@ def _base_fundamentals(ticker: str):
         rev_growth = (info.get("revenueGrowth") or 0.10) * 100
         price      = float(info.get("currentPrice") or info.get("regularMarketPrice") or 0) or None
 
-        # Damodaran fallback — backstop beta / operating margin when yfinance is thin.
+        # Damodaran fallback — backstop operating margin when yfinance is thin.
+        # Beta is resolved separately via the computed-CAPM -> vendor -> Damodaran
+        # priority chain in _resolve_beta(); assumptions_source reflects that tier.
         beta_raw = info.get("beta")
-        assumptions_source = "yfinance"
-        if beta_raw and op_margin_raw:
-            beta      = float(beta_raw)
+        if op_margin_raw:
             op_margin = float(op_margin_raw) * 100
         else:
             dmd = damodaran.lookup(info.get("sector"), info.get("industry"))
-            beta      = float(beta_raw) if beta_raw else dmd["beta"]
-            op_margin = float(op_margin_raw) * 100 if op_margin_raw else dmd["op_margin"]
-            tag = dmd["name"] if dmd.get("matched") else "market avg"
-            assumptions_source = f"Damodaran {dmd['updated']} — {tag}"
+            op_margin = dmd["op_margin"]
+        beta, assumptions_source = _resolve_beta(ticker, beta_raw, info.get("sector"), info.get("industry"))
 
         return {
             "revenue":      max(0.0, round(revenue, 0)),

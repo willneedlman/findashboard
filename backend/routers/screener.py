@@ -9,6 +9,7 @@ import yfinance as yf
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import fmp
+import industry_ratios
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -404,6 +405,31 @@ EXCHANGES = ["NASDAQ", "NYSE", "AMEX"]
 def get_fields():
     return {"fields": SCREENER_FIELDS, "sectors": SECTORS, "exchanges": EXCHANGES,
             "universes": UNIVERSE_OPTIONS, "regions": REGIONS}
+
+
+@router.get("/sector-medians")
+def get_sector_medians():
+    """Industry-median benchmarks (WIFR methodology: median + 1% winsorized,
+    computed from the same bundled US fundamentals universe the screener
+    already loads — see industry_ratios.py). Small payload (11 sectors x
+    <=15 fields), fetch once and diff every row/field against it client-side
+    rather than round-tripping per cell."""
+    return {"sectors": industry_ratios.get_sector_medians(), "fields": list(industry_ratios.MEDIAN_FIELDS)}
+
+
+class PercentileRequest(BaseModel):
+    sector: str
+    values: dict[str, float | None]
+
+
+@router.post("/percentile")
+def get_percentiles(req: PercentileRequest):
+    """Exact percentile rank (0-100) of each given field value within its
+    sector's winsorized distribution. One call for all of a name's ratios —
+    for a single-ticker view (Company Profile), not for scoring an entire
+    screener results table (use /sector-medians + a client-side delta there)."""
+    return {field: industry_ratios.percentile_rank(req.sector, field, value)
+            for field, value in req.values.items()}
 
 # ── Cached base-data snapshot from the FMP screener ───────────────────────────
 

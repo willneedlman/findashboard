@@ -14,6 +14,7 @@ import { type ImportResult } from '../lib/pmImport'
 
 const GOLD = 'var(--theme-primary, #c9a84c)'
 const BLUE = 'var(--theme-tertiary, #60a5fa)'
+const PURPLE = '#a78bfa'
 const POS = 'var(--theme-positive, #3fb950)'
 const NEG = 'var(--theme-negative, #f85149)'
 const TEXT = 'var(--theme-text, #d7e3fc)'
@@ -45,10 +46,66 @@ interface WeightRow { ticker: string; weight: number; risk_contribution: number 
 interface Port { return: number; vol: number; sharpe: number; weights: WeightRow[]; var_95: number; cvar_95: number; max_drawdown: number }
 interface AssetRow { ticker: string; return: number; total_return?: number; vol: number; beta?: number | null }
 interface OptResult {
-  tickers: string[]; dropped?: string[]; days: number; span: { start: string; end: string }; risk_free_rate: number; market_return?: number; long_only: boolean; return_model?: string
+  tickers: string[]; dropped?: string[]; days: number; span: { start: string; end: string }; risk_free_rate: number; market_return?: number
+  constraint_mode: string; bounds: Record<string, [number, number]>; return_model?: string
   portfolios: Record<string, Port>
   frontier: { vol: number; return: number; sharpe: number }[]
   assets: AssetRow[]
+}
+
+type ConstraintMode = 'long_only' | 'unconstrained' | 'concentrated' | 'custom'
+// Presets for the risk-aversion coefficient A. Calibrated for this module's
+// decimal-return implementation of the WRDS Efficient Portfolio Module
+// appendix (w_Tang = (r_Tang-rf)/(0.1*A*sigma_Tang^2)) — NOT the ~2-10 range
+// "risk aversion coefficient" conventionally means in textbook treatments
+// of this same formula family with percent-scale returns. See the backend's
+// _capital_allocation() docstring for the derivation.
+const RISK_PRESETS: { key: string; label: string; A: number }[] = [
+  { key: 'conservative', label: 'Conservative', A: 80 },
+  { key: 'moderate', label: 'Moderate', A: 45 },
+  { key: 'aggressive', label: 'Aggressive', A: 20 },
+]
+
+// Mirrors the backend's _capital_allocation() exactly, so the risk-aversion
+// slider/presets recompute live without re-hitting the optimizer. Tangency,
+// rf, and maxFrontierVol arrive in PERCENT (matching the API response); the
+// WRDS 0.1/0.05 coefficients are applied in decimal internally, same as the
+// backend.
+function computeCapitalAllocation(
+  tangency: { return: number; vol: number }, rfPct: number, riskAversion: number,
+  allowLeverage: boolean, maxFrontierVolPct: number,
+) {
+  const A = riskAversion
+  const rTang = tangency.return / 100, sigmaTang = tangency.vol / 100, rf = rfPct / 100
+  let wTang = sigmaTang > 1e-9 ? (rTang - rf) / (0.1 * A * sigmaTang * sigmaTang) : 0
+  wTang = Math.max(0, Math.min(wTang, allowLeverage ? 3.0 : 1.0))
+  const rComplete = (1 - wTang) * rf + wTang * rTang
+  const sigmaComplete = wTang * sigmaTang
+
+  const calLine: { vol: number; return: number }[] = [
+    { vol: 0, return: rf * 100 },
+    { vol: sigmaTang * 100, return: rTang * 100 },
+  ]
+  if (allowLeverage && wTang > 1.0) {
+    // Reach at least sigmaComplete, whatever wTang turns out to be — not a
+    // fixed multiplier of sigmaTang — so "Your Mix" always lands ON the
+    // drawn line instead of floating past its end.
+    const extVol = Math.max(sigmaTang * 1.5, sigmaComplete * 1.15)
+    calLine.push({ vol: extVol * 100, return: (rf + (rTang - rf) / sigmaTang * extVol) * 100 })
+  }
+
+  const uStar = rComplete - 0.05 * A * sigmaComplete * sigmaComplete
+  const span = Math.max(maxFrontierVolPct / 100, sigmaComplete * 1.3, sigmaTang * 1.2, 0.01)
+  const indifferenceCurve = Array.from({ length: 30 }, (_, i) => {
+    const v = (span / 29) * i
+    return { vol: v * 100, return: (uStar + 0.05 * A * v * v) * 100 }
+  })
+
+  return {
+    weightTangency: wTang * 100, weightRiskFree: (1 - wTang) * 100,
+    completeReturn: rComplete * 100, completeVol: sigmaComplete * 100,
+    calLine, indifferenceCurve,
+  }
 }
 
 const startFor = (years: number) => { const d = new Date(); d.setFullYear(d.getFullYear() - years); return d.toISOString().slice(0, 10) }
@@ -74,7 +131,9 @@ export function PortfolioOptimizerContent() {
   const [tickers, setTickers] = useState<string[]>(['AAPL', 'MSFT', 'NVDA', 'TLT', 'GLD'])
   const [lookback, setLookback] = useState(3)
   const [rf, setRf] = useState('4.00')
-  const [longOnly, setLongOnly] = useState(true)
+  const [constraintMode, setConstraintMode] = useState<ConstraintMode>('long_only')
+  const [customBounds, setCustomBounds] = useState<Record<string, [number, number]>>({})
+  const [riskPreset, setRiskPreset] = useState('moderate')
   const [returnModel, setReturnModel] = useState<'historical' | 'capm'>('historical')
   const [marketReturn, setMarketReturn] = useState('10')
   const [selected, setSelected] = useState('max_sharpe')
@@ -82,6 +141,7 @@ export function PortfolioOptimizerContent() {
   // Per-ticker weights (%) define the CURRENT portfolio, plotted against the optimum.
   const [weights, setWeights] = useState<Record<string, number>>({})
   const [importMsg, setImportMsg] = useState('')
+  const riskAversion = RISK_PRESETS.find(p => p.key === riskPreset)?.A ?? 45
 
   // Auto-populate the risk-free rate from the live Treasury curve (3-month bill).
   useEffect(() => {
@@ -123,7 +183,11 @@ export function PortfolioOptimizerContent() {
   const { mutate, data, isPending, isError, error } = useMutation<OptResult>({
     mutationFn: async () => (await axios.post('/api/portfolio-opt/optimize', {
       tickers, start: startFor(lookback), end: new Date().toISOString().slice(0, 10),
-      risk_free_rate: parseFloat(rf) || 0, long_only: longOnly,
+      risk_free_rate: parseFloat(rf) || 0, constraint_mode: constraintMode,
+      custom_bounds: constraintMode === 'custom'
+        ? Object.fromEntries(tickers.map(t => { const [lo, hi] = customBounds[t] ?? [0, 100]; return [t, [lo / 100, hi / 100]] }))
+        : undefined,
+      risk_aversion: riskAversion,
       return_model: returnModel, market_return: parseFloat(marketReturn) || 10,
       weights: hasWeights ? weights : undefined,
     })).data,
@@ -140,12 +204,25 @@ export function PortfolioOptimizerContent() {
   const currentScatter = useMemo(() => data?.portfolios.current
     ? [{ ...data.portfolios.current, label: 'Your Portfolio', key: 'current' }] : [], [data])
 
+  // Capital Allocation Line + indifference curve + optimal complete portfolio,
+  // recomputed CLIENT-SIDE from the tangency portfolio the backend already
+  // returned — the risk-preset buttons update this instantly with no re-fetch.
+  const allowLeverage = data ? data.constraint_mode !== 'long_only' : false
+  const maxFrontierVol = useMemo(() => data?.frontier.length ? Math.max(...data.frontier.map(f => f.vol)) : 20, [data])
+  const capitalAllocation = useMemo(() => {
+    if (!data?.portfolios.max_sharpe) return null
+    return computeCapitalAllocation(data.portfolios.max_sharpe, data.risk_free_rate, riskAversion, allowLeverage, maxFrontierVol)
+  }, [data, riskAversion, allowLeverage, maxFrontierVol])
+  const completePoint = useMemo(() => capitalAllocation
+    ? [{ vol: capitalAllocation.completeVol, return: capitalAllocation.completeReturn, label: 'Your Mix', key: 'complete' }] : [], [capitalAllocation])
+
   // Axis domains fitted to the data (padded) so the frontier always fills the
   // chart instead of hugging a corner of a 0-anchored axis.
   const [xDom, yDom] = useMemo(() => {
     const def: [[number, number], [number, number]] = [[0, 1], [0, 1]]
     if (!data) return def
-    const pts = [...data.frontier, ...data.assets, ...portScatter, ...currentScatter]
+    const calPts = capitalAllocation?.calLine ?? []
+    const pts = [...data.frontier, ...data.assets, ...portScatter, ...currentScatter, ...calPts, ...completePoint]
     if (!pts.length) return def
     const fit = (arr: number[], clampLo?: number): [number, number] => {
       const lo = Math.min(...arr), hi = Math.max(...arr)
@@ -154,10 +231,10 @@ export function PortfolioOptimizerContent() {
       return [clampLo != null ? Math.max(clampLo, a) : a, hi + pad]
     }
     return [fit(pts.map(p => p.vol), 0), fit(pts.map(p => p.return))]
-  }, [data, portScatter, currentScatter])
+  }, [data, portScatter, currentScatter, capitalAllocation, completePoint])
 
   return (
-    <SidebarLayout sidebarWidth={230} sidebarTitle="" sidebar={<div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <SidebarLayout sidebarWidth={258} sidebarTitle="" sidebar={<div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div>
         <label style={lbl}>Tickers · {tickers.length}</label>
         <TickerTagInput tickers={tickers} onChange={onTickers} placeholder="Add ticker…" maxTags={20} />
@@ -230,10 +307,46 @@ export function PortfolioOptimizerContent() {
         <label style={lbl}>Risk-free rate (annual %)</label>
         <input value={rf} onChange={e => setRf(e.target.value)} type="number" step="0.25" style={inp} />
       </div>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontFamily: SANS, fontSize: 11, color: TEXT }}>
-        <input type="checkbox" checked={longOnly} onChange={e => setLongOnly(e.target.checked)} />
-        Long-only (no shorts)
-      </label>
+      <div>
+        <label style={lbl}>Weight bounds</label>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', border: `1px solid ${BORDER}` }}>
+          {([['long_only', 'Long-only'], ['unconstrained', 'Shorts OK'], ['concentrated', '±10%'], ['custom', 'Custom']] as [ConstraintMode, string][]).map(([k, lab]) => (
+            <button key={k} onClick={() => setConstraintMode(k)} title={
+              k === 'long_only' ? 'No shorts, each holding 0-100%' :
+              k === 'unconstrained' ? 'Shorts allowed, each holding -100% to 100%' :
+              k === 'concentrated' ? 'WRDS-style preset: each holding capped at ±10% — needs 10+ names to reach 100%' :
+              'Set your own min/max % per holding below'
+            } style={{ background: constraintMode === k ? `color-mix(in srgb, ${GOLD} 16%, transparent)` : 'transparent', border: 'none', borderBottom: `1px solid ${BORDER}`, cursor: 'pointer', color: constraintMode === k ? GOLD : SEC, fontFamily: MONO, fontSize: 9.5, fontWeight: 700, padding: '6px 2px' }}>{lab}</button>
+          ))}
+        </div>
+        {constraintMode === 'custom' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+            {tickers.map(t => {
+              const [lo, hi] = customBounds[t] ?? [0, 100]
+              return (
+                <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: GOLD, width: 34, flexShrink: 0 }}>{t}</span>
+                  <input type="number" value={lo} onChange={e => setCustomBounds(cb => ({ ...cb, [t]: [parseFloat(e.target.value) || 0, hi] }))}
+                    style={{ width: 0, flex: 1, background: 'var(--theme-bg)', border: `1px solid ${BORDER}`, color: TEXT, fontFamily: MONO, fontSize: 9, padding: '3px', outline: 'none', textAlign: 'right' }} />
+                  <span style={{ color: FAINT, fontSize: 9 }}>–</span>
+                  <input type="number" value={hi} onChange={e => setCustomBounds(cb => ({ ...cb, [t]: [lo, parseFloat(e.target.value) || 0] }))}
+                    style={{ width: 0, flex: 1, background: 'var(--theme-bg)', border: `1px solid ${BORDER}`, color: TEXT, fontFamily: MONO, fontSize: 9, padding: '3px', outline: 'none', textAlign: 'right' }} />
+                  <span style={{ color: FAINT, fontSize: 9 }}>%</span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+      <div>
+        <label style={lbl}>Risk tolerance</label>
+        <div style={{ display: 'flex', border: `1px solid ${BORDER}` }}>
+          {RISK_PRESETS.map((p, i) => (
+            <button key={p.key} onClick={() => setRiskPreset(p.key)} title="Drives the Capital Allocation Line — how much of the tangency portfolio vs. cash. Updates instantly, no re-run needed."
+              style={{ flex: 1, background: riskPreset === p.key ? `color-mix(in srgb, ${GOLD} 16%, transparent)` : 'transparent', border: 'none', borderRight: i < RISK_PRESETS.length - 1 ? `1px solid ${BORDER}` : 'none', cursor: 'pointer', color: riskPreset === p.key ? GOLD : SEC, fontFamily: MONO, fontSize: 9.5, fontWeight: 700, padding: '6px 0' }}>{p.label}</button>
+          ))}
+        </div>
+      </div>
       <button onClick={() => mutate()} disabled={!canRun} style={{ width: '100%', background: GOLD, border: `1px solid ${GOLD}`, color: 'var(--theme-bg)', fontFamily: SANS, fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '9px 0', cursor: canRun ? 'pointer' : 'default', opacity: canRun ? 1 : 0.5 }}>
         {isPending ? 'Optimizing…' : 'Optimize'}
       </button>
@@ -287,19 +400,37 @@ export function PortfolioOptimizerContent() {
                     <ZAxis range={[60, 60]} />
                     <Tooltip cursor={{ strokeDasharray: '3 3' }} content={<ChartTip />} />
                     <Scatter name="Frontier" data={data.frontier} line={{ stroke: FAINT, strokeWidth: 1.5 }} fill="transparent" />
+                    {capitalAllocation && <Scatter name="Capital Allocation Line" data={capitalAllocation.calLine} line={{ stroke: BLUE, strokeWidth: 1.5, strokeDasharray: '5 3' }} fill="transparent" />}
+                    {capitalAllocation && <Scatter name="Indifference Curve" data={capitalAllocation.indifferenceCurve} line={{ stroke: PURPLE, strokeWidth: 1.2, strokeDasharray: '2 3' }} fill="transparent" />}
                     <Scatter name="Assets" data={data.assets} fill={BLUE} shape="circle" cursor="pointer" onClick={(pt: unknown) => { const p = (pt as { payload?: AssetRow })?.payload ?? (pt as AssetRow); if (p?.ticker) setAsset(p) }} />
                     <Scatter name="Portfolios" data={portScatter} fill={GOLD} shape="diamond">
                       {portScatter.map((p) => <Cell key={p.key} fill={p.key === selected ? GOLD : 'rgba(201,168,76,0.45)'} />)}
                     </Scatter>
                     {currentScatter.length > 0 && <Scatter name="Your Portfolio" data={currentScatter} fill={NEG} shape="star" />}
+                    {completePoint.length > 0 && <Scatter name="Your Mix" data={completePoint} fill={PURPLE} shape="triangle" />}
                   </ScatterChart>
                 </ResponsiveContainer>
-                <div style={{ display: 'flex', gap: 14, padding: '4px 10px 8px', fontFamily: SANS, fontSize: 9, color: FAINT, flexWrap: 'wrap' }}>
-                  <span><span style={{ color: FAINT }}>─</span> efficient frontier</span>
-                  <span><span style={{ color: BLUE }}>●</span> each asset <span style={{ color: FAINT }}>(click for β · E(r))</span></span>
+                <div style={{ display: 'flex', gap: 10, padding: '4px 10px 8px', fontFamily: SANS, fontSize: 9, color: FAINT, flexWrap: 'wrap' }}>
+                  <span><span style={{ color: FAINT }}>─</span> frontier</span>
+                  <span><span style={{ color: BLUE }}>- -</span> CAL</span>
+                  <span><span style={{ color: PURPLE }}>··</span> indifference curve</span>
+                  <span title="Click an asset for its beta and expected return"><span style={{ color: BLUE }}>●</span> assets</span>
                   <span><span style={{ color: GOLD }}>◆</span> portfolios</span>
                   {currentScatter.length > 0 && <span><span style={{ color: NEG }}>★</span> your portfolio</span>}
+                  {completePoint.length > 0 && <span><span style={{ color: PURPLE }}>▲</span> your mix</span>}
                 </div>
+                {capitalAllocation && (
+                  <div style={{ margin: '2px 10px 8px', padding: '9px 12px', border: `1px solid color-mix(in srgb, ${PURPLE} 40%, transparent)`, background: `color-mix(in srgb, ${PURPLE} 8%, transparent)` }}>
+                    <div style={{ fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: PURPLE, marginBottom: 4 }}>Your optimal mix · {RISK_PRESETS.find(p => p.key === riskPreset)?.label}</div>
+                    <div style={{ fontFamily: MONO, fontSize: 12, color: TEXT }}>
+                      {capitalAllocation.weightRiskFree < 0
+                        ? <>{capitalAllocation.weightTangency.toFixed(0)}% Tangency Portfolio <span style={{ color: FAINT }}>(borrowing {Math.abs(capitalAllocation.weightRiskFree).toFixed(0)}% at the risk-free rate)</span></>
+                        : <>{capitalAllocation.weightTangency.toFixed(0)}% Tangency Portfolio / {capitalAllocation.weightRiskFree.toFixed(0)}% Cash</>}
+                      <span style={{ color: FAINT }}> — </span>
+                      {capitalAllocation.completeReturn.toFixed(1)}% return, {capitalAllocation.completeVol.toFixed(1)}% vol
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

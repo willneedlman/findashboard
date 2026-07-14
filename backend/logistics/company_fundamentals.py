@@ -195,3 +195,72 @@ def peers_by_tags(ticker: str, limit: int = 24, expected_name: str | None = None
         "returned": len(returned),
         "peers": returned,
     }
+
+
+def query_customer_links(ticker: str) -> dict:
+    """Return disclosed customer segment relationships for one ticker in two directions:
+      - customers: companies the given ticker sells to (revenue concentration risk)
+      - suppliers: companies that sell to the given ticker (downstream dependency risk)
+    """
+    symbol = (ticker or "").strip().upper()
+    if not available() or not symbol:
+        return {"ticker": symbol, "customers": [], "suppliers": []}
+
+    with _conn() as conn:
+        table_exists = conn.execute(
+            "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='customer_links'"
+        ).fetchone()[0] > 0
+        if not table_exists:
+            return {"ticker": symbol, "customers": [], "suppliers": []}
+
+        # 1. Customers of this company (supplier_ticker = symbol)
+        cust_rows = conn.execute(
+            "SELECT customer_ticker, customer_name, customer_sales, pct_of_revenue, fiscal_year "
+            "FROM customer_links WHERE supplier_ticker = ? ORDER BY customer_sales DESC, pct_of_revenue DESC, fiscal_year DESC",
+            (symbol,)
+        ).fetchall()
+
+        customers = [
+            {
+                "customer_ticker": r["customer_ticker"],
+                "customer_name": r["customer_name"],
+                "customer_sales": r["customer_sales"],
+                "pct_of_revenue": r["pct_of_revenue"],
+                "fiscal_year": r["fiscal_year"]
+            }
+            for r in cust_rows
+        ]
+
+        # 2. Suppliers to this company (customer_ticker = symbol)
+        supp_rows = conn.execute(
+            "SELECT supplier_ticker, customer_sales, pct_of_revenue, fiscal_year "
+            "FROM customer_links WHERE customer_ticker = ? ORDER BY customer_sales DESC, pct_of_revenue DESC, fiscal_year DESC",
+            (symbol,)
+        ).fetchall()
+
+        suppliers = []
+        for r in supp_rows:
+            sup_ticker = r["supplier_ticker"]
+            sup_name = sup_ticker
+            company_row = conn.execute(
+                "SELECT name FROM companies WHERE veridion_id IN "
+                "(SELECT DISTINCT veridion_id FROM ticker_index WHERE symbol = ?)",
+                (sup_ticker,)
+            ).fetchone()
+            if company_row:
+                sup_name = company_row["name"]
+
+            suppliers.append({
+                "supplier_ticker": sup_ticker,
+                "supplier_name": sup_name,
+                "customer_sales": r["customer_sales"],
+                "pct_of_revenue": r["pct_of_revenue"],
+                "fiscal_year": r["fiscal_year"]
+            })
+
+    return {
+        "ticker": symbol,
+        "customers": customers,
+        "suppliers": suppliers
+    }
+

@@ -9,9 +9,14 @@ from cache import get_history as _cached_history, get_news as _cached_news, get_
 from validation import validate_ticker, validate_tickers, validate_date
 import serpapi_finance
 import alpaca
+import factor_models as fm
 
 
 router = APIRouter()
+
+# "Large" CAPM-vs-Scholes-Williams divergence: a starting threshold for
+# flagging thin-trading distortion, not a statistically derived cutoff.
+_THIN_TRADING_DIVERGENCE_PCT = 15.0
 
 
 # Global Markets board: major stock indices by region, FX, commodities, US
@@ -393,6 +398,48 @@ def get_history(ticker: str, start: str | None = None, end: str | None = None, w
         "drawdown": [{"date": _lbl(d), "value": round(float(v), 4)} for d, v in drawdown.items()],
         "meta": {"interval": yf_int, "intraday": intraday, "vol_window": int(win), "window": window, "as_of": _iso_timestamp(prices.index[-1]), "source": "Yahoo Finance", "data_status": "latest" if intraday else "end_of_day"},
     }
+
+
+@router.get("/beta-suite")
+def beta_suite(ticker: str, start: str | None = None, end: str | None = None, model: str = "ff3"):
+    """Computed CAPM + Scholes-Williams beta, FF3/FF4 style loadings, and
+    IVOL/TVOL for a single ticker, regressed against Ken French factors —
+    real regression output, not the vendor `beta` field. Falls back to the
+    vendor beta, labeled as such, when there isn't enough price history to
+    regress (e.g. a recent IPO)."""
+    sym = validate_ticker(ticker)
+    if model not in ("ff3", "ff4"):
+        raise HTTPException(400, "model must be 'ff3' or 'ff4'")
+    end = end or _dt.date.today().isoformat()
+    start = start or (_dt.date.today() - _dt.timedelta(days=3 * 365)).isoformat()
+    validate_date(start); validate_date(end)
+
+    try:
+        returns = fm.stock_returns(sym, start, end, "daily")
+    except Exception:
+        raise HTTPException(500, "Internal server error")
+
+    if returns.empty or len(returns) < 20:
+        info = get_info(sym)
+        raw_beta = info.get("beta") if info.get("beta") is not None else info.get("beta3Year")
+        vendor_beta = round(float(raw_beta), 2) if isinstance(raw_beta, (int, float)) else None
+        return {
+            "ticker": sym, "available": False,
+            "reason": "insufficient price history to regress",
+            "vendor_beta": vendor_beta,
+            "vendor_beta_source": "yfinance (unlabeled methodology)" if vendor_beta is not None else None,
+        }
+
+    result = fm.compute_beta_suite(returns, frequency="daily", model=model)
+    capm_beta = result["capm"].get("betas", {}).get("mktrf") if result["capm"].get("available") else None
+    sw_beta = result["scholes_williams"].get("beta") if result["scholes_williams"].get("available") else None
+    divergence = round(abs(sw_beta - capm_beta) / abs(capm_beta) * 100, 1) if capm_beta and sw_beta is not None else None
+
+    result["ticker"] = sym
+    result["available"] = True
+    result["beta_divergence_pct"] = divergence
+    result["thin_trading_flag"] = bool(divergence is not None and divergence >= _THIN_TRADING_DIVERGENCE_PCT)
+    return result
 
 
 _COMPARE_PERIOD_DAYS = {"1m": 31, "3m": 92, "6m": 183, "1y": 366, "2y": 731, "5y": 1827}

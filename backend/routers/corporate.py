@@ -873,7 +873,13 @@ def get_credit(ticker: str):
         "altman_zone": altman_zone,
         "current_ratio": round(cur_assets / cur_liab, 2) if cur_assets and cur_liab else None,
     }
-    disk_set(ck, out, ttl=86400)
+    # A real operating company (we have debt/cash) whose rating still came back
+    # empty means income_stmt/balance_sheet likely failed transiently (yfinance
+    # hiccup) rather than genuinely lacking financials — don't bake that failure
+    # in for a full day. Genuine non-companies (ETFs, no debt/cash at all either)
+    # keep the long TTL since that null result is stable.
+    degraded = rating is None and (total_debt is not None or cash is not None)
+    disk_set(ck, out, ttl=600 if degraded else 86400)
     return out
 
 

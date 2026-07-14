@@ -15,6 +15,7 @@ import { MONO, SANS, mix, InfoTip, Panel, seg, KpiStrip } from './cockpitKit'
 interface FactorRow { factor: string; proxy: string; beta: number; t_stat: number | null; risk_pct: number }
 interface HoldingDetail { ticker: string; weight: number; betas: Record<string, number>; idiosyncratic_pct: number; book_var_share_pct: number }
 interface Resp {
+  mode: 'macro' | 'style'
   factors: FactorRow[]; rolling: Record<string, { date: string; beta: number }[]>
   holdings_detail: HoldingDetail[]; book_betas: Record<string, number>; roll_window: number
   r_squared: number; systematic_pct: number; idiosyncratic_pct: number; ann_vol_pct: number; alpha_ann_pct: number
@@ -31,16 +32,18 @@ export default function FactorDecomposition() {
   const [bookId, setBookId] = useState(books[0]?.id ?? '')
   const [rows, setRows] = useState<Row[]>([{ ticker: 'NVDA', weight: '40' }, { ticker: 'AAPL', weight: '35' }, { ticker: 'TLT', weight: '25' }])
   const [lookback, setLookback] = useState(365)
+  const [factorSet, setFactorSet] = useState<'macro' | 'style'>('macro')
 
   const m = useMutation<Resp>({
     mutationFn: () => {
+      const extra = { mode: factorSet }
       if (mode === 'saved') {
         const book = books.find(b => b.id === bookId) as PMPortfolio
         const holdings = book.holdings.filter(h => h.ticker && h.shares).map(h => ({ ticker: normalizeTicker(h.ticker), shares: h.shares }))
-        return fetchFactorDecomposition({ holdings, lookback_days: lookback })
+        return fetchFactorDecomposition({ holdings, lookback_days: lookback, ...extra })
       }
       const holdings = rows.filter(r => r.ticker.trim() && Number(r.weight) > 0).map(r => ({ ticker: normalizeTicker(r.ticker), weight: Number(r.weight) }))
-      return fetchFactorDecomposition({ holdings, lookback_days: lookback })
+      return fetchFactorDecomposition({ holdings, lookback_days: lookback, ...extra })
     },
   })
   const setRow = (i: number, patch: Partial<Row>) => setRows(rs => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)))
@@ -80,6 +83,16 @@ export default function FactorDecomposition() {
         <div style={{ ...LABEL, marginBottom: 7 }}>Window</div>
         <div style={{ display: 'flex', gap: 5 }}>{LOOKBACKS.map(([l, d]) => <button key={d} onClick={() => setLookback(d)} style={seg(lookback === d)}>{l}</button>)}</div>
       </div>
+      <div style={{ padding: '12px 12px 13px', borderBottom: `1px solid ${T.border}` }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 7 }}>
+          <span style={LABEL}>Factor set</span>
+          <InfoTip align="left" title="Macro vs. style factors" body="Macro: sensitivity to market, rates, credit, oil, and the dollar via liquid ETF proxies. Style: Fama-French/Carhart tilt toward size, value, and momentum, from the Ken French Data Library. Different lenses on the same book — macro sensitivity vs. equity style tilt." source="Two independent factor models" />
+        </div>
+        <div style={{ display: 'flex', gap: 5 }}>
+          <button onClick={() => setFactorSet('macro')} style={seg(factorSet === 'macro')}>Macro</button>
+          <button onClick={() => setFactorSet('style')} style={seg(factorSet === 'style')}>Style</button>
+        </div>
+      </div>
       <div style={{ padding: '13px 12px', display: 'flex', flexDirection: 'column', gap: 9 }}>
         <button onClick={() => m.mutate()} disabled={m.isPending} style={{ textAlign: 'center', fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.gold, border: `1px solid ${T.gold}`, background: mix(T.gold, 8), padding: '9px 8px', cursor: m.isPending ? 'wait' : 'pointer' }}>{m.isPending ? 'Running' : 'Decompose'}</button>
         <div style={{ fontFamily: MONO, fontSize: 9, color: T.textDim, lineHeight: 1.5 }}>Hover any ⓘ for what a metric means.</div>
@@ -92,7 +105,7 @@ export default function FactorDecomposition() {
       <SidebarLayout sidebar={rail} sidebarTitle="Book">
         {m.isPending ? <LoadingState label="Regressing the book on its factors" />
           : m.error ? <ErrorState message={(m.error as any)?.response?.data?.detail || 'Could not decompose the book.'} onRetry={() => m.mutate()} />
-          : m.data ? <Results d={m.data} />
+          : m.data ? <Results key={m.data.mode} d={m.data} />
           : <EmptyState title="Factor Decomposition" hint="Load a saved book or enter weights to measure factor exposure and beta drift."
             keys={['Market', 'Rates', 'Credit', 'Oil', 'Dollar']} kpis={['Market', 'Rates', 'Credit', 'Oil', 'Dollar']}
             preview="chart" previewLabel="Factor Exposure" />}
@@ -101,11 +114,11 @@ export default function FactorDecomposition() {
   )
 }
 
-const FACTOR_KEYS = ['market', 'rates', 'credit', 'oil', 'dollar']
 const barColor = (v: number) => (v >= 0 ? T.gold : T.neg)
 
 function Results({ d }: { d: Resp }) {
-  const [factor, setFactor] = useState('market')
+  const factorKeys = Object.keys(d.book_betas)
+  const [factor, setFactor] = useState(factorKeys[0] ?? 'market')
   const [holding, setHolding] = useState(d.holdings_detail[0]?.ticker ?? '')
   const top = d.factors[0]
   const kpis = [
@@ -126,7 +139,7 @@ function Results({ d }: { d: Resp }) {
       <KpiStrip cells={kpis} />
 
       {/* Factor exposures */}
-      <Panel label="Factor Exposures" meta={`${d.observations} days · partial betas — each holds the others fixed`} style={{ padding: '32px 0 0' }}>
+      <Panel label="Factor Exposures" meta={`${d.observations} days · partial betas — each holds the others fixed · ${d.source}`} style={{ padding: '32px 0 0' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '110px 80px 100px 90px 1fr 90px', padding: '0 14px' }}>
           {['Factor', 'Proxy', 'Beta', 't-stat', 'Risk share', ''].map((h, i) => (
             <div key={h + i} style={{ display: 'flex', alignItems: 'center', gap: 5, justifyContent: i >= 2 && i <= 3 ? 'flex-end' : i === 4 ? 'flex-end' : 'flex-start', fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.muted, padding: '8px 4px', borderBottom: `1px solid ${T.border}` }}>
@@ -160,7 +173,7 @@ function Results({ d }: { d: Resp }) {
 
       {/* Rolling exposure */}
       <Panel label={`Rolling Exposure · ${d.roll_window}d Window`} style={{ padding: '32px 14px 8px' }}
-        meta={<span style={{ display: 'flex', gap: 5 }}>{FACTOR_KEYS.map(k => (
+        meta={<span style={{ display: 'flex', gap: 5 }}>{factorKeys.map(k => (
           <button key={k} onClick={() => setFactor(k)} style={{ fontFamily: MONO, fontSize: 9, fontWeight: factor === k ? 700 : 400, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '2px 6px', cursor: 'pointer', background: factor === k ? mix(T.gold, 14) : 'transparent', color: factor === k ? T.gold : T.muted, border: `1px solid ${factor === k ? T.gold : T.border}` }}>{k}</button>
         ))}</span>}>
         <div style={{ height: 150 }}>
@@ -196,14 +209,14 @@ function Results({ d }: { d: Resp }) {
         </Panel>
         <Panel label={`Holding Drill · ${hd?.ticker ?? ''}`} labelColor={T.gold} style={{ flex: 1, padding: '32px 16px 12px', overflow: 'hidden' }}
           meta={<span style={{ display: 'flex', gap: 12 }}><span style={{ color: T.gold }}>■ {hd?.ticker}</span><span style={{ color: mix(T.text, 45) }}>■ book</span></span>}>
-          {hd && <Drill hd={hd} book={d.book_betas} systematic={d.systematic_pct} />}
+          {hd && <Drill hd={hd} book={d.book_betas} systematic={d.systematic_pct} factorKeys={factorKeys} />}
         </Panel>
       </div>
     </div>
   )
 }
 
-function Drill({ hd, book, systematic }: { hd: HoldingDetail; book: Record<string, number>; systematic: number }) {
+function Drill({ hd, book, systematic, factorKeys }: { hd: HoldingDetail; book: Record<string, number>; systematic: number; factorKeys: string[] }) {
   const bar = (v: number, color: string) => {
     const w = Math.min(50, (Math.abs(v) / 3.3) * 50)
     return (
@@ -219,7 +232,7 @@ function Drill({ hd, book, systematic }: { hd: HoldingDetail; book: Record<strin
   return (
     <div style={{ display: 'flex', gap: 16, height: '100%' }}>
       <div style={{ flex: 1.4, display: 'flex', flexDirection: 'column' }}>
-        {FACTOR_KEYS.map(k => (
+        {factorKeys.map(k => (
           <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 0', borderBottom: `1px solid ${mix(T.text, 4)}` }}>
             <span style={{ fontFamily: MONO, fontSize: 10.5, color: T.muted, width: 52, textTransform: 'capitalize' }}>{k}</span>
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>{bar(hd.betas[k] ?? 0, T.gold)}{bar(book[k] ?? 0, mix(T.text, 30))}</div>

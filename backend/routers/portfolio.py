@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from cache import get_download
 from admin_auth import require_admin
 from validation import validate_tickers, validate_ticker, validate_date
+import factor_models as fm
 
 _FRED_KEY = os.getenv("FRED_API_KEY", "")
 
@@ -358,6 +359,17 @@ _FACTORS = [
     ("Dollar", "UUP"),
 ]
 
+# Equity style factors (Fama-French / Carhart), sourced from the Ken French
+# Data Library via factor_models.py. A different lens from the macro ETF
+# factors above: style tilt (size/value/momentum) rather than macro
+# sensitivity (rates/credit/oil/dollar).
+_STYLE_LABELS = {
+    "mktrf": ("Market", "Ken French Mkt-RF"),
+    "smb":   ("Size", "Ken French SMB"),
+    "hml":   ("Value", "Ken French HML"),
+    "umd":   ("Momentum", "Ken French UMD"),
+}
+
 
 class FactorHolding(BaseModel):
     ticker: str
@@ -368,13 +380,16 @@ class FactorHolding(BaseModel):
 class FactorRequest(BaseModel):
     holdings: list[FactorHolding] = Field(..., min_length=1, max_length=100)
     lookback_days: int = Field(365, ge=90, le=1825)
+    mode: str = Field("macro", pattern="^(macro|style)$")
 
 
 @router.post("/factor-decomposition")
 def factor_decomposition(req: FactorRequest):
-    """Regress a book's daily returns on market, rates, credit, oil, and dollar
-    factors. Returns partial factor betas with t-stats, each factor's share of
-    return variance, the idiosyncratic remainder, and concentration stats.
+    """Regress a book's daily returns on either macro factors (market, rates,
+    credit, oil, dollar — mode='macro', the default) or equity style factors
+    (Fama-French/Carhart market, size, value, momentum — mode='style').
+    Returns partial factor betas with t-stats, each factor's share of return
+    variance, the idiosyncratic remainder, and concentration stats.
 
     Weights come from `weight` when given (paste mode); otherwise from
     shares x last close (the saved Portfolio Manager book)."""
@@ -388,7 +403,7 @@ def factor_decomposition(req: FactorRequest):
         raise HTTPException(400, "No priceable holdings")
 
     tickers = sorted(holds)
-    factor_syms = [s for _, s in _FACTORS]
+    factor_syms = [s for _, s in _FACTORS] if req.mode == "macro" else []
     union = tuple(sorted(set(tickers) | set(factor_syms)))
     import datetime as _dt
     end = (_dt.date.today() + _dt.timedelta(days=1)).isoformat()
@@ -427,13 +442,33 @@ def factor_decomposition(req: FactorRequest):
 
     daily = raw.pct_change().dropna(how="all")
     port = sum(daily[t].fillna(0.0) * weights[t] for t in priced)
-    fac_cols = [(lbl, s) for lbl, s in _FACTORS if s in daily.columns and daily[s].notna().sum() > 20]
-    frame = pd.concat([port.rename("port")] + [daily[s].rename(s) for _, s in fac_cols], axis=1).dropna()
+
+    if req.mode == "style":
+        keys = ["mktrf", "smb", "hml", "umd"]
+        style_factors = fm.get_factors("daily")[keys].dropna()
+        labels = {k: _STYLE_LABELS[k][0] for k in keys}
+        proxies = {k: _STYLE_LABELS[k][1] for k in keys}
+        fac_frame_for_merge = style_factors
+        source_label = f"Ken French FF4/Carhart factors ({'/'.join(keys)})"
+    else:
+        fac_cols = [(lbl, s) for lbl, s in _FACTORS if s in daily.columns and daily[s].notna().sum() > 20]
+        keys = [lbl.lower() for lbl, _ in fac_cols]
+        labels = {lbl.lower(): lbl for lbl, _ in fac_cols}
+        proxies = {lbl.lower(): s for lbl, s in fac_cols}
+        fac_frame_for_merge = pd.concat([daily[s].rename(lbl.lower()) for lbl, s in fac_cols], axis=1)
+        source_label = "yfinance factor ETFs (SPY/TLT/HYG/USO/UUP)"
+
+    frame = pd.concat([port.rename("port"), fac_frame_for_merge], axis=1).dropna()
     if len(frame) < 60:
         raise HTTPException(422, "Not enough overlapping history for a stable fit")
 
+    # Output keys are always the lowercased display label (consistent across
+    # modes and matching book_betas below), even though `keys` — used to pull
+    # columns out of `frame`/X — are the raw factor codes for style mode.
+    out_keys = [labels[k].lower() for k in keys]
+
     y = frame["port"].to_numpy()
-    X = frame[[s for _, s in fac_cols]].to_numpy()
+    X = frame[keys].to_numpy()
     n, k = X.shape
     Xa = np.column_stack([np.ones(n), X])
     beta, *_ = np.linalg.lstsq(Xa, y, rcond=None)
@@ -450,13 +485,13 @@ def factor_decomposition(req: FactorRequest):
     var_p = float(np.var(y, ddof=1)) or 1e-12
 
     factors = []
-    for i, (lbl, s) in enumerate(fac_cols):
+    for i, key in enumerate(keys):
         b = float(beta[i + 1])
         cov = float(np.cov(X[:, i], y, ddof=1)[0, 1])
         contrib = b * cov / var_p                          # sums to R^2 across factors
         t = b / se[i + 1] if se[i + 1] and not np.isnan(se[i + 1]) else None
         factors.append({
-            "factor": lbl, "proxy": s, "beta": round(b, 3),
+            "factor": labels[key], "proxy": proxies[key], "beta": round(b, 3),
             "t_stat": round(t, 2) if t is not None else None,
             "risk_pct": round(contrib * 100, 1),
         })
@@ -471,8 +506,7 @@ def factor_decomposition(req: FactorRequest):
     # window so the drift in each exposure is visible. Downsampled to ~180 pts.
     fdates = [str(d.date()) for d in frame.index]
     roll_win = min(60, max(20, n // 4))
-    keys = [lbl.lower() for lbl, _ in fac_cols]
-    rolling: dict[str, list] = {k: [] for k in keys}
+    rolling: dict[str, list] = {k: [] for k in out_keys}
     for e in range(roll_win, n + 1):
         sl = slice(e - roll_win, e)
         Xr = np.column_stack([np.ones(roll_win), X[sl]])
@@ -480,8 +514,8 @@ def factor_decomposition(req: FactorRequest):
             br, *_ = np.linalg.lstsq(Xr, y[sl], rcond=None)
         except np.linalg.LinAlgError:
             continue
-        for j, k in enumerate(keys):
-            rolling[k].append({"date": fdates[e - 1], "beta": round(float(br[j + 1]), 3)})
+        for j, ok in enumerate(out_keys):
+            rolling[ok].append({"date": fdates[e - 1], "beta": round(float(br[j + 1]), 3)})
     rstep = max(1, (n - roll_win) // 180)
     rolling = {k: v[::rstep] for k, v in rolling.items()}
 
@@ -501,7 +535,7 @@ def factor_decomposition(req: FactorRequest):
         cov_ip = float(np.cov(ri, y, ddof=1)[0, 1])
         holdings_detail.append({
             "ticker": t, "weight": round(weights[t] * 100, 1),
-            "betas": {k: round(float(bi[j + 1]), 3) for j, k in enumerate(keys)},
+            "betas": {ok: round(float(bi[j + 1]), 3) for j, ok in enumerate(out_keys)},
             "idiosyncratic_pct": round((1 - r2i) * 100),
             "book_var_share_pct": round(weights[t] * cov_ip / var_p * 100, 1),
         })
@@ -509,6 +543,7 @@ def factor_decomposition(req: FactorRequest):
     book_betas = {f["factor"].lower(): f["beta"] for f in factors}
 
     return {
+        "mode": req.mode,
         "factors": factors,
         "rolling": rolling,
         "holdings_detail": holdings_detail,
@@ -530,7 +565,7 @@ def factor_decomposition(req: FactorRequest):
         "lookback_days": req.lookback_days,
         "weighting": "direct" if use_weight else "market value",
         "dropped": dropped,
-        "source": "yfinance factor ETFs (SPY/TLT/HYG/USO/UUP)",
+        "source": source_label,
     }
 
 

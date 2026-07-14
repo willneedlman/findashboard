@@ -5,6 +5,11 @@ const api = axios.create({ baseURL: '/api', timeout: 25_000 })
 export const fetchMarketHistory = (ticker: string, start?: string, end?: string) =>
   api.get('/market/history', { params: { ticker, start, end } }).then(r => r.data)
 
+// Computed CAPM/Scholes-Williams beta + FF3/FF4 style loadings + IVOL/TVOL,
+// regressed against Ken French factors — real regression, not vendor beta.
+export const fetchBetaSuite = (ticker: string, start?: string, end?: string, model: 'ff3' | 'ff4' = 'ff3') =>
+  api.get('/market/beta-suite', { params: { ticker, start, end, model } }).then(r => r.data)
+
 // Chokepoint Exposure: live chokepoint stress mapped to exposed equities.
 export const fetchChokepointExposure = () =>
   api.get('/maritime/exposure').then(r => r.data)
@@ -95,3 +100,8 @@ export const fetchCurveSpreads = () =>
 
 export const fetchCorrelation = (body: object) =>
   api.post('/correlation/matrix', body).then(r => r.data)
+
+// Disclosed customer relationships from Compustat segment data
+export const fetchCustomerLinks = (ticker: string) =>
+  api.get('/logistics/customer-links', { params: { ticker } }).then(r => r.data)
+

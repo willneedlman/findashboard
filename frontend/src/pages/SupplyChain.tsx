@@ -9,11 +9,12 @@ import PageHeader from '../components/PageHeader'
 import TickerInput from '../components/TickerInput'
 import TickerLogo from '../components/TickerLogo'
 import useIsMobile from '../hooks/useIsMobile'
-import { fetchMarketHistory } from '../hooks/useApi'
+import { fetchMarketHistory, fetchBetaSuite, fetchCustomerLinks } from '../hooks/useApi'
 import { TOOLTIP_STYLE, CROSSHAIR_CURSOR } from '../components/ChartTooltip'
 import { recordRecentTicker } from '../lib/recentTickers'
 import EmptyState from '../components/EmptyState'
 import FactSetFinancials from '../components/FactSetFinancials'
+import HelpTip from '../components/HelpTip'
 
 
 const SEGMENT_COLORS = ['var(--theme-primary, #c9a84c)', '#60a5fa', 'var(--theme-positive, #22c55e)', '#f97316', '#a78bfa', '#38bdf8', '#fb7185', '#34d399', '#fbbf24', '#e879f9']
@@ -408,6 +409,11 @@ function MarketPerformancePanel({ ticker }: { ticker: string }) {
     queryFn: () => fetchMarketHistory(ticker, start, end),
     staleTime: 300_000, retry: 1, enabled: !!ticker && !!start && !!end,
   })
+  const betaQ = useQuery({
+    queryKey: ['profile-beta-suite', ticker, start, end],
+    queryFn: () => fetchBetaSuite(ticker, start, end, 'ff3'),
+    staleTime: 300_000, retry: 1, enabled: !!ticker && !!start && !!end,
+  })
   const m = q.data?.metrics
   const returnColor = m ? (m.total_return >= 0 ? 'var(--theme-positive)' : 'var(--theme-negative)') : T.text
 
@@ -455,6 +461,52 @@ function MarketPerformancePanel({ ticker }: { ticker: string }) {
               </div>
             ))}
           </div>
+          {betaQ.data && (
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', borderBottom: `1px solid ${T.border}` }}>
+              {(betaQ.data.available ? [
+                {
+                  label: 'CAPM Beta',
+                  value: betaQ.data.capm?.available ? betaQ.data.capm.betas.mktrf.toFixed(2) : '—',
+                  color: T.text,
+                  tip: 'Regressed against the value-weighted market (Ken French Mkt-RF) over this date range — a real regression, not a vendor black box.',
+                },
+                {
+                  label: 'Scholes-Williams Beta',
+                  value: betaQ.data.scholes_williams?.available ? betaQ.data.scholes_williams.beta.toFixed(2) : '—',
+                  color: betaQ.data.thin_trading_flag ? 'var(--theme-negative)' : T.text,
+                  tip: betaQ.data.thin_trading_flag
+                    ? `Corrects for non-synchronous/thin trading using lead-lag market returns. Diverges ${betaQ.data.beta_divergence_pct}% from CAPM beta here — a signal this name may trade thinly enough to desynchronize from same-day market moves.`
+                    : 'Corrects for non-synchronous/thin trading using lead-lag market returns. Close to CAPM beta here, so thin trading is not distorting the estimate.',
+                },
+                {
+                  label: 'Idiosyncratic Risk',
+                  value: betaQ.data.ivol_tvol?.available ? `${betaQ.data.ivol_tvol.idiosyncratic_pct}%` : '—',
+                  color: T.text,
+                  tip: 'Share of return variance the risk model cannot explain — name-specific risk that factor exposure alone cannot hedge.',
+                },
+                {
+                  label: 'Ann. Idio. Vol',
+                  value: betaQ.data.ivol_tvol?.available ? `${betaQ.data.ivol_tvol.ivol_annualized_pct}%` : '—',
+                  color: T.text,
+                  tip: 'Idiosyncratic volatility (Ang et al. 2006), annualized — residual volatility left after removing factor exposure.',
+                },
+              ] : [
+                {
+                  label: 'Beta',
+                  value: betaQ.data.vendor_beta != null ? Number(betaQ.data.vendor_beta).toFixed(2) : '—',
+                  color: T.muted,
+                  tip: 'Not enough price history to regress a real beta for this range (recent IPO or similar). Showing the vendor field as a fallback — methodology undisclosed.',
+                },
+              ]).map((stat: { label: string; value: string; color: string; tip: string }, i: number, arr: unknown[]) => (
+                <div key={stat.label} style={{ padding: '12px 16px', borderRight: !isMobile && i < arr.length - 1 ? `1px solid ${T.border}` : 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, marginBottom: 6 }}>
+                    {stat.label}<HelpTip text={stat.tip} width={240} position="bottom" anchor="left" />
+                  </div>
+                  <div style={{ fontFamily: T.mono, fontSize: isMobile ? 16 : 20, fontWeight: 700, color: stat.color, lineHeight: 1.1 }}>{stat.value}</div>
+                </div>
+              ))}
+            </div>
+          )}
           <div style={{ padding: '14px 12px 6px' }}>
             <div style={{ ...labelStyle, paddingLeft: 6 }}>Price</div>
             <PerfChart data={q.data.price} stroke="var(--theme-primary, #c9a84c)" id="profPrice" fmt={v => `$${v.toLocaleString()}`} height={220} />
@@ -485,6 +537,20 @@ export function SupplyChainContent() {
   const [inst,    setInst]    = useState<InstData | null>(null)
   const [instLoading, setInstLoading] = useState(false)
   const [instTab, setInstTab] = useState<'holders' | 'funds'>('holders')
+  // Industry-median benchmarks (WIFR methodology) — static bundled computation,
+  // same source Screener uses, fetched once regardless of ticker.
+  const { data: sectorMedians } = useQuery({
+    queryKey: ['screener-sector-medians'],
+    queryFn: () => axios.get('/api/screener/sector-medians').then(r => r.data),
+    staleTime: Infinity,
+  })
+  const medianTip = (sector: string | undefined, field: string, value: number | null | undefined): string | undefined => {
+    if (value == null || !sector) return undefined
+    const entry = sectorMedians?.sectors?.[sector]?.[field]
+    if (!entry) return undefined
+    const delta = value - entry.median
+    return `${sector} median: ${entry.median.toFixed(2)} (n=${entry.n}) · this name is ${delta >= 0 ? '+' : ''}${delta.toFixed(2)} ${delta >= 0 ? 'above' : 'below'}`
+  }
 
   const doFetch = async (sym?: string) => {
     const ticker = (sym ?? input).trim().toUpperCase()
@@ -549,14 +615,17 @@ export function SupplyChainContent() {
         </div>
 
         {data && (() => {
-          const metrics: { label: string; value: string; color?: string }[] = [
+          const metrics: { label: string; value: string; color?: string; tip?: string }[] = [
             { label: 'Price',      value: data.price != null ? `$${data.price.toFixed(2)}` : '—' },
             { label: 'Market Cap', value: fmtCap(data.market_cap) },
-            { label: 'P/E Ratio',  value: data.pe_ratio != null ? data.pe_ratio.toFixed(1) : '—' },
+            { label: 'P/E Ratio',  value: data.pe_ratio != null ? data.pe_ratio.toFixed(1) : '—',
+              tip: medianTip(data.sector, 'peRatio', data.pe_ratio) },
             { label: 'EPS (TTM)',  value: data.eps_ttm != null ? `$${data.eps_ttm.toFixed(2)}` : '—' },
             { label: 'Rev Growth', value: data.rev_growth != null ? `${data.rev_growth >= 0 ? '↑' : '↓'} ${Math.abs(data.rev_growth * 100).toFixed(1)}%` : '—',
-              color: data.rev_growth != null ? (data.rev_growth >= 0 ? 'var(--theme-positive)' : 'var(--theme-negative)') : undefined },
-            { label: 'Div Yield',  value: data.div_yield != null ? `${data.div_yield.toFixed(2)}%` : '—' },
+              color: data.rev_growth != null ? (data.rev_growth >= 0 ? 'var(--theme-positive)' : 'var(--theme-negative)') : undefined,
+              tip: medianTip(data.sector, 'revenueGrowth', data.rev_growth != null ? data.rev_growth * 100 : null) },
+            { label: 'Div Yield',  value: data.div_yield != null ? `${data.div_yield.toFixed(2)}%` : '—',
+              tip: medianTip(data.sector, 'dividendYield', data.div_yield) },
             { label: 'Employees',  value: fmtEmp(data.employees) },
           ]
           return (
@@ -579,7 +648,7 @@ export function SupplyChainContent() {
                 {metrics.map((m, i) => (
                   <div key={m.label} style={{ padding: '14px 18px', borderRight: !isMobileLayout && i < metrics.length - 1 ? `1px solid ${T.border}` : 'none', borderTop: isMobileLayout && i >= 2 ? `1px solid ${T.border}` : 'none' }}>
                     <div style={{ fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, marginBottom: 4 }}>{m.label}</div>
-                    <div style={{ fontFamily: T.mono, fontSize: 18, fontWeight: 700, color: m.color ?? T.text }}>{m.value}</div>
+                    <div title={m.tip} style={{ fontFamily: T.mono, fontSize: 18, fontWeight: 700, color: m.color ?? T.text, display: 'inline-block', ...(m.tip ? { textDecoration: 'underline dotted', textUnderlineOffset: 3, textDecorationColor: 'color-mix(in srgb, currentColor 30%, transparent)', cursor: 'help' } : {}) }}>{m.value}</div>
                   </div>
                 ))}
               </div>
@@ -632,6 +701,9 @@ export function SupplyChainContent() {
               <AnalystPanel ticker={data.ticker} />
             </div>
 
+            {/* ── Disclosed Customer Concentration ────────── */}
+            <CustomerConcentrationPanel ticker={data.ticker} onSelectTicker={doFetch} />
+
             {/* ── Row 3: Institutional ownership (full width) ────────── */}
             <InstitutionalPanel inst={inst} loading={instLoading} tab={instTab} onTab={setInstTab} />
           </div>
@@ -680,6 +752,125 @@ function ratingColor(r: string | null): string {
 }
 const fmtBn = (v: number | null) => v == null ? '—' : Math.abs(v) >= 1e9 ? `$${(v / 1e9).toFixed(1)}B` : Math.abs(v) >= 1e6 ? `$${(v / 1e6).toFixed(0)}M` : `$${v.toLocaleString()}`
 
+
+function CustomerConcentrationPanel({ ticker, onSelectTicker }: { ticker: string, onSelectTicker: (sym: string) => void }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['customer-links', ticker],
+    queryFn: () => fetchCustomerLinks(ticker),
+    enabled: !!ticker,
+    staleTime: 300_000,
+  })
+
+  if (isLoading) {
+    return (
+      <div className="ft-panel">
+        <div className="ft-panel-header">Disclosed Customer Concentration</div>
+        <div style={{ padding: '16px 18px', color: T.muted, fontFamily: T.mono, fontSize: 11 }}>Loading…</div>
+      </div>
+    )
+  }
+
+  const customers = data?.customers || []
+  const suppliers = data?.suppliers || []
+
+  return (
+    <div className="ft-panel" style={{ display: 'flex', flexDirection: 'column' }}>
+      <div className="ft-panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+        <span>Disclosed Customer Concentration</span>
+        <span style={{ fontSize: 9, color: T.muted, fontWeight: 'normal', textTransform: 'none', fontFamily: T.mono }}>
+          FAS 131 / ASC 280 Disclosures (Customers representing &gt;10% of revenue)
+        </span>
+      </div>
+      <div style={{ padding: '16px 18px', flex: 1 }}>
+        {customers.length === 0 && suppliers.length === 0 ? (
+          <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11, lineHeight: 1.5 }}>
+            No material customer segment disclosures found for this ticker in recent years (disclosures are only mandated for customers representing &gt;10% of total revenue).
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: useIsMobile() ? '1fr' : '1fr 1fr', gap: 24 }}>
+            {/* Customers (Who this company sells to) */}
+            <div>
+              <div style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: T.gold, marginBottom: 12, borderBottom: `1px solid ${T.border}`, paddingBottom: 6 }}>
+                Disclosed Customers (Revenue Concentration Risk)
+              </div>
+              {customers.length === 0 ? (
+                <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 10.5 }}>No customers disclosed.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {customers.map((c: any, i: number) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', background: 'rgba(255, 255, 255, 0.02)', border: `1px solid ${T.border}` }}>
+                      <div>
+                        {c.customer_ticker ? (
+                          <button onClick={() => onSelectTicker(c.customer_ticker)} style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: T.gold, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline' }}>
+                            {c.customer_ticker}
+                          </button>
+                        ) : (
+                          <span style={{ fontFamily: T.label, fontSize: 11, color: T.text }}>{c.customer_name}</span>
+                        )}
+                        {c.customer_ticker && <span style={{ fontFamily: T.label, fontSize: 9.5, color: T.muted, marginLeft: 6 }}>({c.customer_name})</span>}
+                      </div>
+                      <div style={{ fontFamily: T.mono, fontSize: 11, textAlign: 'right', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ color: T.text }}>
+                          {c.pct_of_revenue != null
+                            ? `${c.pct_of_revenue}%`
+                            : (c.customer_sales != null ? `$${c.customer_sales.toFixed(1)}M` : '—')}
+                        </span>
+                        <span style={{ color: T.muted, fontSize: 9.5, marginLeft: 4 }}>FY{c.fiscal_year}</span>
+                        <HelpTip text={
+                          c.pct_of_revenue != null
+                            ? `${c.customer_name} represented ${c.pct_of_revenue}% of this company's revenue in FY${c.fiscal_year}`
+                            : `Disclosed sales to ${c.customer_name} were $${c.customer_sales ? c.customer_sales.toFixed(1) : '—'}M in FY${c.fiscal_year}`
+                        } width={180} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Suppliers (Who sells to this company) */}
+            <div>
+              <div style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: T.gold, marginBottom: 12, borderBottom: `1px solid ${T.border}`, paddingBottom: 6 }}>
+                Disclosed Supplier To (Downstream Dependency)
+              </div>
+              {suppliers.length === 0 ? (
+                <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 10.5 }}>No suppliers disclosed.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {suppliers.map((s: any, i: number) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', background: 'rgba(255, 255, 255, 0.02)', border: `1px solid ${T.border}` }}>
+                      <div>
+                        <button onClick={() => onSelectTicker(s.supplier_ticker)} style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: T.gold, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline' }}>
+                          {s.supplier_ticker}
+                        </button>
+                        <span style={{ fontFamily: T.label, fontSize: 9.5, color: T.muted, marginLeft: 6 }}>({s.supplier_name})</span>
+                      </div>
+                      <div style={{ fontFamily: T.mono, fontSize: 11, textAlign: 'right', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ color: T.text }}>
+                          {s.pct_of_revenue != null
+                            ? `${s.pct_of_revenue}%`
+                            : (s.customer_sales != null ? `$${s.customer_sales.toFixed(1)}M` : '—')}
+                        </span>
+                        <span style={{ color: T.muted, fontSize: 9.5, marginLeft: 4 }}>FY{s.fiscal_year}</span>
+                        <HelpTip text={
+                          s.pct_of_revenue != null
+                            ? `This company represented ${s.pct_of_revenue}% of ${s.supplier_name}'s revenue in FY${s.fiscal_year}`
+                            : `This company represented $${s.customer_sales ? s.customer_sales.toFixed(1) : '—'}M of ${s.supplier_name}'s sales in FY${s.fiscal_year}`
+                        } width={180} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+
 interface Credit {
   synthetic_rating: string | null; rating_basis: string | null; default_spread_pct: number | null
   interest_coverage: number | null
@@ -703,14 +894,20 @@ function CreditPanel({ ticker }: { ticker: string }) {
       <div style={{ fontFamily: T.mono, fontSize: 15, fontWeight: 700, color: color ?? T.text }}>{value}</div>
     </div>
   )
-  const zoneColor = d?.altman_zone === 'safe' ? POS : d?.altman_zone === 'grey' ? AMBER : NEG
+  const zoneColor = d?.altman_zone === 'safe' ? POS : d?.altman_zone === 'grey' ? AMBER : d?.altman_zone === 'distress' ? NEG : T.muted
+  const hasData = !!d && (d.synthetic_rating != null || d.interest_coverage != null || d.debt_to_ebitda != null || d.altman_z != null)
   return (
     <div className="ft-panel" style={{ display: 'flex', flexDirection: 'column' }}>
       <div className="ft-panel-header">Credit Quality</div>
       <div style={{ padding: '16px 18px', flex: 1 }}>
         {state === 'loading' && <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11 }}>Loading…</div>}
         {state === 'err' && <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11 }}>Credit metrics unavailable for this name.</div>}
-        {state === 'ok' && d && (
+        {state === 'ok' && d && !hasData && (
+          <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11, lineHeight: 1.5 }}>
+            No income-statement data to model a credit rating from — either this isn't an operating company (ETF, fund, index), or the source financials weren't available for this pull. Try reloading in a few minutes.
+          </div>
+        )}
+        {state === 'ok' && d && hasData && (
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minWidth: 78, padding: '10px 12px', border: `1px solid ${ratingColor(d.synthetic_rating)}`, background: `color-mix(in srgb, ${ratingColor(d.synthetic_rating)} 10%, transparent)` }}>

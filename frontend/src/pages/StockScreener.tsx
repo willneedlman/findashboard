@@ -177,6 +177,22 @@ export default function StockScreener() {
     queryFn: () => axios.get('/api/screener/fields').then(r => r.data),
     staleTime: Infinity,
   })
+  // Industry-median benchmarks (WIFR methodology) — static bundled computation,
+  // fetch once. Powers the sector-median tooltip on ratio cells; no new columns
+  // or badges, so the table stays exactly as dense as before.
+  const { data: sectorMedians } = useQuery({
+    queryKey: ['screener-sector-medians'],
+    queryFn: () => axios.get('/api/screener/sector-medians').then(r => r.data),
+    staleTime: Infinity,
+  })
+  const medianFields: Set<string> = new Set(sectorMedians?.fields ?? [])
+  const medianTooltip = (sector: string, field: string, value: number | null): string | undefined => {
+    if (value == null || !sector || !medianFields.has(field)) return undefined
+    const entry = sectorMedians?.sectors?.[sector]?.[field]
+    if (!entry) return undefined
+    const delta = value - entry.median
+    return `${sector} median: ${entry.median.toFixed(2)} (n=${entry.n}) · this name is ${delta >= 0 ? '+' : ''}${delta.toFixed(2)} ${delta >= 0 ? 'above' : 'below'}`
+  }
   const fields: FieldMeta[] = meta?.fields ?? []
   const sectors: string[]   = meta?.sectors ?? []
   const exchanges: string[] = meta?.exchanges ?? []
@@ -580,8 +596,9 @@ export default function StockScreener() {
                           )
                         }
                         const color = col.colorFn && raw != null ? col.colorFn(Number(raw)) : col.key === 'marketCap' ? C.emph : ['peRatio', 'pegRatio', 'pbRatio', 'psRatio', 'evEbitda'].includes(col.key as string) ? C.mutedNum : col.align === 'left' ? 'var(--theme-text-muted, #9fb0c7)' : C.text
+                        const tip = medianTooltip(r.sector, col.key as string, raw as number | null)
                         return (
-                          <div key={col.key as string} style={{ fontFamily: col.align === 'right' ? C.mono : C.sans, fontSize: col.align === 'right' ? 12 : 11, color, textAlign: col.align, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          <div key={col.key as string} title={tip} style={{ fontFamily: col.align === 'right' ? C.mono : C.sans, fontSize: col.align === 'right' ? 12 : 11, color, textAlign: col.align, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', ...(tip ? { textDecoration: 'underline dotted', textUnderlineOffset: 2, textDecorationColor: 'color-mix(in srgb, currentColor 30%, transparent)', cursor: 'help' } : {}) }}>
                             {col.fmt(raw)}
                           </div>
                         )

@@ -114,12 +114,118 @@ def _to_num(v):
         return None
 
 
+def _ingest_customer_segments(conn: sqlite3.Connection) -> None:
+    csv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "wrds_customer_segments.csv"))
+    if not os.path.exists(csv_path):
+        log.info("No WRDS customer segments file found at %s. Skipping customer_links ingestion.", csv_path)
+        return
+
+    log.info("Ingesting customer segment disclosures from %s", csv_path)
+    import csv
+
+    # Build local map of ticker -> total_revenue for pct calculations
+    ticker_revs = {}
+    try:
+        # Load from companies table
+        rows = conn.execute(
+            "SELECT DISTINCT t.symbol, c.revenue FROM ticker_index t "
+            "JOIN companies c ON t.veridion_id = c.veridion_id WHERE c.revenue IS NOT NULL AND c.revenue > 0"
+        ).fetchall()
+        for r in rows:
+            ticker_revs[r[0].upper()] = float(r[1])
+    except Exception as e:
+        log.warning("Could not pre-load company revenues from sqlite: %s", e)
+
+    try:
+        # Load from us_fundamentals.json
+        fundamentals_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "backend", "data", "us_fundamentals.json"))
+        if os.path.exists(fundamentals_path):
+            with open(fundamentals_path, "r") as f:
+                fund = json.load(f)
+                for ticker, info in fund.items():
+                    mcap = info.get("marketCap")
+                    ps = info.get("psRatio")
+                    if mcap and ps and ps > 0:
+                        # marketCap in billions -> total revenue in USD
+                        ticker_revs[ticker.upper()] = (mcap / ps) * 1e9
+    except Exception as e:
+        log.warning("Could not pre-load company revenues from us_fundamentals.json: %s", e)
+
+    conn.execute("DROP TABLE IF EXISTS customer_links")
+    conn.execute("""
+        CREATE TABLE customer_links (
+            supplier_ticker TEXT NOT NULL,
+            customer_ticker TEXT,
+            customer_name TEXT NOT NULL,
+            customer_sales REAL,
+            pct_of_revenue REAL,
+            fiscal_year INTEGER NOT NULL
+        )
+    """)
+
+    count = 0
+    with open(csv_path, "r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            sup_ticker = (row.get("stic") or "").strip().upper()
+            cust_ticker = (row.get("ctic") or "").strip().upper() or None
+            cust_name = (row.get("cconm") or row.get("cnms") or "").strip()
+
+            try:
+                sales = float(row.get("salecs") or 0.0)
+                if sales <= 0:
+                    sales = None
+            except (TypeError, ValueError):
+                sales = None
+
+            # Extract fiscal year from srcdate (YYYY-MM-DD)
+            srcdate = (row.get("srcdate") or "").strip()
+            try:
+                fyear = int(srcdate.split("-")[0])
+            except (TypeError, ValueError, IndexError):
+                continue
+
+            if not sup_ticker or not cust_name or not fyear:
+                continue
+
+            # Compute percentage of revenue if we have total revenue
+            pct = None
+            total_rev = ticker_revs.get(sup_ticker)
+            if total_rev and sales:
+                pct = round(((sales * 1e6) / total_rev) * 100, 2)
+                pct = max(0.1, min(pct, 100.0))
+
+            conn.execute(
+                "INSERT INTO customer_links VALUES (?, ?, ?, ?, ?, ?)",
+                (sup_ticker, cust_ticker, cust_name, sales, pct, fyear)
+            )
+            count += 1
+
+
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_cust_supplier ON customer_links(supplier_ticker)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_cust_customer ON customer_links(customer_ticker)")
+    conn.commit()
+    log.info("Ingested %d customer segment relationships.", count)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--max-files", type=int, default=None, help="cap partitions processed (omit for all 96)")
+    ap.add_argument("--wrds-only", action="store_true", help="only ingest the manually exported WRDS customer segments CSV")
     a = ap.parse_args()
 
     _load_env()
+
+    if a.wrds_only:
+        log.info("Running in WRDS-only mode. Ingesting customer segments...")
+        os.makedirs(os.path.dirname(_DB_PATH), exist_ok=True)
+        conn = sqlite3.connect(_DB_PATH)
+        try:
+            _ingest_customer_segments(conn)
+        finally:
+            conn.close()
+        return 0
+
     if not os.getenv("DEWEY_API_KEY"):
         log.error("DEWEY_API_KEY not set — export a valid key first.")
         return 2
@@ -190,6 +296,7 @@ def main() -> int:
             conn.commit()
             log.info("partition %s/%s done — %s companies, %s ticker rows", i + 1, len(files), companies, tickers)
         _index(conn)
+        _ingest_customer_segments(conn)
         conn.commit()
     finally:
         conn.close()

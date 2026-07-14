@@ -82,3 +82,12 @@ def supplier_facets():
     """Distinct industry + product tags that drive the map's filter dropdown.
     Data-driven, so no taxonomy is hard-coded; empty until the DB is built."""
     return veridion.facets()
+
+
+@router.get("/customer-links")
+def get_customer_links(ticker: str = Query(..., description="Ticker to lookup")):
+    """Return disclosed customer segment relationships for one ticker in two directions
+    (customers/buyers and suppliers), sourced from manual WRDS exports."""
+    from logistics import company_fundamentals as cf
+    return cf.query_customer_links(ticker)
+
