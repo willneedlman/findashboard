@@ -186,12 +186,20 @@ export default function StockScreener() {
     staleTime: Infinity,
   })
   const medianFields: Set<string> = new Set(sectorMedians?.fields ?? [])
-  const medianTooltip = (sector: string, field: string, value: number | null): string | undefined => {
-    if (value == null || !sector || !medianFields.has(field)) return undefined
+  // Quartile marker (▲ top quartile, ▼ bottom quartile) alongside the value —
+  // visible without hovering, no new column. Deliberately neutral-colored
+  // rather than green/red: which quartile is "good" depends on the ratio
+  // (top-quartile margin is good, top-quartile debt/equity usually isn't),
+  // so this shows WHERE a value sits, not a judgment on it.
+  const medianBadge = (sector: string, field: string, value: number | null): { symbol: string; tip: string } | null => {
+    if (value == null || !sector || !medianFields.has(field)) return null
     const entry = sectorMedians?.sectors?.[sector]?.[field]
-    if (!entry) return undefined
+    if (!entry) return null
     const delta = value - entry.median
-    return `${sector} median: ${entry.median.toFixed(2)} (n=${entry.n}) · this name is ${delta >= 0 ? '+' : ''}${delta.toFixed(2)} ${delta >= 0 ? 'above' : 'below'}`
+    const tip = `${sector} median: ${entry.median.toFixed(2)} (n=${entry.n}) · this name is ${delta >= 0 ? '+' : ''}${delta.toFixed(2)} ${delta >= 0 ? 'above' : 'below'}`
+    if (entry.p75 != null && value > entry.p75) return { symbol: '▲', tip: `${tip} · top quartile` }
+    if (entry.p25 != null && value < entry.p25) return { symbol: '▼', tip: `${tip} · bottom quartile` }
+    return { symbol: '', tip }
   }
   const fields: FieldMeta[] = meta?.fields ?? []
   const sectors: string[]   = meta?.sectors ?? []
@@ -596,10 +604,10 @@ export default function StockScreener() {
                           )
                         }
                         const color = col.colorFn && raw != null ? col.colorFn(Number(raw)) : col.key === 'marketCap' ? C.emph : ['peRatio', 'pegRatio', 'pbRatio', 'psRatio', 'evEbitda'].includes(col.key as string) ? C.mutedNum : col.align === 'left' ? 'var(--theme-text-muted, #9fb0c7)' : C.text
-                        const tip = medianTooltip(r.sector, col.key as string, raw as number | null)
+                        const badge = medianBadge(r.sector, col.key as string, raw as number | null)
                         return (
-                          <div key={col.key as string} title={tip} style={{ fontFamily: col.align === 'right' ? C.mono : C.sans, fontSize: col.align === 'right' ? 12 : 11, color, textAlign: col.align, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', ...(tip ? { textDecoration: 'underline dotted', textUnderlineOffset: 2, textDecorationColor: 'color-mix(in srgb, currentColor 30%, transparent)', cursor: 'help' } : {}) }}>
-                            {col.fmt(raw)}
+                          <div key={col.key as string} title={badge?.tip} style={{ fontFamily: col.align === 'right' ? C.mono : C.sans, fontSize: col.align === 'right' ? 12 : 11, color, textAlign: col.align, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', ...(badge ? { textDecoration: 'underline dotted', textUnderlineOffset: 2, textDecorationColor: 'color-mix(in srgb, currentColor 30%, transparent)', cursor: 'help' } : {}) }}>
+                            {col.fmt(raw)}{badge?.symbol && <span style={{ marginLeft: 3, fontSize: 8, color: 'var(--theme-secondary, #8099b0)' }}>{badge.symbol}</span>}
                           </div>
                         )
                       })}

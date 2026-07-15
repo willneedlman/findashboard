@@ -38,16 +38,27 @@ logger = logging.getLogger(__name__)
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
 # Ratios worth benchmarking against peers. Excludes beta (not a "ratio" in the
-# WIFR sense — see factor_models.py for real beta) and fields the bundled
-# dataset doesn't carry (interestCoverage, payoutRatio) — those are live-fetch
-# only per ticker today and have no bundled universe to benchmark against.
+# WIFR sense — see factor_models.py for real beta). Cash conversion cycle,
+# cash ratio, payables turnover, and ROIC/return-on-capital are NOT included:
+# Finnhub's free metric bundle (the bundled dataset's only source) carries
+# quick/inventory/receivables ratios but not payables turnover or a clean
+# invested-capital figure, so those four can't be computed honestly from
+# what's available — better to omit them than present an approximation as a
+# real WIFR ratio.
 MEDIAN_FIELDS = (
     "peRatio", "pbRatio", "psRatio", "evEbitda", "pegRatio",
     "grossMargin", "operatingMargin", "netMargin", "roe", "roa",
-    "debtEquity", "currentRatio", "revenueGrowth", "epsGrowth", "dividendYield",
+    "debtEquity", "currentRatio", "quickRatio", "inventoryTurnover",
+    "receivablesTurnover", "interestCoverage", "payoutRatio",
+    "revenueGrowth", "epsGrowth", "dividendYield",
 )
 
-_EXCLUDE_FOR_FINANCIALS = {"currentRatio"}
+# Deposits sit inside "current liabilities" for a bank, so liquidity ratios
+# built on that denominator don't mean the same thing as they do for an
+# operating company. Interest coverage is excluded too: a bank's "interest
+# expense" is its cost of funding deposits, not debt service — comparing
+# that ratio across financials and non-financials isn't apples to apples.
+_EXCLUDE_FOR_FINANCIALS = {"currentRatio", "quickRatio", "interestCoverage"}
 _FINANCIALS_SECTOR = "Financial Services"
 _WINSORIZE_PCT = 1.0     # trim below p1 / above p99 per sector per field
 _MIN_SAMPLE_FOR_TRIM = 20  # percentile trimming only means something with a real sample
@@ -119,7 +130,17 @@ def _compute() -> "tuple[dict, dict]":
                 continue
             arr = _winsorize([r.get(field) for r in sector_rows])
             if arr.size:
-                summary[sector][field] = {"median": round(float(np.median(arr)), 3), "n": int(arr.size)}
+                # p25/p75 let the frontend show a quartile badge (Top 25% / Above
+                # median / Below median / Bottom 25%) computed locally against
+                # the one bundled payload, instead of a per-cell call to
+                # percentile_rank() — impractical at table scale (a screen can
+                # render 50-100 rows x 10 ratio columns).
+                p25, p75 = (float(x) for x in np.percentile(arr, [25, 75])) if arr.size >= 4 else (None, None)
+                summary[sector][field] = {
+                    "median": round(float(np.median(arr)), 3), "n": int(arr.size),
+                    "p25": round(p25, 3) if p25 is not None else None,
+                    "p75": round(p75, 3) if p75 is not None else None,
+                }
                 raw[sector][field] = arr
     return summary, raw
 

@@ -1369,6 +1369,18 @@ def get_supply_chain(ticker: str):
             "eps_ttm":          round(float(eps), 2) if _holder_num(eps) else None,
             "rev_growth":       round(float(rev_g), 4) if _holder_num(rev_g) else None,
             "div_yield":        div_y,
+            # Percent-scale fields (yfinance reports these as fractions), safe to
+            # compare against industry_ratios' sector medians since both are
+            # built the same way. debtToEquity is deliberately excluded — yfinance's
+            # field uses a different scale than the FMP-derived debtEquity the
+            # median dataset is built from (verified: NVDA reads 6.555 here vs.
+            # ~0.07 in the FMP-derived screener data), so it isn't comparable.
+            "gross_margin":     round(float(info["grossMargins"]) * 100, 1) if _holder_num(info.get("grossMargins")) else None,
+            "operating_margin": round(float(info["operatingMargins"]) * 100, 1) if _holder_num(info.get("operatingMargins")) else None,
+            "net_margin":       round(float(info["profitMargins"]) * 100, 1) if _holder_num(info.get("profitMargins")) else None,
+            "roe":              round(float(info["returnOnEquity"]) * 100, 1) if _holder_num(info.get("returnOnEquity")) else None,
+            "roa":              round(float(info["returnOnAssets"]) * 100, 1) if _holder_num(info.get("returnOnAssets")) else None,
+            "current_ratio":    round(float(info["currentRatio"]), 2) if _holder_num(info.get("currentRatio")) else None,
             "product_segments": product_segments,
             "geo_segments":     geo_segments,
             "revenue_activity": revenue_activity,

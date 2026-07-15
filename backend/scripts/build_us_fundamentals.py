@@ -137,6 +137,11 @@ def _fetch(tk: str):
         "revenueGrowth": _num(m.get("revenueGrowthTTMYoy")),
         "epsGrowth": _num(m.get("epsGrowthTTMYoy")),
         "dividendYield": _num(m.get("dividendYieldIndicatedAnnual") or m.get("currentDividendYieldTTM")),
+        "quickRatio": _num(m.get("quickRatioAnnual") or m.get("quickRatioQuarterly")),
+        "inventoryTurnover": _num(m.get("inventoryTurnoverTTM") or m.get("inventoryTurnoverAnnual")),
+        "receivablesTurnover": _num(m.get("receivablesTurnoverTTM") or m.get("receivablesTurnoverAnnual")),
+        "interestCoverage": _num(m.get("netInterestCoverageTTM") or m.get("netInterestCoverageAnnual")),
+        "payoutRatio": _num(m.get("payoutRatioAnnual") or m.get("payoutRatioTTM")),
     }
 
 

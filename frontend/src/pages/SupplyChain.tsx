@@ -99,6 +99,12 @@ interface SupplyChainData {
   eps_ttm?:         number | null
   rev_growth?:      number | null
   div_yield?:       number | null
+  gross_margin?:    number | null
+  operating_margin?: number | null
+  net_margin?:      number | null
+  roe?:             number | null
+  roa?:             number | null
+  current_ratio?:   number | null
   product_segments: SegBlock
   geo_segments:     SegBlock
   revenue_activity?: SegBlock
@@ -732,6 +738,21 @@ export function SupplyChainContent() {
               tip: medianTip(data.sector, 'dividendYield', data.div_yield) },
             { label: 'Employees',  value: fmtEmp(data.employees) },
           ]
+          const profitMetrics: { label: string; value: string; tip?: string }[] = [
+            { label: 'Gross Margin',     value: data.gross_margin != null ? `${data.gross_margin.toFixed(1)}%` : '—',
+              tip: medianTip(data.sector, 'grossMargin', data.gross_margin) },
+            { label: 'Operating Margin', value: data.operating_margin != null ? `${data.operating_margin.toFixed(1)}%` : '—',
+              tip: medianTip(data.sector, 'operatingMargin', data.operating_margin) },
+            { label: 'Net Margin',       value: data.net_margin != null ? `${data.net_margin.toFixed(1)}%` : '—',
+              tip: medianTip(data.sector, 'netMargin', data.net_margin) },
+            { label: 'ROE',              value: data.roe != null ? `${data.roe.toFixed(1)}%` : '—',
+              tip: medianTip(data.sector, 'roe', data.roe) },
+            { label: 'ROA',              value: data.roa != null ? `${data.roa.toFixed(1)}%` : '—',
+              tip: medianTip(data.sector, 'roa', data.roa) },
+            { label: 'Current Ratio',    value: data.current_ratio != null ? data.current_ratio.toFixed(2) : '—',
+              tip: medianTip(data.sector, 'currentRatio', data.current_ratio) },
+          ]
+          const hasProfitMetrics = profitMetrics.some(m => m.value !== '—')
           return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
 
@@ -756,6 +777,16 @@ export function SupplyChainContent() {
                   </div>
                 ))}
               </div>
+              {hasProfitMetrics && (
+                <div style={{ display: 'grid', gridTemplateColumns: isMobileLayout ? 'repeat(2,1fr)' : 'repeat(6,1fr)', borderTop: `1px solid ${T.border}` }}>
+                  {profitMetrics.map((m, i) => (
+                    <div key={m.label} style={{ padding: '12px 18px', borderRight: !isMobileLayout && i < profitMetrics.length - 1 ? `1px solid ${T.border}` : 'none', borderTop: isMobileLayout && i >= 2 ? `1px solid ${T.border}` : 'none' }}>
+                      <div style={{ fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, marginBottom: 4 }}>{m.label}</div>
+                      <div title={m.tip} style={{ fontFamily: T.mono, fontSize: 14, fontWeight: 700, color: T.text, display: 'inline-block', ...(m.tip ? { textDecoration: 'underline dotted', textUnderlineOffset: 3, textDecorationColor: 'color-mix(in srgb, currentColor 30%, transparent)', cursor: 'help' } : {}) }}>{m.value}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* ── FactSet financials + forward estimates (hidden when uncovered) ── */}

@@ -70,10 +70,16 @@ def _load_us_fundamentals() -> dict:
 
 _US_FUND = _load_us_fundamentals()
 # Fundamental + descriptive fields the bundled seed can backfill on a row.
+# cashRatio/payablesTurnover/cashConversionCycle/roic are NOT here — Finnhub's
+# free metric bundle (the seed's only source) doesn't carry payables data or a
+# clean invested-capital figure, so those stay live-fetch (FMP-covered
+# tickers) only rather than an approximation on the seed fallback.
 _SEED_FIELDS = ("companyName", "sector", "industry", "country", "beta", "peRatio",
                 "pbRatio", "psRatio", "evEbitda", "pegRatio", "grossMargin",
                 "operatingMargin", "netMargin", "roe", "roa", "debtEquity",
-                "currentRatio", "revenueGrowth", "epsGrowth", "dividendYield")
+                "currentRatio", "quickRatio", "inventoryTurnover", "receivablesTurnover",
+                "interestCoverage", "payoutRatio",
+                "revenueGrowth", "epsGrowth", "dividendYield")
 
 # SEC-primary fundamental ratios extracted from FactIQ (backend/data/reference.db,
 # built by scripts/build_reference_db.py). These are computed from EDGAR filings, so
@@ -362,7 +368,14 @@ SCREENER_FIELDS = [
     # Financial Health
     {"id": "debtEquity",     "label": "Debt / Equity",        "group": "Financial Health"},
     {"id": "currentRatio",   "label": "Current Ratio",        "group": "Financial Health"},
+    {"id": "quickRatio",     "label": "Quick Ratio",          "group": "Financial Health"},
+    {"id": "cashRatio",      "label": "Cash Ratio",           "group": "Financial Health"},
     {"id": "interestCoverage","label": "Interest Coverage",   "group": "Financial Health"},
+    {"id": "roic",           "label": "ROIC (%)",             "group": "Financial Health"},
+    {"id": "inventoryTurnover",   "label": "Inventory Turnover",   "group": "Efficiency"},
+    {"id": "receivablesTurnover", "label": "Receivables Turnover", "group": "Efficiency"},
+    {"id": "payablesTurnover",    "label": "Payables Turnover",    "group": "Efficiency"},
+    {"id": "cashConversionCycle", "label": "Cash Conversion Cycle (days)", "group": "Efficiency"},
     # Dividends
     {"id": "dividendYield",  "label": "Dividend Yield (%)",   "group": "Dividends"},
     {"id": "payoutRatio",    "label": "Payout Ratio (%)",     "group": "Dividends"},
@@ -612,7 +625,19 @@ def _enrich(ticker: str, base: dict, claim, want_fastinfo: bool = False) -> dict
                 current_assets  = bal.get("totalCurrentAssets") or 0
                 current_liab    = bal.get("totalCurrentLiabilities") or 1
                 interest        = abs(income.get("interestExpense") or 0)
-                ev_raw          = mktcap + total_debt - (bal.get("cashAndCashEquivalents") or 0)
+                cash            = bal.get("cashAndCashEquivalents") or 0
+                ev_raw          = mktcap + total_debt - cash
+                # Working-capital detail, for the liquidity/efficiency ratios below
+                # that plain currentRatio/debtEquity can't answer (WIFR asks for
+                # quick/cash ratio, turnover, and cash conversion cycle too).
+                cogs            = income.get("costOfRevenue") or 0
+                inventory       = bal.get("inventory") or 0
+                receivables     = bal.get("netReceivables") or 0
+                payables        = bal.get("accountPayables") or 0
+                pretax_inc      = income.get("incomeBeforeTax") or 0
+                tax_exp         = income.get("incomeTaxExpense") or 0
+                eff_tax_rate    = (tax_exp / pretax_inc) if pretax_inc > 0 else 0.21
+                invested_cap    = total_debt + equity - cash
 
                 # Map FMP exchangeShortName to standard display name
                 fmp_exch = (prof.get("exchangeShortName") or "").upper()
@@ -635,6 +660,12 @@ def _enrich(ticker: str, base: dict, claim, want_fastinfo: bool = False) -> dict
                     "roa":            round(net_inc / total_assets * 100, 1) if total_assets > 0 else None,
                     "debtEquity":     round(total_debt / equity, 2) if equity > 0 else None,
                     "currentRatio":   round(current_assets / current_liab, 2) if current_liab > 0 else None,
+                    "quickRatio":     round((current_assets - inventory) / current_liab, 2) if current_liab > 0 else None,
+                    "cashRatio":      round(cash / current_liab, 2) if current_liab > 0 else None,
+                    "inventoryTurnover":    round(cogs / inventory, 2) if inventory > 0 and cogs > 0 else None,
+                    "receivablesTurnover":  round(rev / receivables, 2) if receivables > 0 and rev > 0 else None,
+                    "payablesTurnover":     round(cogs / payables, 2) if payables > 0 and cogs > 0 else None,
+                    "roic":           round(op_inc * (1 - eff_tax_rate) / invested_cap * 100, 1) if invested_cap > 0 else None,
                     "interestCoverage": round(op_inc / interest, 1) if interest > 0 else None,
                     "revenueGrowth":  round((rev / rev_prior - 1) * 100, 1) if rev and rev_prior else None,
                     "epsGrowth":      round((eps / eps_prior - 1) * 100, 1) if eps and eps_prior and eps_prior > 0 else None,
@@ -643,6 +674,12 @@ def _enrich(ticker: str, base: dict, claim, want_fastinfo: bool = False) -> dict
                 # PEG = trailing P/E over EPS growth, from the values just computed.
                 _pe, _eg = detail.get("peRatio"), detail.get("epsGrowth")
                 detail["pegRatio"] = round(_pe / _eg, 2) if _pe and _eg and _eg > 0 else None
+                # Cash conversion cycle = days inventory + days receivable - days
+                # payable, from the turnover ratios just computed.
+                dio = 365 / detail["inventoryTurnover"] if detail.get("inventoryTurnover") else None
+                dso = 365 / detail["receivablesTurnover"] if detail.get("receivablesTurnover") else None
+                dpo = 365 / detail["payablesTurnover"] if detail.get("payablesTurnover") else None
+                detail["cashConversionCycle"] = round(dio + dso - dpo, 1) if None not in (dio, dso, dpo) else None
             except Exception:
                 pass
 
