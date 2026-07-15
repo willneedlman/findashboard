@@ -8,7 +8,7 @@ The screener is a fast, cache-backed view over bundled constituent seeds. It is 
 | S&P 400 | 400 | 400 | Seeded, not currently validated | Exact count is not proof of current membership. |
 | Nasdaq-100 | 101 | 100 | Seeded, not currently validated | Share classes account for counts over 100; a dated primary-source roster refresh is still required. |
 | DAX 40 | 40 | 40 | Count-complete, not currently validated | Exact count is not proof of current membership. |
-| FTSE 100 | 54 | 100 | Partial | 46 current constituents are absent. |
+| FTSE 100 | 52 | 100 | Partial | 48 current constituents are absent. Stale `AHT.L` and `CRH.L` were removed after their LSE exits; `BDEV.L` was updated to `BTRW.L`. |
 | Nikkei 225 | 64 | 225 | Partial | 161 current constituents are absent; the bundled financial cohort is complete but the full index is not. |
 | Asia-Pacific | 64 | n/a | Partial | Only the partial Japan subset is bundled. Australia, China, Hong Kong, India, Korea, Singapore, Taiwan, and other Asia-Pacific markets have no constituent source. |
 

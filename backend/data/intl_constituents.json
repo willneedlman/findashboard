@@ -19,14 +19,14 @@
     "LSEG.L": "London Stock Exchange Group", "RR.L": "Rolls-Royce Holdings", "BARC.L": "Barclays",
     "LLOY.L": "Lloyds Banking Group", "VOD.L": "Vodafone Group", "PRU.L": "Prudential",
     "AAL.L": "Anglo American", "TSCO.L": "Tesco", "NWG.L": "NatWest Group", "CPG.L": "Compass Group",
-    "BA.L": "BAE Systems", "IMB.L": "Imperial Brands", "STAN.L": "Standard Chartered", "AHT.L": "Ashtead Group",
-    "SSE.L": "SSE", "NXT.L": "Next", "RKT.L": "Reckitt Benckiser", "CRH.L": "CRH", "ANTO.L": "Antofagasta",
+    "BA.L": "BAE Systems", "IMB.L": "Imperial Brands", "STAN.L": "Standard Chartered",
+    "SSE.L": "SSE", "NXT.L": "Next", "RKT.L": "Reckitt Benckiser", "ANTO.L": "Antofagasta",
     "SGE.L": "Sage Group", "AV.L": "Aviva", "LGEN.L": "Legal & General", "FERG.L": "Ferguson",
     "WPP.L": "WPP", "INF.L": "Informa", "SMIN.L": "Smiths Group", "ITRK.L": "Intertek Group",
     "HLMA.L": "Halma", "BNZL.L": "Bunzl", "SPX.L": "Spirax Group", "WTB.L": "Whitbread",
     "ADM.L": "Admiral Group", "PSON.L": "Pearson", "III.L": "3i Group", "MNG.L": "M&G",
     "SVT.L": "Severn Trent", "UU.L": "United Utilities", "DCC.L": "DCC", "PSN.L": "Persimmon",
-    "BDEV.L": "Barratt Redrow", "LAND.L": "Land Securities", "MKS.L": "Marks & Spencer"
+    "BTRW.L": "Barratt Redrow", "LAND.L": "Land Securities", "MKS.L": "Marks & Spencer"
   },
   "nikkei225": {
     "7203.T": "Toyota Motor", "6758.T": "Sony Group", "9984.T": "SoftBank Group",

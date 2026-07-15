@@ -22,7 +22,7 @@ def test_international_coverage_states_are_explicit_and_honest():
 
     assert coverage["dax40"]["available"] == coverage["dax40"]["expected"] == 40
     assert coverage["dax40"]["status"] == "count_complete_unvalidated"
-    assert coverage["ftse100"]["available"] == 54
+    assert coverage["ftse100"]["available"] == 52
     assert coverage["ftse100"]["available"] < coverage["ftse100"]["expected"] == 100
     assert coverage["ftse100"]["status"] == "partial"
     assert coverage["nikkei225"]["available"] == 64
@@ -34,7 +34,7 @@ def test_international_coverage_states_are_explicit_and_honest():
 def test_international_seeds_have_representative_names_and_deterministic_metadata():
     expected = {
         "dax40": {"SAP.DE", "ALV.DE", "RHM.DE"},
-        "ftse100": {"AZN.L", "HSBA.L", "SHEL.L"},
+        "ftse100": {"AZN.L", "HSBA.L", "SHEL.L", "BTRW.L"},
         "nikkei225": {"7203.T", "6758.T", "8630.T"},
     }
     listing = {

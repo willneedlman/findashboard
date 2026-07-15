@@ -5,7 +5,7 @@
     "sp400": {"label": "S&P 400 MidCap", "available": 400, "expected": 400, "status": "seeded_unvalidated", "source": "Bundled constituent seed", "validation_date": null},
     "nasdaq100": {"label": "Nasdaq-100", "available": 101, "expected": 100, "status": "seeded_unvalidated", "source": "Bundled constituent seed", "validation_date": null},
     "dax40": {"label": "DAX 40", "available": 40, "expected": 40, "status": "count_complete_unvalidated", "source": "Bundled constituent seed; Deutsche Börse roster refresh required", "validation_date": null},
-    "ftse100": {"label": "FTSE 100", "available": 54, "expected": 100, "status": "partial", "source": "Curated bundled large-cap subset", "validation_date": null},
+    "ftse100": {"label": "FTSE 100", "available": 52, "expected": 100, "status": "partial", "source": "Curated bundled large-cap subset", "validation_date": null},
     "nikkei225": {"label": "Nikkei 225", "available": 64, "expected": 225, "status": "partial", "source": "Curated bundled large-cap subset", "validation_date": null}
   },
   "regions": {
