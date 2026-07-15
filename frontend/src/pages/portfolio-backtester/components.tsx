@@ -95,9 +95,19 @@ export function PortfolioTab() {
   const [leverage,   setLeverage]   = useState('1')
   const [borrowRate, setBorrowRate] = useState('0')
   const [rebalance,  setRebalance]  = useState<RebalanceFreq>('none')
+  const [crspMode,   setCrspMode]   = useState(false)
 
   const { mutate, data, isPending } = useMutation({
     mutationFn: async () => {
+      if (crspMode) {
+        const { data: bt } = await axios.post('/api/portfolio/backtest', {
+          crsp_mode: true, benchmark, start, end,
+          leverage: Number(leverage) || 1,
+          borrow_rate: Number(borrowRate) || 0,
+        })
+        return { ...bt, strategyResult: null }
+      }
+
       const totalWeight = assets.reduce((s, a) => s + a.weight, 0) || 100
       const weights = assets.map(a => a.weight / totalWeight * 100)
 
@@ -274,6 +284,7 @@ export function PortfolioTab() {
         onToggleCollapse={() => setCollapsed(c => !c)}
         holdings={assets}
         onHoldingsChange={setAssets}
+        crspMode={crspMode} onCrspModeChange={setCrspMode}
         benchmark={benchmark} setBenchmark={setBenchmark}
         leverage={leverage} setLeverage={setLeverage}
         borrowRate={borrowRate} setBorrowRate={setBorrowRate}
@@ -323,6 +334,20 @@ export function PortfolioTab() {
 
         {data && (
           <>
+            {data.crsp_mode && (
+              <div style={{
+                background: 'var(--theme-bg, #101c2e)',
+                border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)',
+                borderLeft: '4px solid var(--theme-primary, #c9a84c)',
+                padding: '8px 14px', fontFamily: 'var(--theme-mono)', fontSize: 11, lineHeight: 1.5,
+              }}>
+                <span style={{ color: 'var(--theme-primary, #c9a84c)', fontWeight: 700 }}>SURVIVORSHIP-BIAS-FREE (CRSP)</span>
+                <span style={{ color: 'var(--theme-secondary, #99907e)', marginLeft: 8 }}>
+                  {data.constituent_count} S&amp;P 500 constituents as of {start}
+                  {data.delistings?.length > 0 && `, ${data.delistings.length} delisted/acquired during the window and carried through`}.
+                </span>
+              </div>
+            )}
             {data.leverage > 1 && (
               <div style={{
                 background: 'var(--theme-bg, #101c2e)',

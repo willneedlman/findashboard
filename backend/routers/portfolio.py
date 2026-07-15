@@ -12,6 +12,7 @@ from cache import get_download
 from admin_auth import require_admin
 from validation import validate_tickers, validate_ticker, validate_date
 import factor_models as fm
+import crsp_data
 
 _FRED_KEY = os.getenv("FRED_API_KEY", "")
 
@@ -82,8 +83,10 @@ def _series_metrics(equity: pd.Series, bench_ret: pd.Series, rf: float) -> dict:
 
 class BacktestRequest(BaseModel):
     # 25 (not 20) so a full 20-name book plus a CASH sleeve leg validates.
-    tickers: list[str] = Field(min_length=1, max_length=25)
-    weights: list[float] = Field(min_length=1, max_length=25)
+    # min_length=0 so crsp_mode (which ignores tickers/weights entirely — the
+    # S&P 500 point-in-time universe stands in for them) can send empty lists.
+    tickers: list[str] = Field(default_factory=list, max_length=25)
+    weights: list[float] = Field(default_factory=list, max_length=25)
     benchmark: str = "SPY"
     start: str = "2020-01-01"
     end: str = "2024-12-31"
@@ -95,9 +98,18 @@ class BacktestRequest(BaseModel):
     # Holdings drift with prices and reset to target weights at each boundary;
     # "none" = buy and hold, "daily" = constant weights (the old behavior).
     rebalance: str = "none"
+    # Survivorship-bias-free mode: ignores tickers/weights/leverage-per-name and
+    # instead buys the S&P 500 constituents as they actually stood on `start`
+    # (WRDS CRSP data/crsp.db), correctly carrying delisted names' realized
+    # outcome through the return series instead of silently dropping them.
+    crsp_mode: bool = False
 
     @model_validator(mode='after')
     def _validate(self):
+        if self.crsp_mode:
+            self.benchmark = validate_ticker(self.benchmark)
+            validate_date(self.start); validate_date(self.end)
+            return self
         eq_t, eq_w = [], []
         for t, w in zip(self.tickers, self.weights):
             if t.strip().upper() == CASH_SYMBOL:
@@ -144,43 +156,94 @@ def _walk_portfolio(growth: np.ndarray, target: np.ndarray, mask: np.ndarray) ->
     return rets
 
 
-@router.post("/backtest")
-def backtest(req: BacktestRequest):
-    # Normalize equity + cash weights together so a cash sleeve dilutes exposure.
-    eq_w = np.array(req.weights, dtype=float) if req.tickers else np.array([])
-    total_w = eq_w.sum() + req.cash_weight
-    if total_w <= 0:
-        total_w = 1.0
+def _crsp_pit_returns(start: str, end: str) -> tuple[pd.Series, list[dict], int]:
+    """S&P 500 point-in-time daily return series: constituents as of `start`,
+    equal-weighted, a delisted name's realized return (already embedded in
+    crsp_daily.ret) carries through and its weight silently redistributes across
+    the remaining survivors from then on — pandas' skipna mean does that for
+    free, no rebalance bookkeeping needed."""
+    if not crsp_data.available():
+        raise HTTPException(503, "CRSP data not loaded — data/crsp.db is missing")
+    members = crsp_data.point_in_time_members(start)
+    if not members:
+        raise HTTPException(404, f"No CRSP S&P 500 membership data as of {start}")
+    permnos = [m["permno"] for m in members]
+    wide = crsp_data.daily_returns(permnos, start, end)
+    if wide.empty:
+        raise HTTPException(404, "No CRSP price data for the selected window")
+    port = wide.mean(axis=1, skipna=True)
 
-    all_tickers = list(dict.fromkeys(req.tickers + [req.benchmark]))
+    delistings = crsp_data.delisting_summary(permnos, start, end)
+    tickers = crsp_data.tickers_for_permnos([d["permno"] for d in delistings])
+    for d in delistings:
+        d["ticker"] = tickers.get(d["permno"], d["permno"])
+    return port, delistings, len(members)
+
+
+def _crsp_backtest_series(req: BacktestRequest) -> tuple[pd.Series, pd.Series, list[dict], int]:
+    """CRSP point-in-time portfolio + the live benchmark (a real, currently-
+    tradable index fund — not something CRSP needs to correct)."""
+    port, delistings, constituent_count = _crsp_pit_returns(req.start, req.end)
+
     try:
-        dl = get_download(tuple(sorted(all_tickers)), req.start, req.end, req.interval)
-        raw = dl["Close"] if isinstance(dl.columns, pd.MultiIndex) and "Close" in dl.columns.get_level_values(0) else dl
-        if isinstance(raw, pd.Series):
-            raw = raw.to_frame(all_tickers[0])
-        if raw.index.tz is not None:
-            raw.index = raw.index.tz_convert(None)
+        dl = get_download((req.benchmark,), req.start, req.end)
+        braw = dl["Close"] if isinstance(dl.columns, pd.MultiIndex) and "Close" in dl.columns.get_level_values(0) else dl
+        if isinstance(braw, pd.Series):
+            braw = braw.to_frame(req.benchmark)
+        if braw.index.tz is not None:
+            braw.index = braw.index.tz_convert(None)
     except Exception:
         logger.exception("internal error"); raise HTTPException(500, "Internal server error")
+    bench = braw[req.benchmark].dropna().pct_change().dropna()
 
-    raw = raw.dropna()
-    if raw.empty:
-        raise HTTPException(404, "No overlapping data")
+    common = port.index.intersection(bench.index)
+    port, bench = port.loc[common], bench.loc[common]
+    if port.empty:
+        raise HTTPException(404, "No overlapping data between CRSP universe and benchmark")
+    return port, bench, delistings, constituent_count
 
-    daily = raw.pct_change().dropna()
-    cash_daily = (1 + _get_risk_free_rate()) ** (1 / 252) - 1   # zero-vol cash sleeve
-    # Cash rides along as an asset column so buy-and-hold lets it drift too.
-    cols, target = [], []
-    if len(eq_w):
-        cols.append((1 + daily[req.tickers]).to_numpy())
-        target.extend(eq_w / total_w)
-    if req.cash_weight > 0:
-        cols.append(np.full((len(daily), 1), 1 + cash_daily))
-        target.append(req.cash_weight / total_w)
-    growth = np.hstack(cols)
-    mask = _rebalance_mask(daily.index, req.rebalance)
-    port = pd.Series(_walk_portfolio(growth, np.array(target), mask), index=daily.index)
-    bench = daily[req.benchmark]
+
+@router.post("/backtest")
+def backtest(req: BacktestRequest):
+    if req.crsp_mode:
+        port, bench, delistings, constituent_count = _crsp_backtest_series(req)
+    else:
+        # Normalize equity + cash weights together so a cash sleeve dilutes exposure.
+        eq_w = np.array(req.weights, dtype=float) if req.tickers else np.array([])
+        total_w = eq_w.sum() + req.cash_weight
+        if total_w <= 0:
+            total_w = 1.0
+
+        all_tickers = list(dict.fromkeys(req.tickers + [req.benchmark]))
+        try:
+            dl = get_download(tuple(sorted(all_tickers)), req.start, req.end, req.interval)
+            raw = dl["Close"] if isinstance(dl.columns, pd.MultiIndex) and "Close" in dl.columns.get_level_values(0) else dl
+            if isinstance(raw, pd.Series):
+                raw = raw.to_frame(all_tickers[0])
+            if raw.index.tz is not None:
+                raw.index = raw.index.tz_convert(None)
+        except Exception:
+            logger.exception("internal error"); raise HTTPException(500, "Internal server error")
+
+        raw = raw.dropna()
+        if raw.empty:
+            raise HTTPException(404, "No overlapping data")
+
+        daily = raw.pct_change().dropna()
+        cash_daily = (1 + _get_risk_free_rate()) ** (1 / 252) - 1   # zero-vol cash sleeve
+        # Cash rides along as an asset column so buy-and-hold lets it drift too.
+        cols, target = [], []
+        if len(eq_w):
+            cols.append((1 + daily[req.tickers]).to_numpy())
+            target.extend(eq_w / total_w)
+        if req.cash_weight > 0:
+            cols.append(np.full((len(daily), 1), 1 + cash_daily))
+            target.append(req.cash_weight / total_w)
+        growth = np.hstack(cols)
+        mask = _rebalance_mask(daily.index, req.rebalance)
+        port = pd.Series(_walk_portfolio(growth, np.array(target), mask), index=daily.index)
+        bench = daily[req.benchmark]
+        delistings, constituent_count = [], 0
 
     cum_gross = (1 + port).cumprod()
     equity, liquidated = _lever_equity(cum_gross, req.leverage, req.borrow_rate)
@@ -217,15 +280,22 @@ def backtest(req: BacktestRequest):
         ],
         "daily_returns": [{"date": str(d.date()), "value": round(float(v) * 100, 4)} for d, v in lev_ret.items()],
         "rolling_beta": [{"date": str(d.date()), "value": round(float(v), 4)} for d, v in rolling_beta.dropna().items()],
-        "per_ticker_returns": {
+        # per_ticker_returns is only meaningful (and small) for an explicit few-name
+        # book — a 500-constituent CRSP universe reports delistings/count instead.
+        "per_ticker_returns": {} if req.crsp_mode else {
             ticker: [{"date": str(d.date()), "value": round(float(v) * 100, 6)} for d, v in daily[ticker].items()]
             for ticker in req.tickers
         },
+        "crsp_mode": req.crsp_mode,
+        "constituent_count": constituent_count,
+        "delistings": delistings,
     }
 
 
 class MonteCarloRequest(BaseModel):
-    tickers: list[str] = Field(min_length=1, max_length=20)
+    # min_length=0 so crsp_mode (which ignores tickers/weights — the S&P 500
+    # point-in-time universe stands in for them) can send an empty list.
+    tickers: list[str] = Field(default_factory=list, max_length=20)
     weights: list[float] | None = None
     start: str = "2020-01-01"
     end: str = "2024-12-31"
@@ -234,10 +304,20 @@ class MonteCarloRequest(BaseModel):
     # No upper cap — wiped-out simulation paths are floored at 0 (see monte_carlo).
     leverage: float = Field(default=1.0, ge=1.0)
     borrow_rate: float = Field(default=0.0, ge=0.0, le=30.0)
+    # Survivorship-bias-free mode: estimates the GBM drift/vol from the S&P 500's
+    # actual point-in-time constituent history (WRDS CRSP) instead of a typed
+    # basket — a delisted name's realized wipeout or buyout premium is embedded
+    # in the historical return series and correctly fattens the risk estimate.
+    crsp_mode: bool = False
 
     @model_validator(mode='after')
     def _validate(self):
+        if self.crsp_mode:
+            validate_date(self.start); validate_date(self.end)
+            return self
         self.tickers = validate_tickers(self.tickers)
+        if not self.tickers:
+            raise HTTPException(400, "No tickers provided")
         validate_date(self.start); validate_date(self.end)
         if not self.weights or len(self.weights) != len(self.tickers):
             self.weights = [1.0] * len(self.tickers)
@@ -248,21 +328,26 @@ class MonteCarloRequest(BaseModel):
 def monte_carlo(req: MonteCarloRequest):
     """GBM simulation of a (optionally levered) portfolio. Returns terminal equity as a growth
     multiple of starting capital (1.0 = breakeven)."""
-    try:
-        dl = get_download(tuple(sorted(req.tickers)), req.start, req.end)
-        raw = dl["Close"] if isinstance(dl.columns, pd.MultiIndex) and "Close" in dl.columns.get_level_values(0) else dl
-        if isinstance(raw, pd.Series):
-            raw = raw.to_frame(req.tickers[0])
-        if raw.index.tz is not None:
-            raw.index = raw.index.tz_convert(None)
-    except Exception:
-        logger.exception("internal error"); raise HTTPException(500, "Internal server error")
-    raw = raw[req.tickers].dropna()
-    if raw.empty:
-        raise HTTPException(404, "No data")
+    delistings, constituent_count = [], 0
+    if req.crsp_mode:
+        port_ret, delistings, constituent_count = _crsp_pit_returns(req.start, req.end)
+    else:
+        try:
+            dl = get_download(tuple(sorted(req.tickers)), req.start, req.end)
+            raw = dl["Close"] if isinstance(dl.columns, pd.MultiIndex) and "Close" in dl.columns.get_level_values(0) else dl
+            if isinstance(raw, pd.Series):
+                raw = raw.to_frame(req.tickers[0])
+            if raw.index.tz is not None:
+                raw.index = raw.index.tz_convert(None)
+        except Exception:
+            logger.exception("internal error"); raise HTTPException(500, "Internal server error")
+        raw = raw[req.tickers].dropna()
+        if raw.empty:
+            raise HTTPException(404, "No data")
 
-    w = np.array(req.weights, dtype=float); w = w / w.sum()
-    port_ret = (raw.pct_change().dropna() * w).sum(axis=1)
+        w = np.array(req.weights, dtype=float); w = w / w.sum()
+        port_ret = (raw.pct_change().dropna() * w).sum(axis=1)
+
     log_ret = np.log1p(port_ret)
     mu = float(log_ret.mean()); sigma = float(log_ret.std())
     n_sims = min(req.n_sims, 1000); T = req.horizon_days
@@ -296,6 +381,9 @@ def monte_carlo(req: MonteCarloRequest):
         "pct_wiped": round(float((final <= 0).mean() * 100), 1),
         "sample_paths": [[round(float(v), 3) for v in row] for row in sample],
         "histogram": sorted([round(float(v), 3) for v in final]),
+        "crsp_mode": req.crsp_mode,
+        "constituent_count": constituent_count,
+        "delistings": delistings,
     }
 
 

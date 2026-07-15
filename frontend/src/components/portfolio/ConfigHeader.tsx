@@ -17,6 +17,12 @@ interface Props {
   holdings: Holding[]
   onHoldingsChange: (next: Holding[]) => void
 
+  // Survivorship-bias-free mode (WRDS CRSP data/crsp.db): replaces the typed
+  // holdings with the S&P 500 constituents as they actually stood on the
+  // window's start date, correctly carrying delisted names' realized outcome
+  // through instead of silently dropping them like the live yfinance path.
+  crspMode?: boolean; onCrspModeChange?: (v: boolean) => void
+
   benchmark: string; setBenchmark: (v: string) => void
   leverage: string; setLeverage: (v: string) => void
   borrowRate: string; setBorrowRate: (v: string) => void
@@ -189,9 +195,10 @@ export default function ConfigHeader(p: Props) {
   const eyebrow = isBT ? 'Portfolio Controls' : 'Simulation Parameters'
   const leftLabel = isBT ? 'Holdings · Strategy' : 'Portfolio Legs · Strategy'
   const runLabel = isBT ? 'Run Portfolio Engine' : 'Run Simulation'
+  const holdingsSummary = p.crspMode ? 'S&P 500 (CRSP)' : `${p.holdings.length} holdings`
   const summary = isBT
-    ? `${p.holdings.length} holdings · ${(p.start || '').slice(0, 4)}-${(p.end || '').slice(0, 4)} · ${p.leverage || 1}x · bench ${p.benchmark}`
-    : `${p.holdings.length} legs · ${p.horizon}d horizon · ${p.nSims} sims · bench ${p.benchmark}`
+    ? `${holdingsSummary} · ${(p.start || '').slice(0, 4)}-${(p.end || '').slice(0, 4)} · ${p.leverage || 1}x · bench ${p.benchmark}`
+    : `${holdingsSummary} · ${p.horizon}d horizon · ${p.nSims} sims · bench ${p.benchmark}`
 
   const riskFields: { label: string; f: RiskField; ph: string }[] = [
     { label: 'Stop-Loss %', f: p.sl, ph: 'off' },
@@ -256,24 +263,46 @@ export default function ConfigHeader(p: Props) {
         <div style={{ display: 'flex', alignItems: 'stretch', flexWrap: 'wrap' }}>
           {/* Holdings + strategy */}
           <div style={{ flex: 1.7, minWidth: 'min(420px, 100%)', padding: '14px 16px', borderRight: `1px solid ${T.border}` }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
               <span style={SECTION}>{leftLabel}</span>
-              <span style={{ fontFamily: T.mono, fontSize: 10, color: T.faint }}>{p.holdings.length} {noun}{p.holdings.length === 1 ? '' : 's'}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                {p.onCrspModeChange && (
+                  <button type="button" onClick={() => p.onCrspModeChange!(!p.crspMode)}
+                    title="Use the S&P 500 constituents as they actually stood on the start date (WRDS CRSP), instead of typed tickers — correctly includes names later delisted or acquired."
+                    style={{
+                      background: p.crspMode ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 16%, transparent)' : 'none',
+                      border: `1px solid ${p.crspMode ? T.primary : T.border}`, color: p.crspMode ? T.primary : T.sec,
+                      cursor: 'pointer', fontFamily: T.mono, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
+                      textTransform: 'uppercase', padding: '4px 8px',
+                    }}>
+                    S&amp;P 500 (Survivorship-bias-free)
+                  </button>
+                )}
+                {!p.crspMode && <span style={{ fontFamily: T.mono, fontSize: 10, color: T.faint }}>{p.holdings.length} {noun}{p.holdings.length === 1 ? '' : 's'}</span>}
+              </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(166px, 1fr))', gap: 8 }}>
-              {p.holdings.map((h, i) => (
-                <HoldingCard key={i} holding={h} index={i} maxWeight={maxWeight} tickerListId={p.tickerListId}
-                  hideDrift={p.mode === 'backtester'}
-                  onChange={patch => updateHolding(i, patch)}
-                  onRemove={() => p.onHoldingsChange(p.holdings.filter((_, j) => j !== i))} />
-              ))}
-              <button onClick={() => p.onHoldingsChange([...p.holdings, { ticker: '', weight: 0, strategy: STRATEGIES[0], stratParams: {} as StrategyParams }])}
-                onMouseEnter={e => (e.currentTarget.style.borderColor = T.primary, e.currentTarget.style.color = T.primary)}
-                onMouseLeave={e => (e.currentTarget.style.borderColor = T.border, e.currentTarget.style.color = T.sec)}
-                style={{ minHeight: 96, background: 'none', border: `1px dashed ${T.border}`, color: T.sec, cursor: 'pointer', fontFamily: T.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                + Add {noun}
-              </button>
-            </div>
+            {p.crspMode ? (
+              <div style={{ padding: '14px 12px', border: `1px dashed ${T.border}`, color: T.sec, fontFamily: T.sans, fontSize: 11, lineHeight: 1.5 }}>
+                Holdings are ignored in this mode — the {isBT ? 'backtest' : 'simulation'} runs the actual S&amp;P 500
+                constituent list as of the Start date below (WRDS CRSP), including names later delisted or acquired,
+                with their realized outcome carried through instead of silently dropped.
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(166px, 1fr))', gap: 8 }}>
+                {p.holdings.map((h, i) => (
+                  <HoldingCard key={i} holding={h} index={i} maxWeight={maxWeight} tickerListId={p.tickerListId}
+                    hideDrift={p.mode === 'backtester'}
+                    onChange={patch => updateHolding(i, patch)}
+                    onRemove={() => p.onHoldingsChange(p.holdings.filter((_, j) => j !== i))} />
+                ))}
+                <button onClick={() => p.onHoldingsChange([...p.holdings, { ticker: '', weight: 0, strategy: STRATEGIES[0], stratParams: {} as StrategyParams }])}
+                  onMouseEnter={e => (e.currentTarget.style.borderColor = T.primary, e.currentTarget.style.color = T.primary)}
+                  onMouseLeave={e => (e.currentTarget.style.borderColor = T.border, e.currentTarget.style.color = T.sec)}
+                  style={{ minHeight: 96, background: 'none', border: `1px dashed ${T.border}`, color: T.sec, cursor: 'pointer', fontFamily: T.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                  + Add {noun}
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Window / parameters + risk */}
@@ -295,6 +324,12 @@ export default function ConfigHeader(p: Props) {
                   <>
                     <Field label="Horizon (days)"><NumberInput value={p.horizon ?? 0} onChange={v => p.setHorizon?.(+v)} step={1} min={1} /></Field>
                     <Field label="Simulations"><NumberInput value={p.nSims ?? 0} onChange={v => p.setNSims?.(+v)} step={1} min={1} /></Field>
+                    {p.crspMode && (
+                      <>
+                        <Field label="CRSP Calibration Start"><input type="date" value={p.start} onChange={e => p.setStart?.(e.target.value)} onFocus={focusOn} onBlur={focusOff} style={{ ...inputBase, colorScheme: 'dark' } as React.CSSProperties} /></Field>
+                        <Field label="CRSP Calibration End"><input type="date" value={p.end} onChange={e => p.setEnd?.(e.target.value)} onFocus={focusOn} onBlur={focusOff} style={{ ...inputBase, colorScheme: 'dark' } as React.CSSProperties} /></Field>
+                      </>
+                    )}
                     <Field label="Benchmark"><input value={p.benchmark} onChange={e => p.setBenchmark(e.target.value.toUpperCase())} onFocus={focusOn} onBlur={focusOff} style={inputBase} /></Field>
                     <Field label="Leverage (x)"><NumberInput value={p.leverage} onChange={p.setLeverage} step={0.25} min={1} /></Field>
                     <div style={{ gridColumn: '1 / -1' }}>

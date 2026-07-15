@@ -258,6 +258,12 @@ export function MonteCarloContent() {
   const [leverage, setLeverage] = useState('1')
   const [borrowRate, setBorrowRate] = useState('0')
   const [rebalance, setRebalance] = useState<RebalanceFreq>('none')
+  const [crspMode, setCrspMode] = useState(false)
+  // CRSP mode estimates drift/vol from an actual historical window (point-in-time
+  // S&P 500 membership as of `start`) rather than simulating forward from today,
+  // so it needs a date range the normal per-leg GBM/bootstrap flow doesn't.
+  const [crspStart, setCrspStart] = useState('2015-01-01')
+  const [crspEnd, setCrspEnd] = useState(() => new Date().toISOString().split('T')[0])
 
 
   const updateLeg = (i: number, patch: Partial<Leg>) =>
@@ -320,6 +326,67 @@ export function MonteCarloContent() {
   const { mutate, data, isPending } = useMutation({
     mutationFn: async () => {
       _seed = 42 * (horizon + nSims + legs.length)
+
+      if (crspMode) {
+        const [{ data: simulation }, benchResult] = await Promise.all([
+          axios.post('/api/portfolio/montecarlo', {
+            crsp_mode: true,
+            start: crspStart,
+            end: crspEnd,
+            n_sims: Math.min(nSims, 1000),
+            horizon_days: horizon,
+            leverage: Number(leverage) || 1,
+            borrow_rate: Number(borrowRate) || 0,
+          }),
+          axios.get(`/api/market/history?ticker=${benchmark}&start=2020-01-01`)
+            .then(r => r.data)
+            .catch(() => null),
+        ])
+
+        // The API returns its chart sample time-major; transpose to the path-major
+        // shape used by the shared percentile helpers below.
+        const sampledPaths = (simulation.sample_paths?.[0] ?? []).map((_: number, i: number) =>
+          simulation.sample_paths.map((row: number[]) => row[i] * 100)
+        )
+        const terminal = (simulation.histogram as number[]).map(v => v * 100).sort((a, b) => a - b)
+        const benchVol = benchResult?.metrics?.ann_volatility ?? 15
+        const benchDrift = benchResult?.metrics
+          ? (() => {
+              const years = Math.max(new Date().getFullYear() - 2020, 1)
+              return (Math.pow(1 + benchResult.metrics.total_return / 100, 1 / years) - 1) * 100
+            })()
+          : 8
+        const benchPaths = runGBM(100, benchDrift / 100, benchVol / 100, horizon, 100)
+        const bands = Array.from({ length: horizon + 1 }, (_, day) => ({
+          day,
+          ...pathPercentiles(sampledPaths, day),
+          bench_p50: pathPercentiles(benchPaths, day).p50,
+        }))
+        const min = terminal[0], max = terminal[terminal.length - 1]
+        const step = Math.max((max - min) / 50, 1)
+        const histogram = Array.from({ length: 50 }, (_, i) => {
+          const lo = min + i * step, hi = lo + step
+          return { price: +lo.toFixed(0), count: terminal.filter(v => v >= lo && (i === 49 ? v <= hi : v < hi)).length }
+        })
+        const p5 = terminal[Math.floor(terminal.length * 0.05)]
+        const cvarSlice = terminal.slice(0, Math.max(1, Math.floor(terminal.length * 0.05)))
+        const target = targetPrice > 0 ? targetPrice : null
+        return {
+          bands, histogram, S0: 100,
+          median: terminal[Math.floor(terminal.length * 0.5)], p5,
+          p95: terminal[Math.floor(terminal.length * 0.95)],
+          probProfit: terminal.filter(v => v > 100).length / terminal.length * 100,
+          probRuin: simulation.pct_wiped,
+          varAmt: 100 - p5,
+          cvarAmt: 100 - cvarSlice.reduce((sum, value) => sum + value, 0) / cvarSlice.length,
+          effDrift: simulation.mu * 100,
+          probTarget: target === null ? null : terminal.filter(v => v >= target).length / terminal.length * 100,
+          targetPrice, model: 'gbm', benchmark, legs: [],
+          crsp_mode: true,
+          constituent_count: simulation.constituent_count,
+          delistings: simulation.delistings ?? [],
+        }
+      }
       const totalWeight = legs.reduce((s, l) => s + l.weight, 0) || 100
 
       // Fire strategy signals + benchmark fetch in parallel
@@ -533,6 +600,7 @@ export function MonteCarloContent() {
         probTarget, targetPrice, model,
         bootstrapReady: model !== 'bootstrap' || legs.every((l, i) => l.ticker === CASH_SYMBOL || alignedIdx.includes(i)),
         benchmark, legs: legs.map((l, i) => ({ ...l, ...legAdjs[i] })),
+        crsp_mode: false,
       }
     },
   })
@@ -554,6 +622,7 @@ export function MonteCarloContent() {
           }
           return { ...makeLeg(h.ticker, h.weight), ...h } as Leg
         }))}
+        crspMode={crspMode} onCrspModeChange={setCrspMode}
         benchmark={benchmark} setBenchmark={setBenchmark}
         leverage={leverage} setLeverage={setLeverage}
         borrowRate={borrowRate} setBorrowRate={setBorrowRate}
@@ -562,6 +631,8 @@ export function MonteCarloContent() {
         trail={{ val: trailPct, set: setTrailPct }}
         pos={{ val: posPct, set: setPosPct }}
         cash={{ val: cashYield, set: setCashYield }}
+        start={crspStart} setStart={setCrspStart}
+        end={crspEnd} setEnd={setCrspEnd}
         horizon={horizon} setHorizon={setHorizon}
         nSims={nSims} setNSims={setNSims}
         targetPrice={targetPrice} setTargetPrice={setTargetPrice}
@@ -572,8 +643,8 @@ export function MonteCarloContent() {
         paramExtra={
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <Field label="Simulation Model">
-              <select value={model} onChange={e => setModel(e.target.value as SimModel)}
-                style={{ ...paramInput, cursor: 'pointer' }}>
+              <select value={crspMode ? 'gbm' : model} disabled={crspMode} onChange={e => setModel(e.target.value as SimModel)}
+                style={{ ...paramInput, cursor: crspMode ? 'not-allowed' : 'pointer', opacity: crspMode ? 0.65 : 1 }}>
                 {(Object.keys(MODEL_LABELS) as SimModel[]).map(m => (
                   <option key={m} value={m}>{MODEL_LABELS[m]}</option>
                 ))}
@@ -624,8 +695,22 @@ export function MonteCarloContent() {
 
           {data && (
             <>
+              {data.crsp_mode && (
+                <div style={{
+                  background: 'var(--theme-bg, #101c2e)',
+                  border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)',
+                  borderLeft: '4px solid var(--theme-primary, #c9a84c)',
+                  padding: '8px 14px', fontFamily: 'var(--theme-mono)', fontSize: 11, lineHeight: 1.5,
+                }}>
+                  <span style={{ color: 'var(--theme-primary, #c9a84c)', fontWeight: 700 }}>SURVIVORSHIP-BIAS-FREE (CRSP)</span>
+                  <span style={{ color: 'var(--theme-secondary, #99907e)', marginLeft: 8 }}>
+                    GBM calibration uses {data.constituent_count} S&amp;P 500 constituents as of {crspStart}
+                    {data.delistings?.length > 0 && `, including ${data.delistings.length} delisted/acquired names carried through the return history`}.
+                  </span>
+                </div>
+              )}
               {/* Portfolio composition */}
-              <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '8px 12px', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+              {!data.crsp_mode && <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '8px 12px', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                 {data.legs.map((l: any, i: number) => (
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 700, color: 'var(--theme-text, #d7e3fc)' }}>{l.ticker}</span>
@@ -652,7 +737,7 @@ export function MonteCarloContent() {
                     {MODEL_LABELS[data.model as SimModel]}
                   </span>
                 </span>
-              </div>
+              </div>}
 
               {/* Answer-first outcome strip */}
               <div style={STRIP}>
