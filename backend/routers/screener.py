@@ -896,15 +896,17 @@ def run_screen(req: ScreenRequest):
 
     # Add international names: the picked intl universe, or every intl name when the
     # universe is "All". Base data comes USD-normalized from the cached intl snapshot.
-    if not req.sector and not req.exchange:
-        if is_intl:
-            intl_want = uni_set
-        elif not req.universe:
-            intl_want = _ALL_INTL
-        else:
-            intl_want = set()
-        if intl_want:
-            candidates += [r for r in _intl_snapshot() if r["ticker"] in intl_want]
+    # Sector/exchange are NOT a reason to skip this — they're applied as post-filters
+    # below (same as they are for non-FMP-screened candidates), so a sector-scoped
+    # "All" screen must still see international names or it silently excludes them.
+    if is_intl:
+        intl_want = uni_set
+    elif not req.universe:
+        intl_want = _ALL_INTL
+    else:
+        intl_want = set()
+    if intl_want:
+        candidates += [r for r in _intl_snapshot() if r["ticker"] in intl_want]
 
     # Fallback: sector-aware liquid tickers via yfinance
     SECTOR_TICKERS: dict[str, list[str]] = {
