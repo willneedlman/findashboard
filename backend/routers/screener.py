@@ -133,6 +133,12 @@ _INTL_SETS, _INTL_NAMES = _load_intl()
 _INDEX_SETS.update(_INTL_SETS)        # so _resolve_universe + the yfinance path resolve them
 _INTL_KEYS = set(_INTL_SETS.keys())   # universes that need USD FX-normalization + skip FMP
 _ALL_INTL = set().union(*_INTL_SETS.values()) if _INTL_SETS else set()
+_NIKKEI_FINANCIALS = {
+    "5831.T", "7186.T", "8304.T", "8306.T", "8308.T", "8309.T", "8316.T", "8331.T", "8354.T", "8411.T",
+    "8253.T", "8591.T", "8697.T", "8601.T", "8604.T", "8630.T", "8725.T", "8750.T", "8766.T", "8795.T",
+}
+_INTL_SECTOR_OVERRIDES = {ticker: "Financial Services" for ticker in _NIKKEI_FINANCIALS}
+_INTL_SNAPSHOT_CACHE = "screener:intlsnap:v2"
 
 # Country -> region bucket for the Region filter (country comes from yfinance .info).
 _INTL_COUNTRY = {"ftse100": "United Kingdom", "dax40": "Germany", "nikkei225": "Japan"}
@@ -176,10 +182,14 @@ UNIVERSE_OPTIONS = [
     {"value": "xlu",  "label": "XLU · Utilities",           "group": "Sector SPDRs"},
     {"value": "xlre", "label": "XLRE · Real Estate",        "group": "Sector SPDRs"},
     {"value": "xlb",  "label": "XLB · Materials",           "group": "Sector SPDRs"},
-    {"value": "ftse100",   "label": "FTSE 100 · UK",        "group": "International"},
+    {"value": "ftse100",   "label": "UK Large Caps",        "group": "International"},
     {"value": "dax40",     "label": "DAX 40 · Germany",     "group": "International"},
-    {"value": "nikkei225", "label": "Nikkei 225 · Japan",   "group": "International"},
+    {"value": "nikkei225", "label": "Japan Large Caps",     "group": "International"},
 ]
+INTERNATIONAL_COVERAGE_NOTE = (
+    "International screens use curated large-cap index snapshots. Japan includes the full Nikkei financial cohort; "
+    "use a company search to verify a name outside the displayed coverage."
+)
 
 
 _FX_CACHE: TTLCache = TTLCache(maxsize=32, ttl=3600)
@@ -417,7 +427,8 @@ EXCHANGES = ["NASDAQ", "NYSE", "AMEX"]
 @router.get("/fields")
 def get_fields():
     return {"fields": SCREENER_FIELDS, "sectors": SECTORS, "exchanges": EXCHANGES,
-            "universes": UNIVERSE_OPTIONS, "regions": REGIONS}
+            "universes": UNIVERSE_OPTIONS, "regions": REGIONS,
+            "internationalCoverageNote": INTERNATIONAL_COVERAGE_NOTE}
 
 
 @router.get("/sector-medians")
@@ -508,7 +519,7 @@ def _intl_snapshot(full: bool = False) -> list:
     if not _ALL_INTL:
         return []
     if not full:
-        fresh = disk_get("screener:intlsnap")
+        fresh = disk_get(_INTL_SNAPSHOT_CACHE)
         if fresh is not None:
             return fresh
     tk_country = {t: _INTL_COUNTRY.get(k) for k, s in _INTL_SETS.items() for t in s}
@@ -525,14 +536,14 @@ def _intl_snapshot(full: bool = False) -> list:
                 "ticker": tk, "companyName": _INTL_NAMES.get(tk) or tk,
                 "price": round(float(price) / divisor * rate, 2) if price else None,
                 "marketCap": round(float(mc) / divisor * rate / 1e9, 2) if mc else None,
-                "beta": None, "volume": None, "sector": "", "industry": "", "exchange": "",
+                "beta": None, "volume": None, "sector": _INTL_SECTOR_OVERRIDES.get(tk, ""), "industry": "", "exchange": "",
                 "country": tk_country.get(tk), "change1d": None,
             }
             if full:
                 try:
                     info = t.info
                     row.update({
-                        "sector": info.get("sector") or "", "industry": info.get("industry") or "",
+                        "sector": info.get("sector") or row["sector"], "industry": info.get("industry") or "",
                         "beta": info.get("beta"),
                         "peRatio": info.get("trailingPE"), "pbRatio": info.get("priceToBook"),
                         "psRatio": info.get("priceToSalesTrailing12Months"),
@@ -553,10 +564,10 @@ def _intl_snapshot(full: bool = False) -> list:
     with concurrent.futures.ThreadPoolExecutor(max_workers=15) as ex:
         rows = [r for r in ex.map(_q, sorted(_ALL_INTL)) if r and r.get("price")]
     if rows:
-        disk_set("screener:intlsnap", rows, ttl=21600)
-        disk_set("screener:intlsnap:sticky", rows, ttl=604800)
+        disk_set(_INTL_SNAPSHOT_CACHE, rows, ttl=21600)
+        disk_set(f"{_INTL_SNAPSHOT_CACHE}:sticky", rows, ttl=604800)
         return rows
-    return disk_get("screener:intlsnap:sticky") or []
+    return disk_get(f"{_INTL_SNAPSHOT_CACHE}:sticky") or []
 
 
 # ── Detail enrichment per ticker ──────────────────────────────────────────────
@@ -855,7 +866,7 @@ def _compute_history_batch(tickers: list[str]) -> dict:
 def run_screen(req: ScreenRequest):
     import json, hashlib
     # Bump CACHE_VER whenever screener logic changes to invalidate stale disk-cached results
-    CACHE_VER = "v17"
+    CACHE_VER = "v18"
     cache_key = CACHE_VER + hashlib.md5(json.dumps(req.model_dump(), sort_keys=True).encode()).hexdigest()
     with _lock:
         if cache_key in _screen_cache:

@@ -1,5 +1,5 @@
 {
-  "_note": "Curated liquid large-cap constituents as {ticker: company name} in yfinance ticker format (.L London/GBp, .DE XETRA/EUR, .T Tokyo/JPY). Names are bundled so numeric tickers (Tokyo) always show a company name. Representative major members, not exhaustive. Refresh periodically.",
+  "_note": "Curated liquid large-cap constituents as {ticker: company name} in yfinance ticker format (.L London/GBp, .DE XETRA/EUR, .T Tokyo/JPY). Names are bundled so numeric tickers (Tokyo) always show a company name. The complete Nikkei 225 financial cohort is included; refresh periodically from Nikkei Indexes.",
   "dax40": {
     "SAP.DE": "SAP", "SIE.DE": "Siemens", "ALV.DE": "Allianz", "DTE.DE": "Deutsche Telekom",
     "AIR.DE": "Airbus", "MBG.DE": "Mercedes-Benz Group", "BMW.DE": "BMW", "VOW3.DE": "Volkswagen",
@@ -38,6 +38,12 @@
     "8001.T": "Itochu", "8031.T": "Mitsui & Co", "9434.T": "SoftBank Corp", "4519.T": "Chugai Pharmaceutical",
     "6954.T": "Fanuc", "7751.T": "Canon", "6503.T": "Mitsubishi Electric", "6273.T": "SMC", "4543.T": "Terumo",
     "8766.T": "Tokio Marine Holdings", "8411.T": "Mizuho Financial", "9983.T": "Fast Retailing",
+    "5831.T": "Shizuoka Financial Group", "7186.T": "Yokohama Financial Group",
+    "8304.T": "Aozora Bank", "8308.T": "Resona Holdings", "8309.T": "Sumitomo Mitsui Trust Group",
+    "8331.T": "Chiba Bank", "8354.T": "Fukuoka Financial Group", "8253.T": "Credit Saison",
+    "8591.T": "ORIX", "8697.T": "Japan Exchange Group", "8601.T": "Daiwa Securities Group",
+    "8604.T": "Nomura Holdings", "8630.T": "Sompo Holdings",
+    "8725.T": "MS&AD Insurance Group Holdings", "8750.T": "Daiichi Life Group", "8795.T": "T&D Holdings",
     "4661.T": "Oriental Land", "6178.T": "Japan Post Holdings", "7011.T": "Mitsubishi Heavy Industries",
     "6702.T": "Fujitsu", "6857.T": "Advantest", "4568.T": "Daiichi Sankyo", "6752.T": "Panasonic Holdings",
     "8053.T": "Sumitomo Corp", "2914.T": "Japan Tobacco", "4452.T": "Kao", "4901.T": "Fujifilm Holdings",

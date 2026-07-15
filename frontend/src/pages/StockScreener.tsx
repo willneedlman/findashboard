@@ -209,6 +209,7 @@ export default function StockScreener() {
     { value: '', label: 'All', group: 'Indexes' },
     { value: 'sp500', label: 'S&P 500', group: 'Indexes' },
   ]
+  const hasInternationalScope = (region && region !== 'North America') || ['ftse100', 'dax40', 'nikkei225'].includes(universe)
   const universeGroups = [...new Set(universes.map(u => u.group))]
 
   const { mutate, data, isPending, error, reset } = useMutation({
@@ -466,6 +467,11 @@ export default function StockScreener() {
                   {isPending ? 'Screening…' : 'Run'}
                 </button>
               </div>
+              {hasInternationalScope && meta?.internationalCoverageNote && (
+                <div style={{ marginTop: 8, color: C.muted, fontFamily: C.sans, fontSize: 10, lineHeight: 1.45 }}>
+                  {meta.internationalCoverageNote}
+                </div>
+              )}
 
               {/* filter chips — scroll horizontally instead of wrapping off-screen */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, minWidth: 0 }}>
