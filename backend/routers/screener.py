@@ -138,21 +138,32 @@ _NIKKEI_FINANCIALS = {
     "8253.T", "8591.T", "8697.T", "8601.T", "8604.T", "8630.T", "8725.T", "8750.T", "8766.T", "8795.T",
 }
 _INTL_SECTOR_OVERRIDES = {ticker: "Financial Services" for ticker in _NIKKEI_FINANCIALS}
-_INTL_SNAPSHOT_CACHE = "screener:intlsnap:v2"
+_INTL_SNAPSHOT_CACHE = "screener:intlsnap:v3"
 
-# Country -> region bucket for the Region filter (country comes from yfinance .info).
-_INTL_COUNTRY = {"ftse100": "United Kingdom", "dax40": "Germany", "nikkei225": "Japan"}
+# Deterministic listing metadata keeps a valid bundled name visible in region and
+# exchange filters when a quote-provider profile is blank or rate-limited.
+_INTL_LISTING_METADATA = {
+    "ftse100": {"country": "United Kingdom", "region": "Europe", "exchange": "LSE"},
+    "dax40": {"country": "Germany", "region": "Europe", "exchange": "XETRA"},
+    "nikkei225": {"country": "Japan", "region": "Asia-Pacific", "exchange": "TSE"},
+}
+_INTL_COUNTRY = {key: value["country"] for key, value in _INTL_LISTING_METADATA.items()}
+_INTL_TICKER_METADATA = {
+    ticker: _INTL_LISTING_METADATA[key]
+    for key, tickers in _INTL_SETS.items()
+    for ticker in tickers
+}
 REGIONS = ["North America", "Europe", "Asia-Pacific"]
 _COUNTRY_REGION = {
     "United States": "North America", "US": "North America", "USA": "North America",
-    "Canada": "North America", "Mexico": "North America",
-    "United Kingdom": "Europe", "Germany": "Europe", "France": "Europe", "Netherlands": "Europe",
+    "Canada": "North America", "CA": "North America", "Mexico": "North America", "MX": "North America",
+    "United Kingdom": "Europe", "GB": "Europe", "UK": "Europe", "Germany": "Europe", "DE": "Europe", "France": "Europe", "FR": "Europe", "Netherlands": "Europe",
     "Switzerland": "Europe", "Ireland": "Europe", "Spain": "Europe", "Italy": "Europe",
     "Sweden": "Europe", "Denmark": "Europe", "Finland": "Europe", "Norway": "Europe",
     "Belgium": "Europe", "Luxembourg": "Europe", "Austria": "Europe", "Portugal": "Europe",
-    "Japan": "Asia-Pacific", "China": "Asia-Pacific", "Hong Kong": "Asia-Pacific",
-    "Taiwan": "Asia-Pacific", "South Korea": "Asia-Pacific", "Australia": "Asia-Pacific",
-    "Singapore": "Asia-Pacific", "India": "Asia-Pacific",
+    "Japan": "Asia-Pacific", "JP": "Asia-Pacific", "China": "Asia-Pacific", "CN": "Asia-Pacific", "Hong Kong": "Asia-Pacific", "HK": "Asia-Pacific",
+    "Taiwan": "Asia-Pacific", "TW": "Asia-Pacific", "South Korea": "Asia-Pacific", "KR": "Asia-Pacific", "Australia": "Asia-Pacific", "AU": "Asia-Pacific",
+    "Singapore": "Asia-Pacific", "SG": "Asia-Pacific", "India": "Asia-Pacific", "IN": "Asia-Pacific",
 }
 
 # Sector SPDRs are the S&P 500 members in one GICS sector, which is exactly what
@@ -164,10 +175,10 @@ _SECTOR_SPDR = {
     "xlu": "Utilities", "xlre": "Real Estate", "xlb": "Basic Materials",
 }
 
-# Picker options for the frontend (value, label, group). "" = everything (the US
-# indexes plus the bundled international names).
+# Picker options for the frontend (value, label, group). "" = every bundled seed,
+# not a worldwide universe.
 UNIVERSE_OPTIONS = [
-    {"value": "",          "label": "All",             "group": "Indexes"},
+    {"value": "",          "label": "Bundled Universes", "group": "Indexes"},
     {"value": "sp500",     "label": "S&P 500",         "group": "Indexes"},
     {"value": "sp400",     "label": "S&P 400 Midcap",  "group": "Indexes"},
     {"value": "nasdaq100", "label": "Nasdaq 100",      "group": "Indexes"},
@@ -186,10 +197,41 @@ UNIVERSE_OPTIONS = [
     {"value": "dax40",     "label": "DAX 40 · Germany",     "group": "International"},
     {"value": "nikkei225", "label": "Japan Large Caps",     "group": "International"},
 ]
-INTERNATIONAL_COVERAGE_NOTE = (
-    "International screens use curated large-cap index snapshots. Japan includes the full Nikkei financial cohort; "
-    "use a company search to verify a name outside the displayed coverage."
-)
+INTERNATIONAL_COVERAGE_NOTE = "International and regional screens are curated unless their coverage panel says validated complete."
+
+
+def _load_coverage_contract() -> dict:
+    import json
+    path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "screener_coverage.json")
+    try:
+        with open(path) as handle:
+            contract = json.load(handle)
+    except Exception as exc:
+        logger.warning("screener coverage contract load failed: %s", exc)
+        return {"universes": {}, "regions": {}}
+    for key, entry in contract.get("universes", {}).items():
+        entry["available"] = len(_INDEX_SETS.get(key, ()))
+    return contract
+
+
+_COVERAGE_CONTRACT = _load_coverage_contract()
+
+
+def _coverage_for_scope(universe: str | None = None, region: str | None = None) -> dict:
+    """Return an honest, small coverage payload for the selected screener scope."""
+    if universe:
+        entry = _COVERAGE_CONTRACT.get("universes", {}).get(str(universe).lower())
+        if entry:
+            return {"scope": entry["label"], **entry}
+    if region:
+        entry = _COVERAGE_CONTRACT.get("regions", {}).get(region)
+        if entry:
+            return {"scope": region, **entry}
+    return {
+        "scope": "Bundled universes",
+        "status": "curated",
+        "source": "Bundled index seeds; this is not a global market-wide universe",
+    }
 
 
 _FX_CACHE: TTLCache = TTLCache(maxsize=32, ttl=3600)
@@ -422,13 +464,14 @@ SECTORS = ["Technology","Healthcare","Financial Services","Consumer Cyclical",
            "Industrials","Communication Services","Consumer Defensive",
            "Energy","Utilities","Real Estate","Basic Materials"]
 
-EXCHANGES = ["NASDAQ", "NYSE", "AMEX"]
+EXCHANGES = ["NASDAQ", "NYSE", "AMEX", "LSE", "XETRA", "TSE"]
 
 @router.get("/fields")
 def get_fields():
     return {"fields": SCREENER_FIELDS, "sectors": SECTORS, "exchanges": EXCHANGES,
             "universes": UNIVERSE_OPTIONS, "regions": REGIONS,
-            "internationalCoverageNote": INTERNATIONAL_COVERAGE_NOTE}
+            "internationalCoverageNote": INTERNATIONAL_COVERAGE_NOTE,
+            "coverage": _COVERAGE_CONTRACT}
 
 
 @router.get("/sector-medians")
@@ -522,13 +565,13 @@ def _intl_snapshot(full: bool = False) -> list:
         fresh = disk_get(_INTL_SNAPSHOT_CACHE)
         if fresh is not None:
             return fresh
-    tk_country = {t: _INTL_COUNTRY.get(k) for k, s in _INTL_SETS.items() for t in s}
     _pct = lambda v: round(v * 100, 1) if isinstance(v, (int, float)) else None
 
     def _q(tk):
         try:
             t = yf.Ticker(tk)
             fi = t.fast_info
+            listing = _INTL_TICKER_METADATA.get(tk, {})
             price = getattr(fi, "last_price", None)
             mc = getattr(fi, "market_cap", None)
             rate, divisor = _fx_to_usd(getattr(fi, "currency", None))
@@ -536,8 +579,8 @@ def _intl_snapshot(full: bool = False) -> list:
                 "ticker": tk, "companyName": _INTL_NAMES.get(tk) or tk,
                 "price": round(float(price) / divisor * rate, 2) if price else None,
                 "marketCap": round(float(mc) / divisor * rate / 1e9, 2) if mc else None,
-                "beta": None, "volume": None, "sector": _INTL_SECTOR_OVERRIDES.get(tk, ""), "industry": "", "exchange": "",
-                "country": tk_country.get(tk), "change1d": None,
+                "beta": None, "volume": None, "sector": _INTL_SECTOR_OVERRIDES.get(tk, ""), "industry": "",
+                "exchange": listing.get("exchange", ""), "country": listing.get("country", ""), "change1d": None,
             }
             if full:
                 try:
@@ -866,7 +909,7 @@ def _compute_history_batch(tickers: list[str]) -> dict:
 def run_screen(req: ScreenRequest):
     import json, hashlib
     # Bump CACHE_VER whenever screener logic changes to invalidate stale disk-cached results
-    CACHE_VER = "v18"
+    CACHE_VER = "v19"
     cache_key = CACHE_VER + hashlib.md5(json.dumps(req.model_dump(), sort_keys=True).encode()).hexdigest()
     with _lock:
         if cache_key in _screen_cache:
@@ -990,12 +1033,14 @@ def run_screen(req: ScreenRequest):
                 rate, divisor = (_fx_to_usd(getattr(fi, "currency", None)) if is_intl else (1.0, 1.0))
                 price_usd = float(price) / divisor * rate if price else None
                 mc_usd    = float(mc) / divisor * rate if mc else None
+                listing = _INTL_TICKER_METADATA.get(tk, {})
                 return {"ticker": tk, "companyName": _INTL_NAMES.get(tk) or tk,
                         "price":     round(price_usd, 2) if price_usd else None,
                         "marketCap": round(mc_usd / 1e9, 2) if mc_usd else None,
                         "change1d":  round((float(price) / prev - 1) * 100, 2) if price and prev else None,
-                        "beta": None, "volume": None, "sector": "", "industry": "", "exchange": "",
-                        "country": _INTL_COUNTRY.get(str(req.universe).lower()) if is_intl else ""}
+                        "beta": None, "volume": None, "sector": "", "industry": "",
+                        "exchange": listing.get("exchange", ""),
+                        "country": listing.get("country", _INTL_COUNTRY.get(str(req.universe).lower(), "")) if is_intl else ""}
             except Exception:
                 return None
 
@@ -1106,7 +1151,10 @@ def run_screen(req: ScreenRequest):
         for k in [k for k in r if k.startswith("chg:")]:
             r.pop(k, None)
 
-    result = {"results": filtered[:req.limit], "total": len(filtered), "changePeriod": display_period or "1D"}
+    result = {
+        "results": filtered[:req.limit], "total": len(filtered), "changePeriod": display_period or "1D",
+        "coverage": _coverage_for_scope(req.universe, req.region),
+    }
     with _lock:
         _screen_cache[cache_key] = result
     disk_set(f"screen:{cache_key}", result, ttl=3600)

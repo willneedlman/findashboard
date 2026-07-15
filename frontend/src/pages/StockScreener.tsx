@@ -49,6 +49,7 @@ const sectorColor = (s?: string) => (s && SECTOR_COLORS[s]) || 'var(--theme-text
 
 interface FieldMeta { id: string; label: string; group: string }
 interface FilterRow { id: number; field: string; operator: string; value: string; value2: string; param?: string }
+interface CoverageMeta { label?: string; scope?: string; available?: number; expected?: number; status: string; source: string; validation_date?: string | null }
 
 const PRICE_PERIODS = ['1D', '1W', '1M', '3M', '6M', 'YTD', '1Y']
 
@@ -206,10 +207,9 @@ export default function StockScreener() {
   const exchanges: string[] = meta?.exchanges ?? []
   const regions: string[]   = meta?.regions ?? []
   const universes: { value: string; label: string; group: string }[] = meta?.universes ?? [
-    { value: '', label: 'All', group: 'Indexes' },
+    { value: '', label: 'Bundled Universes', group: 'Indexes' },
     { value: 'sp500', label: 'S&P 500', group: 'Indexes' },
   ]
-  const hasInternationalScope = (region && region !== 'North America') || ['ftse100', 'dax40', 'nikkei225'].includes(universe)
   const universeGroups = [...new Set(universes.map(u => u.group))]
 
   const { mutate, data, isPending, error, reset } = useMutation({
@@ -225,6 +225,14 @@ export default function StockScreener() {
       limit: 200,
     }).then(r => r.data),
   })
+
+  const selectedCoverage: CoverageMeta | undefined = data?.coverage ?? (
+    universe ? meta?.coverage?.universes?.[universe] : region ? meta?.coverage?.regions?.[region] : {
+      scope: 'Bundled universes', status: 'curated', source: 'Bundled index seeds; this is not a global market-wide universe',
+    }
+  )
+  const coverageStatus = selectedCoverage?.status?.replace(/_/g, ' ') ?? ''
+  const hasCoverageCaveat = ['partial', 'curated', 'seeded_unvalidated', 'count_complete_unvalidated'].includes(selectedCoverage?.status ?? '')
 
   const runScreen = () => mutate()
 
@@ -467,9 +475,16 @@ export default function StockScreener() {
                   {isPending ? 'Screening…' : 'Run'}
                 </button>
               </div>
-              {hasInternationalScope && meta?.internationalCoverageNote && (
-                <div style={{ marginTop: 8, color: C.muted, fontFamily: C.sans, fontSize: 10, lineHeight: 1.45 }}>
-                  {meta.internationalCoverageNote}
+              {selectedCoverage && (
+                <div style={{ marginTop: 8, display: 'flex', alignItems: 'baseline', gap: 7, flexWrap: 'wrap', color: C.muted, fontFamily: C.sans, fontSize: 10, lineHeight: 1.45 }}>
+                  <span style={{ color: hasCoverageCaveat ? C.warn : C.pos, fontFamily: C.mono, fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                    Coverage · {coverageStatus}
+                  </span>
+                  {selectedCoverage.available != null && selectedCoverage.expected != null && (
+                    <span>{selectedCoverage.available} seeded / {selectedCoverage.expected} target</span>
+                  )}
+                  <span>{selectedCoverage.source}</span>
+                  {hasCoverageCaveat && meta?.internationalCoverageNote && <span>{meta.internationalCoverageNote}</span>}
                 </div>
               )}
 
