@@ -286,6 +286,7 @@ function AssetOLS({ mode, setMode }: { mode: RegMode; setMode: (m: RegMode) => v
 
       {!r && !mutation.isPending && (
         <EmptyState title="Regression" hint="Set a dependent ticker and one or more predictors, then run the regression."
+          action="Run Regression"
           keys={['Enter']} kpis={['R²', 'Adj R²', 'Beta', 'Alpha', 'Observations']}
           preview="table" previewLabel="Regression Coefficients" columns={['Feature', 'Coefficient', 't-stat', 'p-value']} />
       )}

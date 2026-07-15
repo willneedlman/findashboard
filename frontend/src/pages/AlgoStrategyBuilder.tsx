@@ -506,7 +506,8 @@ export function AlgoStrategyBuilderContent() {
         <EmptyState title="Algorithmic Strategy Builder"
           hint={mode === 'portfolio'
             ? 'Add positions (each = a saved rule-set + ticker + weight + the trade its BUY signal opens), then Run Portfolio. Long/short shares and long/short modeled options aggregate into one book.'
-            : 'Build a strategy from entry/exit rules, pick a ticker, then Run Backtest. Saved strategies import into Monte Carlo and the Backtester.'} />
+            : 'Build a strategy from entry/exit rules, pick a ticker, then Run Backtest. Saved strategies import into Monte Carlo and the Backtester.'}
+          action={mode === 'portfolio' ? 'Run Portfolio' : 'Run Backtest'} />
       )}
 
       {R && mR && (

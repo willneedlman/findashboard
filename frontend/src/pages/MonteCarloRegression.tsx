@@ -216,7 +216,7 @@ export default function MonteCarloRegression({ mode, setMode }: { mode: RegMode;
       {!r && !mutation.isPending && (
         <EmptyState title="Monte Carlo Regression" hint={`Set a benchmark and strategy parameters, then run ${nSims.toLocaleString()} simulated futures.`}
           kpis={['Mean Alpha', 'Mean Beta', 'Mean R²', 'Paths']}
-          preview="chart" previewLabel="Alpha Distribution" />
+          preview="chart" previewLabel="Alpha Distribution" action="Run Simulation" />
       )}
     </ToolShell>
   )

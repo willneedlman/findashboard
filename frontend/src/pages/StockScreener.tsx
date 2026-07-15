@@ -517,6 +517,7 @@ export default function StockScreener() {
               <div style={{ padding: 24 }}><LoadingState label="Screening" /></div>
             ) : !data ? (
               <div style={{ padding: 24 }}><EmptyState title="Stock Screener" hint="Pick a screen from the library or set filters, then run the screen."
+                action="Run"
                 kpis={['Matches', 'Avg P/E', 'Median Growth', 'Avg Margin', 'Market Cap']}
                 preview="table" previewLabel="Screen Results" columns={['Company', 'Sector', 'P/E', 'Growth']} /></div>
             ) : (

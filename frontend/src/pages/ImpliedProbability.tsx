@@ -294,6 +294,7 @@ export function ImpliedProbabilityContent() {
 
           {!data && !mutError && !isPending && (
             <EmptyState title="Implied Probability" hint="Enter a ticker and expiry, then press Generate."
+              action="↓ Generate"
               keys={['Enter']} kpis={['Expected Move', 'P(Up)', 'P(Down)', 'ATM IV', 'Days']}
               preview="chart" previewLabel="Implied Distribution" />
           )}

@@ -146,9 +146,9 @@ export function CreditDelinquenciesContent() {
   return <div style={{ width: '100%' }}>
     <PageHeader title="Credit Stress" actions={data?.as_of ? <div style={{ display: 'flex', gap: 10, fontFamily: T.mono, fontSize: 8.5, color: T.muted }}><span style={{ color: T.pos }}>{data.source}</span><span>latest observation {data.as_of} · {ageLabel(data.as_of)}</span></div> : undefined} />
 
-    {isLoading && <EmptyState title="Loading Credit Stress" hint="Assembling financial stress, lending standards, delinquency, and charge-off observations." kpis={['Financial Stress', 'Financial Conditions', 'C&I Standards', 'Card Standards']} preview="chart" previewLabel="Credit Conditions" />}
-    {isError && <EmptyState title="Credit Stress Unavailable" hint="Federal Reserve series could not be reached. No modeled or simulated fallback is shown." kpis={['Financial Stress', 'Financial Conditions', 'C&I Standards', 'Card Standards']} preview="chart" previewLabel="Credit Conditions" />}
-    {data && !data.available && <EmptyState title="Credit Stress Unavailable" hint="A FRED API key is required to load the observed Federal Reserve series." kpis={['Financial Stress', 'Financial Conditions', 'C&I Standards', 'Card Standards']} preview="chart" previewLabel="Credit Conditions" />}
+    {isLoading && <EmptyState title="Loading Credit Stress" hint="Assembling financial stress, lending standards, delinquency, and charge-off observations." variant="loading" />}
+    {isError && <EmptyState title="Credit Stress Unavailable" hint="Federal Reserve series could not be reached. No modeled or simulated fallback is shown." variant="unavailable" />}
+    {data && !data.available && <EmptyState title="Credit Stress Unavailable" hint="A FRED API key is required to load the observed Federal Reserve series." variant="unavailable" />}
 
     {data?.available && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {!!indicators.length && <section style={PANEL}>

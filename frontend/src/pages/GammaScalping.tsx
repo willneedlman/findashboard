@@ -560,6 +560,7 @@ export function GammaScalpingContent() {
             <EmptyState
               title="No simulation run yet"
               hint="Configure position parameters in the sidebar and click Run Simulation."
+              action="Run Simulation"
             />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>

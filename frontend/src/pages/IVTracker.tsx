@@ -626,7 +626,7 @@ export function IVTrackerContent() {
         {!data && !loading && (
           <EmptyState title="Implied Volatility Tracker" hint="Enter a ticker, select an expiry and strike, then load its IV history."
             keys={['Enter']} kpis={['IV Rank', 'IV Percentile', 'ATM IV', 'Implied Move', 'Open Interest']}
-            preview="chart" previewLabel="IV History" />
+            preview="chart" previewLabel="IV History" action="LOAD" />
         )}
 
         {loading && (

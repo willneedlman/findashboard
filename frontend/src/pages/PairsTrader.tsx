@@ -128,7 +128,7 @@ export default function PairsTrader() {
           : m.data ? <Cockpit d={m.data} />
           : <EmptyState title="Pairs Trader" hint="Enter a pair or pick a preset to test cointegration, mean reversion and z-score entries."
             keys={['Cointegration', 'Half-life', 'Z-score backtest']} kpis={['Cointegration', 'Half-life', 'Z-Score', 'Sharpe']}
-            preview="chart" previewLabel="Spread Z-Score" />}
+            preview="chart" previewLabel="Spread Z-Score" action="Test Pair" />}
       </SidebarLayout>
     </PageWrapper>
   )

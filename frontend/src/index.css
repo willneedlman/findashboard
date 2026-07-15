@@ -742,3 +742,7 @@ textarea:focus:not(:focus-visible) {
 @media (prefers-reduced-motion: reduce) {
   [style*="at-choke-pulse"] { animation: none !important; }
 }
+
+/* EmptyState loading variant: indeterminate sliding fill. */
+@keyframes es-load-slide { 0% { transform: translateX(-100%) } 100% { transform: translateX(275%) } }
+@media (prefers-reduced-motion: reduce) { .es-load-fill { animation: none !important; opacity: 0.6 } }

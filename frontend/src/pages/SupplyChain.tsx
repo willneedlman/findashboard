@@ -849,10 +849,7 @@ export function SupplyChainContent() {
           <EmptyState
             title="Loading Company Profile"
             hint="Assembling financials, revenue mix, ownership, and market performance."
-            kpis={['Price', 'Market Cap', 'P/E', 'Rev Growth', 'Employees']}
-            preview="table"
-            previewLabel="Revenue Profile"
-            columns={['Segment', 'Revenue', 'Share', 'YoY']}
+            variant="loading"
           />
         )}
 
@@ -867,6 +864,7 @@ export function SupplyChainContent() {
               preview="table"
               previewLabel="Revenue Profile"
               columns={['Segment', 'Revenue', 'Share', 'YoY']}
+              action="Fetch"
             />
           </>
         )}

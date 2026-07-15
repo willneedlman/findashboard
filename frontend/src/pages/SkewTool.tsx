@@ -151,10 +151,9 @@ export function SkewToolContent() {
         </RailSection>
       }>
         {!data && !isPending && <EmptyState title="Volatility Skew" hint="Enter a ticker and press Generate. Reads the IV skew across strikes, term structure, and crash-fear tails."
-          keys={['Enter']} kpis={['ATM IV', '25d Skew', 'Term Slope', 'Put Skew', 'Call Skew']}
-          preview="chart" previewLabel="IV Skew by Strike" />}
-        {isPending && <EmptyState title="Loading skew surface…" hint="Solving the IV skew across expiries." />}
-        {error && !isPending && <EmptyState title="No skew data" hint="Insufficient options data for this ticker." />}
+          keys={['Enter']} action="Generate" />}
+        {isPending && <EmptyState title="Loading skew surface…" hint="Solving the IV skew across expiries." variant="loading" />}
+        {error && !isPending && <EmptyState title="No skew data" hint="Insufficient options data for this ticker." variant="unavailable" onRetry={refetch} />}
         {data && sel && (() => {
           const em = expectedMove(sel.atm_iv, sel.dte, data.spot)
           const maxDte = Math.max(...data.term_structure.map(t => t.dte))

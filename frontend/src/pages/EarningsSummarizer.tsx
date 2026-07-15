@@ -459,6 +459,7 @@ export default function EarningsSummarizer() {
 
           {!inProgress && streamedResults.length === 0 && !error && (
             <EmptyState title="Earnings Notes" hint="Add tickers, then analyze their latest filings and earnings commentary."
+              action="Analyze"
               kpis={['Filing', 'Key Metric', 'Guidance', 'Tone']}
               preview="table" previewLabel="Earnings Notes" columns={['Ticker', 'Filing', 'Key Read', 'Tone']} />
           )}

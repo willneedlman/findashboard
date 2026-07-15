@@ -260,6 +260,7 @@ export default function CorrelationAnalysis() {
 
       {!r && !mutation.isPending && (
         <EmptyState title="Correlation" hint="Add two or more assets, then run the correlation analysis."
+          action="Run Correlation"
           keys={['Enter']} kpis={['Avg |Corr|', 'Strongest Pair', 'Most Negative', 'Observations']}
           preview="table" previewLabel="Correlation Matrix" columns={['Asset Pair', 'Correlation', 'Beta', 'R²']} />
       )}

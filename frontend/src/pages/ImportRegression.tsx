@@ -214,7 +214,7 @@ export default function ImportRegression({ mode, setMode }: { mode: RegMode; set
       {!r && !mutation.isPending && (
         <EmptyState title="Imported Regression" hint="Select a portfolio or saved strategy, then regress its realized returns against the market."
           kpis={['Beta', 'Alpha', 'R²', 'Observations']}
-          preview="chart" previewLabel="Returns vs Market" />
+          preview="chart" previewLabel="Returns vs Market" action="Regress vs Market" />
       )}
     </ToolShell>
   )

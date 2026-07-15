@@ -231,6 +231,7 @@ export function DividendDiscountContent() {
       {!data && !error && (
         <EmptyState title="Dividend Discount Model"
           hint="Value a dividend-paying stock as the present value of its future dividends. Enter a ticker and Load dividend."
+          action="Load dividend"
           keys={['Enter']} kpis={['Fair Value', 'Upside', 'Cost of Equity', 'Growth', 'Yield']}
           preview="chart" previewLabel="Discounted Dividend Stream" />
       )}

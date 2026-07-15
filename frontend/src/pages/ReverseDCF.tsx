@@ -223,7 +223,7 @@ export function ReverseDCFContent() {
         <EmptyState title="Reverse DCF"
           hint="A reverse DCF flips a normal DCF around. Instead of guessing growth to get a value, it solves for the revenue growth rate the current price already implies, holding margins fixed. Enter a ticker and Load & Solve."
           keys={['Enter']} kpis={['Implied Growth', 'Market Price', 'WACC', 'Op Margin', 'Years']}
-          preview="chart" previewLabel="Implied Revenue Path" />
+          preview="chart" previewLabel="Implied Revenue Path" action="Load & Solve" />
       )}
 
       {data && implied == null && (

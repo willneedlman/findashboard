@@ -318,8 +318,7 @@ export function PortfolioTab() {
       <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
         {!data && !isPending && (
           <EmptyState title="Portfolio Backtester" hint="Set tickers, weights and a date range, then run the backtest."
-            kpis={['Total Return', 'Volatility', 'Sharpe', 'Max Drawdown']}
-            preview="chart" previewLabel="Portfolio Equity Curve" />
+            action="Run Portfolio Engine" />
         )}
 
         {data && (
@@ -919,9 +918,7 @@ export function StrategyTab() {
         <EmptyState
           title="No backtest results yet"
           hint="Configure a strategy in the sidebar and click Run Backtest."
-          kpis={['Total Return', 'Win Rate', 'Sharpe', 'Max Drawdown']}
-          preview="chart"
-          previewLabel="Strategy Equity Curve"
+          action="Run Backtest"
         />
       )}
 

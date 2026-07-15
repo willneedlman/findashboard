@@ -171,9 +171,9 @@ function HousingMarketContent() {
       <span>{data.asof ? `${data.asof} · ${ageLabel(data.asof)}` : 'date unavailable'}</span>
     </div>} />
 
-    {isLoading && <EmptyState title="Loading Housing Market" hint="Assembling prices, affordability, mortgage rates, inventory, rentals, and construction activity." kpis={['Median Price', '30Y Fixed', 'Affordability', 'Supply', 'Median Rent']} preview="chart" previewLabel="Housing Pulse" />}
-    {isError && <EmptyState title="Housing Data Unavailable" hint="The free FRED and RentHub sources could not be reached. No fallback or simulated values are shown." kpis={['Median Price', '30Y Fixed', 'Affordability', 'Supply', 'Median Rent']} preview="chart" previewLabel="Housing Pulse" />}
-    {!isLoading && !isError && !national && <EmptyState title="Housing Data Unavailable" hint="FRED has not returned the national series required to calculate the housing pulse." kpis={['Median Price', '30Y Fixed', 'Affordability', 'Supply', 'Median Rent']} preview="chart" previewLabel="Housing Pulse" />}
+    {isLoading && <EmptyState title="Loading Housing Market" hint="Assembling prices, affordability, mortgage rates, inventory, rentals, and construction activity." variant="loading" />}
+    {isError && <EmptyState title="Housing Data Unavailable" hint="The free FRED and RentHub sources could not be reached. No fallback or simulated values are shown." variant="unavailable" />}
+    {!isLoading && !isError && !national && <EmptyState title="Housing Data Unavailable" hint="FRED has not returned the national series required to calculate the housing pulse." variant="unavailable" />}
 
     {national && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <section style={PANEL}>

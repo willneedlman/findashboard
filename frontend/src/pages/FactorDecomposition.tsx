@@ -108,7 +108,7 @@ export default function FactorDecomposition() {
           : m.data ? <Results key={m.data.mode} d={m.data} />
           : <EmptyState title="Factor Decomposition" hint="Load a saved book or enter weights to measure factor exposure and beta drift."
             keys={['Market', 'Rates', 'Credit', 'Oil', 'Dollar']} kpis={['Market', 'Rates', 'Credit', 'Oil', 'Dollar']}
-            preview="chart" previewLabel="Factor Exposure" />}
+            preview="chart" previewLabel="Factor Exposure" action="Decompose" />}
       </SidebarLayout>
     </PageWrapper>
   )

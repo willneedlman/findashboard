@@ -82,7 +82,7 @@ export function CurrencyMatrixContent() {
 
   if (isLoading) return <LoadingState label="Loading FX" />
   if (error) return <ErrorState title="FX feed failed" message="Could not load the currency matrix." onRetry={() => refetch()} />
-  if (!data || !data.rows.length) return <EmptyState title="Currency Matrix" hint="No FX data available right now." />
+  if (!data || !data.rows.length) return <EmptyState title="Currency Matrix" hint="No FX data available right now." variant="unavailable" onRetry={refetch} />
 
   const { currencies, matrix, rows } = data
   const asOf = new Date(data.as_of * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })

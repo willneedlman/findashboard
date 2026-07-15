@@ -213,7 +213,7 @@ export function OptionsChainScannerContent() {
           {!data && !isPending && (
             <EmptyState title="Options Chain Scanner" hint="Enter a ticker and expiry, then press Load Chain."
               keys={['Enter']} kpis={['Spot', 'ATM IV', 'Put/Call', 'Max Pain', 'Total OI']}
-              preview="table" previewLabel="Options Chain" columns={['Strike', 'Bid', 'Ask', 'IV', 'Open Int']} />
+              preview="table" previewLabel="Options Chain" columns={['Strike', 'Bid', 'Ask', 'IV', 'Open Int']} action="Load Chain" />
           )}
         </SidebarLayout>
   )

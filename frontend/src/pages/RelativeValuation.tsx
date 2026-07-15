@@ -480,10 +480,7 @@ export function RelativeValuationContent() {
           <EmptyState
             title="Loading Peer Comparison"
             hint="Building the peer set and normalizing valuation, growth, and analyst data."
-            kpis={['Target', 'Peer Median', 'Sector', 'Analyst View', 'Upside']}
-            preview="table"
-            previewLabel="Valuation Comparison"
-            columns={['Company', 'P/E', 'EV/EBITDA', 'P/S', 'ROE']}
+            variant="loading"
           />
         )}
 
@@ -498,6 +495,7 @@ export function RelativeValuationContent() {
               preview="table"
               previewLabel="Valuation Comparison"
               columns={['Company', 'P/E', 'EV/EBITDA', 'P/S', 'ROE']}
+              action="FETCH"
             />
           </>
         )}

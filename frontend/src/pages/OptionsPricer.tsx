@@ -459,8 +459,7 @@ export function OptionsPricerContent() {
 
           {mode === 'single' && !priceData && !pricePending && (
             <EmptyState title="Options Pricer" hint="Set your contract assumptions or load a listed option, then calculate its premium and Greeks."
-              kpis={['Premium', 'Delta', 'Gamma', 'Theta', 'Vega']}
-              preview="chart" previewLabel="Greeks by Spot" />
+              action="Calculate" />
           )}
 
           {mode === 'single' && priceData && (<>
@@ -542,8 +541,7 @@ export function OptionsPricerContent() {
 
           {mode === 'multi' && !multiData && !multiPending && (
             <EmptyState title="Multi-Leg Options Pricer" hint="Set the strategy legs, then calculate the combined premium, Greeks and payoff."
-              kpis={['Net Premium', 'Delta', 'Gamma', 'Theta', 'Vega']}
-              preview="chart" previewLabel="Strategy Payoff" />
+              action="Calculate" />
           )}
 
         </SidebarLayout>

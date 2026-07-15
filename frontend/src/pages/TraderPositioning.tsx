@@ -68,7 +68,7 @@ export default function TraderPositioning() {
       </div>
 
       {isLoading && <div style={{ ...panel, padding: 36, fontFamily: T.mono, fontSize: 10, color: T.muted, textAlign: 'center' }}>Loading CFTC positioning…</div>}
-      {(error || (data && !data.available)) && <EmptyState title="CFTC positioning unavailable" hint="The weekly COT report could not be loaded. Try again after the next release." />}
+      {(error || (data && !data.available)) && <EmptyState title="CFTC positioning unavailable" hint="The weekly COT report could not be loaded. Try again after the next release." variant="unavailable" />}
       {selected && <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(260px, 0.31fr) minmax(0, 0.69fr)', ...panel }}>
         <aside style={{ minWidth: 0, borderRight: isMobile ? 'none' : `1px solid ${T.border}`, borderBottom: isMobile ? `1px solid ${T.border}` : 'none' }}>
           <div style={{ padding: '12px 14px 10px', borderBottom: `1px solid ${T.border}` }}>

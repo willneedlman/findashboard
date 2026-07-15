@@ -198,9 +198,8 @@ export function EtfXrayContent() {
       </div>
     </>}>
       {!data && !isPending && <EmptyState title="ETF Analyzer" hint="Pick one or more ETFs to inspect holdings, overlap and concentration."
-        kpis={['Holdings', 'Top 10 Weight', 'Overlap', 'Concentration']}
-        preview="table" previewLabel="Holdings Look-Through" columns={['Holding', 'Weight', 'Funds', 'Overlap']} />}
-      {isPending && <EmptyState title="Reading holdings…" hint="Pulling each fund's holdings." />}
+        action="Run Analysis" />}
+      {isPending && <EmptyState title="Reading holdings…" hint="Pulling each fund's holdings." variant="loading" />}
 
       {data && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
