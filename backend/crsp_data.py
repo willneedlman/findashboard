@@ -62,28 +62,45 @@ def point_in_time_members(as_of: str) -> list[dict]:
         conn.close()
 
 
-def daily_returns(permnos: list[str], start: str, end: str) -> pd.DataFrame:
-    """Wide date x permno frame of CRSP daily simple returns (already delisting-
-    adjusted). A permno's column simply stops on its last observed date — the
-    caller treats that as the position being fully liquidated (its delisting
-    return was the last value in the series)."""
+def portfolio_returns(permnos: list[str], start: str, end: str) -> pd.Series:
+    """Equal-weighted daily return across the given permnos — a delisted name's
+    weight silently redistributes across the remaining survivors from its last
+    observed date onward.
+
+    Aggregated directly in SQL (GROUP BY ... AVG) rather than pulled into a wide
+    date x permno pandas pivot table: a 500+ name universe pivoted wide
+    materializes a large dense matrix (every name x every trading day) just to
+    immediately collapse it back to a single per-day mean, which OOM'd the 1GB
+    prod VM under concurrent load. SQL's AVG() already skips NULLs the same way
+    pandas' skipna mean does, so this returns the identical series while only
+    ever holding one row per trading day in memory."""
     if not permnos:
-        return pd.DataFrame()
+        return pd.Series(dtype=float)
     conn = _conn()
     try:
         placeholders = ",".join("?" * len(permnos))
+        # A small number of (permno, date) pairs are duplicated in the WRDS CIZ
+        # export (same value repeated) — collapse to one row per permno-day
+        # BEFORE averaging across permnos, or a duplicated row silently double-
+        # weights that name on that day. SQLite streams both aggregation stages,
+        # so this still never materializes more than the final ~N-trading-days
+        # result set in Python.
         df = pd.read_sql_query(
-            f"SELECT permno, date, ret FROM crsp_daily "
-            f"WHERE permno IN ({placeholders}) AND date >= ? AND date <= ?",
+            f"""
+            SELECT date, AVG(ret) AS ret FROM (
+                SELECT permno, date, AVG(ret) AS ret FROM crsp_daily
+                WHERE permno IN ({placeholders}) AND date >= ? AND date <= ? AND ret IS NOT NULL
+                GROUP BY permno, date
+            ) per_name
+            GROUP BY date ORDER BY date
+            """,
             conn, params=(*permnos, start, end),
         )
     finally:
         conn.close()
     if df.empty:
-        return pd.DataFrame()
-    wide = df.pivot_table(index="date", columns="permno", values="ret")
-    wide.index = pd.to_datetime(wide.index)
-    return wide.sort_index()
+        return pd.Series(dtype=float)
+    return pd.Series(df["ret"].to_numpy(), index=pd.to_datetime(df["date"]))
 
 
 def delisting_summary(permnos: list[str], start: str, end: str) -> list[dict]:

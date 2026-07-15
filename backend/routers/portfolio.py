@@ -160,18 +160,18 @@ def _crsp_pit_returns(start: str, end: str) -> tuple[pd.Series, list[dict], int]
     """S&P 500 point-in-time daily return series: constituents as of `start`,
     equal-weighted, a delisted name's realized return (already embedded in
     crsp_daily.ret) carries through and its weight silently redistributes across
-    the remaining survivors from then on — pandas' skipna mean does that for
-    free, no rebalance bookkeeping needed."""
+    the remaining survivors from then on — the SQL-side AVG() in
+    crsp_data.portfolio_returns does that for free, no rebalance bookkeeping
+    needed."""
     if not crsp_data.available():
         raise HTTPException(503, "CRSP data not loaded — data/crsp.db is missing")
     members = crsp_data.point_in_time_members(start)
     if not members:
         raise HTTPException(404, f"No CRSP S&P 500 membership data as of {start}")
     permnos = [m["permno"] for m in members]
-    wide = crsp_data.daily_returns(permnos, start, end)
-    if wide.empty:
+    port = crsp_data.portfolio_returns(permnos, start, end)
+    if port.empty:
         raise HTTPException(404, "No CRSP price data for the selected window")
-    port = wide.mean(axis=1, skipna=True)
 
     delistings = crsp_data.delisting_summary(permnos, start, end)
     tickers = crsp_data.tickers_for_permnos([d["permno"] for d in delistings])
