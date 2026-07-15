@@ -138,7 +138,7 @@ _NIKKEI_FINANCIALS = {
     "8253.T", "8591.T", "8697.T", "8601.T", "8604.T", "8630.T", "8725.T", "8750.T", "8766.T", "8795.T",
 }
 _INTL_SECTOR_OVERRIDES = {ticker: "Financial Services" for ticker in _NIKKEI_FINANCIALS}
-_INTL_SNAPSHOT_CACHE = "screener:intlsnap:v3"
+_INTL_SNAPSHOT_CACHE = "screener:intlsnap:v4"
 
 # Deterministic listing metadata keeps a valid bundled name visible in region and
 # exchange filters when a quote-provider profile is blank or rate-limited.
@@ -909,7 +909,7 @@ def _compute_history_batch(tickers: list[str]) -> dict:
 def run_screen(req: ScreenRequest):
     import json, hashlib
     # Bump CACHE_VER whenever screener logic changes to invalidate stale disk-cached results
-    CACHE_VER = "v19"
+    CACHE_VER = "v20"
     cache_key = CACHE_VER + hashlib.md5(json.dumps(req.model_dump(), sort_keys=True).encode()).hexdigest()
     with _lock:
         if cache_key in _screen_cache:
