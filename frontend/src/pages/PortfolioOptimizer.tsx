@@ -11,6 +11,7 @@ import Provenance from '../components/Provenance'
 import PortfolioIO, { type PortfolioAsset } from '../components/PortfolioIO'
 import PMImportPicker from '../components/PMImportPicker'
 import { type ImportResult } from '../lib/pmImport'
+import { Check, ChevronDown, ChevronUp, Play, X } from 'lucide-react'
 
 const GOLD = 'var(--theme-primary, #c9a84c)'
 const BLUE = 'var(--theme-tertiary, #60a5fa)'
@@ -137,6 +138,8 @@ export function PortfolioOptimizerContent() {
   const [returnModel, setReturnModel] = useState<'historical' | 'capm'>('historical')
   const [marketReturn, setMarketReturn] = useState('10')
   const [selected, setSelected] = useState('max_sharpe')
+  const [controlsCollapsed, setControlsCollapsed] = useState(false)
+  const [series, setSeries] = useState({ frontier: true, cal: true, indifference: true, holdings: true, portfolios: true, mix: false })
   const [asset, setAsset] = useState<AssetRow | null>(null)   // clicked frontier dot → popup
   // Per-ticker weights (%) define the CURRENT portfolio, plotted against the optimum.
   const [weights, setWeights] = useState<Record<string, number>>({})
@@ -234,7 +237,7 @@ export function PortfolioOptimizerContent() {
   }, [data, portScatter, currentScatter, capitalAllocation, completePoint])
 
   return (
-    <SidebarLayout sidebarWidth={258} sidebarTitle="" sidebar={<div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <SidebarLayout sidebarWidth={0} sidebarTitle="" sidebar={<div style={{ display: 'none', padding: 14, flexDirection: 'column', gap: 12 }}>
       <div>
         <label style={lbl}>Tickers · {tickers.length}</label>
         <TickerTagInput tickers={tickers} onChange={onTickers} placeholder="Add ticker…" maxTags={20} />
@@ -353,28 +356,63 @@ export function PortfolioOptimizerContent() {
       {tickers.length < 2 && <div style={{ fontSize: 9, color: FAINT, fontFamily: SANS, textAlign: 'center' }}>Enter at least 2 tickers.</div>}
       {isError && <div style={{ fontSize: 9, color: NEG, fontFamily: SANS, textAlign: 'center', lineHeight: 1.4 }}>{errMsg ?? 'Optimization failed'}</div>}
     </div>}>
+      <div style={{ width: '100%', maxWidth: 1320, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '11px 16px', background: SURFACE, border: `1px solid ${BORDER}`, boxShadow: '0 1px 4px rgba(0,0,0,0.18)' }}>
+          <span style={{ ...lbl, margin: 0, color: GOLD }}>Optimizer</span>
+          <span style={{ width: 1, height: 16, background: BORDER }} />
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+            {portList.map(p => <button key={p.key} onClick={() => setSelected(p.key)} title={p.blurb} style={{ border: `1px solid ${selected === p.key ? GOLD : 'transparent'}`, background: selected === p.key ? `color-mix(in srgb, ${GOLD} 15%, transparent)` : 'transparent', color: selected === p.key ? GOLD : p.key === 'current' ? NEG : SEC, cursor: 'pointer', fontFamily: MONO, fontSize: 10, fontWeight: 700, padding: '5px 8px' }}>{p.label}</button>)}
+          </div>
+          <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 10, color: FAINT }}>{lookback}Y · {returnModel === 'capm' ? 'CAPM' : 'Historical'} · rf {rf}%</span>
+          <PMImportPicker onImport={loadFromPM} style={{ ...inp, width: 'auto', minWidth: 190, padding: '7px 9px', cursor: 'pointer' }} />
+          <button onClick={() => mutate()} disabled={!canRun} style={{ display: 'flex', alignItems: 'center', gap: 6, background: GOLD, border: `1px solid ${GOLD}`, color: 'var(--theme-bg)', fontFamily: SANS, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '8px 13px', cursor: canRun ? 'pointer' : 'default', opacity: canRun ? 1 : .5 }}><Play size={11} fill="currentColor" />{isPending ? 'Optimizing' : 'Optimize'}</button>
+        </div>
+
+        <div style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', background: 'rgba(0,0,0,0.12)', borderBottom: `1px solid ${BORDER}`, flexWrap: 'wrap' }}>
+            <span style={{ ...lbl, margin: 0, color: GOLD }}>Portfolio Controls</span>
+            {Math.abs(totalW - 100) < .05 ? <span style={{ fontFamily: MONO, fontSize: 10, color: POS, fontWeight: 700 }}>100%</span> : <button onClick={evenWeights} style={{ background: 'none', border: 'none', color: NEG, cursor: 'pointer', fontFamily: MONO, fontSize: 10, fontWeight: 700, padding: 0 }}>{totalW.toFixed(0)}% → equal weight</button>}
+            {importMsg && <span style={{ fontFamily: MONO, fontSize: 9, color: importMsg.startsWith('Loaded') ? POS : FAINT }}>{importMsg}</span>}
+            <button onClick={() => setControlsCollapsed(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', color: SEC, cursor: 'pointer', fontFamily: MONO, fontSize: 10, padding: 0 }}>{controlsCollapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}{controlsCollapsed ? 'Expand' : 'Collapse'}</button>
+            <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 9, color: FAINT }}>{data ? `${data.days} days · ${data.span.start} → ${data.span.end}` : 'Set the basket, assumptions, then optimize.'}</span>
+          </div>
+          <div style={{ display: 'flex', height: 4, background: 'rgba(255,255,255,.05)' }}>{tickers.map((t, i) => <div key={t} style={{ flex: Math.max(weights[t] || 1, 1), background: i % 2 ? `color-mix(in srgb, ${GOLD} 70%, #000)` : GOLD }} />)}</div>
+          {controlsCollapsed ? <div style={{ padding: '11px 16px', color: SEC, fontFamily: MONO, fontSize: 10 }}>{tickers.join(' · ')} · {lookback}Y · {constraintMode.replace('_', ' ')}</div> : <div style={{ display: 'flex', flexWrap: 'wrap' }}>
+            <div style={{ flex: '1.4 1 420px', minWidth: 0, padding: '14px 16px', borderRight: `1px solid ${BORDER}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}><span style={lbl}>Holdings · Constraint</span><span style={{ fontFamily: MONO, fontSize: 10, color: FAINT }}>{tickers.length} assets</span></div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(150px, 100%), 1fr))', gap: 8 }}>
+                {tickers.map((t, i) => <div key={t} style={{ background: 'color-mix(in srgb, var(--theme-surface, #0d1826) 100%, #000 8%)', border: `1px solid ${BORDER}`, padding: '8px 9px', boxShadow: '0 1px 5px rgba(0,0,0,.35)' }}>
+                  <div style={{ display: 'flex', gap: 4 }}><input value={t} onChange={e => onTickers(tickers.map(x => x === t ? e.target.value.toUpperCase() : x))} style={{ ...inp, padding: '3px 6px', fontWeight: 700 }} /><button onClick={() => onTickers(tickers.filter(x => x !== t))} aria-label={`Remove ${t}`} style={{ background: 'none', border: 'none', color: FAINT, cursor: 'pointer', padding: 0 }}><X size={14} /></button></div>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 6 }}><input type="number" value={weights[t] || ''} onChange={e => setWeight(t, parseFloat(e.target.value) || 0)} style={{ ...inp, width: 52, padding: '3px 4px', color: GOLD, textAlign: 'center', fontWeight: 700 }} /><div style={{ flex: 1, height: 4, background: 'rgba(255,255,255,.08)' }}><div style={{ width: `${hasWeights ? Math.min(100, ((weights[t] || 0) / totalW) * 100) : 0}%`, height: '100%', background: i % 2 ? `color-mix(in srgb, ${GOLD} 70%, #000)` : GOLD }} /></div></div>
+                  <select value={constraintMode} onChange={e => setConstraintMode(e.target.value as ConstraintMode)} style={{ ...inp, marginTop: 7, padding: '4px 6px', cursor: 'pointer' }}><option value="long_only">No bound, 0 to 100%</option><option value="concentrated">Long-only cap 10%</option><option value="custom">Custom range</option><option value="unconstrained">Shorts allowed</option></select>
+                </div>)}
+                <button onClick={() => onTickers([...tickers, ''])} style={{ minHeight: 100, background: 'none', border: `1px dashed ${BORDER}`, color: SEC, cursor: 'pointer', fontFamily: SANS, fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase' }}>+ Add asset</button>
+              </div>
+            </div>
+            <div style={{ flex: '1 1 300px', padding: '14px 16px' }}>
+              <span style={lbl}>Parameters</span>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <label style={lbl}>Lookback<select value={lookback} onChange={e => setLookback(+e.target.value)} style={inp}>{LOOKBACKS.map(l => <option key={l.years} value={l.years}>{l.label}</option>)}</select></label>
+                <label style={lbl}>Expected returns<select value={returnModel} onChange={e => setReturnModel(e.target.value as 'historical' | 'capm')} style={inp}><option value="historical">Historical</option><option value="capm">CAPM</option></select></label>
+                <label style={lbl}>Risk-free %<input value={rf} onChange={e => setRf(e.target.value)} type="number" style={inp} /></label>
+                <label style={lbl}>Risk tolerance<select value={riskPreset} onChange={e => setRiskPreset(e.target.value)} style={inp}>{RISK_PRESETS.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}</select></label>
+                {returnModel === 'capm' && <label style={lbl}>Market return %<input value={marketReturn} onChange={e => setMarketReturn(e.target.value)} type="number" style={inp} /></label>}
+              </div>
+            </div>
+          </div>}
+        </div>
+
       {!data && !isPending && <EmptyState title="Portfolio Optimizer" hint="Enter a basket of tickers, then compare optimized allocations and portfolio risk."
         kpis={['Return', 'Volatility', 'Sharpe', 'VaR', 'CVaR']}
         preview="chart" previewLabel="Efficient Frontier" />}
       {isPending && <EmptyState title="Optimizing…" hint="Fetching aligned history and solving the frontier." />}
 
       {data && sel && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-              {portList.map(p => (
-                <button key={p.key} onClick={() => setSelected(p.key)} title={p.blurb} style={{ background: selected === p.key ? `color-mix(in srgb, ${GOLD} 16%, transparent)` : 'transparent', border: `1px solid ${selected === p.key ? GOLD : p.key === 'current' ? NEG : BORDER}`, cursor: 'pointer', color: selected === p.key ? GOLD : p.key === 'current' ? NEG : SEC, fontFamily: MONO, fontSize: 10, fontWeight: 700, padding: '5px 10px' }}>{p.label}</button>
-              ))}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              {data.dropped && data.dropped.length > 0 && (
-                <span title="Dropped from the optimization — far less history than the rest, which would collapse the shared window and distort annualized figures." style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: NEG, cursor: 'help' }}>
-                  dropped (short history): {data.dropped.join(', ')}
-                </span>
-              )}
-              <span style={{ fontFamily: MONO, fontSize: 9, color: FAINT }}>{data.days} days · {data.span.start} → {data.span.end}</span>
-              <Provenance kind="live" source="yfinance · daily" />
-            </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0, background: SURFACE, border: `1px solid ${BORDER}`, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', minHeight: 30, padding: '0 12px', gap: 10, borderBottom: `1px solid ${BORDER}`, flexWrap: 'wrap' }}>
+            {data.dropped && data.dropped.length > 0 && <span title="Dropped from the optimization because the available history was too short." style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: NEG }}>dropped: {data.dropped.join(', ')}</span>}
+            <span style={{ fontFamily: MONO, fontSize: 9, color: FAINT }}>{data.days} days · {data.span.start} → {data.span.end}</span>
+            <Provenance kind="live" source="yfinance · daily" />
           </div>
 
           {/* Selected-portfolio KPI strip */}
@@ -387,9 +425,9 @@ export function PortfolioOptimizerContent() {
             <KpiCell grow label="Max Drawdown" value={`${sel.max_drawdown.toFixed(1)}%`} valueSize={22} color={NEG} sub="over window" />
           </div>
 
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'stretch' }}>
+          <div style={{ display: 'flex', gap: 0, flexWrap: 'wrap', alignItems: 'stretch', borderTop: `1px solid ${BORDER}` }}>
             {/* Efficient frontier */}
-            <div style={{ flex: '1.3 1 440px', background: SURFACE, border: `1px solid ${BORDER}`, minWidth: 0 }}>
+            <div style={{ flex: '1.3 1 440px', background: SURFACE, minWidth: 0 }}>
               <div style={{ padding: '6px 12px', borderBottom: `1px solid ${BORDER}`, fontFamily: SANS, fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD }}>Efficient Frontier</div>
               <div style={{ padding: '10px 8px 4px' }}>
                 <ResponsiveContainer width="100%" height={300}>
@@ -399,15 +437,15 @@ export function PortfolioOptimizerContent() {
                     <YAxis type="number" dataKey="return" name="Return" domain={yDom} allowDataOverflow tick={{ fontFamily: MONO, fontSize: 9, fill: SEC }} tickLine={false} axisLine={{ stroke: BORDER }} width={40} tickFormatter={(v: number) => `${v.toFixed(0)}%`} label={{ value: 'Return', angle: -90, position: 'insideLeft', fontFamily: SANS, fontSize: 9, fill: FAINT }} />
                     <ZAxis range={[60, 60]} />
                     <Tooltip cursor={{ strokeDasharray: '3 3' }} content={<ChartTip />} />
-                    <Scatter name="Frontier" data={data.frontier} line={{ stroke: FAINT, strokeWidth: 1.5 }} fill="transparent" />
-                    {capitalAllocation && <Scatter name="Capital Allocation Line" data={capitalAllocation.calLine} line={{ stroke: BLUE, strokeWidth: 1.5, strokeDasharray: '5 3' }} fill="transparent" />}
-                    {capitalAllocation && <Scatter name="Indifference Curve" data={capitalAllocation.indifferenceCurve} line={{ stroke: PURPLE, strokeWidth: 1.2, strokeDasharray: '2 3' }} fill="transparent" />}
-                    <Scatter name="Assets" data={data.assets} fill={BLUE} shape="circle" cursor="pointer" onClick={(pt: unknown) => { const p = (pt as { payload?: AssetRow })?.payload ?? (pt as AssetRow); if (p?.ticker) setAsset(p) }} />
-                    <Scatter name="Portfolios" data={portScatter} fill={GOLD} shape="diamond">
+                    {series.frontier && <Scatter name="Frontier" data={data.frontier} line={{ stroke: FAINT, strokeWidth: 1.5 }} fill="transparent" />}
+                    {series.cal && capitalAllocation && <Scatter name="Capital Allocation Line" data={capitalAllocation.calLine} line={{ stroke: BLUE, strokeWidth: 1.5, strokeDasharray: '5 3' }} fill="transparent" />}
+                    {series.indifference && capitalAllocation && <Scatter name="Indifference Curve" data={capitalAllocation.indifferenceCurve} line={{ stroke: PURPLE, strokeWidth: 1.2, strokeDasharray: '2 3' }} fill="transparent" />}
+                    {series.holdings && <Scatter name="Assets" data={data.assets} fill={BLUE} shape="circle" cursor="pointer" onClick={(pt: unknown) => { const p = (pt as { payload?: AssetRow })?.payload ?? (pt as AssetRow); if (p?.ticker) setAsset(p) }} />}
+                    {series.portfolios && <Scatter name="Portfolios" data={portScatter} fill={GOLD} shape="diamond">
                       {portScatter.map((p) => <Cell key={p.key} fill={p.key === selected ? GOLD : 'rgba(201,168,76,0.45)'} />)}
-                    </Scatter>
-                    {currentScatter.length > 0 && <Scatter name="Your Portfolio" data={currentScatter} fill={NEG} shape="star" />}
-                    {completePoint.length > 0 && <Scatter name="Your Mix" data={completePoint} fill={PURPLE} shape="triangle" />}
+                    </Scatter>}
+                    {series.portfolios && currentScatter.length > 0 && <Scatter name="Your Portfolio" data={currentScatter} fill={NEG} shape="star" />}
+                    {series.mix && completePoint.length > 0 && <Scatter name="Your Mix" data={completePoint} fill={PURPLE} shape="triangle" />}
                   </ScatterChart>
                 </ResponsiveContainer>
                 <div style={{ display: 'flex', gap: 10, padding: '4px 10px 8px', fontFamily: SANS, fontSize: 9, color: FAINT, flexWrap: 'wrap' }}>
@@ -419,9 +457,20 @@ export function PortfolioOptimizerContent() {
                   {currentScatter.length > 0 && <span><span style={{ color: NEG }}>★</span> your portfolio</span>}
                   {completePoint.length > 0 && <span><span style={{ color: PURPLE }}>▲</span> your mix</span>}
                 </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '8px 10px 9px', borderTop: `1px solid ${BORDER}`, flexWrap: 'wrap' }}>
+                  <span style={{ ...lbl, margin: '0 6px 0 0' }}>Series</span>
+                  {(Object.entries(series) as [keyof typeof series, boolean][]).map(([key, on]) => {
+                    const label = key === 'holdings' ? 'Assets' : key === 'indifference' ? 'Indifference' : key === 'cal' ? 'CAL' : key[0].toUpperCase() + key.slice(1)
+                    return <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 5, minHeight: 24, padding: '0 7px', background: on ? `color-mix(in srgb, ${GOLD} 9%, transparent)` : 'transparent', border: `1px solid ${on ? `color-mix(in srgb, ${GOLD} 34%, transparent)` : 'transparent'}`, color: on ? TEXT : SEC, cursor: 'pointer', fontFamily: MONO, fontSize: 9, fontWeight: 700 }}>
+                      <input aria-label={`Show ${label}`} type="checkbox" checked={on} onChange={() => setSeries(s => ({ ...s, [key]: !s[key] }))} style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }} />
+                      <span aria-hidden="true" style={{ width: 12, height: 12, display: 'grid', placeItems: 'center', background: on ? GOLD : 'transparent', border: `1px solid ${on ? GOLD : BORDER}`, color: 'var(--theme-bg, #101c2e)', flexShrink: 0 }}>{on && <Check size={10} strokeWidth={3} />}</span>
+                      {label}
+                    </label>
+                  })}
+                </div>
                 {capitalAllocation && (
-                  <div style={{ margin: '2px 10px 8px', padding: '9px 12px', border: `1px solid color-mix(in srgb, ${PURPLE} 40%, transparent)`, background: `color-mix(in srgb, ${PURPLE} 8%, transparent)` }}>
-                    <div style={{ fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: PURPLE, marginBottom: 4 }}>Your optimal mix · {RISK_PRESETS.find(p => p.key === riskPreset)?.label}</div>
+                  <div style={{ margin: '2px 10px 8px', padding: '9px 2px 2px', borderTop: `1px solid ${BORDER}` }}>
+                    <div style={{ fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: GOLD, marginBottom: 4 }}>Optimal mix · {RISK_PRESETS.find(p => p.key === riskPreset)?.label}</div>
                     <div style={{ fontFamily: MONO, fontSize: 12, color: TEXT }}>
                       {capitalAllocation.weightRiskFree < 0
                         ? <>{capitalAllocation.weightTangency.toFixed(0)}% Tangency Portfolio <span style={{ color: FAINT }}>(borrowing {Math.abs(capitalAllocation.weightRiskFree).toFixed(0)}% at the risk-free rate)</span></>
@@ -435,7 +484,7 @@ export function PortfolioOptimizerContent() {
             </div>
 
             {/* Weights + risk contribution for the selected portfolio */}
-            <div style={{ flex: '1 1 320px', background: SURFACE, border: `1px solid ${BORDER}`, minWidth: 0 }}>
+            <div style={{ flex: '1 1 320px', background: SURFACE, borderLeft: `1px solid ${BORDER}`, minWidth: 0 }}>
               <div style={{ padding: '6px 12px', borderBottom: `1px solid ${BORDER}`, display: 'flex', justifyContent: 'space-between', fontFamily: SANS, fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD }}>
                 <span>Allocation · {portList.find(p => p.key === selected)?.label}</span>
                 <span style={{ color: FAINT, letterSpacing: '0.04em' }}>weight · risk</span>
@@ -459,7 +508,7 @@ export function PortfolioOptimizerContent() {
           </div>
 
           {/* Portfolio comparison table */}
-          <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, overflowX: 'auto' }}>
+          <div style={{ background: SURFACE, borderTop: `1px solid ${BORDER}`, overflowX: 'auto' }}>
             <div style={{ padding: '6px 12px', borderBottom: `1px solid ${BORDER}`, fontFamily: SANS, fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD }}>Portfolios Compared</div>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: MONO, fontSize: 11 }}>
               <thead>
@@ -535,6 +584,7 @@ export function PortfolioOptimizerContent() {
           })()}
         </div>
       )}
+      </div>
     </SidebarLayout>
   )
 }

@@ -257,14 +257,14 @@ export default function Layout({ children }: LayoutProps) {
 
       <main id="main-content" className="flex-1 overflow-y-auto" style={{ background: 'var(--theme-bg, #0a1628)' }}>
         {location.pathname === '/dashboard' ? (
-          <div style={{ padding: '24px 24px 300px' }}>{children}</div>
+          <div style={{ padding: 24 }}>{children}</div>
         ) : location.pathname === '/app' ? (
           // Home is a full-bleed command surface: no max-width/padding here so the
           // ticker tape spans the whole main width; Home centers its own content.
           // The content region fills the viewport so the disclaimer footer only
           // appears on scroll (same rule for every branch below).
           <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
-            <div style={{ flex: 1, minHeight: '100vh' }}>{children}</div>
+            <div style={{ flex: 1, minHeight: 0 }}>{children}</div>
             <Footer />
           </div>
         ) : location.pathname === '/chart-studio' && collapsed ? (
@@ -274,13 +274,13 @@ export default function Layout({ children }: LayoutProps) {
         ) : location.pathname === '/flows-map' || location.pathname === '/chart-studio' ? (
           // Map cockpit and Chart Studio want the full main width: gutters waste chart area.
           <div className="px-4 py-4" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
-            <div style={{ flex: 1, minHeight: 'calc(100vh - 32px)' }}>{children}</div>
+            <div style={{ flex: 1, minHeight: 0 }}>{children}</div>
             <Footer />
           </div>
         ) : (
           // Tools own the page: full width with modest gutters, no centered max-width column.
           <div className="w-full px-5 2xl:px-8 py-5" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', boxSizing: 'border-box' }}>
-            <div style={{ flex: 1, minHeight: 'calc(100vh - 40px)' }}>{children}</div>
+            <div style={{ flex: 1, minHeight: 0 }}>{children}</div>
             <Footer />
           </div>
         )}
