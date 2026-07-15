@@ -6,6 +6,7 @@ import { T } from '../lib/theme'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
 import TickerInput from '../components/TickerInput'
+import EmptyState from '../components/EmptyState'
 import { recordRecentTicker } from '../lib/recentTickers'
 
 interface Peer {
@@ -556,48 +557,8 @@ export function SupplyChainPeersContent() {
         <button onClick={() => doFetch(search)} disabled={!search.trim() || loading} style={{ background: 'transparent', border: 'none', color: search.trim() ? GOLD : T.muted, fontFamily: T.mono, fontSize: 9, fontWeight: 800, cursor: search.trim() ? 'pointer' : 'default' }}>GO</button>
       </div>
       {data?.base && !loading && <SupplyMap data={data} verified={verified} onOpen={openProfile} />}
-      {loading && <EmptyMap label="Loading supply-chain data" />}
-      {!loading && !data && <EmptyMap label="Search a ticker or company" />}
-    </div>
-  </div>
-}
-
-function EmptyMap({ label }: { label: string }) {
-  const loading = label.toLowerCase().startsWith('loading')
-  const ghost = 'color-mix(in srgb, var(--theme-text, #d7e3fc) 8%, transparent)'
-  const faint = 'color-mix(in srgb, var(--theme-text, #d7e3fc) 4%, transparent)'
-  const metrics = ['Verified relationships', 'Reported end markets', 'Similarity matches']
-  return <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 16, minHeight: 390, background: 'var(--theme-bg, #101c2e)', border: `1px solid ${T.border}`, boxSizing: 'border-box' }}>
-    <div className="scm-ghost-metrics" style={{ display: 'flex', border: `1px solid ${T.border}`, background: 'var(--theme-hover, rgba(0,0,0,0.12))' }}>
-      {metrics.map((metric, index) => <div key={metric} style={{ flex: 1, padding: '11px 16px', borderLeft: index ? `1px solid ${T.border}` : 'none' }}>
-        <div style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.muted }}>{metric}</div>
-        <div style={{ width: 54 + index * 13, height: 15, marginTop: 7, background: ghost }} />
-      </div>)}
-    </div>
-    <div style={{ position: 'relative', flex: 1, minHeight: 300, border: `1px solid ${T.border}`, overflowX: 'auto', overflowY: 'hidden' }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, padding: '4px 10px', background: PANEL, borderRight: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`, color: T.text, fontFamily: T.label, fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', zIndex: 3 }}>Supply Chain Map</div>
-      <div style={{ position: 'absolute', top: 6, right: 12, color: T.muted, fontFamily: T.mono, fontSize: 9, letterSpacing: '0.06em', zIndex: 3 }}>output preview</div>
-      <div className="scm-map-grid scm-empty-grid" style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'minmax(210px, 1fr) minmax(340px, 0.98fr) minmax(210px, 1fr)', gap: 30, minWidth: 860, padding: '46px 28px 22px', minHeight: 300, boxSizing: 'border-box', alignItems: 'center' }}>
-        <svg aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: '46px 28px 22px', width: 'calc(100% - 56px)', height: 'calc(100% - 68px)', pointerEvents: 'none' }}>
-          {[18, 39, 61, 82].map(y => <path key={`left-${y}`} d={`M 32.5 ${y} C 36 ${y}, 37 50, 40 50`} fill="none" stroke={ghost} strokeWidth="1.1" />)}
-          {[25, 50, 75].map(y => <path key={`right-${y}`} d={`M 60 50 C 63 50, 64 ${y}, 67.5 ${y}`} fill="none" stroke={ghost} strokeWidth="1.1" />)}
-        </svg>
-        <section style={{ zIndex: 1 }}>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 7, marginBottom: 10, color: T.muted, fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.11em', textTransform: 'uppercase' }}>Suppliers / sourcing <ArrowLeft size={12} /></div>
-          <div style={{ display: 'grid', gap: 7 }}>{[0, 1, 2, 3].map(row => <div key={row} style={{ height: 38, border: `1px solid ${faint}`, background: 'color-mix(in srgb, var(--theme-surface, #0d1826) 55%, transparent)', padding: '8px 10px', boxSizing: 'border-box' }}><div style={{ width: `${56 + row * 8}%`, height: 8, marginLeft: 'auto', background: ghost }} /><div style={{ width: `${38 + row * 5}%`, height: 5, margin: '6px 0 0 auto', background: faint }} /></div>)}</div>
-        </section>
-        <section style={{ zIndex: 2, textAlign: 'center', alignSelf: 'center' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 9, padding: '18px 12px' }}>
-            <div style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: T.text }}>{loading ? 'Loading company network' : 'Supply Chain Map'}</div>
-            <div style={{ maxWidth: 440, color: T.muted, fontFamily: T.label, fontSize: 11.5, lineHeight: 1.5 }}>{loading ? 'Combining company profiles, reported markets, and verified relationships.' : 'Search a ticker or company to map suppliers, buyers, and reported end markets.'}</div>
-            {!loading && <span style={{ color: T.muted, border: `1px solid ${T.border}`, borderRadius: 2, padding: '1px 6px', fontFamily: '-apple-system, "Segoe UI", system-ui, sans-serif', fontSize: 10, fontWeight: 600 }}>Enter</span>}
-          </div>
-        </section>
-        <section style={{ zIndex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10, color: T.muted, fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.11em', textTransform: 'uppercase' }}><ArrowRight size={12} /> Buyers / end markets</div>
-          <div style={{ display: 'grid', gap: 7 }}>{[0, 1, 2].map(row => <div key={row} style={{ height: 45, border: `1px solid ${faint}`, background: 'color-mix(in srgb, var(--theme-surface, #0d1826) 55%, transparent)', padding: '9px 10px', boxSizing: 'border-box' }}><div style={{ width: `${64 - row * 7}%`, height: 8, background: ghost }} /><div style={{ width: `${42 + row * 6}%`, height: 5, marginTop: 7, background: faint }} /></div>)}</div>
-        </section>
-      </div>
+      {loading && <EmptyState title="Supply Chain Map" hint="Combining company profiles, reported markets, and verified relationships." variant="loading" />}
+      {!loading && !data && <EmptyState title="Supply Chain Map" hint="Search a ticker or company to map suppliers, buyers, and reported end markets." action="Enter" />}
     </div>
   </div>
 }

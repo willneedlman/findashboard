@@ -378,8 +378,6 @@
   .cs-layer-rail,
   .cs-inspector { width: 100% !important; max-height: 320px; overflow-y: auto; border: 0 !important; border-bottom: 1px solid var(--theme-border, rgba(255,255,255,0.08)) !important; }
 
-  .scm-ghost-metrics { display: grid !important; grid-template-columns: 1fr; }
-  .scm-ghost-metrics > * { border-left: 0 !important; border-top: 1px solid var(--theme-border, rgba(255,255,255,0.08)); }
   .scm-map-grid {
     grid-template-columns: 1fr !important;
     min-width: 0 !important;
@@ -389,7 +387,6 @@
   }
   .scm-map-grid > svg { display: none; }
   .scm-map-grid > section { text-align: left !important; }
-  .scm-empty-grid { min-height: 660px !important; }
 
   .bento-grid {
     grid-template-columns: repeat(2, 1fr) !important;
