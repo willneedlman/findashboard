@@ -1203,6 +1203,7 @@ export function ChartStudioContent() {
           { label: 'Low', value: inspectC.low.toFixed(2), color: 'var(--theme-text, #d7e3fc)' },
           { label: 'Close', value: inspectC.close.toFixed(2), color: 'var(--theme-text, #d7e3fc)' },
           { label: 'Change', value: `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`, color: pct >= 0 ? C.lanePos : C.laneNeg },
+          ...(lanes.volume ? [{ label: 'Volume', value: inspectC.volume.toLocaleString(), color: 'var(--theme-text, #d7e3fc)' }] : []),
         ],
       })
     }
