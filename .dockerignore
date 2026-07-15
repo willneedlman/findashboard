@@ -47,3 +47,4 @@ data/*
 !data/consumer_spend.db
 !data/supply_chain.db
 !data/corporate.db
+!data/crsp.db
