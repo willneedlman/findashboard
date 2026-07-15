@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import axios from 'axios'
-import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts'
+import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
 import EmptyState from '../components/EmptyState'
@@ -89,7 +89,7 @@ function computeCapitalAllocation(
   ]
   if (allowLeverage && wTang > 1.0) {
     // Reach at least sigmaComplete, whatever wTang turns out to be — not a
-    // fixed multiplier of sigmaTang — so "Your Mix" always lands ON the
+    // fixed multiplier of sigmaTang — keeping the CAL visible beyond the
     // drawn line instead of floating past its end.
     const extVol = Math.max(sigmaTang * 1.5, sigmaComplete * 1.15)
     calLine.push({ vol: extVol * 100, return: (rf + (rTang - rf) / sigmaTang * extVol) * 100 })
@@ -117,7 +117,7 @@ function ChartTip({ active, payload }: { active?: boolean; payload?: { payload: 
   if (!active || !payload?.length) return null
   const p = payload[0].payload
   const name = p.ticker || p.label || 'Efficient frontier'
-  const color = p.key === 'current' ? NEG : p.ticker ? BLUE : GOLD
+  const color = GOLD
   return (
     <div style={{ background: SURFACE, border: `1px solid ${GOLD}`, padding: '6px 9px', fontFamily: MONO, fontSize: 10 }}>
       <div style={{ color, fontWeight: 700, marginBottom: 2 }}>{name}</div>
@@ -139,7 +139,7 @@ export function PortfolioOptimizerContent() {
   const [marketReturn, setMarketReturn] = useState('10')
   const [selected, setSelected] = useState('max_sharpe')
   const [controlsCollapsed, setControlsCollapsed] = useState(false)
-  const [series, setSeries] = useState({ frontier: true, cal: true, indifference: true, holdings: true, portfolios: true, mix: false })
+  const [series, setSeries] = useState({ frontier: true, cal: true, indifference: true, holdings: true, portfolios: true })
   const [asset, setAsset] = useState<AssetRow | null>(null)   // clicked frontier dot → popup
   // Per-ticker weights (%) define the CURRENT portfolio, plotted against the optimum.
   const [weights, setWeights] = useState<Record<string, number>>({})
@@ -207,7 +207,7 @@ export function PortfolioOptimizerContent() {
   const currentScatter = useMemo(() => data?.portfolios.current
     ? [{ ...data.portfolios.current, label: 'Your Portfolio', key: 'current' }] : [], [data])
 
-  // Capital Allocation Line + indifference curve + optimal complete portfolio,
+  // Capital Allocation Line + indifference curve,
   // recomputed CLIENT-SIDE from the tangency portfolio the backend already
   // returned — the risk-preset buttons update this instantly with no re-fetch.
   const allowLeverage = data ? data.constraint_mode !== 'long_only' : false
@@ -216,16 +216,13 @@ export function PortfolioOptimizerContent() {
     if (!data?.portfolios.max_sharpe) return null
     return computeCapitalAllocation(data.portfolios.max_sharpe, data.risk_free_rate, riskAversion, allowLeverage, maxFrontierVol)
   }, [data, riskAversion, allowLeverage, maxFrontierVol])
-  const completePoint = useMemo(() => capitalAllocation
-    ? [{ vol: capitalAllocation.completeVol, return: capitalAllocation.completeReturn, label: 'Your Mix', key: 'complete' }] : [], [capitalAllocation])
-
   // Axis domains fitted to the data (padded) so the frontier always fills the
   // chart instead of hugging a corner of a 0-anchored axis.
   const [xDom, yDom] = useMemo(() => {
     const def: [[number, number], [number, number]] = [[0, 1], [0, 1]]
     if (!data) return def
     const calPts = capitalAllocation?.calLine ?? []
-    const pts = [...data.frontier, ...data.assets, ...portScatter, ...currentScatter, ...calPts, ...completePoint]
+    const pts = [...data.frontier, ...data.assets, ...portScatter, ...currentScatter, ...calPts]
     if (!pts.length) return def
     const fit = (arr: number[], clampLo?: number): [number, number] => {
       const lo = Math.min(...arr), hi = Math.max(...arr)
@@ -234,7 +231,7 @@ export function PortfolioOptimizerContent() {
       return [clampLo != null ? Math.max(clampLo, a) : a, hi + pad]
     }
     return [fit(pts.map(p => p.vol), 0), fit(pts.map(p => p.return))]
-  }, [data, portScatter, currentScatter, capitalAllocation, completePoint])
+  }, [data, portScatter, currentScatter, capitalAllocation])
 
   return (
     <SidebarLayout sidebarWidth={0} sidebarTitle="" sidebar={<div style={{ display: 'none', padding: 14, flexDirection: 'column', gap: 12 }}>
@@ -357,24 +354,15 @@ export function PortfolioOptimizerContent() {
       {isError && <div style={{ fontSize: 9, color: NEG, fontFamily: SANS, textAlign: 'center', lineHeight: 1.4 }}>{errMsg ?? 'Optimization failed'}</div>}
     </div>}>
       <div style={{ width: '100%', maxWidth: 1320, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '11px 16px', background: SURFACE, border: `1px solid ${BORDER}`, boxShadow: '0 1px 4px rgba(0,0,0,0.18)' }}>
-          <span style={{ ...lbl, margin: 0, color: GOLD }}>Optimizer</span>
-          <span style={{ width: 1, height: 16, background: BORDER }} />
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-            {portList.map(p => <button key={p.key} onClick={() => setSelected(p.key)} title={p.blurb} style={{ border: `1px solid ${selected === p.key ? GOLD : 'transparent'}`, background: selected === p.key ? `color-mix(in srgb, ${GOLD} 15%, transparent)` : 'transparent', color: selected === p.key ? GOLD : p.key === 'current' ? NEG : SEC, cursor: 'pointer', fontFamily: MONO, fontSize: 10, fontWeight: 700, padding: '5px 8px' }}>{p.label}</button>)}
-          </div>
-          <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 10, color: FAINT }}>{lookback}Y · {returnModel === 'capm' ? 'CAPM' : 'Historical'} · rf {rf}%</span>
-          <PMImportPicker onImport={loadFromPM} style={{ ...inp, width: 'auto', minWidth: 190, padding: '7px 9px', cursor: 'pointer' }} />
-          <button onClick={() => mutate()} disabled={!canRun} style={{ display: 'flex', alignItems: 'center', gap: 6, background: GOLD, border: `1px solid ${GOLD}`, color: 'var(--theme-bg)', fontFamily: SANS, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '8px 13px', cursor: canRun ? 'pointer' : 'default', opacity: canRun ? 1 : .5 }}><Play size={11} fill="currentColor" />{isPending ? 'Optimizing' : 'Optimize'}</button>
-        </div>
-
         <div style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', background: 'rgba(0,0,0,0.12)', borderBottom: `1px solid ${BORDER}`, flexWrap: 'wrap' }}>
             <span style={{ ...lbl, margin: 0, color: GOLD }}>Portfolio Controls</span>
             {Math.abs(totalW - 100) < .05 ? <span style={{ fontFamily: MONO, fontSize: 10, color: POS, fontWeight: 700 }}>100%</span> : <button onClick={evenWeights} style={{ background: 'none', border: 'none', color: NEG, cursor: 'pointer', fontFamily: MONO, fontSize: 10, fontWeight: 700, padding: 0 }}>{totalW.toFixed(0)}% → equal weight</button>}
             {importMsg && <span style={{ fontFamily: MONO, fontSize: 9, color: importMsg.startsWith('Loaded') ? POS : FAINT }}>{importMsg}</span>}
             <button onClick={() => setControlsCollapsed(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', color: SEC, cursor: 'pointer', fontFamily: MONO, fontSize: 10, padding: 0 }}>{controlsCollapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}{controlsCollapsed ? 'Expand' : 'Collapse'}</button>
-            <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 9, color: FAINT }}>{data ? `${data.days} days · ${data.span.start} → ${data.span.end}` : 'Set the basket, assumptions, then optimize.'}</span>
+            <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 10, color: FAINT }}>{lookback}Y · {returnModel === 'capm' ? 'CAPM' : 'Historical'} · rf {rf}%</span>
+            <PMImportPicker onImport={loadFromPM} style={{ ...inp, width: 'auto', minWidth: 190, padding: '7px 9px', cursor: 'pointer' }} />
+            <button onClick={() => mutate()} disabled={!canRun} style={{ display: 'flex', alignItems: 'center', gap: 6, background: GOLD, border: `1px solid ${GOLD}`, color: 'var(--theme-bg)', fontFamily: SANS, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '8px 13px', cursor: canRun ? 'pointer' : 'default', opacity: canRun ? 1 : .5 }}><Play size={11} fill="currentColor" />{isPending ? 'Optimizing' : 'Optimize'}</button>
           </div>
           <div style={{ display: 'flex', height: 4, background: 'rgba(255,255,255,.05)' }}>{tickers.map((t, i) => <div key={t} style={{ flex: Math.max(weights[t] || 1, 1), background: i % 2 ? `color-mix(in srgb, ${GOLD} 70%, #000)` : GOLD }} />)}</div>
           {controlsCollapsed ? <div style={{ padding: '11px 16px', color: SEC, fontFamily: MONO, fontSize: 10 }}>{tickers.join(' · ')} · {lookback}Y · {constraintMode.replace('_', ' ')}</div> : <div style={{ display: 'flex', flexWrap: 'wrap' }}>
@@ -403,26 +391,31 @@ export function PortfolioOptimizerContent() {
         </div>
 
       {!data && !isPending && <EmptyState title="Portfolio Optimizer" hint="Enter a basket of tickers, then compare optimized allocations and portfolio risk."
-        kpis={['Return', 'Volatility', 'Sharpe', 'VaR', 'CVaR']}
-        preview="chart" previewLabel="Efficient Frontier" />}
-      {isPending && <EmptyState title="Optimizing…" hint="Fetching aligned history and solving the frontier." />}
+        action="Optimize" />}
+      {isPending && <EmptyState title="Optimizing…" hint="Fetching aligned history and solving the frontier." variant="loading" />}
 
       {data && sel && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 0, background: SURFACE, border: `1px solid ${BORDER}`, overflow: 'hidden' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', minHeight: 30, padding: '0 12px', gap: 10, borderBottom: `1px solid ${BORDER}`, flexWrap: 'wrap' }}>
-            {data.dropped && data.dropped.length > 0 && <span title="Dropped from the optimization because the available history was too short." style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: NEG }}>dropped: {data.dropped.join(', ')}</span>}
-            <span style={{ fontFamily: MONO, fontSize: 9, color: FAINT }}>{data.days} days · {data.span.start} → {data.span.end}</span>
-            <Provenance kind="live" source="yfinance · daily" />
+          <div style={{ display: 'flex', alignItems: 'center', minHeight: 36, padding: '4px 12px', gap: 12, borderBottom: `1px solid ${BORDER}`, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+              <span style={{ ...lbl, margin: '0 5px 0 0' }}>Portfolio</span>
+              {portList.map(p => <button key={p.key} onClick={() => setSelected(p.key)} title={p.blurb} style={{ background: selected === p.key ? `color-mix(in srgb, ${GOLD} 14%, transparent)` : 'transparent', border: `1px solid ${selected === p.key ? `color-mix(in srgb, ${GOLD} 55%, transparent)` : BORDER}`, cursor: 'pointer', color: selected === p.key ? GOLD : p.key === 'current' ? NEG : SEC, fontFamily: MONO, fontSize: 9, fontWeight: 700, padding: '4px 7px' }}>{p.label}</button>)}
+            </div>
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              {data.dropped && data.dropped.length > 0 && <span title="Dropped from the optimization because the available history was too short." style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: NEG }}>dropped: {data.dropped.join(', ')}</span>}
+              <span style={{ fontFamily: MONO, fontSize: 9, color: FAINT }}>{data.days} days · {data.span.start} → {data.span.end}</span>
+              <Provenance kind="live" source="yfinance · daily" />
+            </div>
           </div>
 
           {/* Selected-portfolio KPI strip */}
           <div style={STRIP}>
-            <KpiCell grow label="Expected Return" value={`${sel.return >= 0 ? '+' : ''}${sel.return.toFixed(1)}%`} valueSize={22} color={sel.return >= 0 ? POS : NEG} sub={data.return_model === 'capm' ? 'CAPM · forward' : 'realized · annualized'} />
-            <KpiCell grow label="Volatility" value={`${sel.vol.toFixed(1)}%`} valueSize={22} sub="annualized" />
-            <KpiCell grow label="Sharpe" value={sel.sharpe.toFixed(2)} valueSize={22} color={sel.sharpe >= 1 ? POS : GOLD} sub={`rf ${data.risk_free_rate}%`} />
-            <KpiCell grow label="VaR 95%" value={`${sel.var_95.toFixed(2)}%`} valueSize={22} color={NEG} sub="1-day historical" help="Value at Risk. On a normal day the portfolio should not lose more than this. Read as: 95% of days lose less, 1 day in 20 loses more. Based on the actual daily returns over the window, not a bell curve." />
-            <KpiCell grow label="CVaR 95%" value={`${sel.cvar_95.toFixed(2)}%`} valueSize={22} color={NEG} sub="expected shortfall" help="Conditional VaR, or expected shortfall. On the worst 1 day in 20 (the days past VaR), this is the average loss. Always at least as large as VaR and captures how deep the tail goes." />
-            <KpiCell grow label="Max Drawdown" value={`${sel.max_drawdown.toFixed(1)}%`} valueSize={22} color={NEG} sub="over window" />
+            <KpiCell grow align="top" label="Expected Return" value={`${sel.return >= 0 ? '+' : ''}${sel.return.toFixed(1)}%`} valueSize={20} color={sel.return >= 0 ? POS : NEG} sub={data.return_model === 'capm' ? 'CAPM · forward' : 'realized · annualized'} />
+            <KpiCell grow align="top" label="Volatility" value={`${sel.vol.toFixed(1)}%`} valueSize={20} sub="annualized" />
+            <KpiCell grow align="top" label="Sharpe" value={sel.sharpe.toFixed(2)} valueSize={20} color={sel.sharpe >= 1 ? POS : GOLD} sub={`rf ${data.risk_free_rate}%`} />
+            <KpiCell grow align="top" label="VaR 95%" value={`${sel.var_95.toFixed(2)}%`} valueSize={20} color={NEG} sub="1-day historical" help="Value at Risk. On a normal day the portfolio should not lose more than this. Read as: 95% of days lose less, 1 day in 20 loses more. Based on the actual daily returns over the window, not a bell curve." />
+            <KpiCell grow align="top" label="CVaR 95%" value={`${sel.cvar_95.toFixed(2)}%`} valueSize={20} color={NEG} sub="expected shortfall" help="Conditional VaR, or expected shortfall. On the worst 1 day in 20 (the days past VaR), this is the average loss. Always at least as large as VaR and captures how deep the tail goes." />
+            <KpiCell grow align="top" label="Max Drawdown" value={`${sel.max_drawdown.toFixed(1)}%`} valueSize={20} color={NEG} sub="over window" />
           </div>
 
           <div style={{ display: 'flex', gap: 0, flexWrap: 'wrap', alignItems: 'stretch', borderTop: `1px solid ${BORDER}` }}>
@@ -437,35 +430,30 @@ export function PortfolioOptimizerContent() {
                     <YAxis type="number" dataKey="return" name="Return" domain={yDom} allowDataOverflow tick={{ fontFamily: MONO, fontSize: 9, fill: SEC }} tickLine={false} axisLine={{ stroke: BORDER }} width={40} tickFormatter={(v: number) => `${v.toFixed(0)}%`} label={{ value: 'Return', angle: -90, position: 'insideLeft', fontFamily: SANS, fontSize: 9, fill: FAINT }} />
                     <ZAxis range={[60, 60]} />
                     <Tooltip cursor={{ strokeDasharray: '3 3' }} content={<ChartTip />} />
-                    {series.frontier && <Scatter name="Frontier" data={data.frontier} line={{ stroke: FAINT, strokeWidth: 1.5 }} fill="transparent" />}
-                    {series.cal && capitalAllocation && <Scatter name="Capital Allocation Line" data={capitalAllocation.calLine} line={{ stroke: BLUE, strokeWidth: 1.5, strokeDasharray: '5 3' }} fill="transparent" />}
-                    {series.indifference && capitalAllocation && <Scatter name="Indifference Curve" data={capitalAllocation.indifferenceCurve} line={{ stroke: PURPLE, strokeWidth: 1.2, strokeDasharray: '2 3' }} fill="transparent" />}
-                    {series.holdings && <Scatter name="Assets" data={data.assets} fill={BLUE} shape="circle" cursor="pointer" onClick={(pt: unknown) => { const p = (pt as { payload?: AssetRow })?.payload ?? (pt as AssetRow); if (p?.ticker) setAsset(p) }} />}
-                    {series.portfolios && <Scatter name="Portfolios" data={portScatter} fill={GOLD} shape="diamond">
-                      {portScatter.map((p) => <Cell key={p.key} fill={p.key === selected ? GOLD : 'rgba(201,168,76,0.45)'} />)}
-                    </Scatter>}
-                    {series.portfolios && currentScatter.length > 0 && <Scatter name="Your Portfolio" data={currentScatter} fill={NEG} shape="star" />}
-                    {series.mix && completePoint.length > 0 && <Scatter name="Your Mix" data={completePoint} fill={PURPLE} shape="triangle" />}
+                    {series.frontier && <Scatter isAnimationActive={false} name="Frontier" data={data.frontier} line={{ stroke: GOLD, strokeWidth: 1.5 }} fill="transparent" />}
+                    {series.cal && capitalAllocation && <Scatter isAnimationActive={false} name="Capital Allocation Line" data={capitalAllocation.calLine} line={{ stroke: GOLD, strokeWidth: 1.5, strokeDasharray: '5 3' }} fill="transparent" />}
+                    {series.indifference && capitalAllocation && <Scatter isAnimationActive={false} name="Indifference Curve" data={capitalAllocation.indifferenceCurve} line={{ stroke: GOLD, strokeWidth: 1.2, strokeDasharray: '2 3' }} fill="transparent" />}
+                    {series.holdings && <Scatter isAnimationActive={false} name="Assets" data={data.assets} fill="var(--theme-bg, #101c2e)" stroke={GOLD} strokeWidth={2} shape="circle" cursor="pointer" onClick={(pt: unknown) => { const p = (pt as { payload?: AssetRow })?.payload ?? (pt as AssetRow); if (p?.ticker) setAsset(p) }} />}
+                    {series.portfolios && <Scatter isAnimationActive={false} name="Portfolios" data={portScatter} fill="var(--theme-bg, #101c2e)" stroke={GOLD} strokeWidth={2} shape="diamond" />}
+                    {series.portfolios && currentScatter.length > 0 && <Scatter isAnimationActive={false} name="Your Portfolio" data={currentScatter} fill="var(--theme-bg, #101c2e)" stroke={GOLD} strokeWidth={2} shape="star" />}
                   </ScatterChart>
                 </ResponsiveContainer>
                 <div style={{ display: 'flex', gap: 10, padding: '4px 10px 8px', fontFamily: SANS, fontSize: 9, color: FAINT, flexWrap: 'wrap' }}>
-                  <span><span style={{ color: FAINT }}>─</span> frontier</span>
-                  <span><span style={{ color: BLUE }}>- -</span> CAL</span>
-                  <span><span style={{ color: PURPLE }}>··</span> indifference curve</span>
-                  <span title="Click an asset for its beta and expected return"><span style={{ color: BLUE }}>●</span> assets</span>
-                  <span><span style={{ color: GOLD }}>◆</span> portfolios</span>
-                  {currentScatter.length > 0 && <span><span style={{ color: NEG }}>★</span> your portfolio</span>}
-                  {completePoint.length > 0 && <span><span style={{ color: PURPLE }}>▲</span> your mix</span>}
+                  {series.frontier && <span><span style={{ color: GOLD }}>─</span> frontier</span>}
+                  {series.cal && <span><span style={{ color: GOLD }}>- -</span> capital allocation line</span>}
+                  {series.indifference && <span><span style={{ color: GOLD }}>··</span> indifference curve</span>}
+                  {series.holdings && <span title="Click an asset for its beta and expected return"><span style={{ color: GOLD }}>●</span> assets</span>}
+                  {series.portfolios && <span><span style={{ color: GOLD }}>◆</span> portfolios</span>}
+                  {series.portfolios && currentScatter.length > 0 && <span><span style={{ color: GOLD }}>★</span> your portfolio</span>}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '8px 10px 9px', borderTop: `1px solid ${BORDER}`, flexWrap: 'wrap' }}>
                   <span style={{ ...lbl, margin: '0 6px 0 0' }}>Series</span>
                   {(Object.entries(series) as [keyof typeof series, boolean][]).map(([key, on]) => {
-                    const label = key === 'holdings' ? 'Assets' : key === 'indifference' ? 'Indifference' : key === 'cal' ? 'CAL' : key[0].toUpperCase() + key.slice(1)
-                    return <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 5, minHeight: 24, padding: '0 7px', background: on ? `color-mix(in srgb, ${GOLD} 9%, transparent)` : 'transparent', border: `1px solid ${on ? `color-mix(in srgb, ${GOLD} 34%, transparent)` : 'transparent'}`, color: on ? TEXT : SEC, cursor: 'pointer', fontFamily: MONO, fontSize: 9, fontWeight: 700 }}>
-                      <input aria-label={`Show ${label}`} type="checkbox" checked={on} onChange={() => setSeries(s => ({ ...s, [key]: !s[key] }))} style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }} />
+                    const label = key === 'holdings' ? 'Assets' : key === 'indifference' ? 'Indifference' : key === 'cal' ? 'Capital Allocation' : key[0].toUpperCase() + key.slice(1)
+                    return <button key={key} type="button" aria-pressed={on} onClick={() => setSeries(s => ({ ...s, [key]: !s[key] }))} style={{ display: 'flex', alignItems: 'center', gap: 5, minHeight: 24, padding: '0 7px', background: on ? `color-mix(in srgb, ${GOLD} 9%, transparent)` : 'transparent', border: `1px solid ${on ? `color-mix(in srgb, ${GOLD} 34%, transparent)` : 'transparent'}`, color: on ? TEXT : SEC, cursor: 'pointer', fontFamily: MONO, fontSize: 9, fontWeight: 700 }}>
                       <span aria-hidden="true" style={{ width: 12, height: 12, display: 'grid', placeItems: 'center', background: on ? GOLD : 'transparent', border: `1px solid ${on ? GOLD : BORDER}`, color: 'var(--theme-bg, #101c2e)', flexShrink: 0 }}>{on && <Check size={10} strokeWidth={3} />}</span>
                       {label}
-                    </label>
+                    </button>
                   })}
                 </div>
                 {capitalAllocation && (
