@@ -91,3 +91,13 @@ def get_customer_links(ticker: str = Query(..., description="Ticker to lookup"))
     from logistics import company_fundamentals as cf
     return cf.query_customer_links(ticker)
 
+
+@router.get("/customer-edges")
+def get_customer_edges(limit: int = Query(500, ge=1, le=2000)):
+    """Disclosed customer->supplier relationships as geocoded edges, for the
+    Freight Map's customer-link layer. Only pairs where both companies resolve
+    to a Veridion location — most disclosed customers aren't geocoded, so this
+    is real but sparse coverage, same caveat as the supplier-nodes layer."""
+    from logistics import company_fundamentals as cf
+    return {"edges": cf.query_customer_edges(limit)}
+

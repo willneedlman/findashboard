@@ -16,6 +16,7 @@ download. --max-files bounds it.
 from __future__ import annotations
 
 import argparse
+import datetime as _dt
 import json
 import logging
 import os
@@ -188,10 +189,21 @@ def _ingest_customer_segments(conn: sqlite3.Connection) -> None:
             if not sup_ticker or not cust_name or not fyear:
                 continue
 
-            # Compute percentage of revenue if we have total revenue
+            # Percentage of revenue, computed against the supplier's CURRENT
+            # total revenue (no historical by-year revenue source exists in
+            # this pipeline — Compustat Segments doesn't carry a same-year
+            # total-sales column, and there's no other GVKEY-indexed
+            # fundamentals-by-year file in data/). Using today's revenue as
+            # the denominator for an old disclosure understates the true
+            # historical percentage for any company that's grown since then
+            # (a real FY2019 >10% customer can compute under 10% today), so
+            # this is only computed for disclosures recent enough that
+            # current revenue is a fair proxy — older years keep the real
+            # disclosed dollar figure (customer_sales) but leave pct null
+            # rather than publish a systematically wrong percentage.
             pct = None
             total_rev = ticker_revs.get(sup_ticker)
-            if total_rev and sales:
+            if total_rev and sales and fyear >= _dt.date.today().year - 2:
                 pct = round(((sales * 1e6) / total_rev) * 100, 2)
                 pct = max(0.1, min(pct, 100.0))
 

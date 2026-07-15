@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
-import { MapContainer, CircleMarker, Marker, Tooltip, useMap, useMapEvents } from 'react-leaflet'
+import { MapContainer, CircleMarker, Marker, Polyline, Tooltip, useMap, useMapEvents } from 'react-leaflet'
 import Lf from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import PageWrapper from '../components/PageWrapper'
@@ -97,6 +97,11 @@ type Insp = { kind: 'ship'; v: Vessel } | { kind: 'flight'; f: Flight }
 interface SupplierFeature { type: 'Feature'; geometry: { type: 'Point'; coordinates: [number, number] }; properties: { company_name: string | null; company_industry: string | null; product_names: string | null } }
 interface SupplierFC { type: string; features?: SupplierFeature[]; count: number; available: boolean }
 interface Facets { industries?: string[]; products?: string[]; available: boolean }
+interface CustomerEdge {
+  supplier_ticker: string; supplier_name: string; supplier_lat: number; supplier_lng: number
+  customer_ticker: string; customer_name: string; customer_lat: number; customer_lng: number
+  customer_sales: number | null; pct_of_revenue: number | null; fiscal_year: number
+}
 
 const panel = 'color-mix(in srgb, var(--theme-surface) 95%, transparent)'
 function Dot({ c }: { c: string }) { return <span style={{ width: 9, height: 9, borderRadius: '50%', background: c, flex: 'none' }} /> }
@@ -105,7 +110,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 export default function LogisticsMap() {
-  const [layers, setLayers] = useState({ vessels: true, flights: true, air: true, choke: true, port: true, suppliers: true })
+  const [layers, setLayers] = useState({ vessels: true, flights: true, air: true, choke: true, port: true, suppliers: true, custLinks: false })
   const [insp, setInsp] = useState<Insp | null>(null)
   const [supIndustry, setSupIndustry] = useState('')
   const [supProduct, setSupProduct] = useState('')
@@ -114,6 +119,7 @@ export default function LogisticsMap() {
   const PORT = readToken('--theme-positive', '#3fb6a0'), VESSEL = readToken('--theme-secondary', '#8099b0')
   const FLIGHT = readToken('--theme-accent-violet', '#a78bfa'), LAND = readToken('--theme-surface', '#0f1d31')
   const SUPPLIER = readToken('--theme-accent-cyan', '#22d3ee')
+  const CUSTLINK = readToken('--theme-accent-orange', '#f97316')
   // Small glyph markers (ship / jet) instead of plain dots. currentColor + a CSS
   // :hover rule gives the colour-on-hover; the jet rotates to its heading.
   const shipIcon = Lf.divIcon({ className: 'lm-mk', iconSize: [15, 15], iconAnchor: [7.5, 7.5],
@@ -137,8 +143,15 @@ export default function LogisticsMap() {
     placeholderData: keepPreviousData,
     staleTime: 6 * 3600e3, retry: 1,
   })
+  const custLinksQ = useQuery<{ edges?: CustomerEdge[] }>({
+    queryKey: ['lm-cust-edges'],
+    queryFn: () => axios.get('/api/logistics/customer-edges?limit=500').then(r => r.data),
+    enabled: layers.custLinks,
+    staleTime: 24 * 3600e3, retry: 1,
+  })
 
   const supFeatures = supQ.data?.features ?? []
+  const custEdges = custLinksQ.data?.edges ?? []
   const facetInds = facetsQ.data?.industries ?? []
   const hubs = air.data?.hubs ?? []
   const maxAir = Math.max(1, ...hubs.map(h => h.movements))
@@ -153,8 +166,9 @@ export default function LogisticsMap() {
 
   const eyebrow: React.CSSProperties = { fontFamily: L.mono, fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: L.gold }
   const goldTint = 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)'
-  const VIEW: ['vessels' | 'flights' | 'air' | 'choke' | 'port' | 'suppliers', string, string, number][] = [
+  const VIEW: ['vessels' | 'flights' | 'air' | 'choke' | 'port' | 'suppliers' | 'custLinks', string, string, number][] = [
     ['suppliers', 'Suppliers', SUPPLIER, supFeatures.length],
+    ['custLinks', 'Customer links', CUSTLINK, custEdges.length],
     ['vessels', 'Cargo ships', VESSEL, vessels.length], ['flights', 'Cargo flights', FLIGHT, flights.length],
     ['air', 'Air hubs', AIR, hubs.length], ['choke', 'Chokepoints', CHOKE, Object.keys(CHOKES).length], ['port', 'LSCI ports', PORT, econ.length],
   ]
@@ -203,6 +217,19 @@ export default function LogisticsMap() {
               </Tooltip>
             </CircleMarker>
           ))}
+          {layers.custLinks && custEdges.map((e, i) => (
+            <Polyline key={`ce-${i}`}
+              positions={[[e.supplier_lat, e.supplier_lng], [e.customer_lat, e.customer_lng]]}
+              pathOptions={{ color: CUSTLINK, weight: 1.3, opacity: 0.55 }}>
+              <Tooltip>
+                <div style={{ fontWeight: 700 }}>{e.supplier_name} → {e.customer_name}</div>
+                <div>
+                  {e.pct_of_revenue != null ? `${e.pct_of_revenue.toFixed(1)}% of ${e.supplier_ticker} revenue` : e.customer_sales != null ? `$${e.customer_sales.toFixed(0)}M disclosed sales` : 'Disclosed relationship'}
+                  {' · FY'}{e.fiscal_year}
+                </div>
+              </Tooltip>
+            </Polyline>
+          ))}
           {layers.vessels && vessels.map(v => (
             <Marker key={`v-${v.mmsi}`} position={[v.lat as number, v.lon as number]} icon={shipIcon} eventHandlers={{ click: () => setInsp({ kind: 'ship', v }) }} />
           ))}
@@ -250,17 +277,18 @@ export default function LogisticsMap() {
           </div>
           <div style={{ marginTop: 'auto', pointerEvents: 'auto', background: panel, border: `1px solid ${L.border}`, padding: '13px 16px' }}>
             <div style={{ fontFamily: L.mono, fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', color: L.text, marginBottom: 9 }}>LEGEND</div>
-            {([['Supplier node', SUPPLIER, 'dot'], ['Cargo ship', VESSEL, 'ship'], ['Cargo flight', FLIGHT, 'jet'], ['Air cargo hub', AIR, 'dot'], ['Chokepoint', CHOKE, 'dot'], ['Connectivity port', PORT, 'dot']] as [string, string, 'ship' | 'jet' | 'dot'][]).map(([lbl, c, t]) => (
+            {([['Supplier node', SUPPLIER, 'dot'], ['Customer link', CUSTLINK, 'line'], ['Cargo ship', VESSEL, 'ship'], ['Cargo flight', FLIGHT, 'jet'], ['Air cargo hub', AIR, 'dot'], ['Chokepoint', CHOKE, 'dot'], ['Connectivity port', PORT, 'dot']] as [string, string, 'ship' | 'jet' | 'dot' | 'line'][]).map(([lbl, c, t]) => (
               <div key={lbl} style={{ display: 'flex', alignItems: 'center', gap: 9, lineHeight: '22px' }}>
                 <span style={{ width: 16, display: 'flex', justifyContent: 'center', flex: 'none' }}>
                   {t === 'ship' ? <svg width="15" height="15" viewBox="0 0 24 24" style={{ color: c }}><path fill="currentColor" d="M3 14l1.8 5h14.4L21 14H3zm3-2V8l6-4 6 4v4H6z" /></svg>
                     : t === 'jet' ? <svg width="15" height="15" viewBox="0 0 24 24" style={{ color: c }}><path fill="currentColor" d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-4.5l8 2.5z" /></svg>
+                      : t === 'line' ? <span style={{ width: 15, height: 0, borderTop: `1.5px solid ${c}` }} />
                       : <Dot c={c} />}
                 </span>
                 <span style={{ fontFamily: L.sans, fontSize: 11.5, color: L.sec }}>{lbl}</span>
               </div>
             ))}
-            <div style={{ fontFamily: L.sans, fontSize: 8.5, color: L.faint, marginTop: 8, lineHeight: 1.5 }}>Marker size ∝ value in layer. Click a ship or flight to inspect.</div>
+            <div style={{ fontFamily: L.sans, fontSize: 8.5, color: L.faint, marginTop: 8, lineHeight: 1.5 }}>Marker size ∝ value in layer. Click a ship or flight to inspect. Customer links: real disclosed relationships (FAS 131), sparse — only pairs where both companies are geocoded.</div>
           </div>
         </div>
 

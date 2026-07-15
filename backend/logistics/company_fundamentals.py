@@ -264,3 +264,59 @@ def query_customer_links(ticker: str) -> dict:
         "suppliers": suppliers
     }
 
+
+def query_customer_edges(limit: int = 500) -> list[dict]:
+    """Disclosed customer->supplier relationships where BOTH tickers resolve to
+    a geocoded Veridion company, for the Freight Map's customer-link layer.
+    One canonical location per ticker (MIN(veridion_id)) so a company with
+    multiple Veridion facility records doesn't fan a single disclosed
+    relationship out into duplicate edges."""
+    if not available():
+        return []
+    with _conn() as conn:
+        table_exists = conn.execute(
+            "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='customer_links'"
+        ).fetchone()[0] > 0
+        if not table_exists:
+            return []
+        # One edge per (supplier, customer) pair — customer_links carries one
+        # row per disclosed fiscal year, and drawing every year as a separate
+        # overlapping line would just clutter the map. Latest year wins.
+        rows = conn.execute("""
+            SELECT cl.supplier_ticker, cl.customer_ticker, cl.customer_name,
+                   cl.customer_sales, cl.pct_of_revenue, cl.fiscal_year,
+                   sc.name AS supplier_name, sc.latitude AS s_lat, sc.longitude AS s_lng,
+                   cc.latitude AS c_lat, cc.longitude AS c_lng
+            FROM customer_links cl
+            JOIN (SELECT symbol, MIN(veridion_id) AS veridion_id FROM ticker_index GROUP BY symbol) sti
+                ON sti.symbol = cl.supplier_ticker
+            JOIN companies sc ON sc.veridion_id = sti.veridion_id
+            JOIN (SELECT symbol, MIN(veridion_id) AS veridion_id FROM ticker_index GROUP BY symbol) cti
+                ON cti.symbol = cl.customer_ticker
+            JOIN companies cc ON cc.veridion_id = cti.veridion_id
+            JOIN (
+                SELECT supplier_ticker, customer_ticker, MAX(fiscal_year) AS fiscal_year
+                FROM customer_links WHERE customer_ticker IS NOT NULL
+                GROUP BY supplier_ticker, customer_ticker
+            ) latest ON latest.supplier_ticker = cl.supplier_ticker
+                    AND latest.customer_ticker = cl.customer_ticker
+                    AND latest.fiscal_year = cl.fiscal_year
+            WHERE cl.customer_ticker IS NOT NULL
+              AND sc.latitude IS NOT NULL AND sc.longitude IS NOT NULL
+              AND cc.latitude IS NOT NULL AND cc.longitude IS NOT NULL
+            GROUP BY cl.supplier_ticker, cl.customer_ticker
+            ORDER BY (cl.customer_sales IS NULL), cl.customer_sales DESC, cl.fiscal_year DESC
+            LIMIT ?
+        """, (limit,)).fetchall()
+        return [
+            {
+                "supplier_ticker": r["supplier_ticker"], "supplier_name": r["supplier_name"],
+                "supplier_lat": r["s_lat"], "supplier_lng": r["s_lng"],
+                "customer_ticker": r["customer_ticker"], "customer_name": r["customer_name"],
+                "customer_lat": r["c_lat"], "customer_lng": r["c_lng"],
+                "customer_sales": r["customer_sales"], "pct_of_revenue": r["pct_of_revenue"],
+                "fiscal_year": r["fiscal_year"],
+            }
+            for r in rows
+        ]
+
