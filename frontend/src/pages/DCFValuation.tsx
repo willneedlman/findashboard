@@ -159,6 +159,7 @@ export function DCFValuationContent() {
   const [paramsOpen, setParamsOpen] = useState(true)
   const [aiRationale, setAiRationale] = useState<{ growth: string; margin: string; wacc: string } | null>(null)
   const [aiSuggested, setAiSuggested] = useState<Partial<typeof p> | null>(null)
+  const [betaInfo, setBetaInfo] = useState<{ beta: number; source: string } | null>(null)
   const [p, setP] = useState({
     revenue: 0, op_margin: 15, target_margin: 15, rev_growth_1: 15, rev_growth_2: 10, rev_growth_3: 5,
     wacc: 9, terminal_growth: 2.5, shares: 100, net_debt: 0,
@@ -256,6 +257,7 @@ export function DCFValuationContent() {
       const g = Math.min(f.rev_growth ?? 10, 35)
       // Use analyst-consensus target margin if available, else sector default
       const targetMargin = f.target_margin ?? (f.op_margin >= 0 ? f.op_margin : 15)
+      setBetaInfo(f.beta != null ? { beta: f.beta, source: f.assumptions_source ?? 'unknown' } : null)
       setP(prev => ({
         ...prev,
         revenue: f.revenue, op_margin: f.op_margin, target_margin: targetMargin, shares: f.shares,
@@ -440,6 +442,11 @@ export function DCFValuationContent() {
                   <label style={LABEL}>{label}</label>
                   <input type="number" style={INPUT} value={p[key]} step={step}
                     onChange={set(key)} onFocus={focus} onBlur={blur} />
+                  {key === 'wacc' && betaInfo && (
+                    <div style={{ fontSize: 9, color: 'var(--theme-secondary, #8099b0)', fontFamily: 'var(--theme-mono)', marginTop: 3 }}>
+                      β {betaInfo.beta.toFixed(2)} · {betaInfo.source}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

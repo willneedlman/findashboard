@@ -168,12 +168,18 @@ def _align(returns: pd.Series, factors: pd.DataFrame) -> pd.DataFrame:
     return frame
 
 
-def _ols(frame: pd.DataFrame, factor_names: list[str]) -> dict:
-    n = len(frame)
+def ols_fit(y: np.ndarray, X: np.ndarray, factor_names: list[str]) -> dict:
+    """Generic multivariate OLS core: y = alpha + X @ beta + eps, with
+    t-stats, R^2, and residual std. Shared by the CAPM/FF3/FF4 excess-return
+    regressions below AND by any caller regressing a return series on an
+    arbitrary factor set that isn't a CAPM-style excess-return setup (e.g.
+    portfolio.py's macro-ETF-proxy factor decomposition, which regresses raw
+    portfolio returns on raw ETF returns with no risk-free subtraction, but
+    wants the same betas/t-stats/R^2 math rather than a second hand-rolled
+    copy of it)."""
+    n = len(y)
     if n < _MIN_OBS:
         return {"available": False, "reason": "insufficient overlapping history", "observations": n}
-    y = frame["ri_rf"].to_numpy()
-    X = frame[factor_names].to_numpy()
     k = X.shape[1]
     Xa = np.column_stack([np.ones(n), X])
     coef, *_ = np.linalg.lstsq(Xa, y, rcond=None)
@@ -203,9 +209,18 @@ def _ols(frame: pd.DataFrame, factor_names: list[str]) -> dict:
         "r_squared": round(r2, 3),
         "residual_std": float(np.std(resid, ddof=1)),
         "observations": n,
-        "start": str(frame.index[0].date()),
-        "end": str(frame.index[-1].date()),
     }
+
+
+def _ols(frame: pd.DataFrame, factor_names: list[str]) -> dict:
+    n = len(frame)
+    if n < _MIN_OBS:
+        return {"available": False, "reason": "insufficient overlapping history", "observations": n}
+    fit = ols_fit(frame["ri_rf"].to_numpy(), frame[factor_names].to_numpy(), factor_names)
+    if fit["available"]:
+        fit["start"] = str(frame.index[0].date())
+        fit["end"] = str(frame.index[-1].date())
+    return fit
 
 
 def capm(returns: pd.Series, factors: pd.DataFrame) -> dict:

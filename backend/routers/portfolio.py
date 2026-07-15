@@ -470,29 +470,24 @@ def factor_decomposition(req: FactorRequest):
     y = frame["port"].to_numpy()
     X = frame[keys].to_numpy()
     n, k = X.shape
-    Xa = np.column_stack([np.ones(n), X])
-    beta, *_ = np.linalg.lstsq(Xa, y, rcond=None)
-    resid = y - Xa @ beta
-    sse = float(resid @ resid)
-    sst = float(((y - y.mean()) ** 2).sum())
-    r2 = 1.0 - sse / sst if sst > 0 else 0.0
-    dof = max(n - k - 1, 1)
-    mse = sse / dof
-    try:
-        se = np.sqrt(np.diag(mse * np.linalg.inv(Xa.T @ Xa)))
-    except np.linalg.LinAlgError:
-        se = np.full(k + 1, float("nan"))
+    # Shared OLS core (backend/factor_models.py) — same regression math CAPM/
+    # FF3/FF4 use, just fed raw portfolio/factor returns instead of a
+    # CAPM-style excess-return frame (this isn't an alpha/excess-return
+    # model, it's a factor-exposure decomposition).
+    fit = fm.ols_fit(y, X, out_keys)
+    if not fit.get("available"):
+        raise HTTPException(422, "Not enough overlapping history for a stable fit")
     var_p = float(np.var(y, ddof=1)) or 1e-12
 
     factors = []
     for i, key in enumerate(keys):
-        b = float(beta[i + 1])
+        ok = out_keys[i]
+        b = fit["betas"][ok]
         cov = float(np.cov(X[:, i], y, ddof=1)[0, 1])
         contrib = b * cov / var_p                          # sums to R^2 across factors
-        t = b / se[i + 1] if se[i + 1] and not np.isnan(se[i + 1]) else None
         factors.append({
             "factor": labels[key], "proxy": proxies[key], "beta": round(b, 3),
-            "t_stat": round(t, 2) if t is not None else None,
+            "t_stat": fit["t_stats"][ok],
             "risk_pct": round(contrib * 100, 1),
         })
     factors.sort(key=lambda f: abs(f["risk_pct"]), reverse=True)
@@ -509,13 +504,11 @@ def factor_decomposition(req: FactorRequest):
     rolling: dict[str, list] = {k: [] for k in out_keys}
     for e in range(roll_win, n + 1):
         sl = slice(e - roll_win, e)
-        Xr = np.column_stack([np.ones(roll_win), X[sl]])
-        try:
-            br, *_ = np.linalg.lstsq(Xr, y[sl], rcond=None)
-        except np.linalg.LinAlgError:
+        rfit = fm.ols_fit(y[sl], X[sl], out_keys)
+        if not rfit.get("available"):
             continue
-        for j, ok in enumerate(out_keys):
-            rolling[ok].append({"date": fdates[e - 1], "beta": round(float(br[j + 1]), 3)})
+        for ok in out_keys:
+            rolling[ok].append({"date": fdates[e - 1], "beta": rfit["betas"][ok]})
     rstep = max(1, (n - roll_win) // 180)
     rolling = {k: v[::rstep] for k, v in rolling.items()}
 
@@ -524,19 +517,14 @@ def factor_decomposition(req: FactorRequest):
     holdings_detail = []
     for t in priced:
         ri = daily[t].reindex(frame.index).fillna(0.0).to_numpy()
-        Xi = np.column_stack([np.ones(n), X])
-        try:
-            bi, *_ = np.linalg.lstsq(Xi, ri, rcond=None)
-        except np.linalg.LinAlgError:
+        hfit = fm.ols_fit(ri, X, out_keys)
+        if not hfit.get("available"):
             continue
-        resi = ri - Xi @ bi
-        ssei = float(resi @ resi); ssti = float(((ri - ri.mean()) ** 2).sum())
-        r2i = 1 - ssei / ssti if ssti > 0 else 0.0
         cov_ip = float(np.cov(ri, y, ddof=1)[0, 1])
         holdings_detail.append({
             "ticker": t, "weight": round(weights[t] * 100, 1),
-            "betas": {ok: round(float(bi[j + 1]), 3) for j, ok in enumerate(out_keys)},
-            "idiosyncratic_pct": round((1 - r2i) * 100),
+            "betas": {ok: hfit["betas"][ok] for ok in out_keys},
+            "idiosyncratic_pct": round((1 - hfit["r_squared"]) * 100),
             "book_var_share_pct": round(weights[t] * cov_ip / var_p * 100, 1),
         })
     holdings_detail.sort(key=lambda h: h["weight"], reverse=True)
@@ -549,11 +537,11 @@ def factor_decomposition(req: FactorRequest):
         "holdings_detail": holdings_detail,
         "book_betas": book_betas,
         "roll_window": roll_win,
-        "r_squared": round(r2, 3),
-        "systematic_pct": round(r2 * 100, 1),
-        "idiosyncratic_pct": round((1 - r2) * 100, 1),
+        "r_squared": fit["r_squared"],
+        "systematic_pct": round(fit["r_squared"] * 100, 1),
+        "idiosyncratic_pct": round((1 - fit["r_squared"]) * 100, 1),
         "ann_vol_pct": round(ann_vol * 100, 1),
-        "alpha_ann_pct": round(float(beta[0]) * 252 * 100, 2),
+        "alpha_ann_pct": round(fit["alpha"] * 252 * 100, 2),
         "concentration": {
             "holdings": len(priced),
             "hhi": round(hhi, 4),

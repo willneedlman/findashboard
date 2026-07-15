@@ -53,7 +53,13 @@ def get_fundamentals(ticker: str):
                 for k in ("revenue", "op_margin", "shares", "net_debt", "rev_growth", "capex_pct", "de_ratio"):
                     if fs.get(k) is not None:
                         base[k] = fs[k]
-                base["assumptions_source"] = fs["assumptions_source"]
+                # FactSet supplies financials but never beta — overwriting
+                # assumptions_source with FactSet's own label here used to
+                # mislabel the beta figure too (e.g. showing "FactSet" when
+                # beta actually came from the computed-CAPM/vendor/Damodaran
+                # chain in _resolve_beta). Compose both so each figure's real
+                # source stays honest.
+                base["assumptions_source"] = f"{fs['assumptions_source']} · beta: {base['assumptions_source']}"
         except Exception:
             logger.info("FactSet fundamentals unavailable for %s, using base source", ticker)
     return base

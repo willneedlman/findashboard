@@ -360,9 +360,9 @@ const rangePct = (price?: number | null, lo?: number | null, hi?: number | null)
   return Math.min(98, Math.max(2, ((price - lo) / (hi - lo)) * 100))
 }
 
-function StatCell({ label, value }: { label: string; value: string }) {
+function StatCell({ label, value, title }: { label: string; value: string; title?: string }) {
   return (
-    <div style={{ padding: '13px 22px', borderRight: '1px solid rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+    <div title={title} style={{ padding: '13px 22px', borderRight: '1px solid rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
       <div style={{ fontFamily: F.sans, fontSize: 8.5, fontWeight: 400, letterSpacing: '0.14em', textTransform: 'uppercase', color: F.muted }}>{label}</div>
       <div style={{ fontFamily: F.mono, fontSize: 13.5, fontWeight: 400, color: F.text, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
     </div>
@@ -504,7 +504,7 @@ function TickerDashboard({ sym }: { sym: string }) {
           <StatCell label="Market Cap" value={fmtCompact(hub?.market_cap)} />
           <StatCell label="P/E Ratio" value={fmtRatio(hub?.pe_ratio)} />
           <StatCell label="Div Yield" value={fmtYield(hub?.dividend_yield)} />
-          <StatCell label="Beta" value={fmtRatio(hub?.beta)} />
+          <StatCell label="Beta" value={fmtRatio(hub?.beta)} title="Vendor beta, methodology undisclosed. See Company Profile for computed CAPM / Scholes-Williams beta." />
         </div>
 
         {/* 3. Range bars */}
