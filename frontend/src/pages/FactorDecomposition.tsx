@@ -24,7 +24,7 @@ interface Resp {
 }
 
 interface Row { ticker: string; weight: string }
-const LOOKBACKS: [string, number][] = [['6M', 180], ['1Y', 365], ['2Y', 730], ['3Y', 1095]]
+const LOOKBACKS: [string, number][] = [['6M', 180], ['1Y', 365], ['2Y', 730], ['3Y', 1095], ['5Y', 1826], ['10Y', 3653]]
 
 export default function FactorDecomposition() {
   const books = useMemo(() => readPMPortfolios().filter(p => p.holdings.length), [])

@@ -269,8 +269,11 @@ def get_dividends(tickers: str):
     return out
 
 
-def _get_history(ticker: str) -> pd.DataFrame:
-    df = _cached_history(ticker, period="5y")
+def _get_history(ticker: str, start: str | None = None) -> pd.DataFrame:
+    # An explicit start bypasses the "5y" bucket entirely (cache.get_history honors
+    # start/end verbatim) so a caller asking for 2020-01-01 actually gets 2020-01-01
+    # instead of being silently clipped to the last 5 years.
+    df = _cached_history(ticker, period="max", start=start) if start else _cached_history(ticker, period="5y")
     if df.empty:
         return pd.DataFrame()
     df = df.rename(columns={"Close": "close"})
@@ -355,7 +358,7 @@ def get_history(ticker: str, start: str | None = None, end: str | None = None, w
     # (e.g. a short range older than the provider's intraday cap).
     if df is None or df.empty:
         intraday, bars_per_year = False, _TRADING_DAYS
-        df = _get_history(ticker)
+        df = _get_history(ticker, start=start)
         if df.empty:
             raise HTTPException(404, "No data found for ticker")
         if start:
@@ -700,7 +703,10 @@ def get_ohlcv(ticker: str, period: str = "1y", interval: str = "1d", tf: str | N
         df = None
         # Alpaca first for equities: deep, native intraday (odd frames included), so
         # no resample needed. Falls through to yfinance when unavailable/empty.
-        if alpaca.available() and alpaca.is_equity(ticker):
+        # Daily/weekly/monthly skip Alpaca entirely — its IEX feed is capped at
+        # _ALPACA_LOOKBACK_DAYS (10y) while yfinance's period="max" below reaches
+        # back to each ticker's actual listing date, which is strictly deeper.
+        if intraday and alpaca.available() and alpaca.is_equity(ticker):
             adf = alpaca.history_df(ticker, tf, _alpaca_start(tf))
             if not adf.empty:
                 df = adf

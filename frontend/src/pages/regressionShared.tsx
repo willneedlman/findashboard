@@ -10,7 +10,7 @@ import useIsMobile from '../hooks/useIsMobile'
 // Shared tokens, controls, and the side-rail shell for the Regression and
 // Correlation tools so the two split pages read as one consistent system.
 
-export const PERIODS = ['1mo', '3mo', '6mo', '1y', '2y', '3y', '5y']
+export const PERIODS = ['1mo', '3mo', '6mo', '1y', '2y', '3y', '5y', '10y', 'max']
 
 // The three regression tool modes, shared so every view's ModeToggle matches.
 export type RegMode = 'ols' | 'mc' | 'import'

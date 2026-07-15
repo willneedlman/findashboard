@@ -26,7 +26,7 @@ from regression_engine.strategies import short_vol_paths
 _log = logging.getLogger(__name__)
 router = APIRouter()
 
-_VALID_PERIODS = {"1mo", "3mo", "6mo", "1y", "2y", "3y", "5y"}
+_VALID_PERIODS = {"1mo", "3mo", "6mo", "1y", "2y", "3y", "5y", "10y", "max"}
 _VALID_MODELS  = {"linear", "polynomial"}
 
 
@@ -709,7 +709,7 @@ def _half_life(spread: np.ndarray):
 @router.get("/pairs")
 def pairs_analysis(
     a: str = Query(...), b: str = Query(...),
-    lookback_days: int = Query(365, ge=90, le=1825),
+    lookback_days: int = Query(365, ge=90, le=14600),  # up to ~40y — as deep as yfinance goes
     entry_z: float = Query(2.0, ge=0.5, le=4.0),
     exit_z: float = Query(0.5, ge=0.0, le=3.0),
     z_window: int = Query(60, ge=10, le=250),

@@ -41,6 +41,7 @@ const PORTFOLIOS: { key: string; label: string; blurb: string }[] = [
 ]
 const LOOKBACKS: { label: string; years: number }[] = [
   { label: '1Y', years: 1 }, { label: '3Y', years: 3 }, { label: '5Y', years: 5 }, { label: '10Y', years: 10 },
+  { label: '20Y', years: 20 }, { label: 'Max', years: 40 },
 ]
 
 interface WeightRow { ticker: string; weight: number; risk_contribution: number }

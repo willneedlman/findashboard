@@ -92,7 +92,7 @@ export default function PairsTrader() {
       <div style={{ ...railSection, padding: '12px 12px 13px' }}>
         <div style={{ ...LABEL, marginBottom: 7 }}>Window</div>
         <div style={{ display: 'flex', gap: 5 }}>
-          {([['1Y', 365], ['2Y', 730], ['3Y', 1095]] as [string, number][]).map(([l, d]) => (
+          {([['1Y', 365], ['2Y', 730], ['3Y', 1095], ['5Y', 1826], ['10Y', 3653]] as [string, number][]).map(([l, d]) => (
             <button key={d} onClick={() => setLookback(d)} style={seg(lookback === d)}>{l}</button>
           ))}
         </div>

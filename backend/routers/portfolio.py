@@ -379,7 +379,7 @@ class FactorHolding(BaseModel):
 
 class FactorRequest(BaseModel):
     holdings: list[FactorHolding] = Field(..., min_length=1, max_length=100)
-    lookback_days: int = Field(365, ge=90, le=1825)
+    lookback_days: int = Field(365, ge=90, le=14600)  # up to ~40y — as deep as yfinance goes
     mode: str = Field("macro", pattern="^(macro|style)$")
 
 
