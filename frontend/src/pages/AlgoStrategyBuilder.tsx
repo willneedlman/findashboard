@@ -141,7 +141,10 @@ function errMsg(e: unknown, fallback = 'Request failed'): string {
   return (e as { message?: string })?.message ?? fallback
 }
 
-const fmtCap = (n: number) => `$${Math.abs(n) >= 1000 ? (n / 1000).toFixed(1) + 'K' : n.toFixed(0)}`
+// Exact dollars, not K-abbreviated — rounding e.g. $9,974 to "$10.0K" reads as
+// "unchanged from $10K starting capital" right next to a P&L tile that (being
+// under $1,000) already shows the real, non-zero number, which looks like a bug.
+const fmtCap = (n: number) => `$${Math.round(n).toLocaleString()}`
 const countConds = (def: CustomStrategyDef) => ({
   buy: def.buy.groups.reduce((s, g) => s + g.conditions.length, 0),
   sell: def.sell.groups.reduce((s, g) => s + g.conditions.length, 0),
@@ -748,7 +751,13 @@ export function AlgoStrategyBuilderContent() {
       </div>
     </>}>
 
-      {!R && (
+      {!R && (mode === 'portfolio' ? runPortfolio.isPending : isPending) && (
+        <EmptyState title={mode === 'portfolio' ? 'Running Portfolio…' : 'Running Backtest…'}
+          hint="Fetching price history and evaluating the rules across the date range."
+          variant="loading" />
+      )}
+
+      {!R && !(mode === 'portfolio' ? runPortfolio.isPending : isPending) && (
         <EmptyState title="Algorithmic Strategy Builder"
           hint={mode === 'portfolio'
             ? 'Add positions (each = a saved rule-set + ticker + weight + the trade its BUY signal opens), then Run Portfolio. Long/short shares and long/short modeled options aggregate into one book.'

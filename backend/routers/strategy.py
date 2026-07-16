@@ -838,4 +838,6 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
         },
         "timeframe": tf,
         "positions": positions_out,
+        "bars": int(n),
+        "span": {"start": port_eq.index[0].strftime(_cfmt), "end": port_eq.index[-1].strftime(_cfmt)},
     }

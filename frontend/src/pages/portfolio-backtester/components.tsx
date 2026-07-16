@@ -371,6 +371,11 @@ export function PortfolioTab() {
         }
       />
       <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {isPending && (
+          <EmptyState title="Running Portfolio…" hint="Fetching price history and evaluating the rules across the date range."
+            variant="loading" />
+        )}
+
         {!data && !isPending && (
           <EmptyState title="Portfolio Backtester" hint="Set tickers, weights and a date range, then run the backtest."
             action="Run Portfolio Engine" />
@@ -1006,13 +1011,8 @@ export function StrategyTab() {
       )}
 
       {backtestMutation.isPending && (
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          minHeight: 300, color: 'var(--theme-secondary, #5e768f)',
-          fontFamily: 'var(--theme-mono)', fontSize: 11, letterSpacing: '0.12em',
-        }}>
-          Computing strategy signals…
-        </div>
+        <EmptyState title="Computing Strategy Signals…" hint="Fetching price history and evaluating the rules across the date range."
+          variant="loading" />
       )}
 
       {result && !backtestMutation.isPending && (
