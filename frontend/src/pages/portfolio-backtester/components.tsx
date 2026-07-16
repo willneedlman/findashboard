@@ -24,7 +24,7 @@ import { usePortfolio } from '../../contexts/PortfolioContext'
 import ConfigHeader, { RebalanceSelect, type RebalanceFreq } from '../../components/portfolio/ConfigHeader'
 import HelpTip from '../../components/HelpTip'
 import { TAB_BAR, TAB_BASE, type Tab, type Asset, makeAsset, PORT_DEFAULTS, PORT_INPUT, PORT_LABEL, PORT_TICK, ALGO_STRATEGIES, ALGO_DEFAULT_PARAMS, ALGO_PARAM_LABELS, ALGO_INPUT, ALGO_LABEL, ALGO_TICK, ALGO_SECTION_DIVIDER, type BacktestResult, type SignalResult } from './shared'
-import { PRESETS, PRESET_GROUPS } from '../strategy-builder/shared'
+import { PRESETS } from '../strategy-builder/shared'
 import { legsToCombo } from '../AlgoStrategyBuilder'
 import { ReturnsScatter, quickRegression } from '../regressionShared'
 
@@ -156,7 +156,7 @@ export function PortfolioTab() {
           const { data: cb } = await axios.post('/api/strategy/custom-backtest', {
             ticker: a.ticker, start, end: end || undefined,
             rules: rulesForTicker(customDef, a.ticker),
-            instrument: { kind: 'combo', dte: a.comboDte ?? 30, legs: legsToCombo(PRESETS[a.comboPreset ?? 'Short Straddle'] ?? []) },
+            instrument: { kind: 'combo', dte: a.comboDte ?? 30, legs: a.comboLegs?.length ? a.comboLegs : legsToCombo(PRESETS['Short Straddle']) },
             position_size: 100, initial_capital: 10000,
           })
           const map: Record<string, number> = {}

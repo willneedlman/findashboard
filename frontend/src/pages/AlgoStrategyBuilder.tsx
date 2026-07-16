@@ -20,10 +20,71 @@ import { ReturnsScatter, quickRegression } from './regressionShared'
 export type ComboLeg = { type: 'call' | 'put'; side: 'buy' | 'sell'; moneyness: number; qty: number }
 export const legsToCombo = (legs: Leg[]): ComboLeg[] =>
   legs.map(l => ({ type: l.option_type, side: l.action, moneyness: l.K / 100, qty: l.quantity }))
-const mkComboLeg = (): ComboLeg => ({ type: 'call', side: 'buy', moneyness: 1, qty: 1 })
+export const mkComboLeg = (): ComboLeg => ({ type: 'call', side: 'buy', moneyness: 1, qty: 1 })
 // paper_engine.place_multileg_order only accepts 2-4 legs — capping here keeps a
 // backtested combo executable live instead of silently failing to open.
-const MAX_COMBO_LEGS = 4
+export const MAX_COMBO_LEGS = 4
+
+// One leg per card (type/side row, then strike%/qty row) rather than cramming
+// five fields into one row — the combo editor lives in narrow rails/cards
+// (as narrow as 166px) where a single-row grid truncates every field's text.
+// Shared by the Algo Strategy Builder (single + portfolio mode) and the
+// Portfolio Backtester's combo holdings.
+export function ComboLegEditor({ legs, onUpdate, onRemove, onAdd }: {
+  legs: ComboLeg[]
+  onUpdate: (i: number, patch: Partial<ComboLeg>) => void
+  onRemove: (i: number) => void
+  onAdd: () => void
+}) {
+  const sel: React.CSSProperties = { background: 'var(--theme-bg, #0a1628)', border: '1px solid var(--theme-border, rgba(255,255,255,0.14))', color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-mono)', fontSize: 10, padding: '4px 5px', outline: 'none', cursor: 'pointer', width: '100%', boxSizing: 'border-box' }
+  const num: React.CSSProperties = { ...sel, cursor: 'text' }
+  const fieldLabel: React.CSSProperties = { fontSize: 8, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', marginBottom: 2 }
+  const atCap = legs.length >= MAX_COMBO_LEGS
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)' }}>Legs ({legs.length})</span>
+        <button type="button" onClick={onAdd} disabled={atCap}
+          title={atCap ? `Live paper trading supports at most ${MAX_COMBO_LEGS} legs` : undefined}
+          style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', color: atCap ? 'var(--theme-text-faint, rgba(255,255,255,0.3))' : 'var(--theme-primary, #c9a84c)', background: 'none', border: 'none', cursor: atCap ? 'default' : 'pointer' }}>+ ADD</button>
+      </div>
+      {legs.map((leg, i) => (
+        <div key={i} style={{ background: 'var(--theme-bg, #0a1628)', border: `1px solid ${leg.side === 'sell' ? 'var(--theme-negative)' : 'var(--theme-positive)'}44`, padding: 6, display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', color: leg.side === 'sell' ? 'var(--theme-negative)' : 'var(--theme-positive)', textTransform: 'uppercase' }}>Leg {i + 1}</span>
+            <button type="button" onClick={() => onRemove(i)} disabled={legs.length <= 1} title="Remove leg"
+              style={{ background: 'none', border: 'none', fontSize: 13, lineHeight: 1, cursor: legs.length <= 1 ? 'default' : 'pointer', color: legs.length <= 1 ? 'var(--theme-text-faint, rgba(255,255,255,0.2))' : 'var(--theme-negative)' }}>×</button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5 }}>
+            <select value={leg.type} onChange={e => onUpdate(i, { type: e.target.value as ComboLeg['type'] })} style={sel}>
+              <option value="call">Call</option>
+              <option value="put">Put</option>
+            </select>
+            <select value={leg.side} onChange={e => onUpdate(i, { side: e.target.value as ComboLeg['side'] })} style={sel}>
+              <option value="buy">Buy</option>
+              <option value="sell">Sell</option>
+            </select>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5 }}>
+            <div>
+              <div style={fieldLabel}>Strike %</div>
+              <input type="number" value={Math.round(leg.moneyness * 100)} step={1} min={1}
+                title="Strike as % of spot (100 = at the money)"
+                onChange={e => onUpdate(i, { moneyness: Math.max(0.01, (e.target.value === '' ? 100 : +e.target.value) / 100) })}
+                style={num} />
+            </div>
+            <div>
+              <div style={fieldLabel}>Qty</div>
+              <input type="number" value={leg.qty} step={1} min={1}
+                onChange={e => onUpdate(i, { qty: Math.max(1, Math.round(+e.target.value || 1)) })}
+                style={num} />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 const STRIP: React.CSSProperties = {
   display: 'flex', alignItems: 'stretch', overflowX: 'auto',
@@ -351,39 +412,7 @@ export function AlgoStrategyBuilderContent() {
                   ))}
                 </select>
               </div>
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <label style={{ ...LABEL, fontSize: 8, marginBottom: 0 }}>Legs ({comboLegs.length})</label>
-                  <button onClick={addComboLeg} disabled={comboLegs.length >= MAX_COMBO_LEGS} title={comboLegs.length >= MAX_COMBO_LEGS ? `Live paper trading supports at most ${MAX_COMBO_LEGS} legs` : undefined}
-                    style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', color: comboLegs.length >= MAX_COMBO_LEGS ? 'var(--theme-text-faint, rgba(255,255,255,0.3))' : 'var(--theme-primary, #c9a84c)', background: 'none', border: 'none', cursor: comboLegs.length >= MAX_COMBO_LEGS ? 'default' : 'pointer' }}>+ ADD</button>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 40px 14px', gap: 4, fontSize: 7, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--theme-text-faint, rgba(255,255,255,0.35))', marginBottom: 3 }}>
-                  <span>Type</span><span>Side</span><span>Strike %</span><span>Qty</span><span />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {comboLegs.map((leg, i) => (
-                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 40px 14px', gap: 4, alignItems: 'center', background: 'var(--theme-bg, #0a1628)', border: `1px solid ${leg.side === 'sell' ? NEG : POS}44`, padding: 4 }}>
-                      <select value={leg.type} onChange={e => updateComboLeg(i, { type: e.target.value as ComboLeg['type'] })} style={{ ...INPUT, fontSize: 9, padding: '3px 4px', cursor: 'pointer' }}>
-                        <option value="call">Call</option>
-                        <option value="put">Put</option>
-                      </select>
-                      <select value={leg.side} onChange={e => updateComboLeg(i, { side: e.target.value as ComboLeg['side'] })} style={{ ...INPUT, fontSize: 9, padding: '3px 4px', cursor: 'pointer' }}>
-                        <option value="buy">Buy</option>
-                        <option value="sell">Sell</option>
-                      </select>
-                      <input type="number" value={Math.round(leg.moneyness * 100)} step={1} min={1}
-                        title="Strike as % of spot (100 = at the money)"
-                        onChange={e => updateComboLeg(i, { moneyness: Math.max(0.01, (e.target.value === '' ? 100 : +e.target.value) / 100) })}
-                        style={{ ...INPUT, fontSize: 9, padding: '3px 4px' }} />
-                      <input type="number" value={leg.qty} step={1} min={1}
-                        onChange={e => updateComboLeg(i, { qty: Math.max(1, Math.round(+e.target.value || 1)) })}
-                        style={{ ...INPUT, fontSize: 9, padding: '3px 4px' }} />
-                      <button onClick={() => removeComboLeg(i)} disabled={comboLegs.length <= 1} title="Remove leg"
-                        style={{ background: 'none', border: 'none', fontSize: 13, lineHeight: 1, cursor: comboLegs.length <= 1 ? 'default' : 'pointer', color: comboLegs.length <= 1 ? 'var(--theme-text-faint, rgba(255,255,255,0.2))' : 'var(--theme-negative)' }}>×</button>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <ComboLegEditor legs={comboLegs} onUpdate={updateComboLeg} onRemove={removeComboLeg} onAdd={addComboLeg} />
               <div>
                 <label style={{ ...LABEL, fontSize: 8 }}>DTE (days)</label>
                 <input type="number" value={comboDte} step={1} min={1} max={365}
@@ -528,28 +557,8 @@ export function AlgoStrategyBuilderContent() {
                           </optgroup>
                         ))}
                       </select>
-                      {p.comboLegs.map((leg, i) => (
-                        <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 34px 14px', gap: 3, alignItems: 'center' }}>
-                          <select value={leg.type} onChange={e => patchComboLeg(p.id, i, { type: e.target.value as ComboLeg['type'] })} style={{ ...INPUT, fontSize: 9, padding: '3px 4px', cursor: 'pointer' }}>
-                            <option value="call">Call</option>
-                            <option value="put">Put</option>
-                          </select>
-                          <select value={leg.side} onChange={e => patchComboLeg(p.id, i, { side: e.target.value as ComboLeg['side'] })} style={{ ...INPUT, fontSize: 9, padding: '3px 4px', cursor: 'pointer' }}>
-                            <option value="buy">Buy</option>
-                            <option value="sell">Sell</option>
-                          </select>
-                          <input type="number" value={Math.round(leg.moneyness * 100)} step={1} min={1} title="Strike as % of spot"
-                            onChange={e => patchComboLeg(p.id, i, { moneyness: Math.max(0.01, (e.target.value === '' ? 100 : +e.target.value) / 100) })}
-                            style={{ ...INPUT, fontSize: 9, padding: '3px 4px' }} />
-                          <input type="number" value={leg.qty} step={1} min={1}
-                            onChange={e => patchComboLeg(p.id, i, { qty: Math.max(1, Math.round(+e.target.value || 1)) })}
-                            style={{ ...INPUT, fontSize: 9, padding: '3px 4px' }} />
-                          <button onClick={() => removeComboLegFromPosition(p.id, i)} disabled={p.comboLegs.length <= 1} title="Remove leg"
-                            style={{ background: 'none', border: 'none', fontSize: 12, lineHeight: 1, cursor: p.comboLegs.length <= 1 ? 'default' : 'pointer', color: p.comboLegs.length <= 1 ? 'var(--theme-text-faint, rgba(255,255,255,0.2))' : 'var(--theme-negative)' }}>×</button>
-                        </div>
-                      ))}
-                      <button onClick={() => addComboLegToPosition(p.id)} disabled={p.comboLegs.length >= MAX_COMBO_LEGS} title={p.comboLegs.length >= MAX_COMBO_LEGS ? `Live paper trading supports at most ${MAX_COMBO_LEGS} legs` : undefined}
-                        style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', textAlign: 'left', color: p.comboLegs.length >= MAX_COMBO_LEGS ? 'var(--theme-text-faint, rgba(255,255,255,0.3))' : 'var(--theme-primary, #c9a84c)', background: 'none', border: 'none', cursor: p.comboLegs.length >= MAX_COMBO_LEGS ? 'default' : 'pointer' }}>+ ADD LEG</button>
+                      <ComboLegEditor legs={p.comboLegs} onUpdate={(i, patch) => patchComboLeg(p.id, i, patch)}
+                        onRemove={i => removeComboLegFromPosition(p.id, i)} onAdd={() => addComboLegToPosition(p.id)} />
                       <div>
                         <div style={{ fontSize: 8, color: 'var(--theme-secondary, #8099b0)', marginBottom: 2 }}>DTE (days)</div>
                         <input type="number" value={p.comboDte} min={1} max={365}

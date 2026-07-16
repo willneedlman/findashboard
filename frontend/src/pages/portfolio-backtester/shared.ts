@@ -18,6 +18,8 @@ import { RailSection } from '../valuationShared'
 import EmptyState from '../../components/EmptyState'
 import PortfolioIO, { type PortfolioAsset } from '../../components/PortfolioIO'
 import PMImportPicker from '../../components/PMImportPicker'
+import { type ComboLeg, legsToCombo } from '../AlgoStrategyBuilder'
+import { PRESETS } from '../strategy-builder/shared'
 import { CASH_SYMBOL, type ImportResult } from '../../lib/pmImport'
 import { usePortfolio } from '../../contexts/PortfolioContext'
 import { weightTotal, normalizeTo100 } from '../../components/portfolio/weights'
@@ -61,13 +63,13 @@ export type Asset = {
   // strategy only — the combo's own entry/exit is driven by the same rules,
   // so it replaces rather than layers on top of the sl/tp/trail overlay).
   instMode?: 'underlying' | 'combo'
-  comboPreset?: string
+  comboLegs?: ComboLeg[]
   comboDte?: number
 }
 
 export const makeAsset = (ticker: string, weight: number): Asset => ({
   ticker, weight, strategy: STRATEGIES[0], stratParams: {},
-  instMode: 'underlying', comboPreset: 'Short Straddle', comboDte: 30,
+  instMode: 'underlying', comboLegs: legsToCombo(PRESETS['Short Straddle']), comboDte: 30,
 })
 
 export const PORT_DEFAULTS: Asset[] = [

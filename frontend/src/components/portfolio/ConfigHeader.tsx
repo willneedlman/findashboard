@@ -3,6 +3,7 @@ import { ChevronUp, ChevronDown, Play, X, MoreHorizontal } from 'lucide-react'
 import StrategySelector, { STRATEGIES, CUSTOM_STRATEGY_KEY, type StrategyParams } from '../StrategySelector'
 import { weightTotal, normalizeTo100 } from './weights'
 import { PRESETS, PRESET_GROUPS } from '../../pages/strategy-builder/shared'
+import { type ComboLeg, legsToCombo, mkComboLeg, MAX_COMBO_LEGS, ComboLegEditor } from '../../pages/AlgoStrategyBuilder'
 
 export type Holding = {
   ticker: string; weight: number; strategy: string; stratParams: StrategyParams
@@ -10,7 +11,7 @@ export type Holding = {
   // with the Custom Rule strategy (the combo's own entry/exit comes from those
   // rules). Backtester mode only; Monte Carlo's holdings stay equity-only.
   instMode?: 'underlying' | 'combo'
-  comboPreset?: string
+  comboLegs?: ComboLeg[]
   comboDte?: number
 }
 
@@ -178,7 +179,10 @@ function HoldingCard({ holding, index, maxWeight, onChange, onRemove, tickerList
         <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
           <div style={{ display: 'flex', gap: 4 }}>
             {(['underlying', 'combo'] as const).map(im => (
-              <button key={im} type="button" onClick={() => onChange({ instMode: im })}
+              <button key={im} type="button" onClick={() => onChange(im === 'underlying' ? { instMode: im }
+                // Seed comboLegs here, not just at read sites — a holding toggled to
+                // Combo without a legs array would silently drop from the backtest.
+                : { instMode: im, comboLegs: holding.comboLegs?.length ? holding.comboLegs : legsToCombo(PRESETS['Short Straddle']), comboDte: holding.comboDte ?? 30 })}
                 style={{
                   flex: 1, padding: '3px 0', fontFamily: T.mono, fontSize: 8, fontWeight: 700,
                   letterSpacing: '0.06em', textTransform: 'uppercase', cursor: 'pointer',
@@ -190,20 +194,24 @@ function HoldingCard({ holding, index, maxWeight, onChange, onRemove, tickerList
           </div>
           {holding.instMode === 'combo' && (
             <>
-              <select value={holding.comboPreset ?? 'Short Straddle'} onChange={e => onChange({ comboPreset: e.target.value })}
+              <select value="" onChange={e => e.target.value && onChange({ comboLegs: legsToCombo(PRESETS[e.target.value] ?? []) })}
                 style={{ ...inputBase, fontSize: 9, padding: '3px 5px', cursor: 'pointer' }}>
+                <option value="">Load preset…</option>
                 {PRESET_GROUPS.map(g => (
                   <optgroup key={g.label} label={g.label}>
                     {g.keys.map(k => <option key={k} value={k}>{k}</option>)}
                   </optgroup>
                 ))}
               </select>
+              <ComboLegEditor legs={holding.comboLegs ?? []}
+                onUpdate={(i, patch) => onChange({ comboLegs: (holding.comboLegs ?? []).map((l, j) => j === i ? { ...l, ...patch } : l) })}
+                onRemove={i => onChange({ comboLegs: (holding.comboLegs ?? []).length > 1 ? (holding.comboLegs ?? []).filter((_, j) => j !== i) : holding.comboLegs })}
+                onAdd={() => onChange({ comboLegs: (holding.comboLegs ?? []).length >= MAX_COMBO_LEGS ? holding.comboLegs : [...(holding.comboLegs ?? []), mkComboLeg()] })} />
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span style={{ fontSize: 8, color: T.faint }}>DTE</span>
                 <input type="number" value={holding.comboDte ?? 30} min={1} max={365}
                   onChange={e => onChange({ comboDte: Math.max(1, +e.target.value || 30) })}
                   style={{ ...inputBase, fontSize: 9, padding: '3px 5px', width: 44 } as React.CSSProperties} />
-                <span style={{ fontSize: 8, color: T.faint }}>{(PRESETS[holding.comboPreset ?? 'Short Straddle'] ?? []).length} legs</span>
               </div>
             </>
           )}
