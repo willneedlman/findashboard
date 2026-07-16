@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import axios from 'axios'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
@@ -13,6 +13,7 @@ import CustomStrategyModal, { type CustomStrategyDef, DEFAULT_RISK, rulesForTick
 import { loadCustomStrategies, saveCustomStrategy, deleteCustomStrategy } from '../utils/customStrategies'
 import { PRESETS, PRESET_GROUPS, type Leg } from './strategy-builder/shared'
 import { ReturnsScatter, quickRegression } from './regressionShared'
+import { readPMPortfolios, normalizeTicker } from '../lib/pmImport'
 
 // Backend combo-instrument leg shape (mirrors strategy-builder's Leg but strike
 // is a moneyness ratio — spot-relative, not a dollar strike — since the combo
@@ -197,6 +198,20 @@ export function AlgoStrategyBuilderContent() {
   const patchPosition = (id: string, patch: Partial<PortfolioPos>) =>
     setPositions(p => p.map(x => x.id === id ? { ...x, ...patch } : x))
   const removePosition = (id: string) => setPositions(p => p.filter(x => x.id !== id))
+  // Clone one position's full config (strategy, side, instrument, combo legs —
+  // everything but ticker/id) onto a batch of other tickers, so building a
+  // strategy once (e.g. a short straddle) doesn't mean rebuilding it per ticker.
+  const [cloningId, setCloningId] = useState<string | null>(null)
+  const [cloneInput, setCloneInput] = useState('')
+  const pmBooks = useMemo(() => readPMPortfolios().filter(b => b.holdings.length), [])
+  const cloneToTickers = (template: PortfolioPos) => {
+    const tickers = [...new Set(cloneInput.split(/[,\s]+/).map(t => normalizeTicker(t)).filter(Boolean))]
+      .filter(t => t !== template.ticker.toUpperCase())
+    if (!tickers.length) return
+    setPositions(p => [...p, ...tickers.map(t => ({ ...template, id: rid(), ticker: t }))])
+    setCloneInput('')
+    setCloningId(null)
+  }
   const patchComboLeg = (posId: string, i: number, patch: Partial<ComboLeg>) =>
     setPositions(p => p.map(x => x.id !== posId ? x : { ...x, comboLegs: x.comboLegs.map((l, j) => j === i ? { ...l, ...patch } : l) }))
   const addComboLegToPosition = (posId: string) =>
@@ -573,6 +588,42 @@ export function AlgoStrategyBuilderContent() {
                       ? `${p.side === 'short' ? 'Short' : 'Long'} ${p.otmPct === 0 ? 'ATM' : p.otmPct > 0 ? `${p.otmPct}% OTM` : `${-p.otmPct}% ITM`} ${p.optType} · ${p.dte}d`
                       : `${p.side === 'short' ? 'Short' : 'Long'} shares`}
                     {p.instMode === 'option' && p.side === 'short' && <span style={{ color: 'var(--theme-text-faint, rgba(255,255,255,0.4))' }}> · written</span>}
+                  </div>
+                  <div style={{ marginTop: 5, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingTop: 5 }}>
+                    <button onClick={() => { setCloningId(cloningId === p.id ? null : p.id); setCloneInput('') }}
+                      style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                      {cloningId === p.id ? '× Cancel' : 'Copy to other tickers…'}
+                    </button>
+                    {cloningId === p.id && (
+                      <>
+                        {pmBooks.length > 0 && (
+                          <select value="" onChange={e => {
+                            const book = pmBooks.find(b => b.id === e.target.value)
+                            if (!book) return
+                            const tickers = [...new Set(book.holdings.map(h => normalizeTicker(h.ticker)).filter(Boolean))]
+                              .filter(t => t !== p.ticker.toUpperCase())
+                            setCloneInput(tickers.join(', '))
+                          }} style={{ ...INPUT, fontSize: 9, cursor: 'pointer', marginTop: 4 }}>
+                            <option value="">Load from Portfolio Manager…</option>
+                            {pmBooks.map(b => <option key={b.id} value={b.id}>{b.name} ({b.holdings.length})</option>)}
+                          </select>
+                        )}
+                        <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                          <input value={cloneInput} onChange={e => setCloneInput(e.target.value)} placeholder="MSFT, NVDA, TSLA…"
+                            onKeyDown={e => e.key === 'Enter' && cloneToTickers(p)}
+                            autoFocus style={{ ...INPUT, fontSize: 9, flex: 1, textTransform: 'uppercase' }} />
+                          <button onClick={() => cloneToTickers(p)} disabled={!cloneInput.trim()} style={{
+                            fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '0 8px',
+                            color: cloneInput.trim() ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-text-faint, rgba(255,255,255,0.3))',
+                            background: 'none', border: `1px solid ${cloneInput.trim() ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.12))'}`,
+                            cursor: cloneInput.trim() ? 'pointer' : 'default',
+                          }}>Add</button>
+                        </div>
+                        <div style={{ fontSize: 7, color: 'var(--theme-text-faint, rgba(255,255,255,0.35))', lineHeight: '10px', marginTop: 3 }}>
+                          Same strategy, side, and instrument (legs included) as one new position per ticker.
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               )
