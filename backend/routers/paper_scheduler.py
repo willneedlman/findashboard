@@ -102,6 +102,9 @@ def _init_db() -> None:
             # OCC symbol of the option contract a job currently holds (option
             # instruments only) so the exit closes exactly what the entry opened.
             "ALTER TABLE paper_schedule_jobs ADD COLUMN open_occ TEXT",
+            # JSON list of {occ, side, qty} for a combo instrument's currently-held
+            # legs — a combo needs more than one OCC symbol, unlike open_occ above.
+            "ALTER TABLE paper_schedule_jobs ADD COLUMN open_legs_json TEXT",
         ):
             try:
                 conn.execute(ddl)
@@ -262,6 +265,102 @@ def _place_option_sync(user_id: str, ticker: str, signal: str, qty: int, spec: d
         return None, None
 
 
+def _resolve_combo_contracts(ticker: str, combo: dict, spot: float) -> list[dict] | None:
+    """Resolve every leg of a combo instrument to a real listed contract from
+    the live chain. All legs share the same ticker+expiry (only strike/type
+    differ), so the chain is fetched once and reused per leg rather than
+    re-fetching per leg. Returns None if any single leg can't be resolved — a
+    combo either opens whole or not at all, never partially."""
+    legs_cfg = combo.get("legs") or []
+    if not legs_cfg or not spot:
+        return None
+    dte = max(1, int(combo.get("dte", 30)))
+    try:
+        import datetime as _dt
+        tk = yf.Ticker(ticker)
+        exps = [e for e in (tk.options or []) if e]
+        if not exps:
+            return None
+        target = _dt.date.today() + _dt.timedelta(days=dte)
+        expiry = min(exps, key=lambda e: abs((_dt.date.fromisoformat(e) - target).days))
+        chain = tk.option_chain(expiry)
+        y, m, d = expiry.split("-")
+    except Exception as e:
+        _log.warning("Combo contract resolve failed for %s: %s", ticker, e)
+        return None
+    resolved: list[dict] = []
+    for lc in legs_cfg:
+        otype = "put" if str(lc.get("type", "call")).lower().startswith("p") else "call"
+        moneyness = float(lc.get("moneyness", 1.0))
+        df = chain.puts if otype == "put" else chain.calls
+        if df is None or df.empty:
+            return None
+        strikes = [float(s) for s in df["strike"].tolist()]
+        strike = min(strikes, key=lambda s: abs(s - spot * moneyness))
+        cp = "C" if otype == "call" else "P"
+        occ = f"{ticker.upper()}{y[2:]}{m}{d}{cp}{int(round(strike * 1000)):08d}"
+        resolved.append({"occ": occ, "side": str(lc.get("side", "buy")).lower(), "qty": max(1, int(lc.get("qty", 1)))})
+    return resolved
+
+
+def _place_combo_sync(user_id: str, ticker: str, signal: str, base_qty: int, combo: dict,
+                      open_legs: list[dict] | None, spot: float) -> tuple[str | None, list[dict] | None]:
+    """Open every leg of a combo atomically on BUY, close every held leg
+    atomically on SELL, via paper_engine.place_multileg_order — the same
+    all-or-nothing multi-leg fill the manual "send to paper" bridge uses, so a
+    rule-triggered straddle/condor/etc opens as one real position, not a
+    sequence of independent single-leg orders that could partially fill.
+    Returns (order_id, new_open_legs) — new_open_legs is [] once flat, None =
+    no change. A 1-leg combo routes through the plain single-option order
+    since place_multileg_order requires 2-4 legs; combos above 4 legs aren't
+    supported by the paper engine and are skipped (logged, no order)."""
+    if not user_id:
+        return None, None
+    try:
+        if signal == "BUY":
+            if open_legs:
+                return None, None   # already holding this combo
+            legs = _resolve_combo_contracts(ticker, combo, spot)
+            if not legs:
+                return None, None
+            if len(legs) > 4:
+                _log.warning("Combo for %s has %d legs — paper engine supports at most 4, skipping", ticker, len(legs))
+                return None, None
+            order_legs = [{
+                "option_symbol": l["occ"], "side": "sell_to_open" if l["side"] == "sell" else "buy_to_open",
+                "quantity": max(1, int(round(base_qty * l["qty"]))),
+            } for l in legs]
+            if len(order_legs) == 1:
+                res = paper_engine.place_option_order(user_id, order_legs[0]["option_symbol"], order_legs[0]["side"], order_legs[0]["quantity"], "market")
+                if res.get("status") != "filled":
+                    _log.info("Scheduler combo BUY not filled (%s): %s", order_legs[0]["option_symbol"], res.get("reason") or res.get("status"))
+                    return None, None
+                return str(res.get("id") or "") or None, [{"occ": order_legs[0]["option_symbol"], "side": legs[0]["side"], "qty": order_legs[0]["quantity"]}]
+            res = paper_engine.place_multileg_order(user_id, order_legs, "market")
+            if res.get("status") != "filled":
+                _log.info("Scheduler combo BUY not filled (%s legs, %s): %s", len(order_legs), ticker, res.get("reason") or res.get("status"))
+                return None, None
+            held = [{"occ": ol["option_symbol"], "side": l["side"], "qty": ol["quantity"]} for ol, l in zip(order_legs, legs)]
+            return str(res.get("id") or ""), held
+        else:  # SELL — close every held leg together
+            if not open_legs:
+                return None, None
+            close_legs = [{
+                "option_symbol": l["occ"], "side": "buy_to_close" if l["side"] == "sell" else "sell_to_close",
+                "quantity": l["qty"],
+            } for l in open_legs]
+            if len(close_legs) == 1:
+                res = paper_engine.place_option_order(user_id, close_legs[0]["option_symbol"], close_legs[0]["side"], close_legs[0]["quantity"], "market")
+                oid = str(res.get("id") or "") or None if res.get("status") == "filled" else None
+                return oid, ([] if oid else None)
+            res = paper_engine.place_multileg_order(user_id, close_legs, "market")
+            oid = str(res.get("id") or "") if res.get("status") == "filled" else None
+            return oid, ([] if oid else None)
+    except Exception as e:
+        _log.warning("Paper combo order failed (%s %s): %s", signal, ticker, e)
+        return None, None
+
+
 def _is_market_open() -> bool:
     """True if current time is within NYSE regular hours (09:30–16:00 ET, Mon-Fri)."""
     from zoneinfo import ZoneInfo
@@ -328,7 +427,8 @@ async def _run_scheduler_loop() -> None:
 
             log_rows: list[tuple] = []
             job_updates: list[tuple] = []
-            occ_updates: list[tuple] = []   # (open_occ, job_id) for option jobs whose holding changed
+            occ_updates: list[tuple] = []    # (open_occ, job_id) for option jobs whose holding changed
+            legs_updates: list[tuple] = []   # (open_legs_json, job_id) for combo jobs whose holding changed
 
             for job in due_jobs:
                 job_id = job["id"]
@@ -376,7 +476,8 @@ async def _run_scheduler_loop() -> None:
 
                 order_id: str | None = None
                 notes = ""
-                occ_update: str | None = None   # new open_occ when it changes
+                occ_update: str | None = None    # new open_occ when it changes
+                legs_update: list[dict] | None = None   # new open_legs when a combo's holding changes
 
                 # Execute into the job owner's own paper account — only on a
                 # signal TRANSITION. Strategies report BUY every bar while invested
@@ -385,7 +486,15 @@ async def _run_scheduler_loop() -> None:
                 transition = signal_str != (job.get("last_signal") or "HOLD")
                 if signal_str in ("BUY", "SELL") and transition:
                     inst_spec = params.get("instrument") or {}
-                    if inst_spec.get("kind") == "option":
+                    if inst_spec.get("kind") == "combo":
+                        open_legs = json.loads(job.get("open_legs_json") or "null")
+                        order_id, legs_update = await loop.run_in_executor(
+                            _executor, _place_combo_sync, job.get("user_id", ""),
+                            ticker, signal_str, qty, inst_spec, open_legs, price,
+                        )
+                        held_count = len(legs_update) if legs_update is not None else len(open_legs or [])
+                        notes = f"combo legs={held_count} order_id={order_id}" if order_id else "combo_order_failed"
+                    elif inst_spec.get("kind") == "option":
                         opt_side = str(params.get("side", "long")).lower()
                         order_id, occ_update = await loop.run_in_executor(
                             _executor, _place_option_sync, job.get("user_id", ""),
@@ -413,8 +522,10 @@ async def _run_scheduler_loop() -> None:
                 job_updates.append((signal_str, price, now_ts, job_id))
                 if occ_update is not None:
                     occ_updates.append((occ_update, job_id))
+                if legs_update is not None:
+                    legs_updates.append((json.dumps(legs_update), job_id))
 
-            if log_rows or job_updates or occ_updates:
+            if log_rows or job_updates or occ_updates or legs_updates:
                 with _db() as conn:
                     if log_rows:
                         conn.executemany(
@@ -433,6 +544,11 @@ async def _run_scheduler_loop() -> None:
                         conn.executemany(
                             "UPDATE paper_schedule_jobs SET open_occ=? WHERE id=?",
                             occ_updates
+                        )
+                    if legs_updates:
+                        conn.executemany(
+                            "UPDATE paper_schedule_jobs SET open_legs_json=? WHERE id=?",
+                            legs_updates
                         )
                     # Prune old log rows
                     conn.execute(
@@ -586,10 +702,38 @@ def create_job(body: JobCreate, authorization: str = Header(default=""), x_sessi
     return _row_to_job(row)
 
 
+def _flatten_job_position(job: dict) -> None:
+    """Close whatever a job currently holds (single option or combo legs)
+    before it's deleted or disabled — otherwise a naked short position (a
+    combo's uncapped legs especially) is stranded with nothing left to ever
+    close it. Closing needs no live spot price (only the held OCC symbols),
+    so this runs synchronously and cheaply."""
+    params = json.loads(job.get("params_json") or "{}")
+    inst_spec = params.get("instrument") or {}
+    user_id = job.get("user_id", "")
+    if not user_id:
+        return
+    try:
+        if inst_spec.get("kind") == "combo":
+            open_legs = json.loads(job.get("open_legs_json") or "null")
+            if open_legs:
+                _place_combo_sync(user_id, job["ticker"], "SELL", job.get("qty", 1), inst_spec, open_legs, 0.0)
+        elif inst_spec.get("kind") == "option" and job.get("open_occ"):
+            opt_side = str(params.get("side", "long")).lower()
+            _place_option_sync(user_id, job["ticker"], "SELL", job.get("qty", 1), inst_spec, job.get("open_occ"), 0.0, opt_side)
+    except Exception as e:
+        _log.warning("Could not flatten job %s on delete/disable: %s", job.get("id"), e)
+
+
 @router.delete("/jobs/{job_id}")
 def delete_job(job_id: str, user_id: str, authorization: str = Header(default=""), x_session_token: str = Header(default="")):
     _require_owner(user_id, authorization, x_session_token)
     with _db() as conn:
+        row = conn.execute(
+            "SELECT * FROM paper_schedule_jobs WHERE id=? AND user_id=?", (job_id, user_id)
+        ).fetchone()
+        if row:
+            _flatten_job_position(dict(row))
         deleted = conn.execute(
             "DELETE FROM paper_schedule_jobs WHERE id=? AND user_id=?", (job_id, user_id)
         ).rowcount
@@ -604,6 +748,13 @@ def toggle_job(job_id: str, body: dict, user_id: str, authorization: str = Heade
     _require_owner(user_id, authorization, x_session_token)
     enabled = int(bool(body.get("enabled", True)))
     with _db() as conn:
+        if not enabled:
+            row = conn.execute(
+                "SELECT * FROM paper_schedule_jobs WHERE id=? AND user_id=?", (job_id, user_id)
+            ).fetchone()
+            if row:
+                _flatten_job_position(dict(row))
+                conn.execute("UPDATE paper_schedule_jobs SET open_occ=NULL, open_legs_json=NULL WHERE id=?", (job_id,))
         updated = conn.execute(
             "UPDATE paper_schedule_jobs SET enabled=? WHERE id=? AND user_id=?",
             (enabled, job_id, user_id)
