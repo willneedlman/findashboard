@@ -26,6 +26,7 @@ import HelpTip from '../../components/HelpTip'
 import { TAB_BAR, TAB_BASE, type Tab, type Asset, makeAsset, PORT_DEFAULTS, PORT_INPUT, PORT_LABEL, PORT_TICK, ALGO_STRATEGIES, ALGO_DEFAULT_PARAMS, ALGO_PARAM_LABELS, ALGO_INPUT, ALGO_LABEL, ALGO_TICK, ALGO_SECTION_DIVIDER, type BacktestResult, type SignalResult } from './shared'
 import { PRESETS, PRESET_GROUPS } from '../strategy-builder/shared'
 import { legsToCombo } from '../AlgoStrategyBuilder'
+import { ReturnsScatter, quickRegression } from '../regressionShared'
 
 const STRIP: React.CSSProperties = {
   display: 'flex', alignItems: 'stretch', overflowX: 'auto',
@@ -492,6 +493,20 @@ export function PortfolioTab() {
                 </ResponsiveContainer>
               </PortChartPanel>
             </div>
+
+            {(() => {
+              const curve = data.strategyResult?.cumulative || data.cumulative
+              const reg = quickRegression(curve.map((pt: any) => ({ x: pt.benchmark, y: pt.strategy ?? pt.portfolio })))
+              if (reg.x.length < 2) return null
+              return (
+                <PortChartPanel label={`Regression — ${data.strategyResult ? 'Strategy' : 'Portfolio'} vs ${benchmark} Daily Returns`} height={330}>
+                  <ReturnsScatter x={reg.x} y={reg.y} line={reg.line} xLabel={benchmark} yLabel={data.strategyResult ? 'strategy daily return' : 'portfolio daily return'} height={280} />
+                  <div style={{ fontSize: 9, fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em', color: 'var(--theme-secondary, #99907e)', textAlign: 'center', marginTop: 6 }}>
+                    Beta {reg.beta.toFixed(2)} · daily alpha {reg.alpha >= 0 ? '+' : ''}{(reg.alpha * 100).toFixed(3)}%
+                  </div>
+                </PortChartPanel>
+              )
+            })()}
 
             {portSignalData.map(leg => (
               <BacktestSignalChart

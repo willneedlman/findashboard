@@ -400,6 +400,7 @@
 .metric-grid   { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .metric-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
 .chart-pair    { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chart-pair > * { min-width: 0; }
 .table-scroll  { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
 @media (max-width: 767px) {

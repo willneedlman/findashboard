@@ -11,7 +11,8 @@ import { useChartColors } from '../hooks/useChartColors'
 import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
 import CustomStrategyModal, { type CustomStrategyDef, DEFAULT_RISK, rulesForTicker, usesNonDailyTimeframe } from '../components/CustomStrategyModal'
 import { loadCustomStrategies, saveCustomStrategy, deleteCustomStrategy } from '../utils/customStrategies'
-import { PRESETS, PRESET_DESC, PRESET_GROUPS, type Leg } from './strategy-builder/shared'
+import { PRESETS, PRESET_GROUPS, type Leg } from './strategy-builder/shared'
+import { ReturnsScatter, quickRegression } from './regressionShared'
 
 // Backend combo-instrument leg shape (mirrors strategy-builder's Leg but strike
 // is a moneyness ratio — spot-relative, not a dollar strike — since the combo
@@ -19,6 +20,10 @@ import { PRESETS, PRESET_DESC, PRESET_GROUPS, type Leg } from './strategy-builde
 export type ComboLeg = { type: 'call' | 'put'; side: 'buy' | 'sell'; moneyness: number; qty: number }
 export const legsToCombo = (legs: Leg[]): ComboLeg[] =>
   legs.map(l => ({ type: l.option_type, side: l.action, moneyness: l.K / 100, qty: l.quantity }))
+const mkComboLeg = (): ComboLeg => ({ type: 'call', side: 'buy', moneyness: 1, qty: 1 })
+// paper_engine.place_multileg_order only accepts 2-4 legs — capping here keeps a
+// backtested combo executable live instead of silently failing to open.
+const MAX_COMBO_LEGS = 4
 
 const STRIP: React.CSSProperties = {
   display: 'flex', alignItems: 'stretch', overflowX: 'auto',
@@ -43,7 +48,7 @@ interface BacktestResult {
 interface PortfolioPos {
   id: string; strategy: string; ticker: string
   instMode: 'underlying' | 'option' | 'combo'; optType: 'call' | 'put'; otmPct: number; dte: number
-  comboPreset: string; comboDte: number
+  comboLegs: ComboLeg[]; comboDte: number
   side: 'long' | 'short'; weight: number
 }
 interface PortfolioResult {
@@ -88,9 +93,15 @@ export function AlgoStrategyBuilderContent() {
   const [otmPct, setOtmPct] = useState(0)
   const optMoneyness = optType === 'call' ? 1 + otmPct / 100 : 1 - otmPct / 100
   const [dte, setDte] = useState(30)
-  const [comboPreset, setComboPreset] = useState('Short Straddle')
+  // Combo legs start from a preset but are then freely editable — add/remove/
+  // retype/reweight any leg, same as the Options Strategy Builder.
+  const [comboLegs, setComboLegs] = useState<ComboLeg[]>(() => legsToCombo(PRESETS['Short Straddle']))
   const [comboDte, setComboDte] = useState(30)
-  const comboInstrument = () => ({ kind: 'combo', dte: comboDte, legs: legsToCombo(PRESETS[comboPreset] ?? []) })
+  const comboInstrument = () => ({ kind: 'combo', dte: comboDte, legs: comboLegs })
+  const loadComboPreset = (name: string) => setComboLegs(legsToCombo(PRESETS[name] ?? []))
+  const addComboLeg = () => setComboLegs(l => l.length >= MAX_COMBO_LEGS ? l : [...l, mkComboLeg()])
+  const removeComboLeg = (i: number) => setComboLegs(l => l.length > 1 ? l.filter((_, j) => j !== i) : l)
+  const updateComboLeg = (i: number, patch: Partial<ComboLeg>) => setComboLegs(l => l.map((leg, j) => j === i ? { ...leg, ...patch } : leg))
   // Direction the BUY signal opens (single mode): long buys, short sells/writes.
   const [side, setSide] = useState<'long' | 'short'>('long')
   const [paramsOpen, setParamsOpen] = useState(true)
@@ -100,17 +111,37 @@ export function AlgoStrategyBuilderContent() {
   const [editing, setEditing] = useState<CustomStrategyDef | null>(null)
   const [mode, setMode] = useState<'single' | 'portfolio'>('single')
   const [positions, setPositions] = useState<PortfolioPos[]>(() => {
-    try { return JSON.parse(localStorage.getItem(PF_KEY) || '[]') } catch { return [] }
+    try {
+      const raw: any[] = JSON.parse(localStorage.getItem(PF_KEY) || '[]')
+      // Migrate positions saved before combo legs became editable — they only
+      // have a `comboPreset` name, not a legs array. Drop that name once migrated;
+      // nothing reads it anymore.
+      return raw.map(({ comboPreset, ...p }) => ({
+        ...p,
+        comboLegs: Array.isArray(p.comboLegs) && p.comboLegs.length ? p.comboLegs : legsToCombo(PRESETS[comboPreset ?? 'Short Straddle'] ?? PRESETS['Short Straddle']),
+      }))
+    } catch { return [] }
   })
-  useEffect(() => { localStorage.setItem(PF_KEY, JSON.stringify(positions)) }, [positions])
+  // Debounced: combo-leg edits call setPositions on every keystroke, and writing
+  // the whole array to localStorage on each one is wasted work mid-typing.
+  useEffect(() => {
+    const t = setTimeout(() => localStorage.setItem(PF_KEY, JSON.stringify(positions)), 400)
+    return () => clearTimeout(t)
+  }, [positions])
   const addPosition = () => setPositions(p => [...p, {
     id: rid(), strategy: loadCustomStrategies()[0]?.name ?? '', ticker: 'AAPL',
     instMode: 'underlying', optType: 'call', otmPct: 0, dte: 30,
-    comboPreset: 'Short Straddle', comboDte: 30, side: 'long', weight: 25,
+    comboLegs: legsToCombo(PRESETS['Short Straddle']), comboDte: 30, side: 'long', weight: 25,
   }])
   const patchPosition = (id: string, patch: Partial<PortfolioPos>) =>
     setPositions(p => p.map(x => x.id === id ? { ...x, ...patch } : x))
   const removePosition = (id: string) => setPositions(p => p.filter(x => x.id !== id))
+  const patchComboLeg = (posId: string, i: number, patch: Partial<ComboLeg>) =>
+    setPositions(p => p.map(x => x.id !== posId ? x : { ...x, comboLegs: x.comboLegs.map((l, j) => j === i ? { ...l, ...patch } : l) }))
+  const addComboLegToPosition = (posId: string) =>
+    setPositions(p => p.map(x => x.id !== posId || x.comboLegs.length >= MAX_COMBO_LEGS ? x : { ...x, comboLegs: [...x.comboLegs, mkComboLeg()] }))
+  const removeComboLegFromPosition = (posId: string, i: number) =>
+    setPositions(p => p.map(x => x.id !== posId || x.comboLegs.length <= 1 ? x : { ...x, comboLegs: x.comboLegs.filter((_, j) => j !== i) }))
 
   const posToPayload = (p: PortfolioPos) => {
     const def = saved.find(s => s.name === p.strategy)
@@ -119,7 +150,7 @@ export function AlgoStrategyBuilderContent() {
     const r = def.risk
     const rules = rulesForTicker(def, p.ticker)   // per-ticker override, else default
     const instrument = p.instMode === 'option' ? { kind: 'option', type: p.optType, moneyness: money, dte: p.dte }
-      : p.instMode === 'combo' ? { kind: 'combo', dte: p.comboDte ?? 30, legs: legsToCombo(PRESETS[p.comboPreset ?? 'Short Straddle'] ?? []) }
+      : p.instMode === 'combo' ? { kind: 'combo', dte: p.comboDte ?? 30, legs: p.comboLegs?.length ? p.comboLegs : legsToCombo(PRESETS['Short Straddle']) }
       : undefined
     return {
       ticker: p.ticker, side: p.side, weight: p.weight,
@@ -210,6 +241,9 @@ export function AlgoStrategyBuilderContent() {
   const pf = runPortfolio.data
   const R = mode === 'portfolio' ? pf : data          // active result for the current mode
   const mR = R?.metrics
+  // Regression dotplot: daily strategy vs benchmark returns derived straight from
+  // the equity curve already on screen, no extra backend round-trip.
+  const reg = R ? quickRegression(R.equity_curve.map(pt => ({ x: pt.benchmark, y: pt.strategy }))) : null
 
   return (
     <SidebarLayout sidebarWidth={230} sidebarTitle="" sidebar={<>
@@ -307,8 +341,9 @@ export function AlgoStrategyBuilderContent() {
           {mode === 'single' && instMode === 'combo' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 8, border: '1px solid var(--theme-border, rgba(255,255,255,0.1))', background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 4%, transparent)' }}>
               <div>
-                <label style={{ ...LABEL, fontSize: 8 }}>Structure</label>
-                <select value={comboPreset} onChange={e => setComboPreset(e.target.value)} style={{ ...INPUT, cursor: 'pointer' }}>
+                <label style={{ ...LABEL, fontSize: 8 }}>Load preset</label>
+                <select value="" onChange={e => e.target.value && loadComboPreset(e.target.value)} style={{ ...INPUT, cursor: 'pointer' }}>
+                  <option value="">— pick a starting structure —</option>
                   {PRESET_GROUPS.map(g => (
                     <optgroup key={g.label} label={g.label}>
                       {g.keys.map(k => <option key={k} value={k}>{k}</option>)}
@@ -316,19 +351,43 @@ export function AlgoStrategyBuilderContent() {
                   ))}
                 </select>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                <div>
-                  <label style={{ ...LABEL, fontSize: 8 }}>DTE (days)</label>
-                  <input type="number" value={comboDte} step={1} min={1} max={365}
-                    onChange={e => setComboDte(Math.max(1, +e.target.value || 30))} style={INPUT} />
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <label style={{ ...LABEL, fontSize: 8, marginBottom: 0 }}>Legs ({comboLegs.length})</label>
+                  <button onClick={addComboLeg} disabled={comboLegs.length >= MAX_COMBO_LEGS} title={comboLegs.length >= MAX_COMBO_LEGS ? `Live paper trading supports at most ${MAX_COMBO_LEGS} legs` : undefined}
+                    style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', color: comboLegs.length >= MAX_COMBO_LEGS ? 'var(--theme-text-faint, rgba(255,255,255,0.3))' : 'var(--theme-primary, #c9a84c)', background: 'none', border: 'none', cursor: comboLegs.length >= MAX_COMBO_LEGS ? 'default' : 'pointer' }}>+ ADD</button>
                 </div>
-                <div>
-                  <label style={{ ...LABEL, fontSize: 8 }}>Legs</label>
-                  <div style={{ ...INPUT, display: 'flex', alignItems: 'center', color: 'var(--theme-secondary, #8099b0)' }}>{(PRESETS[comboPreset] ?? []).length}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 40px 14px', gap: 4, fontSize: 7, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--theme-text-faint, rgba(255,255,255,0.35))', marginBottom: 3 }}>
+                  <span>Type</span><span>Side</span><span>Strike %</span><span>Qty</span><span />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {comboLegs.map((leg, i) => (
+                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 40px 14px', gap: 4, alignItems: 'center', background: 'var(--theme-bg, #0a1628)', border: `1px solid ${leg.side === 'sell' ? NEG : POS}44`, padding: 4 }}>
+                      <select value={leg.type} onChange={e => updateComboLeg(i, { type: e.target.value as ComboLeg['type'] })} style={{ ...INPUT, fontSize: 9, padding: '3px 4px', cursor: 'pointer' }}>
+                        <option value="call">Call</option>
+                        <option value="put">Put</option>
+                      </select>
+                      <select value={leg.side} onChange={e => updateComboLeg(i, { side: e.target.value as ComboLeg['side'] })} style={{ ...INPUT, fontSize: 9, padding: '3px 4px', cursor: 'pointer' }}>
+                        <option value="buy">Buy</option>
+                        <option value="sell">Sell</option>
+                      </select>
+                      <input type="number" value={Math.round(leg.moneyness * 100)} step={1} min={1}
+                        title="Strike as % of spot (100 = at the money)"
+                        onChange={e => updateComboLeg(i, { moneyness: Math.max(0.01, (e.target.value === '' ? 100 : +e.target.value) / 100) })}
+                        style={{ ...INPUT, fontSize: 9, padding: '3px 4px' }} />
+                      <input type="number" value={leg.qty} step={1} min={1}
+                        onChange={e => updateComboLeg(i, { qty: Math.max(1, Math.round(+e.target.value || 1)) })}
+                        style={{ ...INPUT, fontSize: 9, padding: '3px 4px' }} />
+                      <button onClick={() => removeComboLeg(i)} disabled={comboLegs.length <= 1} title="Remove leg"
+                        style={{ background: 'none', border: 'none', fontSize: 13, lineHeight: 1, cursor: comboLegs.length <= 1 ? 'default' : 'pointer', color: comboLegs.length <= 1 ? 'var(--theme-text-faint, rgba(255,255,255,0.2))' : 'var(--theme-negative)' }}>×</button>
+                    </div>
+                  ))}
                 </div>
               </div>
-              <div style={{ fontSize: 8, color: 'var(--theme-secondary, #8099b0)', fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em' }}>
-                {PRESET_DESC[comboPreset]}
+              <div>
+                <label style={{ ...LABEL, fontSize: 8 }}>DTE (days)</label>
+                <input type="number" value={comboDte} step={1} min={1} max={365}
+                  onChange={e => setComboDte(Math.max(1, +e.target.value || 30))} style={INPUT} />
               </div>
               <div style={{ fontSize: 8, lineHeight: '12px', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))' }}>
                 Modeled P&L: every leg priced with Black-Scholes on the historical underlying at today's IV (no historical option prices). Approximate, not a real options backtest. The BUY signal opens all legs together; the SELL signal (or shared DTE expiry) closes them together.
@@ -432,11 +491,11 @@ export function AlgoStrategyBuilderContent() {
                         const on = kind === 'shares' ? p.instMode === 'underlying' : kind === 'combo' ? p.instMode === 'combo' : p.instMode === 'option' && p.optType === kind
                         return (
                           <button key={kind} onClick={() => patchPosition(p.id, kind === 'shares' ? { instMode: 'underlying' }
-                            // Seed comboPreset/comboDte here, not just at read sites — a position
+                            // Seed comboLegs/comboDte here, not just at read sites — a position
                             // saved before this feature existed has neither field, and toggling
-                            // to Combo without seeding them left PRESETS[undefined] resolving to
-                            // an empty leg list, silently dropping the position from the backtest.
-                            : kind === 'combo' ? { instMode: 'combo', comboPreset: p.comboPreset ?? 'Short Straddle', comboDte: p.comboDte ?? 30 }
+                            // to Combo without seeding them would silently drop the position
+                            // from the backtest.
+                            : kind === 'combo' ? { instMode: 'combo', comboLegs: p.comboLegs?.length ? p.comboLegs : legsToCombo(PRESETS['Short Straddle']), comboDte: p.comboDte ?? 30 }
                             : { instMode: 'option', optType: kind })} style={btn(on)}>{lbl}</button>
                         )
                       })}
@@ -460,14 +519,37 @@ export function AlgoStrategyBuilderContent() {
                   )}
                   {p.instMode === 'combo' && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <select value={p.comboPreset} onChange={e => patchPosition(p.id, { comboPreset: e.target.value })}
+                      <select value="" onChange={e => e.target.value && patchPosition(p.id, { comboLegs: legsToCombo(PRESETS[e.target.value] ?? []) })}
                         style={{ ...INPUT, fontSize: 10, cursor: 'pointer' }}>
+                        <option value="">Load preset…</option>
                         {PRESET_GROUPS.map(g => (
                           <optgroup key={g.label} label={g.label}>
                             {g.keys.map(k => <option key={k} value={k}>{k}</option>)}
                           </optgroup>
                         ))}
                       </select>
+                      {p.comboLegs.map((leg, i) => (
+                        <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 34px 14px', gap: 3, alignItems: 'center' }}>
+                          <select value={leg.type} onChange={e => patchComboLeg(p.id, i, { type: e.target.value as ComboLeg['type'] })} style={{ ...INPUT, fontSize: 9, padding: '3px 4px', cursor: 'pointer' }}>
+                            <option value="call">Call</option>
+                            <option value="put">Put</option>
+                          </select>
+                          <select value={leg.side} onChange={e => patchComboLeg(p.id, i, { side: e.target.value as ComboLeg['side'] })} style={{ ...INPUT, fontSize: 9, padding: '3px 4px', cursor: 'pointer' }}>
+                            <option value="buy">Buy</option>
+                            <option value="sell">Sell</option>
+                          </select>
+                          <input type="number" value={Math.round(leg.moneyness * 100)} step={1} min={1} title="Strike as % of spot"
+                            onChange={e => patchComboLeg(p.id, i, { moneyness: Math.max(0.01, (e.target.value === '' ? 100 : +e.target.value) / 100) })}
+                            style={{ ...INPUT, fontSize: 9, padding: '3px 4px' }} />
+                          <input type="number" value={leg.qty} step={1} min={1}
+                            onChange={e => patchComboLeg(p.id, i, { qty: Math.max(1, Math.round(+e.target.value || 1)) })}
+                            style={{ ...INPUT, fontSize: 9, padding: '3px 4px' }} />
+                          <button onClick={() => removeComboLegFromPosition(p.id, i)} disabled={p.comboLegs.length <= 1} title="Remove leg"
+                            style={{ background: 'none', border: 'none', fontSize: 12, lineHeight: 1, cursor: p.comboLegs.length <= 1 ? 'default' : 'pointer', color: p.comboLegs.length <= 1 ? 'var(--theme-text-faint, rgba(255,255,255,0.2))' : 'var(--theme-negative)' }}>×</button>
+                        </div>
+                      ))}
+                      <button onClick={() => addComboLegToPosition(p.id)} disabled={p.comboLegs.length >= MAX_COMBO_LEGS} title={p.comboLegs.length >= MAX_COMBO_LEGS ? `Live paper trading supports at most ${MAX_COMBO_LEGS} legs` : undefined}
+                        style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', textAlign: 'left', color: p.comboLegs.length >= MAX_COMBO_LEGS ? 'var(--theme-text-faint, rgba(255,255,255,0.3))' : 'var(--theme-primary, #c9a84c)', background: 'none', border: 'none', cursor: p.comboLegs.length >= MAX_COMBO_LEGS ? 'default' : 'pointer' }}>+ ADD LEG</button>
                       <div>
                         <div style={{ fontSize: 8, color: 'var(--theme-secondary, #8099b0)', marginBottom: 2 }}>DTE (days)</div>
                         <input type="number" value={p.comboDte} min={1} max={365}
@@ -477,7 +559,7 @@ export function AlgoStrategyBuilderContent() {
                     </div>
                   )}
                   <div style={{ fontSize: 8, fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em', color: p.instMode === 'combo' ? 'var(--theme-primary, #c9a84c)' : p.side === 'short' ? NEG : POS }}>
-                    {p.instMode === 'combo' ? `${p.comboPreset ?? 'Short Straddle'} · ${(PRESETS[p.comboPreset ?? 'Short Straddle'] ?? []).length} legs · ${p.comboDte ?? 30}d`
+                    {p.instMode === 'combo' ? `${p.comboLegs.length}-leg combo · ${p.comboDte ?? 30}d`
                       : p.instMode === 'option'
                       ? `${p.side === 'short' ? 'Short' : 'Long'} ${p.otmPct === 0 ? 'ATM' : p.otmPct > 0 ? `${p.otmPct}% OTM` : `${-p.otmPct}% ITM`} ${p.optType} · ${p.dte}d`
                       : `${p.side === 'short' ? 'Short' : 'Long'} shares`}
@@ -647,7 +729,7 @@ export function AlgoStrategyBuilderContent() {
             <div style={{ fontSize: 10, color: 'var(--theme-primary, #c9a84c)', fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em', display: 'flex', flexDirection: 'column', gap: 4 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', border: '1px solid var(--theme-primary, #c9a84c)', padding: '1px 5px' }}>MODELED COMBO</span>
-                {comboPreset} · {im.dte} DTE · IV {im.iv}% (Black-Scholes per leg on underlying, not real option prices)
+                {(im.legs ?? comboLegs).length}-leg combo · {im.dte} DTE · IV {im.iv}% (Black-Scholes per leg on underlying, not real option prices)
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 9 }}>
                 {(im.legs ?? []).map((l, i) => (
@@ -714,6 +796,20 @@ export function AlgoStrategyBuilderContent() {
               </ResponsiveContainer>
             </div>
           </div>
+
+          {reg && reg.x.length > 1 && (
+            <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', position: 'relative', marginTop: 12 }}>
+              <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 10, background: 'var(--theme-surface, #142032)', padding: '3px 8px', borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>
+                Regression — Strategy vs Buy &amp; Hold Daily Returns
+              </div>
+              <div style={{ paddingTop: 30, paddingLeft: 8, paddingRight: 8, paddingBottom: 8 }}>
+                <ReturnsScatter x={reg.x} y={reg.y} line={reg.line} xLabel="Buy & Hold" height={280} />
+                <div style={{ fontSize: 9, fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', textAlign: 'center', marginTop: 6 }}>
+                  Beta {reg.beta.toFixed(2)} · daily alpha {reg.alpha >= 0 ? '+' : ''}{(reg.alpha * 100).toFixed(3)}%
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
 

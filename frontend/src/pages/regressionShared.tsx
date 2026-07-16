@@ -123,21 +123,44 @@ export function TickerTags({ tickers, onRemove, color }: { tickers: string[]; on
   )
 }
 
+// Derive a quick OLS regression (daily y-returns vs x-returns) from a series of
+// paired cumulative values (equity curve, base-100 index, etc) — no backend
+// round-trip. Feeds ReturnsScatter for an in-context "regression dotplot" on
+// any results panel that already has a strategy/benchmark curve.
+export interface QuickRegression { x: number[]; y: number[]; line: { x: number; y: number }[]; beta: number; alpha: number }
+export function quickRegression(curve: { x: number; y: number }[]): QuickRegression {
+  const x: number[] = [], y: number[] = []
+  for (let i = 1; i < curve.length; i++) {
+    const px = curve[i - 1].x, py = curve[i - 1].y
+    if (px > 0 && py > 0) { x.push(curve[i].x / px - 1); y.push(curve[i].y / py - 1) }
+  }
+  const n = x.length
+  if (n < 2) return { x, y, line: [], beta: 0, alpha: 0 }
+  const mx = x.reduce((s, v) => s + v, 0) / n
+  const my = y.reduce((s, v) => s + v, 0) / n
+  let num = 0, den = 0
+  for (let i = 0; i < n; i++) { num += (x[i] - mx) * (y[i] - my); den += (x[i] - mx) ** 2 }
+  const beta = den > 0 ? num / den : 0
+  const alpha = my - beta * mx
+  const xMin = Math.min(...x), xMax = Math.max(...x)
+  return { x, y, line: [{ x: xMin, y: alpha + beta * xMin }, { x: xMax, y: alpha + beta * xMax }], beta, alpha }
+}
+
 // Scatter of strategy daily returns (y) vs benchmark daily returns (x) with the
 // fitted OLS line. Shared by the Monte-Carlo and Import regression views.
-export function ReturnsScatter({ x, y, line, xLabel, height = 280 }: {
-  x: number[]; y: number[]; line: { x: number; y: number }[]; xLabel: string; height?: number
+export function ReturnsScatter({ x, y, line, xLabel, yLabel = 'strategy daily return', height = 280 }: {
+  x: number[]; y: number[]; line: { x: number; y: number }[]; xLabel: string; yLabel?: string; height?: number
 }) {
   const pts = x.map((xi, i) => ({ x: xi, y: y[i] }))
   const rp = (v: number) => `${(v * 100).toFixed(1)}%`
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <ScatterChart margin={{ top: 10, right: 20, left: 0, bottom: 22 }}>
+      <ScatterChart margin={{ top: 10, right: 20, left: 12, bottom: 34 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
         <XAxis dataKey="x" type="number" stroke={C.muted} tick={{ fill: C.muted, fontSize: 10 }} tickFormatter={rp}
-          label={{ value: `${xLabel} daily return`, fill: C.muted, fontSize: 11, position: 'insideBottom', offset: -10 }} />
-        <YAxis dataKey="y" type="number" stroke={C.muted} tick={{ fill: C.muted, fontSize: 10 }} tickFormatter={rp}
-          label={{ value: 'strategy daily return', fill: C.muted, fontSize: 11, angle: -90, position: 'insideLeft' }} />
+          label={{ value: `${xLabel} daily return`, fill: C.muted, fontSize: 11, position: 'insideBottom', offset: -4 }} />
+        <YAxis dataKey="y" type="number" stroke={C.muted} tick={{ fill: C.muted, fontSize: 10 }} tickFormatter={rp} width={64}
+          label={{ value: yLabel, fill: C.muted, fontSize: 11, angle: -90, position: 'insideLeft', offset: 12 }} />
         <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ background: C.surf, border: `1px solid ${C.border}`, color: C.text, fontSize: 11 }} formatter={(v: number) => `${(v * 100).toFixed(3)}%`} />
         <Scatter data={pts} fill={C.blue} opacity={0.22} />
         <Scatter data={line} line={{ stroke: C.gold, strokeWidth: 2 }} fill={C.gold} shape={() => null as any} />
