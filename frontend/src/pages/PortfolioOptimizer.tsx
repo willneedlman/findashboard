@@ -354,7 +354,7 @@ export function PortfolioOptimizerContent() {
       {tickers.length < 2 && <div style={{ fontSize: 9, color: FAINT, fontFamily: SANS, textAlign: 'center' }}>Enter at least 2 tickers.</div>}
       {isError && <div style={{ fontSize: 9, color: NEG, fontFamily: SANS, textAlign: 'center', lineHeight: 1.4 }}>{errMsg ?? 'Optimization failed'}</div>}
     </div>}>
-      <div style={{ width: '100%', maxWidth: 1320, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ width: '100%', maxWidth: 1320, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 12, minHeight: 'calc(100vh - 220px)' }}>
         <div style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', background: 'rgba(0,0,0,0.12)', borderBottom: `1px solid ${BORDER}`, flexWrap: 'wrap' }}>
             <span style={{ ...lbl, margin: 0, color: GOLD }}>Portfolio Controls</span>
@@ -391,9 +391,10 @@ export function PortfolioOptimizerContent() {
           </div>}
         </div>
 
-      {!data && !isPending && <EmptyState title="Portfolio Optimizer" hint="Enter a basket of tickers, then compare optimized allocations and portfolio risk."
-        action="Optimize" />}
-      {isPending && <EmptyState title="Optimizing…" hint="Fetching aligned history and solving the frontier." variant="loading" />}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      {!data && !isPending && <div style={{ flex: 1, display: 'grid' }}><EmptyState title="Portfolio Optimizer" hint="Enter a basket of tickers, then compare optimized allocations and portfolio risk."
+        action="Optimize" /></div>}
+      {isPending && <div style={{ flex: 1, display: 'grid' }}><EmptyState title="Optimizing…" hint="Fetching aligned history and solving the frontier." variant="loading" /></div>}
 
       {data && sel && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 0, background: SURFACE, border: `1px solid ${BORDER}`, overflow: 'hidden' }}>
@@ -573,6 +574,7 @@ export function PortfolioOptimizerContent() {
           })()}
         </div>
       )}
+      </div>
       </div>
     </SidebarLayout>
   )
