@@ -5,6 +5,7 @@ import { Activity, GitBranch } from 'lucide-react'
 import TickerInput from '../components/TickerInput'
 import EmptyState from '../components/EmptyState'
 import { loadCustomStrategies } from '../utils/customStrategies'
+import { readPMPortfolios, type PMPortfolio } from '../lib/pmImport'
 import {
   C, PERIODS, StatCard, inputStyle, selectStyle, railLabel,
   RailGroup, RunButton, ToolShell, ModeToggle, REG_MODES, ReturnsScatter, RollingBetaChart, type RegMode,
@@ -20,19 +21,13 @@ interface ImportResult {
   rolling_beta: { window: number; dates: string[]; beta: (number | null)[] }
 }
 
-interface PMHolding { ticker: string; shares: number; avgCost: number }
-
-// The Portfolio Manager persists a single holdings book here; weight each name by
-// cost basis (shares x avgCost) exactly as the Stress Tester import does.
-function loadPortfolio(): { ticker: string; weight: number }[] {
-  try {
-    const pm: PMHolding[] = JSON.parse(localStorage.getItem('ft-portfolio-manager') || '[]')
-    if (!Array.isArray(pm) || !pm.length) return []
-    const vals = pm.map(h => h.shares * (h.avgCost || 1))
-    const total = vals.reduce((s, v) => s + v, 0)
-    if (total <= 0) return pm.map(h => ({ ticker: h.ticker, weight: 1 }))
-    return pm.map((h, i) => ({ ticker: h.ticker, weight: vals[i] / total }))
-  } catch { return [] }
+// Weight a saved book's holdings by cost basis (shares x avgCost).
+function weighted(book: PMPortfolio): { ticker: string; weight: number }[] {
+  if (!book.holdings.length) return []
+  const vals = book.holdings.map(h => h.shares * (h.avgCost || 1))
+  const total = vals.reduce((s, v) => s + v, 0)
+  if (total <= 0) return book.holdings.map(h => ({ ticker: h.ticker, weight: 1 }))
+  return book.holdings.map((h, i) => ({ ticker: h.ticker, weight: vals[i] / total }))
 }
 
 const pctp = (v: number) => `${(v * 100).toFixed(1)}%`
@@ -63,7 +58,12 @@ export default function ImportRegression({ mode, setMode }: { mode: RegMode; set
   const [period, setPeriod] = useState('2y')
   const [rollWindow, setRollWindow] = useState(60)
 
-  const holdings = useMemo(loadPortfolio, [])
+  const books = useMemo(() => readPMPortfolios().filter(p => p.holdings.length), [])
+  const [bookId, setBookId] = useState(books[0]?.id ?? '')
+  const holdings = useMemo(() => {
+    const book = books.find(b => b.id === bookId)
+    return book ? weighted(book) : []
+  }, [books, bookId])
   const strategies = useMemo(loadCustomStrategies, [])
   const [algoName, setAlgoName] = useState(strategies[0]?.name ?? '')
   const [algoTicker, setAlgoTicker] = useState('AAPL')
@@ -95,13 +95,15 @@ export default function ImportRegression({ mode, setMode }: { mode: RegMode; set
 
       {source === 'portfolio' ? (
         <RailGroup label="Portfolio">
-          {holdings.length ? (
-            <div style={{ fontSize: 11, color: C.text, fontFamily: 'var(--theme-mono)', lineHeight: '16px' }}>
-              {holdings.length} holdings, cost-weighted
-              <div style={{ color: C.muted, fontSize: 10, marginTop: 4 }}>
-                {holdings.slice(0, 6).map(h => h.ticker).join(', ')}{holdings.length > 6 ? '...' : ''}
+          {books.length ? (
+            <>
+              <select value={bookId} onChange={e => setBookId(e.target.value)} style={selectStyle}>
+                {books.map(b => <option key={b.id} value={b.id}>{b.name} ({b.holdings.length})</option>)}
+              </select>
+              <div style={{ fontSize: 9, color: C.muted, marginTop: 6, lineHeight: '14px' }}>
+                Cost-weighted (shares × avg cost). Options and futures excluded.
               </div>
-            </div>
+            </>
           ) : (
             <div style={{ fontSize: 10, color: C.muted, lineHeight: '15px' }}>
               No saved portfolio. Add holdings in the Portfolio Manager first.
