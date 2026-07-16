@@ -161,25 +161,32 @@ interface PortfolioResult {
   bars?: number
   span?: { start: string; end: string }
 }
-// Buy/sell hover markers on the equity curve — same triangle-dot shapes as the
-// Portfolio Backtester's replay chart (BacktestSignalChart), so both tools'
-// trade markers read as one visual language.
+// Entry/exit hover markers on the equity curve — same triangle-dot shapes as
+// the Portfolio Backtester's replay chart (BacktestSignalChart), so both
+// tools' trade markers read as one visual language. Sized up from the replay
+// chart's originals — this chart can carry years of daily bars, so a trade's
+// marker needs a bigger hit target to hover precisely among that many points.
 type MarkerPoint = { date: string; strategy: number; benchmark: number; buyTrades?: BacktestTrade[]; sellTrades?: BacktestTrade[] }
 const EqBuyDot = (props: { cx?: number; cy?: number; value?: number }) => {
   const { cx = 0, cy = 0, value } = props
   if (value == null) return null
-  return <polygon points={`${cx},${cy - 7} ${cx - 5},${cy + 1} ${cx + 5},${cy + 1}`} style={{ fill: 'var(--theme-positive)' }} stroke="none" />
+  return <polygon points={`${cx},${cy - 10} ${cx - 7},${cy + 2} ${cx + 7},${cy + 2}`} style={{ fill: 'var(--theme-positive)' }} stroke="none" />
 }
 const EqSellDot = (props: { cx?: number; cy?: number; value?: number }) => {
   const { cx = 0, cy = 0, value } = props
   if (value == null) return null
-  return <polygon points={`${cx},${cy + 7} ${cx - 5},${cy - 1} ${cx + 5},${cy - 1}`} style={{ fill: 'var(--theme-negative)' }} stroke="none" />
+  return <polygon points={`${cx},${cy + 10} ${cx - 7},${cy - 2} ${cx + 7},${cy - 2}`} style={{ fill: 'var(--theme-negative)' }} stroke="none" />
 }
 
 // Default formatter+labelFormatter can't show a variable number of conditional
 // trade-detail rows, so trade dates get a custom tooltip instead — same
-// strategy/benchmark rows as before, plus a BUY/SELL section (price, leg,
-// and why it fired) only on dates that actually traded.
+// strategy/benchmark rows as before, plus an ENTRY/EXIT section (each leg's
+// own action, price, and why it fired) only on dates that actually traded.
+// Headed "ENTRY"/"EXIT" rather than "BUY"/"SELL": is_entry tracks whether the
+// POSITION opened or closed, not the direction of any one leg — a short
+// straddle's entry SELLS both legs, so labeling that section "BUY" would say
+// the opposite of what actually happened. Each row states its own action
+// explicitly (e.g. "SELL call 3.97 @ $1.41") so there's no guessing.
 function EquityTradeTooltip({ active, payload, label }: {
   active?: boolean; label?: string
   payload?: { payload: MarkerPoint }[]
@@ -188,7 +195,8 @@ function EquityTradeTooltip({ active, payload, label }: {
   const pt = payload[0].payload
   const rows = (trades?: BacktestTrade[]) => trades?.map((t, i) => (
     <div key={i} style={{ marginTop: 2 }}>
-      {(t.ticker ? `${t.ticker} ` : '') + (t.leg ? `${t.leg} ` : '') + `@ $${t.price}`}
+      <span style={{ color: t.action === 'SELL' ? 'var(--theme-negative)' : 'var(--theme-positive)', fontWeight: 700 }}>{t.action}</span>
+      {' ' + (t.ticker ? `${t.ticker} ` : '') + (t.leg ? `${t.leg} ` : '') + `@ $${t.price}`}
       <div style={{ color: 'var(--theme-text-faint, rgba(255,255,255,0.45))', fontSize: 9 }}>{t.reason}</div>
     </div>
   ))
@@ -199,13 +207,13 @@ function EquityTradeTooltip({ active, payload, label }: {
       <div style={TOOLTIP_ITEM}>Buy &amp; Hold: ${pt.benchmark?.toLocaleString()}</div>
       {pt.buyTrades && (
         <div style={{ marginTop: 5, color: 'var(--theme-positive)', fontWeight: 700, fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-          BUY
+          ENTRY
           <div style={{ color: 'var(--theme-text, #d7e3fc)', fontWeight: 400, textTransform: 'none' }}>{rows(pt.buyTrades)}</div>
         </div>
       )}
       {pt.sellTrades && (
         <div style={{ marginTop: 5, color: 'var(--theme-negative)', fontWeight: 700, fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-          SELL
+          EXIT
           <div style={{ color: 'var(--theme-text, #d7e3fc)', fontWeight: 400, textTransform: 'none' }}>{rows(pt.sellTrades)}</div>
         </div>
       )}
@@ -1001,8 +1009,8 @@ export function AlgoStrategyBuilderContent() {
                   <Legend wrapperStyle={{ fontSize: 10 }} payload={[
                     { value: 'Strategy', type: 'line', id: 's', color: cc.primary },
                     { value: 'Buy & Hold', type: 'line', id: 'b', color: cc.c2 },
-                    { value: 'Buy', type: 'triangle', id: 'buy', color: 'var(--theme-positive)' },
-                    { value: 'Sell', type: 'triangle', id: 'sell', color: 'var(--theme-negative)' },
+                    { value: 'Entry', type: 'triangle', id: 'buy', color: 'var(--theme-positive)' },
+                    { value: 'Exit', type: 'triangle', id: 'sell', color: 'var(--theme-negative)' },
                   ]} />
                   <Area type="monotone" dataKey="strategy" stroke={cc.primary} strokeWidth={2} fill="url(#algoEq)" name="strategy" dot={false} />
                   <Area type="monotone" dataKey="benchmark" stroke={cc.c2} strokeWidth={1.5} strokeDasharray="4 2" fill="transparent" name="benchmark" dot={false} />
