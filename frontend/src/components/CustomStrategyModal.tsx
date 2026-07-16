@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import axios from 'axios'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -548,6 +549,213 @@ function RuleBlockEditor({ label, block, onChange, accentColor }: {
   )
 }
 
+// ── Describe-in-English chat ─────────────────────────────────────────────────
+// Converts an English description into the same buy/sell/risk shape the manual
+// editor above produces, via a multi-turn chat (backend/routers/ai.py's
+// /strategy-chat asks clarifying questions before it's confident enough to
+// draft). The LLM's JSON never carries row/group ids and isn't guaranteed to
+// stay inside the IndicatorType union, so every accepted draft is hydrated —
+// same purpose as cloneBlock() below, but rebuilding from an untrusted shape
+// rather than copying a trusted one.
+
+const ALL_INDICATOR_TYPES = new Set<IndicatorType>(Object.keys(IND_LABELS) as IndicatorType[])
+const ALL_OPS = new Set<OpType>(Object.keys(OP_LABELS) as OpType[])
+
+function hydrateIndicatorRef(raw: any): IndicatorRef {
+  const type: IndicatorType = raw && ALL_INDICATOR_TYPES.has(raw.type) ? raw.type : 'PRICE'
+  const base = DEFAULT_IND[type]
+  const ref: IndicatorRef = { type }
+  if (base.period !== undefined) ref.period = Number(raw?.period ?? base.period) || base.period
+  if (base.fast !== undefined) ref.fast = Number(raw?.fast ?? base.fast) || base.fast
+  if (base.slow !== undefined) ref.slow = Number(raw?.slow ?? base.slow) || base.slow
+  if (base.signal_period !== undefined) ref.signal_period = Number(raw?.signal_period ?? base.signal_period) || base.signal_period
+  if (base.std !== undefined) ref.std = Number(raw?.std ?? base.std) || base.std
+  if (raw?.ticker && typeof raw.ticker === 'string') ref.ticker = raw.ticker.toUpperCase().replace(/[^A-Z0-9.\-]/g, '') || undefined
+  if (!NO_TIMEFRAME_TYPES.includes(type) && raw?.timeframe && raw.timeframe !== 'daily') ref.timeframe = raw.timeframe as Timeframe
+  return ref
+}
+
+function hydrateCondition(raw: any): ConditionRow {
+  const rhs_type: 'number' | 'indicator' = raw?.rhs_type === 'indicator' ? 'indicator' : 'number'
+  return {
+    id: uid(),
+    lhs: hydrateIndicatorRef(raw?.lhs),
+    op: raw && ALL_OPS.has(raw.op) ? raw.op : 'gt',
+    rhs_type,
+    rhs_num: typeof raw?.rhs_num === 'number' && isFinite(raw.rhs_num) ? raw.rhs_num : 0,
+    rhs_ind: hydrateIndicatorRef(raw?.rhs_ind),
+  }
+}
+
+function hydrateGroup(raw: any): ConditionGroup {
+  return {
+    id: uid(),
+    logic: raw?.logic === 'OR' ? 'OR' : 'AND',
+    conditions: Array.isArray(raw?.conditions) ? raw.conditions.map(hydrateCondition) : [],
+  }
+}
+
+function hydrateRuleBlock(raw: any): RuleBlock {
+  const groups = Array.isArray(raw?.groups) ? raw.groups.map(hydrateGroup) : []
+  return { logic: raw?.logic === 'OR' ? 'OR' : 'AND', groups: groups.length ? groups : [{ id: uid(), logic: 'AND', conditions: [] }] }
+}
+
+function hydrateRisk(raw: any): StrategyRisk {
+  const n = (v: any, fallback: number) => typeof v === 'number' && isFinite(v) && v >= 0 ? v : fallback
+  return {
+    sizingPct: n(raw?.sizingPct, 100), stopLossPct: n(raw?.stopLossPct, 0), takeProfitPct: n(raw?.takeProfitPct, 0),
+    trailingStopPct: n(raw?.trailingStopPct, 0), maxHoldBars: n(raw?.maxHoldBars, 0),
+  }
+}
+
+// Plain-English rendering of a built rule tree — used for the draft preview so
+// the user can sanity-check what the AI built without switching to the manual
+// editor's interactive controls first.
+function describeIndicator(ref: IndicatorRef): string {
+  const label = IND_LABELS[ref.type] ?? ref.type
+  let param = ''
+  if (ref.type === 'MACD_LINE' || ref.type === 'MACD_SIGNAL') param = `${ref.fast ?? 12}/${ref.slow ?? 26}/${ref.signal_period ?? 9}`
+  else if (ref.type === 'BB_UPPER' || ref.type === 'BB_MID' || ref.type === 'BB_LOWER') param = `${ref.period ?? 20}, ${ref.std ?? 2}σ`
+  else if (ref.period != null) param = String(ref.period)
+  let s = param ? `${label}(${param})` : label
+  if (ref.ticker) s += ` [${ref.ticker}]`
+  if (ref.timeframe && ref.timeframe !== 'daily') s += ` @${ref.timeframe}`
+  return s
+}
+function describeCondition(c: ConditionRow): string {
+  const rhs = c.rhs_type === 'number' ? String(c.rhs_num) : describeIndicator(c.rhs_ind)
+  return `${describeIndicator(c.lhs)} ${OP_LABELS[c.op]} ${rhs}`
+}
+function describeGroup(g: ConditionGroup, wrap: boolean): string {
+  if (!g.conditions.length) return '(no conditions)'
+  const body = g.conditions.map(describeCondition).join(g.logic === 'AND' ? ' and ' : ' or ')
+  return wrap && g.conditions.length > 1 ? `(${body})` : body
+}
+function describeRuleBlock(b: RuleBlock): string {
+  const groups = b.groups.filter(g => g.conditions.length)
+  if (!groups.length) return '(no rule conditions — exits only via risk controls, if any)'
+  return groups.map(g => describeGroup(g, groups.length > 1)).join(b.logic === 'AND' ? ' AND ' : ' OR ')
+}
+
+interface ChatMsg { role: 'user' | 'assistant'; content: string }
+export interface StrategyDraft { buy: RuleBlock; sell: RuleBlock; risk: StrategyRisk; summary: string }
+
+function AiStrategyChat({ onAccept }: { onAccept: (draft: StrategyDraft) => void }) {
+  const [messages, setMessages] = useState<ChatMsg[]>([])
+  const [input, setInput] = useState('')
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState('')
+  const [draft, setDraft] = useState<StrategyDraft | null>(null)
+
+  const send = async () => {
+    const text = input.trim()
+    if (!text || pending) return
+    const next = [...messages, { role: 'user' as const, content: text }]
+    setMessages(next)
+    setInput('')
+    setError('')
+    setPending(true)
+    try {
+      const { data } = await axios.post('/api/ai/strategy-chat', { messages: next })
+      if (data?.type === 'draft') {
+        const hydrated: StrategyDraft = {
+          buy: hydrateRuleBlock(data.buy), sell: hydrateRuleBlock(data.sell), risk: hydrateRisk(data.risk),
+          summary: typeof data.summary === 'string' && data.summary ? data.summary : 'Strategy drafted — review below.',
+        }
+        setDraft(hydrated)
+        setMessages(m => [...m, { role: 'assistant', content: hydrated.summary }])
+      } else {
+        setDraft(null)
+        setMessages(m => [...m, { role: 'assistant', content: data?.text || "Could you say a bit more about that?" }])
+      }
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || e?.message || 'Request failed')
+    } finally {
+      setPending(false)
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ fontSize: 9, color: T.dim, fontFamily: T.mono, lineHeight: 1.6 }}>
+        Describe a strategy in plain English. The assistant asks clarifying questions, then drafts buy/sell rules you can review, edit, and save like any other strategy.
+      </div>
+
+      <div style={{
+        display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 320, overflowY: 'auto',
+        padding: messages.length ? 10 : 0, background: messages.length ? T.surface : 'transparent',
+        border: messages.length ? `1px solid ${T.border}` : 'none',
+      }}>
+        {messages.length === 0 && (
+          <div style={{ fontSize: 10, color: T.dim, fontFamily: T.mono, lineHeight: 1.6, fontStyle: 'italic' }}>
+            e.g. "Buy when RSI drops below 30 and price is above the 200-day SMA. Sell on RSI above 70 or a 10% trailing stop."
+          </div>
+        )}
+        {messages.map((m, i) => (
+          <div key={i} style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
+            <div style={{
+              fontSize: 8, color: T.dim, fontFamily: T.mono, marginBottom: 2, letterSpacing: '0.08em',
+              textTransform: 'uppercase', textAlign: m.role === 'user' ? 'right' : 'left',
+            }}>{m.role === 'user' ? 'You' : 'Assistant'}</div>
+            <div style={{
+              fontSize: 11, fontFamily: T.mono, lineHeight: 1.5, padding: '7px 10px', whiteSpace: 'pre-wrap',
+              color: T.text, background: m.role === 'user' ? `${T.gold}14` : T.bg,
+              border: `1px solid ${m.role === 'user' ? `${T.gold}40` : T.border}`,
+            }}>{m.content}</div>
+          </div>
+        ))}
+        {pending && <div style={{ fontSize: 10, color: T.dim, fontFamily: T.mono, fontStyle: 'italic' }}>Thinking…</div>}
+      </div>
+
+      {draft && (
+        <div style={{ border: `1px solid ${T.gold}40`, background: `${T.gold}08`, padding: '10px 12px' }}>
+          <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.gold, fontFamily: T.mono, marginBottom: 8 }}>
+            Draft ready
+          </div>
+          <div style={{ fontSize: 10, fontFamily: T.mono, color: T.text, marginBottom: 5, lineHeight: 1.5 }}>
+            <span style={{ color: T.pos, fontWeight: 700 }}>BUY </span>{describeRuleBlock(draft.buy)}
+          </div>
+          <div style={{ fontSize: 10, fontFamily: T.mono, color: T.text, marginBottom: 8, lineHeight: 1.5 }}>
+            <span style={{ color: T.neg, fontWeight: 700 }}>SELL </span>{describeRuleBlock(draft.sell)}
+          </div>
+          {(draft.risk.stopLossPct > 0 || draft.risk.takeProfitPct > 0 || draft.risk.trailingStopPct > 0 || draft.risk.maxHoldBars > 0 || draft.risk.sizingPct !== 100) && (
+            <div style={{ fontSize: 9, fontFamily: T.mono, color: T.muted, marginBottom: 8 }}>
+              Risk — size {draft.risk.sizingPct}%
+              {draft.risk.stopLossPct > 0 ? ` · SL ${draft.risk.stopLossPct}%` : ''}
+              {draft.risk.takeProfitPct > 0 ? ` · TP ${draft.risk.takeProfitPct}%` : ''}
+              {draft.risk.trailingStopPct > 0 ? ` · trail ${draft.risk.trailingStopPct}%` : ''}
+              {draft.risk.maxHoldBars > 0 ? ` · max ${draft.risk.maxHoldBars} bars` : ''}
+            </div>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button onClick={() => onAccept(draft)}
+              style={{ ...btn, background: T.gold, border: 'none', color: T.surface, fontWeight: 700, letterSpacing: '0.08em' }}>
+              Use This Draft
+            </button>
+            <span style={{ fontSize: 8, color: T.dim, fontFamily: T.mono }}>or keep chatting below to refine it</span>
+          </div>
+        </div>
+      )}
+
+      {error && <div style={{ fontSize: 9, color: T.neg, fontFamily: T.mono }}>{error}</div>}
+
+      <div style={{ display: 'flex', gap: 6 }}>
+        <input
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
+          placeholder={messages.length ? 'Reply…' : 'Describe your strategy…'}
+          disabled={pending}
+          style={{ ...inp, fontSize: 12, padding: '8px 10px', flex: 1 }} />
+        <button onClick={send} disabled={pending || !input.trim()}
+          style={{ ...btn, padding: '6px 16px', fontWeight: 700, opacity: (pending || !input.trim()) ? 0.5 : 1, cursor: (pending || !input.trim()) ? 'default' : 'pointer' }}>
+          Send
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── Main modal ────────────────────────────────────────────────────────────────
 
 const EMPTY_BLOCK = (): RuleBlock => ({
@@ -610,6 +818,7 @@ interface Props {
 export default function CustomStrategyModal({ open, onClose, onSave, initialDef }: Props) {
   const [def, setDef] = useState<CustomStrategyDef>(() => initialDef ?? { ...DEFAULTS, buy: { ...DEFAULTS.buy }, sell: { ...DEFAULTS.sell }, name: '' })
   const [nameError, setNameError] = useState('')
+  const [tab, setTab] = useState<'manual' | 'describe'>('manual')
 
   const reset = useCallback(() => {
     setDef(initialDef ?? { ...DEFAULTS, buy: { ...DEFAULTS.buy }, sell: { ...DEFAULTS.sell }, name: '' })
@@ -634,6 +843,15 @@ export default function CustomStrategyModal({ open, onClose, onSave, initialDef 
     u({ perTicker: (def.perTicker ?? []).map(r => r.id === id ? { ...r, ...patch } : r) })
   const removeTickerRule = (id: string) =>
     u({ perTicker: (def.perTicker ?? []).filter(r => r.id !== id) })
+
+  // Replaces the default buy/sell/risk with the accepted draft (name and any
+  // per-ticker overrides are untouched) and drops back to the manual editor so
+  // the user reviews/edits the generated rules with the same controls as a
+  // hand-built strategy, rather than saving straight out of the chat.
+  const acceptDraft = (draft: StrategyDraft) => {
+    u({ buy: draft.buy, sell: draft.sell, risk: draft.risk })
+    setTab('manual')
+  }
 
   const handleSave = () => {
     if (!def.name.trim()) { setNameError('Strategy name is required.'); return }
@@ -708,6 +926,26 @@ export default function CustomStrategyModal({ open, onClose, onSave, initialDef 
 
           {/* Divider */}
           <div style={{ height: 1, background: T.border, marginBottom: 12 }} />
+
+          {/* Manual vs AI-describe tabs */}
+          <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
+            {(['manual', 'describe'] as const).map(t => (
+              <button key={t} onClick={() => setTab(t)} style={{
+                padding: '6px 14px', fontFamily: T.mono, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer',
+                background: tab === t ? `${T.gold}1a` : 'transparent',
+                border: `1px solid ${tab === t ? T.gold : T.border}`,
+                color: tab === t ? T.gold : T.muted,
+              }}>{t === 'manual' ? 'Manual' : 'Describe (AI)'}</button>
+            ))}
+          </div>
+
+          {tab === 'describe' && (
+            <div style={{ marginBottom: 16 }}>
+              <AiStrategyChat onAccept={acceptDraft} />
+            </div>
+          )}
+
+          {tab === 'manual' && (<>
 
           {/* Logic legend — make the ALL/ANY nesting explicit */}
           <div style={{ fontSize: 9, color: T.dim, fontFamily: T.mono, lineHeight: 1.6, marginBottom: 14 }}>
@@ -818,6 +1056,8 @@ export default function CustomStrategyModal({ open, onClose, onSave, initialDef 
               ))}
             </div>
           </div>
+
+          </>)}
         </div>
 
         {/* Footer */}

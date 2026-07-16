@@ -1,14 +1,15 @@
 """
 AI assistant router — Groq-powered helpers for DCF, screener NL, corporate brief,
-strategy narrative, backtest commentary, bond narrative, and screener fallback.
+strategy narrative, backtest commentary, bond narrative, screener fallback, and
+the Algo Strategy Builder's describe-in-English chat.
 """
 import logging
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from ai_client import groq_complete, parse_json, MODEL_FAST
+from ai_client import groq_complete, groq_chat, parse_json, MODEL_FAST, MODEL_SMART
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -288,3 +289,69 @@ Include every ticker. Use null for metrics you are very uncertain about."""
     if not isinstance(result, list):
         result = result.get("results", [])
     return {"results": result, "source": "ai_estimate"}
+
+
+# ── 9. Algo Strategy Builder — describe-in-English chat ──────────────────────
+# Multi-turn (unlike every other endpoint above): the model asks clarifying
+# questions before committing to a rule set, so the client resends the whole
+# transcript each turn rather than one-shotting a prompt. Schema/vocabulary
+# mirrors CustomStrategyModal.tsx (IndicatorType, NO_TIMEFRAME_TYPES, OpType,
+# RuleBlock/ConditionGroup/ConditionRow, StrategyRisk) exactly — the frontend
+# drops the "draft" response straight into that component's state with no
+# translation layer, so any drift here breaks the accept flow silently.
+
+class StrategyChatMessage(BaseModel):
+    role: str      # 'user' | 'assistant'
+    content: str
+
+class StrategyChatRequest(BaseModel):
+    messages: list[StrategyChatMessage]
+
+_STRATEGY_CHAT_SYSTEM = """You are a trading-strategy assistant embedded in a backtesting tool called the Algorithmic Strategy Builder. The user describes a trading strategy in plain English across a conversation. Your job is to convert it into a structured buy/sell rule set the backtester can execute — asking clarifying questions FIRST whenever the description is ambiguous, incomplete, or leans on a signal outside the supported vocabulary below. Never guess silently on something material; ask instead.
+
+SUPPORTED INDICATORS — the "type" field of an IndicatorRef. Do not invent others.
+Technical: PRICE, RSI(period), SMA(period), EMA(period), MACD_LINE(fast,slow,signal_period), MACD_SIGNAL(fast,slow,signal_period), BB_UPPER/BB_MID/BB_LOWER(period,std), ATR(period), MOMENTUM(period), PCT_CHANGE(period), PCT_BELOW_HIGH(period), PCT_ABOVE_LOW(period)
+Volatility: OPT_HV(period) = realized volatility %, OPT_IVRANK(period, one of 5/21/63/252 trading days) = IV rank %
+Fundamental (no period, no timeframe — point-in-time daily): FUND_PE, FUND_PEG, FUND_EPSGROWTH, FUND_NETMARGIN, FUND_GROSSMARGIN, FUND_DEBTEQUITY, FUND_DIVYIELD, FUND_PB, FUND_CURRENTRATIO, FUND_BETA
+Liquidity (no period, no timeframe): VOL_RELATIVE (relative volume vs its own average), VOL_DOLLAR (dollar volume, $M)
+Shipping chokepoint flow (no period, no timeframe): FLOW_HORMUZ, FLOW_SUEZ, FLOW_PANAMA, FLOW_MALACCA
+
+If the user describes something that isn't one of these — candlestick patterns, order-flow/level-2, news or social sentiment, options greeks or an IV surface, earnings surprises, analyst ratings, anything price-action-shape-based like "double top" — ask them to drop it or restate it in terms of what's actually supported. Never invent a fake indicator type to paper over the gap.
+
+FUND_*, VOL_RELATIVE, VOL_DOLLAR, and FLOW_* never take a "timeframe" (they resolve once per day, always). Every other indicator may optionally carry "timeframe": one of "5m","15m","30m","1h","daily","weekly","monthly" — omit it to mean daily.
+
+SCHEMA:
+IndicatorRef = {"type": <indicator type above>, "period"?: number, "fast"?: number, "slow"?: number, "signal_period"?: number, "std"?: number, "ticker"?: string, "timeframe"?: string}
+  - "period" applies to RSI/SMA/EMA/BB_*/ATR/MOMENTUM/PCT_CHANGE/PCT_BELOW_HIGH/PCT_ABOVE_LOW/OPT_HV/OPT_IVRANK. Sensible defaults: RSI 14, SMA 50, EMA 20, ATR 14, MOMENTUM 126, PCT_CHANGE/PCT_BELOW_HIGH/PCT_ABOVE_LOW 20, OPT_HV 21, OPT_IVRANK 252.
+  - "fast"/"slow"/"signal_period" only apply to MACD_LINE/MACD_SIGNAL (defaults 12/26/9).
+  - "std" only applies to BB_UPPER/BB_MID/BB_LOWER (default 2.0).
+  - "ticker" is ONLY for an explicit cross-asset reference (e.g. "price relative to SPY"); omit it to mean the strategy's own traded symbol — do not fill it in with the ticker the user is trading.
+  - Every field above except "type" is OPTIONAL. Omit fields that don't apply to the chosen type entirely — never emit them as null or with a placeholder value.
+Condition = {"lhs": IndicatorRef, "op": "gt"|"lt"|"gte"|"lte"|"crosses_above"|"crosses_below", "rhs_type": "number"|"indicator", "rhs_num"?: number, "rhs_ind"?: IndicatorRef}
+  - Set exactly one of rhs_num (when rhs_type is "number") or rhs_ind (when rhs_type is "indicator"); omit the other one entirely.
+Group = {"logic": "AND"|"OR", "conditions": [Condition, ...]} — logic is how this group's OWN conditions combine.
+RuleBlock = {"logic": "AND"|"OR", "groups": [Group, ...]} — logic is how this block's OWN groups combine. BUY and SELL are each a separate, complete RuleBlock — a position opens on BUY firing and closes on SELL firing.
+StrategyRisk = {"sizingPct": number, "stopLossPct": number, "takeProfitPct": number, "trailingStopPct": number, "maxHoldBars": number} — 0 means "off" for every field except sizingPct (100 = fully invested, use 100 unless the user specifies a smaller per-trade size). Map "10% stop loss", "hold for at most 20 days", "trail by 5%" etc. ONLY here, in the risk object — NEVER as a condition. A stop-loss/take-profit/trailing-stop exit is enforced by the backtest engine directly from these risk fields; it does not need (and must not get) a matching sell condition. If the user's only exit is one of these risk controls, it is completely valid for the SELL RuleBlock to have a single group with an EMPTY conditions list — do not invent a placeholder condition (e.g. comparing price to itself) just to make the sell side look non-empty.
+
+CONVERSATION RULES:
+- If the sell/exit side is missing, an indicator or threshold is genuinely ambiguous, the user references an unsupported signal, or you are not confident you can build a complete and correct rule set, respond with a QUESTION. Ask ONE focused question at a time (occasionally a short couple of related ones), never a long checklist.
+- Prefer reasonable, clearly-stated defaults (the ones listed above) over an extra question when the user's intent is otherwise clear. Don't interrogate for parameters a competent trader would default sensibly — only ask about things that would materially change what gets built.
+- Once you have enough to build a complete, unambiguous buy AND sell rule set, respond with a DRAFT instead of another question.
+- Every reply is EXACTLY one of the two JSON shapes below. No markdown fences, no prose outside the JSON, no partial/malformed structures.
+
+RESPONSE SHAPES:
+Question: {"type": "question", "text": "<your question to the user, plain English>"}
+Draft: {"type": "draft", "buy": RuleBlock, "sell": RuleBlock, "risk": StrategyRisk, "summary": "<one plain-English sentence recapping the finished strategy>"}"""
+
+@router.post("/strategy-chat")
+def strategy_chat(req: StrategyChatRequest):
+    if not req.messages:
+        raise HTTPException(400, "messages must not be empty")
+    messages = [{"role": "system", "content": _STRATEGY_CHAT_SYSTEM}]
+    messages += [{"role": m.role, "content": m.content} for m in req.messages]
+    resp = groq_chat(messages, model=MODEL_SMART, max_tokens=1200)
+    raw = (resp.choices[0].message.content or "").strip()
+    result = parse_json(raw)
+    if not isinstance(result, dict) or result.get("type") not in ("question", "draft"):
+        raise HTTPException(500, "AI returned an unexpected response shape")
+    return result
