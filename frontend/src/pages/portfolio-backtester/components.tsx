@@ -24,6 +24,8 @@ import { usePortfolio } from '../../contexts/PortfolioContext'
 import ConfigHeader, { RebalanceSelect, type RebalanceFreq } from '../../components/portfolio/ConfigHeader'
 import HelpTip from '../../components/HelpTip'
 import { TAB_BAR, TAB_BASE, type Tab, type Asset, makeAsset, PORT_DEFAULTS, PORT_INPUT, PORT_LABEL, PORT_TICK, ALGO_STRATEGIES, ALGO_DEFAULT_PARAMS, ALGO_PARAM_LABELS, ALGO_INPUT, ALGO_LABEL, ALGO_TICK, ALGO_SECTION_DIVIDER, type BacktestResult, type SignalResult } from './shared'
+import { PRESETS, PRESET_GROUPS } from '../strategy-builder/shared'
+import { legsToCombo } from '../AlgoStrategyBuilder'
 
 const STRIP: React.CSSProperties = {
   display: 'flex', alignItems: 'stretch', overflowX: 'auto',
@@ -135,6 +137,37 @@ export function PortfolioTab() {
         }),
       ])
 
+      // Combo-instrument assets (Custom Rule strategy only): the rules already
+      // drive a full multi-leg options backtest server-side, so fetch each one's
+      // equity curve directly instead of reconstructing it from raw price + a
+      // client-side signal overlay — its day-over-day return REPLACES the
+      // sl/tp/trail-gated equity return below (the combo backtest already has
+      // its own entry/exit and there's no clean "% OTM stop-loss" on a spread).
+      // Keyed by asset INDEX, not ticker — two combo positions on the same
+      // underlying (a realistic combo use case, e.g. a straddle + a separate
+      // condor both on AAPL) would otherwise collide on a shared ticker key.
+      const comboRetMaps: Record<number, Record<string, number>> = {}
+      await Promise.all(assets.map(async (a, ai) => {
+        if (a.strategy !== CUSTOM_STRATEGY_KEY || a.instMode !== 'combo') return
+        const customDef = a.stratParams._custom_def ? JSON.parse(a.stratParams._custom_def) : null
+        if (!customDef) return
+        try {
+          const { data: cb } = await axios.post('/api/strategy/custom-backtest', {
+            ticker: a.ticker, start, end: end || undefined,
+            rules: rulesForTicker(customDef, a.ticker),
+            instrument: { kind: 'combo', dte: a.comboDte ?? 30, legs: legsToCombo(PRESETS[a.comboPreset ?? 'Short Straddle'] ?? []) },
+            position_size: 100, initial_capital: 10000,
+          })
+          const map: Record<string, number> = {}
+          let prev: number | null = null
+          for (const pt of cb.equity_curve) {
+            if (prev != null && prev > 0) map[pt.date] = pt.strategy / prev - 1
+            prev = pt.strategy
+          }
+          comboRetMaps[ai] = map
+        } catch { /* asset falls back to a flat (0%) contribution below */ }
+      }))
+
       const rfDaily = (parseFloat(cashYield) || 0) / 100 / 252   // cash sleeve grows at the chosen yield
       const hasAnyStrategy = legSigs.some(s => s?.signal?.length > 0)
 
@@ -189,6 +222,16 @@ export function PortfolioTab() {
             let stratPortRet = 0
             assets.forEach((a, li) => {
               const wt = a.weight / totalWeight
+              if (a.strategy === CUSTOM_STRATEGY_KEY && a.instMode === 'combo') {
+                // Combo's own entry/exit timing is already resolved server-side (no
+                // sl/tp/trail overlay — there's no clean "% OTM stop" on a spread),
+                // but Position Size % / Cash Yield % still apply like every other
+                // asset: blend pos% of the combo's own return with (1-pos)% idle
+                // cash yield, the same formula used below for equity/option legs.
+                const comboRet = comboRetMaps[li]?.[row.date] ?? 0
+                stratPortRet += wt * (pos * comboRet + (1 - pos) * rfDaily)
+                return
+              }
               const actualRet = tickerRetMaps[a.ticker][row.date] ?? 0
               if (!legInTrade[li] || legStopped[li]) { stratPortRet += wt * rfDaily; return }
               legEntryCum[li] *= (1 + actualRet)

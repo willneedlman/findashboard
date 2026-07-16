@@ -1,9 +1,18 @@
 import { useState } from 'react'
 import { ChevronUp, ChevronDown, Play, X, MoreHorizontal } from 'lucide-react'
-import StrategySelector, { STRATEGIES, type StrategyParams } from '../StrategySelector'
+import StrategySelector, { STRATEGIES, CUSTOM_STRATEGY_KEY, type StrategyParams } from '../StrategySelector'
 import { weightTotal, normalizeTo100 } from './weights'
+import { PRESETS, PRESET_GROUPS } from '../../pages/strategy-builder/shared'
 
-export type Holding = { ticker: string; weight: number; strategy: string; stratParams: StrategyParams }
+export type Holding = {
+  ticker: string; weight: number; strategy: string; stratParams: StrategyParams
+  // Multi-leg options combo instead of a plain equity position — only paired
+  // with the Custom Rule strategy (the combo's own entry/exit comes from those
+  // rules). Backtester mode only; Monte Carlo's holdings stay equity-only.
+  instMode?: 'underlying' | 'combo'
+  comboPreset?: string
+  comboDte?: number
+}
 
 export type ConfigMode = 'backtester' | 'montecarlo'
 
@@ -128,9 +137,9 @@ function NumberInput({ value, onChange, placeholder, step, min }:
   )
 }
 
-function HoldingCard({ holding, index, maxWeight, onChange, onRemove, tickerListId, hideDrift }: {
+function HoldingCard({ holding, index, maxWeight, onChange, onRemove, tickerListId, hideDrift, allowCombo }: {
   holding: Holding; index: number; maxWeight: number
-  onChange: (patch: Partial<Holding>) => void; onRemove: () => void; tickerListId?: string; hideDrift?: boolean
+  onChange: (patch: Partial<Holding>) => void; onRemove: () => void; tickerListId?: string; hideDrift?: boolean; allowCombo?: boolean
 }) {
   const [hover, setHover] = useState(false)
   const barPct = maxWeight > 0 ? Math.max(0, (holding.weight / maxWeight) * 100) : 0
@@ -165,6 +174,41 @@ function HoldingCard({ holding, index, maxWeight, onChange, onRemove, tickerList
         <StrategySelector value={holding.strategy} params={holding.stratParams}
           onChange={(s, p) => onChange({ strategy: s, stratParams: p })} compact hideDrift={hideDrift} />
       </div>
+      {allowCombo && holding.strategy === CUSTOM_STRATEGY_KEY && (
+        <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={{ display: 'flex', gap: 4 }}>
+            {(['underlying', 'combo'] as const).map(im => (
+              <button key={im} type="button" onClick={() => onChange({ instMode: im })}
+                style={{
+                  flex: 1, padding: '3px 0', fontFamily: T.mono, fontSize: 8, fontWeight: 700,
+                  letterSpacing: '0.06em', textTransform: 'uppercase', cursor: 'pointer',
+                  background: (holding.instMode ?? 'underlying') === im ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)' : 'transparent',
+                  border: `1px solid ${(holding.instMode ?? 'underlying') === im ? T.primary : T.border}`,
+                  color: (holding.instMode ?? 'underlying') === im ? T.primary : T.sec,
+                }}>{im === 'underlying' ? 'Shares' : 'Combo'}</button>
+            ))}
+          </div>
+          {holding.instMode === 'combo' && (
+            <>
+              <select value={holding.comboPreset ?? 'Short Straddle'} onChange={e => onChange({ comboPreset: e.target.value })}
+                style={{ ...inputBase, fontSize: 9, padding: '3px 5px', cursor: 'pointer' }}>
+                {PRESET_GROUPS.map(g => (
+                  <optgroup key={g.label} label={g.label}>
+                    {g.keys.map(k => <option key={k} value={k}>{k}</option>)}
+                  </optgroup>
+                ))}
+              </select>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ fontSize: 8, color: T.faint }}>DTE</span>
+                <input type="number" value={holding.comboDte ?? 30} min={1} max={365}
+                  onChange={e => onChange({ comboDte: Math.max(1, +e.target.value || 30) })}
+                  style={{ ...inputBase, fontSize: 9, padding: '3px 5px', width: 44 } as React.CSSProperties} />
+                <span style={{ fontSize: 8, color: T.faint }}>{(PRESETS[holding.comboPreset ?? 'Short Straddle'] ?? []).length} legs</span>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -291,7 +335,7 @@ export default function ConfigHeader(p: Props) {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(166px, 1fr))', gap: 8 }}>
                 {p.holdings.map((h, i) => (
                   <HoldingCard key={i} holding={h} index={i} maxWeight={maxWeight} tickerListId={p.tickerListId}
-                    hideDrift={p.mode === 'backtester'}
+                    hideDrift={p.mode === 'backtester'} allowCombo={isBT}
                     onChange={patch => updateHolding(i, patch)}
                     onRemove={() => p.onHoldingsChange(p.holdings.filter((_, j) => j !== i))} />
                 ))}

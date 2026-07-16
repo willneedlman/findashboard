@@ -57,10 +57,17 @@ export type Asset = {
   weight: number
   strategy: string
   stratParams: StrategyParams
+  // Multi-leg options combo instead of the plain equity position (Custom Rule
+  // strategy only — the combo's own entry/exit is driven by the same rules,
+  // so it replaces rather than layers on top of the sl/tp/trail overlay).
+  instMode?: 'underlying' | 'combo'
+  comboPreset?: string
+  comboDte?: number
 }
 
 export const makeAsset = (ticker: string, weight: number): Asset => ({
   ticker, weight, strategy: STRATEGIES[0], stratParams: {},
+  instMode: 'underlying', comboPreset: 'Short Straddle', comboDte: 30,
 })
 
 export const PORT_DEFAULTS: Asset[] = [
