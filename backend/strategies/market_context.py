@@ -27,6 +27,7 @@ _VOL_TYPES = {"VOL_RELATIVE", "VOL_DOLLAR"}
 # Options-snapshot field per type (OPT_IVHV is derived from atm_iv / hv_30).
 _OPT_FIELDS: dict[str, str] = {
     "OPT_IV": "atm_iv", "OPT_HV": "hv_30", "OPT_PUTCALL": "pc_vol", "OPT_IMPLIEDMOVE": "implied_move",
+    "OPT_IVRANK": "iv_rank",
 }
 # ATM greeks derived from the snapshot (spot + ATM IV + expiry) via Black-Scholes.
 _OPT_GREEKS = {"OPT_DELTA", "OPT_GAMMA", "OPT_THETA", "OPT_VEGA"}

@@ -10,7 +10,7 @@ export type IndicatorType =
   | 'FUND_PE' | 'FUND_PEG' | 'FUND_EPSGROWTH' | 'FUND_NETMARGIN' | 'FUND_GROSSMARGIN'
   | 'FUND_DEBTEQUITY' | 'FUND_DIVYIELD' | 'FUND_PB' | 'FUND_CURRENTRATIO' | 'FUND_BETA'
   | 'VOL_RELATIVE' | 'VOL_DOLLAR'
-  | 'OPT_IV' | 'OPT_HV' | 'OPT_IVHV' | 'OPT_PUTCALL' | 'OPT_IMPLIEDMOVE'
+  | 'OPT_IV' | 'OPT_HV' | 'OPT_IVHV' | 'OPT_PUTCALL' | 'OPT_IMPLIEDMOVE' | 'OPT_IVRANK'
   | 'OPT_DELTA' | 'OPT_GAMMA' | 'OPT_THETA' | 'OPT_VEGA'
   | 'FLOW_HORMUZ' | 'FLOW_SUEZ' | 'FLOW_PANAMA' | 'FLOW_MALACCA'
 
@@ -21,7 +21,7 @@ export const LIVE_TYPES: IndicatorType[] = [
   'FUND_PE', 'FUND_PEG', 'FUND_EPSGROWTH', 'FUND_NETMARGIN', 'FUND_GROSSMARGIN',
   'FUND_DEBTEQUITY', 'FUND_DIVYIELD', 'FUND_PB', 'FUND_CURRENTRATIO', 'FUND_BETA',
   'VOL_RELATIVE', 'VOL_DOLLAR',
-  'OPT_IV', 'OPT_HV', 'OPT_IVHV', 'OPT_PUTCALL', 'OPT_IMPLIEDMOVE',
+  'OPT_IV', 'OPT_HV', 'OPT_IVHV', 'OPT_PUTCALL', 'OPT_IMPLIEDMOVE', 'OPT_IVRANK',
   'OPT_DELTA', 'OPT_GAMMA', 'OPT_THETA', 'OPT_VEGA',
   'FLOW_HORMUZ', 'FLOW_SUEZ', 'FLOW_PANAMA', 'FLOW_MALACCA',
 ]
@@ -138,7 +138,7 @@ const IND_LABELS: Record<IndicatorType, string> = {
   FUND_PB: 'P/B ratio', FUND_CURRENTRATIO: 'Current ratio', FUND_BETA: 'Beta',
   VOL_RELATIVE: 'Relative volume', VOL_DOLLAR: 'Dollar volume ($M)',
   OPT_IV: 'Implied vol % (ATM)', OPT_HV: 'Hist vol % (30d)', OPT_IVHV: 'IV / HV ratio',
-  OPT_PUTCALL: 'Put/call ratio', OPT_IMPLIEDMOVE: 'Implied move %',
+  OPT_PUTCALL: 'Put/call ratio', OPT_IMPLIEDMOVE: 'Implied move %', OPT_IVRANK: 'IV Rank % (1y)',
   OPT_DELTA: 'Delta', OPT_GAMMA: 'Gamma', OPT_THETA: 'Theta', OPT_VEGA: 'Vega',
   FLOW_HORMUZ: 'Hormuz transits', FLOW_SUEZ: 'Suez transits',
   FLOW_PANAMA: 'Panama transits', FLOW_MALACCA: 'Malacca transits',
@@ -148,7 +148,7 @@ const IND_GROUPS: { label: string; types: IndicatorType[] }[] = [
   { label: 'Technical', types: ['PRICE', 'RSI', 'SMA', 'EMA', 'MACD_LINE', 'MACD_SIGNAL', 'BB_UPPER', 'BB_MID', 'BB_LOWER', 'ATR', 'MOMENTUM', 'PCT_CHANGE', 'PCT_BELOW_HIGH', 'PCT_ABOVE_LOW'] },
   { label: 'Fundamental (live)', types: ['FUND_PE', 'FUND_PEG', 'FUND_EPSGROWTH', 'FUND_NETMARGIN', 'FUND_GROSSMARGIN', 'FUND_DEBTEQUITY', 'FUND_DIVYIELD', 'FUND_PB', 'FUND_CURRENTRATIO', 'FUND_BETA'] },
   { label: 'Liquidity (live)', types: ['VOL_RELATIVE', 'VOL_DOLLAR'] },
-  { label: 'Options (live)', types: ['OPT_IV', 'OPT_HV', 'OPT_IVHV', 'OPT_PUTCALL', 'OPT_IMPLIEDMOVE'] },
+  { label: 'Options (live)', types: ['OPT_IV', 'OPT_HV', 'OPT_IVHV', 'OPT_PUTCALL', 'OPT_IMPLIEDMOVE', 'OPT_IVRANK'] },
   { label: 'Greeks (live)', types: ['OPT_DELTA', 'OPT_GAMMA', 'OPT_THETA', 'OPT_VEGA'] },
   { label: 'Energy flow (live)', types: ['FLOW_HORMUZ', 'FLOW_SUEZ', 'FLOW_PANAMA', 'FLOW_MALACCA'] },
 ]
@@ -181,6 +181,7 @@ const DEFAULT_IND: Record<IndicatorType, IndicatorRef> = {
   VOL_RELATIVE: { type: 'VOL_RELATIVE' }, VOL_DOLLAR: { type: 'VOL_DOLLAR' },
   OPT_IV: { type: 'OPT_IV' }, OPT_HV: { type: 'OPT_HV' }, OPT_IVHV: { type: 'OPT_IVHV' },
   OPT_PUTCALL: { type: 'OPT_PUTCALL' }, OPT_IMPLIEDMOVE: { type: 'OPT_IMPLIEDMOVE' },
+  OPT_IVRANK: { type: 'OPT_IVRANK' },
   OPT_DELTA: { type: 'OPT_DELTA', level: 1.0, opt_type: 'call' },
   OPT_GAMMA: { type: 'OPT_GAMMA', level: 1.0, opt_type: 'call' },
   OPT_THETA: { type: 'OPT_THETA', level: 1.0, opt_type: 'call' },

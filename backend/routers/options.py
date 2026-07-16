@@ -195,6 +195,18 @@ def options_snapshot(ticker: str):
                 'current': round(float(rv.iloc[-1]), 1),
             }
 
+    # IV Rank proxy: a real historical implied-vol series isn't available for
+    # arbitrary tickers, so this ranks today's 21d realized vol within its own
+    # trailing-1y distribution. Scaling every historical value by the same
+    # atm_iv/hv_30 factor (the technique the IV Tracker's snapshot history
+    # uses) would preserve this exact rank, since it's a positive affine
+    # transform — so this is a defensible stand-in, not a fabricated series.
+    iv_rank = None
+    if '21' in vol_cone:
+        c21 = vol_cone['21']
+        mn, mx = c21['min'], c21['max']
+        iv_rank = round((c21['current'] - mn) / (mx - mn) * 100, 1) if mx > mn else 50.0
+
     # ── Analyst consensus via yfinance recommendations_summary ───────────────
     consensus      = None
     analyst_count  = None
@@ -266,6 +278,7 @@ def options_snapshot(ticker: str):
         "be_upper":       be_upper,
         "be_lower":       be_lower,
         "implied_move":   implied_move,
+        "iv_rank":        iv_rank,
         "consensus":      consensus,
         "vol_cone":       vol_cone,
         "analyst_count":  analyst_count,
