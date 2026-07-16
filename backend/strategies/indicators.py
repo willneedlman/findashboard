@@ -133,6 +133,34 @@ def momentum(prices: np.ndarray, period: int = 126) -> np.ndarray:
     return result
 
 
+def pct_below_high(prices: np.ndarray, period: int = 20) -> np.ndarray:
+    """Percent below the rolling N-bar high, as a positive percentage (20.0 =
+    20% below the high; 0 = at the high). period counts in bars (trading days
+    for daily data), so "1m" ≈ 21, "1w" ≈ 5, matching the rest of the engine's
+    bar-count convention (SMA/RSI/etc)."""
+    n = len(prices)
+    result = np.full(n, np.nan)
+    p = prices.astype(float)
+    for i in range(period - 1, n):
+        window_high = float(np.max(p[i - period + 1:i + 1]))
+        if window_high > 0:
+            result[i] = (window_high - p[i]) / window_high * 100.0
+    return result
+
+
+def pct_above_low(prices: np.ndarray, period: int = 20) -> np.ndarray:
+    """Percent above the rolling N-bar low, as a positive percentage (20.0 =
+    20% above the low; 0 = at the low)."""
+    n = len(prices)
+    result = np.full(n, np.nan)
+    p = prices.astype(float)
+    for i in range(period - 1, n):
+        window_low = float(np.min(p[i - period + 1:i + 1]))
+        if window_low > 0:
+            result[i] = (p[i] - window_low) / window_low * 100.0
+    return result
+
+
 def get_indicator(ind: dict, prices: np.ndarray, context: dict | None = None) -> np.ndarray:
     """Dispatch an IndicatorRef dict to the appropriate function.
 
@@ -174,6 +202,8 @@ def get_indicator(ind: dict, prices: np.ndarray, context: dict | None = None) ->
     # Percent change over N bars, expressed as a percentage (5.0 = +5%), so a
     # rule can compare it to a plain number ("% change 20d > 5").
     if t == "PCT_CHANGE":  return momentum(prices, int(ind.get("period", 20))) * 100.0
+    if t == "PCT_BELOW_HIGH": return pct_below_high(prices, int(ind.get("period", 20)))
+    if t == "PCT_ABOVE_LOW":  return pct_above_low(prices, int(ind.get("period", 20)))
     return prices.astype(float)
 
 
@@ -190,4 +220,5 @@ def warmup_bars(ind: dict) -> int:
     if t == "ATR":                           return int(ind.get("period", 14)) + 2
     if t == "MOMENTUM":                      return int(ind.get("period", 126)) + 1
     if t == "PCT_CHANGE":                    return int(ind.get("period", 20)) + 1
+    if t in ("PCT_BELOW_HIGH", "PCT_ABOVE_LOW"): return int(ind.get("period", 20))
     return 30

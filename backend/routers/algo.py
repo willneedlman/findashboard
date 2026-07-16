@@ -1,12 +1,21 @@
+import threading
 import numpy as np
 import pandas as pd
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from cache import get_history, get_info
 
 router = APIRouter()
+
+# combo_monte_carlo's (n_sims, dte+1) path grid can peak at ~150-200MB per
+# request at the endpoint's own caps — same failure shape as the yfinance
+# BoundedSemaphore(2) in cache.py (added after a real prod OOM on this 1GB
+# VM), so a concurrent-request cap applies here too rather than letting
+# requests stack unbounded.
+_COMBO_MC_SEM = threading.BoundedSemaphore(2)
+_COMBO_MC_TIMEOUT = float(os.getenv("COMBO_MC_ACQUIRE_TIMEOUT", "10"))
 
 
 class BacktestRequest(BaseModel):
@@ -379,6 +388,331 @@ def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: 
         },
         "trades": trades[:200],
         "instrument": {"kind": "option", "type": otype, "moneyness": moneyness, "dte": dte, "iv": round(iv, 1), "direction": direction, "modeled": True},
+    }
+
+
+def _compute_combo_metrics(signal: pd.Series, close: pd.Series, combo: dict, iv: float,
+                           position_size: float = 100, initial_capital: float = 10_000,
+                           bars_per_year: int = 252, intraday: bool = False):
+    """Modeled multi-leg option combo backtest (straddle/strangle/spread/condor/
+    butterfly/etc — same leg shape as the Options Strategy Builder's PRESETS
+    table: {type, side, moneyness, qty}). On each entry every leg opens
+    simultaneously (strike = moneyness × spot, one shared DTE), the combo's net
+    signed value is marked daily as time decays, and every leg closes together
+    on rule-exit or shared expiry (rolling a fresh set of legs if the signal is
+    still active). IV is held at the current snapshot value for every leg — the
+    project has no historical option prices — so this is an APPROXIMATION,
+    labeled as modeled in the UI, same convention as the single-leg version.
+
+    Unlike the single-leg function's whole-curve "mirror around 2×capital"
+    trick (which only works when every leg is on the same side), each leg here
+    carries its own signed quantity (+qty long, -qty short) and the account
+    value is cash + Σ(signed_qty × leg value) — this handles any mix of long
+    and short legs (iron condors, jade lizards, ratio spreads, ...) correctly
+    without a post-hoc sign flip. Floored at zero per bar (a full loss of the
+    capital allocated to this position) since a naked short leg's risk isn't
+    capped like a single covered position.
+
+    position_size(%) scales the whole structure's premium notional
+    (Σ|signed_qty|×entry_val×MULT at entry) to alloc% of current capital,
+    preserving the preset's relative leg ratios (e.g. 1:2:1 for a butterfly)."""
+    from math_engine import bs_price
+    legs_cfg = combo.get("legs") or []
+    if not legs_cfg:
+        raise HTTPException(422, "Combo instrument needs at least one leg")
+    dte = max(1, int(combo.get("dte", 30)))
+    r = 4.0
+    alloc = max(0.0, min(100.0, position_size)) / 100.0
+    _dfmt = "%Y-%m-%d %H:%M" if intraday else "%Y-%m-%d"
+    idx = close.index
+    px = close.to_numpy(dtype=float)
+    sig = signal.to_numpy(dtype=float)
+    n = len(px)
+
+    equity = np.empty(n)
+    cash = float(initial_capital)
+    cur = float(initial_capital)
+    in_trade = False
+    entry_i = -1
+    leg_state: list[dict] = []   # [{type, strike, signed_qty}]
+    trades: list[dict] = []
+
+    def _leg_val(leg: dict, i: int) -> float:
+        t_rem = max(0, dte - (i - entry_i))
+        return float(bs_price(px[i], leg["strike"], t_rem, r, iv, leg["type"]))
+
+    def _combo_mtm(i: int) -> float:
+        return sum(l["signed_qty"] * _leg_val(l, i) * _OPT_MULT for l in leg_state)
+
+    for i in range(n):
+        exiting = in_trade and (sig[i] == 0.0 or (i - entry_i) >= dte)
+        if exiting:
+            cash += _combo_mtm(i)
+            for l in leg_state:
+                trades.append({
+                    "date": idx[i].strftime(_dfmt),
+                    "action": "SELL" if l["signed_qty"] > 0 else "BUY",   # closing action is opposite of opening
+                    "price": round(_leg_val(l, i), 2),
+                    "leg": f"{l['type']} {l['strike']:g}",
+                })
+            in_trade, leg_state = False, []
+        if not in_trade and sig[i] == 1.0:
+            unscaled: list[dict] = []
+            base_notional = 0.0
+            for lc in legs_cfg:
+                strike = round(px[i] * float(lc.get("moneyness", 1.0)), 2)
+                otype = "put" if str(lc.get("type", "call")).lower().startswith("p") else "call"
+                qty = max(0.0, float(lc.get("qty", 1.0)))
+                signed_qty = qty if str(lc.get("side", "buy")).lower() == "buy" else -qty
+                entry_val = max(float(bs_price(px[i], strike, dte, r, iv, otype)), 0.01)
+                unscaled.append({"type": otype, "strike": strike, "signed_qty": signed_qty, "entry_val": entry_val})
+                base_notional += qty * entry_val * _OPT_MULT
+            scale = (cur * alloc) / base_notional if base_notional > 0 else 0.0
+            leg_state = []
+            for l in unscaled:
+                signed_qty = l["signed_qty"] * scale
+                leg_state.append({"type": l["type"], "strike": l["strike"], "signed_qty": signed_qty})
+                trades.append({
+                    "date": idx[i].strftime(_dfmt),
+                    "action": "BUY" if signed_qty > 0 else "SELL",
+                    "price": round(l["entry_val"], 2),
+                    "leg": f"{l['type']} {l['strike']:g}",
+                })
+            cash -= sum(l["signed_qty"] * bs_price(px[i], l["strike"], dte, r, iv, l["type"]) * _OPT_MULT for l in leg_state)
+            entry_i, in_trade = i, True
+        cur = max(0.0, cash + (_combo_mtm(i) if in_trade else 0.0))
+        equity[i] = cur
+
+    eq = pd.Series(equity, index=idx)
+    daily = eq.pct_change()
+    benchmark = (1 + close.pct_change().fillna(0)).cumprod() * initial_capital
+    total_return = float(eq.iloc[-1] / initial_capital - 1) * 100
+    ann_return = float(((eq.iloc[-1] / initial_capital) ** (bars_per_year / max(1, n)) - 1) * 100)
+    drawdown = (eq - eq.cummax()) / eq.cummax()
+    sharpe = float(daily.mean() / daily.std() * np.sqrt(bars_per_year)) if daily.std() > 0 else 0.0
+
+    # Round-trip win rate: pair each entry batch with its exit batch (same leg count
+    # per side) and compare total premium in vs out, since individual leg wins/losses
+    # can offset within one combo.
+    num_trades = 0
+    wins = 0
+    i2 = 0
+    n_legs = len(legs_cfg)
+    while i2 + 2 * n_legs <= len(trades):
+        entry_batch = trades[i2:i2 + n_legs]
+        exit_batch = trades[i2 + n_legs:i2 + 2 * n_legs]
+        if len(exit_batch) == n_legs:
+            entry_flow = sum((-1 if t["action"] == "BUY" else 1) * t["price"] for t in entry_batch)
+            exit_flow = sum((1 if t["action"] == "SELL" else -1) * t["price"] for t in exit_batch)
+            num_trades += 1
+            if entry_flow + exit_flow > 0:
+                wins += 1
+        i2 += 2 * n_legs
+    win_rate = float(wins / num_trades * 100) if num_trades else 0.0
+
+    curve = [{"date": d.strftime(_dfmt), "strategy": round(float(sv), 2), "benchmark": round(float(bv), 2)}
+             for d, sv, bv in zip(eq.index, eq.values, benchmark.values)]
+    return {
+        "equity_curve": curve,
+        "metrics": {
+            "total_return": round(total_return, 2), "ann_return": round(ann_return, 2),
+            "max_drawdown": round(float(drawdown.min() * 100), 2), "sharpe": round(sharpe, 3),
+            "num_trades": num_trades, "win_rate": round(win_rate, 1),
+            "initial_capital": round(initial_capital, 2), "final_capital": round(float(eq.iloc[-1]), 2),
+            "total_pnl": round(float(eq.iloc[-1]) - initial_capital, 2),
+        },
+        "trades": trades[:200],
+        "instrument": {"kind": "combo", "legs": legs_cfg, "dte": dte, "iv": round(iv, 1), "modeled": True},
+    }
+
+
+class ComboMonteCarloRequest(BaseModel):
+    ticker: str
+    combo: dict                                   # {dte, legs:[{type,side,moneyness,qty}]}
+    n_sims: int = 2000
+    # Early-exit management, as % of the entry credit/debit magnitude (the
+    # standard "close at 50% of max profit" convention) — None = no such exit.
+    take_profit_pct: float | None = None
+    stop_loss_pct: float | None = None
+    max_hold_days: int | None = Field(None, ge=1)   # None = hold to DTE; 0/negative rejected, not silently ignored
+
+
+def _bs_vec(S: "np.ndarray", K: float, T: "np.ndarray", rf: float, sigma: float, otype: str) -> "np.ndarray":
+    """Vectorized Black-Scholes over an (n_sims, n_days) price grid — math_engine's
+    bs_core/bs_price are scalar-only (their T<=0 branch uses Python's max(), which
+    can't handle an array truth value), so a small array-safe version lives here
+    for the path simulation below."""
+    from scipy.stats import norm
+    T_safe = np.maximum(T, 1e-8)
+    d1 = (np.log(S / K) + (rf + 0.5 * sigma ** 2) * T_safe) / (sigma * np.sqrt(T_safe))
+    d2 = d1 - sigma * np.sqrt(T_safe)
+    if otype == "call":
+        val = S * norm.cdf(d1) - K * np.exp(-rf * T_safe) * norm.cdf(d2)
+        intrinsic = np.maximum(S - K, 0.0)
+    else:
+        val = K * np.exp(-rf * T_safe) * norm.cdf(-d2) - S * norm.cdf(-d1)
+        intrinsic = np.maximum(K - S, 0.0)
+    return np.where(T <= 1e-8, intrinsic, val)
+
+
+@router.post("/combo-montecarlo")
+def combo_monte_carlo(req: ComboMonteCarloRequest):
+    if not _COMBO_MC_SEM.acquire(timeout=_COMBO_MC_TIMEOUT):
+        raise HTTPException(503, "Too many simulations running — try again shortly")
+    try:
+        return _combo_monte_carlo_impl(req)
+    finally:
+        _COMBO_MC_SEM.release()
+
+
+def _combo_monte_carlo_impl(req: ComboMonteCarloRequest):
+    """P&L distribution for a multi-leg options combo (same PRESETS shape as
+    the Options Strategy Builder / Algo Strategy Builder combo instrument),
+    from a current live spot/IV — not tied to any entry rule.
+
+    The underlying is simulated as a full DAILY price path to DTE via
+    risk-neutral GBM (drift = r, the same rate used to price the legs) rather
+    than empirical historical drift: this is the standard convention for a
+    probability-of-profit calculator — it answers "given how the market is
+    pricing this vol, what's the outcome distribution", not "assuming the
+    stock keeps doing what it's done". Every leg is marked to market via
+    Black-Scholes at EVERY day along the path (not just at expiry), so an
+    optional take-profit/stop-loss/max-hold exits the position the first day
+    it's triggered — a short-premium strategy managed at "close at 50% of
+    max profit" behaves very differently from one held to expiry, and this
+    is the whole reason the path (not just the terminal price) matters here."""
+    from routers.options import options_snapshot
+    from math_engine import bs_price
+    snap = options_snapshot(req.ticker)
+    spot, iv = snap.get("spot"), snap.get("atm_iv")
+    if not spot or not isinstance(iv, (int, float)) or iv <= 0:
+        raise HTTPException(422, f"No live spot/IV available for {req.ticker}")
+
+    legs_cfg = req.combo.get("legs") or []
+    if not legs_cfg:
+        raise HTTPException(422, "Combo needs at least one leg")
+    dte = max(1, int(req.combo.get("dte", 30)))
+    r = 4.0
+
+    resolved: list[dict] = []
+    entry_cash_flow = 0.0
+    for lc in legs_cfg:
+        strike = round(spot * float(lc.get("moneyness", 1.0)), 2)
+        otype = "put" if str(lc.get("type", "call")).lower().startswith("p") else "call"
+        qty = max(0.0, float(lc.get("qty", 1.0)))
+        signed_qty = qty if str(lc.get("side", "buy")).lower() == "buy" else -qty
+        entry_val = max(float(bs_price(spot, strike, dte, r, iv, otype)), 0.01)
+        entry_cash_flow += -signed_qty * entry_val * _OPT_MULT
+        resolved.append({"type": otype, "strike": strike, "signed_qty": signed_qty})
+
+    def payoff(price: float) -> float:
+        val = sum(
+            l["signed_qty"] * (max(price - l["strike"], 0.0) if l["type"] == "call" else max(l["strike"] - price, 0.0)) * _OPT_MULT
+            for l in resolved
+        )
+        return entry_cash_flow + val
+
+    # Deterministic payoff curve for charting, 50%-150% of spot — this is the
+    # "if held to expiry" reference; the simulated distribution below reflects
+    # early-exit rules when they're set, so the two can legitimately diverge.
+    lo, hi = spot * 0.5, spot * 1.5
+    curve = [{"price": round(lo + (hi - lo) * i / 100, 2)} for i in range(101)]
+    for pt in curve:
+        pt["pnl"] = round(payoff(pt["price"]), 2)
+
+    # Breakevens: bisect every sign change in the sampled curve.
+    breakevens: list[float] = []
+    for a, b in zip(curve, curve[1:]):
+        if (a["pnl"] <= 0 < b["pnl"]) or (a["pnl"] >= 0 > b["pnl"]):
+            lo_p, hi_p = a["price"], b["price"]
+            for _ in range(40):
+                mid = (lo_p + hi_p) / 2
+                if (payoff(lo_p) <= 0) == (payoff(mid) <= 0):
+                    lo_p = mid
+                else:
+                    hi_p = mid
+            breakevens.append(round((lo_p + hi_p) / 2, 2))
+
+    # Only the upside (price -> infinity) can be truly unbounded at expiry —
+    # the downside is always floored at price=0. (An early stop-loss further
+    # bounds both sides in the simulated distribution below.)
+    slope_up = sum(l["signed_qty"] * _OPT_MULT for l in resolved if l["type"] == "call")
+    floor_pnl = payoff(0.0)
+    sampled_pnls = [pt["pnl"] for pt in curve] + [floor_pnl]
+    max_profit_expiry = None if slope_up > 1e-6 else round(max(sampled_pnls), 2)
+    max_loss_expiry = None if slope_up < -1e-6 else round(min(sampled_pnls), 2)
+
+    # ── Path simulation ──────────────────────────────────────────────────────
+    T = dte / 365.0
+    sigma = iv / 100.0
+    rf = r / 100.0
+    dt = T / dte
+    # Early exit needs a full (n_sims, dte+1) grid marked at every day, not just
+    # a terminal draw — meaningfully heavier, so cap sims lower than the
+    # expiry-only version did.
+    n = min(max(int(req.n_sims), 100), 5000)
+
+    rng = np.random.default_rng()
+    shocks = (rf - 0.5 * sigma ** 2) * dt + sigma * np.sqrt(dt) * rng.standard_normal((n, dte))
+    log_paths = np.cumsum(shocks, axis=1)
+    price_paths = np.hstack([np.full((n, 1), spot), spot * np.exp(log_paths)])   # (n, dte+1), day 0..dte
+
+    days = np.arange(dte + 1)
+    t_rem = (dte - days) / 365.0   # (dte+1,) remaining years per column, broadcasts over price_paths
+
+    mtm = np.zeros((n, dte + 1))
+    for leg in resolved:
+        leg_val = _bs_vec(price_paths, leg["strike"], t_rem, rf, sigma, leg["type"])
+        mtm += leg["signed_qty"] * leg_val * _OPT_MULT
+    pnl_path = entry_cash_flow + mtm   # (n, dte+1) unrealized P&L at each day, each path
+
+    has_exit_rule = req.take_profit_pct is not None or req.stop_loss_pct is not None or req.max_hold_days is not None
+    max_days = min(int(req.max_hold_days), dte) if req.max_hold_days is not None else dte
+    basis = abs(entry_cash_flow) or 1.0
+    tp_level = (req.take_profit_pct / 100.0) * basis if req.take_profit_pct is not None else None
+    sl_level = -(req.stop_loss_pct / 100.0) * basis if req.stop_loss_pct is not None else None
+
+    search = pnl_path[:, :max_days + 1]
+    hit_tp = (search >= tp_level) if tp_level is not None else np.zeros_like(search, dtype=bool)
+    hit_sl = (search <= sl_level) if sl_level is not None else np.zeros_like(search, dtype=bool)
+    exit_trigger = hit_tp | hit_sl
+    triggered = exit_trigger.any(axis=1)
+    exit_day = np.where(triggered, exit_trigger.argmax(axis=1), max_days)
+    pnl = pnl_path[np.arange(n), exit_day]
+
+    # Which rule fired on each path's actual exit day (both can trigger the
+    # same day on a large gap move — stop-loss wins that tie as the more
+    # conservative read of what happened).
+    row_idx = np.arange(n)
+    sl_at_exit = hit_sl[row_idx, exit_day] if sl_level is not None else np.zeros(n, dtype=bool)
+    tp_at_exit = hit_tp[row_idx, exit_day] if tp_level is not None else np.zeros(n, dtype=bool)
+    exited_sl = triggered & sl_at_exit
+    exited_tp = triggered & tp_at_exit & ~exited_sl
+    pct_take_profit = round(float(exited_tp.mean() * 100), 1) if tp_level is not None else 0.0
+    pct_stop_loss = round(float(exited_sl.mean() * 100), 1) if sl_level is not None else 0.0
+    pct_held_full_term = round(float((~triggered).mean() * 100), 1)
+    avg_hold_days = round(float(exit_day.mean()), 1)
+
+    percentiles = {k: round(float(np.percentile(pnl, q)), 2)
+                   for k, q in [("p5", 5), ("p25", 25), ("p50", 50), ("p75", 75), ("p95", 95)]}
+    prob_profit = round(float((pnl > 0).mean() * 100), 1)
+
+    return {
+        "ticker": req.ticker.upper(), "spot": round(spot, 2), "iv": round(iv, 1), "dte": dte,
+        "entry_credit_debit": round(entry_cash_flow, 2),
+        "breakevens": breakevens,
+        "max_profit": max_profit_expiry, "max_loss": max_loss_expiry,
+        "prob_profit": prob_profit,
+        "percentiles": percentiles,
+        "payoff_curve": curve,
+        "histogram": sorted(round(float(v), 2) for v in pnl),
+        "n_sims": n,
+        "has_exit_rule": has_exit_rule,
+        "max_hold_days": max_days if has_exit_rule else None,
+        "avg_hold_days": avg_hold_days,
+        "pct_take_profit": pct_take_profit,
+        "pct_stop_loss": pct_stop_loss,
+        "pct_held_to_exit_cap": pct_held_full_term,
     }
 
 

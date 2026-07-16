@@ -31,7 +31,8 @@ _BASE_MINUTES = {"1d": 390, "1h": 60, "30m": 30, "15m": 15, "5m": 5}
 # Timeframe only applies to price-derived indicators; live-snapshot metrics
 # (fundamentals, options, greeks, flow) are constant across the series.
 _TF_TYPES = {"PRICE", "RSI", "SMA", "EMA", "MACD_LINE", "MACD_SIGNAL",
-             "BB_UPPER", "BB_MID", "BB_LOWER", "ATR", "MOMENTUM", "PCT_CHANGE"}
+             "BB_UPPER", "BB_MID", "BB_LOWER", "ATR", "MOMENTUM", "PCT_CHANGE",
+             "PCT_BELOW_HIGH", "PCT_ABOVE_LOW"}
 
 # ── Base backtest timeframe ───────────────────────────────────────────────────
 # Alpaca supplies deep intraday history, so a strategy can trade on sub-daily bars.
@@ -633,9 +634,9 @@ def _instrument_metrics(signal, close, instrument, side, ticker, position_size, 
     P&L for an option instrument (long buys it, short writes it), else long/short
     shares. `side` drives direction for both. Same result shape as /algo/backtest.
     Raises 422 if an option can't be priced."""
-    from .algo import _compute_metrics, _compute_option_metrics
+    from .algo import _compute_metrics, _compute_option_metrics, _compute_combo_metrics
     inst = instrument or {}
-    if inst.get("kind") == "option":
+    if inst.get("kind") in ("option", "combo"):
         try:
             from routers.options import options_snapshot
             iv = options_snapshot(ticker).get("atm_iv")
@@ -643,6 +644,8 @@ def _instrument_metrics(signal, close, instrument, side, ticker, position_size, 
             iv = None
         if not isinstance(iv, (int, float)) or iv <= 0:
             raise HTTPException(422, f"No implied volatility available to model options for {ticker}")
+        if inst.get("kind") == "combo":
+            return _compute_combo_metrics(signal, close, inst, float(iv), position_size, capital, bars_per_year=bars_per_year, intraday=intraday)
         return _compute_option_metrics(signal, close, inst, float(iv), position_size, capital, direction=side, bars_per_year=bars_per_year, intraday=intraday)
     return _compute_metrics(signal, close, position_size, capital, direction=side, bars_per_year=bars_per_year, intraday=intraday)
 
