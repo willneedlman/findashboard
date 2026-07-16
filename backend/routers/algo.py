@@ -300,15 +300,25 @@ _OPT_MULT = 100
 
 def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: float,
                             position_size: float = 100, initial_capital: float = 10_000,
-                            direction: str = "long", bars_per_year: int = 252, intraday: bool = False):
+                            direction: str = "long", bars_per_year: int = 252, intraday: bool = False,
+                            stop_loss: float | None = None, take_profit: float | None = None,
+                            trailing_stop: float | None = None, max_hold_bars: int | None = None):
     """Modeled single-option backtest. On each entry the strategy buys (long) or
     writes (short) a fresh Black-Scholes-priced call/put (strike = moneyness × spot,
-    fixed DTE), marks it daily as time decays, and realizes it when the rules exit
-    or it reaches expiry (then rolls if still signalled). IV is held at the current
-    snapshot value — the project has no historical option prices — so this is an
-    APPROXIMATION, labeled as modeled in the UI. A short leg mirrors the long leg's
-    dollar P&L (project convention; assignment risk is not modeled) and is floored
-    at a total loss of its capital. Benchmark stays underlying buy & hold."""
+    fixed DTE), marks it daily as time decays, and realizes it when the rules exit,
+    a risk-control trigger fires, or it reaches expiry (then rolls if still
+    signalled). IV is held at the current snapshot value — the project has no
+    historical option prices — so this is an APPROXIMATION, labeled as modeled
+    in the UI. A short leg mirrors the long leg's dollar P&L (project
+    convention; assignment risk is not modeled) and is floored at a total loss
+    of its capital. Benchmark stays underlying buy & hold.
+
+    stop_loss/take_profit/trailing_stop are evaluated against the OPTION'S OWN
+    unrealized P&L (as % of the entry premium paid/collected), not the
+    underlying's price move — an option's value doesn't move 1:1 with the
+    underlying (theta, vega, and non-ATM strikes all break that), so a
+    price-based stop would trigger at the wrong P&L level or not at all.
+    max_hold_bars forces an exit after N bars even if DTE/the rules haven't."""
     from math_engine import bs_price
     otype = "put" if str(opt.get("type", "call")).lower().startswith("p") else "call"
     moneyness = float(opt.get("moneyness", 1.0))
@@ -328,28 +338,50 @@ def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: 
     cash = float(initial_capital)
     cur = float(initial_capital)
     in_trade = False
+    blocked = False   # true after a risk-triggered exit, until the raw signal drops to 0
     contracts = 0.0
     strike = 0.0
     entry_i = -1
+    entry_val = 0.0
+    basis = 1.0
+    peak_pnl = 0.0
     trades: list[dict] = []
 
     def _val(i: int) -> float:
         return float(bs_price(px[i], strike, dte - (i - entry_i), r, iv, otype))
 
     for i in range(n):
-        exiting = in_trade and (sig[i] == 0.0 or (i - entry_i) >= dte)
+        risk_triggered = False
+        if in_trade:
+            raw_pnl = contracts * (_val(i) - entry_val) * _OPT_MULT
+            pnl = -raw_pnl if short else raw_pnl   # short profits when the option cheapens
+            peak_pnl = max(peak_pnl, pnl)
+            if stop_loss is not None and pnl <= -(stop_loss / 100.0) * basis:
+                risk_triggered = True
+            if not risk_triggered and take_profit is not None and pnl >= (take_profit / 100.0) * basis:
+                risk_triggered = True
+            if not risk_triggered and trailing_stop is not None and pnl <= peak_pnl - (trailing_stop / 100.0) * basis:
+                risk_triggered = True
+            if not risk_triggered and max_hold_bars is not None and (i - entry_i) >= max_hold_bars:
+                risk_triggered = True
+        exiting = in_trade and (sig[i] == 0.0 or (i - entry_i) >= dte or risk_triggered)
         if exiting:
             v = _val(i)
             cash += contracts * v * _OPT_MULT
             trades.append({"date": idx[i].strftime(_dfmt), "action": exit_action, "price": round(v, 2)})
             in_trade, contracts = False, 0.0
-        if not in_trade and sig[i] == 1.0:
+            blocked = risk_triggered
+        if blocked and sig[i] == 0.0:
+            blocked = False
+        if not in_trade and not blocked and sig[i] == 1.0:
             strike = round(px[i] * moneyness, 2)
             entry_val = max(float(bs_price(px[i], strike, dte, r, iv, otype)), 0.01)
             invest = cur * alloc
             contracts = invest / (entry_val * _OPT_MULT)
             cash = cur - contracts * entry_val * _OPT_MULT
             entry_i, in_trade = i, True
+            basis = contracts * entry_val * _OPT_MULT or 1.0
+            peak_pnl = 0.0
             trades.append({"date": idx[i].strftime(_dfmt), "action": entry_action, "price": round(entry_val, 2)})
         cur = cash + (contracts * _val(i) * _OPT_MULT if in_trade else 0.0)
         equity[i] = cur
@@ -393,16 +425,19 @@ def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: 
 
 def _compute_combo_metrics(signal: pd.Series, close: pd.Series, combo: dict, iv: float,
                            position_size: float = 100, initial_capital: float = 10_000,
-                           bars_per_year: int = 252, intraday: bool = False):
+                           bars_per_year: int = 252, intraday: bool = False,
+                           stop_loss: float | None = None, take_profit: float | None = None,
+                           trailing_stop: float | None = None, max_hold_bars: int | None = None):
     """Modeled multi-leg option combo backtest (straddle/strangle/spread/condor/
     butterfly/etc — same leg shape as the Options Strategy Builder's PRESETS
     table: {type, side, moneyness, qty}). On each entry every leg opens
     simultaneously (strike = moneyness × spot, one shared DTE), the combo's net
     signed value is marked daily as time decays, and every leg closes together
-    on rule-exit or shared expiry (rolling a fresh set of legs if the signal is
-    still active). IV is held at the current snapshot value for every leg — the
-    project has no historical option prices — so this is an APPROXIMATION,
-    labeled as modeled in the UI, same convention as the single-leg version.
+    on rule-exit, a risk-control trigger, or shared expiry (rolling a fresh set
+    of legs if the signal is still active). IV is held at the current snapshot
+    value for every leg — the project has no historical option prices — so
+    this is an APPROXIMATION, labeled as modeled in the UI, same convention as
+    the single-leg version.
 
     Unlike the single-leg function's whole-curve "mirror around 2×capital"
     trick (which only works when every leg is on the same side), each leg here
@@ -413,9 +448,21 @@ def _compute_combo_metrics(signal: pd.Series, close: pd.Series, combo: dict, iv:
     capital allocated to this position) since a naked short leg's risk isn't
     capped like a single covered position.
 
-    position_size(%) scales the whole structure's premium notional
-    (Σ|signed_qty|×entry_val×MULT at entry) to alloc% of current capital,
-    preserving the preset's relative leg ratios (e.g. 1:2:1 for a butterfly)."""
+    position_size(%) scales the whole structure to alloc% of current capital
+    via NOTIONAL (Σqty×spot×MULT), not premium — premium-based sizing blows up
+    for cheap far-OTM legs (a strangle's wings can be a tiny fraction of a
+    straddle's ATM premium, forcing an enormous contract count to hit the same
+    %-of-capital target, i.e. hidden leverage with no cap). Notional sizing
+    stays bounded regardless of how cheap the legs are, and still preserves
+    the preset's relative leg ratios (e.g. 1:2:1 for a butterfly).
+
+    stop_loss/take_profit/trailing_stop are evaluated against the COMBO'S OWN
+    unrealized P&L (as % of the entry credit/debit magnitude — the standard
+    "close at 50% of max profit" convention, same basis combo_monte_carlo's
+    early-exit uses), not the underlying's price move — a short strangle can
+    lose or gain heavily from IV/theta with the stock barely moving, so a
+    price-based stop (correct for plain shares) would rarely fire here at all.
+    max_hold_bars forces an exit after N bars even if DTE/the rules haven't."""
     from math_engine import bs_price
     legs_cfg = combo.get("legs") or []
     if not legs_cfg:
@@ -433,7 +480,11 @@ def _compute_combo_metrics(signal: pd.Series, close: pd.Series, combo: dict, iv:
     cash = float(initial_capital)
     cur = float(initial_capital)
     in_trade = False
+    blocked = False   # true after a risk-triggered exit, until the raw signal drops to 0
     entry_i = -1
+    entry_mtm = 0.0
+    peak_pnl = 0.0
+    basis = 1.0
     leg_state: list[dict] = []   # [{type, strike, signed_qty}]
     trades: list[dict] = []
 
@@ -445,7 +496,19 @@ def _compute_combo_metrics(signal: pd.Series, close: pd.Series, combo: dict, iv:
         return sum(l["signed_qty"] * _leg_val(l, i) * _OPT_MULT for l in leg_state)
 
     for i in range(n):
-        exiting = in_trade and (sig[i] == 0.0 or (i - entry_i) >= dte)
+        risk_triggered = False
+        if in_trade:
+            pnl = _combo_mtm(i) - entry_mtm
+            peak_pnl = max(peak_pnl, pnl)
+            if stop_loss is not None and pnl <= -(stop_loss / 100.0) * basis:
+                risk_triggered = True
+            if not risk_triggered and take_profit is not None and pnl >= (take_profit / 100.0) * basis:
+                risk_triggered = True
+            if not risk_triggered and trailing_stop is not None and pnl <= peak_pnl - (trailing_stop / 100.0) * basis:
+                risk_triggered = True
+            if not risk_triggered and max_hold_bars is not None and (i - entry_i) >= max_hold_bars:
+                risk_triggered = True
+        exiting = in_trade and (sig[i] == 0.0 or (i - entry_i) >= dte or risk_triggered)
         if exiting:
             cash += _combo_mtm(i)
             for l in leg_state:
@@ -456,7 +519,14 @@ def _compute_combo_metrics(signal: pd.Series, close: pd.Series, combo: dict, iv:
                     "leg": f"{l['type']} {l['strike']:g}",
                 })
             in_trade, leg_state = False, []
-        if not in_trade and sig[i] == 1.0:
+            # Only a risk-forced exit blocks re-entry (until the rule itself says
+            # exit) — a rule-driven exit (sig[i]==0) already can't re-enter this
+            # same bar since the "not in_trade and sig[i]==1" check below needs
+            # sig[i]==1, which isn't the case here.
+            blocked = risk_triggered
+        if blocked and sig[i] == 0.0:
+            blocked = False
+        if not in_trade and not blocked and sig[i] == 1.0:
             unscaled: list[dict] = []
             base_notional = 0.0
             for lc in legs_cfg:
@@ -466,7 +536,7 @@ def _compute_combo_metrics(signal: pd.Series, close: pd.Series, combo: dict, iv:
                 signed_qty = qty if str(lc.get("side", "buy")).lower() == "buy" else -qty
                 entry_val = max(float(bs_price(px[i], strike, dte, r, iv, otype)), 0.01)
                 unscaled.append({"type": otype, "strike": strike, "signed_qty": signed_qty, "entry_val": entry_val})
-                base_notional += qty * entry_val * _OPT_MULT
+                base_notional += qty * px[i] * _OPT_MULT
             scale = (cur * alloc) / base_notional if base_notional > 0 else 0.0
             leg_state = []
             for l in unscaled:
@@ -480,6 +550,9 @@ def _compute_combo_metrics(signal: pd.Series, close: pd.Series, combo: dict, iv:
                 })
             cash -= sum(l["signed_qty"] * bs_price(px[i], l["strike"], dte, r, iv, l["type"]) * _OPT_MULT for l in leg_state)
             entry_i, in_trade = i, True
+            entry_mtm = _combo_mtm(i)
+            basis = abs(entry_mtm) or 1.0
+            peak_pnl = 0.0
         cur = max(0.0, cash + (_combo_mtm(i) if in_trade else 0.0))
         equity[i] = cur
 

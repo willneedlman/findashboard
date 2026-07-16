@@ -160,7 +160,7 @@ export function ReturnsScatter({ x, y, line, xLabel, yLabel = 'strategy daily re
         <XAxis dataKey="x" type="number" stroke={C.muted} tick={{ fill: C.muted, fontSize: 10 }} tickFormatter={rp}
           label={{ value: `${xLabel} daily return`, fill: C.muted, fontSize: 11, position: 'insideBottom', offset: -4 }} />
         <YAxis dataKey="y" type="number" stroke={C.muted} tick={{ fill: C.muted, fontSize: 10 }} tickFormatter={rp} width={64}
-          label={{ value: yLabel, fill: C.muted, fontSize: 11, angle: -90, position: 'insideLeft', offset: 12 }} />
+          label={{ value: yLabel, fill: C.muted, fontSize: 11, angle: -90, position: 'center', dx: -28 }} />
         <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ background: C.surf, border: `1px solid ${C.border}`, color: C.text, fontSize: 11 }} formatter={(v: number) => `${(v * 100).toFixed(3)}%`} />
         <Scatter data={pts} fill={C.blue} opacity={0.22} />
         <Scatter data={line} line={{ stroke: C.gold, strokeWidth: 2 }} fill={C.gold} shape={() => null as any} />

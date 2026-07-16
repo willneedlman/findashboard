@@ -643,13 +643,23 @@ def custom_backtest(req: CustomBacktestRequest):
     if close is None or len(close) < 60:
         raise HTTPException(422, "Not enough price history for a backtest (need about 60 bars). Use a longer date range.")
     signal = pd.Series(sig_arr, index=close.index)
-    signal = _apply_risk_controls(
-        signal, close, req.stop_loss, req.take_profit, req.trailing_stop, req.max_hold_bars,
-    )
+    # Option/combo risk controls are P&L-based (see _compute_option_metrics /
+    # _compute_combo_metrics) — a modeled position's value doesn't move 1:1
+    # with the underlying's price, so the price-based pre-filter below (correct
+    # for plain shares) would rarely trigger at the intended P&L level.
+    is_modeled = (req.instrument or {}).get("kind") in ("option", "combo")
+    if not is_modeled:
+        signal = _apply_risk_controls(
+            signal, close, req.stop_loss, req.take_profit, req.trailing_stop, req.max_hold_bars,
+        )
     bpy = _BACKTEST_TF.get(tf, ("1d", 252))[1]
     result = _instrument_metrics(signal, close, req.instrument, req.side, req.ticker,
                                  req.position_size, req.initial_capital, bars_per_year=bpy,
-                                 intraday=_is_intraday_tf(tf))
+                                 intraday=_is_intraday_tf(tf),
+                                 stop_loss=req.stop_loss if is_modeled else None,
+                                 take_profit=req.take_profit if is_modeled else None,
+                                 trailing_stop=req.trailing_stop if is_modeled else None,
+                                 max_hold_bars=req.max_hold_bars if is_modeled else None)
     # Surface the window + timeframe actually used so "history" is never ambiguous.
     result["bars"] = int(len(close))
     result["timeframe"] = tf
@@ -658,11 +668,20 @@ def custom_backtest(req: CustomBacktestRequest):
     return result
 
 
-def _instrument_metrics(signal, close, instrument, side, ticker, position_size, capital, bars_per_year: int = 252, intraday: bool = False):
+def _instrument_metrics(signal, close, instrument, side, ticker, position_size, capital, bars_per_year: int = 252, intraday: bool = False,
+                        stop_loss: float | None = None, take_profit: float | None = None,
+                        trailing_stop: float | None = None, max_hold_bars: int | None = None):
     """Metrics for one position given its resolved signal + close: modeled option
     P&L for an option instrument (long buys it, short writes it), else long/short
     shares. `side` drives direction for both. Same result shape as /algo/backtest.
-    Raises 422 if an option can't be priced."""
+    Raises 422 if an option can't be priced.
+
+    stop_loss/take_profit/trailing_stop/max_hold_bars are ONLY used for option/
+    combo instruments here — they're evaluated against the position's own P&L
+    inside _compute_option_metrics/_compute_combo_metrics. For shares the
+    caller already applied them as a price-based pre-filter on `signal` (see
+    _apply_risk_controls), which is the correct check there since a share's
+    P&L moves 1:1 with price."""
     from .algo import _compute_metrics, _compute_option_metrics, _compute_combo_metrics
     inst = instrument or {}
     if inst.get("kind") in ("option", "combo"):
@@ -674,8 +693,10 @@ def _instrument_metrics(signal, close, instrument, side, ticker, position_size, 
         if not isinstance(iv, (int, float)) or iv <= 0:
             raise HTTPException(422, f"No implied volatility available to model options for {ticker}")
         if inst.get("kind") == "combo":
-            return _compute_combo_metrics(signal, close, inst, float(iv), position_size, capital, bars_per_year=bars_per_year, intraday=intraday)
-        return _compute_option_metrics(signal, close, inst, float(iv), position_size, capital, direction=side, bars_per_year=bars_per_year, intraday=intraday)
+            return _compute_combo_metrics(signal, close, inst, float(iv), position_size, capital, bars_per_year=bars_per_year, intraday=intraday,
+                                          stop_loss=stop_loss, take_profit=take_profit, trailing_stop=trailing_stop, max_hold_bars=max_hold_bars)
+        return _compute_option_metrics(signal, close, inst, float(iv), position_size, capital, direction=side, bars_per_year=bars_per_year, intraday=intraday,
+                                       stop_loss=stop_loss, take_profit=take_profit, trailing_stop=trailing_stop, max_hold_bars=max_hold_bars)
     return _compute_metrics(signal, close, position_size, capital, direction=side, bars_per_year=bars_per_year, intraday=intraday)
 
 
@@ -752,10 +773,18 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
         if close is None or len(close) < 40:
             continue
         signal = pd.Series(sig_arr, index=close.index)
-        signal = _apply_risk_controls(signal, close, p.stop_loss, p.take_profit, p.trailing_stop, p.max_hold_bars)
+        # See custom_backtest: option/combo risk controls are P&L-based, applied
+        # inside _instrument_metrics — the price-based pre-filter is for shares only.
+        is_modeled = (p.instrument or {}).get("kind") in ("option", "combo")
+        if not is_modeled:
+            signal = _apply_risk_controls(signal, close, p.stop_loss, p.take_profit, p.trailing_stop, p.max_hold_bars)
         try:
             res = _instrument_metrics(signal, close, p.instrument, p.side, p.ticker, p.position_size, cap,
-                                      bars_per_year=bpy, intraday=intraday)
+                                      bars_per_year=bpy, intraday=intraday,
+                                      stop_loss=p.stop_loss if is_modeled else None,
+                                      take_profit=p.take_profit if is_modeled else None,
+                                      trailing_stop=p.trailing_stop if is_modeled else None,
+                                      max_hold_bars=p.max_hold_bars if is_modeled else None)
         except HTTPException:
             continue
         legs.append((p, cap, res))

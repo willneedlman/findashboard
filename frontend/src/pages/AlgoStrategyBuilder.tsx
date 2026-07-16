@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
@@ -25,6 +25,15 @@ export const mkComboLeg = (): ComboLeg => ({ type: 'call', side: 'buy', moneynes
 // paper_engine.place_multileg_order only accepts 2-4 legs — capping here keeps a
 // backtested combo executable live instead of silently failing to open.
 export const MAX_COMBO_LEGS = 4
+// A combo's real direction lives per-leg (side: 'buy'|'sell'), not in the
+// position's own top-level `side` field — that field is hidden/unused once
+// instMode is 'combo' (see the Instrument toggle), so it's stale leftover
+// data, not a reliable label.
+const comboNetSide = (legs: ComboLeg[]): 'long' | 'short' | 'mixed' => {
+  if (legs.every(l => l.side === 'buy')) return 'long'
+  if (legs.every(l => l.side === 'sell')) return 'short'
+  return 'mixed'
+}
 
 // One leg per card (type/side row, then strike%/qty row) rather than cramming
 // five fields into one row — the combo editor lives in narrow rails/cards
@@ -317,9 +326,25 @@ export function AlgoStrategyBuilderContent() {
   const pf = runPortfolio.data
   const R = mode === 'portfolio' ? pf : data          // active result for the current mode
   const mR = R?.metrics
-  // Regression dotplot: daily strategy vs benchmark returns derived straight from
-  // the equity curve already on screen, no extra backend round-trip.
-  const reg = R ? quickRegression(R.equity_curve.map(pt => ({ x: pt.benchmark, y: pt.strategy }))) : null
+  // Regression dotplot: strategy vs the broad MARKET (SPY), not vs buy & hold of
+  // the traded ticker — the equity curve's own "benchmark" field is buy & hold of
+  // whatever's being traded, which answers a different question ("did I beat just
+  // holding this stock") than systematic market exposure. Needs its own fetch
+  // since the backtest response doesn't carry SPY's price series.
+  const spyHist = useQuery<{ date: string; value: number }[]>({
+    queryKey: ['algo-regression-spy', R?.span?.start, R?.span?.end],
+    queryFn: () => axios.get(`/api/market/history?ticker=SPY&start=${R!.span!.start}&end=${R!.span!.end}`).then(r => r.data.price ?? []),
+    enabled: !!R?.span,
+    staleTime: 5 * 60_000,
+  })
+  const reg = useMemo(() => {
+    if (!R || !spyHist.data?.length) return null
+    const spyByDate = new Map(spyHist.data.map(p => [p.date, p.value]))
+    const curve = R.equity_curve
+      .map(pt => ({ x: spyByDate.get(pt.date), y: pt.strategy }))
+      .filter((pt): pt is { x: number; y: number } => typeof pt.x === 'number')
+    return curve.length > 1 ? quickRegression(curve) : null
+  }, [R, spyHist.data])
 
   return (
     <SidebarLayout sidebarWidth={230} sidebarTitle="" sidebar={<>
@@ -770,16 +795,26 @@ export function AlgoStrategyBuilderContent() {
 
           {mode === 'portfolio' && pf && (
             <div style={{ ...STRIP, flexWrap: 'wrap' }}>
-              {pf.positions.map((p, i) => (
+              {pf.positions.map((p, i) => {
+                const comboSide = p.instrument === 'combo'
+                  ? comboNetSide((positions.find(x => x.instMode === 'combo' && x.ticker.toUpperCase() === p.ticker.toUpperCase())?.comboLegs) ?? [])
+                  : null
+                const badgeLabel = p.instrument === 'option' ? (p.opt_type ? p.opt_type.toUpperCase() : 'OPT')
+                  : p.instrument === 'combo' ? (comboSide === 'mixed' ? 'MIXED COMBO' : comboSide ? `${comboSide.toUpperCase()} COMBO` : 'COMBO')
+                  : 'SHR'
+                const badgeColor = p.instrument === 'combo' ? (comboSide === 'short' ? NEG : comboSide === 'long' ? POS : 'var(--theme-secondary, #8099b0)')
+                  : (p.side === 'short' ? NEG : POS)
+                return (
                 <div key={i} style={{ flex: '1 1 140px', minWidth: 140, padding: '6px 10px', borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.06))' }}>
                   <div style={{ fontSize: 10, fontFamily: 'var(--theme-mono)', fontWeight: 700, color: 'var(--theme-text, #d7e3fc)' }}>
-                    {p.ticker} <span style={{ fontSize: 8, color: p.side === 'short' ? NEG : POS, letterSpacing: '0.06em' }}>{p.side.toUpperCase()} {p.instrument === 'option' ? (p.opt_type ? p.opt_type.toUpperCase() : 'OPT') : p.instrument === 'combo' ? 'COMBO' : 'SHR'}</span>
+                    {p.ticker} <span style={{ fontSize: 8, color: badgeColor, letterSpacing: '0.06em' }}>{p.instrument === 'combo' ? badgeLabel : `${p.side.toUpperCase()} ${badgeLabel}`}</span>
                   </div>
                   <div style={{ fontSize: 9, fontFamily: 'var(--theme-mono)', color: 'var(--theme-secondary, #8099b0)', marginTop: 2 }}>
                     w {p.weight_pct}% · <span style={{ color: p.return_pct >= 0 ? POS : NEG }}>{p.return_pct >= 0 ? '+' : ''}{p.return_pct}%</span> · {p.num_trades} trades
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           )}
 
@@ -860,10 +895,10 @@ export function AlgoStrategyBuilderContent() {
           {reg && reg.x.length > 1 && (
             <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', position: 'relative', marginTop: 12 }}>
               <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 10, background: 'var(--theme-surface, #142032)', padding: '3px 8px', borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>
-                Regression — Strategy vs Buy &amp; Hold Daily Returns
+                Regression — Strategy vs Market (SPY) Daily Returns
               </div>
               <div style={{ paddingTop: 30, paddingLeft: 8, paddingRight: 8, paddingBottom: 8 }}>
-                <ReturnsScatter x={reg.x} y={reg.y} line={reg.line} xLabel="Buy & Hold" height={280} />
+                <ReturnsScatter x={reg.x} y={reg.y} line={reg.line} xLabel="SPY" height={280} />
                 <div style={{ fontSize: 9, fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', textAlign: 'center', marginTop: 6 }}>
                   Beta {reg.beta.toFixed(2)} · daily alpha {reg.alpha >= 0 ? '+' : ''}{(reg.alpha * 100).toFixed(3)}%
                 </div>
