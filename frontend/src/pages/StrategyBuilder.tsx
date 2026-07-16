@@ -17,6 +17,7 @@ export default function StrategyBuilder() {
   const [legs, setLegs]               = useState<Leg[]>(PRESETS['Long Call'])
   const [preset, setPreset]           = useState('Long Call')
   const [paramsOpen, setParamsOpen]   = useState(true)
+  const [tab, setTab]                 = useState<'manual' | 'describe'>('manual')
   const [openGroups, setOpenGroups]   = useState<Record<string, boolean>>(
     Object.fromEntries(PRESET_GROUPS.map(g => [g.label, g.label === 'Single Leg']))
   )
@@ -288,7 +289,31 @@ export default function StrategyBuilder() {
           <RailSection title="Parameters" open={paramsOpen} onToggle={() => setParamsOpen(o => !o)}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
 
-            {/* Presets */}
+            {/* Manual vs AI tabs */}
+            <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+              {(['manual', 'describe'] as const).map(t => (
+                <button key={t} onClick={() => setTab(t)} style={{
+                  padding: '4px 10px', fontFamily: 'var(--theme-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer',
+                  background: tab === t ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)' : 'transparent',
+                  border: `1px solid ${tab === t ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.12))'}`,
+                  color: tab === t ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #8099b0)',
+                  flex: 1,
+                }}>{t === 'manual' ? 'Manual' : 'Describe (AI)'}</button>
+              ))}
+            </div>
+
+            <div style={{ display: tab === 'describe' ? 'block' : 'none' }}>
+              <AiOptionsStrategyChat onAccept={(draft) => {
+                setPreset(draft.name)
+                setLegs(draft.legs)
+                setSpotOverrides({})
+                setLegChains({})
+                setTab('manual')
+              }} />
+            </div>
+
+            <div style={{ display: tab === 'manual' ? 'flex' : 'none', flexDirection: 'column', gap: 10 }}>
+                {/* Presets */}
             <div>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', marginBottom: 6 }}>Presets</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -468,6 +493,7 @@ export default function StrategyBuilder() {
                   </div>
                 ))}
               </div>
+            </div>
             </div>
           </div>
           </RailSection>
@@ -1071,3 +1097,150 @@ export default function StrategyBuilder() {
     </PageWrapper>
   )
 }
+
+interface OptionsChatMsg { role: 'user' | 'assistant'; content: string }
+export interface OptionsStrategyDraft { name: string; legs: Leg[]; summary: string }
+
+function AiOptionsStrategyChat({ onAccept }: { onAccept: (draft: OptionsStrategyDraft) => void }) {
+  const [messages, setMessages] = useState<OptionsChatMsg[]>([])
+  const [input, setInput] = useState('')
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState('')
+  const [draft, setDraft] = useState<OptionsStrategyDraft | null>(null)
+
+  const T = {
+    bg:      'var(--theme-bg, #101c2e)',
+    surface: 'var(--theme-surface, #0d1826)',
+    border:  'var(--theme-border, rgba(255,255,255,0.10))',
+    text:    'var(--theme-text, #d7e3fc)',
+    muted:   'var(--theme-secondary, #99907e)',
+    dim:     'var(--theme-text-faint, rgba(255,255,255,0.28))',
+    gold:    'var(--theme-primary, #c9a84c)',
+    pos:     'var(--theme-pos, #4caf7d)',
+    neg:     'var(--theme-neg, #e05c6e)',
+    mono:    'var(--theme-mono, ui-monospace, monospace)',
+  }
+
+  const inp: React.CSSProperties = {
+    background: T.bg, border: `1px solid ${T.border}`,
+    color: T.text, fontFamily: T.mono, fontSize: 11,
+    padding: '4px 6px', outline: 'none', width: '100%', boxSizing: 'border-box',
+  }
+
+  const btn: React.CSSProperties = {
+    background: 'transparent', border: `1px solid ${T.border}`,
+    color: T.muted, fontFamily: T.mono, fontSize: 9,
+    padding: '4px 10px', cursor: 'pointer', letterSpacing: '0.08em',
+  }
+
+  const send = async () => {
+    const text = input.trim()
+    if (!text || pending) return
+    const next = [...messages, { role: 'user' as const, content: text }]
+    setMessages(next)
+    setInput('')
+    setError('')
+    setPending(true)
+    try {
+      const { data } = await axios.post('/api/ai/options-strategy-chat', { messages: next })
+      if (data?.type === 'draft') {
+        const draftLegs: Leg[] = Array.isArray(data.legs) ? data.legs.map((l: any) => ({
+          option_type: l.option_type === 'put' ? 'put' : 'call',
+          action: l.action === 'sell' ? 'sell' : 'buy',
+          K: Number(l.K) || 100,
+          premium: Number(l.premium) || 2.0,
+          quantity: Number(l.quantity) || 1,
+          ticker: typeof l.ticker === 'string' && l.ticker ? l.ticker.toUpperCase() : 'SPY',
+          expiry: typeof l.expiry === 'string' && l.expiry ? l.expiry : DEFAULT_EXPIRY,
+        })) : []
+        const hydrated: OptionsStrategyDraft = {
+          name: typeof data.name === 'string' && data.name ? data.name : 'Custom Strategy',
+          legs: draftLegs,
+          summary: typeof data.summary === 'string' && data.summary ? data.summary : 'Draft ready.',
+        }
+        setDraft(hydrated)
+        setMessages(m => [...m, { role: 'assistant', content: hydrated.summary }])
+      } else {
+        setDraft(null)
+        setMessages(m => [...m, { role: 'assistant', content: data?.text || "Could you clarify that strategy?" }])
+      }
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || e?.message || 'Request failed')
+    } finally {
+      setPending(false)
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ fontSize: 9, color: T.dim, fontFamily: T.mono, lineHeight: 1.4 }}>
+        Describe an options strategy. The assistant asks clarifying questions, then drafts the contract legs.
+      </div>
+
+      <div style={{
+        display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 220, overflowY: 'auto',
+        padding: messages.length ? 8 : 0, background: messages.length ? T.surface : 'transparent',
+        border: messages.length ? `1px solid ${T.border}` : 'none',
+      }}>
+        {messages.length === 0 && (
+          <div style={{ fontSize: 10, color: T.dim, fontFamily: T.mono, lineHeight: 1.6, fontStyle: 'italic' }}>
+            e.g. "Sell a 10% wide iron condor on SPY for August expiry" or "Buy a 150/160 bull call spread on AAPL"
+          </div>
+        )}
+        {messages.map((m, i) => (
+          <div key={i} style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
+            <div style={{
+              fontSize: 8, color: T.dim, fontFamily: T.mono, marginBottom: 2, letterSpacing: '0.08em',
+              textTransform: 'uppercase', textAlign: m.role === 'user' ? 'right' : 'left',
+            }}>{m.role === 'user' ? 'You' : 'Assistant'}</div>
+            <div style={{
+              fontSize: 10, fontFamily: T.mono, lineHeight: 1.4, padding: '5px 8px', whiteSpace: 'pre-wrap',
+              color: T.text, background: m.role === 'user' ? `${T.gold}14` : T.bg,
+              border: `1px solid ${m.role === 'user' ? `${T.gold}40` : T.border}`,
+            }}>{m.content}</div>
+          </div>
+        ))}
+        {pending && <div style={{ fontSize: 9, color: T.dim, fontFamily: T.mono, fontStyle: 'italic' }}>Thinking…</div>}
+      </div>
+
+      {draft && (
+        <div style={{ border: `1px solid ${T.gold}40`, background: `${T.gold}08`, padding: '8px 10px' }}>
+          <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.gold, fontFamily: T.mono, marginBottom: 6 }}>
+            Draft ready ({draft.name})
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
+            {draft.legs.map((leg, idx) => (
+              <div key={idx} style={{ fontSize: 9, fontFamily: T.mono, color: T.text }}>
+                {leg.action === 'buy' ? '▲ BUY' : '▼ SELL'} {leg.ticker} {leg.option_type.toUpperCase()} K={leg.K} exp={leg.expiry} ×{leg.quantity}
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button onClick={() => onAccept(draft)}
+              style={{ ...btn, background: T.gold, border: 'none', color: T.bg, fontWeight: 700, letterSpacing: '0.08em', padding: '4px 8px' }}>
+              Load Legs
+            </button>
+            <span style={{ fontSize: 8, color: T.dim, fontFamily: T.mono }}>or keep chatting below to adjust</span>
+          </div>
+        </div>
+      )}
+
+      {error && <div style={{ fontSize: 9, color: T.neg, fontFamily: T.mono }}>{error}</div>}
+
+      <div style={{ display: 'flex', gap: 4 }}>
+        <input
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
+          placeholder={messages.length ? 'Reply…' : 'Describe strategy…'}
+          disabled={pending}
+          style={{ ...inp, fontSize: 11, padding: '6px 8px', flex: 1 }} />
+        <button onClick={send} disabled={pending || !input.trim()}
+          style={{ ...btn, padding: '4px 12px', fontWeight: 700, opacity: (pending || !input.trim()) ? 0.5 : 1, cursor: (pending || !input.trim()) ? 'default' : 'pointer' }}>
+          Send
+        </button>
+      </div>
+    </div>
+  )
+}
+

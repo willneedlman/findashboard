@@ -406,8 +406,14 @@ def _fake_fetch(spec, limit):
 
 def test_engine_llm_off_real_composite(monkeypatch):
     import sentiment.engine as engine
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("CEREBRAS_API_KEY", raising=False)
     monkeypatch.setattr(engine, "fetch_source", _fake_fetch)
     monkeypatch.setattr(engine, "fetch_market_context", lambda: {})
+    monkeypatch.setattr(engine._reliability, "update", lambda *a, **kw: None)
+    monkeypatch.setattr(engine._reliability, "persist", lambda *a, **kw: None)
+    monkeypatch.setattr(engine._reliability, "score", lambda *a, **kw: 1.0)
     s1 = engine.build_snapshot(refresh=True, now=NOW)
     s2 = engine.build_snapshot(refresh=True, now=NOW)
 

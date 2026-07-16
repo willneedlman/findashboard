@@ -939,13 +939,11 @@ export default function CustomStrategyModal({ open, onClose, onSave, initialDef 
             ))}
           </div>
 
-          {tab === 'describe' && (
-            <div style={{ marginBottom: 16 }}>
-              <AiStrategyChat onAccept={acceptDraft} />
-            </div>
-          )}
+          <div style={{ display: tab === 'describe' ? 'block' : 'none', marginBottom: 16 }}>
+            <AiStrategyChat onAccept={acceptDraft} />
+          </div>
 
-          {tab === 'manual' && (<>
+          <div style={{ display: tab === 'manual' ? 'block' : 'none' }}>
 
           {/* Logic legend — make the ALL/ANY nesting explicit */}
           <div style={{ fontSize: 9, color: T.dim, fontFamily: T.mono, lineHeight: 1.6, marginBottom: 14 }}>
@@ -1057,7 +1055,7 @@ export default function CustomStrategyModal({ open, onClose, onSave, initialDef 
             </div>
           </div>
 
-          </>)}
+          </div>
         </div>
 
         {/* Footer */}

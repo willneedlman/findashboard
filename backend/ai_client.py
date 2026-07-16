@@ -171,13 +171,37 @@ def groq_complete(prompt: str, max_tokens: int = 512, *,
 def parse_json(raw: str):
     raw = re.sub(r"^```(?:json)?\s*", "", raw.strip())
     raw = re.sub(r"\s*```$", "", raw)
+
+    def clean_control_chars(s: str) -> str:
+        in_string = False
+        escaped = False
+        chars = []
+        for char in s:
+            if char == '"' and not escaped:
+                in_string = not in_string
+            if in_string and char == '\n':
+                chars.append('\\n')
+            elif in_string and char == '\r':
+                chars.append('\\r')
+            elif in_string and char == '\t':
+                chars.append('\\t')
+            else:
+                chars.append(char)
+            if char == '\\':
+                escaped = not escaped
+            else:
+                escaped = False
+        return "".join(chars)
+
+    cleaned = clean_control_chars(raw)
     try:
-        return json.loads(raw)
+        return json.loads(cleaned)
     except json.JSONDecodeError:
-        m = re.search(r'[\[{].*[\]}]', raw, re.DOTALL)
+        m = re.search(r'[\[{].*[\]}]', cleaned, re.DOTALL)
         if m:
             try:
                 return json.loads(m.group())
             except Exception:
                 pass
         raise HTTPException(500, "AI returned malformed JSON")
+
