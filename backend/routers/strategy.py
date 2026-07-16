@@ -913,10 +913,21 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
         return pd.Series([pt[key] for pt in res["equity_curve"]],
                          index=pd.to_datetime([pt["date"] for pt in res["equity_curve"]]))
 
-    eq_df = pd.concat({str(i): _series(res, "strategy") for i, (_, _, res) in enumerate(legs)}, axis=1, join="inner")
-    bm_df = pd.concat({str(i): _series(res, "benchmark") for i, (_, _, res) in enumerate(legs)}, axis=1, join="inner")
+    # An inner join here would collapse the WHOLE portfolio's window down to
+    # whichever single position has the shortest trading history (e.g. one
+    # recent IPO in an otherwise-2022-onward book) — silently discarding years
+    # of valid data from every other position. Outer-join instead, so the
+    # curve spans the full requested range; a position with no data yet just
+    # sits at its allocated capital (idle cash) until its own history starts,
+    # same convention already used for a position that fails outright.
+    eq_df = pd.concat({str(i): _series(res, "strategy") for i, (_, _, res) in enumerate(legs)}, axis=1, join="outer").sort_index()
+    bm_df = pd.concat({str(i): _series(res, "benchmark") for i, (_, _, res) in enumerate(legs)}, axis=1, join="outer").sort_index()
     if eq_df.empty:
         raise HTTPException(422, "Positions share no overlapping trading days — align their tickers or date range")
+    for i, (_, cap, _) in enumerate(legs):
+        col = str(i)
+        eq_df[col] = eq_df[col].ffill().fillna(cap)
+        bm_df[col] = bm_df[col].ffill().fillna(cap)
     idle_cash = req.initial_capital - sum(cap for _, cap, _ in legs)   # capital of any dropped positions
     port_eq = eq_df.sum(axis=1) + idle_cash
     port_bm = bm_df.sum(axis=1) + idle_cash
