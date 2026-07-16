@@ -281,8 +281,8 @@ def create_portfolio_paper(body: PortfolioPaperCreate, authorization: str = Head
     from routers.paper_scheduler import _insert_job
     from strategies.builtin.custom_rule_strategy import CustomRuleStrategy
     _require_owner(body.user_id, authorization, x_session_token)
-    if not (1 <= len(body.positions) <= 12):
-        raise HTTPException(400, "A portfolio needs 1-12 positions")
+    if not (1 <= len(body.positions) <= 30):
+        raise HTTPException(400, "A portfolio needs 1-30 positions")
 
     base = (body.name or "portfolio").strip().lower().replace(" ", "_")[:24] or "portfolio"
     created = 0

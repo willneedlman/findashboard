@@ -842,8 +842,8 @@ class PortfolioBacktestRequest(BaseModel):
 
     @model_validator(mode="after")
     def _validate(self):
-        if not (1 <= len(self.positions) <= 12):
-            raise ValueError("A portfolio needs 1-12 positions")
+        if not (1 <= len(self.positions) <= 30):
+            raise ValueError("A portfolio needs 1-30 positions")
         for p in self.positions:
             p.ticker = validate_ticker(p.ticker)
         validate_date(self.start)
