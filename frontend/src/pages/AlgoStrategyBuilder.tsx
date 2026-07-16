@@ -1,14 +1,14 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import axios from 'axios'
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
+import { ComposedChart, Area, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
 import EmptyState from '../components/EmptyState'
 import TickerInput from '../components/TickerInput'
 import { KpiCell } from '../components/mmCockpit'
 import { useChartColors } from '../hooks/useChartColors'
-import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
+import { INPUT, LABEL, TOOLTIP_STYLE, TOOLTIP_LABEL, TOOLTIP_ITEM, TICK, RailSection } from './valuationShared'
 import CustomStrategyModal, { type CustomStrategyDef, DEFAULT_RISK, rulesForTicker, usesNonDailyTimeframe } from '../components/CustomStrategyModal'
 import { loadCustomStrategies, saveCustomStrategy, deleteCustomStrategy } from '../utils/customStrategies'
 import { PRESETS, PRESET_GROUPS, type Leg } from './strategy-builder/shared'
@@ -40,6 +40,31 @@ const comboNetSide = (legs: ComboLeg[]): 'long' | 'short' | 'mixed' => {
 // (as narrow as 166px) where a single-row grid truncates every field's text.
 // Shared by the Algo Strategy Builder (single + portfolio mode) and the
 // Portfolio Backtester's combo holdings.
+// A plain controlled number input can't be cleared to type a fresh value —
+// the moment the field goes empty, onChange fires with '', the handler falls
+// back to a default, and the forced re-render snaps the digits right back in
+// before the user can type a replacement. This tracks its own text so the
+// field can sit empty while typing; it only commits (and clamps) a real
+// number up to the parent, and only re-syncs to an empty/invalid field on
+// blur (so an external change — e.g. loading a preset — still shows up).
+const _numInputDefaultStyle: React.CSSProperties = { background: 'var(--theme-bg, #0a1628)', border: '1px solid var(--theme-border, rgba(255,255,255,0.14))', color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-mono)', fontSize: 10, padding: '4px 5px', outline: 'none', width: '100%', boxSizing: 'border-box' }
+export function NumInput({ value, min, max, onCommit, title, style }: {
+  value: number; min: number; max?: number; onCommit: (v: number) => void; title?: string; style?: React.CSSProperties
+}) {
+  const [text, setText] = useState(String(value))
+  useEffect(() => { setText(String(value)) }, [value])
+  return (
+    <input type="number" step={1} min={min} max={max} title={title} value={text}
+      onChange={e => {
+        setText(e.target.value)
+        const n = Number(e.target.value)
+        if (e.target.value.trim() !== '' && Number.isFinite(n)) onCommit(Math.min(max ?? Infinity, Math.max(min, n)))
+      }}
+      onBlur={() => { if (text.trim() === '' || !Number.isFinite(Number(text))) setText(String(value)) }}
+      style={style ?? _numInputDefaultStyle} />
+  )
+}
+
 export function ComboLegEditor({ legs, onUpdate, onRemove, onAdd }: {
   legs: ComboLeg[]
   onUpdate: (i: number, patch: Partial<ComboLeg>) => void
@@ -47,7 +72,6 @@ export function ComboLegEditor({ legs, onUpdate, onRemove, onAdd }: {
   onAdd: () => void
 }) {
   const sel: React.CSSProperties = { background: 'var(--theme-bg, #0a1628)', border: '1px solid var(--theme-border, rgba(255,255,255,0.14))', color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-mono)', fontSize: 10, padding: '4px 5px', outline: 'none', cursor: 'pointer', width: '100%', boxSizing: 'border-box' }
-  const num: React.CSSProperties = { ...sel, cursor: 'text' }
   const fieldLabel: React.CSSProperties = { fontSize: 8, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', marginBottom: 2 }
   const atCap = legs.length >= MAX_COMBO_LEGS
   return (
@@ -78,16 +102,14 @@ export function ComboLegEditor({ legs, onUpdate, onRemove, onAdd }: {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5 }}>
             <div>
               <div style={fieldLabel}>Strike %</div>
-              <input type="number" value={Math.round(leg.moneyness * 100)} step={1} min={1}
+              <NumInput value={Math.round(leg.moneyness * 100)} min={1}
                 title="Strike as % of spot (100 = at the money)"
-                onChange={e => onUpdate(i, { moneyness: Math.max(0.01, (e.target.value === '' ? 100 : +e.target.value) / 100) })}
-                style={num} />
+                onCommit={pct => onUpdate(i, { moneyness: Math.max(0.01, pct / 100) })} />
             </div>
             <div>
               <div style={fieldLabel}>Qty</div>
-              <input type="number" value={leg.qty} step={1} min={1}
-                onChange={e => onUpdate(i, { qty: Math.max(1, Math.round(+e.target.value || 1)) })}
-                style={num} />
+              <NumInput value={leg.qty} min={1}
+                onCommit={q => onUpdate(i, { qty: Math.max(1, Math.round(q)) })} />
             </div>
           </div>
         </div>
@@ -108,10 +130,19 @@ interface BacktestResult {
     total_return: number; ann_return: number; max_drawdown: number; sharpe: number
     num_trades: number; win_rate: number; initial_capital: number; final_capital: number; total_pnl: number
   }
-  trades: { date: string; action: string; price: number; leg?: string }[]
+  trades: BacktestTrade[]
   instrument?: { kind: string; type?: string; moneyness?: number; dte: number; iv: number; direction?: string; modeled: boolean; legs?: ComboLeg[] }
   bars?: number
   span?: { start: string; end: string }
+  buy_reason?: string
+  sell_reason?: string
+}
+
+// A single fill. Combo trades share a date+direction across legs (one row per
+// leg) — the chart groups those back into one hover marker per date+side.
+interface BacktestTrade {
+  date: string; action: string; price: number; leg?: string
+  is_entry?: boolean; exit_kind?: string | null; reason?: string; ticker?: string
 }
 
 // A portfolio is a book of positions, each pairing a saved rule-set with its own
@@ -126,9 +157,62 @@ interface PortfolioResult {
   equity_curve: { date: string; strategy: number; benchmark: number }[]
   metrics: BacktestResult['metrics']
   positions: { ticker: string; side: string; instrument: string; opt_type?: string | null; weight_pct: number; return_pct: number; pnl: number; num_trades: number }[]
+  trades?: BacktestTrade[]
   bars?: number
   span?: { start: string; end: string }
 }
+// Buy/sell hover markers on the equity curve — same triangle-dot shapes as the
+// Portfolio Backtester's replay chart (BacktestSignalChart), so both tools'
+// trade markers read as one visual language.
+type MarkerPoint = { date: string; strategy: number; benchmark: number; buyTrades?: BacktestTrade[]; sellTrades?: BacktestTrade[] }
+const EqBuyDot = (props: { cx?: number; cy?: number; value?: number }) => {
+  const { cx = 0, cy = 0, value } = props
+  if (value == null) return null
+  return <polygon points={`${cx},${cy - 7} ${cx - 5},${cy + 1} ${cx + 5},${cy + 1}`} style={{ fill: 'var(--theme-positive)' }} stroke="none" />
+}
+const EqSellDot = (props: { cx?: number; cy?: number; value?: number }) => {
+  const { cx = 0, cy = 0, value } = props
+  if (value == null) return null
+  return <polygon points={`${cx},${cy + 7} ${cx - 5},${cy - 1} ${cx + 5},${cy - 1}`} style={{ fill: 'var(--theme-negative)' }} stroke="none" />
+}
+
+// Default formatter+labelFormatter can't show a variable number of conditional
+// trade-detail rows, so trade dates get a custom tooltip instead — same
+// strategy/benchmark rows as before, plus a BUY/SELL section (price, leg,
+// and why it fired) only on dates that actually traded.
+function EquityTradeTooltip({ active, payload, label }: {
+  active?: boolean; label?: string
+  payload?: { payload: MarkerPoint }[]
+}) {
+  if (!active || !payload?.length) return null
+  const pt = payload[0].payload
+  const rows = (trades?: BacktestTrade[]) => trades?.map((t, i) => (
+    <div key={i} style={{ marginTop: 2 }}>
+      {(t.ticker ? `${t.ticker} ` : '') + (t.leg ? `${t.leg} ` : '') + `@ $${t.price}`}
+      <div style={{ color: 'var(--theme-text-faint, rgba(255,255,255,0.45))', fontSize: 9 }}>{t.reason}</div>
+    </div>
+  ))
+  return (
+    <div style={{ ...TOOLTIP_STYLE, padding: '6px 10px', fontSize: 11, fontFamily: 'var(--theme-mono)', maxWidth: 260 }}>
+      <div style={{ ...TOOLTIP_LABEL, marginBottom: 3 }}>{label}</div>
+      <div style={TOOLTIP_ITEM}>Strategy: ${pt.strategy?.toLocaleString()}</div>
+      <div style={TOOLTIP_ITEM}>Buy &amp; Hold: ${pt.benchmark?.toLocaleString()}</div>
+      {pt.buyTrades && (
+        <div style={{ marginTop: 5, color: 'var(--theme-positive)', fontWeight: 700, fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+          BUY
+          <div style={{ color: 'var(--theme-text, #d7e3fc)', fontWeight: 400, textTransform: 'none' }}>{rows(pt.buyTrades)}</div>
+        </div>
+      )}
+      {pt.sellTrades && (
+        <div style={{ marginTop: 5, color: 'var(--theme-negative)', fontWeight: 700, fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+          SELL
+          <div style={{ color: 'var(--theme-text, #d7e3fc)', fontWeight: 400, textTransform: 'none' }}>{rows(pt.sellTrades)}</div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const PF_KEY = 'fdb_algo_portfolio'
 const rid = () => Math.random().toString(36).slice(2, 8)
 
@@ -349,6 +433,32 @@ export function AlgoStrategyBuilderContent() {
     return curve.length > 1 ? quickRegression(curve) : null
   }, [R, spyHist.data])
 
+  // One hover marker per date+direction — a combo trade posts one row per leg
+  // on the same date, so those collapse into a single BUY/SELL marker whose
+  // tooltip lists every leg (see EquityTradeTooltip).
+  const markerData = useMemo(() => {
+    const curve = R?.equity_curve ?? []
+    const trades = R?.trades
+    if (!curve.length || !trades?.length) return curve
+    const byDate = new Map<string, { buy: BacktestTrade[]; sell: BacktestTrade[] }>()
+    for (const t of trades) {
+      const bucket = byDate.get(t.date) ?? { buy: [], sell: [] }
+      bucket[t.is_entry ? 'buy' : 'sell'].push(t)
+      byDate.set(t.date, bucket)
+    }
+    return curve.map(pt => {
+      const b = byDate.get(pt.date)
+      if (!b) return pt
+      return {
+        ...pt,
+        buyMarker: b.buy.length ? pt.strategy : undefined,
+        sellMarker: b.sell.length ? pt.strategy : undefined,
+        buyTrades: b.buy.length ? b.buy : undefined,
+        sellTrades: b.sell.length ? b.sell : undefined,
+      }
+    })
+  }, [R])
+
   return (
     <SidebarLayout sidebarWidth={230} sidebarTitle="" sidebar={<>
       <div style={{ padding: '10px 12px 0', display: 'flex', gap: 4 }}>
@@ -458,8 +568,7 @@ export function AlgoStrategyBuilderContent() {
               <ComboLegEditor legs={comboLegs} onUpdate={updateComboLeg} onRemove={removeComboLeg} onAdd={addComboLeg} />
               <div>
                 <label style={{ ...LABEL, fontSize: 8 }}>DTE (days)</label>
-                <input type="number" value={comboDte} step={1} min={1} max={365}
-                  onChange={e => setComboDte(Math.max(1, +e.target.value || 30))} style={INPUT} />
+                <NumInput value={comboDte} min={1} max={365} onCommit={v => setComboDte(Math.round(v))} style={INPUT} />
               </div>
               <div style={{ fontSize: 8, lineHeight: '12px', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))' }}>
                 Modeled P&L: every leg priced with Black-Scholes on the historical underlying at today's IV (no historical option prices). Approximate, not a real options backtest. The BUY signal opens all legs together; the SELL signal (or shared DTE expiry) closes them together.
@@ -482,14 +591,13 @@ export function AlgoStrategyBuilderContent() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                 <div>
                   <label style={{ ...LABEL, fontSize: 8 }}>% OTM</label>
-                  <input type="number" value={otmPct} step={1} min={-50} max={50}
+                  <NumInput value={otmPct} min={-50} max={50}
                     title="Strike distance from spot. Positive = out of the money, negative = in the money, 0 = at the money."
-                    onChange={e => setOtmPct(Math.max(-50, Math.min(50, Math.round(+e.target.value || 0))))} style={INPUT} />
+                    onCommit={v => setOtmPct(Math.round(v))} style={INPUT} />
                 </div>
                 <div>
                   <label style={{ ...LABEL, fontSize: 8 }}>DTE (days)</label>
-                  <input type="number" value={dte} step={1} min={1} max={365}
-                    onChange={e => setDte(Math.max(1, +e.target.value || 30))} style={INPUT} />
+                  <NumInput value={dte} min={1} max={365} onCommit={v => setDte(Math.round(v))} style={INPUT} />
                 </div>
               </div>
               <div style={{ fontSize: 8, color: 'var(--theme-secondary, #8099b0)', fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em' }}>
@@ -524,8 +632,8 @@ export function AlgoStrategyBuilderContent() {
                     <input value={p.ticker} placeholder="TICKER"
                       onChange={e => patchPosition(p.id, { ticker: e.target.value.toUpperCase() })}
                       style={{ ...INPUT, fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }} />
-                    <input type="number" value={p.weight} min={0} max={100} title="Capital weight %"
-                      onChange={e => patchPosition(p.id, { weight: Math.max(0, +e.target.value || 0) })}
+                    <NumInput value={p.weight} min={0} max={100} title="Capital weight %"
+                      onCommit={v => patchPosition(p.id, { weight: v })}
                       style={{ ...INPUT, fontSize: 11 }} />
                     <button onClick={() => removePosition(p.id)} title="Remove"
                       style={{ background: 'none', border: 'none', color: 'var(--theme-negative)', cursor: 'pointer', fontSize: 14 }}>×</button>
@@ -577,14 +685,14 @@ export function AlgoStrategyBuilderContent() {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
                       <div>
                         <div style={{ fontSize: 8, color: 'var(--theme-secondary, #8099b0)', marginBottom: 2 }}>% OTM (neg = ITM)</div>
-                        <input type="number" value={p.otmPct} min={-50} max={50}
-                          onChange={e => patchPosition(p.id, { otmPct: Math.max(-50, Math.min(50, Math.round(+e.target.value || 0))) })}
+                        <NumInput value={p.otmPct} min={-50} max={50}
+                          onCommit={v => patchPosition(p.id, { otmPct: Math.round(v) })}
                           style={{ ...INPUT, fontSize: 10 }} />
                       </div>
                       <div>
                         <div style={{ fontSize: 8, color: 'var(--theme-secondary, #8099b0)', marginBottom: 2 }}>DTE (days)</div>
-                        <input type="number" value={p.dte} min={1} max={365}
-                          onChange={e => patchPosition(p.id, { dte: Math.max(1, +e.target.value || 30) })}
+                        <NumInput value={p.dte} min={1} max={365}
+                          onCommit={v => patchPosition(p.id, { dte: Math.round(v) })}
                           style={{ ...INPUT, fontSize: 10 }} />
                       </div>
                     </div>
@@ -604,8 +712,8 @@ export function AlgoStrategyBuilderContent() {
                         onRemove={i => removeComboLegFromPosition(p.id, i)} onAdd={() => addComboLegToPosition(p.id)} />
                       <div>
                         <div style={{ fontSize: 8, color: 'var(--theme-secondary, #8099b0)', marginBottom: 2 }}>DTE (days)</div>
-                        <input type="number" value={p.comboDte} min={1} max={365}
-                          onChange={e => patchPosition(p.id, { comboDte: Math.max(1, +e.target.value || 30) })}
+                        <NumInput value={p.comboDte} min={1} max={365}
+                          onCommit={v => patchPosition(p.id, { comboDte: Math.round(v) })}
                           style={{ ...INPUT, fontSize: 10 }} />
                       </div>
                     </div>
@@ -879,7 +987,7 @@ export function AlgoStrategyBuilderContent() {
             </div>
             <div style={{ paddingTop: 30, paddingLeft: 8, paddingRight: 8, paddingBottom: 8, height: 320 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={R.equity_curve}>
+                <ComposedChart data={markerData}>
                   <defs>
                     <linearGradient id="algoEq" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor={cc.primary} stopOpacity={0.22} />
@@ -889,14 +997,18 @@ export function AlgoStrategyBuilderContent() {
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.045)" />
                   <XAxis dataKey="date" tick={TICK} tickFormatter={d => d.slice(0, 7)} interval="preserveStartEnd" minTickGap={48} />
                   <YAxis tick={TICK} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} orientation="right" domain={['auto', 'auto']} />
-                  <Tooltip formatter={(v: number, n: string) => [`$${(+v).toLocaleString()}`, n === 'strategy' ? 'Strategy' : 'Buy & Hold']} contentStyle={TOOLTIP_STYLE} labelFormatter={() => ''} />
+                  <Tooltip content={<EquityTradeTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 10 }} payload={[
                     { value: 'Strategy', type: 'line', id: 's', color: cc.primary },
                     { value: 'Buy & Hold', type: 'line', id: 'b', color: cc.c2 },
+                    { value: 'Buy', type: 'triangle', id: 'buy', color: 'var(--theme-positive)' },
+                    { value: 'Sell', type: 'triangle', id: 'sell', color: 'var(--theme-negative)' },
                   ]} />
                   <Area type="monotone" dataKey="strategy" stroke={cc.primary} strokeWidth={2} fill="url(#algoEq)" name="strategy" dot={false} />
                   <Area type="monotone" dataKey="benchmark" stroke={cc.c2} strokeWidth={1.5} strokeDasharray="4 2" fill="transparent" name="benchmark" dot={false} />
-                </AreaChart>
+                  <Line dataKey="buyMarker" stroke="transparent" dot={<EqBuyDot />} activeDot={false} isAnimationActive={false} legendType="none" />
+                  <Line dataKey="sellMarker" stroke="transparent" dot={<EqSellDot />} activeDot={false} isAnimationActive={false} legendType="none" />
+                </ComposedChart>
               </ResponsiveContainer>
             </div>
           </div>

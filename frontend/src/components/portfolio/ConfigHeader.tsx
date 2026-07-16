@@ -3,7 +3,7 @@ import { ChevronUp, ChevronDown, Play, X, MoreHorizontal } from 'lucide-react'
 import StrategySelector, { STRATEGIES, CUSTOM_STRATEGY_KEY, type StrategyParams } from '../StrategySelector'
 import { weightTotal, normalizeTo100 } from './weights'
 import { PRESETS, PRESET_GROUPS } from '../../pages/strategy-builder/shared'
-import { type ComboLeg, legsToCombo, mkComboLeg, MAX_COMBO_LEGS, ComboLegEditor } from '../../pages/AlgoStrategyBuilder'
+import { type ComboLeg, legsToCombo, mkComboLeg, MAX_COMBO_LEGS, ComboLegEditor, NumInput } from '../../pages/AlgoStrategyBuilder'
 
 export type Holding = {
   ticker: string; weight: number; strategy: string; stratParams: StrategyParams
@@ -209,8 +209,8 @@ function HoldingCard({ holding, index, maxWeight, onChange, onRemove, tickerList
                 onAdd={() => onChange({ comboLegs: (holding.comboLegs ?? []).length >= MAX_COMBO_LEGS ? holding.comboLegs : [...(holding.comboLegs ?? []), mkComboLeg()] })} />
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span style={{ fontSize: 8, color: T.faint }}>DTE</span>
-                <input type="number" value={holding.comboDte ?? 30} min={1} max={365}
-                  onChange={e => onChange({ comboDte: Math.max(1, +e.target.value || 30) })}
+                <NumInput value={holding.comboDte ?? 30} min={1} max={365}
+                  onCommit={v => onChange({ comboDte: Math.round(v) })}
                   style={{ ...inputBase, fontSize: 9, padding: '3px 5px', width: 44 } as React.CSSProperties} />
               </div>
             </>

@@ -466,6 +466,98 @@ def evaluate_custom_rules(prices: np.ndarray, rules: dict, context: dict | None 
     return signal
 
 
+# ── Human-readable rule descriptions (for trade-marker tooltips) ─────────────
+# Mirrors the frontend's IND_LABELS (CustomStrategyModal.tsx) — kept as a
+# literal here rather than shared, since indicator labels rarely change and a
+# cross-language import isn't worth the coupling.
+_IND_LABELS: dict[str, str] = {
+    "PRICE": "Price", "RSI": "RSI", "SMA": "SMA", "EMA": "EMA",
+    "MACD_LINE": "MACD Line", "MACD_SIGNAL": "MACD Signal",
+    "BB_UPPER": "BB Upper", "BB_MID": "BB Mid", "BB_LOWER": "BB Lower",
+    "ATR": "ATR", "MOMENTUM": "Momentum", "PCT_CHANGE": "% change",
+    "PCT_BELOW_HIGH": "% below high", "PCT_ABOVE_LOW": "% above low",
+    "OPT_HV": "Realized vol %", "OPT_IVRANK": "IV Rank %",
+    "FUND_PE": "P/E", "FUND_PEG": "PEG", "FUND_EPSGROWTH": "EPS growth %",
+    "FUND_NETMARGIN": "Net margin %", "FUND_GROSSMARGIN": "Gross margin %",
+    "FUND_DEBTEQUITY": "Debt/equity", "FUND_DIVYIELD": "Dividend yield %",
+    "FUND_PB": "P/B", "FUND_CURRENTRATIO": "Current ratio", "FUND_BETA": "Beta",
+    "VOL_RELATIVE": "Relative volume", "VOL_DOLLAR": "Dollar volume",
+    "FLOW_HORMUZ": "Hormuz transits", "FLOW_SUEZ": "Suez transits",
+    "FLOW_PANAMA": "Panama transits", "FLOW_MALACCA": "Malacca transits",
+}
+_OP_LABELS: dict[str, str] = {
+    "gt": ">", "lt": "<", "gte": "≥", "lte": "≤",
+    "crosses_above": "crosses above", "crosses_below": "crosses below",
+}
+
+
+def _describe_indicator(ind: dict) -> str:
+    t = ind.get("type", "PRICE")
+    label = _IND_LABELS.get(t, t)
+    period = ind.get("period")
+    if period and t not in ("OPT_IVRANK",):
+        label += f" ({period}d)"
+    tk = ind.get("ticker")
+    if tk:
+        label += f" [{str(tk).upper()}]"
+    return label
+
+
+def _describe_condition(cond: dict) -> str:
+    lhs = _describe_indicator(cond.get("lhs") or {"type": "PRICE"})
+    op = _OP_LABELS.get(cond.get("op", "gt"), cond.get("op", "gt"))
+    if cond.get("rhs_type") == "indicator":
+        rhs = _describe_indicator(cond.get("rhs_ind") or {"type": "PRICE"})
+    else:
+        rhs = str(cond.get("rhs_num", 0))
+    return f"{lhs} {op} {rhs}"
+
+
+def describe_rule_block(block: dict | None) -> str:
+    """Human-readable summary of a buy/sell rule block, for trade-marker
+    tooltips — e.g. '% below high (20d) > 20 AND IV Rank % >= 80'."""
+    block = block or {}
+    groups = block.get("groups")
+    if not groups:
+        flat = block.get("conditions") or []
+        if not flat:
+            return "no conditions set"
+        groups = [{"logic": block.get("logic", "AND"), "conditions": flat}]
+    group_strs = []
+    for g in groups:
+        conds = g.get("conditions") or []
+        if not conds:
+            continue
+        logic = f" {g.get('logic', 'AND')} "
+        s = logic.join(_describe_condition(c) for c in conds)
+        group_strs.append(f"({s})" if len(conds) > 1 and len(groups) > 1 else s)
+    if not group_strs:
+        return "no conditions set"
+    top_logic = f" {block.get('logic', 'AND')} "
+    return top_logic.join(group_strs)
+
+
+def _exit_reason(exit_kind: str | None, sell_reason: str, *, stop_loss=None, take_profit=None,
+                 trailing_stop=None, max_hold_bars=None, dte=None) -> str:
+    """A risk-control-forced exit (stop-loss/take-profit/trailing-stop/max-hold/
+    DTE expiry) did NOT happen because the sell rule fired — showing the static
+    sell_reason text on those trades would misattribute the exit. exit_kind
+    (set by _apply_risk_controls/_compute_option_metrics/_compute_combo_metrics)
+    picks the accurate label instead; only a genuine rule-driven exit ("rule" or
+    unset) falls back to sell_reason."""
+    if exit_kind == "stop_loss" and stop_loss is not None:
+        return f"Stop-loss triggered ({stop_loss:g}%)"
+    if exit_kind == "take_profit" and take_profit is not None:
+        return f"Take-profit triggered ({take_profit:g}%)"
+    if exit_kind == "trailing_stop" and trailing_stop is not None:
+        return f"Trailing stop triggered ({trailing_stop:g}%)"
+    if exit_kind == "max_hold" and max_hold_bars is not None:
+        return f"Max hold reached ({max_hold_bars} bars)"
+    if exit_kind == "dte" and dte is not None:
+        return f"Held to expiry ({dte} DTE)"
+    return sell_reason
+
+
 def referenced_tickers(rules: dict | None, primary: str) -> list[str]:
     """Every symbol a rule set touches: the primary plus any per-condition ticker
     overrides. Used to fetch and date-align all needed price frames."""
@@ -648,9 +740,11 @@ def custom_backtest(req: CustomBacktestRequest):
     # with the underlying's price, so the price-based pre-filter below (correct
     # for plain shares) would rarely trigger at the intended P&L level.
     is_modeled = (req.instrument or {}).get("kind") in ("option", "combo")
+    exit_kinds: dict = {}
     if not is_modeled:
         signal = _apply_risk_controls(
             signal, close, req.stop_loss, req.take_profit, req.trailing_stop, req.max_hold_bars,
+            exit_kinds=exit_kinds,
         )
     bpy = _BACKTEST_TF.get(tf, ("1d", 252))[1]
     result = _instrument_metrics(signal, close, req.instrument, req.side, req.ticker,
@@ -659,18 +753,37 @@ def custom_backtest(req: CustomBacktestRequest):
                                  stop_loss=req.stop_loss if is_modeled else None,
                                  take_profit=req.take_profit if is_modeled else None,
                                  trailing_stop=req.trailing_stop if is_modeled else None,
-                                 max_hold_bars=req.max_hold_bars if is_modeled else None)
+                                 max_hold_bars=req.max_hold_bars if is_modeled else None,
+                                 exit_kinds=exit_kinds)
     # Surface the window + timeframe actually used so "history" is never ambiguous.
     result["bars"] = int(len(close))
     result["timeframe"] = tf
     _fmt = (lambda d: d.strftime("%Y-%m-%d %H:%M")) if _is_intraday_tf(tf) else (lambda d: str(d.date()))
     result["span"] = {"start": _fmt(close.index[0]), "end": _fmt(close.index[-1])}
+    # Human-readable "why" per trade, for the equity-curve's hover markers. An
+    # exit's reason is the sell rule ONLY if that's what actually closed it —
+    # a stop-loss/take-profit/trailing-stop/max-hold/DTE exit gets its own
+    # accurate label instead (see _exit_reason).
+    buy_reason = describe_rule_block(req.rules.get("buy"))
+    sell_reason = describe_rule_block(req.rules.get("sell"))
+    dte = (req.instrument or {}).get("dte")
+    for t in result.get("trades", []):
+        if t.get("is_entry"):
+            t["reason"] = buy_reason
+        else:
+            t["reason"] = _exit_reason(t.get("exit_kind"), sell_reason,
+                                       stop_loss=req.stop_loss, take_profit=req.take_profit,
+                                       trailing_stop=req.trailing_stop, max_hold_bars=req.max_hold_bars,
+                                       dte=dte if is_modeled else None)
+    result["buy_reason"] = buy_reason
+    result["sell_reason"] = sell_reason
     return result
 
 
 def _instrument_metrics(signal, close, instrument, side, ticker, position_size, capital, bars_per_year: int = 252, intraday: bool = False,
                         stop_loss: float | None = None, take_profit: float | None = None,
-                        trailing_stop: float | None = None, max_hold_bars: int | None = None):
+                        trailing_stop: float | None = None, max_hold_bars: int | None = None,
+                        exit_kinds: dict | None = None):
     """Metrics for one position given its resolved signal + close: modeled option
     P&L for an option instrument (long buys it, short writes it), else long/short
     shares. `side` drives direction for both. Same result shape as /algo/backtest.
@@ -697,7 +810,8 @@ def _instrument_metrics(signal, close, instrument, side, ticker, position_size, 
                                           stop_loss=stop_loss, take_profit=take_profit, trailing_stop=trailing_stop, max_hold_bars=max_hold_bars)
         return _compute_option_metrics(signal, close, inst, float(iv), position_size, capital, direction=side, bars_per_year=bars_per_year, intraday=intraday,
                                        stop_loss=stop_loss, take_profit=take_profit, trailing_stop=trailing_stop, max_hold_bars=max_hold_bars)
-    return _compute_metrics(signal, close, position_size, capital, direction=side, bars_per_year=bars_per_year, intraday=intraday)
+    return _compute_metrics(signal, close, position_size, capital, direction=side, bars_per_year=bars_per_year, intraday=intraday,
+                            exit_kinds=exit_kinds)
 
 
 # ─── Multi-position portfolio backtest ────────────────────────────────────────
@@ -776,15 +890,18 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
         # See custom_backtest: option/combo risk controls are P&L-based, applied
         # inside _instrument_metrics — the price-based pre-filter is for shares only.
         is_modeled = (p.instrument or {}).get("kind") in ("option", "combo")
+        exit_kinds: dict = {}
         if not is_modeled:
-            signal = _apply_risk_controls(signal, close, p.stop_loss, p.take_profit, p.trailing_stop, p.max_hold_bars)
+            signal = _apply_risk_controls(signal, close, p.stop_loss, p.take_profit, p.trailing_stop, p.max_hold_bars,
+                                          exit_kinds=exit_kinds)
         try:
             res = _instrument_metrics(signal, close, p.instrument, p.side, p.ticker, p.position_size, cap,
                                       bars_per_year=bpy, intraday=intraday,
                                       stop_loss=p.stop_loss if is_modeled else None,
                                       take_profit=p.take_profit if is_modeled else None,
                                       trailing_stop=p.trailing_stop if is_modeled else None,
-                                      max_hold_bars=p.max_hold_bars if is_modeled else None)
+                                      max_hold_bars=p.max_hold_bars if is_modeled else None,
+                                      exit_kinds=exit_kinds)
         except HTTPException:
             continue
         legs.append((p, cap, res))
@@ -827,6 +944,28 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
         "num_trades": res["metrics"]["num_trades"],
     } for (p, cap, res) in legs]
 
+    # Aggregate every position's trades onto the shared timeline, for the
+    # equity-curve's hover markers — tagged with ticker (several positions can
+    # trade the same day) and a per-position "why" (each has its own rules).
+    # Only dates inside the portfolio's own (inner-joined) span have a curve
+    # point to anchor a marker to.
+    valid_dates = {d.strftime(_cfmt) for d in port_eq.index}
+    trades_out = []
+    for p, _cap, res in legs:
+        buy_reason = describe_rule_block(p.rules.get("buy"))
+        sell_reason = describe_rule_block(p.rules.get("sell"))
+        is_modeled = (p.instrument or {}).get("kind") in ("option", "combo")
+        dte = (p.instrument or {}).get("dte") if is_modeled else None
+        for t in res.get("trades", []):
+            if t["date"] not in valid_dates:
+                continue
+            reason = buy_reason if t.get("is_entry") else _exit_reason(
+                t.get("exit_kind"), sell_reason, stop_loss=p.stop_loss, take_profit=p.take_profit,
+                trailing_stop=p.trailing_stop, max_hold_bars=p.max_hold_bars, dte=dte,
+            )
+            trades_out.append({**t, "ticker": p.ticker, "reason": reason})
+    trades_out.sort(key=lambda t: t["date"])
+
     return {
         "equity_curve": curve,
         "metrics": {
@@ -838,6 +977,7 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
         },
         "timeframe": tf,
         "positions": positions_out,
+        "trades": trades_out,
         "bars": int(n),
         "span": {"start": port_eq.index[0].strftime(_cfmt), "end": port_eq.index[-1].strftime(_cfmt)},
     }

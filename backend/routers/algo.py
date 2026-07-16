@@ -161,7 +161,13 @@ def _apply_risk_controls(
     take_profit: float | None,
     trailing_stop: float | None = None,
     max_hold_bars: int | None = None,
+    exit_kinds: dict | None = None,
 ) -> pd.Series:
+    """exit_kinds, if passed, is mutated in place: {Timestamp: "stop_loss"|
+    "take_profit"|"trailing_stop"|"max_hold"} for every risk-forced exit — lets
+    callers distinguish a risk-control exit from a rule-driven one (e.g. for
+    trade-marker tooltips), without changing this function's return shape for
+    existing callers that don't need it."""
     no_controls = all(v is None for v in [stop_loss, take_profit, trailing_stop, max_hold_bars])
     if no_controls:
         return signal
@@ -177,20 +183,22 @@ def _apply_risk_controls(
         if in_trade:
             peak_price = max(peak_price, price)
             bars_held += 1
-            exited = False
+            exit_kind = None
             if stop_loss is not None and price <= entry_price * (1 - stop_loss / 100):
-                exited = True
-            if not exited and take_profit is not None and price >= entry_price * (1 + take_profit / 100):
-                exited = True
-            if not exited and trailing_stop is not None and price <= peak_price * (1 - trailing_stop / 100):
-                exited = True
-            if not exited and max_hold_bars is not None and bars_held >= max_hold_bars:
-                exited = True
-            if exited:
+                exit_kind = "stop_loss"
+            if exit_kind is None and take_profit is not None and price >= entry_price * (1 + take_profit / 100):
+                exit_kind = "take_profit"
+            if exit_kind is None and trailing_stop is not None and price <= peak_price * (1 - trailing_stop / 100):
+                exit_kind = "trailing_stop"
+            if exit_kind is None and max_hold_bars is not None and bars_held >= max_hold_bars:
+                exit_kind = "max_hold"
+            if exit_kind is not None:
                 result.iloc[i] = 0.0
                 in_trade = False
                 blocked = True
                 bars_held = 0
+                if exit_kinds is not None:
+                    exit_kinds[close.index[i]] = exit_kind
             else:
                 result.iloc[i] = 1.0
         else:
@@ -209,7 +217,8 @@ def _apply_risk_controls(
 
 def _compute_metrics(signal: pd.Series, close: pd.Series, position_size: float = 100,
                      initial_capital: float = 10_000, direction: str = "long",
-                     bars_per_year: int = 252, intraday: bool = False):
+                     bars_per_year: int = 252, intraday: bool = False,
+                     exit_kinds: dict | None = None):
     alloc = max(0.0, min(100.0, position_size)) / 100.0
     # Intraday keeps the time in each label so bars within a day stay distinct
     # (a date-only label would collapse them and break the curve / portfolio join).
@@ -246,9 +255,10 @@ def _compute_metrics(signal: pd.Series, close: pd.Series, position_size: float =
 
     trades = []
     for d in buy_dates:
-        trades.append({"date": d.strftime(_dfmt), "action": "BUY", "price": round(float(close.loc[d]), 2)})
+        trades.append({"date": d.strftime(_dfmt), "action": "BUY", "price": round(float(close.loc[d]), 2), "is_entry": True})
     for d in sell_dates:
-        trades.append({"date": d.strftime(_dfmt), "action": "SELL", "price": round(float(close.loc[d]), 2)})
+        trades.append({"date": d.strftime(_dfmt), "action": "SELL", "price": round(float(close.loc[d]), 2), "is_entry": False,
+                       "exit_kind": (exit_kinds or {}).get(d)})
     trades.sort(key=lambda x: x["date"])
 
     num_trades = len(buy_dates)
@@ -351,24 +361,28 @@ def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: 
         return float(bs_price(px[i], strike, dte - (i - entry_i), r, iv, otype))
 
     for i in range(n):
-        risk_triggered = False
+        exit_kind = None
         if in_trade:
             raw_pnl = contracts * (_val(i) - entry_val) * _OPT_MULT
             pnl = -raw_pnl if short else raw_pnl   # short profits when the option cheapens
             peak_pnl = max(peak_pnl, pnl)
             if stop_loss is not None and pnl <= -(stop_loss / 100.0) * basis:
-                risk_triggered = True
-            if not risk_triggered and take_profit is not None and pnl >= (take_profit / 100.0) * basis:
-                risk_triggered = True
-            if not risk_triggered and trailing_stop is not None and pnl <= peak_pnl - (trailing_stop / 100.0) * basis:
-                risk_triggered = True
-            if not risk_triggered and max_hold_bars is not None and (i - entry_i) >= max_hold_bars:
-                risk_triggered = True
-        exiting = in_trade and (sig[i] == 0.0 or (i - entry_i) >= dte or risk_triggered)
+                exit_kind = "stop_loss"
+            if exit_kind is None and take_profit is not None and pnl >= (take_profit / 100.0) * basis:
+                exit_kind = "take_profit"
+            if exit_kind is None and trailing_stop is not None and pnl <= peak_pnl - (trailing_stop / 100.0) * basis:
+                exit_kind = "trailing_stop"
+            if exit_kind is None and max_hold_bars is not None and (i - entry_i) >= max_hold_bars:
+                exit_kind = "max_hold"
+        risk_triggered = exit_kind is not None
+        if in_trade and not risk_triggered and (i - entry_i) >= dte:
+            exit_kind = "dte"
+        exiting = in_trade and (sig[i] == 0.0 or exit_kind is not None)
         if exiting:
             v = _val(i)
             cash += contracts * v * _OPT_MULT
-            trades.append({"date": idx[i].strftime(_dfmt), "action": exit_action, "price": round(v, 2)})
+            trades.append({"date": idx[i].strftime(_dfmt), "action": exit_action, "price": round(v, 2), "is_entry": False,
+                           "exit_kind": exit_kind or "rule"})
             in_trade, contracts = False, 0.0
             blocked = risk_triggered
         if blocked and sig[i] == 0.0:
@@ -382,7 +396,7 @@ def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: 
             entry_i, in_trade = i, True
             basis = contracts * entry_val * _OPT_MULT or 1.0
             peak_pnl = 0.0
-            trades.append({"date": idx[i].strftime(_dfmt), "action": entry_action, "price": round(entry_val, 2)})
+            trades.append({"date": idx[i].strftime(_dfmt), "action": entry_action, "price": round(entry_val, 2), "is_entry": True})
         cur = cash + (contracts * _val(i) * _OPT_MULT if in_trade else 0.0)
         equity[i] = cur
 
@@ -496,19 +510,22 @@ def _compute_combo_metrics(signal: pd.Series, close: pd.Series, combo: dict, iv:
         return sum(l["signed_qty"] * _leg_val(l, i) * _OPT_MULT for l in leg_state)
 
     for i in range(n):
-        risk_triggered = False
+        exit_kind = None
         if in_trade:
             pnl = _combo_mtm(i) - entry_mtm
             peak_pnl = max(peak_pnl, pnl)
             if stop_loss is not None and pnl <= -(stop_loss / 100.0) * basis:
-                risk_triggered = True
-            if not risk_triggered and take_profit is not None and pnl >= (take_profit / 100.0) * basis:
-                risk_triggered = True
-            if not risk_triggered and trailing_stop is not None and pnl <= peak_pnl - (trailing_stop / 100.0) * basis:
-                risk_triggered = True
-            if not risk_triggered and max_hold_bars is not None and (i - entry_i) >= max_hold_bars:
-                risk_triggered = True
-        exiting = in_trade and (sig[i] == 0.0 or (i - entry_i) >= dte or risk_triggered)
+                exit_kind = "stop_loss"
+            if exit_kind is None and take_profit is not None and pnl >= (take_profit / 100.0) * basis:
+                exit_kind = "take_profit"
+            if exit_kind is None and trailing_stop is not None and pnl <= peak_pnl - (trailing_stop / 100.0) * basis:
+                exit_kind = "trailing_stop"
+            if exit_kind is None and max_hold_bars is not None and (i - entry_i) >= max_hold_bars:
+                exit_kind = "max_hold"
+        risk_triggered = exit_kind is not None
+        if in_trade and not risk_triggered and (i - entry_i) >= dte:
+            exit_kind = "dte"
+        exiting = in_trade and (sig[i] == 0.0 or exit_kind is not None)
         if exiting:
             cash += _combo_mtm(i)
             for l in leg_state:
@@ -517,6 +534,8 @@ def _compute_combo_metrics(signal: pd.Series, close: pd.Series, combo: dict, iv:
                     "action": "SELL" if l["signed_qty"] > 0 else "BUY",   # closing action is opposite of opening
                     "price": round(_leg_val(l, i), 2),
                     "leg": f"{l['type']} {l['strike']:g}",
+                    "is_entry": False,
+                    "exit_kind": exit_kind or "rule",
                 })
             in_trade, leg_state = False, []
             # Only a risk-forced exit blocks re-entry (until the rule itself says
@@ -547,6 +566,7 @@ def _compute_combo_metrics(signal: pd.Series, close: pd.Series, combo: dict, iv:
                     "action": "BUY" if signed_qty > 0 else "SELL",
                     "price": round(l["entry_val"], 2),
                     "leg": f"{l['type']} {l['strike']:g}",
+                    "is_entry": True,
                 })
             cash -= sum(l["signed_qty"] * bs_price(px[i], l["strike"], dte, r, iv, l["type"]) * _OPT_MULT for l in leg_state)
             entry_i, in_trade = i, True
