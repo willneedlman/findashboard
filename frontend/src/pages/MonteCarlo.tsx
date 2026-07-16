@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { AreaChart, Area, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Legend } from 'recharts'
+import { AreaChart, Area, LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Legend } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import { KpiCell } from '../components/mmCockpit'
 import { useChartColors } from '../hooks/useChartColors'
@@ -21,6 +21,8 @@ import PMImportPicker from '../components/PMImportPicker'
 import { CASH_SYMBOL } from '../lib/pmImport'
 import ConfigHeader, { Field, paramInput, RebalanceSelect, type RebalanceFreq } from '../components/portfolio/ConfigHeader'
 import { usePortfolio, type PortfolioHolding } from '../contexts/PortfolioContext'
+import { PRESETS, PRESET_DESC, PRESET_GROUPS } from './strategy-builder/shared'
+import { legsToCombo } from './AlgoStrategyBuilder'
 // ── GBM math ────────────────────────────────────────────────────────────────
 
 function runGBM(S0: number, mu: number, sigma: number, T: number, nSims: number) {
@@ -228,6 +230,210 @@ function ChartPanel({ label, height, children }: { label: React.ReactNode; heigh
   )
 }
 
+// ── Options Strategy P&L distribution ───────────────────────────────────────
+// Standalone mode, separate from the portfolio GBM simulator above: pick a
+// ticker + a multi-leg combo (same PRESETS as Options/Algo Strategy Builder),
+// simulate the underlying to DTE via risk-neutral GBM, and show the resulting
+// P&L distribution (breakevens, max profit/loss, probability of profit).
+
+function MCModeToggle({ mode, onChange }: { mode: 'portfolio' | 'options-strategy'; onChange: (m: 'portfolio' | 'options-strategy') => void }) {
+  return (
+    <div style={{ display: 'flex', gap: 4, marginBottom: 10 }}>
+      {(['portfolio', 'options-strategy'] as const).map(m => (
+        <button key={m} onClick={() => onChange(m)} style={{
+          padding: '6px 14px', fontFamily: 'var(--theme-mono)', fontSize: 10, fontWeight: 700,
+          letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer',
+          background: mode === m ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)' : 'transparent',
+          border: `1px solid ${mode === m ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.12))'}`,
+          color: mode === m ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #8099b0)',
+        }}>{m === 'portfolio' ? 'Portfolio' : 'Options Strategy'}</button>
+      ))}
+    </div>
+  )
+}
+
+interface ComboMcResult {
+  ticker: string; spot: number; iv: number; dte: number
+  entry_credit_debit: number
+  breakevens: number[]
+  max_profit: number | null; max_loss: number | null
+  prob_profit: number
+  percentiles: { p5: number; p25: number; p50: number; p75: number; p95: number }
+  payoff_curve: { price: number; pnl: number }[]
+  histogram: number[]
+  n_sims: number
+  has_exit_rule: boolean
+  max_hold_days: number | null
+  avg_hold_days: number
+  pct_take_profit: number
+  pct_stop_loss: number
+  pct_held_to_exit_cap: number
+}
+
+function OptionsStrategyMonteCarlo({ onSwitchMode }: { onSwitchMode: () => void }) {
+  const cc = useChartColors()
+  const [ticker, setTicker] = useState('AAPL')
+  const [comboPreset, setComboPreset] = useState('Short Straddle')
+  const [comboDte, setComboDte] = useState(30)
+  const [nSims, setNSims] = useState(3000)
+  // Early exit — % of the entry credit/debit magnitude, the standard "close at
+  // 50% of max profit" convention. Blank = no such exit (hold to DTE or hold cap).
+  const [tpPct, setTpPct] = useState('')
+  const [slPct, setSlPct] = useState('')
+  const [maxHoldDays, setMaxHoldDays] = useState('')
+
+  const { mutate, data, isPending, isError, error } = useMutation<ComboMcResult>({
+    mutationFn: async () => {
+      const { data } = await axios.post('/api/algo/combo-montecarlo', {
+        ticker, combo: { dte: comboDte, legs: legsToCombo(PRESETS[comboPreset] ?? []) }, n_sims: nSims,
+        take_profit_pct: tpPct ? +tpPct : undefined,
+        stop_loss_pct: slPct ? +slPct : undefined,
+        max_hold_days: maxHoldDays ? +maxHoldDays : undefined,
+      })
+      return data
+    },
+  })
+
+  const histBins = (() => {
+    if (!data?.histogram.length) return []
+    const min = data.histogram[0], max = data.histogram[data.histogram.length - 1]
+    const step = Math.max((max - min) / 40, 0.01)
+    return Array.from({ length: 40 }, (_, i) => {
+      const lo = min + i * step, hi = lo + step
+      return { pnl: Math.round(lo), count: data.histogram.filter(v => v >= lo && (i === 39 ? v <= hi : v < hi)).length }
+    })
+  })()
+
+  return (
+    <>
+      <MCModeToggle mode="options-strategy" onChange={m => m === 'portfolio' && onSwitchMode()} />
+      <div style={{ border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #0d1826)', padding: '14px 16px', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
+        <div>
+          <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', marginBottom: 3 }}>Ticker</label>
+          <input value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())} style={{ ...paramInput, width: 90 }} />
+        </div>
+        <div>
+          <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', marginBottom: 3 }}>Structure</label>
+          <select value={comboPreset} onChange={e => setComboPreset(e.target.value)} style={{ ...paramInput, width: 200, cursor: 'pointer' }}>
+            {PRESET_GROUPS.map(g => (
+              <optgroup key={g.label} label={g.label}>
+                {g.keys.map(k => <option key={k} value={k}>{k}</option>)}
+              </optgroup>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', marginBottom: 3 }}>DTE</label>
+          <input type="number" value={comboDte} min={1} max={365} onChange={e => setComboDte(Math.max(1, +e.target.value || 30))} style={{ ...paramInput, width: 70 }} />
+        </div>
+        <div>
+          <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', marginBottom: 3 }}>Simulations</label>
+          <input type="number" value={nSims} min={100} max={5000} onChange={e => setNSims(Math.max(100, +e.target.value || 3000))} style={{ ...paramInput, width: 90 }} />
+        </div>
+        <button onClick={() => mutate()} disabled={isPending} style={{
+          display: 'flex', alignItems: 'center', gap: 6, background: 'var(--theme-primary, #c9a84c)', border: '1px solid var(--theme-primary, #c9a84c)',
+          color: 'var(--theme-bg, #101c2e)', fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
+          padding: '8px 18px', cursor: isPending ? 'default' : 'pointer', opacity: isPending ? 0.6 : 1, whiteSpace: 'nowrap',
+        }}>{isPending ? 'Running…' : 'Run Simulation'}</button>
+        <div style={{ fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', fontFamily: 'var(--theme-mono)', maxWidth: 420, lineHeight: '13px' }}>
+          {PRESET_DESC[comboPreset]} · legs priced from live spot/IV, simulated to DTE via risk-neutral GBM — not a real historical backtest.
+        </div>
+        <div style={{ width: '100%', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+          <div>
+            <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)', marginBottom: 3 }}>Take-Profit %</label>
+            <input type="number" value={tpPct} placeholder="off" min={0} max={500} onChange={e => setTpPct(e.target.value)} style={{ ...paramInput, width: 80 }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)', marginBottom: 3 }}>Stop-Loss %</label>
+            <input type="number" value={slPct} placeholder="off" min={0} max={2000} onChange={e => setSlPct(e.target.value)} style={{ ...paramInput, width: 80 }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)', marginBottom: 3 }}>Max Hold (days)</label>
+            <input type="number" value={maxHoldDays} placeholder={`${comboDte} (DTE)`} min={1} max={comboDte}
+              onChange={e => setMaxHoldDays(e.target.value === '' ? '' : String(Math.max(1, +e.target.value || 1)))}
+              style={{ ...paramInput, width: 100 }} />
+          </div>
+          <div style={{ fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', fontFamily: 'var(--theme-mono)', maxWidth: 380, lineHeight: '13px' }}>
+            % of the entry credit/debit magnitude — e.g. Take-Profit 50 closes once 50% of max profit is captured, matching the position's realized P&L path day-by-day (not just at expiry). Leave blank to hold to DTE.
+          </div>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {!data && !isPending && (
+          <EmptyState title="Options Strategy Monte Carlo" hint="Pick a ticker and a multi-leg structure, then run the simulation." action="Run Simulation" />
+        )}
+        {isError && (
+          <div style={{ padding: '10px 14px', border: '1px solid var(--theme-negative)', color: 'var(--theme-negative)', fontFamily: 'var(--theme-mono)', fontSize: 11 }}>
+            {(() => {
+              const d = (error as any)?.response?.data?.detail
+              if (typeof d === 'string') return d
+              if (Array.isArray(d)) return d.map((x: any) => x?.msg ?? String(x)).join(' · ')
+              return 'Simulation failed'
+            })()}
+          </div>
+        )}
+        {data && (
+          <>
+            <div style={STRIP}>
+              <KpiCell grow label={data.entry_credit_debit >= 0 ? 'Credit Received' : 'Debit Paid'} value={`$${Math.abs(data.entry_credit_debit).toLocaleString(undefined, { maximumFractionDigits: 0 })}`} color={data.entry_credit_debit >= 0 ? POS : NEG} />
+              <KpiCell grow label="Prob. of Profit" value={`${data.prob_profit}%`} color={data.prob_profit >= 50 ? POS : NEG} />
+              <KpiCell grow label={data.has_exit_rule ? 'Max Profit (expiry)' : 'Max Profit'} value={data.max_profit == null ? 'Unlimited' : `$${data.max_profit.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} color={POS} />
+              <KpiCell grow label={data.has_exit_rule ? 'Max Loss (expiry)' : 'Max Loss'} value={data.max_loss == null ? 'Unlimited' : `$${Math.abs(data.max_loss).toLocaleString(undefined, { maximumFractionDigits: 0 })}`} color={NEG} />
+              <KpiCell grow label="Breakevens" value={data.breakevens.length ? data.breakevens.map(b => `$${b.toFixed(0)}`).join(' / ') : '—'} />
+              <KpiCell grow label="Spot · IV · DTE" value={`$${data.spot} · ${data.iv}% · ${data.dte}d`} />
+            </div>
+
+            {data.has_exit_rule && (
+              <div style={STRIP}>
+                <KpiCell grow label="Avg. Hold" value={`${data.avg_hold_days}d`} sub={`of ${data.max_hold_days}d cap`} />
+                <KpiCell grow label="Hit Take-Profit" value={`${data.pct_take_profit}%`} color={POS} sub="of simulated paths" />
+                <KpiCell grow label="Hit Stop-Loss" value={`${data.pct_stop_loss}%`} color={NEG} sub="of simulated paths" />
+                <KpiCell grow label="Held to Cap" value={`${data.pct_held_to_exit_cap}%`} sub="neither triggered" />
+              </div>
+            )}
+
+            <ChartPanel label="Payoff at Expiry (deterministic)" height={260}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={data.payoff_curve} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
+                  <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
+                  <XAxis dataKey="price" tick={TICK} tickLine={false} axisLine={{ stroke: 'var(--theme-border, rgba(255,255,255,0.08))' }} tickFormatter={(v: number) => `$${v.toFixed(0)}`} />
+                  <YAxis tick={TICK} tickLine={false} axisLine={{ stroke: 'var(--theme-border, rgba(255,255,255,0.08))' }} tickFormatter={(v: number) => `$${v.toFixed(0)}`} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [`$${v.toFixed(0)}`, 'P&L']} labelFormatter={(v: number) => `Price $${v}`} cursor={CROSSHAIR_CURSOR} />
+                  <ReferenceLine y={0} stroke="var(--theme-text-faint, rgba(255,255,255,0.3))" />
+                  <ReferenceLine x={data.spot} stroke={cc.primary} strokeDasharray="3 3" label={{ value: 'spot', position: 'top', fill: cc.primary, fontSize: 9 }} />
+                  <Area type="monotone" dataKey="pnl" stroke={cc.primary} fill={cc.primary} fillOpacity={0.15} strokeWidth={2} isAnimationActive={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </ChartPanel>
+
+            <ChartPanel label={`Simulated P&L Distribution ${data.has_exit_rule ? 'at Exit' : 'at Expiry'} (${data.n_sims.toLocaleString()} paths)`} height={220}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={histBins} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
+                  <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
+                  <XAxis dataKey="pnl" tick={TICK} tickLine={false} axisLine={{ stroke: 'var(--theme-border, rgba(255,255,255,0.08))' }} tickFormatter={(v: number) => `$${v}`} />
+                  <YAxis tick={TICK} tickLine={false} axisLine={{ stroke: 'var(--theme-border, rgba(255,255,255,0.08))' }} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} cursor={BAR_CURSOR} formatter={(v: number) => [v, 'paths']} labelFormatter={(v: number) => `P&L ≈ $${v}`} />
+                  <ReferenceLine x={0} stroke="var(--theme-text-faint, rgba(255,255,255,0.3))" />
+                  <Bar dataKey="count" isAnimationActive={false}>
+                    {histBins.map((b, i) => <Cell key={i} fill={b.pnl >= 0 ? POS : NEG} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartPanel>
+
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-secondary, #8099b0)' }}>
+              {(['p5', 'p25', 'p50', 'p75', 'p95'] as const).map(k => (
+                <span key={k}>{k.toUpperCase()}: <span style={{ color: data.percentiles[k] >= 0 ? POS : NEG, fontWeight: 700 }}>${data.percentiles[k].toFixed(0)}</span></span>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </>
+  )
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
 
 export function MonteCarloContent() {
@@ -243,6 +449,7 @@ export function MonteCarloContent() {
     }
     return [makeLeg('SPY', 100)]
   })
+  const [mcMode, setMcMode] = useState<'portfolio' | 'options-strategy'>('portfolio')
   const [collapsed, setCollapsed] = useState(false)
   const [horizon, setHorizon] = useState(252)
   const [nSims, setNSims] = useState(500)
@@ -605,8 +812,13 @@ export function MonteCarloContent() {
     },
   })
 
+  if (mcMode === 'options-strategy') {
+    return <OptionsStrategyMonteCarlo onSwitchMode={() => setMcMode('portfolio')} />
+  }
+
   return (
     <>
+      <MCModeToggle mode={mcMode} onChange={setMcMode} />
       <ConfigHeader
         mode="montecarlo"
         collapsed={collapsed}
