@@ -29,7 +29,7 @@ from typing import Any
 import numpy as np
 
 from strategies.base import MarketDataPoint, Signal, Strategy, StrategyMetadata
-from strategies.indicators import get_indicator, warmup_bars
+from strategies.indicators import get_indicator, warmup_bars, _CONTEXT_TYPES
 
 
 def _all_conditions(block: dict):
@@ -52,8 +52,21 @@ def _rules_warmup(rules: dict) -> int:
     return needed + 10
 
 
-def _eval_cond(cond: dict, prices: np.ndarray) -> bool:
-    lhs_arr = get_indicator(cond.get("lhs", {"type": "PRICE"}), prices)
+def _rules_need_context(rules: dict) -> bool:
+    """True if any condition references a fundamentals/liquidity/flow indicator
+    — those need a resolved context (see market_context.resolve_live_context)
+    rather than being computable from the price buffer alone."""
+    for block in (rules.get("buy", {}), rules.get("sell", {})):
+        for cond in _all_conditions(block):
+            if cond.get("lhs", {}).get("type") in _CONTEXT_TYPES:
+                return True
+            if cond.get("rhs_type") == "indicator" and cond.get("rhs_ind", {}).get("type") in _CONTEXT_TYPES:
+                return True
+    return False
+
+
+def _eval_cond(cond: dict, prices: np.ndarray, context: dict | None) -> bool:
+    lhs_arr = get_indicator(cond.get("lhs", {"type": "PRICE"}), prices, context)
     i = len(lhs_arr) - 1
     lhs = lhs_arr[i]
     if np.isnan(lhs):
@@ -66,7 +79,7 @@ def _eval_cond(cond: dict, prices: np.ndarray) -> bool:
         rhs      = float(cond.get("rhs_num", 0))
         prev_rhs = rhs
     else:
-        rhs_arr = get_indicator(cond.get("rhs_ind", {"type": "PRICE"}), prices)
+        rhs_arr = get_indicator(cond.get("rhs_ind", {"type": "PRICE"}), prices, context)
         rhs = rhs_arr[i]
         if np.isnan(rhs):
             return False
@@ -88,16 +101,16 @@ def _eval_cond(cond: dict, prices: np.ndarray) -> bool:
     return False
 
 
-def _eval_group(group: dict, prices: np.ndarray) -> bool:
+def _eval_group(group: dict, prices: np.ndarray, context: dict | None) -> bool:
     conds = group.get("conditions", [])
     if not conds:
         return False
     logic   = group.get("logic", "AND")
-    results = [_eval_cond(c, prices) for c in conds]
+    results = [_eval_cond(c, prices, context) for c in conds]
     return all(results) if logic == "AND" else any(results)
 
 
-def _eval_block(block: dict, prices: np.ndarray) -> bool:
+def _eval_block(block: dict, prices: np.ndarray, context: dict | None) -> bool:
     groups = block.get("groups")
     # backwards compat: flat conditions → treat as single group
     if not groups:
@@ -106,7 +119,7 @@ def _eval_block(block: dict, prices: np.ndarray) -> bool:
             return False
         groups = [{"logic": block.get("logic", "AND"), "conditions": flat}]
     top_logic = block.get("logic", "AND")
-    results   = [_eval_group(g, prices) for g in groups]
+    results   = [_eval_group(g, prices, context) for g in groups]
     return all(results) if top_logic == "AND" else any(results)
 
 
@@ -124,6 +137,7 @@ class CustomRuleStrategy(Strategy):
         self._buf_size = _rules_warmup(self._rules)
         self._prices: deque[float] = deque(maxlen=self._buf_size)
         self._in_trade = False
+        self._needs_context = _rules_need_context(self._rules)
 
     def on_data(self, dp: MarketDataPoint) -> Signal:
         self._prices.append(dp.price)
@@ -131,13 +145,17 @@ class CustomRuleStrategy(Strategy):
             return Signal.HOLD
 
         prices = np.array(self._prices, dtype=float)
+        context = None
+        if self._needs_context:
+            from strategies.market_context import resolve_live_context
+            context = resolve_live_context(dp.symbol, self._rules)
 
         if not self._in_trade:
-            if _eval_block(self._rules.get("buy", {}), prices):
+            if _eval_block(self._rules.get("buy", {}), prices, context):
                 self._in_trade = True
                 return Signal.BUY
         else:
-            if _eval_block(self._rules.get("sell", {}), prices):
+            if _eval_block(self._rules.get("sell", {}), prices, context):
                 self._in_trade = False
                 return Signal.SELL
             return Signal.BUY  # remain invested
