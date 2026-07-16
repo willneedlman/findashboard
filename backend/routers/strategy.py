@@ -28,11 +28,13 @@ _TF_RESAMPLE = {"5m": "5min", "15m": "15min", "30m": "30min", "1h": "1h", "hourl
 _TF_MINUTES = {"5m": 5, "15m": 15, "30m": 30, "1h": 60, "hourly": 60,
                "daily": 390, "weekly": 1950, "monthly": 8190}
 _BASE_MINUTES = {"1d": 390, "1h": 60, "30m": 30, "15m": 15, "5m": 5}
-# Timeframe only applies to price-derived indicators; live-snapshot metrics
-# (fundamentals, options, greeks, flow) are constant across the series.
+# Timeframe resampling only applies to indicators computed straight from the
+# price series (get_indicator's plain dispatch branches). Context types
+# (fundamentals, liquidity, flow) are pre-resolved per-bar arrays looked up by
+# type, not resampled from price, so they always run at the base cadence.
 _TF_TYPES = {"PRICE", "RSI", "SMA", "EMA", "MACD_LINE", "MACD_SIGNAL",
              "BB_UPPER", "BB_MID", "BB_LOWER", "ATR", "MOMENTUM", "PCT_CHANGE",
-             "PCT_BELOW_HIGH", "PCT_ABOVE_LOW"}
+             "PCT_BELOW_HIGH", "PCT_ABOVE_LOW", "OPT_HV", "OPT_IVRANK"}
 
 # ── Base backtest timeframe ───────────────────────────────────────────────────
 # Alpaca supplies deep intraday history, so a strategy can trade on sub-daily bars.
@@ -61,14 +63,23 @@ def _clamp_intraday_start(tf: str, start: str, end: str) -> str:
     return max(start, floor)
 
 
-def _fetch_close_tf(ticker: str, start: str, end: str, tf: str) -> pd.Series:
-    """Close series at the base timeframe. Daily uses the existing cached path;
-    intraday pulls Alpaca bars (equities only). Empty Series on miss."""
+def _fetch_ohlcv_tf(ticker: str, start: str, end: str, tf: str) -> pd.DataFrame:
+    """OHLCV at the base timeframe. Daily uses the existing cached path; intraday
+    pulls Alpaca bars (equities only). Empty DataFrame on miss. Volume comes along
+    for VOL_RELATIVE/VOL_DOLLAR context indicators, which used to need a second
+    fetch of data this call already has."""
     if not _is_intraday_tf(tf):
-        return _fetch_close(ticker, start, end)
+        return get_history(ticker, start=start, end=end)
     import alpaca
     atf = _BACKTEST_TF.get(tf, ("1d",))[0]
-    df = alpaca.history_df(ticker, atf, start, end)
+    return alpaca.history_df(ticker, atf, start, end)
+
+
+def _fetch_close_tf(ticker: str, start: str, end: str, tf: str) -> pd.Series:
+    """Close series at the base timeframe. Empty Series on miss."""
+    if not _is_intraday_tf(tf):
+        return _fetch_close(ticker, start, end)
+    df = _fetch_ohlcv_tf(ticker, start, end, tf)
     return df["Close"].dropna() if not df.empty else pd.Series(dtype=float)
 
 router = APIRouter()
@@ -478,20 +489,34 @@ def referenced_tickers(rules: dict | None, primary: str) -> list[str]:
 
 
 def build_aligned_frames(tickers: list[str], start: str, end: str, timeframe: str = "1d"):
-    """Fetch each symbol's close and inner-join on shared bars so every frame shares
-    one index (cross-ticker conditions compare same-bar values). `timeframe` selects
-    the base bar size (daily or Alpaca intraday). Returns (index, {TICKER: close_array}).
+    """Fetch each symbol's OHLCV and inner-join closes on shared bars so every frame
+    shares one index (cross-ticker conditions compare same-bar values). `timeframe`
+    selects the base bar size (daily or Alpaca intraday). Returns
+    (index, {TICKER: close_array}, {TICKER: volume_array}) — volume feeds the
+    VOL_RELATIVE/VOL_DOLLAR context indicators, reindexed onto the same shared
+    bars (NaN where a symbol's feed has no volume, e.g. some intraday sources).
     Symbols with no data are dropped."""
     series: dict[str, pd.Series] = {}
+    vol_series: dict[str, pd.Series] = {}
     for tk in tickers:
-        s = _fetch_close_tf(tk, start, end, timeframe)
-        if not s.empty:
-            series[tk] = s
+        df = _fetch_ohlcv_tf(tk, start, end, timeframe)
+        if df.empty or "Close" not in df:
+            continue
+        c = df["Close"].dropna()
+        if c.empty:
+            continue
+        series[tk] = c
+        if "Volume" in df:
+            vol_series[tk] = df["Volume"]
     if not series:
-        return None, {}
+        return None, {}, {}
     df = pd.concat(series, axis=1, join="inner").dropna()
     frames = {str(tk): df[tk].to_numpy(dtype=float) for tk in df.columns}
-    return df.index, frames
+    volumes = {
+        str(tk): vol_series[tk].reindex(df.index).to_numpy(dtype=float)
+        for tk in df.columns if tk in vol_series
+    }
+    return df.index, frames, volumes
 
 
 class CustomSignalRequest(BaseModel):
@@ -577,17 +602,21 @@ class CustomBacktestRequest(BaseModel):
 
 
 def _run_custom_rules(ticker: str, rules: dict, start: str, end: str, timeframe: str = "1d"):
-    """Fetch + align every symbol a rule set references, resolve each one's live
-    context, and evaluate the rules on the chosen base timeframe. Returns
+    """Fetch + align every symbol a rule set references, resolve each one's
+    point-in-time context (fundamentals/liquidity/flow series aligned to the same
+    bars), and evaluate the rules on the chosen base timeframe. Returns
     (signal_array, primary_close) where primary_close is a Series indexed by the
     shared bars."""
     from strategies.market_context import resolve_context
     primary = ticker.strip().upper()
     tickers = referenced_tickers(rules, primary)
-    index, frames = build_aligned_frames(tickers, start, end, timeframe)
+    index, frames, volumes = build_aligned_frames(tickers, start, end, timeframe)
     if index is None or primary not in frames:
         return None, None
-    ctx_by_ticker = {tk: resolve_context(tk, rules) for tk in frames}
+    ctx_by_ticker = {
+        tk: resolve_context(tk, rules, index=index, close=frames[tk], volume=volumes.get(tk))
+        for tk in frames
+    }
     prices = frames[primary]
     sig = evaluate_custom_rules(prices, rules, frames=frames,
                                 ctx_by_ticker=ctx_by_ticker, primary=primary,

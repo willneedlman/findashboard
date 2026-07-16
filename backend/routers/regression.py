@@ -550,7 +550,8 @@ def regression_import(req: ImportRegressionRequest):
         close = _fetch_close(req.ticker, start, end)
         if len(close) < 60:
             raise HTTPException(422, "Insufficient price history for the strategy")
-        sig = evaluate_custom_rules(close.to_numpy().astype(float), req.rules, resolve_context(req.ticker, req.rules))
+        ctx = resolve_context(req.ticker, req.rules, close.index, close=close.to_numpy())
+        sig = evaluate_custom_rules(close.to_numpy().astype(float), req.rules, ctx)
         signal = pd.Series(sig, index=close.index)
         # Yesterday's signal earns today's move (no look-ahead).
         y = (signal.shift(1).fillna(0.0) * close.pct_change()).dropna().rename("Y")

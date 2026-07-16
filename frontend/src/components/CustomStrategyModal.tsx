@@ -7,22 +7,23 @@ export type IndicatorType =
   | 'MACD_LINE' | 'MACD_SIGNAL'
   | 'BB_UPPER' | 'BB_MID' | 'BB_LOWER'
   | 'ATR' | 'MOMENTUM' | 'PCT_CHANGE' | 'PCT_BELOW_HIGH' | 'PCT_ABOVE_LOW'
+  | 'OPT_HV' | 'OPT_IVRANK'
   | 'FUND_PE' | 'FUND_PEG' | 'FUND_EPSGROWTH' | 'FUND_NETMARGIN' | 'FUND_GROSSMARGIN'
   | 'FUND_DEBTEQUITY' | 'FUND_DIVYIELD' | 'FUND_PB' | 'FUND_CURRENTRATIO' | 'FUND_BETA'
   | 'VOL_RELATIVE' | 'VOL_DOLLAR'
-  | 'OPT_IV' | 'OPT_HV' | 'OPT_IVHV' | 'OPT_PUTCALL' | 'OPT_IMPLIEDMOVE' | 'OPT_IVRANK'
-  | 'OPT_DELTA' | 'OPT_GAMMA' | 'OPT_THETA' | 'OPT_VEGA'
   | 'FLOW_HORMUZ' | 'FLOW_SUEZ' | 'FLOW_PANAMA' | 'FLOW_MALACCA'
 
-// Fundamental / liquidity / options / flow metrics resolve from a current
-// snapshot (live signal), held constant through a historical backtest. See
-// backend market_context.
-export const LIVE_TYPES: IndicatorType[] = [
+// Fundamental / liquidity / flow metrics resolve from a point-in-time context
+// (see backend market_context) as a per-bar array already aligned to the price
+// series — a pre-resolved lookup, not resampled from price, so unlike every
+// other indicator here they always run at the base cadence (no timeframe
+// selector). Options-derived signals that can't be made point-in-time at all
+// (implied vol, put/call ratio, implied move, greeks) aren't offered — no
+// historical options-chain data source exists anywhere in this app.
+export const NO_TIMEFRAME_TYPES: IndicatorType[] = [
   'FUND_PE', 'FUND_PEG', 'FUND_EPSGROWTH', 'FUND_NETMARGIN', 'FUND_GROSSMARGIN',
   'FUND_DEBTEQUITY', 'FUND_DIVYIELD', 'FUND_PB', 'FUND_CURRENTRATIO', 'FUND_BETA',
   'VOL_RELATIVE', 'VOL_DOLLAR',
-  'OPT_IV', 'OPT_HV', 'OPT_IVHV', 'OPT_PUTCALL', 'OPT_IMPLIEDMOVE', 'OPT_IVRANK',
-  'OPT_DELTA', 'OPT_GAMMA', 'OPT_THETA', 'OPT_VEGA',
   'FLOW_HORMUZ', 'FLOW_SUEZ', 'FLOW_PANAMA', 'FLOW_MALACCA',
 ]
 
@@ -41,8 +42,6 @@ export interface IndicatorRef {
   std?: number
   ticker?: string   // optional cross-ticker reference; blank = the strategy's primary symbol
   timeframe?: Timeframe   // optional; absent = daily
-  level?: number    // greeks: strike as a multiple of spot (1.0 = ATM, 1.05 = 5% OTM call)
-  opt_type?: 'call' | 'put'   // greeks: which side the greek is measured on
 }
 
 const TF_OPTIONS: { value: Timeframe; label: string }[] = [
@@ -132,25 +131,22 @@ const IND_LABELS: Record<IndicatorType, string> = {
   BB_UPPER: 'BB Upper', BB_MID: 'BB Mid', BB_LOWER: 'BB Lower',
   ATR: 'ATR', MOMENTUM: 'Momentum', PCT_CHANGE: '% change (N-day)',
   PCT_BELOW_HIGH: '% below N-day high', PCT_ABOVE_LOW: '% above N-day low',
-  FUND_PE: 'P/E ratio', FUND_PEG: 'PEG ratio', FUND_EPSGROWTH: 'EPS growth %',
+  OPT_HV: 'Realized vol % (N-day)', OPT_IVRANK: 'IV Rank % (1y)',
+  FUND_PE: 'P/E ratio', FUND_PEG: 'PEG ratio', FUND_EPSGROWTH: 'EPS growth % (YoY)',
   FUND_NETMARGIN: 'Net margin %', FUND_GROSSMARGIN: 'Gross margin %',
   FUND_DEBTEQUITY: 'Debt / equity', FUND_DIVYIELD: 'Dividend yield %',
-  FUND_PB: 'P/B ratio', FUND_CURRENTRATIO: 'Current ratio', FUND_BETA: 'Beta',
+  FUND_PB: 'P/B ratio', FUND_CURRENTRATIO: 'Current ratio', FUND_BETA: 'Beta (60d rolling)',
   VOL_RELATIVE: 'Relative volume', VOL_DOLLAR: 'Dollar volume ($M)',
-  OPT_IV: 'Implied vol % (ATM)', OPT_HV: 'Hist vol % (30d)', OPT_IVHV: 'IV / HV ratio',
-  OPT_PUTCALL: 'Put/call ratio', OPT_IMPLIEDMOVE: 'Implied move %', OPT_IVRANK: 'IV Rank % (1y)',
-  OPT_DELTA: 'Delta', OPT_GAMMA: 'Gamma', OPT_THETA: 'Theta', OPT_VEGA: 'Vega',
   FLOW_HORMUZ: 'Hormuz transits', FLOW_SUEZ: 'Suez transits',
   FLOW_PANAMA: 'Panama transits', FLOW_MALACCA: 'Malacca transits',
 }
 
 const IND_GROUPS: { label: string; types: IndicatorType[] }[] = [
   { label: 'Technical', types: ['PRICE', 'RSI', 'SMA', 'EMA', 'MACD_LINE', 'MACD_SIGNAL', 'BB_UPPER', 'BB_MID', 'BB_LOWER', 'ATR', 'MOMENTUM', 'PCT_CHANGE', 'PCT_BELOW_HIGH', 'PCT_ABOVE_LOW'] },
-  { label: 'Fundamental (live)', types: ['FUND_PE', 'FUND_PEG', 'FUND_EPSGROWTH', 'FUND_NETMARGIN', 'FUND_GROSSMARGIN', 'FUND_DEBTEQUITY', 'FUND_DIVYIELD', 'FUND_PB', 'FUND_CURRENTRATIO', 'FUND_BETA'] },
-  { label: 'Liquidity (live)', types: ['VOL_RELATIVE', 'VOL_DOLLAR'] },
-  { label: 'Options (live)', types: ['OPT_IV', 'OPT_HV', 'OPT_IVHV', 'OPT_PUTCALL', 'OPT_IMPLIEDMOVE', 'OPT_IVRANK'] },
-  { label: 'Greeks (live)', types: ['OPT_DELTA', 'OPT_GAMMA', 'OPT_THETA', 'OPT_VEGA'] },
-  { label: 'Energy flow (live)', types: ['FLOW_HORMUZ', 'FLOW_SUEZ', 'FLOW_PANAMA', 'FLOW_MALACCA'] },
+  { label: 'Volatility', types: ['OPT_HV', 'OPT_IVRANK'] },
+  { label: 'Fundamental', types: ['FUND_PE', 'FUND_PEG', 'FUND_EPSGROWTH', 'FUND_NETMARGIN', 'FUND_GROSSMARGIN', 'FUND_DEBTEQUITY', 'FUND_DIVYIELD', 'FUND_PB', 'FUND_CURRENTRATIO', 'FUND_BETA'] },
+  { label: 'Liquidity', types: ['VOL_RELATIVE', 'VOL_DOLLAR'] },
+  { label: 'Energy flow', types: ['FLOW_HORMUZ', 'FLOW_SUEZ', 'FLOW_PANAMA', 'FLOW_MALACCA'] },
 ]
 
 const OP_LABELS: Record<OpType, string> = {
@@ -173,19 +169,13 @@ const DEFAULT_IND: Record<IndicatorType, IndicatorRef> = {
   PCT_CHANGE:  { type: 'PCT_CHANGE', period: 20 },
   PCT_BELOW_HIGH: { type: 'PCT_BELOW_HIGH', period: 20 },
   PCT_ABOVE_LOW:  { type: 'PCT_ABOVE_LOW', period: 20 },
+  OPT_HV: { type: 'OPT_HV', period: 21 }, OPT_IVRANK: { type: 'OPT_IVRANK' },
   FUND_PE:     { type: 'FUND_PE' }, FUND_PEG: { type: 'FUND_PEG' },
   FUND_EPSGROWTH: { type: 'FUND_EPSGROWTH' }, FUND_NETMARGIN: { type: 'FUND_NETMARGIN' },
   FUND_GROSSMARGIN: { type: 'FUND_GROSSMARGIN' }, FUND_DEBTEQUITY: { type: 'FUND_DEBTEQUITY' },
   FUND_DIVYIELD: { type: 'FUND_DIVYIELD' }, FUND_PB: { type: 'FUND_PB' },
   FUND_CURRENTRATIO: { type: 'FUND_CURRENTRATIO' }, FUND_BETA: { type: 'FUND_BETA' },
   VOL_RELATIVE: { type: 'VOL_RELATIVE' }, VOL_DOLLAR: { type: 'VOL_DOLLAR' },
-  OPT_IV: { type: 'OPT_IV' }, OPT_HV: { type: 'OPT_HV' }, OPT_IVHV: { type: 'OPT_IVHV' },
-  OPT_PUTCALL: { type: 'OPT_PUTCALL' }, OPT_IMPLIEDMOVE: { type: 'OPT_IMPLIEDMOVE' },
-  OPT_IVRANK: { type: 'OPT_IVRANK' },
-  OPT_DELTA: { type: 'OPT_DELTA', level: 1.0, opt_type: 'call' },
-  OPT_GAMMA: { type: 'OPT_GAMMA', level: 1.0, opt_type: 'call' },
-  OPT_THETA: { type: 'OPT_THETA', level: 1.0, opt_type: 'call' },
-  OPT_VEGA:  { type: 'OPT_VEGA',  level: 1.0, opt_type: 'call' },
   FLOW_HORMUZ: { type: 'FLOW_HORMUZ' }, FLOW_SUEZ: { type: 'FLOW_SUEZ' },
   FLOW_PANAMA: { type: 'FLOW_PANAMA' }, FLOW_MALACCA: { type: 'FLOW_MALACCA' },
 }
@@ -255,7 +245,7 @@ function IndicatorSelector({ value, onChange }: {
         placeholder="sym"
         title="Cross-ticker reference — evaluate this indicator on another symbol. Blank = the strategy's primary ticker."
         style={{ ...inp, width: 52, flexShrink: 0, textTransform: 'uppercase' }} />
-      {!LIVE_TYPES.includes(t) && (
+      {!NO_TIMEFRAME_TYPES.includes(t) && (
         <select value={value.timeframe ?? 'daily'}
           onChange={e => onChange({ ...value, timeframe: e.target.value === 'daily' ? undefined : e.target.value as Timeframe })}
           title="Bar size this indicator runs on. A frame coarser than the backtest timeframe resamples up (e.g. 1H trend while trading 5m); a same/finer frame runs on the backtest's own bars. Intraday frames need an intraday backtest timeframe on a US equity."
@@ -263,14 +253,14 @@ function IndicatorSelector({ value, onChange }: {
           {TF_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
       )}
-      {LIVE_TYPES.includes(t) && (
-        <span title="Current-snapshot value (live signal). Held constant through a historical backtest, so it is not point-in-time."
+      {NO_TIMEFRAME_TYPES.includes(t) && (
+        <span title="Resolved from a point-in-time context (fundamentals/liquidity/flow) aligned to the backtest's own daily bars — always runs at the base cadence, no timeframe to pick."
           style={{ fontSize: 8, color: T.muted, fontFamily: T.mono, border: `1px solid ${T.border}`, padding: '1px 4px', letterSpacing: '0.06em' }}>
-          LIVE
+          DAILY
         </span>
       )}
       {(t === 'RSI' || t === 'SMA' || t === 'EMA' || t === 'ATR' || t === 'MOMENTUM' || t === 'PCT_CHANGE' ||
-        t === 'PCT_BELOW_HIGH' || t === 'PCT_ABOVE_LOW' ||
+        t === 'PCT_BELOW_HIGH' || t === 'PCT_ABOVE_LOW' || t === 'OPT_HV' ||
         t === 'BB_UPPER' || t === 'BB_MID' || t === 'BB_LOWER') && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
           <span style={{ fontSize: 8, color: T.muted, fontFamily: T.mono }}>period</span>
@@ -307,23 +297,6 @@ function IndicatorSelector({ value, onChange }: {
               onChange={e => set('signal_period', +e.target.value || 9)}
               style={{ ...inp, width: 40 }} />
           </div>
-        </>
-      )}
-      {(t === 'OPT_DELTA' || t === 'OPT_GAMMA' || t === 'OPT_THETA' || t === 'OPT_VEGA') && (
-        <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-            <span style={{ fontSize: 8, color: T.muted, fontFamily: T.mono }}
-              title="Strike as a multiple of spot: 1.00 = ATM, 1.05 = 5% OTM call, 0.95 = 5% below spot">strike ×</span>
-            <input type="number" value={value.level ?? 1.0} min={0.5} max={1.5} step={0.05}
-              onChange={e => set('level', +e.target.value || 1)}
-              style={{ ...inp, width: 48 }} />
-          </div>
-          <select value={value.opt_type ?? 'call'}
-            onChange={e => onChange({ ...value, opt_type: e.target.value as 'call' | 'put' })}
-            style={{ ...sel, width: 58 }}>
-            <option value="call">call</option>
-            <option value="put">put</option>
-          </select>
         </>
       )}
     </div>

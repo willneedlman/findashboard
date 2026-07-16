@@ -6,23 +6,21 @@ length, with NaN for bars where there is insufficient history.
 from __future__ import annotations
 import numpy as np
 
-# Live/snapshot metric types resolved from a market context (see
-# strategies/market_context.py), not from the price series. Kept as a literal
-# here so this module stays dependency-free; must match market_context.
+# Point-in-time metric types resolved from a market context (see
+# strategies/market_context.py) as a per-bar array aligned to the price series,
+# not computed from price directly. Kept as a literal here so this module stays
+# dependency-free; must match market_context. Options-derived signals (implied
+# vol, put/call ratio, implied move, greeks) are NOT here — no historical
+# options-chain data source exists anywhere in this app, so there is no honest
+# way to make them point-in-time; they were dropped rather than offered as a
+# "live-only" constant. IV Rank and historical vol are still available, but as
+# real per-bar technical indicators computed from price alone (see below).
 _CONTEXT_TYPES = frozenset({
     "FUND_PE", "FUND_PEG", "FUND_EPSGROWTH", "FUND_NETMARGIN", "FUND_GROSSMARGIN",
     "FUND_DEBTEQUITY", "FUND_DIVYIELD", "FUND_PB", "FUND_CURRENTRATIO", "FUND_BETA",
     "VOL_RELATIVE", "VOL_DOLLAR",
-    "OPT_IV", "OPT_HV", "OPT_IVHV", "OPT_PUTCALL", "OPT_IMPLIEDMOVE", "OPT_IVRANK",
-    "OPT_DELTA", "OPT_GAMMA", "OPT_THETA", "OPT_VEGA",
     "FLOW_HORMUZ", "FLOW_SUEZ", "FLOW_PANAMA", "FLOW_MALACCA",
 })
-
-# Greeks are computed per-condition at a chosen strike level (not a single baked
-# value), so get_indicator intercepts them before the constant-context path and
-# derives them from the raw snapshot inputs (_OPT_SPOT/_OPT_IV/_OPT_DTE).
-_GREEK_TYPES = frozenset({"OPT_DELTA", "OPT_GAMMA", "OPT_THETA", "OPT_VEGA"})
-_GREEK_FIELD = {"OPT_DELTA": "delta", "OPT_GAMMA": "gamma", "OPT_THETA": "theta", "OPT_VEGA": "vega"}
 
 
 def sma(prices: np.ndarray, period: int) -> np.ndarray:
@@ -161,32 +159,65 @@ def pct_above_low(prices: np.ndarray, period: int = 20) -> np.ndarray:
     return result
 
 
+def realized_vol(prices: np.ndarray, period: int = 21) -> np.ndarray:
+    """Rolling annualized close-to-close realized volatility, as a percentage —
+    the same 21-bar/annualized convention the options snapshot's 30d HV uses,
+    just computed at every bar instead of only today."""
+    n = len(prices)
+    result = np.full(n, np.nan)
+    p = prices.astype(float)
+    if n < 2 or period < 2:
+        return result
+    with np.errstate(divide="ignore", invalid="ignore"):
+        log_ret = np.diff(np.log(p))
+    for i in range(period, n):
+        window = log_ret[i - period:i]
+        if np.all(np.isfinite(window)):
+            result[i] = float(np.std(window, ddof=1)) * np.sqrt(252) * 100.0
+    return result
+
+
+def iv_rank(prices: np.ndarray, rv_period: int = 21, rank_period: int = 252) -> np.ndarray:
+    """IV Rank proxy: at each bar, the rolling realized vol's percentile within its
+    own trailing 1y (rank_period-bar) distribution. A real historical implied-vol
+    series isn't available for arbitrary tickers, so this ranks realized vol
+    instead — computable from price alone, and a positive affine rescale of it
+    (e.g. scaling every value by the same current-IV/current-HV factor, as the
+    options snapshot's own IV Rank does) preserves the same rank."""
+    rv = realized_vol(prices, rv_period)
+    n = len(rv)
+    result = np.full(n, np.nan)
+    for i in range(rv_period + rank_period - 1, n):
+        window = rv[i - rank_period + 1:i + 1]
+        window = window[~np.isnan(window)]
+        if len(window) < 2:
+            continue
+        mn, mx = float(np.min(window)), float(np.max(window))
+        result[i] = (rv[i] - mn) / (mx - mn) * 100.0 if mx > mn else 50.0
+    return result
+
+
 def get_indicator(ind: dict, prices: np.ndarray, context: dict | None = None) -> np.ndarray:
     """Dispatch an IndicatorRef dict to the appropriate function.
 
-    `context` carries resolved live/snapshot metrics (fundamentals, liquidity);
-    those types return a constant series at the current value (NaN when the metric
-    is unavailable, so the condition never fires)."""
+    `context` carries resolved point-in-time metrics (fundamentals, liquidity,
+    flow). A backtest passes a per-bar array already aligned to `prices` (see
+    market_context.resolve_context); live/paper evaluation passes a plain float
+    — the latest known reading (see market_context.resolve_live_context), since
+    a live tick has no historical window to align against, just "right now."
+    Either way, a bar/tick with no reading yet is NaN, so the condition never
+    fires there rather than firing on stale/unrelated data."""
     t = ind.get("type", "PRICE")
-    if t in _GREEK_TYPES:
-        # Leveled greek: computed per-condition at strike = level × spot for the
-        # chosen call/put, so it isn't pinned to ~0.5 ATM delta. Raw inputs
-        # (spot/IV/DTE) come from the live snapshot via market_context.
-        ctx = context or {}
-        spot, iv, dte = ctx.get("_OPT_SPOT"), ctx.get("_OPT_IV"), ctx.get("_OPT_DTE")
-        if not (isinstance(spot, (int, float)) and spot > 0
-                and isinstance(iv, (int, float)) and iv > 0
-                and isinstance(dte, (int, float)) and dte > 0):
-            return np.full(len(prices), float("nan"), dtype=float)
-        level = float(ind.get("level", 1.0)) or 1.0
-        opt_type = "put" if str(ind.get("opt_type", "call")).lower().startswith("p") else "call"
-        from math_engine import bs_greeks
-        g = bs_greeks(float(spot), float(spot) * level, float(dte), 4.0, float(iv), opt_type)
-        return np.full(len(prices), float(g[_GREEK_FIELD[t]]), dtype=float)
     if t in _CONTEXT_TYPES:
-        val = (context or {}).get(t, float("nan"))
-        return np.full(len(prices), float(val), dtype=float)
+        val = (context or {}).get(t)
+        if isinstance(val, np.ndarray) and len(val) == len(prices):
+            return val.astype(float)
+        if isinstance(val, (int, float)) and not (isinstance(val, float) and np.isnan(val)):
+            return np.full(len(prices), float(val), dtype=float)
+        return np.full(len(prices), float("nan"), dtype=float)
     if t == "PRICE":       return prices.astype(float)
+    if t == "OPT_HV":      return realized_vol(prices, int(ind.get("period", 21)))
+    if t == "OPT_IVRANK":  return iv_rank(prices)
     if t == "RSI":         return rsi(prices, int(ind.get("period", 14)))
     if t == "SMA":         return sma(prices, int(ind.get("period", 50)))
     if t == "EMA":         return ema(prices, int(ind.get("period", 20)))
@@ -221,4 +252,6 @@ def warmup_bars(ind: dict) -> int:
     if t == "MOMENTUM":                      return int(ind.get("period", 126)) + 1
     if t == "PCT_CHANGE":                    return int(ind.get("period", 20)) + 1
     if t in ("PCT_BELOW_HIGH", "PCT_ABOVE_LOW"): return int(ind.get("period", 20))
+    if t == "OPT_HV":                        return int(ind.get("period", 21)) + 2
+    if t == "OPT_IVRANK":                    return 21 + 252
     return 30
