@@ -6,7 +6,7 @@ export type IndicatorType =
   | 'PRICE' | 'RSI' | 'SMA' | 'EMA'
   | 'MACD_LINE' | 'MACD_SIGNAL'
   | 'BB_UPPER' | 'BB_MID' | 'BB_LOWER'
-  | 'ATR' | 'MOMENTUM' | 'PCT_CHANGE'
+  | 'ATR' | 'MOMENTUM' | 'PCT_CHANGE' | 'PCT_BELOW_HIGH' | 'PCT_ABOVE_LOW'
   | 'FUND_PE' | 'FUND_PEG' | 'FUND_EPSGROWTH' | 'FUND_NETMARGIN' | 'FUND_GROSSMARGIN'
   | 'FUND_DEBTEQUITY' | 'FUND_DIVYIELD' | 'FUND_PB' | 'FUND_CURRENTRATIO' | 'FUND_BETA'
   | 'VOL_RELATIVE' | 'VOL_DOLLAR'
@@ -131,6 +131,7 @@ const IND_LABELS: Record<IndicatorType, string> = {
   MACD_LINE: 'MACD Line', MACD_SIGNAL: 'MACD Signal',
   BB_UPPER: 'BB Upper', BB_MID: 'BB Mid', BB_LOWER: 'BB Lower',
   ATR: 'ATR', MOMENTUM: 'Momentum', PCT_CHANGE: '% change (N-day)',
+  PCT_BELOW_HIGH: '% below N-day high', PCT_ABOVE_LOW: '% above N-day low',
   FUND_PE: 'P/E ratio', FUND_PEG: 'PEG ratio', FUND_EPSGROWTH: 'EPS growth %',
   FUND_NETMARGIN: 'Net margin %', FUND_GROSSMARGIN: 'Gross margin %',
   FUND_DEBTEQUITY: 'Debt / equity', FUND_DIVYIELD: 'Dividend yield %',
@@ -144,7 +145,7 @@ const IND_LABELS: Record<IndicatorType, string> = {
 }
 
 const IND_GROUPS: { label: string; types: IndicatorType[] }[] = [
-  { label: 'Technical', types: ['PRICE', 'RSI', 'SMA', 'EMA', 'MACD_LINE', 'MACD_SIGNAL', 'BB_UPPER', 'BB_MID', 'BB_LOWER', 'ATR', 'MOMENTUM', 'PCT_CHANGE'] },
+  { label: 'Technical', types: ['PRICE', 'RSI', 'SMA', 'EMA', 'MACD_LINE', 'MACD_SIGNAL', 'BB_UPPER', 'BB_MID', 'BB_LOWER', 'ATR', 'MOMENTUM', 'PCT_CHANGE', 'PCT_BELOW_HIGH', 'PCT_ABOVE_LOW'] },
   { label: 'Fundamental (live)', types: ['FUND_PE', 'FUND_PEG', 'FUND_EPSGROWTH', 'FUND_NETMARGIN', 'FUND_GROSSMARGIN', 'FUND_DEBTEQUITY', 'FUND_DIVYIELD', 'FUND_PB', 'FUND_CURRENTRATIO', 'FUND_BETA'] },
   { label: 'Liquidity (live)', types: ['VOL_RELATIVE', 'VOL_DOLLAR'] },
   { label: 'Options (live)', types: ['OPT_IV', 'OPT_HV', 'OPT_IVHV', 'OPT_PUTCALL', 'OPT_IMPLIEDMOVE'] },
@@ -170,6 +171,8 @@ const DEFAULT_IND: Record<IndicatorType, IndicatorRef> = {
   ATR:         { type: 'ATR', period: 14 },
   MOMENTUM:    { type: 'MOMENTUM', period: 126 },
   PCT_CHANGE:  { type: 'PCT_CHANGE', period: 20 },
+  PCT_BELOW_HIGH: { type: 'PCT_BELOW_HIGH', period: 20 },
+  PCT_ABOVE_LOW:  { type: 'PCT_ABOVE_LOW', period: 20 },
   FUND_PE:     { type: 'FUND_PE' }, FUND_PEG: { type: 'FUND_PEG' },
   FUND_EPSGROWTH: { type: 'FUND_EPSGROWTH' }, FUND_NETMARGIN: { type: 'FUND_NETMARGIN' },
   FUND_GROSSMARGIN: { type: 'FUND_GROSSMARGIN' }, FUND_DEBTEQUITY: { type: 'FUND_DEBTEQUITY' },
@@ -266,6 +269,7 @@ function IndicatorSelector({ value, onChange }: {
         </span>
       )}
       {(t === 'RSI' || t === 'SMA' || t === 'EMA' || t === 'ATR' || t === 'MOMENTUM' || t === 'PCT_CHANGE' ||
+        t === 'PCT_BELOW_HIGH' || t === 'PCT_ABOVE_LOW' ||
         t === 'BB_UPPER' || t === 'BB_MID' || t === 'BB_LOWER') && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
           <span style={{ fontSize: 8, color: T.muted, fontFamily: T.mono }}>period</span>
