@@ -495,7 +495,7 @@ def _describe_indicator(ind: dict) -> str:
     t = ind.get("type", "PRICE")
     label = _IND_LABELS.get(t, t)
     period = ind.get("period")
-    if period and t not in ("OPT_IVRANK",):
+    if period:
         label += f" ({period}d)"
     tk = ind.get("ticker")
     if tk:

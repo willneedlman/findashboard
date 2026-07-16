@@ -51,6 +51,16 @@ const TF_OPTIONS: { value: Timeframe; label: string }[] = [
   { value: 'monthly', label: 'Monthly' },
 ]
 
+// IV Rank's lookback: how far back the current realized-vol reading is ranked
+// against (trading days). Shorter windows warm up faster and react to a
+// recent vol regime; longer windows (the 1y/annual default) match the
+// standard "IV Rank" convention but need much more history before they
+// produce a value at all — see backend warmup_bars(OPT_IVRANK).
+const IV_RANK_WINDOWS: { value: number; label: string }[] = [
+  { value: 5, label: 'Weekly' }, { value: 21, label: 'Monthly' },
+  { value: 63, label: 'Quarterly' }, { value: 252, label: 'Annually' },
+]
+
 export type OpType = 'gt' | 'lt' | 'gte' | 'lte' | 'crosses_above' | 'crosses_below'
 
 export interface ConditionRow {
@@ -131,7 +141,7 @@ const IND_LABELS: Record<IndicatorType, string> = {
   BB_UPPER: 'BB Upper', BB_MID: 'BB Mid', BB_LOWER: 'BB Lower',
   ATR: 'ATR', MOMENTUM: 'Momentum', PCT_CHANGE: '% change (N-day)',
   PCT_BELOW_HIGH: '% below N-day high', PCT_ABOVE_LOW: '% above N-day low',
-  OPT_HV: 'Realized vol % (N-day)', OPT_IVRANK: 'IV Rank % (1y)',
+  OPT_HV: 'Realized vol % (N-day)', OPT_IVRANK: 'IV Rank %',
   FUND_PE: 'P/E ratio', FUND_PEG: 'PEG ratio', FUND_EPSGROWTH: 'EPS growth % (YoY)',
   FUND_NETMARGIN: 'Net margin %', FUND_GROSSMARGIN: 'Gross margin %',
   FUND_DEBTEQUITY: 'Debt / equity', FUND_DIVYIELD: 'Dividend yield %',
@@ -169,7 +179,7 @@ const DEFAULT_IND: Record<IndicatorType, IndicatorRef> = {
   PCT_CHANGE:  { type: 'PCT_CHANGE', period: 20 },
   PCT_BELOW_HIGH: { type: 'PCT_BELOW_HIGH', period: 20 },
   PCT_ABOVE_LOW:  { type: 'PCT_ABOVE_LOW', period: 20 },
-  OPT_HV: { type: 'OPT_HV', period: 21 }, OPT_IVRANK: { type: 'OPT_IVRANK' },
+  OPT_HV: { type: 'OPT_HV', period: 21 }, OPT_IVRANK: { type: 'OPT_IVRANK', period: 252 },
   FUND_PE:     { type: 'FUND_PE' }, FUND_PEG: { type: 'FUND_PEG' },
   FUND_EPSGROWTH: { type: 'FUND_EPSGROWTH' }, FUND_NETMARGIN: { type: 'FUND_NETMARGIN' },
   FUND_GROSSMARGIN: { type: 'FUND_GROSSMARGIN' }, FUND_DEBTEQUITY: { type: 'FUND_DEBTEQUITY' },
@@ -267,6 +277,17 @@ function IndicatorSelector({ value, onChange }: {
           <input type="number" value={value.period ?? 14} min={1} max={500}
             onChange={e => set('period', +e.target.value || 1)}
             style={{ ...inp, width: 46 }} />
+        </div>
+      )}
+      {t === 'OPT_IVRANK' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+          <span style={{ fontSize: 8, color: T.muted, fontFamily: T.mono }}>window</span>
+          <select value={value.period ?? 252}
+            onChange={e => set('period', +e.target.value)}
+            title="How far back current realized vol is ranked against. Shorter windows need less warmup history but rank against a smaller, noisier sample; Annually is the standard 1-year IV Rank convention."
+            style={{ ...sel, width: 92 }}>
+            {IV_RANK_WINDOWS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
         </div>
       )}
       {(t === 'BB_UPPER' || t === 'BB_MID' || t === 'BB_LOWER') && (

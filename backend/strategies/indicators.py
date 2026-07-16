@@ -217,7 +217,7 @@ def get_indicator(ind: dict, prices: np.ndarray, context: dict | None = None) ->
         return np.full(len(prices), float("nan"), dtype=float)
     if t == "PRICE":       return prices.astype(float)
     if t == "OPT_HV":      return realized_vol(prices, int(ind.get("period", 21)))
-    if t == "OPT_IVRANK":  return iv_rank(prices)
+    if t == "OPT_IVRANK":  return iv_rank(prices, rank_period=int(ind.get("period", 252)))
     if t == "RSI":         return rsi(prices, int(ind.get("period", 14)))
     if t == "SMA":         return sma(prices, int(ind.get("period", 50)))
     if t == "EMA":         return ema(prices, int(ind.get("period", 20)))
@@ -253,5 +253,5 @@ def warmup_bars(ind: dict) -> int:
     if t == "PCT_CHANGE":                    return int(ind.get("period", 20)) + 1
     if t in ("PCT_BELOW_HIGH", "PCT_ABOVE_LOW"): return int(ind.get("period", 20))
     if t == "OPT_HV":                        return int(ind.get("period", 21)) + 2
-    if t == "OPT_IVRANK":                    return 21 + 252
+    if t == "OPT_IVRANK":                    return 21 + int(ind.get("period", 252))
     return 30
