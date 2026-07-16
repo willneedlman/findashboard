@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useMutation, useQuery, type UseMutationResult } from '@tanstack/react-query'
 import axios from 'axios'
 import { ComposedChart, Area, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
-import { ChevronUp, ChevronDown, Play, MoreVertical, Send } from 'lucide-react'
+import { ChevronUp, ChevronDown, Play, Plus, Send } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import EmptyState from '../components/EmptyState'
 import TickerInput from '../components/TickerInput'
@@ -546,7 +546,7 @@ function SinglePositionCard({
         <div style={{ flex: '1 1 200px' }}>
           <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)', marginBottom: 2 }}>Strategy</div>
           <select value={strategy} onChange={e => setStrategy(e.target.value)}
-            style={{ ...INPUT, fontSize: 10, cursor: 'pointer', height: 23 }}>
+            style={{ ...INPUT, fontSize: 11, cursor: 'pointer', height: 25, boxSizing: 'border-box', padding: '3px 24px 3px 6px' }}>
             {saved.length === 0 && <option value="">— build a strategy first —</option>}
             {saved.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
           </select>
@@ -665,6 +665,7 @@ function StrategyControlsPanel({
   comboDte, setComboDte,
   runBacktest, isPending, isError, error,
   sendToPaper,
+  builderTab, setBuilderTab, handleAiDraftAccept,
 }: {
   mode: 'single' | 'portfolio'; setMode: (m: 'single' | 'portfolio') => void
   positions: PortfolioPos[]; saved: CustomStrategyDef[]; addPosition: () => void
@@ -704,8 +705,10 @@ function StrategyControlsPanel({
   isError: boolean
   error: unknown
   sendToPaper: UseMutationResult<{ name: string }, Error, void>
+  builderTab: 'manual' | 'ai'; setBuilderTab: (t: 'manual' | 'ai') => void
+  handleAiDraftAccept: (draft: AlgoStrategyDraft) => void
 }) {
-  const [menuOpen, setMenuOpen] = useState(false)
+
   const totalWeight = positions.reduce((s, p) => s + (p.weight || 0), 0)
   const maxWeight = Math.max(1, ...positions.map(p => p.weight || 0))
   const anyNonDaily = mode === 'portfolio'
@@ -768,20 +771,12 @@ function StrategyControlsPanel({
             opacity: (!activeName || sendToPaper.isPending) ? 0.6 : 1,
           }}><Send size={10} />{sendToPaper.isPending ? 'Sending…' : 'Send to Paper'}</button>
         )}
-        <div style={{ position: 'relative' }}>
-          <button onClick={() => setMenuOpen(o => !o)} title="More actions" style={{
-            display: 'flex', padding: 6, background: menuOpen ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)' : 'transparent',
-            border: '1px solid var(--theme-border, rgba(255,255,255,0.12))', color: 'var(--theme-secondary, #8099b0)', cursor: 'pointer',
-          }}><MoreVertical size={12} /></button>
-          {menuOpen && (
-            <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 3, zIndex: 30, minWidth: 140, background: 'var(--theme-surface, #142032)', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))', boxShadow: '0 4px 14px rgba(0,0,0,0.5)' }}>
-              <button onClick={() => { setMenuOpen(false); onNewStrategy() }} style={{
-                width: '100%', textAlign: 'left', padding: '8px 10px', background: 'none', border: 'none', cursor: 'pointer',
-                fontFamily: 'inherit', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)',
-              }}>+ New Strategy</button>
-            </div>
-          )}
-        </div>
+        <button onClick={onNewStrategy} title="Create a new strategy" style={{
+          ...headerBtn, background: 'transparent', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))',
+          color: 'var(--theme-primary, #c9a84c)',
+        }}>
+          <Plus size={10} />New Strategy
+        </button>
         <button onClick={onToggleCollapsed} title={collapsed ? 'Expand' : 'Collapse'} style={{
           display: 'flex', padding: 6, background: 'transparent', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))', color: 'var(--theme-secondary, #8099b0)', cursor: 'pointer',
         }}>{collapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}</button>
@@ -810,7 +805,21 @@ function StrategyControlsPanel({
 
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 250px', gap: 16, padding: 10, alignItems: 'stretch' }}>
             <div style={{ borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingRight: 16 }}>
-              {mode === 'portfolio' ? (
+              {/* Tab Selector */}
+              <div style={{ display: 'flex', gap: 4, marginBottom: 12, borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingBottom: 6 }}>
+                {([['manual', 'Manual Editor'], ['ai', 'AI Assistant']] as const).map(([tabId, label]) => (
+                  <button key={tabId} onClick={() => setBuilderTab(tabId)} style={{
+                    padding: '4px 12px', fontFamily: 'var(--theme-mono)', fontSize: 9.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer',
+                    background: builderTab === tabId ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)' : 'transparent',
+                    border: `1px solid ${builderTab === tabId ? 'var(--theme-primary, #c9a84c)' : 'transparent'}`,
+                    color: builderTab === tabId ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #8099b0)',
+                  }}>{label}</button>
+                ))}
+              </div>
+
+              {builderTab === 'ai' ? (
+                <AiAlgoStrategyChat onAccept={handleAiDraftAccept} />
+              ) : mode === 'portfolio' ? (
                 <>
                   {positions.length === 0 && (
                     <div style={{ fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.45))', lineHeight: '14px', marginBottom: 8 }}>
@@ -905,6 +914,7 @@ function StrategyControlsPanel({
 
 export function AlgoStrategyBuilderContent() {
   const cc = useChartColors()
+  const [builderTab, setBuilderTab] = useState<'manual' | 'ai'>('manual')
   const [ticker, setTicker] = useState('AAPL')
   const [start, setStart] = useState('2022-01-01')
   const [end, setEnd] = useState('')
@@ -1005,6 +1015,57 @@ export function AlgoStrategyBuilderContent() {
 
   const activeDef = saved.find(s => s.name === activeName) ?? null
   const refresh = () => setSaved(loadCustomStrategies())
+
+  const handleAiDraftAccept = (draft: AlgoStrategyDraft) => {
+    const toSave: CustomStrategyDef[] = []
+    if (draft.mode === 'single' && draft.strategy) {
+      toSave.push(draft.strategy)
+    } else if (draft.mode === 'portfolio' && draft.strategies) {
+      toSave.push(...draft.strategies)
+    }
+
+    if (toSave.length > 0) {
+      toSave.forEach(s => saveCustomStrategy(s))
+      setSaved(loadCustomStrategies())
+    }
+
+    if (draft.mode === 'single') {
+      setMode('single')
+      if (draft.ticker) setTicker(draft.ticker.toUpperCase())
+      if (draft.side) setSide(draft.side)
+      if (draft.instrument) setInstMode(draft.instrument)
+      if (draft.opt_type) setOptType(draft.opt_type)
+      if (draft.otm_pct !== undefined) setOtmPct(draft.otm_pct)
+      if (draft.dte !== undefined) setDte(draft.dte)
+      if (draft.combo_legs) setComboLegs(draft.combo_legs)
+      if (draft.combo_dte !== undefined) setComboDte(draft.combo_dte)
+      if (draft.strategy?.name) {
+        setActiveName(draft.strategy.name)
+      }
+    } else {
+      setMode('portfolio')
+      const loaded: PortfolioPos[] = (draft.positions ?? []).map(pos => {
+        const matching = loadCustomStrategies().find(s => s.name === pos.strategy_name)
+        const stratName = matching ? matching.name : (pos.strategy_name || loadCustomStrategies()[0]?.name || '')
+        
+        return {
+          id: rid(),
+          ticker: pos.ticker.toUpperCase(),
+          weight: pos.weight_pct ?? 25,
+          strategy: stratName,
+          instMode: pos.instrument ?? 'underlying',
+          optType: pos.opt_type ?? 'call',
+          otmPct: pos.otm_pct ?? 0,
+          dte: pos.dte ?? 30,
+          comboLegs: pos.combo_legs ?? legsToCombo(PRESETS['Short Straddle']),
+          comboDte: pos.combo_dte ?? 30,
+          side: pos.side ?? 'long'
+        }
+      })
+      setPositions(loaded)
+    }
+    setBuilderTab('manual')
+  }
 
   const onModalSave = (def: CustomStrategyDef) => {
     saveCustomStrategy(def)
@@ -1342,6 +1403,7 @@ export function AlgoStrategyBuilderContent() {
           comboDte={comboDte} setComboDte={setComboDte}
           runBacktest={runBacktest} isPending={isPending} isError={isError} error={error}
           sendToPaper={sendToPaper}
+          builderTab={builderTab} setBuilderTab={setBuilderTab} handleAiDraftAccept={handleAiDraftAccept}
         />
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12, padding: 16, background: 'var(--theme-bg, #101c2e)' }}>
           {resultsSection}
@@ -1357,4 +1419,187 @@ export function AlgoStrategyBuilderContent() {
 
 export default function AlgoStrategyBuilder() {
   return <PageWrapper title="Algorithmic Strategy Builder"><AlgoStrategyBuilderContent /></PageWrapper>
+}
+
+interface AlgoStrategyDraft {
+  summary: string
+  mode: 'single' | 'portfolio'
+  ticker?: string
+  side?: 'long' | 'short'
+  instrument?: 'underlying' | 'option' | 'combo'
+  opt_type?: 'call' | 'put'
+  otm_pct?: number
+  dte?: number
+  combo_legs?: ComboLeg[]
+  combo_dte?: number
+  strategy?: CustomStrategyDef
+  positions?: {
+    ticker: string
+    side: 'long' | 'short'
+    instrument: 'underlying' | 'option' | 'combo'
+    opt_type?: 'call' | 'put'
+    otm_pct?: number
+    dte?: number
+    combo_legs?: ComboLeg[]
+    combo_dte?: number
+    weight_pct: number
+    strategy_name: string
+  }[]
+  strategies?: CustomStrategyDef[]
+}
+
+interface AlgoChatMsg {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+function AiAlgoStrategyChat({ onAccept }: { onAccept: (draft: AlgoStrategyDraft) => void }) {
+  const [messages, setMessages] = useState<AlgoChatMsg[]>([])
+  const [input, setInput] = useState('')
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState('')
+  const [draft, setDraft] = useState<AlgoStrategyDraft | null>(null)
+
+  const listRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (listRef.current) {
+      listRef.current.scrollTop = listRef.current.scrollHeight
+    }
+  }, [messages, pending])
+
+  const T = {
+    bg:      'var(--theme-bg, #101c2e)',
+    surface: 'var(--theme-surface, #0d1826)',
+    border:  'var(--theme-border, rgba(255,255,255,0.10))',
+    text:    'var(--theme-text, #d7e3fc)',
+    muted:   'var(--theme-secondary, #99907e)',
+    dim:     'var(--theme-text-faint, rgba(255,255,255,0.28))',
+    gold:    'var(--theme-primary, #c9a84c)',
+    pos:     'var(--theme-pos, #4caf7d)',
+    neg:     'var(--theme-neg, #e05c6e)',
+    mono:    'var(--theme-mono, ui-monospace, monospace)',
+  }
+
+  const inp: React.CSSProperties = {
+    background: T.bg, border: `1px solid ${T.border}`,
+    color: T.text, fontFamily: T.mono, fontSize: 11,
+    padding: '4px 6px', outline: 'none', width: '100%', boxSizing: 'border-box',
+  }
+
+  const btn: React.CSSProperties = {
+    background: 'transparent', border: `1px solid ${T.border}`,
+    color: T.muted, fontFamily: T.mono, fontSize: 9,
+    padding: '4px 10px', cursor: 'pointer', letterSpacing: '0.08em',
+  }
+
+  const send = async () => {
+    const text = input.trim()
+    if (!text || pending) return
+    const next = [...messages, { role: 'user' as const, content: text }]
+    setMessages(next)
+    setInput('')
+    setError('')
+    setPending(true)
+    try {
+      const { data } = await axios.post('/api/ai/strategy-chat', { messages: next, scope: 'full' })
+      if (data?.type === 'draft') {
+        setDraft(data)
+        setMessages(m => [...m, { role: 'assistant', content: data.summary || "Draft ready." }])
+      } else {
+        setDraft(null)
+        setMessages(m => [...m, { role: 'assistant', content: data?.text || "Could you say a bit more about that?" }])
+      }
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || e?.message || 'Request failed')
+    } finally {
+      setPending(false)
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ fontSize: 9, color: T.dim, fontFamily: T.mono, lineHeight: 1.4 }}>
+        Describe a single position (shares, options, combos like straddles/condors) or an entire multi-asset portfolio, along with entry/exit rules. The AI configures the assets, options, weights, and rules.
+      </div>
+
+      <div ref={listRef} style={{
+        display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 240, overflowY: 'auto',
+        padding: messages.length ? 8 : 0, background: messages.length ? T.surface : 'transparent',
+        border: messages.length ? `1px solid ${T.border}` : 'none',
+      }}>
+        {messages.length === 0 && (
+          <div style={{ fontSize: 10, color: T.dim, fontFamily: T.mono, lineHeight: 1.6, fontStyle: 'italic' }}>
+            e.g. "Sell a 30-day ATM straddle on SPY with weight 50% using RSI mean reversion" or "Make a portfolio: 60% AAPL shares and 40% TSLA call options"
+          </div>
+        )}
+        {messages.map((m, i) => (
+          <div key={i} style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
+            <div style={{
+              fontSize: 8, color: T.dim, fontFamily: T.mono, marginBottom: 2, letterSpacing: '0.08em',
+              textTransform: 'uppercase', textAlign: m.role === 'user' ? 'right' : 'left',
+            }}>{m.role === 'user' ? 'You' : 'Assistant'}</div>
+            <div style={{
+              fontSize: 10, fontFamily: T.mono, lineHeight: 1.4, padding: '5px 8px', whiteSpace: 'pre-wrap',
+              color: T.text, background: m.role === 'user' ? `${T.gold}14` : T.bg,
+              border: `1px solid ${m.role === 'user' ? `${T.gold}40` : T.border}`,
+            }}>{m.content}</div>
+          </div>
+        ))}
+        {pending && <div style={{ fontSize: 9, color: T.dim, fontFamily: T.mono, fontStyle: 'italic' }}>Thinking…</div>}
+      </div>
+
+      {draft && (
+        <div style={{ border: `1px solid ${T.gold}40`, background: `${T.gold}08`, padding: '8px 10px' }}>
+          <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.gold, fontFamily: T.mono, marginBottom: 6 }}>
+            Draft Ready ({draft.mode === 'portfolio' ? 'Portfolio Mode' : 'Single Position Mode'})
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8, maxHeight: 120, overflowY: 'auto' }}>
+            {draft.mode === 'single' ? (
+              <div style={{ fontSize: 9, fontFamily: T.mono, color: T.text }}>
+                Ticker: {draft.ticker} · Side: {draft.side?.toUpperCase()} · Instrument: {draft.instrument?.toUpperCase()}
+                {draft.instrument === 'option' && ` (${draft.opt_type?.toUpperCase()}, ${draft.otm_pct}% OTM, ${draft.dte} DTE)`}
+                {draft.instrument === 'combo' && ` (${draft.combo_legs?.length} legs, ${draft.combo_dte} DTE)`}
+                {draft.strategy && ` · Custom Rules: "${draft.strategy.name}"`}
+              </div>
+            ) : (
+              (draft.positions ?? []).map((pos, idx) => (
+                <div key={idx} style={{ fontSize: 9, fontFamily: T.mono, color: T.text, borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: 2 }}>
+                  {pos.ticker} ({pos.weight_pct}%) · {pos.side?.toUpperCase()} {pos.instrument?.toUpperCase()}
+                  {pos.instrument === 'option' && ` (${pos.opt_type?.toUpperCase()}, ${pos.otm_pct}% OTM)`}
+                  {pos.instrument === 'combo' && ` (${pos.combo_legs?.length} legs)`}
+                  {` · Rules: ${pos.strategy_name}`}
+                </div>
+              ))
+            )}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button onClick={() => onAccept(draft)}
+              style={{ ...btn, background: T.gold, border: 'none', color: T.bg, fontWeight: 700, letterSpacing: '0.08em', padding: '4px 8px' }}>
+              Load Setup
+            </button>
+            <span style={{ fontSize: 8, color: T.dim, fontFamily: T.mono }}>Click to apply to builder</span>
+          </div>
+        </div>
+      )}
+
+      {error && <div style={{ fontSize: 9, color: T.neg, fontFamily: T.mono }}>{error}</div>}
+
+      <div style={{ display: 'flex', gap: 4 }}>
+        <input
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
+          placeholder={messages.length ? 'Reply…' : 'Describe setup…'}
+          disabled={pending}
+          style={{ ...inp, fontSize: 11, padding: '6px 8px', flex: 1 }} />
+        <button onClick={send} disabled={pending || !input.trim()}
+          style={{ ...btn, padding: '4px 12px', fontWeight: 700, opacity: (pending || !input.trim()) ? 0.5 : 1, cursor: (pending || !input.trim()) ? 'default' : 'pointer' }}>
+          Send
+        </button>
+      </div>
+    </div>
+  )
 }

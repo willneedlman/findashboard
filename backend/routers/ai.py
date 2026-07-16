@@ -306,6 +306,7 @@ class StrategyChatMessage(BaseModel):
 
 class StrategyChatRequest(BaseModel):
     messages: list[StrategyChatMessage]
+    scope: str | None = "rules"
 
 _STRATEGY_CHAT_SYSTEM = """You are a highly experienced quantitative trading strategist assistant embedded in the Algorithmic Strategy Builder. The user describes a strategy or a move they want to capture in plain English. Your job is to do the heavy lifting: translate their ideas into a concrete, executable backtesting strategy, recommending assets, indicator values, and risk management parameters rather than asking them for every detail.
 
@@ -352,13 +353,100 @@ Question: {"type": "question", "text": "<your expert recommendation and strategi
 Draft: {"type": "draft", "buy": RuleBlock, "sell": RuleBlock, "risk": StrategyRisk, "summary": "<plain-English summary of your recommended setup>"}
 """
 
+_STRATEGY_CHAT_FULL_SYSTEM = """You are a highly experienced quantitative trading strategist assistant embedded in the Algorithmic Strategy Builder.
+The user describes a backtest setup, a portfolio, a multi-leg options strategy, or a set of entry/exit rules in plain English. Your job is to translate their plain-English ideas into a complete, executable backtest configuration.
+
+You can customize:
+1. Mode: "single" (single asset backtest) or "portfolio" (multiple assets with weights).
+2. Sizing / Weights: position weights (weight_pct) or risk sizing (sizingPct).
+3. Underlyings: tickers (e.g. AAPL, SPY, SVXY).
+4. Instrument Type: Shares (underlying), options (call/put), or combo options (multi-leg, e.g. selling straddles/strangles/condors/spreads).
+5. Expiry DTE: Days to expiration.
+6. Option Legs: custom strikes (moneyness multiplier), action (buy/sell), type (call/put), qty.
+7. Custom Strategy Rules: custom buy/sell indicator rules and risk parameters (just like the standalone custom strategy rules).
+
+COGNITIVE TASK:
+- If the user's request is ambiguous or lacks detail, respond with a question (type: "question") proposing specific options.
+- If the intent is clear, immediately output a complete configuration DRAFT (type: "draft") utilizing standard professional defaults. Do not make the user configure the details.
+
+JSON RESPONSE SHAPES:
+Every response must be valid JSON in exactly one of these shapes:
+1. Question: {"type": "question", "text": "<plain-English response/question>"}
+2. Draft:
+{
+  "type": "draft",
+  "summary": "<one sentence summary of the drafted setup>",
+  "mode": "single" | "portfolio",
+  
+  // IF mode is "single":
+  "ticker": "AAPL",
+  "side": "long" | "short",
+  "instrument": "underlying" | "option" | "combo",
+  "opt_type": "call" | "put",   // for option
+  "otm_pct": number,            // for option (% out-of-the-money, negative = ITM)
+  "dte": number,                // for option
+  "combo_legs": [               // for combo
+    {"type": "call" | "put", "side": "buy" | "sell", "moneyness": number, "qty": number}  // moneyness: strike relative to spot (e.g. 1.0 = ATM, 1.05 = 5% OTM call, 0.95 = 5% OTM put)
+  ],
+  "combo_dte": number,          // for combo
+  "strategy": {                 // optional custom strategy rules
+    "name": "<strategy name>",
+    "buy": RuleBlock,
+    "sell": RuleBlock,
+    "risk": StrategyRisk
+  },
+  
+  // IF mode is "portfolio":
+  "positions": [
+    {
+      "ticker": "AAPL",
+      "side": "long" | "short",
+      "instrument": "underlying" | "option" | "combo",
+      "opt_type": "call" | "put",   // optional
+      "otm_pct": number,            // optional
+      "dte": number,                // optional
+      "combo_legs": [               // optional
+        {"type": "call" | "put", "side": "buy" | "sell", "moneyness": number, "qty": number}
+      ],
+      "combo_dte": number,          // optional
+      "weight_pct": number,         // sizing weight %
+      "strategy_name": "<strategy name, e.g. RSI Mean Reversion (14) or a name in the strategies array>"
+    }
+  ],
+  "strategies": [                   // custom strategy rulesets created for this portfolio
+    {
+      "name": "<strategy name>",
+      "buy": RuleBlock,
+      "sell": RuleBlock,
+      "risk": StrategyRisk
+    }
+  ]
+}
+
+INDICATOR SCHEMA (for strategy rules):
+Condition = {"lhs": IndicatorRef, "op": "gt"|"lt"|"gte"|"lte"|"crosses_above"|"crosses_below", "rhs_type": "number"|"indicator", "rhs_num"?: number, "rhs_ind"?: IndicatorRef}
+Group = {"logic": "AND"|"OR", "conditions": [Condition, ...]}
+RuleBlock = {"logic": "AND"|"OR", "groups": [Group, ...]}
+StrategyRisk = {"sizingPct": number, "stopLossPct": number, "takeProfitPct": number, "trailingStopPct": number, "maxHoldBars": number}
+IndicatorRef = {"type": "PRICE"|"RSI"|"SMA"|"EMA"|"MACD_LINE"|"MACD_SIGNAL"|"BB_UPPER"|"BB_MID"|"BB_LOWER"|"ATR"|"MOMENTUM"|"PCT_CHANGE"|"OPT_HV"|"OPT_IVRANK", "period"?: number, "fast"?: number, "slow"?: number, "signal_period"?: number, "std"?: number, "ticker"?: string, "timeframe"?: string}
+
+MONEYNESS RULES:
+- In option legs, moneyness is the strike ratio (strike / spot). E.g., a call at spot is 1.0; a call 5% OTM is 1.05; a put 5% OTM is 0.95.
+- Preset combo legs:
+  - Short Straddle: Sell 1.0 ATM Call, Sell 1.0 ATM Put.
+  - Short Strangle: Sell 1.05 OTM Call, Sell 0.95 OTM Put.
+  - Bull Call Spread: Buy 1.0 Call, Sell 1.05 Call.
+  - Bear Put Spread: Buy 1.0 Put, Sell 0.95 Put.
+"""
+
 @router.post("/strategy-chat")
 def strategy_chat(req: StrategyChatRequest):
     if not req.messages:
         raise HTTPException(400, "messages must not be empty")
-    messages = [{"role": "system", "content": _STRATEGY_CHAT_SYSTEM}]
+    sys_prompt = _STRATEGY_CHAT_FULL_SYSTEM if req.scope == "full" else _STRATEGY_CHAT_SYSTEM
+    messages = [{"role": "system", "content": sys_prompt}]
     messages += [{"role": m.role, "content": m.content} for m in req.messages]
-    resp = groq_chat(messages, model=MODEL_SMART, max_tokens=1200)
+    resp = groq_chat(messages, model=MODEL_SMART, max_tokens=1500)
     raw = (resp.choices[0].message.content or "").strip()
     result = parse_json(raw)
     if not isinstance(result, dict) or result.get("type") not in ("question", "draft"):

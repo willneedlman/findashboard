@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { ComposedChart, Area, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import { KpiCell } from '../components/mmCockpit'
@@ -1108,6 +1108,14 @@ function AiOptionsStrategyChat({ onAccept }: { onAccept: (draft: OptionsStrategy
   const [error, setError] = useState('')
   const [draft, setDraft] = useState<OptionsStrategyDraft | null>(null)
 
+  const listRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (listRef.current) {
+      listRef.current.scrollTop = listRef.current.scrollHeight
+    }
+  }, [messages, pending])
+
   const T = {
     bg:      'var(--theme-bg, #101c2e)',
     surface: 'var(--theme-surface, #0d1826)',
@@ -1177,7 +1185,7 @@ function AiOptionsStrategyChat({ onAccept }: { onAccept: (draft: OptionsStrategy
         Describe an options strategy. The assistant asks clarifying questions, then drafts the contract legs.
       </div>
 
-      <div style={{
+      <div ref={listRef} style={{
         display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 220, overflowY: 'auto',
         padding: messages.length ? 8 : 0, background: messages.length ? T.surface : 'transparent',
         border: messages.length ? `1px solid ${T.border}` : 'none',

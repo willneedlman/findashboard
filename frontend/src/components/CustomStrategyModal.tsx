@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import axios from 'axios'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -647,6 +647,14 @@ function AiStrategyChat({ onAccept }: { onAccept: (draft: StrategyDraft) => void
   const [error, setError] = useState('')
   const [draft, setDraft] = useState<StrategyDraft | null>(null)
 
+  const listRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (listRef.current) {
+      listRef.current.scrollTop = listRef.current.scrollHeight
+    }
+  }, [messages, pending])
+
   const send = async () => {
     const text = input.trim()
     if (!text || pending) return
@@ -681,7 +689,7 @@ function AiStrategyChat({ onAccept }: { onAccept: (draft: StrategyDraft) => void
         Describe a strategy in plain English. The assistant asks clarifying questions, then drafts buy/sell rules you can review, edit, and save like any other strategy.
       </div>
 
-      <div style={{
+      <div ref={listRef} style={{
         display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 320, overflowY: 'auto',
         padding: messages.length ? 10 : 0, background: messages.length ? T.surface : 'transparent',
         border: messages.length ? `1px solid ${T.border}` : 'none',
