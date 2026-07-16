@@ -1,0 +1,20 @@
+{
+  "name": "Alphatape",
+  "short_name": "Alphatape",
+  "description": "Institutional-style market analytics terminal: options flow, dealer gamma, DCF valuation, macro rates, backtesting, and paper trading.",
+  "start_url": "/app",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#101c2e",
+  "theme_color": "#101c2e",
+  "categories": ["finance", "productivity", "business"],
+  "icons": [
+    {
+      "src": "/favicon.svg?v=12",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

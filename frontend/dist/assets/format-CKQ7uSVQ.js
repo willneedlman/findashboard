@@ -1,0 +1,1 @@
+function e(e){return e==null?`—`:e>=0xe8d4a51000?`$${(e/0xe8d4a51000).toFixed(2)}T`:e>=1e9?`$${(e/1e9).toFixed(1)}B`:e>=1e6?`$${(e/1e6).toFixed(0)}M`:`$${e.toLocaleString()}`}function t(e,t=2,n=``){return typeof e!=`number`||Number.isNaN(e)?`—`:`${e.toFixed(t)}${n}`}export{t as n,e as t};
