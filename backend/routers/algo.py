@@ -533,7 +533,7 @@ def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: 
             "total_pnl": round(float(eq.iloc[-1]) - initial_capital, 2),
             "blown_up_at": blown_up_at.strftime(_dfmt) if blown_up_at is not None else None,
         },
-        "trades": trades[:200],
+        "trades": trades,
         "instrument": {"kind": "option", "type": otype, "moneyness": moneyness, "dte": dte, "iv": round(iv, 1), "direction": direction, "modeled": True},
     }
 
@@ -740,7 +740,7 @@ def _compute_combo_metrics(signal: pd.Series, close: pd.Series, combo: dict, iv:
             "total_pnl": round(float(eq.iloc[-1]) - initial_capital, 2),
             "blown_up_at": blown_up_at.strftime(_dfmt) if blown_up_at is not None else None,
         },
-        "trades": trades[:200],
+        "trades": trades,
         "instrument": {"kind": "combo", "legs": legs_cfg, "dte": dte, "iv": round(iv, 1), "modeled": True},
     }
 
