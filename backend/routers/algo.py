@@ -747,6 +747,13 @@ def _compute_combo_metrics(signal: pd.Series, close: pd.Series, combo: dict, iv:
 
 class ComboMonteCarloRequest(BaseModel):
     ticker: str
+    # Multi-ticker basket: the SAME leg structure (moneyness-based, so strikes
+    # derive from each ticker's own spot) applied across every ticker, equal-
+    # weighted, independent GBM paths per name, summed into one portfolio P&L
+    # distribution — for a universe strategy imported from the Algo Strategy
+    # Builder (one shared combo across many symbols), not a single position.
+    # None/empty = single-ticker mode using `ticker` above, unchanged.
+    tickers: list[str] | None = None
     combo: dict                                   # {dte, legs:[{type,side,moneyness,qty}]}
     n_sims: int = 2000
     # Early-exit management, as % of the entry credit/debit magnitude (the
@@ -773,6 +780,8 @@ class ComboMonteCarloRequest(BaseModel):
             raise ValueError("Effective annual rate must be between 0% and 100%")
         if not 0 < self.position_size <= 100:
             raise ValueError("Position size must be between 0% and 100% of capital")
+        if self.tickers is not None and len(self.tickers) > 100:
+            raise ValueError("Basket is limited to 100 tickers — each one needs its own live spot/IV fetch and simulation")
         return self
 
 
@@ -804,6 +813,49 @@ def combo_monte_carlo(req: ComboMonteCarloRequest):
         _COMBO_MC_SEM.release()
 
 
+def _price_ticker_leg(ticker: str, legs_cfg: list, dte: int, r: float, committed_dollars: float,
+                      n: int, dt: float, rng) -> dict:
+    """Fetch one ticker's own live spot/IV and simulate its dollar
+    contribution to the combo — legs are moneyness-based, so strikes derive
+    from THIS ticker's own spot, and its notional is scaled to
+    committed_dollars independent of every other ticker in a basket."""
+    from routers.options import options_snapshot
+    from math_engine import bs_price
+    snap = options_snapshot(ticker)
+    spot, iv = snap.get("spot"), snap.get("atm_iv")
+    if not spot or not isinstance(iv, (int, float)) or iv <= 0:
+        raise HTTPException(422, f"No live spot/IV available for {ticker}")
+
+    base_notional = sum(max(0.0, float(lc.get("qty", 1.0))) * spot * _OPT_MULT for lc in legs_cfg)
+    scale = committed_dollars / base_notional if base_notional > 0 else 0.0
+
+    resolved: list[dict] = []
+    entry_cash_flow = 0.0
+    for lc in legs_cfg:
+        strike = round(spot * float(lc.get("moneyness", 1.0)), 2)
+        otype = "put" if str(lc.get("type", "call")).lower().startswith("p") else "call"
+        qty = max(0.0, float(lc.get("qty", 1.0))) * scale
+        signed_qty = qty if str(lc.get("side", "buy")).lower() == "buy" else -qty
+        entry_val = max(float(bs_price(spot, strike, dte, r, iv, otype)), 0.01)
+        entry_cash_flow += -signed_qty * entry_val * _OPT_MULT
+        resolved.append({"type": otype, "strike": strike, "signed_qty": signed_qty})
+
+    sigma = iv / 100.0
+    rf = r / 100.0
+    shocks = (rf - 0.5 * sigma ** 2) * dt + sigma * np.sqrt(dt) * rng.standard_normal((n, dte))
+    log_paths = np.cumsum(shocks, axis=1)
+    price_paths = np.hstack([np.full((n, 1), spot), spot * np.exp(log_paths)])   # (n, dte+1), day 0..dte
+    days = np.arange(dte + 1)
+    t_rem = (dte - days) / 365.0   # (dte+1,) remaining years per column, broadcasts over price_paths
+    mtm = np.zeros((n, dte + 1))
+    for leg in resolved:
+        leg_val = _bs_vec(price_paths, leg["strike"], t_rem, rf, sigma, leg["type"])
+        mtm += leg["signed_qty"] * leg_val * _OPT_MULT
+    pnl_path = entry_cash_flow + mtm   # (n, dte+1) unrealized $ P&L at each day, each path
+
+    return {"spot": spot, "iv": iv, "resolved": resolved, "entry_cash_flow": entry_cash_flow, "pnl_path": pnl_path}
+
+
 def _combo_monte_carlo_impl(req: ComboMonteCarloRequest):
     """P&L distribution for a multi-leg options combo (same PRESETS shape as
     the Options Strategy Builder / Algo Strategy Builder combo instrument),
@@ -819,106 +871,99 @@ def _combo_monte_carlo_impl(req: ComboMonteCarloRequest):
     optional take-profit/stop-loss/max-hold exits the position the first day
     it's triggered — a short-premium strategy managed at "close at 50% of
     max profit" behaves very differently from one held to expiry, and this
-    is the whole reason the path (not just the terminal price) matters here."""
-    from routers.options import options_snapshot
-    from math_engine import bs_price
-    snap = options_snapshot(req.ticker)
-    spot, iv = snap.get("spot"), snap.get("atm_iv")
-    if not spot or not isinstance(iv, (int, float)) or iv <= 0:
-        raise HTTPException(422, f"No live spot/IV available for {req.ticker}")
+    is the whole reason the path (not just the terminal price) matters here.
 
+    req.tickers (plural) applies the SAME leg structure to every ticker —
+    each with its own live spot/IV and its own independent GBM draw — equal-
+    weighted and summed into one basket P&L distribution. This is how a
+    universe strategy imported from the Algo Strategy Builder (one shared
+    combo across many symbols) is represented here, since a single-ticker
+    payoff curve has no meaning once there's more than one underlying."""
     legs_cfg = req.combo.get("legs") or []
     if not legs_cfg:
         raise HTTPException(422, "Combo needs at least one leg")
     dte = max(1, int(req.combo.get("dte", 30)))
     r = 4.0
+    dt = (dte / 365.0) / dte
+
+    tickers = [t.strip().upper() for t in req.tickers if t and t.strip()] if req.tickers else [req.ticker.strip().upper()]
+    if not tickers:
+        raise HTTPException(422, "Need at least one ticker")
+    is_basket = len(tickers) > 1
 
     # Notional sizing: preserve each leg's qty RATIO from the preset (e.g. a
     # butterfly's 1:2:1), scale absolute size to position_size% of capital
     # times leverage — same convention _compute_combo_metrics uses, so a
     # structure imported from the Algo Strategy Builder sizes identically here.
+    # A basket splits that total notional equally across every ticker.
     alloc = (req.position_size / 100.0) * req.leverage
-    base_notional = sum(max(0.0, float(lc.get("qty", 1.0))) * spot * _OPT_MULT for lc in legs_cfg)
-    scale = (req.initial_capital * alloc) / base_notional if base_notional > 0 else 0.0
     committed_notional = req.initial_capital * alloc
     borrowed_notional = max(0.0, committed_notional - req.initial_capital)
+    per_ticker_dollars = committed_notional / len(tickers)
 
-    resolved: list[dict] = []
-    entry_cash_flow = 0.0
-    for lc in legs_cfg:
-        strike = round(spot * float(lc.get("moneyness", 1.0)), 2)
-        otype = "put" if str(lc.get("type", "call")).lower().startswith("p") else "call"
-        qty = max(0.0, float(lc.get("qty", 1.0))) * scale
-        signed_qty = qty if str(lc.get("side", "buy")).lower() == "buy" else -qty
-        entry_val = max(float(bs_price(spot, strike, dte, r, iv, otype)), 0.01)
-        entry_cash_flow += -signed_qty * entry_val * _OPT_MULT
-        resolved.append({"type": otype, "strike": strike, "signed_qty": signed_qty})
+    # Early exit needs a full (n_sims, dte+1) grid marked at every day, not just
+    # a terminal draw — meaningfully heavier, so cap sims lower than the
+    # expiry-only version did.
+    n = min(max(int(req.n_sims), 100), 5000)
+    rng = np.random.default_rng()
+
+    per_ticker = [_price_ticker_leg(tk, legs_cfg, dte, r, per_ticker_dollars, n, dt, rng) for tk in tickers]
+    entry_cash_flow = sum(res["entry_cash_flow"] for res in per_ticker)
+    pnl_path = sum(res["pnl_path"] for res in per_ticker)   # (n, dte+1), independent draws per ticker summed
 
     # Financing at full term (the deterministic "held to expiry" reference below)
     # — folded into payoff() itself so breakevens/max-profit/max-loss all widen
     # correctly to account for the borrowing cost, same as a real levered account.
     financing_at_expiry = borrowed_notional * ((1 + req.effective_annual_rate / 100.0) ** (dte / 365.0) - 1)
 
-    def payoff(price: float) -> float:
-        val = sum(
-            l["signed_qty"] * (max(price - l["strike"], 0.0) if l["type"] == "call" else max(l["strike"] - price, 0.0)) * _OPT_MULT
-            for l in resolved
-        )
-        return max(entry_cash_flow + val - financing_at_expiry, -req.initial_capital)
+    if is_basket:
+        # No single price axis applies once there's more than one underlying —
+        # skip the deterministic curve/breakevens/max-profit/max-loss; the
+        # simulated distribution (percentiles/histogram) below still fully
+        # represents the basket's outcome.
+        curve: list[dict] = []
+        breakevens: list[float] = []
+        max_profit_expiry = None
+        max_loss_expiry = None
+    else:
+        resolved, spot = per_ticker[0]["resolved"], per_ticker[0]["spot"]
 
-    # Deterministic payoff curve for charting, 50%-150% of spot — this is the
-    # "if held to expiry" reference; the simulated distribution below reflects
-    # early-exit rules when they're set, so the two can legitimately diverge.
-    lo, hi = spot * 0.5, spot * 1.5
-    curve = [{"price": round(lo + (hi - lo) * i / 100, 2)} for i in range(101)]
-    for pt in curve:
-        pt["pnl"] = round(payoff(pt["price"]), 2)
+        def payoff(price: float) -> float:
+            val = sum(
+                l["signed_qty"] * (max(price - l["strike"], 0.0) if l["type"] == "call" else max(l["strike"] - price, 0.0)) * _OPT_MULT
+                for l in resolved
+            )
+            return max(entry_cash_flow + val - financing_at_expiry, -req.initial_capital)
 
-    # Breakevens: bisect every sign change in the sampled curve.
-    breakevens: list[float] = []
-    for a, b in zip(curve, curve[1:]):
-        if (a["pnl"] <= 0 < b["pnl"]) or (a["pnl"] >= 0 > b["pnl"]):
-            lo_p, hi_p = a["price"], b["price"]
-            for _ in range(40):
-                mid = (lo_p + hi_p) / 2
-                if (payoff(lo_p) <= 0) == (payoff(mid) <= 0):
-                    lo_p = mid
-                else:
-                    hi_p = mid
-            breakevens.append(round((lo_p + hi_p) / 2, 2))
+        # Deterministic payoff curve for charting, 50%-150% of spot — this is the
+        # "if held to expiry" reference; the simulated distribution below reflects
+        # early-exit rules when they're set, so the two can legitimately diverge.
+        lo, hi = spot * 0.5, spot * 1.5
+        curve = [{"price": round(lo + (hi - lo) * i / 100, 2)} for i in range(101)]
+        for pt in curve:
+            pt["pnl"] = round(payoff(pt["price"]), 2)
 
-    # Only the upside (price -> infinity) can be truly unbounded at expiry —
-    # the downside is always floored at price=0. (An early stop-loss further
-    # bounds both sides in the simulated distribution below.)
-    slope_up = sum(l["signed_qty"] * _OPT_MULT for l in resolved if l["type"] == "call")
-    floor_pnl = payoff(0.0)
-    sampled_pnls = [pt["pnl"] for pt in curve] + [floor_pnl]
-    max_profit_expiry = None if slope_up > 1e-6 else round(max(sampled_pnls), 2)
-    max_loss_expiry = None if slope_up < -1e-6 else round(min(sampled_pnls), 2)
+        # Breakevens: bisect every sign change in the sampled curve.
+        breakevens = []
+        for a, b in zip(curve, curve[1:]):
+            if (a["pnl"] <= 0 < b["pnl"]) or (a["pnl"] >= 0 > b["pnl"]):
+                lo_p, hi_p = a["price"], b["price"]
+                for _ in range(40):
+                    mid = (lo_p + hi_p) / 2
+                    if (payoff(lo_p) <= 0) == (payoff(mid) <= 0):
+                        lo_p = mid
+                    else:
+                        hi_p = mid
+                breakevens.append(round((lo_p + hi_p) / 2, 2))
 
-    # ── Path simulation ──────────────────────────────────────────────────────
-    T = dte / 365.0
-    sigma = iv / 100.0
-    rf = r / 100.0
-    dt = T / dte
-    # Early exit needs a full (n_sims, dte+1) grid marked at every day, not just
-    # a terminal draw — meaningfully heavier, so cap sims lower than the
-    # expiry-only version did.
-    n = min(max(int(req.n_sims), 100), 5000)
-
-    rng = np.random.default_rng()
-    shocks = (rf - 0.5 * sigma ** 2) * dt + sigma * np.sqrt(dt) * rng.standard_normal((n, dte))
-    log_paths = np.cumsum(shocks, axis=1)
-    price_paths = np.hstack([np.full((n, 1), spot), spot * np.exp(log_paths)])   # (n, dte+1), day 0..dte
-
-    days = np.arange(dte + 1)
-    t_rem = (dte - days) / 365.0   # (dte+1,) remaining years per column, broadcasts over price_paths
-
-    mtm = np.zeros((n, dte + 1))
-    for leg in resolved:
-        leg_val = _bs_vec(price_paths, leg["strike"], t_rem, rf, sigma, leg["type"])
-        mtm += leg["signed_qty"] * leg_val * _OPT_MULT
-    pnl_path = entry_cash_flow + mtm   # (n, dte+1) unrealized P&L at each day, each path
+        # Only the upside (price -> infinity) can be truly unbounded at expiry —
+        # the downside is always floored at price=0. (An early stop-loss further
+        # bounds both sides in the simulated distribution below.)
+        slope_up = sum(l["signed_qty"] * _OPT_MULT for l in resolved if l["type"] == "call")
+        floor_pnl = payoff(0.0)
+        sampled_pnls = [pt["pnl"] for pt in curve] + [floor_pnl]
+        max_profit_expiry = None if slope_up > 1e-6 else round(max(sampled_pnls), 2)
+        max_loss_expiry = None if slope_up < -1e-6 else round(min(sampled_pnls), 2)
 
     has_exit_rule = req.take_profit_pct is not None or req.stop_loss_pct is not None or req.max_hold_days is not None
     max_days = min(int(req.max_hold_days), dte) if req.max_hold_days is not None else dte
@@ -957,7 +1002,12 @@ def _combo_monte_carlo_impl(req: ComboMonteCarloRequest):
     prob_profit = round(float((pnl > 0).mean() * 100), 1)
 
     return {
-        "ticker": req.ticker.upper(), "spot": round(spot, 2), "iv": round(iv, 1), "dte": dte,
+        "ticker": tickers[0] if not is_basket else None,
+        "tickers": tickers if is_basket else None,
+        "is_basket": is_basket,
+        "spot": round(per_ticker[0]["spot"], 2) if not is_basket else None,
+        "iv": round(per_ticker[0]["iv"], 1) if not is_basket else None,
+        "dte": dte,
         "entry_credit_debit": round(entry_cash_flow, 2),
         "breakevens": breakevens,
         "max_profit": max_profit_expiry, "max_loss": max_loss_expiry,

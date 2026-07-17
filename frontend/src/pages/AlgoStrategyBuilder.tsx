@@ -40,18 +40,22 @@ export type AlgoMonteCarloHandoff = {
   positions: Array<Pick<PortfolioPos, 'ticker' | 'instMode' | 'optType' | 'otmPct' | 'dte' | 'comboLegs' | 'comboDte' | 'side' | 'tradeSize'>>
 }
 
-// A single-mode option/combo position has no analog in the portfolio GBM/
-// bootstrap simulator (it treats every leg as plain weighted equity — no
-// strike, no premium decay, no options awareness at all) or in "Exact Algo
-// Replay" (that's the buy/sell-RULE-driven historical backtest; this handoff
-// carries a structural snapshot instead, since the options Monte Carlo tab
-// has no rule-evaluation concept — it's "enter this structure now, simulate
-// to DTE"). Routes to the Options Strategy tab, not the Portfolio tab.
+// An option/combo position has no analog in the portfolio GBM/bootstrap
+// simulator (it treats every leg as plain weighted equity — no strike, no
+// premium decay, no options awareness at all) or in "Exact Algo Replay"
+// (that's the buy/sell-RULE-driven historical backtest; this handoff carries
+// a structural snapshot instead, since the options Monte Carlo tab has no
+// rule-evaluation concept — it's "enter this structure now, simulate to
+// DTE"). Routes to the Options Strategy tab, not the Portfolio tab. A single
+// position uses `ticker`; a portfolio where every position runs the same
+// combo across many symbols uses `tickers` — the SAME legs applied to each
+// one's own spot/IV, equal-weighted, summed into one basket distribution.
 export const ALGO_MC_OPTIONS_HANDOFF_KEY = 'fdb_algo_options_monte_carlo_handoff'
 export type AlgoOptionsMonteCarloHandoff = {
   version: 1
   createdAt: string
   ticker: string
+  tickers?: string[]
   legs: ComboLeg[]
   dte: number
   takeProfitPct?: number
@@ -1141,8 +1145,43 @@ export function AlgoStrategyBuilderContent() {
 
   const activeDef = saved.find(s => s.name === activeName) ?? null
   const refresh = () => setSaved(loadCustomStrategies())
+  // A universe of option/combo positions (e.g. one shared short-straddle
+  // template cloned across 60 symbols) has no representation in the
+  // portfolio GBM/bootstrap simulator — it silently flattens every leg to
+  // plain weighted equity, losing the whole structure. Route those to the
+  // options-basket handoff instead, using the FIRST option/combo position's
+  // legs as the shared template (the universe-strategy model clones one
+  // structure across tickers, so they're expected to match) applied across
+  // every option/combo-typed ticker. A mixed portfolio's plain-share
+  // positions aren't representable here either, so they're left out of this
+  // view — the portfolio handoff below remains the right tool for those.
   const exportToMonteCarlo = () => {
     if (!activeDef || positions.length === 0) return
+    const optionPositions = positions.filter(p => p.instMode === 'option' || p.instMode === 'combo')
+    if (optionPositions.length > 0) {
+      const template = optionPositions[0]
+      const legs: ComboLeg[] = template.instMode === 'option'
+        ? [{ type: template.optType, side: template.side === 'short' ? 'sell' : 'buy', moneyness: template.optType === 'call' ? 1 + template.otmPct / 100 : 1 - template.otmPct / 100, qty: 1 }]
+        : (template.comboLegs?.length ? template.comboLegs : legsToCombo(PRESETS['Short Straddle']))
+      const r = activeDef.risk ?? DEFAULT_RISK
+      const handoff: AlgoOptionsMonteCarloHandoff = {
+        version: 1,
+        createdAt: new Date().toISOString(),
+        ticker: optionPositions[0].ticker,
+        tickers: optionPositions.map(p => p.ticker),
+        legs,
+        dte: template.instMode === 'option' ? template.dte : (template.comboDte ?? 30),
+        takeProfitPct: r.takeProfitPct || undefined,
+        stopLossPct: r.stopLossPct || undefined,
+        maxHoldDays: r.maxHoldBars || undefined,
+        positionSizePct: portfolioTradeSize,
+        leverage: portfolioLeverage,
+        effectiveAnnualRate,
+      }
+      localStorage.setItem(ALGO_MC_OPTIONS_HANDOFF_KEY, JSON.stringify(handoff))
+      window.location.assign('/montecarlo')
+      return
+    }
     const handoff: AlgoMonteCarloHandoff = {
       version: 1,
       createdAt: new Date().toISOString(),

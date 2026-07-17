@@ -279,7 +279,8 @@ function MCModeToggle({ mode, onChange }: { mode: 'portfolio' | 'options-strateg
 }
 
 interface ComboMcResult {
-  ticker: string; spot: number; iv: number; dte: number
+  ticker: string | null; tickers: string[] | null; is_basket: boolean
+  spot: number | null; iv: number | null; dte: number
   entry_credit_debit: number
   breakevens: number[]
   max_profit: number | null; max_loss: number | null
@@ -307,6 +308,11 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
   // so it bypasses the preset dropdown entirely rather than trying to find
   // the closest-matching preset name and silently drifting from the original.
   const [legsOverride] = useState<ComboLeg[] | null>(handoff?.legs ?? null)
+  // A universe strategy imported from the Algo Strategy Builder (one shared
+  // combo cloned across many symbols) carries the full ticker list here —
+  // basket mode applies `legsOverride` to every one of these instead of the
+  // single `ticker` field, equal-weighted, summed into one P&L distribution.
+  const [tickersOverride] = useState<string[] | null>(handoff?.tickers && handoff.tickers.length > 1 ? handoff.tickers : null)
   const [comboDte, setComboDte] = useState(handoff?.dte ?? 30)
   const [nSims, setNSims] = useState(3000)
   // Early exit — % of the entry credit/debit magnitude, the standard "close at
@@ -325,7 +331,8 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
   const { mutate, data, isPending, isError, error } = useMutation<ComboMcResult>({
     mutationFn: async () => {
       const { data } = await axios.post('/api/algo/combo-montecarlo', {
-        ticker, combo: { dte: comboDte, legs: legsOverride ?? legsToCombo(PRESETS[comboPreset] ?? []) }, n_sims: nSims,
+        ticker, tickers: tickersOverride ?? undefined,
+        combo: { dte: comboDte, legs: legsOverride ?? legsToCombo(PRESETS[comboPreset] ?? []) }, n_sims: nSims,
         take_profit_pct: tpPct ? +tpPct : undefined,
         stop_loss_pct: slPct ? +slPct : undefined,
         max_hold_days: maxHoldDays ? +maxHoldDays : undefined,
@@ -352,14 +359,25 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
       <MCModeToggle mode="options-strategy" onChange={m => m === 'portfolio' && onSwitchMode()} />
       {handoff && (
         <div style={{ marginBottom: 10, padding: '8px 12px', border: `1px solid var(--theme-primary, #c9a84c)`, background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)', fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-secondary, #8099b0)' }}>
-          Imported from the Algo Strategy Builder — {ticker} {legsOverride?.length === 1 ? 'single option' : `${legsOverride?.length ?? 0}-leg combo`}, {comboDte} DTE. Structure, DTE, risk controls, and sizing carried over exactly; the buy/sell rules don't apply here — this tool simulates entering the structure now, not waiting for a signal.
+          Imported from the Algo Strategy Builder — {tickersOverride ? `${tickersOverride.length}-symbol basket` : ticker}, {legsOverride?.length === 1 ? 'single option' : `${legsOverride?.length ?? 0}-leg combo`}, {comboDte} DTE.
+          {tickersOverride ? ' The same structure applies to every symbol, each priced off its own spot/IV, equal-weighted and summed into one basket P&L distribution — there\'s no single payoff-at-expiry chart once more than one underlying is involved.' : ' Structure, DTE, risk controls, and sizing carried over exactly.'}
+          {' '}The buy/sell rules don't apply here — this tool simulates entering the structure(s) now, not waiting for a signal.
         </div>
       )}
       <div style={{ border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #0d1826)', padding: '14px 16px', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
-        <div>
-          <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', marginBottom: 3 }}>Ticker</label>
-          <input value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())} style={{ ...paramInput, width: 90 }} />
-        </div>
+        {tickersOverride ? (
+          <div>
+            <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', marginBottom: 3 }}>Tickers (imported)</label>
+            <div title={tickersOverride.join(', ')} style={{ ...paramInput, width: 200, display: 'flex', alignItems: 'center', cursor: 'default', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {tickersOverride.length} symbols — {tickersOverride.slice(0, 4).join(', ')}{tickersOverride.length > 4 ? '…' : ''}
+            </div>
+          </div>
+        ) : (
+          <div>
+            <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', marginBottom: 3 }}>Ticker</label>
+            <input value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())} style={{ ...paramInput, width: 90 }} />
+          </div>
+        )}
         {legsOverride ? (
           <div>
             <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', marginBottom: 3 }}>Structure (imported)</label>
@@ -454,10 +472,10 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
             <div style={STRIP}>
               <KpiCell grow label={data.entry_credit_debit >= 0 ? 'Credit Received' : 'Debit Paid'} value={`$${Math.abs(data.entry_credit_debit).toLocaleString(undefined, { maximumFractionDigits: 0 })}`} color={data.entry_credit_debit >= 0 ? POS : NEG} />
               <KpiCell grow label="Prob. of Profit" value={`${data.prob_profit}%`} color={data.prob_profit >= 50 ? POS : NEG} />
-              <KpiCell grow label={data.has_exit_rule ? 'Max Profit (expiry)' : 'Max Profit'} value={data.max_profit == null ? 'Unlimited' : `$${data.max_profit.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} color={POS} />
-              <KpiCell grow label={data.has_exit_rule ? 'Max Loss (expiry)' : 'Max Loss'} value={data.max_loss == null ? 'Unlimited' : `$${Math.abs(data.max_loss).toLocaleString(undefined, { maximumFractionDigits: 0 })}`} color={NEG} />
-              <KpiCell grow label="Breakevens" value={data.breakevens.length ? data.breakevens.map(b => `$${b.toFixed(0)}`).join(' / ') : '—'} />
-              <KpiCell grow label="Spot · IV · DTE" value={`$${data.spot} · ${data.iv}% · ${data.dte}d`} />
+              <KpiCell grow label={data.has_exit_rule ? 'Max Profit (expiry)' : 'Max Profit'} value={data.is_basket ? 'N/A (basket)' : data.max_profit == null ? 'Unlimited' : `$${data.max_profit.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} color={POS} />
+              <KpiCell grow label={data.has_exit_rule ? 'Max Loss (expiry)' : 'Max Loss'} value={data.is_basket ? 'N/A (basket)' : data.max_loss == null ? 'Unlimited' : `$${Math.abs(data.max_loss).toLocaleString(undefined, { maximumFractionDigits: 0 })}`} color={NEG} />
+              <KpiCell grow label="Breakevens" value={data.is_basket ? 'N/A (basket)' : data.breakevens.length ? data.breakevens.map(b => `$${b.toFixed(0)}`).join(' / ') : '—'} />
+              <KpiCell grow label={data.is_basket ? 'Symbols · DTE' : 'Spot · IV · DTE'} value={data.is_basket ? `${data.tickers?.length ?? 0} tickers · ${data.dte}d` : `$${data.spot} · ${data.iv}% · ${data.dte}d`} />
             </div>
 
             {data.leverage > 1 && (
@@ -475,19 +493,25 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
               </div>
             )}
 
-            <ChartPanel label="Payoff at Expiry (deterministic)" height={260}>
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={data.payoff_curve} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
-                  <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
-                  <XAxis dataKey="price" tick={TICK} tickLine={false} axisLine={{ stroke: 'var(--theme-border, rgba(255,255,255,0.08))' }} tickFormatter={(v: number) => `$${v.toFixed(0)}`} />
-                  <YAxis tick={TICK} tickLine={false} axisLine={{ stroke: 'var(--theme-border, rgba(255,255,255,0.08))' }} tickFormatter={(v: number) => `$${v.toFixed(0)}`} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [`$${v.toFixed(0)}`, 'P&L']} labelFormatter={(v: number) => `Price $${v}`} cursor={CROSSHAIR_CURSOR} />
-                  <ReferenceLine y={0} stroke="var(--theme-text-faint, rgba(255,255,255,0.3))" />
-                  <ReferenceLine x={data.spot} stroke={cc.primary} strokeDasharray="3 3" label={{ value: 'spot', position: 'top', fill: cc.primary, fontSize: 9 }} />
-                  <Area type="monotone" dataKey="pnl" stroke={cc.primary} fill={cc.primary} fillOpacity={0.15} strokeWidth={2} isAnimationActive={false} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </ChartPanel>
+            {data.is_basket ? (
+              <div style={{ padding: '10px 14px', border: '1px dashed var(--theme-border, rgba(255,255,255,0.16))', fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))' }}>
+                No single payoff-at-expiry chart for a {data.tickers?.length ?? 0}-symbol basket — each underlying moves independently. The P&L distribution below already reflects the full basket.
+              </div>
+            ) : (
+              <ChartPanel label="Payoff at Expiry (deterministic)" height={260}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={data.payoff_curve} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
+                    <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
+                    <XAxis dataKey="price" tick={TICK} tickLine={false} axisLine={{ stroke: 'var(--theme-border, rgba(255,255,255,0.08))' }} tickFormatter={(v: number) => `$${v.toFixed(0)}`} />
+                    <YAxis tick={TICK} tickLine={false} axisLine={{ stroke: 'var(--theme-border, rgba(255,255,255,0.08))' }} tickFormatter={(v: number) => `$${v.toFixed(0)}`} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [`$${v.toFixed(0)}`, 'P&L']} labelFormatter={(v: number) => `Price $${v}`} cursor={CROSSHAIR_CURSOR} />
+                    <ReferenceLine y={0} stroke="var(--theme-text-faint, rgba(255,255,255,0.3))" />
+                    <ReferenceLine x={data.spot ?? 0} stroke={cc.primary} strokeDasharray="3 3" label={{ value: 'spot', position: 'top', fill: cc.primary, fontSize: 9 }} />
+                    <Area type="monotone" dataKey="pnl" stroke={cc.primary} fill={cc.primary} fillOpacity={0.15} strokeWidth={2} isAnimationActive={false} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </ChartPanel>
+            )}
 
             <ChartPanel label={`Simulated P&L Distribution ${data.has_exit_rule ? 'at Exit' : 'at Expiry'} (${data.n_sims.toLocaleString()} paths)`} height={220}>
               <ResponsiveContainer width="100%" height="100%">
