@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import axios from 'axios'
@@ -9,6 +9,7 @@ import ErrorState from '../components/ErrorState'
 import Tooltip from '../components/Tooltip'
 import { setLinkedTicker } from '../lib/tickerLink'
 import useIsMobile from '../hooks/useIsMobile'
+import { ArrowRight, ChevronDown } from 'lucide-react'
 import { readPMPortfolios, addHoldingsToPortfolio, normalizeTicker, type PMPortfolio } from '../lib/pmImport'
 
 const C = {
@@ -107,7 +108,7 @@ const TABLE_COLS: { key: keyof ScreenResult; label: string; w: string; align: 'l
 ]
 
 // Client-side seeded screens (presets). Selecting one loads its filters + sort.
-interface Preset { id: string; name: string; desc: string; universe?: string; sortBy: string; sortDir: 'asc' | 'desc'; sortParam?: string; filters: { field: string; operator: string; value: string; param?: string }[] }
+interface Preset { id: string; name: string; desc: string; universes?: string[]; sortBy: string; sortDir: 'asc' | 'desc'; sortParam?: string; filters: { field: string; operator: string; value: string; param?: string }[] }
 const PRESETS: Preset[] = [
   { id: 'liquid-large-caps', name: 'Liquid Large Caps', desc: 'Big, liquid names — loads instantly', sortBy: 'marketCap', sortDir: 'desc',
     filters: [{ field: 'marketCap', operator: 'gt', value: '10' }] },
@@ -126,6 +127,23 @@ const PRESETS: Preset[] = [
 ]
 const DEFAULT_PRESET = PRESETS[0]
 let _fid = 1
+
+// The Screen Library is user-editable (create/rename/delete/reorder) but
+// starts seeded from the built-in PRESETS above on first-ever visit — from
+// that point on the persisted, mutable copy in localStorage is the source of
+// truth, so a rename/delete of a "built-in" screen behaves exactly like one
+// on a screen the user made themselves.
+const SAVED_SCREENS_KEY = 'fdb_screener_saved_screens_v1'
+function loadScreens(): Preset[] {
+  try {
+    const raw = localStorage.getItem(SAVED_SCREENS_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed) && parsed.length) return parsed
+    }
+  } catch { /* fall through to seed */ }
+  return PRESETS
+}
 const toRows = (p: Preset): FilterRow[] => p.filters.map(f => ({ id: _fid++, field: f.field, operator: f.operator, value: f.value, value2: '', param: f.param }))
 
 const EB: React.CSSProperties = { fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.13em', textTransform: 'uppercase', color: C.muted }
@@ -157,6 +175,63 @@ const ROW_LINKS: { label: string; base?: string; overview?: boolean }[] = [
   { label: 'Alert',    base: '/alerts' },
 ]
 
+// Checkbox dropdown so several universes can screen together (e.g. S&P 500 +
+// Nasdaq 100 + a Sector SPDR) — a native <select multiple> can't do a
+// click-to-toggle dropdown with grouped headers the way a single-select
+// <select>+<optgroup> can. Empty selection = "Bundled Universes" (all three
+// core indexes) and is exclusive with any other pick, matching the single-
+// select default's meaning.
+function UniverseMultiSelect({ options, groups, selected, onChange, triggerStyle }: {
+  options: { value: string; label: string; group: string }[]
+  groups: string[]
+  selected: string[]
+  onChange: (values: string[]) => void
+  triggerStyle: React.CSSProperties
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const onDocClick = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [open])
+  const toggle = (value: string) => {
+    if (!value) { onChange([]); return }
+    onChange(selected.includes(value) ? selected.filter(v => v !== value) : [...selected, value])
+  }
+  const bundledLabel = options.find(o => !o.value)?.label ?? 'All'
+  const label = selected.length === 0 ? bundledLabel
+    : selected.length === 1 ? (options.find(o => o.value === selected[0])?.label ?? selected[0])
+    : `${selected.length} universes`
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <span onClick={() => setOpen(v => !v)} title="Universe (select one or more)"
+        style={{ ...triggerStyle, display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+        {label}<ChevronDown size={11} />
+      </span>
+      {open && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, minWidth: 210, maxHeight: 340, overflowY: 'auto', background: C.surface, border: `1px solid ${C.border}`, padding: 6, zIndex: 40, boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
+          {groups.map(g => (
+            <div key={g}>
+              <div style={{ fontFamily: C.sans, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.dim, padding: '6px 8px 3px' }}>{g}</div>
+              {options.filter(o => o.group === g).map(o => {
+                const checked = o.value ? selected.includes(o.value) : selected.length === 0
+                return (
+                  <label key={o.value || 'all'} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '4px 8px', fontFamily: C.sans, fontSize: 11, color: checked ? C.gold : C.chipVal, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={checked} onChange={() => toggle(o.value)} style={{ margin: 0, accentColor: C.gold }} />
+                    {o.label}
+                  </label>
+                )
+              })}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function StockScreener() {
   const navigate = useNavigate()
   const isMobile = useIsMobile()
@@ -164,7 +239,7 @@ export default function StockScreener() {
   const [sector,   setSector]   = useState('')
   const [exchange, setExchange] = useState('')
   const [region,   setRegion]   = useState('')
-  const [universe, setUniverse] = useState(DEFAULT_PRESET.universe ?? '')
+  const [selectedUniverses, setSelectedUniverses] = useState<string[]>(DEFAULT_PRESET.universes ?? [])
   const [sortBy,   setSortBy]   = useState(DEFAULT_PRESET.sortBy)
   const [sortDir,  setSortDir]  = useState<'desc' | 'asc'>(DEFAULT_PRESET.sortDir)
   const [sortParam, setSortParam] = useState(DEFAULT_PRESET.sortParam ?? '1M')
@@ -175,6 +250,9 @@ export default function StockScreener() {
   const [localSort, setLocalSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: DEFAULT_PRESET.sortBy, dir: DEFAULT_PRESET.sortDir })
   const [textFilter, setTextFilter] = useState('')
   const [activeScreenId, setActiveScreenId] = useState<string>(DEFAULT_PRESET.id)
+  const [screens, setScreens] = useState<Preset[]>(loadScreens)
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renameText, setRenameText] = useState('')
   const [railCollapsed, setRailCollapsed] = useState(() => localStorage.getItem('screenerRailCollapsed') === '1')
   const [editingFilterId, setEditingFilterId] = useState<number | null>(null)
   const [density, setDensity] = useState<'roomy' | 'compact'>('roomy')
@@ -222,18 +300,39 @@ export default function StockScreener() {
   ]
   const universeGroups = [...new Set(universes.map(u => u.group))]
 
+  // Several universes screen together as N parallel single-universe requests,
+  // merged and deduped by ticker client-side — mirrors the AI assistant's own
+  // multi-universe screen (backend/routers/ai.py's _screen_candidates loop),
+  // rather than teaching the screener endpoint's already-large universe-
+  // resolution logic a second, union-of-sets code path.
   const { mutate, data, isPending, error, reset } = useMutation({
-    mutationFn: () => axios.post('/api/screener/run', {
-      filters: filters.filter(f => f.value !== '').map(f => ({
-        field: f.field, operator: f.operator,
-        value: parseFloat(f.value),
-        value2: f.value2 ? parseFloat(f.value2) : null,
-        param: f.field === 'priceChange' ? (f.param || '1M') : null,
-      })),
-      sector: sector || null, exchange: exchange || null, region: region || null, universe: universe || null,
-      sort_by: sortBy, sort_dir: sortDir, sort_param: sortBy === 'priceChange' ? sortParam : null,
-      limit: 200,
-    }).then(r => r.data),
+    mutationFn: async () => {
+      const body = {
+        filters: filters.filter(f => f.value !== '').map(f => ({
+          field: f.field, operator: f.operator,
+          value: parseFloat(f.value),
+          value2: f.value2 ? parseFloat(f.value2) : null,
+          param: f.field === 'priceChange' ? (f.param || '1M') : null,
+        })),
+        sector: sector || null, exchange: exchange || null, region: region || null,
+        sort_by: sortBy, sort_dir: sortDir, sort_param: sortBy === 'priceChange' ? sortParam : null,
+        limit: 200,
+      }
+      const targets = selectedUniverses.length ? selectedUniverses : [null]
+      const responses = await Promise.all(targets.map(u =>
+        axios.post('/api/screener/run', { ...body, universe: u }).then(r => r.data)
+      ))
+      if (responses.length === 1) return responses[0]
+      const seen = new Set<string>()
+      const results: ScreenResult[] = []
+      for (const r of responses) {
+        for (const row of r.results ?? []) {
+          const t = row.ticker?.toUpperCase()
+          if (t && !seen.has(t)) { seen.add(t); results.push(row) }
+        }
+      }
+      return { results, total: results.length, changePeriod: responses[0]?.changePeriod }
+    },
   })
 
   const runScreen = () => mutate()
@@ -242,7 +341,7 @@ export default function StockScreener() {
 
   const applyPreset = (p: Preset) => {
     setFilters(toRows(p))
-    setUniverse(p.universe ?? '')
+    setSelectedUniverses(p.universes ?? [])
     setSector(''); setExchange(''); setRegion('')
     setSortBy(p.sortBy); setSortDir(p.sortDir); setSortParam(p.sortParam ?? '1M')
     setEditingFilterId(null)
@@ -254,11 +353,60 @@ export default function StockScreener() {
   const newScreen = () => {
     const id = _fid++
     setFilters([{ id, field: 'marketCap', operator: 'gt', value: '', value2: '' }])
-    setUniverse(''); setSector(''); setExchange(''); setRegion('')
+    setSelectedUniverses([]); setSector(''); setExchange(''); setRegion('')
     setSortBy('marketCap'); setSortDir('desc')
     setActiveScreenId('custom-' + id)
     setEditingFilterId(id)
     reset()
+  }
+
+  useEffect(() => { localStorage.setItem(SAVED_SCREENS_KEY, JSON.stringify(screens)) }, [screens])
+
+  // Save: updates the active screen in place if it's already in the library
+  // (e.g. filters were tweaked after picking it), otherwise files the current
+  // live config as a brand-new library entry and opens its name for editing.
+  const saveScreen = () => {
+    const config = {
+      universes: selectedUniverses.length ? selectedUniverses : undefined,
+      sortBy, sortDir, sortParam: sortBy === 'priceChange' ? sortParam : undefined,
+      filters: filters.filter(f => f.value !== '').map(f => ({ field: f.field, operator: f.operator, value: f.value, param: f.param })),
+    }
+    const existing = screens.find(s => s.id === activeScreenId)
+    if (existing) {
+      setScreens(prev => prev.map(s => s.id === activeScreenId ? { ...s, ...config } : s))
+      return
+    }
+    const names = new Set(screens.map(s => s.name))
+    let name = 'New Screen'
+    let n = 2
+    while (names.has(name)) name = `New Screen ${n++}`
+    const id = 'screen-' + Date.now().toString(36)
+    setScreens(prev => [...prev, { id, name, desc: '', ...config }])
+    setActiveScreenId(id)
+    setRenamingId(id)
+    setRenameText(name)
+  }
+  const startRename = (s: Preset) => { setRenamingId(s.id); setRenameText(s.name) }
+  const commitRename = () => {
+    if (renamingId) setScreens(prev => prev.map(s => s.id === renamingId ? { ...s, name: renameText.trim() || s.name } : s))
+    setRenamingId(null)
+  }
+  const deleteScreen = (id: string) => {
+    setScreens(prev => {
+      const next = prev.filter(s => s.id !== id)
+      if (activeScreenId === id && next.length) applyPreset(next[0])
+      return next
+    })
+  }
+  const moveScreen = (id: string, dir: -1 | 1) => {
+    setScreens(prev => {
+      const i = prev.findIndex(s => s.id === id)
+      const j = i + dir
+      if (i < 0 || j < 0 || j >= prev.length) return prev
+      const next = [...prev]
+      ;[next[i], next[j]] = [next[j], next[i]]
+      return next
+    })
   }
 
   const addFilter = () => {
@@ -334,7 +482,7 @@ export default function StockScreener() {
     return { matches: data?.total ?? rows.length, avgPE: mean(col('peRatio').filter(v => v > 0)), medRev: median(col('revenueGrowth')), avgOp: mean(col('operatingMargin')), medMc: median(col('marketCap')), mix }
   }, [data])
 
-  const activePreset = PRESETS.find(p => p.id === activeScreenId)
+  const activePreset = screens.find(p => p.id === activeScreenId)
   const sortColLabel = sortBy === 'priceChange' ? `${sortParam} price change` : (TABLE_COLS.find(c => c.key === sortBy)?.label ?? sortBy)
   const renderCols = TABLE_COLS.filter(c => visibleCols.has(c.key as string))
   const gridTemplate = `minmax(190px,1.5fr) ${renderCols.map(c => c.w).join(' ')}`
@@ -343,7 +491,9 @@ export default function StockScreener() {
   // results pane is narrow (e.g. the app nav rail is expanded).
   const tableMinWidth = 48 + 190 + renderCols.reduce((s, c) => s + parseInt(c.w, 10), 0)
   const rowPad = density === 'compact' ? 7 : 11
-  const universeLabel = universes.find(u => u.value === universe)?.label ?? 'All'
+  const universeLabel = selectedUniverses.length === 0 ? (universes.find(u => !u.value)?.label ?? 'All')
+    : selectedUniverses.length === 1 ? (universes.find(u => u.value === selectedUniverses[0])?.label ?? selectedUniverses[0])
+    : `${selectedUniverses.length} universes`
 
   const focus = (e: React.FocusEvent<HTMLElement>) => ((e.target as HTMLElement).style.borderColor = C.gold)
   const blur  = (e: React.FocusEvent<HTMLElement>) => ((e.target as HTMLElement).style.borderColor = 'var(--theme-border, rgba(255,255,255,0.13))')
@@ -389,7 +539,7 @@ export default function StockScreener() {
             {railCollapsed ? (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px 0', gap: 14, height: '100%' }}>
                 <span onClick={() => setRailCollapsed(false)} title="Expand library" style={{ ...railBtn, width: 30, height: 30, border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)', color: C.gold, fontSize: 14 }}>»</span>
-                <span style={{ fontFamily: C.mono, fontSize: 14, fontWeight: 700, color: C.gold }}>{PRESETS.length}</span>
+                <span style={{ fontFamily: C.mono, fontSize: 14, fontWeight: 700, color: C.gold }}>{screens.length}</span>
                 <span style={{ fontFamily: C.sans, fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.muted }}>Saved</span>
               </div>
             ) : (
@@ -399,22 +549,42 @@ export default function StockScreener() {
                   <span onClick={() => setRailCollapsed(true)} title="Collapse library" style={{ ...railBtn, width: 24, height: 24, border: '1px solid var(--theme-border, rgba(255,255,255,0.1))', color: C.muted, fontSize: 14 }}>«</span>
                 </div>
                 <div style={{ overflowY: 'auto', flex: 1 }}>
-                  {PRESETS.map(p => {
+                  {screens.map((p, screenIdx) => {
                     const on = p.id === activeScreenId
+                    const renaming = renamingId === p.id
+                    const actionBtn: React.CSSProperties = { background: 'none', border: 'none', cursor: 'pointer', fontFamily: C.sans, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.04em', color: C.dim, padding: 0 }
                     return (
                       <div key={p.id} className="ft-screen-row" onClick={() => applyPreset(p)}
                         style={{ position: 'relative', padding: '11px 16px 11px 18px', background: on ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 6%, transparent)' : 'transparent', borderBottom: '1px solid var(--theme-border-faint, rgba(255,255,255,0.045))', cursor: 'pointer' }}>
                         <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: on ? C.gold : 'transparent' }} />
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ fontFamily: C.sans, fontSize: 12.5, fontWeight: 600, color: on ? C.emph : 'var(--theme-text-muted, #aebdd4)' }}>{p.name}</span>
+                          {renaming ? (
+                            <input autoFocus value={renameText} onClick={e => e.stopPropagation()}
+                              onChange={e => setRenameText(e.target.value)}
+                              onBlur={commitRename}
+                              onKeyDown={e => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setRenamingId(null) }}
+                              style={{ ...INPUT, fontSize: 12.5, fontWeight: 600, padding: '2px 5px' }} />
+                          ) : (
+                            <span style={{ fontFamily: C.sans, fontSize: 12.5, fontWeight: 600, color: on ? C.emph : 'var(--theme-text-muted, #aebdd4)' }}>{p.name}</span>
+                          )}
                           <span style={{ marginLeft: 'auto', fontFamily: C.mono, fontSize: 11, color: on ? C.gold : C.dim }}>{on && data ? data.total : ''}</span>
                         </div>
                         <div style={{ fontFamily: C.sans, fontSize: 9.5, color: C.dim, marginTop: 2 }}>{p.desc}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 5 }}>
+                          <span onClick={e => { e.stopPropagation(); moveScreen(p.id, -1) }} title="Move up"
+                            style={{ ...actionBtn, opacity: screenIdx === 0 ? 0.3 : 1, cursor: screenIdx === 0 ? 'default' : 'pointer' }}>↑</span>
+                          <span onClick={e => { e.stopPropagation(); moveScreen(p.id, 1) }} title="Move down"
+                            style={{ ...actionBtn, opacity: screenIdx === screens.length - 1 ? 0.3 : 1, cursor: screenIdx === screens.length - 1 ? 'default' : 'pointer' }}>↓</span>
+                          <span onClick={e => { e.stopPropagation(); startRename(p) }} style={actionBtn}>RENAME</span>
+                          <span onClick={e => { e.stopPropagation(); deleteScreen(p.id) }} style={{ ...actionBtn, color: 'var(--theme-negative)' }}>DEL</span>
+                        </div>
                       </div>
                     )
                   })}
-                  <div style={{ padding: '13px 18px' }}>
-                    <span onClick={newScreen} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: C.sans, fontSize: 11, padding: '7px 12px', border: '1px dashed var(--theme-border, rgba(255,255,255,0.16))', color: 'var(--theme-text-muted, #9fb0c7)', cursor: 'pointer' }}>+ New Screen</span>
+                  <div style={{ padding: '13px 18px', display: 'flex', gap: 8 }}>
+                    <span onClick={newScreen} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: C.sans, fontSize: 11, padding: '7px 12px', border: '1px dashed var(--theme-border, rgba(255,255,255,0.16))', color: 'var(--theme-text-muted, #9fb0c7)', cursor: 'pointer' }}>+ New Screen</span>
+                    <span onClick={saveScreen} title="Save the current filters/sort/universe as a screen"
+                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: C.sans, fontSize: 11, fontWeight: 600, padding: '7px 12px', border: `1px solid ${C.gold}`, color: C.gold, cursor: 'pointer' }}>Save</span>
                   </div>
                 </div>
                 <div style={{ padding: '13px 18px', borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', flex: 'none' }}>
@@ -430,10 +600,11 @@ export default function StockScreener() {
             {/* screen header + scope + filters */}
             <div style={{ padding: isMobile ? 12 : '16px 24px', borderBottom: `1px solid ${C.border}`, flex: 'none' }}>
               {isMobile && <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                <select value={activeScreenId} onChange={e => { const preset = PRESETS.find(item => item.id === e.target.value); if (preset) applyPreset(preset) }} style={{ ...SELECT, flex: 1, minWidth: 0 }} aria-label="Saved screen">
-                  {PRESETS.map(preset => <option key={preset.id} value={preset.id}>{preset.name}</option>)}
+                <select value={activeScreenId} onChange={e => { const preset = screens.find(item => item.id === e.target.value); if (preset) applyPreset(preset) }} style={{ ...SELECT, flex: 1, minWidth: 0 }} aria-label="Saved screen">
+                  {screens.map(preset => <option key={preset.id} value={preset.id}>{preset.name}</option>)}
                 </select>
                 <button onClick={newScreen} style={{ flex: 'none', padding: '7px 11px', background: 'none', border: `1px solid ${C.border}`, color: C.gold, fontFamily: C.sans, fontSize: 10, cursor: 'pointer' }}>New</button>
+                <button onClick={saveScreen} style={{ flex: 'none', padding: '7px 11px', background: 'none', border: `1px solid ${C.gold}`, color: C.gold, fontFamily: C.sans, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>Save</button>
               </div>}
               <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'flex-start', justifyContent: 'space-between', gap: isMobile ? 10 : 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
@@ -486,9 +657,7 @@ export default function StockScreener() {
               {/* scope selectors */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
                 <span style={{ ...EB, marginRight: 2 }}>Scope</span>
-                <select value={universe} onChange={e => setUniverse(e.target.value)} style={scopeSelect} title="Universe">
-                  {universeGroups.map(g => <optgroup key={g} label={g}>{universes.filter(u => u.group === g).map(u => <option key={u.value || 'all'} value={u.value}>{u.label}</option>)}</optgroup>)}
-                </select>
+                <UniverseMultiSelect options={universes} groups={universeGroups} selected={selectedUniverses} onChange={setSelectedUniverses} triggerStyle={scopeSelect} />
                 <select value={sector} onChange={e => setSector(e.target.value)} style={scopeSelect} title="Sector">
                   <option value="">All Sectors</option>{sectors.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
@@ -660,15 +829,15 @@ export default function StockScreener() {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 24px', borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', flex: 'none' }}>
                   <span style={{ fontFamily: C.sans, fontSize: 10, color: C.dim }}>Showing {displayRows.length} of {data.total} matches</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                    <span onClick={() => exportCsv(displayRows, renderCols)} style={{ fontFamily: C.sans, fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', color: 'var(--theme-text-muted, #9fb0c7)', cursor: 'pointer' }}>Export CSV →</span>
+                    <span onClick={() => exportCsv(displayRows, renderCols)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: C.sans, fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', color: 'var(--theme-text-muted, #9fb0c7)', cursor: 'pointer' }}>Export CSV <ArrowRight size={11} /></span>
                     <span onClick={sendToAlgoBuilder} title={`Send ${displayRows.length} ticker${displayRows.length === 1 ? '' : 's'} to the Algo Strategy Builder as a portfolio universe`}
-                      style={{ fontFamily: C.sans, fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', color: 'var(--theme-text-muted, #9fb0c7)', cursor: displayRows.length ? 'pointer' : 'default', opacity: displayRows.length ? 1 : 0.4 }}>
-                      Send to Algo Builder →
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: C.sans, fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', color: 'var(--theme-text-muted, #9fb0c7)', cursor: displayRows.length ? 'pointer' : 'default', opacity: displayRows.length ? 1 : 0.4 }}>
+                      Send to Algo Builder <ArrowRight size={11} />
                     </span>
                     <div style={{ position: 'relative' }}>
                       <span onClick={() => { setPmResult(null); setPmPickerOpen(v => !v) }}
-                        style={{ fontFamily: C.sans, fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', color: pmPickerOpen ? C.gold : 'var(--theme-text-muted, #9fb0c7)', cursor: displayRows.length ? 'pointer' : 'default', opacity: displayRows.length ? 1 : 0.4 }}>
-                        Add to Portfolio ▾
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: C.sans, fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', color: pmPickerOpen ? C.gold : 'var(--theme-text-muted, #9fb0c7)', cursor: displayRows.length ? 'pointer' : 'default', opacity: displayRows.length ? 1 : 0.4 }}>
+                        Add to Portfolio <ChevronDown size={11} />
                       </span>
                       {pmPickerOpen && (
                         <div style={{ position: 'absolute', bottom: '100%', right: 0, marginBottom: 8, width: 220, background: C.surface, border: `1px solid ${C.border}`, padding: 10, zIndex: 30, display: 'flex', flexDirection: 'column', gap: 8 }}>
