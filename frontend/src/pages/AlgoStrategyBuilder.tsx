@@ -71,6 +71,8 @@ export type AlgoOptionsMonteCarloHandoff = {
   positionSizePct: number
   leverage: number
   effectiveAnnualRate: number
+  strategyName?: string
+  strategyRules?: { buy: any; sell: any }
 }
 
 // The Screener owns SCREENER_ALGO_HANDOFF_KEY/ScreenerAlgoHandoff (it's the
@@ -109,25 +111,43 @@ const comboNetSide = (legs: ComboLeg[]): 'long' | 'short' | 'mixed' => {
 // Portfolio Backtester's combo holdings.
 // A plain controlled number input can't be cleared to type a fresh value —
 // the moment the field goes empty, onChange fires with '', the handler falls
-// back to a default, and the forced re-render snaps the digits right back in
-// before the user can type a replacement. This tracks its own text so the
-// field can sit empty while typing; it only commits (and clamps) a real
-// number up to the parent, and only re-syncs to an empty/invalid field on
-// blur (so an external change — e.g. loading a preset — still shows up).
+// back to a default/min, and the forced re-render snaps digits back before the
+// user can type a replacement. Local text state lets the field sit empty while
+// typing; clamp + commit only on blur (or Enter). While focused, external
+// value changes do not overwrite in-progress edits.
 const _numInputDefaultStyle: React.CSSProperties = { background: 'var(--theme-bg, #0a1628)', border: '1px solid var(--theme-border, rgba(255,255,255,0.14))', color: 'var(--theme-text, #d7e3fc)', fontFamily: 'var(--theme-mono)', fontSize: 10, padding: '4px 5px', outline: 'none', width: '100%', boxSizing: 'border-box' }
 export function NumInput({ value, min, max, onCommit, title, style }: {
   value: number; min: number; max?: number; onCommit: (v: number) => void; title?: string; style?: React.CSSProperties
 }) {
   const [text, setText] = useState(String(value))
-  useEffect(() => { setText(String(value)) }, [value])
+  const focusedRef = useRef(false)
+  useEffect(() => {
+    if (!focusedRef.current) setText(String(value))
+  }, [value])
+
+  const commit = () => {
+    const raw = text.trim()
+    const n = Number(raw)
+    if (raw === '' || !Number.isFinite(n)) {
+      setText(String(value))
+      return
+    }
+    const clamped = Math.min(max ?? Infinity, Math.max(min, n))
+    onCommit(clamped)
+    setText(String(clamped))
+  }
+
   return (
-    <input type="number" step={1} min={min} max={max} title={title} value={text}
-      onChange={e => {
-        setText(e.target.value)
-        const n = Number(e.target.value)
-        if (e.target.value.trim() !== '' && Number.isFinite(n)) onCommit(Math.min(max ?? Infinity, Math.max(min, n)))
+    <input type="number" step="any" min={min} max={max} title={title} value={text}
+      onFocus={() => { focusedRef.current = true }}
+      onChange={e => setText(e.target.value)}
+      onBlur={() => {
+        focusedRef.current = false
+        commit()
       }}
-      onBlur={() => setText(String(value))}
+      onKeyDown={e => {
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+      }}
       style={style ?? _numInputDefaultStyle} />
   )
 }
@@ -1221,6 +1241,8 @@ export function AlgoStrategyBuilderContent() {
         positionSizePct: portfolioTradeSize,
         leverage: portfolioLeverage,
         effectiveAnnualRate,
+        strategyName: activeDef.name,
+        strategyRules: { buy: activeDef.buy, sell: activeDef.sell },
       }
       localStorage.removeItem(ALGO_MC_HANDOFF_KEY)
       localStorage.setItem(ALGO_MC_OPTIONS_HANDOFF_KEY, JSON.stringify(handoff))
@@ -1280,6 +1302,8 @@ export function AlgoStrategyBuilderContent() {
         positionSizePct: r.sizingPct || 100,
         leverage: r.leverage || 1,
         effectiveAnnualRate: r.effectiveAnnualRate || 0,
+        strategyName: activeDef?.name || undefined,
+        strategyRules: activeDef ? { buy: activeDef.buy, sell: activeDef.sell } : undefined,
       }
       localStorage.removeItem(ALGO_MC_HANDOFF_KEY)
       localStorage.setItem(ALGO_MC_OPTIONS_HANDOFF_KEY, JSON.stringify(handoff))
@@ -1460,6 +1484,8 @@ export function AlgoStrategyBuilderContent() {
   const [selectedPortfolioTicker, setSelectedPortfolioTicker] = useState<string | null>(null)
   const [tradeEventFilter, setTradeEventFilter] = useState<'all' | 'buy' | 'sell' | 'expired'>('all')
   const [pfCollapsed, setPfCollapsed] = useState(false)
+  // Collapse the per-ticker attribution grid under portfolio backtest results
+  const [tickerGridCollapsed, setTickerGridCollapsed] = useState(false)
   const askAiToImproveBacktest = () => {
     if (!mR) return
     const traded = mode === 'portfolio'
@@ -1628,30 +1654,58 @@ export function AlgoStrategyBuilderContent() {
           })()}
 
           {mode === 'portfolio' && pf && (
-            <div style={{ ...STRIP, flexWrap: 'wrap' }}>
-              {pf.positions.map((p, i) => {
-                const comboSide = p.instrument === 'combo'
-                  ? comboNetSide((positions.find(x => x.instMode === 'combo' && x.ticker.toUpperCase() === p.ticker.toUpperCase())?.comboLegs) ?? [])
-                  : null
-                const badgeLabel = p.instrument === 'option' ? (p.opt_type ? p.opt_type.toUpperCase() : 'OPT')
-                  : p.instrument === 'combo' ? (comboSide === 'mixed' ? 'MIXED COMBO' : comboSide ? `${comboSide.toUpperCase()} COMBO` : 'COMBO')
-                  : 'SHR'
-                const badgeColor = p.instrument === 'combo' ? (comboSide === 'short' ? NEG : comboSide === 'long' ? POS : 'var(--theme-secondary, #8099b0)')
-                  : (p.side === 'short' ? NEG : POS)
-                const isSelected = selectedPortfolioTicker === p.ticker.toUpperCase()
-                return (
-                <button key={i} onClick={() => setSelectedPortfolioTicker(current => current === p.ticker.toUpperCase() ? null : p.ticker.toUpperCase())}
-                  title={isSelected ? `Show every position's trades` : `Show only ${p.ticker}'s trades on the equity curve`}
-                  style={{ flex: '1 1 140px', minWidth: 140, padding: '6px 10px', border: `1px solid ${isSelected ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.06))'}`, background: isSelected ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 12%, transparent)' : 'transparent', cursor: 'pointer', textAlign: 'left' }}>
-                  <div style={{ fontSize: 10, fontFamily: 'var(--theme-mono)', fontWeight: 700, color: 'var(--theme-text, #d7e3fc)' }}>
-                    {p.ticker} <span style={{ fontSize: 8, color: badgeColor, letterSpacing: '0.06em' }}>{p.instrument === 'combo' ? badgeLabel : `${p.side.toUpperCase()} ${badgeLabel}`}</span>
-                  </div>
-                  <div style={{ fontSize: 9, fontFamily: 'var(--theme-mono)', color: 'var(--theme-secondary, #8099b0)', marginTop: 2 }}>
-                    {p.weight_pct}% / trade · <span style={{ color: p.return_pct >= 0 ? POS : NEG }}>{p.return_pct >= 0 ? '+' : ''}{p.return_pct}%</span> · {p.num_trades} trades
-                  </div>
-                </button>
-                )
-              })}
+            <div style={{ border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', marginTop: 4 }}>
+              <button
+                type="button"
+                onClick={() => setTickerGridCollapsed(c => !c)}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+                  padding: '8px 12px', background: 'var(--theme-surface, #0d1826)', border: 'none', cursor: 'pointer',
+                  borderBottom: tickerGridCollapsed ? 'none' : '1px solid var(--theme-border, rgba(255,255,255,0.06))',
+                }}
+              >
+                <span style={{
+                  fontFamily: 'var(--theme-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em',
+                  textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)',
+                }}>
+                  Positions · {pf.positions.length} tickers · {pf.positions.reduce((s, p) => s + (p.num_trades || 0), 0)} trades
+                  {selectedPortfolioTicker ? ` · filter ${selectedPortfolioTicker}` : ''}
+                </span>
+                <span style={{
+                  fontFamily: 'var(--theme-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
+                  color: 'var(--theme-secondary, #8099b0)', display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  {tickerGridCollapsed ? 'Expand' : 'Collapse'}
+                  {tickerGridCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                </span>
+              </button>
+              {!tickerGridCollapsed && (
+                <div style={{ ...STRIP, flexWrap: 'wrap', border: 'none' }}>
+                  {pf.positions.map((p, i) => {
+                    const comboSide = p.instrument === 'combo'
+                      ? comboNetSide((positions.find(x => x.instMode === 'combo' && x.ticker.toUpperCase() === p.ticker.toUpperCase())?.comboLegs) ?? [])
+                      : null
+                    const badgeLabel = p.instrument === 'option' ? (p.opt_type ? p.opt_type.toUpperCase() : 'OPT')
+                      : p.instrument === 'combo' ? (comboSide === 'mixed' ? 'MIXED COMBO' : comboSide ? `${comboSide.toUpperCase()} COMBO` : 'COMBO')
+                      : 'SHR'
+                    const badgeColor = p.instrument === 'combo' ? (comboSide === 'short' ? NEG : comboSide === 'long' ? POS : 'var(--theme-secondary, #8099b0)')
+                      : (p.side === 'short' ? NEG : POS)
+                    const isSelected = selectedPortfolioTicker === p.ticker.toUpperCase()
+                    return (
+                    <button key={i} onClick={() => setSelectedPortfolioTicker(current => current === p.ticker.toUpperCase() ? null : p.ticker.toUpperCase())}
+                      title={isSelected ? `Show every position's trades` : `Show only ${p.ticker}'s trades on the equity curve`}
+                      style={{ flex: '1 1 140px', minWidth: 140, padding: '6px 10px', border: `1px solid ${isSelected ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.06))'}`, background: isSelected ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 12%, transparent)' : 'transparent', cursor: 'pointer', textAlign: 'left' }}>
+                      <div style={{ fontSize: 10, fontFamily: 'var(--theme-mono)', fontWeight: 700, color: 'var(--theme-text, #d7e3fc)' }}>
+                        {p.ticker} <span style={{ fontSize: 8, color: badgeColor, letterSpacing: '0.06em' }}>{p.instrument === 'combo' ? badgeLabel : `${p.side.toUpperCase()} ${badgeLabel}`}</span>
+                      </div>
+                      <div style={{ fontSize: 9, fontFamily: 'var(--theme-mono)', color: 'var(--theme-secondary, #8099b0)', marginTop: 2 }}>
+                        {p.weight_pct}% / trade · <span style={{ color: p.return_pct >= 0 ? POS : NEG }}>{p.return_pct >= 0 ? '+' : ''}{p.return_pct}%</span> · {p.num_trades} trades
+                      </div>
+                    </button>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           )}
 

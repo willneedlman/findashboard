@@ -397,8 +397,8 @@ SCREENER_FIELDS = [
     # Price & Market
     {"id": "price",          "label": "Price ($)",           "group": "Price & Market"},
     {"id": "marketCap",      "label": "Market Cap ($B)",      "group": "Price & Market"},
-    {"id": "volume",         "label": "Volume",               "group": "Price & Market"},
-    {"id": "avgVolume",      "label": "Avg Volume",           "group": "Price & Market"},
+    {"id": "volume",         "label": "Volume (sh)",          "group": "Price & Market"},
+    {"id": "avgVolume",      "label": "Avg Volume (sh)",      "group": "Price & Market"},
     {"id": "beta",           "label": "Beta",                 "group": "Price & Market"},
     {"id": "priceChange",    "label": "Price Change (%)",     "group": "Price & Market", "param": "period"},
     {"id": "change52wHiPct", "label": "% Below 52W High",    "group": "Price & Market"},

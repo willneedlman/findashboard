@@ -33,6 +33,7 @@ const STRIP: React.CSSProperties = {
   background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
 }
 const POS = 'var(--theme-positive)', NEG = 'var(--theme-negative)'
+const formatPValue = (value: number | null) => value === null ? '—' : value < 0.001 ? '<0.001' : value.toFixed(3)
 
 // ── Shared sub-components ────────────────────────────────────────────────────
 
@@ -503,13 +504,25 @@ export function PortfolioTab() {
               const curve = data.strategyResult?.cumulative || data.cumulative
               const reg = quickRegression(curve.map((pt: any) => ({ x: pt.benchmark, y: pt.strategy ?? pt.portfolio })))
               if (reg.x.length < 2) return null
+              const yLabel = data.strategyResult ? 'strategy daily return' : 'portfolio daily return'
               return (
-                <PortChartPanel label={`Regression — ${data.strategyResult ? 'Strategy' : 'Portfolio'} vs ${benchmark} Daily Returns`} height={330}>
-                  <ReturnsScatter x={reg.x} y={reg.y} line={reg.line} xLabel={benchmark} yLabel={data.strategyResult ? 'strategy daily return' : 'portfolio daily return'} height={280} />
-                  <div style={{ fontSize: 9, fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em', color: 'var(--theme-secondary, #99907e)', textAlign: 'center', marginTop: 6 }}>
-                    Beta {reg.beta.toFixed(2)} · daily alpha {reg.alpha >= 0 ? '+' : ''}{(reg.alpha * 100).toFixed(3)}%
-                  </div>
-                </PortChartPanel>
+                <>
+                  {reg.observations >= 3 && (
+                    <div style={{ ...STRIP, flexWrap: 'wrap' }}>
+                      <KpiCell grow minWidth={135} label="Market Corr. (r)" value={reg.correlation.toFixed(3)} color={Math.abs(reg.correlation) < 0.35 ? POS : undefined} sub={`daily returns vs ${benchmark}`} />
+                      <KpiCell grow label="R²" value={reg.rSquared.toFixed(3)} sub="market explained" />
+                      <KpiCell grow label="Beta" value={reg.beta.toFixed(3)} sub={`p ${formatPValue(reg.betaPValue)}`} />
+                      <KpiCell grow label="Daily Alpha" value={`${reg.alpha >= 0 ? '+' : ''}${(reg.alpha * 100).toFixed(3)}%`} color={reg.alpha >= 0 ? POS : NEG} sub={`p ${formatPValue(reg.alphaPValue)}`} />
+                      <KpiCell grow label="Observations" value={String(reg.observations)} sub="daily return pairs" />
+                    </div>
+                  )}
+                  <PortChartPanel label={`Regression — ${data.strategyResult ? 'Strategy' : 'Portfolio'} vs ${benchmark} Daily Returns`} height={330}>
+                    <ReturnsScatter x={reg.x} y={reg.y} line={reg.line} xLabel={benchmark} yLabel={yLabel} height={280} />
+                    <div style={{ fontSize: 9, fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', textAlign: 'center', marginTop: 6 }}>
+                      OLS line · two-sided p-values test beta and alpha against zero
+                    </div>
+                  </PortChartPanel>
+                </>
               )
             })()}
 

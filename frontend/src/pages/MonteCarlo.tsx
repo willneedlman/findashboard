@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { AreaChart, Area, LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Legend } from 'recharts'
+import { ChevronDown, ChevronUp } from 'lucide-react'
+import { AreaChart, Area, LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Legend, ScatterChart, Scatter } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import { KpiCell } from '../components/mmCockpit'
 import { useChartColors } from '../hooks/useChartColors'
@@ -18,11 +19,14 @@ import axios from 'axios'
 import EmptyState from '../components/EmptyState'
 import PortfolioIO, { type PortfolioAsset } from '../components/PortfolioIO'
 import PMImportPicker from '../components/PMImportPicker'
-import { CASH_SYMBOL } from '../lib/pmImport'
+import { CASH_SYMBOL, readPMPortfolios } from '../lib/pmImport'
+import { screenerFilterToApi } from '../lib/format'
 import ConfigHeader, { Field, NumberInput, paramInput, RebalanceSelect, type RebalanceFreq } from '../components/portfolio/ConfigHeader'
 import { usePortfolio, type PortfolioHolding } from '../contexts/PortfolioContext'
 import { PRESETS, PRESET_DESC, PRESET_GROUPS } from './strategy-builder/shared'
-import { ALGO_MC_HANDOFF_KEY, ALGO_MC_OPTIONS_HANDOFF_KEY, legsToCombo, ComboLegEditor, mkComboLeg, MAX_COMBO_LEGS, type AlgoMonteCarloHandoff, type AlgoOptionsMonteCarloHandoff, type ComboLeg } from './AlgoStrategyBuilder'
+import { ALGO_STRATEGIES, ALGO_DEFAULT_PARAMS, ALGO_PARAM_LABELS } from './portfolio-backtester/shared'
+import { ALGO_MC_HANDOFF_KEY, ALGO_MC_OPTIONS_HANDOFF_KEY, legsToCombo, ComboLegEditor, mkComboLeg, MAX_COMBO_LEGS, type AlgoMonteCarloHandoff, type AlgoOptionsMonteCarloHandoff, type ComboLeg, NumInput } from './AlgoStrategyBuilder'
+import { runComboMonteCarloJob } from '../lib/mcJobClient'
 // ── GBM math ────────────────────────────────────────────────────────────────
 
 function runGBM(S0: number, mu: number, sigma: number, T: number, nSims: number) {
@@ -178,6 +182,15 @@ const MODEL_LABELS: Record<SimModel, string> = {
   bootstrap: 'Block bootstrap (historical)',
 }
 
+/** Options-strategy MC path generators (server-side). */
+type OptionsPathModel = 'gbm' | 'student_t' | 'bootstrap' | 'gbm_rn'
+const OPTIONS_PATH_MODELS: { value: OptionsPathModel; label: string; hint: string }[] = [
+  { value: 'gbm', label: 'GBM (physical)', hint: 'Lognormal paths, σ = max(ATM IV, HV). Multi-name correlated when possible.' },
+  { value: 'student_t', label: 'Student-t (fat tails)', hint: 'Same drift/vol as GBM with fatter crash tails (df=5).' },
+  { value: 'bootstrap', label: 'Block bootstrap', hint: 'Resamples each name’s historical log-return blocks (vol clustering + real tails).' },
+  { value: 'gbm_rn', label: 'GBM (risk-neutral)', hint: 'Classic options RN measure: drift ≈ r, vol = ATM IV only.' },
+]
+
 function pathPercentiles(paths: number[][], day: number) {
   const vals = paths.map(p => p[day]).sort((a, b) => a - b)
   const n = vals.length
@@ -278,6 +291,53 @@ function MCModeToggle({ mode, onChange }: { mode: 'portfolio' | 'options-strateg
   )
 }
 
+interface DistSummary {
+  mean: number | null; std: number | null; min: number | null
+  p5: number | null; p25: number | null; p50: number | null
+  p75: number | null; p95: number | null; max: number | null
+  prob_positive: number | null
+}
+
+interface MarketRegressionSummary {
+  correlation: number
+  r_squared: number
+  beta: number
+  beta_p: number | null
+  alpha_daily: number
+  alpha_p: number | null
+  observations: number
+}
+
+interface MarketRegression {
+  benchmark: string
+  n_paths: number
+  n_obs: number
+  n_failed: number
+  /** Same strip as algo backtester: corr / R² / beta / daily α / n */
+  summary?: MarketRegressionSummary
+  alpha_ann_pct: DistSummary | null
+  beta: DistSummary | null
+  r_squared: DistSummary | null
+  /** Daily returns scatter: x=market, y=strategy (+ OLS line) */
+  scatter: {
+    x?: number[]
+    y?: number[]
+    line?: { x: number; y: number }[]
+    /** legacy path-coeff scatter (pre-summary) */
+    beta?: number[]
+    alpha_ann_pct?: number[]
+    r_squared?: number[]
+  }
+  market_bands?: { day: number; p5: number; p50: number; p95: number }[]
+  calibration?: { mu_annual: number; sigma_annual: number }
+  error?: string
+}
+
+function formatPValue(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(Number(value))) return '—'
+  return Number(value) < 0.001 ? '<0.001' : Number(value).toFixed(3)
+}
+
 interface ComboMcResult {
   ticker: string | null; tickers: string[] | null; is_basket: boolean
   dropped_tickers: { ticker: string; reason: string }[] | null
@@ -288,9 +348,13 @@ interface ComboMcResult {
   max_profit: number | null; max_loss: number | null
   prob_profit: number
   percentiles: { p5: number; p25: number; p50: number; p75: number; p95: number }
+  percentiles_equity?: { p5: number; p25: number; p50: number; p75: number; p95: number }
   payoff_curve: { price: number; pnl: number }[]
-  histogram: number[]
+  /** Hold-to-DTE: raw terminal $ P&L list. Strategy mode: binned {price,count}[]. */
+  histogram: number[] | { price: number; count: number }[]
   n_sims: number
+  horizon_days?: number
+  path_model?: string
   has_exit_rule: boolean
   max_hold_days: number | null
   avg_hold_days: number
@@ -299,198 +363,779 @@ interface ComboMcResult {
   pct_held_to_exit_cap: number
   initial_capital: number; position_size: number; leverage: number; effective_annual_rate: number
   interest_paid_p50: number
+  pnl_bands?: { day: number; p5: number; p25: number; p50: number; p75: number; p95: number }[]
+  /** When "equity_100", pnl_bands are already portfolio equity on a $100 start. */
+  bands_unit?: 'pnl' | 'equity_100'
+  strategy_metrics?: {
+    ann_return: number
+    max_drawdown: number
+    sharpe: number
+    win_rate: number
+    num_trades: number
+  }
+  market_regression?: MarketRegression
+  diagnostics?: {
+    median_trades: number
+    mean_trades?: number
+    pct_paths_with_trades: number
+    warning: string | null
+    path_cache?: { hits: number; total: number; all_cached?: boolean }
+  }
+}
+
+function fmtNum(v: number | null | undefined, digits = 1, fallback = '—'): string {
+  if (v == null || !Number.isFinite(Number(v))) return fallback
+  return Number(v).toFixed(digits)
+}
+
+function fmtPct(v: number | null | undefined, digits = 1): string {
+  if (v == null || !Number.isFinite(Number(v))) return '—'
+  return `${Number(v).toFixed(digits)}%`
+}
+
+function readAllScreens(): { id: string; name: string; filters: any[]; sortBy: string; sortDir: 'asc' | 'desc' }[] {
+  const PRESETS = [
+    { id: 'liquid-large-caps', name: 'Liquid Large Caps', sortBy: 'marketCap', sortDir: 'desc' as const,
+      filters: [{ field: 'marketCap', operator: 'gt', value: 10 }] },
+    { id: 'mega-cap-quality', name: 'Mega-Cap Quality', sortBy: 'marketCap', sortDir: 'desc' as const,
+      filters: [{ field: 'marketCap', operator: 'gt', value: 100 }, { field: 'operatingMargin', operator: 'gt', value: 20 }, { field: 'roe', operator: 'gt', value: 15 }] },
+    { id: 'deep-value', name: 'Deep Value', sortBy: 'peRatio', sortDir: 'asc' as const,
+      filters: [{ field: 'peRatio', operator: 'gt', value: 0 }, { field: 'peRatio', operator: 'lt', value: 15 }, { field: 'pbRatio', operator: 'lt', value: 3 }] },
+    { id: 'high-growth', name: 'High Growth', sortBy: 'revenueGrowth', sortDir: 'desc' as const,
+      filters: [{ field: 'revenueGrowth', operator: 'gt', value: 25 }] },
+    { id: 'dividend-growers', name: 'Dividend Growers', sortBy: 'dividendYield', sortDir: 'desc' as const,
+      filters: [{ field: 'dividendYield', operator: 'gt', value: 2 }, { field: 'netMargin', operator: 'gt', value: 5 }] },
+    { id: 'momentum-leaders', name: 'Momentum Leaders', sortBy: 'priceChange', sortDir: 'desc' as const,
+      filters: [{ field: 'change52wHiPct', operator: 'gt', value: -5 }, { field: 'priceChange', operator: 'gt', value: 10, param: '3M' }] },
+    { id: 'quality-at-a-price', name: 'Quality at a Price', sortBy: 'roe', sortDir: 'desc' as const,
+      filters: [{ field: 'roe', operator: 'gt', value: 15 }, { field: 'peRatio', operator: 'lt', value: 25 }] },
+  ]
+  try {
+    const raw = localStorage.getItem('fdb_screener_saved_screens_v1')
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed) && parsed.length) {
+        return parsed.map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          filters: Array.isArray(s.filters) ? s.filters : [],
+          sortBy: s.sortBy || 'marketCap',
+          sortDir: s.sortDir || 'desc'
+        }))
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return PRESETS
 }
 
 function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: () => void; handoff: AlgoOptionsMonteCarloHandoff | null }) {
   const cc = useChartColors()
-  const [ticker, setTicker] = useState(handoff?.ticker ?? 'AAPL')
+  const { holdings } = usePortfolio()
+  const [collapsed, setCollapsed] = useState(false)
+
+  const [tickers, setTickers] = useState<string[]>(() =>
+    handoff?.tickers && handoff.tickers.length > 1 ? handoff.tickers : [handoff?.ticker ?? 'AAPL']
+  )
+  const [tickerInput, setTickerInput] = useState<string>(() =>
+    handoff?.tickers && handoff.tickers.length > 1 ? handoff.tickers.join(', ') : (handoff?.ticker ?? 'AAPL')
+  )
   const [comboPreset, setComboPreset] = useState('Short Straddle')
-  // A structure imported from the Algo Strategy Builder carries its exact
-  // legs (which may not match any named preset — a custom butterfly, say),
-  // so it bypasses the preset dropdown entirely rather than trying to find
-  // the closest-matching preset name and silently drifting from the original.
-  // Still fully editable via the same structured leg-card editor the Algo
-  // Strategy Builder uses (ComboLegEditor) — not a flattened, read-only
-  // text summary.
-  const [legsOverride, setLegsOverride] = useState<ComboLeg[] | null>(handoff?.legs ?? null)
-  const updateOverrideLeg = (i: number, patch: Partial<ComboLeg>) =>
-    setLegsOverride(legs => legs ? legs.map((leg, j) => j === i ? { ...leg, ...patch } : leg) : legs)
-  const addOverrideLeg = () =>
-    setLegsOverride(legs => legs && legs.length < MAX_COMBO_LEGS ? [...legs, mkComboLeg()] : legs)
-  const removeOverrideLeg = (i: number) =>
-    setLegsOverride(legs => legs && legs.length > 1 ? legs.filter((_, j) => j !== i) : legs)
-  // A universe strategy imported from the Algo Strategy Builder (one shared
-  // combo cloned across many symbols) carries the full ticker list here —
-  // basket mode applies `legsOverride` to every one of these instead of the
-  // single `ticker` field, equal-weighted, summed into one P&L distribution.
-  const [tickersOverride] = useState<string[] | null>(handoff?.tickers && handoff.tickers.length > 1 ? handoff.tickers : null)
+
+  const pmPortfolios = useMemo(() => readPMPortfolios(), [])
+  const allScreens = useMemo(() => readAllScreens(), [])
+  const [screenerLoading, setScreenerLoading] = useState(false)
+  const [screenerError, setSenerError] = useState<string | null>(null)
+
+  const handleTickerInputChange = (val: string) => {
+    setTickerInput(val)
+    const list = val.split(',')
+      .map(t => t.trim().toUpperCase())
+      .filter(t => t.length > 0)
+    setTickers(list.length > 0 ? list : ['AAPL'])
+  }
+
+  const handlePortfolioSelect = (portId: string) => {
+    if (!portId) return
+    const port = pmPortfolios.find(p => p.id === portId)
+    if (!port) return
+    const CASH_SYMBOL = 'USD'
+    const list = port.holdings
+      .map(h => h.ticker.trim().toUpperCase())
+      .filter(t => t && t !== CASH_SYMBOL && t !== 'CASH')
+    if (list.length > 0) {
+      setTickers(list)
+      setTickerInput(list.join(', '))
+    }
+  }
+
+  const handleScreenSelect = async (screenId: string) => {
+    if (!screenId) return
+    const screen = allScreens.find(s => s.id === screenId)
+    if (!screen) return
+
+    setScreenerLoading(true)
+    setSenerError(null)
+    try {
+      const { data } = await axios.post('/api/screener/run', {
+        filters: screen.filters.map((f: { field: string; operator: string; value: string | number; value2?: string | number | null; param?: string | null }) => ({
+          ...f,
+          value: screenerFilterToApi(f.field, String(f.value)) ?? Number(f.value),
+          value2: f.value2 != null && f.value2 !== '' ? (screenerFilterToApi(f.field, String(f.value2)) ?? Number(f.value2)) : null,
+        })),
+        sector: null,
+        exchange: null,
+        sort_by: screen.sortBy,
+        sort_dir: screen.sortDir,
+        limit: 40,
+      })
+      const results = data?.results ?? []
+      const list = results
+        .map((r: any) => r.ticker.trim().toUpperCase())
+        .filter((t: string) => t && t !== 'CASH')
+      if (list.length > 0) {
+        setTickers(list)
+        setTickerInput(list.join(', '))
+      } else {
+        setSenerError('No symbols matched in screen.')
+      }
+    } catch (err: any) {
+      setSenerError(err?.message ?? 'Failed to run screen.')
+    } finally {
+      setScreenerLoading(false)
+    }
+  }
+
+  // Unified legs state. If a preset is loaded initially, fetch its legs.
+  const [legs, setLegs] = useState<ComboLeg[]>(() =>
+    handoff?.legs ?? legsToCombo(PRESETS[comboPreset] ?? [])
+  )
+
+  const updateLeg = (i: number, patch: Partial<ComboLeg>) =>
+    setLegs(prev => prev.map((leg, j) => j === i ? { ...leg, ...patch } : leg))
+  const addLeg = () =>
+    setLegs(prev => prev.length < MAX_COMBO_LEGS ? [...prev, mkComboLeg()] : prev)
+  const removeLeg = (i: number) =>
+    setLegs(prev => prev.length > 1 ? prev.filter((_, j) => j !== i) : prev)
+
   const [comboDte, setComboDte] = useState(handoff?.dte ?? 30)
-  const [nSims, setNSims] = useState(3000)
-  // Early exit — % of the entry credit/debit magnitude, the standard "close at
-  // 50% of max profit" convention. Blank = no such exit (hold to DTE or hold cap).
+  // Default low for interactive use; large universe/horizon jobs scale up intentionally.
+  const [nSims, setNSims] = useState(500)
+
   const [tpPct, setTpPct] = useState(handoff?.takeProfitPct ? String(handoff.takeProfitPct) : '')
   const [slPct, setSlPct] = useState(handoff?.stopLossPct ? String(handoff.stopLossPct) : '')
   const [maxHoldDays, setMaxHoldDays] = useState(handoff?.maxHoldDays ? String(handoff.maxHoldDays) : '')
-  // Sizing — notional-based, same convention as the Algo Strategy Builder's
-  // combo backtest: leg qty ratios stay fixed, absolute size is normalized to
-  // positionSize% of capital times leverage, with EAR charged on the portion
-  // borrowed beyond capital over each path's own holding period.
-  const [positionSize, setPositionSize] = useState(String(handoff?.positionSizePct ?? 100))
-  const [leverage, setLeverage] = useState(String(handoff?.leverage ?? 1))
-  const [borrowRate, setBorrowRate] = useState(String(handoff?.effectiveAnnualRate ?? 0))
+
+  const [positionSize, setPositionSize] = useState(String(handoff?.positionSizePct ?? 8)) // Default to 8% in the screenshot
+  const [leverage, setLeverage] = useState(String(handoff?.leverage ?? 3)) // Default to 3x in the screenshot
+  const [borrowRate, setBorrowRate] = useState(String(handoff?.effectiveAnnualRate ?? 3.5)) // Default to 3.5% in the screenshot
+
+  const [strategy, setStrategy] = useState<string>(handoff?.strategyName ? 'imported_algo' : 'none')
+  const [strategyParams, setStrategyParams] = useState<Record<string, number>>({})
+  // Keep imported Algo Builder rules in state so a re-render / preset change
+  // cannot drop strategyRules while Entry Signal still says "Imported: …".
+  const [importedRules, setImportedRules] = useState<{ buy: any; sell: any } | null>(
+    () => handoff?.strategyRules ?? null,
+  )
+  const [simHorizon, setSimHorizon] = useState<number>(strategy !== 'none' || handoff?.strategyName ? 63 : 252)
+  const [pathModel, setPathModel] = useState<OptionsPathModel>('student_t')
+
+  // Mirror server caps (backend/routers/algo.py)
+  const STRATEGY_N_SIMS_CAP = 2000
+  const STRATEGY_HORIZON_CAP = 1260 // ~5y trading days
+  const strategyMode = strategy !== 'none'
+  const simsCap = strategyMode ? STRATEGY_N_SIMS_CAP : 5000
+  const effectiveNSims = Math.min(Math.max(100, nSims), simsCap)
+  const effectiveHorizon = strategyMode
+    ? Math.min(Math.max(1, simHorizon || 63), STRATEGY_HORIZON_CAP)
+    : undefined
+  const effectiveDte = Math.min(Math.max(1, comboDte || 30), 365)
+
+  // Rough ETA for display only — client no longer times out the wait.
+  const mcEtaLabel = useMemo(() => {
+    const nTick = Math.max(1, tickers.length)
+    const h = strategyMode ? (effectiveHorizon ?? 63) : Math.min(effectiveDte, 365)
+    const simDays = nTick * effectiveNSims * h
+    const workers = Math.min(4, nTick)
+    const estMs = nTick * 2000 + (simDays * 0.015) / Math.max(1, workers / 1.2)
+    const sec = Math.round(estMs / 1000)
+    if (sec < 60) return `~${Math.max(20, sec)}s`
+    const min = Math.round(sec / 60)
+    return min <= 1 ? '~1 min' : `~${min} min`
+  }, [tickers.length, strategyMode, effectiveNSims, effectiveHorizon, effectiveDte])
+
+  const [mcProgress, setMcProgress] = useState<{ pct: number; message: string }>({ pct: 0, message: '' })
 
   const { mutate, data, isPending, isError, error } = useMutation<ComboMcResult>({
     mutationFn: async () => {
-      const { data } = await axios.post('/api/algo/combo-montecarlo', {
-        ticker, tickers: tickersOverride ?? undefined,
-        combo: { dte: comboDte, legs: legsOverride ?? legsToCombo(PRESETS[comboPreset] ?? []) }, n_sims: nSims,
+      const rulesPayload = strategy === 'imported_algo'
+        ? (importedRules ?? handoff?.strategyRules)
+        : undefined
+      if (strategy === 'imported_algo' && !rulesPayload) {
+        throw new Error('Imported strategy has no buy/sell rules attached — re-export from Algo Strategy Builder.')
+      }
+      setMcProgress({ pct: 0, message: 'Starting job…' })
+      // Async job + poll — no client wait timeout; progress comes from the server.
+      return runComboMonteCarloJob<ComboMcResult>({
+        ticker: tickers[0] ?? 'AAPL',
+        tickers: tickers.length > 1 ? tickers : undefined,
+        combo: { dte: effectiveDte, legs: legs }, n_sims: effectiveNSims,
         take_profit_pct: tpPct ? +tpPct : undefined,
         stop_loss_pct: slPct ? +slPct : undefined,
         max_hold_days: maxHoldDays ? +maxHoldDays : undefined,
         position_size: Math.min(100, Math.max(1, Number(positionSize) || 100)),
         leverage: Math.max(1, Number(leverage) || 1),
         effective_annual_rate: Math.min(100, Math.max(0, Number(borrowRate) || 0)),
+        strategy: (strategy === 'none' || strategy === 'imported_algo') ? undefined : strategy,
+        strategy_params: (strategy === 'none' || strategy === 'imported_algo') ? undefined : strategyParams,
+        strategy_rules: rulesPayload,
+        horizon_days: effectiveHorizon,
+        path_model: pathModel,
+      }, {
+        onProgress: p => setMcProgress({ pct: p.progress, message: p.progress_message }),
       })
-      return data
     },
+    onSuccess: () => setMcProgress({ pct: 100, message: 'Complete' }),
+    onError: () => { /* keep last progress message for context */ },
   })
 
-  const histBins = (() => {
-    if (!data?.histogram.length) return []
-    const min = data.histogram[0], max = data.histogram[data.histogram.length - 1]
-    const step = Math.max((max - min) / 40, 0.01)
-    return Array.from({ length: 40 }, (_, i) => {
-      const lo = min + i * step, hi = lo + step
-      return { pnl: Math.round(lo), count: data.histogram.filter(v => v >= lo && (i === 39 ? v <= hi : v < hi)).length }
+  // Normalize path bands to $100-start equity for plotting
+  const bandsData = useMemo(() => {
+    if (!data?.pnl_bands?.length) return []
+    const cap = data.initial_capital > 0 ? data.initial_capital : 10_000
+    const alreadyEquity = data.bands_unit === 'equity_100'
+    const mkt = data.market_regression?.market_bands
+    const mktByDay = new Map((mkt ?? []).map(b => [b.day, b]))
+    return data.pnl_bands.map((b: any) => {
+      const scale = (v: number) => alreadyEquity ? v : 100 * (1 + v / cap)
+      const mb = mktByDay.get(b.day)
+      return {
+        day: b.day,
+        p5: scale(b.p5),
+        p25: scale(b.p25),
+        p50: scale(b.p50),
+        p75: scale(b.p75),
+        p95: scale(b.p95),
+        bench_p50: mb?.p50,
+      }
     })
-  })()
+  }, [data])
+
+  const terminalHist = useMemo(() => {
+    if (!data?.histogram?.length) return []
+    const h = data.histogram
+    // Strategy mode: already binned {price, count}
+    if (typeof h[0] === 'object' && h[0] != null && 'count' in (h[0] as object)) {
+      return h as { price: number; count: number }[]
+    }
+    // Hold-to-DTE: raw terminal $ P&L → bin on $100 equity scale
+    const cap = data.initial_capital > 0 ? data.initial_capital : 10_000
+    const vals = (h as number[]).map(v => 100 * (1 + v / cap)).filter(Number.isFinite).sort((a, b) => a - b)
+    if (!vals.length) return []
+    const lo = vals[Math.floor(vals.length * 0.01)]
+    const hi = vals[Math.min(vals.length - 1, Math.floor(vals.length * 0.99))]
+    const nBins = 40
+    const width = Math.max(1e-6, hi - lo) / nBins
+    const counts = new Array(nBins).fill(0)
+    for (const v of vals) {
+      const i = Math.min(nBins - 1, Math.max(0, Math.floor((v - lo) / width)))
+      counts[i]++
+    }
+    return counts.map((count, i) => ({ price: Math.round((lo + (i + 0.5) * width) * 100) / 100, count }))
+  }, [data])
+
+  // Daily-return scatter for regression chart (strategy y vs market x)
+  const regReturnsScatter = useMemo(() => {
+    const sc = data?.market_regression?.scatter
+    if (!sc?.x?.length || !sc?.y?.length) return []
+    return sc.x.map((x, i) => ({ x, y: sc.y![i] })).filter(p => Number.isFinite(p.x) && Number.isFinite(p.y))
+  }, [data])
+
+  const regReturnsLine = useMemo(() => {
+    const line = data?.market_regression?.scatter?.line
+    if (!line?.length) return []
+    return line.map(p => ({ x: p.x, y: p.y }))
+  }, [data])
+
+  const handlePresetChange = (presetName: string) => {
+    setComboPreset(presetName)
+    setLegs(legsToCombo(PRESETS[presetName] ?? []))
+  }
+
+  const SUBLABEL: React.CSSProperties = {
+    display: 'block',
+    fontFamily: 'var(--theme-sans)',
+    fontSize: 8,
+    fontWeight: 700,
+    letterSpacing: '0.12em',
+    textTransform: 'uppercase',
+    color: 'var(--theme-text-faint, rgba(255,255,255,0.4))',
+    marginBottom: 3
+  }
+
 
   return (
     <>
       <MCModeToggle mode="options-strategy" onChange={m => m === 'portfolio' && onSwitchMode()} />
-      {handoff && (
-        <div style={{ marginBottom: 10, padding: '8px 12px', border: `1px solid var(--theme-primary, #c9a84c)`, background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)', fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-secondary, #8099b0)' }}>
-          Imported from the Algo Strategy Builder — {tickersOverride ? `${tickersOverride.length}-symbol basket` : ticker}, {legsOverride?.length === 1 ? 'single option' : `${legsOverride?.length ?? 0}-leg combo`}, {comboDte} DTE.
-          {tickersOverride ? ' The same structure applies to every symbol, each priced off its own spot/IV, equal-weighted and summed into one basket P&L distribution — there\'s no single payoff-at-expiry chart once more than one underlying is involved.' : ' Structure, DTE, risk controls, and sizing carried over exactly.'}
-          {' '}The buy/sell rules don't apply here — this tool simulates entering the structure(s) now, not waiting for a signal.
+      
+      
+      {/* MONTE CARLO · OPTIONS STRATEGY Header Panel */}
+      <div style={{
+        background: 'var(--theme-surface, #0d1826)',
+        border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
+        padding: '10px 14px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
+        marginBottom: 8
+      }}>
+        {/* Title row */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: collapsed ? 'none' : '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingBottom: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 3, height: 14, background: 'var(--theme-primary, #c9a84c)' }} />
+            <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 12, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--theme-text, #d7e3fc)' }}>MONTE CARLO · OPTIONS STRATEGY</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))' }}>
+              {OPTIONS_PATH_MODELS.find(m => m.value === pathModel)?.label ?? pathModel}
+              {' · '}{effectiveNSims.toLocaleString()} paths{strategyMode ? ` · ${effectiveHorizon}d horizon` : ''}
+            </div>
+            <button onClick={() => setCollapsed(c => !c)} title={collapsed ? 'Expand' : 'Collapse'} style={{
+              background: 'transparent', border: 'none', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))',
+              cursor: 'pointer', padding: '2px 4px', display: 'flex', alignItems: 'center', transition: 'color 0.2s'
+            }}>{collapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}</button>
+          </div>
         </div>
-      )}
-      <div style={{ border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #0d1826)', padding: '14px 16px', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
-        {tickersOverride ? (
-          <div>
-            <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', marginBottom: 3 }}>Tickers (imported)</label>
-            <div title={tickersOverride.join(', ')} style={{ ...paramInput, width: 200, display: 'flex', alignItems: 'center', cursor: 'default', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {tickersOverride.length} symbols — {tickersOverride.slice(0, 4).join(', ')}{tickersOverride.length > 4 ? '…' : ''}
+
+        {!collapsed && (<>
+
+        {/* SETUP SECTION */}
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            <div style={{ width: 2, height: 10, background: 'var(--theme-primary, #c9a84c)' }} />
+            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)' }}>Setup</span>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', width: '100%', marginBottom: 4 }}>
+            <div style={{ flex: 1, minWidth: 150 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                <label style={SUBLABEL}>
+                  Tickers (comma-separated)
+                  {screenerLoading && <span style={{ color: 'var(--theme-primary, #c9a84c)', marginLeft: 6, textTransform: 'none', fontSize: 8 }}>[Running screen…]</span>}
+                  {screenerError && <span style={{ color: 'var(--theme-negative, #ef4444)', marginLeft: 6, textTransform: 'none', fontSize: 8 }}>[{screenerError}]</span>}
+                </label>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <select
+                    value=""
+                    onChange={e => handlePortfolioSelect(e.target.value)}
+                    style={{
+                      background: '#07101a',
+                      border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
+                      color: 'var(--theme-primary, #c9a84c)',
+                      fontFamily: 'var(--theme-mono)',
+                      fontSize: 8,
+                      fontWeight: 700,
+                      letterSpacing: '0.04em',
+                      padding: '1px 4px',
+                      outline: 'none',
+                      cursor: 'pointer',
+                      height: 15,
+                      boxSizing: 'border-box'
+                    }}
+                  >
+                    <option value="" disabled>-- Portfolio --</option>
+                    {pmPortfolios.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                  <select
+                    value=""
+                    onChange={e => handleScreenSelect(e.target.value)}
+                    style={{
+                      background: '#07101a',
+                      border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
+                      color: 'var(--theme-primary, #c9a84c)',
+                      fontFamily: 'var(--theme-mono)',
+                      fontSize: 8,
+                      fontWeight: 700,
+                      letterSpacing: '0.04em',
+                      padding: '1px 4px',
+                      outline: 'none',
+                      cursor: 'pointer',
+                      height: 15,
+                      boxSizing: 'border-box'
+                    }}
+                  >
+                    <option value="" disabled>-- Screen --</option>
+                    {allScreens.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <input 
+                value={tickerInput} 
+                onChange={e => handleTickerInputChange(e.target.value)} 
+                style={{ ...paramInput, background: '#07101a', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} 
+                placeholder="e.g. AAPL, MSFT, TSLA"
+              />
+            </div>
+            <div style={{ width: 140 }}>
+              <label style={SUBLABEL}>Structure</label>
+              <select value={comboPreset} onChange={e => handlePresetChange(e.target.value)} style={{ ...paramInput, cursor: 'pointer', background: '#07101a', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+                {PRESET_GROUPS.map(g => (
+                  <optgroup key={g.label} label={g.label}>
+                    {g.keys.map(k => <option key={k} value={k}>{k}</option>)}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+            <div style={{ width: 80 }}>
+              <label style={SUBLABEL}>DTE</label>
+              <NumInput
+                value={comboDte}
+                min={1}
+                max={365}
+                onCommit={v => setComboDte(Math.round(v))}
+                title="Days to expiry for the option structure (1–365)."
+                style={{ ...paramInput, background: '#07101a', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
+              />
+            </div>
+            <div style={{ width: 90 }}>
+              <label style={SUBLABEL}>Simulations</label>
+              <NumInput
+                value={nSims}
+                min={100}
+                max={simsCap}
+                onCommit={v => setNSims(Math.round(v))}
+                title={strategyMode
+                  ? `Entry-signal mode caps at ${STRATEGY_N_SIMS_CAP.toLocaleString()} paths (day-by-day pricing). Clear the field to type a new value.`
+                  : 'Hold-to-DTE mode caps at 5,000 paths. Clear the field to type a new value.'}
+                style={{ ...paramInput, background: '#07101a', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
+              />
+            </div>
+            <div style={{ width: 170 }}>
+              <label style={SUBLABEL}>Path model</label>
+              <select
+                value={pathModel}
+                onChange={e => setPathModel(e.target.value as OptionsPathModel)}
+                title={OPTIONS_PATH_MODELS.find(m => m.value === pathModel)?.hint}
+                style={{ ...paramInput, cursor: 'pointer', background: '#07101a', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
+              >
+                {OPTIONS_PATH_MODELS.map(m => (
+                  <option key={m.value} value={m.value} title={m.hint}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ width: 140 }}>
+              <label style={SUBLABEL}>Entry Signal</label>
+              <select
+                value={strategy}
+                onChange={e => {
+                  const val = e.target.value
+                  setStrategy(val)
+                  setStrategyParams(ALGO_DEFAULT_PARAMS[val] || {})
+                  if (val === 'imported_algo' && handoff?.strategyRules) {
+                    setImportedRules(handoff.strategyRules)
+                  }
+                }}
+                style={{ ...paramInput, cursor: 'pointer', background: '#07101a', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
+              >
+                <option value="none">Enter Immediately</option>
+                {handoff?.strategyName && (
+                  <option value="imported_algo">Imported: {handoff.strategyName}</option>
+                )}
+                {ALGO_STRATEGIES.map(s => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+            </div>
+            {strategy !== 'none' && (
+              <div style={{ width: 80 }}>
+                <label style={SUBLABEL}>Horizon</label>
+                <NumInput
+                  value={simHorizon}
+                  min={1}
+                  max={STRATEGY_HORIZON_CAP}
+                  onCommit={v => setSimHorizon(Math.round(v))}
+                  title={`Entry-signal horizon capped at ${STRATEGY_HORIZON_CAP} trading days (~5y). Clear the field to type a new value.`}
+                  style={{ ...paramInput, background: '#07101a', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
+                />
+              </div>
+            )}
+            {strategy !== 'none' && Object.keys(ALGO_DEFAULT_PARAMS[strategy] || {}).map(param => {
+              const label = ALGO_PARAM_LABELS[strategy]?.[param] || param
+              return (
+                <div key={param} style={{ width: 85 }}>
+                  <label style={SUBLABEL}>{label}</label>
+                  <input
+                    type="number"
+                    value={strategyParams[param] !== undefined ? strategyParams[param] : ALGO_DEFAULT_PARAMS[strategy][param]}
+                    onChange={e => {
+                      const val = Number(e.target.value) || 0
+                      setStrategyParams(prev => ({ ...prev, [param]: val }))
+                    }}
+                    style={{ ...paramInput, background: '#07101a', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
+                  />
+                </div>
+              )
+            })}
+            <button onClick={() => mutate()} disabled={isPending} style={{
+              display: 'flex', alignItems: 'center', gap: 6, background: 'var(--theme-primary, #c9a84c)', border: '1px solid var(--theme-primary, #c9a84c)',
+              color: 'var(--theme-bg, #101c2e)', fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
+              padding: '8px 18px', cursor: isPending ? 'default' : 'pointer', opacity: isPending ? 0.6 : 1, whiteSpace: 'nowrap',
+              boxShadow: '0 0 10px rgba(201, 168, 76, 0.3)', transition: 'all 0.2s ease', height: 28, boxSizing: 'border-box'
+            }}>
+              {isPending ? 'Running…' : '▶ Run Simulation'}
+            </button>
+          </div>
+        </div>
+
+        {/* LEGS SECTION */}
+        <div style={{ borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingTop: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ width: 2, height: 10, background: 'var(--theme-primary, #c9a84c)' }} />
+              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)' }}>Legs - {legs.length}</span>
+            </div>
+            <button onClick={addLeg} disabled={legs.length >= 4} style={{
+              background: 'none', border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)',
+              fontFamily: 'var(--theme-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', padding: '3px 8px',
+              cursor: legs.length >= 4 ? 'default' : 'pointer', opacity: legs.length >= 4 ? 0.5 : 1
+            }}>
+              + ADD LEG
+            </button>
+          </div>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 8 }}>
+            {legs.map((leg, i) => {
+              const isSell = leg.side === 'sell'
+              const color = isSell ? 'var(--theme-negative, #ef4444)' : 'var(--theme-positive, #22c55e)'
+              return (
+                <div key={i} style={{
+                  background: '#07101a',
+                  border: `1px solid ${color}44`,
+                  padding: 8,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 6
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color, textTransform: 'uppercase' }}>Leg {i + 1}</span>
+                    <button type="button" onClick={() => removeLeg(i)} disabled={legs.length <= 1} style={{
+                      background: 'none', border: 'none', fontSize: 14, cursor: legs.length <= 1 ? 'default' : 'pointer',
+                      color: legs.length <= 1 ? 'var(--theme-text-faint, rgba(255,255,255,0.2))' : color
+                    }}>×</button>
+                  </div>
+                  
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                    <div>
+                      <label style={{ ...SUBLABEL, marginBottom: 2 }}>Type</label>
+                      <select value={leg.type} onChange={e => updateLeg(i, { type: e.target.value as ComboLeg['type'] })} style={{ ...paramInput, background: '#0a1628', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '4px 6px', fontSize: 11, color: 'var(--theme-text, #d7e3fc)', outline: 'none' }}>
+                        <option value="call">Call</option>
+                        <option value="put">Put</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ ...SUBLABEL, marginBottom: 2 }}>Side</label>
+                      <select value={leg.side} onChange={e => updateLeg(i, { side: e.target.value as ComboLeg['side'] })} style={{ ...paramInput, background: '#0a1628', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '4px 6px', fontSize: 11, color: 'var(--theme-text, #d7e3fc)', outline: 'none' }}>
+                        <option value="buy">Buy</option>
+                        <option value="sell">Sell</option>
+                      </select>
+                    </div>
+                  </div>
+                  
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                    <div>
+                      <label style={{ ...SUBLABEL, marginBottom: 2 }}>Strike %</label>
+                      <NumInput value={Math.round(leg.moneyness * 100)} min={1} onCommit={pct => updateLeg(i, { moneyness: Math.max(0.01, pct / 100) })} style={{ ...paramInput, background: '#0a1628', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '4px 6px', fontSize: 11, color: 'var(--theme-text, #d7e3fc)' }} />
+                    </div>
+                    <div>
+                      <label style={{ ...SUBLABEL, marginBottom: 2 }}>Qty</label>
+                      <NumInput value={leg.qty} min={1} onCommit={q => updateLeg(i, { qty: Math.max(1, Math.round(q)) })} style={{ ...paramInput, background: '#0a1628', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '4px 6px', fontSize: 11, color: 'var(--theme-text, #d7e3fc)' }} />
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* EXIT RULES SECTION */}
+        <div style={{ borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingTop: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            <div style={{ width: 2, height: 10, background: 'var(--theme-primary, #c9a84c)' }} />
+            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)' }}>Exit Rules</span>
+          </div>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ width: 100 }}>
+                <label style={SUBLABEL}>Take-Profit %</label>
+                <input value={tpPct} placeholder="off" onChange={e => setTpPct(e.target.value)} style={{ ...paramInput, background: '#07101a', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
+              </div>
+              <div style={{ width: 100 }}>
+                <label style={SUBLABEL}>Stop-Loss %</label>
+                <input value={slPct} placeholder="off" onChange={e => setSlPct(e.target.value)} style={{ ...paramInput, background: '#07101a', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
+              </div>
+              <div style={{ width: 115 }}>
+                <label style={SUBLABEL}>Max Hold - Days</label>
+                <input value={maxHoldDays} placeholder={`${comboDte} (DTE)`} onChange={e => setMaxHoldDays(e.target.value)} style={{ ...paramInput, background: '#07101a', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
+              </div>
+            </div>
+            <div style={{ flex: 1, minWidth: 280, fontSize: 9.5, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', fontFamily: 'var(--theme-mono)', lineHeight: '14px' }}>
+              % of the entry credit/debit magnitude — e.g. Take-Profit 50 closes once 50% of max profit is captured, matching the position's realized P&L path day-by-day (not just at expiry). Leave blank to hold to DTE.
             </div>
           </div>
-        ) : (
-          <div>
-            <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', marginBottom: 3 }}>Ticker</label>
-            <input value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())} style={{ ...paramInput, width: 90 }} />
-          </div>
-        )}
-        {!legsOverride && (
-          <div>
-            <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', marginBottom: 3 }}>Structure</label>
-            <select value={comboPreset} onChange={e => setComboPreset(e.target.value)} style={{ ...paramInput, width: 200, cursor: 'pointer' }}>
-              {PRESET_GROUPS.map(g => (
-                <optgroup key={g.label} label={g.label}>
-                  {g.keys.map(k => <option key={k} value={k}>{k}</option>)}
-                </optgroup>
-              ))}
-            </select>
-          </div>
-        )}
-        <div>
-          <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', marginBottom: 3 }}>DTE</label>
-          <input type="number" value={comboDte} min={1} max={365} onChange={e => setComboDte(Math.max(1, +e.target.value || 30))} style={{ ...paramInput, width: 70 }} />
         </div>
-        <div>
-          <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', marginBottom: 3 }}>Simulations</label>
-          <input type="number" value={nSims} min={100} max={5000} onChange={e => setNSims(Math.max(100, +e.target.value || 3000))} style={{ ...paramInput, width: 90 }} />
-        </div>
-        <button onClick={() => mutate()} disabled={isPending} style={{
-          display: 'flex', alignItems: 'center', gap: 6, background: 'var(--theme-primary, #c9a84c)', border: '1px solid var(--theme-primary, #c9a84c)',
-          color: 'var(--theme-bg, #101c2e)', fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
-          padding: '8px 18px', cursor: isPending ? 'default' : 'pointer', opacity: isPending ? 0.6 : 1, whiteSpace: 'nowrap',
-        }}>{isPending ? 'Running…' : 'Run Simulation'}</button>
-        <div style={{ fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', fontFamily: 'var(--theme-mono)', maxWidth: 420, lineHeight: '13px' }}>
-          {legsOverride ? 'Imported structure — fully editable below' : PRESET_DESC[comboPreset]} · legs priced from live spot/IV, simulated to DTE via risk-neutral GBM — not a real historical backtest.
-        </div>
-        {legsOverride && (
-          <div style={{ width: '100%', paddingTop: 8, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
-            <ComboLegEditor legs={legsOverride} onUpdate={updateOverrideLeg} onRemove={removeOverrideLeg} onAdd={addOverrideLeg} horizontal />
+
+        {/* SIZING & LEVERAGE SECTION */}
+        <div style={{ borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingTop: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            <div style={{ width: 2, height: 10, background: 'var(--theme-primary, #c9a84c)' }} />
+            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)' }}>Sizing & Leverage</span>
           </div>
-        )}
-        <div style={{ width: '100%', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
-          <div>
-            <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)', marginBottom: 3 }}>Take-Profit %</label>
-            <input type="number" value={tpPct} placeholder="off" min={0} max={500} onChange={e => setTpPct(e.target.value)} style={{ ...paramInput, width: 80 }} />
-          </div>
-          <div>
-            <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)', marginBottom: 3 }}>Stop-Loss %</label>
-            <input type="number" value={slPct} placeholder="off" min={0} max={2000} onChange={e => setSlPct(e.target.value)} style={{ ...paramInput, width: 80 }} />
-          </div>
-          <div>
-            <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)', marginBottom: 3 }}>Max Hold (days)</label>
-            <input type="number" value={maxHoldDays} placeholder={`${comboDte} (DTE)`} min={1} max={comboDte}
-              onChange={e => setMaxHoldDays(e.target.value === '' ? '' : String(Math.max(1, +e.target.value || 1)))}
-              style={{ ...paramInput, width: 100 }} />
-          </div>
-          <div style={{ fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', fontFamily: 'var(--theme-mono)', maxWidth: 380, lineHeight: '13px' }}>
-            % of the entry credit/debit magnitude — e.g. Take-Profit 50 closes once 50% of max profit is captured, matching the position's realized P&L path day-by-day (not just at expiry). Leave blank to hold to DTE.
-          </div>
-        </div>
-        <div style={{ width: '100%', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
-          <div style={{ width: 110 }}>
-            <Field label="Position Size %"><NumberInput value={positionSize} min={1} onChange={setPositionSize} /></Field>
-          </div>
-          <div style={{ width: 90 }}>
-            <Field label="Leverage (x)"><NumberInput value={leverage} min={1} step={0.25} onChange={setLeverage} /></Field>
-          </div>
-          {(Number(leverage) || 1) > 1 && (
-            <div style={{ width: 100 }}>
-              <Field label="Borrow Rate %"><NumberInput value={borrowRate} min={0} step={0.5} onChange={setBorrowRate} /></Field>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ width: 100 }}>
+                <label style={SUBLABEL}>Position Size %</label>
+                <input value={positionSize} onChange={e => setPositionSize(e.target.value)} style={{ ...paramInput, background: '#07101a', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
+              </div>
+              <div style={{ width: 100 }}>
+                <label style={SUBLABEL}>Leverage *</label>
+                <input value={leverage} onChange={e => setLeverage(e.target.value)} style={{ ...paramInput, background: '#07101a', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
+              </div>
+              <div style={{ width: 115 }}>
+                <label style={SUBLABEL}>Borrow Rate %</label>
+                <input value={borrowRate} onChange={e => setBorrowRate(e.target.value)} style={{ ...paramInput, background: '#07101a', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
+              </div>
             </div>
-          )}
-          <div style={{ fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', fontFamily: 'var(--theme-mono)', maxWidth: 380, lineHeight: '13px' }}>
-            Notional sizing on a $10,000 account — leg qty ratios stay fixed, absolute size scales to Position Size% × Leverage. No ceiling on leverage; a wipeout floors at $0, not a negative account.
+            <div style={{ flex: 1, minWidth: 280, fontSize: 9.5, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', fontFamily: 'var(--theme-mono)', lineHeight: '14px' }}>
+              Each admitted trade sizes to Position Size% × Leverage of the full account (same as the Algo backtester) — not split across tickers. Leg qty ratios stay fixed. Wipeout floors at $0.
+            </div>
           </div>
         </div>
+      </>)}
       </div>
 
       <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {isPending && (
+          <div style={{
+            background: 'var(--theme-surface, #0d1826)',
+            border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
+            padding: '28px 24px 24px',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14,
+          }}>
+            <div style={{
+              fontFamily: 'var(--theme-mono)', fontSize: 13, fontWeight: 700,
+              letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)',
+            }}>
+              Running Simulation…
+            </div>
+            <div style={{
+              fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-secondary, #8099b0)',
+              textAlign: 'center', maxWidth: 520, lineHeight: 1.5,
+            }}>
+              {strategyMode
+                ? `${tickers.length} name${tickers.length === 1 ? '' : 's'} · ${effectiveNSims.toLocaleString()} paths · ${effectiveHorizon}d · rough ETA ${mcEtaLabel}`
+                : `${effectiveNSims.toLocaleString()} paths · ${tickers.length} name${tickers.length === 1 ? '' : 's'} · rough ETA ${mcEtaLabel}`}
+              <br />
+              <span style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))' }}>
+                Safe to switch tabs — job runs on the server with no client timeout.
+              </span>
+            </div>
+            <div style={{ width: 'min(420px, 100%)', marginTop: 4 }}>
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', marginBottom: 6,
+                fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 700,
+                color: 'var(--theme-primary, #c9a84c)',
+              }}>
+                <span>{Math.min(100, Math.max(0, mcProgress.pct)).toFixed(0)}%</span>
+                <span style={{ fontWeight: 500, color: 'var(--theme-secondary, #8099b0)', fontSize: 10 }}>
+                  {mcProgress.message || 'Working…'}
+                </span>
+              </div>
+              <div style={{
+                height: 8, borderRadius: 4, overflow: 'hidden',
+                background: 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(255,255,255,0.08)',
+              }}>
+                <div style={{
+                  height: '100%',
+                  width: `${Math.min(100, Math.max(2, mcProgress.pct || 2))}%`,
+                  background: 'linear-gradient(90deg, var(--theme-primary, #c9a84c), color-mix(in srgb, var(--theme-primary, #c9a84c) 60%, #fff))',
+                  boxShadow: '0 0 10px rgba(201,168,76,0.35)',
+                  transition: 'width 0.35s ease',
+                }} />
+              </div>
+            </div>
+          </div>
+        )}
         {!data && !isPending && (
           <EmptyState title="Options Strategy Monte Carlo" hint="Pick a ticker and a multi-leg structure, then run the simulation." action="Run Simulation" />
         )}
-        {isError && (
-          <div style={{ padding: '10px 14px', border: '1px solid var(--theme-negative)', color: 'var(--theme-negative)', fontFamily: 'var(--theme-mono)', fontSize: 11 }}>
+        {isError && !isPending && (
+          <div style={{ padding: '10px 14px', border: '1px solid var(--theme-negative)', color: 'var(--theme-negative)', fontFamily: 'var(--theme-mono)', fontSize: 11, lineHeight: 1.45 }}>
             {(() => {
               const d = (error as any)?.response?.data?.detail
               if (typeof d === 'string') return d
               if (Array.isArray(d)) return d.map((x: any) => x?.msg ?? String(x)).join(' · ')
+              if ((error as any)?.message) return String((error as any).message)
               return 'Simulation failed'
             })()}
           </div>
         )}
-        {data && (
+        {data && !isPending && (
           <>
-            <div style={STRIP}>
-              <KpiCell grow label={data.entry_credit_debit >= 0 ? 'Credit Received' : 'Debit Paid'} value={`$${Math.abs(data.entry_credit_debit).toLocaleString(undefined, { maximumFractionDigits: 0 })}`} color={data.entry_credit_debit >= 0 ? POS : NEG} />
-              <KpiCell grow label="Prob. of Profit" value={`${data.prob_profit}%`} color={data.prob_profit >= 50 ? POS : NEG} />
-              <KpiCell grow label={data.has_exit_rule ? 'Max Profit (expiry)' : 'Max Profit'} value={data.is_basket ? 'N/A (basket)' : data.max_profit == null ? 'Unlimited' : `$${data.max_profit.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} color={POS} />
-              <KpiCell grow label={data.has_exit_rule ? 'Max Loss (expiry)' : 'Max Loss'} value={data.is_basket ? 'N/A (basket)' : data.max_loss == null ? 'Unlimited' : `$${Math.abs(data.max_loss).toLocaleString(undefined, { maximumFractionDigits: 0 })}`} color={NEG} />
-              <KpiCell grow label="Breakevens" value={data.is_basket ? 'N/A (basket)' : data.breakevens.length ? data.breakevens.map(b => `$${b.toFixed(0)}`).join(' / ') : '—'} />
-              <KpiCell grow label={data.is_basket ? 'Symbols · DTE' : 'Spot · IV · DTE'} value={data.is_basket ? `${data.tickers?.length ?? 0} tickers · ${data.dte}d` : `$${data.spot} · ${data.iv}% · ${data.dte}d`} />
-            </div>
-
-            {data.leverage > 1 && (
-              <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-secondary, #8099b0)' }}>
-                {data.position_size}% position size · {data.leverage}x leverage · {data.effective_annual_rate.toFixed(2)}% borrowing EAR · median interest paid: ${data.interest_paid_p50.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+            {data.diagnostics?.warning && (
+              <div style={{
+                padding: '10px 14px', border: '1px solid var(--theme-primary, #c9a84c)',
+                background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 10%, transparent)',
+                fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-primary, #c9a84c)', lineHeight: 1.45,
+              }}>
+                {data.diagnostics.warning}
               </div>
             )}
 
-            {data.has_exit_rule && (
+            {data.strategy_metrics ? (
+              <div style={STRIP}>
+                <KpiCell grow label="CAGR (Median)" value={fmtPct(data.strategy_metrics.ann_return)} color={(data.strategy_metrics.ann_return ?? 0) >= 0 ? POS : NEG} />
+                <KpiCell grow label="Sharpe (Median)" value={fmtNum(data.strategy_metrics.sharpe, 2)} color={(data.strategy_metrics.sharpe ?? 0) >= 1.0 ? POS : 'var(--theme-text)'} />
+                <KpiCell grow label="Max Drawdown (Median)" value={fmtPct(data.strategy_metrics.max_drawdown)} color={NEG} />
+                <KpiCell grow label="Win Rate" value={fmtPct(data.strategy_metrics.win_rate)} color={(data.strategy_metrics.win_rate ?? 0) >= 50 ? POS : NEG}
+                  sub="all winning trades / all trades" />
+                <KpiCell grow label="Trades / Path" value={fmtNum(data.strategy_metrics.num_trades, 2)}
+                  sub={data.diagnostics
+                    ? `${fmtNum(data.diagnostics.pct_paths_with_trades, 0)}% paths traded` +
+                      (data.diagnostics.median_trades > 0 ? ` · med ${fmtNum(data.diagnostics.median_trades, 1)} when active` : '')
+                    : 'mean across paths'} />
+                <KpiCell grow label="Prob. of Profit" value={fmtPct(data.prob_profit)} color={data.prob_profit >= 50 ? POS : NEG} />
+              </div>
+            ) : (
+              <div style={STRIP}>
+                <KpiCell grow label={data.entry_credit_debit >= 0 ? 'Credit Received' : 'Debit Paid'} value={`$${Math.abs(data.entry_credit_debit).toLocaleString(undefined, { maximumFractionDigits: 0 })}`} color={data.entry_credit_debit >= 0 ? POS : NEG} />
+                <KpiCell grow label="Prob. of Profit" value={fmtPct(data.prob_profit)} color={data.prob_profit >= 50 ? POS : NEG} />
+                <KpiCell grow label={data.has_exit_rule ? 'Max Profit (expiry)' : 'Max Profit'} value={data.is_basket ? 'N/A (basket)' : data.max_profit == null ? 'Unlimited' : `$${data.max_profit.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} color={POS} />
+                <KpiCell grow label={data.has_exit_rule ? 'Max Loss (expiry)' : 'Max Loss'} value={data.is_basket ? 'N/A (basket)' : data.max_loss == null ? 'Unlimited' : `$${Math.abs(data.max_loss).toLocaleString(undefined, { maximumFractionDigits: 0 })}`} color={NEG} />
+                <KpiCell grow label="Breakevens" value={data.is_basket ? 'N/A (basket)' : data.breakevens.length ? data.breakevens.map(b => `$${b.toFixed(0)}`).join(' / ') : '—'} />
+                <KpiCell grow label={data.is_basket ? 'Symbols · DTE' : 'Spot · IV · DTE'} value={data.is_basket ? `${data.tickers?.length ?? 0} tickers · ${data.dte}d` : `$${fmtNum(data.spot, 2)} · ${fmtNum(data.iv, 1)}% · ${data.dte}d`} />
+              </div>
+            )}
+
+            {(data.leverage > 1 || data.position_size < 100 || data.diagnostics?.path_cache) && (
+              <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-secondary, #8099b0)' }}>
+                {data.position_size}% × {data.leverage}x = {(data as any).trade_size_pct != null
+                  ? `${fmtNum((data as any).trade_size_pct, 1)}%`
+                  : `${fmtNum(data.position_size * data.leverage, 1)}%`} per trade
+                {(data as any).dollars_per_trade != null ? ` ($${(data as any).dollars_per_trade.toLocaleString(undefined, { maximumFractionDigits: 0 })})` : ''}
+                {' · '}{fmtNum(data.effective_annual_rate, 2)}% EAR
+                {data.interest_paid_p50 > 0 ? ` · median interest $${fmtNum(data.interest_paid_p50, 0)}` : ''}
+                {data.diagnostics?.path_cache
+                  ? ` · path cache ${data.diagnostics.path_cache.hits}/${data.diagnostics.path_cache.total}${data.diagnostics.path_cache.all_cached ? ' (fast re-run)' : ''}`
+                  : ''}
+              </div>
+            )}
+
+            {!data.strategy_metrics && data.has_exit_rule && (
               <div style={STRIP}>
                 <KpiCell grow label="Avg. Hold" value={`${data.avg_hold_days}d`} sub={`of ${data.max_hold_days}d cap`} />
                 <KpiCell grow label="Hit Take-Profit" value={`${data.pct_take_profit}%`} color={POS} sub="of simulated paths" />
@@ -499,11 +1144,173 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
               </div>
             )}
 
-            {data.is_basket ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ padding: '10px 14px', border: '1px dashed var(--theme-border, rgba(255,255,255,0.16))', fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))' }}>
-                  No single payoff-at-expiry chart for a {data.tickers?.length ?? 0}-symbol basket — each underlying moves independently. The P&L distribution below already reflects the full basket. Each name's own breakeven(s) are shown below for reference.
+            {/* Simulated Portfolio Paths chart */}
+            <ChartPanel label={`Simulated Portfolio Paths ($100 start · ${data.n_sims.toLocaleString()} paths${data.horizon_days ? ` · ${data.horizon_days}d` : ''})`} height={328}>
+              <ResponsiveContainer width="100%" height={300}>
+                <AreaChart data={bandsData} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.07)" />
+                  <XAxis dataKey="day" tick={TICK} tickFormatter={d => `D${d}`} interval="preserveStartEnd" />
+                  <YAxis tick={TICK} tickFormatter={v => `$${Number(v).toFixed(0)}`} domain={['auto', 'auto']} orientation="right" />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} cursor={CROSSHAIR_CURSOR} formatter={(v: number) => [`$${Number(v).toFixed(2)}`]} />
+                  <Legend wrapperStyle={{ fontSize: 10 }} />
+                  <Area type="monotone" dataKey="p95" stroke={cc.gain} strokeWidth={1.5} fill="transparent" name="P95" isAnimationActive={false} />
+                  <Area type="monotone" dataKey="p75" stroke={cc.c2} strokeWidth={1} fill="rgba(31,86,115,0.12)" name="P75" isAnimationActive={false} />
+                  <Area type="monotone" dataKey="p50" stroke={cc.c2} strokeWidth={2.5} fill="transparent" strokeDasharray="4 2" name="Median" isAnimationActive={false} />
+                  {data.market_regression?.market_bands && (
+                    <Area type="monotone" dataKey="bench_p50" stroke={cc.primary} strokeWidth={1.5} fill="transparent" strokeDasharray="3 5" name={`${data.market_regression.benchmark} median`} isAnimationActive={false} />
+                  )}
+                  <Area type="monotone" dataKey="p25" stroke="rgba(140,46,54,0.55)" strokeWidth={1} fill="transparent" name="P25" isAnimationActive={false} />
+                  <Area type="monotone" dataKey="p5" stroke={cc.loss} strokeWidth={1.5} fill="transparent" name="P5" isAnimationActive={false} />
+                  <ReferenceLine y={100} stroke="var(--theme-primary, #c9a84c)" strokeDasharray="4 4" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </ChartPanel>
+
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-secondary, #8099b0)', marginBottom: 8 }}>
+              {(['p5', 'p25', 'p50', 'p75', 'p95'] as const).map(k => {
+                const eq = data.percentiles_equity?.[k]
+                const val = eq != null
+                  ? eq
+                  : 100 * (1 + (data.percentiles?.[k] ?? 0) / (data.initial_capital || 10_000))
+                const n = Number(val)
+                return (
+                  <span key={k}>{k.toUpperCase()}: <span style={{ color: n >= 100 ? POS : NEG, fontWeight: 700 }}>${fmtNum(n, 2)}</span></span>
+                )
+              })}
+            </div>
+
+            {terminalHist.length > 0 && (
+              <ChartPanel label="Terminal Portfolio Distribution ($100 start)" height={208}>
+                <ResponsiveContainer width="100%" height={180}>
+                  <BarChart data={terminalHist}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.07)" />
+                    <XAxis dataKey="price" tick={TICK} interval="preserveStartEnd" tickFormatter={v => `$${v}`} />
+                    <YAxis tick={TICK} orientation="right" />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} cursor={BAR_CURSOR} />
+                    <ReferenceLine x={100} stroke="var(--theme-primary, #c9a84c)" strokeDasharray="4 4"
+                      label={{ value: 'Entry', fill: 'var(--theme-primary, #c9a84c)', fontSize: 9 }} />
+                    <Bar dataKey="count" fill={cc.c2Muted} opacity={0.85} name="Frequency" isAnimationActive={false} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </ChartPanel>
+            )}
+
+            {/* Market regression KPIs directly above the regression chart (backtester layout) */}
+            {data.market_regression?.summary && data.market_regression.summary.observations >= 3 && (
+              <div style={{ ...STRIP, flexWrap: 'wrap' }}>
+                <KpiCell
+                  grow minWidth={135}
+                  label="Market Corr. (r)"
+                  value={data.market_regression.summary.correlation.toFixed(3)}
+                  color={Math.abs(data.market_regression.summary.correlation) < 0.35 ? POS : undefined}
+                  sub={`daily returns vs ${data.market_regression.benchmark}`}
+                />
+                <KpiCell grow label="R²" value={data.market_regression.summary.r_squared.toFixed(3)} sub="market explained" />
+                <KpiCell
+                  grow
+                  label="Beta"
+                  value={data.market_regression.summary.beta.toFixed(3)}
+                  sub={`p ${formatPValue(data.market_regression.summary.beta_p)}`}
+                />
+                <KpiCell
+                  grow
+                  label="Daily Alpha"
+                  value={`${data.market_regression.summary.alpha_daily >= 0 ? '+' : ''}${(data.market_regression.summary.alpha_daily * 100).toFixed(3)}%`}
+                  color={data.market_regression.summary.alpha_daily >= 0 ? POS : NEG}
+                  sub={`p ${formatPValue(data.market_regression.summary.alpha_p)}`}
+                />
+                <KpiCell
+                  grow
+                  label="Observations"
+                  value={String(data.market_regression.summary.observations)}
+                  sub="daily return pairs"
+                />
+              </div>
+            )}
+
+            {regReturnsScatter.length > 1 && data.market_regression && (
+              <div style={{ background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', position: 'relative' }}>
+                <div style={{
+                  position: 'absolute', top: 0, left: 0, zIndex: 10,
+                  background: 'var(--theme-surface, #142032)', padding: '3px 8px',
+                  borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
+                  borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
+                  fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase',
+                  color: 'var(--theme-text, #d7e3fc)',
+                }}>
+                  {`Regression — Strategy vs Market (${data.market_regression.benchmark}) Daily Returns`}
                 </div>
+                <div style={{ paddingTop: 36, paddingLeft: 4, paddingRight: 12, paddingBottom: 12 }}>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <ScatterChart margin={{ top: 16, right: 28, left: 8, bottom: 40 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.07)" />
+                      <XAxis
+                        type="number"
+                        dataKey="x"
+                        name="market"
+                        tick={{ ...TICK, fontSize: 10 }}
+                        tickFormatter={v => `${(Number(v) * 100).toFixed(1)}%`}
+                        domain={['auto', 'auto']}
+                        label={{
+                          value: `${data.market_regression.benchmark} daily return`,
+                          fill: 'var(--theme-secondary, #8099b0)',
+                          fontSize: 11,
+                          position: 'insideBottom',
+                          offset: -28,
+                        }}
+                      />
+                      <YAxis
+                        type="number"
+                        dataKey="y"
+                        name="strategy"
+                        orientation="right"
+                        width={72}
+                        tick={{ ...TICK, fontSize: 10 }}
+                        tickFormatter={v => `${(Number(v) * 100).toFixed(1)}%`}
+                        domain={['auto', 'auto']}
+                        label={{
+                          value: 'strategy daily return',
+                          fill: 'var(--theme-secondary, #8099b0)',
+                          fontSize: 11,
+                          angle: 90,
+                          position: 'insideRight',
+                          offset: 10,
+                        }}
+                      />
+                      <Tooltip
+                        contentStyle={TOOLTIP_STYLE}
+                        formatter={(v: number, name: string) => [
+                          `${(Number(v) * 100).toFixed(3)}%`,
+                          name === 'y' || name === 'strategy' ? 'strategy' : name === 'x' || name === 'market' ? data.market_regression!.benchmark : name,
+                        ]}
+                        labelFormatter={() => ''}
+                      />
+                      <ReferenceLine y={0} stroke="rgba(255,255,255,0.12)" />
+                      <ReferenceLine x={0} stroke="rgba(255,255,255,0.12)" />
+                      <Scatter data={regReturnsScatter} fill={cc.c2} fillOpacity={0.28} name="days" isAnimationActive={false} />
+                      {regReturnsLine.length > 0 && (
+                        <Scatter
+                          data={regReturnsLine}
+                          line={{ stroke: 'var(--theme-primary, #c9a84c)', strokeWidth: 2 }}
+                          fill="var(--theme-primary, #c9a84c)"
+                          shape={() => null as any}
+                          name="OLS fit"
+                          isAnimationActive={false}
+                          legendType="line"
+                        />
+                      )}
+                    </ScatterChart>
+                  </ResponsiveContainer>
+                  <div style={{ fontSize: 9, fontFamily: 'var(--theme-mono)', letterSpacing: '0.04em', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', textAlign: 'center', marginTop: 4 }}>
+                    OLS line · two-sided p-values test beta and alpha against zero
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Basket Mode skipped tickers & breakevens table */}
+            {data.is_basket && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {data.dropped_tickers && data.dropped_tickers.length > 0 && (
                   <div title={data.dropped_tickers.map(d => `${d.ticker}: ${d.reason}`).join('\n')}
                     style={{ padding: '8px 14px', border: '1px solid var(--theme-negative)', background: 'color-mix(in srgb, var(--theme-negative) 8%, transparent)', fontFamily: 'var(--theme-mono)', fontSize: 10, color: NEG }}>
@@ -519,7 +1326,7 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
                       {data.per_ticker_breakevens.map(row => (
                         <div key={row.ticker} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.6fr 1fr 1fr', gap: 8, padding: '5px 12px', fontFamily: 'var(--theme-mono)', fontSize: 10.5, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.06))' }}>
                           <span style={{ color: 'var(--theme-text, #d7e3fc)' }}>{row.ticker}</span>
-                          <span>${row.spot.toFixed(2)}</span>
+                          <span>${fmtNum(row.spot, 2)}</span>
                           <span>{row.breakevens.length ? row.breakevens.map(b => `$${b.toFixed(0)}`).join(' / ') : '—'}</span>
                           <span style={{ color: POS }}>{row.max_profit == null ? 'Unlimited' : `$${row.max_profit.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}</span>
                           <span style={{ color: NEG }}>{row.max_loss == null ? 'Unlimited' : `$${Math.abs(row.max_loss).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}</span>
@@ -529,42 +1336,7 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
                   </div>
                 )}
               </div>
-            ) : (
-              <ChartPanel label="Payoff at Expiry (deterministic)" height={260}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={data.payoff_curve} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
-                    <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
-                    <XAxis dataKey="price" tick={TICK} tickLine={false} axisLine={{ stroke: 'var(--theme-border, rgba(255,255,255,0.08))' }} tickFormatter={(v: number) => `$${v.toFixed(0)}`} />
-                    <YAxis tick={TICK} tickLine={false} axisLine={{ stroke: 'var(--theme-border, rgba(255,255,255,0.08))' }} tickFormatter={(v: number) => `$${v.toFixed(0)}`} />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [`$${v.toFixed(0)}`, 'P&L']} labelFormatter={(v: number) => `Price $${v}`} cursor={CROSSHAIR_CURSOR} />
-                    <ReferenceLine y={0} stroke="var(--theme-text-faint, rgba(255,255,255,0.3))" />
-                    <ReferenceLine x={data.spot ?? 0} stroke={cc.primary} strokeDasharray="3 3" label={{ value: 'spot', position: 'top', fill: cc.primary, fontSize: 9 }} />
-                    <Area type="monotone" dataKey="pnl" stroke={cc.primary} fill={cc.primary} fillOpacity={0.15} strokeWidth={2} isAnimationActive={false} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </ChartPanel>
             )}
-
-            <ChartPanel label={`Simulated P&L Distribution ${data.has_exit_rule ? 'at Exit' : 'at Expiry'} (${data.n_sims.toLocaleString()} paths)`} height={220}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={histBins} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
-                  <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
-                  <XAxis dataKey="pnl" tick={TICK} tickLine={false} axisLine={{ stroke: 'var(--theme-border, rgba(255,255,255,0.08))' }} tickFormatter={(v: number) => `$${v}`} />
-                  <YAxis tick={TICK} tickLine={false} axisLine={{ stroke: 'var(--theme-border, rgba(255,255,255,0.08))' }} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} cursor={BAR_CURSOR} formatter={(v: number) => [v, 'paths']} labelFormatter={(v: number) => `P&L ≈ $${v}`} />
-                  <ReferenceLine x={0} stroke="var(--theme-text-faint, rgba(255,255,255,0.3))" />
-                  <Bar dataKey="count" isAnimationActive={false}>
-                    {histBins.map((b, i) => <Cell key={i} fill={b.pnl >= 0 ? POS : NEG} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </ChartPanel>
-
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-secondary, #8099b0)' }}>
-              {(['p5', 'p25', 'p50', 'p75', 'p95'] as const).map(k => (
-                <span key={k}>{k.toUpperCase()}: <span style={{ color: data.percentiles[k] >= 0 ? POS : NEG, fontWeight: 700 }}>${data.percentiles[k].toFixed(0)}</span></span>
-              ))}
-            </div>
           </>
         )}
       </div>

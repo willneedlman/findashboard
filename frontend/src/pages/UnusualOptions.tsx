@@ -5,6 +5,8 @@ import { useQuery } from '@tanstack/react-query'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
 import { VerdictStrip } from './valuationShared'
+import { readPMPortfolios, normalizeTicker } from '../lib/pmImport'
+import { screenerFilterToApi } from '../lib/format'
 
 
 interface Row {
@@ -38,7 +40,65 @@ interface ScanParams {
   minVolOi:  number
 }
 
+// Backend /api/options/unusual caps the universe at 25 names.
+const TICKER_CAP = 25
+
 const DEFAULT_PARAMS: ScanParams = { tickers: '', expiries: 2, minVolume: 300, minVolOi: 1.5 }
+
+type SavedScreen = {
+  id: string
+  name: string
+  filters: { field: string; operator: string; value: string | number; value2?: string | number | null; param?: string | null }[]
+  sortBy: string
+  sortDir: string
+}
+
+function readSavedScreens(): SavedScreen[] {
+  try {
+    const raw = localStorage.getItem('fdb_screener_saved_screens_v1')
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter((s: any) => s?.id && s?.name)
+      .map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        filters: Array.isArray(s.filters) ? s.filters : [],
+        sortBy: s.sortBy || 'marketCap',
+        sortDir: s.sortDir || 'desc',
+      }))
+  } catch {
+    return []
+  }
+}
+
+function dedupeTickers(raw: string[]): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const t of raw) {
+    const sym = normalizeTicker(t)
+    if (!sym || sym === 'CASH' || sym === 'USD' || seen.has(sym)) continue
+    seen.add(sym)
+    out.push(sym)
+    if (out.length >= TICKER_CAP) break
+  }
+  return out
+}
+
+const importSelectStyle: React.CSSProperties = {
+  background:   T.bg,
+  border:       `1px solid ${T.border}`,
+  color:        T.gold,
+  fontFamily:   T.mono,
+  fontSize:     9,
+  fontWeight:   700,
+  letterSpacing: '0.04em',
+  padding:      '3px 6px',
+  outline:      'none',
+  cursor:       'pointer',
+  maxWidth:     140,
+}
 
 type SortKey = 'dte' | 'moneyness' | 'volume' | 'volOiRatio' | 'premium'
 
@@ -92,6 +152,71 @@ const labelStyle: React.CSSProperties = {
 export function UnusualOptionsContent() {
   const [draft, setDraft]   = useState<ScanParams>(DEFAULT_PARAMS)
   const [active, setActive] = useState<ScanParams>(DEFAULT_PARAMS)
+  const [importNote, setImportNote] = useState<string | null>(null)
+  const [screenerLoading, setScreenerLoading] = useState(false)
+  const [screenerError, setScreenerError] = useState<string | null>(null)
+
+  const pmPortfolios = useMemo(() => readPMPortfolios().filter(p => p.holdings.length > 0), [])
+  const savedScreens = useMemo(() => readSavedScreens(), [])
+
+  const applyTickers = (list: string[], source: string) => {
+    const cleaned = dedupeTickers(list)
+    if (cleaned.length === 0) {
+      setImportNote(`No equity tickers found in ${source}.`)
+      return
+    }
+    setDraft(d => ({ ...d, tickers: cleaned.join(', ') }))
+    setImportNote(
+      cleaned.length >= TICKER_CAP
+        ? `Loaded ${cleaned.length} from ${source} (capped at ${TICKER_CAP}).`
+        : `Loaded ${cleaned.length} from ${source}.`,
+    )
+    setScreenerError(null)
+  }
+
+  const handlePortfolioSelect = (portId: string) => {
+    if (!portId) return
+    const port = pmPortfolios.find(p => p.id === portId)
+    if (!port) return
+    applyTickers(port.holdings.map(h => h.ticker), port.name)
+  }
+
+  const handleScreenSelect = async (screenId: string) => {
+    if (!screenId) return
+    const screen = savedScreens.find(s => s.id === screenId)
+    if (!screen) return
+
+    setScreenerLoading(true)
+    setScreenerError(null)
+    setImportNote(null)
+    try {
+      const { data: body } = await axios.post('/api/screener/run', {
+        filters: screen.filters.map(f => ({
+          ...f,
+          value: screenerFilterToApi(f.field, String(f.value)) ?? Number(f.value),
+          value2: f.value2 != null && f.value2 !== ''
+            ? (screenerFilterToApi(f.field, String(f.value2)) ?? Number(f.value2))
+            : null,
+        })),
+        sector: null,
+        exchange: null,
+        sort_by: screen.sortBy,
+        sort_dir: screen.sortDir,
+        limit: TICKER_CAP,
+      })
+      const results = body?.results ?? []
+      const list = results.map((r: any) => String(r.ticker ?? '')).filter(Boolean)
+      if (list.length === 0) {
+        setScreenerError('No symbols matched in screen.')
+        return
+      }
+      applyTickers(list, screen.name)
+    } catch (err: any) {
+      setScreenerError(err?.response?.data?.detail || err?.message || 'Failed to run screen.')
+    } finally {
+      setScreenerLoading(false)
+    }
+  }
 
   const { data, isFetching, isError, refetch } = useQuery<UnusualResponse>({
     queryKey: ['unusual-options', active],
@@ -147,14 +272,50 @@ export function UnusualOptionsContent() {
         background: T.surface, border: `1px solid ${T.border}`, padding: '16px 18px', marginBottom: 18,
       }}>
         <div style={{ flex: '1 1 280px', minWidth: 200 }}>
-          <label style={labelStyle}>Tickers (blank = liquid default set)</label>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 5, flexWrap: 'wrap' }}>
+            <label style={{ ...labelStyle, marginBottom: 0 }}>Tickers (blank = liquid default set)</label>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+              {pmPortfolios.length > 0 && (
+                <select
+                  value=""
+                  onChange={e => handlePortfolioSelect(e.target.value)}
+                  style={importSelectStyle}
+                  title="Load tickers from Portfolio Manager"
+                >
+                  <option value="" disabled>Portfolio…</option>
+                  {pmPortfolios.map(p => (
+                    <option key={p.id} value={p.id}>{p.name} ({p.holdings.length})</option>
+                  ))}
+                </select>
+              )}
+              {savedScreens.length > 0 && (
+                <select
+                  value=""
+                  onChange={e => { void handleScreenSelect(e.target.value) }}
+                  disabled={screenerLoading}
+                  style={{ ...importSelectStyle, opacity: screenerLoading ? 0.6 : 1, cursor: screenerLoading ? 'wait' : 'pointer' }}
+                  title="Load tickers from a saved screen"
+                >
+                  <option value="" disabled>{screenerLoading ? 'Running…' : 'Screen…'}</option>
+                  {savedScreens.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </div>
           <input
             value={draft.tickers}
-            onChange={e => setDraft({ ...draft, tickers: e.target.value })}
+            onChange={e => { setDraft({ ...draft, tickers: e.target.value }); setImportNote(null) }}
             onKeyDown={e => { if (e.key === 'Enter') runScan() }}
             placeholder="AAPL, NVDA, TSLA …"
             style={{ ...inputStyle, width: '100%' }}
           />
+          {(importNote || screenerError || screenerLoading) && (
+            <div style={{ fontFamily: T.mono, fontSize: 9, marginTop: 5, lineHeight: 1.4, color: screenerError ? T.neg : T.muted }}>
+              {screenerLoading ? 'Running screen…' : (screenerError || importNote)}
+            </div>
+          )}
         </div>
         <div style={{ width: 110 }}>
           <label style={labelStyle}>Expiries</label>

@@ -11,6 +11,7 @@ import { setLinkedTicker } from '../lib/tickerLink'
 import useIsMobile from '../hooks/useIsMobile'
 import { ArrowRight, ChevronDown } from 'lucide-react'
 import { readPMPortfolios, addHoldingsToPortfolio, normalizeTicker, type PMPortfolio } from '../lib/pmImport'
+import { formatScreenerFilterDisplay, screenerFilterPlaceholder, screenerFilterToApi } from '../lib/format'
 
 const C = {
   bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))', surface: 'var(--theme-surface, #0d1826)',
@@ -310,8 +311,8 @@ export default function StockScreener() {
       const body = {
         filters: filters.filter(f => f.value !== '').map(f => ({
           field: f.field, operator: f.operator,
-          value: parseFloat(f.value),
-          value2: f.value2 ? parseFloat(f.value2) : null,
+          value: screenerFilterToApi(f.field, f.value) ?? parseFloat(f.value),
+          value2: f.value2 ? (screenerFilterToApi(f.field, f.value2) ?? parseFloat(f.value2)) : null,
           param: f.field === 'priceChange' ? (f.param || '1M') : null,
         })),
         sector: sector || null, exchange: exchange || null, region: region || null,
@@ -506,7 +507,7 @@ export default function StockScreener() {
     const fieldLabel = (fields.find(x => x.id === f.field)?.label ?? f.field).replace(' (%)', '').replace(' ($B)', '').replace(' ($)', '')
     const opSym = OPERATORS.find(o => o.value === f.operator)?.label ?? f.operator
     const periodSuffix = f.field === 'priceChange' ? ` ${f.param || '1M'}` : ''
-    const expr = `${opSym} ${f.value || '·'}${f.operator === 'between' && f.value2 ? `–${f.value2}` : ''}`
+    const expr = `${opSym} ${formatScreenerFilterDisplay(f.field, f.value)}${f.operator === 'between' && f.value2 ? `–${formatScreenerFilterDisplay(f.field, f.value2)}` : ''}`
     const editing = editingFilterId === f.id
     return (
       <span key={f.id} onClick={() => setEditingFilterId(editing ? null : f.id)}
@@ -696,15 +697,20 @@ export default function StockScreener() {
                   <select value={editingFilter.operator} onChange={e => patchFilter(editingFilter.id, { operator: e.target.value })} style={{ ...SELECT, width: 60, flex: 'none', padding: '4px 4px' }}>
                     {OPERATORS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
-                  <input type="number" value={editingFilter.value} placeholder="Value" autoFocus style={{ ...INPUT, width: 90, flex: 'none' }}
+                  <input value={editingFilter.value} placeholder={screenerFilterPlaceholder(editingFilter.field)} autoFocus style={{ ...INPUT, width: 100, flex: 'none' }}
                     onChange={e => patchFilter(editingFilter.id, { value: e.target.value })} onKeyDown={e => { if (e.key === 'Enter') { setEditingFilterId(null); runScreen() } }} />
                   {editingFilter.operator === 'between' && (
-                    <input type="number" value={editingFilter.value2} placeholder="To" style={{ ...INPUT, width: 90, flex: 'none' }} onChange={e => patchFilter(editingFilter.id, { value2: e.target.value })} />
+                    <input value={editingFilter.value2} placeholder={screenerFilterPlaceholder(editingFilter.field)} style={{ ...INPUT, width: 100, flex: 'none' }} onChange={e => patchFilter(editingFilter.id, { value2: e.target.value })} />
                   )}
                   <button onClick={() => { setEditingFilterId(null); runScreen() }}
                     style={{ flex: 'none', background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)', border: `1px solid ${C.gold}`, color: C.gold, fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '6px 14px', cursor: 'pointer' }}>
                     Apply
                   </button>
+                  {(['marketCap', 'volume', 'avgVolume'] as const).includes(editingFilter.field as 'marketCap' | 'volume' | 'avgVolume') && (
+                    <span style={{ fontFamily: C.sans, fontSize: 9, color: C.dim, flex: '1 1 140px', minWidth: 140 }}>
+                      K/M/B/T suffixes · bare market cap = $B
+                    </span>
+                  )}
                 </div>
               )}
             </div>
