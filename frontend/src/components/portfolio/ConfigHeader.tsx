@@ -384,6 +384,9 @@ export default function ConfigHeader(p: Props) {
                     )}
                     <Field label="Benchmark"><input value={p.benchmark} onChange={e => p.setBenchmark(e.target.value.toUpperCase())} onFocus={focusOn} onBlur={focusOff} style={inputBase} /></Field>
                     <Field label="Leverage (x)"><NumberInput value={p.leverage} onChange={p.setLeverage} step={0.25} min={1} /></Field>
+                    {(Number(p.leverage) || 1) > 1 && (
+                      <Field label="Borrow Rate %"><NumberInput value={p.borrowRate} onChange={p.setBorrowRate} step={0.5} min={0} /></Field>
+                    )}
                     <div style={{ gridColumn: '1 / -1' }}>
                       <Field label="Target Endpoint ($)"><NumberInput value={p.targetPrice || ''} onChange={v => p.setTargetPrice?.(v === '' ? 0 : +v)} placeholder="e.g. 120 = +20%" /></Field>
                     </div>

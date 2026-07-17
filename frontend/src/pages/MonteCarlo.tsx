@@ -22,7 +22,7 @@ import { CASH_SYMBOL } from '../lib/pmImport'
 import ConfigHeader, { Field, paramInput, RebalanceSelect, type RebalanceFreq } from '../components/portfolio/ConfigHeader'
 import { usePortfolio, type PortfolioHolding } from '../contexts/PortfolioContext'
 import { PRESETS, PRESET_DESC, PRESET_GROUPS } from './strategy-builder/shared'
-import { ALGO_MC_HANDOFF_KEY, legsToCombo, type AlgoMonteCarloHandoff } from './AlgoStrategyBuilder'
+import { ALGO_MC_HANDOFF_KEY, ALGO_MC_OPTIONS_HANDOFF_KEY, legsToCombo, type AlgoMonteCarloHandoff, type AlgoOptionsMonteCarloHandoff, type ComboLeg } from './AlgoStrategyBuilder'
 // ── GBM math ────────────────────────────────────────────────────────────────
 
 function runGBM(S0: number, mu: number, sigma: number, T: number, nSims: number) {
@@ -224,6 +224,16 @@ function readAlgoUniverseHandoff(): AlgoMonteCarloHandoff | null {
   }
 }
 
+function readAlgoOptionsHandoff(): AlgoOptionsMonteCarloHandoff | null {
+  try {
+    const raw = JSON.parse(localStorage.getItem(ALGO_MC_OPTIONS_HANDOFF_KEY) || 'null')
+    if (!raw || raw.version !== 1 || !raw.ticker || !Array.isArray(raw.legs) || !raw.legs.length) return null
+    return raw as AlgoOptionsMonteCarloHandoff
+  } catch {
+    return null
+  }
+}
+
 // ── Styles ───────────────────────────────────────────────────────────────────
 
 import { INPUT, TICK } from './valuationShared'
@@ -284,27 +294,44 @@ interface ComboMcResult {
   pct_take_profit: number
   pct_stop_loss: number
   pct_held_to_exit_cap: number
+  initial_capital: number; position_size: number; leverage: number; effective_annual_rate: number
+  interest_paid_p50: number
 }
 
-function OptionsStrategyMonteCarlo({ onSwitchMode }: { onSwitchMode: () => void }) {
+function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: () => void; handoff: AlgoOptionsMonteCarloHandoff | null }) {
   const cc = useChartColors()
-  const [ticker, setTicker] = useState('AAPL')
+  const [ticker, setTicker] = useState(handoff?.ticker ?? 'AAPL')
   const [comboPreset, setComboPreset] = useState('Short Straddle')
-  const [comboDte, setComboDte] = useState(30)
+  // A structure imported from the Algo Strategy Builder carries its exact
+  // legs (which may not match any named preset — a custom butterfly, say),
+  // so it bypasses the preset dropdown entirely rather than trying to find
+  // the closest-matching preset name and silently drifting from the original.
+  const [legsOverride] = useState<ComboLeg[] | null>(handoff?.legs ?? null)
+  const [comboDte, setComboDte] = useState(handoff?.dte ?? 30)
   const [nSims, setNSims] = useState(3000)
   // Early exit — % of the entry credit/debit magnitude, the standard "close at
   // 50% of max profit" convention. Blank = no such exit (hold to DTE or hold cap).
-  const [tpPct, setTpPct] = useState('')
-  const [slPct, setSlPct] = useState('')
-  const [maxHoldDays, setMaxHoldDays] = useState('')
+  const [tpPct, setTpPct] = useState(handoff?.takeProfitPct ? String(handoff.takeProfitPct) : '')
+  const [slPct, setSlPct] = useState(handoff?.stopLossPct ? String(handoff.stopLossPct) : '')
+  const [maxHoldDays, setMaxHoldDays] = useState(handoff?.maxHoldDays ? String(handoff.maxHoldDays) : '')
+  // Sizing — notional-based, same convention as the Algo Strategy Builder's
+  // combo backtest: leg qty ratios stay fixed, absolute size is normalized to
+  // positionSize% of capital times leverage, with EAR charged on the portion
+  // borrowed beyond capital over each path's own holding period.
+  const [positionSize, setPositionSize] = useState(String(handoff?.positionSizePct ?? 100))
+  const [leverage, setLeverage] = useState(String(handoff?.leverage ?? 1))
+  const [borrowRate, setBorrowRate] = useState(String(handoff?.effectiveAnnualRate ?? 0))
 
   const { mutate, data, isPending, isError, error } = useMutation<ComboMcResult>({
     mutationFn: async () => {
       const { data } = await axios.post('/api/algo/combo-montecarlo', {
-        ticker, combo: { dte: comboDte, legs: legsToCombo(PRESETS[comboPreset] ?? []) }, n_sims: nSims,
+        ticker, combo: { dte: comboDte, legs: legsOverride ?? legsToCombo(PRESETS[comboPreset] ?? []) }, n_sims: nSims,
         take_profit_pct: tpPct ? +tpPct : undefined,
         stop_loss_pct: slPct ? +slPct : undefined,
         max_hold_days: maxHoldDays ? +maxHoldDays : undefined,
+        position_size: Math.min(100, Math.max(1, Number(positionSize) || 100)),
+        leverage: Math.max(1, Number(leverage) || 1),
+        effective_annual_rate: Math.max(0, Number(borrowRate) || 0),
       })
       return data
     },
@@ -323,21 +350,35 @@ function OptionsStrategyMonteCarlo({ onSwitchMode }: { onSwitchMode: () => void 
   return (
     <>
       <MCModeToggle mode="options-strategy" onChange={m => m === 'portfolio' && onSwitchMode()} />
+      {handoff && (
+        <div style={{ marginBottom: 10, padding: '8px 12px', border: `1px solid var(--theme-primary, #c9a84c)`, background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)', fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-secondary, #8099b0)' }}>
+          Imported from the Algo Strategy Builder — {ticker} {legsOverride?.length === 1 ? 'single option' : `${legsOverride?.length ?? 0}-leg combo`}, {comboDte} DTE. Structure, DTE, risk controls, and sizing carried over exactly; the buy/sell rules don't apply here — this tool simulates entering the structure now, not waiting for a signal.
+        </div>
+      )}
       <div style={{ border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', background: 'var(--theme-surface, #0d1826)', padding: '14px 16px', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
         <div>
           <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', marginBottom: 3 }}>Ticker</label>
           <input value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())} style={{ ...paramInput, width: 90 }} />
         </div>
-        <div>
-          <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', marginBottom: 3 }}>Structure</label>
-          <select value={comboPreset} onChange={e => setComboPreset(e.target.value)} style={{ ...paramInput, width: 200, cursor: 'pointer' }}>
-            {PRESET_GROUPS.map(g => (
-              <optgroup key={g.label} label={g.label}>
-                {g.keys.map(k => <option key={k} value={k}>{k}</option>)}
-              </optgroup>
-            ))}
-          </select>
-        </div>
+        {legsOverride ? (
+          <div>
+            <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', marginBottom: 3 }}>Structure (imported)</label>
+            <div style={{ ...paramInput, width: 260, display: 'flex', alignItems: 'center', cursor: 'default' }}>
+              {legsOverride.map(l => `${l.side.toUpperCase()} ${l.type.toUpperCase()} @${Math.round(l.moneyness * 100)}%`).join(' / ')}
+            </div>
+          </div>
+        ) : (
+          <div>
+            <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', marginBottom: 3 }}>Structure</label>
+            <select value={comboPreset} onChange={e => setComboPreset(e.target.value)} style={{ ...paramInput, width: 200, cursor: 'pointer' }}>
+              {PRESET_GROUPS.map(g => (
+                <optgroup key={g.label} label={g.label}>
+                  {g.keys.map(k => <option key={k} value={k}>{k}</option>)}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+        )}
         <div>
           <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', marginBottom: 3 }}>DTE</label>
           <input type="number" value={comboDte} min={1} max={365} onChange={e => setComboDte(Math.max(1, +e.target.value || 30))} style={{ ...paramInput, width: 70 }} />
@@ -352,7 +393,7 @@ function OptionsStrategyMonteCarlo({ onSwitchMode }: { onSwitchMode: () => void 
           padding: '8px 18px', cursor: isPending ? 'default' : 'pointer', opacity: isPending ? 0.6 : 1, whiteSpace: 'nowrap',
         }}>{isPending ? 'Running…' : 'Run Simulation'}</button>
         <div style={{ fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', fontFamily: 'var(--theme-mono)', maxWidth: 420, lineHeight: '13px' }}>
-          {PRESET_DESC[comboPreset]} · legs priced from live spot/IV, simulated to DTE via risk-neutral GBM — not a real historical backtest.
+          {legsOverride ? 'Imported structure' : PRESET_DESC[comboPreset]} · legs priced from live spot/IV, simulated to DTE via risk-neutral GBM — not a real historical backtest.
         </div>
         <div style={{ width: '100%', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
           <div>
@@ -371,6 +412,25 @@ function OptionsStrategyMonteCarlo({ onSwitchMode }: { onSwitchMode: () => void 
           </div>
           <div style={{ fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', fontFamily: 'var(--theme-mono)', maxWidth: 380, lineHeight: '13px' }}>
             % of the entry credit/debit magnitude — e.g. Take-Profit 50 closes once 50% of max profit is captured, matching the position's realized P&L path day-by-day (not just at expiry). Leave blank to hold to DTE.
+          </div>
+        </div>
+        <div style={{ width: '100%', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+          <div>
+            <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)', marginBottom: 3 }}>Position Size %</label>
+            <input type="number" value={positionSize} min={1} max={100} onChange={e => setPositionSize(e.target.value)} style={{ ...paramInput, width: 80 }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)', marginBottom: 3 }}>Leverage (x)</label>
+            <input type="number" value={leverage} min={1} step={0.25} onChange={e => setLeverage(e.target.value)} style={{ ...paramInput, width: 80 }} />
+          </div>
+          {(Number(leverage) || 1) > 1 && (
+            <div>
+              <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)', marginBottom: 3 }}>Borrow Rate %</label>
+              <input type="number" value={borrowRate} min={0} step={0.5} onChange={e => setBorrowRate(e.target.value)} style={{ ...paramInput, width: 80 }} />
+            </div>
+          )}
+          <div style={{ fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', fontFamily: 'var(--theme-mono)', maxWidth: 380, lineHeight: '13px' }}>
+            Notional sizing on a $10,000 account — leg qty ratios stay fixed, absolute size scales to Position Size% × Leverage. No ceiling on leverage; a wipeout floors at $0, not a negative account.
           </div>
         </div>
       </div>
@@ -399,6 +459,12 @@ function OptionsStrategyMonteCarlo({ onSwitchMode }: { onSwitchMode: () => void 
               <KpiCell grow label="Breakevens" value={data.breakevens.length ? data.breakevens.map(b => `$${b.toFixed(0)}`).join(' / ') : '—'} />
               <KpiCell grow label="Spot · IV · DTE" value={`$${data.spot} · ${data.iv}% · ${data.dte}d`} />
             </div>
+
+            {data.leverage > 1 && (
+              <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-secondary, #8099b0)' }}>
+                {data.position_size}% position size · {data.leverage}x leverage · {data.effective_annual_rate.toFixed(2)}% borrowing EAR · median interest paid: ${data.interest_paid_p50.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              </div>
+            )}
 
             {data.has_exit_rule && (
               <div style={STRIP}>
@@ -456,6 +522,7 @@ export function MonteCarloContent() {
   const cc = useChartColors()
   const { holdings, setHoldings } = usePortfolio()
   const [algoHandoff] = useState<AlgoMonteCarloHandoff | null>(readAlgoUniverseHandoff)
+  const [algoOptionsHandoff] = useState<AlgoOptionsMonteCarloHandoff | null>(readAlgoOptionsHandoff)
   const [legs, setLegs] = useState<Leg[]>(() => {
     if (algoHandoff) {
       const weight = 100 / algoHandoff.positions.length
@@ -474,7 +541,7 @@ export function MonteCarloContent() {
     }
     return [makeLeg('SPY', 100)]
   })
-  const [mcMode, setMcMode] = useState<'portfolio' | 'options-strategy'>('portfolio')
+  const [mcMode, setMcMode] = useState<'portfolio' | 'options-strategy'>(algoOptionsHandoff ? 'options-strategy' : 'portfolio')
   const [collapsed, setCollapsed] = useState(false)
   const [horizon, setHorizon] = useState(252)
   const [nSims, setNSims] = useState(500)
@@ -600,8 +667,8 @@ export function MonteCarloContent() {
             end: crspEnd,
             n_sims: Math.min(nSims, 1000),
             horizon_days: horizon,
-            leverage: Number(leverage) || 1,
-            borrow_rate: Number(borrowRate) || 0,
+            leverage: Math.max(1, Number(leverage) || 1),
+            borrow_rate: Math.max(0, Number(borrowRate) || 0),
           }),
           axios.get(`/api/market/history?ticker=${benchmark}&start=2020-01-01`)
             .then(r => r.data)
@@ -812,8 +879,8 @@ export function MonteCarloContent() {
       })
       // Apply borrow-to-magnify leverage to the gross portfolio paths (static debt, floored
       // at 0 on wipeout), then risk controls, then scale to $100.
-      const L = Number(leverage) || 1
-      const bDaily = Math.pow(1 + (Number(borrowRate) || 0) / 100, 1 / 252)
+      const L = Math.max(1, Number(leverage) || 1)
+      const bDaily = Math.pow(1 + (Math.max(0, Number(borrowRate) || 0)) / 100, 1 / 252)
       const leveredPaths = L === 1 ? rawPortfolioPaths : rawPortfolioPaths.map(path => {
         let wiped = false
         return path.map((g, day) => {
@@ -871,7 +938,7 @@ export function MonteCarloContent() {
   })
 
   if (mcMode === 'options-strategy') {
-    return <OptionsStrategyMonteCarlo onSwitchMode={() => setMcMode('portfolio')} />
+    return <OptionsStrategyMonteCarlo onSwitchMode={() => setMcMode('portfolio')} handoff={algoOptionsHandoff} />
   }
 
   return (

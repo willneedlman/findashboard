@@ -105,8 +105,8 @@ export function PortfolioTab() {
       if (crspMode) {
         const { data: bt } = await axios.post('/api/portfolio/backtest', {
           crsp_mode: true, benchmark, start, end,
-          leverage: Number(leverage) || 1,
-          borrow_rate: Number(borrowRate) || 0,
+          leverage: Math.max(1, Number(leverage) || 1),
+          borrow_rate: Math.max(0, Number(borrowRate) || 0),
         })
         return { ...bt, strategyResult: null }
       }
@@ -119,8 +119,8 @@ export function PortfolioTab() {
           tickers: assets.map(a => a.ticker),
           weights,
           benchmark, start, end,
-          leverage: Number(leverage) || 1,
-          borrow_rate: Number(borrowRate) || 0,
+          leverage: Math.max(1, Number(leverage) || 1),
+          borrow_rate: Math.max(0, Number(borrowRate) || 0),
           rebalance,
         }),
         ...assets.map(a => {

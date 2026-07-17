@@ -2,7 +2,7 @@ import threading
 import numpy as np
 import pandas as pd
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from cache import get_history, get_info
@@ -754,6 +754,26 @@ class ComboMonteCarloRequest(BaseModel):
     take_profit_pct: float | None = None
     stop_loss_pct: float | None = None
     max_hold_days: int | None = Field(None, ge=1)   # None = hold to DTE; 0/negative rejected, not silently ignored
+    # Sizing — notional-based, same convention as _compute_combo_metrics: leg
+    # qty ratios from `combo.legs` are preserved, absolute size is normalized
+    # to position_size% of initial_capital times leverage. Replaces the older
+    # literal-qty-is-the-answer behavior so this tool sizes the same way the
+    # Algo Strategy Builder's own combo backtest does (a raw contract count is
+    # otherwise meaningless without an account size to relate it to).
+    initial_capital: float = 10_000
+    position_size: float = 100        # % of capital committed to this structure
+    leverage: float = 1               # gross-notional multiplier, 1x = unlevered
+    effective_annual_rate: float = 0  # EAR on notional borrowed beyond capital
+
+    @model_validator(mode="after")
+    def _validate_sizing(self):
+        if self.leverage < 1:
+            raise ValueError("Leverage must be at least 1x")
+        if not 0 <= self.effective_annual_rate <= 100:
+            raise ValueError("Effective annual rate must be between 0% and 100%")
+        if not 0 < self.position_size <= 100:
+            raise ValueError("Position size must be between 0% and 100% of capital")
+        return self
 
 
 def _bs_vec(S: "np.ndarray", K: float, T: "np.ndarray", rf: float, sigma: float, otype: str) -> "np.ndarray":
@@ -813,23 +833,38 @@ def _combo_monte_carlo_impl(req: ComboMonteCarloRequest):
     dte = max(1, int(req.combo.get("dte", 30)))
     r = 4.0
 
+    # Notional sizing: preserve each leg's qty RATIO from the preset (e.g. a
+    # butterfly's 1:2:1), scale absolute size to position_size% of capital
+    # times leverage — same convention _compute_combo_metrics uses, so a
+    # structure imported from the Algo Strategy Builder sizes identically here.
+    alloc = (req.position_size / 100.0) * req.leverage
+    base_notional = sum(max(0.0, float(lc.get("qty", 1.0))) * spot * _OPT_MULT for lc in legs_cfg)
+    scale = (req.initial_capital * alloc) / base_notional if base_notional > 0 else 0.0
+    committed_notional = req.initial_capital * alloc
+    borrowed_notional = max(0.0, committed_notional - req.initial_capital)
+
     resolved: list[dict] = []
     entry_cash_flow = 0.0
     for lc in legs_cfg:
         strike = round(spot * float(lc.get("moneyness", 1.0)), 2)
         otype = "put" if str(lc.get("type", "call")).lower().startswith("p") else "call"
-        qty = max(0.0, float(lc.get("qty", 1.0)))
+        qty = max(0.0, float(lc.get("qty", 1.0))) * scale
         signed_qty = qty if str(lc.get("side", "buy")).lower() == "buy" else -qty
         entry_val = max(float(bs_price(spot, strike, dte, r, iv, otype)), 0.01)
         entry_cash_flow += -signed_qty * entry_val * _OPT_MULT
         resolved.append({"type": otype, "strike": strike, "signed_qty": signed_qty})
+
+    # Financing at full term (the deterministic "held to expiry" reference below)
+    # — folded into payoff() itself so breakevens/max-profit/max-loss all widen
+    # correctly to account for the borrowing cost, same as a real levered account.
+    financing_at_expiry = borrowed_notional * ((1 + req.effective_annual_rate / 100.0) ** (dte / 365.0) - 1)
 
     def payoff(price: float) -> float:
         val = sum(
             l["signed_qty"] * (max(price - l["strike"], 0.0) if l["type"] == "call" else max(l["strike"] - price, 0.0)) * _OPT_MULT
             for l in resolved
         )
-        return entry_cash_flow + val
+        return max(entry_cash_flow + val - financing_at_expiry, -req.initial_capital)
 
     # Deterministic payoff curve for charting, 50%-150% of spot — this is the
     # "if held to expiry" reference; the simulated distribution below reflects
@@ -898,6 +933,11 @@ def _combo_monte_carlo_impl(req: ComboMonteCarloRequest):
     triggered = exit_trigger.any(axis=1)
     exit_day = np.where(triggered, exit_trigger.argmax(axis=1), max_days)
     pnl = pnl_path[np.arange(n), exit_day]
+    # Financing accrues over each path's OWN holding period (an early TP/SL
+    # exit stops paying it, same as closing a levered position early does) —
+    # computed per-path from exit_day, not the fixed DTE the expiry curve uses.
+    financing = borrowed_notional * (np.power(1 + req.effective_annual_rate / 100.0, exit_day / 365.0) - 1)
+    pnl = np.maximum(pnl - financing, -req.initial_capital)
 
     # Which rule fired on each path's actual exit day (both can trigger the
     # same day on a large gap move — stop-loss wins that tie as the more
@@ -932,6 +972,9 @@ def _combo_monte_carlo_impl(req: ComboMonteCarloRequest):
         "pct_take_profit": pct_take_profit,
         "pct_stop_loss": pct_stop_loss,
         "pct_held_to_exit_cap": pct_held_full_term,
+        "initial_capital": req.initial_capital, "position_size": req.position_size,
+        "leverage": req.leverage, "effective_annual_rate": req.effective_annual_rate,
+        "interest_paid_p50": round(float(np.median(financing)), 2) if req.effective_annual_rate > 0 else 0.0,
     }
 
 

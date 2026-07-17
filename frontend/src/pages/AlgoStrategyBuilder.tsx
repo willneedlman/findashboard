@@ -40,6 +40,28 @@ export type AlgoMonteCarloHandoff = {
   positions: Array<Pick<PortfolioPos, 'ticker' | 'instMode' | 'optType' | 'otmPct' | 'dte' | 'comboLegs' | 'comboDte' | 'side' | 'tradeSize'>>
 }
 
+// A single-mode option/combo position has no analog in the portfolio GBM/
+// bootstrap simulator (it treats every leg as plain weighted equity — no
+// strike, no premium decay, no options awareness at all) or in "Exact Algo
+// Replay" (that's the buy/sell-RULE-driven historical backtest; this handoff
+// carries a structural snapshot instead, since the options Monte Carlo tab
+// has no rule-evaluation concept — it's "enter this structure now, simulate
+// to DTE"). Routes to the Options Strategy tab, not the Portfolio tab.
+export const ALGO_MC_OPTIONS_HANDOFF_KEY = 'fdb_algo_options_monte_carlo_handoff'
+export type AlgoOptionsMonteCarloHandoff = {
+  version: 1
+  createdAt: string
+  ticker: string
+  legs: ComboLeg[]
+  dte: number
+  takeProfitPct?: number
+  stopLossPct?: number
+  maxHoldDays?: number
+  positionSizePct: number
+  leverage: number
+  effectiveAnnualRate: number
+}
+
 // The Screener owns SCREENER_ALGO_HANDOFF_KEY/ScreenerAlgoHandoff (it's the
 // producer — "Send to Algo Builder" on a screen result). Consumed here and
 // cleared immediately, unlike ALGO_MC_HANDOFF_KEY above: that handoff seeds
@@ -694,7 +716,7 @@ function StrategyControlsPanel({
   cloningId, setCloningId, cloneInput, setCloneInput, cloneToTickers, pmBooks,
   start, setStart, end, setEnd, timeframe, setTimeframe,
   activeName, setActiveName, onEditStrategy, onDuplicateStrategy, onDeleteStrategy, onNewStrategy,
-  runPortfolio, sendPortfolioToPaper, exportToMonteCarlo, collapsed, onToggleCollapsed,
+  runPortfolio, sendPortfolioToPaper, exportToMonteCarlo, exportSingleToMonteCarlo, collapsed, onToggleCollapsed,
   // Single mode additions:
   ticker, setTicker,
   side, setSide,
@@ -732,6 +754,7 @@ function StrategyControlsPanel({
   runPortfolio: UseMutationResult<PortfolioResult, Error, void>
   sendPortfolioToPaper: UseMutationResult<{ created: number }, Error, void>
   exportToMonteCarlo: () => void
+  exportSingleToMonteCarlo: () => void
   collapsed: boolean; onToggleCollapsed: () => void
 
   ticker: string; setTicker: (t: string) => void
@@ -831,11 +854,17 @@ function StrategyControlsPanel({
             opacity: (!activeName || sendToPaper.isPending) ? 0.6 : 1,
           }}><Send size={10} />{sendToPaper.isPending ? 'Sending…' : 'Send to Paper'}</button>
         )}
-        {mode === 'portfolio' && (
+        {mode === 'portfolio' ? (
           <button onClick={exportToMonteCarlo} disabled={positions.length === 0 || !activeName} title="Open this shared algo universe in Monte Carlo" style={{
             ...headerBtn, background: 'transparent', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))',
             color: activeName ? 'var(--theme-secondary, #8099b0)' : 'var(--theme-text-faint, rgba(255,255,255,0.35))',
             opacity: (positions.length === 0 || !activeName) ? 0.6 : 1,
+          }}>↗ Monte Carlo</button>
+        ) : (
+          <button onClick={exportSingleToMonteCarlo} disabled={!activeName} title={instMode === 'underlying' ? 'Open this position in Monte Carlo' : 'Open this options structure in the Monte Carlo Options Strategy tab'} style={{
+            ...headerBtn, background: 'transparent', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))',
+            color: activeName ? 'var(--theme-secondary, #8099b0)' : 'var(--theme-text-faint, rgba(255,255,255,0.35))',
+            opacity: !activeName ? 0.6 : 1,
           }}>↗ Monte Carlo</button>
         )}
         <button onClick={onNewStrategy} title="Create a new strategy" style={{
@@ -1127,6 +1156,47 @@ export function AlgoStrategyBuilderContent() {
       positions: positions.map(({ ticker, instMode, optType, otmPct, dte, comboLegs, comboDte, side, tradeSize }) => ({ ticker, instMode, optType, otmPct, dte, comboLegs, comboDte, side, tradeSize })),
     }
     localStorage.setItem(ALGO_MC_HANDOFF_KEY, JSON.stringify(handoff))
+    window.location.assign('/montecarlo')
+  }
+
+  // Single mode: shares route through the same portfolio-shaped handoff as a
+  // one-position "portfolio" (the GBM/bootstrap simulator and Exact Replay
+  // both already handle that fine); a single option/combo position instead
+  // goes to the Options Strategy handoff, since that's the only MC tool that
+  // actually models options rather than silently treating the leg as equity.
+  const exportSingleToMonteCarlo = () => {
+    if (!activeDef) return
+    const r = activeDef.risk ?? DEFAULT_RISK
+    if (instMode === 'underlying') {
+      const handoff: AlgoMonteCarloHandoff = {
+        version: 1,
+        createdAt: new Date().toISOString(),
+        start, end: end || undefined, timeframe,
+        strategy: activeDef,
+        tradeSizePct: r.sizingPct || 100,
+        leverage: r.leverage || 1,
+        effectiveAnnualRate: r.effectiveAnnualRate || 0,
+        positions: [{ ticker, instMode, optType, otmPct, dte, comboLegs, comboDte, side, tradeSize: undefined }],
+      }
+      localStorage.setItem(ALGO_MC_HANDOFF_KEY, JSON.stringify(handoff))
+    } else {
+      const legs: ComboLeg[] = instMode === 'option'
+        ? [{ type: optType, side: side === 'short' ? 'sell' : 'buy', moneyness: optType === 'call' ? 1 + otmPct / 100 : 1 - otmPct / 100, qty: 1 }]
+        : (comboLegs?.length ? comboLegs : legsToCombo(PRESETS['Short Straddle']))
+      const handoff: AlgoOptionsMonteCarloHandoff = {
+        version: 1,
+        createdAt: new Date().toISOString(),
+        ticker, legs,
+        dte: instMode === 'option' ? dte : (comboDte ?? 30),
+        takeProfitPct: r.takeProfitPct || undefined,
+        stopLossPct: r.stopLossPct || undefined,
+        maxHoldDays: r.maxHoldBars || undefined,
+        positionSizePct: r.sizingPct || 100,
+        leverage: r.leverage || 1,
+        effectiveAnnualRate: r.effectiveAnnualRate || 0,
+      }
+      localStorage.setItem(ALGO_MC_OPTIONS_HANDOFF_KEY, JSON.stringify(handoff))
+    }
     window.location.assign('/montecarlo')
   }
 
@@ -1642,6 +1712,7 @@ export function AlgoStrategyBuilderContent() {
           onNewStrategy={() => { setEditing(null); setReviewTargetNames([]); setAiPrompt(null); setModalOpen(true) }}
           runPortfolio={runPortfolio} sendPortfolioToPaper={sendPortfolioToPaper}
           exportToMonteCarlo={exportToMonteCarlo}
+          exportSingleToMonteCarlo={exportSingleToMonteCarlo}
           collapsed={pfCollapsed} onToggleCollapsed={() => setPfCollapsed(c => !c)}
           ticker={ticker} setTicker={setTicker}
           side={side} setSide={setSide}
