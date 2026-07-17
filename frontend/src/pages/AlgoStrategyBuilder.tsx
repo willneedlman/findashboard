@@ -1178,6 +1178,7 @@ export function AlgoStrategyBuilderContent() {
         leverage: portfolioLeverage,
         effectiveAnnualRate,
       }
+      localStorage.removeItem(ALGO_MC_HANDOFF_KEY)
       localStorage.setItem(ALGO_MC_OPTIONS_HANDOFF_KEY, JSON.stringify(handoff))
       window.location.assign('/montecarlo')
       return
@@ -1194,6 +1195,7 @@ export function AlgoStrategyBuilderContent() {
       effectiveAnnualRate,
       positions: positions.map(({ ticker, instMode, optType, otmPct, dte, comboLegs, comboDte, side, tradeSize }) => ({ ticker, instMode, optType, otmPct, dte, comboLegs, comboDte, side, tradeSize })),
     }
+    localStorage.removeItem(ALGO_MC_OPTIONS_HANDOFF_KEY)
     localStorage.setItem(ALGO_MC_HANDOFF_KEY, JSON.stringify(handoff))
     window.location.assign('/montecarlo')
   }
@@ -1217,6 +1219,7 @@ export function AlgoStrategyBuilderContent() {
         effectiveAnnualRate: r.effectiveAnnualRate || 0,
         positions: [{ ticker, instMode, optType, otmPct, dte, comboLegs, comboDte, side, tradeSize: undefined }],
       }
+      localStorage.removeItem(ALGO_MC_OPTIONS_HANDOFF_KEY)
       localStorage.setItem(ALGO_MC_HANDOFF_KEY, JSON.stringify(handoff))
     } else {
       const legs: ComboLeg[] = instMode === 'option'
@@ -1234,6 +1237,7 @@ export function AlgoStrategyBuilderContent() {
         leverage: r.leverage || 1,
         effectiveAnnualRate: r.effectiveAnnualRate || 0,
       }
+      localStorage.removeItem(ALGO_MC_HANDOFF_KEY)
       localStorage.setItem(ALGO_MC_OPTIONS_HANDOFF_KEY, JSON.stringify(handoff))
     }
     window.location.assign('/montecarlo')

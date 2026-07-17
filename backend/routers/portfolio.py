@@ -92,7 +92,7 @@ class BacktestRequest(BaseModel):
     end: str = "2024-12-31"
     # No upper cap — a wipeout is floored at 0 from the liquidation point.
     leverage: float = Field(default=1.0, ge=1.0)
-    borrow_rate: float = Field(default=0.0, ge=0.0, le=30.0)
+    borrow_rate: float = Field(default=0.0, ge=0.0, le=100.0)
     cash_weight: float = 0.0   # filled from any CASH legs (see CASH_SYMBOL)
     interval: str = "1d"       # "1d" (daily) or intraday e.g. "15m" for a 1-day curve
     # Holdings drift with prices and reset to target weights at each boundary;
@@ -303,7 +303,7 @@ class MonteCarloRequest(BaseModel):
     horizon_days: int = Field(default=252, ge=1, le=2520)
     # No upper cap — wiped-out simulation paths are floored at 0 (see monte_carlo).
     leverage: float = Field(default=1.0, ge=1.0)
-    borrow_rate: float = Field(default=0.0, ge=0.0, le=30.0)
+    borrow_rate: float = Field(default=0.0, ge=0.0, le=100.0)
     # Survivorship-bias-free mode: estimates the GBM drift/vol from the S&P 500's
     # actual point-in-time constituent history (WRDS CRSP) instead of a typed
     # basket — a delisted name's realized wipeout or buyout premium is embedded
@@ -398,7 +398,7 @@ class ComparePortfolio(BaseModel):
     # No upper cap on leverage — a wipeout is handled gracefully by flooring the
     # equity at 0 from the liquidation point onward (see _lever_equity).
     leverage: float = Field(default=1.0, ge=1.0)
-    borrow_rate: float = Field(default=0.0, ge=0.0, le=30.0)
+    borrow_rate: float = Field(default=0.0, ge=0.0, le=100.0)
     # Filled by CompareRequest._validate from any "CASH" legs (see CASH_SYMBOL):
     # the weight allocated to a zero-volatility cash sleeve, growing at the
     # risk-free rate. Kept out of `tickers` so it never hits ticker validation.

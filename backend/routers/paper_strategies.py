@@ -261,7 +261,6 @@ class PortfolioPaperPosition(BaseModel):
     rules:         dict
     instrument:    dict | None = None
     side:          str = "long"
-    weight:        float = 0.0           # direct % of the whole portfolio
     position_size: float | None = None   # optional per-position trade-size override
 
 

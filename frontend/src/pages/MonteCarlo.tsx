@@ -338,7 +338,7 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
         max_hold_days: maxHoldDays ? +maxHoldDays : undefined,
         position_size: Math.min(100, Math.max(1, Number(positionSize) || 100)),
         leverage: Math.max(1, Number(leverage) || 1),
-        effective_annual_rate: Math.max(0, Number(borrowRate) || 0),
+        effective_annual_rate: Math.min(100, Math.max(0, Number(borrowRate) || 0)),
       })
       return data
     },
@@ -444,7 +444,7 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
           {(Number(leverage) || 1) > 1 && (
             <div>
               <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)', marginBottom: 3 }}>Borrow Rate %</label>
-              <input type="number" value={borrowRate} min={0} step={0.5} onChange={e => setBorrowRate(e.target.value)} style={{ ...paramInput, width: 80 }} />
+              <input type="number" value={borrowRate} min={0} max={100} step={0.5} onChange={e => setBorrowRate(e.target.value)} style={{ ...paramInput, width: 80 }} />
             </div>
           )}
           <div style={{ fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', fontFamily: 'var(--theme-mono)', maxWidth: 380, lineHeight: '13px' }}>

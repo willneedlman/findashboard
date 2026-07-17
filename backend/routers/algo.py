@@ -13,9 +13,13 @@ router = APIRouter()
 # request at the endpoint's own caps — same failure shape as the yfinance
 # BoundedSemaphore(2) in cache.py (added after a real prod OOM on this 1GB
 # VM), so a concurrent-request cap applies here too rather than letting
-# requests stack unbounded.
+# requests stack unbounded. A ticker basket accumulates into one running
+# total instead of holding a (n_sims, dte+1) array per ticker (see
+# _combo_monte_carlo_impl), so its peak stays bounded by _BASKET_FETCH_WORKERS
+# in-flight arrays regardless of basket size, not by the ticker count.
 _COMBO_MC_SEM = threading.BoundedSemaphore(2)
 _COMBO_MC_TIMEOUT = float(os.getenv("COMBO_MC_ACQUIRE_TIMEOUT", "10"))
+_BASKET_FETCH_WORKERS = 8
 
 
 class BacktestRequest(BaseModel):
@@ -495,9 +499,15 @@ def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: 
             trades.append({"date": idx[i].strftime(_dfmt), "action": entry_action, "price": round(entry_val, 2), "is_entry": True})
         cur = cash + (signed_contracts * _val(i) * _OPT_MULT if in_trade else 0.0)
         if cur <= 0:
+            # Record the OPTION's own value at liquidation, not the
+            # underlying's spot price — the win/loss classification below
+            # compares this "price" against the entry premium, and comparing
+            # an underlying price (e.g. $180) against a premium (e.g. $3.50)
+            # would classify almost every wipeout as a win.
+            liq_val = _val(i) if in_trade else 0.0
             wiped_out, blown_up_at, cur = True, idx[i], 0.0
             cash, in_trade, signed_contracts = 0.0, False, 0.0
-            trades.append({"date": idx[i].strftime(_dfmt), "action": "LIQUIDATED", "price": round(px[i], 2),
+            trades.append({"date": idx[i].strftime(_dfmt), "action": "LIQUIDATED", "price": round(liq_val, 2),
                            "is_entry": False, "exit_kind": "wipeout"})
         equity[i] = cur
 
@@ -691,10 +701,24 @@ def _compute_combo_metrics(signal: pd.Series, close: pd.Series, combo: dict, iv:
             peak_pnl = 0.0
         cur = cash + (_combo_mtm(i) if in_trade else 0.0)
         if cur <= 0:
-            wiped_out, blown_up_at, cur = True, idx[i], 0.0
-            cash, in_trade, leg_state = 0.0, False, []
-            trades.append({"date": idx[i].strftime(_dfmt), "action": "LIQUIDATED", "price": round(px[i], 2),
-                           "is_entry": False, "exit_kind": "wipeout"})
+            wiped_out, blown_up_at = True, idx[i]
+            # One row per leg, using each leg's own mark value — not a single
+            # summary row at the underlying's spot price. The round-trip
+            # win-rate pairing below walks `trades` in fixed n_legs-sized
+            # batches; a single row (regardless of leg count) breaks that
+            # assumption, and spot price isn't comparable to a leg's entry
+            # premium anyway (same fix as the single-option engine's wipeout).
+            if in_trade:
+                for l in leg_state:
+                    trades.append({
+                        "date": idx[i].strftime(_dfmt),
+                        "action": "SELL" if l["signed_qty"] > 0 else "BUY",
+                        "price": round(_leg_val(l, i), 2),
+                        "leg": f"{l['type']} {l['strike']:g}",
+                        "is_entry": False,
+                        "exit_kind": "wipeout",
+                    })
+            cash, in_trade, leg_state, cur = 0.0, False, [], 0.0
         equity[i] = cur
 
     eq = pd.Series(equity, index=idx)
@@ -905,11 +929,41 @@ def _combo_monte_carlo_impl(req: ComboMonteCarloRequest):
     # a terminal draw — meaningfully heavier, so cap sims lower than the
     # expiry-only version did.
     n = min(max(int(req.n_sims), 100), 5000)
-    rng = np.random.default_rng()
 
-    per_ticker = [_price_ticker_leg(tk, legs_cfg, dte, r, per_ticker_dollars, n, dt, rng) for tk in tickers]
-    entry_cash_flow = sum(res["entry_cash_flow"] for res in per_ticker)
-    pnl_path = sum(res["pnl_path"] for res in per_ticker)   # (n, dte+1), independent draws per ticker summed
+    if is_basket:
+        # options_snapshot does its own live fetch (price history + up to a
+        # dozen option-chain calls hunting for a valid ATM expiry) per ticker
+        # — sequential, that's 60+ round trips end-to-end for the reported
+        # real-world basket size before any simulation even starts. Fetch/
+        # simulate concurrently instead (each ticker is an independent cache
+        # key in options_snapshot, so this is safe). np.random.Generator is
+        # NOT thread-safe to share across threads — spawn an independent,
+        # non-overlapping stream per ticker via SeedSequence. Accumulate into
+        # a running total rather than collecting all N per-ticker (n_sims,
+        # dte+1) arrays first: at the 100-ticker/5000-sim/365-DTE cap, holding
+        # all of them at once would peak past 1GB on this VM's own budget
+        # (see _COMBO_MC_SEM's comment above) — bounded to ~_BASKET_FETCH_WORKERS
+        # in-flight arrays plus the running total instead.
+        import concurrent.futures
+        child_seeds = np.random.SeedSequence().spawn(len(tickers))
+        entry_cash_flow = 0.0
+        pnl_path = np.zeros((n, dte + 1))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(_BASKET_FETCH_WORKERS, len(tickers))) as pool:
+            futures = [
+                pool.submit(_price_ticker_leg, tk, legs_cfg, dte, r, per_ticker_dollars, n, dt, np.random.default_rng(seed))
+                for tk, seed in zip(tickers, child_seeds)
+            ]
+            for fut in concurrent.futures.as_completed(futures):
+                res = fut.result()
+                entry_cash_flow += res["entry_cash_flow"]
+                pnl_path += res["pnl_path"]
+        per_ticker_single = None
+    else:
+        rng = np.random.default_rng()
+        res = _price_ticker_leg(tickers[0], legs_cfg, dte, r, per_ticker_dollars, n, dt, rng)
+        entry_cash_flow = res["entry_cash_flow"]
+        pnl_path = res["pnl_path"]
+        per_ticker_single = res
 
     # Financing at full term (the deterministic "held to expiry" reference below)
     # — folded into payoff() itself so breakevens/max-profit/max-loss all widen
@@ -926,7 +980,7 @@ def _combo_monte_carlo_impl(req: ComboMonteCarloRequest):
         max_profit_expiry = None
         max_loss_expiry = None
     else:
-        resolved, spot = per_ticker[0]["resolved"], per_ticker[0]["spot"]
+        resolved, spot = per_ticker_single["resolved"], per_ticker_single["spot"]
 
         def payoff(price: float) -> float:
             val = sum(
@@ -1005,8 +1059,8 @@ def _combo_monte_carlo_impl(req: ComboMonteCarloRequest):
         "ticker": tickers[0] if not is_basket else None,
         "tickers": tickers if is_basket else None,
         "is_basket": is_basket,
-        "spot": round(per_ticker[0]["spot"], 2) if not is_basket else None,
-        "iv": round(per_ticker[0]["iv"], 1) if not is_basket else None,
+        "spot": round(per_ticker_single["spot"], 2) if not is_basket else None,
+        "iv": round(per_ticker_single["iv"], 1) if not is_basket else None,
         "dte": dte,
         "entry_credit_debit": round(entry_cash_flow, 2),
         "breakevens": breakevens,

@@ -553,7 +553,7 @@ def _exit_reason(exit_kind: str | None, sell_reason: str, *, stop_loss=None, tak
         return f"Trailing stop triggered ({trailing_stop:g}%)"
     if exit_kind == "max_hold" and max_hold_bars is not None:
         return f"Max hold reached ({max_hold_bars} bars)"
-    if exit_kind in {"dte", "expiration"} and dte is not None:
+    if exit_kind == "expiration" and dte is not None:
         return f"Expired and settled ({dte} calendar DTE)"
     if exit_kind == "wipeout":
         return "Liquidated — position lost its full allocated capital"

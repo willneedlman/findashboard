@@ -323,11 +323,15 @@ def _draft_is_confirmed(messages: list[StrategyChatMessage]) -> bool:
     last_user = next((m.content.lower() for m in reversed(messages) if m.role == "user"), "")
     if "not ready" in last_user:
         return False
-    return any(phrase in last_user for phrase in (
+    # Word-boundary match, not substring — "yes" as a bare `in` check also
+    # matches "yesterday"/"yesteryear", misreading an unrelated message
+    # (e.g. "use yesterday's close instead") as explicit build confirmation.
+    phrases = (
         "yes", "confirm", "proceed", "go ahead", "build it", "build this", "create it", "draft it", "prepare the draft", "prepare draft",
         "use your defaults", "use the defaults", "sounds good", "looks good",
         "i'm ready", "im ready", "ready to build", "ready to create",
-    ))
+    )
+    return any(re.search(rf"\b{re.escape(phrase)}\b", last_user) for phrase in phrases)
 
 
 def _next_discovery_question(user_turns: int) -> str:
@@ -719,6 +723,20 @@ def _normalize_fractional_percentages(draft: dict) -> None:
         if isinstance(risk, dict):
             for key in ("sizingPct", "stopLossPct", "takeProfitPct", "trailingStopPct"):
                 risk[key] = percent(risk.get(key))
+            # Single-mode drafts have no guardrail question equivalent to
+            # _portfolio_allocation_issue (that one only checks mode=="portfolio")
+            # — clamp here instead of letting an out-of-range value get saved
+            # and only fail later when the user actually runs the backtest.
+            if "leverage" in risk:
+                try:
+                    risk["leverage"] = max(1.0, float(risk["leverage"]))
+                except (TypeError, ValueError):
+                    risk["leverage"] = 1.0
+            if "effectiveAnnualRate" in risk:
+                try:
+                    risk["effectiveAnnualRate"] = min(100.0, max(0.0, float(risk["effectiveAnnualRate"])))
+                except (TypeError, ValueError):
+                    risk["effectiveAnnualRate"] = 0.0
 
     if draft.get("mode") == "portfolio":
         draft["position_size_pct"] = percent(draft.get("position_size_pct"))
