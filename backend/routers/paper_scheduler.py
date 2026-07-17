@@ -105,6 +105,10 @@ def _init_db() -> None:
             # JSON list of {occ, side, qty} for a combo instrument's currently-held
             # legs — a combo needs more than one OCC symbol, unlike open_occ above.
             "ALTER TABLE paper_schedule_jobs ADD COLUMN open_legs_json TEXT",
+            # Actual filled quantity for this log row — the job's own qty column
+            # stays a vestigial 1 now that live sizing is dollar-target-based
+            # (see _dollar_target), so attribution() must read this instead.
+            "ALTER TABLE paper_schedule_log ADD COLUMN qty INTEGER",
         ):
             try:
                 conn.execute(ddl)
@@ -185,20 +189,71 @@ def _warmup(inst: Strategy, ticker: str, params: dict) -> None:
             pass
 
 
-def _place_order_sync(user_id: str, ticker: str, side: str, qty: int) -> str | None:
-    """Place a market order into the user's own paper account. Returns the order
-    id when filled, else None (rejected/resting)."""
-    if not user_id:
-        return None
+_OPT_MULT = 100
+
+
+def _dollar_target(user_id: str, params: dict) -> float:
+    """Convert this job's %-of-portfolio sizing (portfolio_trade_size_pct for
+    a universe position, position_size for a standalone one — see
+    create_portfolio_paper/create_job) into a live dollar amount, sized off
+    the account's CURRENT equity rather than a stale reference — position
+    size scales with current capital, same convention a real broker's
+    percent-of-buying-power order type uses."""
+    pct = params.get("portfolio_trade_size_pct", params.get("position_size", 100.0))
     try:
+        pct = max(1.0, min(500.0, float(pct)))
+    except (TypeError, ValueError):
+        pct = 100.0
+    try:
+        equity = float(paper_engine.get_account(user_id).get("equity") or 0.0)
+    except Exception:
+        equity = 0.0
+    return max(0.0, equity) * (pct / 100.0)
+
+
+def _held_qty(user_id: str, symbol: str, is_option: bool) -> int:
+    """Actual quantity currently held for `symbol` in the user's paper
+    account, looked up live — closing a position uses this instead of
+    re-deriving a quantity from a fresh dollar target, since equity/price
+    (and therefore what a fresh target would compute) can have moved since
+    the position was opened; closing must match what's actually open."""
+    try:
+        acct = paper_engine.get_account(user_id)
+        rows = acct.get("option_positions", []) if is_option else acct.get("positions", [])
+        key = "option_symbol" if is_option else "symbol"
+        for row in rows:
+            if row.get(key) == symbol:
+                return abs(int(row.get("quantity", 0)))
+    except Exception:
+        pass
+    return 0
+
+
+def _place_order_sync(user_id: str, ticker: str, side: str, is_opening: bool, dollar_target: float, price: float) -> tuple[str | None, int]:
+    """Place a market order into the user's own paper account. Opening sizes
+    to dollar_target/price (the job's %-of-current-equity sizing); closing
+    always sells/covers exactly what's currently held (see _held_qty), not a
+    freshly-computed target — equity/price can have moved since it opened.
+    Returns (order_id, qty) — qty is 0 when nothing was filled/nothing to
+    close, so the caller can log the quantity a fill actually used (position
+    size is dynamic now, no longer the job's static column)."""
+    if not user_id:
+        return None, 0
+    try:
+        if is_opening:
+            qty = max(1, int(dollar_target / price)) if price > 0 else 1
+        else:
+            qty = _held_qty(user_id, ticker, is_option=False)
+            if qty <= 0:
+                return None, 0
         result = paper_engine.place_order(user_id, ticker, side, qty, "market")
         if result.get("status") == "filled":
-            return str(result.get("id") or "") or None
+            return str(result.get("id") or "") or None, qty
         _log.info("Scheduler order not filled (%s %s x%d): %s", side, ticker, qty, result.get("reason") or result.get("status"))
-        return None
+        return None, 0
     except Exception as e:
-        _log.warning("Paper order failed (%s %s x%d): %s", side, ticker, qty, e)
-        return None
+        _log.warning("Paper order failed (%s %s): %s", side, ticker, e)
+        return None, 0
 
 
 def _resolve_option_contract(ticker: str, spec: dict, spot: float) -> str | None:
@@ -231,38 +286,46 @@ def _resolve_option_contract(ticker: str, spec: dict, spot: float) -> str | None
         return None
 
 
-def _place_option_sync(user_id: str, ticker: str, signal: str, qty: int, spec: dict,
+def _place_option_sync(user_id: str, ticker: str, signal: str, dollar_target: float, spec: dict,
                        open_occ: str | None, spot: float, side: str = "long") -> tuple[str | None, str | None]:
     """Trade a real option at the live chain price. A long leg buys-to-open on BUY
     and sells-to-close on SELL; a short leg writes the contract (sell-to-open) on
-    BUY and buys-to-close on SELL. Returns (order_id, new_open_occ) — new_open_occ
-    is the OCC now held ('' when flat, None = no change)."""
+    BUY and buys-to-close on SELL. Opening sizes contracts to dollar_target /
+    (live premium x 100); closing sells/covers whatever is actually held
+    (_held_qty), not a freshly-recomputed count. Returns (order_id,
+    new_open_occ, qty) — new_open_occ is the OCC now held ('' when flat, None
+    = no change); qty is 0 when nothing filled."""
     if not user_id:
-        return None, None
+        return None, None, 0
     short = str(side).lower() == "short"
     open_action = "sell_to_open" if short else "buy_to_open"
     close_action = "buy_to_close" if short else "sell_to_close"
     try:
         if signal == "BUY":
             if open_occ:
-                return None, None   # already holding a contract
+                return None, None, 0   # already holding a contract
             occ = _resolve_option_contract(ticker, spec, spot)
             if not occ:
-                return None, None
+                return None, None, 0
+            price = paper_engine._option_price(occ) or 0.0
+            qty = max(1, round(dollar_target / (price * _OPT_MULT))) if price > 0 else 1
             res = paper_engine.place_option_order(user_id, occ, open_action, qty, "market")
             if res.get("status") == "filled":
-                return str(res.get("id") or "") or None, occ
+                return str(res.get("id") or "") or None, occ, qty
             _log.info("Scheduler option BUY not filled (%s): %s", occ, res.get("reason") or res.get("status"))
-            return None, None
+            return None, None, 0
         else:  # SELL — close what we hold
             if not open_occ:
-                return None, None
+                return None, None, 0
+            qty = _held_qty(user_id, open_occ, is_option=True)
+            if qty <= 0:
+                return None, "", 0   # nothing actually held — clear the stale open_occ
             res = paper_engine.place_option_order(user_id, open_occ, close_action, qty, "market")
             oid = str(res.get("id") or "") or None if res.get("status") == "filled" else None
-            return oid, ("" if oid else None)   # clear holding once closed
+            return oid, ("" if oid else None), (qty if oid else 0)   # clear holding once closed
     except Exception as e:
         _log.warning("Paper option order failed (%s %s): %s", signal, ticker, e)
-        return None, None
+        return None, None, 0
 
 
 def _resolve_combo_contracts(ticker: str, combo: dict, spot: float) -> list[dict] | None:
@@ -299,52 +362,73 @@ def _resolve_combo_contracts(ticker: str, combo: dict, spot: float) -> list[dict
         strike = min(strikes, key=lambda s: abs(s - spot * moneyness))
         cp = "C" if otype == "call" else "P"
         occ = f"{ticker.upper()}{y[2:]}{m}{d}{cp}{int(round(strike * 1000)):08d}"
-        resolved.append({"occ": occ, "side": str(lc.get("side", "buy")).lower(), "qty": max(1, int(lc.get("qty", 1)))})
+        row = df[abs(df["strike"] - strike) < 1e-6]
+        price = 0.0
+        if not row.empty:
+            r = row.iloc[0]
+            bid, ask, last = float(r.get("bid") or 0), float(r.get("ask") or 0), float(r.get("lastPrice") or 0)
+            price = (bid + ask) / 2 if bid > 0 and ask > 0 else last
+        resolved.append({
+            "occ": occ, "side": str(lc.get("side", "buy")).lower(),
+            "qty": max(1, int(lc.get("qty", 1))), "price": price,
+        })
     return resolved
 
 
-def _place_combo_sync(user_id: str, ticker: str, signal: str, base_qty: int, combo: dict,
+def _place_combo_sync(user_id: str, ticker: str, signal: str, dollar_target: float, combo: dict,
                       open_legs: list[dict] | None, spot: float) -> tuple[str | None, list[dict] | None]:
     """Open every leg of a combo atomically on BUY, close every held leg
     atomically on SELL, via paper_engine.place_multileg_order — the same
     all-or-nothing multi-leg fill the manual "send to paper" bridge uses, so a
     rule-triggered straddle/condor/etc opens as one real position, not a
     sequence of independent single-leg orders that could partially fill.
-    Returns (order_id, new_open_legs) — new_open_legs is [] once flat, None =
-    no change. A 1-leg combo routes through the plain single-option order
-    since place_multileg_order requires 2-4 legs; combos above 4 legs aren't
-    supported by the paper engine and are skipped (logged, no order)."""
+    Opening preserves each leg's qty RATIO from the combo definition (e.g. a
+    butterfly's 1:2:1) and scales absolute size to dollar_target / total
+    notional — same notional-sizing convention the backtest engine uses.
+    Closing uses each leg's qty as already recorded in open_legs (set when it
+    was opened), not a freshly-recomputed count. Returns (order_id,
+    new_open_legs, qty) — new_open_legs is [] once flat, None = no change;
+    qty is the first leg's contract count, a representative figure only (legs
+    can carry different counts per the combo's own ratio — win-rate/P&L
+    attribution for combos already approximates using the underlying's spot
+    price rather than the combo's real premium, a separate, pre-existing
+    limitation this doesn't attempt to fix). A 1-leg combo routes through the
+    plain single-option order since place_multileg_order requires 2-4 legs;
+    combos above 4 legs aren't supported by the paper engine and are skipped
+    (logged, no order)."""
     if not user_id:
-        return None, None
+        return None, None, 0
     try:
         if signal == "BUY":
             if open_legs:
-                return None, None   # already holding this combo
+                return None, None, 0   # already holding this combo
             legs = _resolve_combo_contracts(ticker, combo, spot)
             if not legs:
-                return None, None
+                return None, None, 0
             if len(legs) > 4:
                 _log.warning("Combo for %s has %d legs — paper engine supports at most 4, skipping", ticker, len(legs))
-                return None, None
+                return None, None, 0
+            base_notional = sum(l["qty"] * max(l["price"], 0.01) * _OPT_MULT for l in legs)
+            scale = dollar_target / base_notional if base_notional > 0 else 0.0
             order_legs = [{
                 "option_symbol": l["occ"], "side": "sell_to_open" if l["side"] == "sell" else "buy_to_open",
-                "quantity": max(1, int(round(base_qty * l["qty"]))),
+                "quantity": max(1, int(round(l["qty"] * scale))),
             } for l in legs]
             if len(order_legs) == 1:
                 res = paper_engine.place_option_order(user_id, order_legs[0]["option_symbol"], order_legs[0]["side"], order_legs[0]["quantity"], "market")
                 if res.get("status") != "filled":
                     _log.info("Scheduler combo BUY not filled (%s): %s", order_legs[0]["option_symbol"], res.get("reason") or res.get("status"))
-                    return None, None
-                return str(res.get("id") or "") or None, [{"occ": order_legs[0]["option_symbol"], "side": legs[0]["side"], "qty": order_legs[0]["quantity"]}]
+                    return None, None, 0
+                return str(res.get("id") or "") or None, [{"occ": order_legs[0]["option_symbol"], "side": legs[0]["side"], "qty": order_legs[0]["quantity"]}], order_legs[0]["quantity"]
             res = paper_engine.place_multileg_order(user_id, order_legs, "market")
             if res.get("status") != "filled":
                 _log.info("Scheduler combo BUY not filled (%s legs, %s): %s", len(order_legs), ticker, res.get("reason") or res.get("status"))
-                return None, None
+                return None, None, 0
             held = [{"occ": ol["option_symbol"], "side": l["side"], "qty": ol["quantity"]} for ol, l in zip(order_legs, legs)]
-            return str(res.get("id") or ""), held
+            return str(res.get("id") or ""), held, order_legs[0]["quantity"]
         else:  # SELL — close every held leg together
             if not open_legs:
-                return None, None
+                return None, None, 0
             close_legs = [{
                 "option_symbol": l["occ"], "side": "buy_to_close" if l["side"] == "sell" else "sell_to_close",
                 "quantity": l["qty"],
@@ -352,10 +436,10 @@ def _place_combo_sync(user_id: str, ticker: str, signal: str, base_qty: int, com
             if len(close_legs) == 1:
                 res = paper_engine.place_option_order(user_id, close_legs[0]["option_symbol"], close_legs[0]["side"], close_legs[0]["quantity"], "market")
                 oid = str(res.get("id") or "") or None if res.get("status") == "filled" else None
-                return oid, ([] if oid else None)
+                return oid, ([] if oid else None), (close_legs[0]["quantity"] if oid else 0)
             res = paper_engine.place_multileg_order(user_id, close_legs, "market")
             oid = str(res.get("id") or "") if res.get("status") == "filled" else None
-            return oid, ([] if oid else None)
+            return oid, ([] if oid else None), (close_legs[0]["quantity"] if oid else 0)
     except Exception as e:
         _log.warning("Paper combo order failed (%s %s): %s", signal, ticker, e)
         return None, None
@@ -439,7 +523,6 @@ async def _run_scheduler_loop() -> None:
 
                 strategy_name = job["strategy_name"]
                 params = json.loads(job["params_json"] or "{}")
-                qty = job["qty"]
 
                 # Ensure strategy instance exists and is warmed up
                 if job_id not in _instances:
@@ -478,6 +561,7 @@ async def _run_scheduler_loop() -> None:
                 notes = ""
                 occ_update: str | None = None    # new open_occ when it changes
                 legs_update: list[dict] | None = None   # new open_legs when a combo's holding changes
+                filled_qty = 0
 
                 # Execute into the job owner's own paper account — only on a
                 # signal TRANSITION. Strategies report BUY every bar while invested
@@ -485,20 +569,26 @@ async def _run_scheduler_loop() -> None:
                 # every poll; fire only when the signal actually changes.
                 transition = signal_str != (job.get("last_signal") or "HOLD")
                 if signal_str in ("BUY", "SELL") and transition:
+                    user_id = job.get("user_id", "")
+                    is_opening = signal_str == "BUY"
+                    # Only priced on the opening leg — closing sells/covers
+                    # whatever is actually held (see _held_qty/open_legs), so
+                    # a stale or zero target on close is harmless.
+                    dollar_target = _dollar_target(user_id, params) if is_opening else 0.0
                     inst_spec = params.get("instrument") or {}
                     if inst_spec.get("kind") == "combo":
                         open_legs = json.loads(job.get("open_legs_json") or "null")
-                        order_id, legs_update = await loop.run_in_executor(
-                            _executor, _place_combo_sync, job.get("user_id", ""),
-                            ticker, signal_str, qty, inst_spec, open_legs, price,
+                        order_id, legs_update, filled_qty = await loop.run_in_executor(
+                            _executor, _place_combo_sync, user_id,
+                            ticker, signal_str, dollar_target, inst_spec, open_legs, price,
                         )
                         held_count = len(legs_update) if legs_update is not None else len(open_legs or [])
                         notes = f"combo legs={held_count} order_id={order_id}" if order_id else "combo_order_failed"
                     elif inst_spec.get("kind") == "option":
                         opt_side = str(params.get("side", "long")).lower()
-                        order_id, occ_update = await loop.run_in_executor(
-                            _executor, _place_option_sync, job.get("user_id", ""),
-                            ticker, signal_str, qty, inst_spec, job.get("open_occ"), price, opt_side,
+                        order_id, occ_update, filled_qty = await loop.run_in_executor(
+                            _executor, _place_option_sync, user_id,
+                            ticker, signal_str, dollar_target, inst_spec, job.get("open_occ"), price, opt_side,
                         )
                         notes = f"{opt_side} option={occ_update or job.get('open_occ') or ''} order_id={order_id}" if order_id else "option_order_failed"
                     else:
@@ -509,15 +599,15 @@ async def _run_scheduler_loop() -> None:
                             side = "sell" if signal_str == "BUY" else "buy"
                         else:
                             side = "buy" if signal_str == "BUY" else "sell"
-                        order_id = await loop.run_in_executor(
-                            _executor, _place_order_sync, job.get("user_id", ""), ticker, side, qty
+                        order_id, filled_qty = await loop.run_in_executor(
+                            _executor, _place_order_sync, user_id, ticker, side, is_opening, dollar_target, price
                         )
                         notes = f"{pos_side} order_id={order_id}" if order_id else "order_failed"
-                    _log.info("Scheduler %s %s x%d @ %.2f → %s", signal_str, ticker, qty, price, notes)
+                    _log.info("Scheduler %s %s @ %.2f → %s", signal_str, ticker, price, notes)
 
                 log_rows.append((
                     str(uuid.uuid4()), job_id, ticker, strategy_name,
-                    signal_str, price, now_ts, order_id, notes, job.get("user_id", "")
+                    signal_str, price, now_ts, order_id, notes, job.get("user_id", ""), filled_qty
                 ))
                 job_updates.append((signal_str, price, now_ts, job_id))
                 if occ_update is not None:
@@ -530,8 +620,8 @@ async def _run_scheduler_loop() -> None:
                     if log_rows:
                         conn.executemany(
                             "INSERT INTO paper_schedule_log "
-                            "(id,job_id,ticker,strategy_name,signal,price,timestamp,order_id,notes,user_id) "
-                            "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                            "(id,job_id,ticker,strategy_name,signal,price,timestamp,order_id,notes,user_id,qty) "
+                            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                             log_rows
                         )
                     if job_updates:
@@ -717,10 +807,13 @@ def _flatten_job_position(job: dict) -> None:
         if inst_spec.get("kind") == "combo":
             open_legs = json.loads(job.get("open_legs_json") or "null")
             if open_legs:
-                _place_combo_sync(user_id, job["ticker"], "SELL", job.get("qty", 1), inst_spec, open_legs, 0.0)
+                # dollar_target is unused on a close path (closes exactly
+                # what's held — see _place_combo_sync's docstring); 0.0 is a
+                # neutral placeholder, not a real sizing input.
+                _place_combo_sync(user_id, job["ticker"], "SELL", 0.0, inst_spec, open_legs, 0.0)
         elif inst_spec.get("kind") == "option" and job.get("open_occ"):
             opt_side = str(params.get("side", "long")).lower()
-            _place_option_sync(user_id, job["ticker"], "SELL", job.get("qty", 1), inst_spec, job.get("open_occ"), 0.0, opt_side)
+            _place_option_sync(user_id, job["ticker"], "SELL", 0.0, inst_spec, job.get("open_occ"), 0.0, opt_side)
     except Exception as e:
         _log.warning("Could not flatten job %s on delete/disable: %s", job.get("id"), e)
 
@@ -791,13 +884,19 @@ def attribution(user_id: str, authorization: str = Header(default=""), x_session
 
     Strategies are long-only single-position, so each SELL closes the oldest
     open BUY for that (strategy, ticker). Uses the logged fill price and the
-    job's qty. Open (unclosed) buys are reported but not realized.
+    ACTUAL filled qty recorded on the log row (dollar-target sizing means this
+    varies trade to trade — the job's own qty column is a vestigial 1, kept
+    only as a fallback for log rows written before this column existed).
+    Open (unclosed) buys are reported but not realized. Note: for option/combo
+    trades, the logged price is the underlying's spot price rather than the
+    instrument's real premium (a separate, pre-existing limitation), so
+    realized_pnl here is only accurate for share trades.
     """
     _require_owner(user_id, authorization, x_session_token)
     with _db() as conn:
         rows = conn.execute(
             "SELECT l.strategy_name, l.ticker, l.signal, l.price, l.timestamp, "
-            "COALESCE(j.qty, 1) AS qty FROM paper_schedule_log l "
+            "COALESCE(l.qty, j.qty, 1) AS qty FROM paper_schedule_log l "
             "LEFT JOIN paper_schedule_jobs j ON j.id = l.job_id "
             "WHERE l.user_id=? AND l.order_id IS NOT NULL AND l.signal IN ('BUY','SELL') "
             "ORDER BY l.timestamp ASC",

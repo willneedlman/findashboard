@@ -447,7 +447,7 @@ export default function StockScreener() {
   const [pmPickerOpen, setPmPickerOpen] = useState(false)
   const [pmTarget, setPmTarget] = useState('new')
   const [pmNewName, setPmNewName] = useState('')
-  const [pmResult, setPmResult] = useState<{ name: string; added: number; skipped: number } | null>(null)
+  const [pmResult, setPmResult] = useState<{ name: string; added: number; skipped: number; notFound?: false } | { notFound: true } | null>(null)
   const pmBooks = useMemo(() => readPMPortfolios(), [pmPickerOpen])
 
   const sendToAlgoBuilder = () => {
@@ -858,11 +858,15 @@ export default function StockScreener() {
                           <button onClick={confirmAddToPortfolio} style={{ background: C.gold, border: 'none', color: C.bg, fontFamily: C.mono, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 0', cursor: 'pointer' }}>
                             Add
                           </button>
-                          {pmResult && (
+                          {pmResult && (pmResult.notFound ? (
+                            <span style={{ fontFamily: C.sans, fontSize: 9, color: C.neg }}>
+                              Target portfolio no longer exists — it may have been deleted elsewhere. Refresh and pick another.
+                            </span>
+                          ) : (
                             <span style={{ fontFamily: C.sans, fontSize: 9, color: C.pos }}>
                               Added {pmResult.added} to "{pmResult.name}"{pmResult.skipped ? ` · ${pmResult.skipped} already held` : ''}.
                             </span>
-                          )}
+                          ))}
                         </div>
                       )}
                     </div>

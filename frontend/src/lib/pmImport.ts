@@ -63,7 +63,7 @@ const uid = () => (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.
 export function addHoldingsToPortfolio(
   target: { portfolioId: string } | { newName: string },
   holdings: { ticker: string; shares: number; avgCost: number }[],
-): { name: string; added: number; skipped: number } {
+): { name: string; added: number; skipped: number; notFound?: false } | { notFound: true } {
   const raw = localStorage.getItem(PORTFOLIOS_KEY)
   let state: any
   try {
@@ -84,7 +84,11 @@ export function addHoldingsToPortfolio(
     state.portfolios.push({ id: targetId, name: targetName, holdings: [], options: [], futures: [], cash: [] })
   } else {
     const found = state.portfolios.find((p: any) => p.id === target.portfolioId)
-    if (!found) return { name: '', added: 0, skipped: holdings.length }
+    // Distinguish "target portfolio doesn't exist" (e.g. deleted in another tab
+    // since the picker was populated) from a legitimate "0 added, all already
+    // held" outcome below — collapsing them into the same added:0 shape reads
+    // as a false "nothing new" when the real problem is the target vanished.
+    if (!found) return { notFound: true }
     targetId = found.id
     targetName = found.name
   }

@@ -248,6 +248,22 @@ def _safe_ann_return(final_capital: float, initial_capital: float, ann_factor: f
     return float(ratio ** ann_factor - 1) * 100
 
 
+def _ear_bar_rate(effective_annual_rate: float, bars_per_year: float) -> float:
+    """Per-bar compounding rate implied by an effective annual rate (%), for
+    contexts that accrue financing once per trading bar (historical
+    backtests, keyed off the series' own bar count/year)."""
+    return (1 + effective_annual_rate / 100.0) ** (1 / bars_per_year) - 1
+
+
+def _ear_growth_factor(effective_annual_rate: float, days, day_count: float = 365.0):
+    """Total compounding growth factor an effective annual rate (%) implies
+    over a calendar-day span (accepts a scalar or an ndarray of days) — for
+    contexts keyed off actual DTE/holding-period days rather than trading
+    bars (options/combo Monte Carlo). Multiply by borrowed notional directly;
+    the result is already "growth over the period", not a per-day rate."""
+    return np.power(1 + effective_annual_rate / 100.0, days / day_count) - 1
+
+
 def _apply_financing_cost(equity: pd.Series, signal: pd.Series, trade_size_pct: float,
                           initial_capital: float, effective_annual_rate: float, bars_per_year: int):
     """Charge daily-compounded interest on whatever notional a leveraged
@@ -259,8 +275,7 @@ def _apply_financing_cost(equity: pd.Series, signal: pd.Series, trade_size_pct: 
         return equity, 0.0
     gross_notional = signal.reindex(equity.index).ffill().fillna(0.0) * (trade_size_pct / 100.0) * initial_capital
     borrowed_notional = (gross_notional - initial_capital).clip(lower=0.0)
-    daily_rate = (1 + effective_annual_rate / 100.0) ** (1 / bars_per_year) - 1
-    interest_cost = borrowed_notional * daily_rate
+    interest_cost = borrowed_notional * _ear_bar_rate(effective_annual_rate, bars_per_year)
     total_interest = float(interest_cost.sum())
     if not total_interest:
         return equity, 0.0
@@ -442,6 +457,7 @@ def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: 
     trades: list[dict] = []
     wiped_out = False
     blown_up_at = None
+    in_position = np.empty(n, dtype=bool)   # actual open-position state per bar, for financing (see _apply_financing_cost caller) — diverges from the raw signal during a blocked (already-closed) period
 
     def _val(i: int) -> float:
         remaining_days = max(0, (expiry_at - idx[i]).total_seconds() / 86_400) if entry_i >= 0 else dte
@@ -458,6 +474,7 @@ def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: 
     for i in range(n):
         if wiped_out:
             equity[i] = 0.0
+            in_position[i] = False
             continue
         exit_kind = None
         expires_now = in_trade and expiry_at is not None and idx[i] >= expiry_at
@@ -510,6 +527,7 @@ def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: 
             trades.append({"date": idx[i].strftime(_dfmt), "action": "LIQUIDATED", "price": round(liq_val, 2),
                            "is_entry": False, "exit_kind": "wipeout"})
         equity[i] = cur
+        in_position[i] = in_trade
 
     eq = pd.Series(equity, index=idx)
     daily = eq.pct_change()
@@ -545,6 +563,7 @@ def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: 
         },
         "trades": trades,
         "instrument": {"kind": "option", "type": otype, "moneyness": moneyness, "dte": dte, "iv": round(iv, 1), "direction": direction, "modeled": True},
+        "in_position": in_position.tolist(),
     }
 
 
@@ -616,6 +635,7 @@ def _compute_combo_metrics(signal: pd.Series, close: pd.Series, combo: dict, iv:
     expiry_at = None
     wiped_out = False
     blown_up_at = None
+    in_position = np.empty(n, dtype=bool)   # actual open-position state per bar, for financing (see _apply_financing_cost caller) — diverges from the raw signal during a blocked (already-closed) period
 
     def _leg_val(leg: dict, i: int) -> float:
         remaining_days = max(0, (expiry_at - idx[i]).total_seconds() / 86_400) if entry_i >= 0 else dte
@@ -633,6 +653,7 @@ def _compute_combo_metrics(signal: pd.Series, close: pd.Series, combo: dict, iv:
     for i in range(n):
         if wiped_out:
             equity[i] = 0.0
+            in_position[i] = False
             continue
         exit_kind = None
         expires_now = in_trade and expiry_at is not None and idx[i] >= expiry_at
@@ -720,6 +741,7 @@ def _compute_combo_metrics(signal: pd.Series, close: pd.Series, combo: dict, iv:
                     })
             cash, in_trade, leg_state, cur = 0.0, False, [], 0.0
         equity[i] = cur
+        in_position[i] = in_trade
 
     eq = pd.Series(equity, index=idx)
     daily = eq.pct_change()
@@ -766,6 +788,7 @@ def _compute_combo_metrics(signal: pd.Series, close: pd.Series, combo: dict, iv:
         },
         "trades": trades,
         "instrument": {"kind": "combo", "legs": legs_cfg, "dte": dte, "iv": round(iv, 1), "modeled": True},
+        "in_position": in_position.tolist(),
     }
 
 
@@ -880,6 +903,49 @@ def _price_ticker_leg(ticker: str, legs_cfg: list, dte: int, r: float, committed
     return {"spot": spot, "iv": iv, "resolved": resolved, "entry_cash_flow": entry_cash_flow, "pnl_path": pnl_path}
 
 
+def _payoff_breakevens(resolved: list, spot: float, entry_cash_flow: float,
+                       financing_share: float, capital_floor: float):
+    """Deterministic 50%-150%-of-spot payoff curve + breakevens + max profit/
+    loss at expiry for one underlying's resolved legs — the "if held to
+    expiry" reference. Used for the single-ticker combo curve and, per-ticker,
+    for a basket's breakeven summary (each ticker priced independently off
+    its own spot/legs/entry cash flow, sharing an equal split of the basket's
+    total financing cost — see _combo_monte_carlo_impl's per_ticker_dollars)."""
+    def payoff(price: float) -> float:
+        val = sum(
+            l["signed_qty"] * (max(price - l["strike"], 0.0) if l["type"] == "call" else max(l["strike"] - price, 0.0)) * _OPT_MULT
+            for l in resolved
+        )
+        return max(entry_cash_flow + val - financing_share, -capital_floor)
+
+    lo, hi = spot * 0.5, spot * 1.5
+    curve = [{"price": round(lo + (hi - lo) * i / 100, 2)} for i in range(101)]
+    for pt in curve:
+        pt["pnl"] = round(payoff(pt["price"]), 2)
+
+    breakevens = []
+    for a, b in zip(curve, curve[1:]):
+        if (a["pnl"] <= 0 < b["pnl"]) or (a["pnl"] >= 0 > b["pnl"]):
+            lo_p, hi_p = a["price"], b["price"]
+            for _ in range(40):
+                mid = (lo_p + hi_p) / 2
+                if (payoff(lo_p) <= 0) == (payoff(mid) <= 0):
+                    lo_p = mid
+                else:
+                    hi_p = mid
+            breakevens.append(round((lo_p + hi_p) / 2, 2))
+
+    # Only the upside (price -> infinity) can be truly unbounded at expiry —
+    # the downside is always floored at price=0. (An early stop-loss further
+    # bounds both sides in the simulated distribution.)
+    slope_up = sum(l["signed_qty"] * _OPT_MULT for l in resolved if l["type"] == "call")
+    floor_pnl = payoff(0.0)
+    sampled_pnls = [pt["pnl"] for pt in curve] + [floor_pnl]
+    max_profit = None if slope_up > 1e-6 else round(max(sampled_pnls), 2)
+    max_loss = None if slope_up < -1e-6 else round(min(sampled_pnls), 2)
+    return curve, breakevens, max_profit, max_loss
+
+
 def _combo_monte_carlo_impl(req: ComboMonteCarloRequest):
     """P&L distribution for a multi-leg options combo (same PRESETS shape as
     the Options Strategy Builder / Algo Strategy Builder combo instrument),
@@ -948,15 +1014,17 @@ def _combo_monte_carlo_impl(req: ComboMonteCarloRequest):
         child_seeds = np.random.SeedSequence().spawn(len(tickers))
         entry_cash_flow = 0.0
         pnl_path = np.zeros((n, dte + 1))
+        per_ticker_results: dict = {}
         with concurrent.futures.ThreadPoolExecutor(max_workers=min(_BASKET_FETCH_WORKERS, len(tickers))) as pool:
-            futures = [
-                pool.submit(_price_ticker_leg, tk, legs_cfg, dte, r, per_ticker_dollars, n, dt, np.random.default_rng(seed))
+            futures = {
+                pool.submit(_price_ticker_leg, tk, legs_cfg, dte, r, per_ticker_dollars, n, dt, np.random.default_rng(seed)): tk
                 for tk, seed in zip(tickers, child_seeds)
-            ]
+            }
             for fut in concurrent.futures.as_completed(futures):
                 res = fut.result()
                 entry_cash_flow += res["entry_cash_flow"]
                 pnl_path += res["pnl_path"]
+                per_ticker_results[futures[fut]] = res
         per_ticker_single = None
     else:
         rng = np.random.default_rng()
@@ -968,56 +1036,39 @@ def _combo_monte_carlo_impl(req: ComboMonteCarloRequest):
     # Financing at full term (the deterministic "held to expiry" reference below)
     # — folded into payoff() itself so breakevens/max-profit/max-loss all widen
     # correctly to account for the borrowing cost, same as a real levered account.
-    financing_at_expiry = borrowed_notional * ((1 + req.effective_annual_rate / 100.0) ** (dte / 365.0) - 1)
+    financing_at_expiry = borrowed_notional * _ear_growth_factor(req.effective_annual_rate, dte)
 
     if is_basket:
         # No single price axis applies once there's more than one underlying —
-        # skip the deterministic curve/breakevens/max-profit/max-loss; the
-        # simulated distribution (percentiles/histogram) below still fully
-        # represents the basket's outcome.
+        # skip the deterministic curve/breakevens/max-profit/max-loss for the
+        # basket as a whole; the simulated distribution (percentiles/
+        # histogram) below still fully represents the basket's outcome. Each
+        # ticker's OWN breakeven(s) are still well-defined though (each has
+        # its own spot/strikes), sharing an equal split of the basket's total
+        # financing cost — surfaced as reference info per name.
         curve: list[dict] = []
         breakevens: list[float] = []
         max_profit_expiry = None
         max_loss_expiry = None
+        financing_share = financing_at_expiry / len(tickers)
+        per_ticker_breakevens = [
+            {
+                "ticker": tk,
+                "spot": round(res["spot"], 2),
+                "entry_credit_debit": round(res["entry_cash_flow"], 2),
+                **dict(zip(
+                    ("breakevens", "max_profit", "max_loss"),
+                    _payoff_breakevens(res["resolved"], res["spot"], res["entry_cash_flow"], financing_share, req.initial_capital)[1:],
+                )),
+            }
+            for tk, res in ((t, per_ticker_results[t]) for t in tickers)
+        ]
     else:
         resolved, spot = per_ticker_single["resolved"], per_ticker_single["spot"]
-
-        def payoff(price: float) -> float:
-            val = sum(
-                l["signed_qty"] * (max(price - l["strike"], 0.0) if l["type"] == "call" else max(l["strike"] - price, 0.0)) * _OPT_MULT
-                for l in resolved
-            )
-            return max(entry_cash_flow + val - financing_at_expiry, -req.initial_capital)
-
-        # Deterministic payoff curve for charting, 50%-150% of spot — this is the
-        # "if held to expiry" reference; the simulated distribution below reflects
-        # early-exit rules when they're set, so the two can legitimately diverge.
-        lo, hi = spot * 0.5, spot * 1.5
-        curve = [{"price": round(lo + (hi - lo) * i / 100, 2)} for i in range(101)]
-        for pt in curve:
-            pt["pnl"] = round(payoff(pt["price"]), 2)
-
-        # Breakevens: bisect every sign change in the sampled curve.
-        breakevens = []
-        for a, b in zip(curve, curve[1:]):
-            if (a["pnl"] <= 0 < b["pnl"]) or (a["pnl"] >= 0 > b["pnl"]):
-                lo_p, hi_p = a["price"], b["price"]
-                for _ in range(40):
-                    mid = (lo_p + hi_p) / 2
-                    if (payoff(lo_p) <= 0) == (payoff(mid) <= 0):
-                        lo_p = mid
-                    else:
-                        hi_p = mid
-                breakevens.append(round((lo_p + hi_p) / 2, 2))
-
-        # Only the upside (price -> infinity) can be truly unbounded at expiry —
-        # the downside is always floored at price=0. (An early stop-loss further
-        # bounds both sides in the simulated distribution below.)
-        slope_up = sum(l["signed_qty"] * _OPT_MULT for l in resolved if l["type"] == "call")
-        floor_pnl = payoff(0.0)
-        sampled_pnls = [pt["pnl"] for pt in curve] + [floor_pnl]
-        max_profit_expiry = None if slope_up > 1e-6 else round(max(sampled_pnls), 2)
-        max_loss_expiry = None if slope_up < -1e-6 else round(min(sampled_pnls), 2)
+        curve, breakevens, max_profit_expiry, max_loss_expiry = _payoff_breakevens(
+            resolved, spot, entry_cash_flow, financing_at_expiry, req.initial_capital
+        )
+        per_ticker_breakevens = None
 
     has_exit_rule = req.take_profit_pct is not None or req.stop_loss_pct is not None or req.max_hold_days is not None
     max_days = min(int(req.max_hold_days), dte) if req.max_hold_days is not None else dte
@@ -1035,7 +1086,7 @@ def _combo_monte_carlo_impl(req: ComboMonteCarloRequest):
     # Financing accrues over each path's OWN holding period (an early TP/SL
     # exit stops paying it, same as closing a levered position early does) —
     # computed per-path from exit_day, not the fixed DTE the expiry curve uses.
-    financing = borrowed_notional * (np.power(1 + req.effective_annual_rate / 100.0, exit_day / 365.0) - 1)
+    financing = borrowed_notional * _ear_growth_factor(req.effective_annual_rate, exit_day)
     pnl = np.maximum(pnl - financing, -req.initial_capital)
 
     # Which rule fired on each path's actual exit day (both can trigger the
@@ -1064,6 +1115,7 @@ def _combo_monte_carlo_impl(req: ComboMonteCarloRequest):
         "dte": dte,
         "entry_credit_debit": round(entry_cash_flow, 2),
         "breakevens": breakevens,
+        "per_ticker_breakevens": per_ticker_breakevens,
         "max_profit": max_profit_expiry, "max_loss": max_loss_expiry,
         "prob_profit": prob_profit,
         "percentiles": percentiles,

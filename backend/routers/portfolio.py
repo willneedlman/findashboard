@@ -44,8 +44,9 @@ def _lever_equity(cum_gross: pd.Series, leverage: float, borrow_rate: float) -> 
     and holds it statically over the window — not a daily-rebalanced leveraged ETF. cum_gross is the
     unlevered wealth index. Returns (leveraged equity index, liquidated). On wipeout (equity <= 0)
     the position is floored at 0 from the first non-positive point onward."""
+    from .algo import _ear_bar_rate
     t = np.arange(len(cum_gross))
-    b_d = (1 + borrow_rate / 100.0) ** (1 / 252)
+    b_d = 1 + _ear_bar_rate(borrow_rate, 252)
     eq = leverage * cum_gross.values - (leverage - 1) * (b_d ** t)
     liquidated = bool((eq <= 0).any())
     if liquidated:

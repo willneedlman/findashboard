@@ -23,6 +23,13 @@ export type ComboLeg = { type: 'call' | 'put'; side: 'buy' | 'sell'; moneyness: 
 export const legsToCombo = (legs: Leg[]): ComboLeg[] =>
   legs.map(l => ({ type: l.option_type, side: l.action, moneyness: l.K / 100, qty: l.quantity }))
 export const mkComboLeg = (): ComboLeg => ({ type: 'call', side: 'buy', moneyness: 1, qty: 1 })
+// Strike entered as % out-of-the-money (negative = in-the-money) converts to the
+// backend's moneyness multiplier per option side: call OTM = strike above spot,
+// put OTM = strike below spot.
+export const otmToMoneyness = (optType: 'call' | 'put', otmPct: number) =>
+  optType === 'call' ? 1 + otmPct / 100 : 1 - otmPct / 100
+export const singleOptionLeg = (optType: 'call' | 'put', side: 'long' | 'short', otmPct: number): ComboLeg =>
+  ({ type: optType, side: side === 'short' ? 'sell' : 'buy', moneyness: otmToMoneyness(optType, otmPct), qty: 1 })
 // paper_engine.place_multileg_order only accepts 2-4 legs — capping here keeps a
 // backtested combo executable live instead of silently failing to open.
 export const MAX_COMBO_LEGS = 4
@@ -1015,7 +1022,7 @@ export function AlgoStrategyBuilderContent() {
   // the backend's moneyness multiplier per the option side. Call OTM = strike
   // above spot; put OTM = strike below spot.
   const [otmPct, setOtmPct] = useState(0)
-  const optMoneyness = optType === 'call' ? 1 + otmPct / 100 : 1 - otmPct / 100
+  const optMoneyness = otmToMoneyness(optType, otmPct)
   const [dte, setDte] = useState(30)
   // Combo legs start from a preset but are then freely editable — add/remove/
   // retype/reweight any leg, same as the Options Strategy Builder.
@@ -1127,7 +1134,7 @@ export function AlgoStrategyBuilderContent() {
   const posToPayload = (p: PortfolioPos) => {
     const def = saved.find(s => s.name === activeName)
     if (!def) throw new Error(`Strategy "${activeName}" not found`)
-    const money = p.optType === 'call' ? 1 + p.otmPct / 100 : 1 - p.otmPct / 100
+    const money = otmToMoneyness(p.optType, p.otmPct)
     const r = def.risk
     const rules = rulesForTicker(def, p.ticker)   // per-ticker override, else default
     const instrument = p.instMode === 'option' ? { kind: 'option', type: p.optType, moneyness: money, dte: p.dte }
@@ -1161,7 +1168,7 @@ export function AlgoStrategyBuilderContent() {
     if (optionPositions.length > 0) {
       const template = optionPositions[0]
       const legs: ComboLeg[] = template.instMode === 'option'
-        ? [{ type: template.optType, side: template.side === 'short' ? 'sell' : 'buy', moneyness: template.optType === 'call' ? 1 + template.otmPct / 100 : 1 - template.otmPct / 100, qty: 1 }]
+        ? [singleOptionLeg(template.optType, template.side, template.otmPct)]
         : (template.comboLegs?.length ? template.comboLegs : legsToCombo(PRESETS['Short Straddle']))
       const r = activeDef.risk ?? DEFAULT_RISK
       const handoff: AlgoOptionsMonteCarloHandoff = {
@@ -1223,7 +1230,7 @@ export function AlgoStrategyBuilderContent() {
       localStorage.setItem(ALGO_MC_HANDOFF_KEY, JSON.stringify(handoff))
     } else {
       const legs: ComboLeg[] = instMode === 'option'
-        ? [{ type: optType, side: side === 'short' ? 'sell' : 'buy', moneyness: optType === 'call' ? 1 + otmPct / 100 : 1 - otmPct / 100, qty: 1 }]
+        ? [singleOptionLeg(optType, side, otmPct)]
         : (comboLegs?.length ? comboLegs : legsToCombo(PRESETS['Short Straddle']))
       const handoff: AlgoOptionsMonteCarloHandoff = {
         version: 1,

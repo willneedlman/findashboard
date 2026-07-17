@@ -19,7 +19,7 @@ import EmptyState from '../components/EmptyState'
 import PortfolioIO, { type PortfolioAsset } from '../components/PortfolioIO'
 import PMImportPicker from '../components/PMImportPicker'
 import { CASH_SYMBOL } from '../lib/pmImport'
-import ConfigHeader, { Field, paramInput, RebalanceSelect, type RebalanceFreq } from '../components/portfolio/ConfigHeader'
+import ConfigHeader, { Field, NumberInput, paramInput, RebalanceSelect, type RebalanceFreq } from '../components/portfolio/ConfigHeader'
 import { usePortfolio, type PortfolioHolding } from '../contexts/PortfolioContext'
 import { PRESETS, PRESET_DESC, PRESET_GROUPS } from './strategy-builder/shared'
 import { ALGO_MC_HANDOFF_KEY, ALGO_MC_OPTIONS_HANDOFF_KEY, legsToCombo, type AlgoMonteCarloHandoff, type AlgoOptionsMonteCarloHandoff, type ComboLeg } from './AlgoStrategyBuilder'
@@ -283,6 +283,7 @@ interface ComboMcResult {
   spot: number | null; iv: number | null; dte: number
   entry_credit_debit: number
   breakevens: number[]
+  per_ticker_breakevens: { ticker: string; spot: number; entry_credit_debit: number; breakevens: number[]; max_profit: number | null; max_loss: number | null }[] | null
   max_profit: number | null; max_loss: number | null
   prob_profit: number
   percentiles: { p5: number; p25: number; p50: number; p75: number; p95: number }
@@ -433,18 +434,15 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
           </div>
         </div>
         <div style={{ width: '100%', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
-          <div>
-            <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)', marginBottom: 3 }}>Position Size %</label>
-            <input type="number" value={positionSize} min={1} max={100} onChange={e => setPositionSize(e.target.value)} style={{ ...paramInput, width: 80 }} />
+          <div style={{ width: 80 }}>
+            <Field label="Position Size %"><NumberInput value={positionSize} min={1} onChange={setPositionSize} /></Field>
           </div>
-          <div>
-            <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)', marginBottom: 3 }}>Leverage (x)</label>
-            <input type="number" value={leverage} min={1} step={0.25} onChange={e => setLeverage(e.target.value)} style={{ ...paramInput, width: 80 }} />
+          <div style={{ width: 80 }}>
+            <Field label="Leverage (x)"><NumberInput value={leverage} min={1} step={0.25} onChange={setLeverage} /></Field>
           </div>
           {(Number(leverage) || 1) > 1 && (
-            <div>
-              <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)', marginBottom: 3 }}>Borrow Rate %</label>
-              <input type="number" value={borrowRate} min={0} max={100} step={0.5} onChange={e => setBorrowRate(e.target.value)} style={{ ...paramInput, width: 80 }} />
+            <div style={{ width: 80 }}>
+              <Field label="Borrow Rate %"><NumberInput value={borrowRate} min={0} step={0.5} onChange={setBorrowRate} /></Field>
             </div>
           )}
           <div style={{ fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', fontFamily: 'var(--theme-mono)', maxWidth: 380, lineHeight: '13px' }}>
@@ -494,8 +492,28 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
             )}
 
             {data.is_basket ? (
-              <div style={{ padding: '10px 14px', border: '1px dashed var(--theme-border, rgba(255,255,255,0.16))', fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))' }}>
-                No single payoff-at-expiry chart for a {data.tickers?.length ?? 0}-symbol basket — each underlying moves independently. The P&L distribution below already reflects the full basket.
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ padding: '10px 14px', border: '1px dashed var(--theme-border, rgba(255,255,255,0.16))', fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))' }}>
+                  No single payoff-at-expiry chart for a {data.tickers?.length ?? 0}-symbol basket — each underlying moves independently. The P&L distribution below already reflects the full basket. Each name's own breakeven(s) are shown below for reference.
+                </div>
+                {data.per_ticker_breakevens && data.per_ticker_breakevens.length > 0 && (
+                  <div style={{ border: '1px solid var(--theme-border, rgba(255,255,255,0.12))', overflow: 'hidden' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.6fr 1fr 1fr', gap: 8, padding: '6px 12px', fontFamily: 'var(--theme-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.12))' }}>
+                      <span>Ticker</span><span>Spot</span><span>Breakevens</span><span>Max Profit</span><span>Max Loss</span>
+                    </div>
+                    <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+                      {data.per_ticker_breakevens.map(row => (
+                        <div key={row.ticker} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.6fr 1fr 1fr', gap: 8, padding: '5px 12px', fontFamily: 'var(--theme-mono)', fontSize: 10.5, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.06))' }}>
+                          <span style={{ color: 'var(--theme-text, #d7e3fc)' }}>{row.ticker}</span>
+                          <span>${row.spot.toFixed(2)}</span>
+                          <span>{row.breakevens.length ? row.breakevens.map(b => `$${b.toFixed(0)}`).join(' / ') : '—'}</span>
+                          <span style={{ color: POS }}>{row.max_profit == null ? 'Unlimited' : `$${row.max_profit.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}</span>
+                          <span style={{ color: NEG }}>{row.max_loss == null ? 'Unlimited' : `$${Math.abs(row.max_loss).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <ChartPanel label="Payoff at Expiry (deterministic)" height={260}>

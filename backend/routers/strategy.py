@@ -786,7 +786,16 @@ def custom_backtest(req: CustomBacktestRequest):
     # same daily-compounding financing charge portfolio_backtest uses, then
     # re-floor since financing drag can itself tip a thin curve to zero.
     equity = pd.Series([pt["strategy"] for pt in result["equity_curve"]], index=close.index)
-    equity, total_interest = _apply_financing_cost(equity, signal, trade_size, req.initial_capital,
+    # For a modeled option/combo instrument, the raw entry-rule signal can stay
+    # "1" through a blocked period (already force-closed by a risk trigger,
+    # waiting for the rule to drop to 0 before re-entering) — financing must be
+    # computed off the engine's own in_position state, not that raw signal, or
+    # it keeps charging interest on notional that was already unwound.
+    financing_signal = (
+        pd.Series(result["in_position"], index=close.index).astype(float)
+        if is_modeled and result.get("in_position") is not None else signal
+    )
+    equity, total_interest = _apply_financing_cost(equity, financing_signal, trade_size, req.initial_capital,
                                                     req.effective_annual_rate, bpy)
     blown_up_at = None
     if total_interest:
@@ -925,7 +934,7 @@ class PortfolioBacktestRequest(BaseModel):
 
 @router.post("/portfolio-backtest")
 def portfolio_backtest(req: PortfolioBacktestRequest):
-    from .algo import _apply_risk_controls, _floor_equity, _safe_ann_return
+    from .algo import _apply_risk_controls, _floor_equity, _safe_ann_return, _ear_bar_rate
     import datetime as _dt
     import numpy as _np
     import alpaca
@@ -1001,7 +1010,16 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
                                       exit_kinds=exit_kinds)
         except HTTPException:
             continue
-        legs.append((p, res, signal))
+        # Financing (below) needs the ACTUAL open-position state, not the raw
+        # entry-rule signal — for a modeled option/combo leg those diverge
+        # during a blocked period (already force-closed by a risk trigger,
+        # waiting for the rule to drop to 0 before re-entering); see
+        # custom_backtest's identical financing_signal handling.
+        financing_signal = (
+            pd.Series(res["in_position"], index=close.index).astype(float)
+            if is_modeled and res.get("in_position") is not None else signal
+        )
+        legs.append((p, res, financing_signal))
 
     if not legs:
         raise HTTPException(422, "No position produced a backtest (check tickers, rules, and date range)")
@@ -1026,7 +1044,19 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
         eq_df[col] = eq_df[col].ffill().fillna(req.initial_capital)
         bm_df[col] = bm_df[col].ffill().fillna(req.initial_capital)
     port_eq = req.initial_capital + (eq_df - req.initial_capital).sum(axis=1)
-    port_bm = bm_df.iloc[:, 0]
+
+    # Blend every leg's own buy-and-hold benchmark (each already a full-capital
+    # curve for its ticker — see _compute_metrics/_compute_option_metrics),
+    # weighted by that leg's actual share of the portfolio, instead of just
+    # reading the first leg's curve as if it stood in for the whole book.
+    leg_weights = pd.Series({str(i): trade_size(p) for i, (p, _, _) in enumerate(legs)})
+    weight_total = float(leg_weights.sum())
+    if weight_total > 0:
+        leg_weights = leg_weights[bm_df.columns] / weight_total
+        bm_returns = bm_df.pct_change().fillna(0.0)
+        port_bm = req.initial_capital * (1 + (bm_returns * leg_weights).sum(axis=1)).cumprod()
+    else:
+        port_bm = bm_df.iloc[:, 0]
 
     gross_notional = pd.Series(0.0, index=port_eq.index)
     for p, _res, signal in legs:
@@ -1039,8 +1069,7 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
         sig.loc[sig.index > signal.index.max()] = 0.0
         gross_notional = gross_notional.add(sig * (trade_size(p) / 100.0) * req.initial_capital, fill_value=0.0)
     borrowed_notional = (gross_notional - req.initial_capital).clip(lower=0.0)
-    daily_financing_rate = (1 + req.effective_annual_rate / 100.0) ** (1 / bpy) - 1
-    interest_cost = borrowed_notional * daily_financing_rate
+    interest_cost = borrowed_notional * _ear_bar_rate(req.effective_annual_rate, bpy)
     total_interest = float(interest_cost.sum())
     if total_interest:
         port_eq = port_eq - interest_cost.cumsum()

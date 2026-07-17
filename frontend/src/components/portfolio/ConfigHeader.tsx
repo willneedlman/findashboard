@@ -129,7 +129,7 @@ export function RebalanceSelect({ value, onChange }: { value: RebalanceFreq; onC
   )
 }
 
-function NumberInput({ value, onChange, placeholder, step, min }:
+export function NumberInput({ value, onChange, placeholder, step, min }:
   { value: number | string; onChange: (v: string) => void; placeholder?: string; step?: number; min?: number }) {
   return (
     <input type="number" value={value} placeholder={placeholder} step={step} min={min}
@@ -280,7 +280,7 @@ export default function ConfigHeader(p: Props) {
         </button>
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-          {p.overflow && (
+          {(p.overflow || p.onCrspModeChange) && (
             <div style={{ position: 'relative' }}>
               <button onClick={() => setMenuOpen(o => !o)} aria-label="Import and export"
                 style={{ display: 'flex', background: 'none', border: `1px solid ${T.border}`, color: T.sec, cursor: 'pointer', padding: 5 }}>
@@ -288,6 +288,20 @@ export default function ConfigHeader(p: Props) {
               </button>
               {menuOpen && (
                 <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 200, width: 230, background: T.bg, border: `1px solid ${T.border}`, boxShadow: '0 10px 30px rgba(0,0,0,0.8)', padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {p.onCrspModeChange && (
+                    <button type="button" onClick={() => p.onCrspModeChange!(!p.crspMode)}
+                      title="Use the S&P 500 constituents as they actually stood on the start date (WRDS CRSP), instead of typed tickers — correctly includes names later delisted or acquired."
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                        background: 'none', border: 'none', color: p.crspMode ? T.primary : T.sec,
+                        cursor: 'pointer', fontFamily: T.mono, fontSize: 10, letterSpacing: '0.03em',
+                        textAlign: 'left', padding: '2px 0', paddingBottom: p.overflow ? 8 : 0,
+                        borderBottom: p.overflow ? `1px solid ${T.border}` : 'none',
+                      }}>
+                      <span>Survivorship-bias-free (CRSP)</span>
+                      <span style={{ fontSize: 9, fontWeight: 700, opacity: p.crspMode ? 1 : 0.5 }}>{p.crspMode ? 'ON' : 'OFF'}</span>
+                    </button>
+                  )}
                   {p.overflow}
                 </div>
               )}
@@ -318,18 +332,7 @@ export default function ConfigHeader(p: Props) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
               <span style={SECTION}>{leftLabel}</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                {p.onCrspModeChange && (
-                  <button type="button" onClick={() => p.onCrspModeChange!(!p.crspMode)}
-                    title="Use the S&P 500 constituents as they actually stood on the start date (WRDS CRSP), instead of typed tickers — correctly includes names later delisted or acquired."
-                    style={{
-                      background: p.crspMode ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 16%, transparent)' : 'none',
-                      border: `1px solid ${p.crspMode ? T.primary : T.border}`, color: p.crspMode ? T.primary : T.sec,
-                      cursor: 'pointer', fontFamily: T.mono, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
-                      textTransform: 'uppercase', padding: '4px 8px',
-                    }}>
-                    S&amp;P 500 (Survivorship-bias-free)
-                  </button>
-                )}
+                {p.crspMode && <span style={{ fontFamily: T.mono, fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', color: T.primary, textTransform: 'uppercase' }}>CRSP mode</span>}
                 {!p.crspMode && <span style={{ fontFamily: T.mono, fontSize: 10, color: T.faint }}>{p.holdings.length} {noun}{p.holdings.length === 1 ? '' : 's'}</span>}
               </div>
             </div>
