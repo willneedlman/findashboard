@@ -9,6 +9,7 @@ import ErrorState from '../components/ErrorState'
 import Tooltip from '../components/Tooltip'
 import { setLinkedTicker } from '../lib/tickerLink'
 import useIsMobile from '../hooks/useIsMobile'
+import { readPMPortfolios, addHoldingsToPortfolio, normalizeTicker, type PMPortfolio } from '../lib/pmImport'
 
 const C = {
   bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))', surface: 'var(--theme-surface, #0d1826)',
@@ -63,6 +64,16 @@ interface ScreenResult {
   change52wHiPct: number | null; avgVolume: number | null
   rsi14: number | null; smaDist50: number | null; smaDist200: number | null; vol30: number | null
   priceChange: number | null; region: string | null; country: string | null
+}
+
+// Handoff to the Algo Strategy Builder: "Send to Algo Builder" writes the
+// current result set's tickers here, then hard-navigates to /algo-strategy,
+// which reads + clears this key on mount and appends one position per ticker.
+export const SCREENER_ALGO_HANDOFF_KEY = 'fdb_screener_algo_universe_handoff'
+export type ScreenerAlgoHandoff = {
+  version: 1
+  createdAt: string
+  tickers: string[]
 }
 
 // Column registry. `w` is the grid width when shown (Company is rendered specially).
@@ -280,6 +291,32 @@ export default function StockScreener() {
     })
     return rows
   }, [data, localSort, textFilter, STRING_KEYS])
+
+  // Send/save actions act on the currently visible rows (displayRows) — same
+  // "what's on screen" semantics exportCsv already uses, so filtering the
+  // table first is how the user scopes what gets sent, no separate
+  // row-selection UI needed.
+  const [pmPickerOpen, setPmPickerOpen] = useState(false)
+  const [pmTarget, setPmTarget] = useState('new')
+  const [pmNewName, setPmNewName] = useState('')
+  const [pmResult, setPmResult] = useState<{ name: string; added: number; skipped: number } | null>(null)
+  const pmBooks = useMemo(() => readPMPortfolios(), [pmPickerOpen])
+
+  const sendToAlgoBuilder = () => {
+    const tickers = [...new Set(displayRows.map(r => normalizeTicker(r.ticker)).filter(Boolean))]
+    if (!tickers.length) return
+    const handoff: ScreenerAlgoHandoff = { version: 1, createdAt: new Date().toISOString(), tickers }
+    localStorage.setItem(SCREENER_ALGO_HANDOFF_KEY, JSON.stringify(handoff))
+    window.location.assign('/algo-strategy')
+  }
+
+  const confirmAddToPortfolio = () => {
+    const holdings = displayRows.map(r => ({ ticker: r.ticker, shares: 1, avgCost: r.price ?? 0 }))
+    if (!holdings.length) return
+    const target = pmTarget === 'new' ? { newName: pmNewName || 'Screener picks' } : { portfolioId: pmTarget }
+    const result = addHoldingsToPortfolio(target, holdings)
+    setPmResult(result)
+  }
 
   // Summary stats over the full result set.
   const stats = useMemo(() => {
@@ -622,7 +659,45 @@ export default function StockScreener() {
                 {/* footer */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 24px', borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', flex: 'none' }}>
                   <span style={{ fontFamily: C.sans, fontSize: 10, color: C.dim }}>Showing {displayRows.length} of {data.total} matches</span>
-                  <span onClick={() => exportCsv(displayRows, renderCols)} style={{ fontFamily: C.sans, fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', color: 'var(--theme-text-muted, #9fb0c7)', cursor: 'pointer' }}>Export CSV →</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                    <span onClick={() => exportCsv(displayRows, renderCols)} style={{ fontFamily: C.sans, fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', color: 'var(--theme-text-muted, #9fb0c7)', cursor: 'pointer' }}>Export CSV →</span>
+                    <span onClick={sendToAlgoBuilder} title={`Send ${displayRows.length} ticker${displayRows.length === 1 ? '' : 's'} to the Algo Strategy Builder as a portfolio universe`}
+                      style={{ fontFamily: C.sans, fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', color: 'var(--theme-text-muted, #9fb0c7)', cursor: displayRows.length ? 'pointer' : 'default', opacity: displayRows.length ? 1 : 0.4 }}>
+                      Send to Algo Builder →
+                    </span>
+                    <div style={{ position: 'relative' }}>
+                      <span onClick={() => { setPmResult(null); setPmPickerOpen(v => !v) }}
+                        style={{ fontFamily: C.sans, fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', color: pmPickerOpen ? C.gold : 'var(--theme-text-muted, #9fb0c7)', cursor: displayRows.length ? 'pointer' : 'default', opacity: displayRows.length ? 1 : 0.4 }}>
+                        Add to Portfolio ▾
+                      </span>
+                      {pmPickerOpen && (
+                        <div style={{ position: 'absolute', bottom: '100%', right: 0, marginBottom: 8, width: 220, background: C.surface, border: `1px solid ${C.border}`, padding: 10, zIndex: 30, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          <div style={{ fontFamily: C.mono, fontSize: 9, color: C.muted, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                            Add {displayRows.length} ticker{displayRows.length === 1 ? '' : 's'} to
+                          </div>
+                          <select value={pmTarget} onChange={e => setPmTarget(e.target.value)} style={SELECT}>
+                            <option value="new">New portfolio…</option>
+                            {pmBooks.map((b: PMPortfolio) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                          </select>
+                          {pmTarget === 'new' && (
+                            <input value={pmNewName} onChange={e => setPmNewName(e.target.value)} placeholder="Portfolio name"
+                              style={INPUT} />
+                          )}
+                          <span style={{ fontFamily: C.sans, fontSize: 9, color: C.dim, lineHeight: 1.4 }}>
+                            Adds each ticker at 1 share, cost basis = current screener price. Tickers already held are left untouched.
+                          </span>
+                          <button onClick={confirmAddToPortfolio} style={{ background: C.gold, border: 'none', color: C.bg, fontFamily: C.mono, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 0', cursor: 'pointer' }}>
+                            Add
+                          </button>
+                          {pmResult && (
+                            <span style={{ fontFamily: C.sans, fontSize: 9, color: C.pos }}>
+                              Added {pmResult.added} to "{pmResult.name}"{pmResult.skipped ? ` · ${pmResult.skipped} already held` : ''}.
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </>
             )}

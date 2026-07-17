@@ -215,11 +215,83 @@ def _apply_risk_controls(
     return result
 
 
+def _floor_equity(equity: pd.Series):
+    """Freeze an equity curve at 0 the first time it goes non-positive. A
+    leveraged position can lose more than 100% in a single bar; letting a raw
+    cumulative-return series carry on compounding past that point lets it
+    swing back above zero on a later "gain", which misrepresents a wipeout as
+    a recovery. Real accounts don't get that free option — once equity hits
+    zero the position is liquidated and stays at zero. Returns
+    (floored_series, date_of_wipeout_or_None)."""
+    non_positive = equity <= 0
+    if not non_positive.any():
+        return equity, None
+    first = non_positive.idxmax()
+    out = equity.copy()
+    out.loc[first:] = 0.0
+    return out, first
+
+
+def _safe_ann_return(final_capital: float, initial_capital: float, ann_factor: float) -> float:
+    """(final/initial) ** ann_factor blows up into a complex number for a
+    non-integer ann_factor once final_capital is negative — guard the
+    wipeout case explicitly instead of relying on floored equity everywhere."""
+    if initial_capital <= 0:
+        return 0.0
+    ratio = final_capital / initial_capital
+    if ratio <= 0:
+        return -100.0
+    return float(ratio ** ann_factor - 1) * 100
+
+
+def _apply_financing_cost(equity: pd.Series, signal: pd.Series, trade_size_pct: float,
+                          initial_capital: float, effective_annual_rate: float, bars_per_year: int):
+    """Charge daily-compounded interest on whatever notional a leveraged
+    position carries beyond 100% of initial capital — the same borrowed-cash
+    model portfolio_backtest uses, applied to a single position so a
+    leveraged single-ticker backtest isn't "free" leverage with no financing
+    drag. Returns (equity_with_financing_deducted, total_interest_paid)."""
+    if effective_annual_rate <= 0 or trade_size_pct <= 100:
+        return equity, 0.0
+    gross_notional = signal.reindex(equity.index).ffill().fillna(0.0) * (trade_size_pct / 100.0) * initial_capital
+    borrowed_notional = (gross_notional - initial_capital).clip(lower=0.0)
+    daily_rate = (1 + effective_annual_rate / 100.0) ** (1 / bars_per_year) - 1
+    interest_cost = borrowed_notional * daily_rate
+    total_interest = float(interest_cost.sum())
+    if not total_interest:
+        return equity, 0.0
+    return equity - interest_cost.cumsum(), total_interest
+
+
+def _summarize_equity(equity: pd.Series, initial_capital: float, bars_per_year: int, blown_up_at=None) -> dict:
+    """Recompute the standard summary stats (total/ann return, drawdown,
+    Sharpe, final capital) from an equity curve that's already been floored —
+    used after a post-hoc adjustment (financing cost) changes a curve that an
+    engine already summarized once."""
+    n = len(equity)
+    ann_factor = bars_per_year / max(1, n)
+    total_return = float(equity.iloc[-1] / initial_capital - 1) * 100
+    ann_return = _safe_ann_return(float(equity.iloc[-1]), initial_capital, ann_factor)
+    roll_max = equity.cummax().replace(0, np.nan)
+    drawdown = (equity - roll_max) / roll_max
+    max_drawdown = float(drawdown.min(skipna=True) * 100) if drawdown.notna().any() else -100.0
+    if blown_up_at is not None:
+        max_drawdown = min(max_drawdown, -100.0)
+    daily = equity.pct_change()
+    sharpe = float(daily.mean() / daily.std() * np.sqrt(bars_per_year)) if daily.std() > 0 else 0.0
+    return {
+        "total_return": round(total_return, 2), "ann_return": round(ann_return, 2),
+        "max_drawdown": round(max_drawdown, 2), "sharpe": round(sharpe, 3),
+        "final_capital": round(float(equity.iloc[-1]), 2),
+        "total_pnl": round(float(equity.iloc[-1]) - initial_capital, 2),
+    }
+
+
 def _compute_metrics(signal: pd.Series, close: pd.Series, position_size: float = 100,
                      initial_capital: float = 10_000, direction: str = "long",
                      bars_per_year: int = 252, intraday: bool = False,
                      exit_kinds: dict | None = None):
-    alloc = max(0.0, min(100.0, position_size)) / 100.0
+    alloc = max(0.0, position_size) / 100.0
     # Intraday keeps the time in each label so bars within a day stay distinct
     # (a date-only label would collapse them and break the curve / portfolio join).
     _dfmt = "%Y-%m-%d %H:%M" if intraday else "%Y-%m-%d"
@@ -228,8 +300,9 @@ def _compute_metrics(signal: pd.Series, close: pd.Series, position_size: float =
     strat_ret = signal.shift(1) * daily_ret * alloc * sign
 
     # Equity curves — normalized to initial_capital
-    equity = (1 + strat_ret.fillna(0)).cumprod() * initial_capital
+    equity_raw = (1 + strat_ret.fillna(0)).cumprod() * initial_capital
     benchmark = (1 + daily_ret.fillna(0)).cumprod() * initial_capital
+    equity, blown_up_at = _floor_equity(equity_raw)
 
     # Total return
     total_return = float(equity.iloc[-1] / initial_capital - 1) * 100
@@ -238,12 +311,15 @@ def _compute_metrics(signal: pd.Series, close: pd.Series, position_size: float =
     # ~1638 hourly, ~19656 for 5-minute bars, so intraday Sharpe/CAGR stay comparable).
     n_days = len(equity)
     ann_factor = bars_per_year / n_days
-    ann_return = float(((equity.iloc[-1] / initial_capital) ** ann_factor - 1) * 100)
+    ann_return = _safe_ann_return(float(equity.iloc[-1]), initial_capital, ann_factor)
 
-    # Max drawdown
+    # Max drawdown — guard the 0/0 case a same-bar wipeout produces (roll_max
+    # is 0 too when equity never traded above zero before freezing).
     roll_max = equity.cummax()
-    drawdown = (equity - roll_max) / roll_max
-    max_drawdown = float(drawdown.min() * 100)
+    drawdown = (equity - roll_max) / roll_max.replace(0, np.nan)
+    max_drawdown = float(drawdown.min(skipna=True) * 100) if drawdown.notna().any() else -100.0
+    if blown_up_at is not None:
+        max_drawdown = min(max_drawdown, -100.0)
 
     # Sharpe (rf=0, annualized)
     sharpe = float(strat_ret.mean() / strat_ret.std() * np.sqrt(bars_per_year)) if strat_ret.std() > 0 else 0.0
@@ -300,6 +376,7 @@ def _compute_metrics(signal: pd.Series, close: pd.Series, position_size: float =
             "initial_capital": round(initial_capital, 2),
             "final_capital": round(final_capital, 2),
             "total_pnl": round(total_pnl, 2),
+            "blown_up_at": blown_up_at.strftime(_dfmt) if blown_up_at is not None else None,
         },
         "trades": trades,
     }
@@ -316,12 +393,14 @@ def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: 
     """Modeled single-option backtest. On each entry the strategy buys (long) or
     writes (short) a fresh Black-Scholes-priced call/put (strike = moneyness × spot,
     fixed DTE), marks it daily as time decays, and realizes it when the rules exit,
-    a risk-control trigger fires, or it reaches expiry (then rolls if still
+    a risk-control trigger fires, or it reaches its calendar-date expiry (then rolls if still
     signalled). IV is held at the current snapshot value — the project has no
     historical option prices — so this is an APPROXIMATION, labeled as modeled
     in the UI. A short leg mirrors the long leg's dollar P&L (project
-    convention; assignment risk is not modeled) and is floored at a total loss
-    of its capital. Benchmark stays underlying buy & hold.
+    convention). Expiry is cash-settled at intrinsic value, which is economically
+    equivalent to exercise/assignment with an immediately flattened share delivery;
+    assignment margin and post-expiry shares are not carried. Benchmark stays
+    underlying buy & hold.
 
     stop_loss/take_profit/trailing_stop are evaluated against the OPTION'S OWN
     unrealized P&L (as % of the entry premium paid/collected), not the
@@ -337,7 +416,7 @@ def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: 
     entry_action = "SELL" if short else "BUY"   # short = sell-to-open
     exit_action = "BUY" if short else "SELL"
     r = 4.0
-    alloc = max(0.0, min(100.0, position_size)) / 100.0
+    alloc = max(0.0, position_size) / 100.0
     _dfmt = "%Y-%m-%d %H:%M" if intraday else "%Y-%m-%d"
     idx = close.index
     px = close.to_numpy(dtype=float)
@@ -349,72 +428,93 @@ def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: 
     cur = float(initial_capital)
     in_trade = False
     blocked = False   # true after a risk-triggered exit, until the raw signal drops to 0
-    contracts = 0.0
+    signed_contracts = 0.0
     strike = 0.0
     entry_i = -1
     entry_val = 0.0
+    entry_mtm = 0.0
     basis = 1.0
     peak_pnl = 0.0
     trades: list[dict] = []
+    wiped_out = False
+    blown_up_at = None
 
     def _val(i: int) -> float:
-        return float(bs_price(px[i], strike, dte - (i - entry_i), r, iv, otype))
+        remaining_days = max(0, (expiry_at - idx[i]).total_seconds() / 86_400) if entry_i >= 0 else dte
+        return float(bs_price(px[i], strike, remaining_days, r, iv, otype))
+
+    def _settlement(i: int) -> str:
+        intrinsic = max(px[i] - strike, 0.0) if otype == "call" else max(strike - px[i], 0.0)
+        if intrinsic <= 0:
+            return "expired_worthless"
+        return "assignment" if short else "exercise"
+
+    expiry_at = None
 
     for i in range(n):
+        if wiped_out:
+            equity[i] = 0.0
+            continue
         exit_kind = None
+        expires_now = in_trade and expiry_at is not None and idx[i] >= expiry_at
         if in_trade:
-            raw_pnl = contracts * (_val(i) - entry_val) * _OPT_MULT
-            pnl = -raw_pnl if short else raw_pnl   # short profits when the option cheapens
+            pnl = signed_contracts * _val(i) * _OPT_MULT - entry_mtm
             peak_pnl = max(peak_pnl, pnl)
-            if stop_loss is not None and pnl <= -(stop_loss / 100.0) * basis:
+            if not expires_now and stop_loss is not None and pnl <= -(stop_loss / 100.0) * basis:
                 exit_kind = "stop_loss"
-            if exit_kind is None and take_profit is not None and pnl >= (take_profit / 100.0) * basis:
+            if not expires_now and exit_kind is None and take_profit is not None and pnl >= (take_profit / 100.0) * basis:
                 exit_kind = "take_profit"
-            if exit_kind is None and trailing_stop is not None and pnl <= peak_pnl - (trailing_stop / 100.0) * basis:
+            if not expires_now and exit_kind is None and trailing_stop is not None and pnl <= peak_pnl - (trailing_stop / 100.0) * basis:
                 exit_kind = "trailing_stop"
-            if exit_kind is None and max_hold_bars is not None and (i - entry_i) >= max_hold_bars:
+            if not expires_now and exit_kind is None and max_hold_bars is not None and (i - entry_i) >= max_hold_bars:
                 exit_kind = "max_hold"
         risk_triggered = exit_kind is not None
-        if in_trade and not risk_triggered and (i - entry_i) >= dte:
-            exit_kind = "dte"
+        if expires_now:
+            exit_kind = "expiration"
         exiting = in_trade and (sig[i] == 0.0 or exit_kind is not None)
         if exiting:
             v = _val(i)
-            cash += contracts * v * _OPT_MULT
-            trades.append({"date": idx[i].strftime(_dfmt), "action": exit_action, "price": round(v, 2), "is_entry": False,
-                           "exit_kind": exit_kind or "rule"})
-            in_trade, contracts = False, 0.0
+            cash += signed_contracts * v * _OPT_MULT
+            trades.append({"date": idx[i].strftime(_dfmt), "action": "EXPIRE" if exit_kind == "expiration" else exit_action, "price": round(v, 2), "is_entry": False,
+                           "exit_kind": exit_kind or "rule", **({"settlement": _settlement(i)} if exit_kind == "expiration" else {})})
+            in_trade, signed_contracts = False, 0.0
             blocked = risk_triggered
         if blocked and sig[i] == 0.0:
             blocked = False
         if not in_trade and not blocked and sig[i] == 1.0:
             strike = round(px[i] * moneyness, 2)
             entry_val = max(float(bs_price(px[i], strike, dte, r, iv, otype)), 0.01)
-            invest = cur * alloc
+            invest = cash * alloc
             contracts = invest / (entry_val * _OPT_MULT)
-            cash = cur - contracts * entry_val * _OPT_MULT
-            entry_i, in_trade = i, True
-            basis = contracts * entry_val * _OPT_MULT or 1.0
+            signed_contracts = -contracts if short else contracts
+            cash -= signed_contracts * entry_val * _OPT_MULT
+            entry_i, expiry_at, in_trade = i, idx[i] + pd.Timedelta(days=dte), True
+            entry_mtm = signed_contracts * entry_val * _OPT_MULT
+            basis = abs(entry_mtm) or 1.0
             peak_pnl = 0.0
             trades.append({"date": idx[i].strftime(_dfmt), "action": entry_action, "price": round(entry_val, 2), "is_entry": True})
-        cur = cash + (contracts * _val(i) * _OPT_MULT if in_trade else 0.0)
+        cur = cash + (signed_contracts * _val(i) * _OPT_MULT if in_trade else 0.0)
+        if cur <= 0:
+            wiped_out, blown_up_at, cur = True, idx[i], 0.0
+            cash, in_trade, signed_contracts = 0.0, False, 0.0
+            trades.append({"date": idx[i].strftime(_dfmt), "action": "LIQUIDATED", "price": round(px[i], 2),
+                           "is_entry": False, "exit_kind": "wipeout"})
         equity[i] = cur
 
     eq = pd.Series(equity, index=idx)
-    if short:
-        # Short leg: dollar P&L is the negative of the long leg's, floored at a
-        # full loss of capital. Modeled/approximate — not a true written-premium
-        # backtest (no margin, no assignment).
-        eq = (2 * initial_capital - eq).clip(lower=0.0)
     daily = eq.pct_change()
     benchmark = (1 + close.pct_change().fillna(0)).cumprod() * initial_capital
     total_return = float(eq.iloc[-1] / initial_capital - 1) * 100
-    ann_return = float(((eq.iloc[-1] / initial_capital) ** (bars_per_year / max(1, n)) - 1) * 100)
-    drawdown = (eq - eq.cummax()) / eq.cummax()
+    ann_return = _safe_ann_return(float(eq.iloc[-1]), initial_capital, bars_per_year / max(1, n))
+    roll_max = eq.cummax().replace(0, np.nan)
+    drawdown = (eq - roll_max) / roll_max
+    max_drawdown = float(drawdown.min(skipna=True) * 100) if drawdown.notna().any() else -100.0
+    if blown_up_at is not None:
+        max_drawdown = min(max_drawdown, -100.0)
     sharpe = float(daily.mean() / daily.std() * np.sqrt(bars_per_year)) if daily.std() > 0 else 0.0
 
-    entries = [t for t in trades if t["action"] == entry_action]
-    exits = [t for t in trades if t["action"] == exit_action]
+    entries = [t for t in trades if t["is_entry"]]
+    exits = [t for t in trades if not t["is_entry"]]
     # A short leg profits when it buys the option back cheaper than it sold it.
     wins = sum(1 for e, x in zip(entries, exits)
                if (x["price"] < e["price"] if short else x["price"] > e["price"]))
@@ -427,10 +527,11 @@ def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: 
         "equity_curve": curve,
         "metrics": {
             "total_return": round(total_return, 2), "ann_return": round(ann_return, 2),
-            "max_drawdown": round(float(drawdown.min() * 100), 2), "sharpe": round(sharpe, 3),
+            "max_drawdown": round(max_drawdown, 2), "sharpe": round(sharpe, 3),
             "num_trades": num_trades, "win_rate": round(win_rate, 1),
             "initial_capital": round(initial_capital, 2), "final_capital": round(float(eq.iloc[-1]), 2),
             "total_pnl": round(float(eq.iloc[-1]) - initial_capital, 2),
+            "blown_up_at": blown_up_at.strftime(_dfmt) if blown_up_at is not None else None,
         },
         "trades": trades[:200],
         "instrument": {"kind": "option", "type": otype, "moneyness": moneyness, "dte": dte, "iv": round(iv, 1), "direction": direction, "modeled": True},
@@ -458,9 +559,10 @@ def _compute_combo_metrics(signal: pd.Series, close: pd.Series, combo: dict, iv:
     carries its own signed quantity (+qty long, -qty short) and the account
     value is cash + Σ(signed_qty × leg value) — this handles any mix of long
     and short legs (iron condors, jade lizards, ratio spreads, ...) correctly
-    without a post-hoc sign flip. Floored at zero per bar (a full loss of the
-    capital allocated to this position) since a naked short leg's risk isn't
-    capped like a single covered position.
+    without a post-hoc sign flip. A naked short leg's risk isn't capped like a
+    single covered position, so the account is force-liquidated and frozen at
+    zero the first bar it goes non-positive — it doesn't keep trading on
+    borrowed/negative cash.
 
     position_size(%) scales the whole structure to alloc% of current capital
     via NOTIONAL (Σqty×spot×MULT), not premium — premium-based sizing blows up
@@ -483,7 +585,7 @@ def _compute_combo_metrics(signal: pd.Series, close: pd.Series, combo: dict, iv:
         raise HTTPException(422, "Combo instrument needs at least one leg")
     dte = max(1, int(combo.get("dte", 30)))
     r = 4.0
-    alloc = max(0.0, min(100.0, position_size)) / 100.0
+    alloc = max(0.0, position_size) / 100.0
     _dfmt = "%Y-%m-%d %H:%M" if intraday else "%Y-%m-%d"
     idx = close.index
     px = close.to_numpy(dtype=float)
@@ -501,41 +603,55 @@ def _compute_combo_metrics(signal: pd.Series, close: pd.Series, combo: dict, iv:
     basis = 1.0
     leg_state: list[dict] = []   # [{type, strike, signed_qty}]
     trades: list[dict] = []
+    expiry_at = None
+    wiped_out = False
+    blown_up_at = None
 
     def _leg_val(leg: dict, i: int) -> float:
-        t_rem = max(0, dte - (i - entry_i))
-        return float(bs_price(px[i], leg["strike"], t_rem, r, iv, leg["type"]))
+        remaining_days = max(0, (expiry_at - idx[i]).total_seconds() / 86_400) if entry_i >= 0 else dte
+        return float(bs_price(px[i], leg["strike"], remaining_days, r, iv, leg["type"]))
 
     def _combo_mtm(i: int) -> float:
         return sum(l["signed_qty"] * _leg_val(l, i) * _OPT_MULT for l in leg_state)
 
+    def _settlement(leg: dict, i: int) -> str:
+        intrinsic = max(px[i] - leg["strike"], 0.0) if leg["type"] == "call" else max(leg["strike"] - px[i], 0.0)
+        if intrinsic <= 0:
+            return "expired_worthless"
+        return "exercise" if leg["signed_qty"] > 0 else "assignment"
+
     for i in range(n):
+        if wiped_out:
+            equity[i] = 0.0
+            continue
         exit_kind = None
+        expires_now = in_trade and expiry_at is not None and idx[i] >= expiry_at
         if in_trade:
             pnl = _combo_mtm(i) - entry_mtm
             peak_pnl = max(peak_pnl, pnl)
-            if stop_loss is not None and pnl <= -(stop_loss / 100.0) * basis:
+            if not expires_now and stop_loss is not None and pnl <= -(stop_loss / 100.0) * basis:
                 exit_kind = "stop_loss"
-            if exit_kind is None and take_profit is not None and pnl >= (take_profit / 100.0) * basis:
+            if not expires_now and exit_kind is None and take_profit is not None and pnl >= (take_profit / 100.0) * basis:
                 exit_kind = "take_profit"
-            if exit_kind is None and trailing_stop is not None and pnl <= peak_pnl - (trailing_stop / 100.0) * basis:
+            if not expires_now and exit_kind is None and trailing_stop is not None and pnl <= peak_pnl - (trailing_stop / 100.0) * basis:
                 exit_kind = "trailing_stop"
-            if exit_kind is None and max_hold_bars is not None and (i - entry_i) >= max_hold_bars:
+            if not expires_now and exit_kind is None and max_hold_bars is not None and (i - entry_i) >= max_hold_bars:
                 exit_kind = "max_hold"
         risk_triggered = exit_kind is not None
-        if in_trade and not risk_triggered and (i - entry_i) >= dte:
-            exit_kind = "dte"
+        if expires_now:
+            exit_kind = "expiration"
         exiting = in_trade and (sig[i] == 0.0 or exit_kind is not None)
         if exiting:
             cash += _combo_mtm(i)
             for l in leg_state:
                 trades.append({
                     "date": idx[i].strftime(_dfmt),
-                    "action": "SELL" if l["signed_qty"] > 0 else "BUY",   # closing action is opposite of opening
+                    "action": "EXPIRE" if exit_kind == "expiration" else "SELL" if l["signed_qty"] > 0 else "BUY",
                     "price": round(_leg_val(l, i), 2),
                     "leg": f"{l['type']} {l['strike']:g}",
                     "is_entry": False,
                     "exit_kind": exit_kind or "rule",
+                    **({"settlement": _settlement(l, i)} if exit_kind == "expiration" else {}),
                 })
             in_trade, leg_state = False, []
             # Only a risk-forced exit blocks re-entry (until the rule itself says
@@ -556,7 +672,7 @@ def _compute_combo_metrics(signal: pd.Series, close: pd.Series, combo: dict, iv:
                 entry_val = max(float(bs_price(px[i], strike, dte, r, iv, otype)), 0.01)
                 unscaled.append({"type": otype, "strike": strike, "signed_qty": signed_qty, "entry_val": entry_val})
                 base_notional += qty * px[i] * _OPT_MULT
-            scale = (cur * alloc) / base_notional if base_notional > 0 else 0.0
+            scale = (cash * alloc) / base_notional if base_notional > 0 else 0.0
             leg_state = []
             for l in unscaled:
                 signed_qty = l["signed_qty"] * scale
@@ -569,19 +685,28 @@ def _compute_combo_metrics(signal: pd.Series, close: pd.Series, combo: dict, iv:
                     "is_entry": True,
                 })
             cash -= sum(l["signed_qty"] * bs_price(px[i], l["strike"], dte, r, iv, l["type"]) * _OPT_MULT for l in leg_state)
-            entry_i, in_trade = i, True
+            entry_i, expiry_at, in_trade = i, idx[i] + pd.Timedelta(days=dte), True
             entry_mtm = _combo_mtm(i)
             basis = abs(entry_mtm) or 1.0
             peak_pnl = 0.0
-        cur = max(0.0, cash + (_combo_mtm(i) if in_trade else 0.0))
+        cur = cash + (_combo_mtm(i) if in_trade else 0.0)
+        if cur <= 0:
+            wiped_out, blown_up_at, cur = True, idx[i], 0.0
+            cash, in_trade, leg_state = 0.0, False, []
+            trades.append({"date": idx[i].strftime(_dfmt), "action": "LIQUIDATED", "price": round(px[i], 2),
+                           "is_entry": False, "exit_kind": "wipeout"})
         equity[i] = cur
 
     eq = pd.Series(equity, index=idx)
     daily = eq.pct_change()
     benchmark = (1 + close.pct_change().fillna(0)).cumprod() * initial_capital
     total_return = float(eq.iloc[-1] / initial_capital - 1) * 100
-    ann_return = float(((eq.iloc[-1] / initial_capital) ** (bars_per_year / max(1, n)) - 1) * 100)
-    drawdown = (eq - eq.cummax()) / eq.cummax()
+    ann_return = _safe_ann_return(float(eq.iloc[-1]), initial_capital, bars_per_year / max(1, n))
+    roll_max = eq.cummax().replace(0, np.nan)
+    drawdown = (eq - roll_max) / roll_max
+    max_drawdown = float(drawdown.min(skipna=True) * 100) if drawdown.notna().any() else -100.0
+    if blown_up_at is not None:
+        max_drawdown = min(max_drawdown, -100.0)
     sharpe = float(daily.mean() / daily.std() * np.sqrt(bars_per_year)) if daily.std() > 0 else 0.0
 
     # Round-trip win rate: pair each entry batch with its exit batch (same leg count
@@ -609,10 +734,11 @@ def _compute_combo_metrics(signal: pd.Series, close: pd.Series, combo: dict, iv:
         "equity_curve": curve,
         "metrics": {
             "total_return": round(total_return, 2), "ann_return": round(ann_return, 2),
-            "max_drawdown": round(float(drawdown.min() * 100), 2), "sharpe": round(sharpe, 3),
+            "max_drawdown": round(max_drawdown, 2), "sharpe": round(sharpe, 3),
             "num_trades": num_trades, "win_rate": round(win_rate, 1),
             "initial_capital": round(initial_capital, 2), "final_capital": round(float(eq.iloc[-1]), 2),
             "total_pnl": round(float(eq.iloc[-1]) - initial_capital, 2),
+            "blown_up_at": blown_up_at.strftime(_dfmt) if blown_up_at is not None else None,
         },
         "trades": trades[:200],
         "instrument": {"kind": "combo", "legs": legs_cfg, "dte": dte, "iv": round(iv, 1), "modeled": True},

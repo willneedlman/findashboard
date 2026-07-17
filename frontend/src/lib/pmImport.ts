@@ -52,6 +52,63 @@ export function readPMPortfolios(): PMPortfolio[] {
   }
 }
 
+const uid = () => (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now() + Math.random())
+
+// Bulk-add holdings (e.g. from a Screener export) into an existing PM
+// portfolio or a newly created one, and persist straight to pm-portfolios-v2 —
+// the same key/shape PortfolioManager.tsx itself reads and writes. A ticker
+// already held in the target portfolio is left untouched (its existing cost
+// basis isn't something an external tool should silently overwrite); only
+// new tickers are appended. Returns a summary for the caller to surface.
+export function addHoldingsToPortfolio(
+  target: { portfolioId: string } | { newName: string },
+  holdings: { ticker: string; shares: number; avgCost: number }[],
+): { name: string; added: number; skipped: number } {
+  const raw = localStorage.getItem(PORTFOLIOS_KEY)
+  let state: any
+  try {
+    state = raw ? JSON.parse(raw) : null
+  } catch {
+    state = null
+  }
+  if (!state?.portfolios?.length) {
+    const id = uid()
+    state = { portfolios: [{ id, name: 'Default', holdings: [], options: [], futures: [], cash: [] }], activeId: id }
+  }
+
+  let targetId: string
+  let targetName: string
+  if ('newName' in target) {
+    targetId = uid()
+    targetName = target.newName.trim() || 'Portfolio'
+    state.portfolios.push({ id: targetId, name: targetName, holdings: [], options: [], futures: [], cash: [] })
+  } else {
+    const found = state.portfolios.find((p: any) => p.id === target.portfolioId)
+    if (!found) return { name: '', added: 0, skipped: holdings.length }
+    targetId = found.id
+    targetName = found.name
+  }
+
+  let added = 0, skipped = 0
+  state.portfolios = state.portfolios.map((p: any) => {
+    if (p.id !== targetId) return p
+    const existing = new Set((p.holdings ?? []).map((h: any) => normalizeTicker(h.ticker)))
+    const fresh: PMHolding[] = []
+    for (const h of holdings) {
+      const sym = normalizeTicker(h.ticker)
+      if (!sym || existing.has(sym)) { skipped++; continue }
+      existing.add(sym)
+      fresh.push({ ticker: sym, shares: h.shares, avgCost: h.avgCost })
+      added++
+    }
+    return { ...p, holdings: [...(p.holdings ?? []), ...fresh] }
+  })
+  state.activeId = targetId
+
+  localStorage.setItem(PORTFOLIOS_KEY, JSON.stringify(state))
+  return { name: targetName, added, skipped }
+}
+
 export interface WeightedLeg { ticker: string; weight: number }
 export interface ImportResult {
   legs: WeightedLeg[]     // equity legs, weights in % (cash excluded here)

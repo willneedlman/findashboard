@@ -388,7 +388,7 @@ class ScreenRequest(BaseModel):
     sort_by:    str = "marketCap"
     sort_dir:   str = "desc"
     sort_param: str | None = None   # period when sorting by priceChange
-    limit:      int = Field(default=50, ge=1, le=500)
+    limit:      int | None = Field(default=None, ge=1)
     universe:   str | None = None   # 'sp500' | 'sp400' | 'nasdaq100' | None (all three)
 
 # ── Field definitions visible to the frontend ─────────────────────────────────
@@ -1152,7 +1152,7 @@ def run_screen(req: ScreenRequest):
             r.pop(k, None)
 
     result = {
-        "results": filtered[:req.limit], "total": len(filtered), "changePeriod": display_period or "1D",
+        "results": filtered[:req.limit] if req.limit is not None else filtered, "total": len(filtered), "changePeriod": display_period or "1D",
         "coverage": _coverage_for_scope(req.universe, req.region),
     }
     with _lock:

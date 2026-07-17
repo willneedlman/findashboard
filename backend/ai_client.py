@@ -172,6 +172,27 @@ def parse_json(raw: str):
     raw = re.sub(r"^```(?:json)?\s*", "", raw.strip())
     raw = re.sub(r"\s*```$", "", raw)
 
+    def strip_line_comments(s: str) -> str:
+        out = []
+        in_string = False
+        escaped = False
+        i = 0
+        while i < len(s):
+            char = s[i]
+            if char == '"' and not escaped:
+                in_string = not in_string
+            if not in_string and char == '/' and i + 1 < len(s) and s[i + 1] == '/':
+                while i < len(s) and s[i] not in '\r\n':
+                    i += 1
+                continue
+            out.append(char)
+            if char == '\\':
+                escaped = not escaped
+            else:
+                escaped = False
+            i += 1
+        return "".join(out)
+
     def clean_control_chars(s: str) -> str:
         in_string = False
         escaped = False
@@ -193,7 +214,7 @@ def parse_json(raw: str):
                 escaped = False
         return "".join(chars)
 
-    cleaned = clean_control_chars(raw)
+    cleaned = clean_control_chars(strip_line_comments(raw))
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
@@ -204,4 +225,3 @@ def parse_json(raw: str):
             except Exception:
                 pass
         raise HTTPException(500, "AI returned malformed JSON")
-

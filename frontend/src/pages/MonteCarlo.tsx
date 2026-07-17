@@ -22,7 +22,7 @@ import { CASH_SYMBOL } from '../lib/pmImport'
 import ConfigHeader, { Field, paramInput, RebalanceSelect, type RebalanceFreq } from '../components/portfolio/ConfigHeader'
 import { usePortfolio, type PortfolioHolding } from '../contexts/PortfolioContext'
 import { PRESETS, PRESET_DESC, PRESET_GROUPS } from './strategy-builder/shared'
-import { legsToCombo } from './AlgoStrategyBuilder'
+import { ALGO_MC_HANDOFF_KEY, legsToCombo, type AlgoMonteCarloHandoff } from './AlgoStrategyBuilder'
 // ── GBM math ────────────────────────────────────────────────────────────────
 
 function runGBM(S0: number, mu: number, sigma: number, T: number, nSims: number) {
@@ -203,10 +203,26 @@ type Leg = {
   fetched: boolean
 }
 
+type ExactAlgoReplay = {
+  metrics: { total_return: number; ann_return: number; max_drawdown: number; sharpe: number; num_trades: number; win_rate: number; total_pnl: number }
+  bars?: number
+  span?: { start: string; end: string }
+}
+
 const makeLeg = (ticker: string, weight: number): Leg => ({
   ticker, weight, spot: 100, vol: 20, drift: 8,
   strategy: STRATEGIES[0], stratParams: {}, fetched: false,
 })
+
+function readAlgoUniverseHandoff(): AlgoMonteCarloHandoff | null {
+  try {
+    const raw = JSON.parse(localStorage.getItem(ALGO_MC_HANDOFF_KEY) || 'null')
+    if (!raw || raw.version !== 1 || !raw.strategy || !Array.isArray(raw.positions) || !raw.positions.length) return null
+    return raw as AlgoMonteCarloHandoff
+  } catch {
+    return null
+  }
+}
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 
@@ -439,7 +455,16 @@ function OptionsStrategyMonteCarlo({ onSwitchMode }: { onSwitchMode: () => void 
 export function MonteCarloContent() {
   const cc = useChartColors()
   const { holdings, setHoldings } = usePortfolio()
+  const [algoHandoff] = useState<AlgoMonteCarloHandoff | null>(readAlgoUniverseHandoff)
   const [legs, setLegs] = useState<Leg[]>(() => {
+    if (algoHandoff) {
+      const weight = 100 / algoHandoff.positions.length
+      return algoHandoff.positions.map(position => ({
+        ...makeLeg(position.ticker, weight),
+        strategy: CUSTOM_STRATEGY_KEY,
+        stratParams: { _custom_def: JSON.stringify(algoHandoff.strategy) } as StrategyParams,
+      }))
+    }
     if (holdings && holdings.length > 0) {
       return holdings.map(h => ({
         ...makeLeg(h.ticker, h.weight),
@@ -471,6 +496,39 @@ export function MonteCarloContent() {
   // so it needs a date range the normal per-leg GBM/bootstrap flow doesn't.
   const [crspStart, setCrspStart] = useState('2015-01-01')
   const [crspEnd, setCrspEnd] = useState(() => new Date().toISOString().split('T')[0])
+
+  const { mutate: runExactReplay, data: exactReplay, isPending: exactReplayPending, isError: exactReplayError } = useMutation<ExactAlgoReplay>({
+    mutationFn: async () => {
+      if (!algoHandoff) throw new Error('No algorithm universe was imported.')
+      const risk = algoHandoff.strategy.risk ?? { stopLossPct: 0, takeProfitPct: 0, trailingStopPct: 0, maxHoldBars: 0 }
+      const positions = algoHandoff.positions.map(position => ({
+        ticker: position.ticker,
+        side: position.side,
+        rules: { buy: algoHandoff.strategy.buy, sell: algoHandoff.strategy.sell },
+        instrument: position.instMode === 'option'
+          ? { kind: 'option', type: position.optType, moneyness: position.optType === 'call' ? 1 + position.otmPct / 100 : 1 - position.otmPct / 100, dte: position.dte }
+          : position.instMode === 'combo'
+            ? { kind: 'combo', dte: position.comboDte, legs: position.comboLegs }
+            : undefined,
+        position_size: position.tradeSize ?? algoHandoff.tradeSizePct,
+        stop_loss: risk.stopLossPct || undefined,
+        take_profit: risk.takeProfitPct || undefined,
+        trailing_stop: risk.trailingStopPct || undefined,
+        max_hold_bars: risk.maxHoldBars || undefined,
+      }))
+      const { data } = await axios.post('/api/strategy/portfolio-backtest', {
+        positions,
+        start: algoHandoff.start,
+        end: algoHandoff.end,
+        timeframe: algoHandoff.timeframe,
+        initial_capital: 10_000,
+        position_size: algoHandoff.tradeSizePct,
+        leverage: algoHandoff.leverage ?? 1,
+        effective_annual_rate: algoHandoff.effectiveAnnualRate ?? 0,
+      })
+      return data
+    },
+  })
 
 
   const updateLeg = (i: number, patch: Partial<Leg>) =>
@@ -819,6 +877,27 @@ export function MonteCarloContent() {
   return (
     <>
       <MCModeToggle mode={mcMode} onChange={setMcMode} />
+      {algoHandoff && (
+        <div style={{ marginTop: 10, padding: '8px 10px', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 55%, transparent)', background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)', color: 'var(--theme-text, #d7e3fc)', fontSize: 10, fontFamily: 'var(--theme-mono)', lineHeight: 1.5 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span>Imported algo universe · {algoHandoff.positions.length} symbols · {algoHandoff.tradeSizePct}% per admitted trade · {algoHandoff.strategy.name}.</span>
+            <button onClick={() => runExactReplay()} disabled={exactReplayPending} style={{ ...INPUT, width: 'auto', padding: '4px 8px', cursor: exactReplayPending ? 'default' : 'pointer', color: 'var(--theme-primary, #c9a84c)', borderColor: 'var(--theme-primary, #c9a84c)', opacity: exactReplayPending ? 0.6 : 1 }}>
+              {exactReplayPending ? 'Replaying…' : 'Run Exact Algo Replay'}
+            </button>
+          </div>
+          <div style={{ marginTop: 4, color: 'var(--theme-secondary, #8099b0)' }}>The normal Monte Carlo view remains a correlated equal-weight proxy. Exact Replay uses the same universe event queue, risk exits, and modeled option/combo P&amp;L engine as the Algorithmic Strategy Builder.</div>
+        </div>
+      )}
+      {exactReplay && (
+        <div style={{ ...STRIP, marginTop: 10 }}>
+          <KpiCell grow label="Exact Replay Return" value={`${exactReplay.metrics.total_return >= 0 ? '+' : ''}${exactReplay.metrics.total_return.toFixed(2)}%`} color={exactReplay.metrics.total_return >= 0 ? POS : NEG} />
+          <KpiCell grow label="P&L" value={`${exactReplay.metrics.total_pnl >= 0 ? '+' : ''}$${exactReplay.metrics.total_pnl.toFixed(2)}`} color={exactReplay.metrics.total_pnl >= 0 ? POS : NEG} />
+          <KpiCell grow label="Trades" value={String(exactReplay.metrics.num_trades)} />
+          <KpiCell grow label="Sharpe" value={exactReplay.metrics.sharpe.toFixed(3)} />
+          <KpiCell grow label="Max Drawdown" value={`${exactReplay.metrics.max_drawdown.toFixed(2)}%`} color={NEG} />
+        </div>
+      )}
+      {exactReplayError && <div style={{ marginTop: 8, color: NEG, fontSize: 10, fontFamily: 'var(--theme-mono)' }}>Exact replay failed. Check the imported symbols, rules, and market-data availability.</div>}
       <ConfigHeader
         mode="montecarlo"
         collapsed={collapsed}

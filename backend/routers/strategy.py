@@ -553,8 +553,10 @@ def _exit_reason(exit_kind: str | None, sell_reason: str, *, stop_loss=None, tak
         return f"Trailing stop triggered ({trailing_stop:g}%)"
     if exit_kind == "max_hold" and max_hold_bars is not None:
         return f"Max hold reached ({max_hold_bars} bars)"
-    if exit_kind == "dte" and dte is not None:
-        return f"Held to expiry ({dte} DTE)"
+    if exit_kind in {"dte", "expiration"} and dte is not None:
+        return f"Expired and settled ({dte} calendar DTE)"
+    if exit_kind == "wipeout":
+        return "Liquidated — position lost its full allocated capital"
     return sell_reason
 
 
@@ -680,6 +682,8 @@ class CustomBacktestRequest(BaseModel):
     initial_capital: float = 10_000
     instrument: dict | None = None   # {kind:"option", type:"call"|"put", moneyness, dte} → modeled option P&L
     side: str = "long"               # long|short — drives direction for shares AND options
+    leverage: float = 1              # gross-notional multiplier on position_size, 1x = unlevered
+    effective_annual_rate: float = 0  # EAR charged on notional borrowed beyond 100% of capital
 
     @model_validator(mode="after")
     def _validate(self):
@@ -687,9 +691,16 @@ class CustomBacktestRequest(BaseModel):
         validate_date(self.start)
         if self.end:
             validate_date(self.end)
+        for field in ("stop_loss", "take_profit", "trailing_stop", "max_hold_bars"):
+            if getattr(self, field) is not None and getattr(self, field) <= 0:
+                setattr(self, field, None)
         self.timeframe = (self.timeframe or "1d").lower()
         if self.timeframe not in _BACKTEST_TF:
             raise HTTPException(422, f"Unsupported timeframe '{self.timeframe}'. Use one of: {', '.join(_BACKTEST_TF)}.")
+        if self.leverage < 1:
+            raise ValueError("Leverage must be at least 1x")
+        if not 0 <= self.effective_annual_rate <= 100:
+            raise ValueError("Effective annual rate must be between 0% and 100%")
         return self
 
 
@@ -700,6 +711,19 @@ def _run_custom_rules(ticker: str, rules: dict, start: str, end: str, timeframe:
     (signal_array, primary_close) where primary_close is a Series indexed by the
     shared bars."""
     from strategies.market_context import resolve_context
+
+    def strip_self_placeholder(value):
+        if isinstance(value, list):
+            return [strip_self_placeholder(item) for item in value]
+        if not isinstance(value, dict):
+            return value
+        return {
+            key: strip_self_placeholder(item)
+            for key, item in value.items()
+            if not (key == "ticker" and isinstance(item, str) and item.strip().upper() in {"$TICKER", "TICKER", "$SYMBOL", "SYMBOL", "SELF"})
+        }
+
+    rules = strip_self_placeholder(rules)
     primary = ticker.strip().upper()
     tickers = referenced_tickers(rules, primary)
     index, frames, volumes = build_aligned_frames(tickers, start, end, timeframe)
@@ -719,7 +743,7 @@ def _run_custom_rules(ticker: str, rules: dict, start: str, end: str, timeframe:
 
 @router.post("/custom-backtest")
 def custom_backtest(req: CustomBacktestRequest):
-    from .algo import _apply_risk_controls
+    from .algo import _apply_risk_controls, _apply_financing_cost, _floor_equity, _summarize_equity
     import datetime, alpaca
     end = req.end or datetime.date.today().isoformat()
     tf = req.timeframe
@@ -747,14 +771,35 @@ def custom_backtest(req: CustomBacktestRequest):
             exit_kinds=exit_kinds,
         )
     bpy = _BACKTEST_TF.get(tf, ("1d", 252))[1]
+    trade_size = req.position_size * req.leverage
     result = _instrument_metrics(signal, close, req.instrument, req.side, req.ticker,
-                                 req.position_size, req.initial_capital, bars_per_year=bpy,
+                                 trade_size, req.initial_capital, bars_per_year=bpy,
                                  intraday=_is_intraday_tf(tf),
                                  stop_loss=req.stop_loss if is_modeled else None,
                                  take_profit=req.take_profit if is_modeled else None,
                                  trailing_stop=req.trailing_stop if is_modeled else None,
                                  max_hold_bars=req.max_hold_bars if is_modeled else None,
                                  exit_kinds=exit_kinds)
+
+    # Leverage is "free" P&L amplification unless the borrowed portion of
+    # notional (beyond 100% of capital) actually costs something — apply the
+    # same daily-compounding financing charge portfolio_backtest uses, then
+    # re-floor since financing drag can itself tip a thin curve to zero.
+    equity = pd.Series([pt["strategy"] for pt in result["equity_curve"]], index=close.index)
+    equity, total_interest = _apply_financing_cost(equity, signal, trade_size, req.initial_capital,
+                                                    req.effective_annual_rate, bpy)
+    blown_up_at = None
+    if total_interest:
+        equity, blown_up_at = _floor_equity(equity)
+        result["metrics"].update(_summarize_equity(equity, req.initial_capital, bpy, blown_up_at))
+        for pt, val in zip(result["equity_curve"], equity.values):
+            pt["strategy"] = round(float(val), 2)
+        if blown_up_at is not None:
+            result["metrics"]["blown_up_at"] = blown_up_at.strftime("%Y-%m-%d %H:%M" if _is_intraday_tf(tf) else "%Y-%m-%d")
+    result["metrics"]["interest_paid"] = round(total_interest, 2)
+    result["metrics"]["leverage"] = req.leverage
+    result["metrics"]["effective_annual_rate"] = req.effective_annual_rate
+
     # Surface the window + timeframe actually used so "history" is never ambiguous.
     result["bars"] = int(len(close))
     result["timeframe"] = tf
@@ -816,21 +861,28 @@ def _instrument_metrics(signal, close, instrument, side, ticker, position_size, 
 
 # ─── Multi-position portfolio backtest ────────────────────────────────────────
 # A strategy can be a BOOK of positions, each with its own ticker, instrument
-# (shares long/short or a modeled option), rules, and capital weight. Each runs
-# through the shared engine; equity curves are weight-scaled, date-aligned, and
-# summed into one portfolio curve with per-position attribution.
+# (shares long/short or a modeled option), and rules. Each runs through the
+# shared engine, sized off the portfolio's shared trade size (or its own
+# override); equity curves are date-aligned and summed into one portfolio
+# curve with per-position attribution.
 
 class PortfolioPosition(BaseModel):
     ticker:        str
     rules:         dict = {}
     instrument:    dict | None = None   # {kind:"shares"|"option", type:"call"|"put", ...}; None = shares
     side:          str = "long"          # long|short — drives direction for shares AND options
-    weight:        float = 0.0           # % of capital; all-zero ⇒ equal weight
-    position_size: float = 100
+    position_size: float | None = None   # optional per-position override of the shared trade size
     stop_loss:     float | None = None
     take_profit:   float | None = None
     trailing_stop: float | None = None
     max_hold_bars: int | None = None
+
+    @model_validator(mode="after")
+    def _normalize_disabled_risk_controls(self):
+        for field in ("stop_loss", "take_profit", "trailing_stop", "max_hold_bars"):
+            if getattr(self, field) is not None and getattr(self, field) <= 0:
+                setattr(self, field, None)
+        return self
 
 
 class PortfolioBacktestRequest(BaseModel):
@@ -839,13 +891,29 @@ class PortfolioBacktestRequest(BaseModel):
     end:             str | None = None
     timeframe:       str = "1d"          # shared base bar size for every position
     initial_capital: float = 10_000
+    position_size:   float = 10           # % of the whole portfolio for every admitted trade
+    max_exposure:    float = 100          # cap on simultaneous gross allocation
+    leverage:        float = 1            # gross-notional multiplier, 1x = unlevered
+    effective_annual_rate: float = 0      # EAR charged on borrowed notional
 
     @model_validator(mode="after")
     def _validate(self):
-        if not (1 <= len(self.positions) <= 30):
-            raise ValueError("A portfolio needs 1-30 positions")
+        if not self.positions:
+            raise ValueError("A portfolio needs at least one position")
+        if not 1 <= self.position_size <= 100:
+            raise ValueError("Trade size must be between 1% and 100% of the portfolio")
+        if not 0 < self.max_exposure <= 100:
+            raise ValueError("Maximum exposure must be greater than 0% and no more than 100%")
+        if self.leverage < 1:
+            raise ValueError("Leverage must be at least 1x")
+        if not 0 <= self.effective_annual_rate <= 100:
+            raise ValueError("Effective annual rate must be between 0% and 100%")
+        if self.position_size > self.max_exposure:
+            raise ValueError("Trade size cannot exceed maximum portfolio exposure")
         for p in self.positions:
             p.ticker = validate_ticker(p.ticker)
+            if p.position_size is not None and not 1 <= p.position_size <= self.max_exposure:
+                raise ValueError(f"Trade size override for {p.ticker} must be between 1% and the maximum portfolio exposure")
         validate_date(self.start)
         if self.end:
             validate_date(self.end)
@@ -857,7 +925,7 @@ class PortfolioBacktestRequest(BaseModel):
 
 @router.post("/portfolio-backtest")
 def portfolio_backtest(req: PortfolioBacktestRequest):
-    from .algo import _apply_risk_controls
+    from .algo import _apply_risk_controls, _floor_equity, _safe_ann_return
     import datetime as _dt
     import numpy as _np
     import alpaca
@@ -875,18 +943,47 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
         start = req.start
     bpy = _BACKTEST_TF.get(tf, ("1d", 252))[1]
 
-    weights = [max(0.0, p.weight) for p in req.positions]
-    if sum(weights) <= 0:
-        weights = [100.0 / len(req.positions)] * len(req.positions)
-    tot_w = sum(weights)
-
-    legs = []   # (position, cap, result)
-    for p, w in zip(req.positions, weights):
-        cap = (w / tot_w) * req.initial_capital
+    candidates = []
+    for p in req.positions:
         sig_arr, close = _run_custom_rules(p.ticker, p.rules, start, end, tf)
         if close is None or len(close) < 40:
             continue
-        signal = pd.Series(sig_arr, index=close.index)
+        candidates.append((p, pd.Series(sig_arr, index=close.index), close))
+
+    if not candidates:
+        raise HTTPException(422, "No position produced a backtest (check tickers, rules, and date range)")
+
+    # A universe strategy is one algorithm applied to many symbols. A ticker is
+    # admitted only when it has a signal and the shared portfolio has room for
+    # its master-sized trade or its explicit per-position override; leverage
+    # scales both notional and the gross-exposure capacity. It never
+    # receives a pre-funded capital sleeve merely because it is in the universe.
+    def trade_size(position: PortfolioPosition) -> float:
+        base_size = position.position_size if position.position_size is not None else req.position_size
+        return base_size * req.leverage
+
+    all_dates = sorted({date for _, signal, _ in candidates for date in signal.index})
+    controlled = [pd.Series(0.0, index=close.index) for _, _, close in candidates]
+    active: set[int] = set()
+    for date in all_dates:
+        for i, (_, signal, _) in enumerate(candidates):
+            if i not in active or date not in signal.index:
+                continue
+            if signal.loc[date] == 0:
+                active.remove(i)
+            else:
+                controlled[i].loc[date] = 1.0
+        for i, (_, signal, _) in enumerate(candidates):
+            if i in active or date not in signal.index or signal.loc[date] == 0:
+                continue
+            open_exposure = sum(trade_size(candidates[active_i][0]) for active_i in active)
+            if open_exposure + trade_size(candidates[i][0]) > req.max_exposure * req.leverage:
+                continue
+            active.add(i)
+            controlled[i].loc[date] = 1.0
+
+    legs = []   # (position, result)
+    for (p, _raw_signal, close), signal in zip(candidates, controlled):
         # See custom_backtest: option/combo risk controls are P&L-based, applied
         # inside _instrument_metrics — the price-based pre-filter is for shares only.
         is_modeled = (p.instrument or {}).get("kind") in ("option", "combo")
@@ -895,7 +992,7 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
             signal = _apply_risk_controls(signal, close, p.stop_loss, p.take_profit, p.trailing_stop, p.max_hold_bars,
                                           exit_kinds=exit_kinds)
         try:
-            res = _instrument_metrics(signal, close, p.instrument, p.side, p.ticker, p.position_size, cap,
+            res = _instrument_metrics(signal, close, p.instrument, p.side, p.ticker, trade_size(p), req.initial_capital,
                                       bars_per_year=bpy, intraday=intraday,
                                       stop_loss=p.stop_loss if is_modeled else None,
                                       take_profit=p.take_profit if is_modeled else None,
@@ -904,7 +1001,7 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
                                       exit_kinds=exit_kinds)
         except HTTPException:
             continue
-        legs.append((p, cap, res))
+        legs.append((p, res, signal))
 
     if not legs:
         raise HTTPException(422, "No position produced a backtest (check tickers, rules, and date range)")
@@ -920,26 +1017,53 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
     # curve spans the full requested range; a position with no data yet just
     # sits at its allocated capital (idle cash) until its own history starts,
     # same convention already used for a position that fails outright.
-    eq_df = pd.concat({str(i): _series(res, "strategy") for i, (_, _, res) in enumerate(legs)}, axis=1, join="outer").sort_index()
-    bm_df = pd.concat({str(i): _series(res, "benchmark") for i, (_, _, res) in enumerate(legs)}, axis=1, join="outer").sort_index()
+    eq_df = pd.concat({str(i): _series(res, "strategy") for i, (_, res, _) in enumerate(legs)}, axis=1, join="outer").sort_index()
+    bm_df = pd.concat({str(i): _series(res, "benchmark") for i, (_, res, _) in enumerate(legs)}, axis=1, join="outer").sort_index()
     if eq_df.empty:
         raise HTTPException(422, "Positions share no overlapping trading days — align their tickers or date range")
-    for i, (_, cap, _) in enumerate(legs):
+    for i, (_, _res, _) in enumerate(legs):
         col = str(i)
-        eq_df[col] = eq_df[col].ffill().fillna(cap)
-        bm_df[col] = bm_df[col].ffill().fillna(cap)
-    idle_cash = req.initial_capital - sum(cap for _, cap, _ in legs)   # capital of any dropped positions
-    port_eq = eq_df.sum(axis=1) + idle_cash
-    port_bm = bm_df.sum(axis=1) + idle_cash
+        eq_df[col] = eq_df[col].ffill().fillna(req.initial_capital)
+        bm_df[col] = bm_df[col].ffill().fillna(req.initial_capital)
+    port_eq = req.initial_capital + (eq_df - req.initial_capital).sum(axis=1)
+    port_bm = bm_df.iloc[:, 0]
+
+    gross_notional = pd.Series(0.0, index=port_eq.index)
+    for p, _res, signal in legs:
+        # ffill only covers gaps WITHIN this ticker's own price history (e.g. a
+        # holiday another leg doesn't share) — it must not carry a position
+        # "open" past the last date this ticker actually has data for, or a
+        # leg whose price feed simply ends mid-window while in a trade reads
+        # as permanently open and accrues financing interest forever.
+        sig = signal.reindex(port_eq.index).ffill().fillna(0.0)
+        sig.loc[sig.index > signal.index.max()] = 0.0
+        gross_notional = gross_notional.add(sig * (trade_size(p) / 100.0) * req.initial_capital, fill_value=0.0)
+    borrowed_notional = (gross_notional - req.initial_capital).clip(lower=0.0)
+    daily_financing_rate = (1 + req.effective_annual_rate / 100.0) ** (1 / bpy) - 1
+    interest_cost = borrowed_notional * daily_financing_rate
+    total_interest = float(interest_cost.sum())
+    if total_interest:
+        port_eq = port_eq - interest_cost.cumsum()
+
+    # Floor the aggregate curve too — every leg is individually floored at 0,
+    # but several legs losing their full allocation in the same window can
+    # still sum the portfolio below zero (each leg is sized against the FULL
+    # initial capital, not a shared pool), which hits the same
+    # negative-equity crash/false-recovery risk as a single leveraged leg.
+    port_eq, blown_up_at = _floor_equity(port_eq)
 
     n = len(port_eq)
     daily = port_eq.pct_change()
     total_return = float(port_eq.iloc[-1] / req.initial_capital - 1) * 100
-    ann_return = float(((port_eq.iloc[-1] / req.initial_capital) ** (bpy / max(1, n)) - 1) * 100)
-    dd = (port_eq - port_eq.cummax()) / port_eq.cummax()
+    ann_return = _safe_ann_return(float(port_eq.iloc[-1]), req.initial_capital, bpy / max(1, n))
+    roll_max = port_eq.cummax().replace(0, _np.nan)
+    dd = (port_eq - roll_max) / roll_max
+    max_drawdown = float(dd.min(skipna=True) * 100) if dd.notna().any() else -100.0
+    if blown_up_at is not None:
+        max_drawdown = min(max_drawdown, -100.0)
     sharpe = float(daily.mean() / daily.std() * _np.sqrt(bpy)) if daily.std() > 0 else 0.0
-    trades_tot = sum(res["metrics"]["num_trades"] for _, _, res in legs)
-    wins_tot = sum(round(res["metrics"]["win_rate"] / 100 * res["metrics"]["num_trades"]) for _, _, res in legs)
+    trades_tot = sum(res["metrics"]["num_trades"] for _, res, _ in legs)
+    wins_tot = sum(round(res["metrics"]["win_rate"] / 100 * res["metrics"]["num_trades"]) for _, res, _ in legs)
     win_rate = float(wins_tot / trades_tot * 100) if trades_tot else 0.0
 
     _cfmt = "%Y-%m-%d %H:%M" if intraday else "%Y-%m-%d"
@@ -949,11 +1073,11 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
         "ticker": p.ticker, "side": p.side,
         "instrument": (p.instrument or {}).get("kind", "shares"),
         "opt_type": (p.instrument or {}).get("type"),
-        "weight_pct": round(cap / req.initial_capital * 100, 1),
+        "weight_pct": trade_size(p),
         "return_pct": res["metrics"]["total_return"],
-        "pnl": round(float(_series(res, "strategy").iloc[-1]) - cap, 2),
+        "pnl": round(float(_series(res, "strategy").iloc[-1]) - req.initial_capital, 2),
         "num_trades": res["metrics"]["num_trades"],
-    } for (p, cap, res) in legs]
+    } for (p, res, _) in legs]
 
     # Aggregate every position's trades onto the shared timeline, for the
     # equity-curve's hover markers — tagged with ticker (several positions can
@@ -962,7 +1086,7 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
     # point to anchor a marker to.
     valid_dates = {d.strftime(_cfmt) for d in port_eq.index}
     trades_out = []
-    for p, _cap, res in legs:
+    for p, res, _ in legs:
         buy_reason = describe_rule_block(p.rules.get("buy"))
         sell_reason = describe_rule_block(p.rules.get("sell"))
         is_modeled = (p.instrument or {}).get("kind") in ("option", "combo")
@@ -981,10 +1105,12 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
         "equity_curve": curve,
         "metrics": {
             "total_return": round(total_return, 2), "ann_return": round(ann_return, 2),
-            "max_drawdown": round(float(dd.min() * 100), 2), "sharpe": round(sharpe, 3),
+            "max_drawdown": round(max_drawdown, 2), "sharpe": round(sharpe, 3),
             "num_trades": trades_tot, "win_rate": round(win_rate, 1),
             "initial_capital": round(req.initial_capital, 2), "final_capital": round(float(port_eq.iloc[-1]), 2),
             "total_pnl": round(float(port_eq.iloc[-1]) - req.initial_capital, 2),
+            "interest_paid": round(total_interest, 2), "leverage": req.leverage, "effective_annual_rate": req.effective_annual_rate,
+            "blown_up_at": blown_up_at.strftime(_cfmt) if blown_up_at is not None else None,
         },
         "timeframe": tf,
         "positions": positions_out,

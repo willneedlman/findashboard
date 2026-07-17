@@ -127,7 +127,55 @@ export function TickerTags({ tickers, onRemove, color }: { tickers: string[]; on
 // paired cumulative values (equity curve, base-100 index, etc) — no backend
 // round-trip. Feeds ReturnsScatter for an in-context "regression dotplot" on
 // any results panel that already has a strategy/benchmark curve.
-export interface QuickRegression { x: number[]; y: number[]; line: { x: number; y: number }[]; beta: number; alpha: number }
+export interface QuickRegression {
+  x: number[]; y: number[]; line: { x: number; y: number }[]
+  beta: number; alpha: number; correlation: number; rSquared: number
+  betaPValue: number | null; alphaPValue: number | null; observations: number
+}
+
+function logGamma(z: number): number {
+  const coefficients = [676.5203681218851, -1259.1392167224028, 771.3234287776531, -176.6150291621406, 12.507343278686905, -0.13857109526572012, 9.984369578019572e-6, 1.5056327351493116e-7]
+  if (z < 0.5) return Math.log(Math.PI) - Math.log(Math.sin(Math.PI * z)) - logGamma(1 - z)
+  let value = 0.9999999999998099
+  const shifted = z - 1
+  for (let i = 0; i < coefficients.length; i++) value += coefficients[i] / (shifted + i + 1)
+  const t = shifted + coefficients.length - 0.5
+  return 0.5 * Math.log(2 * Math.PI) + (shifted + 0.5) * Math.log(t) - t + Math.log(value)
+}
+
+function betaFraction(a: number, b: number, x: number): number {
+  const epsilon = 3e-7, min = 1e-30
+  let c = 1, d = 1 - (a + b) * x / (a + 1)
+  d = 1 / (Math.abs(d) < min ? min : d)
+  let h = d
+  for (let m = 1; m <= 100; m++) {
+    const m2 = 2 * m
+    let aa = m * (b - m) * x / ((a + m2 - 1) * (a + m2))
+    d = 1 + aa * d; d = 1 / (Math.abs(d) < min ? min : d)
+    c = 1 + aa / c; c = Math.abs(c) < min ? min : c
+    h *= d * c
+    aa = -(a + m) * (a + b + m) * x / ((a + m2) * (a + m2 + 1))
+    d = 1 + aa * d; d = 1 / (Math.abs(d) < min ? min : d)
+    c = 1 + aa / c; c = Math.abs(c) < min ? min : c
+    const delta = d * c
+    h *= delta
+    if (Math.abs(delta - 1) < epsilon) break
+  }
+  return h
+}
+
+function regularizedBeta(x: number, a: number, b: number): number {
+  if (x <= 0) return 0
+  if (x >= 1) return 1
+  const front = Math.exp(a * Math.log(x) + b * Math.log(1 - x) - logGamma(a) - logGamma(b) + logGamma(a + b))
+  return x < (a + 1) / (a + b + 2) ? front * betaFraction(a, b, x) / a : 1 - front * betaFraction(b, a, 1 - x) / b
+}
+
+function twoSidedTPValue(t: number, degreesOfFreedom: number): number | null {
+  if (degreesOfFreedom <= 0 || !Number.isFinite(t)) return null
+  return regularizedBeta(degreesOfFreedom / (degreesOfFreedom + t ** 2), degreesOfFreedom / 2, 0.5)
+}
+
 export function quickRegression(curve: { x: number; y: number }[]): QuickRegression {
   const x: number[] = [], y: number[] = []
   for (let i = 1; i < curve.length; i++) {
@@ -135,15 +183,24 @@ export function quickRegression(curve: { x: number; y: number }[]): QuickRegress
     if (px > 0 && py > 0) { x.push(curve[i].x / px - 1); y.push(curve[i].y / py - 1) }
   }
   const n = x.length
-  if (n < 2) return { x, y, line: [], beta: 0, alpha: 0 }
+  if (n < 2) return { x, y, line: [], beta: 0, alpha: 0, correlation: 0, rSquared: 0, betaPValue: null, alphaPValue: null, observations: n }
   const mx = x.reduce((s, v) => s + v, 0) / n
   const my = y.reduce((s, v) => s + v, 0) / n
-  let num = 0, den = 0
-  for (let i = 0; i < n; i++) { num += (x[i] - mx) * (y[i] - my); den += (x[i] - mx) ** 2 }
+  let num = 0, den = 0, yDen = 0
+  for (let i = 0; i < n; i++) { num += (x[i] - mx) * (y[i] - my); den += (x[i] - mx) ** 2; yDen += (y[i] - my) ** 2 }
   const beta = den > 0 ? num / den : 0
   const alpha = my - beta * mx
+  const correlation = den > 0 && yDen > 0 ? num / Math.sqrt(den * yDen) : 0
+  const rSquared = correlation ** 2
+  const residualSumSquares = y.reduce((sum, value, i) => sum + (value - (alpha + beta * x[i])) ** 2, 0)
+  const residualVariance = n > 2 ? residualSumSquares / (n - 2) : 0
+  const betaSE = den > 0 ? Math.sqrt(residualVariance / den) : Infinity
+  const alphaSE = den > 0 ? Math.sqrt(residualVariance * (1 / n + mx ** 2 / den)) : Infinity
   const xMin = Math.min(...x), xMax = Math.max(...x)
-  return { x, y, line: [{ x: xMin, y: alpha + beta * xMin }, { x: xMax, y: alpha + beta * xMax }], beta, alpha }
+  return {
+    x, y, line: [{ x: xMin, y: alpha + beta * xMin }, { x: xMax, y: alpha + beta * xMax }], beta, alpha,
+    correlation, rSquared, betaPValue: twoSidedTPValue(beta / betaSE, n - 2), alphaPValue: twoSidedTPValue(alpha / alphaSE, n - 2), observations: n,
+  }
 }
 
 // Scatter of strategy daily returns (y) vs benchmark daily returns (x) with the

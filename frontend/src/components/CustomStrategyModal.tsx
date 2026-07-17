@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, type ReactNode } from 'react'
 import axios from 'axios'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -85,17 +85,22 @@ export interface RuleBlock {
 }
 
 // Risk management — travels with the strategy so backtest/import apply it.
-// 0 means "off" for each control; sizingPct defaults to fully invested.
+// 0 means "off" for each control; sizingPct defaults to fully invested,
+// leverage defaults to 1x (unlevered) — unlike the other controls, 0 is not
+// a valid "off" value for leverage, since it would mean no position at all.
 export interface StrategyRisk {
   sizingPct: number        // % of capital per position
   stopLossPct: number      // exit if price drops X% from entry (0 = off)
   takeProfitPct: number    // exit if price rises X% from entry (0 = off)
   trailingStopPct: number  // exit if price drops X% from peak since entry (0 = off)
   maxHoldBars: number      // exit after N bars (0 = off)
+  leverage: number         // gross-notional multiplier on sizingPct, 1x = unlevered
+  effectiveAnnualRate: number  // EAR charged on notional borrowed beyond 100% of capital (0 = off)
 }
 
 export const DEFAULT_RISK: StrategyRisk = {
   sizingPct: 100, stopLossPct: 0, takeProfitPct: 0, trailingStopPct: 0, maxHoldBars: 0,
+  leverage: 1, effectiveAnnualRate: 0,
 }
 
 // A per-ticker override: its own complete buy/sell signal that replaces the
@@ -243,6 +248,7 @@ function IndicatorSelector({ value, onChange }: {
   return (
     <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
       <select value={t} onChange={e => setType(e.target.value as IndicatorType)}
+        title={t === 'PCT_CHANGE' ? 'Uses percentage points: enter -20 for a 20% drop, not -0.2.' : undefined}
         style={{ ...sel, width: 130, flexShrink: 0 }}>
         {IND_GROUPS.map(g => (
           <optgroup key={g.label} label={g.label}>
@@ -570,7 +576,10 @@ function hydrateIndicatorRef(raw: any): IndicatorRef {
   if (base.slow !== undefined) ref.slow = Number(raw?.slow ?? base.slow) || base.slow
   if (base.signal_period !== undefined) ref.signal_period = Number(raw?.signal_period ?? base.signal_period) || base.signal_period
   if (base.std !== undefined) ref.std = Number(raw?.std ?? base.std) || base.std
-  if (raw?.ticker && typeof raw.ticker === 'string') ref.ticker = raw.ticker.toUpperCase().replace(/[^A-Z0-9.\-]/g, '') || undefined
+  if (raw?.ticker && typeof raw.ticker === 'string') {
+    const ticker = raw.ticker.toUpperCase().replace(/[^A-Z0-9.\-]/g, '')
+    if (!['TICKER', 'SYMBOL', 'SELF'].includes(ticker)) ref.ticker = ticker || undefined
+  }
   if (!NO_TIMEFRAME_TYPES.includes(type) && raw?.timeframe && raw.timeframe !== 'daily') ref.timeframe = raw.timeframe as Timeframe
   return ref
 }
@@ -601,10 +610,11 @@ function hydrateRuleBlock(raw: any): RuleBlock {
 }
 
 function hydrateRisk(raw: any): StrategyRisk {
-  const n = (v: any, fallback: number) => typeof v === 'number' && isFinite(v) && v >= 0 ? v : fallback
+  const n = (v: any, fallback: number, min = 0) => typeof v === 'number' && isFinite(v) && v >= min ? v : fallback
   return {
     sizingPct: n(raw?.sizingPct, 100), stopLossPct: n(raw?.stopLossPct, 0), takeProfitPct: n(raw?.takeProfitPct, 0),
     trailingStopPct: n(raw?.trailingStopPct, 0), maxHoldBars: n(raw?.maxHoldBars, 0),
+    leverage: n(raw?.leverage, 1, 1), effectiveAnnualRate: n(raw?.effectiveAnnualRate, 0),
   }
 }
 
@@ -726,9 +736,11 @@ function AiStrategyChat({ onAccept }: { onAccept: (draft: StrategyDraft) => void
           <div style={{ fontSize: 10, fontFamily: T.mono, color: T.text, marginBottom: 8, lineHeight: 1.5 }}>
             <span style={{ color: T.neg, fontWeight: 700 }}>SELL </span>{describeRuleBlock(draft.sell)}
           </div>
-          {(draft.risk.stopLossPct > 0 || draft.risk.takeProfitPct > 0 || draft.risk.trailingStopPct > 0 || draft.risk.maxHoldBars > 0 || draft.risk.sizingPct !== 100) && (
+          {(draft.risk.stopLossPct > 0 || draft.risk.takeProfitPct > 0 || draft.risk.trailingStopPct > 0 || draft.risk.maxHoldBars > 0 || draft.risk.sizingPct !== 100 || draft.risk.leverage > 1) && (
             <div style={{ fontSize: 9, fontFamily: T.mono, color: T.muted, marginBottom: 8 }}>
               Risk — size {draft.risk.sizingPct}%
+              {draft.risk.leverage > 1 ? ` · ${draft.risk.leverage}x leverage` : ''}
+              {draft.risk.leverage > 1 && draft.risk.effectiveAnnualRate > 0 ? ` · ${draft.risk.effectiveAnnualRate}% EAR` : ''}
               {draft.risk.stopLossPct > 0 ? ` · SL ${draft.risk.stopLossPct}%` : ''}
               {draft.risk.takeProfitPct > 0 ? ` · TP ${draft.risk.takeProfitPct}%` : ''}
               {draft.risk.trailingStopPct > 0 ? ` · trail ${draft.risk.trailingStopPct}%` : ''}
@@ -821,12 +833,16 @@ interface Props {
   onClose: () => void
   onSave: (def: CustomStrategyDef) => void
   initialDef?: CustomStrategyDef | null
+  allowAiAssist?: boolean
+  aiAssistant?: ReactNode
+  initialTab?: 'manual' | 'describe'
 }
 
-export default function CustomStrategyModal({ open, onClose, onSave, initialDef }: Props) {
+export default function CustomStrategyModal({ open, onClose, onSave, initialDef, allowAiAssist = true, aiAssistant, initialTab = 'manual' }: Props) {
   const [def, setDef] = useState<CustomStrategyDef>(() => initialDef ?? { ...DEFAULTS, buy: { ...DEFAULTS.buy }, sell: { ...DEFAULTS.sell }, name: '' })
   const [nameError, setNameError] = useState('')
-  const [tab, setTab] = useState<'manual' | 'describe'>('manual')
+  const [tab, setTab] = useState<'manual' | 'describe'>(initialTab)
+  const aiAssistantOwnsSave = Boolean(aiAssistant) && tab === 'describe'
 
   const reset = useCallback(() => {
     setDef(initialDef ?? { ...DEFAULTS, buy: { ...DEFAULTS.buy }, sell: { ...DEFAULTS.sell }, name: '' })
@@ -916,40 +932,45 @@ export default function CustomStrategyModal({ open, onClose, onSave, initialDef 
 
         {/* Body */}
         <div style={{ padding: '16px 18px', flex: 1 }}>
-          {/* Strategy name */}
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', color: T.muted, textTransform: 'uppercase', marginBottom: 5, fontFamily: T.mono }}>
-              Strategy Name
+          {!aiAssistantOwnsSave && <>
+            {/* Strategy name */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', color: T.muted, textTransform: 'uppercase', marginBottom: 5, fontFamily: T.mono }}>
+                Strategy Name
+              </div>
+              <input
+                value={def.name}
+                onChange={e => { u({ name: e.target.value }); setNameError('') }}
+                placeholder="e.g. RSI Oversold + SMA Trend"
+                style={{ ...inp, fontSize: 13, padding: '7px 10px' }}
+              />
+              {nameError && (
+                <div style={{ fontSize: 9, color: T.neg, fontFamily: T.mono, marginTop: 4 }}>{nameError}</div>
+              )}
             </div>
-            <input
-              value={def.name}
-              onChange={e => { u({ name: e.target.value }); setNameError('') }}
-              placeholder="e.g. RSI Oversold + SMA Trend"
-              style={{ ...inp, fontSize: 13, padding: '7px 10px' }}
-            />
-            {nameError && (
-              <div style={{ fontSize: 9, color: T.neg, fontFamily: T.mono, marginTop: 4 }}>{nameError}</div>
-            )}
-          </div>
 
-          {/* Divider */}
-          <div style={{ height: 1, background: T.border, marginBottom: 12 }} />
+            {/* Divider */}
+            <div style={{ height: 1, background: T.border, marginBottom: 12 }} />
+          </>}
 
-          {/* Manual vs AI-describe tabs */}
-          <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
-            {(['manual', 'describe'] as const).map(t => (
-              <button key={t} onClick={() => setTab(t)} style={{
-                padding: '6px 14px', fontFamily: T.mono, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer',
-                background: tab === t ? `${T.gold}1a` : 'transparent',
-                border: `1px solid ${tab === t ? T.gold : T.border}`,
-                color: tab === t ? T.gold : T.muted,
-              }}>{t === 'manual' ? 'Manual' : 'Describe (AI)'}</button>
-            ))}
-          </div>
+          {(allowAiAssist || aiAssistant) && (
+            <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
+              {(['manual', 'describe'] as const).map(t => (
+                <button key={t} onClick={() => setTab(t)} style={{
+                  padding: '6px 14px', fontFamily: T.mono, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer',
+                  background: tab === t ? `${T.gold}1a` : 'transparent',
+                  border: `1px solid ${tab === t ? T.gold : T.border}`,
+                  color: tab === t ? T.gold : T.muted,
+                }}>{t === 'manual' ? 'Manual' : aiAssistant ? 'AI Assistant' : 'Describe (AI)'}</button>
+              ))}
+            </div>
+          )}
 
-          <div style={{ display: tab === 'describe' ? 'block' : 'none', marginBottom: 16 }}>
-            <AiStrategyChat onAccept={acceptDraft} />
-          </div>
+          {(allowAiAssist || aiAssistant) && (
+            <div style={{ display: tab === 'describe' ? 'block' : 'none', marginBottom: 16 }}>
+              {aiAssistant ?? <AiStrategyChat onAccept={acceptDraft} />}
+            </div>
+          )}
 
           <div style={{ display: tab === 'manual' ? 'block' : 'none' }}>
 
@@ -1019,22 +1040,24 @@ export default function CustomStrategyModal({ open, onClose, onSave, initialDef 
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
               {([
-                ['Position Size %', 'sizingPct', 5],
-                ['Stop-Loss %', 'stopLossPct', 0.5],
-                ['Take-Profit %', 'takeProfitPct', 0.5],
-                ['Trailing Stop %', 'trailingStopPct', 0.5],
-                ['Max Hold (bars)', 'maxHoldBars', 1],
-              ] as [string, keyof StrategyRisk, number][]).map(([label, key, step]) => (
+                ['Position Size %', 'sizingPct', 5, 0, Infinity],
+                ['Stop-Loss %', 'stopLossPct', 0.5, 0, Infinity],
+                ['Take-Profit %', 'takeProfitPct', 0.5, 0, Infinity],
+                ['Trailing Stop %', 'trailingStopPct', 0.5, 0, Infinity],
+                ['Max Hold (bars)', 'maxHoldBars', 1, 0, Infinity],
+                ['Leverage (x)', 'leverage', 0.5, 1, Infinity],
+                ['Borrowing EAR %', 'effectiveAnnualRate', 0.5, 0, 100],
+              ] as [string, keyof StrategyRisk, number, number, number][]).map(([label, key, step, min, max]) => (
                 <div key={key}>
                   <label style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.muted, display: 'block', marginBottom: 3, fontFamily: T.mono }}>{label}</label>
-                  <input type="number" min={0} step={step} value={(def.risk ?? DEFAULT_RISK)[key]}
-                    onChange={e => u({ risk: { ...(def.risk ?? DEFAULT_RISK), [key]: Math.max(0, +e.target.value) } })}
+                  <input type="number" min={min} max={max === Infinity ? undefined : max} step={step} value={(def.risk ?? DEFAULT_RISK)[key]}
+                    onChange={e => u({ risk: { ...(def.risk ?? DEFAULT_RISK), [key]: Math.min(max, Math.max(min, +e.target.value)) } })}
                     style={{ width: '100%', boxSizing: 'border-box', background: T.bg, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.mono, fontSize: 11, padding: '5px 6px', outline: 'none' }} />
                 </div>
               ))}
             </div>
             <div style={{ fontSize: 8, color: T.dim, fontFamily: T.mono, marginTop: 5 }}>
-              0 disables a control. Position size caps the % of capital committed per trade.
+              0 disables a control. Position size caps the % of capital committed per trade. Leverage (1x minimum, no ceiling) multiplies that notional; borrowing EAR charges daily-compounded interest on the portion above 100% of capital. Uncapped leverage means a modest adverse move can wipe the position out entirely — see the tooltip on the leverage field.
             </div>
           </div>
 
@@ -1072,16 +1095,25 @@ export default function CustomStrategyModal({ open, onClose, onSave, initialDef 
           padding: '12px 18px', borderTop: `1px solid ${T.border}`,
           background: T.surface, flexShrink: 0,
         }}>
-          <button onClick={() => { reset(); onClose() }} style={{ ...btn, padding: '6px 16px' }}>
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            style={{ ...btn, padding: '6px 20px', fontWeight: 700,
-              background: T.gold, border: 'none', color: T.surface, letterSpacing: '0.1em' }}
-          >
-            Save Strategy
-          </button>
+          {aiAssistantOwnsSave ? <>
+            <span style={{ marginRight: 'auto', alignSelf: 'center', color: T.dim, fontSize: 8, fontFamily: T.mono }}>
+              Use the gold Apply button in the AI draft to update the strategy.
+            </span>
+            <button onClick={() => { reset(); onClose() }} style={{ ...btn, padding: '6px 16px' }}>
+              Close
+            </button>
+          </> : <>
+            <button onClick={() => { reset(); onClose() }} style={{ ...btn, padding: '6px 16px' }}>
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              style={{ ...btn, padding: '6px 20px', fontWeight: 700,
+                background: T.gold, border: 'none', color: T.surface, letterSpacing: '0.1em' }}
+            >
+              Save Strategy
+            </button>
+          </>}
         </div>
       </div>
     </div>

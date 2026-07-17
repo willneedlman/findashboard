@@ -261,14 +261,15 @@ class PortfolioPaperPosition(BaseModel):
     rules:         dict
     instrument:    dict | None = None
     side:          str = "long"
-    weight:        float = 0.0
-    position_size: float = 100
+    weight:        float = 0.0           # direct % of the whole portfolio
+    position_size: float | None = None   # optional per-position trade-size override
 
 
 class PortfolioPaperCreate(BaseModel):
     user_id:   str
     name:      str = "portfolio"
     positions: list[PortfolioPaperPosition]
+    position_size: float = 10
 
 
 @router.post("/portfolio")
@@ -281,8 +282,10 @@ def create_portfolio_paper(body: PortfolioPaperCreate, authorization: str = Head
     from routers.paper_scheduler import _insert_job
     from strategies.builtin.custom_rule_strategy import CustomRuleStrategy
     _require_owner(body.user_id, authorization, x_session_token)
-    if not (1 <= len(body.positions) <= 30):
-        raise HTTPException(400, "A portfolio needs 1-30 positions")
+    if not body.positions:
+        raise HTTPException(400, "A portfolio needs at least one position")
+    if not 1 <= body.position_size <= 100:
+        raise HTTPException(400, "Trade size must be between 1% and 100% of the portfolio")
 
     base = (body.name or "portfolio").strip().lower().replace(" ", "_")[:24] or "portfolio"
     created = 0
@@ -291,14 +294,16 @@ def create_portfolio_paper(body: PortfolioPaperCreate, authorization: str = Head
         if not tk:
             continue
         name = f"{base}_{tk}_{i}"[:40]
-        params = {"name": name, "rules": p.rules, "bull_drift": 0.0, "bear_drift": 0.0, "side": p.side}
+        if p.position_size is not None and not 1 <= p.position_size <= 100:
+            raise HTTPException(400, f"Trade size override for {tk} must be between 1% and 100% of the portfolio")
+        params = {"name": name, "rules": p.rules, "bull_drift": 0.0, "bear_drift": 0.0, "side": p.side,
+                  "portfolio_trade_size_pct": p.position_size if p.position_size is not None else body.position_size}
         if p.instrument:
             params["instrument"] = p.instrument
         CustomRuleStrategy().initialize(params)   # validate rules parse
         _active[name] = {"cls": CustomRuleStrategy, "params": params, "enabled": True}
         _loader._registry[name] = CustomRuleStrategy
-        qty = max(1, round(p.weight / 25)) if p.weight else 1   # coarse weight→size; user can tune per job
-        _insert_job(body.user_id, tk, name, params, qty)
+        _insert_job(body.user_id, tk, name, params, 1)
         created += 1
 
     if created == 0:
