@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { useMutation, useQuery, type UseMutationResult } from '@tanstack/react-query'
 import axios from 'axios'
 import { ComposedChart, Area, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
-import { ChevronUp, ChevronDown, Play, Plus, Send } from 'lucide-react'
+import { ChevronUp, ChevronDown, Play, Plus, Send, Repeat } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import EmptyState from '../components/EmptyState'
 import TickerInput from '../components/TickerInput'
@@ -392,7 +392,7 @@ function SavedStrategyRow({ def, active, onSelect, onEdit, onDuplicate, onDelete
 // 230px rail.
 function PositionCard({ p, index, tradeSize, strategyName, saved, patchPosition, removePosition, patchComboLeg,
   addComboLegToPosition, removeComboLegFromPosition, cloningId, setCloningId, cloneInput, setCloneInput,
-  cloneToTickers, pmBooks }: {
+  cloneToTickers, pmBooks, applyInstrumentToAll, otherPositionCount }: {
   p: PortfolioPos; index: number; tradeSize: number; strategyName: string; saved: CustomStrategyDef[]
   patchPosition: (id: string, patch: Partial<PortfolioPos>) => void
   removePosition: (id: string) => void
@@ -403,8 +403,11 @@ function PositionCard({ p, index, tradeSize, strategyName, saved, patchPosition,
   cloneInput: string; setCloneInput: (s: string) => void
   cloneToTickers: (template: PortfolioPos) => void
   pmBooks: PMPortfolio[]
+  applyInstrumentToAll: (sourceId: string) => void
+  otherPositionCount: number
 }) {
   const [hover, setHover] = useState(false)
+  const [justApplied, setJustApplied] = useState(false)
   const effectiveTradeSize = p.tradeSize ?? tradeSize
   const barPct = Math.max(0, Math.min(100, effectiveTradeSize))
   const btn = (on: boolean): React.CSSProperties => ({
@@ -463,7 +466,21 @@ function PositionCard({ p, index, tradeSize, strategyName, saved, patchPosition,
         </div>
       )}
       <div>
-        <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)', marginBottom: 3 }}>Instrument</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 3 }}>
+          <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)' }}>Instrument</div>
+          {otherPositionCount > 0 && (
+            <button
+              onClick={() => { applyInstrumentToAll(p.id); setJustApplied(true); setTimeout(() => setJustApplied(false), 1400) }}
+              title={`Replicate this instrument (and side/strikes/legs) onto all ${otherPositionCount} other position${otherPositionCount === 1 ? '' : 's'} in the portfolio`}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 3, background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+                color: justApplied ? POS : 'var(--theme-primary, #c9a84c)',
+              }}>
+              <Repeat size={9} />{justApplied ? `Applied to ${otherPositionCount}` : 'Apply to All'}
+            </button>
+          )}
+        </div>
         <div style={{ display: 'flex', gap: 4 }}>
           {([['shares', 'Shares'], ['call', 'Call'], ['put', 'Put'], ['combo', 'Combo']] as const).map(([kind, lbl]) => {
             const on = kind === 'shares' ? p.instMode === 'underlying' : kind === 'combo' ? p.instMode === 'combo' : p.instMode === 'option' && p.optType === kind
@@ -721,7 +738,7 @@ function SinglePositionCard({
 // both single-position and portfolio-position backtests.
 function StrategyControlsPanel({
   mode, setMode, positions, saved, addPosition,
-  patchPosition, removePosition, patchComboLeg, addComboLegToPosition, removeComboLegFromPosition,
+  patchPosition, removePosition, patchComboLeg, addComboLegToPosition, removeComboLegFromPosition, applyInstrumentToAll,
   portfolioTradeSize, setPortfolioTradeSize,
   portfolioLeverage, setPortfolioLeverage, effectiveAnnualRate, setEffectiveAnnualRate,
   cloningId, setCloningId, cloneInput, setCloneInput, cloneToTickers, pmBooks,
@@ -750,6 +767,7 @@ function StrategyControlsPanel({
   patchComboLeg: (posId: string, i: number, patch: Partial<ComboLeg>) => void
   addComboLegToPosition: (posId: string) => void
   removeComboLegFromPosition: (posId: string, i: number) => void
+  applyInstrumentToAll: (sourceId: string) => void
   cloningId: string | null; setCloningId: (id: string | null) => void
   cloneInput: string; setCloneInput: (s: string) => void
   cloneToTickers: (template: PortfolioPos) => void
@@ -926,7 +944,8 @@ function StrategyControlsPanel({
                         patchPosition={patchPosition} removePosition={removePosition} patchComboLeg={patchComboLeg}
                         addComboLegToPosition={addComboLegToPosition} removeComboLegFromPosition={removeComboLegFromPosition}
                         cloningId={cloningId} setCloningId={setCloningId} cloneInput={cloneInput} setCloneInput={setCloneInput}
-                        cloneToTickers={cloneToTickers} pmBooks={pmBooks} />
+                        cloneToTickers={cloneToTickers} pmBooks={pmBooks}
+                        applyInstrumentToAll={applyInstrumentToAll} otherPositionCount={positions.length - 1} />
                     ))}
                     <button onClick={addPosition} style={{
                       minHeight: 60, background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 8%, transparent)',
@@ -1130,6 +1149,24 @@ export function AlgoStrategyBuilderContent() {
     setPositions(p => p.map(x => x.id !== posId || x.comboLegs.length >= MAX_COMBO_LEGS ? x : { ...x, comboLegs: [...x.comboLegs, mkComboLeg()] }))
   const removeComboLegFromPosition = (posId: string, i: number) =>
     setPositions(p => p.map(x => x.id !== posId || x.comboLegs.length <= 1 ? x : { ...x, comboLegs: x.comboLegs.filter((_, j) => j !== i) }))
+  // Broadcast one position's instrument config (shares/call/put/combo, its
+  // strike/DTE or leg structure, and side) to every OTHER position already in
+  // the grid — a universe strategy is one shared algorithm across many
+  // symbols, but the instrument itself still defaults per-position and has to
+  // be built once and replicated, same idea as "copy to other tickers" but
+  // for tickers ALREADY in the portfolio instead of a typed-in list, and
+  // instrument-only so it doesn't clobber each position's own trade-size
+  // override or ticker-specific signal.
+  const applyInstrumentToAll = (sourceId: string) =>
+    setPositions(p => {
+      const src = p.find(x => x.id === sourceId)
+      if (!src) return p
+      const { instMode, optType, otmPct, dte, comboLegs, comboDte, side } = src
+      return p.map(x => x.id === sourceId ? x : {
+        ...x, instMode, optType, otmPct, dte, comboDte, side,
+        comboLegs: comboLegs.map(l => ({ ...l })),
+      })
+    })
 
   const posToPayload = (p: PortfolioPos) => {
     const def = saved.find(s => s.name === activeName)
@@ -1752,6 +1789,7 @@ export function AlgoStrategyBuilderContent() {
           portfolioTradeSize={portfolioTradeSize} setPortfolioTradeSize={setPortfolioTradeSize}
           portfolioLeverage={portfolioLeverage} setPortfolioLeverage={setPortfolioLeverage} effectiveAnnualRate={effectiveAnnualRate} setEffectiveAnnualRate={setEffectiveAnnualRate}
           addComboLegToPosition={addComboLegToPosition} removeComboLegFromPosition={removeComboLegFromPosition}
+          applyInstrumentToAll={applyInstrumentToAll}
           cloningId={cloningId} setCloningId={setCloningId} cloneInput={cloneInput} setCloneInput={setCloneInput}
           cloneToTickers={cloneToTickers} pmBooks={pmBooks}
           start={start} setStart={setStart} end={end} setEnd={setEnd} timeframe={timeframe} setTimeframe={setTimeframe}
