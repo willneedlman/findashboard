@@ -22,7 +22,7 @@ import { CASH_SYMBOL } from '../lib/pmImport'
 import ConfigHeader, { Field, NumberInput, paramInput, RebalanceSelect, type RebalanceFreq } from '../components/portfolio/ConfigHeader'
 import { usePortfolio, type PortfolioHolding } from '../contexts/PortfolioContext'
 import { PRESETS, PRESET_DESC, PRESET_GROUPS } from './strategy-builder/shared'
-import { ALGO_MC_HANDOFF_KEY, ALGO_MC_OPTIONS_HANDOFF_KEY, legsToCombo, type AlgoMonteCarloHandoff, type AlgoOptionsMonteCarloHandoff, type ComboLeg } from './AlgoStrategyBuilder'
+import { ALGO_MC_HANDOFF_KEY, ALGO_MC_OPTIONS_HANDOFF_KEY, legsToCombo, ComboLegEditor, mkComboLeg, MAX_COMBO_LEGS, type AlgoMonteCarloHandoff, type AlgoOptionsMonteCarloHandoff, type ComboLeg } from './AlgoStrategyBuilder'
 // ── GBM math ────────────────────────────────────────────────────────────────
 
 function runGBM(S0: number, mu: number, sigma: number, T: number, nSims: number) {
@@ -280,6 +280,7 @@ function MCModeToggle({ mode, onChange }: { mode: 'portfolio' | 'options-strateg
 
 interface ComboMcResult {
   ticker: string | null; tickers: string[] | null; is_basket: boolean
+  dropped_tickers: { ticker: string; reason: string }[] | null
   spot: number | null; iv: number | null; dte: number
   entry_credit_debit: number
   breakevens: number[]
@@ -308,7 +309,16 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
   // legs (which may not match any named preset — a custom butterfly, say),
   // so it bypasses the preset dropdown entirely rather than trying to find
   // the closest-matching preset name and silently drifting from the original.
-  const [legsOverride] = useState<ComboLeg[] | null>(handoff?.legs ?? null)
+  // Still fully editable via the same structured leg-card editor the Algo
+  // Strategy Builder uses (ComboLegEditor) — not a flattened, read-only
+  // text summary.
+  const [legsOverride, setLegsOverride] = useState<ComboLeg[] | null>(handoff?.legs ?? null)
+  const updateOverrideLeg = (i: number, patch: Partial<ComboLeg>) =>
+    setLegsOverride(legs => legs ? legs.map((leg, j) => j === i ? { ...leg, ...patch } : leg) : legs)
+  const addOverrideLeg = () =>
+    setLegsOverride(legs => legs && legs.length < MAX_COMBO_LEGS ? [...legs, mkComboLeg()] : legs)
+  const removeOverrideLeg = (i: number) =>
+    setLegsOverride(legs => legs && legs.length > 1 ? legs.filter((_, j) => j !== i) : legs)
   // A universe strategy imported from the Algo Strategy Builder (one shared
   // combo cloned across many symbols) carries the full ticker list here —
   // basket mode applies `legsOverride` to every one of these instead of the
@@ -379,14 +389,7 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
             <input value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())} style={{ ...paramInput, width: 90 }} />
           </div>
         )}
-        {legsOverride ? (
-          <div>
-            <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', marginBottom: 3 }}>Structure (imported)</label>
-            <div style={{ ...paramInput, width: 260, display: 'flex', alignItems: 'center', cursor: 'default' }}>
-              {legsOverride.map(l => `${l.side.toUpperCase()} ${l.type.toUpperCase()} @${Math.round(l.moneyness * 100)}%`).join(' / ')}
-            </div>
-          </div>
-        ) : (
+        {!legsOverride && (
           <div>
             <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', marginBottom: 3 }}>Structure</label>
             <select value={comboPreset} onChange={e => setComboPreset(e.target.value)} style={{ ...paramInput, width: 200, cursor: 'pointer' }}>
@@ -412,8 +415,13 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
           padding: '8px 18px', cursor: isPending ? 'default' : 'pointer', opacity: isPending ? 0.6 : 1, whiteSpace: 'nowrap',
         }}>{isPending ? 'Running…' : 'Run Simulation'}</button>
         <div style={{ fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', fontFamily: 'var(--theme-mono)', maxWidth: 420, lineHeight: '13px' }}>
-          {legsOverride ? 'Imported structure' : PRESET_DESC[comboPreset]} · legs priced from live spot/IV, simulated to DTE via risk-neutral GBM — not a real historical backtest.
+          {legsOverride ? 'Imported structure — fully editable below' : PRESET_DESC[comboPreset]} · legs priced from live spot/IV, simulated to DTE via risk-neutral GBM — not a real historical backtest.
         </div>
+        {legsOverride && (
+          <div style={{ width: '100%', paddingTop: 8, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+            <ComboLegEditor legs={legsOverride} onUpdate={updateOverrideLeg} onRemove={removeOverrideLeg} onAdd={addOverrideLeg} horizontal />
+          </div>
+        )}
         <div style={{ width: '100%', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
           <div>
             <label style={{ display: 'block', fontFamily: 'var(--theme-sans)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)', marginBottom: 3 }}>Take-Profit %</label>
@@ -434,14 +442,14 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
           </div>
         </div>
         <div style={{ width: '100%', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
-          <div style={{ width: 80 }}>
+          <div style={{ width: 110 }}>
             <Field label="Position Size %"><NumberInput value={positionSize} min={1} onChange={setPositionSize} /></Field>
           </div>
-          <div style={{ width: 80 }}>
+          <div style={{ width: 90 }}>
             <Field label="Leverage (x)"><NumberInput value={leverage} min={1} step={0.25} onChange={setLeverage} /></Field>
           </div>
           {(Number(leverage) || 1) > 1 && (
-            <div style={{ width: 80 }}>
+            <div style={{ width: 100 }}>
               <Field label="Borrow Rate %"><NumberInput value={borrowRate} min={0} step={0.5} onChange={setBorrowRate} /></Field>
             </div>
           )}
@@ -496,6 +504,12 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
                 <div style={{ padding: '10px 14px', border: '1px dashed var(--theme-border, rgba(255,255,255,0.16))', fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))' }}>
                   No single payoff-at-expiry chart for a {data.tickers?.length ?? 0}-symbol basket — each underlying moves independently. The P&L distribution below already reflects the full basket. Each name's own breakeven(s) are shown below for reference.
                 </div>
+                {data.dropped_tickers && data.dropped_tickers.length > 0 && (
+                  <div title={data.dropped_tickers.map(d => `${d.ticker}: ${d.reason}`).join('\n')}
+                    style={{ padding: '8px 14px', border: '1px solid var(--theme-negative)', background: 'color-mix(in srgb, var(--theme-negative) 8%, transparent)', fontFamily: 'var(--theme-mono)', fontSize: 10, color: NEG }}>
+                    {data.dropped_tickers.length} of {(data.tickers?.length ?? 0) + data.dropped_tickers.length} tickers skipped (no live data): {data.dropped_tickers.map(d => d.ticker).join(', ')}. The rest of the basket still ran below.
+                  </div>
+                )}
                 {data.per_ticker_breakevens && data.per_ticker_breakevens.length > 0 && (
                   <div style={{ border: '1px solid var(--theme-border, rgba(255,255,255,0.12))', overflow: 'hidden' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.6fr 1fr 1fr', gap: 8, padding: '6px 12px', fontFamily: 'var(--theme-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.12))' }}>

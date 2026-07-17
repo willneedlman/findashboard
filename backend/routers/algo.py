@@ -996,6 +996,7 @@ def _combo_monte_carlo_impl(req: ComboMonteCarloRequest):
     # expiry-only version did.
     n = min(max(int(req.n_sims), 100), 5000)
 
+    dropped_tickers: dict = {}   # ticker -> reason, populated in the basket branch below
     if is_basket:
         # options_snapshot does its own live fetch (price history + up to a
         # dozen option-chain calls hunting for a valid ATM expiry) per ticker
@@ -1021,10 +1022,26 @@ def _combo_monte_carlo_impl(req: ComboMonteCarloRequest):
                 for tk, seed in zip(tickers, child_seeds)
             }
             for fut in concurrent.futures.as_completed(futures):
-                res = fut.result()
-                entry_cash_flow += res["entry_cash_flow"]
-                pnl_path += res["pnl_path"]
-                per_ticker_results[futures[fut]] = res
+                tk = futures[fut]
+                try:
+                    res = fut.result()
+                # A basket at real-world scale (60-100+ symbols) is expected to hit
+                # at least one bad ticker (delisted, no listed options, a transient
+                # fetch failure) — one name failing shouldn't 404 the whole basket
+                # and discard every other ticker's already-completed work. Drop it
+                # and keep going; the response reports what was dropped and why,
+                # same "no silent gaps" posture as the rest of the app's caveats.
+                except HTTPException as e:
+                    dropped_tickers[tk] = str(e.detail)
+                except Exception as e:
+                    dropped_tickers[tk] = str(e)
+                else:
+                    entry_cash_flow += res["entry_cash_flow"]
+                    pnl_path += res["pnl_path"]
+                    per_ticker_results[tk] = res
+        if not per_ticker_results:
+            raise HTTPException(422, f"No live spot/IV available for any of the {len(tickers)} tickers in this basket")
+        tickers = [t for t in tickers if t in per_ticker_results]   # drop failures, preserve request order
         per_ticker_single = None
     else:
         rng = np.random.default_rng()
@@ -1109,6 +1126,7 @@ def _combo_monte_carlo_impl(req: ComboMonteCarloRequest):
     return {
         "ticker": tickers[0] if not is_basket else None,
         "tickers": tickers if is_basket else None,
+        "dropped_tickers": [{"ticker": tk, "reason": reason} for tk, reason in dropped_tickers.items()] if is_basket else None,
         "is_basket": is_basket,
         "spot": round(per_ticker_single["spot"], 2) if not is_basket else None,
         "iv": round(per_ticker_single["iv"], 1) if not is_basket else None,
