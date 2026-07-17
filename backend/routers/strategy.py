@@ -932,6 +932,12 @@ class PortfolioBacktestRequest(BaseModel):
         return self
 
 
+# Bounded so a large universe's per-ticker fetch/compute (see portfolio_backtest)
+# doesn't spin up unbounded threads; cache.py's own yfinance BoundedSemaphore(2)
+# still gates actual concurrent yfinance calls beneath this regardless of count.
+_PORTFOLIO_FETCH_WORKERS = 8
+
+
 @router.post("/portfolio-backtest")
 def portfolio_backtest(req: PortfolioBacktestRequest):
     from .algo import _apply_risk_controls, _floor_equity, _safe_ann_return, _ear_bar_rate
@@ -952,12 +958,38 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
         start = req.start
     bpy = _BACKTEST_TF.get(tf, ("1d", 252))[1]
 
-    candidates = []
-    for p in req.positions:
-        sig_arr, close = _run_custom_rules(p.ticker, p.rules, start, end, tf)
+    # Fetching + evaluating each position's own signal is independent per
+    # ticker and dominated by network I/O (price history, and for a modeled
+    # option/combo leg below, an options-chain snapshot too) — a large
+    # universe (60-100+ symbols, one shared algorithm cloned across each) run
+    # sequentially routinely blew past Fly's 120s proxy read timeout. Fetch
+    # concurrently instead, same pattern as the basket options Monte Carlo
+    # (_combo_monte_carlo_impl); cache.py's own yfinance BoundedSemaphore(2)
+    # still caps actual concurrent yfinance calls regardless of worker count,
+    # so this is safe against the project's rate-limit/memory constraints —
+    # excess workers just queue on that semaphore instead of adding load.
+    # A single ticker's fetch failing doesn't abort the whole portfolio; it's
+    # just dropped, matching the original sequential loop's skip-and-continue.
+    import concurrent.futures
+
+    def _fetch_one(p: PortfolioPosition):
+        try:
+            sig_arr, close = _run_custom_rules(p.ticker, p.rules, start, end, tf)
+        except Exception as e:
+            logger.warning("portfolio_backtest: signal fetch failed for %s: %s", p.ticker, e)
+            return None
         if close is None or len(close) < 40:
-            continue
-        candidates.append((p, pd.Series(sig_arr, index=close.index), close))
+            return None
+        return (p, pd.Series(sig_arr, index=close.index), close)
+
+    fetch_results: list = [None] * len(req.positions)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, min(_PORTFOLIO_FETCH_WORKERS, len(req.positions)))) as pool:
+        futures = {pool.submit(_fetch_one, p): i for i, p in enumerate(req.positions)}
+        for fut in concurrent.futures.as_completed(futures):
+            fetch_results[futures[fut]] = fut.result()
+    # Preserve request order (as_completed finishes out of order) so result
+    # display order matches how positions were configured.
+    candidates = [r for r in fetch_results if r is not None]
 
     if not candidates:
         raise HTTPException(422, "No position produced a backtest (check tickers, rules, and date range)")
@@ -991,8 +1023,11 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
             active.add(i)
             controlled[i].loc[date] = 1.0
 
-    legs = []   # (position, result)
-    for (p, _raw_signal, close), signal in zip(candidates, controlled):
+    # Same rationale as the fetch stage above: each leg's _instrument_metrics
+    # call is independent, and for a modeled option/combo instrument it also
+    # fetches its own options-chain snapshot over the network — run
+    # concurrently rather than one ticker at a time.
+    def _compute_leg(p: PortfolioPosition, close: pd.Series, signal: pd.Series):
         # See custom_backtest: option/combo risk controls are P&L-based, applied
         # inside _instrument_metrics — the price-based pre-filter is for shares only.
         is_modeled = (p.instrument or {}).get("kind") in ("option", "combo")
@@ -1009,7 +1044,7 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
                                       max_hold_bars=p.max_hold_bars if is_modeled else None,
                                       exit_kinds=exit_kinds)
         except HTTPException:
-            continue
+            return None
         # Financing (below) needs the ACTUAL open-position state, not the raw
         # entry-rule signal — for a modeled option/combo leg those diverge
         # during a blocked period (already force-closed by a risk trigger,
@@ -1019,7 +1054,18 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
             pd.Series(res["in_position"], index=close.index).astype(float)
             if is_modeled and res.get("in_position") is not None else signal
         )
-        legs.append((p, res, financing_signal))
+        return (p, res, financing_signal)
+
+    pairs = list(zip(candidates, controlled))
+    leg_results: list = [None] * len(pairs)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, min(_PORTFOLIO_FETCH_WORKERS, len(pairs)))) as pool:
+        futures = {
+            pool.submit(_compute_leg, p, close, signal): i
+            for i, ((p, _raw_signal, close), signal) in enumerate(pairs)
+        }
+        for fut in concurrent.futures.as_completed(futures):
+            leg_results[futures[fut]] = fut.result()
+    legs = [r for r in leg_results if r is not None]   # (position, result) — request order preserved
 
     if not legs:
         raise HTTPException(422, "No position produced a backtest (check tickers, rules, and date range)")
