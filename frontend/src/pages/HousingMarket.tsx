@@ -6,8 +6,9 @@ import { T } from '../lib/theme'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
 import EmptyState from '../components/EmptyState'
-import HelpTip from '../components/HelpTip'
+import { KpiCell } from '../components/mmCockpit'
 import useIsMobile from '../hooks/useIsMobile'
+import { TOOLTIP_STYLE } from '../components/ChartTooltip'
 
 interface Trend { mom: number | null; yoy: number | null }
 interface RegionRow {
@@ -93,13 +94,8 @@ function PanelHead({ title, meta, children }: { title: string; meta?: string; ch
   </div>
 }
 
-function MetricCell({ label, value, sub, tone, help, last = false }: { label: string; value: string; sub?: string; tone?: string; help?: string; last?: boolean }) {
-  const unavailable = value === 'Data unavailable'
-  return <div style={{ minWidth: 145, padding: '13px 16px', borderRight: last ? 'none' : `1px solid ${T.border}` }}>
-    <div style={{ minHeight: 14, display: 'flex', alignItems: 'center', fontFamily: T.label, fontSize: 8.5, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.muted }}>{label}{help && <HelpTip text={help} />}</div>
-    <div style={{ marginTop: 6, fontFamily: T.mono, fontSize: unavailable ? 11 : 20, fontWeight: 800, color: unavailable ? T.muted : tone ?? T.text, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>{value}</div>
-    {sub && <div style={{ marginTop: 5, fontFamily: T.mono, fontSize: 8.5, color: T.muted }}>{sub}</div>}
-  </div>
+function metricColor(value: string, tone?: string) {
+  return value === 'Data unavailable' ? 'var(--theme-secondary, #8099b0)' : tone
 }
 
 function SortButton({ active, children, onClick }: { active: boolean; children: React.ReactNode; onClick: () => void }) {
@@ -123,13 +119,20 @@ function RentalMarket({ rent, loading }: { rent?: RentResp; loading: boolean }) 
       </span>
     </PanelHead>
     {loading ? <div style={{ padding: 22, fontFamily: T.mono, fontSize: 10, color: T.muted }}>Loading rental listings…</div> : !rent?.available ? <div style={{ padding: 22, fontFamily: T.mono, fontSize: 10, color: T.muted }}>Data unavailable. RentHub snapshot has not been ingested.</div> : <>
-      <div className="housing-metric-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(145px, 1fr))', borderBottom: `1px solid ${T.border}` }}>
-        <MetricCell label="Active Listings" value={number(rent.national?.listings)} sub="snapshot coverage" />
-        <MetricCell label="Median Asking Rent" value={money(rent.national?.median_rent)} sub="all unit types" />
-        <MetricCell label="Rent / Sq Ft" value={rent.national?.median_rent_per_sqft != null ? `$${rent.national.median_rent_per_sqft.toFixed(2)}` : 'Data unavailable'} sub="where square feet reported" />
-        <MetricCell label="One Bedroom" value={money(rent.national?.median_rent_1br)} sub="median asking rent" />
-        <MetricCell label="Two Bedroom" value={money(rent.national?.median_rent_2br)} sub="median asking rent" last />
-      </div>
+      {(() => {
+        const listings = number(rent.national?.listings)
+        const medianRent = money(rent.national?.median_rent)
+        const psf = rent.national?.median_rent_per_sqft != null ? `$${rent.national.median_rent_per_sqft.toFixed(2)}` : 'Data unavailable'
+        const rent1br = money(rent.national?.median_rent_1br)
+        const rent2br = money(rent.national?.median_rent_2br)
+        return <div className="housing-metric-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(145px, 1fr))', borderBottom: `1px solid ${T.border}` }}>
+          <KpiCell label="Active Listings" value={listings} color={metricColor(listings)} valueSize={20} sub="snapshot coverage" />
+          <KpiCell label="Median Asking Rent" value={medianRent} color={metricColor(medianRent)} valueSize={20} sub="all unit types" />
+          <KpiCell label="Rent / Sq Ft" value={psf} color={metricColor(psf)} valueSize={20} sub="where square feet reported" />
+          <KpiCell label="One Bedroom" value={rent1br} color={metricColor(rent1br)} valueSize={20} sub="median asking rent" />
+          <KpiCell label="Two Bedroom" value={rent2br} color={metricColor(rent2br)} valueSize={20} sub="median asking rent" />
+        </div>
+      })()}
       <div style={{ maxHeight: 420, overflow: 'auto' }}>
         <table style={{ width: '100%', minWidth: 760, borderCollapse: 'collapse', fontVariantNumeric: 'tabular-nums' }}>
           <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: T.surface }}><tr>
@@ -179,12 +182,12 @@ function HousingMarketContent() {
       <section style={PANEL}>
         <PanelHead title="National Housing Pulse" meta={`FRED · ${national.asof} · observed public series`} />
         <div className="housing-metric-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(145px, 1fr))' }}>
-          <MetricCell label="Median Home Price" value={money(national.median_price)} sub={signed(national.trends.median_price.yoy)} tone={(national.trends.median_price.yoy ?? 0) >= 0 ? T.pos : T.neg} />
-          <MetricCell label="30Y Fixed" value={pct(national.rate_30y)} sub="prevailing mortgage rate" />
-          <MetricCell label="Affordability Index" value={national.affordability_index.toFixed(1)} sub={national.affordability_index >= 100 ? 'affordable' : 'stretched'} tone={national.affordability_index >= 100 ? T.pos : T.neg} help="100 means a median-income household earns exactly enough to qualify for the median-priced home under the model assumptions." />
-          <MetricCell label="Months of Supply" value={national.months_of_supply.toFixed(2)} sub={`${national.market} market`} tone={MARKET_COLOR[national.market]} help="Active inventory divided by the current monthly sales pace. Under four months generally favors sellers." />
-          <MetricCell label="Days on Market" value={`${national.days_on_market.toFixed(1)} days`} sub="median listing time" />
-          <MetricCell label="List Price / Sq Ft" value={national.price_per_sqft > 0 ? money(national.price_per_sqft) : 'Data unavailable'} sub="national median" last />
+          <KpiCell label="Median Home Price" value={money(national.median_price)} valueSize={20} sub={signed(national.trends.median_price.yoy)} color={metricColor(money(national.median_price), (national.trends.median_price.yoy ?? 0) >= 0 ? T.pos : T.neg)} />
+          <KpiCell label="30Y Fixed" value={pct(national.rate_30y)} valueSize={20} color={metricColor(pct(national.rate_30y))} sub="prevailing mortgage rate" />
+          <KpiCell label="Affordability Index" value={national.affordability_index.toFixed(1)} valueSize={20} sub={national.affordability_index >= 100 ? 'affordable' : 'stretched'} color={national.affordability_index >= 100 ? T.pos : T.neg} help="100 means a median-income household earns exactly enough to qualify for the median-priced home under the model assumptions." />
+          <KpiCell label="Months of Supply" value={national.months_of_supply.toFixed(2)} valueSize={20} sub={`${national.market} market`} color={MARKET_COLOR[national.market]} help="Active inventory divided by the current monthly sales pace. Under four months generally favors sellers." />
+          <KpiCell label="Days on Market" value={`${national.days_on_market.toFixed(1)} days`} valueSize={20} color={metricColor(`${national.days_on_market.toFixed(1)} days`)} sub="median listing time" />
+          <KpiCell label="List Price / Sq Ft" value={national.price_per_sqft > 0 ? money(national.price_per_sqft) : 'Data unavailable'} valueSize={20} color={metricColor(national.price_per_sqft > 0 ? money(national.price_per_sqft) : 'Data unavailable')} sub="national median" />
         </div>
       </section>
 
@@ -236,12 +239,12 @@ function HousingMarketContent() {
         <section style={PANEL}>
           <PanelHead title="Mortgage Credit Risk" meta="national" />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
-            <MetricCell label="SF Delinquency" value={pct(national.sf_default_rate)} sub={signed(national.trends.sf_default_rate.yoy)} tone={national.sf_default_rate > 2 ? T.neg : T.text} />
-            <MetricCell label="90+ Days Past Due" value={pct(national.serious_delinquency)} sub="serious delinquency" last />
-            <MetricCell label="Multifamily Default" value={pct(national.mf_default_rate)} sub="FRED series unavailable" />
-            <MetricCell label="Foreclosure Rate" value={pct(national.foreclosure_rate)} sub="FRED series unavailable" last />
-            <MetricCell label="Negative Equity" value={pct(national.negative_equity, 1)} sub="FRED series unavailable" />
-            <MetricCell label="Origination FICO / LTV" value={national.avg_fico > 0 ? `${national.avg_fico.toFixed(0)} / ${national.avg_ltv.toFixed(1)}%` : 'Data unavailable'} sub="lending standards" last />
+            <KpiCell label="SF Delinquency" value={pct(national.sf_default_rate)} valueSize={20} sub={signed(national.trends.sf_default_rate.yoy)} color={metricColor(pct(national.sf_default_rate), national.sf_default_rate > 2 ? T.neg : T.text)} />
+            <KpiCell label="90+ Days Past Due" value={pct(national.serious_delinquency)} valueSize={20} color={metricColor(pct(national.serious_delinquency))} sub="serious delinquency" />
+            <KpiCell label="Multifamily Default" value={pct(national.mf_default_rate)} valueSize={20} color={metricColor(pct(national.mf_default_rate))} sub="FRED series unavailable" />
+            <KpiCell label="Foreclosure Rate" value={pct(national.foreclosure_rate)} valueSize={20} color={metricColor(pct(national.foreclosure_rate))} sub="FRED series unavailable" />
+            <KpiCell label="Negative Equity" value={pct(national.negative_equity, 1)} valueSize={20} color={metricColor(pct(national.negative_equity, 1))} sub="FRED series unavailable" />
+            <KpiCell label="Origination FICO / LTV" value={national.avg_fico > 0 ? `${national.avg_fico.toFixed(0)} / ${national.avg_ltv.toFixed(1)}%` : 'Data unavailable'} valueSize={20} color={metricColor(national.avg_fico > 0 ? `${national.avg_fico.toFixed(0)} / ${national.avg_ltv.toFixed(1)}%` : 'Data unavailable')} sub="lending standards" />
           </div>
         </section>
       </div>
@@ -260,7 +263,7 @@ function HousingMarketContent() {
 }
 
 const axisTick = { fontFamily: T.mono, fontSize: 8, fill: T.muted }
-const tooltipStyle = { background: T.surface, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.mono, fontSize: 10, padding: '8px 10px' }
+const tooltipStyle = { ...TOOLTIP_STYLE }
 const Unavailable = ({ text }: { text: string }) => <div style={{ minHeight: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.muted, fontFamily: T.mono, fontSize: 10 }}>{text}</div>
 
 export { HousingMarketContent }

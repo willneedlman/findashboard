@@ -4,6 +4,7 @@ import PageWrapper from '../components/PageWrapper'
 import { Widget, HeaderBar, KpiCell, RiskMeterStrip, QuoteCell, Stepper, Chips, Segmented, WidenControl } from '../components/mmCockpit'
 import { useChallenge, ModeToggle, ChallengeClock, LeaderboardModal, CHALLENGE_SPEED, type SimMode } from '../components/mmChallenge'
 import useIsMobile from '../hooks/useIsMobile'
+import { TOOLTIP_STYLE } from '../components/ChartTooltip'
 
 /*
  * Fixed Income MM Simulator
@@ -524,7 +525,7 @@ export function FixedIncomeMarketMakerContent() {
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.07)" />
                     <XAxis dataKey="i" hide />
                     <YAxis tick={{ fontSize: 9, fill: T.muted, fontFamily: T.mono }} orientation="right" domain={['auto', 'auto']} tickFormatter={v => `${(+v).toFixed(2)}%`} width={46} />
-                    <Tooltip contentStyle={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 0, fontFamily: T.mono, fontSize: 11 }}
+                    <Tooltip contentStyle={{ ...TOOLTIP_STYLE }}
                       formatter={(v: number, name: string) => [`${(+v).toFixed(3)}%`, name]} labelFormatter={() => ''} />
                     {!multiPlot && <ReferenceLine y={CURVE0[selected]} stroke="color-mix(in srgb, var(--theme-primary) 25%, transparent)" strokeDasharray="3 4" />}
                     {plotIds.map((id, idx) => <Line key={id} type="monotone" dataKey={id} stroke={multiPlot ? TAPE_COLORS[idx % TAPE_COLORS.length] : 'var(--theme-tertiary, #60a5fa)'} strokeWidth={2} dot={false} isAnimationActive={false} />)}

@@ -8,6 +8,7 @@ import {
 import SidebarLayout from '../components/SidebarLayout'
 import EmptyState from '../components/EmptyState'
 import HelpTip from '../components/HelpTip'
+import { KpiCell } from '../components/mmCockpit'
 import { useChartColors } from '../hooks/useChartColors'
 import axios from 'axios'
 
@@ -218,49 +219,6 @@ function runSimulation(params: SimParams): SimResult {
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
-
-function MetricCard({ label, value, sub, help }: { label: string; value: string; sub?: string; help?: string }) {
-  const [show, setShow] = useState(false)
-  return (
-    <div style={{
-      background: 'var(--theme-surface, #142032)',
-      border: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.07)))',
-      borderTop: '2px solid var(--theme-primary, #c9a84c)',
-      padding: '10px 12px',
-      position: 'relative',
-      flex: 1,
-      minWidth: 0,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
-        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)' }}>
-          {label}
-        </span>
-        {help && (
-          <span
-            style={{ fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.22))', cursor: 'help' }}
-            onMouseEnter={() => setShow(true)}
-            onMouseLeave={() => setShow(false)}
-          >ⓘ</span>
-        )}
-        {show && help && (
-          <div style={{
-            position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)',
-            marginBottom: 6, background: 'var(--theme-bg, #0a1628)',
-            border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)',
-            padding: '6px 9px', width: 200, fontSize: 11, color: 'var(--theme-text, #d7e3fc)',
-            lineHeight: '15px', zIndex: 50, pointerEvents: 'none', fontFamily: 'var(--theme-mono)',
-          }}>
-            {help}
-          </div>
-        )}
-      </div>
-      <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 20, fontWeight: 700, color: 'var(--theme-text, #d7e3fc)' }}>
-        {value}
-      </div>
-      {sub && <div style={{ fontSize: 10, color: 'var(--theme-text-dim, rgba(255,255,255,0.28))', marginTop: 3, fontFamily: 'var(--theme-mono)' }}>{sub}</div>}
-    </div>
-  )
-}
 
 function ChartPanel({ label, height, note, children }: { label: string; height: number; note?: string; children: React.ReactNode }) {
   return (
@@ -566,28 +524,36 @@ export function GammaScalpingContent() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
               {/* Metric cards */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-                <MetricCard
+              <div style={{ display: 'flex', flexWrap: 'wrap', background: 'var(--theme-surface, #142032)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+                <KpiCell
+                  grow
                   label="Avg P&L"
                   value={`$${result.avgPnl >= 0 ? '+' : ''}${result.avgPnl.toFixed(2)}`}
+                  valueSize={20}
                   sub={`${nSims} simulations`}
                   help="Mean terminal P&L across all simulation paths after delta-hedging."
                 />
-                <MetricCard
+                <KpiCell
+                  grow
                   label="Prob Profit"
                   value={`${result.probProfit.toFixed(1)}%`}
+                  valueSize={20}
                   sub="paths with PnL > 0"
                   help="Fraction of simulation paths ending with positive P&L."
                 />
-                <MetricCard
+                <KpiCell
+                  grow
                   label="Breakeven RV"
                   value={`${result.breakevenRv.toFixed(1)}%`}
+                  valueSize={20}
                   sub={`IV = ${iv}%`}
                   help="The realized vol at which expected P&L is approximately zero (delta-hedge neutral)."
                 />
-                <MetricCard
+                <KpiCell
+                  grow
                   label="Theta Bleed / Day"
                   value={`$${result.thetaBleedPerDay.toFixed(3)}`}
+                  valueSize={20}
                   sub="BS theta decay"
                   help="Daily option value decay (BS theta), paid by long gamma / received by short gamma."
                 />

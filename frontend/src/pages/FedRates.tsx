@@ -215,7 +215,7 @@ function YieldCurveChart({ rows, twist }: { rows: any[]; twist: number }) {
         <Tooltip contentStyle={TOOLTIP_STYLE} cursor={CROSSHAIR_CURSOR} formatter={(v: number, n: string) => [`${v.toFixed(2)}%`, n]} />
         <Legend verticalAlign="top" align="right" wrapperStyle={{ fontFamily: T.label, fontSize: 9, letterSpacing: '0.08em', paddingBottom: 4 }} />
         <Line type="monotone" dataKey="m6" stroke="rgba(255,255,255,0.30)" strokeWidth={1.25} strokeDasharray="2 4" dot={false} name="6M ago" connectNulls isAnimationActive={false} />
-        <Line type="monotone" dataKey="m1" stroke="#5e768f" strokeWidth={1.5} strokeDasharray="6 4" dot={false} name="1M ago" connectNulls isAnimationActive={false} />
+        <Line type="monotone" dataKey="m1" stroke="var(--theme-secondary, #5e768f)" strokeWidth={1.5} strokeDasharray="6 4" dot={false} name="1M ago" connectNulls isAnimationActive={false} />
         <Line type="monotone" dataKey="d1" stroke={VIOLET} strokeWidth={1.25} strokeDasharray="7 3" strokeOpacity={0.7} dot={false} name="1D ago" connectNulls isAnimationActive={false} />
         <Line type="monotone" dataKey="today"
           stroke={active ? 'rgba(255,255,255,0.28)' : T.gold} strokeWidth={active ? 1.75 : 2}
@@ -257,10 +257,10 @@ function DotPlot({ data }: { data: any }) {
             return (
               <g key={c.key}>
                 {d.range_low != null && d.range_high != null && (
-                  <line x1={x} x2={x} y1={yPix(d.range_high)} y2={yPix(d.range_low)} stroke="#5e768f" strokeWidth={1} opacity={0.5} />
+                  <line x1={x} x2={x} y1={yPix(d.range_high)} y2={yPix(d.range_low)} stroke="var(--theme-secondary, #5e768f)" strokeWidth={1} opacity={0.5} />
                 )}
                 {d.ct_low != null && d.ct_high != null && (
-                  <line x1={x} x2={x} y1={yPix(d.ct_high)} y2={yPix(d.ct_low)} stroke="#5e768f" strokeWidth={7} opacity={0.55} strokeLinecap="round" />
+                  <line x1={x} x2={x} y1={yPix(d.ct_high)} y2={yPix(d.ct_low)} stroke="var(--theme-secondary, #5e768f)" strokeWidth={7} opacity={0.55} strokeLinecap="round" />
                 )}
                 {d.median != null && (
                   <line x1={x - 14} x2={x + 14} y1={yPix(d.median)} y2={yPix(d.median)} stroke={T.gold} strokeWidth={2.5} />
@@ -579,7 +579,7 @@ export function FedRatesContent() {
                   {sepVintage && <span style={{ fontFamily: T.mono, fontSize: 8.5, letterSpacing: '0.1em', color: T.muted }}>{sepVintage}</span>}
                   <span style={{ display: 'inline-flex', gap: 12, fontFamily: T.label, fontSize: 8.5, letterSpacing: '0.06em', color: T.muted }}>
                     <span><span style={{ color: T.gold }}>—</span> MEDIAN</span>
-                    <span><span style={{ color: '#5e768f' }}>▮</span> CT / RANGE</span>
+                    <span><span style={{ color: 'var(--theme-secondary, #5e768f)' }}>▮</span> CT / RANGE</span>
                     <span><span style={{ color: T.blue }}>◆</span> MARKET</span>
                   </span>
                 </div>

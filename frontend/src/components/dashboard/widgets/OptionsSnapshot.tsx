@@ -7,6 +7,7 @@ import {
 } from 'recharts'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
 import { useOptimalGrid } from '../../../hooks/useOptimalGrid'
+import { TOOLTIP_STYLE } from '../../ChartTooltip'
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const T = {
@@ -310,7 +311,7 @@ function ImpliedProb({ spot, atmIv, expiry }: { spot: number; atmIv: number; exp
             <XAxis dataKey="price" type="number" domain={xDomain} ticks={xTicks} tick={{ fontSize: 8, fill: T.muted, fontFamily: T.mono }} tickLine={false} axisLine={false} tickFormatter={v => `$${Math.round(v as number)}`} />
             <YAxis hide />
             <Tooltip
-              contentStyle={{ background: T.surface, border: `1px solid ${T.border}`, fontSize: 9, fontFamily: T.mono }}
+              contentStyle={{ ...TOOLTIP_STYLE }}
               formatter={(val: number, name: string) => name === 'prob' ? [`${(val * 100).toFixed(3)}%`, 'density'] : [null, null]}
               labelFormatter={v => `$${Number(v).toFixed(2)}`}
             />

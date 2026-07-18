@@ -14,6 +14,7 @@ import PaperChart, { type ChartFill } from '../../components/PaperChart'
 import { loadActivePortfolio } from '../../components/dashboard/widgets/usePortfolio'
 import { EMPTY_LEG, OPTION_STRATEGY_TEMPLATES, type LegState, type StrategyTemplate } from './optionTemplates'
 import { useAuth, adaptAccount, T, inp, sel, lbl, btn, sectionHeader, fmt$, fmtDate, statusColor, computeReplayStats, applyRiskToChart, PT_LS_KEY, BUILTIN_STRATEGY_INFO, PAPER_DEFAULT_PARAMS, PAPER_PARAM_LABELS, STRATEGY_TEMPLATE, RISK_DEFAULTS, type Balances, type Position, type Order, type AccountData, type PendingOptionStrategy, type ChartPoint, type StrategyEntry, type ReplayEvent, type ReplayResult, type RiskConfig, type SchedulerStatus, type SchedulerJob, type SchedulerLogEntry } from './shared'
+import { TOOLTIP_STYLE, CROSSHAIR_CURSOR } from '../../components/ChartTooltip'
 
 function StrategySignalChart({ data, ticker, mode, intervalMs = 15_000 }: {
   data: ChartPoint[]; ticker: string; mode: 'replay' | 'live'; intervalMs?: number
@@ -83,8 +84,8 @@ function StrategySignalChart({ data, ticker, mode, intervalMs = 15_000 }: {
             tickFormatter={(v: number) => `$${v.toFixed(0)}`}
           />
           <Tooltip
-            contentStyle={{ background: 'var(--theme-surface,#142032)', border: `1px solid ${T.border}`,
-              fontFamily: T.mono, fontSize: 10, borderRadius: 0 }}
+            contentStyle={TOOLTIP_STYLE}
+            cursor={CROSSHAIR_CURSOR}
             labelStyle={{ color: T.gold }}
             formatter={(value: number, name: string) => {
               if (name === 'price') return [`$${value.toFixed(2)}`, 'Price']

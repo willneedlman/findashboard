@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
+import { TOOLTIP_STYLE, CROSSHAIR_CURSOR } from '../../ChartTooltip'
 
 
 const shimmer: React.CSSProperties = {
@@ -129,8 +130,8 @@ export default function CreditSpreadsWidget({ config }: { config: WidgetConfig }
                     <YAxis yAxisId="right" orientation="right" hide domain={['auto', 'auto']} />
                   )}
                   <Tooltip
-                    cursor={{ stroke: T.border }}
-                    contentStyle={{ background: T.surface, border: `1px solid ${T.border}`, fontFamily: T.mono, fontSize: 9, padding: '4px 8px' }}
+                    cursor={CROSSHAIR_CURSOR}
+                    contentStyle={{ ...TOOLTIP_STYLE }}
                     labelStyle={{ color: T.gold, fontSize: 8 }}
                     formatter={(v: number, key: string) => {
                       if (key === '_vix') return [`${v.toFixed(1)}`, 'VIX']

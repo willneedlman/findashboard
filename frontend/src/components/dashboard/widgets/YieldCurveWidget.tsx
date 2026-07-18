@@ -6,6 +6,7 @@ import {
   Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
+import { TOOLTIP_STYLE } from '../../ChartTooltip'
 
 const T = {
   bg:      'var(--theme-bg, #101c2e)',
@@ -157,7 +158,7 @@ export default function YieldCurveWidget({ config: _config }: { config: WidgetCo
                   domain={['auto', 'auto']}
                 />
                 <Tooltip
-                  contentStyle={{ background: T.surface, border: `1px solid ${T.border}`, fontFamily: T.mono, fontSize: 9, padding: '5px 8px' }}
+                  contentStyle={{ ...TOOLTIP_STYLE }}
                   labelFormatter={(label: string) => label}
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   formatter={(v: any, key: string) => {

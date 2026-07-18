@@ -5,6 +5,8 @@ import { useQuery } from '@tanstack/react-query'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
+import { KpiCell } from '../components/mmCockpit'
+import { TOOLTIP_STYLE, CROSSHAIR_CURSOR } from '../components/ChartTooltip'
 
 
 const SERIES_COLORS: Record<string, string> = {
@@ -40,28 +42,6 @@ interface CreditResponse {
 
 type ViewKey = 'ig_oas' | 'hy_oas' | 'ig_3_5' | 'hy_b' | 'hy_ccc' | 'vix'
 const OVERLAY_KEYS: ViewKey[] = ['ig_oas', 'hy_oas', 'ig_3_5', 'hy_b', 'hy_ccc']
-
-function StatCell({ label, benchmark, value, change, isVix, last }: { label: string; benchmark: string; value: number | null; change: number | null; isVix?: boolean; last?: boolean }) {
-  return (
-    <div style={{
-      flex: 1,
-      padding: '12px 16px',
-      borderRight: last ? 'none' : `1px solid ${T.border}`,
-    }}>
-      <div style={{ fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.muted, marginBottom: 1 }}>{label}</div>
-      <div style={{ fontFamily: T.mono, fontSize: 8, color: T.muted, opacity: 0.6, marginBottom: 7, letterSpacing: '0.04em' }}>{benchmark}</div>
-      <div style={{ fontFamily: T.mono, fontSize: 20, fontWeight: 700, color: isVix ? T.gold : T.text, lineHeight: 1.1 }}>
-        {value != null ? value.toFixed(isVix ? 2 : 0) : '—'}
-        {!isVix && value != null && <span style={{ fontSize: 11, opacity: 0.55 }}> bps</span>}
-      </div>
-      {change != null && (
-        <div style={{ fontFamily: T.mono, fontSize: 9, color: change >= 0 ? T.neg : T.pos, marginTop: 5 }}>
-          {change >= 0 ? '▲' : '▼'} {Math.abs(change).toFixed(0)} bps vs 1Y ago
-        </div>
-      )}
-    </div>
-  )
-}
 
 export function CreditSpreadsContent() {
   const [lookback, setLookback] = useState(365)
@@ -116,11 +96,17 @@ export function CreditSpreadsContent() {
         {data && (
           <div style={{ background: T.surface, border: `1px solid ${T.border}`, marginBottom: 20, boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }}>
             <div style={{ display: 'flex', flexWrap: 'wrap' }}>
-              {Object.entries(data.series).filter(([k]) => k !== 'vix').map(([key, s], i, arr) => (
-                <StatCell key={key} label={s.label} benchmark={s.benchmark ?? ''} value={s.current} change={s.change_1y ?? null} last={i === arr.length - 1 && !data.series.vix} />
-              ))}
+              {Object.entries(data.series).filter(([k]) => k !== 'vix').map(([key, s]) => {
+                const change = s.change_1y ?? null
+                const sub = change != null
+                  ? `${s.benchmark ?? ''} · ${change >= 0 ? '▲' : '▼'} ${Math.abs(change).toFixed(0)} bps vs 1Y ago`
+                  : (s.benchmark ?? '')
+                return <KpiCell key={key} grow label={s.label} value={s.current != null ? `${s.current.toFixed(0)} bps` : '—'}
+                  sub={sub} subColor={change != null ? (change >= 0 ? T.neg : T.pos) : undefined} />
+              })}
               {data.series.vix && (
-                <StatCell label="VIX" benchmark="CBOE 30-day implied vol (S&P 500)" value={data.series.vix.current} change={null} isVix last />
+                <KpiCell grow label="VIX" value={data.series.vix.current != null ? data.series.vix.current.toFixed(2) : '—'}
+                  color="var(--theme-primary, #c9a84c)" sub="CBOE 30-day implied vol (S&P 500)" />
               )}
             </div>
           </div>
@@ -177,7 +163,7 @@ export function CreditSpreadsContent() {
                 <XAxis dataKey="date" tick={{ fontFamily: T.mono, fontSize: 8, fill: T.muted }} tickLine={false} axisLine={false} tickFormatter={v => v.slice(0, 7)} interval="preserveStartEnd" />
                 <YAxis yAxisId="spread" tickFormatter={v => `${v}`} tick={{ fontFamily: T.mono, fontSize: 8, fill: T.muted }} tickLine={false} axisLine={false} label={{ value: 'OAS (bps)', angle: -90, position: 'insideLeft', fill: T.muted, fontSize: 8, fontFamily: T.mono }} />
                 {showVix && <YAxis yAxisId="vix" orientation="right" tickFormatter={v => `${v}`} tick={{ fontFamily: T.mono, fontSize: 8, fill: T.gold }} tickLine={false} axisLine={false} />}
-                <Tooltip cursor={{ stroke: 'var(--theme-border, rgba(255,255,255,0.06))', strokeWidth: 1 }} contentStyle={{ background: T.surface, border: `1px solid color-mix(in srgb, var(--theme-primary) 25%, transparent)`, fontFamily: T.mono, fontSize: 10, padding: '8px 10px' }} labelStyle={{ color: T.gold, fontFamily: T.label, fontWeight: 700 }} formatter={(v: number, name: string) => [`${v.toFixed(2)}${name === 'vix' ? '' : ' bps'}`, name.toUpperCase()]} />
+                <Tooltip cursor={CROSSHAIR_CURSOR} contentStyle={{ ...TOOLTIP_STYLE }} labelStyle={{ color: T.gold, fontFamily: T.label, fontWeight: 700 }} formatter={(v: number, name: string) => [`${v.toFixed(2)}${name === 'vix' ? '' : ' bps'}`, name.toUpperCase()]} />
                 {OVERLAY_KEYS.filter(k => activeKeys.has(k)).map(k => (
                   <Line key={k} yAxisId="spread" type="monotone" dataKey={k} stroke={SERIES_COLORS[k]} strokeWidth={1.5} dot={false} name={k} connectNulls />
                 ))}

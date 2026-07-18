@@ -14,6 +14,7 @@ import PaperChart, { type ChartFill } from '../../components/PaperChart'
 import { loadActivePortfolio } from '../../components/dashboard/widgets/usePortfolio'
 import { EMPTY_LEG, OPTION_STRATEGY_TEMPLATES, type LegState, type StrategyTemplate } from './optionTemplates'
 import { useAuth, adaptAccount, T, inp, sel, lbl, btn, sectionHeader, fmt$, fmtDate, statusColor, computeReplayStats, applyRiskToChart, PT_LS_KEY, BUILTIN_STRATEGY_INFO, PAPER_DEFAULT_PARAMS, PAPER_PARAM_LABELS, STRATEGY_TEMPLATE, RISK_DEFAULTS, type Balances, type Position, type Order, type AccountData, type PendingOptionStrategy, type ChartPoint, type StrategyEntry, type ReplayEvent, type ReplayResult, type RiskConfig, type SchedulerStatus, type SchedulerJob, type SchedulerLogEntry } from './shared'
+import { TOOLTIP_STYLE, CROSSHAIR_CURSOR } from '../../components/ChartTooltip'
 
 // ─── Ticker chart modal ───────────────────────────────────────────────────────
 function TickerChartModal({ ticker, onClose }: { ticker: string; onClose: () => void }) {
@@ -108,7 +109,8 @@ function TickerChartModal({ ticker, onClose }: { ticker: string; onClose: () => 
                   width={52}
                 />
                 <Tooltip
-                  contentStyle={{ background: 'var(--theme-surface, #142032)', border: '1px solid color-mix(in srgb, var(--theme-primary) 30%, transparent)', borderRadius: 0, fontFamily: T.mono, fontSize: 11 }}
+                  contentStyle={TOOLTIP_STYLE}
+                  cursor={CROSSHAIR_CURSOR}
                   formatter={(v: number) => [fmt$(v), 'Close']}
                 />
                 <Area

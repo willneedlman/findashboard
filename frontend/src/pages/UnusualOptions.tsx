@@ -5,8 +5,9 @@ import { useQuery } from '@tanstack/react-query'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
 import { VerdictStrip } from './valuationShared'
-import { readPMPortfolios, normalizeTicker } from '../lib/pmImport'
+import { normalizeTicker } from '../lib/pmImport'
 import { screenerFilterToApi } from '../lib/format'
+import UniversePicker from '../components/UniversePicker'
 
 
 interface Row {
@@ -156,7 +157,6 @@ export function UnusualOptionsContent() {
   const [screenerLoading, setScreenerLoading] = useState(false)
   const [screenerError, setScreenerError] = useState<string | null>(null)
 
-  const pmPortfolios = useMemo(() => readPMPortfolios().filter(p => p.holdings.length > 0), [])
   const savedScreens = useMemo(() => readSavedScreens(), [])
 
   const applyTickers = (list: string[], source: string) => {
@@ -172,13 +172,6 @@ export function UnusualOptionsContent() {
         : `Loaded ${cleaned.length} from ${source}.`,
     )
     setScreenerError(null)
-  }
-
-  const handlePortfolioSelect = (portId: string) => {
-    if (!portId) return
-    const port = pmPortfolios.find(p => p.id === portId)
-    if (!port) return
-    applyTickers(port.holdings.map(h => h.ticker), port.name)
   }
 
   const handleScreenSelect = async (screenId: string) => {
@@ -274,35 +267,14 @@ export function UnusualOptionsContent() {
         <div style={{ flex: '1 1 280px', minWidth: 200 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 5, flexWrap: 'wrap' }}>
             <label style={{ ...labelStyle, marginBottom: 0 }}>Tickers (blank = liquid default set)</label>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-              {pmPortfolios.length > 0 && (
-                <select
-                  value=""
-                  onChange={e => handlePortfolioSelect(e.target.value)}
-                  style={importSelectStyle}
-                  title="Load tickers from Portfolio Manager"
-                >
-                  <option value="" disabled>Portfolio…</option>
-                  {pmPortfolios.map(p => (
-                    <option key={p.id} value={p.id}>{p.name} ({p.holdings.length})</option>
-                  ))}
-                </select>
-              )}
-              {savedScreens.length > 0 && (
-                <select
-                  value=""
-                  onChange={e => { void handleScreenSelect(e.target.value) }}
-                  disabled={screenerLoading}
-                  style={{ ...importSelectStyle, opacity: screenerLoading ? 0.6 : 1, cursor: screenerLoading ? 'wait' : 'pointer' }}
-                  title="Load tickers from a saved screen"
-                >
-                  <option value="" disabled>{screenerLoading ? 'Running…' : 'Screen…'}</option>
-                  {savedScreens.map(s => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
-              )}
-            </div>
+            <UniversePicker
+              mode="tickers"
+              tickerCap={TICKER_CAP}
+              onImportTickers={(list, name) => applyTickers(list, name)}
+              screenHandoff={{ screens: savedScreens, loading: screenerLoading, onSelect: id => { void handleScreenSelect(id) } }}
+              style={importSelectStyle}
+              showNote={false}
+            />
           </div>
           <input
             value={draft.tickers}

@@ -6,11 +6,12 @@ import SidebarLayout from '../components/SidebarLayout'
 import EmptyState from '../components/EmptyState'
 import ErrorState from '../components/ErrorState'
 import LoadingState from '../components/LoadingState'
-import { INPUT, SELECT, LABEL } from './valuationShared'
+import HelpTip from '../components/HelpTip'
+import { INPUT, SELECT, LABEL, TICK, TOOLTIP_STYLE } from './valuationShared'
 import { fetchFactorDecomposition } from '../hooks/useApi'
 import { readPMPortfolios, normalizeTicker, type PMPortfolio } from '../lib/pmImport'
 import { T } from '../lib/theme'
-import { MONO, SANS, mix, InfoTip, Panel, seg, KpiStrip } from './cockpitKit'
+import { MONO, SANS, mix, Panel, seg, KpiStrip } from './cockpitKit'
 
 interface FactorRow { factor: string; proxy: string; beta: number; t_stat: number | null; risk_pct: number }
 interface HoldingDetail { ticker: string; weight: number; betas: Record<string, number>; idiosyncratic_pct: number; book_var_share_pct: number }
@@ -86,7 +87,7 @@ export default function FactorDecomposition() {
       <div style={{ padding: '12px 12px 13px', borderBottom: `1px solid ${T.border}` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 7 }}>
           <span style={LABEL}>Factor set</span>
-          <InfoTip align="left" title="Macro vs. style factors" body="Macro: sensitivity to market, rates, credit, oil, and the dollar via liquid ETF proxies. Style: Fama-French/Carhart tilt toward size, value, and momentum, from the Ken French Data Library. Different lenses on the same book — macro sensitivity vs. equity style tilt." source="Two independent factor models" />
+          <HelpTip anchor="left" title="Macro vs. style factors" body="Macro: sensitivity to market, rates, credit, oil, and the dollar via liquid ETF proxies. Style: Fama-French/Carhart tilt toward size, value, and momentum, from the Ken French Data Library. Different lenses on the same book — macro sensitivity vs. equity style tilt." source="Two independent factor models" />
         </div>
         <div style={{ display: 'flex', gap: 5 }}>
           <button onClick={() => setFactorSet('macro')} style={seg(factorSet === 'macro')}>Macro</button>
@@ -143,7 +144,7 @@ function Results({ d }: { d: Resp }) {
         <div style={{ display: 'grid', gridTemplateColumns: '110px 80px 100px 90px 1fr 90px', padding: '0 14px' }}>
           {['Factor', 'Proxy', 'Beta', 't-stat', 'Risk share', ''].map((h, i) => (
             <div key={h + i} style={{ display: 'flex', alignItems: 'center', gap: 5, justifyContent: i >= 2 && i <= 3 ? 'flex-end' : i === 4 ? 'flex-end' : 'flex-start', fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.muted, padding: '8px 4px', borderBottom: `1px solid ${T.border}` }}>
-              {h}{i === 4 && <InfoTip align="right" title="Risk share" body={`Each factor's contribution to the book's return variance. The five shares sum to the systematic ${d.systematic_pct}%; the rest is name-specific. Negative shares are small hedging offsets.`} source="β·cov decomposition" />}
+              {h}{i === 4 && <HelpTip anchor="right" title="Risk share" body={`Each factor's contribution to the book's return variance. The five shares sum to the systematic ${d.systematic_pct}%; the rest is name-specific. Negative shares are small hedging offsets.`} source="β·cov decomposition" />}
             </div>
           ))}
         </div>
@@ -180,9 +181,9 @@ function Results({ d }: { d: Resp }) {
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={rollData} margin={{ top: 4, right: 62, bottom: 0, left: -20 }}>
               <CartesianGrid stroke={T.borderFaint} vertical={false} />
-              <XAxis dataKey="date" tick={{ fontSize: 9, fill: T.muted, fontFamily: 'var(--theme-mono)' }} minTickGap={70} axisLine={{ stroke: T.border }} tickLine={false} />
-              <YAxis tick={{ fontSize: 9, fill: T.muted, fontFamily: 'var(--theme-mono)' }} domain={['auto', 'auto']} axisLine={false} tickLine={false} width={38} />
-              <Tooltip contentStyle={{ background: T.bg, border: `1px solid ${T.border}`, fontFamily: 'var(--theme-mono)', fontSize: 11 }} labelStyle={{ color: T.muted }} />
+              <XAxis dataKey="date" tick={TICK} minTickGap={70} axisLine={{ stroke: T.border }} tickLine={false} />
+              <YAxis tick={TICK} domain={['auto', 'auto']} axisLine={false} tickLine={false} width={38} />
+              <Tooltip contentStyle={{ ...TOOLTIP_STYLE, fontFamily: 'var(--theme-mono)', fontSize: 11 }} labelStyle={{ color: T.muted }} />
               <ReferenceLine y={1} stroke={mix(T.text, 12)} label={{ value: 'β 1.0', position: 'right', fill: T.textDim, fontSize: 9, fontFamily: 'var(--theme-mono)' }} />
               <ReferenceLine y={rollFull} stroke={T.gold} strokeDasharray="6 5" label={{ value: `full-sample ${rollFull}`, position: 'right', fill: T.gold, fontSize: 9, fontFamily: 'var(--theme-mono)' }} />
               <Line type="monotone" dataKey="beta" stroke={T.blue} strokeWidth={1.6} dot={false} isAnimationActive={false} name={`${factor} β`} />

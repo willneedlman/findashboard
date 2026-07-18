@@ -1,14 +1,30 @@
 import { useState, useRef, useEffect, useCallback, useId, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
 
-interface HelpTipProps {
+interface HelpTipTextProps {
   text: string
+  title?: undefined
+  body?: undefined
+  source?: undefined
+}
+
+interface HelpTipStructuredProps {
+  text?: undefined
+  // Structured content: an uppercase gold title, a body line, and an
+  // optional citation footer — the shape InfoTip used to own.
+  title: string
+  body: string
+  source?: string
+}
+
+type HelpTipProps = (HelpTipTextProps | HelpTipStructuredProps) & {
   width?: number
   position?: 'top' | 'bottom' | 'right' | 'left'
   anchor?: 'left' | 'right'
 }
 
-export default function HelpTip({ text, width = 220, position = 'top', anchor = 'right' }: HelpTipProps) {
+export default function HelpTip({ text, title, body, source, width, position = 'top', anchor = 'right' }: HelpTipProps) {
+  const w = width ?? (title ? 260 : 220)
   const [open, setOpen] = useState(false)
   const [coords, setCoords] = useState<{ top: number; left: number; width: number } | null>(null)
   const btnRef = useRef<HTMLButtonElement>(null)
@@ -22,7 +38,7 @@ export default function HelpTip({ text, width = 220, position = 'top', anchor = 
     const margin = 12
     const viewportWidth = window.innerWidth
     const viewportHeight = window.innerHeight
-    const popupWidth = Math.min(width, viewportWidth - margin * 2)
+    const popupWidth = Math.min(w, viewportWidth - margin * 2)
     const popupHeight = Math.min(tipRef.current?.offsetHeight ?? 120, viewportHeight - margin * 2)
     let top = 0
     let left = 0
@@ -56,7 +72,7 @@ export default function HelpTip({ text, width = 220, position = 'top', anchor = 
     top = Math.max(margin, Math.min(top, viewportHeight - popupHeight - margin))
 
     setCoords({ top, left, width: popupWidth })
-  }, [position, anchor, width])
+  }, [position, anchor, w])
 
   useEffect(() => {
     if (!open) return
@@ -100,7 +116,7 @@ export default function HelpTip({ text, width = 220, position = 'top', anchor = 
     border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
     boxShadow: '0 10px 30px rgba(0,0,0,0.42)',
     padding: '10px 12px',
-    width: coords?.width ?? width,
+    width: coords?.width ?? w,
     maxHeight: 'calc(100vh - 24px)',
     overflowY: 'auto',
     fontSize: 10.5,
@@ -144,7 +160,17 @@ export default function HelpTip({ text, width = 220, position = 'top', anchor = 
         ?
       </button>
       {open && coords && createPortal(
-        <div id={tipId} ref={tipRef} role="tooltip" style={tipStyle}>{text}</div>,
+        <div id={tipId} ref={tipRef} role="tooltip" style={tipStyle}>
+          {title ? (
+            <>
+              <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)', marginBottom: 6 }}>{title}</div>
+              <div>{body}</div>
+              {source && (
+                <div style={{ marginTop: 9, paddingTop: 8, borderTop: '1px solid var(--theme-border-faint, rgba(255,255,255,0.06))', fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-secondary, #8099b0)' }}>{source}</div>
+              )}
+            </>
+          ) : text}
+        </div>,
         document.body
       )}
     </span>

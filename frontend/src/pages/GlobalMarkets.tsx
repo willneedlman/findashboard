@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import PageWrapper from '../components/PageWrapper'
 import AssetChartModal from '../components/AssetChartModal'
 import { BoardSkeleton } from '../components/Skeleton'
+import ErrorState from '../components/ErrorState'
 import useIsMobile from '../hooks/useIsMobile'
 import { formatLocalTime, localDateInputValue, localTimeZone } from '../lib/time'
 
@@ -124,7 +125,7 @@ function SpotlightCard({ row, group, yields, onUnpin, onOpen }: { row: Row; grou
   return (
     <div onClick={onOpen} role="button" tabIndex={0} aria-label={`Open ${row.label} chart`}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen() } }}
-      style={{ position: 'relative', overflow: 'hidden', cursor: 'pointer', background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 6%, var(--theme-surface, #0d1826))', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 28%, transparent)', borderRadius: 5, padding: '13px 14px 15px' }}>
+      style={{ position: 'relative', overflow: 'hidden', cursor: 'pointer', background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 6%, var(--theme-surface, #0d1826))', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 28%, transparent)', borderRadius: 0, padding: '13px 14px 15px' }}>
       {line && (
         <svg viewBox="0 0 140 44" preserveAspectRatio="none" aria-hidden="true"
           style={{ position: 'absolute', right: 0, bottom: 0, width: '56%', height: 38, pointerEvents: 'none', WebkitMaskImage: 'linear-gradient(90deg, transparent, #000 45%)', maskImage: 'linear-gradient(90deg, transparent, #000 45%)' }}>
@@ -226,7 +227,7 @@ export default function GlobalMarkets() {
   return (
     <PageWrapper>
       <style>{`.gm-row:hover { background: color-mix(in srgb, var(--theme-primary, #c9a84c) 7%, transparent); }`}</style>
-      <div style={{ background: 'var(--theme-surface, #0a1424)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 22%, transparent)', borderRadius: 6, padding: isMobile ? '20px 16px 24px' : '26px 26px 30px' }}>
+      <div style={{ background: 'var(--theme-surface, #0a1424)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 22%, transparent)', borderRadius: 0, padding: isMobile ? '20px 16px 24px' : '26px 26px 30px' }}>
 
         {/* Header bar */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 11, paddingBottom: 13, marginBottom: 18, borderBottom: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 40%, transparent)' }}>
@@ -264,7 +265,7 @@ export default function GlobalMarkets() {
         </div>
 
         {q.isLoading && <BoardSkeleton isMobile={isMobile} />}
-        {q.isError && <div style={{ padding: '32px 0', color: 'var(--theme-secondary, #5f7893)', fontFamily: MONO, fontSize: 11, fontStyle: 'italic' }}>The board is unavailable. <button onClick={() => q.refetch()} style={{ marginLeft: 6, background: 'transparent', border: `1px solid ${GOLD}`, color: GOLD, fontFamily: MONO, fontSize: 9, cursor: 'pointer', padding: '3px 6px' }}>RETRY</button></div>}
+        {q.isError && <ErrorState title="Board unavailable" message="The board is unavailable." onRetry={() => q.refetch()} />}
 
         {q.data && (
           <>
@@ -274,7 +275,7 @@ export default function GlobalMarkets() {
               <span style={{ fontFamily: MONO, fontSize: 9.5, color: 'var(--theme-secondary, #5f7893)' }}>Tap the star on any row to pin / unpin</span>
             </div>
             {spotlight.length === 0 ? (
-              <div style={{ border: '1px dashed color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', borderRadius: 5, padding: 28, textAlign: 'center', fontFamily: MONO, fontSize: 11, color: 'var(--theme-secondary, #5f7893)', marginBottom: 26 }}>
+              <div style={{ border: '1px dashed color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', borderRadius: 0, padding: 28, textAlign: 'center', fontFamily: MONO, fontSize: 11, color: 'var(--theme-secondary, #5f7893)', marginBottom: 26 }}>
                 No pinned assets — tap the ☆ on any row below to build your spotlight.
               </div>
             ) : (

@@ -1,5 +1,6 @@
 import PageWrapper from '../components/PageWrapper'
 import EmptyState from '../components/EmptyState'
+import UniversePicker from '../components/UniversePicker'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { usePortfolio } from '../contexts/PortfolioContext'
@@ -436,7 +437,7 @@ export function PortfolioEarningsContent() {
         .pe-news-title:hover { color: color-mix(in srgb, var(--theme-primary, #c9a84c) 62%, white) !important; }
       `}</style>
 
-      <div style={{ background: PANEL, border: `1px solid ${gold(22)}`, borderRadius: 6, padding: isMobile ? '18px 16px 24px' : '24px 26px 30px', position: 'relative' }}>
+      <div style={{ background: PANEL, border: `1px solid ${gold(22)}`, borderRadius: 0, padding: isMobile ? '18px 16px 24px' : '24px 26px 30px', position: 'relative' }}>
 
         {/* Header row */}
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', paddingBottom: 14, marginBottom: 15, borderBottom: `1px solid ${gold(40)}` }}>
@@ -447,7 +448,7 @@ export function PortfolioEarningsContent() {
             </p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: MONO, fontSize: 9.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: DIM }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: POS, boxShadow: '0 0 8px #46c88f' }} />
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: POS, boxShadow: `0 0 8px ${POS}` }} />
             {isPending ? 'SCANNING…' : `${nHoldings} holdings · As of ${asOfStr}`}
           </div>
         </div>
@@ -493,6 +494,16 @@ export function PortfolioEarningsContent() {
                 </div>
               )}
             </span>
+            <UniversePicker
+              mode="tickers"
+              onImportTickers={list => {
+                const fresh = list.filter(t => !watchlist.includes(t))
+                if (fresh.length === 0) return
+                setWatchlist([...watchlist, ...fresh])
+                loadTickers(fresh, false)
+              }}
+              style={{ fontFamily: MONO, fontWeight: 700, fontSize: 9.5, letterSpacing: '0.05em', padding: '4px 9px' }}
+            />
           </div>
 
           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>

@@ -6,6 +6,7 @@ import {
 import HelpTip from '../components/HelpTip'
 import PageWrapper from '../components/PageWrapper'
 import useIsMobile from '../hooks/useIsMobile'
+import { TOOLTIP_STYLE } from '../components/ChartTooltip'
 
 // Shared tokens, controls, and the side-rail shell for the Regression and
 // Correlation tools so the two split pages read as one consistent system.
@@ -218,7 +219,7 @@ export function ReturnsScatter({ x, y, line, xLabel, yLabel = 'strategy daily re
           label={{ value: `${xLabel} daily return`, fill: C.muted, fontSize: 11, position: 'insideBottom', offset: -4 }} />
         <YAxis dataKey="y" type="number" stroke={C.muted} tick={{ fill: C.muted, fontSize: 10 }} tickFormatter={rp} width={64}
           label={{ value: yLabel, fill: C.muted, fontSize: 11, angle: -90, position: 'center', dx: -28 }} />
-        <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ background: C.surf, border: `1px solid ${C.border}`, color: C.text, fontSize: 11 }} formatter={(v: number) => `${(v * 100).toFixed(3)}%`} />
+        <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ ...TOOLTIP_STYLE }} formatter={(v: number) => `${(v * 100).toFixed(3)}%`} />
         <Scatter data={pts} fill={C.blue} opacity={0.22} />
         <Scatter data={line} line={{ stroke: C.gold, strokeWidth: 2 }} fill={C.gold} shape={() => null as any} />
       </ScatterChart>
@@ -242,7 +243,7 @@ export function RollingBetaChart({ data, xKey, xLabel, refValue, refLabel, heigh
         <YAxis stroke={C.muted} tick={{ fill: C.muted, fontSize: 10 }} domain={['auto', 'auto']} />
         <ReferenceLine y={refValue} stroke={C.gold} strokeDasharray="4 2"
           label={{ value: refLabel, fill: C.gold, fontSize: 10, position: 'right' }} />
-        <Tooltip contentStyle={{ background: C.surf, border: `1px solid ${C.border}`, color: C.text, fontSize: 11 }}
+        <Tooltip contentStyle={{ ...TOOLTIP_STYLE }}
           formatter={(v: unknown) => (v == null ? 'n/a' : Number(v).toFixed(3))} />
         <Line type="monotone" dataKey="beta" stroke={C.blue} strokeWidth={1.6} dot={false} />
       </LineChart>

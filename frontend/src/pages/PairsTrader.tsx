@@ -7,10 +7,11 @@ import EmptyState from '../components/EmptyState'
 import ErrorState from '../components/ErrorState'
 import LoadingState from '../components/LoadingState'
 import TickerLink from '../components/TickerLink'
-import { INPUT, LABEL, SIDEBAR } from './valuationShared'
+import HelpTip from '../components/HelpTip'
+import { INPUT, LABEL, SIDEBAR, TICK, TOOLTIP_STYLE } from './valuationShared'
 import { fetchPairsAnalysis } from '../hooks/useApi'
 import { T } from '../lib/theme'
-import { MONO, SANS, mix, chg, signed, InfoTip, Panel, seg } from './cockpitKit'
+import { MONO, SANS, mix, chg, signed, Panel, seg } from './cockpitKit'
 
 interface Trade { n: number; entered: string; exited: string | null; side: string; z_in: number; z_out: number | null; days: number; pnl: number; open: boolean }
 interface Marker { date: string; z: number; side?: string; kind: string }
@@ -80,7 +81,7 @@ export default function PairsTrader() {
       <div style={{ ...railSection, padding: '12px 12px 13px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 7 }}>
           <span style={LABEL as React.CSSProperties}>Hedge method</span>
-          <InfoTip title="Hedge ratio method" body={`How β between the legs is fit. OLS is one static β over the full window. ROLL refits β on a trailing window so it drifts. KALMAN filters β as a random walk and trades the one-step innovation — the fastest to adapt.`} source="log(A) on log(B)" />
+          <HelpTip title="Hedge ratio method" body={`How β between the legs is fit. OLS is one static β over the full window. ROLL refits β on a trailing window so it drifts. KALMAN filters β as a random walk and trades the one-step innovation — the fastest to adapt.`} source="log(A) on log(B)" />
         </div>
         <div style={{ display: 'flex', gap: 5 }}>
           {([['ols', 'OLS'], ['roll', 'ROLL'], ['kalman', 'KALMAN']] as [string, string][]).map(([k, l]) => (
@@ -187,7 +188,7 @@ function Cockpit({ d }: { d: Resp }) {
           <div key={k.label} style={{ flex: 1, padding: '10px 14px', borderLeft: i ? `1px solid ${T.borderFaint}` : 'none' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <span style={{ fontFamily: SANS, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, whiteSpace: 'nowrap' }}>{k.label}</span>
-              <InfoTip {...k.tip} />
+              {k.tip && <HelpTip title={k.tip.title} body={k.tip.body} source={k.tip.source} />}
             </div>
             <div style={{ fontFamily: MONO, fontSize: 17, fontWeight: 700, color: k.vc, marginTop: 5 }}>{k.value}</div>
             <div style={{ fontFamily: MONO, fontSize: 9, color: T.muted, marginTop: 2 }}>{k.sub}</div>
@@ -201,9 +202,9 @@ function Cockpit({ d }: { d: Resp }) {
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={zData} margin={{ top: 6, right: 10, bottom: 0, left: -20 }}>
               <CartesianGrid stroke={T.borderFaint} vertical={false} />
-              <XAxis dataKey="date" tick={{ fontSize: 9, fill: T.muted, fontFamily: 'var(--theme-mono)' }} minTickGap={70} axisLine={{ stroke: T.border }} tickLine={false} />
-              <YAxis tick={{ fontSize: 9, fill: T.muted, fontFamily: 'var(--theme-mono)' }} domain={[-4, 4]} axisLine={false} tickLine={false} width={40} />
-              <Tooltip contentStyle={{ background: T.bg, border: `1px solid ${T.border}`, fontFamily: 'var(--theme-mono)', fontSize: 11 }} labelStyle={{ color: T.muted }} />
+              <XAxis dataKey="date" tick={TICK} minTickGap={70} axisLine={{ stroke: T.border }} tickLine={false} />
+              <YAxis tick={TICK} domain={[-4, 4]} axisLine={false} tickLine={false} width={40} />
+              <Tooltip contentStyle={{ ...TOOLTIP_STYLE, fontFamily: 'var(--theme-mono)', fontSize: 11 }} labelStyle={{ color: T.muted }} />
               <ReferenceLine y={0} stroke={mix(T.text, 12)} />
               <ReferenceLine y={z.entry} stroke={T.gold} strokeDasharray="6 5" />
               <ReferenceLine y={-z.entry} stroke={T.gold} strokeDasharray="6 5" />
@@ -233,7 +234,7 @@ function Cockpit({ d }: { d: Resp }) {
               <LineChart data={d.legs} margin={{ top: 4, right: 6, bottom: 0, left: -26 }}>
                 <ReferenceLine y={100} stroke={mix(T.text, 7)} />
                 <XAxis dataKey="date" hide /><YAxis domain={['auto', 'auto']} hide />
-                <Tooltip contentStyle={{ background: T.bg, border: `1px solid ${T.border}`, fontFamily: 'var(--theme-mono)', fontSize: 11 }} labelStyle={{ color: T.muted }} />
+                <Tooltip contentStyle={{ ...TOOLTIP_STYLE, fontFamily: 'var(--theme-mono)', fontSize: 11 }} labelStyle={{ color: T.muted }} />
                 <Line type="monotone" dataKey="b" stroke={T.gold} strokeWidth={1.3} dot={false} isAnimationActive={false} name={d.b} />
                 <Line type="monotone" dataKey="a" stroke={T.blue} strokeWidth={1.3} dot={false} isAnimationActive={false} name={d.a} />
               </LineChart>
@@ -248,7 +249,7 @@ function Cockpit({ d }: { d: Resp }) {
               <AreaChart data={d.equity} margin={{ top: 4, right: 6, bottom: 0, left: -26 }}>
                 <ReferenceLine y={0} stroke={mix(T.text, 7)} />
                 <XAxis dataKey="date" hide /><YAxis domain={['auto', 'auto']} hide />
-                <Tooltip contentStyle={{ background: T.bg, border: `1px solid ${T.border}`, fontFamily: 'var(--theme-mono)', fontSize: 11 }} labelStyle={{ color: T.muted }} />
+                <Tooltip contentStyle={{ ...TOOLTIP_STYLE, fontFamily: 'var(--theme-mono)', fontSize: 11 }} labelStyle={{ color: T.muted }} />
                 <Area type="stepAfter" dataKey="v" stroke={T.pos} strokeWidth={1.4} fill={mix(T.pos, 10)} isAnimationActive={false} name="P&L %" />
               </AreaChart>
             </ResponsiveContainer>

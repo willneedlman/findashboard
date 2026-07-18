@@ -18,8 +18,8 @@ import { FUTURES } from '../lib/futures'
 import axios from 'axios'
 import EmptyState from '../components/EmptyState'
 import PortfolioIO, { type PortfolioAsset } from '../components/PortfolioIO'
-import PMImportPicker from '../components/PMImportPicker'
-import { CASH_SYMBOL, readPMPortfolios } from '../lib/pmImport'
+import UniversePicker from '../components/UniversePicker'
+import { CASH_SYMBOL } from '../lib/pmImport'
 import { screenerFilterToApi } from '../lib/format'
 import ConfigHeader, { Field, NumberInput, paramInput, RebalanceSelect, type RebalanceFreq } from '../components/portfolio/ConfigHeader'
 import { usePortfolio, type PortfolioHolding } from '../contexts/PortfolioContext'
@@ -443,7 +443,6 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
   )
   const [comboPreset, setComboPreset] = useState('Short Straddle')
 
-  const pmPortfolios = useMemo(() => readPMPortfolios(), [])
   const allScreens = useMemo(() => readAllScreens(), [])
   const [screenerLoading, setScreenerLoading] = useState(false)
   const [screenerError, setSenerError] = useState<string | null>(null)
@@ -454,20 +453,6 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
       .map(t => t.trim().toUpperCase())
       .filter(t => t.length > 0)
     setTickers(list.length > 0 ? list : ['AAPL'])
-  }
-
-  const handlePortfolioSelect = (portId: string) => {
-    if (!portId) return
-    const port = pmPortfolios.find(p => p.id === portId)
-    if (!port) return
-    const CASH_SYMBOL = 'USD'
-    const list = port.holdings
-      .map(h => h.ticker.trim().toUpperCase())
-      .filter(t => t && t !== CASH_SYMBOL && t !== 'CASH')
-    if (list.length > 0) {
-      setTickers(list)
-      setTickerInput(list.join(', '))
-    }
   }
 
   const handleScreenSelect = async (screenId: string) => {
@@ -724,65 +709,28 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
                   {screenerLoading && <span style={{ color: 'var(--theme-primary, #c9a84c)', marginLeft: 6, textTransform: 'none', fontSize: 8 }}>[Running screen…]</span>}
                   {screenerError && <span style={{ color: 'var(--theme-negative, #ef4444)', marginLeft: 6, textTransform: 'none', fontSize: 8 }}>[{screenerError}]</span>}
                 </label>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <select
-                    value=""
-                    onChange={e => handlePortfolioSelect(e.target.value)}
-                    style={{
-                      background: '#07101a',
-                      border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
-                      color: 'var(--theme-primary, #c9a84c)',
-                      fontFamily: 'var(--theme-mono)',
-                      fontSize: 8,
-                      fontWeight: 700,
-                      letterSpacing: '0.04em',
-                      padding: '1px 4px',
-                      outline: 'none',
-                      cursor: 'pointer',
-                      height: 15,
-                      boxSizing: 'border-box'
-                    }}
-                  >
-                    <option value="" disabled>-- Portfolio --</option>
-                    {pmPortfolios.map(p => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
-                  <select
-                    value=""
-                    onChange={e => handleScreenSelect(e.target.value)}
-                    style={{
-                      background: '#07101a',
-                      border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
-                      color: 'var(--theme-primary, #c9a84c)',
-                      fontFamily: 'var(--theme-mono)',
-                      fontSize: 8,
-                      fontWeight: 700,
-                      letterSpacing: '0.04em',
-                      padding: '1px 4px',
-                      outline: 'none',
-                      cursor: 'pointer',
-                      height: 15,
-                      boxSizing: 'border-box'
-                    }}
-                  >
-                    <option value="" disabled>-- Screen --</option>
-                    {allScreens.map(s => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                  </select>
-                </div>
+                <UniversePicker
+                  mode="tickers"
+                  tickerCap={40}
+                  onImportTickers={list => { setTickers(list); setTickerInput(list.join(', ')) }}
+                  screenHandoff={{ screens: allScreens, loading: screenerLoading, onSelect: handleScreenSelect, triggerLabel: 'Load from Screener' }}
+                  style={{
+                    background: 'var(--theme-bg, #07101a)',
+                    fontSize: 8, fontWeight: 700, letterSpacing: '0.04em',
+                    padding: '1px 4px', height: 15, boxSizing: 'border-box',
+                  }}
+                />
               </div>
               <input 
                 value={tickerInput} 
                 onChange={e => handleTickerInputChange(e.target.value)} 
-                style={{ ...paramInput, background: '#07101a', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} 
+                style={{ ...paramInput, background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} 
                 placeholder="e.g. AAPL, MSFT, TSLA"
               />
             </div>
             <div style={{ width: 140 }}>
               <label style={SUBLABEL}>Structure</label>
-              <select value={comboPreset} onChange={e => handlePresetChange(e.target.value)} style={{ ...paramInput, cursor: 'pointer', background: '#07101a', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+              <select value={comboPreset} onChange={e => handlePresetChange(e.target.value)} style={{ ...paramInput, cursor: 'pointer', background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
                 {PRESET_GROUPS.map(g => (
                   <optgroup key={g.label} label={g.label}>
                     {g.keys.map(k => <option key={k} value={k}>{k}</option>)}
@@ -798,7 +746,7 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
                 max={365}
                 onCommit={v => setComboDte(Math.round(v))}
                 title="Days to expiry for the option structure (1–365)."
-                style={{ ...paramInput, background: '#07101a', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
+                style={{ ...paramInput, background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
               />
             </div>
             <div style={{ width: 90 }}>
@@ -811,7 +759,7 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
                 title={strategyMode
                   ? `Entry-signal mode caps at ${STRATEGY_N_SIMS_CAP.toLocaleString()} paths (day-by-day pricing). Clear the field to type a new value.`
                   : 'Hold-to-DTE mode caps at 5,000 paths. Clear the field to type a new value.'}
-                style={{ ...paramInput, background: '#07101a', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
+                style={{ ...paramInput, background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
               />
             </div>
             <div style={{ width: 170 }}>
@@ -820,7 +768,7 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
                 value={pathModel}
                 onChange={e => setPathModel(e.target.value as OptionsPathModel)}
                 title={OPTIONS_PATH_MODELS.find(m => m.value === pathModel)?.hint}
-                style={{ ...paramInput, cursor: 'pointer', background: '#07101a', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
+                style={{ ...paramInput, cursor: 'pointer', background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
               >
                 {OPTIONS_PATH_MODELS.map(m => (
                   <option key={m.value} value={m.value} title={m.hint}>{m.label}</option>
@@ -839,7 +787,7 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
                     setImportedRules(handoff.strategyRules)
                   }
                 }}
-                style={{ ...paramInput, cursor: 'pointer', background: '#07101a', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
+                style={{ ...paramInput, cursor: 'pointer', background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
               >
                 <option value="none">Enter Immediately</option>
                 {handoff?.strategyName && (
@@ -859,7 +807,7 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
                   max={STRATEGY_HORIZON_CAP}
                   onCommit={v => setSimHorizon(Math.round(v))}
                   title={`Entry-signal horizon capped at ${STRATEGY_HORIZON_CAP} trading days (~5y). Clear the field to type a new value.`}
-                  style={{ ...paramInput, background: '#07101a', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
+                  style={{ ...paramInput, background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
                 />
               </div>
             )}
@@ -875,7 +823,7 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
                       const val = Number(e.target.value) || 0
                       setStrategyParams(prev => ({ ...prev, [param]: val }))
                     }}
-                    style={{ ...paramInput, background: '#07101a', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
+                    style={{ ...paramInput, background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
                   />
                 </div>
               )
@@ -913,7 +861,7 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
               const color = isSell ? 'var(--theme-negative, #ef4444)' : 'var(--theme-positive, #22c55e)'
               return (
                 <div key={i} style={{
-                  background: '#07101a',
+                  background: 'var(--theme-bg, #07101a)',
                   border: `1px solid ${color}44`,
                   padding: 8,
                   display: 'flex',
@@ -971,15 +919,15 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <div style={{ width: 100 }}>
                 <label style={SUBLABEL}>Take-Profit %</label>
-                <input value={tpPct} placeholder="off" onChange={e => setTpPct(e.target.value)} style={{ ...paramInput, background: '#07101a', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
+                <input value={tpPct} placeholder="off" onChange={e => setTpPct(e.target.value)} style={{ ...paramInput, background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
               </div>
               <div style={{ width: 100 }}>
                 <label style={SUBLABEL}>Stop-Loss %</label>
-                <input value={slPct} placeholder="off" onChange={e => setSlPct(e.target.value)} style={{ ...paramInput, background: '#07101a', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
+                <input value={slPct} placeholder="off" onChange={e => setSlPct(e.target.value)} style={{ ...paramInput, background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
               </div>
               <div style={{ width: 115 }}>
                 <label style={SUBLABEL}>Max Hold - Days</label>
-                <input value={maxHoldDays} placeholder={`${comboDte} (DTE)`} onChange={e => setMaxHoldDays(e.target.value)} style={{ ...paramInput, background: '#07101a', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
+                <input value={maxHoldDays} placeholder={`${comboDte} (DTE)`} onChange={e => setMaxHoldDays(e.target.value)} style={{ ...paramInput, background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
               </div>
             </div>
             <div style={{ flex: 1, minWidth: 280, fontSize: 9.5, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', fontFamily: 'var(--theme-mono)', lineHeight: '14px' }}>
@@ -998,15 +946,15 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <div style={{ width: 100 }}>
                 <label style={SUBLABEL}>Position Size %</label>
-                <input value={positionSize} onChange={e => setPositionSize(e.target.value)} style={{ ...paramInput, background: '#07101a', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
+                <input value={positionSize} onChange={e => setPositionSize(e.target.value)} style={{ ...paramInput, background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
               </div>
               <div style={{ width: 100 }}>
                 <label style={SUBLABEL}>Leverage *</label>
-                <input value={leverage} onChange={e => setLeverage(e.target.value)} style={{ ...paramInput, background: '#07101a', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
+                <input value={leverage} onChange={e => setLeverage(e.target.value)} style={{ ...paramInput, background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
               </div>
               <div style={{ width: 115 }}>
                 <label style={SUBLABEL}>Borrow Rate %</label>
-                <input value={borrowRate} onChange={e => setBorrowRate(e.target.value)} style={{ ...paramInput, background: '#07101a', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
+                <input value={borrowRate} onChange={e => setBorrowRate(e.target.value)} style={{ ...paramInput, background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
               </div>
             </div>
             <div style={{ flex: 1, minWidth: 280, fontSize: 9.5, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', fontFamily: 'var(--theme-mono)', lineHeight: '14px' }}>
@@ -1845,9 +1793,10 @@ export function MonteCarloContent() {
               style={{ ...INPUT, cursor: fetching ? 'default' : 'pointer', textAlign: 'left', opacity: fetching ? 0.6 : 1 }}>
               {fetching ? 'Fetching…' : 'Fetch Live Vol / Drift'}
             </button>
-            <PMImportPicker
+            <UniversePicker
+              mode="weighted"
               style={{ ...INPUT, cursor: 'pointer' }}
-              onImport={(r) => {
+              onImportWeighted={(r) => {
                 const newLegs: Leg[] = r.legs.map(l => makeLeg(l.ticker, l.weight))
                 if (r.cashWeight > 0) newLegs.push({ ...makeLeg(CASH_SYMBOL, r.cashWeight), vol: 0, drift: parseFloat(cashYield) || 4.5, fetched: true })
                 if (newLegs.length === 0) return

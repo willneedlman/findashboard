@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { fetchGEX } from '../../../hooks/useApi'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
+import { TOOLTIP_STYLE, BAR_CURSOR } from '../../ChartTooltip'
 
 
 interface GEXStrike { strike: number; net_gex: number }
@@ -84,8 +85,8 @@ export default function DealerGEXWidget({ config }: { config: WidgetConfig }) {
                 <XAxis dataKey="strike" tick={{ fontSize: 8, fill: T.muted, fontFamily: T.mono }} tickFormatter={(v: number) => `${v}`} interval="preserveStartEnd" />
                 <YAxis hide domain={['auto', 'auto']} />
                 <Tooltip
-                  cursor={{ fill: 'rgba(255,255,255,0.04)' }}
-                  contentStyle={{ background: T.surface, border: `1px solid ${T.border}`, fontFamily: T.mono, fontSize: 9, padding: '4px 8px' }}
+                  cursor={BAR_CURSOR}
+                  contentStyle={{ ...TOOLTIP_STYLE }}
                   labelStyle={{ color: T.gold, fontSize: 8 }}
                   formatter={(v: number) => [`${v.toFixed(0)}M`, 'Net GEX']}
                 />

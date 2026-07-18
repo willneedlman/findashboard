@@ -10,6 +10,7 @@ import 'leaflet/dist/leaflet.css'
 import PageWrapper from '../components/PageWrapper'
 import { readToken } from '../lib/theme'
 import { formatLocalTime, localTimeZone } from '../lib/time'
+import { TOOLTIP_STYLE } from '../components/ChartTooltip'
 
 // Leaflet SVG/canvas can't consume CSS var(), so resolve theme tokens to concrete
 // values at runtime (recomputed on preset change). Semantic categories map to the
@@ -1176,7 +1177,7 @@ function HistoryPanel({ C, chokepoints, ids, days, metric, series, loading, nowc
               <YAxis tick={{ fill: 'var(--theme-secondary)', fontSize: 9.5, fontFamily: 'var(--theme-mono)' }} width={44}
                 tickFormatter={(v: number) => fmtVal(v, metric)} domain={['auto', 'auto']} axisLine={false} tickLine={false} />
               <ChartTip
-                contentStyle={{ background: 'var(--theme-surface)', border: '1px solid var(--theme-border)', borderRadius: 2, fontFamily: 'var(--theme-mono)', fontSize: 11 }}
+                contentStyle={{ ...TOOLTIP_STYLE }}
                 labelStyle={{ color: 'var(--theme-text)' }}
                 formatter={(v: number, name: string) => [fmtVal(v, metric), series.find(s => s.id === name)?.name ?? name]} />
               {ids.map(id => <Line key={id} type="monotone" dataKey={id} stroke={colorOf(id)} strokeWidth={1.8} dot={false} connectNulls

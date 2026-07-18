@@ -148,7 +148,7 @@ function CandleChart({ ticker }: { ticker: string }) {
         )}
         {error && !loading && (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-            <div style={{ fontSize: 11, color: '#5e768f' }}>Chart unavailable</div>
+            <div style={{ fontSize: 11, color: 'var(--theme-secondary, #5e768f)' }}>Chart unavailable</div>
             <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 9, color: 'var(--theme-text-faint, rgba(255,255,255,0.18))' }}>{error}</div>
           </div>
         )}

@@ -207,7 +207,7 @@ export function MultiplesContent() {
                         style={{ ...INPUT, width: 74, padding: '4px 6px', textAlign: 'right', color: 'var(--theme-primary, #c9a84c)' }} />
                     </td>
                     <td style={TD}>{isFinite(r.implied) && r.implied > 0 ? `$${r.implied.toFixed(2)}` : '—'}</td>
-                    <td style={{ ...TD, color: (r.upside ?? 0) >= 0 ? '#3fb950' : '#f85149' }}>
+                    <td style={{ ...TD, color: (r.upside ?? 0) >= 0 ? 'var(--theme-positive, #3fb950)' : 'var(--theme-negative, #f85149)' }}>
                       {r.upside != null && isFinite(r.implied) && r.implied > 0 ? `${r.upside > 0 ? '+' : ''}${r.upside.toFixed(1)}%` : '—'}
                     </td>
                   </tr>

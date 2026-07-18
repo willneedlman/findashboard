@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query'
 import axios from 'axios'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceDot } from 'recharts'
 import { Plus, X } from 'lucide-react'
+import { TOOLTIP_STYLE } from '../components/ChartTooltip'
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
 import EmptyState from '../components/EmptyState'
@@ -196,7 +197,7 @@ export function PortfolioCompareContent() {
                   <XAxis dataKey="date" stroke={C.muted} tick={{ fill: C.muted, fontSize: 9 }} minTickGap={60} />
                   <YAxis stroke={C.muted} tick={{ fill: C.muted, fontSize: 10 }} width={52}
                     tickFormatter={(v: number) => (mode === 'pct' ? `${v}%` : `$${v}`)} />
-                  <Tooltip contentStyle={{ background: 'var(--theme-surface)', border: `1px solid ${C.border}`, color: C.text, fontSize: 11 }}
+                  <Tooltip contentStyle={{ ...TOOLTIP_STYLE, color: C.text }}
                     formatter={(v: number) => (mode === 'pct' ? `${v >= 0 ? '+' : ''}${v.toFixed(2)}%` : `$${v.toFixed(2)}`)} />
                   <Legend wrapperStyle={{ color: C.muted, fontSize: 11 }} />
                   {r.series.map((s, i) => (

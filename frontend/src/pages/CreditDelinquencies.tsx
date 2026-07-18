@@ -6,7 +6,9 @@ import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
 import EmptyState from '../components/EmptyState'
 import HelpTip from '../components/HelpTip'
+import { KpiCell } from '../components/mmCockpit'
 import useIsMobile from '../hooks/useIsMobile'
+import { TOOLTIP_STYLE } from '../components/ChartTooltip'
 
 interface CreditPoint { asof: string; delinquency_rate: number; chargeoff_rate: number | null }
 interface CreditClass {
@@ -48,7 +50,7 @@ const PURPLE = '#c084fc'
 const PANEL: React.CSSProperties = { background: T.surface, border: `1px solid ${T.border}` }
 const COLORS = [GOLD, BLUE, ORANGE, PURPLE, '#34d399']
 const axisTick = { fontFamily: T.mono, fontSize: 8, fill: T.muted }
-const tooltipStyle: React.CSSProperties = { backgroundColor: T.bg, border: '1px solid color-mix(in srgb, var(--theme-primary) 32%, var(--theme-border))', color: T.text, boxShadow: 'none', fontFamily: T.mono, fontSize: 10, padding: '8px 10px' }
+const tooltipStyle: React.CSSProperties = { ...TOOLTIP_STYLE }
 
 function ageLabel(date: string | null | undefined) {
   if (!date) return ''
@@ -85,15 +87,6 @@ function PanelHead({ title, meta, help }: { title: string; meta?: string; help?:
   return <div style={{ minHeight: 36, padding: '0 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, borderBottom: `1px solid ${T.border}`, background: 'rgba(255,255,255,0.012)' }}>
     <span style={{ display: 'inline-flex', alignItems: 'center', fontFamily: T.label, fontSize: 9, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.text }}>{title}{help && <HelpTip text={help} width={300} position="bottom" anchor="left" />}</span>
     {meta && <span style={{ fontFamily: T.mono, fontSize: 8.5, color: T.muted }}>{meta}</span>}
-  </div>
-}
-
-function StressMetric({ indicator, last }: { indicator: StressIndicator; last: boolean }) {
-  return <div style={{ minWidth: 190, padding: '14px 16px', borderRight: last ? 'none' : `1px solid ${T.border}` }}>
-    <div style={{ minHeight: 24, fontFamily: T.label, fontSize: 8.5, fontWeight: 800, letterSpacing: '0.1em', lineHeight: 1.35, textTransform: 'uppercase', color: T.muted }}>{indicator.label}</div>
-    <div style={{ marginTop: 5, fontFamily: T.mono, fontSize: 22, fontWeight: 800, lineHeight: 1, color: indicatorTone(indicator), fontVariantNumeric: 'tabular-nums' }}>{indicatorValue(indicator)}</div>
-    <div style={{ marginTop: 6, fontFamily: T.mono, fontSize: 8.5, color: T.muted }}>{indicatorState(indicator)}</div>
-    <div style={{ marginTop: 3, fontFamily: T.mono, fontSize: 8, color: T.textDim }}>{indicator.frequency} · {indicator.asof} · {ageLabel(indicator.asof)}</div>
   </div>
 }
 
@@ -153,7 +146,8 @@ export function CreditDelinquenciesContent() {
     {data?.available && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {!!indicators.length && <section style={PANEL}>
         <PanelHead title="System Credit Pulse" meta="observed Federal Reserve series · positive values indicate tightening or stress" />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>{indicators.map((indicator, index) => <StressMetric key={indicator.key} indicator={indicator} last={index === indicators.length - 1} />)}</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap' }}>{indicators.map(indicator => <KpiCell key={indicator.key} grow minWidth={180} label={indicator.label} value={indicatorValue(indicator)} valueSize={22} color={indicatorTone(indicator)}
+          sub={`${indicatorState(indicator)} · ${ageLabel(indicator.asof)}`} />)}</div>
       </section>}
 
       {(marketIndicators.length > 0 || lendingIndicators.length > 0) && <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16 }}>

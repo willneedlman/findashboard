@@ -539,7 +539,7 @@ export default function StrategyBuilder() {
                           fontSize: 9, fontWeight: 700, padding: '3px 10px', cursor: 'pointer', letterSpacing: '0.06em',
                           background: activeChainLeg === idx ? `${LEG_COLORS[idx % LEG_COLORS.length]}30` : 'transparent',
                           border: `1px solid ${activeChainLeg === idx ? LEG_COLORS[idx % LEG_COLORS.length] : 'var(--theme-border, rgba(255,255,255,0.1))'}`,
-                          color: activeChainLeg === idx ? LEG_COLORS[idx % LEG_COLORS.length] : '#5e768f',
+                          color: activeChainLeg === idx ? LEG_COLORS[idx % LEG_COLORS.length] : 'var(--theme-secondary, #5e768f)',
                         }}>
                         {l.ticker || `Leg ${idx+1}`}
                       </button>

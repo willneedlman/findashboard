@@ -4,6 +4,7 @@ import PageWrapper from '../components/PageWrapper'
 import { Widget, HeaderBar, KpiCell, RiskMeterStrip, QuoteCell, Stepper, Chips, WidenControl } from '../components/mmCockpit'
 import { useChallenge, ModeToggle, ChallengeClock, LeaderboardModal, CHALLENGE_SPEED, type SimMode } from '../components/mmChallenge'
 import useIsMobile from '../hooks/useIsMobile'
+import { TOOLTIP_STYLE } from '../components/ChartTooltip'
 
 /*
  * Options MM Simulator
@@ -522,7 +523,7 @@ export function OptionsMarketMakerContent() {
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.07)" />
                     <XAxis dataKey="i" hide />
                     <YAxis tick={{ fontSize: 9, fill: T.muted, fontFamily: T.mono }} orientation="right" domain={['auto', 'auto']} tickFormatter={v => tapeOptions ? `$${(+v).toFixed(1)}` : `$${(+v).toFixed(0)}`} width={42} />
-                    <Tooltip contentStyle={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 0, fontFamily: T.mono, fontSize: 11 }}
+                    <Tooltip contentStyle={{ ...TOOLTIP_STYLE }}
                       formatter={(v: number, name: string) => [`$${(+v).toFixed(tapeOptions ? 3 : 2)}`, tapeOptions ? name : 'spot']} labelFormatter={() => ''} />
                     {tapeOptions
                       ? tapeSel.map((k, idx) => <Line key={k} type="monotone" dataKey={k} stroke={TAPE_COLORS[idx % TAPE_COLORS.length]} strokeWidth={2} dot={false} isAnimationActive={false} />)

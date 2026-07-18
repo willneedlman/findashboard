@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer, Cell } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
-import { VerdictStrip } from './valuationShared'
+import { VerdictStrip, TICK, TOOLTIP_STYLE, TOOLTIP_CURSOR } from './valuationShared'
 
 
 const PERIODS = ['1W', '1M', '3M', '6M', 'YTD', '1Y'] as const
@@ -350,15 +350,15 @@ export function SectorRotationContent() {
                     )
                   }}
                 />
-                <YAxis tickFormatter={v => `${v}%`} tick={{ fontFamily: T.mono, fontSize: 9, fill: T.muted }} tickLine={false} axisLine={false} />
+                <YAxis tickFormatter={v => `${v}%`} tick={TICK} tickLine={false} axisLine={false} />
                 <ReferenceLine y={0} stroke={T.border} />
                 {data.spy_returns[activePeriod] != null && (
                   <ReferenceLine y={data.spy_returns[activePeriod]!} stroke={T.gold} strokeDasharray="4 4" label={{ value: 'SPY', position: 'insideTopRight', fill: T.gold, fontSize: 9, fontFamily: T.mono }} />
                 )}
                 <Tooltip
-                  cursor={{ fill: 'var(--theme-hover, rgba(255,255,255,0.04))' }}
+                  cursor={TOOLTIP_CURSOR}
                   formatter={(v: number, name: string) => [`${v?.toFixed(2)}%`, name === 'value' ? 'Return' : 'vs SPY']}
-                  contentStyle={{ background: T.surface, border: `1px solid ${T.border}`, fontFamily: T.mono, fontSize: 10 }}
+                  contentStyle={{ ...TOOLTIP_STYLE, fontFamily: T.mono, fontSize: 10 }}
                   labelFormatter={(label) => {
                     const entry = chartData.find(d => d.name === label)
                     return `${label} · ${entry?.fullName ?? ''}`

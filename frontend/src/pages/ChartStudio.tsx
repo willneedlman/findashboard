@@ -270,7 +270,8 @@ function chartColors() {
   return {
     bg, surface: t('--theme-surface', '#0d1826'),
     gold: t('--theme-primary', '#c9a84c'), text: t('--theme-secondary', '#8099b0'),
-    pos: '#22c55e', neg: '#ef4444', lanePos: '#3fb6a0', laneNeg: '#cf4b3f',
+    pos: t('--theme-positive', '#22c55e'), neg: t('--theme-negative', '#ef4444'),
+    lanePos: t('--theme-positive', '#3fb6a0'), laneNeg: t('--theme-negative', '#cf4b3f'),
     blue: t('--theme-tertiary', '#60a5fa'), violet: t('--theme-accent-violet', '#c084fc'),
     grid: isLight ? 'rgba(40,20,20,0.07)' : 'rgba(255,255,255,0.045)',
     axisBorder: isLight ? 'rgba(40,20,20,0.16)' : 'rgba(255,255,255,0.08)',

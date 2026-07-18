@@ -13,6 +13,8 @@ import { fetchMarketHistory, fetchBetaSuite } from '../hooks/useApi'
 import { TOOLTIP_STYLE, CROSSHAIR_CURSOR } from '../components/ChartTooltip'
 import { recordRecentTicker } from '../lib/recentTickers'
 import EmptyState from '../components/EmptyState'
+import ErrorState from '../components/ErrorState'
+import LoadingState from '../components/LoadingState'
 import FactSetFinancials from '../components/FactSetFinancials'
 import HelpTip from '../components/HelpTip'
 
@@ -147,9 +149,9 @@ function SegmentBreakdown({ title, block, hideHeader = false }: { title: string;
     return (
       <div style={{ marginBottom: hideHeader ? 0 : 24 }}>
         {!hideHeader && <div style={labelStyle}>{title}</div>}
-        <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11, fontStyle: 'italic' }}>
-          {block.error ? 'Temporarily unavailable — retry shortly.' : 'Not reported by this issuer.'}
-        </div>
+        {block.error
+          ? <ErrorState title="Segment data unavailable" message="Temporarily unavailable — retry shortly." />
+          : <EmptyState title={title} hint="Not reported by this issuer." />}
       </div>
     )
   }
@@ -352,9 +354,9 @@ function InstitutionalPanel({ inst, loading, tab, onTab }:
       </div>
       <div style={{ padding: '18px 20px' }}>
         {loading ? (
-          <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11, fontStyle: 'italic' }}>Loading ownership data…</div>
+          <LoadingState label="Loading ownership data" />
         ) : !hasData ? (
-          <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11, fontStyle: 'italic' }}>No institutional ownership reported.</div>
+          <EmptyState title="Ownership" hint="No institutional ownership reported." />
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '200px minmax(0, 1fr) minmax(0, 1fr)', gap: 32, alignItems: 'start' }}>
             {/* Summary stats + provenance */}
@@ -479,8 +481,8 @@ function MarketPerformancePanel({ ticker }: { ticker: string }) {
           </span>
         </span>
       </div>
-      {q.isLoading && <div style={{ padding: '20px 18px', color: T.muted, fontFamily: T.mono, fontSize: 11, fontStyle: 'italic' }}>Loading price history…</div>}
-      {q.isError && <div style={{ padding: '20px 18px', color: T.muted, fontFamily: T.mono, fontSize: 11, fontStyle: 'italic' }}>Price history unavailable for this name.</div>}
+      {q.isLoading && <LoadingState label="Loading price history" />}
+      {q.isError && <ErrorState title="Price history unavailable" message="Price history unavailable for this name." onRetry={() => q.refetch()} />}
       {q.data && m && (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', borderBottom: `1px solid ${T.border}` }}>
@@ -588,9 +590,9 @@ function DealsPanel({ data, loading }: { data: any; loading: boolean }) {
       </div>
       <div style={{ padding: '18px 20px' }}>
         {loading ? (
-          <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11, fontStyle: 'italic' }}>Loading deals data…</div>
+          <LoadingState label="Loading deals data" />
         ) : !hasData ? (
-          <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11, fontStyle: 'italic' }}>No reported M&A activity.</div>
+          <EmptyState title="M&A Activity" hint="No reported M&A activity." />
         ) : (
           <div>
             {deals.map((d: any, i: number) => {

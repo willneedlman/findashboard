@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, CartesianGrid } from 'recharts'
 import type { WidgetConfig } from '../../../hooks/useDashboard'
+import { TOOLTIP_STYLE, CROSSHAIR_CURSOR } from '../../ChartTooltip'
 
 
 interface SkewResp {
@@ -75,8 +76,8 @@ export default function VolSkewWidget({ config }: { config: WidgetConfig }) {
                 <XAxis dataKey="moneyness" tick={{ fontSize: 8, fill: T.muted, fontFamily: T.mono }} tickFormatter={(v: number) => `${v > 0 ? '+' : ''}${v}%`} type="number" domain={['dataMin', 'dataMax']} />
                 <YAxis width={28} tick={{ fontSize: 8, fill: T.muted, fontFamily: T.mono }} tickFormatter={(v: number) => `${Math.round(v)}%`} domain={['auto', 'auto']} />
                 <Tooltip
-                  cursor={{ stroke: T.border }}
-                  contentStyle={{ background: T.surface, border: `1px solid ${T.border}`, fontFamily: T.mono, fontSize: 9, padding: '4px 8px' }}
+                  cursor={CROSSHAIR_CURSOR}
+                  contentStyle={{ ...TOOLTIP_STYLE }}
                   labelStyle={{ color: T.gold, fontSize: 8 }}
                   formatter={(v: number) => [`${v.toFixed(1)}%`, 'IV']}
                   labelFormatter={(m) => `${Number(m) > 0 ? '+' : ''}${m}% moneyness`}
