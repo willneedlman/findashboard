@@ -88,11 +88,16 @@ def cached(ttl: int = 300, maxsize: int = 256, persist: bool = False):
     disk cache (survives restarts) — only for JSON-serializable returns
     (dicts/lists); DataFrames stay memory-only.
 
+    Concurrent misses for the same key single-flight: only one caller runs
+    the function; others wait on the same result (avoids stampede on cold
+    cache for multi-second endpoints like the Global Markets board).
+
     The wrapper exposes .cache_clear() to flush the in-memory tier.
     """
     def deco(fn):
         mem: TTLCache = TTLCache(maxsize=maxsize, ttl=ttl)
         flock = threading.Lock()
+        inflight: dict[str, threading.Event] = {}
         prefix = f"{fn.__module__}.{fn.__qualname__}"
 
         @functools.wraps(fn)
@@ -101,15 +106,39 @@ def cached(ttl: int = 300, maxsize: int = 256, persist: bool = False):
             with flock:
                 if k in mem:
                     return mem[k]
+                leader = k not in inflight
+                if leader:
+                    inflight[k] = threading.Event()
+                wait_evt = inflight[k]
             if persist:
                 hit = disk_get(k)
                 if hit is not None:
                     with flock:
                         mem[k] = hit
+                        evt = inflight.pop(k, None)
+                    if evt is not None:
+                        evt.set()
                     return hit
-            val = fn(*args, **kwargs)
+            if not leader:
+                # Wait for the in-flight compute (bounded); then re-check cache.
+                wait_evt.wait(timeout=max(ttl, 120))
+                with flock:
+                    if k in mem:
+                        return mem[k]
+                # Leader failed without caching — compute ourselves as backup.
+            try:
+                val = fn(*args, **kwargs)
+            except Exception:
+                if leader:
+                    with flock:
+                        inflight.pop(k, None)
+                        wait_evt.set()
+                raise
             with flock:
                 mem[k] = val
+                if leader:
+                    inflight.pop(k, None)
+                    wait_evt.set()
             if persist:
                 disk_set(k, val, ttl=ttl)
             return val
@@ -216,6 +245,12 @@ def get_news(ticker: str) -> list:
     return news
 
 
+# Single-flight events for multi-ticker downloads so concurrent Global Markets
+# (and similar) loads share one Yahoo round-trip instead of N parallel ones.
+_download_inflight: dict[tuple, threading.Event] = {}
+_download_inflight_lock = threading.Lock()
+
+
 def get_download(tickers: tuple, start: str, end: str, interval: str = "1d", cache_ttl: int = 300) -> pd.DataFrame:
     cache = _download_live_cache if cache_ttl <= 60 else _download_cache
     key = (tickers, start, end, interval)
@@ -223,20 +258,43 @@ def get_download(tickers: tuple, start: str, end: str, interval: str = "1d", cac
         if key in cache:
             return cache[key]
 
+    with _download_inflight_lock:
+        leader = key not in _download_inflight
+        if leader:
+            _download_inflight[key] = threading.Event()
+        wait_evt = _download_inflight[key]
+    if not leader:
+        wait_evt.wait(timeout=90)
+        with _lock:
+            if key in cache:
+                return cache[key]
+        # Leader produced nothing usable — fall through and try ourselves.
+
     def _do():
-        df = yf.download(list(tickers), start=start, end=end, interval=interval, auto_adjust=True, progress=False)
+        df = yf.download(list(tickers), start=start, end=end, interval=interval, auto_adjust=True, progress=False, threads=True)
         if not df.empty and df.index.tz is not None:
             df.index = df.index.tz_localize(None)
         return df
 
     try:
-        df = _run_yf(f"download {len(tickers)} tickers", _do)
-    except YFContention:
-        logger.info("download of %d tickers deferred — yfinance saturated", len(tickers))
-        df = pd.DataFrame()
+        # Live multi-ticker boards need more patience than the default 6s
+        # history/info budget — wait longer before yielding empty.
+        acquire_timeout = max(YF_ACQUIRE_TIMEOUT, 25.0) if len(tickers) >= 10 else YF_ACQUIRE_TIMEOUT
+        if not _YF_SEM.acquire(timeout=acquire_timeout):
+            logger.info("download of %d tickers deferred — yfinance saturated (>%ss)", len(tickers), acquire_timeout)
+            df = pd.DataFrame()
+        else:
+            try:
+                df = _do()
+            finally:
+                _YF_SEM.release()
     except Exception:
         df = pd.DataFrame()
     if not df.empty:                      # don't cache transient failures
         with _lock:
             cache[key] = df
+    if leader:
+        with _download_inflight_lock:
+            _download_inflight.pop(key, None)
+        wait_evt.set()
     return df

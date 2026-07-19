@@ -83,6 +83,23 @@ function indicatorState(indicator: StressIndicator) {
   return indicator.value > 0 ? 'net tightening' : 'net easing'
 }
 
+// Plain-English tips for the System Credit Pulse tiles. Keys match
+// backend/fred_credit.py _STRESS_MAP; falls back to the FRED interpretation.
+const STRESS_HELP: Record<string, string> = {
+  stl_fsi:
+    'St. Louis Fed Financial Stress Index. Zero is the historical average. Above zero = markets are more stressed than usual (funding, volatility, credit spreads). Below zero = calmer than average. Weekly; not a %.',
+  nfci:
+    'Chicago Fed National Financial Conditions Index. Zero is average conditions. Above zero = tighter financial conditions (harder/costlier credit and market funding). Below zero = looser. Weekly; not a %.',
+  ci_tightening:
+    'Fed Senior Loan Officer Opinion Survey (SLOOS). Net % of banks that tightened standards on large- and middle-market commercial & industrial (C&I) loans this quarter vs eased. Positive = net tightening (banks more selective on business credit); negative = net easing. Not a delinquency or rejection rate.',
+  card_tightening:
+    'Fed SLOOS: net % of banks that tightened standards on credit-card loans this quarter vs eased. Positive = net tightening (cards harder to get or keep); negative = net easing. Quarterly diffusion index — not the share of applications denied and not a delinquency rate.',
+}
+
+function stressHelp(indicator: StressIndicator) {
+  return STRESS_HELP[indicator.key] ?? indicator.interpretation
+}
+
 function PanelHead({ title, meta, help }: { title: string; meta?: string; help?: string }) {
   return <div style={{ minHeight: 36, padding: '0 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, borderBottom: `1px solid ${T.border}`, background: 'rgba(255,255,255,0.012)' }}>
     <span style={{ display: 'inline-flex', alignItems: 'center', fontFamily: T.label, fontSize: 9, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.text }}>{title}{help && <HelpTip text={help} width={300} position="bottom" anchor="left" />}</span>

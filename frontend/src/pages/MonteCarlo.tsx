@@ -432,16 +432,20 @@ function readAllScreens(): { id: string; name: string; filters: any[]; sortBy: s
 
 function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: () => void; handoff: AlgoOptionsMonteCarloHandoff | null }) {
   const cc = useChartColors()
-  const { holdings } = usePortfolio()
   const [collapsed, setCollapsed] = useState(false)
 
-  const [tickers, setTickers] = useState<string[]>(() =>
-    handoff?.tickers && handoff.tickers.length > 1 ? handoff.tickers : [handoff?.ticker ?? 'AAPL']
-  )
-  const [tickerInput, setTickerInput] = useState<string>(() =>
-    handoff?.tickers && handoff.tickers.length > 1 ? handoff.tickers.join(', ') : (handoff?.ticker ?? 'AAPL')
-  )
-  const [comboPreset, setComboPreset] = useState('Short Straddle')
+  // No demo tickers / structure — start blank unless an Algo Builder handoff
+  // seeds the form. User picks portfolio, screen, or types names themselves.
+  const [tickers, setTickers] = useState<string[]>(() => {
+    if (handoff?.tickers && handoff.tickers.length > 0) return handoff.tickers
+    if (handoff?.ticker) return [handoff.ticker]
+    return []
+  })
+  const [tickerInput, setTickerInput] = useState<string>(() => {
+    if (handoff?.tickers && handoff.tickers.length > 0) return handoff.tickers.join(', ')
+    return handoff?.ticker ?? ''
+  })
+  const [comboPreset, setComboPreset] = useState(handoff?.legs?.length ? 'Custom' : '')
 
   const allScreens = useMemo(() => readAllScreens(), [])
   const [screenerLoading, setScreenerLoading] = useState(false)
@@ -449,10 +453,11 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
 
   const handleTickerInputChange = (val: string) => {
     setTickerInput(val)
-    const list = val.split(',')
-      .map(t => t.trim().toUpperCase())
-      .filter(t => t.length > 0)
-    setTickers(list.length > 0 ? list : ['AAPL'])
+    setTickers(
+      val.split(',')
+        .map(t => t.trim().toUpperCase())
+        .filter(t => t.length > 0),
+    )
   }
 
   const handleScreenSelect = async (screenId: string) => {
@@ -492,17 +497,22 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
     }
   }
 
-  // Unified legs state. If a preset is loaded initially, fetch its legs.
-  const [legs, setLegs] = useState<ComboLeg[]>(() =>
-    handoff?.legs ?? legsToCombo(PRESETS[comboPreset] ?? [])
-  )
+  // Legs only pre-filled from a handoff; otherwise start with no structure tiles
+  // until the user picks a preset or clicks + ADD LEG.
+  const [legs, setLegs] = useState<ComboLeg[]>(() => handoff?.legs ?? [])
 
-  const updateLeg = (i: number, patch: Partial<ComboLeg>) =>
+  const updateLeg = (i: number, patch: Partial<ComboLeg>) => {
+    setComboPreset(prev => (prev && prev !== 'Custom' ? 'Custom' : prev || 'Custom'))
     setLegs(prev => prev.map((leg, j) => j === i ? { ...leg, ...patch } : leg))
-  const addLeg = () =>
+  }
+  const addLeg = () => {
+    setComboPreset(prev => prev || 'Custom')
     setLegs(prev => prev.length < MAX_COMBO_LEGS ? [...prev, mkComboLeg()] : prev)
-  const removeLeg = (i: number) =>
-    setLegs(prev => prev.length > 1 ? prev.filter((_, j) => j !== i) : prev)
+  }
+  const removeLeg = (i: number) => {
+    setComboPreset(prev => (prev && prev !== 'Custom' ? 'Custom' : prev || 'Custom'))
+    setLegs(prev => prev.filter((_, j) => j !== i))
+  }
 
   const [comboDte, setComboDte] = useState(handoff?.dte ?? 30)
   // Default low for interactive use; large universe/horizon jobs scale up intentionally.
@@ -512,9 +522,9 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
   const [slPct, setSlPct] = useState(handoff?.stopLossPct ? String(handoff.stopLossPct) : '')
   const [maxHoldDays, setMaxHoldDays] = useState(handoff?.maxHoldDays ? String(handoff.maxHoldDays) : '')
 
-  const [positionSize, setPositionSize] = useState(String(handoff?.positionSizePct ?? 8)) // Default to 8% in the screenshot
-  const [leverage, setLeverage] = useState(String(handoff?.leverage ?? 3)) // Default to 3x in the screenshot
-  const [borrowRate, setBorrowRate] = useState(String(handoff?.effectiveAnnualRate ?? 3.5)) // Default to 3.5% in the screenshot
+  const [positionSize, setPositionSize] = useState(String(handoff?.positionSizePct ?? 100))
+  const [leverage, setLeverage] = useState(String(handoff?.leverage ?? 1))
+  const [borrowRate, setBorrowRate] = useState(String(handoff?.effectiveAnnualRate ?? 0))
 
   const [strategy, setStrategy] = useState<string>(handoff?.strategyName ? 'imported_algo' : 'none')
   const [strategyParams, setStrategyParams] = useState<Record<string, number>>({})
@@ -562,8 +572,10 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
       }
       setMcProgress({ pct: 0, message: 'Starting job…' })
       // Async job + poll — no client wait timeout; progress comes from the server.
+      if (tickers.length === 0) throw new Error('Add at least one ticker (or import a portfolio / screen).')
+      if (legs.length === 0) throw new Error('Add at least one option leg, or pick a structure preset.')
       return runComboMonteCarloJob<ComboMcResult>({
-        ticker: tickers[0] ?? 'AAPL',
+        ticker: tickers[0],
         tickers: tickers.length > 1 ? tickers : undefined,
         combo: { dte: effectiveDte, legs: legs }, n_sims: effectiveNSims,
         take_profit_pct: tpPct ? +tpPct : undefined,
@@ -645,8 +657,11 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
 
   const handlePresetChange = (presetName: string) => {
     setComboPreset(presetName)
+    if (!presetName || presetName === 'Custom') return
     setLegs(legsToCombo(PRESETS[presetName] ?? []))
   }
+
+  const canRun = tickers.length > 0 && legs.length > 0 && !isPending
 
   const SUBLABEL: React.CSSProperties = {
     display: 'block',
@@ -728,9 +743,11 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
                 placeholder="e.g. AAPL, MSFT, TSLA"
               />
             </div>
-            <div style={{ width: 140 }}>
+            <div style={{ width: 160 }}>
               <label style={SUBLABEL}>Structure</label>
               <select value={comboPreset} onChange={e => handlePresetChange(e.target.value)} style={{ ...paramInput, cursor: 'pointer', background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+                <option value="">Select structure…</option>
+                {comboPreset === 'Custom' && <option value="Custom">Custom</option>}
                 {PRESET_GROUPS.map(g => (
                   <optgroup key={g.label} label={g.label}>
                     {g.keys.map(k => <option key={k} value={k}>{k}</option>)}
@@ -828,11 +845,11 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
                 </div>
               )
             })}
-            <button onClick={() => mutate()} disabled={isPending} style={{
+            <button onClick={() => mutate()} disabled={!canRun} title={!canRun && !isPending ? 'Add tickers and a structure first' : undefined} style={{
               display: 'flex', alignItems: 'center', gap: 6, background: 'var(--theme-primary, #c9a84c)', border: '1px solid var(--theme-primary, #c9a84c)',
               color: 'var(--theme-bg, #101c2e)', fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
-              padding: '8px 18px', cursor: isPending ? 'default' : 'pointer', opacity: isPending ? 0.6 : 1, whiteSpace: 'nowrap',
-              boxShadow: '0 0 10px rgba(201, 168, 76, 0.3)', transition: 'all 0.2s ease', height: 28, boxSizing: 'border-box'
+              padding: '8px 18px', cursor: canRun ? 'pointer' : 'default', opacity: canRun ? 1 : 0.45, whiteSpace: 'nowrap',
+              boxShadow: canRun ? '0 0 10px rgba(201, 168, 76, 0.3)' : 'none', transition: 'all 0.2s ease', height: 28, boxSizing: 'border-box'
             }}>
               {isPending ? 'Running…' : '▶ Run Simulation'}
             </button>
@@ -844,16 +861,28 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <div style={{ width: 2, height: 10, background: 'var(--theme-primary, #c9a84c)' }} />
-              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)' }}>Legs - {legs.length}</span>
+              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)' }}>
+                Legs{legs.length > 0 ? ` · ${legs.length}` : ''}
+              </span>
             </div>
-            <button onClick={addLeg} disabled={legs.length >= 4} style={{
+            <button onClick={addLeg} disabled={legs.length >= MAX_COMBO_LEGS} style={{
               background: 'none', border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)',
               fontFamily: 'var(--theme-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', padding: '3px 8px',
-              cursor: legs.length >= 4 ? 'default' : 'pointer', opacity: legs.length >= 4 ? 0.5 : 1
+              cursor: legs.length >= MAX_COMBO_LEGS ? 'default' : 'pointer', opacity: legs.length >= MAX_COMBO_LEGS ? 0.5 : 1
             }}>
               + ADD LEG
             </button>
           </div>
+
+          {legs.length === 0 && (
+            <div style={{
+              padding: '14px 12px', fontFamily: 'var(--theme-mono)', fontSize: 10,
+              color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', lineHeight: 1.5,
+              border: '1px dashed var(--theme-border, rgba(255,255,255,0.12))', background: '#07101a',
+            }}>
+              No legs yet — pick a structure above, or + ADD LEG to build a custom multi-leg.
+            </div>
+          )}
           
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 8 }}>
             {legs.map((leg, i) => {
@@ -1019,7 +1048,15 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
           </div>
         )}
         {!data && !isPending && (
-          <EmptyState title="Options Strategy Monte Carlo" hint="Pick a ticker and a multi-leg structure, then run the simulation." action="Run Simulation" />
+          <EmptyState
+            title="Options Strategy Monte Carlo"
+            hint={tickers.length === 0
+              ? 'Add tickers (type, portfolio, or screen), pick a structure, then run.'
+              : legs.length === 0
+                ? 'Pick a structure preset or add legs, then run the simulation.'
+                : 'Press Run Simulation to price the structure across Monte Carlo paths.'}
+            action="Run Simulation"
+          />
         )}
         {isError && !isPending && (
           <div style={{ padding: '10px 14px', border: '1px solid var(--theme-negative)', color: 'var(--theme-negative)', fontFamily: 'var(--theme-mono)', fontSize: 11, lineHeight: 1.45 }}>

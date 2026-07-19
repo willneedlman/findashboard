@@ -73,10 +73,12 @@ def _us_cash_session_open(now_utc: _dt.datetime) -> bool:
 
 
 def _global_window(window: str, now):
+    # Prefer coarser bars than strict 1m/5m: board needs last price + % change
+    # + a short spark, not tick resolution. Fewer bars → much faster Yahoo download.
     if window == "10m": return now - _dt.timedelta(minutes=10), "1m", True
-    if window == "30m": return now - _dt.timedelta(minutes=30), "1m", True
-    if window == "1h":  return now - _dt.timedelta(hours=1), "1m", True
-    if window == "1d":  return now - _dt.timedelta(days=1), "5m", True
+    if window == "30m": return now - _dt.timedelta(minutes=30), "5m", True
+    if window == "1h":  return now - _dt.timedelta(hours=1), "5m", True
+    if window == "1d":  return now - _dt.timedelta(days=1), "15m", True
     if window == "1w":  return now - _dt.timedelta(days=7), "1d", False
     if window == "1m":  return now - _dt.timedelta(days=31), "1d", False
     return _dt.datetime(now.year, 1, 1), "1d", False
@@ -91,14 +93,29 @@ def _iso_timestamp(value) -> str | None:
     return stamp.isoformat()
 
 
+def _close_frame(df: pd.DataFrame) -> pd.DataFrame | None:
+    if df is None or df.empty:
+        return None
+    closes = df.get("Close")
+    if closes is None:
+        return None
+    # Single-ticker downloads return a Series; multi-ticker a DataFrame.
+    if isinstance(closes, pd.Series):
+        return closes.to_frame()
+    return closes
+
+
 @router.get("/global-board")
-@cached(ttl=60)
+@cached(ttl=120, maxsize=48, persist=True)
 def global_board(date: str | None = None, window: str = "1d"):
     """Global Markets board with a consistent performance window.
 
     The current board uses the freshest intraday bars available for 10m through
     1d. Longer windows use daily closes. A dated session always remains an
     end-of-day snapshot so it cannot be mistaken for live data.
+
+    Cached 2 minutes in memory + disk so cold tabs and concurrent visitors
+    share one Yahoo multi-ticker download instead of stampeding.
     """
     target = None
     if date:
@@ -129,11 +146,21 @@ def global_board(date: str | None = None, window: str = "1d"):
         reference_at, interval, intraday = None, "1d", False
     else:
         reference_at, interval, intraday = _global_window(window, now)
-        fetch_start = (reference_at.date() - _dt.timedelta(days=1)).isoformat() if intraday else reference_at.date().isoformat()
+        # Pad enough for weekends/holidays so the window base always resolves.
+        pad_days = 3 if interval == "1d" else 2
+        fetch_start = (reference_at.date() - _dt.timedelta(days=pad_days)).isoformat()
         fetch_end = (now.date() + _dt.timedelta(days=1)).isoformat()
-        df = get_download(syms, fetch_start, fetch_end, interval, cache_ttl=60 if intraday else 300)
+        df = get_download(syms, fetch_start, fetch_end, interval, cache_ttl=120 if intraday else 300)
+        # If live multi-ticker download was empty (contention / Yahoo blip), fall
+        # back to daily bars so the board still paints instead of a long skeleton.
+        if df.empty and interval != "1d":
+            daily_start = (now.date() - _dt.timedelta(days=10)).isoformat()
+            df = get_download(syms, daily_start, fetch_end, "1d", cache_ttl=300)
+            if not df.empty:
+                interval, intraday = "1d", False
+                reference_at = now - _dt.timedelta(days=1)
 
-    closes = df.get("Close") if not df.empty else None
+    closes = _close_frame(df)
     fred_series: dict[str, pd.Series] = {}
     try:
         import fred as _fred
@@ -151,7 +178,7 @@ def global_board(date: str | None = None, window: str = "1d"):
     for section, label, quote_symbol, canonical_symbol, is_cme_proxy in active_board:
         if quote_symbol in fred_series:
             series = fred_series[quote_symbol]
-        elif closes is not None and quote_symbol in closes:
+        elif closes is not None and quote_symbol in closes.columns:
             series = closes[quote_symbol].dropna()
         else:
             series = pd.Series(dtype=float)
@@ -181,6 +208,9 @@ def global_board(date: str | None = None, window: str = "1d"):
                     has_window = last_at > pd.Timestamp(reference_at)
                     prior = series[series.index <= pd.Timestamp(reference_at)] if has_window else pd.Series(dtype=float)
                     base = float(prior.iloc[-1]) if not prior.empty else None
+                    # If the window base is missing (holiday gap), use previous bar.
+                    if base is None and len(series) >= 2:
+                        base = float(series.iloc[-2])
                     row["status"] = "intraday" if intraday and now - last_at <= _dt.timedelta(minutes=20) else "delayed" if intraday else "end_of_day"
                     row["as_of"] = _iso_timestamp(last_at)
                 row["price"] = round(price, 4) if price is not None else None
@@ -196,7 +226,7 @@ def global_board(date: str | None = None, window: str = "1d"):
         "as_of": _dt.datetime.now(_dt.timezone.utc).isoformat(),
         "date": target.isoformat() if target else None,
         "window": "1d" if target else window,
-        "refresh_seconds": 60 if intraday and not target else 300,
+        "refresh_seconds": 120 if intraday and not target else 300,
         "americas_mode": "cme_futures" if use_cme_futures else "cash_indices",
     }
 

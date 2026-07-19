@@ -3,11 +3,11 @@ import EmptyState from '../components/EmptyState'
 import UniversePicker from '../components/UniversePicker'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { usePortfolio } from '../contexts/PortfolioContext'
 import axios from 'axios'
 import TickerLogo from '../components/TickerLogo'
 import { fmtMarketCap } from '../lib/format'
 import useIsMobile from '../hooks/useIsMobile'
+import { readPMPortfolios, normalizeTicker } from '../lib/pmImport'
 
 interface TickerRow {
   ticker: string; name: string
@@ -173,7 +173,6 @@ const pctTone = (p: number | null) => p == null ? FAINT : p >= 0 ? POS : NEG
 export function PortfolioEarningsContent() {
   const isMobile = useIsMobile()
   const [searchParams, setSearchParams] = useSearchParams()
-  const { tickers: portfolioTickers } = usePortfolio()
 
   const [watchlist, setWatchlistRaw] = useState<string[]>(() => {
     const raw = searchParams.get('tickers')
@@ -189,6 +188,11 @@ export function PortfolioEarningsContent() {
   const [sort, setSort] = useState<SortKey>('proximity')
   const [windowKey, setWindowKey] = useState<WindowKey>('all')
   const [openMenu, setOpenMenu] = useState<MenuKey>(null)
+  // Re-read PM books each time the add menu opens so renames/new books show up.
+  const pmBooks = useMemo(
+    () => readPMPortfolios().filter(p => p.holdings.some(h => h.ticker && h.shares)),
+    [openMenu],
+  )
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [showTrades, setShowTrades] = useState<Record<string, boolean>>({})
 
@@ -277,10 +281,21 @@ export function PortfolioEarningsContent() {
     loadTickers([sym], false)
   }
   const removeTicker = (tk: string) => setWatchlist(watchlist.filter(t => t !== tk))
-  const importPortfolio = () => {
+  const importPmBook = (bookId: string) => {
+    const book = pmBooks.find(b => b.id === bookId)
+    if (!book) return
+    const seen = new Set<string>()
+    const tickers: string[] = []
+    for (const h of book.holdings) {
+      const sym = normalizeTicker(h.ticker)
+      if (!sym || sym === 'CASH' || seen.has(sym)) continue
+      seen.add(sym)
+      tickers.push(sym)
+    }
     setOpenMenu(null)
-    setWatchlist(portfolioTickers)
-    loadTickers(portfolioTickers, true)
+    if (tickers.length === 0) return
+    setWatchlist(tickers)
+    loadTickers(tickers, true)
   }
 
   const toggleExpand = (tk: string) => {
@@ -485,11 +500,30 @@ export function PortfolioEarningsContent() {
                   {addQuery.trim().length >= 2 && addSuggestions.length === 0 && (
                     <div style={{ fontFamily: SANS, fontSize: 10.5, color: FAINT, padding: '6px 8px' }}>Press Enter to add "{addQuery.trim().toUpperCase()}"</div>
                   )}
-                  {portfolioTickers.length > 0 && (
-                    <button className="pe-menu-item" onClick={importPortfolio}
-                      style={{ ...MENU_ITEM, color: MUTED, borderTop: `1px solid ${HAIRLINE}`, borderRadius: 0, marginTop: 4, paddingTop: 8 }}>
-                      IMPORT PORTFOLIO ({portfolioTickers.length})
-                    </button>
+                  {pmBooks.length > 0 && (
+                    <div style={{ borderTop: `1px solid ${HAIRLINE}`, marginTop: 4, paddingTop: 4 }}>
+                      <div style={{ fontFamily: MONO, fontWeight: 700, fontSize: 8, letterSpacing: '0.12em', color: DIM, padding: '6px 8px 4px' }}>
+                        IMPORT FROM PORTFOLIO MANAGER
+                      </div>
+                      {pmBooks.map(b => {
+                        const n = new Set(
+                          b.holdings
+                            .map(h => normalizeTicker(h.ticker))
+                            .filter(t => t && t !== 'CASH'),
+                        ).size
+                        return (
+                          <button
+                            key={b.id}
+                            className="pe-menu-item"
+                            onClick={() => importPmBook(b.id)}
+                            style={{ ...MENU_ITEM, color: MUTED, display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' }}
+                          >
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.name}</span>
+                            <span style={{ fontFamily: MONO, fontSize: 9, color: FAINT, flexShrink: 0 }}>{n}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
                   )}
                 </div>
               )}

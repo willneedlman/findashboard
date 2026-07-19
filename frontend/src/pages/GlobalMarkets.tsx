@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import axios from 'axios'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import PageWrapper from '../components/PageWrapper'
 import AssetChartModal from '../components/AssetChartModal'
 import { BoardSkeleton } from '../components/Skeleton'
@@ -203,9 +203,17 @@ export default function GlobalMarkets() {
 
   const q = useQuery<Board>({
     queryKey: ['global-board', date, window],
-    queryFn: () => axios.get('/api/market/global-board', { params: { ...(date ? { date } : {}), window } }).then(r => r.data),
-    staleTime: date ? 300_000 : 60_000,
-    refetchInterval: date ? false : 60_000,
+    queryFn: () => axios.get('/api/market/global-board', {
+      params: { ...(date ? { date } : {}), window },
+      // Cold multi-ticker Yahoo download can exceed the browser default when
+      // the server is contended; give it room so we paint data, not a skeleton.
+      timeout: 90_000,
+    }).then(r => r.data),
+    // Keep showing the last board while window/date changes or a background
+    // refresh runs — full skeleton only on the true first load.
+    placeholderData: keepPreviousData,
+    staleTime: date ? 300_000 : 120_000,
+    refetchInterval: date ? false : 120_000,
     refetchIntervalInBackground: false,
     retry: 1,
   })
@@ -259,13 +267,21 @@ export default function GlobalMarkets() {
             <span style={{ fontFamily: MONO, fontSize: 10, color: 'var(--theme-secondary, #5f7893)' }}>Pinned benchmarks · change is measured from the selected interval · displayed in {zone}</span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0, fontFamily: MONO, fontSize: 9.5, letterSpacing: '0.12em', lineHeight: 1.45, textTransform: 'uppercase', color: 'var(--theme-secondary, #56708a)', textAlign: 'right' }}>
               <span style={{ flex: '0 0 auto', padding: '3px 5px', border: `1px solid ${date ? 'var(--theme-border, rgba(255,255,255,0.14))' : 'color-mix(in srgb, var(--theme-tertiary, #60a5fa) 45%, transparent)'}`, color: date ? 'var(--theme-secondary, #8099b0)' : 'var(--theme-tertiary, #60a5fa)', background: date ? 'transparent' : 'color-mix(in srgb, var(--theme-tertiary, #60a5fa) 8%, transparent)' }}>{date ? 'SESSION CLOSE' : 'MARKET DATA'}</span>
-              <span>{date ? `Session ${date} · completed session` : asOf ? `${q.data?.americas_mode === 'cme_futures' ? 'CME futures proxies · ' : ''}Yahoo Finance · as of ${asOf} local · refreshes every 60s` : 'Loading'}</span>
+              <span>
+                {date
+                  ? `Session ${date} · completed session`
+                  : asOf
+                    ? `${q.data?.americas_mode === 'cme_futures' ? 'CME futures proxies · ' : ''}Yahoo Finance · as of ${asOf} local · refreshes every 2m${q.isFetching ? ' · updating…' : ''}`
+                    : 'Loading'}
+              </span>
             </span>
           </div>
         </div>
 
-        {q.isLoading && <BoardSkeleton isMobile={isMobile} />}
-        {q.isError && <ErrorState title="Board unavailable" message="The board is unavailable." onRetry={() => q.refetch()} />}
+        {/* Only the first ever load shows the full skeleton; window switches and
+            background refreshes keep the previous board on screen. */}
+        {q.isLoading && !q.data && <BoardSkeleton isMobile={isMobile} />}
+        {q.isError && !q.data && <ErrorState title="Board unavailable" message="The board is unavailable." onRetry={() => q.refetch()} />}
 
         {q.data && (
           <>
