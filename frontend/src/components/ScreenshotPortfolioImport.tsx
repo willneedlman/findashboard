@@ -4,14 +4,19 @@ import { ImagePlus } from 'lucide-react'
 import { T } from '../lib/theme'
 import { normalizeTicker } from '../lib/pmImport'
 
-// Upload/paste a screenshot of a brokerage holdings table and have the backend
-// (Claude vision — see backend/routers/portfolio_import.py) extract ticker/
-// shares/avg-cost rows. Nothing is committed to the portfolio until the user
-// reviews and confirms each row here — AI-read numbers are shown editable,
-// never silently trusted, since a misread share count is real money.
+// Upload/paste one or more screenshots of a brokerage holdings table and have
+// the backend (Claude vision — see backend/routers/portfolio_import.py)
+// extract ticker/shares/avg-cost rows. Each screenshot is parsed independently
+// in parallel and the results are merged into one review list. Nothing is
+// committed to the portfolio until the user reviews and confirms each row
+// here — AI-read numbers are shown editable, never silently trusted, since a
+// misread share count is real money.
 
 interface ParsedRow { ticker: string; shares: number; avgCost: number | null; include: boolean }
 interface ImportedHolding { ticker: string; shares: number; avgCost: number | null }
+interface PendingImage { id: number; dataUrl: string }
+
+const MAX_IMAGES = 8
 
 const triggerBtn: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -37,53 +42,78 @@ const rowInp: React.CSSProperties = {
 
 export default function ScreenshotPortfolioImport({ onImport }: { onImport: (rows: ImportedHolding[]) => void }) {
   const [open, setOpen] = useState(false)
-  const [imgDataUrl, setImgDataUrl] = useState<string | null>(null)
+  const [images, setImages] = useState<PendingImage[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [warning, setWarning] = useState<string | null>(null)
   const [rows, setRows] = useState<ParsedRow[] | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const nextId = useRef(0)
 
-  const reset = () => { setImgDataUrl(null); setRows(null); setError(null); setWarning(null) }
-  const close = () => { setOpen(false); reset() }
+  const resetResults = () => { setRows(null); setError(null); setWarning(null) }
+  const clearAll = () => { setImages([]); resetResults() }
+  const close = () => { setOpen(false); clearAll() }
 
-  const loadFile = (file: File) => {
-    reset()
-    const reader = new FileReader()
-    reader.onload = ev => setImgDataUrl(ev.target?.result as string)
-    reader.readAsDataURL(file)
+  const addFiles = (files: File[]) => {
+    const imgs = files.filter(f => f.type.startsWith('image/'))
+    imgs.forEach(file => {
+      const reader = new FileReader()
+      reader.onload = ev => {
+        const dataUrl = ev.target?.result as string
+        setImages(prev => {
+          if (prev.length >= MAX_IMAGES) {
+            setError(`You can add up to ${MAX_IMAGES} screenshots at a time.`)
+            return prev
+          }
+          return [...prev, { id: nextId.current++, dataUrl }]
+        })
+      }
+      reader.readAsDataURL(file)
+    })
   }
 
+  const removeImage = (id: number) => setImages(prev => prev.filter(img => img.id !== id))
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) loadFile(file)
+    addFiles(Array.from(e.target.files ?? []))
     e.target.value = ''
   }
 
   const handlePaste = (e: React.ClipboardEvent) => {
-    const item = Array.from(e.clipboardData.items).find(i => i.type.startsWith('image/'))
-    const file = item?.getAsFile()
-    if (file) loadFile(file)
+    const files = Array.from(e.clipboardData.items)
+      .filter(i => i.type.startsWith('image/'))
+      .map(i => i.getAsFile())
+      .filter((f): f is File => !!f)
+    addFiles(files)
   }
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
-    const file = Array.from(e.dataTransfer.files).find(f => f.type.startsWith('image/'))
-    if (file) loadFile(file)
+    addFiles(Array.from(e.dataTransfer.files))
   }
 
   const parse = useCallback(() => {
-    if (!imgDataUrl) return
+    if (!images.length) return
     setBusy(true); setError(null); setWarning(null)
-    axios.post('/api/portfolio-import/screenshot', { image_base64: imgDataUrl })
-      .then(r => {
-        const holdings = r.data.holdings as ImportedHolding[]
+    Promise.allSettled(images.map(img => axios.post('/api/portfolio-import/screenshot', { image_base64: img.dataUrl })))
+      .then(results => {
+        const holdings: ImportedHolding[] = []
+        const notes: string[] = []
+        results.forEach((res, i) => {
+          const label = images.length > 1 ? `Screenshot ${i + 1}: ` : ''
+          if (res.status === 'fulfilled') {
+            holdings.push(...(res.value.data.holdings as ImportedHolding[]))
+            if (res.value.data.warning) notes.push(`${label}${res.value.data.warning}`)
+          } else {
+            const detail = res.reason?.response?.data?.detail || 'could not be parsed'
+            notes.push(`${label}${detail}`)
+          }
+        })
         setRows(holdings.map(h => ({ ...h, include: true })))
-        setWarning(r.data.warning ?? null)
+        setWarning(notes.length ? notes.join(' · ') : null)
       })
-      .catch(e => setError(e?.response?.data?.detail || 'Could not parse that screenshot.'))
       .finally(() => setBusy(false))
-  }, [imgDataUrl])
+  }, [images])
 
   const updateRow = (i: number, patch: Partial<ParsedRow>) =>
     setRows(prev => prev ? prev.map((r, j) => (j === i ? { ...r, ...patch } : r)) : prev)
@@ -119,17 +149,30 @@ export default function ScreenshotPortfolioImport({ onImport }: { onImport: (row
             <div style={{ padding: 16, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
               {!rows && (
                 <>
-                  <div onPaste={handlePaste} onDrop={handleDrop} onDragOver={e => e.preventDefault()}
-                    onClick={() => fileRef.current?.click()} tabIndex={0}
-                    style={{ border: `1px dashed ${T.border}`, borderRadius: 6, padding: imgDataUrl ? 8 : 24, textAlign: 'center', cursor: 'pointer', color: T.muted, fontFamily: T.mono, fontSize: 11, lineHeight: 1.6 }}>
-                    {imgDataUrl
-                      ? <img src={imgDataUrl} alt="Selected portfolio screenshot" style={{ maxWidth: '100%', maxHeight: 240, borderRadius: 4, display: 'block', margin: '0 auto' }} />
-                      : <>Click to choose a file, drag one in, or paste (⌘V / Ctrl-V) a screenshot of your portfolio holdings</>}
-                  </div>
-                  <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFileChange} />
+                  {images.length > 0 && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(84px, 1fr))', gap: 8 }}>
+                      {images.map(img => (
+                        <div key={img.id} style={{ position: 'relative', border: `1px solid ${T.border}`, borderRadius: 4, overflow: 'hidden', aspectRatio: '1', background: T.bg }}>
+                          <img src={img.dataUrl} alt="Selected portfolio screenshot" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                          <button onClick={() => removeImage(img.id)} disabled={busy} aria-label="Remove screenshot"
+                            style={{ position: 'absolute', top: 2, right: 2, width: 18, height: 18, lineHeight: '16px', textAlign: 'center', background: 'rgba(0,0,0,0.65)', border: 'none', color: '#fff', fontSize: 12, cursor: busy ? 'default' : 'pointer', borderRadius: 3, padding: 0 }}>×</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {images.length < MAX_IMAGES && (
+                    <div onPaste={handlePaste} onDrop={handleDrop} onDragOver={e => e.preventDefault()}
+                      onClick={() => fileRef.current?.click()} tabIndex={0}
+                      style={{ border: `1px dashed ${T.border}`, borderRadius: 6, padding: images.length ? 14 : 24, textAlign: 'center', cursor: 'pointer', color: T.muted, fontFamily: T.mono, fontSize: 11, lineHeight: 1.6 }}>
+                      {images.length
+                        ? <>+ Add another screenshot ({images.length}/{MAX_IMAGES})</>
+                        : <>Click to choose file(s), drag them in, or paste (⌘V / Ctrl-V) — add as many screenshots as you need</>}
+                    </div>
+                  )}
+                  <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleFileChange} />
                   {error && <div style={{ color: T.neg, fontFamily: T.mono, fontSize: 11 }}>{error}</div>}
-                  <button onClick={parse} disabled={!imgDataUrl || busy} style={{ ...primaryBtn, opacity: (!imgDataUrl || busy) ? 0.5 : 1, cursor: (!imgDataUrl || busy) ? 'default' : 'pointer' }}>
-                    {busy ? 'Parsing…' : 'Parse Screenshot'}
+                  <button onClick={parse} disabled={!images.length || busy} style={{ ...primaryBtn, opacity: (!images.length || busy) ? 0.5 : 1, cursor: (!images.length || busy) ? 'default' : 'pointer' }}>
+                    {busy ? 'Parsing…' : images.length > 1 ? `Parse ${images.length} Screenshots` : 'Parse Screenshot'}
                   </button>
                 </>
               )}
@@ -158,7 +201,7 @@ export default function ScreenshotPortfolioImport({ onImport }: { onImport: (row
                     </div>
                   )}
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={reset} style={ghostBtn}>← Back</button>
+                    <button onClick={resetResults} style={ghostBtn}>← Back</button>
                     <button onClick={commit} disabled={included.length === 0} style={{ ...primaryBtn, opacity: included.length === 0 ? 0.5 : 1, cursor: included.length === 0 ? 'default' : 'pointer' }}>
                       Import {included.length} Holding{included.length === 1 ? '' : 's'}
                     </button>

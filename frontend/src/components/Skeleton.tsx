@@ -18,21 +18,21 @@ const BORDER = 'var(--theme-border, rgba(255,255,255,0.08))'
 // of section tables — the same bones as the loaded board, so nothing jumps in.
 export function BoardSkeleton({ isMobile }: { isMobile?: boolean }) {
   const card = (
-    <div style={{ background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 5%, var(--theme-surface, #0d1826))', border: `1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 22%, transparent)`, borderRadius: 5, padding: '13px 14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <Skel w={90} h={9} />
-      <Skel w={110} h={20} />
-      <Skel w={64} h={9} />
+    <div style={{ background: 'color-mix(in srgb, var(--theme-primary, #c9a84c) 5%, var(--theme-surface, #0d1826))', border: `1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 22%, transparent)`, borderRadius: 0, padding: '13px 14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <Skel w={90} h={9} r={0} />
+      <Skel w={110} h={20} r={0} />
+      <Skel w={64} h={9} r={0} />
     </div>
   )
   const rows = (n: number) => (
     <div>
-      <Skel w={120} h={9} style={{ marginBottom: 12 }} />
+      <Skel w={120} h={9} r={0} style={{ marginBottom: 12 }} />
       {Array.from({ length: n }).map((_, i) => (
         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 4px', borderBottom: `1px solid var(--theme-border-faint, rgba(255,255,255,0.05))` }}>
-          <Skel w={16} h={16} r={3} />
-          <Skel w={`${40 + (i * 7) % 30}%`} h={10} />
-          <Skel w={46} h={12} style={{ marginLeft: 'auto' }} />
-          <Skel w={40} h={12} />
+          <Skel w={16} h={16} r={0} />
+          <Skel w={`${40 + (i * 7) % 30}%`} h={10} r={0} />
+          <Skel w={46} h={12} r={0} style={{ marginLeft: 'auto' }} />
+          <Skel w={40} h={12} r={0} />
         </div>
       ))}
     </div>
