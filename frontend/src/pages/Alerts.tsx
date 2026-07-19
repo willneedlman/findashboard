@@ -9,6 +9,9 @@ import useIsMobile from '../hooks/useIsMobile'
 import { useTheme } from '../contexts/ThemeContext'
 import { loadCustomStrategies } from '../utils/customStrategies'
 import type { CustomStrategyDef } from '../components/CustomStrategyModal'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip } from '../lib/reportCaptureRegistry'
 
 const CONDITIONS = [
   { value: 'price_above',           label: 'Price above $' },
@@ -245,6 +248,33 @@ export default function Alerts() {
   const notifsOn = notifState === 'granted'
 
   const shown = alerts.filter(a => filter === 'all' ? true : filter === 'armed' ? !isCooldown(a) : isCooldown(a))
+
+  useReportCapture(() => {
+    if (!alerts.length) return null
+    const pieces: ClipDraft[] = [
+      kpiClip('Price Alerts', 'Price Alerts Summary', [
+        { label: 'Total', value: String(alerts.length) },
+        { label: 'Armed', value: String(armedCount) },
+        { label: 'Cooldown', value: String(cooldownCount) },
+        { label: 'Fired Today', value: String(firedToday) },
+      ]),
+      tableClip(
+        'Price Alerts',
+        'Alert List',
+        ['Ticker', 'Condition', 'Status', 'Last'],
+        shown.slice(0, 20).map(a => {
+          const q = quotes?.[a.ticker]
+          return [
+            a.ticker,
+            conditionLabel(a.condition, a.threshold),
+            isCooldown(a) ? 'Cooldown' : 'Armed',
+            q?.current_price != null ? `$${q.current_price.toFixed(2)}` : '—',
+          ]
+        }),
+      ),
+    ]
+    return pieces
+  }, { disabled: !alerts.length, sourceTab: 'Price Alerts' })
 
   // ── Summary strip cell ──────────────────────────────────────────────────────
   const SummaryCell = ({ label, value, color, sub, primary }: { label: string; value: string; color?: string; sub?: React.ReactNode; primary?: boolean }) => (

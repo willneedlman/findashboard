@@ -9,6 +9,9 @@ import SidebarLayout from '../components/SidebarLayout'
 import TickerInput from '../components/TickerInput'
 import ExpirySelect from '../components/ExpirySelect'
 import { priceOption, optionPayoff, optionSurface, optionMultiLeg, fetchOptionsChain, fetchRiskFreeRate } from '../hooks/useApi'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip, chartClip } from '../lib/reportCaptureRegistry'
 
 const GREEK_COLOR: Record<string, string> = {
   delta: 'var(--theme-tertiary, #1f5673)', gamma: '#7b5ea7', theta: '#8c2e36', vega: '#2f6b4b',
@@ -296,6 +299,98 @@ export function OptionsPricerContent() {
 
   const chain = chainMut.data
   const chainRows = chain ? (params.option_type === 'call' ? chain.calls : chain.puts) : []
+
+  const TAB = 'Options Pricer'
+  useReportCapture(() => {
+    const pieces: ClipDraft[] = []
+    if (mode === 'multi' && multiData) {
+      const debit = multiData.net_price >= 0
+      pieces.push(kpiClip(TAB, 'Multi-Leg Summary', [
+        { label: debit ? 'Net Debit' : 'Net Credit', value: `$${Math.abs(multiData.net_price).toFixed(2)}` },
+        { label: 'Max Profit', value: multiData.max_profit_unbounded ? 'Unbounded' : `$${multiData.max_profit.toFixed(2)}` },
+        { label: 'Max Loss', value: multiData.max_loss_unbounded ? 'Unbounded' : `$${Math.abs(multiData.max_loss).toFixed(2)}` },
+        { label: 'Breakeven', value: multiData.breakevens.length ? multiData.breakevens.map(b => `$${b.toFixed(2)}`).join(' · ') : '—' },
+        { label: 'Delta', value: gFmt(multiData.greeks.delta) },
+        { label: 'Gamma', value: gFmt(multiData.greeks.gamma) },
+        { label: 'Theta', value: gFmt(multiData.greeks.theta) },
+        { label: 'Vega', value: gFmt(multiData.greeks.vega) },
+      ]))
+      pieces.push(tableClip(TAB, 'Legs',
+        ['Leg', 'Qty', 'Strike', 'Days', 'IV', 'Premium', 'Delta'],
+        multiData.legs.map(l => [
+          `${l.side === 1 ? 'Long' : 'Short'} ${l.option_type}`,
+          l.qty, l.K, l.T, `${l.sigma}%`, l.price.toFixed(2), l.greeks.delta.toFixed(3),
+        ]),
+      ))
+      if (multiData.spot?.length) {
+        pieces.push(chartClip(TAB, 'Net P&L at Expiry', 'line', 'spot',
+          multiData.spot.map((s, i) => ({ spot: +s.toFixed(1), pnl: multiData.payoff[i] })),
+          [{ key: 'pnl', label: 'P&L' }],
+        ))
+      }
+      if (multiData.surface?.spot?.length) {
+        pieces.push(chartClip(TAB, 'Net Greeks vs Spot', 'line', 'spot',
+          multiData.surface.spot.map((s, i) => ({
+            spot: +s.toFixed(0),
+            delta: multiData.surface.delta[i],
+            gamma: multiData.surface.gamma[i],
+            theta: multiData.surface.theta[i],
+            vega: multiData.surface.vega[i],
+          })),
+          [
+            { key: 'delta', label: 'Delta' }, { key: 'gamma', label: 'Gamma' },
+            { key: 'theta', label: 'Theta' }, { key: 'vega', label: 'Vega' },
+          ],
+        ))
+      }
+      return pieces
+    }
+    if (mode === 'single' && priceData) {
+      pieces.push(kpiClip(TAB, 'Premium & Greeks', [
+        { label: 'Option Premium', value: `$${priceData.price}` },
+        ...(loadedMark ? [{ label: 'Market', value: `$${loadedMark.mark.toFixed(2)}` }] : []),
+        { label: 'Delta', value: gFmt(priceData.greeks.delta) },
+        { label: 'Gamma', value: gFmt(priceData.greeks.gamma) },
+        { label: 'Theta', value: gFmt(priceData.greeks.theta) },
+        { label: 'Vega', value: gFmt(priceData.greeks.vega) },
+        { label: 'Vanna', value: gFmt(priceData.vanna) },
+        { label: 'Charm', value: gFmt(priceData.charm) },
+        { label: 'Lambda', value: gFmt(priceData.lambda) },
+      ]))
+      pieces.push(kpiClip(TAB, 'Contract Assumptions', [
+        { label: 'Type', value: params.option_type.toUpperCase() },
+        { label: 'Spot', value: `$${params.S}` },
+        { label: 'Strike', value: `$${params.K}` },
+        { label: 'Days', value: String(params.T) },
+        { label: 'IV', value: `${params.sigma}%` },
+        { label: 'Rate', value: `${params.r}%` },
+      ]))
+      if (payoffData?.spot?.length) {
+        pieces.push(chartClip(TAB, 'P&L at Expiry', 'line', 'spot',
+          payoffData.spot.map((s: number, i: number) => ({ spot: +s.toFixed(1), pnl: payoffData.payoff[i] })),
+          [{ key: 'pnl', label: 'P&L' }],
+        ))
+      }
+      if (surfaceData?.spot?.length) {
+        pieces.push(chartClip(TAB, 'Greeks vs Spot', 'line', 'spot',
+          surfaceData.spot.map((s: number, i: number) => ({
+            spot: +s.toFixed(0),
+            delta: surfaceData.delta[i], gamma: surfaceData.gamma[i],
+            theta: surfaceData.theta[i], vega: surfaceData.vega[i],
+          })),
+          [
+            { key: 'delta', label: 'Delta' }, { key: 'gamma', label: 'Gamma' },
+            { key: 'theta', label: 'Theta' }, { key: 'vega', label: 'Vega' },
+          ],
+        ))
+      }
+      return pieces
+    }
+    return null
+  }, {
+    disabled: mode === 'single' ? !priceData : !multiData,
+    sourceTab: TAB,
+  })
 
   // Pull a real listed contract into the analyzer: spot, strike, days-to-expiry
   // and implied vol all come straight from the live chain, then we re-price.

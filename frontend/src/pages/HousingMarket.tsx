@@ -9,6 +9,9 @@ import EmptyState from '../components/EmptyState'
 import { KpiCell } from '../components/mmCockpit'
 import useIsMobile from '../hooks/useIsMobile'
 import { TOOLTIP_STYLE } from '../components/ChartTooltip'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip, chartClip, textClip } from '../lib/reportCaptureRegistry'
 
 interface Trend { mom: number | null; yoy: number | null }
 interface RegionRow {
@@ -167,6 +170,86 @@ function HousingMarketContent() {
   const { data: construction } = useQuery<ConstructionResp>({ queryKey: ['housing-construction'], queryFn: () => axios.get('/api/housing/construction?region=national').then(r => r.data), staleTime: 3_600_000, retry: 1 })
   const national = data?.by_region.find(region => region.region === 'national')
   const constructionHistory = construction?.history.filter(row => row.housing_starts > 0 || row.building_permits > 0 || row.completions > 0) ?? []
+
+  const TAB = 'Housing Market'
+  useReportCapture(() => {
+    if (!national) return null
+    const pieces: ClipDraft[] = [
+      kpiClip(TAB, 'National Housing Pulse', [
+        { label: 'Median Home Price', value: money(national.median_price), sub: signed(national.trends.median_price.yoy) },
+        { label: '30Y Fixed', value: pct(national.rate_30y) },
+        { label: 'Affordability Index', value: national.affordability_index.toFixed(1), sub: national.affordability_index >= 100 ? 'affordable' : 'stretched' },
+        { label: 'Months of Supply', value: national.months_of_supply.toFixed(2), sub: `${national.market} market` },
+        { label: 'Days on Market', value: `${national.days_on_market.toFixed(1)} days` },
+        { label: 'List Price / Sq Ft', value: national.price_per_sqft > 0 ? money(national.price_per_sqft) : '—' },
+      ]),
+      kpiClip(TAB, 'Market Balance', [
+        { label: 'Active Listings', value: number(national.active_listings) },
+        { label: 'Monthly Sales', value: number(national.sales_volume) },
+        { label: 'Median Income', value: money(national.median_income) },
+        { label: 'Price / Income', value: `${national.price_to_income.toFixed(3)}x` },
+      ]),
+      kpiClip(TAB, 'Mortgage Credit Risk', [
+        { label: 'SF Delinquency', value: pct(national.sf_default_rate) },
+        { label: '90+ Days Past Due', value: pct(national.serious_delinquency) },
+        { label: 'Multifamily Default', value: pct(national.mf_default_rate) },
+        { label: 'Foreclosure Rate', value: pct(national.foreclosure_rate) },
+      ]),
+    ]
+    if (rates?.history?.length) {
+      pieces.push(chartClip(TAB, 'Mortgage Rate Curve · 3Y', 'line', 'asof',
+        rates.history.map(r => ({ asof: r.asof, rate_30y: r.rate_30y, rate_15y: r.rate_15y, rate_arm: r.rate_arm })),
+        [
+          { key: 'rate_30y', label: '30Y fixed' },
+          { key: 'rate_15y', label: '15Y fixed' },
+          { key: 'rate_arm', label: '5/1 ARM' },
+        ],
+      ))
+    }
+    if (constructionHistory.length) {
+      pieces.push(chartClip(TAB, 'Residential Construction Pipeline', 'line', 'asof',
+        constructionHistory.map(r => ({
+          asof: r.asof,
+          housing_starts: r.housing_starts,
+          building_permits: r.building_permits,
+          completions: r.completions,
+        })),
+        [
+          { key: 'housing_starts', label: 'Starts' },
+          { key: 'building_permits', label: 'Permits' },
+          { key: 'completions', label: 'Completions' },
+        ],
+      ))
+    }
+    if (rent?.available && rent.national) {
+      pieces.push(kpiClip(TAB, 'Rental Market (National)', [
+        { label: 'Active Listings', value: number(rent.national.listings) },
+        { label: 'Median Asking Rent', value: money(rent.national.median_rent) },
+        { label: 'Rent / Sq Ft', value: rent.national.median_rent_per_sqft != null ? `$${rent.national.median_rent_per_sqft.toFixed(2)}` : '—' },
+        { label: 'One Bedroom', value: money(rent.national.median_rent_1br) },
+        { label: 'Two Bedroom', value: money(rent.national.median_rent_2br) },
+      ]))
+    }
+    if (rent?.available && rent.states?.length) {
+      pieces.push(tableClip(TAB, 'Rental Market by State',
+        ['State', 'Listings', 'Median Rent', 'Rent/SqFt', '1BR', '2BR'],
+        rent.states.slice(0, 30).map(s => [
+          s.state,
+          s.listings,
+          s.median_rent != null ? Math.round(s.median_rent) : null,
+          s.median_rent_per_sqft != null ? s.median_rent_per_sqft.toFixed(2) : null,
+          s.median_rent_1br != null ? Math.round(s.median_rent_1br) : null,
+          s.median_rent_2br != null ? Math.round(s.median_rent_2br) : null,
+        ]),
+      ))
+    }
+    if (data?.flags?.length) {
+      pieces.push(textClip(TAB, 'Conditions to Watch',
+        data.flags.map(f => `${f.region.toUpperCase()}: ${f.detail}`).join('\n'),
+      ))
+    }
+    return pieces
+  }, { disabled: !national, sourceTab: TAB })
 
   return <div style={{ width: '100%' }}>
     <PageHeader title="Housing Market" actions={data && <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontFamily: T.mono, fontSize: 8.5, color: T.muted }}>

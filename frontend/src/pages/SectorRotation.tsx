@@ -6,6 +6,9 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, Res
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
 import { VerdictStrip, TICK, TOOLTIP_STYLE, TOOLTIP_CURSOR } from './valuationShared'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip, chartClip } from '../lib/reportCaptureRegistry'
 
 
 const PERIODS = ['1W', '1M', '3M', '6M', 'YTD', '1Y'] as const
@@ -76,6 +79,54 @@ export function SectorRotationContent() {
     value:    s.returns[activePeriod],
     rel:      s.rel_strength[activePeriod],
   }))
+
+  useReportCapture(() => {
+    if (!data?.sectors?.length) return null
+    const pieces: ClipDraft[] = []
+    const per = activePeriod
+    const spyRet = data.spy_returns[per]
+    const valid = data.sectors.filter(s => s.returns[per] != null)
+    const beating = spyRet != null ? valid.filter(s => (s.returns[per] as number) > spyRet).length : 0
+    const byRet = [...valid].sort((a, b) => (b.returns[per] as number) - (a.returns[per] as number))
+    const top = byRet[0], bottom = byRet[byRet.length - 1]
+    const fmtP = (v: number | null) => v == null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`
+    pieces.push(kpiClip('Sector Rotation', `Sector Breadth · ${per}`, [
+      { label: `Breadth · ${per}`, value: `${beating}/${valid.length}`, sub: valid.length && beating >= valid.length / 2 ? 'risk-on' : 'defensive' },
+      { label: `SPY ${per}`, value: fmtP(spyRet) },
+      ...(top ? [{ label: 'Leader', value: `${top.ticker} ${fmtP(top.returns[per])}` }] : []),
+      ...(bottom ? [{ label: 'Laggard', value: `${bottom.ticker} ${fmtP(bottom.returns[per])}` }] : []),
+      ...(top && bottom ? [{ label: 'Dispersion', value: `${((top.returns[per] as number) - (bottom.returns[per] as number)).toFixed(1)}%` }] : []),
+    ]))
+    pieces.push(tableClip(
+      'Sector Rotation',
+      `Sector Heatmap${data.as_of ? ` · as of ${data.as_of}` : ''}`,
+      ['Sector', 'Name', 'Price', ...PERIODS, `vs SPY (${per})`, 'Mom', `Rank (${per})`],
+      [
+        ['SPY', 'S&P 500 Benchmark', null, ...PERIODS.map(p => pct(data.spy_returns[p])), null, null, null],
+        ...sorted.map(s => [
+          s.ticker,
+          s.name,
+          s.price != null ? `$${s.price.toFixed(2)}` : null,
+          ...PERIODS.map(p => pct(s.returns[p])),
+          pct(s.rel_strength[per]),
+          s.momentum != null ? s.momentum.toFixed(2) : null,
+          s.ranks?.[per] != null ? `#${s.ranks[per]}` : null,
+        ]),
+      ],
+    ))
+    const barRows = chartData.filter(d => d.value != null)
+    if (barRows.length) {
+      pieces.push(chartClip(
+        'Sector Rotation',
+        `Sector Returns · ${per}`,
+        'bar',
+        'name',
+        barRows.map(d => ({ name: d.name, return: d.value })),
+        [{ key: 'return', label: `${per} Return %` }],
+      ))
+    }
+    return pieces
+  }, { disabled: !data?.sectors?.length, sourceTab: 'Sector Rotation' })
 
   const tabStyle = (active: boolean): React.CSSProperties => ({
     background:   'none',

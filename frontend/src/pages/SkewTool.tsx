@@ -9,6 +9,9 @@ import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
 import EmptyState from '../components/EmptyState'
 import { Widget, KpiCell } from '../components/mmCockpit'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, chartClip, tableClip } from '../lib/reportCaptureRegistry'
 import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
 
 interface SmilePoint { moneyness: number; iv: number }
@@ -103,6 +106,39 @@ export function SkewToolContent() {
 
   // Reset the explorer to ATM whenever the selected smile changes.
   useEffect(() => { setMny(0) }, [expiry, data])
+
+  const TAB = 'Volatility Skew'
+  useReportCapture(() => {
+    if (!data || !sel) return null
+    const em = expectedMove(sel.atm_iv, sel.dte, data.spot)
+    const pieces: ClipDraft[] = [
+      kpiClip(TAB, `Skew Pulse · ${data.ticker} ${sel.expiry}`, [
+        { label: '25Δ RR', value: `${sel.rr_25 > 0 ? '+' : ''}${sel.rr_25.toFixed(1)}` },
+        { label: 'ATM IV', value: `${sel.atm_iv.toFixed(1)}%`, sub: sel.expiry },
+        { label: 'Implied Move', value: `±${em.pct.toFixed(1)}%`, sub: `$${em.lo.toFixed(0)}–$${em.hi.toFixed(0)}` },
+        { label: '25Δ BF', value: `${sel.bf_25 > 0 ? '+' : ''}${sel.bf_25.toFixed(1)}` },
+        { label: 'Near vs Far Vol', value: `${data.ts_slope > 0 ? '+' : ''}${data.ts_slope.toFixed(1)}` },
+        { label: 'Spot', value: `$${data.spot}`, sub: `${sel.dte}d to expiry` },
+      ]),
+    ]
+    if (sel.smile?.length) {
+      pieces.push(chartClip(TAB, `IV Smile — ${data.ticker} ${sel.expiry}`, 'area', 'moneyness',
+        sel.smile.map(s => ({ moneyness: s.moneyness, iv: s.iv })),
+        [{ key: 'iv', label: 'IV' }],
+      ))
+    }
+    if (data.term_structure?.length) {
+      pieces.push(chartClip(TAB, 'ATM IV Term Structure', 'line', 'dte',
+        data.term_structure.map(t => ({ dte: t.dte, atm_iv: t.atm_iv, rr_25: t.rr_25 })),
+        [{ key: 'atm_iv', label: 'ATM IV' }, { key: 'rr_25', label: '25Δ Put Skew' }],
+      ))
+      pieces.push(tableClip(TAB, 'Term Structure',
+        ['Expiry', 'DTE', 'ATM IV', '25Δ RR', '25Δ BF'],
+        data.term_structure.map(t => [t.expiry, t.dte, t.atm_iv.toFixed(1), t.rr_25.toFixed(1), t.bf_25.toFixed(1)]),
+      ))
+    }
+    return pieces
+  }, { disabled: !data || !sel, sourceTab: TAB })
 
   return (
       <SidebarLayout sidebarWidth={210} sidebarTitle="" sidebar={

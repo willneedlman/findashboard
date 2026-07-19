@@ -8,6 +8,9 @@ import {
   INPUT, LABEL, SECTION, RailSection, PRIMARY_BTN, GHOST_BTN, READOUT_ROW,
   TH, TD, PANEL, STACK, fmtM, VerdictStrip, upsidePrimary, LabeledPanel,
 } from './valuationShared'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip } from '../lib/reportCaptureRegistry'
 
 // Gold ramp across segments so the value stack / bars read as one family.
 const RAMP: number[][] = [[216, 184, 90], [201, 168, 76], [178, 146, 63], [156, 126, 53], [134, 105, 43]]
@@ -168,6 +171,26 @@ export function SOTPContent() {
     const upside = data.market_price ? (perShare / data.market_price - 1) * 100 : null
     return { rows, total, perShare, upside }
   }, [data, mult])
+
+  useReportCapture(() => {
+    if (!data || !calc) return null
+    const tkr = data.ticker ? ` · ${data.ticker}` : ''
+    const pieces: ClipDraft[] = [
+      kpiClip('Sum of the Parts', `SOTP Verdict${tkr}`, [
+        { label: 'Value / Share', value: `$${calc.perShare.toFixed(2)}` },
+        ...(data.market_price != null ? [{ label: 'Market Price', value: `$${data.market_price.toFixed(2)}` }] : []),
+        ...(calc.upside != null ? [{ label: 'Upside', value: `${calc.upside >= 0 ? '+' : '−'}${Math.abs(calc.upside).toFixed(1)}%` }] : []),
+        { label: 'Implied Equity Value', value: fmtM(calc.total) },
+      ]),
+      tableClip(
+        'Sum of the Parts',
+        `Segment Values${tkr}`,
+        ['Segment', 'Revenue', 'P/S', 'Value'],
+        calc.rows.map(r => [r.name, fmtM(r.revenue), r.mult.toFixed(2), fmtM(r.value)]),
+      ),
+    ]
+    return pieces
+  }, { disabled: !data || !calc, sourceTab: 'Sum of the Parts' })
 
   return (
     <SidebarLayout sidebarWidth={250} sidebarTitle="" sidebar={

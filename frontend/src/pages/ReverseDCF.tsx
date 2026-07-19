@@ -7,6 +7,9 @@ import EmptyState from '../components/EmptyState'
 import TickerInput from '../components/TickerInput'
 import { useChartColors } from '../hooks/useChartColors'
 import { INPUT, LABEL, HINT, SIDEBAR, SECTION, RailSection, PRIMARY_BTN, GHOST_BTN, READOUT_ROW, TOOLTIP_STYLE, TOOLTIP_LABEL, TOOLTIP_ITEM, TOOLTIP_CURSOR, TICK, PANEL, STACK, fmtM, ChartPanel, LabeledPanel, VerdictStrip, type VerdictTone } from './valuationShared'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip } from '../lib/reportCaptureRegistry'
 
 const MONO = 'var(--theme-mono)', SANS = 'var(--theme-sans)'
 const TXT = 'var(--theme-text, #d7e3fc)', SEC = 'var(--theme-secondary, #99907e)', GOLD = 'var(--theme-primary, #c9a84c)'
@@ -156,6 +159,24 @@ export function ReverseDCFContent() {
   }
 
   const implied = data?.implied_growth
+
+  useReportCapture(() => {
+    if (!data || implied == null) return null
+    const tkr = (data as { ticker?: string }).ticker || ticker
+    const tag = tkr ? ` · ${String(tkr).toUpperCase()}` : ''
+    const vlabel = data.verdict === 'demanding' ? 'Demanding' : data.verdict === 'undemanding' ? 'Undemanding' : data.verdict === 'in-line' ? 'In-line' : 'Implied'
+    const pieces: ClipDraft[] = [
+      kpiClip('Reverse DCF', `Implied Growth${tag}`, [
+        { label: 'Implied Rev Growth', value: `${implied.toFixed(1)}%`, sub: vlabel },
+        { label: 'Market Price', value: `$${Number(data.market_price).toFixed(2)}` },
+        ...(data.current_growth != null ? [{ label: 'Current Growth', value: `${data.current_growth.toFixed(1)}%` }] : []),
+        { label: 'WACC', value: `${wacc}%` },
+        { label: 'Terminal Growth', value: `${termGrowth}%` },
+        { label: 'Op. Margin', value: `${opMargin}%` },
+      ]),
+    ]
+    return pieces
+  }, { disabled: data == null || implied == null, sourceTab: 'Reverse DCF' })
 
   return (
     <SidebarLayout sidebarWidth={232} sidebarTitle="" sidebar={

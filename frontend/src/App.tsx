@@ -3,6 +3,7 @@ import { lazyWithReload } from './lib/chunkReload'
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import CommandPalette from './components/CommandPalette'
+import ReportCaptureHost from './components/ReportCaptureHost'
 import { TICKER_SYM_RE, LINKED_ROUTES, setLinkedTicker, getLinkedTicker, isLinkOn } from './lib/tickerLink'
 import { recordRecentTicker } from './lib/recentTickers'
 
@@ -117,6 +118,8 @@ const LogisticsMap       = lazyWithReload(() => import('./pages/LogisticsMap'))
 const ChokepointExposure = lazyWithReload(() => import('./pages/ChokepointExposure'))
 const TradeFlows = lazyWithReload(() => import('./pages/TradeFlows'))
 const TraderPositioning = lazyWithReload(() => import('./pages/TraderPositioning'))
+const ReportCreator      = lazyWithReload(() => import('./pages/ReportCreator'))
+const ReportPrint        = lazyWithReload(() => import('./pages/ReportPrint'))
 
 function PageLoader() {
   return (
@@ -180,6 +183,7 @@ function TerminalChrome() {
     <Layout>
       <CommandPalette />
       <TickerDrawerHost />
+      <ReportCaptureHost />
       <AnimatePresence mode="wait">
         <Suspense key={location.pathname} fallback={<LoadingState />}>
           {holdForInject ? <LoadingState /> : <Outlet />}
@@ -232,6 +236,9 @@ export default function App() {
             {/* Password reset — chrome-free, reached from the email link */}
             <Route path="/reset-password"    element={<ResetPassword />} />
 
+            {/* Report export — chrome-free print/PDF layout */}
+            <Route path="/report-creator/print/:id" element={<ReportPrint />} />
+
             {/* Legal — marketing chrome (no terminal sidebar) */}
             <Route element={<MktShell />}>
               <Route path="/privacy"         element={<PrivacyPolicy />} />
@@ -247,6 +254,7 @@ export default function App() {
               <Route path="/hub/:slug"  element={<HubLanding />} />
               <Route path="/market"     element={<RedirectWithSearch to="/company-profile" />} />
               <Route path="/global-markets" element={<GlobalMarkets />} />
+              <Route path="/report-creator" element={<ReportCreator />} />
               <Route path="/chart-studio" element={<ChartStudio />} />
               <Route path="/options"    element={<OptionsPricer />} />
               <Route path="/bond"       element={<BondAnalytics />} />

@@ -1,4 +1,7 @@
 import React, { useState, useMemo } from 'react'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip, chartClip, textClip } from '../lib/reportCaptureRegistry'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { TrendingUp, History, Sparkles, Flag } from 'lucide-react'
 import axios from 'axios'
@@ -1041,6 +1044,81 @@ export default function SentimentTracker() {
   const shownCount = lens === 'all'
     ? (data?.in_window_count ?? 0)
     : displaySources.reduce((n, s) => n + s.items.length, 0)
+
+  useReportCapture(() => {
+    if (!data) return null
+    const pieces: ClipDraft[] = []
+    const tfLabel = tf.label
+    pieces.push(kpiClip('Sentiment Tracker', `Market Sentiment · ${tfLabel}`, [
+      { label: 'Composite', value: data.composite_score.toFixed(0), sub: data.label },
+      { label: 'Forward', value: fwdComposite.toFixed(0), sub: `${data.forward_count ?? 0} articles` },
+      { label: 'Backward', value: bwdComposite.toFixed(0), sub: `${data.backward_count ?? 0} articles` },
+      { label: 'Bull / Bear', value: `${data.bull_pct?.toFixed?.(0) ?? Math.round((data.bull_count / Math.max(1, data.bull_count + data.bear_count + data.neutral_count)) * 100)}% / ${data.bear_pct?.toFixed?.(0) ?? '—'}%`, sub: `${data.in_window_count} headlines` },
+      ...(baselineDelta != null ? [{ label: 'vs Baseline', value: `${baselineDelta >= 0 ? '+' : ''}${baselineDelta.toFixed(1)}`, sub: baselineN ? `n=${baselineN}` : undefined }] : []),
+      ...(data.high_impact_score != null ? [{ label: 'High Impact', value: data.high_impact_score.toFixed(0), sub: data.high_impact_count != null ? `${data.high_impact_count} articles` : undefined }] : []),
+    ]))
+    if (sparklineHistory.length >= 2) {
+      const step = Math.max(1, Math.floor(sparklineHistory.length / 48))
+      pieces.push(chartClip(
+        'Sentiment Tracker',
+        `Sentiment Trend · ${tfLabel}`,
+        'line',
+        't',
+        sparklineHistory
+          .filter((_, i) => i % step === 0 || i === sparklineHistory.length - 1)
+          .map(p => ({
+            t: new Date(p.fetched_at * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+            score: p.composite_score,
+          })),
+        [{ key: 'score', label: 'Composite score' }],
+      ))
+    }
+    if (sources.length) {
+      pieces.push(tableClip(
+        'Sentiment Tracker',
+        'Source Breakdown',
+        ['Source', 'Type', 'Score', 'Dir', 'Count', 'Age (h)'],
+        sources.map(s => [
+          s.label,
+          s.type,
+          s.avg_score.toFixed(0),
+          s.avg_direction.toFixed(2),
+          s.count,
+          s.avg_age_h.toFixed(1),
+        ]),
+      ))
+    }
+    if (assetClassScores.length) {
+      pieces.push(tableClip(
+        'Sentiment Tracker',
+        'Sentiment by Asset Class',
+        ['Asset Class', 'Score', 'Mentions'],
+        assetClassScores.map(a => [a.ac, a.score, a.count]),
+      ))
+    }
+    if (data.breaking?.length) {
+      pieces.push(tableClip(
+        'Sentiment Tracker',
+        'Breaking Headlines',
+        ['Headline', 'Source', 'Sentiment', 'Score', 'Age (h)'],
+        data.breaking.slice(0, 15).map(b => [
+          b.text.slice(0, 120),
+          b.source_label,
+          b.sentiment,
+          b.score.toFixed(0),
+          b.age_hours.toFixed(1),
+        ]),
+      ))
+    }
+    if (velocity) {
+      pieces.push(textClip(
+        'Sentiment Tracker',
+        'Velocity',
+        `Delta ${velocity.delta >= 0 ? '+' : ''}${velocity.delta.toFixed(1)} · ${velocity.velocity_hr.toFixed(2)}/hr over ${velocity.elapsed_min.toFixed(0)} min (${velocity.points_used} points)`,
+      ))
+    }
+    return pieces
+  }, { disabled: !data, sourceTab: 'Sentiment Tracker' })
 
   const sidebar = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

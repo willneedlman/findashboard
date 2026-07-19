@@ -8,6 +8,9 @@ import SidebarLayout from '../components/SidebarLayout'
 import { fetchGEX, fetchOptionsChain } from '../hooks/useApi'
 import EmptyState from '../components/EmptyState'
 import { useChartColors } from '../hooks/useChartColors'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, chartClip } from '../lib/reportCaptureRegistry'
 import { INPUT, LABEL, TOOLTIP_STYLE, TOOLTIP_LABEL, TOOLTIP_ITEM, TICK, RailSection } from './valuationShared'
 
 const STRIP: React.CSSProperties = {
@@ -130,6 +133,43 @@ export default function DealerGEX() {
       }
     }
   }
+
+  const TAB = 'Dealer GEX'
+  useReportCapture(() => {
+    if (!data) return null
+    const pieces: ClipDraft[] = [
+      kpiClip(TAB, `GEX Pulse · ${submitted?.ticker ?? ticker}`, [
+        { label: 'Net GEX', value: `${totalNet > 0 ? '+' : ''}$${totalNet.toFixed(1)}M`, sub: totalNet > 0 ? 'Dealers Long γ' : 'Dealers Short γ' },
+        { label: 'Spot', value: spot != null ? `$${spot.toFixed(2)}` : '—' },
+        { label: 'Call GEX', value: `+$${totalCall.toFixed(1)}M` },
+        { label: 'Put GEX', value: `$${totalPut.toFixed(1)}M` },
+        { label: 'Gamma Flip', value: flipLevel != null ? `~$${flipLevel.toLocaleString()}` : 'N/A' },
+      ]),
+    ]
+    if (filtered.length) {
+      pieces.push(chartClip(TAB, 'Net Dealer GEX by Strike ($M)', 'bar', 'strike',
+        filtered.map((d: any) => ({ strike: d.strike, net_gex: d.net_gex })),
+        [{ key: 'net_gex', label: 'Net GEX' }],
+      ))
+      pieces.push(chartClip(TAB, 'Call vs Put GEX by Strike', 'bar', 'strike',
+        filtered.map((d: any) => ({ strike: d.strike, call_gex: d.call_gex, put_gex: d.put_gex })),
+        [{ key: 'call_gex', label: 'Call GEX' }, { key: 'put_gex', label: 'Put GEX' }],
+      ))
+    }
+    const oiMap = data?.oiMap ?? {}
+    if (Object.keys(oiMap).length) {
+      const oiRows = Object.entries(oiMap)
+        .map(([k, v]: [string, any]) => ({ strike: +k, callOI: v.callOI ?? 0, putOI: v.putOI ?? 0 }))
+        .sort((a, b) => a.strike - b.strike)
+        .filter(d => !spot || (d.strike >= spot - nStrikes * STEP && d.strike <= spot + nStrikes * STEP))
+      if (oiRows.length) {
+        pieces.push(chartClip(TAB, 'Open Interest by Strike', 'bar', 'strike',
+          oiRows, [{ key: 'callOI', label: 'Call OI' }, { key: 'putOI', label: 'Put OI' }],
+        ))
+      }
+    }
+    return pieces
+  }, { disabled: !data, sourceTab: TAB })
 
   return (
     <PageWrapper title="Dealer GEX">

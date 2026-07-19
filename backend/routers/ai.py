@@ -1174,3 +1174,876 @@ def options_strategy_chat(req: StrategyChatRequest):
     if not isinstance(result, dict) or result.get("type") not in ("question", "draft"):
         raise HTTPException(500, "AI returned an unexpected response shape")
     return result
+
+
+# ── Report Creator: synthesize an analyst report from clipped data ────────────
+
+class ReportClipIn(BaseModel):
+    id: str
+    sourceTab: str = ""
+    dataType: str = ""
+    title: str = ""
+    userDescription: str = ""
+    dataSummary: str = ""
+
+class ReportGenRequest(BaseModel):
+    projectName: str = ""
+    timeframe: str = ""
+    purpose: str = ""
+    goal: str = ""
+    # Optional explicit subject from the client (wins over text heuristics).
+    subjectTicker: str = ""
+    clips: list[ReportClipIn]
+
+_REPORT_SYSTEM = """You are a senior investment analyst writing a formal research note for a professional desk. Register: academic, financial, and direct. State conclusions plainly. Support every claim with figures from the clips or valuationContext.
+
+You receive: Purpose, Goal, Timeframe (lookback and/or lookforward), DATA CLIPS (each with id, source tool, title, optional user note, data summary), and valuationContext (live spot, optional day change, optional DCF, signalDigest of directional cues extracted from clips).
+
+Primary job: answer the Goal with a clear stance. When the Goal is a fair value, price target, near-term range, or outlook, keyResult MUST be a dollar range — never "not estimable" and never a vague qualitative-only bottom line when marketPrice is set.
+
+════════════════════════════════════════
+STANCE (non-negotiable)
+════════════════════════════════════════
+- Take a lean: bullish, bearish, or neutral. Neutral is allowed only when directional signals truly cancel or are absent. If call flow, call GEX, and risk-on macro align, do NOT hide behind "range-bound with no edge."
+- Conviction: low, moderate, or high. Low conviction still requires a lean and an asymmetric or shifted range that reflects that lean.
+- Separate (1) the statistical envelope from options (implied move, vol cone, density percentiles) from (2) your research range. The cone/IV envelope is a constraint on how wide you may go, not the thesis itself. Do not publish a range that is essentially spot ± implied-move or the cone's 15th/85th unless every other clip is empty of directional content.
+- Encode stance in the dollars: a bullish lean usually means midpoint above spot and/or more room to the upside than downside (e.g. floor near spot or slightly below, ceiling further out). A bearish lean does the reverse. A truly neutral lean may be tight and near-symmetric — say so explicitly and name the conflicting signals.
+- Executive summary and conclusion must each state the lean, the range, and the two or three decisive drivers in plain language. Avoid empty phrases like "modest upside bias" without tying them to a mid above spot or an asymmetric band.
+
+════════════════════════════════════════
+INTEGRATE EVERY SUPPLIED CLIP FAMILY
+════════════════════════════════════════
+Build ONE argument. Each body section must push the range decision forward, not summarize a panel in isolation.
+- Dealer GEX / gamma: long gamma + call-heavy GEX supports a floor and mean-reversion toward a flip/zero-gamma level. Call wall / put wall strikes are candidate range edges. State whether dealers dampen or amplify moves in the lean direction.
+- Options flow / unusual activity: call vs put premium share, top strikes, vol/OI aggression. Aggressive call buying below or at spot is a bullish tell. Put buying above spot is a hedge or bearish tell. Do not ignore flow when setting the mid.
+- IV rank / term / implied move: IV rank high = richer premium, often mean-reverting vol. Implied move sets a hard near-term width budget. Prefer base case inside ~0.5–0.8× one implied-move, with tails out to the cone only if catalysts justify it.
+- Implied probability / density: modal strike and P50 are better anchors for "where the market prices the stock" than a flat ±10% band. Skew (put vs call IV) shifts the lean.
+- Macro / calendar: scheduled high-impact prints (CPI, FOMC, ECB) raise event vol. They widen the band or cut conviction. They do not by themselves center the range on spot.
+- Credit / stress / markets board: risk-on vs risk-off backdrop tilts equity beta names.
+- Sentiment: only if the clip has real scores/figures (ignore empty stubs that say no structured panels).
+- Company profile / fundamentals: valuation multiples, growth, margin — structural context for whether a premium to spot is justified.
+- DCF / multiples / SOTP: structural anchors. Cite gap to spot. Do not paste intrinsic as the range. Use as one vote among positioning and vol.
+Ignore pure appendix stubs that contain no figures.
+
+If clips conflict (e.g. bullish GEX vs demanding reverse-DCF growth), name the conflict, weight the horizon (near-term positioning often dominates a 7-day goal, models dominate a 90-day fair-value goal), and still pick a lean with appropriate conviction.
+
+════════════════════════════════════════
+HORIZON
+════════════════════════════════════════
+- Lookback: interpret trends against that history.
+- Lookforward: the range and recommendation apply to this window. A 7-day range is a trading corridor, not terminal value. A 90-day range can sit further from spot when models and macro support it.
+- Connect both when present.
+
+════════════════════════════════════════
+HARD RULES
+════════════════════════════════════════
+- Use ONLY figures present in clips or valuationContext. Never invent prices, GEX, IV, or dates.
+- keyResult.value format: "$A–$B" with A < B. Prefer whole dollars for equities above $20.
+- keyResult.context: must include spot, lean, and the main driver stack (e.g. "spot $203 · bullish lean · call GEX + flow · IV envelope caps $218").
+- stance object required (see schema).
+- Tone and range must agree. Do not claim a strong bullish lean with a mid glued to spot and equal wings.
+- No 2×–3× fantasy targets without model support. Keep a short horizon range inside roughly ±25% of spot unless clips justify wider.
+- Writing: no em dashes, no semicolons, no emoji, no bullet lists inside prose. Flowing paragraphs. Spartan. No restating Purpose/Goal as labels.
+- Curate sections: only clips that advance the thesis. Others → appendixClipIds.
+- Prefer chart-type clips as body section clipIds when the same tool also has a KPI or table clip (diagrams lead the note; KPIs become keyFigures). Put redundant KPI-only duplicates in appendixClipIds.
+- Every body section needs keyFigures (2–4 real figures from that clip). Keep keyFigures sparse when a chart carries the story.
+- Large boards: two to five key figures, not every row.
+
+Respond ONLY with valid JSON (no markdown, no code fences):
+{
+  "headline": "punchy research-note title, under 12 words, no period",
+  "stance": {
+    "lean": "bullish" | "bearish" | "neutral",
+    "conviction": "low" | "moderate" | "high",
+    "baseCase": "$X",
+    "thesis": "one sentence: what you believe happens over the lookforward and why"
+  },
+  "keyResult": {
+    "label": "Fair Value Range (TICKER)" or "Near-Term Range (TICKER)",
+    "value": "$A–$B",
+    "context": "spot $X · lean · decisive drivers"
+  },
+  "executiveSummary": "one tight paragraph: lean, range, spot, and how GEX/flow/IV/macro/models jointly justify the band (not a list of panel summaries)",
+  "sections": [
+    {
+      "clipId": "<id>",
+      "heading": "analytical heading, not the tool name",
+      "analysis": "one to three paragraphs linking THIS clip's figures to the lean and to the dollar range (what edge moves, what widens/tightens)",
+      "keyFigures": [ { "label": "metric", "value": "figure with units" } ]
+    }
+  ],
+  "conclusion": "restate lean, range, conviction, what would falsify the view, and a concrete action (hold band, buy dips toward floor, fade rallies into ceiling, wait for event)",
+  "appendixClipIds": ["<ids not central to the thesis>"]
+}
+Every clipId must be one of the provided clip ids."""
+
+def _clean_figs(raw) -> list:
+    figs = []
+    for f in (raw or [])[:6]:
+        if isinstance(f, dict):
+            label = str(f.get("label", "")).strip()
+            value = str(f.get("value", "")).strip()
+            if label and value:
+                figs.append({"label": label[:60], "value": value[:60]})
+    return figs
+
+_TICKER_STOP = {
+    "THE", "AND", "FOR", "FROM", "LAST", "DAYS", "DAY", "YTD", "QTD", "PDF", "API", "USD",
+    "CEO", "CFO", "EPS", "PE", "AI", "US", "UK", "EU", "FX", "VIX", "DCF", "FCF",
+    "EV", "WACC", "KPI", "ROI", "ROA", "ROE", "NIM", "NCO", "GDP", "CPI", "FED",
+    "ETF", "IPO", "ALL", "NOT", "YES", "LOW", "HIGH", "MID", "NET", "PER", "VS",
+    "TO", "OF", "OR", "IN", "ON", "AT", "BY", "AS", "AN", "A", "IS", "BE", "IT",
+    "RANGE", "FAIR", "VALUE", "PRICE", "TARGET", "STOCK", "SHARE", "SHARES",
+    "NEXT", "OVER", "INTO", "WITH", "THIS", "THAT", "THAN", "THEN", "WHEN",
+    "WHAT", "WILL", "WEEK", "YEAR", "MONTH", "REPORT", "MODEL", "SPOT",
+    "OLD", "BIG", "TOP", "OUT", "CAN", "HAS", "HAD", "WAS", "ARE",
+    "ANY", "OWN", "OUR", "ITS", "HIS", "HER", "WHO", "HOW", "WHY", "MAY", "GET",
+    "SET", "RUN", "USE", "SEE", "SAY", "TRY", "WAY", "END", "AGO", "YET", "TOO",
+    "ALSO", "JUST", "ONLY", "EVEN", "MUCH", "MANY", "MOST", "SOME", "SUCH",
+    "VERY", "WELL", "BACK", "BOTH", "EACH", "FEW", "MORE", "SAME", "OTHER",
+    "UNDER", "AFTER", "BEFORE", "ABOUT", "ABOVE", "BELOW", "BETWEEN", "DURING",
+    "THROUGH", "ACROSS", "AGAINST", "WITHOUT", "WITHIN", "ESTIMATE", "ANALYZE",
+    "IDENTIFY", "HORIZON", "LOOKBACK", "OUTLOOK", "QUARTER", "PORTFOLIO",
+    "MARKET", "CREDIT", "STRESS", "GLOBAL", "MACRO",
+    # NOTE: NOW/NEW/ALL stay out of the hard stop — they are real tickers but
+    # live in _AMBIGUOUS_TICKERS and require strong context (not "from now").
+}
+
+# Listings that collide with English (ServiceNow=NOW). Accept only with clear cues.
+_AMBIGUOUS_TICKERS = {
+    "NOW", "NEW", "ALL", "ONE", "TWO", "BIG", "TOP", "OLD", "LOW", "OUT", "CAN",
+    "HAS", "ANY", "OWN", "SO", "UP", "ON", "IT", "OR", "IF", "DO", "GO", "AN",
+    "BY", "TO", "AT", "IN", "FOR", "NEXT", "LAST", "FROM", "DAYS", "DAY", "WEEK",
+    "YEAR", "SOON", "NEAR", "LONG", "FAST", "REAL", "SAFE", "TRUE", "FREE", "OPEN",
+    "LIVE", "FUND", "BOND", "CASH", "GOLD", "TECH", "DATA", "AUTO", "BEST", "GOOD",
+    "PLAY", "MOVE", "CALL", "PUT", "BEAT", "MISS", "GAIN", "LOSS", "RISK", "RATE",
+}
+
+# Common company names → listing ticker (fast path before FMP/yfinance search).
+_COMPANY_ALIASES = {
+    "nvidia": "NVDA", "nvda": "NVDA",
+    "apple": "AAPL", "aapl": "AAPL",
+    "microsoft": "MSFT", "msft": "MSFT",
+    "google": "GOOGL", "alphabet": "GOOGL", "googl": "GOOGL", "goog": "GOOG",
+    "amazon": "AMZN", "amzn": "AMZN",
+    "meta": "META", "facebook": "META",
+    "tesla": "TSLA", "tsla": "TSLA",
+    "broadcom": "AVGO", "avgo": "AVGO",
+    "amd": "AMD", "advanced micro devices": "AMD",
+    "intel": "INTC", "intc": "INTC",
+    "netflix": "NFLX", "nflx": "NFLX",
+    "salesforce": "CRM", "crm": "CRM",
+    "oracle": "ORCL", "orcl": "ORCL",
+    "adobe": "ADBE", "adbe": "ADBE",
+    "costco": "COST", "cost": "COST",
+    "walmart": "WMT", "wmt": "WMT",
+    "jpmorgan": "JPM", "jp morgan": "JPM", "jpm": "JPM",
+    "berkshire": "BRK.B", "berkshire hathaway": "BRK.B",
+    "exxon": "XOM", "exxonmobil": "XOM", "xom": "XOM",
+    "chevron": "CVX", "cvx": "CVX",
+    "visa": "V", "mastercard": "MA",
+    "paypal": "PYPL", "pypl": "PYPL",
+    "uber": "UBER", "airbnb": "ABNB", "abnb": "ABNB",
+    "palantir": "PLTR", "pltr": "PLTR",
+    "coinbase": "COIN", "coin": "COIN",
+    "micron": "MU", "mu": "MU",
+    "qualcomm": "QCOM", "qcom": "QCOM",
+    "texas instruments": "TXN", "txn": "TXN",
+    "asml": "ASML", "tsmc": "TSM", "taiwan semiconductor": "TSM",
+    "servicenow": "NOW", "service now": "NOW",
+}
+
+_DCF_TICKER_RE = re.compile(
+    r"(?:DCF|Intrinsic|Verdict|Valuation|Assumptions|Bridge|Sensitivity|Projection)[^\n·•|\-]*[·•|\-]\s*([A-Z]{1,5})\b",
+    re.I,
+)
+_EXPLICIT_TICKER_RE = re.compile(
+    r"(?:\$|ticker\s*[:=]?\s*|symbol\s*[:=]?\s*|\(|\bfor\s+|\bof\s+|\bon\s+)"
+    r"([A-Za-z]{1,5})(?:'s|’s)?\b",
+    re.I,
+)
+_RANGE_RE = re.compile(
+    r"\$\s*([\d,]+(?:\.\d+)?)\s*[-–—to]+\s*\$?\s*([\d,]+(?:\.\d+)?)",
+    re.I,
+)
+_ENGLISH_NOW_RE = re.compile(
+    r"\b(?:from|right|by|until|till|starting|as\s+of|up\s+to)\s+now\b|"
+    r"\bnow\s+(?:on|that|the|we|i|to|for|is|as)\b",
+    re.I,
+)
+
+def _parse_money(s: str) -> float | None:
+    try:
+        return float(s.replace(",", ""))
+    except Exception:
+        return None
+
+def _is_plausible_ticker(sym: str) -> bool:
+    s = (sym or "").upper()
+    if not s or s in _TICKER_STOP:
+        return False
+    return bool(re.fullmatch(r"[A-Z]{1,5}", s))
+
+def _ticker_context_score(sym: str, blob: str) -> int:
+    """Higher = more likely the user meant this equity, not an English word."""
+    if not blob:
+        return 0
+    s = sym.upper()
+    score = 0
+    if re.search(rf"\${re.escape(s)}\b", blob, re.I):
+        score += 50
+    if re.search(rf"\({re.escape(s)}\)", blob, re.I):
+        score += 40
+    if re.search(rf"\b(?:ticker|symbol)\s*[:=]?\s*{re.escape(s)}\b", blob, re.I):
+        score += 45
+    if re.search(rf"\b(?:for|of|on|in)\s+{re.escape(s)}\b", blob, re.I):
+        score += 30
+    if re.search(rf"\b{re.escape(s)}\b\s+(?:fair|value|price|target|dcf|valuation|stock|shares)\b", blob, re.I):
+        score += 35
+    if re.search(rf"\b(?:fair|value|price|target|dcf|valuation|stock)\b[^\n.]{{0,40}}\b{re.escape(s)}\b", blob, re.I):
+        score += 30
+    if re.search(rf"\b{re.escape(s)}\b", blob):
+        score += 10
+    if s in _AMBIGUOUS_TICKERS:
+        score -= 40
+        if s == "NOW" and _ENGLISH_NOW_RE.search(blob):
+            score -= 50
+        if s == "NOW" and re.search(r"servicenow|service\s*now", blob, re.I):
+            score += 80
+    return score
+
+def _extract_ticker_candidates(*texts: str) -> list[str]:
+    out: list[str] = []
+    for t in texts:
+        if not t:
+            continue
+        for m in _EXPLICIT_TICKER_RE.finditer(t):
+            sym = m.group(1).upper()
+            if _is_plausible_ticker(sym) and sym not in out:
+                out.append(sym)
+        for m in re.finditer(r"\b([A-Za-z]{2,5})(?:'s|’s)?\b", t):
+            sym = m.group(1).upper()
+            if not _is_plausible_ticker(sym) or sym in out:
+                continue
+            raw = m.group(1)
+            # Only bare tokens that look like tickers (all-caps) or known alias keys
+            # (nvda, aapl). Do NOT treat alias values as a match for English words
+            # ("now" must not become ServiceNow's NOW).
+            if raw.isupper() or raw.lower() in _COMPANY_ALIASES:
+                out.append(sym)
+    return out
+
+def _alias_hits(*texts: str) -> list[str]:
+    blob = " ".join(t for t in texts if t).lower()
+    if not blob:
+        return []
+    hits: list[str] = []
+    for name in sorted(_COMPANY_ALIASES.keys(), key=len, reverse=True):
+        if re.search(rf"\b{re.escape(name)}\b", blob):
+            sym = _COMPANY_ALIASES[name]
+            if sym not in hits:
+                hits.append(sym)
+    return hits
+
+def _search_symbol(query: str) -> str | None:
+    q = (query or "").strip()
+    if not q or len(q) < 2:
+        return None
+    if q.upper() in _TICKER_STOP or q.upper() in _AMBIGUOUS_TICKERS:
+        return None
+    try:
+        import fmp
+        if fmp.available():
+            rows = fmp.search_symbols(q, limit=5)
+            for r in rows:
+                sym = str(r.get("ticker") or "").upper()
+                if sym and _is_plausible_ticker(sym) and sym not in _AMBIGUOUS_TICKERS:
+                    return sym
+                if sym and _is_plausible_ticker(sym):
+                    return sym
+    except Exception as e:
+        logger.warning("report FMP symbol search failed for %r: %s", q, e)
+    try:
+        import yfinance as yf
+        search = getattr(yf, "Search", None)
+        if search is not None:
+            res = search(q, max_results=5)
+            quotes = getattr(res, "quotes", None) or []
+            for row in quotes:
+                sym = str(row.get("symbol") or "").upper()
+                if not sym or "." in sym or not _is_plausible_ticker(sym):
+                    continue
+                if sym in _AMBIGUOUS_TICKERS:
+                    continue
+                if len(sym) <= 5:
+                    return sym
+    except Exception as e:
+        logger.warning("report yfinance symbol search failed for %r: %s", q, e)
+    return None
+
+def _dcf_tickers_from_clips(clips: list[ReportClipIn]) -> set[str]:
+    found: set[str] = set()
+    for c in clips:
+        blob = f"{c.sourceTab} {c.title} {c.dataSummary}"
+        if not re.search(r"dcf|intrinsic\s*/?\s*share|enterprise\s+value", blob, re.I):
+            continue
+        for m in _DCF_TICKER_RE.finditer(blob):
+            sym = m.group(1).upper()
+            if _is_plausible_ticker(sym):
+                found.add(sym)
+        for m in re.finditer(r"[·•]\s*([A-Z]{1,5})\b", blob):
+            sym = m.group(1).upper()
+            if _is_plausible_ticker(sym):
+                found.add(sym)
+    return found
+
+def _subject_ticker(req: ReportGenRequest) -> str | None:
+    """Resolve subject equity — scored so 'from NOW' loses to NVDA."""
+    # Explicit client override wins.
+    explicit = (getattr(req, "subjectTicker", None) or "").strip().upper()
+    if explicit and _is_plausible_ticker(explicit):
+        return explicit
+
+    goal = req.goal or ""
+    purpose = req.purpose or ""
+    name = req.projectName or ""
+    goal_purpose = f"{goal}\n{purpose}"
+    all_text = f"{goal}\n{purpose}\n{name}"
+    scores: dict[str, int] = {}
+
+    def bump(sym: str, pts: int, blob: str = all_text):
+        if not _is_plausible_ticker(sym):
+            return
+        s = sym.upper()
+        scores[s] = scores.get(s, 0) + pts + _ticker_context_score(s, blob)
+
+    for sym in _alias_hits(goal, purpose):
+        bump(sym, 100, goal_purpose)
+    for sym in _alias_hits(name):
+        bump(sym, 40, name)
+
+    for sym in _extract_ticker_candidates(goal):
+        bump(sym, 80, goal)
+    for sym in _extract_ticker_candidates(purpose):
+        bump(sym, 50, purpose)
+    for sym in _extract_ticker_candidates(name):
+        bump(sym, 25, name)
+
+    dcf = _dcf_tickers_from_clips(req.clips)
+    clip_blob = " ".join(f"{c.title} {c.dataSummary}" for c in req.clips)
+    for sym in dcf:
+        bump(sym, 60, clip_blob)
+
+    if not scores or max(scores.values()) < 40:
+        for source, w in ((goal, 55), (purpose, 35), (name, 20)):
+            if not source:
+                continue
+            for m in re.finditer(r"\b([A-Za-z][A-Za-z.&'-]{1,30})(?:'s|’s)?\b", source):
+                word = m.group(1)
+                if word.upper() in _TICKER_STOP or word.lower() in {
+                    "estimate", "analyze", "identify", "fair", "value", "range", "price",
+                    "target", "report", "next", "days", "last", "quarter", "portfolio",
+                    "from", "now", "into", "over", "under", "about",
+                }:
+                    continue
+                resolved = _search_symbol(word)
+                if resolved:
+                    bump(resolved, w, source)
+
+    if not scores:
+        return None
+
+    ranked = sorted(scores.items(), key=lambda kv: (-kv[1], kv[0]))
+    for sym, sc in ranked:
+        if sym in _AMBIGUOUS_TICKERS and sc < 50:
+            continue
+        if sc <= 0:
+            continue
+        return sym
+    best_sym, best_sc = ranked[0]
+    return best_sym if best_sc > 0 else None
+
+def _subject_dcf_present(clips: list[ReportClipIn], subject: str | None) -> bool:
+    if not subject:
+        return False
+    sub = subject.upper()
+    for c in clips:
+        blob = f"{c.sourceTab} {c.title} {c.dataSummary}"
+        if not re.search(r"dcf|intrinsic\s*/?\s*share", blob, re.I):
+            continue
+        if re.search(rf"(?:·|•)\s*{re.escape(sub)}\b", blob, re.I):
+            return True
+        if re.search(rf"\b{re.escape(sub)}\b", blob) and re.search(r"intrinsic", blob, re.I):
+            return True
+    return False
+
+def _fetch_market_quote(ticker: str | None) -> dict:
+    """Live last price (+ optional day change) for the subject equity."""
+    empty = {"ticker": ticker, "price": None, "changePct": None, "name": None, "source": None}
+    if not ticker:
+        return empty
+    sym = ticker.strip().upper()
+    out = {**empty, "ticker": sym}
+
+    # Primary: shared live quote path (Alpaca / Tradier / yfinance).
+    try:
+        from quotes import live_price
+        p = live_price(sym)
+        if p and p > 0:
+            out["price"] = float(p)
+            out["source"] = "live_price"
+    except Exception as e:
+        logger.warning("report live_price failed for %s: %s", sym, e)
+
+    # Enrich with name + day change via yfinance (and price fallback).
+    try:
+        import yfinance as yf
+        t = yf.Ticker(sym)
+        info = {}
+        try:
+            info = t.fast_info or {}
+        except Exception:
+            info = {}
+        if out["price"] is None:
+            p = getattr(info, "last_price", None) if not isinstance(info, dict) else info.get("last_price")
+            if p and float(p) > 0:
+                out["price"] = float(p)
+                out["source"] = "yfinance.fast_info"
+        prev = getattr(info, "previous_close", None) if not isinstance(info, dict) else info.get("previous_close")
+        if out["price"] and prev and float(prev) > 0:
+            out["changePct"] = (out["price"] / float(prev) - 1.0) * 100.0
+        try:
+            meta = t.info or {}
+            if isinstance(meta, dict):
+                out["name"] = meta.get("shortName") or meta.get("longName") or out["name"]
+                if out["price"] is None:
+                    p = meta.get("currentPrice") or meta.get("regularMarketPrice")
+                    if p and float(p) > 0:
+                        out["price"] = float(p)
+                        out["source"] = "yfinance.info"
+                if out["changePct"] is None and meta.get("regularMarketChangePercent") is not None:
+                    out["changePct"] = float(meta["regularMarketChangePercent"])
+        except Exception:
+            pass
+    except Exception as e:
+        logger.warning("report yfinance enrich failed for %s: %s", sym, e)
+
+    return out
+
+def _fetch_market_price(ticker: str | None) -> float | None:
+    q = _fetch_market_quote(ticker)
+    p = q.get("price")
+    return float(p) if p and float(p) > 0 else None
+
+def _dcf_intrinsic_for_subject(clips: list[ReportClipIn], subject: str | None) -> float | None:
+    if not subject:
+        return None
+    sub = subject.upper()
+    for c in clips:
+        blob = f"{c.title} {c.dataSummary}"
+        if not re.search(rf"(?:·|•)\s*{re.escape(sub)}\b|\b{re.escape(sub)}\b", blob):
+            continue
+        if not re.search(r"intrinsic", blob, re.I):
+            continue
+        m = re.search(r"intrinsic\s*/?\s*share\s*[:=]?\s*\$?\s*([\d,]+(?:\.\d+)?)", blob, re.I)
+        if m:
+            return _parse_money(m.group(1))
+        # KPI summary: "Intrinsic / Share: $196.17"
+        m = re.search(r"Intrinsic\s*/\s*Share:\s*\$?\s*([\d,]+(?:\.\d+)?)", blob, re.I)
+        if m:
+            return _parse_money(m.group(1))
+    return None
+
+def _parse_range(value: str) -> tuple[float, float] | None:
+    m = _RANGE_RE.search(value or "")
+    if not m:
+        return None
+    a, b = _parse_money(m.group(1)), _parse_money(m.group(2))
+    if a is None or b is None:
+        return None
+    return (min(a, b), max(a, b))
+
+def _fmt_range(lo: float, hi: float) -> str:
+    def f(x: float) -> str:
+        if x >= 1000:
+            return f"${x:,.0f}"
+        if x >= 100:
+            return f"${x:.0f}"
+        return f"${x:.2f}"
+    return f"{f(lo)}–{f(hi)}"
+
+def _spot_context(market: float, change_pct: float | None, extra: str = "") -> str:
+    bits = [f"spot ${market:,.2f}"]
+    if change_pct is not None and abs(change_pct) < 50:
+        bits.append(f"day {change_pct:+.1f}%")
+    if extra:
+        bits.append(extra)
+    return " · ".join(bits)
+
+def _clip_signal_digest(clips: list[ReportClipIn]) -> dict:
+    """Extract directional cues from clip text so the model cannot ignore them."""
+    blob = " ".join(
+        f"{c.sourceTab} {c.title} {c.dataSummary} {c.userDescription}" for c in clips
+    )
+    dig: dict = {"rawHints": []}
+
+    def hint(s: str):
+        if s and s not in dig["rawHints"]:
+            dig["rawHints"].append(s)
+
+    m = re.search(r"(?:calls?\s*%|call\s*(?:share|pct|%))\s*[:\s]+(\d+(?:\.\d+)?)\s*%?", blob, re.I)
+    if m:
+        dig["callPremiumPct"] = float(m.group(1))
+        hint(f"call premium share {m.group(1)}%")
+    m = re.search(r"net\s*gex\s*[:\s]+([+\-−]?\s*\$?[\d,.]+)\s*([MBK])?", blob, re.I)
+    if m:
+        dig["netGexRaw"] = m.group(0).strip()
+        hint(m.group(0).strip())
+    m = re.search(r"call\s*gex\s*[:\s]+([+\-−]?\s*\$?[\d,.]+)\s*([MBK])?", blob, re.I)
+    if m:
+        dig["callGexRaw"] = m.group(0).strip()
+    m = re.search(r"put\s*gex\s*[:\s]+([+\-−]?\s*\$?[\d,.]+)\s*([MBK])?", blob, re.I)
+    if m:
+        dig["putGexRaw"] = m.group(0).strip()
+    m = re.search(r"implied\s*move\s*[:\s]+([+\-−]?\d+(?:\.\d+)?)\s*%", blob, re.I)
+    if m:
+        dig["impliedMovePct"] = abs(float(m.group(1).replace("−", "-")))
+        hint(f"implied move ±{dig['impliedMovePct']}%")
+    m = re.search(r"iv\s*rank\s*[:\s]+(\d+(?:\.\d+)?)", blob, re.I)
+    if m:
+        dig["ivRank"] = float(m.group(1))
+    m = re.search(r"(?:85th|p85|upper)\s*(?:percentile)?\s*[:\s]+\$?\s*([\d,]+(?:\.\d+)?)", blob, re.I)
+    if m:
+        dig["coneP85"] = _parse_money(m.group(1))
+    m = re.search(r"(?:15th|p15|lower)\s*(?:percentile)?\s*[:\s]+\$?\s*([\d,]+(?:\.\d+)?)", blob, re.I)
+    if m:
+        dig["coneP15"] = _parse_money(m.group(1))
+    m = re.search(r"(?:median|p50|modal(?:\s*strike)?)\s*[:\s]+\$?\s*([\d,]+(?:\.\d+)?)", blob, re.I)
+    if m:
+        dig["coneMid"] = _parse_money(m.group(1))
+    # Crude directional score from keywords in options/macro clips
+    score = 0
+    if dig.get("callPremiumPct") is not None:
+        if dig["callPremiumPct"] >= 60:
+            score += 2
+            hint("call-heavy flow")
+        elif dig["callPremiumPct"] <= 40:
+            score -= 2
+            hint("put-heavy flow")
+    if re.search(r"call[- ]?(?:heavy|biased|dominated)|long gamma|bullish tilt", blob, re.I):
+        score += 1
+    if re.search(r"put[- ]?(?:heavy|biased|dominated)|short gamma|bearish tilt", blob, re.I):
+        score -= 1
+    if re.search(r"below[- ]average stress|risk[- ]on|net easing", blob, re.I):
+        score += 1
+        hint("constructive macro/credit")
+    if re.search(r"above[- ]average stress|risk[- ]off|net tightening|demanding", blob, re.I):
+        score -= 1
+        hint("cautious macro/credit")
+    dig["directionalScore"] = score
+    dig["suggestedLean"] = "bullish" if score >= 2 else "bearish" if score <= -2 else "mixed_or_neutral"
+    dig["guidance"] = (
+        "Use signalDigest with the clips. suggestedLean is a hint from positioning/flow/macro keywords, "
+        "not a mandate. Vol cone and implied move bound width. Do not set the research range equal to "
+        "spot ± impliedMove or cone 15/85 alone when directionalScore is non-zero. Shift midpoint and/or "
+        "wings to encode lean."
+    )
+    return dig
+
+def _stance_from_result(result: dict, market: float | None) -> dict | None:
+    raw = result.get("stance")
+    if not isinstance(raw, dict):
+        raw = {}
+    lean = str(raw.get("lean", "")).strip().lower()
+    if lean not in ("bullish", "bearish", "neutral"):
+        # Infer from baseCase vs spot if possible
+        lean = "neutral"
+        bc = _parse_range(f"${raw.get('baseCase', '')}") or None
+        if market and raw.get("baseCase"):
+            try:
+                bcv = _parse_money(str(raw.get("baseCase", "")).replace("$", ""))
+                if bcv and bcv > market * 1.01:
+                    lean = "bullish"
+                elif bcv and bcv < market * 0.99:
+                    lean = "bearish"
+            except Exception:
+                pass
+    conv = str(raw.get("conviction", "")).strip().lower()
+    if conv not in ("low", "moderate", "high"):
+        conv = "moderate"
+    base = str(raw.get("baseCase", "")).strip()
+    thesis = str(raw.get("thesis", "")).strip()
+    return {
+        "lean": lean,
+        "conviction": conv,
+        "baseCase": base[:40],
+        "thesis": thesis[:280],
+    }
+
+def _normalize_key_result(
+    key_result: dict | None,
+    *,
+    subject: str | None,
+    market: float | None,
+    change_pct: float | None = None,
+    subject_dcf: bool,
+    dcf_intrinsic: float | None,
+    stance: dict | None = None,
+    signal_digest: dict | None = None,
+) -> dict | None:
+    """Ensure usable keyResult with live spot. Preserve asymmetric, stance-encoding ranges."""
+    lean = (stance or {}).get("lean") or "neutral"
+    label = f"Near-Term Range ({subject})" if subject else (
+        (key_result or {}).get("label") or "Fair Value Range"
+    )
+    # Prefer model label if it already names the ticker sensibly
+    if key_result and key_result.get("label"):
+        label = str(key_result["label"]).strip()[:80]
+    value = ((key_result or {}).get("value") or "").strip()
+    context = ((key_result or {}).get("context") or "").strip()
+    rng = _parse_range(value)
+    ctx_l = context.lower()
+    weak_ctx = (
+        not context
+        or "not estimable" in ctx_l
+        or "spot unknown" in ctx_l
+        or "not estimable" in value.lower()
+    )
+    missing_range = (not rng) or "not estimable" in value.lower() or "pending" in value.lower()
+    sig = signal_digest or {}
+    impl = sig.get("impliedMovePct")
+    if isinstance(impl, (int, float)) and impl > 0:
+        impl = float(impl) / 100.0
+    else:
+        impl = None
+
+    # Fallback range when the model omitted one: directional if signals say so.
+    if market and market > 0 and missing_range:
+        if subject_dcf and dcf_intrinsic and dcf_intrinsic > 0:
+            blend = market * 0.55 + dcf_intrinsic * 0.45
+            lo, hi = sorted((blend * 0.94, blend * 1.08))
+            lo = max(lo, market * 0.75)
+            hi = min(hi, market * 1.35)
+            if lo >= hi:
+                lo, hi = market * 0.92, market * 1.10
+            gap_pct = (dcf_intrinsic / market - 1) * 100
+            value = _fmt_range(lo, hi)
+            rng = (lo, hi)
+            context = _spot_context(
+                market, change_pct,
+                f"{lean} · DCF ${dcf_intrinsic:,.2f} ({gap_pct:+.0f}% vs spot)",
+            )
+        else:
+            # Asymmetric default from lean + optional implied-move width.
+            wing = impl if impl and 0.02 <= impl <= 0.20 else 0.06
+            if lean == "bullish":
+                lo, hi = market * (1 - wing * 0.55), market * (1 + wing * 1.15)
+            elif lean == "bearish":
+                lo, hi = market * (1 - wing * 1.15), market * (1 + wing * 0.55)
+            else:
+                lo, hi = market * (1 - wing * 0.85), market * (1 + wing * 0.85)
+            value = _fmt_range(lo, hi)
+            rng = (lo, hi)
+            context = _spot_context(market, change_pct, f"{lean} lean · multi-signal fallback")
+
+    if market and market > 0 and rng:
+        lo, hi = rng[0], rng[1]
+        mid = (lo + hi) / 2
+        down = market - lo
+        up = hi - market
+        # Only cap fantasy mids — do not re-center a reasoned asymmetric band onto spot.
+        if mid > market * 1.45 or mid < market * 0.55:
+            wing = impl if impl and impl > 0 else 0.10
+            if lean == "bullish":
+                lo, hi = market * (1 - wing * 0.5), market * (1 + wing * 1.2)
+            elif lean == "bearish":
+                lo, hi = market * (1 - wing * 1.2), market * (1 + wing * 0.5)
+            else:
+                lo, hi = market * (1 - wing), market * (1 + wing)
+            value = _fmt_range(lo, hi)
+            rng = (lo, hi)
+            mid = (lo + hi) / 2
+            context = _spot_context(market, change_pct, f"{lean} · range capped vs spot")
+        else:
+            width = hi - lo
+            if width > market * 0.50:
+                # Shrink wings proportionally (keep mid / asymmetry).
+                scale = (market * 0.36) / width
+                lo = mid - (mid - lo) * scale
+                hi = mid + (hi - mid) * scale
+                value = _fmt_range(lo, hi)
+                rng = (lo, hi)
+
+        # If model produced a near-symmetric band glued to spot while lean is
+        # directional, nudge mid and wings slightly (do not invent a new thesis).
+        mid = (rng[0] + rng[1]) / 2
+        down = max(market - rng[0], 1e-9)
+        up = max(rng[1] - market, 1e-9)
+        sym_ratio = min(down, up) / max(down, up)
+        mid_glued = abs(mid / market - 1) < 0.008
+        if lean in ("bullish", "bearish") and mid_glued and sym_ratio > 0.85:
+            wing = (rng[1] - rng[0]) / 2
+            if lean == "bullish":
+                lo = market - wing * 0.65
+                hi = market + wing * 1.25
+            else:
+                lo = market - wing * 1.25
+                hi = market + wing * 0.65
+            value = _fmt_range(lo, hi)
+            rng = (lo, hi)
+            mid = (lo + hi) / 2
+            if "lean" not in context.lower():
+                context = _spot_context(
+                    market, change_pct,
+                    f"{lean} lean · range shifted off spot (signals, not pure vol envelope)",
+                )
+
+        if weak_ctx or "spot $" not in context.lower() or "spot unknown" in context.lower():
+            to_mid = (mid / market - 1) * 100
+            extra = f"{lean} · mid {to_mid:+.1f}% vs spot"
+            if subject_dcf and dcf_intrinsic and dcf_intrinsic > 0:
+                gap = (dcf_intrinsic / market - 1) * 100
+                extra = f"DCF ${dcf_intrinsic:,.2f} ({gap:+.0f}% vs spot) · {extra}"
+            context = _spot_context(market, change_pct, extra)
+        else:
+            if not re.search(r"spot\s*\$", context, re.I):
+                context = _spot_context(market, change_pct, context)
+            if lean and lean not in context.lower():
+                context = f"{context} · {lean}"
+            if subject_dcf and dcf_intrinsic and dcf_intrinsic > 0 and "dcf" not in context.lower():
+                gap = (dcf_intrinsic / market - 1) * 100
+                context = f"{context} · DCF ${dcf_intrinsic:,.2f} ({gap:+.0f}% vs spot)"
+
+        return {"label": label[:80], "value": value[:80], "context": context[:200]}
+
+    if value and "not estimable" not in value.lower():
+        return {
+            "label": label[:80],
+            "value": value[:80],
+            "context": (context or "Live spot unavailable for this symbol")[:160],
+        }
+    if subject:
+        return {
+            "label": f"Near-Term Range ({subject})",
+            "value": "Range pending spot",
+            "context": f"Could not fetch a live market price for {subject}. Check the symbol or market data feed.",
+        }
+    return key_result
+
+@router.post("/report")
+def generate_report(req: ReportGenRequest):
+    if not req.clips:
+        raise HTTPException(400, "No clips to synthesize")
+    valid_ids = {c.id for c in req.clips}
+
+    subject = _subject_ticker(req)
+    dcf_names = sorted(_dcf_tickers_from_clips(req.clips))
+    subject_dcf = _subject_dcf_present(req.clips, subject)
+    quote = _fetch_market_quote(subject)
+    market = float(quote["price"]) if quote.get("price") else None
+    change_pct = float(quote["changePct"]) if quote.get("changePct") is not None else None
+    dcf_intrinsic = _dcf_intrinsic_for_subject(req.clips, subject) if subject_dcf else None
+    signal_digest = _clip_signal_digest(req.clips)
+
+    valuation_context = {
+        "subjectTicker": subject,
+        "subjectName": quote.get("name"),
+        "marketPrice": round(market, 4) if market else None,
+        "dayChangePct": round(change_pct, 3) if change_pct is not None else None,
+        "priceSource": quote.get("source"),
+        "subjectDcfPresent": subject_dcf,
+        "subjectDcfIntrinsic": round(dcf_intrinsic, 4) if dcf_intrinsic else None,
+        "dcfTickersInClips": dcf_names,
+        "signalDigest": signal_digest,
+        "note": (
+            "marketPrice is LIVE spot — always cite it. "
+            "signalDigest summarizes directional cues already in the clips (GEX, call%, IV, cone). "
+            "Vol cone and implied move bound WIDTH only. "
+            "When signalDigest.suggestedLean is bullish or bearish, the research range must encode that lean "
+            "(mid shifted and/or asymmetric wings). Do not publish spot ± impliedMove as the whole thesis. "
+            "Integrate every clip family into one argument. "
+            "subjectDcfIntrinsic is one input, not the answer."
+        ),
+    }
+
+    payload = {
+        "projectName": req.projectName,
+        "timeframe": req.timeframe,
+        "purpose": req.purpose or "(not specified)",
+        "goal": req.goal or "(not specified)",
+        "valuationContext": valuation_context,
+        "clips": [
+            {"id": c.id, "sourceTool": c.sourceTab, "type": c.dataType,
+             "title": c.title, "userInstruction": c.userDescription, "data": c.dataSummary}
+            for c in req.clips
+        ],
+    }
+    messages = [
+        {"role": "system", "content": _REPORT_SYSTEM},
+        {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+    ]
+    resp = groq_chat(messages, model=MODEL_SMART, max_tokens=4000, temperature=0.3)
+    raw = (resp.choices[0].message.content or "").strip()
+    result = parse_json(raw)
+    if not isinstance(result, dict) or "executiveSummary" not in result:
+        raise HTTPException(502, "AI returned an unexpected report shape")
+
+    sections = []
+    for s in result.get("sections") or []:
+        if not isinstance(s, dict):
+            continue
+        cid = str(s.get("clipId", ""))
+        analysis = str(s.get("analysis", "")).strip()
+        if cid in valid_ids and analysis:
+            sections.append({
+                "clipId": cid,
+                "heading": str(s.get("heading", "")).strip() or "Analysis",
+                "analysis": analysis,
+                "keyFigures": _clean_figs(s.get("keyFigures")),
+            })
+    used = {s["clipId"] for s in sections}
+    appendix = [cid for cid in (str(x) for x in (result.get("appendixClipIds") or [])) if cid in valid_ids and cid not in used]
+    for cid in (c.id for c in req.clips):
+        if cid not in used and cid not in appendix:
+            appendix.append(cid)
+
+    stance = _stance_from_result(result, market)
+    # If model omitted stance lean, use signal digest as soft prior.
+    if stance and stance.get("lean") == "neutral" and signal_digest.get("suggestedLean") in ("bullish", "bearish"):
+        stance["lean"] = signal_digest["suggestedLean"]
+        if not stance.get("thesis"):
+            stance["thesis"] = (
+                f"Positioning and flow cues lean {stance['lean']} "
+                f"({', '.join(signal_digest.get('rawHints', [])[:3]) or 'see clips'})."
+            )
+
+    key_result = None
+    kr = result.get("keyResult")
+    if isinstance(kr, dict) and str(kr.get("value", "")).strip():
+        key_result = {
+            "label": str(kr.get("label", "")).strip() or "Bottom line",
+            "value": str(kr.get("value", "")).strip(),
+            "context": str(kr.get("context", "")).strip(),
+        }
+    key_result = _normalize_key_result(
+        key_result,
+        subject=subject,
+        market=market,
+        change_pct=change_pct,
+        subject_dcf=subject_dcf,
+        dcf_intrinsic=dcf_intrinsic,
+        stance=stance,
+        signal_digest=signal_digest,
+    )
+
+    return {
+        "headline": str(result.get("headline", "")).strip(),
+        "stance": stance,
+        "keyResult": key_result,
+        "executiveSummary": str(result.get("executiveSummary", "")).strip(),
+        "sections": sections,
+        "conclusion": str(result.get("conclusion", "")).strip(),
+        "appendixClipIds": appendix,
+        "model": MODEL_SMART,
+        "valuationContext": valuation_context,
+    }

@@ -6,6 +6,9 @@ import SidebarLayout from '../components/SidebarLayout'
 import ExpirySelect from '../components/ExpirySelect'
 import axios from 'axios'
 import { TICK, RailSection } from './valuationShared'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip, chartClip, textClip } from '../lib/reportCaptureRegistry'
 
 const STRIP: React.CSSProperties = {
   display: 'flex', alignItems: 'stretch', overflowX: 'auto',
@@ -282,6 +285,62 @@ export default function StrategyBuilder() {
   }
   const updateLeg = (i: number, k: keyof Leg, v: string | number) =>
     setLegs(p => p.map((l, idx) => idx === i ? { ...l, [k]: v } : l))
+
+  const TAB = 'Options Strategy Builder'
+  useReportCapture(() => {
+    if (!legs.length) return null
+    const netCost = legs.reduce((s, l) => s + (l.action === 'buy' ? 1 : -1) * (l.premium ?? 0) * (l.quantity ?? 0), 0) * 100
+    const pieces: ClipDraft[] = [
+      kpiClip(TAB, `${preset} · Summary`, [
+        { label: netCost >= 0 ? 'Net Debit' : 'Net Credit', value: `$${Math.abs(netCost).toFixed(2)}` },
+        { label: 'Breakeven', value: chartData.breakevens.length ? chartData.breakevens.map(b => `$${b}`).join(' · ') : '—' },
+        { label: 'Legs', value: String(legs.length) },
+        { label: `${primaryTicker} Spot`, value: `$${chartData.spot.toFixed(2)}` },
+      ]),
+      tableClip(TAB, 'Strategy Legs',
+        ['Action', 'Ticker', 'Type', 'Strike', 'Expiry', 'Premium', 'Qty'],
+        legs.map(l => [
+          l.action.toUpperCase(), l.ticker, l.option_type.toUpperCase(),
+          l.K, l.expiry, l.premium, l.quantity,
+        ]),
+      ),
+    ]
+    if (chartData.rows?.length) {
+      pieces.push(chartClip(TAB, 'Payoff at Expiry', 'line', 'price',
+        chartData.rows.map((r: any) => ({ price: r.price, total: r.total, tval: r.tval })),
+        [
+          { key: 'total', label: 'At Expiry' },
+          ...(chartData.showT ? [{ key: 'tval', label: 'At Selected Date' }] : []),
+        ],
+      ))
+    }
+    if (greekResult) {
+      pieces.push(kpiClip(TAB, 'Portfolio Greeks', [
+        { label: 'Net Delta', value: `${greekResult.net.delta >= 0 ? '+' : ''}${greekResult.net.delta.toFixed(4)}` },
+        { label: 'Net Gamma', value: `${greekResult.net.gamma >= 0 ? '+' : ''}${greekResult.net.gamma.toFixed(4)}` },
+        { label: 'Net Theta', value: `${greekResult.net.theta >= 0 ? '+' : ''}${greekResult.net.theta.toFixed(4)}` },
+        { label: 'Net Vega', value: `${greekResult.net.vega >= 0 ? '+' : ''}${greekResult.net.vega.toFixed(4)}` },
+      ]))
+      if (greekResult.positions?.length) {
+        pieces.push(tableClip(TAB, 'Per-Leg Greeks',
+          ['Ticker', 'K', 'Expiry', 'Type', 'Pos', 'Qty', 'Δ', 'Γ', 'Θ', 'ν'],
+          greekResult.positions.map((pos: any) => [
+            pos.ticker, pos.strike, pos.expiry, pos.option_type, pos.position_type, pos.qty,
+            pos.delta.toFixed(4), pos.gamma.toFixed(4), pos.theta.toFixed(4), pos.vega.toFixed(4),
+          ]),
+        ))
+      }
+    }
+    if (aiNarrative?.summary) {
+      pieces.push(textClip(TAB, 'AI Risk Analysis', [
+        aiNarrative.summary,
+        aiNarrative.rate_sensitivity && `Rate Sensitivity: ${aiNarrative.rate_sensitivity}`,
+        aiNarrative.yield_context && `Context: ${aiNarrative.yield_context}`,
+        aiNarrative.investor_fit && `Fit: ${aiNarrative.investor_fit}`,
+      ].filter(Boolean).join('\n\n')))
+    }
+    return pieces
+  }, { disabled: !legs.length, sourceTab: TAB })
 
   return (
     <PageWrapper title="Options Strategy Builder">

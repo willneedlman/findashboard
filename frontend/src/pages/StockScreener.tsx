@@ -12,6 +12,9 @@ import useIsMobile from '../hooks/useIsMobile'
 import { ArrowRight, ChevronDown } from 'lucide-react'
 import { readPMPortfolios, addHoldingsToPortfolio, normalizeTicker, type PMPortfolio } from '../lib/pmImport'
 import { formatScreenerFilterDisplay, screenerFilterPlaceholder, screenerFilterToApi } from '../lib/format'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip, textClip } from '../lib/reportCaptureRegistry'
 
 const C = {
   bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))', surface: 'var(--theme-surface, #0d1826)',
@@ -484,6 +487,50 @@ export default function StockScreener() {
   }, [data])
 
   const activePreset = screens.find(p => p.id === activeScreenId)
+
+  useReportCapture(() => {
+    if (!data?.results?.length) return null
+    const pieces: ClipDraft[] = []
+    const screenName = activePreset?.name ?? 'Custom'
+    const n = displayRows.length
+    const total = data.total ?? data.results.length
+    const sectorsHit = new Set(displayRows.map(r => r.sector).filter(Boolean)).size
+    pieces.push(kpiClip('Stock Screener', `Screen Results · ${screenName}`, [
+      { label: 'Matches', value: String(n), sub: n !== total ? `${total} before table filter` : undefined },
+      { label: 'Sectors', value: String(sectorsHit) },
+      { label: 'Sort', value: `${localSort.key} ${localSort.dir}` },
+      ...(selectedUniverses.length ? [{ label: 'Universe', value: selectedUniverses.join(', ') }] : []),
+    ]))
+    const activeFilters = filters.filter(f => f.value !== '')
+    if (activeFilters.length) {
+      pieces.push(textClip(
+        'Stock Screener',
+        'Active Filters',
+        activeFilters.map(f => {
+          const op = OPERATORS.find(o => o.value === f.operator)?.label ?? f.operator
+          const range = f.operator === 'between' && f.value2 ? `${f.value}–${f.value2}` : f.value
+          return `${f.field} ${op} ${range}${f.param ? ` (${f.param})` : ''}`
+        }).join('\n'),
+      ))
+    }
+    const colKeys = (['ticker', 'companyName', ...[...visibleCols]] as (keyof ScreenResult)[])
+      .filter((k, i, a) => a.indexOf(k) === i)
+      .slice(0, 10)
+    const colMeta = colKeys.map(k => {
+      if (k === 'ticker') return { key: k, label: 'Ticker', fmt: (v: unknown) => String(v ?? '—') }
+      if (k === 'companyName') return { key: k, label: 'Company', fmt: (v: unknown) => String(v ?? '—') }
+      const meta = TABLE_COLS.find(c => c.key === k)
+      return { key: k, label: meta?.label ?? String(k), fmt: meta?.fmt ?? ((v: unknown) => v == null ? '—' : String(v)) }
+    })
+    pieces.push(tableClip(
+      'Stock Screener',
+      `Top Matches · ${screenName}`,
+      colMeta.map(c => c.label),
+      displayRows.slice(0, 20).map(r => colMeta.map(c => c.fmt(r[c.key]))),
+    ))
+    return pieces
+  }, { disabled: !data?.results?.length, sourceTab: 'Stock Screener' })
+
   const sortColLabel = sortBy === 'priceChange' ? `${sortParam} price change` : (TABLE_COLS.find(c => c.key === sortBy)?.label ?? sortBy)
   const renderCols = TABLE_COLS.filter(c => visibleCols.has(c.key as string))
   const gridTemplate = `minmax(190px,1.5fr) ${renderCols.map(c => c.w).join(' ')}`

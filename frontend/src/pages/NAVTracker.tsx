@@ -8,6 +8,9 @@ import { fetchNAVProxy, fetchNAVRegistry } from '../hooks/useApi'
 import EmptyState from '../components/EmptyState'
 import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection, VerdictStrip, RangeTrack } from './valuationShared'
 import { T } from '../lib/theme'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, chartClip } from '../lib/reportCaptureRegistry'
 
 const STRIP: React.CSSProperties = {
   display: 'flex', alignItems: 'stretch', overflowX: 'auto',
@@ -70,6 +73,44 @@ export default function NAVTracker() {
 
   const focus = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => (e.target.style.borderColor = 'var(--theme-primary, #c9a84c)')
   const blur  = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => (e.target.style.borderColor = 'var(--theme-border, rgba(255,255,255,0.10))')
+
+  useReportCapture(() => {
+    if (!data?.current) return null
+    const c = data.current
+    const tkr = p.target ? ` · ${p.target}` : ''
+    const series = (data.series ?? []) as { date: string; target: number; nav: number; premium: number }[]
+    const step = Math.max(1, Math.ceil(series.length / 80))
+    const sampled = series.filter((_, i) => i % step === 0 || i === series.length - 1)
+    const pieces: ClipDraft[] = [
+      kpiClip('NAV Tracker', `NAV Snapshot${tkr}`, [
+        { label: `${p.target} Price`, value: `$${c.target_price.toLocaleString()}` },
+        { label: 'NAV / Share', value: `$${c.nav_per_share.toLocaleString()}` },
+        { label: 'Premium', value: `${c.premium > 0 ? '+' : ''}${c.premium}%` },
+        { label: `${data.asset_label ?? p.asset} Spot`, value: `$${c.asset_spot.toLocaleString()}` },
+        { label: 'Holdings', value: Number(data.holdings).toLocaleString() },
+        ...(data.unrealized_pnl !== 0 ? [{ label: 'Unrealized P&L', value: `$${data.unrealized_pnl}B` }] : []),
+      ]),
+    ]
+    if (sampled.length) {
+      pieces.push(chartClip(
+        'NAV Tracker',
+        `${p.target} Price vs Net NAV Floor`,
+        'line',
+        'date',
+        sampled.map(s => ({ date: s.date, target: s.target, nav: s.nav })),
+        [{ key: 'target', label: p.target }, { key: 'nav', label: 'Net NAV' }],
+      ))
+      pieces.push(chartClip(
+        'NAV Tracker',
+        `Historical Premium / Discount %${tkr}`,
+        'area',
+        'date',
+        sampled.map(s => ({ date: s.date, premium: s.premium })),
+        [{ key: 'premium', label: 'Premium %' }],
+      ))
+    }
+    return pieces
+  }, { disabled: !data?.current, sourceTab: 'NAV Tracker' })
 
   return (
     <PageWrapper title="NAV Tracker">

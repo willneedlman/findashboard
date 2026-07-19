@@ -8,6 +8,9 @@ import TickerLogo from '../components/TickerLogo'
 import { fmtMarketCap } from '../lib/format'
 import useIsMobile from '../hooks/useIsMobile'
 import { readPMPortfolios, normalizeTicker } from '../lib/pmImport'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip, textClip } from '../lib/reportCaptureRegistry'
 
 interface TickerRow {
   ticker: string; name: string
@@ -356,6 +359,43 @@ export function PortfolioEarningsContent() {
       items: [...items].sort((a, b) => sortValue(b) - sortValue(a)),
     }]
   }, [items, sort, shortData, impliedData])
+
+  const TAB = 'Portfolio Earnings'
+  useReportCapture(() => {
+    if (!items.length) return null
+    const imminent = items.filter(({ days }) => days != null && days <= 14).length
+    const withImpl = items.filter(({ r }) => impliedData[r.ticker] != null)
+    const avgImpl = withImpl.length
+      ? withImpl.reduce((s, { r }) => s + (impliedData[r.ticker] ?? 0), 0) / withImpl.length
+      : null
+    const pieces: ClipDraft[] = [
+      kpiClip(TAB, 'Earnings Watchlist', [
+        { label: 'Names', value: String(items.length) },
+        { label: 'Within 14d', value: String(imminent) },
+        { label: 'Avg Impl. Move', value: avgImpl != null ? `${avgImpl.toFixed(1)}%` : '—' },
+        { label: 'Sort', value: SORT_LABEL[sort] },
+        { label: 'Window', value: WINDOW_LABEL[windowKey] },
+      ]),
+      tableClip(TAB, 'Upcoming Reports',
+        ['Ticker', 'Date', 'Days', '1D %', 'Impl. Move', 'Short %', 'P/E', 'Mkt Cap', 'Consensus'],
+        items.slice(0, 20).map(({ r, days }) => [
+          r.ticker,
+          r.date || '—',
+          days != null ? days : null,
+          r.pctChange != null ? +r.pctChange.toFixed(2) : null,
+          impliedData[r.ticker] != null ? +Number(impliedData[r.ticker]).toFixed(2) : null,
+          shortData[r.ticker]?.display ?? null,
+          r.pe != null ? +r.pe.toFixed(1) : null,
+          r.marketCap != null ? Math.round(r.marketCap) : null,
+          r.consensus || '—',
+        ]),
+      ),
+    ]
+    if (aiBrief?.bullets?.length) {
+      pieces.push(textClip(TAB, 'AI Brief', aiBrief.bullets.map(b => `• ${b}`).join('\n')))
+    }
+    return pieces
+  }, { disabled: !items.length, sourceTab: TAB })
 
   const wireGroups = useMemo(() =>
     [...items].sort((a, b) => (a.days ?? Infinity) - (b.days ?? Infinity))

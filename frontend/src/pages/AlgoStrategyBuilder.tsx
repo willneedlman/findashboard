@@ -15,6 +15,9 @@ import { PRESETS, PRESET_GROUPS, type Leg } from './strategy-builder/shared'
 import { ReturnsScatter, quickRegression } from './regressionShared'
 import { readPMPortfolios, normalizeTicker, type PMPortfolio } from '../lib/pmImport'
 import { SCREENER_ALGO_HANDOFF_KEY, type ScreenerAlgoHandoff } from './StockScreener'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip, chartClip, textClip } from '../lib/reportCaptureRegistry'
 
 // Backend combo-instrument leg shape (mirrors strategy-builder's Leg but strike
 // is a moneyness ratio — spot-relative, not a dollar strike — since the combo
@@ -1480,6 +1483,62 @@ export function AlgoStrategyBuilderContent() {
   const pf = runPortfolio.data
   const R = mode === 'portfolio' ? pf : data          // active result for the current mode
   const mR = R?.metrics
+
+  const TAB = 'Algorithmic Strategy Builder'
+  useReportCapture(() => {
+    if (!mR || !R) return null
+    const label = mode === 'portfolio'
+      ? `Portfolio · ${pf?.positions.length ?? positions.length} legs`
+      : `${ticker.toUpperCase()} · ${activeName || 'Strategy'}`
+    const pieces: ClipDraft[] = [
+      kpiClip(TAB, `Backtest · ${label}`, [
+        { label: 'Total Return', value: `${mR.total_return.toFixed(2)}%` },
+        { label: 'Ann. Return', value: `${mR.ann_return.toFixed(2)}%` },
+        { label: 'Max DD', value: `${mR.max_drawdown.toFixed(2)}%` },
+        { label: 'Sharpe', value: mR.sharpe.toFixed(2) },
+        { label: 'Trades', value: String(mR.num_trades) },
+        { label: 'Win Rate', value: `${mR.win_rate.toFixed(1)}%` },
+        { label: 'P&L', value: mR.total_pnl.toFixed(2) },
+        { label: 'Final Capital', value: mR.final_capital.toFixed(0) },
+      ]),
+    ]
+    if (R.equity_curve?.length) {
+      const step = Math.max(1, Math.ceil(R.equity_curve.length / 80))
+      pieces.push(chartClip(TAB, 'Equity Curve', 'line', 'date',
+        R.equity_curve
+          .filter((_, i) => i % step === 0 || i === R.equity_curve.length - 1)
+          .map(p => ({ date: p.date, strategy: p.strategy, benchmark: p.benchmark })),
+        [{ key: 'strategy', label: 'Strategy' }, { key: 'benchmark', label: 'Benchmark' }],
+      ))
+    }
+    if (mode === 'portfolio' && pf?.positions?.length) {
+      pieces.push(tableClip(TAB, 'Position Attribution',
+        ['Ticker', 'Side', 'Instrument', 'Weight %', 'Return %', 'P&L', 'Trades'],
+        pf.positions.slice(0, 20).map(p => [
+          p.ticker, p.side, p.instrument,
+          p.weight_pct?.toFixed?.(1) ?? p.weight_pct,
+          p.return_pct?.toFixed?.(2) ?? p.return_pct,
+          p.pnl?.toFixed?.(2) ?? p.pnl,
+          p.num_trades,
+        ]),
+      ))
+    }
+    if (R.trades?.length) {
+      pieces.push(tableClip(TAB, 'Trades',
+        ['Date', 'Action', 'Price', 'Ticker', 'Reason'],
+        R.trades.slice(0, 20).map(t => [
+          t.date, t.action, t.price, t.ticker || '—',
+          (t.exit_kind || t.reason || '—').slice(0, 40),
+        ]),
+      ))
+    }
+    pieces.push(textClip(TAB, 'Run Spec',
+      mode === 'portfolio'
+        ? `Portfolio backtest · ${start} → ${end || 'latest'} · tf=${timeframe} · size=${portfolioTradeSize} · lev=${portfolioLeverage}`
+        : `Single ${side} ${instMode} ${ticker.toUpperCase()} · strategy=${activeName || '—'} · ${start} → ${end || 'latest'} · tf=${timeframe}`))
+    return pieces
+  }, { disabled: !mR, sourceTab: TAB })
+
   const [pinnedTrade, setPinnedTrade] = useState<MarkerPoint | null>(null)
   const [selectedPortfolioTicker, setSelectedPortfolioTicker] = useState<string | null>(null)
   const [tradeEventFilter, setTradeEventFilter] = useState<'all' | 'buy' | 'sell' | 'expired'>('all')

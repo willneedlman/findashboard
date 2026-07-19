@@ -9,6 +9,9 @@ import { fetchOptionsChain } from '../hooks/useApi'
 import axios from 'axios'
 import EmptyState from '../components/EmptyState'
 import { useChartColors } from '../hooks/useChartColors'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip, chartClip } from '../lib/reportCaptureRegistry'
 import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
 const TH: React.CSSProperties = { fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #99907e)', padding: '7px 10px', textAlign: 'right', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', whiteSpace: 'nowrap' }
 const TD: React.CSSProperties = { padding: '5px 10px', borderBottom: '1px solid var(--theme-hover, rgba(255,255,255,0.04))', fontSize: 11, fontFamily: 'var(--theme-mono)', color: 'var(--theme-text, #d7e3fc)', textAlign: 'right', verticalAlign: 'middle' }
@@ -72,6 +75,41 @@ export function OptionsChainScannerContent() {
     const put = puts.find((p: any) => p.strike === c.strike) || {}
     return { strike: c.strike, callOI: c.openInterest || 0, putOI: -((put as any).openInterest || 0) }
   })
+
+  const TAB = 'Chain Scanner'
+  useReportCapture(() => {
+    if (!data) return null
+    const pieces: ClipDraft[] = [
+      kpiClip(TAB, `Chain Pulse · ${ticker}`, [
+        { label: 'P/C OI Ratio', value: pcRatio.toFixed(2), sub: pcRatio < 1 ? 'Bullish' : 'Bearish' },
+        { label: 'Total Call OI', value: totalCallOI.toLocaleString() },
+        { label: 'Total Put OI', value: totalPutOI.toLocaleString() },
+        { label: 'IV Skew (P−C)', value: `${ivSkew > 0 ? '+' : ''}${ivSkew.toFixed(1)}%` },
+        { label: 'Avg Call IV', value: `${(avgCallIV * 100).toFixed(1)}%` },
+        { label: 'Avg Put IV', value: `${(avgPutIV * 100).toFixed(1)}%` },
+        ...(spot != null ? [{ label: 'Spot', value: `$${spot.toFixed(2)}` }] : []),
+      ]),
+    ]
+    const chainCols = ['Strike', 'Last', 'Bid', 'Ask', 'Volume', 'Open Int.', 'Impl. Vol']
+    const toRow = (r: any) => [
+      r.strike,
+      r.lastPrice?.toFixed(2) ?? null,
+      r.bid?.toFixed(2) ?? null,
+      r.ask?.toFixed(2) ?? null,
+      r.volume ?? null,
+      r.openInterest ?? null,
+      r.impliedVolatility != null ? `${(r.impliedVolatility * 100).toFixed(1)}%` : null,
+    ]
+    if (calls.length) pieces.push(tableClip(TAB, `Call Chain — ${ticker}`, chainCols, calls.map(toRow)))
+    if (puts.length) pieces.push(tableClip(TAB, `Put Chain — ${ticker}`, chainCols, puts.map(toRow)))
+    if (chartData.length) {
+      pieces.push(chartClip(TAB, 'Open Interest by Strike', 'bar', 'strike',
+        chartData.map((d: any) => ({ strike: d.strike, callOI: d.callOI, putOI: Math.abs(d.putOI) })),
+        [{ key: 'callOI', label: 'Call OI' }, { key: 'putOI', label: 'Put OI' }],
+      ))
+    }
+    return pieces
+  }, { disabled: !data, sourceTab: TAB })
 
   return (
     <SidebarLayout sidebarWidth={210} sidebarTitle="" sidebar={<>

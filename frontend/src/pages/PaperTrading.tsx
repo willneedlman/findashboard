@@ -18,6 +18,9 @@ import { OrderTicket } from './paper-trading/OrderTicket'
 import { PositionsPanel, OrdersPanel } from './paper-trading/Positions'
 import { StrategyPanel } from './paper-trading/StrategyPanel'
 import useIsMobile from '../hooks/useIsMobile'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip } from '../lib/reportCaptureRegistry'
 
 
 // OCC option symbol helpers live in lib/occ (shared with the paper-trade widget).
@@ -104,6 +107,46 @@ export default function PaperTrading() {
     : T.muted
 
   const [gammaOpen, setGammaOpen] = useState(false)
+
+  const TAB = 'Paper Trading'
+  useReportCapture(() => {
+    if (!bal) return null
+    const pieces: ClipDraft[] = [
+      kpiClip(TAB, 'Account Snapshot', [
+        { label: 'Equity', value: fmt$(bal.total_equity) },
+        { label: 'Buying Power', value: fmt$(bal.buying_power) },
+        { label: 'Day P&L', value: fmt$(bal.day_change) },
+        { label: 'Cash', value: fmt$(bal.cash) },
+        { label: 'Market Value', value: fmt$(bal.market_value) },
+        { label: 'Positions', value: String(positions.length) },
+      ]),
+    ]
+    if (positions.length) {
+      pieces.push(tableClip(TAB, 'Open Positions',
+        ['Symbol', 'Qty', 'Cost Basis', 'Acquired'],
+        positions.slice(0, 20).map(p => [
+          p.symbol,
+          p.quantity,
+          Math.round(p.cost_basis * 100) / 100,
+          p.date_acquired || '—',
+        ]),
+      ))
+    }
+    if (orders.length) {
+      pieces.push(tableClip(TAB, 'Recent Orders',
+        ['Symbol', 'Side', 'Qty', 'Type', 'Status', 'Price'],
+        orders.slice(0, 20).map(o => [
+          o.symbol,
+          o.side,
+          o.quantity,
+          o.type,
+          o.status,
+          o.avg_fill_price ?? o.price ?? null,
+        ]),
+      ))
+    }
+    return pieces
+  }, { disabled: !authed || !bal, sourceTab: TAB })
 
   // Automated order tracking: orderId → strategyName
   const [automatedOrders, setAutomatedOrders] = useState<Record<string, string>>({})

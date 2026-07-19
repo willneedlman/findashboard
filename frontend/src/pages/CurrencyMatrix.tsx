@@ -4,6 +4,9 @@ import PageWrapper from '../components/PageWrapper'
 import EmptyState from '../components/EmptyState'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { tableClip, textClip } from '../lib/reportCaptureRegistry'
 
 const T = {
   bg: 'var(--theme-bg, #101c2e)', surface: 'var(--theme-surface, #0d1826)',
@@ -80,6 +83,43 @@ export function CurrencyMatrixContent() {
     refetchInterval: 15 * 60 * 1000,
   })
 
+  const TAB = 'Currency Matrix'
+  const trendMark = (t: FxRow['vol_trend']) => t === 'up' ? '↑' : t === 'down' ? '↓' : '→'
+  useReportCapture(() => {
+    if (!data?.rows?.length) return null
+    const { currencies, matrix, rows } = data
+    const pieces: ClipDraft[] = [
+      tableClip(TAB, 'Spot Cross Rates',
+        ['', ...currencies],
+        currencies.map((rowc, i) => [
+          rowc,
+          ...currencies.map((colc, j) => {
+            if (i === j) return '—'
+            const v = matrix[i][j]
+            return v.toLocaleString('en-US', { maximumFractionDigits: colc === 'JPY' ? 2 : 4 })
+          }),
+        ]),
+      ),
+      tableClip(TAB, 'Forwards · Basis · Volatility',
+        ['Pair', 'Spot', '1D %', 'Fwd 3M', 'XCCY 3M', '3M Rate', 'Vol 1W', 'Trend'],
+        rows.map(r => [
+          r.pair,
+          r.spot,
+          r.chg_pct == null ? null : `${r.chg_pct >= 0 ? '+' : ''}${r.chg_pct.toFixed(2)}%`,
+          `${r.fwd_pts_3m >= 0 ? '+' : ''}${r.fwd_pts_3m}`,
+          `${r.basis_3m_bps >= 0 ? '+' : ''}${r.basis_3m_bps} bp`,
+          `${r.short_rate.toFixed(2)}%`,
+          r.vol_1w != null ? `${r.vol_1w.toFixed(1)}%` : null,
+          trendMark(r.vol_trend),
+        ]),
+      ),
+      textClip(TAB, 'Notes',
+        'Spot and realized volatility are live. Forward points are covered-interest-parity implied from indicative 3-month money rates. Vol is annualized 1-week realized.',
+      ),
+    ]
+    return pieces
+  }, { disabled: !data?.rows?.length, sourceTab: TAB })
+
   if (isLoading) return <LoadingState label="Loading FX" />
   if (error) return <ErrorState title="FX feed failed" message="Could not load the currency matrix." onRetry={() => refetch()} />
   if (!data || !data.rows.length) return <EmptyState title="Currency Matrix" hint="No FX data available right now." variant="unavailable" onRetry={refetch} />
@@ -93,7 +133,6 @@ export function CurrencyMatrixContent() {
     return { min: Math.min(...vs), max: Math.max(...vs) }
   })
 
-  const trendMark = (t: FxRow['vol_trend']) => t === 'up' ? '↑' : t === 'down' ? '↓' : '→'
   const trendColor = (t: FxRow['vol_trend']) => t === 'up' ? T.gold : t === 'down' ? T.blue : T.muted
 
   return (

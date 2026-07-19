@@ -7,6 +7,10 @@ import TickerLink from '../components/TickerLink'
 import ColumnFilterMenu, { type SortState, type FilterSpec } from '../components/ColumnFilterMenu'
 import useIsMobile from '../hooks/useIsMobile'
 import { usePortfolio } from '../contexts/PortfolioContext'
+import { localDateInputValue } from '../lib/time'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip } from '../lib/reportCaptureRegistry'
 
 const C = {
   bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))',
@@ -33,7 +37,19 @@ interface Enriched {
 const WINDOWS = [{ label: 'Day', days: 1 }, { label: '3 Days', days: 3 }, { label: 'Week', days: 7 }]
 const HOUR_LABEL: Record<string, string> = { bmo: 'Pre', amc: 'Post', dmh: 'Mid' }
 
-function today(): string { return new Date().toISOString().slice(0, 10) }
+// Local calendar date (YYYY-MM-DD). Never use toISOString().slice — that is UTC
+// and rolls the "today" anchor forward in US evening hours, which can drop names
+// reporting later in the selected window.
+function today(): string { return localDateInputValue() }
+
+// Common search terms → tickers so "google" hits GOOGL before enrichment fills companyName.
+const SEARCH_ALIASES: Record<string, string[]> = {
+  GOOGLE: ['GOOGL', 'GOOG'], ALPHABET: ['GOOGL', 'GOOG'],
+  META: ['META'], FACEBOOK: ['META'],
+  AMAZON: ['AMZN'], APPLE: ['AAPL'], MICROSOFT: ['MSFT'], NVIDIA: ['NVDA'],
+  TESLA: ['TSLA'], NETFLIX: ['NFLX'], BERKSHIRE: ['BRK.B', 'BRK.A'],
+  JPMORGAN: ['JPM'], 'JP MORGAN': ['JPM'], EXXON: ['XOM'],
+}
 
 function fmtMoney(v: number | null | undefined): string {
   if (v == null) return '—'
@@ -87,6 +103,7 @@ export function EarningsCalendarContent() {
   const [days, setDays] = useState(1)
   const [rows, setRows] = useState<Row[]>([])
   const [covered, setCovered] = useState(0)
+  const [rangeTo, setRangeTo] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -104,9 +121,14 @@ export function EarningsCalendarContent() {
 
   useEffect(() => {
     let cancelled = false
-    setLoading(true); setError(null); setEnriched({}); enrichingRef.current = new Set()
+    setLoading(true); setError(null); setEnriched({}); enrichingRef.current = new Set(); setRangeTo(null)
     axios.get('/api/earnings/calendar', { params: { date, days } })
-      .then(r => { if (cancelled) return; setRows(r.data.rows || []); setCovered(r.data.covered || 0) })
+      .then(r => {
+        if (cancelled) return
+        setRows(r.data.rows || [])
+        setCovered(r.data.covered || 0)
+        setRangeTo(r.data.to || null)
+      })
       .catch(() => { if (cancelled) return; setError('Could not load the earnings calendar. Try again shortly.') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
@@ -114,13 +136,24 @@ export function EarningsCalendarContent() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toUpperCase()
+    // Alias match only for meaningful queries (avoid "G" matching Google).
+    const aliasHits = q.length >= 3
+      ? Object.entries(SEARCH_ALIASES).flatMap(([name, syms]) =>
+          name.startsWith(q) || q.startsWith(name) || name.includes(q) ? syms : [])
+      : []
+    const aliasSet = new Set(aliasHits.map(s => s.toUpperCase()))
     return rows.filter(r => {
       if (coveredOnly && r.epsEstimate == null) return false
       if (watchOnly && !watchSet.has(r.symbol.toUpperCase())) return false
       if (hourFilter && r.hour !== hourFilter) return false
       if (q) {
+        const sym = r.symbol.toUpperCase()
         const name = (enriched[r.symbol]?.companyName || '').toUpperCase()
-        if (!r.symbol.toUpperCase().includes(q) && !name.includes(q)) return false
+        if (
+          !sym.includes(q)
+          && !name.includes(q)
+          && !aliasSet.has(sym)
+        ) return false
       }
       return true
     })
@@ -216,6 +249,40 @@ export function EarningsCalendarContent() {
   const anyFilter = !!(query || minCapStr || hourFilter || sort)
   const clearFilters = () => { setQuery(''); setMinCapStr(''); setHourFilter(''); setSort(null) }
 
+  useReportCapture(() => {
+    if (!visible.length) return null
+    const pieces: ClipDraft[] = []
+    const windowLabel = days === 1 ? date : `${date} + ${days}d`
+    pieces.push(kpiClip('Earnings Scanner', `Earnings Window · ${windowLabel}`, [
+      { label: 'Visible', value: String(visible.length), sub: rows.length ? `${rows.length} total loaded` : undefined },
+      { label: 'Covered', value: String(covered) },
+      { label: 'Window', value: days === 1 ? '1 day' : `${days} days` },
+      { label: 'Start', value: date },
+    ]))
+    pieces.push(tableClip(
+      'Earnings Scanner',
+      `Earnings Calendar · ${windowLabel}`,
+      ['Symbol', 'Company', 'Date', 'Time', 'Mkt Cap', 'EPS Est', 'Rev Est', 'Impl Move', 'Surprise', 'React', 'Since'],
+      visible.slice(0, 20).map(r => {
+        const e = enriched[r.symbol]
+        return [
+          r.symbol,
+          e?.companyName ?? null,
+          r.date,
+          HOUR_LABEL[r.hour] ?? r.hour ?? null,
+          e?.marketCap != null ? fmtMoney(e.marketCap) : null,
+          fmtEps(r.epsEstimate),
+          fmtMoney(r.revenueEstimate),
+          e?.impliedMove != null ? fmtPct(e.impliedMove) : null,
+          e?.surprisePct != null ? fmtPct(e.surprisePct) : null,
+          e?.reactionPct != null ? fmtPct(e.reactionPct) : null,
+          e?.runSincePct != null ? fmtPct(e.runSincePct) : null,
+        ]
+      }),
+    ))
+    return pieces
+  }, { disabled: !visible.length, sourceTab: 'Earnings Scanner' })
+
   const SORT_KEY: Record<string, string> = {
     'Symbol': 'symbol', 'Mkt Cap': 'marketCap', 'Time': 'hour', 'EPS Est': 'epsEstimate',
     'Rev Est': 'revenueEstimate', 'Impl Move': 'impliedMove', 'Impl': 'impliedMove',
@@ -255,7 +322,15 @@ export function EarningsCalendarContent() {
           <label style={{ ...LABEL, marginBottom: 5 }}>Window</label>
           <div style={{ display: 'flex', border: `1px solid ${C.border}` }}>
             {WINDOWS.map(w => (
-              <button key={w.days} onClick={() => setDays(w.days)}
+              <button
+                key={w.days}
+                onClick={() => {
+                  // Re-anchor to local today when picking a relative window so a
+                  // stale date-picker value (e.g. last Monday) cannot exclude
+                  // names that report later this week / next week.
+                  setDate(today())
+                  setDays(w.days)
+                }}
                 style={{
                   background: days === w.days ? C.gold : 'transparent',
                   color: days === w.days ? C.header : C.muted,
@@ -265,6 +340,18 @@ export function EarningsCalendarContent() {
                 }}>{w.label}</button>
             ))}
           </div>
+        </div>
+        <div style={{ alignSelf: 'flex-end' }}>
+          <button
+            type="button"
+            onClick={() => setDate(today())}
+            title="Jump date to today (local)"
+            style={{
+              background: 'transparent', border: `1px solid ${C.border}`, color: C.muted, cursor: 'pointer',
+              fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
+              padding: '8px 12px', whiteSpace: 'nowrap',
+            }}
+          >Today</button>
         </div>
         <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', gap: 8 }}>
@@ -289,7 +376,10 @@ export function EarningsCalendarContent() {
           {' · '}<span style={{ color: C.text }}>{covered}</span> with estimates
           {sort
             ? <>{' · sorted by '}<span style={{ color: C.text }}>{sort.key}</span> {sort.dir === 'asc' ? '↑' : '↓'}</>
-            : <>{' · '}{fmtDate(date)}{days > 1 ? ` → ${fmtDate(grouped[grouped.length - 1]?.[0] || date)}` : ''}</>}
+            : <>{' · '}{fmtDate(date)}{days > 1 ? ` → ${fmtDate(rangeTo || grouped[grouped.length - 1]?.[0] || date)}` : ''}</>}
+          {days > 1 && (
+            <span style={{ color: C.dim }}> · {days} day window</span>
+          )}
         </div>
       )}
 

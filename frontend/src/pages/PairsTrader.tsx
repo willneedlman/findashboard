@@ -12,6 +12,9 @@ import { INPUT, LABEL, SIDEBAR, TICK, TOOLTIP_STYLE } from './valuationShared'
 import { fetchPairsAnalysis } from '../hooks/useApi'
 import { T } from '../lib/theme'
 import { MONO, SANS, mix, chg, signed, Panel, seg } from './cockpitKit'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip, chartClip, textClip } from '../lib/reportCaptureRegistry'
 
 interface Trade { n: number; entered: string; exited: string | null; side: string; z_in: number; z_out: number | null; days: number; pnl: number; open: boolean }
 interface Marker { date: string; z: number; side?: string; kind: string }
@@ -147,6 +150,66 @@ function Cockpit({ d }: { d: Resp }) {
   const z = d.zscore
   const hm = d.hedge_method
   const weeks = d.half_life_days != null ? Math.round(d.half_life_days / 5) : null
+
+  useReportCapture(() => {
+    const pair = `${d.a}/${d.b}`
+    const pieces: ClipDraft[] = [
+      kpiClip('Pairs Trader', `Pairs · ${pair}`, [
+        { label: 'Correlation', value: d.correlation != null ? d.correlation.toFixed(2) : '—' },
+        { label: 'Cointegration', value: d.adf.stationary ? 'Yes' : 'Weak' },
+        { label: 'Half-life', value: d.half_life_days != null ? `${d.half_life_days}d` : '—' },
+        { label: 'Hedge β', value: d.hedge_ratio.toFixed(2) },
+        { label: 'Current z', value: z.current != null ? z.current.toFixed(2) : '—' },
+        { label: 'Sharpe', value: d.backtest.sharpe != null ? d.backtest.sharpe.toFixed(2) : '—' },
+      ]),
+      kpiClip('Pairs Trader', `Backtest · ${pair}`, [
+        { label: 'Spread return', value: `${signed(d.backtest.total_spread_return * 100, 1)}%` },
+        { label: 'Trades', value: String(d.backtest.trades) },
+        { label: 'Win rate', value: d.backtest.win_rate != null ? `${(d.backtest.win_rate * 100).toFixed(0)}%` : '—' },
+        { label: 'Exposure', value: `${d.backtest.exposure_pct}%` },
+        { label: 'Signal', value: SIG[d.signal] },
+      ]),
+    ]
+    if (d.series.length) {
+      const step = Math.max(1, Math.ceil(d.series.length / 80))
+      const sampled = d.series.filter((_, i) => i % step === 0 || i === d.series.length - 1)
+      pieces.push(chartClip(
+        'Pairs Trader',
+        `Spread Z-Score · ${pair}`,
+        'line',
+        'date',
+        sampled.map(p => ({ date: p.date, z: p.z })),
+        [{ key: 'z', label: 'z-score' }],
+      ))
+    }
+    if (d.equity.length) {
+      const step = Math.max(1, Math.ceil(d.equity.length / 80))
+      const sampled = d.equity.filter((_, i) => i % step === 0 || i === d.equity.length - 1)
+      pieces.push(chartClip(
+        'Pairs Trader',
+        `Spread P&L · ${pair}`,
+        'area',
+        'date',
+        sampled.map(p => ({ date: p.date, v: p.v })),
+        [{ key: 'v', label: 'P&L %' }],
+      ))
+    }
+    if (d.trades.length) {
+      pieces.push(tableClip(
+        'Pairs Trader',
+        `Trade Log · ${pair}`,
+        ['#', 'Entered', 'Side', 'Z In', 'Exited', 'Z Out', 'Days', 'P&L %'],
+        d.trades.slice(0, 20).map(t => [
+          t.n, t.entered, t.side, t.z_in, t.exited ?? 'open', t.z_out ?? '—', t.days,
+          `${signed(t.pnl * 100, 2)}%`,
+        ]),
+      ))
+    }
+    pieces.push(textClip('Pairs Trader', `Signal · ${pair}`,
+      `z = ${z.current} · ${SIG[d.signal]} · entry ±${z.entry} · exit ±${z.exit} · hedge ${HEDGE_LABEL[hm] ?? hm} β ${d.hedge_ratio.toFixed(2)}`))
+    return pieces
+  }, { disabled: !d.a || !d.b, sourceTab: 'Pairs Trader' })
+
   const kpis = [
     { label: 'Correlation', value: d.correlation != null ? d.correlation.toFixed(2) : '—', vc: T.text, sub: 'daily log returns',
       tip: { title: 'Return correlation', body: `How tightly ${d.a} and ${d.b} move day to day. At ${d.correlation?.toFixed(2)} they share most of their direction — enough co-movement to run a spread, though correlation alone does not guarantee it mean-reverts.`, source: 'Pearson r of daily log returns' } },

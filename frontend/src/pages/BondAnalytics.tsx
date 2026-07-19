@@ -9,6 +9,9 @@ import SidebarLayout from '../components/SidebarLayout'
 import EmptyState from '../components/EmptyState'
 import Provenance from '../components/Provenance'
 import axios from 'axios'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip, chartClip, textClip } from '../lib/reportCaptureRegistry'
 import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
 
 const STRIP: React.CSSProperties = {
@@ -93,6 +96,56 @@ export function BondAnalyticsContent() {
     if (price < face * 0.999) return 'Discount Bond'
     return 'Par Bond'
   })()
+
+  const TAB = 'Bond Analytics'
+  useReportCapture(() => {
+    if (!data) return null
+    const pieces: ClipDraft[] = [
+      kpiClip(TAB, 'Bond Metrics', [
+        { label: 'Implied YTM', value: `${data.ytm}%`, sub: liveBondType },
+        { label: 'Modified Duration', value: String(data.mod_duration) },
+        { label: 'Convexity', value: String(data.convexity) },
+        { label: 'Coupon Payment', value: `$${data.coupon_payment}` },
+        { label: 'Face', value: `$${p.face}` },
+        { label: 'Market Price', value: `$${p.market_price}` },
+        { label: 'Coupon Rate', value: `${p.coupon_rate}%` },
+        { label: 'Maturity', value: `${p.maturity}y` },
+      ]),
+    ]
+    if (shiftedPoint) {
+      const chg = (shiftedPoint.price - p.market_price) / p.market_price * 100
+      pieces.push(kpiClip(TAB, `Rate Shift Sensitivity · ${shift > 0 ? '+' : ''}${shift} bps`, [
+        { label: 'Rate Shift', value: `${shift > 0 ? '+' : ''}${shift} bps` },
+        { label: 'New Price', value: `$${shiftedPoint.price.toFixed(2)}`, sub: `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%` },
+        { label: 'New YTM', value: `${Math.max(((data.ytm / 100) + shift / 10000) * 100, 0.01).toFixed(2)}%` },
+      ]))
+    }
+    if (data.sensitivity?.length) {
+      pieces.push(chartClip(TAB, 'Price vs Rate Shift', 'line', 'shift',
+        data.sensitivity.map((s: any) => ({ shift: s.shift, price: s.price })),
+        [{ key: 'price', label: 'Price' }],
+      ))
+    }
+    if (data.cash_flows?.length) {
+      pieces.push(chartClip(TAB, 'Cash Flow Schedule', 'bar', 'year',
+        data.cash_flows.map((c: any) => ({ year: c.year, nominal: c.nominal, pv: c.pv })),
+        [{ key: 'nominal', label: 'Nominal CF' }, { key: 'pv', label: 'Present Value' }],
+      ))
+      pieces.push(tableClip(TAB, 'Cash Flows',
+        ['Year', 'Nominal', 'PV'],
+        data.cash_flows.map((c: any) => [c.year, c.nominal?.toFixed?.(2) ?? c.nominal, c.pv?.toFixed?.(2) ?? c.pv]),
+      ))
+    }
+    if (aiNarrative?.summary) {
+      pieces.push(textClip(TAB, 'AI Bond Analysis', [
+        aiNarrative.summary,
+        aiNarrative.rate_sensitivity && `Rate Sensitivity: ${aiNarrative.rate_sensitivity}`,
+        aiNarrative.yield_context && `Yield Context: ${aiNarrative.yield_context}`,
+        aiNarrative.investor_fit && `Investor Fit: ${aiNarrative.investor_fit}`,
+      ].filter(Boolean).join('\n\n')))
+    }
+    return pieces
+  }, { disabled: !data, sourceTab: TAB })
 
   return (
       <SidebarLayout sidebarWidth={210} sidebarTitle="" sidebar={<>

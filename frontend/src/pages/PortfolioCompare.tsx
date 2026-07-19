@@ -10,6 +10,9 @@ import EmptyState from '../components/EmptyState'
 import TickerInput from '../components/TickerInput'
 import PMImportPicker from '../components/PMImportPicker'
 import { CASH_SYMBOL, type ImportResult } from '../lib/pmImport'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip, chartClip } from '../lib/reportCaptureRegistry'
 
 const C = {
   bg: 'var(--theme-bg)', surf: 'var(--theme-surface)', border: 'var(--theme-border)',
@@ -101,6 +104,49 @@ export function PortfolioCompareContent() {
         return pt ? { name: s.name, date: pt.date, color: LINE_COLORS[i] } : null
       }).filter(Boolean) as { name: string; date: string; color: string }[]
     : []
+
+  useReportCapture(() => {
+    if (!r?.metrics?.length) return null
+    const pieces: ClipDraft[] = [
+      kpiClip('Compare Portfolios', 'Portfolio Comparison Snapshot', r.metrics.map(mt => ({
+        label: mt.name,
+        value: `${mt.cagr >= 0 ? '+' : ''}${mt.cagr}% CAGR`,
+        sub: `Sharpe ${mt.sharpe} · DD ${mt.max_drawdown}%`,
+      }))),
+      tableClip(
+        'Compare Portfolios',
+        'Metrics',
+        ['Portfolio', 'Lev', 'CAGR %', 'Vol %', 'Sharpe', 'Max DD %', 'Sortino', 'Calmar'],
+        r.metrics.map(mt => [
+          mt.liquidated ? `${mt.name} (LIQ)` : mt.name,
+          `${mt.leverage}x`,
+          mt.cagr,
+          mt.vol,
+          mt.sharpe,
+          mt.max_drawdown,
+          mt.sortino,
+          mt.calmar,
+        ]),
+      ),
+    ]
+    if (chartData.length && r.series.length) {
+      const step = Math.max(1, Math.ceil(chartData.length / 80))
+      const sampled = chartData.filter((_, i) => i % step === 0 || i === chartData.length - 1) as Record<string, string | number>[]
+      pieces.push(chartClip(
+        'Compare Portfolios',
+        mode === 'pct' ? 'Cumulative Return' : 'Growth of $100',
+        'line',
+        'date',
+        sampled.map(row => {
+          const out: Record<string, string | number | null> = { date: String(row.date) }
+          for (const s of r.series) out[s.name] = (row[s.name] as number) ?? null
+          return out
+        }),
+        r.series.map(s => ({ key: s.name, label: s.name })),
+      ))
+    }
+    return pieces
+  }, { disabled: !r?.metrics?.length, sourceTab: 'Compare Portfolios' })
 
   return (
     <>

@@ -6,6 +6,9 @@ import SidebarLayout from '../components/SidebarLayout'
 import EmptyState from '../components/EmptyState'
 import { KpiCell } from '../components/mmCockpit'
 import { RailSection } from './valuationShared'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip } from '../lib/reportCaptureRegistry'
 
 const GOLD = 'var(--theme-primary, #c9a84c)'
 const SEC = 'var(--theme-secondary, #8099b0)'
@@ -159,6 +162,62 @@ export function EtfXrayContent() {
   const tag = (f: string) => (
     <span key={f} style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, color: fundColor(f), border: `1px solid ${fundColor(f)}`, padding: '1px 4px', whiteSpace: 'nowrap' }}>{f}</span>
   )
+
+  useReportCapture(() => {
+    if (!data) return null
+    const pieces: ClipDraft[] = []
+    const fundNames = data.funds.map(f => f.fund).join(' + ')
+    pieces.push(kpiClip('ETF Analyzer', `Look-Through · ${fundNames}`, [
+      { label: 'ETFs', value: String(data.funds.length), sub: fundNames },
+      { label: 'Unique Holdings', value: String(data.unique_holdings), sub: data.any_partial ? 'partial coverage' : undefined },
+      { label: 'Overlapping Names', value: data.funds.length > 1 ? String(data.overlapping_holdings) : '—', sub: 'held in ≥2 funds' },
+      { label: 'Max Pair Overlap', value: maxPair ? `${(ov[maxPair[0]]?.[maxPair[1]] ?? 0).toFixed(1)}%` : '—', sub: maxPair ? `${maxPair[0]} × ${maxPair[1]}` : undefined },
+    ]))
+    pieces.push(tableClip(
+      'ETF Analyzer',
+      'Look-Through Holdings',
+      ['#', 'Ticker', 'Name', 'Weight %', 'Funds', 'Fund list'],
+      rows.slice(0, 20).map((a, i) => [
+        i + 1,
+        a.ticker,
+        a.name,
+        a.weight.toFixed(2),
+        a.fund_count,
+        a.funds.join(', '),
+      ]),
+    ))
+    if (data.overlap.length) {
+      pieces.push(tableClip(
+        'ETF Analyzer',
+        'Fund Overlap Matrix',
+        ['Fund A', 'Fund B', 'Overlap %', 'Shared names'],
+        data.overlap.map(o => [o.a, o.b, o.overlap.toFixed(1), o.shared]),
+      ))
+    }
+    if (sharedNames.length && activePair) {
+      pieces.push(tableClip(
+        'ETF Analyzer',
+        `Shared Holdings · ${activePair[0]} × ${activePair[1]}`,
+        ['Ticker', 'Name', 'Weight %', 'Funds'],
+        sharedNames.slice(0, 20).map(a => [a.ticker, a.name, a.weight.toFixed(2), a.funds.join(', ')]),
+      ))
+    }
+    if (data.funds.length) {
+      pieces.push(tableClip(
+        'ETF Analyzer',
+        'Fund Snapshot',
+        ['Fund', 'Name', 'Holdings', 'Top 10 %', 'As of'],
+        data.funds.map(f => [
+          f.fund,
+          f.name,
+          f.count,
+          f.top10 != null ? f.top10.toFixed(1) : null,
+          f.as_of || null,
+        ]),
+      ))
+    }
+    return pieces
+  }, { disabled: !data, sourceTab: 'ETF Analyzer' })
 
   return (
     <SidebarLayout sidebarWidth={220} sidebarTitle="" sidebar={<>

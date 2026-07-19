@@ -1,4 +1,7 @@
 import { useState, useMemo } from 'react'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip, chartClip } from '../lib/reportCaptureRegistry'
 import { useMutation } from '@tanstack/react-query'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Legend, ScatterChart, Scatter } from 'recharts'
@@ -641,6 +644,60 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
     }
     return counts.map((count, i) => ({ price: Math.round((lo + (i + 0.5) * width) * 100) / 100, count }))
   }, [data])
+
+  useReportCapture(() => {
+    if (!data) return null
+    const label = data.is_basket
+      ? `${data.tickers?.length ?? 0} tickers`
+      : (data.ticker ?? tickers[0] ?? 'Options')
+    const pieces: ClipDraft[] = []
+    if (data.strategy_metrics) {
+      pieces.push(kpiClip('Monte Carlo', `Options MC · ${label}`, [
+        { label: 'CAGR (Median)', value: fmtPct(data.strategy_metrics.ann_return) },
+        { label: 'Sharpe', value: fmtNum(data.strategy_metrics.sharpe, 2) },
+        { label: 'Max DD', value: fmtPct(data.strategy_metrics.max_drawdown) },
+        { label: 'Win Rate', value: fmtPct(data.strategy_metrics.win_rate) },
+        { label: 'Trades / Path', value: fmtNum(data.strategy_metrics.num_trades, 2) },
+        { label: 'Prob. of Profit', value: fmtPct(data.prob_profit) },
+      ]))
+    } else {
+      pieces.push(kpiClip('Monte Carlo', `Options MC · ${label}`, [
+        { label: data.entry_credit_debit >= 0 ? 'Credit' : 'Debit', value: `$${Math.abs(data.entry_credit_debit).toLocaleString(undefined, { maximumFractionDigits: 0 })}` },
+        { label: 'Prob. of Profit', value: fmtPct(data.prob_profit) },
+        { label: 'Max Profit', value: data.max_profit == null ? 'Unlimited' : `$${data.max_profit.toLocaleString(undefined, { maximumFractionDigits: 0 })}` },
+        { label: 'Max Loss', value: data.max_loss == null ? 'Unlimited' : `$${Math.abs(data.max_loss).toLocaleString(undefined, { maximumFractionDigits: 0 })}` },
+        { label: 'P50 P&L', value: `$${fmtNum(data.percentiles.p50, 0)}` },
+        { label: 'P5 / P95', value: `$${fmtNum(data.percentiles.p5, 0)} / $${fmtNum(data.percentiles.p95, 0)}` },
+      ]))
+    }
+    if (bandsData.length) {
+      const step = Math.max(1, Math.ceil(bandsData.length / 80))
+      const sampled = bandsData.filter((_, i) => i % step === 0 || i === bandsData.length - 1)
+      pieces.push(chartClip(
+        'Monte Carlo',
+        `Simulated Paths · ${label}`,
+        'area',
+        'day',
+        sampled.map(b => ({ day: b.day, p5: b.p5, p50: b.p50, p95: b.p95 })),
+        [
+          { key: 'p95', label: 'P95' },
+          { key: 'p50', label: 'Median' },
+          { key: 'p5', label: 'P5' },
+        ],
+      ))
+    }
+    if (terminalHist.length) {
+      pieces.push(chartClip(
+        'Monte Carlo',
+        `Terminal Distribution · ${label}`,
+        'bar',
+        'price',
+        terminalHist.slice(0, 40).map(h => ({ price: h.price, count: h.count })),
+        [{ key: 'count', label: 'Count' }],
+      ))
+    }
+    return pieces
+  }, { disabled: !data, sourceTab: 'Monte Carlo' })
 
   // Daily-return scatter for regression chart (strategy y vs market x)
   const regReturnsScatter = useMemo(() => {
@@ -1749,6 +1806,62 @@ export function MonteCarloContent() {
       }
     },
   })
+
+  useReportCapture(() => {
+    if (!data?.median) return null
+    const pieces: ClipDraft[] = [
+      kpiClip('Monte Carlo', 'Portfolio Monte Carlo Snapshot', [
+        { label: 'Median Final', value: `$${Number(data.median).toFixed(2)}` },
+        { label: 'Prob of Profit', value: `${Number(data.probProfit).toFixed(1)}%` },
+        { label: 'P5', value: `$${Number(data.p5).toFixed(2)}` },
+        { label: 'P95', value: `$${Number(data.p95).toFixed(2)}` },
+        { label: 'VaR 95%', value: `$${Number(data.varAmt).toFixed(2)}` },
+        { label: 'CVaR 95%', value: `$${Number(data.cvarAmt).toFixed(2)}` },
+        { label: 'Eff. Drift', value: `${Number(data.effDrift).toFixed(1)}%` },
+        ...(data.probRuin > 0 ? [{ label: 'Prob of Ruin', value: `${Number(data.probRuin).toFixed(1)}%` }] : []),
+      ]),
+    ]
+    if (Array.isArray(data.legs) && data.legs.length) {
+      pieces.push(tableClip(
+        'Monte Carlo',
+        'Portfolio Legs',
+        ['Ticker', 'Weight %', 'Vol %', 'Drift %'],
+        data.legs.slice(0, 20).map((l: { ticker: string; weight: number; vol?: number; drift?: number }) => [
+          l.ticker, l.weight, l.vol ?? null, l.drift ?? null,
+        ]),
+      ))
+    }
+    if (Array.isArray(data.bands) && data.bands.length) {
+      const step = Math.max(1, Math.ceil(data.bands.length / 80))
+      const sampled = data.bands.filter((_: unknown, i: number) => i % step === 0 || i === data.bands.length - 1)
+      pieces.push(chartClip(
+        'Monte Carlo',
+        `Simulated Paths vs ${data.benchmark}`,
+        'area',
+        'day',
+        sampled.map((b: { day: number; p5: number; p50: number; p95: number; bench_p50?: number }) => ({
+          day: b.day, p5: b.p5, p50: b.p50, p95: b.p95, bench_p50: b.bench_p50 ?? null,
+        })),
+        [
+          { key: 'p95', label: 'P95' },
+          { key: 'p50', label: 'Median' },
+          { key: 'p5', label: 'P5' },
+          { key: 'bench_p50', label: String(data.benchmark) },
+        ],
+      ))
+    }
+    if (Array.isArray(data.histogram) && data.histogram.length) {
+      pieces.push(chartClip(
+        'Monte Carlo',
+        'Terminal Portfolio Distribution',
+        'bar',
+        'price',
+        data.histogram.slice(0, 50).map((h: { price: number; count: number }) => ({ price: h.price, count: h.count })),
+        [{ key: 'count', label: 'Frequency' }],
+      ))
+    }
+    return pieces
+  }, { disabled: mcMode !== 'portfolio' || !data?.median, sourceTab: 'Monte Carlo' })
 
   if (mcMode === 'options-strategy') {
     return <OptionsStrategyMonteCarlo onSwitchMode={() => setMcMode('portfolio')} handoff={algoOptionsHandoff} />

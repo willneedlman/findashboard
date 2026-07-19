@@ -7,6 +7,9 @@ import {
 } from 'recharts'
 import { TOOLTIP_STYLE, CROSSHAIR_CURSOR, BAR_CURSOR } from '../components/ChartTooltip'
 import PageWrapper from '../components/PageWrapper'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, chartClip } from '../lib/reportCaptureRegistry'
 
 const TICK = { fontSize: 9, fill: 'var(--theme-secondary, #5e768f)', fontFamily: 'var(--theme-mono)' }
 const FED_TARGET = 2.0
@@ -66,6 +69,49 @@ export function EconomyMonitorContent() {
     staleTime: 24 * 3_600_000,
     retry: 1,
   })
+
+  const TAB = 'Macro Monitor'
+  useReportCapture(() => {
+    if (!data) return null
+    const { unemployment: u, payrolls: p, inflation: inf } = data
+    const pieces: ClipDraft[] = [
+      kpiClip(TAB, 'Macro Pulse', [
+        { label: 'Unemployment', value: u.value != null ? `${u.value.toFixed(1)}%` : '—', sub: fmtMonth(u.date) },
+        { label: 'Payrolls (MoM)', value: p.value != null ? `${p.value >= 0 ? '+' : ''}${Math.round(p.value)}K` : '—', sub: fmtMonth(p.date) },
+        { label: 'CPI (YoY)', value: inf.cpi != null ? `${inf.cpi.toFixed(1)}%` : '—', sub: fmtMonth(inf.date) },
+        { label: 'Core CPI (YoY)', value: inf.core != null ? `${inf.core.toFixed(1)}%` : '—' },
+        { label: 'PCE (YoY)', value: inf.pce != null ? `${inf.pce.toFixed(1)}%` : '—' },
+      ]),
+    ]
+    if (inf.trend?.length) {
+      pieces.push(chartClip(TAB, 'Inflation — Year over Year', 'line', 'd',
+        inf.trend.map(t => ({ d: t.d, cpi: t.cpi, core: t.core, pce: t.pce })),
+        [
+          { key: 'cpi', label: 'CPI' },
+          { key: 'core', label: 'Core CPI' },
+          { key: 'pce', label: 'PCE' },
+        ],
+      ))
+    }
+    if (u.trend?.length) {
+      pieces.push(chartClip(TAB, 'Unemployment Rate', 'area', 'd',
+        u.trend.map(t => ({ d: t.d, v: t.v })),
+        [{ key: 'v', label: 'Unemployment' }],
+      ))
+    }
+    if (p.trend?.length) {
+      pieces.push(chartClip(TAB, 'Nonfarm Payrolls', 'bar', 'd',
+        p.trend.map(t => ({ d: t.d, v: t.v })),
+        [{ key: 'v', label: 'Payrolls (K)' }],
+      ))
+    }
+    if (spf?.available && spf.forecasts?.length) {
+      pieces.push(kpiClip(TAB, 'SPF Professional Forecasts',
+        spf.forecasts.map(f => ({ label: f.label, value: `${f.median.toFixed(1)}%` })),
+      ))
+    }
+    return pieces
+  }, { disabled: !data, sourceTab: TAB })
 
   if (isLoading) {
     return <div style={{ padding: 40, textAlign: 'center', fontFamily: T.mono, fontSize: 11, color: T.muted }}>Loading economic data…</div>

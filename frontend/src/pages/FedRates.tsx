@@ -11,6 +11,9 @@ import PageWrapper from '../components/PageWrapper'
 import { fetchYieldCurve, fetchFedProjections, fetchSepDots, fetchCurveSpreads } from '../hooks/useApi'
 import { TOOLTIP_STYLE, CROSSHAIR_CURSOR } from '../components/ChartTooltip'
 import { formatLocalTime, localTimeZone } from '../lib/time'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip, chartClip } from '../lib/reportCaptureRegistry'
 
 // Weight models — how a front-end funds shock decays across meetings / tenors.
 const FED_WEIGHTS = [1.0, 0.9, 0.7, 0.5, 0.3, 0.1]
@@ -473,6 +476,98 @@ export function FedRatesContent() {
     const d = new Date(sepData.vintage + 'T00:00:00')
     sepVintage = `${MONTHS[d.getMonth()]} ${d.getFullYear()} SEP`
   }
+
+  const TAB = 'Rate Engine'
+  useReportCapture(() => {
+    if (!ready) return null
+    const pieces: ClipDraft[] = []
+    if (m0) {
+      pieces.push(kpiClip(TAB, 'Fed Funds Path Pulse', [
+        { label: 'Next Meeting', value: `${m0.adjusted_rate.toFixed(2)}%`, sub: m0.date },
+        ...(yEnd ? [{ label: yEnd.date, value: `${yEnd.adjusted_rate.toFixed(2)}%` }] : []),
+        { label: 'Total Move', value: `${totalMove > 0 ? '+' : ''}${totalMove.toFixed(0)} bps` },
+        ...(twist ? [{ label: 'Scenario Shock', value: `${twist > 0 ? '+' : ''}${twist} bps` }] : []),
+        ...(fomcLabel ? [{ label: 'Next FOMC', value: fomcLabel, sub: fomcDays }] : []),
+      ]))
+    }
+    if (adjustedMeetings.length) {
+      pieces.push(chartClip(TAB, 'Market-Implied Fed Funds Path', 'line', 'date',
+        adjustedMeetings.map((m: any) => ({
+          date: m.date,
+          adjusted_rate: m.adjusted_rate,
+          ...(twist ? { base_rate: m.base_rate } : {}),
+        })),
+        [
+          { key: 'adjusted_rate', label: twist ? 'Scenario' : 'Implied' },
+          ...(twist ? [{ key: 'base_rate', label: 'Base' }] : []),
+        ],
+      ))
+      pieces.push(tableClip(TAB, 'Meeting Odds',
+        ['Date', 'Implied Rate', 'P(Hike)', 'P(Hold)', 'P(Cut)'],
+        adjustedMeetings.slice(0, 8).map((m: any) => [
+          m.date,
+          `${m.adjusted_rate.toFixed(2)}%`,
+          `${Math.round(m.prob_hike)}%`,
+          `${Math.round(m.prob_hold)}%`,
+          `${Math.round(m.prob_cut)}%`,
+        ]),
+      ))
+    }
+    if (adjustedCurve.length) {
+      const ten10Y = getTenorVal('10Y')
+      const ten2Y = getTenorVal('2Y')
+      const ten3M = getTenorVal('3M')
+      pieces.push(kpiClip(TAB, 'Yield Curve Snapshot', [
+        { label: '10Y-2Y', value: `${((ten10Y - ten2Y) * 100).toFixed(0)}bp` },
+        { label: '10Y-3M', value: `${((ten10Y - ten3M) * 100).toFixed(0)}bp` },
+        ...adjustedCurve.map(a => ({
+          label: a.tenor,
+          value: `${(twist ? a.adjusted : a.current).toFixed(2)}%`,
+        })),
+      ]))
+    }
+    if (curveChart.length) {
+      pieces.push(chartClip(TAB, 'US Treasury Yield Curve', 'line', 'tenor',
+        curveChart.map((r: any) => ({
+          tenor: r.tenor,
+          today: r.today,
+          d1: r.d1,
+          m1: r.m1,
+          m6: r.m6,
+          ...(r.adjusted != null ? { adjusted: r.adjusted } : {}),
+        })),
+        [
+          { key: 'today', label: 'Today' },
+          { key: 'd1', label: '1D Ago' },
+          { key: 'm1', label: '1M Ago' },
+          { key: 'm6', label: '6M Ago' },
+          ...(twist ? [{ key: 'adjusted', label: 'Scenario' }] : []),
+        ],
+      ))
+    }
+    if (spreadsData?.spreads?.length) {
+      pieces.push(tableClip(TAB, 'Curve Spreads — 6M Trend',
+        ['Spread', 'Current (bp)', '6M Change (bp)'],
+        spreadsData.spreads.map((s: any) => {
+          const chg = (s.current != null && s.history?.length) ? s.current - s.history[0].bp : null
+          return [s.label ?? s.name ?? s.id, s.current != null ? s.current.toFixed(0) : null, chg != null ? chg.toFixed(0) : null]
+        }),
+      ))
+    }
+    if (sepData?.years?.length) {
+      pieces.push(tableClip(TAB, 'SEP Dot Plot vs Market',
+        ['Year', 'Median', 'Market', 'Range Low', 'Range High'],
+        sepData.years.map((y: any) => [
+          y.year,
+          y.median != null ? y.median.toFixed(2) : null,
+          y.market != null ? y.market.toFixed(2) : null,
+          y.low != null ? y.low.toFixed(2) : (y.range_low != null ? y.range_low.toFixed(2) : null),
+          y.high != null ? y.high.toFixed(2) : (y.range_high != null ? y.range_high.toFixed(2) : null),
+        ]),
+      ))
+    }
+    return pieces
+  }, { disabled: !ready, sourceTab: TAB })
 
   return (
     <div style={{ maxWidth: 1560, margin: '0 auto', border: `1px solid ${T.border}`, background: T.bg }}>

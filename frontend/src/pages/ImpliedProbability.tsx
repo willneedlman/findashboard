@@ -9,6 +9,9 @@ import axios from 'axios'
 import EmptyState from '../components/EmptyState'
 import ExpirySelect from '../components/ExpirySelect'
 import { useChartColors } from '../hooks/useChartColors'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, chartClip } from '../lib/reportCaptureRegistry'
 import { INPUT, LABEL, TOOLTIP_STYLE, TICK, RailSection } from './valuationShared'
 
 const STRIP: React.CSSProperties = {
@@ -116,6 +119,60 @@ export function ImpliedProbabilityContent() {
     const d = new Date(`${expiry}T00:00:00`)
     return isNaN(+d) ? null : Math.max(0, Math.round((+d - Date.now()) / 86_400_000))
   })()
+
+  const TAB = 'Implied Probability'
+  useReportCapture(() => {
+    if (!cone && !dist) return null
+    const pieces: ClipDraft[] = []
+    if (cone) {
+      pieces.push(kpiClip(TAB, `Vol Cone · ${ticker}`, [
+        { label: 'Spot', value: `$${cone.S0.toLocaleString()}` },
+        { label: 'ATM IV', value: `${(cone.sigma * 100).toFixed(1)}%` },
+        { label: 'Risk-Free Rate', value: `${(cone.r * 100).toFixed(2)}%` },
+        { label: 'Days to Expiry', value: dte != null ? `${dte}d` : '—' },
+      ]))
+      if (cone.cone?.length) {
+        pieces.push(chartClip(TAB, `Volatility Cone — ${ticker}`, 'area', 'date',
+          cone.cone.map((p: any) => ({ date: p.date, upper: p.upper, median: p.median, lower: p.lower })),
+          [
+            { key: 'upper', label: '~85th Pct' },
+            { key: 'median', label: 'Median' },
+            { key: 'lower', label: '~15th Pct' },
+          ],
+        ))
+      }
+    }
+    if (dist) {
+      const k = strike ?? dist.p50
+      const pAbove = interpAt(dist.delta_curve, 'delta', k)
+      pieces.push(kpiClip(TAB, `Market Distribution · ${ticker}`, [
+        { label: 'Modal Strike', value: `$${dist.modal_strike.toLocaleString()}` },
+        { label: 'P10', value: `$${dist.p10.toLocaleString()}` },
+        { label: 'P50', value: `$${dist.p50.toLocaleString()}` },
+        { label: 'P90', value: `$${dist.p90.toLocaleString()}` },
+        { label: 'IV Skew (P−C)', value: `${dist.iv_skew > 0 ? '+' : ''}${dist.iv_skew.toFixed(1)}%` },
+        { label: 'Avg Call IV', value: `${dist.avg_call_iv.toFixed(1)}%` },
+      ]))
+      pieces.push(kpiClip(TAB, `Explorer @ $${k.toLocaleString()}`, [
+        { label: 'Strike', value: `$${k.toLocaleString()}` },
+        { label: 'P(Finish Above)', value: pAbove != null ? `${(pAbove * 100).toFixed(1)}%` : '—' },
+        { label: 'P(Below)', value: pAbove != null ? `${((1 - pAbove) * 100).toFixed(1)}%` : '—' },
+      ]))
+      if (dist.density?.length) {
+        pieces.push(chartClip(TAB, `Probability Density — ${ticker}`, 'area', 'strike',
+          dist.density.map((p: any) => ({ strike: p.strike, density: +(p.density * 100).toFixed(4) })),
+          [{ key: 'density', label: 'Density %' }],
+        ))
+      }
+      if (dist.delta_curve?.length) {
+        pieces.push(chartClip(TAB, 'Cumulative P(Finish Above)', 'line', 'strike',
+          dist.delta_curve.map((p: any) => ({ strike: p.strike, delta: +(p.delta * 100).toFixed(2) })),
+          [{ key: 'delta', label: 'P(S_T > K) %' }],
+        ))
+      }
+    }
+    return pieces
+  }, { disabled: !cone && !dist, sourceTab: TAB })
 
   return (
     <SidebarLayout sidebarWidth={210} sidebarTitle="" sidebar={<>

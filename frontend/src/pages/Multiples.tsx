@@ -5,6 +5,9 @@ import SidebarLayout from '../components/SidebarLayout'
 import EmptyState from '../components/EmptyState'
 import TickerInput from '../components/TickerInput'
 import { INPUT, LABEL, RailSection, PRIMARY_BTN, READOUT_ROW, TH, TD, PANEL, STACK, VerdictStrip, upsidePrimary, LabeledPanel } from './valuationShared'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip } from '../lib/reportCaptureRegistry'
 
 const MONO = 'var(--theme-mono)', SANS = 'var(--theme-sans)'
 const TXT = 'var(--theme-text, #d7e3fc)', SEC = 'var(--theme-secondary, #99907e)', GOLD = 'var(--theme-primary, #c9a84c)'
@@ -115,6 +118,32 @@ export function MultiplesContent() {
     const avgUpside = (avg != null && data.price) ? (avg / data.price - 1) * 100 : null
     return { out, avg, avgUpside }
   }, [data, target])
+
+  useReportCapture(() => {
+    if (!data || !rows || !data.metrics.length) return null
+    const tkr = data.ticker ? ` · ${data.ticker}` : ''
+    const pieces: ClipDraft[] = [
+      kpiClip('Multiples', `Multiples Verdict${tkr}`, [
+        { label: 'Blended Implied', value: rows.avg != null ? `$${rows.avg.toFixed(2)}` : '—' },
+        ...(data.price != null ? [{ label: 'Market Price', value: `$${data.price.toFixed(2)}` }] : []),
+        ...(rows.avgUpside != null ? [{ label: 'Upside', value: `${rows.avgUpside >= 0 ? '+' : '−'}${Math.abs(rows.avgUpside).toFixed(1)}%` }] : []),
+      ]),
+      tableClip(
+        'Multiples',
+        `Implied Price by Multiple${tkr}`,
+        ['Multiple', 'Per Share', 'Current', 'Target', 'Implied', 'Upside'],
+        rows.out.map(r => [
+          r.label,
+          r.per_share.toFixed(2),
+          r.current_mult != null ? r.current_mult.toFixed(1) : null,
+          r.mult.toFixed(1),
+          isFinite(r.implied) ? `$${r.implied.toFixed(2)}` : null,
+          r.upside != null ? `${r.upside >= 0 ? '+' : '−'}${Math.abs(r.upside).toFixed(1)}%` : null,
+        ]),
+      ),
+    ]
+    return pieces
+  }, { disabled: !data || !rows || !data.metrics.length, sourceTab: 'Multiples' })
 
   return (
     <SidebarLayout sidebarWidth={232} sidebarTitle="" sidebar={

@@ -24,6 +24,7 @@ const ALLOWLIST = [
   'fdb_custom_strategies',         // Custom strategies
   'ft_nav_favorites',              // Pinned nav items
   'pe_wl',                         // Portfolio Earnings watchlist
+  'fdb_report_creator_v1',         // Report Creator projects and clips
 ]
 const ALLOW = new Set(ALLOWLIST)
 

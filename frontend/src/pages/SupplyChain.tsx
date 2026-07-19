@@ -17,6 +17,9 @@ import ErrorState from '../components/ErrorState'
 import LoadingState from '../components/LoadingState'
 import FactSetFinancials from '../components/FactSetFinancials'
 import HelpTip from '../components/HelpTip'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip, textClip } from '../lib/reportCaptureRegistry'
 
 
 const SEGMENT_COLORS = ['var(--theme-primary, #c9a84c)', '#60a5fa', 'var(--theme-positive, #22c55e)', '#f97316', '#a78bfa', '#38bdf8', '#fb7185', '#34d399', '#fbbf24', '#e879f9']
@@ -690,6 +693,85 @@ export function SupplyChainContent() {
     const t = searchParams.get('ticker')
     if (t) doFetch(t)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const TAB = 'Company Profile'
+  useReportCapture(() => {
+    if (!data) return null
+    const pieces: ClipDraft[] = [
+      kpiClip(TAB, `${data.ticker} · Snapshot`, [
+        { label: 'Price', value: data.price != null ? `$${data.price.toFixed(2)}` : '—' },
+        { label: 'Market Cap', value: fmtCap(data.market_cap) },
+        { label: 'P/E', value: data.pe_ratio != null ? data.pe_ratio.toFixed(1) : '—' },
+        { label: 'EPS (TTM)', value: data.eps_ttm != null ? `$${data.eps_ttm.toFixed(2)}` : '—' },
+        { label: 'Rev Growth', value: data.rev_growth != null ? `${(data.rev_growth * 100).toFixed(1)}%` : '—' },
+        { label: 'Div Yield', value: data.div_yield != null ? `${data.div_yield.toFixed(2)}%` : '—' },
+        { label: 'Employees', value: fmtEmp(data.employees) },
+      ]),
+      kpiClip(TAB, `${data.ticker} · Profitability`, [
+        { label: 'Gross Margin', value: data.gross_margin != null ? `${data.gross_margin.toFixed(1)}%` : '—' },
+        { label: 'Operating Margin', value: data.operating_margin != null ? `${data.operating_margin.toFixed(1)}%` : '—' },
+        { label: 'Net Margin', value: data.net_margin != null ? `${data.net_margin.toFixed(1)}%` : '—' },
+        { label: 'ROE', value: data.roe != null ? `${data.roe.toFixed(1)}%` : '—' },
+        { label: 'ROA', value: data.roa != null ? `${data.roa.toFixed(1)}%` : '—' },
+        { label: 'Current Ratio', value: data.current_ratio != null ? data.current_ratio.toFixed(2) : '—' },
+      ]),
+    ]
+    if (data.description) {
+      pieces.push(textClip(TAB, `${data.name} (${data.ticker})`,
+        `${data.sector || '—'}${data.industry ? ` · ${data.industry}` : ''}\n\n${data.description.slice(0, 600)}${data.description.length > 600 ? '…' : ''}`))
+    }
+    if (data.product_segments?.latest?.length) {
+      pieces.push(tableClip(TAB, 'Product Segments',
+        ['Segment', 'Value', 'Share %', 'YoY %'],
+        data.product_segments.latest.slice(0, 20).map(s => [
+          prettyName(s.name),
+          Math.round(s.value),
+          s.pct.toFixed(1),
+          s.yoy_pct != null ? s.yoy_pct.toFixed(1) : null,
+        ]),
+      ))
+    }
+    if (data.geo_segments?.latest?.length) {
+      pieces.push(tableClip(TAB, 'Geographic Segments',
+        ['Region', 'Value', 'Share %', 'YoY %'],
+        data.geo_segments.latest.slice(0, 20).map(s => [
+          prettyName(s.name),
+          Math.round(s.value),
+          s.pct.toFixed(1),
+          s.yoy_pct != null ? s.yoy_pct.toFixed(1) : null,
+        ]),
+      ))
+    }
+    if (inst?.holders?.length) {
+      pieces.push(kpiClip(TAB, 'Ownership Mix', [
+        { label: 'Institutions', value: inst.pct_institutions != null ? `${inst.pct_institutions.toFixed(1)}%` : '—' },
+        { label: 'Insiders', value: inst.pct_insiders != null ? `${inst.pct_insiders.toFixed(1)}%` : '—' },
+        { label: 'Passive', value: inst.passive_pct != null ? `${inst.passive_pct.toFixed(1)}%` : '—' },
+        { label: 'Active', value: inst.active_pct != null ? `${inst.active_pct.toFixed(1)}%` : '—' },
+      ]))
+      pieces.push(tableClip(TAB, 'Top Institutional Holders',
+        ['Holder', 'Shares', 'Value', '% Out'],
+        inst.holders.slice(0, 15).map(h => [
+          h.holder,
+          Math.round(h.shares),
+          Math.round(h.value),
+          h.pct_out != null ? h.pct_out.toFixed(2) : null,
+        ]),
+      ))
+    }
+    if (deals?.deals?.length) {
+      pieces.push(tableClip(TAB, 'M&A Activity',
+        ['Date', 'Type', 'Counterparty', 'Value'],
+        deals.deals.slice(0, 15).map((d: { date?: string; deal_type?: string; type?: string; counterparty?: string; target?: string; acquirer?: string; value?: number | null; deal_value?: number | null }) => [
+          d.date || '—',
+          d.deal_type || d.type || '—',
+          d.counterparty || d.target || d.acquirer || '—',
+          d.value != null ? Math.round(d.value) : d.deal_value != null ? Math.round(d.deal_value) : null,
+        ]),
+      ))
+    }
+    return pieces
+  }, { disabled: !data, sourceTab: TAB })
 
   return (
     <div id="supply-chain-content" style={{ width: '100%' }}>

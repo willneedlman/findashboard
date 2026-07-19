@@ -27,6 +27,9 @@ import { TAB_BAR, TAB_BASE, type Tab, type Asset, makeAsset, PORT_DEFAULTS, PORT
 import { PRESETS } from '../strategy-builder/shared'
 import { legsToCombo } from '../AlgoStrategyBuilder'
 import { ReturnsScatter, quickRegression } from '../regressionShared'
+import type { ClipDraft } from '../../lib/reportCreator'
+import { useReportCapture } from '../../hooks/useReportCapture'
+import { kpiClip, tableClip, chartClip } from '../../lib/reportCaptureRegistry'
 
 const STRIP: React.CSSProperties = {
   display: 'flex', alignItems: 'stretch', overflowX: 'auto',
@@ -320,6 +323,58 @@ export function PortfolioTab() {
 
   const updateAsset = (i: number, patch: Partial<Asset>) =>
     setAssets(prev => prev.map((a, idx) => idx === i ? { ...a, ...patch } : a))
+
+  useReportCapture(() => {
+    if (!data?.metrics) return null
+    const m = data.metrics as {
+      port_cagr: number; bench_cagr: number; port_sharpe: number; port_vol: number
+      max_drawdown: number; sortino: number; calmar: number; beta: number
+    }
+    const pieces: ClipDraft[] = [
+      kpiClip('Backtester', 'Portfolio Backtest Snapshot', [
+        { label: 'Portfolio CAGR', value: `${m.port_cagr}%` },
+        { label: `${benchmark} CAGR`, value: `${m.bench_cagr}%` },
+        { label: 'Sharpe', value: String(m.port_sharpe) },
+        { label: 'Ann. Vol', value: `${m.port_vol}%` },
+        { label: 'Max Drawdown', value: `${m.max_drawdown}%` },
+        { label: 'Sortino', value: String(m.sortino) },
+        { label: 'Calmar', value: String(m.calmar) },
+        { label: 'Beta', value: String(m.beta) },
+      ]),
+    ]
+    if (Array.isArray(assets) && assets.length) {
+      pieces.push(tableClip(
+        'Backtester',
+        'Holdings',
+        ['Ticker', 'Weight %'],
+        assets.slice(0, 20).map(a => [a.ticker, a.weight]),
+      ))
+    }
+    const curve = (data.strategyResult?.cumulative || data.cumulative) as { date: string; portfolio?: number; benchmark?: number; strategy?: number }[] | undefined
+    if (Array.isArray(curve) && curve.length) {
+      const step = Math.max(1, Math.ceil(curve.length / 80))
+      const sampled = curve.filter((_, i) => i % step === 0 || i === curve.length - 1)
+      const series = [
+        { key: 'portfolio', label: 'Portfolio' },
+        { key: 'benchmark', label: benchmark },
+        ...(data.strategyResult ? [{ key: 'strategy', label: 'Strategy' }] : []),
+      ]
+      pieces.push(chartClip(
+        'Backtester',
+        'Cumulative Return — Base 100',
+        'line',
+        'date',
+        sampled.map(p => ({
+          date: p.date,
+          portfolio: p.portfolio ?? null,
+          benchmark: p.benchmark ?? null,
+          strategy: p.strategy ?? null,
+        })),
+        series,
+      ))
+    }
+    return pieces
+  }, { disabled: !data?.metrics, sourceTab: 'Backtester' })
 
   return (
     <>

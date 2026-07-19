@@ -10,6 +10,9 @@ import MacroToolbar, { type Filters } from '../components/macroEvents/MacroToolb
 import ReleaseTape, { type Section, type Sort } from '../components/macroEvents/ReleaseTape'
 import { dayKey, dayLabel, sortValue, hasColData, type FilterCol } from '../components/macroEvents/tapeUtils'
 import useIsMobile from '../hooks/useIsMobile'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip } from '../lib/reportCaptureRegistry'
 
 interface EventsResponse { events: MacroEvent[]; source: string; note?: string }
 interface AlertRow { id: string; condition: string; payload: string | null }
@@ -158,6 +161,36 @@ function MacroEventHubContent() {
     upcoming: events.filter(e => e.status === 'upcoming').length,
     high: events.filter(e => e.impact === 'High').length,
   }), [events])
+
+  const TAB = 'Economic Calendar'
+  useReportCapture(() => {
+    if (!filtered.length && !events.length) return null
+    const pieces: ClipDraft[] = [
+      kpiClip(TAB, 'Calendar Pulse', [
+        { label: 'Tracked', value: String(stats.tracked) },
+        { label: 'Upcoming', value: String(stats.upcoming) },
+        { label: 'High Impact', value: String(stats.high) },
+        { label: 'Filtered', value: String(filtered.length) },
+      ]),
+    ]
+    const rows = filtered.slice(0, 80).map(e => [
+      e.displayTime || e.datetime.slice(0, 16),
+      e.countryCode || e.country,
+      e.name,
+      e.impact,
+      e.status,
+      e.actual ?? '—',
+      e.expected ?? '—',
+      e.previous ?? '—',
+    ])
+    if (rows.length) {
+      pieces.push(tableClip(TAB, 'Release Tape',
+        ['Time', 'Region', 'Event', 'Impact', 'Status', 'Actual', 'Expected', 'Previous'],
+        rows,
+      ))
+    }
+    return pieces
+  }, { disabled: !events.length, sourceTab: TAB })
 
   return (
     <PageWrapper>

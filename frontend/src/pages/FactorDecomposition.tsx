@@ -12,6 +12,9 @@ import { fetchFactorDecomposition } from '../hooks/useApi'
 import { readPMPortfolios, normalizeTicker, type PMPortfolio } from '../lib/pmImport'
 import { T } from '../lib/theme'
 import { MONO, SANS, mix, Panel, seg, KpiStrip } from './cockpitKit'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip, chartClip } from '../lib/reportCaptureRegistry'
 
 interface FactorRow { factor: string; proxy: string; beta: number; t_stat: number | null; risk_pct: number }
 interface HoldingDetail { ticker: string; weight: number; betas: Record<string, number>; idiosyncratic_pct: number; book_var_share_pct: number }
@@ -122,6 +125,48 @@ function Results({ d }: { d: Resp }) {
   const [factor, setFactor] = useState(factorKeys[0] ?? 'market')
   const [holding, setHolding] = useState(d.holdings_detail[0]?.ticker ?? '')
   const top = d.factors[0]
+
+  useReportCapture(() => {
+    const pieces: ClipDraft[] = [
+      kpiClip('Factor Decomposition', `Factor Decomposition · ${d.mode}`, [
+        { label: 'Ann. Vol', value: `${d.ann_vol_pct}%` },
+        { label: 'Systematic', value: `${d.systematic_pct}%` },
+        { label: 'Idiosyncratic', value: `${d.idiosyncratic_pct}%` },
+        { label: 'Alpha (ann)', value: `${d.alpha_ann_pct > 0 ? '+' : ''}${d.alpha_ann_pct}%` },
+        { label: 'Dominant', value: top ? top.factor : '—' },
+        { label: 'Effective N', value: d.concentration.effective_n != null ? String(d.concentration.effective_n) : '—' },
+      ]),
+      tableClip(
+        'Factor Decomposition',
+        'Factor Exposures',
+        ['Factor', 'Proxy', 'Beta', 't-stat', 'Risk %'],
+        d.factors.map(f => [f.factor, f.proxy, f.beta, f.t_stat, f.risk_pct]),
+      ),
+    ]
+    if (d.holdings_detail.length) {
+      pieces.push(tableClip(
+        'Factor Decomposition',
+        'Holdings · Weight & Variance Share',
+        ['Ticker', 'Weight %', 'Idiosyncratic %', 'Book Var Share %'],
+        d.holdings_detail.slice(0, 20).map(h => [h.ticker, h.weight, h.idiosyncratic_pct, h.book_var_share_pct]),
+      ))
+    }
+    const roll = d.rolling[factor] ?? []
+    if (roll.length) {
+      const step = Math.max(1, Math.ceil(roll.length / 80))
+      const sampled = roll.filter((_, i) => i % step === 0 || i === roll.length - 1)
+      pieces.push(chartClip(
+        'Factor Decomposition',
+        `Rolling Exposure · ${factor} · ${d.roll_window}d`,
+        'line',
+        'date',
+        sampled.map(p => ({ date: p.date, beta: p.beta })),
+        [{ key: 'beta', label: `${factor} β` }],
+      ))
+    }
+    return pieces
+  }, { disabled: !d.factors.length, sourceTab: 'Factor Decomposition' })
+
   const kpis = [
     { label: 'Annualized vol', value: `${d.ann_vol_pct}%`, sub: 'book returns', tip: { title: 'Annualized volatility', body: `The book's own return volatility, annualized. ${d.ann_vol_pct}% is the swing you actually live with — before deciding whether it comes from the market or from single names.`, source: 'Daily book returns × √252' } },
     { label: 'Systematic', value: `${d.systematic_pct}%`, vc: T.gold, sub: 'R² on factors', tip: { title: 'Systematic share', body: `Share of the book's variance the five factors explain. At ${d.systematic_pct}%, the rest (${d.idiosyncratic_pct}%) is name-specific risk the factors cannot see or hedge.`, source: 'R² of the factor regression' } },

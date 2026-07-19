@@ -7,6 +7,8 @@ import { BoardSkeleton } from '../components/Skeleton'
 import ErrorState from '../components/ErrorState'
 import useIsMobile from '../hooks/useIsMobile'
 import { formatLocalTime, localDateInputValue, localTimeZone } from '../lib/time'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
 
 // Global Markets board (hifi handoff "2a"): a pinnable Spotlight of benchmark
 // cards over flat editorial tables — indices by region, FX, commodities, US
@@ -227,6 +229,49 @@ export default function GlobalMarkets() {
   const spotlight = favs.map(sym => rowBySym[sym]).filter(Boolean) as Row[]
   const asOf = q.data ? formatLocalTime(q.data.as_of) : null
   const zone = localTimeZone()
+
+  const captureBoard = (): ClipDraft[] => {
+    if (!q.data) return []
+    const pieces: ClipDraft[] = []
+    const win = (q.data.window ?? window).toUpperCase()
+    // Spotlight first — the curated subset the user pinned, not the full board.
+    if (spotlight.length) {
+      pieces.push({ sourceTab: 'Global Markets', dataType: 'kpi', payload: { kind: 'kpi', title: `Spotlight Benchmarks · Δ ${win}`, cells: spotlight.map(r => {
+        const yields = groupOf[r.symbol] === 'US Yields'
+        return {
+          label: r.label,
+          value: r.price == null ? '—' : `${fmtPrice(r.price)}${yields ? '%' : ''}`,
+          sub: r.change_pct == null ? undefined : changeText(r, yields),
+        }
+      }) } })
+    }
+    // One table per region / asset class so the report can pick relevant slices
+    // instead of dumping the entire board into a single clip.
+    for (const s of q.data.sections) {
+      if (!s.rows.length) continue
+      const yields = s.name === 'US Yields'
+      pieces.push({
+        sourceTab: 'Global Markets',
+        dataType: 'table',
+        payload: {
+          kind: 'table',
+          title: `${s.name} · Δ ${win}`,
+          columns: ['Instrument', 'Last', yields ? 'Chg (bp)' : 'Chg %'],
+          rows: s.rows.map(r => [
+            r.label,
+            r.price == null ? null : `${fmtPrice(r.price)}${yields ? '%' : ''}`,
+            r.change_pct == null && !(yields && r.change_abs != null) ? null : changeText(r, yields),
+          ]),
+        },
+      })
+    }
+    return pieces
+  }
+
+  useReportCapture(captureBoard, {
+    disabled: !q.data,
+    sourceTab: 'Global Markets',
+  })
 
   // Equal-height stacks: the shorter columns absorb slack between their groups
   // (space-between adds to the 22px minimum gap) so all three bottoms align.

@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import PageWrapper from '../components/PageWrapper'
 import TickerInput from '../components/TickerInput'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip } from '../lib/reportCaptureRegistry'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -640,6 +643,51 @@ export default function TradeJournal() {
     const matchSearch = !q || t.ticker.toLowerCase().includes(q) || t.thesis.toLowerCase().includes(q)
     return matchStatus && matchSearch
   })
+
+  useReportCapture(() => {
+    if (!trades.length) return null
+    const closed = trades.filter(t => t.status === 'Closed')
+    const pnls = closed.map(calcPnl).filter((x): x is number => x != null)
+    const wins = pnls.filter(p => p > 0)
+    const losses = pnls.filter(p => p < 0)
+    const totalPnl = pnls.reduce((a, b) => a + b, 0)
+    const winRate = closed.length ? wins.length / closed.length : 0
+    const totalWins = wins.reduce((a, b) => a + b, 0)
+    const totalLoss = Math.abs(losses.reduce((a, b) => a + b, 0))
+    const profitFactor = totalLoss > 0 ? totalWins / totalLoss : totalWins > 0 ? Infinity : 0
+    const openCount = trades.filter(t => t.status === 'Open').length
+    const pieces: ClipDraft[] = [
+      kpiClip('Trade Journal', 'Trade Journal Summary', [
+        { label: 'Total Trades', value: String(trades.length) },
+        { label: 'Open', value: String(openCount) },
+        { label: 'Closed', value: String(closed.length) },
+        ...(closed.length ? [
+          { label: 'Win Rate', value: `${(winRate * 100).toFixed(1)}%` },
+          { label: 'Total P&L', value: `${totalPnl >= 0 ? '+' : ''}$${totalPnl.toFixed(2)}` },
+          { label: 'Profit Factor', value: isFinite(profitFactor) ? profitFactor.toFixed(2) : '∞' },
+        ] : []),
+      ]),
+      tableClip(
+        'Trade Journal',
+        'Recent Trades',
+        ['Ticker', 'Direction', 'Entry', 'Entry $', 'Size', 'Status', 'Exit', 'P&L'],
+        sorted.slice(0, 20).map(t => {
+          const pnl = calcPnl(t)
+          return [
+            t.ticker,
+            t.direction,
+            t.entryDate,
+            t.entryPrice,
+            t.size,
+            t.status,
+            t.exitDate ?? '—',
+            pnl != null ? `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}` : '—',
+          ]
+        }),
+      ),
+    ]
+    return pieces
+  }, { disabled: !trades.length, sourceTab: 'Trade Journal' })
 
   const thCol: React.CSSProperties = {
     fontFamily: C.mono,

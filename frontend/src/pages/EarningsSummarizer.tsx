@@ -5,6 +5,9 @@ import EmptyState from '../components/EmptyState'
 import TickerTagInput from '../components/TickerTagInput'
 import useIsMobile from '../hooks/useIsMobile'
 import { useAnalysis } from '../context/AnalysisContext'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip, textClip } from '../lib/reportCaptureRegistry'
 
 const C = {
   bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))', header: 'var(--theme-surface, #0d1826)', surface: 'var(--theme-bg, #101c2e)',
@@ -278,6 +281,56 @@ export default function EarningsSummarizer() {
   const [error,           setError]           = useState<string | null>(null)
 
   const isPending = inProgress
+
+  const okResults = streamedResults.filter(r => r.summary && !r.error)
+
+  useReportCapture(() => {
+    if (!okResults.length) return null
+    const pieces: ClipDraft[] = []
+    for (const result of okResults.slice(0, 5)) {
+      const s = result.summary!
+      const tkr = result.ticker
+      const cells: { label: string; value: string; sub?: string }[] = [
+        { label: 'Ticker', value: tkr, sub: result.company ?? result.period ?? undefined },
+        { label: 'Tone', value: s.management_tone || '—' },
+      ]
+      if (result.metrics?.eps) cells.push({ label: 'EPS', value: result.metrics.eps.value, sub: result.metrics.eps.yoy ? `${result.metrics.eps.yoy} YoY` : undefined })
+      if (result.metrics?.revenue) cells.push({ label: 'Revenue', value: result.metrics.revenue.value, sub: result.metrics.revenue.yoy ? `${result.metrics.revenue.yoy} YoY` : undefined })
+      if (result.metrics?.gross_margin) cells.push({ label: 'Gross Margin', value: result.metrics.gross_margin.value })
+      if (result.reaction) cells.push({ label: 'Reaction', value: `${result.reaction.pct >= 0 ? '+' : ''}${result.reaction.pct.toFixed(1)}%` })
+      pieces.push(kpiClip('Earnings AI', `Earnings Snapshot · ${tkr}`, cells))
+      if (s.verdict) {
+        pieces.push(textClip('Earnings AI', `AI Summary · ${tkr}`, s.verdict))
+      }
+      const bullets: string[] = []
+      if (s.bull_points?.length) bullets.push('Bull case:\n' + s.bull_points.map(p => `• ${p}`).join('\n'))
+      if (s.bear_points?.length) bullets.push('Bear case:\n' + s.bear_points.map(p => `• ${p}`).join('\n'))
+      if (s.guidance && s.guidance !== 'N/A') bullets.push(`Guidance: ${s.guidance}`)
+      if (s.key_themes?.length) bullets.push(`Themes: ${s.key_themes.join(', ')}`)
+      if (s.risks?.length) bullets.push(`Risks: ${s.risks.join(', ')}`)
+      if (s.analyst_questions_focus) bullets.push(`Analyst focus: ${s.analyst_questions_focus}`)
+      if (bullets.length) {
+        pieces.push(textClip('Earnings AI', `Bull / Bear · ${tkr}`, bullets.join('\n\n')))
+      }
+      if (s.key_metrics?.length) {
+        pieces.push(tableClip(
+          'Earnings AI',
+          `Key Metrics · ${tkr}`,
+          ['Metric', 'Value', 'vs Est', 'YoY'],
+          s.key_metrics.map(m => [m.name, m.value, m.vs_est ?? null, m.yoy ?? null]),
+        ))
+      }
+      if (result.segments?.length) {
+        pieces.push(tableClip(
+          'Earnings AI',
+          `Segment Revenue · ${tkr}`,
+          ['Segment', 'Revenue'],
+          result.segments.map(seg => [seg.name, fmtB(seg.value)]),
+        ))
+      }
+    }
+    return pieces
+  }, { disabled: !okResults.length, sourceTab: 'Earnings AI' })
 
   const startAnalysis = async () => {
     setError(null)

@@ -10,6 +10,9 @@ import {
   INPUT, EYEBROW, PANEL, PRIMARY_BTN, TitleBar, TitleAction, VerdictStrip, MetricCard,
   toneColor, type VerdictTone,
 } from './valuationShared'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip, textClip } from '../lib/reportCaptureRegistry'
 
 const G = 'var(--theme-primary, #c9a84c)'
 const SURFACE = 'var(--theme-surface, #0d1826)'
@@ -289,6 +292,61 @@ export default function CusipLookup() {
       : result ? 'result' : candidates ? 'candidates' : issuers ? 'issuers' : 'empty'
   const multiEntity = !!(issuers && issuers.length > 1)
 
+  const TAB = 'Bond Lookup'
+  useReportCapture(() => {
+    if (tab !== 'single') return null
+    const pieces: ClipDraft[] = []
+    if (result) {
+      pieces.push(kpiClip(TAB, `${result.cusip} · Key Terms`, [
+        { label: 'Coupon', value: result.coupon_rate != null ? `${result.coupon_rate}%` : '—' },
+        { label: 'Maturity', value: result.maturity_date || '—', sub: result.years_to_maturity != null ? `${result.years_to_maturity} yrs` : undefined },
+        { label: 'YTM', value: derived ? `${derived.ytm}%` : (result.market_price == null ? 'Price req.' : '—') },
+        { label: 'Price', value: result.market_price != null ? String(result.market_price) : '—', sub: result.price_source || undefined },
+        { label: 'Mod Duration', value: derived ? String(derived.mod_duration) : '—' },
+        { label: 'Convexity', value: derived ? String(derived.convexity) : '—' },
+      ]))
+      pieces.push(textClip(TAB, result.name || result.cusip,
+        `${result.type || 'Bond'}${result.market_sector ? ` · ${result.market_sector}` : ''}${result.description ? `\n${result.description}` : ''}\nCUSIP ${result.cusip}${result.figi ? ` · FIGI ${result.figi}` : ''}`))
+      pieces.push(tableClip(TAB, 'Reference Terms',
+        ['Field', 'Value'],
+        [
+          ['Issuer', result.name || '—'],
+          ['CUSIP', result.cusip],
+          ['Type', result.type || '—'],
+          ['Coupon', result.coupon_rate != null ? `${result.coupon_rate}%` : '—'],
+          ['Maturity', result.maturity_date || '—'],
+          ['Issue Date', result.issue_date || '—'],
+          ['Sector', result.market_sector || '—'],
+          ['Price As Of', result.price_as_of || '—'],
+        ],
+      ))
+    } else if (candidates?.length) {
+      pieces.push(tableClip(TAB, 'Bond Candidates',
+        ['CUSIP', 'Name', 'Coupon', 'Maturity', 'Price', 'Yrs'],
+        candidates.slice(0, 20).map(b => [
+          b.cusip,
+          (b.name || '').slice(0, 40),
+          b.coupon_rate != null ? b.coupon_rate : null,
+          b.maturity_date || '—',
+          b.market_price != null ? b.market_price : null,
+          b.years_to_maturity != null ? b.years_to_maturity : null,
+        ]),
+      ))
+    } else if (issuers?.length) {
+      pieces.push(tableClip(TAB, 'Issuers',
+        ['Issuer', 'Bonds', 'Nearest Maturity'],
+        issuers.slice(0, 20).map(e => [
+          e.name,
+          e.bonds.length,
+          e.bonds[0]?.maturity_date || '—',
+        ]),
+      ))
+    } else {
+      return null
+    }
+    return pieces
+  }, { disabled: tab !== 'single' || (!result && !candidates?.length && !issuers?.length), sourceTab: TAB })
+
   return (
     <PageWrapper>
       <div className="mx-auto w-full max-w-[1180px] 2xl:max-w-[1440px]" style={{ background: 'var(--theme-bg, #0a1422)', border: `1px solid ${BORDER}` }}>
@@ -416,6 +474,32 @@ function BatchView() {
     mutationFn: (list: string[]) => resolveCusipBatch(list),
     onSuccess: (res: { rows: BatchRow[] }) => setRows(res.rows || []),
   })
+
+  const TAB = 'Bond Lookup'
+  useReportCapture(() => {
+    if (!rows?.length) return null
+    const found = rows.filter(r => r.found).length
+    const pieces: ClipDraft[] = [
+      kpiClip(TAB, 'Batch Resolve', [
+        { label: 'Resolved', value: `${found} / ${rows.length}` },
+        { label: 'With Yield', value: String(rows.filter(r => r.ytm != null).length) },
+        { label: 'Missing', value: String(rows.length - found) },
+      ]),
+      tableClip(TAB, 'Batch CUSIPs',
+        ['CUSIP', 'Issuer', 'Coupon', 'Maturity', 'Price', 'YTM', 'As Of'],
+        rows.slice(0, 20).map(r => [
+          r.cusip,
+          r.found ? (r.name || '—').slice(0, 36) : (r.error || 'Not found'),
+          r.coupon_rate != null ? r.coupon_rate : null,
+          r.maturity_date || '—',
+          r.market_price != null ? r.market_price : null,
+          r.ytm != null ? r.ytm : null,
+          r.price_as_of || '—',
+        ]),
+      ),
+    ]
+    return pieces
+  }, { disabled: !rows?.length, sourceTab: TAB })
 
   const onFile = (f: File | undefined) => {
     if (!f) return

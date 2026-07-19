@@ -9,6 +9,9 @@ import { fetchChokepointExposure } from '../hooks/useApi'
 import { T } from '../lib/theme'
 import { WORLD_DOT_PATH } from '../lib/worldDotMap'
 import { MONO, SANS, mix, chg, signed, Panel, KpiStrip } from './cockpitKit'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip } from '../lib/reportCaptureRegistry'
 
 interface Driver { strait: string; status: string; direction: number; contribution: number }
 interface Quote { price: number | null; change_pct: number | null; spark: number[] }
@@ -241,6 +244,47 @@ function Board({ data }: { data: Resp }) {
     { label: 'Most pressured', value: pressured[0]?.ticker ?? '—', vc: T.neg, sub: pressured[0] ? `score ${signed(pressured[0].score, 1)}` : undefined, tip: { title: 'Most pressured', body: `The name most hurt by today's stress. ${pressured[0]?.ticker ?? '—'} sits behind a stressed strait where disruption is a headwind for its basket.`, source: 'Lowest negative score' } },
     { label: 'Names priced', value: String(data.priced), tip: { title: 'Names priced', body: `${data.priced} exposed equities with a live quote attached. Prices are daily closes from yfinance, mapped to straits through the curated exposure map.`, source: 'yfinance closes' } },
   ]
+
+  useReportCapture(() => {
+    if (!straits.length) return null
+    const pieces: ClipDraft[] = [
+      kpiClip('Chokepoint Exposure', 'Chokepoint Stress Snapshot', [
+        { label: 'Chokepoints', value: String(straits.length) },
+        { label: 'Under stress', value: String(stressed.length) },
+        { label: 'Top beneficiary', value: benefit[0]?.ticker ?? '—', sub: benefit[0] ? `score ${signed(benefit[0].score, 1)}` : undefined },
+        { label: 'Most pressured', value: pressured[0]?.ticker ?? '—', sub: pressured[0] ? `score ${signed(pressured[0].score, 1)}` : undefined },
+        { label: 'Names priced', value: String(data.priced) },
+      ]),
+      tableClip(
+        'Chokepoint Exposure',
+        'Chokepoint Status',
+        ['Strait', 'Status', 'Oil mbd', 'Δ %', 'Disruption'],
+        straits.slice(0, 20).map(c => [
+          c.name,
+          c.status ?? '—',
+          c.oil_mbd,
+          c.delta_pct != null ? `${signed(c.delta_pct, 1)}%` : '—',
+          +c.disruption.toFixed(2),
+        ]),
+      ),
+    ]
+    if (data.leaders.length) {
+      pieces.push(tableClip(
+        'Chokepoint Exposure',
+        'Exposed Names',
+        ['Ticker', 'Group', 'Score', 'Price', 'Chg %', 'Chokepoints'],
+        data.leaders.slice(0, 20).map(l => [
+          l.ticker,
+          l.group,
+          +l.score.toFixed(1),
+          l.price != null ? `$${l.price.toFixed(2)}` : '—',
+          l.change_pct != null ? `${signed(l.change_pct, 2)}%` : '—',
+          l.chokepoints.slice(0, 3).join(', '),
+        ]),
+      ))
+    }
+    return pieces
+  }, { disabled: !straits.length, sourceTab: 'Chokepoint Exposure' })
 
   const rows = data.leaders.filter(l => (basket === 'All' || l.group === basket) && (dir === 'all' || (dir === 'tailwind' ? l.score > 0 : l.score < 0)))
   const maxScore = Math.max(1, ...data.leaders.map(l => Math.abs(l.score)))

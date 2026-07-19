@@ -10,6 +10,9 @@ import { recordRecentTicker } from '../lib/recentTickers'
 import EmptyState from '../components/EmptyState'
 import TickerLink from '../components/TickerLink'
 import useIsMobile from '../hooks/useIsMobile'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip } from '../lib/reportCaptureRegistry'
 
 
 const METRICS = [
@@ -280,6 +283,56 @@ export function RelativeValuationContent() {
       medians[m.key] = vals.length ? median(vals) : null
     }
   }
+
+  useReportCapture(() => {
+    if (!data?.peers?.length) return null
+    const pieces: ClipDraft[] = []
+    const tkr = data.ticker
+    const target = data.peers.find(p => p.ticker === tkr)
+    const peMed = medians.pe
+    const pe = target?.pe ?? null
+    const upside = target?.target_mean_price != null && target?.price
+      ? ((target.target_mean_price - target.price) / target.price) * 100
+      : null
+    pieces.push(kpiClip('Peer Comparison', `Peer Snapshot · ${tkr}`, [
+      { label: 'Ticker', value: tkr, sub: data.sector ?? undefined },
+      { label: 'P/E', value: pe != null ? `${pe.toFixed(1)}x` : '—', sub: peMed != null ? `median ${peMed.toFixed(1)}x` : undefined },
+      { label: 'EV/EBITDA', value: target?.ev_ebitda != null ? `${target.ev_ebitda.toFixed(1)}x` : '—', sub: medians.ev_ebitda != null ? `median ${medians.ev_ebitda.toFixed(1)}x` : undefined },
+      ...(upside != null ? [{ label: 'Analyst Upside', value: `${upside >= 0 ? '+' : ''}${upside.toFixed(1)}%` }] : []),
+      { label: 'Peers', value: String(data.peers.length), sub: data.comps_source === 'ai_generated' ? 'AI comps' : data.comps_source === 'sector_fallback' ? 'sector fallback' : undefined },
+    ]))
+    pieces.push(tableClip(
+      'Peer Comparison',
+      `All Metrics · ${tkr}`,
+      ['Ticker', 'Name', 'P/E', 'EV/EBITDA', 'P/S', 'P/B', 'P/FCF', 'ROE', 'Rev Growth'],
+      [
+        ['Median', '—', ...METRICS.map(m => fmt(medians[m.key], m.isPct))],
+        ...data.peers.map(row => [
+          row.ticker,
+          row.name,
+          ...METRICS.map(m => fmt(row[m.key], m.isPct)),
+        ]),
+      ],
+    ))
+    pieces.push(tableClip(
+      'Peer Comparison',
+      `Analyst Consensus · ${tkr}`,
+      ['Ticker', 'Rec', 'Analysts', 'Target', 'Upside'],
+      data.peers.map(row => {
+        const u = row.target_mean_price != null && row.price
+          ? ((row.target_mean_price - row.price) / row.price) * 100
+          : null
+        return [
+          row.ticker,
+          recLabel(row.recommendation_mean, row.recommendation_key),
+          row.num_analyst_opinions ?? null,
+          row.target_mean_price != null ? `$${row.target_mean_price.toFixed(0)}` : null,
+          u != null ? `${u >= 0 ? '+' : ''}${u.toFixed(1)}%` : null,
+        ]
+      }),
+    ))
+    return pieces
+  }, { disabled: !data?.peers?.length, sourceTab: 'Peer Comparison' })
 
   const inp: React.CSSProperties = {
     background: T.surface, border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 35%, transparent)', color: T.text,

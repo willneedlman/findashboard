@@ -12,6 +12,7 @@ Ask for (or infer from the request): the tool's **display name**, its **hub** (R
 ## 1. The page — `frontend/src/pages/<Name>.tsx`
 - Export a `*Content` component with the body, and a default export that wraps it: `export default function <Name>() { return <PageWrapper title="<Display Name>"><<Name>Content /></PageWrapper> }`. (Some tools omit the title and render their own in-panel header — match the closest sibling.)
 - Use the shared building blocks, do not reinvent: `PageWrapper`/`PageHeader`, `SidebarLayout` (inputs rail + results) or the `mmCockpit` `KpiCell` strip for answer-first metrics, `LoadingState` / `EmptyState` / `ErrorState`, `TickerLogo`, and formatters from `lib/format`. For a ticker-driven tool use `TickerLaunch` for the empty state and auto-load the recent ticker (never a blank form; never fetch a name uninvited beyond the recent one).
+- Register a Report Creator capture with `useReportCapture(getClip, { disabled, sourceTab })` from `hooks/useReportCapture` so the shell **Send to Report** button clips structured KPIs/tables/charts (helpers in `lib/reportCaptureRegistry`). The shell always offers a fallback stub for hub tools; rich registration is required when the tool has meaningful displays.
 - Style with the dark terminal palette via `var(--theme-*)` tokens (see DESIGN.md) — never raw hex when a token exists. Route colors through the theme so custom themes hold.
 - Follow the writing-style rules (spartan, active, second person, no emoji, no em dashes, no semicolons).
 

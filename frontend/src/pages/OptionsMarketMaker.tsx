@@ -5,6 +5,9 @@ import { Widget, HeaderBar, KpiCell, RiskMeterStrip, QuoteCell, Stepper, Chips, 
 import { useChallenge, ModeToggle, ChallengeClock, LeaderboardModal, CHALLENGE_SPEED, type SimMode } from '../components/mmChallenge'
 import useIsMobile from '../hooks/useIsMobile'
 import { TOOLTIP_STYLE } from '../components/ChartTooltip'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip, chartClip } from '../lib/reportCaptureRegistry'
 
 /*
  * Options MM Simulator
@@ -404,6 +407,48 @@ export function OptionsMarketMakerContent() {
     }
     return row
   })
+
+  const TAB = 'Market Maker Simulator'
+  useReportCapture(() => {
+    if (!f || !g) return null
+    const spotChgCap = f.spotHistory.length > 1 ? (f.spot / f.spotHistory[0] - 1) * 100 : 0
+    const pieces: ClipDraft[] = [
+      kpiClip(TAB, 'Options Desk · Book', [
+        { label: 'Net P&L', value: fmtMoney(g.netPnl) },
+        { label: 'Spread Edge', value: fmtMoney(f.edge) },
+        { label: 'Net Delta', value: `${g.totalDeltaSh >= 0 ? '+' : ''}${Math.round(g.totalDeltaSh)}` },
+        { label: 'Net Gamma', value: `${g.gamma >= 0 ? '+' : ''}${g.gamma.toFixed(1)}` },
+        { label: 'Net Vega', value: fmtMoney(g.vega1pct) },
+        { label: 'Spot', value: `$${f.spot.toFixed(2)}`, sub: `${spotChgCap >= 0 ? '+' : ''}${spotChgCap.toFixed(2)}%` },
+        { label: 'Stock Hedge', value: `${f.stock >= 0 ? '+' : ''}${f.stock}` },
+      ]),
+    ]
+    const posRows = Object.entries(f.positions).filter(([, q]) => q).slice(0, 20)
+    if (posRows.length) {
+      pieces.push(tableClip(TAB, 'Option Inventory',
+        ['Contract', 'Qty', 'Sold', 'Bought'],
+        posRows.map(([k, q]) => [k, q, f.sold[k] || 0, f.bought[k] || 0]),
+      ))
+    }
+    if (f.ledger?.length) {
+      pieces.push(tableClip(TAB, 'Recent Fills',
+        ['Time', 'Side', 'Contract', 'Size', 'Price', 'Edge'],
+        f.ledger.slice(-15).map(fl => [
+          fl.tLabel, fl.clientSide, fl.contract, fl.size,
+          fl.fillPrice, Math.round(fl.edge),
+        ]),
+      ))
+    }
+    if (f.spotHistory?.length > 1) {
+      const step = Math.max(1, Math.ceil(f.spotHistory.length / 80))
+      pieces.push(chartClip(TAB, 'Spot Tape', 'line', 'i',
+        f.spotHistory.map((spot, i) => ({ i, spot: +spot.toFixed(2) }))
+          .filter((_, i) => i % step === 0 || i === f.spotHistory.length - 1),
+        [{ key: 'spot', label: 'Spot' }],
+      ))
+    }
+    return pieces
+  }, { disabled: !f || !g, sourceTab: TAB })
 
   // ── Sidebar: controls + rules ────────────────────────────────────────────
   const labelStyle: React.CSSProperties = { fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.muted, marginBottom: 3, fontFamily: T.sans }

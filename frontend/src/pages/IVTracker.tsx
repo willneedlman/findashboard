@@ -9,6 +9,9 @@ import {
   Tooltip, CartesianGrid, ResponsiveContainer,
   ReferenceLine, Legend,
 } from 'recharts'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, chartClip } from '../lib/reportCaptureRegistry'
 
 // ── Design tokens — all values are CSS variables so every theme preset works ───
 const T = {
@@ -320,6 +323,52 @@ export function IVTrackerContent() {
     : ivRank >= 75 ? T.neg
     : ivRank <= 25 ? T.pos
     : T.warn
+
+  const TAB = 'IV Rank & Term'
+  useReportCapture(() => {
+    if (!data) return null
+    const pieces: ClipDraft[] = [
+      kpiClip(TAB, `${data.ticker} ${data.strike} ${data.option_type.toUpperCase()} · ${data.expiry}`, [
+        { label: 'IV Rank', value: ivRank == null ? '—' : ivRank.toFixed(0), sub: ivLabel(ivRank) },
+        { label: 'IV Percentile', value: ivPct == null ? '—' : ivPct.toFixed(1) },
+        { label: 'Current IV', value: `${data.current_iv.toFixed(1)}%` },
+        { label: 'HV 30d', value: fmtPct(data.current_hv_30d) },
+        { label: 'IV Premium', value: data.iv_premium != null ? `${data.iv_premium >= 0 ? '+' : ''}${data.iv_premium.toFixed(1)}%` : '—' },
+        { label: 'Implied Move', value: data.implied_move != null ? `±${data.implied_move.toFixed(1)}%` : '—' },
+        { label: 'Underlying', value: `$${data.spot.toFixed(2)}` },
+        { label: 'Straddle', value: data.straddle != null ? `$${data.straddle.toFixed(2)}` : '—' },
+        { label: 'Bid / Ask', value: `$${data.bid.toFixed(2)} / $${data.ask.toFixed(2)}` },
+        { label: 'Vol / OI', value: `${data.volume.toLocaleString()} / ${data.open_interest.toLocaleString()}` },
+        { label: 'IV Range', value: `${fmtPct(data.iv_min)}–${fmtPct(data.iv_max)}` },
+      ]),
+    ]
+    if (Object.keys(greeks).length > 0) {
+      pieces.push(kpiClip(TAB, 'Option Greeks', [
+        { label: 'Delta', value: fmtNum(greeks.delta, 4) },
+        { label: 'Gamma', value: fmtNum(greeks.gamma, 6) },
+        { label: 'Theta', value: `$${fmtNum(greeks.theta, 4)}/d` },
+        { label: 'Vega', value: `$${fmtNum(greeks.vega, 4)}` },
+        { label: 'Rho', value: `$${fmtNum(greeks.rho, 4)}` },
+        { label: 'Risk-Free Rate', value: fmtPct(data.risk_free_rate) },
+      ]))
+    }
+    if (chartData.length) {
+      pieces.push(chartClip(TAB, `IV vs HV vs Stock · ${days}d`, 'line', 'date',
+        chartData.map(p => ({
+          date: p.date,
+          iv: p.iv,
+          hv30: p.hv30,
+          price: p.price,
+        })),
+        [
+          { key: 'iv', label: 'Implied Vol' },
+          { key: 'hv30', label: 'HV 30d' },
+          { key: 'price', label: 'Stock Price' },
+        ],
+      ))
+    }
+    return pieces
+  }, { disabled: !data, sourceTab: TAB })
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (

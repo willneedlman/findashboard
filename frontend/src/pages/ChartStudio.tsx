@@ -10,6 +10,9 @@ import PageWrapper from '../components/PageWrapper'
 import { readToken } from '../lib/theme'
 import { smaArr, emaArr, bollinger, vwapArr, rsiArr, macdArr, hvArr } from '../lib/indicators'
 import { formatLocalTime, localTimeZone } from '../lib/time'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip, chartClip, textClip } from '../lib/reportCaptureRegistry'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface Candle { time: number; open: number; high: number; low: number; close: number; volume: number }
@@ -591,6 +594,60 @@ export function ChartStudioContent() {
 
   const candles = candlesQ.data ?? []
   const closes = useMemo(() => candles.map(c => c.close), [candles])
+
+  const TAB = 'Chart Studio'
+  useReportCapture(() => {
+    if (!candles.length) return null
+    const barT = (t: number) => {
+      const ms = t < 1e12 ? t * 1000 : t
+      return new Date(ms).toISOString().slice(0, 10)
+    }
+    const last = candles[candles.length - 1]
+    const first = candles[0]
+    const chg = first.close ? ((last.close / first.close) - 1) * 100 : 0
+    const hi = Math.max(...candles.map(c => c.high))
+    const lo = Math.min(...candles.map(c => c.low))
+    const pieces: ClipDraft[] = [
+      kpiClip(TAB, `${ticker} · ${tf}`, [
+        { label: 'Last', value: last.close.toFixed(2) },
+        { label: 'Open', value: last.open.toFixed(2) },
+        { label: 'High', value: last.high.toFixed(2) },
+        { label: 'Low', value: last.low.toFixed(2) },
+        { label: 'Volume', value: Math.round(last.volume).toLocaleString() },
+        { label: 'Window Chg', value: `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%`, sub: `${candles.length} bars` },
+        { label: 'Range Hi/Lo', value: `${hi.toFixed(2)} / ${lo.toFixed(2)}` },
+      ]),
+    ]
+    const step = Math.max(1, Math.ceil(candles.length / 80))
+    pieces.push(chartClip(TAB, `${ticker} Close · ${tf}`, 'line', 't',
+      candles.filter((_, i) => i % step === 0 || i === candles.length - 1)
+        .map(c => ({ t: barT(c.time), close: +c.close.toFixed(4) })),
+      [{ key: 'close', label: 'Close' }],
+    ))
+    pieces.push(tableClip(TAB, 'Recent Bars',
+      ['Time', 'Open', 'High', 'Low', 'Close', 'Volume'],
+      candles.slice(-15).map(c => [
+        barT(c.time),
+        +c.open.toFixed(4),
+        +c.high.toFixed(4),
+        +c.low.toFixed(4),
+        +c.close.toFixed(4),
+        Math.round(c.volume),
+      ]),
+    ))
+    const activeInds = [
+      ...Object.entries(ind).filter(([, on]) => on).map(([k]) => k),
+      ...Object.entries(lanes).filter(([, on]) => on).map(([k]) => k),
+    ]
+    const layers = [
+      activeInds.length ? `Indicators: ${activeInds.join(', ')}` : '',
+      mas.length ? `MAs: ${mas.map(m => `${m.kind.toUpperCase()}(${m.period})`).join(', ')}` : '',
+      compares.length ? `Compare: ${compares.join(', ')}` : '',
+      overlays.length ? `Overlays: ${overlays.join(', ')}` : '',
+    ].filter(Boolean)
+    if (layers.length) pieces.push(textClip(TAB, 'Active Layers', layers.join('\n')))
+    return pieces
+  }, { disabled: !candles.length, sourceTab: TAB })
 
   // ── Indicator series data ──
   const indData = useMemo(() => {

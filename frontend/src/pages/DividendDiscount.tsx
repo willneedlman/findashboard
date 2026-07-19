@@ -9,6 +9,9 @@ import {
   RangeTrack, heatColor,
 } from './valuationShared'
 import { T } from '../lib/theme'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip } from '../lib/reportCaptureRegistry'
 
 type DDM = {
   ticker: string; pays_dividend: boolean; price?: number | null
@@ -185,6 +188,34 @@ export function DividendDiscountContent() {
     const vals = cells.flat().filter(v => isFinite(v))
     return { rSteps, gSteps, cells, min: vals.length ? Math.min(...vals) : 0, max: vals.length ? Math.max(...vals) : 0 }
   }, [data, r, g1, g2, years])
+
+  useReportCapture(() => {
+    if (!data?.pays_dividend || !calc?.validTerminal) return null
+    const tkr = data.ticker ? ` · ${data.ticker}` : ''
+    const pieces: ClipDraft[] = [
+      kpiClip('Dividend Discount', `DDM Verdict${tkr}`, [
+        { label: 'Intrinsic / Share', value: `$${calc.value.toFixed(2)}` },
+        ...(data.price != null ? [{ label: 'Market Price', value: `$${data.price.toFixed(2)}` }] : []),
+        ...(calc.upside != null ? [{ label: 'Upside', value: `${calc.upside >= 0 ? '+' : '−'}${Math.abs(calc.upside).toFixed(1)}%` }] : []),
+        ...(data.div_yield != null ? [{ label: 'Div Yield', value: `${data.div_yield.toFixed(2)}%` }] : []),
+      ]),
+      kpiClip('Dividend Discount', `DDM Assumptions${tkr}`, [
+        { label: 'Required Return', value: `${r}%` },
+        { label: 'Stage-1 Growth', value: `${g1}%` },
+        { label: 'Stage-1 Years', value: String(years) },
+        { label: 'Terminal Growth', value: `${g2}%` },
+      ]),
+    ]
+    if (calc.rows.length) {
+      pieces.push(tableClip(
+        'Dividend Discount',
+        `Dividend Stream${tkr}`,
+        ['Year', 'DPS', 'PV'],
+        calc.rows.map(row => [`Y${row.year}`, `$${row.dividend.toFixed(2)}`, `$${row.pv.toFixed(2)}`]),
+      ))
+    }
+    return pieces
+  }, { disabled: !(data?.pays_dividend && calc?.validTerminal), sourceTab: 'Dividend Discount' })
 
   return (
     <SidebarLayout sidebarWidth={250} sidebarTitle="" sidebar={

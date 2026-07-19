@@ -12,6 +12,9 @@ import {
   C, PERIODS, StatCard, inputStyle, selectStyle, btnStyle,
   RailGroup, RunButton, TickerTags, ToolShell,
 } from './regressionShared'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip, chartClip } from '../lib/reportCaptureRegistry'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -144,6 +147,66 @@ export default function CorrelationAnalysis() {
   const r = mutation.data
   const avg = r?.summary.avg_abs_correlation ?? 0
   const divLabel = avg > 0.6 ? 'Highly correlated basket' : avg > 0.35 ? 'Moderately correlated' : 'Well diversified'
+
+  useReportCapture(() => {
+    if (!r) return null
+    const pieces: ClipDraft[] = []
+    pieces.push(kpiClip('Correlation', 'Correlation Summary', [
+      { label: 'Avg |correlation|', value: avg.toFixed(3), sub: divLabel },
+      ...(r.summary.strongest_pair ? [{ label: 'Most correlated', value: `+${r.summary.strongest_pair.value.toFixed(2)}`, sub: `${r.summary.strongest_pair.a} ↔ ${r.summary.strongest_pair.b}` }] : []),
+      ...(r.summary.most_negative_pair ? [{ label: 'Most negative', value: r.summary.most_negative_pair.value.toFixed(2), sub: `${r.summary.most_negative_pair.a} ↔ ${r.summary.most_negative_pair.b}` }] : []),
+      { label: 'Observations', value: String(r.observations), sub: `${r.period} · ${r.use_returns ? 'returns' : 'prices'}` },
+    ]))
+    const lookup = new Map(r.matrix.map(m => [`${m.row}|${m.col}`, m.value]))
+    pieces.push(tableClip(
+      'Correlation',
+      'Correlation Matrix',
+      ['', ...r.tickers],
+      r.tickers.map(rowT => [
+        rowT,
+        ...r.tickers.map(colT => {
+          const v = lookup.get(`${rowT}|${colT}`)
+          return v == null ? null : v.toFixed(2)
+        }),
+      ]),
+    ))
+    if (r.pairs?.length) {
+      pieces.push(tableClip(
+        'Correlation',
+        'Pair Correlations',
+        ['Asset A', 'Asset B', 'Correlation'],
+        r.pairs.slice(0, 20).map(p => [p.a, p.b, p.value.toFixed(3)]),
+      ))
+    }
+    if (r.rolling?.dates?.length) {
+      const step = Math.max(1, Math.floor(r.rolling.dates.length / 60))
+      const series = r.rolling.dates
+        .map((d, i) => ({ date: d, corr: r.rolling!.corr[i] }))
+        .filter((_, i) => i % step === 0 || i === r.rolling!.dates.length - 1)
+      pieces.push(chartClip(
+        'Correlation',
+        `Rolling Correlation · ${r.rolling.pair[0]} ↔ ${r.rolling.pair[1]}`,
+        'line',
+        'date',
+        series,
+        [{ key: 'corr', label: `${r.rolling.window}-day corr` }],
+      ))
+    }
+    if (r.betas?.length) {
+      pieces.push(tableClip(
+        'Correlation',
+        `Beta vs ${r.benchmark ?? 'benchmark'}`,
+        ['Asset', 'Beta', 'R²', 'Reading'],
+        r.betas.map(b => [
+          b.ticker,
+          b.beta.toFixed(3),
+          b.r_squared.toFixed(3),
+          b.ticker === r.benchmark ? 'benchmark' : b.r_squared < 0.2 ? 'largely independent' : b.beta < 0 ? 'moves opposite' : b.beta > 1.2 ? 'amplifies' : b.beta < 0.8 ? 'dampens' : 'tracks closely',
+        ]),
+      ))
+    }
+    return pieces
+  }, { disabled: !r, sourceTab: 'Correlation' })
 
   const rail = (
     <>

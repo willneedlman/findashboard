@@ -7,6 +7,9 @@ import TickerLink from '../components/TickerLink'
 import ColumnFilterMenu, { type SortState, type FilterSpec } from '../components/ColumnFilterMenu'
 import useIsMobile from '../hooks/useIsMobile'
 import { usePortfolio } from '../contexts/PortfolioContext'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip } from '../lib/reportCaptureRegistry'
 
 const C = {
   bg: 'var(--theme-bg, #101c2e)', border: 'var(--theme-border, rgba(255,255,255,0.08))',
@@ -358,6 +361,38 @@ export function IpoCalendarContent() {
   const colMenu = (c: string, align: 'left' | 'right') => (
     <ColumnFilterMenu align={align} sortKey={SORT_KEY[c]} sort={sort} onSort={setSort} filter={colFilterSpec(c)} />
   )
+
+  const TAB = 'IPO Scanner'
+  useReportCapture(() => {
+    if (loading || error || !rows.length) return null
+    const pieces: ClipDraft[] = [
+      kpiClip(TAB, `IPO Pipeline · ${WINDOWS.find(w => w.days === days)?.label ?? `${days}d`}`, [
+        { label: 'Listings', value: String(filtered.length), sub: `${rows.length} in window` },
+        { label: 'Released', value: String(priced) },
+        { label: 'Pending', value: String(filtered.filter(r => r.status === 'expected').length) },
+        { label: 'Filed', value: String(filtered.filter(r => r.status === 'filed').length) },
+        { label: 'Withdrawn', value: String(filtered.filter(r => r.status === 'withdrawn').length) },
+      ]),
+      tableClip(TAB, 'IPO Calendar',
+        ['Date', 'Symbol', 'Name', 'Exchange', 'Method', 'Price', 'Shares', 'Deal', 'Status'],
+        sorted.slice(0, 20).map(r => {
+          const e = enriched[r.symbol]
+          return [
+            r.date,
+            r.symbol,
+            (r.name || '').slice(0, 40),
+            exchangeFamily(r.exchange) || r.exchange || '—',
+            ipoMethod(r.name, e) ?? '—',
+            fmtPrice(r.price),
+            r.shares != null ? Math.round(r.shares) : null,
+            r.dealValue != null ? Math.round(r.dealValue) : null,
+            STATUS[r.status]?.label ?? r.status,
+          ]
+        }),
+      ),
+    ]
+    return pieces
+  }, { disabled: loading || !!error || !rows.length, sourceTab: TAB })
 
   return (
     <>

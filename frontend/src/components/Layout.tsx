@@ -9,6 +9,7 @@ import Footer from './Footer'
 import AlphaMark from './AlphaMark'
 import TickerLinkChip from './TickerLinkChip'
 import AlertToastQueue from './AlertToastQueue'
+import ReportCaptureToolbar from './ReportCaptureToolbar'
 import { useAlertSocket, type AlertPayload } from '../hooks/useAlertSocket'
 import useIsMobile from '../hooks/useIsMobile'
 import { useTheme } from '../contexts/ThemeContext'
@@ -94,7 +95,10 @@ export default function Layout({ children }: LayoutProps) {
 
         <main id="main-content" className="ft-mobile-main" style={{ flex: 1, overflowY: 'auto', background: 'var(--theme-bg, #0a1628)' }}>
           <div className={`ft-mobile-content${location.pathname === '/dashboard' ? ' ft-mobile-dashboard' : ''}`} style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
-            <div className="ft-mobile-page" style={{ flex: 1, minWidth: 0 }}>{children}</div>
+            <div className="ft-mobile-page" style={{ flex: 1, minWidth: 0 }}>
+              <ReportCaptureToolbar />
+              {children}
+            </div>
             {location.pathname !== '/dashboard' && <Footer />}
           </div>
         </main>
@@ -270,16 +274,21 @@ export default function Layout({ children }: LayoutProps) {
         ) : location.pathname === '/chart-studio' && collapsed ? (
           // Sidebar collapsed → Chart Studio goes full-bleed: no gutters, no footer,
           // maximal chart area edge-to-edge.
-          <div style={{ minHeight: '100vh' }}>{children}</div>
+          <div style={{ minHeight: '100vh' }}>
+            <div style={{ padding: '10px 12px 0' }}><ReportCaptureToolbar /></div>
+            {children}
+          </div>
         ) : location.pathname === '/flows-map' || location.pathname === '/chart-studio' ? (
           // Map cockpit and Chart Studio want the full main width: gutters waste chart area.
           <div className="px-4 py-4" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
+            <ReportCaptureToolbar />
             <div style={{ flex: 1, minHeight: 0 }}>{children}</div>
             <Footer />
           </div>
         ) : (
           // Tools own the page: full width with modest gutters, no centered max-width column.
           <div className="w-full px-5 2xl:px-8 py-5" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', boxSizing: 'border-box' }}>
+            <ReportCaptureToolbar />
             <div style={{ flex: 1, minHeight: 0 }}>{children}</div>
             <Footer />
           </div>

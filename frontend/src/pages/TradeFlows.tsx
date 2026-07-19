@@ -9,6 +9,9 @@ import { T } from '../lib/theme'
 import { ISO_GEO, projectWorld, WORLD_DOT_PATH } from '../lib/worldDotMap'
 import { MONO, SANS, mix, seg, Panel, KpiStrip } from './cockpitKit'
 import useIsMobile from '../hooks/useIsMobile'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip } from '../lib/reportCaptureRegistry'
 
 interface Partner { partner: string | null; iso: string | null; value: number | null; net_wgt: number | null; qty: number | null; unit: string | null }
 interface Resp {
@@ -127,6 +130,33 @@ function Results({ d, cmdLabel, countryLabel }: { d: Resp; cmdLabel: string; cou
     { label: 'Top partner', value: partners[0]?.partner ?? '—', vc: T.blue, sub: partners[0] ? fmtUsd(partners[0].value) : undefined },
     { label: 'Top 5 concentration', value: topFive != null ? `${topFive.toFixed(1)}%` : '—', sub: 'share of reported value' },
   ]
+
+  useReportCapture(() => {
+    const pieces: ClipDraft[] = [
+      kpiClip('Trade Flows', `${countryLabel} · ${cmdLabel} · ${d.period ?? ''}`, [
+        { label: `Total ${(d.flow ?? 'X') === 'X' ? 'exports' : 'imports'}`, value: fmtUsd(d.total?.value), sub: fmtWt(d.total?.net_wgt) },
+        { label: 'World share', value: d.world_share != null ? `${(d.world_share * 100).toFixed(1)}%` : '—' },
+        { label: 'Partners', value: String(d.partner_count ?? partners.length) },
+        { label: 'Top partner', value: partners[0]?.partner ?? '—', sub: partners[0] ? fmtUsd(partners[0].value) : undefined },
+        { label: 'Top 5 conc.', value: topFive != null ? `${topFive.toFixed(1)}%` : '—' },
+      ]),
+    ]
+    if (partners.length) {
+      pieces.push(tableClip(
+        'Trade Flows',
+        `Partners · ${countryLabel} · ${cmdLabel}`,
+        ['Partner', 'ISO', 'Value', 'Share %', 'Weight'],
+        partners.slice(0, 20).map(p => [
+          p.partner ?? '—',
+          p.iso ?? '—',
+          fmtUsd(p.value),
+          d.total?.value && p.value != null ? `${((p.value / d.total.value) * 100).toFixed(1)}%` : '—',
+          fmtWt(p.net_wgt),
+        ]),
+      ))
+    }
+    return pieces
+  }, { disabled: !d.available || !partners.length, sourceTab: 'Trade Flows' })
 
   const handleSelectPartner = (p: Partner) => {
     const idx = partners.findIndex(x => x.iso === p.iso && x.partner === p.partner)

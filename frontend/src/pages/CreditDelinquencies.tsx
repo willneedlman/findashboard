@@ -9,6 +9,8 @@ import HelpTip from '../components/HelpTip'
 import { KpiCell } from '../components/mmCockpit'
 import useIsMobile from '../hooks/useIsMobile'
 import { TOOLTIP_STYLE } from '../components/ChartTooltip'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
 
 interface CreditPoint { asof: string; delinquency_rate: number; chargeoff_rate: number | null }
 interface CreditClass {
@@ -153,8 +155,89 @@ export function CreditDelinquenciesContent() {
   }, {})
   const creditChart = Object.values(creditRows).sort((a, b) => String(a.asof).localeCompare(String(b.asof)))
 
+  const captureCredit = (): ClipDraft[] => {
+    const pieces: ClipDraft[] = []
+    if (indicators.length) {
+      pieces.push({ sourceTab: 'Credit Stress', dataType: 'kpi', payload: { kind: 'kpi', title: 'System Credit Pulse', cells: indicators.map(i => ({ label: i.label, value: indicatorValue(i), sub: `${indicatorState(i)} · ${i.asof}` })) } })
+    }
+    if (marketRows.length && marketIndicators.length) {
+      pieces.push({ sourceTab: 'Credit Stress', dataType: 'chart', payload: {
+        kind: 'chart', title: 'Market Financial Stress', chartType: 'line', xKey: 'asof',
+        data: marketRows, series: marketIndicators.map(i => ({ key: i.key, label: i.label })),
+      } })
+    }
+    if (lendingRows.length && lendingIndicators.length) {
+      pieces.push({ sourceTab: 'Credit Stress', dataType: 'chart', payload: {
+        kind: 'chart', title: 'Bank Lending Standards (SLOOS)', chartType: 'line', xKey: 'asof',
+        data: lendingRows, series: lendingIndicators.map(i => ({ key: i.key, label: i.label })),
+      } })
+    }
+    if (classes.length) {
+      pieces.push({ sourceTab: 'Credit Stress', dataType: 'table', payload: {
+        kind: 'table', title: 'Bank Credit Health by Loan Category',
+        columns: ['Category', 'Delinquency %', 'Charge-off %', 'As of'],
+        rows: classes.map(c => [c.label, fmtPct(c.delinquency_rate), c.chargeoff_rate == null ? null : fmtPct(c.chargeoff_rate), c.asof]),
+      } })
+    }
+    if (creditChart.length && classes.length) {
+      pieces.push({ sourceTab: 'Credit Stress', dataType: 'chart', payload: {
+        kind: 'chart', title: 'Delinquency Trend by Loan Category', chartType: 'line', xKey: 'asof',
+        data: creditChart, series: classes.map(item => ({ key: item.asset_class, label: item.label })),
+      } })
+    }
+    // FDIC cross-section — same aggregates the panel shows on-screen.
+    if (fdic?.available && (fdic.banks?.length ?? 0) > 0) {
+      const banks = fdic.banks ?? []
+      const totalAssets = banks.reduce((sum, b) => sum + (b.assets ?? 0), 0)
+      const topFour = banks.slice(0, 4).reduce((sum, b) => sum + (b.assets ?? 0), 0)
+      const totalDeposits = banks.reduce((sum, b) => sum + (b.deposits ?? 0), 0)
+      const weighted = (field: 'roa' | 'nim' | 'net_chargeoffs') => {
+        const eligible = banks.filter(b => b.assets != null && b[field] != null)
+        const assets = eligible.reduce((sum, b) => sum + (b.assets ?? 0), 0)
+        return assets ? eligible.reduce((sum, b) => sum + (b.assets ?? 0) * (b[field] ?? 0), 0) / assets : null
+      }
+      const nco = weighted('net_chargeoffs')
+      const roa = weighted('roa')
+      pieces.push({ sourceTab: 'Credit Stress', dataType: 'kpi', payload: { kind: 'kpi', title: 'FDIC System Aggregates', cells: [
+        { label: 'Asset-weighted NCO', value: nco == null ? '—' : `${nco.toFixed(2)}%`, sub: 'credit-loss rate' },
+        { label: 'Asset-weighted ROA', value: roa == null ? '—' : `${roa.toFixed(2)}%`, sub: 'profitability' },
+        { label: 'Deposit funding', value: totalAssets ? `${(totalDeposits / totalAssets * 100).toFixed(1)}%` : '—', sub: 'deposits / assets' },
+        { label: 'Top-four concentration', value: totalAssets ? `${(topFour / totalAssets * 100).toFixed(1)}%` : '—', sub: 'assets in tracked group' },
+      ] } })
+      const sorted = [...banks].sort((a, b) => (b.net_chargeoffs ?? -Infinity) - (a.net_chargeoffs ?? -Infinity))
+      pieces.push({ sourceTab: 'Credit Stress', dataType: 'table', payload: {
+        kind: 'table', title: 'FDIC Institutional Stress Matrix',
+        columns: ['Institution', 'Deposits', 'Assets', 'NCO %', 'ROA %', 'NIM %'],
+        rows: sorted.map(b => [
+          (b.name ?? '—').replace(' NATIONAL ASSN', '').replace(' BANK NA', '').replace(' BANK USA', '').replace(' BANK&TRUST CO', ''),
+          fmtBankBalance(b.deposits),
+          fmtBankBalance(b.assets),
+          b.net_chargeoffs == null ? null : b.net_chargeoffs.toFixed(2),
+          b.roa == null ? null : b.roa.toFixed(2),
+          b.nim == null ? null : b.nim.toFixed(2),
+        ]),
+      } })
+      pieces.push({ sourceTab: 'Credit Stress', dataType: 'chart', payload: {
+        kind: 'chart', title: 'Net Charge-off Dispersion (FDIC)', chartType: 'bar', xKey: 'bank',
+        data: sorted.map(b => ({
+          bank: (b.name ?? '—').replace(' NATIONAL ASSN', '').replace(' BANK NA', '').replace(' BANK USA', '').replace(' BANK&TRUST CO', '').slice(0, 18),
+          nco: b.net_chargeoffs,
+        })),
+        series: [{ key: 'nco', label: 'Net charge-offs %' }],
+      } })
+    }
+    return pieces
+  }
+
+  useReportCapture(captureCredit, {
+    disabled: !indicators.length && !classes.length && !(fdic?.available && fdic.banks?.length),
+    sourceTab: 'Credit Stress',
+  })
+
   return <div style={{ width: '100%' }}>
-    <PageHeader title="Credit Stress" actions={data?.as_of ? <div style={{ display: 'flex', gap: 10, fontFamily: T.mono, fontSize: 8.5, color: T.muted }}><span style={{ color: T.pos }}>{data.source}</span><span>latest observation {data.as_of} · {ageLabel(data.as_of)}</span></div> : undefined} />
+    <PageHeader title="Credit Stress" actions={<div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      {data?.as_of && <div style={{ display: 'flex', gap: 10, fontFamily: T.mono, fontSize: 8.5, color: T.muted }}><span style={{ color: T.pos }}>{data.source}</span><span>latest observation {data.as_of} · {ageLabel(data.as_of)}</span></div>}
+    </div>} />
 
     {isLoading && <EmptyState title="Loading Credit Stress" hint="Assembling financial stress, lending standards, delinquency, and charge-off observations." variant="loading" />}
     {isError && <EmptyState title="Credit Stress Unavailable" hint="Federal Reserve series could not be reached. No modeled or simulated fallback is shown." variant="unavailable" />}

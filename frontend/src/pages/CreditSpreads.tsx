@@ -7,6 +7,9 @@ import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
 import { KpiCell } from '../components/mmCockpit'
 import { TOOLTIP_STYLE, CROSSHAIR_CURSOR } from '../components/ChartTooltip'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, chartClip } from '../lib/reportCaptureRegistry'
 
 
 const SERIES_COLORS: Record<string, string> = {
@@ -85,6 +88,43 @@ export function CreditSpreadsContent() {
     border: `1px solid ${active ? T.gold : T.border}`,
     color: active ? T.gold : T.muted,
   })
+
+  const TAB = 'Credit Spreads'
+  useReportCapture(() => {
+    if (!data) return null
+    const pieces: ClipDraft[] = [
+      kpiClip(TAB, 'Credit Spread Snapshot', [
+        ...Object.entries(data.series).filter(([k]) => k !== 'vix').map(([, s]) => ({
+          label: s.label,
+          value: s.current != null ? `${s.current.toFixed(0)} bps` : '—',
+          sub: s.change_1y != null
+            ? `${s.change_1y >= 0 ? '▲' : '▼'} ${Math.abs(s.change_1y).toFixed(0)} bps vs 1Y`
+            : s.benchmark,
+        })),
+        ...(data.series.vix ? [{
+          label: 'VIX',
+          value: data.series.vix.current != null ? data.series.vix.current.toFixed(2) : '—',
+          sub: 'CBOE 30-day implied vol',
+        }] : []),
+      ]),
+    ]
+    if (chartData.length) {
+      const keys = [...activeKeys]
+      pieces.push(chartClip(TAB, 'Spread History', 'line', 'date',
+        chartData.map(row => {
+          const out: Record<string, string | number | null> = { date: row.date }
+          for (const k of keys) out[k] = (row as any)[k] ?? null
+          if (showVix) out.vix = (row as any).vix ?? null
+          return out
+        }),
+        [
+          ...keys.map(k => ({ key: k, label: data.series[k]?.label ?? k })),
+          ...(showVix ? [{ key: 'vix', label: 'VIX' }] : []),
+        ],
+      ))
+    }
+    return pieces
+  }, { disabled: !data, sourceTab: TAB })
 
   return (
       <div id="credit-spreads-content" style={{ width: '100%' }}>

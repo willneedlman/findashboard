@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react'
 import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
 import MarketSessions from '../components/MarketSessions'
-import { MARKETS, marketStatus, PHASE_COLOR, PHASE_OPACITY, type Phase } from '../lib/marketHours'
+import { MARKETS, marketStatus, countdown, PHASE_COLOR, PHASE_OPACITY, type Phase } from '../lib/marketHours'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip } from '../lib/reportCaptureRegistry'
 
 const T = {
   text: 'var(--theme-text, #d7e3fc)', muted: 'var(--theme-secondary, #8099b0)',
@@ -18,9 +21,34 @@ export function MarketHoursContent() {
     return () => clearInterval(id)
   }, [])
 
-  const openCount = MARKETS.filter(m => marketStatus(m, now).open).length
+  const statuses = MARKETS.map(m => ({ market: m, st: marketStatus(m, now) }))
+  const openCount = statuses.filter(s => s.st.open).length
   const localTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
   const localZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+
+  const TAB = 'Market Hours'
+  useReportCapture(() => {
+    const pieces: ClipDraft[] = [
+      kpiClip(TAB, 'Session Pulse', [
+        { label: 'Open / Total', value: `${openCount} / ${MARKETS.length}` },
+        { label: 'Local Time', value: localTime, sub: localZone },
+        { label: 'Regular Open', value: String(statuses.filter(s => s.st.phase === 'regular').length) },
+        { label: 'Closed / Holiday', value: String(statuses.filter(s => s.st.phase === 'closed' || s.st.phase === 'holiday').length) },
+      ]),
+      tableClip(TAB, 'Exchange Status',
+        ['Market', 'Region', 'Phase', 'Local Time', 'Next', 'In'],
+        statuses.map(({ market, st }) => [
+          market.name,
+          market.region,
+          st.phase,
+          st.localTime,
+          st.nextPhase,
+          countdown(st.msToNext),
+        ]),
+      ),
+    ]
+    return pieces
+  }, { sourceTab: TAB })
 
   return (
     <>

@@ -8,6 +8,9 @@ import PageHeader from '../components/PageHeader'
 import TickerInput from '../components/TickerInput'
 import EmptyState from '../components/EmptyState'
 import { recordRecentTicker } from '../lib/recentTickers'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip, textClip } from '../lib/reportCaptureRegistry'
 
 interface Peer {
   symbol: string | null
@@ -541,6 +544,61 @@ export function SupplyChainPeersContent() {
   useEffect(() => {
     if (initialTicker && !data && !loading) void doFetch(initialTicker)
   }, [initialTicker])
+
+  const TAB = 'Supply Chain Map'
+  useReportCapture(() => {
+    if (!data?.base) return null
+    const base = data.base
+    const peers = data.peers ?? []
+    const pieces: ClipDraft[] = [
+      kpiClip(TAB, `${data.ticker} · Map Pulse`, [
+        { label: 'Company', value: base.name.slice(0, 28) },
+        { label: 'Peers', value: String(data.returned ?? peers.length), sub: data.count != null ? `${data.count} total` : undefined },
+        { label: 'Verified Links', value: String(verified.length) },
+        { label: 'Employees', value: base.employees != null ? base.employees.toLocaleString() : '—' },
+        { label: 'Revenue', value: base.revenue != null ? `$${(base.revenue / 1e9).toFixed(1)}B` : '—' },
+        { label: 'Country', value: base.country || '—' },
+      ]),
+    ]
+    if (base.brief) {
+      pieces.push(textClip(TAB, `${base.name} (${data.ticker})`,
+        `${base.industry || '—'}${base.business_category ? ` · ${base.business_category}` : ''}\n\n${base.brief.slice(0, 500)}${base.brief.length > 500 ? '…' : ''}`))
+    }
+    if (verified.length) {
+      pieces.push(tableClip(TAB, 'Verified Relationships',
+        ['Counterparty', 'Role', 'Flow', 'Category', 'Source'],
+        verified.slice(0, 20).map(v => [
+          v.counterparty_name || v.counterparty,
+          v.role,
+          v.flow,
+          v.category,
+          v.source,
+        ]),
+      ))
+    }
+    if (peers.length) {
+      pieces.push(tableClip(TAB, 'Related Companies',
+        ['Symbol', 'Name', 'Industry', 'Country', 'Score', 'Shared Focus'],
+        peers.slice(0, 20).map(p => [
+          p.symbol || '—',
+          (p.name || '').slice(0, 36),
+          p.industry || '—',
+          p.country || '—',
+          p.score != null ? p.score.toFixed(2) : null,
+          (p.shared_focus || []).slice(0, 2).join(', ') || '—',
+        ]),
+      ))
+    }
+    if (base.core_offerings?.length || base.supply_chain_focus?.length || base.target_markets?.length) {
+      pieces.push(textClip(TAB, 'Tags',
+        [
+          base.core_offerings?.length ? `Products: ${base.core_offerings.slice(0, 12).join(', ')}` : '',
+          base.supply_chain_focus?.length ? `Sourcing: ${base.supply_chain_focus.slice(0, 12).join(', ')}` : '',
+          base.target_markets?.length ? `Markets: ${base.target_markets.slice(0, 12).join(', ')}` : '',
+        ].filter(Boolean).join('\n')))
+    }
+    return pieces
+  }, { disabled: !data?.base, sourceTab: TAB })
 
   return <div>
     <PageHeader title="Supply Chain Map" />

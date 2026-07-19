@@ -9,6 +9,9 @@ import PageWrapper from '../components/PageWrapper'
 import PageHeader from '../components/PageHeader'
 import EmptyState from '../components/EmptyState'
 import useIsMobile from '../hooks/useIsMobile'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip, chartClip } from '../lib/reportCaptureRegistry'
 
 
 const SERIES_COLORS  = ['var(--theme-primary, #c9a84c)', '#60a5fa', '#34d399', '#f97316', '#a78bfa', '#38bdf8', '#fb7185', '#fbbf24']
@@ -226,6 +229,53 @@ export function CompareContent() {
     : ratios.length ? 'Multiples & Ratios'
     : 'Macro Indicators'
   const axisLabelStyle = { fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', fill: '#5e768f' as const }
+
+  useReportCapture(() => {
+    if (!data?.tickers?.length || !chartData.length) return null
+    const visible = assets.filter(t => !hidden.has(t) && data.tickers.includes(t))
+    if (!visible.length) return null
+    const pieces: ClipDraft[] = [
+      kpiClip('Asset Overlay', `Asset Overlay · ${period.toUpperCase()} · ${NORMS.find(n => n.key === norm)?.label ?? norm}`,
+        visible.map(t => {
+          const ch = data.meta?.[t]?.change_pct
+          return {
+            label: t,
+            value: ch != null ? `${ch >= 0 ? '+' : ''}${ch.toFixed(1)}%` : '—',
+            sub: data.meta?.[t]?.last != null ? `last ${Number(data.meta[t].last).toFixed(2)}` : undefined,
+          }
+        }),
+      ),
+      tableClip(
+        'Asset Overlay',
+        'Asset Performance',
+        ['Ticker', 'Start', 'Last', 'Change %'],
+        visible.map(t => {
+          const m = data.meta?.[t]
+          return [
+            t,
+            m?.start != null ? Number(m.start).toFixed(2) : null,
+            m?.last != null ? Number(m.last).toFixed(2) : null,
+            m?.change_pct != null ? `${m.change_pct >= 0 ? '+' : ''}${m.change_pct.toFixed(2)}%` : null,
+          ]
+        }),
+      ),
+    ]
+    const step = Math.max(1, Math.ceil(chartData.length / 80))
+    const sampled = chartData.filter((_, i) => i % step === 0 || i === chartData.length - 1)
+    pieces.push(chartClip(
+      'Asset Overlay',
+      `Overlay · ${period.toUpperCase()}`,
+      'line',
+      'date',
+      sampled.map(row => {
+        const out: Record<string, string | number | null> = { date: String(row.date ?? '') }
+        for (const t of visible) out[t] = row[t] as number | null
+        return out
+      }),
+      visible.map(t => ({ key: t, label: t })),
+    ))
+    return pieces
+  }, { disabled: !data?.tickers?.length || !chartData.length, sourceTab: 'Asset Overlay' })
 
   return (
     <div style={{ width: '100%' }}>

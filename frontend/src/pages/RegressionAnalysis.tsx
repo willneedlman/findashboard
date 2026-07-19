@@ -15,6 +15,9 @@ import {
 import { TOOLTIP_STYLE } from '../components/ChartTooltip'
 import MonteCarloRegression from './MonteCarloRegression'
 import ImportRegression from './ImportRegression'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip, chartClip, textClip } from '../lib/reportCaptureRegistry'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -170,6 +173,49 @@ function AssetOLS({ mode, setMode }: { mode: RegMode; setMode: (m: RegMode) => v
 
   const r = mutation.data
   const r2Color = r ? (r.r_squared > 0.7 ? C.green : r.r_squared > 0.4 ? C.gold : C.red) : C.muted
+
+  const TAB = 'Regression'
+  useReportCapture(() => {
+    if (!r) return null
+    const pieces: ClipDraft[] = [
+      kpiClip(TAB, `${r.y_ticker} ~ ${r.x_tickers.join('+')} · Fit`, [
+        { label: 'R²', value: r.r_squared.toFixed(4), sub: `Adj ${r.adj_r_squared.toFixed(4)}` },
+        { label: 'Observations', value: String(r.observations) },
+        { label: 'F-Statistic', value: r.f_statistic != null ? r.f_statistic.toFixed(2) : '—' },
+        { label: 'MSE', value: r.mse.toExponential(3) },
+        { label: 'Intercept', value: r.intercept.toFixed(6), sub: `p=${r.intercept_p.toExponential(2)}` },
+        ...r.coefficients.slice(0, 4).map((c, i) => ({
+          label: `β ${r.feature_names[i]}`,
+          value: c.toFixed(6),
+          sub: `p=${r.p_values[i].toExponential(2)}`,
+        })),
+      ]),
+      tableClip(TAB, 'Coefficients',
+        ['Feature', 'Coef', 'Std Err', 't-stat', 'p-value'],
+        [
+          ['(Intercept)', r.intercept.toFixed(6), r.std_errors[0]?.toFixed(6) ?? null, r.t_stats[0]?.toFixed(3) ?? null, r.intercept_p.toExponential(2)],
+          ...r.feature_names.map((name, i) => [
+            name,
+            r.coefficients[i].toFixed(6),
+            r.std_errors[i]?.toFixed(6) ?? null,
+            r.t_stats[i]?.toFixed(3) ?? null,
+            r.p_values[i].toExponential(2),
+          ]),
+        ],
+      ),
+      textClip(TAB, 'Model Spec',
+        `${r.model_type} · Y=${r.y_ticker} · X=${r.x_tickers.join(', ')} · period=${period} · ${useReturns ? 'log returns' : 'raw prices'}${r.model_type === 'polynomial' ? ` · degree=${degree}` : ''}`),
+    ]
+    if (r.data?.x?.length && r.x_tickers.length === 1) {
+      const step = Math.max(1, Math.ceil(r.data.x.length / 80))
+      pieces.push(chartClip(TAB, 'Fitted vs Actual (sampled)', 'line', 'i',
+        r.data.x.map((_, i) => ({ i, y: r.data.y[i], y_pred: r.data.y_pred[i] }))
+          .filter((_, i) => i % step === 0 || i === r.data.x.length - 1),
+        [{ key: 'y', label: r.y_ticker }, { key: 'y_pred', label: 'Fitted' }],
+      ))
+    }
+    return pieces
+  }, { disabled: !r, sourceTab: TAB })
 
   const rail = (
     <>

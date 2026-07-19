@@ -1,0 +1,360 @@
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import axios from 'axios'
+import { Plus, Trash2, ChevronUp, ChevronDown, Eye, EyeOff, FileText, FileDown, Sparkles, RefreshCw, Loader2, AlertTriangle } from 'lucide-react'
+import { T } from '../lib/theme'
+import PageWrapper from '../components/PageWrapper'
+import PageHeader from '../components/PageHeader'
+import useIsMobile from '../hooks/useIsMobile'
+import ReportWizardForm from '../components/report/ReportWizardForm'
+import ClipRenderer from '../components/report/ClipRenderer'
+import {
+  useReportCreator, createProject, renameProject, deleteProject, updateScope,
+  removeClip, updateClipDescription, moveClip, timeframeLabel, clipTitle, formatCaptured,
+  setGenerated, updateGenerated, updateGeneratedSection, updateKeyResult, isGenerationStale, summarizeClipForAI,
+  type ReportProject, type ReportClip,
+} from '../lib/reportCreator'
+
+const DTYPE_COLOR: Record<string, string> = { table: '#60a5fa', chart: '#c9a84c', kpi: '#34d399', text: '#c084fc' }
+
+const SPIN_CSS = `@keyframes rc-spin { to { transform: rotate(360deg) } } .rc-spin { animation: rc-spin 0.8s linear infinite }`
+
+const primaryAction: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', gap: 7, background: T.gold, border: `1px solid ${T.gold}`,
+  color: 'var(--theme-bg)', fontFamily: T.label, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em',
+  textTransform: 'uppercase', padding: '8px 14px', cursor: 'pointer',
+}
+const subLabel: React.CSSProperties = {
+  fontFamily: T.label, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.1em',
+  textTransform: 'uppercase', color: T.muted, marginBottom: 7,
+}
+const genField: React.CSSProperties = {
+  background: T.bg, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.label,
+  fontSize: 11.5, lineHeight: 1.6, padding: '9px 11px', width: '100%', outline: 'none', boxSizing: 'border-box', resize: 'vertical',
+}
+
+function GeneratedEditor({ project }: { project: ReportProject }) {
+  const gen = project.generated!
+  const clipById = new Map(project.clips.map(c => [c.id, c]))
+  const kr = gen.keyResult
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div>
+        <div style={subLabel}>Headline</div>
+        <input key={`hl-${gen.generatedAt}`} defaultValue={gen.headline ?? ''} onBlur={e => updateGenerated(project.id, { headline: e.target.value })}
+          placeholder="Research-note headline" style={{ ...genField, fontFamily: T.mono, fontSize: 14, fontWeight: 700, resize: 'none' }} />
+      </div>
+      {gen.stance && (
+        <div style={{ border: `1px solid ${T.border}`, background: T.bg, padding: 12 }}>
+          <div style={subLabel}>Stance</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, fontFamily: T.mono, fontSize: 11, color: T.text }}>
+            <span><span style={{ color: T.muted }}>Lean </span>{gen.stance.lean}</span>
+            <span><span style={{ color: T.muted }}>Conviction </span>{gen.stance.conviction}</span>
+            {gen.stance.baseCase && <span><span style={{ color: T.muted }}>Base </span>{gen.stance.baseCase}</span>}
+          </div>
+          {gen.stance.thesis && (
+            <div style={{ marginTop: 8, fontFamily: T.label, fontSize: 12, color: T.text, lineHeight: 1.5 }}>{gen.stance.thesis}</div>
+          )}
+        </div>
+      )}
+      {kr && (
+        <div style={{ border: `1px solid ${T.gold}`, background: T.goldTint(7), padding: 12 }}>
+          <div style={subLabel}>Bottom line · answers the goal</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <input key={`kl-${gen.generatedAt}`} defaultValue={kr.label} onBlur={e => updateKeyResult(project.id, { label: e.target.value })}
+              placeholder="Result label" style={{ flex: '2 1 180px', minWidth: 0, background: T.bg, border: `1px solid ${T.border}`, color: T.muted, fontFamily: T.label, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 9px', outline: 'none', boxSizing: 'border-box' }} />
+            <input key={`kv-${gen.generatedAt}`} defaultValue={kr.value} onBlur={e => updateKeyResult(project.id, { value: e.target.value })}
+              placeholder="Result value" style={{ flex: '1 1 140px', minWidth: 0, background: T.bg, border: `1px solid ${T.gold}`, color: T.gold, fontFamily: T.mono, fontSize: 15, fontWeight: 700, padding: '5px 9px', outline: 'none', boxSizing: 'border-box' }} />
+          </div>
+          <input key={`kc-${gen.generatedAt}`} defaultValue={kr.context ?? ''} onBlur={e => updateKeyResult(project.id, { context: e.target.value })}
+            placeholder="Supporting context (optional)" style={{ ...genField, marginTop: 8, fontFamily: T.mono, fontSize: 10.5, resize: 'none' }} />
+        </div>
+      )}
+      <div>
+        <div style={subLabel}>Executive summary</div>
+        <textarea key={`es-${gen.generatedAt}`} defaultValue={gen.executiveSummary} rows={4}
+          onBlur={e => updateGenerated(project.id, { executiveSummary: e.target.value })} style={genField} />
+      </div>
+      {gen.sections.map((s, i) => {
+        const clip = clipById.get(s.clipId)
+        return (
+          <div key={s.clipId} style={{ border: `1px solid ${T.border}`, background: T.bg, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontFamily: T.mono, fontSize: 11, color: T.gold }}>{String(i + 1).padStart(2, '0')}</span>
+              <input key={`h-${gen.generatedAt}-${s.clipId}`} defaultValue={s.heading}
+                onBlur={e => updateGeneratedSection(project.id, s.clipId, { heading: e.target.value })}
+                style={{ flex: 1, background: 'transparent', border: 'none', borderBottom: `1px solid ${T.border}`, color: T.text, fontFamily: T.label, fontSize: 12.5, fontWeight: 700, padding: '3px 0', outline: 'none' }} />
+              <span style={{ fontFamily: T.mono, fontSize: 8, color: clip ? T.muted : T.neg }}>{clip ? clip.sourceTab : 'clip removed'}</span>
+            </div>
+            <textarea key={`a-${gen.generatedAt}-${s.clipId}`} defaultValue={s.analysis} rows={4}
+              onBlur={e => updateGeneratedSection(project.id, s.clipId, { analysis: e.target.value })} style={genField} />
+            {s.keyFigures && s.keyFigures.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {s.keyFigures.map((f, j) => (
+                  <span key={j} style={{ display: 'inline-flex', alignItems: 'baseline', gap: 5, border: `1px solid ${T.border}`, padding: '3px 8px' }}>
+                    <span style={{ fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: T.muted }}>{f.label}</span>
+                    <span style={{ fontFamily: T.mono, fontSize: 10.5, color: T.text }}>{f.value}</span>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })}
+      <div>
+        <div style={subLabel}>Conclusion and recommendations</div>
+        <textarea key={`cc-${gen.generatedAt}`} defaultValue={gen.conclusion} rows={4}
+          onBlur={e => updateGenerated(project.id, { conclusion: e.target.value })} style={genField} />
+      </div>
+      {gen.appendixClipIds.length > 0 && (
+        <div>
+          <div style={subLabel}>Appendix · supporting data (not central to the thesis)</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {gen.appendixClipIds.map(id => { const c = clipById.get(id); return c ? <span key={id} style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, border: `1px solid ${T.border}`, padding: '3px 7px' }}>{clipTitle(c)}</span> : null })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Section({ label, meta, children }: { label: string; meta?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <section style={{ border: `1px solid ${T.border}`, background: T.surface }}>
+      <div style={{ minHeight: 34, padding: '0 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, borderBottom: `1px solid ${T.border}` }}>
+        <span style={{ fontFamily: T.label, fontSize: 9, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.text }}>{label}</span>
+        {meta != null && <span style={{ fontFamily: T.mono, fontSize: 8.5, color: T.muted }}>{meta}</span>}
+      </div>
+      <div style={{ padding: 14 }}>{children}</div>
+    </section>
+  )
+}
+
+function ClipCard({ project, clip, index, count }: { project: ReportProject; clip: ReportClip; index: number; count: number }) {
+  const [open, setOpen] = useState(false)
+  const color = DTYPE_COLOR[clip.dataType] ?? T.muted
+  return (
+    <div style={{ border: `1px solid ${T.border}`, background: T.bg }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderBottom: open ? `1px solid ${T.borderFaint}` : 'none' }}>
+        <span style={{ fontFamily: T.mono, fontSize: 10, color: T.muted, width: 18, textAlign: 'right' }}>{index + 1}</span>
+        <span style={{ fontFamily: T.label, fontSize: 7.5, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color, border: `1px solid ${color}`, padding: '2px 5px', flexShrink: 0 }}>{clip.dataType}</span>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontFamily: T.label, fontSize: 11.5, color: T.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{clipTitle(clip)}</div>
+          <div style={{ fontFamily: T.mono, fontSize: 8.5, color: T.muted }}>{clip.sourceTab} · {formatCaptured(clip.capturedAt)}</div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+          <IconBtn title="Move up" disabled={index === 0} onClick={() => moveClip(project.id, clip.id, -1)}><ChevronUp size={13} /></IconBtn>
+          <IconBtn title="Move down" disabled={index === count - 1} onClick={() => moveClip(project.id, clip.id, 1)}><ChevronDown size={13} /></IconBtn>
+          <IconBtn title={open ? 'Hide preview' : 'Show preview'} onClick={() => setOpen(o => !o)}>{open ? <EyeOff size={13} /> : <Eye size={13} />}</IconBtn>
+          <IconBtn title="Remove clip" danger onClick={() => removeClip(project.id, clip.id)}><Trash2 size={13} /></IconBtn>
+        </div>
+      </div>
+      {open && (
+        <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <ClipRenderer payload={clip.payload} mode="dark" />
+          <textarea key={clip.id} defaultValue={clip.userDescription ?? ''} rows={2}
+            placeholder="Add analytical commentary shown beside this data in the report..."
+            onBlur={e => updateClipDescription(project.id, clip.id, e.target.value)}
+            style={{ background: T.surface, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.label, fontSize: 11, lineHeight: 1.5, padding: '7px 9px', width: '100%', outline: 'none', boxSizing: 'border-box', resize: 'vertical' }} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function IconBtn({ children, onClick, title, disabled, danger }: { children: React.ReactNode; onClick: () => void; title: string; disabled?: boolean; danger?: boolean }) {
+  return (
+    <button onClick={onClick} disabled={disabled} title={title} aria-label={title}
+      style={{ background: 'transparent', border: 'none', cursor: disabled ? 'default' : 'pointer', color: disabled ? T.borderFaint : danger ? T.neg : T.muted, padding: 4, display: 'inline-flex', opacity: disabled ? 0.5 : 1 }}>
+      {children}
+    </button>
+  )
+}
+
+export default function ReportCreator() {
+  const projects = useReportCreator()
+  const navigate = useNavigate()
+  const isMobile = useIsMobile()
+  const [activeId, setActiveId] = useState('')
+  const [newName, setNewName] = useState('')
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null)
+  const [generating, setGenerating] = useState(false)
+  const [genError, setGenError] = useState<string | null>(null)
+
+  const active = projects.find(p => p.id === activeId) ?? projects[0]
+
+  const generate = async () => {
+    if (!active || active.clips.length === 0) return
+    setGenerating(true); setGenError(null)
+    try {
+      const payload = {
+        projectName: active.name,
+        timeframe: timeframeLabel(active.scope),
+        purpose: active.scope.purpose,
+        goal: active.scope.goal,
+        clips: active.clips.map(c => ({ id: c.id, sourceTab: c.sourceTab, dataType: c.dataType, title: clipTitle(c), userDescription: c.userDescription ?? '', dataSummary: summarizeClipForAI(c) })),
+      }
+      const r = await axios.post('/api/ai/report', payload)
+      setGenerated(active.id, {
+        headline: r.data.headline ?? '',
+        stance: r.data.stance ?? undefined,
+        keyResult: r.data.keyResult ?? undefined,
+        executiveSummary: r.data.executiveSummary ?? '',
+        sections: Array.isArray(r.data.sections) ? r.data.sections : [],
+        conclusion: r.data.conclusion ?? '',
+        appendixClipIds: Array.isArray(r.data.appendixClipIds) ? r.data.appendixClipIds : [],
+        model: r.data.model,
+      })
+    } catch (e) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setGenError(detail || 'The AI writer is unavailable right now. You can still export the data as a plain report.')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  const create = () => {
+    const name = newName.trim()
+    const p = createProject(name || 'Untitled report')
+    setActiveId(p.id)
+    setNewName('')
+  }
+
+  const clips = active?.clips ?? []
+  const canGenerate = !!active && clips.length > 0
+  const scopeIncomplete = !!active && (!active.scope.purpose.trim() || !active.scope.goal.trim())
+
+  return (
+    <PageWrapper>
+      <style>{SPIN_CSS}</style>
+      <PageHeader title="Report Creator" actions={
+        <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted }}>
+          {projects.length} project{projects.length === 1 ? '' : 's'}
+        </span>
+      } />
+
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '250px 1fr', gap: 16, alignItems: 'start' }}>
+        {/* Project rail */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="New project" onKeyDown={e => { if (e.key === 'Enter') create() }}
+              style={{ flex: 1, minWidth: 0, background: T.bg, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.label, fontSize: 11, padding: '7px 9px', outline: 'none', boxSizing: 'border-box' }} />
+            <button onClick={create} title="Create project" aria-label="Create project"
+              style={{ background: T.goldTint(14), border: `1px solid ${T.gold}`, color: T.gold, cursor: 'pointer', padding: '0 10px', display: 'inline-flex', alignItems: 'center' }}><Plus size={14} /></button>
+          </div>
+
+          {projects.length === 0 ? (
+            <div style={{ border: `1px dashed ${T.border}`, padding: 16, fontFamily: T.mono, fontSize: 10, color: T.muted, lineHeight: 1.6 }}>
+              No projects yet. Name one above, or click Send to Report on any tool to start collecting.
+            </div>
+          ) : projects.map(p => {
+            const on = p.id === active?.id
+            const confirming = pendingDelete === p.id
+            return (
+              <div key={p.id} onClick={() => setActiveId(p.id)}
+                style={{ border: `1px solid ${on ? T.gold : T.border}`, background: on ? T.goldTint(8) : T.surface, padding: '9px 11px', cursor: 'pointer' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <span style={{ fontFamily: T.label, fontSize: 11.5, fontWeight: on ? 700 : 500, color: on ? T.gold : T.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
+                  {confirming ? (
+                    <span style={{ display: 'inline-flex', gap: 4, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                      <button onClick={() => { deleteProject(p.id); setPendingDelete(null) }} style={{ background: 'transparent', border: `1px solid ${T.neg}`, color: T.neg, fontFamily: T.label, fontSize: 8, fontWeight: 700, padding: '2px 5px', cursor: 'pointer', textTransform: 'uppercase' }}>Delete</button>
+                      <button onClick={() => setPendingDelete(null)} style={{ background: 'transparent', border: `1px solid ${T.border}`, color: T.muted, fontFamily: T.label, fontSize: 8, fontWeight: 700, padding: '2px 5px', cursor: 'pointer', textTransform: 'uppercase' }}>No</button>
+                    </span>
+                  ) : (
+                    <button onClick={e => { e.stopPropagation(); setPendingDelete(p.id) }} title="Delete project" aria-label="Delete project"
+                      style={{ background: 'transparent', border: 'none', color: T.muted, cursor: 'pointer', padding: 2, display: 'inline-flex', flexShrink: 0 }}><Trash2 size={12} /></button>
+                  )}
+                </div>
+                <div style={{ fontFamily: T.mono, fontSize: 8.5, color: T.muted, marginTop: 3 }}>{p.clips.length} clip{p.clips.length === 1 ? '' : 's'} · {timeframeLabel(p.scope)}</div>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Active project */}
+        {!active ? (
+          <div style={{ border: `1px solid ${T.border}`, background: T.surface, padding: 40, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+            <FileText size={26} color={T.muted} />
+            <div style={{ fontFamily: T.label, fontSize: 13, fontWeight: 700, color: T.text, letterSpacing: '0.04em' }}>Build a research report</div>
+            <div style={{ fontFamily: T.mono, fontSize: 10.5, color: T.muted, lineHeight: 1.6, maxWidth: 440 }}>
+              Create a project, then browse any tool and use Send to Report to clip tables, charts, and metrics into it. Set a timeframe, purpose, and goal, then generate a print-ready PDF.
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+              <input key={active.id} defaultValue={active.name}
+                onBlur={e => renameProject(active.id, e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                aria-label="Report name"
+                style={{ flex: 1, minWidth: 200, background: 'transparent', border: 'none', borderBottom: `1px solid transparent`, color: T.gold, fontFamily: T.mono, fontSize: 15, fontWeight: 700, letterSpacing: '0.06em', padding: '2px 0', outline: 'none' }}
+                onFocus={e => { e.target.style.borderBottomColor = T.border }}
+              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                {active.generated && (
+                  <button onClick={generate} disabled={generating || !canGenerate} title="Regenerate from the current clips and scope"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'transparent', border: `1px solid ${T.border}`, color: T.muted, fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '8px 12px', cursor: generating ? 'default' : 'pointer', opacity: generating ? 0.6 : 1 }}>
+                    {generating ? <Loader2 size={12} className="rc-spin" /> : <RefreshCw size={12} />} Regenerate
+                  </button>
+                )}
+                {active.generated ? (
+                  <button onClick={() => navigate(`/report-creator/print/${active.id}`)} style={primaryAction}>
+                    <FileDown size={13} /> Export PDF
+                  </button>
+                ) : (
+                  <button onClick={generate} disabled={generating || !canGenerate}
+                    style={{ ...primaryAction, background: canGenerate ? T.gold : 'transparent', border: `1px solid ${canGenerate ? T.gold : T.border}`, color: canGenerate ? 'var(--theme-bg)' : T.muted, cursor: (generating || !canGenerate) ? 'default' : 'pointer', opacity: (generating || !canGenerate) ? 0.6 : 1 }}>
+                    {generating ? <><Loader2 size={13} className="rc-spin" /> Generating…</> : <><Sparkles size={13} /> Generate AI report</>}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {genError && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${T.neg}`, background: T.negTint(8), color: T.neg, fontFamily: T.mono, fontSize: 10.5, padding: '8px 12px' }}>
+                <AlertTriangle size={13} style={{ flexShrink: 0 }} /> <span style={{ flex: 1 }}>{genError}</span>
+                <button onClick={() => navigate(`/report-creator/print/${active.id}`)} style={{ background: 'transparent', border: `1px solid ${T.neg}`, color: T.neg, fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '4px 8px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Export data only</button>
+              </div>
+            )}
+
+            <Section label="Report scope" meta={timeframeLabel(active.scope)}>
+              <ReportWizardForm scope={active.scope} onChange={patch => updateScope(active.id, patch)} />
+            </Section>
+
+            <Section label="Clips" meta={`${clips.length} in order`}>
+              {clips.length === 0 ? (
+                <div style={{ padding: '20px 8px', textAlign: 'center', fontFamily: T.mono, fontSize: 10.5, color: T.muted, lineHeight: 1.6 }}>
+                  No clips yet. Open any tool and click Send to Report to add its tables, charts, or metrics here.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {clips.map((c, i) => <ClipCard key={c.id} project={active} clip={c} index={i} count={clips.length} />)}
+                </div>
+              )}
+            </Section>
+
+            {!active.generated && canGenerate && scopeIncomplete && (
+              <div style={{ fontFamily: T.mono, fontSize: 9.5, color: T.warn }}>
+                Add a purpose and goal so the AI can anchor the report to your intent.
+              </div>
+            )}
+
+            {active.generated && (
+              <Section label="Generated report" meta={`AI draft · ${formatCaptured(active.generated.generatedAt)}`}>
+                {isGenerationStale(active) && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 12, fontFamily: T.mono, fontSize: 9.5, color: T.warn }}>
+                    <AlertTriangle size={12} /> Clips or scope changed since this draft. Regenerate to refresh the analysis.
+                  </div>
+                )}
+                <p style={{ fontFamily: T.mono, fontSize: 9.5, color: T.muted, lineHeight: 1.5, margin: '0 0 14px' }}>
+                  Edit any section below. Your edits are saved and used in the exported PDF.
+                </p>
+                <GeneratedEditor project={active} />
+              </Section>
+            )}
+          </div>
+        )}
+      </div>
+    </PageWrapper>
+  )
+}

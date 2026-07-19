@@ -8,6 +8,9 @@ import { VerdictStrip } from './valuationShared'
 import { normalizeTicker } from '../lib/pmImport'
 import { screenerFilterToApi } from '../lib/format'
 import UniversePicker from '../components/UniversePicker'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip } from '../lib/reportCaptureRegistry'
 
 
 interface Row {
@@ -252,6 +255,45 @@ export function UnusualOptionsContent() {
       return (av - bv) * mult
     })
   }, [rows, sort])
+
+  const TAB = 'Options Flow'
+  useReportCapture(() => {
+    if (!data || !rows.length) return null
+    const total = rows.reduce((s, r) => s + r.premium, 0)
+    const callPrem = rows.filter(r => r.type === 'call').reduce((s, r) => s + r.premium, 0)
+    const callPct = total > 0 ? Math.round(callPrem / total * 100) : 0
+    const fmt = (v: number) => v >= 1e9 ? `$${(v / 1e9).toFixed(2)}B` : v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : `$${(v / 1e3).toFixed(0)}K`
+    const topVO = [...rows].sort((a, b) => b.volOiRatio - a.volOiRatio)[0]
+    const mostA = [...rows].sort((a, b) => b.volume - a.volume)[0]
+    const pieces: ClipDraft[] = [
+      kpiClip(TAB, 'Flow Pulse', [
+        { label: 'Total Premium', value: fmt(total), sub: `${data.count} contracts` },
+        { label: 'Calls', value: `${callPct}%`, sub: fmt(callPrem) },
+        { label: 'Puts', value: `${100 - callPct}%`, sub: fmt(total - callPrem) },
+        { label: 'Top Vol/OI', value: `${topVO.ticker} ${topVO.volOiRatio.toFixed(1)}` },
+        { label: 'Most Active', value: `${mostA.ticker} ${mostA.volume.toLocaleString()}` },
+      ]),
+      tableClip(TAB, 'Unusual Options Flow',
+        ['Ticker', 'Type', 'Strike', 'Expiry', 'DTE', 'Spot', 'OTM%', 'Volume', 'OI', 'Vol/OI', 'IV%', 'Mid', 'Premium'],
+        sortedRows.map(r => [
+          r.ticker,
+          r.type.toUpperCase(),
+          r.strike.toFixed(2),
+          r.expiry,
+          r.dte,
+          r.spot != null ? r.spot.toFixed(2) : null,
+          r.moneyness != null ? `${r.moneyness >= 0 ? '+' : ''}${r.moneyness.toFixed(1)}%` : null,
+          r.volume,
+          r.openInterest,
+          r.volOiRatio.toFixed(1),
+          r.iv.toFixed(1),
+          r.mid.toFixed(2),
+          fmtPremium(r.premium),
+        ]),
+      ),
+    ]
+    return pieces
+  }, { disabled: !data || !rows.length, sourceTab: TAB })
 
   return (
     <div style={{ width: '100%' }}>

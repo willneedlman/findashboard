@@ -13,6 +13,9 @@ import PortfolioIO, { type PortfolioAsset } from '../components/PortfolioIO'
 import PMImportPicker from '../components/PMImportPicker'
 import { type ImportResult } from '../lib/pmImport'
 import { Check, ChevronDown, ChevronUp, Play, X } from 'lucide-react'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip, chartClip } from '../lib/reportCaptureRegistry'
 
 const GOLD = 'var(--theme-primary, #c9a84c)'
 const BLUE = 'var(--theme-tertiary, #60a5fa)'
@@ -234,6 +237,61 @@ export function PortfolioOptimizerContent() {
     }
     return [fit(pts.map(p => p.vol), 0), fit(pts.map(p => p.return))]
   }, [data, portScatter, currentScatter, capitalAllocation])
+
+  useReportCapture(() => {
+    if (!data || !sel) return null
+    const selLabel = portList.find(p => p.key === selected)?.label ?? selected
+    const pieces: ClipDraft[] = [
+      kpiClip('Portfolio Optimizer', `${selLabel} Snapshot`, [
+        { label: 'Expected Return', value: `${sel.return >= 0 ? '+' : ''}${sel.return.toFixed(1)}%` },
+        { label: 'Volatility', value: `${sel.vol.toFixed(1)}%` },
+        { label: 'Sharpe', value: sel.sharpe.toFixed(2) },
+        { label: 'VaR 95%', value: `${sel.var_95.toFixed(2)}%` },
+        { label: 'CVaR 95%', value: `${sel.cvar_95.toFixed(2)}%` },
+        { label: 'Max Drawdown', value: `${sel.max_drawdown.toFixed(1)}%` },
+      ]),
+      tableClip(
+        'Portfolio Optimizer',
+        `Allocation · ${selLabel}`,
+        ['Ticker', 'Weight %', 'Risk Contrib %'],
+        sel.weights.filter(w => Math.abs(w.weight) > 0.01).slice(0, 20).map(w => [
+          w.ticker, +w.weight.toFixed(1), +w.risk_contribution.toFixed(1),
+        ]),
+      ),
+      tableClip(
+        'Portfolio Optimizer',
+        'Portfolios Compared',
+        ['Portfolio', 'Return %', 'Vol %', 'Sharpe', 'VaR 95%', 'Max DD %'],
+        portList.map(p => {
+          const pp = data.portfolios[p.key]
+          return [p.label, +pp.return.toFixed(1), +pp.vol.toFixed(1), +pp.sharpe.toFixed(2), +pp.var_95.toFixed(2), +pp.max_drawdown.toFixed(1)]
+        }),
+      ),
+    ]
+    if (data.frontier.length) {
+      const step = Math.max(1, Math.ceil(data.frontier.length / 60))
+      const sampled = data.frontier.filter((_, i) => i % step === 0 || i === data.frontier.length - 1)
+      pieces.push(chartClip(
+        'Portfolio Optimizer',
+        'Efficient Frontier (vol vs return)',
+        'line',
+        'vol',
+        sampled.map(f => ({ vol: +f.vol.toFixed(2), return: +f.return.toFixed(2) })),
+        [{ key: 'return', label: 'Return %' }],
+      ))
+    }
+    if (data.assets.length) {
+      pieces.push(tableClip(
+        'Portfolio Optimizer',
+        'Asset Stats',
+        ['Ticker', 'Return %', 'Vol %', 'Beta'],
+        data.assets.slice(0, 20).map(a => [
+          a.ticker, +a.return.toFixed(1), +a.vol.toFixed(1), a.beta != null ? +a.beta.toFixed(2) : null,
+        ]),
+      ))
+    }
+    return pieces
+  }, { disabled: !data || !sel, sourceTab: 'Portfolio Optimizer' })
 
   return (
     <SidebarLayout sidebarWidth={0} sidebarTitle="" sidebar={<div style={{ display: 'none', padding: 14, flexDirection: 'column', gap: 12 }}>

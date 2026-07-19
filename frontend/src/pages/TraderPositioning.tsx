@@ -8,6 +8,9 @@ import EmptyState from '../components/EmptyState'
 import useIsMobile from '../hooks/useIsMobile'
 import { TOOLTIP_STYLE, CROSSHAIR_CURSOR } from '../components/ChartTooltip'
 import { T } from '../lib/theme'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip, chartClip } from '../lib/reportCaptureRegistry'
 
 type AssetClass = 'commodities' | 'rates' | 'fx' | 'indices' | 'agriculture'
 type Point = { date: string; net: number; net_pct_oi: number | null; open_interest: number }
@@ -59,6 +62,50 @@ export default function TraderPositioning() {
   const markets = data?.markets ?? []
   const visibleMarkets = useMemo(() => markets.filter(market => market.label.toLowerCase().includes(query.toLowerCase())), [markets, query])
   const selected = markets.find(market => market.id === selectedId) ?? markets[0]
+
+  const TAB = 'Trader Positioning'
+  useReportCapture(() => {
+    if (!selected || !data?.available) return null
+    const pieces: ClipDraft[] = [
+      kpiClip(TAB, `${selected.label} · Positioning`, [
+        { label: 'Net', value: signed(selected.latest.net, ''), sub: 'contracts' },
+        { label: 'Net % of OI', value: signed(selected.latest.net_pct_oi, '%') },
+        { label: 'Weekly Flow', value: contracts(selected.weekly_flow) },
+        { label: '52W Crowding', value: selected.crowding == null ? '—' : `${Math.round(selected.crowding)}` },
+        { label: 'Open Interest', value: Math.round(selected.latest.open_interest).toLocaleString() },
+      ]),
+    ]
+    if (selected.series?.length) {
+      pieces.push(chartClip(TAB, `${selected.label} · Net % of OI (52W)`, 'line', 'date',
+        selected.series.map(p => ({ date: p.date, net_pct_oi: p.net_pct_oi, net: p.net })),
+        [{ key: 'net_pct_oi', label: 'Net % of OI' }],
+      ))
+    }
+    if (selected.cohorts?.length) {
+      pieces.push(tableClip(TAB, 'Positioning by Cohort',
+        ['Cohort', 'Long', 'Short', 'Net', 'Net % OI'],
+        selected.cohorts.map(c => [
+          c.label,
+          Math.round(c.long),
+          Math.round(c.short),
+          Math.round(c.net),
+          c.net_pct_oi != null ? c.net_pct_oi.toFixed(1) : null,
+        ]),
+      ))
+    }
+    if (markets.length) {
+      pieces.push(tableClip(TAB, `${data.asset_label} Contracts`,
+        ['Market', 'Net % OI', 'Crowding', 'Weekly Flow'],
+        markets.map(m => [
+          m.label,
+          m.latest.net_pct_oi != null ? m.latest.net_pct_oi.toFixed(1) : null,
+          m.crowding != null ? Math.round(m.crowding) : null,
+          m.weekly_flow != null ? Math.round(m.weekly_flow) : null,
+        ]),
+      ))
+    }
+    return pieces
+  }, { disabled: !selected || !data?.available, sourceTab: TAB })
 
   return <PageWrapper title="Trader Positioning">
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

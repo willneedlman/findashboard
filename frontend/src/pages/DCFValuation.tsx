@@ -4,6 +4,8 @@ import { useMutation } from '@tanstack/react-query'
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, Cell, ReferenceLine } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import SidebarLayout from '../components/SidebarLayout'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
 import axios from 'axios'
 import EmptyState from '../components/EmptyState'
 import TickerInput from '../components/TickerInput'
@@ -320,6 +322,69 @@ export function DCFValuationContent() {
     : upside > 10 ? 'Undervalued' : upside > 2 ? 'Modestly undervalued'
     : upside >= -2 ? 'Fairly valued' : upside >= -10 ? 'Modestly overvalued' : 'Overvalued'
   const verdictTone: VerdictTone = upside == null ? 'gold' : upside > 2 ? 'pos' : upside >= -2 ? 'gold' : 'neg'
+
+  const captureDcf = (): ClipDraft[] => {
+    if (!data || data.intrinsic_per_share == null) return []
+    const tkr = ticker ? ` · ${ticker.toUpperCase()}` : ''
+    const pieces: ClipDraft[] = []
+    pieces.push({ sourceTab: 'DCF Valuation', dataType: 'kpi', payload: { kind: 'kpi', title: `DCF Verdict${tkr}`, cells: [
+      { label: 'Intrinsic / Share', value: `$${data.intrinsic_per_share.toFixed(2)}` },
+      ...(data.market_price != null ? [{ label: 'Market Price', value: `$${data.market_price.toFixed(2)}` }] : []),
+      ...(upside != null ? [{ label: 'Upside', value: `${upside >= 0 ? '+' : '−'}${Math.abs(upside).toFixed(1)}%`, sub: verdict ?? undefined }] : []),
+    ] } })
+    if (data.enterprise_value != null && data.terminal_value != null) {
+      const termPct = data.enterprise_value > 0 ? (data.terminal_value / data.enterprise_value) * 100 : null
+      pieces.push({ sourceTab: 'DCF Valuation', dataType: 'kpi', payload: { kind: 'kpi', title: `Enterprise Value Bridge${tkr}`, cells: [
+        { label: 'Enterprise Value', value: fmtM(data.enterprise_value) },
+        ...(data.pv_fcfs != null ? [{ label: 'PV of Explicit FCFs', value: fmtM(data.pv_fcfs) }] : []),
+        { label: 'Terminal Value', value: fmtM(data.terminal_value) },
+        ...(termPct != null ? [{ label: 'Terminal % of EV', value: `${termPct.toFixed(0)}%` }] : []),
+      ] } })
+    }
+    if (Array.isArray(data.fcfs) && data.fcfs.length) {
+      pieces.push({ sourceTab: 'DCF Valuation', dataType: 'chart', payload: {
+        kind: 'chart', title: `Revenue Projection${tkr}`, chartType: 'bar', xKey: 'year',
+        data: data.fcfs.map((d: { year: number; revenue: number }) => ({ year: `Y${d.year}`, revenue: d.revenue })),
+        series: [{ key: 'revenue', label: 'Revenue ($M)' }],
+      } })
+      pieces.push({ sourceTab: 'DCF Valuation', dataType: 'chart', payload: {
+        kind: 'chart', title: `Free Cash Flow Projection${tkr}`, chartType: 'line', xKey: 'year',
+        data: data.fcfs.map((d: { year: number; fcf: number; pv_fcf: number }) => ({ year: `Y${d.year}`, fcf: d.fcf, pv_fcf: d.pv_fcf })),
+        series: [{ key: 'fcf', label: 'Free Cash Flow' }, { key: 'pv_fcf', label: 'PV of FCF' }],
+      } })
+    }
+    if (Array.isArray(data.tornado) && data.tornado.length) {
+      pieces.push({ sourceTab: 'DCF Valuation', dataType: 'table', payload: {
+        kind: 'table', title: `Value Drivers — one-way sensitivity${tkr}`,
+        columns: ['Driver', 'Range', 'Low $/sh', 'High $/sh', 'Swing $/sh'],
+        rows: data.tornado.map((t: { label: string; range: string; lo: number; hi: number }) => [t.label, t.range, `$${t.lo.toFixed(2)}`, `$${t.hi.toFixed(2)}`, `$${(t.hi - t.lo).toFixed(2)}`]),
+      } })
+    }
+    if (Array.isArray(data.sensitivity) && data.sensitivity.length && Array.isArray(data.gDeltas) && Array.isArray(data.mDeltas)) {
+      const grid = new Map<string, number>()
+      for (const s of data.sensitivity as { gi: number; mi: number; value: number }[]) grid.set(`${s.gi}:${s.mi}`, s.value)
+      const columns = ['Growth \\ Margin', ...(data.mDeltas as number[]).map(md => `${(data.baseMargin + md).toFixed(0)}%`)]
+      const rows = (data.gDeltas as number[]).map((gd, gi) => [
+        `${(data.baseGrowth + gd).toFixed(0)}%`,
+        ...(data.mDeltas as number[]).map((_, mi) => { const v = grid.get(`${gi}:${mi}`); return v == null ? null : `$${v.toFixed(2)}` }),
+      ])
+      pieces.push({ sourceTab: 'DCF Valuation', dataType: 'table', payload: { kind: 'table', title: `Sensitivity — Intrinsic $/Share${tkr}`, columns, rows } })
+    }
+    pieces.push({ sourceTab: 'DCF Valuation', dataType: 'kpi', payload: { kind: 'kpi', title: `Key Assumptions${tkr}`, cells: [
+      { label: 'WACC', value: `${p.wacc}%` },
+      { label: 'Terminal Growth', value: `${p.terminal_growth}%` },
+      { label: 'Target Margin', value: `${p.target_margin}%` },
+      { label: 'Yr 1-3 Growth', value: `${p.rev_growth_1}%` },
+      { label: 'Tax Rate', value: `${p.tax_rate}%` },
+      { label: 'CapEx % Rev', value: `${p.capex_pct}%` },
+    ] } })
+    return pieces
+  }
+
+  useReportCapture(captureDcf, {
+    disabled: !data?.intrinsic_per_share,
+    sourceTab: 'DCF Valuation',
+  })
 
   return (
       <SidebarLayout sidebarWidth={220} sidebarTitle="" sidebar={<>

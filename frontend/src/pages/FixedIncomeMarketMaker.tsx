@@ -5,6 +5,9 @@ import { Widget, HeaderBar, KpiCell, RiskMeterStrip, QuoteCell, Stepper, Chips, 
 import { useChallenge, ModeToggle, ChallengeClock, LeaderboardModal, CHALLENGE_SPEED, type SimMode } from '../components/mmChallenge'
 import useIsMobile from '../hooks/useIsMobile'
 import { TOOLTIP_STYLE } from '../components/ChartTooltip'
+import type { ClipDraft } from '../lib/reportCreator'
+import { useReportCapture } from '../hooks/useReportCapture'
+import { kpiClip, tableClip, chartClip } from '../lib/reportCaptureRegistry'
 
 /*
  * Fixed Income MM Simulator
@@ -392,6 +395,56 @@ export function FixedIncomeMarketMakerContent() {
   const r = f?.risk
   const overLimit = r ? (Math.abs(r.netDV01) > DV01_LIMIT || Math.abs(r.worstDV01) > BUCKET_LIMIT) : false
   const selQuote = f?.book[selected]
+
+  const TAB = 'Market Maker Simulator'
+  useReportCapture(() => {
+    if (!f || !r) return null
+    const pieces: ClipDraft[] = [
+      kpiClip(TAB, 'Fixed Income Desk · Book', [
+        { label: 'Net P&L', value: `$${Math.round(r.netPnl).toLocaleString()}` },
+        { label: 'Spread Edge', value: `$${Math.round(f.edge).toLocaleString()}` },
+        { label: 'Net DV01', value: `${r.netDV01 >= 0 ? '+' : ''}$${Math.round(r.netDV01)}` },
+        { label: 'Curve DV01', value: `${r.curveDV01 >= 0 ? '+' : ''}$${Math.round(r.curveDV01)}` },
+        { label: 'Convexity', value: r.convexity.toFixed(1) },
+        { label: 'Gross Notion.', value: `$${Math.round(r.grossNotional).toLocaleString()}` },
+        { label: 'Worst Bucket', value: r.worstId, sub: `$${Math.round(r.worstDV01)} DV01` },
+      ]),
+      tableClip(TAB, 'Bond Book',
+        ['Bond', 'Bid', 'Ask', 'Yield %', 'Pos', 'Hedge', 'DV01'],
+        BONDS.map(b => {
+          const q = f.book[b.id]
+          return [
+            b.id,
+            q ? q.bid.toFixed(3) : null,
+            q ? q.ask.toFixed(3) : null,
+            q ? q.yieldPct.toFixed(3) : null,
+            f.positions[b.id] || 0,
+            f.hedge[b.id] || 0,
+            r.buckets[b.id] != null ? Math.round(r.buckets[b.id]) : null,
+          ]
+        }),
+      ),
+    ]
+    if (f.ledger?.length) {
+      pieces.push(tableClip(TAB, 'Recent Fills',
+        ['Time', 'Side', 'Bond', 'Size', 'Price', 'Edge'],
+        f.ledger.slice(-15).map(fl => [
+          fl.tLabel, fl.clientSide, fl.bond, fl.size,
+          fl.fillPrice, Math.round(fl.edge),
+        ]),
+      ))
+    }
+    const yHist = f.yldHistory[selected]
+    if (yHist?.length > 1) {
+      const step = Math.max(1, Math.ceil(yHist.length / 80))
+      pieces.push(chartClip(TAB, `${selected} Yield Tape`, 'line', 'i',
+        yHist.map((y, i) => ({ i, yield: +y.toFixed(3) }))
+          .filter((_, i) => i % step === 0 || i === yHist.length - 1),
+        [{ key: 'yield', label: `${selected} yield` }],
+      ))
+    }
+    return pieces
+  }, { disabled: !f || !r, sourceTab: TAB })
 
   // ── Sidebar: controls + rules ────────────────────────────────────────────
   const labelStyle: React.CSSProperties = { fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.muted, marginBottom: 3, fontFamily: T.sans }
