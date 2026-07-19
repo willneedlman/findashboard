@@ -142,6 +142,7 @@ export default function RegressionAnalysis() {
 function AssetOLS({ mode, setMode }: { mode: RegMode; setMode: (m: RegMode) => void }) {
   const [yTicker,    setYTicker]    = useState('SPY')
   const [xTickers,   setXTickers]   = useState<string[]>(['QQQ'])
+  const [xColors,    setXColors]    = useState<Record<string, string>>({})
   const [xInput,     setXInput]     = useState('')
   const [period,     setPeriod]     = useState('2y')
   const [modelType,  setModelType]  = useState<'linear' | 'polynomial'>('linear')
@@ -178,7 +179,8 @@ function AssetOLS({ mode, setMode }: { mode: RegMode; setMode: (m: RegMode) => v
       </RailGroup>
 
       <RailGroup label="X variables">
-        <TickerTags tickers={xTickers} onRemove={t => setXTickers(p => p.filter(x => x !== t))} color={C.blue} />
+        <TickerTags tickers={xTickers} onRemove={t => setXTickers(p => p.filter(x => x !== t))}
+          colors={xColors} onColorChange={(t, c) => setXColors(p => ({ ...p, [t]: c }))} />
         <div style={{ display: 'flex', gap: 6 }}>
           <TickerInput value={xInput} onChange={setXInput} onEnter={addX} style={inputStyle} placeholder="Add ticker or company" />
           <button onClick={addX} style={{ ...btnStyle, padding: '6px 10px', flexShrink: 0 }}><Plus size={14} /></button>

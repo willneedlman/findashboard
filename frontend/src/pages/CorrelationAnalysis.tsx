@@ -118,6 +118,7 @@ function CorrScatter({ result }: { result: CorrelationResult }) {
 
 export default function CorrelationAnalysis() {
   const [tickers,    setTickers]    = useState<string[]>(['SPY', 'QQQ', 'GLD', 'BTC-USD'])
+  const [tColors,    setTColors]    = useState<Record<string, string>>({})
   const [tInput,     setTInput]     = useState('')
   const [period,     setPeriod]     = useState('2y')
   const [useReturns, setUseReturns] = useState(true)
@@ -147,7 +148,8 @@ export default function CorrelationAnalysis() {
   const rail = (
     <>
       <RailGroup label="Assets">
-        <TickerTags tickers={tickers} onRemove={t => setTickers(p => p.filter(x => x !== t))} color={C.blue} />
+        <TickerTags tickers={tickers} onRemove={t => setTickers(p => p.filter(x => x !== t))}
+          colors={tColors} onColorChange={(t, c) => setTColors(p => ({ ...p, [t]: c }))} />
         <div style={{ display: 'flex', gap: 6 }}>
           <input value={tInput} onChange={e => setTInput(e.target.value.toUpperCase())} onKeyDown={e => e.key === 'Enter' && addT()} style={inputStyle} placeholder="Add e.g. BTC-USD" />
           <button onClick={addT} style={{ ...btnStyle, padding: '6px 10px', flexShrink: 0 }}><Plus size={14} /></button>

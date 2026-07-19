@@ -110,16 +110,36 @@ export function RunButton({ onClick, disabled, busy, label }: { onClick: () => v
   )
 }
 
-// Tag-style multi-ticker input used by both rails.
-export function TickerTags({ tickers, onRemove, color }: { tickers: string[]; onRemove: (t: string) => void; color: string }) {
+// Same per-ticker color palette and swatch as the Asset Overlay tab (Compare.tsx),
+// so tags read the same way across the Regression, Correlation, and Compare tools.
+export const TAG_COLORS = ['var(--theme-primary, #c9a84c)', '#60a5fa', '#34d399', '#f97316', '#a78bfa', '#38bdf8', '#fb7185', '#fbbf24']
+
+function TagSwatch({ value, onChange }: { value: string; onChange: (c: string) => void }) {
+  return <input type="color" value={value} title="Tag color" onClick={e => e.stopPropagation()}
+    onChange={e => onChange(e.target.value)}
+    style={{ width: 13, height: 13, padding: 0, border: 'none', background: 'none', cursor: 'pointer', flexShrink: 0 }} />
+}
+
+// Tag-style multi-ticker input used by both rails. Each tag gets a colorized
+// swatch + tinted border/background (defaulting to TAG_COLORS by position,
+// overridable per-ticker via the swatch) — matches the Asset Overlay tab.
+export function TickerTags({ tickers, onRemove, colors, onColorChange }: {
+  tickers: string[]; onRemove: (t: string) => void
+  colors?: Record<string, string>; onColorChange?: (t: string, c: string) => void
+}) {
   if (!tickers.length) return null
   return (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-      {tickers.map(t => (
-        <span key={t} style={{ background: `${color}22`, border: `1px solid ${color}55`, padding: '2px 8px', fontSize: 11, fontFamily: 'var(--theme-mono)', color: C.text, display: 'flex', gap: 4, alignItems: 'center' }}>
-          {t}<span onClick={() => onRemove(t)} style={{ cursor: 'pointer', color: C.muted }}>×</span>
-        </span>
-      ))}
+      {tickers.map((t, i) => {
+        const c = colors?.[t] ?? TAG_COLORS[i % TAG_COLORS.length]
+        return (
+          <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: `color-mix(in srgb, ${c} 12%, transparent)`, border: `1px solid ${c}`, padding: '4px 7px', fontSize: 11, fontFamily: 'var(--theme-mono)', fontWeight: 700, color: C.text }}>
+            {onColorChange ? <TagSwatch value={c} onChange={v => onColorChange(t, v)} /> : <span style={{ width: 8, height: 8, background: c, flexShrink: 0 }} />}
+            {t}
+            <span onClick={() => onRemove(t)} style={{ cursor: 'pointer', color: C.muted, fontWeight: 400 }}>×</span>
+          </span>
+        )
+      })}
     </div>
   )
 }

@@ -13,6 +13,12 @@ from fastapi import HTTPException
 logger = logging.getLogger(__name__)
 _GROQ_KEY = os.getenv("GROQ_API_KEY", "")
 _CEREBRAS_KEY = os.getenv("CEREBRAS_API_KEY", "")
+_ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+
+# Vision model — none of the text providers above (Groq/Cerebras) have a
+# vision-capable model in our tier, so image tasks (screenshot parsing) go to
+# Claude instead, which reads dense tabular screenshots far more reliably.
+VISION_MODEL = "claude-sonnet-5"
 
 # Model tiers. SMART = deep reasoning (100K TPD free); FAST = structured JSON (500K TPD).
 # The constants are the Groq model ids; each fallback provider maps them to its own.
@@ -50,6 +56,19 @@ def get_cerebras():
         from cerebras.cloud.sdk import Cerebras
         _cerebras_client = Cerebras(api_key=_CEREBRAS_KEY)
     return _cerebras_client
+
+
+_anthropic_client = None
+
+
+def get_anthropic():
+    global _anthropic_client
+    if not _ANTHROPIC_KEY:
+        raise HTTPException(503, "ANTHROPIC_API_KEY not configured")
+    if _anthropic_client is None:
+        from anthropic import Anthropic
+        _anthropic_client = Anthropic(api_key=_ANTHROPIC_KEY)
+    return _anthropic_client
 
 
 _CONN_ERRORS = ("APIConnectionError", "APITimeoutError", "Timeout", "ConnectionError")
@@ -166,6 +185,32 @@ def groq_complete(prompt: str, max_tokens: int = 512, *,
     # content can be None when a reasoning fallback model (gpt-oss) spends its
     # whole budget thinking; coerce so callers never hit .strip() on None.
     return (resp.choices[0].message.content or "").strip()
+
+
+def vision_complete(image_b64: str, media_type: str, prompt: str, *,
+                     max_tokens: int = 1024, system: str | None = None,
+                     model: str = VISION_MODEL) -> str:
+    """Single-turn image+text completion via Claude. `image_b64` is raw base64
+    (no data-URL prefix); `media_type` is e.g. "image/png" or "image/jpeg".
+    Returns stripped text — pass through parse_json() for structured output.
+    """
+    def call():
+        kwargs: dict = {
+            "model": model,
+            "max_tokens": max_tokens,
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": image_b64}},
+                    {"type": "text", "text": prompt},
+                ],
+            }],
+        }
+        if system:
+            kwargs["system"] = system
+        return get_anthropic().messages.create(**kwargs)
+    resp = with_backoff(call)
+    return "".join(block.text for block in resp.content if block.type == "text").strip()
 
 
 def parse_json(raw: str):

@@ -5,6 +5,7 @@ import axios from 'axios'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import PageWrapper from '../components/PageWrapper'
 import PortfolioIO, { type PortfolioAsset } from '../components/PortfolioIO'
+import ScreenshotPortfolioImport from '../components/ScreenshotPortfolioImport'
 import { usePortfolio } from '../contexts/PortfolioContext'
 import { FUTURES, FUTURES_BY_GROUP, futuresSpec } from '../lib/futures'
 import { normalizeTicker } from '../lib/pmImport'
@@ -388,6 +389,25 @@ export default function PortfolioManager() {
     setHoldings(imported)
   }, [])
 
+  // Merge holdings parsed from a screenshot (see ScreenshotPortfolioImport): a
+  // ticker already held gets its shares/cost updated (null avgCost keeps the
+  // existing cost basis), a new ticker is appended — same semantics as addHolding,
+  // just batched for however many rows the user confirmed.
+  const importScreenshotHoldings = useCallback((parsed: { ticker: string; shares: number; avgCost: number | null }[]) => {
+    setHoldings(prev => {
+      let next = [...prev]
+      for (const row of parsed) {
+        const ticker = normalizeTicker(row.ticker)
+        if (!ticker || !(row.shares > 0)) continue
+        const existing = next.findIndex(h => h.ticker === ticker)
+        const avgCost = row.avgCost ?? (existing >= 0 ? next[existing].avgCost : 0)
+        if (existing >= 0) next[existing] = { ...next[existing], shares: row.shares, avgCost }
+        else next.push({ ticker, shares: row.shares, avgCost })
+      }
+      return next
+    })
+  }, [setHoldings])
+
   // ── Option entry handlers ──
   const updateLeg = (i: number, patch: Partial<LegDraft>) =>
     setOptLegs(prev => prev.map((l, j) => (j === i ? { ...l, ...patch } : l)))
@@ -526,7 +546,7 @@ export default function PortfolioManager() {
     <PageWrapper
       title="Portfolio Manager"
     >
-      <div className="mx-auto w-full max-w-[1050px] 2xl:max-w-[1320px]">
+      <div className="w-full">
 
         {/* Portfolio tabs */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginBottom: 16, borderBottom: `1px solid ${T.border}`, flexWrap: 'wrap' }}>
@@ -679,6 +699,7 @@ export default function PortfolioManager() {
                 Exports as <span style={{ fontFamily: T.mono }}>{(portfolioName.trim() || 'Portfolio').replace(/\s+/g, '-')}-{new Date().toISOString().split('T')[0]}</span><br />
                 CSV columns: <span style={{ fontFamily: T.mono }}>TICKER,SHARES,AVG_COST</span>
               </p>
+              <ScreenshotPortfolioImport onImport={importScreenshotHoldings} />
             </div>
 
 

@@ -32,6 +32,7 @@ for _t in list(_TIERS):
 # Longest prefix wins (ordered specific -> general).
 _PREFIX_TIER = [
     ("/api/ai", "ai"), ("/api/filings", "ai"), ("/api/sentiment", "ai"),
+    ("/api/portfolio-import", "ai"),   # must precede /api/portfolio below — Claude vision call
     ("/api/users", "auth"),
     ("/api/options", "data"), ("/api/market", "data"), ("/api/screener", "data"),
     ("/api/portfolio", "data"), ("/api/iv", "data"), ("/api/corporate", "data"),
