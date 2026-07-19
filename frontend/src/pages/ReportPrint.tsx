@@ -233,7 +233,7 @@ export default function ReportPrint() {
             }}>
               <div style={{
                 fontFamily: palette.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.22em',
-                textTransform: 'uppercase', color: palette.accent,
+                textTransform: 'uppercase', color: palette.mastheadAccent,
               }}>
                 Alphatape Research
               </div>
@@ -271,7 +271,7 @@ export default function ReportPrint() {
 
               {gen?.keyResult && (
                 <div style={{
-                  borderLeft: `2px solid ${palette.accent}`,
+                  borderLeft: `2px solid ${palette.mastheadAccent}`,
                   padding: '2px 0 2px 14px',
                   minWidth: 0,
                 }}>
@@ -282,7 +282,7 @@ export default function ReportPrint() {
                     {gen.keyResult.label}
                   </div>
                   <div style={{
-                    fontFamily: palette.mono, fontSize: 20, fontWeight: 700, color: palette.accent,
+                    fontFamily: palette.mono, fontSize: 20, fontWeight: 700, color: palette.mastheadAccent,
                     marginTop: 4, lineHeight: 1.15, wordBreak: 'break-word',
                   }}>
                     {gen.keyResult.value}
@@ -299,7 +299,7 @@ export default function ReportPrint() {
               )}
             </div>
 
-            <div style={{ height: 3, background: `linear-gradient(90deg, ${palette.accent} 0%, ${palette.accent} 28%, transparent 100%)` }} />
+            <div style={{ height: 3, background: `linear-gradient(90deg, ${palette.mastheadAccent} 0%, ${palette.mastheadAccent} 28%, transparent 100%)` }} />
           </header>
 
           <div style={{

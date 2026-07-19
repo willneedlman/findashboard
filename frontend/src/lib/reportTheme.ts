@@ -9,7 +9,13 @@ export interface ReportPalette {
   ink: string
   muted: string
   border: string
+  /** Accent for body chrome (bands, section numbers) on pageBg. */
   accent: string
+  /**
+   * Accent for masthead chrome (key result value, brand, gold line).
+   * Always contrast-checked against masthead — never same-as-fill.
+   */
+  mastheadAccent: string
   masthead: string
   onMasthead: string
   onMastheadDim: string
@@ -89,6 +95,30 @@ function withAlpha(hex: string, alpha: number): string {
   return `rgba(${p[0]}, ${p[1]}, ${p[2]}, ${alpha})`
 }
 
+/** WCAG relative contrast ratio (1–21). */
+function contrastRatio(a: string, b: string): number {
+  const L1 = hexLuminance(a)
+  const L2 = hexLuminance(b)
+  const hi = Math.max(L1, L2)
+  const lo = Math.min(L1, L2)
+  return (hi + 0.05) / (lo + 0.05)
+}
+
+/**
+ * Pick a color that stays readable on `bg`. Tries candidates in order, then
+ * lightens/darkens toward white/black until contrast ≥ minRatio.
+ */
+function ensureContrast(candidate: string, bg: string, minRatio = 3.2): string {
+  if (contrastRatio(candidate, bg) >= minRatio) return candidate
+  const bgLum = hexLuminance(bg)
+  const toward = bgLum > 0.45 ? '#0a0a0a' : '#ffffff'
+  for (const t of [0.35, 0.5, 0.65, 0.8, 0.92]) {
+    const mixed = mixHex(candidate, toward, t)
+    if (contrastRatio(mixed, bg) >= minRatio) return mixed
+  }
+  return toward
+}
+
 export function buildReportPalette(theme: Theme = DEFAULT_THEME): ReportPalette {
   const isLight = hexLuminance(theme.bgColor) > 0.18
   const primary = theme.primaryColor
@@ -114,10 +144,21 @@ export function buildReportPalette(theme: Theme = DEFAULT_THEME): ReportPalette 
   const mastheadLum = hexLuminance(masthead)
   const onMasthead = mastheadLum > 0.45 ? '#1a2332' : '#f0f4fa'
   const onMastheadDim = mastheadLum > 0.45 ? withAlpha('#1a2332', 0.62) : withAlpha('#f0f4fa', 0.62)
-  // Accent on masthead must stay readable
-  const accentOnHeader = mastheadLum > 0.45
-    ? primary
-    : (hexLuminance(primary) > 0.55 ? primary : mixHex(primary, '#ffffff', 0.35))
+
+  // Body accent — readable on pageBg (not on masthead).
+  const pageBg = isLight ? (hexLuminance(bg) > 0.9 ? '#ffffff' : bg) : bg
+  const accent = ensureContrast(primary, pageBg, 3)
+
+  // Masthead accents: primary often *is* the masthead on light presets
+  // (Rosewood/Crimson) so key-result value painted in primary vanishes.
+  // Prefer tertiary, then a lightened primary, then onMasthead.
+  let mastheadAccent = tertiary
+  if (contrastRatio(mastheadAccent, masthead) < 3.2) {
+    mastheadAccent = ensureContrast(primary, masthead, 3.2)
+  }
+  if (contrastRatio(mastheadAccent, masthead) < 3.2) {
+    mastheadAccent = onMasthead
+  }
 
   const border = isLight ? withAlpha('#0f172a', 0.12) : withAlpha('#ffffff', 0.12)
   const panel = isLight ? mixHex(surface, '#ffffff', 0.35) : mixHex(surface, bg, 0.35)
@@ -143,11 +184,12 @@ export function buildReportPalette(theme: Theme = DEFAULT_THEME): ReportPalette 
   const sansFamily = `'${theme.secondaryFont}', system-ui, sans-serif`
 
   return {
-    pageBg: isLight ? (hexLuminance(bg) > 0.9 ? '#ffffff' : bg) : bg,
+    pageBg,
     ink,
     muted,
     border,
-    accent: isLight ? primary : accentOnHeader,
+    accent,
+    mastheadAccent,
     masthead,
     onMasthead,
     onMastheadDim,
