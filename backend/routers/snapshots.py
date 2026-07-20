@@ -4,10 +4,13 @@ points are recorded write-through whenever the live tools compute them, by
 the /series endpoint on first view of the day, and by a slow daily loop over
 a core watchlist. One point per ticker per day, persisted via disk_cache.
 """
+import json
 import logging
+import sqlite3
 import threading
 import sys, os
 from datetime import date, datetime, timedelta
+from pathlib import Path
 from fastapi import APIRouter, HTTPException, Query
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -21,6 +24,33 @@ _KINDS = ("gex", "iv30")
 _CORE = ["SPY", "QQQ", "AAPL", "NVDA", "MSFT", "TSLA"]
 _MAX_POINTS = 1600
 _TTL = 5 * 365 * 86400
+_MAX_BOOK_TICKERS = 60   # protect the daily pass from a pathological watchlist size
+
+_USERS_DB_PATH = Path(os.getenv("USERS_DB_PATH", str(Path(__file__).resolve().parents[2] / "users.db")))
+
+
+def _book_tickers() -> list[str]:
+    """Every ticker held across all saved portfolios, so the daily snapshot
+    pass covers what's actually in the book — not just the fixed core watch
+    list — and features like the Morning Brief's gamma-flip badge have real
+    data to show for the names that matter, not just SPY/QQQ/megacaps."""
+    try:
+        conn = sqlite3.connect(f"file:{_USERS_DB_PATH}?mode=ro", uri=True)
+        rows = conn.execute("SELECT portfolio_json FROM users WHERE portfolio_json IS NOT NULL").fetchall()
+        conn.close()
+    except Exception as e:
+        _log.warning("book ticker read failed: %s", e)
+        return []
+    tickers: set[str] = set()
+    for (raw,) in rows:
+        try:
+            for h in json.loads(raw or "[]"):
+                t = str(h.get("ticker") or "").strip().upper()
+                if t:
+                    tickers.add(t)
+        except Exception:
+            continue
+    return sorted(tickers)[:_MAX_BOOK_TICKERS]
 
 
 def record_point(kind: str, sym: str, payload: dict) -> None:
@@ -137,7 +167,9 @@ def series(kind: str = Query(...), ticker: str = Query(...), compute: bool = Que
 
 # ── Daily core-watchlist loop ────────────────────────────────────────────────
 # Sequential and slow on purpose: one ticker at a time with gaps, well after
-# boot, so the snapshot pass never stacks memory on the small prod VM.
+# boot, so the snapshot pass never stacks memory on the small prod VM. Covers
+# the fixed core set plus every ticker in every saved portfolio, deduped —
+# recomputed fresh each day since holdings change.
 _stop = threading.Event()
 _thread = None
 
@@ -147,7 +179,8 @@ def _run_loop():
     while not _stop.is_set():
         today = date.today().isoformat()
         if disk_get("snap:coreloop") != today:
-            for sym in _CORE:
+            watchlist = list(dict.fromkeys(_CORE + _book_tickers()))
+            for sym in watchlist:
                 for kind in _KINDS:
                     if _stop.is_set():
                         return

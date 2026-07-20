@@ -17,6 +17,7 @@ import ErrorState from '../components/ErrorState'
 import LoadingState from '../components/LoadingState'
 import FactSetFinancials from '../components/FactSetFinancials'
 import HelpTip from '../components/HelpTip'
+import ToolTabs, { type ToolTab } from '../components/ToolTabs'
 import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, tableClip, textClip } from '../lib/reportCaptureRegistry'
@@ -123,6 +124,7 @@ interface InstData {
   pct_insiders: number | null
   passive_pct?: number | null
   active_pct?: number | null
+  float_shares?: number | null
   holders: Holder[]
   funds: Holder[]
   source: string
@@ -459,7 +461,8 @@ function MarketPerformancePanel({ ticker }: { ticker: string }) {
 
   const dateStyle: React.CSSProperties = {
     background: 'var(--theme-bg, #0a1628)', border: `1px solid ${T.border}`, color: T.text,
-    fontFamily: T.mono, fontSize: 10, padding: '2px 5px', outline: 'none', colorScheme: 'dark',
+    fontFamily: T.mono, fontSize: 10, padding: '2px 5px', outline: 'none',
+    colorScheme: 'var(--theme-color-scheme, dark)' as React.CSSProperties['colorScheme'],
   }
 
   return (
@@ -646,6 +649,19 @@ export function SupplyChainContent() {
 
   const [deals, setDeals] = useState<any>(null)
   const [dealsLoading, setDealsLoading] = useState(false)
+
+  const [profileTab, setProfileTab] = useState<'overview' | 'risk' | 'performance'>('overview')
+  const PROFILE_TABS: ToolTab[] = [
+    { key: 'overview', label: 'Overview' },
+    { key: 'risk', label: 'Risk & Ownership' },
+    { key: 'performance', label: 'Market Performance' },
+  ]
+  // Each tab mounts its panels once, on first visit, then stays mounted (just
+  // hidden) — so tab switches never re-fetch or re-flash a loading state.
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(() => new Set(['overview']))
+  useEffect(() => {
+    setVisitedTabs(prev => (prev.has(profileTab) ? prev : new Set(prev).add(profileTab)))
+  }, [profileTab])
 
   // Industry-median benchmarks (WIFR methodology) — static bundled computation,
   // same source Screener uses, fetched once regardless of ticker.
@@ -856,8 +872,10 @@ export function SupplyChainContent() {
               <div style={{ display: 'grid', gridTemplateColumns: isMobileLayout ? 'repeat(2,1fr)' : 'repeat(7,1fr)', borderTop: `1px solid ${T.border}` }}>
                 {metrics.map((m, i) => (
                   <div key={m.label} style={{ padding: '14px 18px', borderRight: !isMobileLayout && i < metrics.length - 1 ? `1px solid ${T.border}` : 'none', borderTop: isMobileLayout && i >= 2 ? `1px solid ${T.border}` : 'none' }}>
-                    <div style={{ fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, marginBottom: 4 }}>{m.label}</div>
-                    <div title={m.tip} style={{ fontFamily: T.mono, fontSize: 18, fontWeight: 700, color: m.color ?? T.text, display: 'inline-block', ...(m.tip ? { textDecoration: 'underline dotted', textUnderlineOffset: 3, textDecorationColor: 'color-mix(in srgb, currentColor 30%, transparent)', cursor: 'help' } : {}) }}>{m.value}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, marginBottom: 4 }}>
+                      {m.label}{m.tip && <HelpTip text={m.tip} width={240} position="bottom" anchor="left" />}
+                    </div>
+                    <div style={{ fontFamily: T.mono, fontSize: 18, fontWeight: 700, color: m.color ?? T.text }}>{m.value}</div>
                   </div>
                 ))}
               </div>
@@ -865,66 +883,83 @@ export function SupplyChainContent() {
                 <div style={{ display: 'grid', gridTemplateColumns: isMobileLayout ? 'repeat(2,1fr)' : 'repeat(6,1fr)', borderTop: `1px solid ${T.border}` }}>
                   {profitMetrics.map((m, i) => (
                     <div key={m.label} style={{ padding: '12px 18px', borderRight: !isMobileLayout && i < profitMetrics.length - 1 ? `1px solid ${T.border}` : 'none', borderTop: isMobileLayout && i >= 2 ? `1px solid ${T.border}` : 'none' }}>
-                      <div style={{ fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, marginBottom: 4 }}>{m.label}</div>
-                      <div title={m.tip} style={{ fontFamily: T.mono, fontSize: 14, fontWeight: 700, color: T.text, display: 'inline-block', ...(m.tip ? { textDecoration: 'underline dotted', textUnderlineOffset: 3, textDecorationColor: 'color-mix(in srgb, currentColor 30%, transparent)', cursor: 'help' } : {}) }}>{m.value}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', fontFamily: T.label, fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted, marginBottom: 4 }}>
+                        {m.label}{m.tip && <HelpTip text={m.tip} width={240} position="bottom" anchor="left" />}
+                      </div>
+                      <div style={{ fontFamily: T.mono, fontSize: 14, fontWeight: 700, color: T.text }}>{m.value}</div>
                     </div>
                   ))}
                 </div>
               )}
             </div>
 
-            {/* ── FactSet financials + forward estimates (hidden when uncovered) ── */}
-            <FactSetFinancials ticker={data.ticker} />
+            {/* ── Section tabs: everything below the identity strip is grouped
+                 into three tabs instead of one long scroll. A tab's panels
+                 mount the first time it's opened (so page load only fetches
+                 Overview's data), then stay mounted-but-hidden afterward —
+                 switching back and forth doesn't re-fetch or flash a spinner. ── */}
+            <ToolTabs tabs={PROFILE_TABS} value={profileTab} onChange={k => setProfileTab(k as typeof profileTab)} />
 
-            {/* ── Row 1: About + Peers · Revenue by Segment · by Geography ── */}
-            <div style={{ display: 'grid', gridTemplateColumns: isMobileLayout ? '1fr' : '1fr 1fr 1fr', gap: 18, alignItems: 'stretch' }}>
-              <div className="ft-panel" style={{ display: 'flex', flexDirection: 'column' }}>
-                <div className="ft-panel-header">About</div>
-                <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', flex: 1 }}>
-                  <div style={{ flex: 1, fontFamily: T.label, fontSize: 12, color: T.muted, lineHeight: 1.7, overflowY: 'auto', maxHeight: 340 }}>
-                    {data.description || 'No description available.'}
-                  </div>
-                  {data.peers.length > 0 && (
-                    <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
-                      <div style={{ ...labelStyle, marginBottom: 8 }}>Sector Peers</div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                        {data.peers.map(p => (
-                          <button key={p} onClick={() => doFetch(p)}
-                            style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: T.text, background: 'var(--theme-hover, rgba(255,255,255,0.04))', border: `1px solid ${T.border}`, padding: '6px 12px', cursor: 'pointer', letterSpacing: '0.06em', transition: 'all 0.12s' }}
-                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = T.gold; (e.currentTarget as HTMLElement).style.borderColor = 'color-mix(in srgb, var(--theme-primary) 35%, transparent)' }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = T.text; (e.currentTarget as HTMLElement).style.borderColor = T.border }}>
-                            {p}
-                          </button>
-                        ))}
+            {visitedTabs.has('overview') && (
+              <div style={{ display: profileTab === 'overview' ? 'flex' : 'none', flexDirection: 'column', gap: 18 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobileLayout ? '1fr' : '1fr 1fr', gap: 18, alignItems: 'stretch' }}>
+                  <div className="ft-panel" style={{ display: 'flex', flexDirection: 'column' }}>
+                    <div className="ft-panel-header">About</div>
+                    <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', flex: 1 }}>
+                      <div style={{ flex: 1, fontFamily: T.label, fontSize: 12, color: T.muted, lineHeight: 1.7, overflowY: 'auto', maxHeight: 340 }}>
+                        {data.description || 'No description available.'}
                       </div>
+                      {data.peers.length > 0 && (
+                        <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
+                          <div style={{ ...labelStyle, marginBottom: 8 }}>Sector Peers</div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                            {data.peers.map(p => (
+                              <button key={p} onClick={() => doFetch(p)}
+                                style={{ fontFamily: T.mono, fontSize: 11, fontWeight: 700, color: T.text, background: 'var(--theme-hover, rgba(255,255,255,0.04))', border: `1px solid ${T.border}`, padding: '6px 12px', cursor: 'pointer', letterSpacing: '0.06em', transition: 'all 0.12s' }}
+                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = T.gold; (e.currentTarget as HTMLElement).style.borderColor = 'color-mix(in srgb, var(--theme-primary) 35%, transparent)' }}
+                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = T.text; (e.currentTarget as HTMLElement).style.borderColor = T.border }}>
+                                {p}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
+                  <AnalystPanel ticker={data.ticker} />
                 </div>
+                <FactSetFinancials ticker={data.ticker} />
+                <div style={{ display: 'grid', gridTemplateColumns: isMobileLayout ? '1fr' : '1fr 1fr', gap: 18, alignItems: 'stretch' }}>
+                  <RevenuePanel title="Revenue · By Segment" block={data.product_segments} />
+                  <RevenuePanel title="Revenue · By Geography" block={data.geo_segments} />
+                </div>
+                {data.revenue_activity && data.revenue_activity.latest.length > 0 && (
+                  <RevenuePanel title="Revenue · By Activity (Fees vs Trading)" block={data.revenue_activity} />
+                )}
               </div>
-
-              <RevenuePanel title="Revenue · By Segment" block={data.product_segments} />
-              <RevenuePanel title="Revenue · By Geography" block={data.geo_segments} />
-            </div>
-
-            {/* Bank fees-vs-trading mix, only when reported */}
-            {data.revenue_activity && data.revenue_activity.latest.length > 0 && (
-              <RevenuePanel title="Revenue · By Activity (Fees vs Trading)" block={data.revenue_activity} />
             )}
 
-            {/* ── Market performance (price, volatility, drawdown) ──────── */}
-            <MarketPerformancePanel ticker={data.ticker} />
+            {visitedTabs.has('risk') && (
+              <div style={{ display: profileTab === 'risk' ? 'flex' : 'none', flexDirection: 'column', gap: 18 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobileLayout ? '1fr' : '1fr 1fr', gap: 18, alignItems: 'stretch' }}>
+                  <CreditPanel ticker={data.ticker} />
+                  <ShortInterestPanel
+                    ticker={data.ticker}
+                    floatShares={inst?.float_shares}
+                    sharesOutstanding={data.market_cap && data.price ? Math.round(data.market_cap / data.price) : null}
+                  />
+                </div>
+                <InstitutionalPanel inst={inst} loading={instLoading} tab={instTab} onTab={setInstTab} />
+                <DebtMaturityPanel ticker={data.ticker} />
+                <DealsPanel data={deals} loading={dealsLoading} />
+              </div>
+            )}
 
-            {/* ── Row 2: Credit quality + Analyst ratings ──────────── */}
-            <div style={{ display: 'grid', gridTemplateColumns: isMobileLayout ? '1fr' : '1fr 1fr', gap: 18, alignItems: 'stretch' }}>
-              <CreditPanel ticker={data.ticker} />
-              <AnalystPanel ticker={data.ticker} />
-            </div>
-
-            {/* ── Row 3: Institutional ownership (full width) ────────── */}
-            <InstitutionalPanel inst={inst} loading={instLoading} tab={instTab} onTab={setInstTab} />
-
-            {/* ── Row 4: SDC Deals M&A (full width) ────────── */}
-            <DealsPanel data={deals} loading={dealsLoading} />
+            {visitedTabs.has('performance') && (
+              <div style={{ display: profileTab === 'performance' ? 'block' : 'none' }}>
+                <MarketPerformancePanel ticker={data.ticker} />
+              </div>
+            )}
           </div>
           )
         })()}
@@ -1098,6 +1133,126 @@ function AnalystPanel({ ticker }: { ticker: string }) {
               {stat('High Target', d.target_high != null ? `$${d.target_high.toFixed(2)}` : '—')}
               {stat('Low Target', d.target_low != null ? `$${d.target_low.toFixed(2)}` : '—')}
               {stat('Consensus', recLabel, buy >= sell ? POS : NEG)}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+interface ShortInterest {
+  issuer_name: string | null
+  exchange: string | null
+  current_short_position: number | null
+  previous_short_position: number | null
+  avg_daily_volume: number | null
+  days_to_cover: number | null
+  change_pct: number | null
+  settlement_date: string | null
+}
+function ShortInterestPanel({ ticker, floatShares, sharesOutstanding }: {
+  ticker: string; floatShares: number | null | undefined; sharesOutstanding: number | null | undefined
+}) {
+  const [d, setD] = useState<ShortInterest | null>(null)
+  const [state, setState] = useState<'loading' | 'ok' | 'err'>('loading')
+  useEffect(() => {
+    let live = true
+    setState('loading')
+    axios.get(`/api/corporate/short-interest?ticker=${encodeURIComponent(ticker)}`)
+      .then(r => { if (live) { setD(r.data?.current_short_position != null ? r.data : null); setState('ok') } })
+      .catch(() => { if (live) setState('err') })
+    return () => { live = false }
+  }, [ticker])
+  const stat = (label: string, value: string, color?: string) => (
+    <div>
+      <div style={{ ...labelStyle, marginBottom: 4 }}>{label}</div>
+      <div style={{ fontFamily: T.mono, fontSize: 15, fontWeight: 700, color: color ?? T.text }}>{value}</div>
+    </div>
+  )
+  const pctOf = (denom: number | null | undefined) =>
+    d?.current_short_position != null && denom ? `${(d.current_short_position / denom * 100).toFixed(2)}%` : '—'
+  return (
+    <div className="ft-panel" style={{ display: 'flex', flexDirection: 'column' }}>
+      <div className="ft-panel-header">Short Interest</div>
+      <div style={{ padding: '16px 18px', flex: 1 }}>
+        {state === 'loading' && <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11 }}>Loading…</div>}
+        {state === 'err' && <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11 }}>Short interest unavailable for this name.</div>}
+        {state === 'ok' && !d && (
+          <div style={{ color: T.muted, fontFamily: T.mono, fontSize: 11, lineHeight: 1.5 }}>
+            Not in FINRA's latest report — thinly traded, delisted, or not yet published for this settlement period.
+          </div>
+        )}
+        {state === 'ok' && d && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 12 }}>
+              <span style={{ fontFamily: T.mono, fontSize: 20, fontWeight: 700, color: (d.days_to_cover ?? 0) >= 3 ? AMBER : T.text }}>
+                {d.days_to_cover != null ? `${d.days_to_cover.toFixed(2)}d` : '—'}
+              </span>
+              <span style={{ fontFamily: T.label, fontSize: 11, color: T.muted }}>to cover</span>
+              {d.settlement_date && <span style={{ fontFamily: T.label, fontSize: 10, color: T.muted, marginLeft: 'auto' }}>as of {d.settlement_date}</span>}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 16px' }}>
+              {stat('Shares Short', d.current_short_position != null ? fmtEmp(d.current_short_position) : '—')}
+              {stat('Short % O/S', pctOf(sharesOutstanding))}
+              {stat('Short % Float', pctOf(floatShares))}
+              {stat('Change', d.change_pct != null ? `${d.change_pct >= 0 ? '+' : ''}${d.change_pct.toFixed(1)}%` : '—')}
+              {stat('Avg Daily Vol', d.avg_daily_volume != null ? fmtEmp(d.avg_daily_volume) : '—')}
+              {stat('Prior Period', d.previous_short_position != null ? fmtEmp(d.previous_short_position) : '—')}
+            </div>
+            <div style={{ marginTop: 14, fontSize: 9.5, color: T.muted, fontFamily: T.label, fontStyle: 'italic' }}>
+              FINRA consolidated short interest, biweekly settlement — not a live intraday figure. % O/S and % Float use shares outstanding/float reported elsewhere on this page, not FINRA's own denominator.
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+interface DebtBucket { label: string; amount: number }
+interface DebtMaturity { as_of: string | null; fiscal_year: number | null; filed: string | null; buckets: DebtBucket[]; total: number }
+function DebtMaturityPanel({ ticker }: { ticker: string }) {
+  const [d, setD] = useState<DebtMaturity | null>(null)
+  const [state, setState] = useState<'loading' | 'ok' | 'err'>('loading')
+  useEffect(() => {
+    let live = true
+    setState('loading')
+    axios.get(`/api/corporate/debt-maturity?ticker=${encodeURIComponent(ticker)}`)
+      .then(r => { if (live) { setD(r.data?.buckets ? r.data : null); setState('ok') } })
+      .catch(() => { if (live) setState('err') })
+    return () => { live = false }
+  }, [ticker])
+  const max = d ? Math.max(1, ...d.buckets.map(b => b.amount)) : 1
+  return (
+    <div className="ft-panel">
+      <div className="ft-panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span>Debt Maturity Ladder</span>
+        {d?.as_of && <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted }}>As of {d.as_of}{d.fiscal_year ? ` · FY${d.fiscal_year}` : ''}</span>}
+      </div>
+      <div style={{ padding: '18px 20px' }}>
+        {state === 'loading' && <LoadingState label="Loading debt schedule" />}
+        {state === 'err' && <EmptyState title="Debt Maturity" hint="Could not load debt schedule for this name." />}
+        {state === 'ok' && !d && (
+          <EmptyState title="Debt Maturity" hint="No long-term debt maturity schedule disclosed — this filer may carry no long-term debt, or the maturity-schedule tags aren't present (common for small or newly-listed filers)." />
+        )}
+        {state === 'ok' && d && (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${d.buckets.length}, 1fr)`, gap: 12, alignItems: 'end', height: 140, marginBottom: 10 }}>
+              {d.buckets.map(b => (
+                <div key={b.label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
+                  <div style={{ fontFamily: T.mono, fontSize: 10, color: T.text, marginBottom: 4 }}>{b.amount > 0 ? fmtCap(b.amount) : '—'}</div>
+                  <div style={{ width: '70%', height: `${Math.max(2, (b.amount / max) * 100)}%`, background: T.gold, opacity: 0.85, borderRadius: '2px 2px 0 0' }} />
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${d.buckets.length}, 1fr)`, gap: 12, borderTop: `1px solid ${T.border}`, paddingTop: 6 }}>
+              {d.buckets.map(b => (
+                <div key={b.label} style={{ textAlign: 'center', fontFamily: T.label, fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: T.muted }}>{b.label}</div>
+              ))}
+            </div>
+            <div style={{ marginTop: 14, fontFamily: T.mono, fontSize: 10, color: T.muted }}>
+              Total scheduled: {fmtCap(d.total)} · from the {d.fiscal_year ? `FY${d.fiscal_year} ` : ''}10-K{d.filed ? `, filed ${d.filed}` : ''}
             </div>
           </>
         )}

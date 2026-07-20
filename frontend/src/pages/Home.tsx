@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useQuery } from '@tanstack/react-query'
 import { AreaChart, Area, YAxis, ReferenceLine, ResponsiveContainer } from 'recharts'
-import { Search, LayoutGrid, ArrowUpRight, Clock, X, Upload, Briefcase, TrendingUp, Zap, Calculator, Globe, Scale, Building2 } from 'lucide-react'
+import { Search, LayoutGrid, ArrowUpRight, Clock, X, Upload, Briefcase, TrendingUp, Zap, Calculator, Globe, Scale, Building2, Sunrise } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import TickerLogo from '../components/TickerLogo'
 import MarketClockMini from '../components/MarketClockMini'
+import MorningBrief from '../components/MorningBrief'
 import useIsMobile from '../hooks/useIsMobile'
 import { usePortfolio, type PortfolioHolding } from '../contexts/PortfolioContext'
 import { loadActivePortfolio, useQuotes, priceHoldings } from '../components/dashboard/widgets/usePortfolio'
@@ -548,6 +549,7 @@ export default function Home() {
   const [tapeSource, setTapeSource] = useState<TapeSource>('holdings')
   const [searchFocus, setSearchFocus] = useState(false)
   const [q, setQ] = useState('')
+  const [briefOpen, setBriefOpen] = useState(false)
 
   const session = useMemo(marketSession, [])
   const dateLabel = useMemo(() => new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }), [])
@@ -688,10 +690,56 @@ export default function Home() {
           {/* Hero — centered wordmark, status, command search, recent chips */}
           <div style={{ textAlign: 'center', padding: isMobile ? '32px 0 26px' : '56px 0 36px' }}>
             <div style={{ fontFamily: 'Cinzel, Georgia, serif', fontSize: isMobile ? 30 : 40, fontWeight: 700, letterSpacing: '0.2em', color: F.gold, lineHeight: 1 }}>ALPHATAPE</div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9, marginTop: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 14 }}>
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: session.color, boxShadow: `0 0 0 3px color-mix(in srgb, ${session.color} 20%, transparent)`, flexShrink: 0 }} />
               <span style={{ fontFamily: F.sans, fontSize: 12.5, color: F.sec, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{dateLabel} · {session.label}</span>
+              {/* Re-open morning brief anytime (daily banner still fires on first visit). */}
+              {!ql && (
+                <button
+                  type="button"
+                  onClick={() => setBriefOpen(true)}
+                  title="Morning brief"
+                  aria-label="Open morning brief"
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    width: 28, height: 28, padding: 0, cursor: 'pointer',
+                    background: briefOpen
+                      ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 18%, transparent)'
+                      : 'transparent',
+                    border: `1px solid ${briefOpen
+                      ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)'
+                      : 'color-mix(in srgb, var(--theme-primary, #c9a84c) 28%, transparent)'}`,
+                    color: F.gold, borderRadius: 4,
+                  }}
+                >
+                  <Sunrise size={15} strokeWidth={1.75} />
+                </button>
+              )}
             </div>
+
+            {/* Always mounted so brief data prefetches in the background on Home. */}
+            <MorningBrief
+              sessionLabel={session.label}
+              dateLabel={dateLabel}
+              portfolioName={hasPM ? pm.name : undefined}
+              positions={priced.map(p => ({
+                ticker: p.ticker,
+                shares: p.shares,
+                value: p.value,
+                cost: p.cost,
+                pnl: p.pnl,
+                pnlPct: p.pnlPct,
+                dayPnl: p.dayPnl,
+                pct1d: p.pct1d,
+                price: p.price,
+              }))}
+              cash={pm.cash}
+              isMobile={isMobile}
+              open={briefOpen}
+              onOpenChange={setBriefOpen}
+              suppressUi={!!ql}
+            />
+
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, maxWidth: 640, margin: '26px auto 0', borderBottom: `1px solid ${searchFocus ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 70%, transparent)' : 'color-mix(in srgb, var(--theme-primary, #c9a84c) 45%, transparent)'}`, padding: '12px 4px', transition: 'border-color 0.15s ease' }}>
               <Search size={17} style={{ color: F.gold, flexShrink: 0 }} />
               <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={onSearchKey} onFocus={() => setSearchFocus(true)} onBlur={() => setSearchFocus(false)} aria-label="Search tickers or tools" placeholder="Search tickers or tools" style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none', color: F.text, fontFamily: F.sans, fontSize: 16 }} />

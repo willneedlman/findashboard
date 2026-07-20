@@ -117,6 +117,7 @@ export interface WeightedLeg { ticker: string; weight: number }
 export interface ImportResult {
   legs: WeightedLeg[]     // equity legs, weights in % (cash excluded here)
   cashWeight: number      // % allocated to the CASH sleeve (0 if no cash)
+  totalValue: number      // total market value of the portfolio (equity + cash), $
   note: string | null     // what was excluded (options/futures), if anything
 }
 
@@ -141,7 +142,7 @@ export async function toWeightedLegs(
   const cashTotal = p.cash.reduce((s, c) => s + cashValue(c), 0)
   const equityTotal = [...byTicker.values()].reduce((s, v) => s + v, 0)
   const total = equityTotal + cashTotal
-  if (total <= 0) return { legs: [], cashWeight: 0, note: 'No priceable holdings to import.' }
+  if (total <= 0) return { legs: [], cashWeight: 0, totalValue: 0, note: 'No priceable holdings to import.' }
 
   const legs: WeightedLeg[] = [...byTicker.entries()]
     .map(([ticker, value]) => ({ ticker, weight: Math.round((value / total) * 1000) / 10 }))
@@ -155,5 +156,5 @@ export async function toWeightedLegs(
     ? `Excluded ${excluded.join(' and ')} (equity-return tools only).`
     : null
 
-  return { legs, cashWeight, note }
+  return { legs, cashWeight, totalValue: total, note }
 }

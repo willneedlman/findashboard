@@ -1141,6 +1141,15 @@ def get_institutional_ownership(ticker: str):
     that rollup exists, since it's real data yfinance doesn't have."""
     symbol = ticker.strip().upper()
 
+    float_shares = None
+    try:
+        _info = get_info(symbol)
+        if isinstance(_info, dict):
+            _fs = _info.get("floatShares")
+            float_shares = int(_fs) if _holder_num(_fs) else None
+    except Exception:
+        pass
+
     lseg = _lseg_institutional_data_v2(symbol)
     lseg_rollup = (lseg or {}).get("rollup") or {}
     lseg_passive_pct = lseg_rollup.get("passive_pct")
@@ -1171,6 +1180,7 @@ def get_institutional_ownership(ticker: str):
             "pct_insiders": held_pct_ins,
             "passive_pct": lseg_passive_pct,
             "active_pct": lseg_active_pct,
+            "float_shares": float_shares,
             "holders": holders,
             "funds": funds,
             "source": "LSEG"
@@ -1191,13 +1201,12 @@ def get_institutional_ownership(ticker: str):
         try: funds = _holder_rows(stock.mutualfund_holders)
         except Exception as e: logger.warning(f"mutualfund_holders {symbol}: {e}")
 
-        inst_pct = insider_pct = float_pct = None
+        inst_pct = insider_pct = None
         try:
             info = get_info(symbol)
             if isinstance(info, dict):
                 inst_pct    = info.get("heldPercentInstitutions")
                 insider_pct = info.get("heldPercentInsiders")
-                float_pct   = info.get("floatShares")
         except Exception:
             pass
 
@@ -1205,7 +1214,7 @@ def get_institutional_ownership(ticker: str):
             "ticker":          symbol,
             "pct_institutions": round(float(inst_pct), 4) if _holder_num(inst_pct) else None,
             "pct_insiders":     round(float(insider_pct), 4) if _holder_num(insider_pct) else None,
-            "float_shares":     int(float_pct) if _holder_num(float_pct) else None,
+            "float_shares":     float_shares,
             "holders":          holders,
             "funds":            funds,
             "source":           "yfinance",
@@ -1414,6 +1423,56 @@ def get_peers_by_tags(ticker: str, limit: int = 24, company_name: str = ""):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/facilities")
+def get_facilities(ticker: str):
+    """Physical facility list for the Supply Chain Map, from the bundled Open
+    Supply Hub ingest. Coverage is a curated ~9-ticker subset, not a general
+    company lookup — the response's `available` flag says which case this is."""
+    from logistics import company_fundamentals
+    symbol = ticker.strip().upper()
+    ck = f"facilities:v2:{symbol}"
+    cached = disk_get(ck)
+    if cached is not None:
+        return cached
+    try:
+        result = company_fundamentals.facilities_for_ticker(symbol)
+        if result.get("available"):
+            disk_set(ck, result, ttl=24 * 3600)
+        return result
+    except Exception as e:
+        logger.error(f"Error in facilities endpoint: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/short-interest")
+def get_short_interest(ticker: str):
+    """Latest FINRA biweekly short-interest snapshot for one symbol. Free,
+    no-auth CDN file covering the whole market — see backend/short_interest.py."""
+    import short_interest
+    symbol = ticker.strip().upper()
+    try:
+        result = short_interest.short_interest_for_ticker(symbol)
+        return result or {"available": False, "ticker": symbol}
+    except Exception as e:
+        logger.error(f"Error in short-interest endpoint: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/debt-maturity")
+def get_debt_maturity(ticker: str):
+    """Forward debt-maturity ladder from the company's own 10-K (SEC XBRL,
+    free, no key). Returns null if the filer carries no long-term debt or the
+    maturity-schedule tags aren't present (small/newly-listed filers)."""
+    import sec_fundamentals
+    symbol = ticker.strip().upper()
+    try:
+        result = sec_fundamentals.debt_maturity_schedule(symbol)
+        return result or {"available": False, "ticker": symbol}
+    except Exception as e:
+        logger.error(f"Error in debt-maturity endpoint: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/public-company-evidence")
 def get_public_company_evidence(ticker: str, company_name: str = ""):
     """Free public records, labelled separately from map similarity data."""
@@ -1427,10 +1486,21 @@ def get_public_company_evidence(ticker: str, company_name: str = ""):
 
 @router.get("/verified-supply-chain-relationships")
 def get_verified_supply_chain_relationships(ticker: str):
-    """First-party public supplier, buyer, and operating-partner disclosures."""
+    """First-party public supplier, buyer, and operating-partner disclosures —
+    curated ledger + SEC Exhibit 21 + USAspending.gov + Open Supply Hub, merged.
+    Cached at this layer too (not just inside each source) so a page load never
+    pays for reassembling/re-requesting all four on every visit, matching how
+    /facilities and /peers-by-tags already cache their merged output."""
     from logistics.verified_relationships import relationships_for_ticker
+    symbol = ticker.strip().upper()
+    ck = f"verified_relationships:v1:{symbol}"
+    cached = disk_get(ck)
+    if cached is not None:
+        return cached
     try:
-        return relationships_for_ticker(ticker)
+        result = relationships_for_ticker(symbol)
+        disk_set(ck, result, ttl=24 * 3600)
+        return result
     except Exception as e:
         logger.error(f"Error in verified-supply-chain-relationships endpoint: {e}")
         raise HTTPException(status_code=500, detail=str(e))

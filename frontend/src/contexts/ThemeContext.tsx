@@ -236,6 +236,11 @@ export function applyTheme(t: Theme) {
   const root = document.documentElement
   root.style.setProperty('--theme-mono', monoFamily)
   root.style.setProperty('--theme-sans', `'${t.secondaryFont}', sans-serif`)
+  // Native form controls (date inputs, etc.) render their own browser chrome
+  // based on CSS color-scheme — hardcoding 'dark' here paints a light-preset
+  // page with dark-mode-native widgets (or vice versa), which is exactly the
+  // mismatched white-box look color-scheme is supposed to prevent.
+  root.style.setProperty('--theme-color-scheme', isLight ? 'light' : 'dark')
   root.style.setProperty('--theme-primary',         t.primaryColor)
   root.style.setProperty('--theme-secondary',       t.secondaryColor)
   root.style.setProperty('--theme-tertiary',        t.tertiaryColor)

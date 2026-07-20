@@ -476,6 +476,9 @@ def beta_suite(ticker: str, start: str | None = None, end: str | None = None, mo
 
 
 _COMPARE_PERIOD_DAYS = {"1m": 31, "3m": 92, "6m": 183, "1y": 366, "2y": 731, "5y": 1827}
+# Intraday periods need an intraday bar interval, not just a shorter daily window —
+# (yfinance interval, lookback days to fetch).
+_COMPARE_INTRADAY = {"1d": ("5m", 2), "1w": ("30m", 8)}
 
 # Macro overlays sourced from FRED rather than yfinance. (series_id, kind) — kind
 # 'level' plots the raw series, 'yoy' plots the year-over-year % change. Monthly
@@ -515,7 +518,11 @@ def compare_assets(tickers: str, period: str = "1y", normalize: str = "indexed",
         raise HTTPException(400, "Invalid ticker symbol")
 
     today = _dt.date.today()
-    if period == "ytd":
+    interval = "1d"
+    if period in _COMPARE_INTRADAY:
+        interval, lookback_days = _COMPARE_INTRADAY[period]
+        start = today - _dt.timedelta(days=lookback_days)
+    elif period == "ytd":
         start = _dt.date(today.year, 1, 1)
     elif period == "max":
         start = today - _dt.timedelta(days=365 * 15)
@@ -524,7 +531,7 @@ def compare_assets(tickers: str, period: str = "1y", normalize: str = "indexed",
     end = today + _dt.timedelta(days=1)
 
     try:
-        raw = get_download(tuple(sorted(allsyms)), str(start), str(end))
+        raw = get_download(tuple(sorted(allsyms)), str(start), str(end), interval=interval)
     except Exception:
         raise HTTPException(500, "Internal server error")
     if raw is None or raw.empty:
@@ -599,8 +606,10 @@ def compare_assets(tickers: str, period: str = "1y", normalize: str = "indexed",
 
     cols = prim_avail + sec_avail + fred_avail
     series = []
+    intraday = period in _COMPARE_INTRADAY
     for d, row in out.iterrows():
-        rec = {"date": str(pd.Timestamp(d).date())}
+        ts = pd.Timestamp(d)
+        rec = {"date": ts.isoformat() if intraday else str(ts.date())}
         for s in cols:
             v = row[s]
             rec[s] = round(float(v), 4) if pd.notna(v) else None
@@ -836,6 +845,49 @@ def get_live_quote(ticker: str):
     if not last:   # None or 0 (halted / no-trade) — don't tick the chart to zero
         raise HTTPException(404, "No live quote")
     return {"ticker": ticker, "last": last}
+
+
+@router.get("/overnight-moves")
+@cached(ttl=20, maxsize=64)
+def overnight_moves(tickers: str):
+    """Prior close vs the freshest available price for a set of tickers — the
+    gap block behind the Morning Brief's Overnight section. Outside the regular
+    session the "last" print is whatever extended-hours trade is available
+    (thin, easily stale), so the response carries a session bucket and an
+    indicative flag rather than presenting pre/post-market prints with
+    regular-session confidence. Caller (book + watchlist) caps the ticker list."""
+    import market_hours
+    import quotes
+    syms = validate_tickers([t.strip() for t in tickers.split(",") if t.strip()], max_count=40)
+    session = market_hours.session_label()
+    rows = []
+    for sym in syms:
+        prior_close = None
+        try:
+            hist = _cached_history(sym, period="5d")
+            closes = hist["Close"].dropna() if not hist.empty else None
+            if closes is not None and not closes.empty:
+                prior_close = float(closes.iloc[-1])
+        except Exception:
+            pass
+        last = quotes.live_price(sym)
+        row = {
+            "ticker": sym,
+            "prior_close": round(prior_close, 4) if prior_close is not None else None,
+            "last": round(last, 4) if last else None,
+            "change_abs": None,
+            "change_pct": None,
+        }
+        if prior_close and last:
+            row["change_abs"] = round(last - prior_close, 4)
+            row["change_pct"] = round((last / prior_close - 1) * 100, 3)
+        rows.append(row)
+    return {
+        "session": session,
+        "indicative": session != "regular",
+        "as_of": _dt.datetime.now(_dt.timezone.utc).isoformat(),
+        "rows": rows,
+    }
 
 
 def _pd_empty():

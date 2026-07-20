@@ -935,7 +935,7 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
             <div style={{
               padding: '14px 12px', fontFamily: 'var(--theme-mono)', fontSize: 10,
               color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', lineHeight: 1.5,
-              border: '1px dashed var(--theme-border, rgba(255,255,255,0.12))', background: '#07101a',
+              border: '1px dashed var(--theme-border, rgba(255,255,255,0.12))', background: 'var(--theme-bg, #07101a)',
             }}>
               No legs yet — pick a structure above, or + ADD LEG to build a custom multi-leg.
             </div>
@@ -965,14 +965,14 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                     <div>
                       <label style={{ ...SUBLABEL, marginBottom: 2 }}>Type</label>
-                      <select value={leg.type} onChange={e => updateLeg(i, { type: e.target.value as ComboLeg['type'] })} style={{ ...paramInput, background: '#0a1628', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '4px 6px', fontSize: 11, color: 'var(--theme-text, #d7e3fc)', outline: 'none' }}>
+                      <select value={leg.type} onChange={e => updateLeg(i, { type: e.target.value as ComboLeg['type'] })} style={{ ...paramInput, background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '4px 6px', fontSize: 11, color: 'var(--theme-text, #d7e3fc)', outline: 'none' }}>
                         <option value="call">Call</option>
                         <option value="put">Put</option>
                       </select>
                     </div>
                     <div>
                       <label style={{ ...SUBLABEL, marginBottom: 2 }}>Side</label>
-                      <select value={leg.side} onChange={e => updateLeg(i, { side: e.target.value as ComboLeg['side'] })} style={{ ...paramInput, background: '#0a1628', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '4px 6px', fontSize: 11, color: 'var(--theme-text, #d7e3fc)', outline: 'none' }}>
+                      <select value={leg.side} onChange={e => updateLeg(i, { side: e.target.value as ComboLeg['side'] })} style={{ ...paramInput, background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '4px 6px', fontSize: 11, color: 'var(--theme-text, #d7e3fc)', outline: 'none' }}>
                         <option value="buy">Buy</option>
                         <option value="sell">Sell</option>
                       </select>
@@ -982,11 +982,11 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                     <div>
                       <label style={{ ...SUBLABEL, marginBottom: 2 }}>Strike %</label>
-                      <NumInput value={Math.round(leg.moneyness * 100)} min={1} onCommit={pct => updateLeg(i, { moneyness: Math.max(0.01, pct / 100) })} style={{ ...paramInput, background: '#0a1628', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '4px 6px', fontSize: 11, color: 'var(--theme-text, #d7e3fc)' }} />
+                      <NumInput value={Math.round(leg.moneyness * 100)} min={1} onCommit={pct => updateLeg(i, { moneyness: Math.max(0.01, pct / 100) })} style={{ ...paramInput, background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '4px 6px', fontSize: 11, color: 'var(--theme-text, #d7e3fc)' }} />
                     </div>
                     <div>
                       <label style={{ ...SUBLABEL, marginBottom: 2 }}>Qty</label>
-                      <NumInput value={leg.qty} min={1} onCommit={q => updateLeg(i, { qty: Math.max(1, Math.round(q)) })} style={{ ...paramInput, background: '#0a1628', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '4px 6px', fontSize: 11, color: 'var(--theme-text, #d7e3fc)' }} />
+                      <NumInput value={leg.qty} min={1} onCommit={q => updateLeg(i, { qty: Math.max(1, Math.round(q)) })} style={{ ...paramInput, background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '4px 6px', fontSize: 11, color: 'var(--theme-text, #d7e3fc)' }} />
                     </div>
                   </div>
                 </div>

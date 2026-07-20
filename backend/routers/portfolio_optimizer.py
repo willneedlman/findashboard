@@ -404,6 +404,11 @@ def optimize(req: OptimizeRequest):
         "portfolios": portfolios,
         "frontier": frontier,
         "capital_allocation": capital_allocation,
+        # Annualized covariance in (%^2) units — i.e. cov*10000 — so the frontend
+        # can score an arbitrary weight vector instantly (return = w.mu, vol =
+        # sqrt(w.cov.w) with mu/vol already in the assets[]/frontier % scale)
+        # without a re-optimize round-trip. Ticker order matches `tickers` above.
+        "covariance": (cov * 10000).round(6).tolist(),
         "assets": [
             {"ticker": t, "return": round(float(mu[i]) * 100, 2),
              "total_return": round(float(total_ret[i]) * 100, 1),

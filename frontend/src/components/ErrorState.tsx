@@ -13,7 +13,7 @@ export default function ErrorState({ title = 'Something went wrong', message, on
       style={{
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
         padding: '48px 24px', gap: 14, textAlign: 'center',
-        background: 'var(--theme-bg, #101c2e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
+        background: 'var(--theme-surface, #0d1826)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
         minHeight: 220,
       }}
     >

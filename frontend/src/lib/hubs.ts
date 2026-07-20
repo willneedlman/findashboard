@@ -6,7 +6,7 @@ import {
   GitBranch, Landmark, Dices, Gauge, BookOpen, Bell, Workflow, Clock, ArrowLeftRight, Home,
   CandlestickChart, Megaphone, Rocket,
   Container, Fuel, MapPinned, Waypoints,
-  ClipboardList,
+  ClipboardList, SlidersHorizontal,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -116,6 +116,7 @@ export const HUBS: Hub[] = [
       { title: 'Backtester',               chip: 'Backtester',    desc: 'Sharpe, Sortino, and Calmar across history',    route: '/backtest',          icon: BarChart2 },
       { title: 'Monte Carlo',              chip: 'Monte Carlo',   desc: 'GBM path simulation with VaR and CVaR',         route: '/montecarlo',        icon: Dices },
       { title: 'Portfolio Optimizer',      chip: 'Optimizer',     desc: 'Efficient frontier, max-Sharpe, risk parity, and per-holding risk', route: '/portfolio-optimizer', icon: PieChart },
+      { title: 'Portfolio Builder',        chip: 'Builder',       desc: 'Deploy cash across tickers with linked weight sliders, then send it to Portfolio Manager', route: '/portfolio-builder', icon: SlidersHorizontal },
       { title: 'Factor Decomposition',     chip: 'Factors',       desc: 'Regress your book on market, rates, credit, oil, and dollar factors', route: '/factor-decomposition', icon: Layers },
       { title: 'Pairs Trader',             chip: 'Pairs',         desc: 'Cointegration, mean-reversion half-life, and a z-score spread backtest', route: '/pairs-trader',        icon: Shuffle },
       { title: 'Market Maker Simulator',   chip: 'Market Maker',  desc: 'Quote two-sided markets and hedge — options and Treasury desks', route: '/market-maker', icon: Gauge },

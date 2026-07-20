@@ -292,7 +292,7 @@ export default function GlobalMarkets() {
             <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-secondary, #56708a)' }}>Session</span>
               <input type="date" value={date} max={today} onChange={e => setDate(e.target.value)} aria-label="Session date"
-                style={{ width: 132, boxSizing: 'border-box', background: 'var(--theme-bg, #0d1826)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 25%, transparent)', color: 'var(--theme-text, #e6edf7)', fontFamily: MONO, fontSize: 10, padding: '2px 6px', outline: 'none', colorScheme: 'dark' }} />
+                style={{ width: 132, boxSizing: 'border-box', background: 'var(--theme-bg, #0d1826)', border: '1px solid color-mix(in srgb, var(--theme-primary, #c9a84c) 25%, transparent)', color: 'var(--theme-text, #e6edf7)', fontFamily: MONO, fontSize: 10, padding: '2px 6px', outline: 'none', colorScheme: 'var(--theme-color-scheme, dark)' as React.CSSProperties['colorScheme'] }} />
               {date !== today && (
                 <button onClick={() => setDate(today)} aria-label="Show today's session"
                   style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: MONO, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--theme-secondary, #56708a)' }}>TODAY</button>

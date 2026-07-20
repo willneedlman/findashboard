@@ -51,7 +51,7 @@ export default function MacroToolbar({ filters, onChange, count }: {
   ]
   const dateInput: React.CSSProperties = {
     background: 'transparent', border: 'none', outline: 'none', color: T.text,
-    fontFamily: T.mono, fontSize: 10.5, colorScheme: 'dark', width: 112, padding: 0,
+    fontFamily: T.mono, fontSize: 10.5, colorScheme: 'var(--theme-color-scheme, dark)' as React.CSSProperties['colorScheme'], width: 112, padding: 0,
   }
 
   return (

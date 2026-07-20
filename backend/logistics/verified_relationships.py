@@ -1,10 +1,18 @@
-"""Small, source-linked ledger of public, first-party supply-chain relationships.
-
-This is intentionally curated rather than inferred. Each record is limited to a
-relationship that the named company publicly described, and the raw S&P Capital
-IQ exports are never stored or served here.
+"""Small, source-linked ledger of public, first-party supply-chain relationships,
+plus two programmatic additions: SEC Exhibit 21 significant subsidiaries and
+USAspending.gov federal contract awards. All three fold into the same VERIFIED
+tier the Supply Chain Map already exposes — the hand-curated ledger below is
+intentionally curated rather than inferred, and the EDGAR/USASpending records
+are deterministic (the company's own filing, or an actual government award),
+so none of the three is the Veridion tag-similarity a "verified" label would
+otherwise be misleading against. The raw S&P Capital IQ exports the curated
+ledger was originally scoped from are never stored or served here.
 """
 from __future__ import annotations
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 _APPLE_AMP = "https://www.apple.com/newsroom/2025/08/apple-increases-us-commitment-to-600-billion-usd-announces-ambitious-program/"
@@ -29,8 +37,147 @@ _RELATIONSHIPS = [
 ]
 
 
+def _edgar_subsidiary_records(symbol: str, company_name: str) -> list[dict]:
+    """Significant-subsidiary edges from the company's own Exhibit 21."""
+    try:
+        from logistics.edgar_exhibit21 import subsidiaries_for_ticker
+        data = subsidiaries_for_ticker(symbol)
+    except Exception as exc:
+        logger.warning("edgar subsidiary lookup failed for %s: %s", symbol, exc)
+        return []
+    if not data.get("available"):
+        return []
+    out = []
+    for sub in data["subsidiaries"]:
+        name, jurisdiction = sub["name"], sub.get("jurisdiction")
+        out.append({
+            "counterparty": name.upper()[:40],
+            "counterparty_name": name,
+            "role": "SUBSIDIARY",
+            "flow": f"{company_name} -> {name}",
+            "category": f"Significant subsidiary ({jurisdiction})" if jurisdiction else "Significant subsidiary",
+            "summary": f"{name} is disclosed as a significant subsidiary of {company_name} in its Exhibit 21 "
+                       f"filing dated {data['filing_date']}.",
+            "source": "SEC EDGAR",
+            "published": data["filing_date"],
+            "url": data["url"],
+        })
+    return out
+
+
+def _usaspending_agency_records(symbol: str, company_name: str) -> list[dict]:
+    """Federal-contract edges from USAspending.gov's agency-award breakdown."""
+    try:
+        from logistics.public_enrichment import usaspending_agency_awards
+        awards = usaspending_agency_awards(company_name)
+    except Exception as exc:
+        logger.warning("usaspending relationship lookup failed for %s: %s", symbol, exc)
+        return []
+    out = []
+    for a in awards:
+        fy_label = a["fiscal_year_end"][:4]
+        out.append({
+            "counterparty": (a["agency_code"] or a["agency"] or "")[:40],
+            "counterparty_name": a["agency"],
+            "role": "GOVERNMENT CUSTOMER",
+            "flow": f"{a['agency']} -> {company_name}",
+            "category": f"Federal contract awards, FY{fy_label}",
+            "summary": f"{company_name} received ${a['amount']:,.0f} in net federal contract obligations from "
+                       f"{a['agency']} in fiscal year {fy_label} (Oct {a['fiscal_year_start'][:4]} - "
+                       f"Sep {a['fiscal_year_end'][:4]}), per USAspending.gov. Keyword-matched, not UEI-verified — "
+                       f"directional, not a confirmed award to this specific entity.",
+            "source": "USAspending.gov",
+            "published": a["fiscal_year_end"],
+            "url": "https://www.usaspending.gov/search",
+        })
+    return out
+
+
+def _usaspending_subcontract_records(symbol: str, company_name: str) -> list[dict]:
+    """Private-sector subcontract edges: primes that hired this company as a
+    subcontractor on a federal contract. Role does NOT start with "BUYER" so
+    it routes to BUYERS/END MARKETS, same as GOVERNMENT CUSTOMER above — the
+    prime is a customer of this company's work, just not the government
+    agency directly."""
+    try:
+        from logistics.public_enrichment import usaspending_subcontracts
+        subs = usaspending_subcontracts(company_name)
+    except Exception as exc:
+        logger.warning("usaspending subcontract relationship lookup failed for %s: %s", symbol, exc)
+        return []
+    out = []
+    for s in subs:
+        fy_label = s["fiscal_year_end"][:4]
+        prime = s["prime"]
+        times = f" ({s['count']} sub-awards)" if s["count"] > 1 else ""
+        out.append({
+            "counterparty": prime[:40],
+            "counterparty_name": prime,
+            "role": "SUBCONTRACT CUSTOMER",
+            "flow": f"{prime} -> {company_name}",
+            "category": f"Federal subcontract, FY{fy_label}",
+            "summary": f"{company_name} was subcontracted ${s['total_amount']:,.0f}{times} by {prime} on federal "
+                       f"work ({s.get('agency') or 'agency unspecified'}) in fiscal year {fy_label}, per "
+                       f"USAspending.gov subaward data. Keyword-matched, not UEI-verified, and subaward reporting "
+                       f"compliance is uneven — absence of a row does not mean no relationship exists.",
+            "source": "USAspending.gov",
+            "published": s["fiscal_year_end"],
+            "url": "https://www.usaspending.gov/search",
+        })
+    return out
+
+
+def _facility_records(symbol: str, company_name: str) -> list[dict]:
+    """Physical-facility edges from the Open Supply Hub CSV ingest. A facility
+    contributed against this ticker is a real manufacturing/sourcing site
+    doing business with the company, so it's a supplier relationship — role
+    "BUYER / SOURCING COMPANY" (the ticker is the buyer/sourcer here) puts it
+    on the correct SUPPLIERS/SOURCING side of the graph, same convention the
+    curated ledger uses. Capped at 60 so the graph stays legible; the page's
+    separate Facilities table still shows the full list regardless of this cap."""
+    try:
+        from logistics.company_fundamentals import facilities_for_ticker
+        data = facilities_for_ticker(symbol, limit=60)
+    except Exception as exc:
+        logger.warning("facility relationship lookup failed for %s: %s", symbol, exc)
+        return []
+    if not data.get("available"):
+        return []
+    out = []
+    for f in data["facilities"]:
+        name = f.get("name") or "Unnamed facility"
+        location = ", ".join(x for x in [f.get("address"), f.get("country")] if x)
+        operator = f.get("parent_company")
+        summary = f"{name}{f' ({location})' if location else ''} is contributed to Open Supply Hub as a facility " \
+                  f"in {company_name}'s supply chain"
+        if operator and operator.strip().upper() not in (company_name.strip().upper(), "", "NO GROUP (AP)"):
+            summary += f", operated by {operator}"
+        summary += "."
+        out.append({
+            "counterparty": (f.get("os_id") or name)[:40],
+            "counterparty_name": name,
+            "role": "BUYER / SOURCING COMPANY",
+            "flow": f"{name} -> {company_name}",
+            "category": f.get("sector") or "Supply chain facility",
+            "summary": summary,
+            "source": "Open Supply Hub",
+            "published": f.get("contribution_date") or "",
+            "url": "https://opensupplyhub.org/",
+        })
+    return out
+
+
 def relationships_for_ticker(ticker: str) -> dict:
-    """Return source-backed relationships for one symbol, with direction explicit."""
+    """Return source-backed relationships for one symbol, with direction explicit.
+
+    Five sources feed the same VERIFIED tier: the hand-curated ledger above
+    (first-party disclosures), SEC Exhibit 21 (significant subsidiaries),
+    USAspending.gov prime awards (direct federal contracts) and subawards
+    (private-sector primes that subcontracted work to this company), and Open
+    Supply Hub (physical facilities) — folded together per product decision
+    rather than split into separate filter tiers, since all five are
+    deterministic/first-party rather than inferred.
+    """
     symbol = (ticker or "").strip().upper()
     records = []
     company_name = symbol
@@ -61,6 +208,25 @@ def relationships_for_ticker(ticker: str) -> dict:
                 "published": relation["published"],
                 "url": relation["url"],
             })
+
+    # SEC's registrant name for this ticker (cached) — a better display name
+    # than the raw symbol for tickers the curated ledger above doesn't cover,
+    # and the anchor both programmatic sources below key their lookup off.
+    resolved_name = company_name
+    try:
+        from logistics.public_enrichment import _sec_record
+        sec = _sec_record(symbol)
+        resolved_name = sec.get("facts", {}).get("registrant") or company_name
+    except Exception as exc:
+        logger.warning("sec registrant lookup failed for %s: %s", symbol, exc)
+    if resolved_name and resolved_name != symbol:
+        company_name = resolved_name
+
+    records.extend(_edgar_subsidiary_records(symbol, company_name))
+    records.extend(_usaspending_agency_records(symbol, company_name))
+    records.extend(_usaspending_subcontract_records(symbol, company_name))
+    records.extend(_facility_records(symbol, company_name))
+
     return {
         "ticker": symbol,
         "company_name": company_name,

@@ -102,6 +102,69 @@ def _annual_map(us: dict, concepts: list[str], want_shares: bool, instant: bool)
     return {}
 
 
+_MATURITY_TAGS = [
+    ("Year 1", "LongTermDebtMaturitiesRepaymentsOfPrincipalInNextTwelveMonths"),
+    ("Year 2", "LongTermDebtMaturitiesRepaymentsOfPrincipalInYearTwo"),
+    ("Year 3", "LongTermDebtMaturitiesRepaymentsOfPrincipalInYearThree"),
+    ("Year 4", "LongTermDebtMaturitiesRepaymentsOfPrincipalInYearFour"),
+    ("Year 5", "LongTermDebtMaturitiesRepaymentsOfPrincipalInYearFive"),
+    ("Thereafter", "LongTermDebtMaturitiesRepaymentsOfPrincipalAfterYearFive"),
+]
+
+
+def debt_maturity_schedule(sym: str) -> dict | None:
+    """Forward debt-maturity ladder — ASC 470 requires this 5-year-plus-
+    thereafter breakdown in every 10-K that carries long-term debt, tagged as
+    six top-level XBRL facts. Anchored on the single most recent balance-sheet
+    date carrying ANY of the six buckets, then every bucket is read AS OF
+    THAT SAME DATE — so the ladder always reflects one filing's footnote
+    table, never a patchwork across fiscal years if a filer skips re-tagging
+    a bucket in some year. Cached the same 30 days as the other SEC-sourced
+    statements here (debt schedules only change with the next 10-K)."""
+    cache_key = f"debt_maturity:v1:{sym.upper()}"
+    cached = disk_get(cache_key)
+    if cached is not None:
+        return cached
+    us = _fetch_facts(sym)
+    if not us:
+        return None
+
+    all_facts = []
+    for _label, tag in _MATURITY_TAGS:
+        node = us.get(tag)
+        if not node:
+            continue
+        for f in node.get("units", {}).get("USD", []):
+            if str(f.get("form", "")).startswith("10-K") and f.get("val") is not None and f.get("end"):
+                all_facts.append(f)
+    if not all_facts:
+        return None
+    as_of = max(f["end"] for f in all_facts)
+    anchor = next(f for f in all_facts if f["end"] == as_of)
+
+    buckets = []
+    for label, tag in _MATURITY_TAGS:
+        node = us.get(tag)
+        val = None
+        if node:
+            for f in node.get("units", {}).get("USD", []):
+                if f.get("end") == as_of and str(f.get("form", "")).startswith("10-K") and f.get("val") is not None:
+                    val = f["val"]
+                    break
+        buckets.append({"label": label, "amount": val or 0})
+
+    result = {
+        "as_of": as_of,
+        "fiscal_year": anchor.get("fy"),
+        "filed": anchor.get("filed"),
+        "buckets": buckets,
+        "total": sum(b["amount"] for b in buckets),
+        "source": "SEC EDGAR 10-K (XBRL)",
+    }
+    disk_set(cache_key, result, ttl=_CACHE_TTL)
+    return result
+
+
 def _fetch_facts(sym: str) -> dict | None:
     cik = _cik_for(sym)
     if not cik:

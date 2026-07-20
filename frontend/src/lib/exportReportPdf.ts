@@ -1,9 +1,9 @@
-import html2canvas from 'html2canvas'
-import { jsPDF } from 'jspdf'
-
 // Rasterize the on-screen research note into a multi-page PDF without the
 // browser's automatic print chrome (URL, clock, page X/Y). Filename is the
 // download name the OS save dialog receives.
+//
+// html2canvas + jspdf are dynamic-imported so they stay out of the initial
+// ReportPrint chunk until the user actually clicks Download PDF.
 
 const PAGE_W_MM = 210 // A4
 const PAGE_H_MM = 297
@@ -15,7 +15,11 @@ export async function exportReportPdf(
   /** Page background from the active theme preset (dark or light). */
   backgroundColor = '#ffffff',
 ): Promise<void> {
-  // Wait a frame so Recharts / fonts settle before capture.
+  const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+    import('html2canvas'),
+    import('jspdf'),
+  ])
+
   await new Promise<void>(r => requestAnimationFrame(() => r()))
 
   const canvas = await html2canvas(pageEl, {
@@ -24,7 +28,6 @@ export async function exportReportPdf(
     allowTaint: true,
     backgroundColor,
     logging: false,
-    // Capture full scroll height of the note, not the viewport.
     windowWidth: pageEl.scrollWidth,
     windowHeight: pageEl.scrollHeight,
   })
@@ -34,8 +37,6 @@ export async function exportReportPdf(
   const contentH = PAGE_H_MM - MARGIN_MM * 2
 
   const imgWmm = contentW
-
-  // Slice the tall canvas into page-height chunks.
   const pageCanvas = document.createElement('canvas')
   const pageCtx = pageCanvas.getContext('2d')
   if (!pageCtx) throw new Error('Canvas unsupported')

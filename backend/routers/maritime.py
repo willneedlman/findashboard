@@ -807,16 +807,61 @@ def stop_ais_stream():
 
 
 # ── VesselAPI REST fallback (api.vesselapi.com bounding-box endpoint) ────────
-# Strictly a fallback: the free tier has a tiny monthly quota, so we only poll
-# when the AIS WebSocket is down, on a long interval, over a couple of small
-# (<=4 deg span) boxes. Enabled by VESSELAPI_KEY.
+# Strictly a fallback: the free tier is 150 calls/MONTH total (verified against
+# vesselapi.com/pricing), and a 429 fires on either quota exhaustion or >20
+# concurrent in-flight requests. We only poll when the AIS WebSocket is down,
+# over a couple of small (<=4 deg span) boxes.
+#
+# The poll interval is NOT fixed — it's paced adaptively from (calls left this
+# month) / (time left in the calendar month), recomputed every cycle. That
+# guarantees the fallback can run every single cycle from now until month-end
+# without ever exceeding budget, no matter how long AISSTREAM stays down: a
+# fixed interval "survives N days" and then goes silent for the rest of the
+# month, which is exactly the failure mode we don't want. Enabled by
+# VESSELAPI_KEY.
 _REST_BASE = os.getenv("VESSELAPI_BASE", "https://api.vesselapi.com").rstrip("/")
-_REST_INTERVAL = 300
+_REST_IDLE_RECHECK = 3600       # how often to re-check whether we SHOULD poll (AIS healthy / quota state) — costs no calls
+_REST_MIN_INTERVAL = 300        # never poll more often than this, regardless of budget math
+_REST_MONTHLY_BUDGET = 140      # stop short of VesselAPI's real 150/month cap, not at it
 _REST_BOXES = [
     (25.5, 55.5, 27.5, 57.0),   # Hormuz  (latBottom, lonLeft, latTop, lonRight)
     (1.0, 103.0, 3.0, 105.0),   # Singapore / Malacca east
 ]
 _rest_thread: threading.Thread | None = None
+
+
+def _rest_quota_key() -> str:
+    return f"vesselapi:calls:{date.today().strftime('%Y-%m')}"
+
+
+def _rest_calls_used() -> int:
+    return disk_get(_rest_quota_key()) or 0
+
+
+def _rest_record_call(n: int = 1) -> int:
+    key = _rest_quota_key()
+    used = (disk_get(key) or 0) + n
+    disk_set(key, used, ttl=32 * 24 * 3600)   # a little over a month so it survives to month-end
+    return used
+
+
+def _rest_mark_exhausted() -> None:
+    """A live 429 is authoritative — stop for the rest of the calendar month
+    regardless of what our own call count says, rather than keep guessing."""
+    disk_set(_rest_quota_key(), _REST_MONTHLY_BUDGET, ttl=32 * 24 * 3600)
+
+
+def _rest_next_interval() -> float:
+    """Spread whatever budget remains evenly across whatever time remains in
+    the calendar month, so the fallback degrades to "sparse" rather than
+    "silent" under a sustained outage. Recomputed every cycle, so it also
+    speeds back up if AIS was only down briefly and budget barely moved."""
+    now = datetime.now()
+    next_month = datetime(now.year + 1, 1, 1) if now.month == 12 else datetime(now.year, now.month + 1, 1)
+    seconds_left = max(3600.0, (next_month - now).total_seconds())
+    calls_left = max(0, _REST_MONTHLY_BUDGET - _rest_calls_used())
+    cycles_left = max(1, calls_left // len(_REST_BOXES))
+    return max(_REST_MIN_INTERVAL, seconds_left / cycles_left)
 
 
 def _poll_vesselapi_box(box, headers) -> int:
@@ -827,7 +872,11 @@ def _poll_vesselapi_box(box, headers) -> int:
                 "filter.latBottom": latB, "filter.latTop": latT, "pagination.limit": 50},
         headers=headers, timeout=20,
     )
+    if r.status_code == 429:
+        _rest_mark_exhausted()
+        _log.warning("VesselAPI quota exhausted (429) — pausing fallback until next calendar month")
     r.raise_for_status()
+    _rest_record_call()
     n = 0
     for it in r.json().get("vessels", []):
         mmsi = str(it.get("mmsi") or "")
@@ -848,14 +897,21 @@ def _run_rest_poll():
         return
     headers = {"Authorization": f"Bearer {key}", "User-Agent": "AlphatapeTerminal/1.0"}
     while not _stop.is_set():
-        if not _status.get("connected"):          # fallback only — spare the quota while AIS is healthy
-            try:
-                got = sum(_poll_vesselapi_box(b, headers) for b in _REST_BOXES)
-                _status["rest_active"] = True
-                _log.info("VesselAPI fallback pulled %d vessels", got)
-            except Exception as e:
-                _log.warning("VesselAPI poll failed: %s", e)
-        _stop.wait(_REST_INTERVAL)
+        used = _rest_calls_used()
+        _status["rest_calls_this_month"] = used
+        _status["rest_quota_exhausted"] = used >= _REST_MONTHLY_BUDGET
+        if _status.get("connected") or used >= _REST_MONTHLY_BUDGET:
+            # AIS healthy, or out of budget for this month — just recheck later, no call spent.
+            _stop.wait(_REST_IDLE_RECHECK)
+            continue
+        try:
+            got = sum(_poll_vesselapi_box(b, headers) for b in _REST_BOXES)
+            _status["rest_active"] = True
+            _log.info("VesselAPI fallback pulled %d vessels (%d/%d calls used this month)",
+                      got, _rest_calls_used(), _REST_MONTHLY_BUDGET)
+        except Exception as e:
+            _log.warning("VesselAPI poll failed: %s", e)
+        _stop.wait(_rest_next_interval())
 
 
 def start_rest_poll():

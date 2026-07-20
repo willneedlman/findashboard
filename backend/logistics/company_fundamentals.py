@@ -320,3 +320,47 @@ def query_customer_edges(limit: int = 500) -> list[dict]:
             for r in rows
         ]
 
+
+def facilities_for_ticker(ticker: str, limit: int = 500) -> dict:
+    """Physical facility list for a ticker, from the Open Supply Hub CSV
+    ingest (logistics.ingest_facilities). Only ~9 tickers carry this data
+    today — always check `available` before assuming coverage."""
+    symbol = (ticker or "").strip().upper()
+    if not available() or not symbol:
+        return {"available": False, "ticker": symbol, "facilities": []}
+    with _conn() as conn:
+        has_table = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='facilities'",
+        ).fetchone()
+        if not has_table:
+            return {"available": False, "ticker": symbol, "facilities": []}
+        rows = conn.execute(
+            """
+            SELECT os_id, name, address, country_name, lat, lng, sector,
+                   number_of_workers, parent_company, processing_type, is_closed,
+                   contribution_date
+            FROM facilities
+            WHERE ticker = ? AND is_closed = 0
+            ORDER BY (number_of_workers IS NULL OR number_of_workers = ''), name
+            LIMIT ?
+            """,
+            (symbol, limit),
+        ).fetchall()
+    return {
+        "available": bool(rows),
+        "ticker": symbol,
+        "count": len(rows),
+        "facilities": [
+            {
+                "os_id": r["os_id"], "name": r["name"], "address": r["address"],
+                "country": r["country_name"], "lat": r["lat"], "lng": r["lng"],
+                "sector": r["sector"], "workers": r["number_of_workers"],
+                "parent_company": r["parent_company"], "processing_type": r["processing_type"],
+                "contribution_date": r["contribution_date"],
+            }
+            for r in rows
+        ],
+        "source": "Open Supply Hub",
+        "source_url": "https://opensupplyhub.org/",
+    }
+

@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import re
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import requests
 
@@ -132,6 +132,154 @@ def _usaspending_record(company_name: str) -> dict:
     except Exception as exc:
         logger.warning("public evidence USAspending record failed for %s: %s", company_name, exc)
         return _source("usaspending", "USAspending.gov", "unavailable", message="USAspending.gov did not respond. No government-buyer data is shown.")
+
+
+def _most_recent_complete_fiscal_year() -> tuple[str, str]:
+    """Federal FY (Oct 1 - Sep 30) start/end dates for the most recently
+    *completed* fiscal year as of today."""
+    today = date.today()
+    fy_end_year = today.year if today.month >= 10 else today.year - 1
+    return f"{fy_end_year - 1}-10-01", f"{fy_end_year}-09-30"
+
+
+def _strip_sec_suffix(company_name: str) -> str:
+    """SEC registrant names carry a "/DE", "/MD", ... state-of-incorporation
+    suffix to disambiguate ticker collisions (e.g. "QUALCOMM INC/DE") that
+    USAspending's recipient names never have — left in place, the exact-ish
+    phrase match returns nothing. Verified live: stripping it is the
+    difference between a real match and a false negative."""
+    return re.sub(r"/[A-Z]{2}$", "", company_name).strip()
+
+
+def usaspending_agency_awards(company_name: str, limit: int = 5) -> list[dict]:
+    """Federal contract $ by awarding agency for the most recent complete
+    fiscal year, keyword-matched on the company's name via USAspending's
+    `recipient_search_text` filter (NOT `keywords`, which searches award
+    descriptions rather than the recipient — verified against the live API).
+
+    This is directional, not a confirmed contractor relationship: there's no
+    UEI-based entity resolution here (the public autocomplete endpoint no
+    longer reliably returns a UEI — see _usaspending_record above), so a
+    generic company name can pick up a same-named but unrelated recipient.
+    Near-zero/negative net amounts (contract modifications, deobligations)
+    are dropped as noise rather than shown as a "relationship". Cached a
+    week — award data for a closed fiscal year doesn't move fast, and this
+    endpoint has been observed to time out on large recipients."""
+    if not company_name:
+        return []
+    company_name = _strip_sec_suffix(company_name)
+    start, end = _most_recent_complete_fiscal_year()
+    cache_key = f"usaspending_agency:v1:{_normalise(company_name)}:{start}"
+    cached = disk_get(cache_key)
+    if cached is not None:
+        return cached
+    try:
+        response = requests.post(
+            "https://api.usaspending.gov/api/v2/search/spending_by_category/awarding_agency/",
+            json={
+                "filters": {
+                    "recipient_search_text": [company_name],
+                    "time_period": [{"start_date": start, "end_date": end}],
+                },
+                "limit": limit,
+            },
+            timeout=_TIMEOUT,
+        )
+        response.raise_for_status()
+        rows = response.json().get("results", [])
+    except Exception as exc:
+        logger.warning("usaspending agency breakdown failed for %s: %s", company_name, exc)
+        return []   # transient failure (incl. timeout) — don't cache, retry next call
+
+    out = []
+    for row in rows:
+        amount = row.get("amount")
+        if amount is None or amount < 1000:
+            continue
+        out.append({
+            "agency": row.get("name"),
+            "agency_code": row.get("code"),
+            "amount": amount,
+            "fiscal_year_start": start,
+            "fiscal_year_end": end,
+        })
+    disk_set(cache_key, out, ttl=7 * 24 * 3600)
+    return out
+
+
+def usaspending_subcontracts(company_name: str, limit: int = 10) -> list[dict]:
+    """Federal subcontracts where this company is the SUB-recipient, grouped
+    by the prime contractor that hired them, for the most recent complete
+    fiscal year. This is the other half of the B2G picture from
+    usaspending_agency_awards above: that covers direct-to-agency prime
+    awards; this covers work flowing through another company's prime
+    contract — the "Prime-to-Subcontractor" relationship structure.
+
+    Uses `spending_level: "subawards"` (not the deprecated `subawards: true`
+    flag — verified against the live API, which now rejects the old form's
+    field names outright) and `recipient_search_text`, which in subaward mode
+    matches the SUB-awardee name, confirmed live against a real prime/sub
+    pair. Same caveats as the agency-award function apply (keyword-matched,
+    no UEI resolution) plus one more: subaward reporting compliance is
+    uneven — primes only have to report subawards over $30k via a separate
+    system (FSRS), and not all do. Absence of a row here does not mean no
+    subcontract relationship exists. Cached a week, same rationale as above."""
+    if not company_name:
+        return []
+    company_name = _strip_sec_suffix(company_name)
+    start, end = _most_recent_complete_fiscal_year()
+    cache_key = f"usaspending_subs:v1:{_normalise(company_name)}:{start}"
+    cached = disk_get(cache_key)
+    if cached is not None:
+        return cached
+    try:
+        response = requests.post(
+            "https://api.usaspending.gov/api/v2/search/spending_by_award/",
+            json={
+                "filters": {
+                    "recipient_search_text": [company_name],
+                    "time_period": [{"start_date": start, "end_date": end}],
+                    "award_type_codes": ["A", "B", "C", "D"],   # contracts only, not grants
+                },
+                "fields": [
+                    "Sub-Award ID", "Sub-Awardee Name", "Sub-Award Date", "Sub-Award Amount",
+                    "Awarding Agency", "Prime Award ID", "Prime Recipient Name", "Sub-Award Description",
+                ],
+                "spending_level": "subawards",
+                "limit": 100,
+            },
+            timeout=_TIMEOUT,
+        )
+        response.raise_for_status()
+        rows = response.json().get("results", [])
+    except Exception as exc:
+        logger.warning("usaspending subcontract search failed for %s: %s", company_name, exc)
+        return []   # transient failure (incl. timeout) — don't cache, retry next call
+
+    # Group by prime — a single prime often reports many small sub-awards
+    # across the year, and listing each one separately reads as duplicate
+    # noise (the exact failure mode fixed in the Supply Chain Map tags).
+    by_prime: dict[str, dict] = {}
+    for row in rows:
+        prime = row.get("Prime Recipient Name")
+        amount = row.get("Sub-Award Amount")
+        if not prime or amount is None or amount <= 0:
+            continue
+        entry = by_prime.setdefault(prime, {
+            "prime": prime, "total_amount": 0.0, "count": 0, "latest_date": None,
+            "agency": row.get("Awarding Agency"), "description": row.get("Sub-Award Description"),
+            "fiscal_year_start": start, "fiscal_year_end": end,
+        })
+        entry["total_amount"] += amount
+        entry["count"] += 1
+        d = row.get("Sub-Award Date")
+        if d and (entry["latest_date"] is None or d > entry["latest_date"]):
+            entry["latest_date"] = d
+            entry["description"] = row.get("Sub-Award Description") or entry["description"]
+
+    out = sorted(by_prime.values(), key=lambda e: e["total_amount"], reverse=True)[:limit]
+    disk_set(cache_key, out, ttl=7 * 24 * 3600)
+    return out
 
 
 def get_public_company_evidence(ticker: str, company_name: str = "") -> dict:

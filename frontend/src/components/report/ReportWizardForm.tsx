@@ -32,7 +32,8 @@ const field: React.CSSProperties = {
 }
 const dateInp: React.CSSProperties = {
   background: T.bg, border: `1px solid ${T.border}`, color: T.text, fontFamily: T.mono,
-  fontSize: 10.5, padding: '5px 8px', outline: 'none', colorScheme: 'dark',
+  fontSize: 10.5, padding: '5px 8px', outline: 'none',
+  colorScheme: 'var(--theme-color-scheme, dark)' as React.CSSProperties['colorScheme'],
 }
 const chipOn = (on: boolean): React.CSSProperties => ({
   fontFamily: T.mono, fontSize: 10, fontWeight: on ? 700 : 400, padding: '5px 11px', cursor: 'pointer',

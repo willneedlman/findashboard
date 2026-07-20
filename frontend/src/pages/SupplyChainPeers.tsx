@@ -110,6 +110,25 @@ interface VerifiedRelationshipsResp {
   disclaimer: string
 }
 
+interface Facility {
+  os_id: string
+  name: string | null
+  address: string | null
+  country: string | null
+  sector: string | null
+  workers: string | null
+  parent_company: string | null
+}
+
+interface FacilitiesResp {
+  available: boolean
+  ticker: string
+  count?: number
+  facilities: Facility[]
+  source?: string
+  source_url?: string
+}
+
 type SortMode = 'score' | 'name' | 'revenue' | 'source'
 type SourceFilter = 'all' | 'verified' | 'reported' | 'similarity'
 type Side = 'sourcing' | 'markets'
@@ -120,6 +139,22 @@ const PANEL = 'var(--theme-surface, #0d1826)'
 const MAX_MAP_NODES = 12
 
 const cur = (currency?: string | null) => !currency || currency === 'USD' ? '$' : `${currency} `
+
+/** Distinct, trimmed, order-preserved values — tag lists derive from one
+ * value per relationship/segment, and many distinct counterparties (e.g. 60
+ * facility suppliers) commonly share the same category string, which without
+ * this reads as the same tag rendered dozens of times. */
+function uniq(values: (string | null | undefined)[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const raw of values) {
+    const v = raw?.trim()
+    if (!v || seen.has(v)) continue
+    seen.add(v)
+    out.push(v)
+  }
+  return out
+}
 
 const fmtBn = (value: number | null, currency?: string | null) => value == null ? 'Size unavailable'
   : Math.abs(value) >= 1e9 ? `${cur(currency)}${(value / 1e9).toFixed(1)}B revenue`
@@ -472,6 +507,53 @@ function BaseCompanyDetail({ data, onOpen }: { data: PeersResp; onOpen: (ticker:
   </div>
 }
 
+const FACILITY_ROW = '1.4fr 1fr 0.8fr 0.6fr 1fr'
+
+function FacilityTable({ facilities }: { facilities: FacilitiesResp }) {
+  if (!facilities.available || !facilities.facilities.length) return null
+  return (
+    <div style={{ marginTop: 22 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
+        <span style={{ fontFamily: T.label, fontSize: 10, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: GOLD }}>
+          Facilities · {facilities.count ?? facilities.facilities.length}
+        </span>
+        {facilities.source_url && (
+          <a href={facilities.source_url} target="_blank" rel="noreferrer" style={{ fontFamily: T.mono, fontSize: 9, color: T.muted }}>
+            {facilities.source ?? 'Source'} ↗
+          </a>
+        )}
+      </div>
+      <div style={{
+        display: 'grid', gridTemplateColumns: FACILITY_ROW, gap: 10, padding: '0 8px 6px',
+        fontFamily: T.label, fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', color: T.muted,
+      }}>
+        <span>Name</span><span>Location</span><span>Sector</span><span>Workers</span><span>Parent</span>
+      </div>
+      <div style={{ maxHeight: 420, overflowY: 'auto', border: `1px solid ${T.border}` }}>
+        {facilities.facilities.map((f, i) => (
+          <div
+            key={f.os_id}
+            style={{
+              display: 'grid', gridTemplateColumns: FACILITY_ROW, gap: 10, padding: '7px 8px',
+              background: i % 2 ? 'transparent' : 'color-mix(in srgb, var(--theme-surface, #0d1826) 60%, transparent)',
+              fontFamily: T.label, fontSize: 11, color: T.text, alignItems: 'start',
+            }}
+          >
+            <span>{f.name || '—'}</span>
+            <span style={{ color: T.textDim }}>{[f.address, f.country].filter(Boolean).join(', ') || '—'}</span>
+            <span style={{ color: T.textDim, fontFamily: T.mono, fontSize: 9.5 }}>{f.sector || '—'}</span>
+            <span style={{ color: T.textDim, fontFamily: T.mono, fontSize: 9.5 }}>{f.workers || '—'}</span>
+            <span style={{ color: T.textDim }}>{f.parent_company || '—'}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 6, fontFamily: T.mono, fontSize: 9, color: T.muted }}>
+        Full facility list from Open Supply Hub. The first {Math.min(facilities.facilities.length, 60)} also appear as VERIFIED supplier links in the map above.
+      </div>
+    </div>
+  )
+}
+
 function Unavailable({ label }: { label: string }) {
   return <div style={{ padding: '16px 12px', border: `1px dashed ${T.border}`, fontFamily: T.mono, fontSize: 10, color: T.muted, textAlign: 'center' }}>{label}</div>
 }
@@ -482,26 +564,29 @@ export function SupplyChainPeersContent() {
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<PeersResp | null>(null)
   const [verified, setVerified] = useState<VerifiedRelationship[]>([])
+  const [facilities, setFacilities] = useState<FacilitiesResp | null>(null)
   const [search, setSearch] = useState('')
 
   const doFetch = async (symbol: string) => {
     const ticker = symbol.trim().toUpperCase()
     if (!ticker) return
-    setLoading(true); setData(null); setVerified([])
+    setLoading(true); setData(null); setVerified([]); setFacilities(null)
     try {
-      const [relationshipsResult, profileResult] = await Promise.allSettled([
+      const [relationshipsResult, profileResult, facilitiesResult] = await Promise.allSettled([
         axios.get<VerifiedRelationshipsResp>(`/api/corporate/verified-supply-chain-relationships?ticker=${encodeURIComponent(ticker)}`),
         axios.get<CompanyProfileResp>(`/api/corporate/supply-chain?ticker=${encodeURIComponent(ticker)}`),
+        axios.get<FacilitiesResp>(`/api/corporate/facilities?ticker=${encodeURIComponent(ticker)}`),
       ])
       const relationships = relationshipsResult.status === 'fulfilled' ? relationshipsResult.value.data : null
       const profile = profileResult.status === 'fulfilled' ? profileResult.value.data : null
+      setFacilities(facilitiesResult.status === 'fulfilled' ? facilitiesResult.value.data : null)
       const canonicalName = profile?.name || relationships?.company_name || ''
       const peers = await axios.get<PeersResp>(`/api/corporate/peers-by-tags?ticker=${encodeURIComponent(ticker)}&company_name=${encodeURIComponent(canonicalName)}&limit=600`)
         .then(response => response.data)
         .catch(() => null)
       const clean = (value?: string | null) => value && value !== 'N/A' ? value : null
-      const productNames = profile?.product_segments.latest?.map(segment => segment.name) ?? []
-      const marketNames = profile?.geo_segments.latest?.map(segment => segment.name) ?? []
+      const productNames = uniq(profile?.product_segments.latest?.map(segment => segment.name) ?? [])
+      const marketNames = uniq(profile?.geo_segments.latest?.map(segment => segment.name) ?? [])
       const segmentSources = [profile?.product_segments.source, profile?.geo_segments.source]
         .filter((source): source is string => !!source)
         .map(source => source.toUpperCase())
@@ -520,7 +605,8 @@ export function SupplyChainPeersContent() {
         year_founded: existingBase?.year_founded ?? null,
         brief: existingBase?.brief ?? profile?.description ?? null,
         core_offerings: existingBase?.core_offerings.length ? existingBase.core_offerings : productNames,
-        supply_chain_focus: existingBase?.supply_chain_focus.length ? existingBase.supply_chain_focus : (relationships?.relationships ?? []).filter(r => r.role.startsWith('BUYER')).map(r => r.category),
+        supply_chain_focus: existingBase?.supply_chain_focus.length ? existingBase.supply_chain_focus
+          : uniq((relationships?.relationships ?? []).filter(r => r.role.startsWith('BUYER')).map(r => r.category)),
         target_markets: existingBase?.target_markets.length ? existingBase.target_markets : marketNames,
         data_sources: dataSources,
       }
@@ -555,6 +641,7 @@ export function SupplyChainPeersContent() {
         { label: 'Company', value: base.name.slice(0, 28) },
         { label: 'Peers', value: String(data.returned ?? peers.length), sub: data.count != null ? `${data.count} total` : undefined },
         { label: 'Verified Links', value: String(verified.length) },
+        { label: 'Facilities', value: facilities?.available ? String(facilities.count ?? facilities.facilities.length) : '—' },
         { label: 'Employees', value: base.employees != null ? base.employees.toLocaleString() : '—' },
         { label: 'Revenue', value: base.revenue != null ? `$${(base.revenue / 1e9).toFixed(1)}B` : '—' },
         { label: 'Country', value: base.country || '—' },
@@ -589,6 +676,18 @@ export function SupplyChainPeersContent() {
         ]),
       ))
     }
+    if (facilities?.available && facilities.facilities.length) {
+      pieces.push(tableClip(TAB, 'Facilities',
+        ['Name', 'Location', 'Sector', 'Workers', 'Parent'],
+        facilities.facilities.slice(0, 20).map(f => [
+          f.name || '—',
+          [f.address, f.country].filter(Boolean).join(', ') || '—',
+          f.sector || '—',
+          f.workers || '—',
+          f.parent_company || '—',
+        ]),
+      ))
+    }
     if (base.core_offerings?.length || base.supply_chain_focus?.length || base.target_markets?.length) {
       pieces.push(textClip(TAB, 'Tags',
         [
@@ -615,6 +714,7 @@ export function SupplyChainPeersContent() {
         <button onClick={() => doFetch(search)} disabled={!search.trim() || loading} style={{ background: 'transparent', border: 'none', color: search.trim() ? GOLD : T.muted, fontFamily: T.mono, fontSize: 9, fontWeight: 800, cursor: search.trim() ? 'pointer' : 'default' }}>GO</button>
       </div>
       {data?.base && !loading && <SupplyMap data={data} verified={verified} onOpen={openProfile} />}
+      {data?.base && !loading && facilities && <FacilityTable facilities={facilities} />}
       {loading && <EmptyState title="Supply Chain Map" hint="Combining company profiles, reported markets, and verified relationships." variant="loading" />}
       {!loading && !data && <EmptyState title="Supply Chain Map" hint="Search a ticker or company to map suppliers, buyers, and reported end markets." action="Enter" />}
     </div>

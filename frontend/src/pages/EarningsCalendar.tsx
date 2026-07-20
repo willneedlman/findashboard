@@ -315,7 +315,8 @@ export function EarningsCalendarContent() {
           <input id="ec-date" type="date" value={date} onChange={e => setDate(e.target.value || today())}
             style={{
               background: C.bg, border: `1px solid ${C.border}`, color: C.text, fontFamily: C.mono,
-              fontSize: 13, padding: '7px 10px', colorScheme: 'dark',
+              fontSize: 13, padding: '7px 10px',
+              colorScheme: 'var(--theme-color-scheme, dark)' as React.CSSProperties['colorScheme'],
             }} />
         </div>
         <div>

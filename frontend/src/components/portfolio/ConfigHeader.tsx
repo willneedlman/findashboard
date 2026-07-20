@@ -367,8 +367,8 @@ export default function ConfigHeader(p: Props) {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
                 {isBT ? (
                   <>
-                    <Field label="Start"><input type="date" value={p.start} onChange={e => p.setStart?.(e.target.value)} onFocus={focusOn} onBlur={focusOff} style={{ ...inputBase, colorScheme: 'dark' } as React.CSSProperties} /></Field>
-                    <Field label="End"><input type="date" value={p.end} onChange={e => p.setEnd?.(e.target.value)} onFocus={focusOn} onBlur={focusOff} style={{ ...inputBase, colorScheme: 'dark' } as React.CSSProperties} /></Field>
+                    <Field label="Start"><input type="date" value={p.start} onChange={e => p.setStart?.(e.target.value)} onFocus={focusOn} onBlur={focusOff} style={{ ...inputBase, colorScheme: 'var(--theme-color-scheme, dark)' as React.CSSProperties['colorScheme'] } as React.CSSProperties} /></Field>
+                    <Field label="End"><input type="date" value={p.end} onChange={e => p.setEnd?.(e.target.value)} onFocus={focusOn} onBlur={focusOff} style={{ ...inputBase, colorScheme: 'var(--theme-color-scheme, dark)' as React.CSSProperties['colorScheme'] } as React.CSSProperties} /></Field>
                     <Field label="Leverage (x)"><NumberInput value={p.leverage} onChange={p.setLeverage} step={0.25} min={1} /></Field>
                     {(Number(p.leverage) || 1) > 1
                       ? <Field label="Borrow Rate %"><NumberInput value={p.borrowRate} onChange={p.setBorrowRate} step={0.5} min={0} /></Field>
@@ -381,8 +381,8 @@ export default function ConfigHeader(p: Props) {
                     <Field label="Simulations"><NumberInput value={p.nSims ?? 0} onChange={v => p.setNSims?.(+v)} step={1} min={1} /></Field>
                     {p.crspMode && (
                       <>
-                        <Field label="CRSP Calibration Start"><input type="date" value={p.start} onChange={e => p.setStart?.(e.target.value)} onFocus={focusOn} onBlur={focusOff} style={{ ...inputBase, colorScheme: 'dark' } as React.CSSProperties} /></Field>
-                        <Field label="CRSP Calibration End"><input type="date" value={p.end} onChange={e => p.setEnd?.(e.target.value)} onFocus={focusOn} onBlur={focusOff} style={{ ...inputBase, colorScheme: 'dark' } as React.CSSProperties} /></Field>
+                        <Field label="CRSP Calibration Start"><input type="date" value={p.start} onChange={e => p.setStart?.(e.target.value)} onFocus={focusOn} onBlur={focusOff} style={{ ...inputBase, colorScheme: 'var(--theme-color-scheme, dark)' as React.CSSProperties['colorScheme'] } as React.CSSProperties} /></Field>
+                        <Field label="CRSP Calibration End"><input type="date" value={p.end} onChange={e => p.setEnd?.(e.target.value)} onFocus={focusOn} onBlur={focusOff} style={{ ...inputBase, colorScheme: 'var(--theme-color-scheme, dark)' as React.CSSProperties['colorScheme'] } as React.CSSProperties} /></Field>
                       </>
                     )}
                     <Field label="Benchmark"><input value={p.benchmark} onChange={e => p.setBenchmark(e.target.value.toUpperCase())} onFocus={focusOn} onBlur={focusOff} style={inputBase} /></Field>
