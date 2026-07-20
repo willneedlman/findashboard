@@ -435,8 +435,18 @@ export function PortfolioBuilderContent() {
         <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
           {/* Left: tickers + sliders */}
           <div style={{ width: 300, flexShrink: 0, background: SURFACE, border: `1px solid ${BORDER}`, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '10px 12px', borderBottom: `1px solid ${BORDER}`, display: 'flex', justifyContent: 'space-between', fontFamily: SANS, fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD }}>
-              <span>Tickers</span><span style={{ color: FAINT }}>{tickers.length}</span>
+            <div style={{ padding: '10px 12px', borderBottom: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontFamily: SANS, fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD }}>
+              <span>Tickers <span style={{ color: FAINT }}>{tickers.length}</span></span>
+              {tickers.length > 0 && (() => {
+                const allLocked = tickers.every(t => locked[t])
+                return (
+                  <button onClick={() => setLocked(allLocked ? {} : Object.fromEntries(tickers.map(t => [t, true])))}
+                    title={allLocked ? 'Unlock every ticker' : 'Lock every ticker — none will move on drag/rebalance'}
+                    style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: `1px solid ${BORDER}`, color: allLocked ? GOLD : SEC, cursor: 'pointer', fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', padding: '4px 7px' }}>
+                    {allLocked ? <Unlock size={11} /> : <Lock size={11} />}{allLocked ? 'Unlock All' : 'Lock All'}
+                  </button>
+                )
+              })()}
             </div>
             <div style={{ padding: 10, display: 'flex', gap: 6 }}>
               <input value={tickerDraft} onChange={e => setTickerDraft(e.target.value)} onKeyDown={e => e.key === 'Enter' && addTicker()}
