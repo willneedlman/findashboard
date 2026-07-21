@@ -37,7 +37,8 @@ const MACRO_GROUPS: { group: string; items: { sym: string; label: string }[] }[]
 // Standardized, size-neutral metrics only (no absolute $ or EPS — not fairly comparable)
 const METRIC_GROUPS: { group: string; items: { key: string; label: string; short: string; unit: 'x' | '%' }[] }[] = [
   { group: 'Valuation', items: [
-    { key: 'pe', label: 'P/E', short: 'P/E', unit: 'x' }, { key: 'ps', label: 'P/S', short: 'P/S', unit: 'x' }, { key: 'pb', label: 'P/B', short: 'P/B', unit: 'x' },
+    { key: 'pe', label: 'P/E', short: 'P/E', unit: 'x' }, { key: 'forward_pe', label: 'Forward P/E', short: 'Fwd P/E', unit: 'x' },
+    { key: 'ps', label: 'P/S', short: 'P/S', unit: 'x' }, { key: 'pb', label: 'P/B', short: 'P/B', unit: 'x' },
     { key: 'ev_ebitda', label: 'EV/EBITDA', short: 'EV/EBITDA', unit: 'x' }, { key: 'ev_sales', label: 'EV/Sales', short: 'EV/Sales', unit: 'x' }, { key: 'p_fcf', label: 'P/FCF', short: 'P/FCF', unit: 'x' },
   ]},
   { group: 'Profitability', items: [

@@ -98,6 +98,7 @@ const MarketHours        = lazyWithReload(() => import('./pages/MarketHours'))
 const CurrencyMatrix     = lazyWithReload(() => import('./pages/CurrencyMatrix'))
 const MaritimeMap        = lazyWithReload(() => import('./pages/MaritimeMap'))
 const RelativeValuation  = lazyWithReload(() => import('./pages/RelativeValuation'))
+const MoverRadar         = lazyWithReload(() => import('./pages/MoverRadar'))
 const SupplyChain        = lazyWithReload(() => import('./pages/SupplyChain'))
 const SupplyChainMap     = lazyWithReload(() => import('./pages/SupplyChainPeers'))
 const TradeJournal       = lazyWithReload(() => import('./pages/TradeJournal'))
@@ -306,6 +307,7 @@ export default function App() {
               <Route path="/currency"            element={<CurrencyMatrix />} />
               <Route path="/flows-map"           element={<MaritimeMap />} />
               <Route path="/relative-valuation"  element={<RelativeValuation />} />
+              <Route path="/mover-radar"          element={<MoverRadar />} />
               <Route path="/company-profile"     element={<SupplyChain />} />
               <Route path="/supply-chain"        element={<RedirectWithSearch to="/company-profile" />} />
               <Route path="/supply-chain-peers"  element={<SupplyChainMap />} />

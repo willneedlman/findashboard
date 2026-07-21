@@ -1,3 +1,4 @@
+import time
 import numpy as np
 import pandas as pd
 import datetime as _dt
@@ -231,9 +232,7 @@ def global_board(date: str | None = None, window: str = "1d"):
     }
 
 
-@router.get("/quote/{ticker}")
-def get_quote(ticker: str):
-    sym = validate_ticker(ticker)
+def _try_history_quote(sym: str) -> dict | None:
     try:
         hist = _cached_history(sym, period="5d")
         closes = hist["Close"].dropna() if not hist.empty else None
@@ -246,6 +245,38 @@ def get_quote(ticker: str):
             }
     except Exception:
         pass
+    return None
+
+
+# Symbols where the free chain (yfinance, with its own internal FMP/AV
+# fallback) has already failed once — skip straight to the SerpAPI fallback
+# next time instead of re-paying the latency of a chain we already know
+# fails for this name. This is a latency fix, not a budget one: SerpAPI's own
+# quote() cache already prevents re-spending on a repeat symbol regardless.
+_UNCOVERED_TTL = 7 * 86400
+
+
+@router.get("/quote/{ticker}")
+def get_quote(ticker: str):
+    from disk_cache import disk_get, disk_set
+    sym = validate_ticker(ticker)
+    uncovered_key = f"quote:uncovered:{sym}"
+    skip_free_chain = bool(disk_get(uncovered_key))
+
+    if not skip_free_chain:
+        got = _try_history_quote(sym)
+        if got:
+            return got
+        # One brief retry before spending SerpAPI budget — a lot of "the whole
+        # free chain failed" moments are transient (yfinance's 2-slot semaphore
+        # busy for a moment, FMP momentarily 429'd), not a genuine "this symbol
+        # isn't covered" case, and a couple of seconds is often enough for that
+        # contention to clear.
+        time.sleep(2)
+        got = _try_history_quote(sym)
+        if got:
+            return got
+        disk_set(uncovered_key, True, ttl=_UNCOVERED_TTL)
 
     # Fallback: Google Finance resolves instruments yfinance cannot (some
     # international tickers, FX, funds). Budget-gated and cached in the client.
@@ -256,6 +287,15 @@ def get_quote(ticker: str):
             "pct_change_1d": gf.get("change_pct"),
             "source": "google_finance",
         }
+    # SerpAPI failed too (budget spent, or genuinely no data) — the "uncovered"
+    # marker was premature; clear it so the next request tries the free chain
+    # fresh rather than being locked out of it for a week over a fluke.
+    if skip_free_chain:
+        try:
+            from disk_cache import _delete as _disk_delete
+            _disk_delete(uncovered_key)
+        except Exception:
+            pass
     raise HTTPException(404, "Could not fetch quote")
 
 
@@ -679,6 +719,22 @@ def fundamental_series(ticker: str, metric: str = "pe", period: str = "quarter")
         if pts:
             return {"ticker": ticker.upper(), "metric": "pe", "unit": "x", "points": pts,
                     "source": "close / TTM EPS (cached backlog)"}
+
+    # Forward P/E is a CURRENT consensus-estimate snapshot (price / next-year
+    # analyst EPS estimate) — unlike trailing P/E there is no free historical
+    # series of past consensus estimates, so it can't be plotted as a real
+    # time series. Returned as a single point far in the past; the frontend's
+    # existing step-hold alignment (built for quarterly-reported ratios)
+    # carries it flat across the whole visible window, which is the honest
+    # way to show a snapshot multiple — a flat reference line, not a fake history.
+    if metric == "forward_pe":
+        info = get_info(ticker) or {}
+        fpe = info.get("forwardPE")
+        if fpe:
+            return {"ticker": ticker.upper(), "metric": "forward_pe", "unit": "x",
+                    "points": [{"date": "2000-01-01", "value": round(float(fpe), 2)}],
+                    "source": "yfinance snapshot — current consensus estimate, not historical"}
+        raise HTTPException(404, "No forward P/E available for this ticker")
 
     if not _fmp.available():
         raise HTTPException(503, "Fundamentals data source unavailable")

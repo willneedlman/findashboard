@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import axios from 'axios'
 import { Star } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
+import EmptyState from '../components/EmptyState'
 import TickerLogo from '../components/TickerLogo'
 import TickerLink from '../components/TickerLink'
 import ColumnFilterMenu, { type SortState, type FilterSpec } from '../components/ColumnFilterMenu'
@@ -119,19 +120,24 @@ export function EarningsCalendarContent() {
   const [enriched, setEnriched] = useState<Record<string, Enriched>>({})
   const enrichingRef = useRef<Set<string>>(new Set())
 
-  useEffect(() => {
-    let cancelled = false
+  // Nothing fetches until Load is clicked — date/window/market-cap are just
+  // local params until then. loadIdRef guards against an in-flight request
+  // resolving after a newer Load click superseded it.
+  const [started, setStarted] = useState(false)
+  const loadIdRef = useRef(0)
+  const loadCalendar = useCallback(() => {
+    const id = ++loadIdRef.current
+    setStarted(true)
     setLoading(true); setError(null); setEnriched({}); enrichingRef.current = new Set(); setRangeTo(null)
     axios.get('/api/earnings/calendar', { params: { date, days } })
       .then(r => {
-        if (cancelled) return
+        if (loadIdRef.current !== id) return
         setRows(r.data.rows || [])
         setCovered(r.data.covered || 0)
         setRangeTo(r.data.to || null)
       })
-      .catch(() => { if (cancelled) return; setError('Could not load the earnings calendar. Try again shortly.') })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
+      .catch(() => { if (loadIdRef.current !== id) return; setError('Could not load the earnings calendar. Try again shortly.') })
+      .finally(() => { if (loadIdRef.current === id) setLoading(false) })
   }, [date, days])
 
   const filtered = useMemo(() => {
@@ -190,12 +196,31 @@ export function EarningsCalendarContent() {
     })
   }, [filtered, enriched])
 
+  // 3 batches of 10 in flight at once, not 1 — the old version waited for each
+  // batch's full round trip before requesting the next 10, so a 500+-name
+  // window took 50+ sequential requests end to end. Firing several batches
+  // concurrently (each still independently fault-isolated in enrichBatch)
+  // cuts that wall-clock time roughly 3x; as each resolves this effect refires
+  // and refills the window with the next unclaimed symbols.
   useEffect(() => {
     const pending = sorted
       .map(r => r.symbol)
       .filter(s => !(s in enriched) && !enrichingRef.current.has(s))
-    if (pending.length) enrichBatch(pending.slice(0, 10))
+    const BATCH_SIZE = 10
+    const MAX_CONCURRENT_BATCHES = 3
+    for (let i = 0; i < MAX_CONCURRENT_BATCHES; i++) {
+      const chunk = pending.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
+      if (chunk.length) enrichBatch(chunk)
+    }
   }, [sorted, enriched, enrichBatch])
+
+  // Market cap (and any enriched-field sort) only reads real data once every
+  // visible row has been enriched — otherwise not-yet-enriched rows read as
+  // "doesn't meet the cap" and flash a false "no companies match" while the
+  // batches are still coming in. So the results stay behind the loading
+  // screen until enrichment has fully caught up with `sorted`.
+  const enrichedCount = sorted.filter(r => r.symbol in enriched).length
+  const fullyEnriched = sorted.length === 0 || enrichedCount === sorted.length
 
   // Market-cap filter applies AFTER enrichment is driven off `sorted`, so a row
   // filtered out here is still enriched (no deadlock) and rows appear as their
@@ -342,6 +367,18 @@ export function EarningsCalendarContent() {
             ))}
           </div>
         </div>
+        <div>
+          <label htmlFor="ec-mincap" style={{ ...LABEL, marginBottom: 5 }}>Market Cap ≥</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, border: `1px solid ${C.border}`, background: C.bg, padding: '0 10px' }}>
+            <span style={{ fontFamily: C.mono, fontSize: 12, color: C.muted }}>$</span>
+            <input id="ec-mincap" type="number" min={0} step="1" value={minCapStr} onChange={e => setMinCapStr(e.target.value)}
+              placeholder="0" style={{
+                background: 'transparent', border: 'none', color: C.text, fontFamily: C.mono,
+                fontSize: 13, padding: '7px 0', width: 64, outline: 'none',
+              }} />
+            <span style={{ fontFamily: C.mono, fontSize: 12, color: C.muted }}>B</span>
+          </div>
+        </div>
         <div style={{ alignSelf: 'flex-end' }}>
           <button
             type="button"
@@ -353,6 +390,19 @@ export function EarningsCalendarContent() {
               padding: '8px 12px', whiteSpace: 'nowrap',
             }}
           >Today</button>
+        </div>
+        <div style={{ alignSelf: 'flex-end' }}>
+          <button
+            type="button"
+            onClick={loadCalendar}
+            disabled={loading}
+            title="Fetch the earnings calendar for the parameters above"
+            style={{
+              background: C.gold, border: 'none', color: C.header, cursor: loading ? 'default' : 'pointer',
+              fontFamily: C.sans, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
+              padding: '9px 18px', whiteSpace: 'nowrap', opacity: loading ? 0.6 : 1,
+            }}
+          >{loading ? 'Loading…' : started ? 'Reload' : 'Load'}</button>
         </div>
         <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', gap: 8 }}>
@@ -371,7 +421,7 @@ export function EarningsCalendarContent() {
       </div>
 
       {/* Summary */}
-      {!loading && !error && (
+      {started && !loading && !error && fullyEnriched && (
         <div style={{ fontFamily: C.sans, fontSize: 11, color: C.muted, marginBottom: 10 }}>
           <span style={{ color: C.text, fontWeight: 700 }}>{minCap ? visible.length : filtered.length}</span> {minCap ? 'shown' : 'reporting'}
           {' · '}<span style={{ color: C.text }}>{covered}</span> with estimates
@@ -384,13 +434,21 @@ export function EarningsCalendarContent() {
         </div>
       )}
 
-      {loading && <Centered>Loading earnings…</Centered>}
-      {error && <Centered tone={C.neg}>{error}</Centered>}
-      {!loading && !error && visible.length === 0 && (
-        <Centered>No companies match. Widen the window or clear filters.</Centered>
+      {!started && (
+        <EmptyState title="Earnings Scanner" hint="Set the date, window, and market cap above, then click Load." action="Load" />
+      )}
+      {started && !error && (loading || !fullyEnriched) && (
+        <EmptyState title="Loading…" variant="loading"
+          hint={loading ? 'Fetching the earnings calendar…' : `Enriching companies — ${enrichedCount} / ${sorted.length}…`} />
+      )}
+      {started && error && (
+        <EmptyState title="Could Not Load" hint={error} variant="unavailable" onRetry={loadCalendar} />
+      )}
+      {started && !loading && !error && fullyEnriched && visible.length === 0 && (
+        <EmptyState title="No Matches" hint="No companies match. Widen the window or clear filters." />
       )}
 
-      {!loading && !error && visible.length > 0 && (
+      {started && !loading && !error && fullyEnriched && visible.length > 0 && (
         <div style={{ border: `1px solid ${C.border}`, overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: isMobile ? 0 : 720 }}>
             <thead>
@@ -417,7 +475,7 @@ export function EarningsCalendarContent() {
         </div>
       )}
 
-      {!loading && !error && visible.length > 0 && (
+      {started && !loading && !error && fullyEnriched && visible.length > 0 && (
         <div style={{ fontFamily: C.sans, fontSize: 10, color: C.muted, marginTop: 10, lineHeight: 1.7 }}>
           Impl Move = expected move priced into the ATM straddle of the expiry spanning this report.
           Surprise = last EPS vs estimate. React = stock's one-day move on its last report.
@@ -516,14 +574,6 @@ function Toggle({ label, active, onClick }: { label: string; active: boolean; on
   )
 }
 
-function Centered({ children, tone }: { children: React.ReactNode; tone?: string }) {
-  return (
-    <div style={{
-      padding: '48px 20px', textAlign: 'center', fontFamily: C.sans, fontSize: 12,
-      color: tone || C.muted, border: `1px solid ${C.border}`,
-    }}>{children}</div>
-  )
-}
 
 export default function EarningsCalendar() {
   return <PageWrapper title="Earnings Scanner"><EarningsCalendarContent /></PageWrapper>

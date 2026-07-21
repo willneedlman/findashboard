@@ -12,6 +12,7 @@ Query format follows Google Finance:
   fx          BASE-QUOTE        (EUR-USD)
   crypto      COIN-USD          (BTC-USD)
 """
+import logging
 import os
 import threading
 import datetime as _dt
@@ -19,6 +20,8 @@ import datetime as _dt
 import requests
 
 from disk_cache import disk_get, disk_set
+
+logger = logging.getLogger(__name__)
 
 _API_KEY = os.getenv("SERPAPI_API_KEY", "")
 _BASE = "https://serpapi.com/search.json"
@@ -60,6 +63,11 @@ def _search(query: str) -> dict | None:
     """Raw Google Finance search. Budget-gated; returns None when spent or on error."""
     if not available() or not _consume():
         return None
+    # Every real spend is logged with the query and the running total — this
+    # was previously invisible, so there was no way to tell whether the
+    # monthly budget was going to a handful of repeat-offender symbols or
+    # broad noise from the free chain (yfinance/FMP/AV) being under strain.
+    logger.info("serpapi spend: %s (%d/%d this month)", query, int(disk_get(_usage_key()) or 0), _MONTHLY_BUDGET)
     try:
         r = requests.get(
             _BASE,
@@ -102,8 +110,11 @@ def _normalize(d: dict, query: str) -> dict | None:
         return None
 
 
-def quote(query: str, ttl: int = 21600) -> dict | None:
-    """Normalized quote for a Google Finance query, disk-cached (default 6h).
+def quote(query: str, ttl: int = 86400) -> dict | None:
+    """Normalized quote for a Google Finance query, disk-cached (default 24h —
+    was 6h; this is a last-resort fallback, not a primary feed, so it doesn't
+    need intraday freshness, and the longer TTL directly cuts repeat spend on
+    the same recurring symbols).
 
     Cache is checked first, so a cached value never spends budget. A miss spends
     one call when budget remains, else returns None.

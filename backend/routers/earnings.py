@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import concurrent.futures as cf
 import logging
+import threading
 from datetime import date, datetime, timedelta
 
 import pandas as pd
@@ -20,6 +21,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 import finnhub
 import options_data
+from cache import _run_yf
 from disk_cache import disk_get, disk_set
 
 router = APIRouter()
@@ -63,6 +65,23 @@ def _nasdaq_calendar(day: str) -> list[dict]:
     return out
 
 
+def _calendar_rows(d0: date, days: int) -> list[dict]:
+    """Core calendar-window logic, shared by the /calendar route and the
+    overnight cache-warm loop below."""
+    d1 = d0 + timedelta(days=days - 1)
+    rows = finnhub.get_earnings_calendar(d0.isoformat(), d1.isoformat())
+    # Augment with Nasdaq (Finnhub's free feed omits many large caps, e.g. NKE).
+    seen = {(r.get("date"), r.get("symbol")) for r in rows}
+    for n in range(days):
+        for nr in _nasdaq_calendar((d0 + timedelta(days=n)).isoformat()):
+            k = (nr["date"], nr["symbol"])
+            if k not in seen:
+                rows.append(nr)
+                seen.add(k)
+    rows.sort(key=lambda r: (r["date"] or "", r.get("epsEstimate") is None, r["symbol"]))
+    return rows
+
+
 @router.get("/calendar")
 def calendar(
     date: str = Query(..., description="anchor date, YYYY-MM-DD"),
@@ -75,23 +94,13 @@ def calendar(
     except ValueError:
         raise HTTPException(400, "date must be YYYY-MM-DD")
 
-    d1 = d0 + timedelta(days=days - 1)
-    rows = finnhub.get_earnings_calendar(d0.isoformat(), d1.isoformat())
-    # Augment with Nasdaq (Finnhub's free feed omits many large caps, e.g. NKE).
-    seen = {(r.get("date"), r.get("symbol")) for r in rows}
-    for n in range(days):
-        for nr in _nasdaq_calendar((d0 + timedelta(days=n)).isoformat()):
-            k = (nr["date"], nr["symbol"])
-            if k not in seen:
-                rows.append(nr)
-                seen.add(k)
+    rows = _calendar_rows(d0, days)
     # Date first, then covered names (those with an estimate) ahead of the
     # long tail of micro-caps that report with no analyst coverage.
-    rows.sort(key=lambda r: (r["date"] or "", r.get("epsEstimate") is None, r["symbol"]))
     covered = sum(1 for r in rows if r.get("epsEstimate") is not None)
     return {
         "from": d0.isoformat(),
-        "to": d1.isoformat(),
+        "to": (d0 + timedelta(days=days - 1)).isoformat(),
         "count": len(rows),
         "covered": covered,
         "rows": rows,
@@ -109,8 +118,14 @@ def _prior_report(sym: str) -> dict:
         return cached
 
     out: dict = {}
+    ttl = 86400
     try:
-        df = yf.Ticker(sym).get_earnings_dates(limit=12)
+        # Routed through cache._run_yf so this shares the app-wide yfinance
+        # concurrency semaphore instead of bypassing it — a raw yf.Ticker()
+        # call here previously let an 8-16-wide ThreadPoolExecutor batch fire
+        # that many *unguarded* concurrent yfinance calls, undermining the
+        # exact contention guard the rest of the app relies on.
+        df = _run_yf(f"earnings_dates {sym}", lambda: yf.Ticker(sym).get_earnings_dates(limit=12))
         if df is not None and not df.empty:
             now = pd.Timestamp.now(tz=df.index.tz)
             past = df[df.index < now]
@@ -124,9 +139,14 @@ def _prior_report(sym: str) -> dict:
             if not future.empty:
                 out["nextDate"] = future.index.min().date().isoformat()
     except Exception:
+        # Now that the yfinance call shares the app-wide semaphore, a busy
+        # moment legitimately raises YFContention — that's a transient queueing
+        # signal, not "this ticker has no earnings history," so it gets a short
+        # retry-soon TTL instead of baking a false miss in for a full day.
         out = {}
+        ttl = 120
 
-    disk_set(ck, out, ttl=86400)
+    disk_set(ck, out, ttl=ttl)
     return out
 
 
@@ -137,16 +157,37 @@ def _implied_move(sym: str, on_or_after: str | None) -> dict:
     cached = disk_get(ck)
     if cached is not None:
         return cached
-    im = options_data.implied_move(sym, on_or_after=on_or_after)
-    out = {"pct": im["move_pct"], "expiry": im["expiry"]} if im else {}
-    disk_set(ck, out, ttl=3600)
+    try:
+        im = _run_yf(f"implied_move {sym}", lambda: options_data.implied_move(sym, on_or_after=on_or_after))
+        out = {"pct": im["move_pct"], "expiry": im["expiry"]} if im else {}
+        disk_set(ck, out, ttl=3600)
+    except Exception:
+        # Same reasoning as _prior_report: don't cache a contention timeout as
+        # "no implied move," and don't let it escape uncaught — _enrich_one is
+        # mapped across a ThreadPoolExecutor, where one uncaught exception
+        # fails the entire batch's list(ex.map(...)) call, not just this ticker.
+        out = {}
+        disk_set(ck, out, ttl=120)
     return out
 
 
 def _enrich_one(sym: str) -> dict:
-    prof = finnhub.get_profile(sym) or {}
-    prior = _prior_report(sym)
-    im = _implied_move(sym, prior.get("nextDate"))
+    # Defensive top-level catch: this runs inside ex.map() across a thread
+    # pool, where one uncaught exception fails list(ex.map(...)) for the
+    # WHOLE batch, not just this ticker — a single bad symbol must degrade to
+    # a mostly-empty row, never take the other 9-plus down with it.
+    try:
+        prof = finnhub.get_profile(sym) or {}
+    except Exception:
+        prof = {}
+    try:
+        prior = _prior_report(sym)
+    except Exception:
+        prior = {}
+    try:
+        im = _implied_move(sym, prior.get("nextDate"))
+    except Exception:
+        im = {}
     return {
         "symbol": sym,
         "companyName": prof.get("companyName"),
@@ -191,13 +232,63 @@ def _moves(closes: pd.Series, prior: date) -> tuple[float | None, float | None]:
     return reaction, run
 
 
+# ── Overnight cache-warm loop ────────────────────────────────────────────────
+# Pre-enriches the upcoming week's covered names once a day, well before market
+# hours, so opening the Scanner during the trading day mostly hits warm cache
+# (_prior_report/_implied_move/finnhub.get_profile) instead of paying full cold
+# cost on 500+ names at once. Sequential and paced on purpose — this trades a
+# slow background pass (which nobody is watching) for a fast foreground one
+# (which somebody is).
+_warm_stop = threading.Event()
+_warm_thread = None
+
+
+def _run_warm_loop():
+    _warm_stop.wait(300)   # let boot settle first
+    while not _warm_stop.is_set():
+        today = date.today().isoformat()
+        if disk_get("earn:warmloop") != today:
+            try:
+                rows = _calendar_rows(date.today(), 7)
+                syms = sorted({r["symbol"] for r in rows if r.get("epsEstimate") is not None})
+                for sym in syms:
+                    if _warm_stop.is_set():
+                        return
+                    try:
+                        _enrich_one(sym)
+                    except Exception as e:
+                        _log.warning("earnings warm-loop %s failed: %s", sym, e)
+                    _warm_stop.wait(0.5)   # paced — not a race, nobody's waiting on this pass
+                disk_set("earn:warmloop", today, ttl=3 * 86400)
+            except Exception as e:
+                _log.warning("earnings warm-loop pass failed: %s", e)
+        _warm_stop.wait(3600)
+
+
+def start_calendar_warm_loop():
+    global _warm_thread
+    if _warm_thread and _warm_thread.is_alive():
+        return
+    _warm_thread = threading.Thread(target=_run_warm_loop, name="earnings-warm", daemon=True)
+    _warm_thread.start()
+
+
+def stop_calendar_warm_loop():
+    _warm_stop.set()
+
+
 @router.get("/enrich")
 def enrich(symbols: str = Query(..., description="comma-separated tickers")):
     syms = [s.strip().upper() for s in symbols.split(",") if s.strip()][:_MAX_ENRICH]
     if not syms:
         return {"rows": []}
 
-    with cf.ThreadPoolExecutor(max_workers=8) as ex:
+    # 16 workers, not 8 — the yfinance-touching calls inside _enrich_one now
+    # correctly queue on cache._run_yf's app-wide 2-slot semaphore regardless
+    # of how many threads try to call them, so raising this only widens
+    # concurrency for the parts that can actually use it (the unguarded,
+    # separately-rate-limited Finnhub profile lookup, plus general I/O wait).
+    with cf.ThreadPoolExecutor(max_workers=16) as ex:
         base = list(ex.map(_enrich_one, syms))
     by_sym = {r["symbol"]: r for r in base}
 

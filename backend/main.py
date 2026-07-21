@@ -29,7 +29,7 @@ from routers import (
     maritime, snapshots, credit, housing,
     portfolio_optimizer, macro_events,
     logistics, factset, comtrade, bcc, official,
-    portfolio_import,
+    portfolio_import, social, movers,
 )
 
 # Pin the MIME types the PWA depends on. A service worker served as anything but
@@ -53,9 +53,11 @@ async def lifespan(app: FastAPI):
     maritime.start_history_sampler() # 24h AIS ring buffer for the replay scrubber
     rates.start_curve_warmer()       # keep yield-curve + Fed-path caches warm (cold path is ~30s)
     snapshots.start_snapshot_loop()  # daily GEX/IV30 points for the core watchlist (240s post-boot)
+    earnings.start_calendar_warm_loop()  # pre-enrich the upcoming week overnight so the Scanner opens warm
     import maritime_kystverket        # Norway coastal AIS (open TCP feed)
     maritime_kystverket.start_stream(maritime._upsert, maritime._classify, maritime._remember)
     yield
+    earnings.stop_calendar_warm_loop()
     snapshots.stop_snapshot_loop()
     rates.stop_curve_warmer()
     maritime_kystverket.stop_stream()
@@ -214,6 +216,8 @@ app.include_router(logistics.router,         prefix="/api/logistics",         ta
 app.include_router(comtrade.router,          prefix="/api/comtrade",          tags=["comtrade"])
 app.include_router(official.router,          prefix="/api/official",          tags=["official-data"])
 app.include_router(bcc.router,               prefix="/api/bcc",               tags=["bcc"])
+app.include_router(social.router,            prefix="/api/social",             tags=["social"])
+app.include_router(movers.router,            prefix="/api/movers",             tags=["movers"])
 
 
 @app.api_route("/api/health", methods=["GET", "HEAD"])
