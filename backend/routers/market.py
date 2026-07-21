@@ -728,12 +728,21 @@ def fundamental_series(ticker: str, metric: str = "pe", period: str = "quarter")
     # carries it flat across the whole visible window, which is the honest
     # way to show a snapshot multiple — a flat reference line, not a fake history.
     if metric == "forward_pe":
+        # Compute from the raw forward-EPS estimate + a live price, rather than
+        # trusting yfinance's own precomputed forwardPE — that field is baked
+        # in whenever Yahoo last recomputed it and goes stale as the price
+        # moves through the day. The estimate itself barely moves intraday, so
+        # dividing it into a genuinely current price keeps this live instead
+        # of frozen at some earlier snapshot.
         info = get_info(ticker) or {}
-        fpe = info.get("forwardPE")
-        if fpe:
+        fwd_eps = info.get("forwardEps")
+        hist = _cached_history(ticker, period="5d")
+        closes = hist["Close"].dropna() if not hist.empty else None
+        price = float(closes.iloc[-1]) if closes is not None and not closes.empty else None
+        if fwd_eps and price:
             return {"ticker": ticker.upper(), "metric": "forward_pe", "unit": "x",
-                    "points": [{"date": "2000-01-01", "value": round(float(fpe), 2)}],
-                    "source": "yfinance snapshot — current consensus estimate, not historical"}
+                    "points": [{"date": "2000-01-01", "value": round(price / float(fwd_eps), 2)}],
+                    "source": "live price / forward EPS estimate — not historical"}
         raise HTTPException(404, "No forward P/E available for this ticker")
 
     if not _fmp.available():

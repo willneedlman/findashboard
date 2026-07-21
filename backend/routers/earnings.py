@@ -125,7 +125,10 @@ def _prior_report(sym: str) -> dict:
         # call here previously let an 8-16-wide ThreadPoolExecutor batch fire
         # that many *unguarded* concurrent yfinance calls, undermining the
         # exact contention guard the rest of the app relies on.
-        df = _run_yf(f"earnings_dates {sym}", lambda: yf.Ticker(sym).get_earnings_dates(limit=12))
+        # Only the single most recent past date and single nearest future one
+        # are ever used below — limit=4 (2 back, 2 forward) safely covers both
+        # with far less payload/parse work per ticker than the old limit=12.
+        df = _run_yf(f"earnings_dates {sym}", lambda: yf.Ticker(sym).get_earnings_dates(limit=4))
         if df is not None and not df.empty:
             now = pd.Timestamp.now(tz=df.index.tz)
             past = df[df.index < now]
@@ -159,8 +162,17 @@ def _implied_move(sym: str, on_or_after: str | None) -> dict:
         return cached
     try:
         im = _run_yf(f"implied_move {sym}", lambda: options_data.implied_move(sym, on_or_after=on_or_after))
-        out = {"pct": im["move_pct"], "expiry": im["expiry"]} if im else {}
-        disk_set(ck, out, ttl=3600)
+        if im:
+            out = {"pct": im["move_pct"], "expiry": im["expiry"]}
+            disk_set(ck, out, ttl=3600)
+        else:
+            # No listed options chain (or nothing spans the report date) — for
+            # the overwhelming majority of tickers this is a durable fact, not
+            # a transient miss, so stop re-attempting a known-dead-end options
+            # fetch every hour. Long TTL still self-corrects eventually if a
+            # name later gets options listed.
+            out = {}
+            disk_set(ck, out, ttl=7 * 86400)
     except Exception:
         # Same reasoning as _prior_report: don't cache a contention timeout as
         # "no implied move," and don't let it escape uncaught — _enrich_one is
@@ -275,6 +287,31 @@ def start_calendar_warm_loop():
 
 def stop_calendar_warm_loop():
     _warm_stop.set()
+
+
+@router.get("/profile")
+def profile_only(symbols: str = Query(..., description="comma-separated tickers")):
+    """Cheap phase-1 pass: company name/market cap/sector only (Finnhub, no
+    yfinance/options-chain work at all). The client uses this to resolve the
+    market-cap filter BEFORE spending the expensive /enrich calls — with a
+    tight cap filter active, most rows never need the earnings-history or
+    implied-move fetch at all because they're filtered out on cap alone."""
+    syms = [s.strip().upper() for s in symbols.split(",") if s.strip()][:_MAX_ENRICH]
+    if not syms:
+        return {"rows": []}
+
+    def _one(sym: str) -> dict:
+        try:
+            prof = finnhub.get_profile(sym) or {}
+        except Exception:
+            prof = {}
+        return {"symbol": sym, "companyName": prof.get("companyName"),
+                "marketCap": prof.get("marketCap") or None, "sector": prof.get("sector")}
+
+    # Finnhub isn't semaphore-gated like yfinance — this can run wide open.
+    with cf.ThreadPoolExecutor(max_workers=20) as ex:
+        rows = list(ex.map(_one, syms))
+    return {"rows": rows}
 
 
 @router.get("/enrich")

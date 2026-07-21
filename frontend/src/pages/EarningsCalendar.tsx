@@ -33,6 +33,7 @@ interface Enriched {
   priorReportDate?: string | null; surprisePct?: number | null
   reactionPct?: number | null; runSincePct?: number | null
   impliedMove?: number | null; impliedMoveExpiry?: string | null
+  _phase?: 1 | 2   // 1 = cheap profile-only (name/cap/sector), 2 = fully enriched
 }
 
 const WINDOWS = [{ label: 'Day', days: 1 }, { label: '3 Days', days: 3 }, { label: 'Week', days: 7 }]
@@ -118,7 +119,8 @@ export function EarningsCalendarContent() {
   const minCap = (parseFloat(minCapStr) || 0) * 1e9
 
   const [enriched, setEnriched] = useState<Record<string, Enriched>>({})
-  const enrichingRef = useRef<Set<string>>(new Set())
+  const profilingRef = useRef<Set<string>>(new Set())   // phase 1: cheap name/cap/sector, in flight
+  const enrichingRef = useRef<Set<string>>(new Set())   // phase 2: full enrichment, in flight
 
   // Nothing fetches until Load is clicked — date/window/market-cap are just
   // local params until then. loadIdRef guards against an in-flight request
@@ -128,7 +130,7 @@ export function EarningsCalendarContent() {
   const loadCalendar = useCallback(() => {
     const id = ++loadIdRef.current
     setStarted(true)
-    setLoading(true); setError(null); setEnriched({}); enrichingRef.current = new Set(); setRangeTo(null)
+    setLoading(true); setError(null); setEnriched({}); profilingRef.current = new Set(); enrichingRef.current = new Set(); setRangeTo(null)
     axios.get('/api/earnings/calendar', { params: { date, days } })
       .then(r => {
         if (loadIdRef.current !== id) return
@@ -165,28 +167,49 @@ export function EarningsCalendarContent() {
     })
   }, [rows, coveredOnly, watchOnly, watchSet, query, hourFilter, enriched])
 
-  // Enrich the visible rows in small batches so the table fills progressively
-  // and no single request blocks on a long list of yfinance lookups.
+  // Phase 1 (cheap): name/cap/sector only, for EVERY row, so the market-cap
+  // filter can resolve before anything expensive runs.
+  const profileBatch = useCallback((symbols: string[]) => {
+    if (!symbols.length) return
+    symbols.forEach(s => profilingRef.current.add(s))
+    axios.get('/api/earnings/profile', { params: { symbols: symbols.join(',') } })
+      .then(r => {
+        const next: Record<string, Enriched> = {}
+        for (const e of (r.data.rows || []) as Enriched[]) next[e.symbol] = { ...e, _phase: 1 }
+        setEnriched(prev => ({ ...prev, ...next }))
+      })
+      .catch(() => {
+        setEnriched(prev => ({ ...prev, ...Object.fromEntries(symbols.map(s => [s, { symbol: s, _phase: 1 as const }])) }))
+      })
+  }, [])
+
+  // Phase 2 (expensive): earnings history + implied move, only for rows that
+  // already have phase-1 data AND pass every active filter, including market
+  // cap — a name filtered out on cap alone never pays for an options-chain
+  // fetch it'll never show.
   const enrichBatch = useCallback((symbols: string[]) => {
     if (!symbols.length) return
     symbols.forEach(s => enrichingRef.current.add(s))
     axios.get('/api/earnings/enrich', { params: { symbols: symbols.join(',') } })
       .then(r => {
         const next: Record<string, Enriched> = {}
-        for (const e of (r.data.rows || []) as Enriched[]) next[e.symbol] = e
+        for (const e of (r.data.rows || []) as Enriched[]) next[e.symbol] = { ...e, _phase: 2 }
         setEnriched(prev => ({ ...prev, ...next }))
       })
       // Mark a failed batch as attempted (empty rows) rather than clearing it, so
       // the effect does not immediately re-request it in a tight loop on a
       // persistent backend error. The row stays as a dash for this load.
       .catch(() => {
-        setEnriched(prev => ({ ...prev, ...Object.fromEntries(symbols.map(s => [s, { symbol: s }])) }))
+        setEnriched(prev => ({
+          ...prev,
+          ...Object.fromEntries(symbols.map(s => [s, { ...(prev[s] || { symbol: s }), _phase: 2 as const }])),
+        }))
       })
   }, [])
 
-  // Largest companies first within each date. Market cap arrives with
-  // enrichment, so rows not yet enriched sort to the bottom (cap -1) and rise as
-  // their data loads. Date stays the primary axis so a multi-day window groups.
+  // Largest companies first within each date. Market cap arrives with phase 1,
+  // so rows without it yet sort to the bottom (cap -1) and rise as it loads.
+  // Date stays the primary axis so a multi-day window groups.
   const sorted = useMemo(() => {
     const cap = (s: string) => enriched[s]?.marketCap ?? -1
     return [...filtered].sort((a, b) => {
@@ -196,39 +219,63 @@ export function EarningsCalendarContent() {
     })
   }, [filtered, enriched])
 
-  // 3 batches of 10 in flight at once, not 1 — the old version waited for each
-  // batch's full round trip before requesting the next 10, so a 500+-name
-  // window took 50+ sequential requests end to end. Firing several batches
-  // concurrently (each still independently fault-isolated in enrichBatch)
-  // cuts that wall-clock time roughly 3x; as each resolves this effect refires
-  // and refills the window with the next unclaimed symbols.
+  // Phase 1: 3 batches of 10 in flight at once for every row, same
+  // concurrency reasoning as phase 2 below.
   useEffect(() => {
     const pending = sorted
       .map(r => r.symbol)
-      .filter(s => !(s in enriched) && !enrichingRef.current.has(s))
+      .filter(s => !(s in enriched) && !profilingRef.current.has(s))
+    const BATCH_SIZE = 10
+    const MAX_CONCURRENT_BATCHES = 3
+    for (let i = 0; i < MAX_CONCURRENT_BATCHES; i++) {
+      const chunk = pending.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
+      if (chunk.length) profileBatch(chunk)
+    }
+  }, [sorted, enriched, profileBatch])
+
+  // Phase 2: 3 batches of 10 in flight at once, not 1 — the old version
+  // waited for each batch's full round trip before requesting the next 10,
+  // so a 500+-name window took 50+ sequential requests end to end. Firing
+  // several batches concurrently (each still independently fault-isolated in
+  // enrichBatch) cuts that wall-clock time roughly 3x; as each resolves this
+  // effect refires and refills the window with the next unclaimed symbols.
+  // Eligibility requires phase-1 data AND passing the market-cap filter —
+  // see the comment on enrichBatch above.
+  useEffect(() => {
+    const eligible = sorted.filter(r => {
+      const e = enriched[r.symbol]
+      if (!e || e._phase !== 1) return false
+      if (minCap) {
+        const c = e.marketCap
+        if (c == null || c < minCap) return false
+      }
+      return true
+    })
+    const pending = eligible
+      .map(r => r.symbol)
+      .filter(s => !enrichingRef.current.has(s))
     const BATCH_SIZE = 10
     const MAX_CONCURRENT_BATCHES = 3
     for (let i = 0; i < MAX_CONCURRENT_BATCHES; i++) {
       const chunk = pending.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
       if (chunk.length) enrichBatch(chunk)
     }
-  }, [sorted, enriched, enrichBatch])
+  }, [sorted, enriched, minCap, enrichBatch])
 
-  // Market cap (and any enriched-field sort) only reads real data once every
-  // visible row has been enriched — otherwise not-yet-enriched rows read as
-  // "doesn't meet the cap" and flash a false "no companies match" while the
-  // batches are still coming in. So the results stay behind the loading
-  // screen until enrichment has fully caught up with `sorted`.
-  const enrichedCount = sorted.filter(r => r.symbol in enriched).length
-  const fullyEnriched = sorted.length === 0 || enrichedCount === sorted.length
-
-  // Market-cap filter applies AFTER enrichment is driven off `sorted`, so a row
-  // filtered out here is still enriched (no deadlock) and rows appear as their
-  // cap loads and qualifies. Unknown-cap rows are held back while a filter is on.
+  // Market cap resolves from phase 1, so the cap filter below can apply as
+  // soon as phase 1 lands, without waiting on the expensive phase-2 fetch.
+  // Unknown-cap rows are held back while a filter is on.
   const visible = useMemo(() => {
     if (!minCap) return sorted
     return sorted.filter(r => { const c = enriched[r.symbol]?.marketCap; return c != null && c >= minCap })
   }, [sorted, enriched, minCap])
+
+  // Loading gate waits for phase 2 (full enrichment) but only on the rows
+  // that actually pass the cap filter — filtered-out rows never get phase 2
+  // at all, so requiring it of every row in `sorted` would hang forever with
+  // a tight cap filter active.
+  const enrichedCount = visible.filter(r => enriched[r.symbol]?._phase === 2).length
+  const fullyEnriched = visible.length === 0 || enrichedCount === visible.length
 
   // Default groups by date; a user sort flattens to one ordered list (the '' key
   // tells GroupBody to drop the date header).
@@ -378,18 +425,6 @@ export function EarningsCalendarContent() {
               }} />
             <span style={{ fontFamily: C.mono, fontSize: 12, color: C.muted }}>B</span>
           </div>
-        </div>
-        <div style={{ alignSelf: 'flex-end' }}>
-          <button
-            type="button"
-            onClick={() => setDate(today())}
-            title="Jump date to today (local)"
-            style={{
-              background: 'transparent', border: `1px solid ${C.border}`, color: C.muted, cursor: 'pointer',
-              fontFamily: C.sans, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
-              padding: '8px 12px', whiteSpace: 'nowrap',
-            }}
-          >Today</button>
         </div>
         <div style={{ alignSelf: 'flex-end' }}>
           <button
