@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, HTTPException
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from cache import get_history as _cached_history, get_news as _cached_news, get_download, cached, get_info
+from cache import get_history as _cached_history, get_news as _cached_news, get_download, cached, get_info, _run_yf
 from validation import validate_ticker, validate_tickers, validate_date
 import serpapi_finance
 import alpaca
@@ -704,6 +704,212 @@ def _daily_pe_from_backlog(ticker: str) -> list:
     return pts
 
 
+# ── yfinance-native fallback for the standardized ratio registry ───────────────
+# FMP's shared daily quota (~250 calls/day across the whole app) sometimes runs
+# out, at which point every ratio it serves (P/B, P/S, EV/EBITDA, margins, ROE,
+# …) goes dark simultaneously, even for tickers FMP has served before, because a
+# transient failure used to get cached as a false "no data" for 24h (fixed
+# separately). yfinance's own quarterly statements carry no such shared budget,
+# so this recomputes the same ratios locally as a fallback — at the cost of only
+# ~5-6 quarters of free history (vs FMP's much deeper backlog when it's up), so
+# it's used only when FMP itself comes back empty, not as the primary source.
+_YF_QSTMT_TTL = 86400
+_YF_BS_FIELDS = ["Stockholders Equity", "Total Debt", "Cash Cash Equivalents And Short Term Investments",
+                 "Total Assets", "Current Assets", "Current Liabilities", "Ordinary Shares Number", "Invested Capital"]
+_YF_INC_FIELDS = ["Total Revenue", "Gross Profit", "Operating Income", "Net Income", "EBITDA"]
+_YF_CF_FIELDS = ["Free Cash Flow"]
+
+
+def _yf_quarterly_statements(ticker: str) -> dict:
+    from disk_cache import disk_get, disk_set
+    sym = ticker.strip().upper()
+    ck = f"yf:qstmt:{sym}"
+    cached = disk_get(ck)
+    if cached is not None:
+        return cached
+    import yfinance as yf
+    t = yf.Ticker(sym)
+
+    def _quarters(df, fields: list) -> list:
+        if df is None or df.empty:
+            return []
+        out = []
+        for d in sorted(df.columns):
+            col = df[d]
+            row = {"date": str(d.date())}
+            ok = False
+            for f in fields:
+                v = col.get(f)
+                if v is not None and not pd.isna(v):
+                    row[f] = float(v)
+                    ok = True
+            if ok:
+                out.append(row)
+        return out
+
+    try:
+        bs = _run_yf(f"qbs {sym}", lambda: t.quarterly_balance_sheet)
+        inc = _run_yf(f"qinc {sym}", lambda: t.quarterly_income_stmt)
+        cf = _run_yf(f"qcf {sym}", lambda: t.quarterly_cashflow)
+        out = {"balance": _quarters(bs, _YF_BS_FIELDS), "income": _quarters(inc, _YF_INC_FIELDS),
+               "cashflow": _quarters(cf, _YF_CF_FIELDS)}
+    except Exception:
+        out = {}
+    disk_set(ck, out, ttl=_YF_QSTMT_TTL)
+    return out
+
+
+def _yf_field_series(rows: list, field: str) -> list:
+    return [(r["date"], r[field]) for r in rows if field in r]
+
+
+def _yf_ttm(rows: list, field: str) -> list:
+    """Trailing-4-quarter sum, one point per quarter once 4 quarters exist."""
+    s = _yf_field_series(rows, field)
+    if len(s) < 4:
+        return []
+    return [(s[i][0], sum(v for _, v in s[i - 3:i + 1])) for i in range(3, len(s))]
+
+
+def _yf_step_cursor(series: list, ds: str, cursor: list) -> float | None:
+    if not series:
+        return None
+    while cursor[0] + 1 < len(series) and series[cursor[0] + 1][0] <= ds:
+        cursor[0] += 1
+    return series[cursor[0]][1] if series[cursor[0]][0] <= ds else None
+
+
+def _yf_daily_multiple(ticker: str, combine, *series_list) -> list:
+    """Daily series: for each price-history date, step each quarterly series
+    forward to its latest value at/before that date, then combine(close, *vals)."""
+    hist = _cached_history(ticker, period="5y")
+    if hist.empty:
+        return []
+    closes = hist["Close"].dropna()
+    cursors = [[0] for _ in series_list]
+    pts = []
+    for d, close in closes.items():
+        ds = str(d.date())
+        vals = [_yf_step_cursor(s, ds, c) for s, c in zip(series_list, cursors)]
+        if any(v is None for v in vals):
+            continue
+        v = combine(float(close), *vals)
+        if v is not None:
+            pts.append({"date": ds, "value": round(v, 3)})
+    return pts
+
+
+def _yf_margin_series(inc_rows: list, num_field: str, den_field: str) -> list:
+    out = []
+    for r in inc_rows:
+        n, d = r.get(num_field), r.get(den_field)
+        if n is not None and d:
+            out.append({"date": r["date"], "value": round(n / d * 100, 3)})
+    return out
+
+
+def _yf_align_ttm_to_balance(ttm_num: list, bal_rows: list, den_field: str, scale: float = 1.0) -> list:
+    """Align a TTM numerator series to the nearest balance-sheet snapshot at/before
+    each date, dividing by den_field there."""
+    den_map = sorted((r["date"], r[den_field]) for r in bal_rows if den_field in r)
+    out, j = [], 0
+    for d, v in ttm_num:
+        while j + 1 < len(den_map) and den_map[j + 1][0] <= d:
+            j += 1
+        if den_map and den_map[j][0] <= d and den_map[j][1]:
+            out.append({"date": d, "value": round(v / den_map[j][1] * scale, 3)})
+    return out
+
+
+def _yf_point_ratio_series(bal_rows: list, num_field: str, den_field: str) -> list:
+    out = []
+    for r in bal_rows:
+        n, d = r.get(num_field), r.get(den_field)
+        if n is not None and d:
+            out.append({"date": r["date"], "value": round(n / d, 3)})
+    return out
+
+
+def _yf_dividend_yield_series(ticker: str) -> list:
+    import yfinance as yf
+    try:
+        divs = _run_yf(f"dividends {ticker}", lambda: yf.Ticker(ticker).dividends)
+    except Exception:
+        return []
+    if divs is None or divs.empty:
+        return []
+    hist = _cached_history(ticker, period="5y")
+    if hist.empty:
+        return []
+    closes = hist["Close"].dropna()
+    div_dates = [d.tz_localize(None) if d.tzinfo else d for d in divs.index]
+    div_vals = list(divs.values)
+    pts = []
+    for d, close in closes.items():
+        dd = d.tz_localize(None) if d.tzinfo else d
+        cutoff = dd - pd.Timedelta(days=365)
+        ttm_div = sum(v for dt, v in zip(div_dates, div_vals) if cutoff < dt <= dd)
+        if ttm_div and close:
+            pts.append({"date": str(d.date()), "value": round(ttm_div / float(close) * 100, 3)})
+    return pts
+
+
+def _yf_ratio_series(ticker: str, metric: str) -> list:
+    stmt = _yf_quarterly_statements(ticker)
+    if not stmt:
+        return []
+    bal, inc, cf = stmt["balance"], stmt["income"], stmt["cashflow"]
+
+    if metric == "pb":
+        eq, sh = _yf_field_series(bal, "Stockholders Equity"), _yf_field_series(bal, "Ordinary Shares Number")
+        return _yf_daily_multiple(ticker, lambda c, e, s: c / (e / s) if e and s else None, eq, sh)
+    if metric == "ps":
+        rev, sh = _yf_ttm(inc, "Total Revenue"), _yf_field_series(bal, "Ordinary Shares Number")
+        return _yf_daily_multiple(ticker, lambda c, r, s: c / (r / s) if r and s else None, rev, sh)
+    if metric == "p_fcf":
+        fcf, sh = _yf_ttm(cf, "Free Cash Flow"), _yf_field_series(bal, "Ordinary Shares Number")
+        return _yf_daily_multiple(ticker, lambda c, f, s: c / (f / s) if f and s else None, fcf, sh)
+    if metric == "ev_ebitda":
+        ebitda = _yf_ttm(inc, "EBITDA")
+        sh, debt, cash = (_yf_field_series(bal, "Ordinary Shares Number"), _yf_field_series(bal, "Total Debt"),
+                          _yf_field_series(bal, "Cash Cash Equivalents And Short Term Investments"))
+        def combine(c, e, s, d, ca):
+            return (c * s + (d or 0) - (ca or 0)) / e if e and s else None
+        return _yf_daily_multiple(ticker, combine, ebitda, sh, debt, cash)
+    if metric == "ev_sales":
+        rev = _yf_ttm(inc, "Total Revenue")
+        sh, debt, cash = (_yf_field_series(bal, "Ordinary Shares Number"), _yf_field_series(bal, "Total Debt"),
+                          _yf_field_series(bal, "Cash Cash Equivalents And Short Term Investments"))
+        def combine(c, r, s, d, ca):
+            return (c * s + (d or 0) - (ca or 0)) / r if r and s else None
+        return _yf_daily_multiple(ticker, combine, rev, sh, debt, cash)
+    if metric == "gross_margin":
+        return _yf_margin_series(inc, "Gross Profit", "Total Revenue")
+    if metric == "operating_margin":
+        return _yf_margin_series(inc, "Operating Income", "Total Revenue")
+    if metric == "net_margin":
+        return _yf_margin_series(inc, "Net Income", "Total Revenue")
+    if metric == "roe":
+        return _yf_align_ttm_to_balance(_yf_ttm(inc, "Net Income"), bal, "Stockholders Equity", 100)
+    if metric == "roa":
+        return _yf_align_ttm_to_balance(_yf_ttm(inc, "Net Income"), bal, "Total Assets", 100)
+    if metric == "roic":
+        # NOPAT approximated as TTM operating income at a flat 21% statutory tax
+        # rate — FMP's own methodology isn't public, so this is a labeled estimate.
+        op_ttm = [(d, v * 0.79) for d, v in _yf_ttm(inc, "Operating Income")]
+        return _yf_align_ttm_to_balance(op_ttm, bal, "Invested Capital", 100)
+    if metric == "debt_equity":
+        return _yf_point_ratio_series(bal, "Total Debt", "Stockholders Equity")
+    if metric == "current_ratio":
+        return _yf_point_ratio_series(bal, "Current Assets", "Current Liabilities")
+    if metric == "dividend_yield":
+        return _yf_dividend_yield_series(ticker)
+    if metric == "fcf_yield":
+        fcf, sh = _yf_ttm(cf, "Free Cash Flow"), _yf_field_series(bal, "Ordinary Shares Number")
+        return _yf_daily_multiple(ticker, lambda c, f, s: (f / s) / c * 100 if f and s and c else None, fcf, sh)
+    return []
+
+
 @router.get("/fundamental-series")
 def fundamental_series(ticker: str, metric: str = "pe", period: str = "quarter"):
     """Time series of a standardized multiple/ratio (P/E, EV/EBITDA, P/S, P/B, ROE,
@@ -741,16 +947,60 @@ def fundamental_series(ticker: str, metric: str = "pe", period: str = "quarter")
                         "source": "daily close / current forward EPS estimate"}
         raise HTTPException(404, "No forward P/E available for this ticker")
 
+    # Same principle as forward P/E, one step removed: there is no free
+    # forward-EBITDA consensus field at all (unlike forwardEps), so this
+    # approximates it from two real analyst inputs — next-year consensus
+    # revenue (yfinance's revenue_estimate '+1y' row) times the trailing
+    # EBITDA margin — then divides that into a daily live enterprise value
+    # (shares outstanding × daily close, plus debt, minus cash) instead of
+    # yfinance's own frozen enterpriseValue/enterpriseToEbitda snapshot.
+    # Debt, cash, shares, and the margin are all held constant through the
+    # window, same trade-off as holding forward EPS constant above — they
+    # move far slower than price.
+    if metric == "forward_ev_ebitda":
+        import yfinance as yf
+        info = get_info(ticker) or {}
+        margin = info.get("ebitdaMargins")
+        shares = info.get("sharesOutstanding")
+        debt = info.get("totalDebt") or 0
+        cash = info.get("totalCash") or 0
+        try:
+            rev_est = _run_yf(f"revenue_estimate {ticker}", lambda: yf.Ticker(ticker).revenue_estimate)
+            fwd_rev = float(rev_est.loc["+1y", "avg"]) if rev_est is not None and "+1y" in rev_est.index else None
+        except Exception:
+            fwd_rev = None
+        fwd_ebitda = fwd_rev * margin if fwd_rev and margin else None
+        hist = _cached_history(ticker, period="5y")
+        if fwd_ebitda and shares and not hist.empty:
+            closes = hist["Close"].dropna()
+            pts = [{"date": str(d.date()), "value": round((float(c) * float(shares) + debt - cash) / fwd_ebitda, 2)}
+                   for d, c in closes.items()]
+            if pts:
+                return {"ticker": ticker.upper(), "metric": "forward_ev_ebitda", "unit": "x", "points": pts,
+                        "source": "daily (shares x close + debt - cash) / (next-year consensus revenue x trailing EBITDA margin)"}
+        raise HTTPException(404, "No forward EV/EBITDA available for this ticker")
+
+    # Standardized ratios: try FMP first (deeper history when it's up), and fall
+    # back to a locally-computed yfinance series — shorter history, but immune
+    # to FMP's shared daily quota — whenever FMP is unavailable or comes back
+    # empty (including while its quota is exhausted for the day).
+    if metric in _fmp.RATIO_METRICS:
+        pts = (_fmp.get_ratio_series(ticker, metric, period if period in ("quarter", "annual") else "annual", 16)
+               if _fmp.available() else [])
+        unit = "%" if _fmp._RATIO_REGISTRY[metric][2] else "x"
+        source = "fmp"
+        if not pts:
+            pts = _yf_ratio_series(ticker, metric)
+            source = "yfinance (fallback — fmp unavailable)"
+        if not pts:
+            raise HTTPException(404, "No data for this ticker/metric")
+        return {"ticker": ticker.upper(), "metric": metric, "unit": unit, "points": pts, "source": source}
+
     if not _fmp.available():
         raise HTTPException(503, "Fundamentals data source unavailable")
-
-    if metric in _fmp.RATIO_METRICS:
-        pts = _fmp.get_ratio_series(ticker, metric, period if period in ("quarter", "annual") else "annual", 16)
-        unit = "%" if _fmp._RATIO_REGISTRY[metric][2] else "x"
-    else:
-        pts = _fmp.get_fundamental_series(ticker, metric, period, 24)
-        unit = {"revenue": "$", "net_income": "$", "eps": "$", "ebitda": "$", "fcf": "$",
-                "gross_margin": "%", "operating_margin": "%", "net_margin": "%"}.get(metric, "")
+    pts = _fmp.get_fundamental_series(ticker, metric, period, 24)
+    unit = {"revenue": "$", "net_income": "$", "eps": "$", "ebitda": "$", "fcf": "$",
+            "gross_margin": "%", "operating_margin": "%", "net_margin": "%"}.get(metric, "")
     if not pts:
         raise HTTPException(404, "No data for this ticker/metric")
     return {"ticker": ticker.upper(), "metric": metric, "unit": unit, "points": pts}

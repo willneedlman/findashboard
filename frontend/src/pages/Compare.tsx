@@ -39,7 +39,8 @@ const METRIC_GROUPS: { group: string; items: { key: string; label: string; short
   { group: 'Valuation', items: [
     { key: 'pe', label: 'P/E', short: 'P/E', unit: 'x' }, { key: 'forward_pe', label: 'Forward P/E', short: 'Fwd P/E', unit: 'x' },
     { key: 'ps', label: 'P/S', short: 'P/S', unit: 'x' }, { key: 'pb', label: 'P/B', short: 'P/B', unit: 'x' },
-    { key: 'ev_ebitda', label: 'EV/EBITDA', short: 'EV/EBITDA', unit: 'x' }, { key: 'ev_sales', label: 'EV/Sales', short: 'EV/Sales', unit: 'x' }, { key: 'p_fcf', label: 'P/FCF', short: 'P/FCF', unit: 'x' },
+    { key: 'ev_ebitda', label: 'EV/EBITDA', short: 'EV/EBITDA', unit: 'x' }, { key: 'forward_ev_ebitda', label: 'Forward EV/EBITDA', short: 'Fwd EV/EBITDA', unit: 'x' },
+    { key: 'ev_sales', label: 'EV/Sales', short: 'EV/Sales', unit: 'x' }, { key: 'p_fcf', label: 'P/FCF', short: 'P/FCF', unit: 'x' },
   ]},
   { group: 'Profitability', items: [
     { key: 'gross_margin', label: 'Gross Margin', short: 'GM', unit: '%' }, { key: 'operating_margin', label: 'Operating Margin', short: 'OM', unit: '%' }, { key: 'net_margin', label: 'Net Margin', short: 'NM', unit: '%' },

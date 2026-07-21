@@ -150,11 +150,19 @@ def _get_v4(path: str, params: dict | None = None) -> list | dict:
         raise
 
 
-def _cached(cache: TTLCache, key: str, fetch_fn):
+def _cached(cache: TTLCache, key: str, fetch_fn, default=None):
     with _lock:
         if key in cache:
             return cache[key]
-    data = fetch_fn()
+    try:
+        data = fetch_fn()
+    except Exception:
+        # A transient failure (rate limit, timeout, network blip) is not the
+        # same fact as "no data" — caching it here would bake in a false
+        # negative for the cache's full TTL (up to 24h), which on the daily
+        # free-tier quota specifically means blocking the very next retry
+        # after the quota resets. Leave it uncached so that retry can land.
+        return default if default is not None else {}
     with _lock:
         cache[key] = data
     return data
@@ -178,7 +186,7 @@ def get_income(ticker: str, limit: int = 2) -> list:
     def fetch():
         d = _get("/income-statement", {"symbol": sym, "period": "annual", "limit": limit})
         return d if isinstance(d, list) else []
-    return _cached(_income_cache, key, fetch)
+    return _cached(_income_cache, key, fetch, default=[])
 
 
 def get_balance(ticker: str) -> dict:
@@ -290,7 +298,7 @@ def get_analyst_estimates(ticker: str, limit: int = 3) -> list:
     def fetch():
         d = _get("/analyst-estimates", {"symbol": sym, "period": "annual", "limit": limit})
         return d if isinstance(d, list) else []
-    return _cached(_estimates_cache, key, fetch)
+    return _cached(_estimates_cache, key, fetch, default=[])
 
 
 _ratings_cache: TTLCache = TTLCache(maxsize=300, ttl=86400)  # 24 hr — analyst ratings change at most daily
@@ -494,12 +502,9 @@ RATIO_METRICS = frozenset(_RATIO_REGISTRY)
 def _statement(path: str, sym: str, period: str, limit: int) -> list:
     key = f"{path}:{sym}:{period}:{limit}"
     def fetch():
-        try:
-            d = _get(path, {"symbol": sym, "period": period, "limit": limit})
-            return d if isinstance(d, list) else []
-        except Exception:
-            return []
-    return _cached(_stmt_cache, key, fetch)
+        d = _get(path, {"symbol": sym, "period": period, "limit": limit})
+        return d if isinstance(d, list) else []
+    return _cached(_stmt_cache, key, fetch, default=[])
 
 
 def get_ratio_series(ticker: str, metric: str, period: str = "annual", limit: int = 16) -> list:

@@ -10,6 +10,7 @@ Set FINNHUB_API_KEY in backend/.env.
 
 import os
 import threading
+import time
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -32,6 +33,29 @@ _retry = Retry(
 )
 _session.mount("https://", HTTPAdapter(max_retries=_retry, pool_connections=10, pool_maxsize=20))
 
+# Free tier is 60 req/min. Callers here (earnings-calendar enrichment in
+# particular) batch dozens of tickers through a thread pool, which used to
+# fire 30+ concurrent requests in a single burst — blowing straight through
+# the per-minute cap and drawing a wave of 429s that (see _cached below) used
+# to get permanently cached as "no data". This paces every call to at most
+# _RATE_LIMIT per rolling minute so bursts queue instead of failing.
+_RATE_LIMIT = 50   # headroom under the documented 60/min cap
+_RATE_WINDOW = 60.0
+_rate_sem = threading.BoundedSemaphore(_RATE_LIMIT)
+
+
+def _refill_rate_sem():
+    interval = _RATE_WINDOW / _RATE_LIMIT
+    while True:
+        time.sleep(interval)
+        try:
+            _rate_sem.release()
+        except ValueError:
+            pass   # already at the ceiling — nothing has spent a permit to return
+
+
+threading.Thread(target=_refill_rate_sem, daemon=True, name="finnhub-rate-refill").start()
+
 _lock          = threading.Lock()
 _quote_cache:   TTLCache = TTLCache(maxsize=300, ttl=1800)   # 30 min
 _ratings_cache: TTLCache = TTLCache(maxsize=300, ttl=86400)  # 24 hr
@@ -46,6 +70,7 @@ def available() -> bool:
 
 
 def _get(path: str, params: dict | None = None) -> dict | list:
+    _rate_sem.acquire()
     p = dict(params or {})
     p["token"] = _API_KEY
     r = _session.get(f"{_BASE}{path}", params=p, timeout=_TIMEOUT)
@@ -53,11 +78,18 @@ def _get(path: str, params: dict | None = None) -> dict | list:
     return r.json()
 
 
-def _cached(cache: TTLCache, key: str, fetch_fn):
+def _cached(cache: TTLCache, key: str, fetch_fn, default=None):
     with _lock:
         if key in cache:
             return cache[key]
-    data = fetch_fn()
+    try:
+        data = fetch_fn()
+    except Exception:
+        # A transient failure (rate limit, timeout, network blip) is not the
+        # same fact as "this ticker has no data" — caching it here would bake
+        # in a false negative for the cache's full TTL (up to 24h). Leave it
+        # uncached so the next call gets a fresh attempt.
+        return default if default is not None else {}
     with _lock:
         cache[key] = data
     return data
@@ -70,14 +102,11 @@ def get_peers(ticker: str) -> list:
     US-focused — good where FMP's curated peer list is thin."""
     sym = ticker.strip().upper()
     def fetch():
-        try:
-            data = _get("/stock/peers", {"symbol": sym})
-            if isinstance(data, list):
-                return [str(s).upper() for s in data if s and str(s).upper() != sym]
-        except Exception:
-            pass
+        data = _get("/stock/peers", {"symbol": sym})
+        if isinstance(data, list):
+            return [str(s).upper() for s in data if s and str(s).upper() != sym]
         return []
-    return _cached(_peers_cache, sym, fetch)
+    return _cached(_peers_cache, sym, fetch, default=[])
 
 
 # ── Quote — normalized to FMP /quote shape ────────────────────────────────────
@@ -90,26 +119,23 @@ def get_quote(ticker: str) -> dict:
     sym = ticker.strip().upper()
 
     def fetch():
-        try:
-            q = _get("/quote", {"symbol": sym})
-            # Finnhub /quote fields: c=current, dp=% change, v=volume, t=timestamp
-            if not q or q.get("c", 0) == 0:
-                return {}
-            return {
-                "symbol":            sym,
-                "price":             q.get("c"),
-                "change":            q.get("d"),           # absolute change
-                "changesPercentage": q.get("dp"),          # % change
-                "volume":            q.get("v"),
-                "previousClose":     q.get("pc"),
-                # marketCap not available on free quote endpoint — omit
-                "marketCap":         None,
-                "_source":           "finnhub",
-            }
-        except Exception:
+        q = _get("/quote", {"symbol": sym})
+        # Finnhub /quote fields: c=current, dp=% change, v=volume, t=timestamp
+        if not q or q.get("c", 0) == 0:
             return {}
+        return {
+            "symbol":            sym,
+            "price":             q.get("c"),
+            "change":            q.get("d"),           # absolute change
+            "changesPercentage": q.get("dp"),          # % change
+            "volume":            q.get("v"),
+            "previousClose":     q.get("pc"),
+            # marketCap not available on free quote endpoint — omit
+            "marketCap":         None,
+            "_source":           "finnhub",
+        }
 
-    return _cached(_quote_cache, sym, fetch)
+    return _cached(_quote_cache, sym, fetch, default={})
 
 
 # ── Analyst ratings — normalized to FMP /analyst-stock-ratings shape ─────────
@@ -122,45 +148,42 @@ def get_analyst_ratings(ticker: str) -> dict:
     sym = ticker.strip().upper()
 
     def fetch():
-        try:
-            # Finnhub /stock/recommendation returns list of weekly snapshots
-            data = _get("/stock/recommendation", {"symbol": sym})
-            if not isinstance(data, list) or not data:
-                return {}
-            latest = data[0]  # most recent week
-            buy    = (latest.get("buy", 0) or 0) + (latest.get("strongBuy", 0) or 0)
-            hold   = latest.get("hold", 0) or 0
-            sell   = (latest.get("sell", 0) or 0) + (latest.get("strongSell", 0) or 0)
-            total  = buy + hold + sell or 1
-
-            # Derive a normalized recommendation string
-            buy_pct = buy / total
-            if buy_pct >= 0.6:
-                rec = "Strong Buy"
-                score = 5
-            elif buy_pct >= 0.4:
-                rec = "Buy"
-                score = 4
-            elif sell / total >= 0.4:
-                rec = "Sell"
-                score = 2
-            else:
-                rec = "Hold"
-                score = 3
-
-            return {
-                "symbol":                 sym,
-                "ratingRecommendation":   rec,
-                "ratingScore":            score,
-                "ratingBuy":              buy,
-                "ratingHold":             hold,
-                "ratingSell":             sell,
-                "_source":                "finnhub",
-            }
-        except Exception:
+        # Finnhub /stock/recommendation returns list of weekly snapshots
+        data = _get("/stock/recommendation", {"symbol": sym})
+        if not isinstance(data, list) or not data:
             return {}
+        latest = data[0]  # most recent week
+        buy    = (latest.get("buy", 0) or 0) + (latest.get("strongBuy", 0) or 0)
+        hold   = latest.get("hold", 0) or 0
+        sell   = (latest.get("sell", 0) or 0) + (latest.get("strongSell", 0) or 0)
+        total  = buy + hold + sell or 1
 
-    return _cached(_ratings_cache, sym, fetch)
+        # Derive a normalized recommendation string
+        buy_pct = buy / total
+        if buy_pct >= 0.6:
+            rec = "Strong Buy"
+            score = 5
+        elif buy_pct >= 0.4:
+            rec = "Buy"
+            score = 4
+        elif sell / total >= 0.4:
+            rec = "Sell"
+            score = 2
+        else:
+            rec = "Hold"
+            score = 3
+
+        return {
+            "symbol":                 sym,
+            "ratingRecommendation":   rec,
+            "ratingScore":            score,
+            "ratingBuy":              buy,
+            "ratingHold":             hold,
+            "ratingSell":             sell,
+            "_source":                "finnhub",
+        }
+
+    return _cached(_ratings_cache, sym, fetch, default={})
 
 
 # ── Company profile — normalized to FMP /profile shape ───────────────────────
@@ -173,27 +196,24 @@ def get_profile(ticker: str) -> dict:
     sym = ticker.strip().upper()
 
     def fetch():
-        try:
-            p = _get("/stock/profile2", {"symbol": sym})
-            if not p or not p.get("name"):
-                return {}
-            return {
-                "symbol":          sym,
-                "companyName":     p.get("name"),
-                "sector":          p.get("finnhubIndustry"),
-                "exchange":        p.get("exchange"),
-                "country":         p.get("country"),  # ISO-2 domicile; foreign → ADR listing
-                "marketCap":       p.get("marketCapitalization", 0) * 1_000_000,  # Finnhub returns $M
-                "logo":            p.get("logo") or None,
-                "price":           None,  # not in profile endpoint
-                "beta":            None,
-                "changePercentage":None,
-                "_source":         "finnhub",
-            }
-        except Exception:
+        p = _get("/stock/profile2", {"symbol": sym})
+        if not p or not p.get("name"):
             return {}
+        return {
+            "symbol":          sym,
+            "companyName":     p.get("name"),
+            "sector":          p.get("finnhubIndustry"),
+            "exchange":        p.get("exchange"),
+            "country":         p.get("country"),  # ISO-2 domicile; foreign → ADR listing
+            "marketCap":       p.get("marketCapitalization", 0) * 1_000_000,  # Finnhub returns $M
+            "logo":            p.get("logo") or None,
+            "price":           None,  # not in profile endpoint
+            "beta":            None,
+            "changePercentage":None,
+            "_source":         "finnhub",
+        }
 
-    return _cached(_profile_cache, sym, fetch)
+    return _cached(_profile_cache, sym, fetch, default={})
 
 
 def get_earnings_calendar(date_from: str, date_to: str) -> list:
@@ -207,25 +227,22 @@ def get_earnings_calendar(date_from: str, date_to: str) -> list:
     key = f"{date_from}:{date_to}"
 
     def fetch():
-        try:
-            d = _get("/calendar/earnings", {"from": date_from, "to": date_to})
-            rows = d.get("earningsCalendar", []) if isinstance(d, dict) else []
-            return [
-                {
-                    "symbol":           r.get("symbol"),
-                    "date":             r.get("date"),
-                    "hour":             r.get("hour") or "",
-                    "quarter":          r.get("quarter"),
-                    "year":             r.get("year"),
-                    "epsEstimate":      r.get("epsEstimate"),
-                    "revenueEstimate":  r.get("revenueEstimate"),
-                }
-                for r in rows if r.get("symbol")
-            ]
-        except Exception:
-            return []
+        d = _get("/calendar/earnings", {"from": date_from, "to": date_to})
+        rows = d.get("earningsCalendar", []) if isinstance(d, dict) else []
+        return [
+            {
+                "symbol":           r.get("symbol"),
+                "date":             r.get("date"),
+                "hour":             r.get("hour") or "",
+                "quarter":          r.get("quarter"),
+                "year":             r.get("year"),
+                "epsEstimate":      r.get("epsEstimate"),
+                "revenueEstimate":  r.get("revenueEstimate"),
+            }
+            for r in rows if r.get("symbol")
+        ]
 
-    return _cached(_earncal_cache, key, fetch)
+    return _cached(_earncal_cache, key, fetch, default=[])
 
 
 def get_ipo_calendar(date_from: str, date_to: str) -> list:
@@ -240,23 +257,20 @@ def get_ipo_calendar(date_from: str, date_to: str) -> list:
     key = f"{date_from}:{date_to}"
 
     def fetch():
-        try:
-            d = _get("/calendar/ipo", {"from": date_from, "to": date_to})
-            rows = d.get("ipoCalendar", []) if isinstance(d, dict) else []
-            return [
-                {
-                    "symbol":     r.get("symbol"),
-                    "name":       r.get("name"),
-                    "date":       r.get("date"),
-                    "exchange":   r.get("exchange") or "",
-                    "price":      r.get("price") or "",
-                    "shares":     r.get("numberOfShares"),
-                    "dealValue":  r.get("totalSharesValue"),
-                    "status":     (r.get("status") or "").lower(),
-                }
-                for r in rows if r.get("symbol")
-            ]
-        except Exception:
-            return []
+        d = _get("/calendar/ipo", {"from": date_from, "to": date_to})
+        rows = d.get("ipoCalendar", []) if isinstance(d, dict) else []
+        return [
+            {
+                "symbol":     r.get("symbol"),
+                "name":       r.get("name"),
+                "date":       r.get("date"),
+                "exchange":   r.get("exchange") or "",
+                "price":      r.get("price") or "",
+                "shares":     r.get("numberOfShares"),
+                "dealValue":  r.get("totalSharesValue"),
+                "status":     (r.get("status") or "").lower(),
+            }
+            for r in rows if r.get("symbol")
+        ]
 
-    return _cached(_ipocal_cache, key, fetch)
+    return _cached(_ipocal_cache, key, fetch, default=[])
