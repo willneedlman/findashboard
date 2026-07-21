@@ -133,10 +133,15 @@ def _prior_report(sym: str) -> dict:
             now = pd.Timestamp.now(tz=df.index.tz)
             past = df[df.index < now]
             if not past.empty:
-                surp = past.iloc[0].get("Surprise(%)")
+                row = past.iloc[0]
+                surp = row.get("Surprise(%)")
+                reported = row.get("Reported EPS")
+                estimate = row.get("EPS Estimate")
                 out = {
                     "date": past.index[0].date().isoformat(),
                     "surprisePct": None if pd.isna(surp) else round(float(surp), 2),
+                    "reportedEps": None if pd.isna(reported) else round(float(reported), 2),
+                    "epsEstimateAtReport": None if pd.isna(estimate) else round(float(estimate), 2),
                 }
             future = df[df.index >= now]
             if not future.empty:
@@ -207,6 +212,8 @@ def _enrich_one(sym: str) -> dict:
         "sector": prof.get("sector"),
         "priorReportDate": prior.get("date"),
         "surprisePct": prior.get("surprisePct"),
+        "reportedEps": prior.get("reportedEps"),
+        "epsEstimateAtReport": prior.get("epsEstimateAtReport"),
         "impliedMove": im.get("pct"),
         "impliedMoveExpiry": im.get("expiry"),
     }

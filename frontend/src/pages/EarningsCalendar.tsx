@@ -31,6 +31,7 @@ interface Row {
 interface Enriched {
   symbol: string; companyName?: string | null; marketCap?: number | null; sector?: string | null
   priorReportDate?: string | null; surprisePct?: number | null
+  reportedEps?: number | null; epsEstimateAtReport?: number | null
   reactionPct?: number | null; runSincePct?: number | null
   impliedMove?: number | null; impliedMoveExpiry?: string | null
   _phase?: 1 | 2   // 1 = cheap profile-only (name/cap/sector), 2 = fully enriched
@@ -115,6 +116,7 @@ export function EarningsCalendarContent() {
   const [minCapStr, setMinCapStr] = useState('')   // in $B
   const [hourFilter, setHourFilter] = useState('') // '', bmo, amc, dmh
   const [sort, setSort] = useState<SortState>(null) // a user sort flattens the date grouping
+  const [detail, setDetail] = useState<Row | null>(null) // row whose result popup is open
 
   const minCap = (parseFloat(minCapStr) || 0) * 1e9
 
@@ -320,8 +322,8 @@ export function EarningsCalendarContent() {
   }, [visible, sort, enriched])
 
   const cols = isMobile
-    ? ['Symbol', 'Time', 'EPS Est', 'Impl', 'React']
-    : ['Symbol', 'Mkt Cap', 'Time', 'EPS Est', 'Rev Est', 'Impl Move', 'Surprise', 'React', 'Since']
+    ? ['Symbol', 'Time', 'EPS Est', 'Impl', 'Result']
+    : ['Symbol', 'Mkt Cap', 'Time', 'EPS Est', 'Rev Est', 'Impl Move', 'Result']
 
   const anyFilter = !!(query || minCapStr || hourFilter || sort)
   const clearFilters = () => { setQuery(''); setMinCapStr(''); setHourFilter(''); setSort(null) }
@@ -339,9 +341,10 @@ export function EarningsCalendarContent() {
     pieces.push(tableClip(
       'Earnings Scanner',
       `Earnings Calendar · ${windowLabel}`,
-      ['Symbol', 'Company', 'Date', 'Time', 'Mkt Cap', 'EPS Est', 'Rev Est', 'Impl Move', 'Surprise', 'React', 'Since'],
+      ['Symbol', 'Company', 'Date', 'Time', 'Mkt Cap', 'EPS Est', 'Rev Est', 'Impl Move', 'Result'],
       visible.slice(0, 20).map(r => {
         const e = enriched[r.symbol]
+        const reported = e?.priorReportDate === r.date
         return [
           r.symbol,
           e?.companyName ?? null,
@@ -351,9 +354,9 @@ export function EarningsCalendarContent() {
           fmtEps(r.epsEstimate),
           fmtMoney(r.revenueEstimate),
           e?.impliedMove != null ? fmtPct(e.impliedMove) : null,
-          e?.surprisePct != null ? fmtPct(e.surprisePct) : null,
-          e?.reactionPct != null ? fmtPct(e.reactionPct) : null,
-          e?.runSincePct != null ? fmtPct(e.runSincePct) : null,
+          reported && e?.reportedEps != null
+            ? `${fmtEps(e.reportedEps)} (${fmtPct(e.surprisePct)} surprise, ${fmtPct(e.reactionPct)} react)`
+            : null,
         ]
       }),
     ))
@@ -363,7 +366,7 @@ export function EarningsCalendarContent() {
   const SORT_KEY: Record<string, string> = {
     'Symbol': 'symbol', 'Mkt Cap': 'marketCap', 'Time': 'hour', 'EPS Est': 'epsEstimate',
     'Rev Est': 'revenueEstimate', 'Impl Move': 'impliedMove', 'Impl': 'impliedMove',
-    'Surprise': 'surprisePct', 'React': 'reactionPct', 'Since': 'runSincePct',
+    'Result': 'surprisePct',
   }
   const colFilterSpec = (c: string): FilterSpec | undefined => {
     switch (c) {
@@ -508,7 +511,8 @@ export function EarningsCalendarContent() {
             <tbody>
               {grouped.map(([gdate, grows]) => (
                 <GroupBody key={gdate} gdate={gdate} grows={grows} enriched={enriched}
-                  cols={cols.length} isMobile={isMobile} showHeader={!sort && days > 1} watch={watchSet} />
+                  cols={cols.length} isMobile={isMobile} showHeader={!sort && days > 1} watch={watchSet}
+                  onRowClick={setDetail} />
               ))}
             </tbody>
           </table>
@@ -518,17 +522,21 @@ export function EarningsCalendarContent() {
       {started && !loading && !error && fullyEnriched && visible.length > 0 && (
         <div style={{ fontFamily: C.sans, fontSize: 10, color: C.muted, marginTop: 10, lineHeight: 1.7 }}>
           Impl Move = expected move priced into the ATM straddle of the expiry spanning this report.
-          Surprise = last EPS vs estimate. React = stock's one-day move on its last report.
-          Since = move from that report to now. Estimates from finnhub, reactions from prior-quarter prices.
+          Result = last reported EPS vs estimate, shown once that report is in. Click a row for the full
+          breakdown (surprise, 1-day reaction, move since). Estimates from finnhub, reactions from prior-quarter prices.
         </div>
+      )}
+
+      {detail && (
+        <EarningsResultModal row={detail} e={enriched[detail.symbol]} onClose={() => setDetail(null)} />
       )}
     </>
   )
 }
 
-function GroupBody({ gdate, grows, enriched, cols, isMobile, showHeader, watch }: {
+function GroupBody({ gdate, grows, enriched, cols, isMobile, showHeader, watch, onRowClick }: {
   gdate: string; grows: Row[]; enriched: Record<string, Enriched>
-  cols: number; isMobile: boolean; showHeader: boolean; watch: Set<string>
+  cols: number; isMobile: boolean; showHeader: boolean; watch: Set<string>; onRowClick: (row: Row) => void
 }) {
   return (
     <>
@@ -545,7 +553,7 @@ function GroupBody({ gdate, grows, enriched, cols, isMobile, showHeader, watch }
         const e = enriched[r.symbol]
         const pending = !e
         return (
-          <tr key={r.symbol + r.date} style={{ borderBottom: `1px solid ${C.border}` }}>
+          <tr key={r.symbol + r.date} onClick={() => onRowClick(r)} style={{ borderBottom: `1px solid ${C.border}`, cursor: 'pointer' }}>
             <td style={{ padding: '10px 14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
                 <TickerLogo ticker={r.symbol} size={22} />
@@ -578,23 +586,91 @@ function GroupBody({ gdate, grows, enriched, cols, isMobile, showHeader, watch }
             <td style={{ ...cell, color: C.gold }} title={e?.impliedMoveExpiry ? `Expected move by ${e.impliedMoveExpiry}` : undefined}>
               {pending ? <span style={shimmer} /> : (e?.impliedMove != null ? `${e.impliedMove.toFixed(1)}%` : '—')}
             </td>
-            {!isMobile && (
-              <td style={{ ...cell, color: pctColor(e?.surprisePct) }}>
-                {pending ? <span style={shimmer} /> : fmtPct(e?.surprisePct)}
-              </td>
-            )}
-            <td style={{ ...cell, color: pctColor(e?.reactionPct) }}>
-              {pending ? <span style={shimmer} /> : fmtPct(e?.reactionPct)}
-            </td>
-            {!isMobile && (
-              <td style={{ ...cell, color: pctColor(e?.runSincePct) }}>
-                {pending ? <span style={shimmer} /> : fmtPct(e?.runSincePct)}
-              </td>
-            )}
+            <td style={cell}>{pending ? <span style={shimmer} /> : <ResultCell row={r} e={e} />}</td>
           </tr>
         )
       })}
     </>
+  )
+}
+
+// The report for this exact row's date has landed and matches the ticker's
+// most recently known report — as opposed to an upcoming/not-yet-reported row.
+function ResultCell({ row, e }: { row: Row; e?: Enriched }) {
+  const reported = e?.priorReportDate === row.date && e?.reportedEps != null
+  if (!reported) return <span style={{ color: C.dim }}>—</span>
+  return (
+    <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
+      <span style={{ color: pctColor(e!.surprisePct) }}>
+        {fmtEps(e!.reportedEps)}{' '}
+        <span style={{ fontSize: 10.5 }}>({fmtPct(e!.surprisePct)})</span>
+      </span>
+      {e!.reactionPct != null && (
+        <span style={{ fontFamily: C.sans, fontSize: 9.5, color: pctColor(e!.reactionPct) }}>
+          {fmtPct(e!.reactionPct)} react
+        </span>
+      )}
+    </div>
+  )
+}
+
+function DetailRow({ label, value, color }: { label: string; value: React.ReactNode; color?: string }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '8px 0', borderBottom: `1px solid ${C.border}` }}>
+      <span style={{ ...LABEL, marginBottom: 0 }}>{label}</span>
+      <span style={{ fontFamily: C.mono, fontSize: 13, fontWeight: 600, color: color ?? C.text, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+    </div>
+  )
+}
+
+function EarningsResultModal({ row, e, onClose }: { row: Row; e?: Enriched; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (ev: KeyboardEvent) => { if (ev.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const reported = e?.priorReportDate === row.date && e?.reportedEps != null
+
+  return (
+    <div onClick={onClose} role="dialog" aria-modal="true" aria-label={`${row.symbol} earnings detail`}
+      style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.62)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div onClick={ev => ev.stopPropagation()}
+        style={{ width: 'min(420px, 92vw)', background: C.header, border: `1px solid ${C.border}`, boxShadow: '0 24px 70px rgba(0,0,0,0.55)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 16px', borderBottom: `1px solid ${C.border}` }}>
+          <TickerLogo ticker={row.symbol} size={22} />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontFamily: C.mono, fontSize: 14, fontWeight: 700, color: C.text }}>
+              <TickerLink ticker={row.symbol} caret={false} />
+            </div>
+            <div style={{ fontFamily: C.sans, fontSize: 9, color: C.muted }}>{e?.companyName || '—'}</div>
+          </div>
+          <button onClick={onClose} aria-label="Close"
+            style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontFamily: C.mono, fontSize: 18, lineHeight: 1, color: C.muted, padding: '0 2px' }}>×</button>
+        </div>
+        <div style={{ padding: '4px 16px 14px' }}>
+          <DetailRow label={`Report · ${fmtDate(row.date)}`} value={<HourChip hour={row.hour} />} />
+          <DetailRow label="EPS Estimate" value={fmtEps(row.epsEstimate)} />
+          <DetailRow label="Revenue Estimate" value={fmtMoney(row.revenueEstimate)} />
+          <DetailRow label="Implied Move"
+            value={e?.impliedMove != null ? `${e.impliedMove.toFixed(1)}%` : '—'} color={C.gold} />
+          {reported ? (
+            <>
+              <DetailRow label="Reported EPS" value={fmtEps(e!.reportedEps)} />
+              <DetailRow label="Surprise" value={fmtPct(e!.surprisePct)} color={pctColor(e!.surprisePct)} />
+              <DetailRow label="1-Day Reaction" value={fmtPct(e!.reactionPct)} color={pctColor(e!.reactionPct)} />
+              <DetailRow label="Move Since Report" value={fmtPct(e!.runSincePct)} color={pctColor(e!.runSincePct)} />
+            </>
+          ) : (
+            <div style={{ fontFamily: C.sans, fontSize: 11, color: C.muted, padding: '10px 0 2px' }}>
+              {e?.priorReportDate
+                ? `Not yet reported. Last report was ${fmtDate(e.priorReportDate)}${e.surprisePct != null ? ` (${fmtPct(e.surprisePct)} surprise)` : ''}.`
+                : 'No report history available for this ticker.'}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }
 
