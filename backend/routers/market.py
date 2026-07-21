@@ -720,29 +720,25 @@ def fundamental_series(ticker: str, metric: str = "pe", period: str = "quarter")
             return {"ticker": ticker.upper(), "metric": "pe", "unit": "x", "points": pts,
                     "source": "close / TTM EPS (cached backlog)"}
 
-    # Forward P/E is a CURRENT consensus-estimate snapshot (price / next-year
-    # analyst EPS estimate) — unlike trailing P/E there is no free historical
-    # series of past consensus estimates, so it can't be plotted as a real
-    # time series. Returned as a single point far in the past; the frontend's
-    # existing step-hold alignment (built for quarterly-reported ratios)
-    # carries it flat across the whole visible window, which is the honest
-    # way to show a snapshot multiple — a flat reference line, not a fake history.
+    # Forward EPS estimates aren't available historically for free, so rather
+    # than trusting yfinance's own precomputed forwardPE (frozen at whatever
+    # point Yahoo last computed it) or emitting a single flat snapshot point
+    # (which renders as a static line no matter how fresh the one value is),
+    # this divides the CURRENT forward-EPS estimate into each day's close
+    # over the trailing price history. The line then moves with price day to
+    # day, at the cost of holding the estimate itself constant through the
+    # window — a reasonable trade since the estimate moves far less than
+    # price does, and revises only a few times a year.
     if metric == "forward_pe":
-        # Compute from the raw forward-EPS estimate + a live price, rather than
-        # trusting yfinance's own precomputed forwardPE — that field is baked
-        # in whenever Yahoo last recomputed it and goes stale as the price
-        # moves through the day. The estimate itself barely moves intraday, so
-        # dividing it into a genuinely current price keeps this live instead
-        # of frozen at some earlier snapshot.
         info = get_info(ticker) or {}
         fwd_eps = info.get("forwardEps")
-        hist = _cached_history(ticker, period="5d")
-        closes = hist["Close"].dropna() if not hist.empty else None
-        price = float(closes.iloc[-1]) if closes is not None and not closes.empty else None
-        if fwd_eps and price:
-            return {"ticker": ticker.upper(), "metric": "forward_pe", "unit": "x",
-                    "points": [{"date": "2000-01-01", "value": round(price / float(fwd_eps), 2)}],
-                    "source": "live price / forward EPS estimate — not historical"}
+        hist = _cached_history(ticker, period="5y")
+        if fwd_eps and not hist.empty:
+            closes = hist["Close"].dropna()
+            pts = [{"date": str(d.date()), "value": round(float(c) / float(fwd_eps), 2)} for d, c in closes.items()]
+            if pts:
+                return {"ticker": ticker.upper(), "metric": "forward_pe", "unit": "x", "points": pts,
+                        "source": "daily close / current forward EPS estimate"}
         raise HTTPException(404, "No forward P/E available for this ticker")
 
     if not _fmp.available():

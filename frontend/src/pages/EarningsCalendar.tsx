@@ -270,12 +270,17 @@ export function EarningsCalendarContent() {
     return sorted.filter(r => { const c = enriched[r.symbol]?.marketCap; return c != null && c >= minCap })
   }, [sorted, enriched, minCap])
 
-  // Loading gate waits for phase 2 (full enrichment) but only on the rows
-  // that actually pass the cap filter — filtered-out rows never get phase 2
-  // at all, so requiring it of every row in `sorted` would hang forever with
-  // a tight cap filter active.
+  // Loading gate: `visible` grows as phase-1 data trickles in, so checking
+  // phase-2 completion against `visible` alone is not enough — if only a
+  // handful of rows have been profiled so far and those happen to pass the
+  // cap, the gate would flip open before the rest of `sorted` even had a
+  // chance to be profiled and checked against the filter, hiding names that
+  // would have qualified once their turn came. Require phase 1 across EVERY
+  // row first, so `visible` reflects the true final cap-qualifying set,
+  // then wait for phase 2 (the expensive part) on just that set.
+  const phase1Done = sorted.every(r => enriched[r.symbol]?._phase != null)
   const enrichedCount = visible.filter(r => enriched[r.symbol]?._phase === 2).length
-  const fullyEnriched = visible.length === 0 || enrichedCount === visible.length
+  const fullyEnriched = phase1Done && (visible.length === 0 || enrichedCount === visible.length)
 
   // Default groups by date; a user sort flattens to one ordered list (the '' key
   // tells GroupBody to drop the date header).
