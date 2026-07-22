@@ -32,10 +32,27 @@ interface Enriched {
   symbol: string; companyName?: string | null; marketCap?: number | null; sector?: string | null
   priorReportDate?: string | null; surprisePct?: number | null
   reportedEps?: number | null; epsEstimateAtReport?: number | null
+  nextDate?: string | null   // yfinance's own nearest-future-or-current earnings date
   reactionPct?: number | null; runSincePct?: number | null
   impliedMove?: number | null; impliedMoveExpiry?: string | null
   _phase?: 1 | 2   // 1 = cheap profile-only (name/cap/sector), 2 = fully enriched
   _impliedMoveLoaded?: boolean   // lazy-fetched separately once the row scrolls into view
+}
+
+// Fallback used only when a row's calendar date never resolves to a real
+// Result: checks whether yfinance's own confirmed schedule agrees at all.
+// Prefers nextDate (a real future mismatch, e.g. the calendar says today but
+// yfinance's own next date is a week out) over a merely-recent past report
+// (within 5 days — a company that reported a few days ago on a date the
+// calendar mislabeled as today), since the former is the more direct answer
+// to "when does this actually report".
+function calendarMismatchDate(e: Enriched | undefined, rowDate: string): string | null {
+  if (e?.nextDate && e.nextDate !== rowDate) return e.nextDate
+  if (e?.reportedEps != null && e?.priorReportDate && e.priorReportDate !== rowDate) {
+    const days = Math.abs((new Date(rowDate + 'T00:00:00').getTime() - new Date(e.priorReportDate + 'T00:00:00').getTime()) / 86400000)
+    if (days <= 5) return e.priorReportDate
+  }
+  return null
 }
 
 const WINDOWS = [{ label: 'Day', days: 1 }, { label: '3 Days', days: 3 }, { label: 'Week', days: 7 }]
@@ -156,7 +173,8 @@ export function EarningsCalendarContent() {
     const id = ++loadIdRef.current
     setStarted(true)
     setLoading(true); setError(null); setEnriched({})
-    profilingRef.current = new Set(); enrichingRef.current = new Set(); impliedMoveRef.current = new Set()
+    profilingRef.current = new Set(); enrichingRef.current = new Set()
+    impliedMoveRef.current = new Set(); impliedMoveRetriedRef.current = new Set()
     setRangeTo(null)
     axios.get('/api/earnings/calendar', { params: { date, days } })
       .then(r => {
@@ -247,19 +265,35 @@ export function EarningsCalendarContent() {
   // set upfront. impliedMoveRef dedupes so a row already requested/loaded is
   // never re-fetched just because it re-enters the viewport.
   const impliedMoveRef = useRef<Set<string>>(new Set())
+  // A null result the first time through gets ONE retry after a short delay
+  // before it's accepted as final — a transient blip (a busy moment on the
+  // shared yfinance semaphore, a brief backend restart) would otherwise get
+  // permanently stuck showing "no data" for the rest of the page session,
+  // since nothing else ever re-requests a symbol once it's marked loaded.
+  const impliedMoveRetriedRef = useRef<Set<string>>(new Set())
   const fetchImpliedMove = useCallback((symbols: string[]) => {
     const fresh = symbols.filter(s => !impliedMoveRef.current.has(s))
     if (!fresh.length) return
     fresh.forEach(s => impliedMoveRef.current.add(s))
     axios.get('/api/earnings/implied-move', { params: { symbols: fresh.join(',') } })
       .then(r => {
+        const rows = (r.data.rows || []) as { symbol: string; impliedMove: number | null; impliedMoveExpiry: string | null }[]
+        const retry: string[] = []
         setEnriched(prev => {
           const out = { ...prev }
-          for (const e of (r.data.rows || []) as { symbol: string; impliedMove: number | null; impliedMoveExpiry: string | null }[]) {
+          for (const e of rows) {
+            if (e.impliedMove == null && !impliedMoveRetriedRef.current.has(e.symbol)) {
+              retry.push(e.symbol)
+              continue   // don't mark _impliedMoveLoaded yet — leave it showing the shimmer through the retry
+            }
             out[e.symbol] = { ...out[e.symbol], impliedMove: e.impliedMove, impliedMoveExpiry: e.impliedMoveExpiry, _impliedMoveLoaded: true }
           }
           return out
         })
+        if (retry.length) {
+          retry.forEach(s => { impliedMoveRetriedRef.current.add(s); impliedMoveRef.current.delete(s) })
+          window.setTimeout(() => fetchImpliedMove(retry), 4000)
+        }
       })
       .catch(() => {
         setEnriched(prev => {
@@ -653,6 +687,11 @@ function GroupBody({ gdate, grows, enriched, cols, isMobile, showHeader, watch, 
         // ticker's most recently known report, as opposed to an
         // upcoming/not-yet-reported row (the common case).
         const reported = e?.priorReportDate === r.date && e?.reportedEps != null
+        // Fallback only: when a row never resolves a Result, check whether
+        // yfinance's own confirmed schedule agrees with the calendar's date
+        // at all — occasionally it doesn't (the calendar source has the
+        // wrong date), and that's a clearer explanation than a bare dash.
+        const mismatch = !pending && !reported ? calendarMismatchDate(e, r.date) : null
         return (
           <tr key={r.symbol + r.date} ref={el => registerRow(el, r.symbol)} onClick={() => onRowClick(r)}
             style={{ borderBottom: `1px solid ${C.border}`, cursor: 'pointer' }}>
@@ -687,7 +726,14 @@ function GroupBody({ gdate, grows, enriched, cols, isMobile, showHeader, watch, 
             {!isMobile && (
               <td style={{ ...cell, color: C.text }}>{fmtEps(r.epsEstimate)}</td>
             )}
-            <td style={cell}>{pending ? <span style={shimmer} /> : <BeatMissBadge surprisePct={reported ? e?.surprisePct : null} />}</td>
+            <td style={cell}>
+              {pending ? <span style={shimmer} /> : mismatch ? (
+                <span style={{ fontFamily: C.sans, fontSize: 9.5, fontStyle: 'italic', color: C.warn }}
+                  title={`This calendar date doesn't match the confirmed report date — yfinance shows ${fmtDate(mismatch)}.`}>
+                  {mismatch < r.date ? 'reported' : 'resched.'} {fmtDateShort(mismatch)}
+                </span>
+              ) : <BeatMissBadge surprisePct={reported ? e?.surprisePct : null} />}
+            </td>
             {!isMobile && (
               <td style={{ ...cell, color: reported && e?.reactionPct != null ? pctColor(e.reactionPct) : C.dim }}>
                 {pending ? <span style={shimmer} /> : reported
@@ -829,9 +875,17 @@ function EarningsResultModal({ row, e, onClose }: { row: Row; e?: Enriched; onCl
               </>
             ) : (
               <div style={{ fontFamily: C.sans, fontSize: 11, color: C.muted, padding: '10px 0' }}>
-                {e?.priorReportDate
-                  ? `Not yet reported. Last report was ${fmtDate(e.priorReportDate)}${e.surprisePct != null ? ` (${fmtPct(e.surprisePct)} surprise)` : ''}.`
-                  : 'No report history available for this ticker.'}
+                {(() => {
+                  const mismatch = calendarMismatchDate(e, row.date)
+                  if (mismatch) {
+                    return mismatch < row.date
+                      ? `This calendar date doesn't match the confirmed report — yfinance shows it already reported on ${fmtDate(mismatch)}${e?.surprisePct != null ? ` (${fmtPct(e.surprisePct)} surprise)` : ''}.`
+                      : `This calendar date doesn't match the confirmed report — yfinance shows the next report on ${fmtDate(mismatch)}.`
+                  }
+                  return e?.priorReportDate
+                    ? `Not yet reported. Last report was ${fmtDate(e.priorReportDate)}${e.surprisePct != null ? ` (${fmtPct(e.surprisePct)} surprise)` : ''}.`
+                    : 'No report history available for this ticker.'
+                })()}
               </div>
             )}
           </div>

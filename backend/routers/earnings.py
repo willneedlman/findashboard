@@ -283,6 +283,13 @@ def _enrich_one(sym: str) -> dict:
         "surprisePct": prior.get("surprisePct"),
         "reportedEps": prior.get("reportedEps"),
         "epsEstimateAtReport": prior.get("epsEstimateAtReport"),
+        # yfinance's own nearest-future-or-current earnings date — already
+        # computed as a side effect of the same call above, so this is free.
+        # Only meant as a fallback signal for the client to explain a missing
+        # Result: when a row's calendar date doesn't match either
+        # priorReportDate OR this, the calendar and yfinance's own confirmed
+        # schedule disagree on when this ticker actually reports.
+        "nextDate": prior.get("nextDate"),
     }
 
 
