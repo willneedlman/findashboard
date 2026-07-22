@@ -576,7 +576,8 @@ export function EarningsCalendarContent() {
       )}
       {started && !error && (loading || !fullyEnriched) && (
         <EmptyState title="Loading…" variant="loading"
-          hint={loading ? 'Fetching the earnings calendar…' : `Enriching companies — ${enrichedCount} / ${sorted.length}…`} />
+          hint={loading ? 'Fetching the earnings calendar…' : `Enriching companies — ${enrichedCount} / ${visible.length}…`}
+          progress={loading ? undefined : (visible.length ? (enrichedCount / visible.length) * 100 : 100)} />
       )}
       {started && error && (
         <EmptyState title="Could Not Load" hint={error} variant="unavailable" onRetry={loadCalendar} />
@@ -688,14 +689,27 @@ function GroupBody({ gdate, grows, enriched, cols, isMobile, showHeader, watch, 
             )}
             <td style={cell}>{pending ? <span style={shimmer} /> : <BeatMissBadge surprisePct={reported ? e?.surprisePct : null} />}</td>
             {!isMobile && (
-              <td style={{ ...cell, color: reported ? pctColor(e?.reactionPct) : C.dim }}>
-                {pending ? <span style={shimmer} /> : (reported ? fmtPct(e?.reactionPct) : '—')}
+              <td style={{ ...cell, color: reported && e?.reactionPct != null ? pctColor(e.reactionPct) : C.dim }}>
+                {pending ? <span style={shimmer} /> : reported
+                  ? (e?.reactionPct != null
+                      ? fmtPct(e.reactionPct)
+                      // Reported today but the market hasn't closed since — the 1-day
+                      // reaction needs a completed trading day after the report to
+                      // compute against, so this fills in on its own, usually the next
+                      // day. A flat "—" here reads identically to "never available",
+                      // which is exactly what confused things.
+                      : <span style={{ fontFamily: C.sans, fontSize: 10, fontStyle: 'italic' }}>pending</span>)
+                  : '—'}
               </td>
             )}
             <td style={{ ...cell, color: C.gold }} title={e?.impliedMoveExpiry ? `Expected move by ${e.impliedMoveExpiry}` : undefined}>
               {pending || !e?._impliedMoveLoaded
-                ? <span style={{ color: C.dim }}>—</span>
-                : (e?.impliedMove != null ? `${e.impliedMove.toFixed(1)}%` : '—')}
+                // Not loaded yet (still off-screen or the lazy fetch is in flight) reads
+                // identically to "confirmed no options chain" otherwise — same problem
+                // as Reaction above, just for a different reason (lazy-loaded, not
+                // time-gated). Shimmer here, not a dash, until it's actually resolved.
+                ? <span style={shimmer} />
+                : (e?.impliedMove != null ? `${e.impliedMove.toFixed(1)}%` : <span style={{ color: C.dim }}>—</span>)}
             </td>
           </tr>
         )

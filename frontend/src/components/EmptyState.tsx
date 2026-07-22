@@ -27,6 +27,11 @@ export interface EmptyStateProps {
   action?: string              // primary-button label, e.g. 'Calculate' — renders the CTA cue (empty only)
   onRetry?: () => void         // optional retry affordance (unavailable only)
   keys?: string[]              // key badges under the message, e.g. ['Enter', '⌘K']
+  progress?: number            // 0-100 (loading only) — swaps the indeterminate slide for a
+                                // determinate bar that eases to the given width, so callers
+                                // tracking real completion (e.g. "N / M enriched") get a bar
+                                // that visibly glides forward instead of jumping in place
+                                // whenever the underlying count updates in large steps.
   // ── Deprecated / ignored (kept for source compatibility with old call sites) ──
   kpis?: string[]
   preview?: 'chart' | 'table'
@@ -57,15 +62,19 @@ function KeyBadge({ children }: { children: React.ReactNode }) {
   )
 }
 
-export default function EmptyState({ title, hint, variant = 'empty', action, onRetry, keys }: EmptyStateProps) {
+export default function EmptyState({ title, hint, variant = 'empty', action, onRetry, keys, progress }: EmptyStateProps) {
   // ── Loading ──────────────────────────────────────────────────────────────
   if (variant === 'loading') {
+    const determinate = progress != null
     return (
       <div role="status" aria-live="polite" style={{ ...SHELL, flexDirection: 'column', gap: 14, minHeight: 220 }}>
         <div style={{ ...TITLE_STYLE, color: TXT }}>{title}</div>
         <div style={HINT_STYLE}>{hint}</div>
         <div className="es-load-track" style={{ width: 150, height: 2, background: BORDER, overflow: 'hidden', marginTop: 2 }}>
-          <div className="es-load-fill" style={{
+          <div className="es-load-fill" style={determinate ? {
+            width: `${Math.max(0, Math.min(100, progress))}%`, height: '100%', background: PRIMARY,
+            transition: 'width 0.5s ease',
+          } : {
             width: '40%', height: '100%', background: PRIMARY,
             animation: 'es-load-slide 1.1s ease-in-out infinite',
           }} />
