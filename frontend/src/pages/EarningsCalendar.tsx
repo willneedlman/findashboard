@@ -78,11 +78,33 @@ function fmtDate(iso: string): string {
   const d = new Date(iso + 'T00:00:00')
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 }
+function fmtDateShort(iso: string): string {
+  const d = new Date(iso + 'T00:00:00')
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toUpperCase()
+}
+function fmtQuarterLabel(iso: string): string {
+  const d = new Date(iso + 'T00:00:00')
+  const q = Math.floor(d.getMonth() / 3) + 1
+  return `Q${q} '${String(d.getFullYear()).slice(2)}`
+}
 
 const shimmer: React.CSSProperties = {
   display: 'inline-block', width: 38, height: 10, borderRadius: 2,
   background: 'linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.04) 75%)',
   backgroundSize: '200% 100%', animation: 'ec-shimmer 1.6s infinite',
+}
+
+function BeatMissBadge({ surprisePct }: { surprisePct: number | null | undefined }) {
+  if (surprisePct == null) return <span style={{ color: C.dim }}>—</span>
+  const beat = surprisePct >= 0
+  const color = beat ? C.pos : C.neg
+  return (
+    <span style={{
+      display: 'inline-block', fontFamily: C.sans, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.04em',
+      color, background: `color-mix(in srgb, ${color} 16%, transparent)`, border: `1px solid color-mix(in srgb, ${color} 40%, transparent)`,
+      borderRadius: 3, padding: '3px 7px', whiteSpace: 'nowrap',
+    }}>{beat ? 'BEAT' : 'MISS'} {beat ? '+' : '−'}{Math.abs(surprisePct).toFixed(1)}%</span>
+  )
 }
 
 function HourChip({ hour }: { hour: string }) {
@@ -294,6 +316,7 @@ export function EarningsCalendarContent() {
         switch (sort.key) {
           case 'symbol':          return r.symbol
           case 'marketCap':       return e?.marketCap ?? -1
+          case 'date':            return r.date || ''
           case 'hour':            return rank[r.hour] ?? 3
           case 'epsEstimate':     return r.epsEstimate ?? -1e18
           case 'revenueEstimate': return r.revenueEstimate ?? -1
@@ -322,8 +345,13 @@ export function EarningsCalendarContent() {
   }, [visible, sort, enriched])
 
   const cols = isMobile
-    ? ['Symbol', 'Time', 'EPS Est', 'Impl', 'Result']
-    : ['Symbol', 'Mkt Cap', 'Time', 'EPS Est', 'Rev Est', 'Impl Move', 'Result']
+    ? ['Symbol', 'Date', 'Result', 'Impl']
+    : ['Symbol', 'Mkt Cap', 'Date', 'Time', 'Est', 'Result', 'Reaction', 'Impl Move']
+
+  // Every column left-aligned, headers and cells alike.
+  const colAlign = (_c: string, i: number): 'left' | 'right' | 'center' => {
+    return i === 0 ? 'left' : 'center'
+  }
 
   const anyFilter = !!(query || minCapStr || hourFilter || sort)
   const clearFilters = () => { setQuery(''); setMinCapStr(''); setHourFilter(''); setSort(null) }
@@ -341,7 +369,7 @@ export function EarningsCalendarContent() {
     pieces.push(tableClip(
       'Earnings Scanner',
       `Earnings Calendar · ${windowLabel}`,
-      ['Symbol', 'Company', 'Date', 'Time', 'Mkt Cap', 'EPS Est', 'Rev Est', 'Impl Move', 'Result'],
+      ['Symbol', 'Company', 'Date', 'Time', 'Mkt Cap', 'Est', 'Result', 'Reaction', 'Impl Move'],
       visible.slice(0, 20).map(r => {
         const e = enriched[r.symbol]
         const reported = e?.priorReportDate === r.date
@@ -352,11 +380,9 @@ export function EarningsCalendarContent() {
           HOUR_LABEL[r.hour] ?? r.hour ?? null,
           e?.marketCap != null ? fmtMoney(e.marketCap) : null,
           fmtEps(r.epsEstimate),
-          fmtMoney(r.revenueEstimate),
+          reported && e?.surprisePct != null ? `${e.surprisePct >= 0 ? 'Beat' : 'Miss'} ${fmtPct(e.surprisePct)}` : null,
+          reported ? fmtPct(e?.reactionPct) : null,
           e?.impliedMove != null ? fmtPct(e.impliedMove) : null,
-          reported && e?.reportedEps != null
-            ? `${fmtEps(e.reportedEps)} (${fmtPct(e.surprisePct)} surprise, ${fmtPct(e.reactionPct)} react)`
-            : null,
         ]
       }),
     ))
@@ -364,9 +390,9 @@ export function EarningsCalendarContent() {
   }, { disabled: !visible.length, sourceTab: 'Earnings Scanner' })
 
   const SORT_KEY: Record<string, string> = {
-    'Symbol': 'symbol', 'Mkt Cap': 'marketCap', 'Time': 'hour', 'EPS Est': 'epsEstimate',
-    'Rev Est': 'revenueEstimate', 'Impl Move': 'impliedMove', 'Impl': 'impliedMove',
-    'Result': 'surprisePct',
+    'Symbol': 'symbol', 'Mkt Cap': 'marketCap', 'Date': 'date', 'Time': 'hour', 'Est': 'epsEstimate',
+    'Impl Move': 'impliedMove', 'Impl': 'impliedMove',
+    'Result': 'surprisePct', 'Reaction': 'reactionPct',
   }
   const colFilterSpec = (c: string): FilterSpec | undefined => {
     switch (c) {
@@ -498,10 +524,10 @@ export function EarningsCalendarContent() {
               <tr style={{ background: C.header }}>
                 {cols.map((c, i) => (
                   <th key={c} style={{
-                    ...LABEL, display: 'table-cell', textAlign: i === 0 ? 'left' : 'right', padding: '9px 14px',
+                    ...LABEL, display: 'table-cell', textAlign: colAlign(c, i), padding: '9px 14px',
                     position: 'sticky', top: 0, background: C.header, borderBottom: `1px solid ${C.border}`,
                   }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', verticalAlign: 'middle' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: colAlign(c, i), width: '100%', verticalAlign: 'middle' }}>
                       {c}{colMenu(c, i === 0 ? 'left' : 'right')}
                     </span>
                   </th>
@@ -522,8 +548,9 @@ export function EarningsCalendarContent() {
       {started && !loading && !error && fullyEnriched && visible.length > 0 && (
         <div style={{ fontFamily: C.sans, fontSize: 10, color: C.muted, marginTop: 10, lineHeight: 1.7 }}>
           Impl Move = expected move priced into the ATM straddle of the expiry spanning this report.
-          Result = last reported EPS vs estimate, shown once that report is in. Click a row for the full
-          breakdown (surprise, 1-day reaction, move since). Estimates from finnhub, reactions from prior-quarter prices.
+          Result/Reaction show once that report is in — Result is last EPS vs estimate, Reaction is the
+          stock's one-day move. Click a row for the last 5 reports and full detail. Estimates from finnhub,
+          reactions from prior-quarter prices.
         </div>
       )}
 
@@ -552,17 +579,21 @@ function GroupBody({ gdate, grows, enriched, cols, isMobile, showHeader, watch, 
       {grows.map(r => {
         const e = enriched[r.symbol]
         const pending = !e
+        // The report for this exact row's date has landed and matches the
+        // ticker's most recently known report, as opposed to an
+        // upcoming/not-yet-reported row (the common case).
+        const reported = e?.priorReportDate === r.date && e?.reportedEps != null
         return (
           <tr key={r.symbol + r.date} onClick={() => onRowClick(r)} style={{ borderBottom: `1px solid ${C.border}`, cursor: 'pointer' }}>
             <td style={{ padding: '10px 14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
                 <TickerLogo ticker={r.symbol} size={22} />
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontFamily: C.mono, fontSize: 13, fontWeight: 600, color: C.text }}>
+                  <div style={{ fontFamily: C.mono, fontSize: 13, fontWeight: 600, color: C.text, whiteSpace: 'nowrap' }}>
                     <TickerLink ticker={r.symbol} />
                     {watch.has(r.symbol.toUpperCase()) && (
                       <Star size={10} fill={C.gold} stroke={C.gold}
-                        style={{ marginLeft: 6, verticalAlign: 'middle' }}
+                        style={{ marginLeft: 6, verticalAlign: 'middle', display: 'inline', flexShrink: 0 }}
                         aria-label="on your watchlist" />
                     )}
                   </div>
@@ -578,39 +609,26 @@ function GroupBody({ gdate, grows, enriched, cols, isMobile, showHeader, watch, 
             {!isMobile && (
               <td style={{ ...cell, color: C.dim }}>{pending ? <span style={shimmer} /> : fmtMoney(e?.marketCap)}</td>
             )}
-            <td style={{ ...cell, textAlign: isMobile ? 'right' : 'right' }}><HourChip hour={r.hour} /></td>
-            <td style={{ ...cell, color: C.text }}>{fmtEps(r.epsEstimate)}</td>
+            <td style={{ ...cell, color: C.text }}>{fmtDateShort(r.date)}</td>
             {!isMobile && (
-              <td style={{ ...cell, color: C.text }}>{fmtMoney(r.revenueEstimate)}</td>
+              <td style={cell}><HourChip hour={r.hour} /></td>
+            )}
+            {!isMobile && (
+              <td style={{ ...cell, color: C.text }}>{fmtEps(r.epsEstimate)}</td>
+            )}
+            <td style={cell}>{pending ? <span style={shimmer} /> : <BeatMissBadge surprisePct={reported ? e?.surprisePct : null} />}</td>
+            {!isMobile && (
+              <td style={{ ...cell, color: reported ? pctColor(e?.reactionPct) : C.dim }}>
+                {pending ? <span style={shimmer} /> : (reported ? fmtPct(e?.reactionPct) : '—')}
+              </td>
             )}
             <td style={{ ...cell, color: C.gold }} title={e?.impliedMoveExpiry ? `Expected move by ${e.impliedMoveExpiry}` : undefined}>
               {pending ? <span style={shimmer} /> : (e?.impliedMove != null ? `${e.impliedMove.toFixed(1)}%` : '—')}
             </td>
-            <td style={cell}>{pending ? <span style={shimmer} /> : <ResultCell row={r} e={e} />}</td>
           </tr>
         )
       })}
     </>
-  )
-}
-
-// The report for this exact row's date has landed and matches the ticker's
-// most recently known report — as opposed to an upcoming/not-yet-reported row.
-function ResultCell({ row, e }: { row: Row; e?: Enriched }) {
-  const reported = e?.priorReportDate === row.date && e?.reportedEps != null
-  if (!reported) return <span style={{ color: C.dim }}>—</span>
-  return (
-    <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
-      <span style={{ color: pctColor(e!.surprisePct) }}>
-        {fmtEps(e!.reportedEps)}{' '}
-        <span style={{ fontSize: 10.5 }}>({fmtPct(e!.surprisePct)})</span>
-      </span>
-      {e!.reactionPct != null && (
-        <span style={{ fontFamily: C.sans, fontSize: 9.5, color: pctColor(e!.reactionPct) }}>
-          {fmtPct(e!.reactionPct)} react
-        </span>
-      )}
-    </div>
   )
 }
 
@@ -623,12 +641,75 @@ function DetailRow({ label, value, color }: { label: string; value: React.ReactN
   )
 }
 
+interface HistoryReport { date: string; estimate: number | null; actual: number | null; surprisePct: number | null }
+
+// Estimate-vs-actual EPS bars for the last n reports, oldest first — two bars
+// per report (muted estimate, colored actual) sharing one scale so a beat/miss
+// pattern reads at a glance instead of one column of surprise% figures.
+function EstActualBars({ reports }: { reports: HistoryReport[] }) {
+  const BAR_H = 110
+  const maxAbs = Math.max(0.01, ...reports.flatMap(r => [r.estimate, r.actual].filter((v): v is number => v != null).map(Math.abs)))
+  const barHeight = (v: number | null) => v == null ? 0 : Math.max(4, Math.round(Math.abs(v) / maxAbs * BAR_H))
+  const valueLabel: React.CSSProperties = {
+    fontFamily: C.mono, fontSize: 10, marginBottom: 5, whiteSpace: 'nowrap',
+  }
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 20, alignItems: 'flex-end', height: BAR_H + 22, padding: '2px 2px 0' }}>
+        {reports.map(r => (
+          <div key={r.date} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', height: BAR_H + 22 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
+                <span style={{ ...valueLabel, color: C.muted }}>{fmtEps(r.estimate)}</span>
+                <div title={`Estimate ${fmtEps(r.estimate)}`} style={{ width: 18, height: barHeight(r.estimate), background: C.muted, opacity: 0.5, borderRadius: '2px 2px 0 0' }} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
+                <span style={{ ...valueLabel, color: C.gold }}>{fmtEps(r.actual)}</span>
+                <div title={`Actual ${fmtEps(r.actual)}`} style={{ width: 18, height: barHeight(r.actual), borderRadius: '2px 2px 0 0', background: C.gold }} />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 20 }}>
+        {reports.map(r => (
+          <div key={r.date} style={{
+            flex: 1, minWidth: 0, textAlign: 'center', fontFamily: C.sans, fontSize: 10.5, color: C.muted,
+            marginTop: 6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>{fmtQuarterLabel(r.date)}</div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 14, marginTop: 14, fontFamily: C.sans, fontSize: 10, color: C.muted }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+          <span style={{ width: 9, height: 9, background: C.muted, opacity: 0.5, display: 'inline-block' }} /> Estimate
+        </span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+          <span style={{ width: 9, height: 9, background: C.gold, display: 'inline-block' }} /> Actual
+        </span>
+      </div>
+    </div>
+  )
+}
+
 function EarningsResultModal({ row, e, onClose }: { row: Row; e?: Enriched; onClose: () => void }) {
+  const [history, setHistory] = useState<HistoryReport[] | null>(null)
+  const [historyLoading, setHistoryLoading] = useState(true)
+
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => { if (ev.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
+
+  useEffect(() => {
+    let cancelled = false
+    setHistory(null); setHistoryLoading(true)
+    axios.get('/api/earnings/history', { params: { symbol: row.symbol } })
+      .then(r => { if (!cancelled) setHistory(r.data.reports || []) })
+      .catch(() => { if (!cancelled) setHistory([]) })
+      .finally(() => { if (!cancelled) setHistoryLoading(false) })
+    return () => { cancelled = true }
+  }, [row.symbol])
 
   const reported = e?.priorReportDate === row.date && e?.reportedEps != null
 
@@ -636,7 +717,7 @@ function EarningsResultModal({ row, e, onClose }: { row: Row; e?: Enriched; onCl
     <div onClick={onClose} role="dialog" aria-modal="true" aria-label={`${row.symbol} earnings detail`}
       style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.62)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div onClick={ev => ev.stopPropagation()}
-        style={{ width: 'min(420px, 92vw)', background: C.header, border: `1px solid ${C.border}`, boxShadow: '0 24px 70px rgba(0,0,0,0.55)' }}>
+        style={{ width: 'min(780px, 95vw)', background: C.header, border: `1px solid ${C.border}`, boxShadow: '0 24px 70px rgba(0,0,0,0.55)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 16px', borderBottom: `1px solid ${C.border}` }}>
           <TickerLogo ticker={row.symbol} size={22} />
           <div style={{ minWidth: 0 }}>
@@ -648,26 +729,38 @@ function EarningsResultModal({ row, e, onClose }: { row: Row; e?: Enriched; onCl
           <button onClick={onClose} aria-label="Close"
             style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontFamily: C.mono, fontSize: 18, lineHeight: 1, color: C.muted, padding: '0 2px' }}>×</button>
         </div>
-        <div style={{ padding: '4px 16px 14px' }}>
-          <DetailRow label={`Report · ${fmtDate(row.date)}`} value={<HourChip hour={row.hour} />} />
-          <DetailRow label="EPS Estimate" value={fmtEps(row.epsEstimate)} />
-          <DetailRow label="Revenue Estimate" value={fmtMoney(row.revenueEstimate)} />
-          <DetailRow label="Implied Move"
-            value={e?.impliedMove != null ? `${e.impliedMove.toFixed(1)}%` : '—'} color={C.gold} />
-          {reported ? (
-            <>
-              <DetailRow label="Reported EPS" value={fmtEps(e!.reportedEps)} />
-              <DetailRow label="Surprise" value={fmtPct(e!.surprisePct)} color={pctColor(e!.surprisePct)} />
-              <DetailRow label="1-Day Reaction" value={fmtPct(e!.reactionPct)} color={pctColor(e!.reactionPct)} />
-              <DetailRow label="Move Since Report" value={fmtPct(e!.runSincePct)} color={pctColor(e!.runSincePct)} />
-            </>
-          ) : (
-            <div style={{ fontFamily: C.sans, fontSize: 11, color: C.muted, padding: '10px 0 2px' }}>
-              {e?.priorReportDate
-                ? `Not yet reported. Last report was ${fmtDate(e.priorReportDate)}${e.surprisePct != null ? ` (${fmtPct(e.surprisePct)} surprise)` : ''}.`
-                : 'No report history available for this ticker.'}
-            </div>
-          )}
+        <div style={{ display: 'flex', flexWrap: 'wrap' }}>
+          <div style={{ width: 240, flexShrink: 0, padding: '4px 16px 16px', borderRight: `1px solid ${C.border}` }}>
+            <DetailRow label={`Report · ${fmtDate(row.date)}`} value={<HourChip hour={row.hour} />} />
+            <DetailRow label="EPS Estimate" value={fmtEps(row.epsEstimate)} />
+            <DetailRow label="Implied Move"
+              value={e?.impliedMove != null ? `${e.impliedMove.toFixed(1)}%` : '—'} color={C.gold} />
+            {reported ? (
+              <>
+                <DetailRow label="Result" value={<BeatMissBadge surprisePct={e!.surprisePct} />} />
+                <DetailRow label="1-Day Reaction" value={fmtPct(e!.reactionPct)} color={pctColor(e!.reactionPct)} />
+                <DetailRow label="Move Since Report" value={fmtPct(e!.runSincePct)} color={pctColor(e!.runSincePct)} />
+              </>
+            ) : (
+              <div style={{ fontFamily: C.sans, fontSize: 11, color: C.muted, padding: '10px 0' }}>
+                {e?.priorReportDate
+                  ? `Not yet reported. Last report was ${fmtDate(e.priorReportDate)}${e.surprisePct != null ? ` (${fmtPct(e.surprisePct)} surprise)` : ''}.`
+                  : 'No report history available for this ticker.'}
+              </div>
+            )}
+          </div>
+          <div style={{ flex: 1, minWidth: 280, padding: '16px 20px' }}>
+            <span style={{ ...LABEL, marginBottom: 12 }}>Last 5 Reports · Est vs Actual</span>
+            {historyLoading ? (
+              <div style={{ height: 150, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={shimmer} />
+              </div>
+            ) : history && history.length ? (
+              <EstActualBars reports={history} />
+            ) : (
+              <div style={{ fontFamily: C.sans, fontSize: 11, color: C.muted, padding: '8px 0' }}>No report history available.</div>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -675,7 +768,7 @@ function EarningsResultModal({ row, e, onClose }: { row: Row; e?: Enriched; onCl
 }
 
 const cell: React.CSSProperties = {
-  padding: '10px 14px', textAlign: 'right', fontFamily: C.mono,
+  padding: '10px 14px', textAlign: 'center', fontFamily: C.mono,
   fontSize: 12.5, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
 }
 

@@ -158,6 +158,42 @@ def _prior_report(sym: str) -> dict:
     return out
 
 
+def _report_history(sym: str, n: int = 5) -> list[dict]:
+    """Last n reported quarters (oldest first): estimate, actual, surprise% —
+    for the estimate-vs-actual bar chart on the ticker detail popup. Shares the
+    same yfinance call shape as _prior_report but keeps n rows instead of one;
+    cached separately since it's fetched lazily (on popup open), not as part of
+    the bulk calendar enrichment."""
+    ck = f"earn:history:{sym}:{n}"
+    cached = disk_get(ck)
+    if cached is not None:
+        return cached
+
+    out: list[dict] = []
+    ttl = 86400
+    try:
+        df = _run_yf(f"earnings_dates {sym}", lambda: yf.Ticker(sym).get_earnings_dates(limit=8))
+        if df is not None and not df.empty:
+            now = pd.Timestamp.now(tz=df.index.tz)
+            past = df[df.index < now].head(n)
+            for ts, row in past.iloc[::-1].iterrows():
+                surp = row.get("Surprise(%)")
+                reported = row.get("Reported EPS")
+                estimate = row.get("EPS Estimate")
+                out.append({
+                    "date": ts.date().isoformat(),
+                    "estimate": None if pd.isna(estimate) else round(float(estimate), 2),
+                    "actual": None if pd.isna(reported) else round(float(reported), 2),
+                    "surprisePct": None if pd.isna(surp) else round(float(surp), 2),
+                })
+    except Exception:
+        out = []
+        ttl = 120
+
+    disk_set(ck, out, ttl=ttl)
+    return out
+
+
 def _implied_move(sym: str, on_or_after: str | None) -> dict:
     """Expected move into the upcoming report, from the ATM straddle of the expiry
     spanning the earnings date. Cached 1h so the calendar does not refetch chains."""
@@ -319,6 +355,18 @@ def profile_only(symbols: str = Query(..., description="comma-separated tickers"
     with cf.ThreadPoolExecutor(max_workers=20) as ex:
         rows = list(ex.map(_one, syms))
     return {"rows": rows}
+
+
+@router.get("/history")
+def history(symbol: str = Query(..., description="single ticker")):
+    """Last 5 reported quarters for the detail popup's estimate-vs-actual bars.
+    Fetched lazily on popup open, not as part of the bulk calendar enrichment —
+    a single ticker's history is cheap, but firing it for every visible row
+    would multiply the yfinance call volume for no benefit most of it unseen."""
+    sym = symbol.strip().upper()
+    if not sym:
+        raise HTTPException(400, "symbol is required")
+    return {"symbol": sym, "reports": _report_history(sym)}
 
 
 @router.get("/enrich")
