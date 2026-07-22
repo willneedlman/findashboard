@@ -106,7 +106,14 @@ def _fetch(tk: str):
     p = _get("/stock/profile2", tk)
     if not m and not p:
         return None
-    mc = p.get("marketCapitalization") or m.get("marketCapitalization")   # $M
+    # profile2 can resolve a foreign-domiciled name to its overseas PRIMARY
+    # listing, reporting marketCapitalization in THAT market's local currency
+    # (TWD, JPY, CNY, EUR, …), not USD — same field shape either way, so a
+    # naive read is silently wrong by the FX rate. Universe here is S&P
+    # 500/400 + Nasdaq 100, virtually all USD-denominated, but guard anyway.
+    currency = p.get("currency")
+    non_usd = currency not in (None, "USD")
+    mc = None if non_usd else (p.get("marketCapitalization") or m.get("marketCapitalization"))   # $M
     sh = p.get("shareOutstanding")
     price = round(mc / sh, 2) if mc and sh else None
     ev_eb = m.get("currentEv/ebitdaTTM") or m.get("currentEv/ebitda")

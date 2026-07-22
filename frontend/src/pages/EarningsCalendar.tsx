@@ -196,10 +196,17 @@ export function EarningsCalendarContent() {
 
   // Phase 1 (cheap): name/cap/sector only, for EVERY row, so the market-cap
   // filter can resolve before anything expensive runs.
-  const profileBatch = useCallback((symbols: string[]) => {
+  // seedOnly (passed by the caller, true whenever a market-cap filter is
+  // active): skips the live Finnhub fallback for symbols outside the bundled
+  // seed entirely — they resolve instantly with a null cap and are naturally
+  // excluded by the filter, instead of paying for a live, rate-limited call
+  // to confirm what the filter would exclude anyway. Trade-off: a genuine
+  // match outside the curated seed won't show until the filter is cleared
+  // and the page reloaded.
+  const profileBatch = useCallback((symbols: string[], seedOnly: boolean) => {
     if (!symbols.length) return
     symbols.forEach(s => profilingRef.current.add(s))
-    axios.get('/api/earnings/profile', { params: { symbols: symbols.join(',') } })
+    axios.get('/api/earnings/profile', { params: { symbols: symbols.join(','), seed_only: seedOnly } })
       .then(r => {
         const next: Record<string, Enriched> = {}
         for (const e of (r.data.rows || []) as Enriched[]) next[e.symbol] = { ...e, _phase: 1 }
@@ -301,7 +308,13 @@ export function EarningsCalendarContent() {
   // per-request cap (_MAX_ENRICH) — for anything already cache-warm, HTTP
   // round-trip overhead dominates over actual backend work, so fewer/larger
   // requests wins even though total data volume is unchanged.
+  // seedOnly follows minCap at fetch time — a cap filter means every row
+  // needs *some* profile result before the filter can be treated as final
+  // (see phase1Done below), and paying for a live, rate-limited Finnhub call
+  // just to confirm a name the filter would exclude anyway is exactly the
+  // cost this mode skips.
   useEffect(() => {
+    const seedOnly = !!minCap
     const pending = sorted
       .map(r => r.symbol)
       .filter(s => !(s in enriched) && !profilingRef.current.has(s))
@@ -309,9 +322,9 @@ export function EarningsCalendarContent() {
     const MAX_CONCURRENT_BATCHES = 3
     for (let i = 0; i < MAX_CONCURRENT_BATCHES; i++) {
       const chunk = pending.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
-      if (chunk.length) profileBatch(chunk)
+      if (chunk.length) profileBatch(chunk, seedOnly)
     }
-  }, [sorted, enriched, profileBatch])
+  }, [sorted, enriched, minCap, profileBatch])
 
   // Phase 2: 3 batches of 60 in flight at once, not 1 — the old version
   // waited for each batch's full round trip before requesting the next
@@ -503,7 +516,7 @@ export function EarningsCalendarContent() {
             ))}
           </div>
         </div>
-        <div>
+        <div title="Filtered results are matched against a curated list of ~1,000 major US names, IPOs, and large ADRs — a name outside that list won't appear while a cap filter is set, even if it would qualify.">
           <label htmlFor="ec-mincap" style={{ ...LABEL, marginBottom: 5 }}>Market Cap ≥</label>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, border: `1px solid ${C.border}`, background: C.bg, padding: '0 10px' }}>
             <span style={{ fontFamily: C.mono, fontSize: 12, color: C.muted }}>$</span>

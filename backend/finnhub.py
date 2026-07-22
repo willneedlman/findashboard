@@ -222,13 +222,24 @@ def get_profile(ticker: str) -> dict:
         p = _get("/stock/profile2", {"symbol": sym})
         if not p or not p.get("name"):
             return {}
+        # profile2 sometimes resolves a foreign ADR (TSM, TM, BABA, ASML, …) to
+        # its overseas PRIMARY listing, and marketCapitalization there is in
+        # THAT market's local currency (TWD, JPY, CNY, EUR, …), not USD — off
+        # by whatever the FX rate is, silently, since the field shape looks
+        # identical either way. There's no live FX conversion wired in here,
+        # so treat it as unknown rather than report a wrong number: a null
+        # market cap correctly falls through/excludes from filters, a wrong
+        # one (e.g. TSM showing $59T) actively lies.
+        currency = p.get("currency")
+        mc_raw = p.get("marketCapitalization")
+        mc = mc_raw * 1_000_000 if (mc_raw is not None and currency in (None, "USD")) else None
         return {
             "symbol":          sym,
             "companyName":     p.get("name"),
             "sector":          p.get("finnhubIndustry"),
             "exchange":        p.get("exchange"),
             "country":         p.get("country"),  # ISO-2 domicile; foreign → ADR listing
-            "marketCap":       p.get("marketCapitalization", 0) * 1_000_000,  # Finnhub returns $M
+            "marketCap":       mc,
             "logo":            p.get("logo") or None,
             "price":           None,  # not in profile endpoint
             "beta":            None,

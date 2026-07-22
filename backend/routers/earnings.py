@@ -383,16 +383,26 @@ def stop_calendar_warm_loop():
 
 
 @router.get("/profile")
-def profile_only(symbols: str = Query(..., description="comma-separated tickers")):
+def profile_only(
+    symbols: str = Query(..., description="comma-separated tickers"),
+    seed_only: bool = Query(False, description="skip the live Finnhub fallback for symbols outside the bundled seed"),
+):
     """Cheap phase-1 pass: company name/market cap/sector only. The client
     uses this to resolve the market-cap filter BEFORE spending the expensive
     /enrich calls — with a tight cap filter active, most rows never need the
     earnings-history or implied-move fetch at all because they're filtered
     out on cap alone.
 
-    The bundled us_fundamentals seed (~915 major US names) is checked first —
-    zero network, zero rate-limit — and only symbols outside it fall back to
-    a live Finnhub profile call."""
+    The bundled us_fundamentals seed (~1,022 major US names + large IPOs/ADRs)
+    is checked first — zero network, zero rate-limit. By default, symbols
+    outside it fall back to a live Finnhub profile call. When seed_only=true
+    (the client sets this whenever a market-cap filter is active), that
+    fallback is skipped entirely — a symbol outside the seed resolves
+    instantly with a null cap and is naturally excluded by the filter,
+    instead of paying for hundreds of live, rate-limited calls to confirm
+    what a cap filter would exclude anyway. Trade-off: a genuine match
+    outside the curated seed (very rare for anything at real filter-relevant
+    size) won't appear until the filter is cleared and the page is reloaded."""
     syms = [s.strip().upper() for s in symbols.split(",") if s.strip()][:_MAX_ENRICH]
     if not syms:
         return {"rows": []}
@@ -402,6 +412,8 @@ def profile_only(symbols: str = Query(..., description="comma-separated tickers"
         if seed and seed.get("marketCap") is not None:
             return {"symbol": sym, "companyName": seed.get("companyName"),
                     "marketCap": float(seed["marketCap"]) * 1e9, "sector": seed.get("sector")}
+        if seed_only:
+            return {"symbol": sym, "companyName": None, "marketCap": None, "sector": None}
         try:
             prof = finnhub.get_profile(sym) or {}
         except Exception:
