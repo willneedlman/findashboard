@@ -39,7 +39,7 @@ _session.mount("https://", HTTPAdapter(max_retries=_retry, pool_connections=10, 
 # the per-minute cap and drawing a wave of 429s that (see _cached below) used
 # to get permanently cached as "no data". This paces every call to at most
 # _RATE_LIMIT per rolling minute so bursts queue instead of failing.
-_RATE_LIMIT = 50   # headroom under the documented 60/min cap
+_RATE_LIMIT = 55   # headroom under the documented 60/min cap
 _RATE_WINDOW = 60.0
 _rate_sem = threading.BoundedSemaphore(_RATE_LIMIT)
 
@@ -57,12 +57,15 @@ def _refill_rate_sem():
 threading.Thread(target=_refill_rate_sem, daemon=True, name="finnhub-rate-refill").start()
 
 _lock          = threading.Lock()
-_quote_cache:   TTLCache = TTLCache(maxsize=300, ttl=1800)   # 30 min
-_ratings_cache: TTLCache = TTLCache(maxsize=300, ttl=86400)  # 24 hr
-_profile_cache: TTLCache = TTLCache(maxsize=300, ttl=86400)  # 24 hr
-_peers_cache:   TTLCache = TTLCache(maxsize=300, ttl=86400)  # 24 hr
-_earncal_cache: TTLCache = TTLCache(maxsize=64,  ttl=3600)   # 1 hr
-_ipocal_cache:  TTLCache = TTLCache(maxsize=64,  ttl=3600)   # 1 hr
+_quote_cache:   TTLCache = TTLCache(maxsize=300,  ttl=1800)   # 30 min
+_ratings_cache: TTLCache = TTLCache(maxsize=300,  ttl=86400)  # 24 hr
+# maxsize bumped from 300 — a single week-wide earnings-calendar window can
+# cover 1000+ symbols, and at 300 the LRU eviction was constantly discarding
+# entries before they could ever be reused within the same day.
+_profile_cache: TTLCache = TTLCache(maxsize=4000, ttl=86400)  # 24 hr
+_peers_cache:   TTLCache = TTLCache(maxsize=300,  ttl=86400)  # 24 hr
+_earncal_cache: TTLCache = TTLCache(maxsize=64,   ttl=3600)   # 1 hr
+_ipocal_cache:  TTLCache = TTLCache(maxsize=64,   ttl=3600)   # 1 hr
 
 
 def available() -> bool:
@@ -188,12 +191,32 @@ def get_analyst_ratings(ticker: str) -> dict:
 
 # ── Company profile — normalized to FMP /profile shape ───────────────────────
 
+_PROFILE_DISK_TTL = 3 * 86400   # see get_profile
+
+
 def get_profile(ticker: str) -> dict:
     """
     Returns company name, sector, market cap, exchange.
     Normalized to match fmp.get_profile() output shape.
+
+    Backed by a disk-persisted L2 cache on top of the in-memory 24h TTLCache:
+    name/sector are stable and a market cap that's a few days stale is fine
+    for filtering/display, so once a symbol has been profiled it survives
+    server restarts and in-memory eviction without spending another live call
+    for _PROFILE_DISK_TTL — the dominant cost of a big earnings-calendar
+    window is exactly this call, repeated for every covered symbol.
     """
+    from disk_cache import disk_get, disk_set
     sym = ticker.strip().upper()
+    with _lock:
+        if sym in _profile_cache:
+            return _profile_cache[sym]
+    dk = f"finnhub:profile:{sym}"
+    disk_val = disk_get(dk)
+    if disk_val is not None:
+        with _lock:
+            _profile_cache[sym] = disk_val
+        return disk_val
 
     def fetch():
         p = _get("/stock/profile2", {"symbol": sym})
@@ -213,7 +236,10 @@ def get_profile(ticker: str) -> dict:
             "_source":         "finnhub",
         }
 
-    return _cached(_profile_cache, sym, fetch, default={})
+    data = _cached(_profile_cache, sym, fetch, default={})
+    if data:
+        disk_set(dk, data, ttl=_PROFILE_DISK_TTL)
+    return data
 
 
 def get_earnings_calendar(date_from: str, date_to: str) -> list:
@@ -221,8 +247,8 @@ def get_earnings_calendar(date_from: str, date_to: str) -> list:
     Upcoming earnings between two ISO dates (inclusive). Finnhub's free tier
     serves forward-looking dates only, which is exactly what the calendar needs.
 
-    Each row: symbol, date, hour (bmo/amc/dmh/""), quarter, year,
-    epsEstimate, revenueEstimate. Actuals are null for future reports.
+    Each row: symbol, date, hour (bmo/amc/dmh/""), quarter, year, epsEstimate.
+    Actuals are null for future reports.
     """
     key = f"{date_from}:{date_to}"
 
@@ -237,7 +263,6 @@ def get_earnings_calendar(date_from: str, date_to: str) -> list:
                 "quarter":          r.get("quarter"),
                 "year":             r.get("year"),
                 "epsEstimate":      r.get("epsEstimate"),
-                "revenueEstimate":  r.get("revenueEstimate"),
             }
             for r in rows if r.get("symbol")
         ]

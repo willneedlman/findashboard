@@ -26,7 +26,7 @@ const LABEL: React.CSSProperties = { fontFamily: C.sans, fontSize: 9, fontWeight
 
 interface Row {
   symbol: string; date: string; hour: string; quarter: number | null; year: number | null
-  epsEstimate: number | null; revenueEstimate: number | null
+  epsEstimate: number | null
 }
 interface Enriched {
   symbol: string; companyName?: string | null; marketCap?: number | null; sector?: string | null
@@ -35,6 +35,7 @@ interface Enriched {
   reactionPct?: number | null; runSincePct?: number | null
   impliedMove?: number | null; impliedMoveExpiry?: string | null
   _phase?: 1 | 2   // 1 = cheap profile-only (name/cap/sector), 2 = fully enriched
+  _impliedMoveLoaded?: boolean   // lazy-fetched separately once the row scrolls into view
 }
 
 const WINDOWS = [{ label: 'Day', days: 1 }, { label: '3 Days', days: 3 }, { label: 'Week', days: 7 }]
@@ -154,7 +155,9 @@ export function EarningsCalendarContent() {
   const loadCalendar = useCallback(() => {
     const id = ++loadIdRef.current
     setStarted(true)
-    setLoading(true); setError(null); setEnriched({}); profilingRef.current = new Set(); enrichingRef.current = new Set(); setRangeTo(null)
+    setLoading(true); setError(null); setEnriched({})
+    profilingRef.current = new Set(); enrichingRef.current = new Set(); impliedMoveRef.current = new Set()
+    setRangeTo(null)
     axios.get('/api/earnings/calendar', { params: { date, days } })
       .then(r => {
         if (loadIdRef.current !== id) return
@@ -231,6 +234,56 @@ export function EarningsCalendarContent() {
       })
   }, [])
 
+  // Implied move (an options-chain fetch — the single most expensive part of
+  // enrichment) is fetched lazily, only for rows that actually scroll into
+  // view, via the IntersectionObserver below — not for the whole cap-filtered
+  // set upfront. impliedMoveRef dedupes so a row already requested/loaded is
+  // never re-fetched just because it re-enters the viewport.
+  const impliedMoveRef = useRef<Set<string>>(new Set())
+  const fetchImpliedMove = useCallback((symbols: string[]) => {
+    const fresh = symbols.filter(s => !impliedMoveRef.current.has(s))
+    if (!fresh.length) return
+    fresh.forEach(s => impliedMoveRef.current.add(s))
+    axios.get('/api/earnings/implied-move', { params: { symbols: fresh.join(',') } })
+      .then(r => {
+        setEnriched(prev => {
+          const out = { ...prev }
+          for (const e of (r.data.rows || []) as { symbol: string; impliedMove: number | null; impliedMoveExpiry: string | null }[]) {
+            out[e.symbol] = { ...out[e.symbol], impliedMove: e.impliedMove, impliedMoveExpiry: e.impliedMoveExpiry, _impliedMoveLoaded: true }
+          }
+          return out
+        })
+      })
+      .catch(() => {
+        setEnriched(prev => {
+          const out = { ...prev }
+          for (const s of fresh) out[s] = { ...(out[s] || { symbol: s }), _impliedMoveLoaded: true }
+          return out
+        })
+      })
+  }, [])
+
+  const rowObserverRef = useRef<IntersectionObserver | null>(null)
+  useEffect(() => {
+    rowObserverRef.current = new IntersectionObserver(entries => {
+      const syms = entries
+        .filter(en => en.isIntersecting)
+        .map(en => (en.target as HTMLElement).dataset.symbol)
+        .filter((s): s is string => !!s && !impliedMoveRef.current.has(s))
+      if (syms.length) fetchImpliedMove(syms)
+    }, { rootMargin: '400px 0px' })
+    return () => rowObserverRef.current?.disconnect()
+  }, [fetchImpliedMove])
+
+  // Attached to every row's <tr ref={...}> so the observer above knows when
+  // it scrolls into view.
+  const registerRow = useCallback((el: HTMLTableRowElement | null, symbol: string) => {
+    if (el && rowObserverRef.current) {
+      el.dataset.symbol = symbol
+      rowObserverRef.current.observe(el)
+    }
+  }, [])
+
   // Largest companies first within each date. Market cap arrives with phase 1,
   // so rows without it yet sort to the bottom (cap -1) and rise as it loads.
   // Date stays the primary axis so a multi-day window groups.
@@ -243,13 +296,16 @@ export function EarningsCalendarContent() {
     })
   }, [filtered, enriched])
 
-  // Phase 1: 3 batches of 10 in flight at once for every row, same
-  // concurrency reasoning as phase 2 below.
+  // Phase 1: 3 batches of 60 in flight at once for every row, same
+  // concurrency reasoning as phase 2 below. 60 matches the backend's own
+  // per-request cap (_MAX_ENRICH) — for anything already cache-warm, HTTP
+  // round-trip overhead dominates over actual backend work, so fewer/larger
+  // requests wins even though total data volume is unchanged.
   useEffect(() => {
     const pending = sorted
       .map(r => r.symbol)
       .filter(s => !(s in enriched) && !profilingRef.current.has(s))
-    const BATCH_SIZE = 10
+    const BATCH_SIZE = 60
     const MAX_CONCURRENT_BATCHES = 3
     for (let i = 0; i < MAX_CONCURRENT_BATCHES; i++) {
       const chunk = pending.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
@@ -257,14 +313,14 @@ export function EarningsCalendarContent() {
     }
   }, [sorted, enriched, profileBatch])
 
-  // Phase 2: 3 batches of 10 in flight at once, not 1 — the old version
-  // waited for each batch's full round trip before requesting the next 10,
-  // so a 500+-name window took 50+ sequential requests end to end. Firing
-  // several batches concurrently (each still independently fault-isolated in
-  // enrichBatch) cuts that wall-clock time roughly 3x; as each resolves this
-  // effect refires and refills the window with the next unclaimed symbols.
-  // Eligibility requires phase-1 data AND passing the market-cap filter —
-  // see the comment on enrichBatch above.
+  // Phase 2: 3 batches of 60 in flight at once, not 1 — the old version
+  // waited for each batch's full round trip before requesting the next
+  // chunk, so a 500+-name window took many sequential requests end to end.
+  // Firing several batches concurrently (each still independently
+  // fault-isolated in enrichBatch) cuts that wall-clock time roughly 3x; as
+  // each resolves this effect refires and refills the window with the next
+  // unclaimed symbols. Eligibility requires phase-1 data AND passing the
+  // market-cap filter — see the comment on enrichBatch above.
   useEffect(() => {
     const eligible = sorted.filter(r => {
       const e = enriched[r.symbol]
@@ -278,7 +334,7 @@ export function EarningsCalendarContent() {
     const pending = eligible
       .map(r => r.symbol)
       .filter(s => !enrichingRef.current.has(s))
-    const BATCH_SIZE = 10
+    const BATCH_SIZE = 60
     const MAX_CONCURRENT_BATCHES = 3
     for (let i = 0; i < MAX_CONCURRENT_BATCHES; i++) {
       const chunk = pending.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
@@ -319,7 +375,6 @@ export function EarningsCalendarContent() {
           case 'date':            return r.date || ''
           case 'hour':            return rank[r.hour] ?? 3
           case 'epsEstimate':     return r.epsEstimate ?? -1e18
-          case 'revenueEstimate': return r.revenueEstimate ?? -1
           case 'impliedMove':     return e?.impliedMove ?? -1
           case 'surprisePct':     return e?.surprisePct ?? -1e18
           case 'reactionPct':     return e?.reactionPct ?? -1e18
@@ -538,7 +593,7 @@ export function EarningsCalendarContent() {
               {grouped.map(([gdate, grows]) => (
                 <GroupBody key={gdate} gdate={gdate} grows={grows} enriched={enriched}
                   cols={cols.length} isMobile={isMobile} showHeader={!sort && days > 1} watch={watchSet}
-                  onRowClick={setDetail} />
+                  onRowClick={setDetail} registerRow={registerRow} />
               ))}
             </tbody>
           </table>
@@ -561,9 +616,10 @@ export function EarningsCalendarContent() {
   )
 }
 
-function GroupBody({ gdate, grows, enriched, cols, isMobile, showHeader, watch, onRowClick }: {
+function GroupBody({ gdate, grows, enriched, cols, isMobile, showHeader, watch, onRowClick, registerRow }: {
   gdate: string; grows: Row[]; enriched: Record<string, Enriched>
   cols: number; isMobile: boolean; showHeader: boolean; watch: Set<string>; onRowClick: (row: Row) => void
+  registerRow: (el: HTMLTableRowElement | null, symbol: string) => void
 }) {
   return (
     <>
@@ -584,7 +640,8 @@ function GroupBody({ gdate, grows, enriched, cols, isMobile, showHeader, watch, 
         // upcoming/not-yet-reported row (the common case).
         const reported = e?.priorReportDate === r.date && e?.reportedEps != null
         return (
-          <tr key={r.symbol + r.date} onClick={() => onRowClick(r)} style={{ borderBottom: `1px solid ${C.border}`, cursor: 'pointer' }}>
+          <tr key={r.symbol + r.date} ref={el => registerRow(el, r.symbol)} onClick={() => onRowClick(r)}
+            style={{ borderBottom: `1px solid ${C.border}`, cursor: 'pointer' }}>
             <td style={{ padding: '10px 14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
                 <TickerLogo ticker={r.symbol} size={22} />
@@ -623,7 +680,9 @@ function GroupBody({ gdate, grows, enriched, cols, isMobile, showHeader, watch, 
               </td>
             )}
             <td style={{ ...cell, color: C.gold }} title={e?.impliedMoveExpiry ? `Expected move by ${e.impliedMoveExpiry}` : undefined}>
-              {pending ? <span style={shimmer} /> : (e?.impliedMove != null ? `${e.impliedMove.toFixed(1)}%` : '—')}
+              {pending || !e?._impliedMoveLoaded
+                ? <span style={{ color: C.dim }}>—</span>
+                : (e?.impliedMove != null ? `${e.impliedMove.toFixed(1)}%` : '—')}
             </td>
           </tr>
         )

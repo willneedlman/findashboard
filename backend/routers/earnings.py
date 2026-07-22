@@ -10,7 +10,9 @@ since. Enrichment is cached 24h per ticker so repeat views are cheap.
 from __future__ import annotations
 
 import concurrent.futures as cf
+import json
 import logging
+import os
 import threading
 from datetime import date, datetime, timedelta
 
@@ -29,6 +31,27 @@ _log = logging.getLogger(__name__)
 
 _MAX_ENRICH = 60
 _NASDAQ_UA = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36", "Accept": "application/json"}
+
+
+def _load_us_fundamentals_seed() -> dict:
+    """Bundled snapshot of ~915 major US companies (name/sector/market cap),
+    built offline — see routers/screener.py's own loader for the same file.
+    Used as phase-1's PRIMARY source: zero-network, zero-rate-limit, so any
+    symbol in this seed skips the live Finnhub profile call entirely. Only
+    names outside it (smaller/less-followed names, which is most of what a
+    market-cap filter excludes anyway) fall back to a live call. Market cap
+    here is a point-in-time snapshot, not live — the same staleness trade the
+    screener already accepts elsewhere for this exact file."""
+    try:
+        path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "us_fundamentals.json")
+        d = json.load(open(path))
+        return {str(k).strip().upper().replace(".", "-"): v for k, v in d.items()} if isinstance(d, dict) else {}
+    except Exception as e:
+        _log.warning("earnings: us_fundamentals seed load failed: %s", e)
+        return {}
+
+
+_US_FUND_SEED = _load_us_fundamentals_seed()
 
 
 def _nasdaq_calendar(day: str) -> list[dict]:
@@ -57,7 +80,7 @@ def _nasdaq_calendar(day: str) -> list[dict]:
             except ValueError:
                 eps_est = None
             out.append({"symbol": sym, "date": day, "hour": hour, "quarter": None,
-                        "year": None, "epsEstimate": eps_est, "revenueEstimate": None})
+                        "year": None, "epsEstimate": eps_est})
     except Exception as e:
         _log.warning("nasdaq earnings %s: %s", day, e)
         return []
@@ -71,9 +94,15 @@ def _calendar_rows(d0: date, days: int) -> list[dict]:
     d1 = d0 + timedelta(days=days - 1)
     rows = finnhub.get_earnings_calendar(d0.isoformat(), d1.isoformat())
     # Augment with Nasdaq (Finnhub's free feed omits many large caps, e.g. NKE).
+    # One request per day in the window, each independent — fired concurrently
+    # rather than in a sequential loop, since a 7-day window used to serialize
+    # 7 ~10s HTTP round trips into ~70s of pure waiting for no reason.
+    day_strs = [(d0 + timedelta(days=n)).isoformat() for n in range(days)]
+    with cf.ThreadPoolExecutor(max_workers=min(14, len(day_strs))) as ex:
+        day_results = list(ex.map(_nasdaq_calendar, day_strs))
     seen = {(r.get("date"), r.get("symbol")) for r in rows}
-    for n in range(days):
-        for nr in _nasdaq_calendar((d0 + timedelta(days=n)).isoformat()):
+    for day_rows in day_results:
+        for nr in day_rows:
             k = (nr["date"], nr["symbol"])
             if k not in seen:
                 rows.append(nr)
@@ -196,7 +225,9 @@ def _report_history(sym: str, n: int = 5) -> list[dict]:
 
 def _implied_move(sym: str, on_or_after: str | None) -> dict:
     """Expected move into the upcoming report, from the ATM straddle of the expiry
-    spanning the earnings date. Cached 1h so the calendar does not refetch chains."""
+    spanning the earnings date. Cached 4h — was 1h; this is now fetched lazily
+    per visible row rather than for the whole calendar upfront, so it's fetched
+    far less often overall and can afford to hold a bit longer between refreshes."""
     ck = f"earn:im:{sym}"
     cached = disk_get(ck)
     if cached is not None:
@@ -205,7 +236,7 @@ def _implied_move(sym: str, on_or_after: str | None) -> dict:
         im = _run_yf(f"implied_move {sym}", lambda: options_data.implied_move(sym, on_or_after=on_or_after))
         if im:
             out = {"pct": im["move_pct"], "expiry": im["expiry"]}
-            disk_set(ck, out, ttl=3600)
+            disk_set(ck, out, ttl=4 * 3600)
         else:
             # No listed options chain (or nothing spans the report date) — for
             # the overwhelming majority of tickers this is a durable fact, not
@@ -229,6 +260,12 @@ def _enrich_one(sym: str) -> dict:
     # pool, where one uncaught exception fails list(ex.map(...)) for the
     # WHOLE batch, not just this ticker — a single bad symbol must degrade to
     # a mostly-empty row, never take the other 9-plus down with it.
+    #
+    # Implied move (the options-chain fetch, the single most expensive part
+    # of enrichment) is deliberately NOT included here — it's fetched lazily,
+    # only for rows actually visible on screen, via /implied-move below. This
+    # is what the live calendar's phase-2 pass calls, so it stays as cheap as
+    # possible (one yfinance call per symbol, not two).
     try:
         prof = finnhub.get_profile(sym) or {}
     except Exception:
@@ -237,10 +274,6 @@ def _enrich_one(sym: str) -> dict:
         prior = _prior_report(sym)
     except Exception:
         prior = {}
-    try:
-        im = _implied_move(sym, prior.get("nextDate"))
-    except Exception:
-        im = {}
     return {
         "symbol": sym,
         "companyName": prof.get("companyName"),
@@ -250,9 +283,23 @@ def _enrich_one(sym: str) -> dict:
         "surprisePct": prior.get("surprisePct"),
         "reportedEps": prior.get("reportedEps"),
         "epsEstimateAtReport": prior.get("epsEstimateAtReport"),
-        "impliedMove": im.get("pct"),
-        "impliedMoveExpiry": im.get("expiry"),
     }
+
+
+def _implied_move_one(sym: str) -> dict:
+    """Implied move only, keyed off whatever prior-report data is already
+    cached (or cheaply fetched) for nextDate. Used by /implied-move (lazy,
+    visible-rows-only) and the warm loop (which still wants full coverage
+    since nobody's waiting on it)."""
+    try:
+        prior = _prior_report(sym)
+    except Exception:
+        prior = {}
+    try:
+        im = _implied_move(sym, prior.get("nextDate"))
+    except Exception:
+        im = {}
+    return {"symbol": sym, "impliedMove": im.get("pct"), "impliedMoveExpiry": im.get("expiry")}
 
 
 def _close_frame(symbols: list[str], start: str, end: str) -> pd.DataFrame:
@@ -288,12 +335,14 @@ def _moves(closes: pd.Series, prior: date) -> tuple[float | None, float | None]:
 
 
 # ── Overnight cache-warm loop ────────────────────────────────────────────────
-# Pre-enriches the upcoming week's covered names once a day, well before market
-# hours, so opening the Scanner during the trading day mostly hits warm cache
-# (_prior_report/_implied_move/finnhub.get_profile) instead of paying full cold
-# cost on 500+ names at once. Sequential and paced on purpose — this trades a
-# slow background pass (which nobody is watching) for a fast foreground one
-# (which somebody is).
+# Pre-enriches the upcoming TWO weeks of covered names once a day, well before
+# market hours, so opening the Scanner during the trading day mostly hits warm
+# cache (_prior_report/_implied_move/finnhub.get_profile) instead of paying
+# full cold cost on 1000+ names at once. 14 days — the /calendar route's own
+# max window — so browsing anywhere within its full range gets the benefit,
+# not just the default 1-day view. Sequential and paced on purpose — this
+# trades a slow background pass (which nobody is watching) for a fast
+# foreground one (which somebody is).
 _warm_stop = threading.Event()
 _warm_thread = None
 
@@ -304,13 +353,14 @@ def _run_warm_loop():
         today = date.today().isoformat()
         if disk_get("earn:warmloop") != today:
             try:
-                rows = _calendar_rows(date.today(), 7)
+                rows = _calendar_rows(date.today(), 14)
                 syms = sorted({r["symbol"] for r in rows if r.get("epsEstimate") is not None})
                 for sym in syms:
                     if _warm_stop.is_set():
                         return
                     try:
                         _enrich_one(sym)
+                        _implied_move_one(sym)   # live /enrich skips this now — the warm pass still covers it
                     except Exception as e:
                         _log.warning("earnings warm-loop %s failed: %s", sym, e)
                     _warm_stop.wait(0.5)   # paced — not a race, nobody's waiting on this pass
@@ -334,16 +384,24 @@ def stop_calendar_warm_loop():
 
 @router.get("/profile")
 def profile_only(symbols: str = Query(..., description="comma-separated tickers")):
-    """Cheap phase-1 pass: company name/market cap/sector only (Finnhub, no
-    yfinance/options-chain work at all). The client uses this to resolve the
-    market-cap filter BEFORE spending the expensive /enrich calls — with a
-    tight cap filter active, most rows never need the earnings-history or
-    implied-move fetch at all because they're filtered out on cap alone."""
+    """Cheap phase-1 pass: company name/market cap/sector only. The client
+    uses this to resolve the market-cap filter BEFORE spending the expensive
+    /enrich calls — with a tight cap filter active, most rows never need the
+    earnings-history or implied-move fetch at all because they're filtered
+    out on cap alone.
+
+    The bundled us_fundamentals seed (~915 major US names) is checked first —
+    zero network, zero rate-limit — and only symbols outside it fall back to
+    a live Finnhub profile call."""
     syms = [s.strip().upper() for s in symbols.split(",") if s.strip()][:_MAX_ENRICH]
     if not syms:
         return {"rows": []}
 
     def _one(sym: str) -> dict:
+        seed = _US_FUND_SEED.get(sym)
+        if seed and seed.get("marketCap") is not None:
+            return {"symbol": sym, "companyName": seed.get("companyName"),
+                    "marketCap": float(seed["marketCap"]) * 1e9, "sector": seed.get("sector")}
         try:
             prof = finnhub.get_profile(sym) or {}
         except Exception:
@@ -400,3 +458,18 @@ def enrich(symbols: str = Query(..., description="comma-separated tickers")):
             r["reactionPct"], r["runSincePct"] = _moves(close[sym], date.fromisoformat(pd_))
 
     return {"rows": [by_sym[s] for s in syms]}
+
+
+@router.get("/implied-move")
+def implied_move_route(symbols: str = Query(..., description="comma-separated tickers")):
+    """Options-chain implied move, split out of /enrich and fetched lazily by
+    the client only for rows actually visible on screen — this is the single
+    most expensive part of enrichment (a full options-chain fetch per
+    symbol), so deferring it well past the initial render cuts total yfinance
+    call volume for any window bigger than one screenful."""
+    syms = [s.strip().upper() for s in symbols.split(",") if s.strip()][:_MAX_ENRICH]
+    if not syms:
+        return {"rows": []}
+    with cf.ThreadPoolExecutor(max_workers=16) as ex:
+        rows = list(ex.map(_implied_move_one, syms))
+    return {"rows": rows}
