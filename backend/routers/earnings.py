@@ -172,6 +172,14 @@ def _prior_report(sym: str) -> dict:
                     "reportedEps": None if pd.isna(reported) else round(float(reported), 2),
                     "epsEstimateAtReport": None if pd.isna(estimate) else round(float(estimate), 2),
                 }
+                # Yahoo's own actuals routinely lag the report date by a day or
+                # more — a JUST-reported ticker with no surprise% yet means "not
+                # backfilled by Yahoo," not "never has one." Recheck soon
+                # instead of baking in a 24h null; bounded to a recent window so
+                # a genuinely old report with no surprise% (Yahoo just never has
+                # it) doesn't get stuck on a short TTL forever.
+                if out["surprisePct"] is None and (now - past.index[0]).total_seconds() < 3 * 86400:
+                    ttl = 1800
             future = df[df.index >= now]
             if not future.empty:
                 out["nextDate"] = future.index.min().date().isoformat()
