@@ -1637,6 +1637,23 @@ export function AlgoStrategyBuilderContent() {
     })
   }, [R, selectedPortfolioTicker, tradeEventFilter])
 
+  // Recharts' default 5-tick axis picks "nice" round steps off the actual
+  // data range, not off the $1k formatting granularity below — a backtest
+  // that stays within a few hundred dollars of its starting capital (a very
+  // common case, not an edge case) gets ticks like 9800/10000/10200/10400,
+  // which every one of collapses to the same "$10k" once rounded to whole
+  // thousands. Pick enough decimal places that adjacent ticks stay distinct.
+  const equityTickDecimals = useMemo(() => {
+    const vals = markerData.map(d => d.strategy).filter((v): v is number => typeof v === 'number')
+    if (vals.length < 2) return 0
+    const range = Math.max(...vals) - Math.min(...vals)
+    if (range <= 0) return 0
+    const stepK = (range / 4) / 1000   // ~4 intervals across the default 5 ticks
+    if (stepK >= 1) return 0
+    if (stepK >= 0.1) return 1
+    return 2
+  }, [markerData])
+
   // Shared between single-position mode (SidebarLayout's children) and
   // portfolio mode (full-width stack below PortfolioControlsPanel) — the
   // content itself already branches on `mode` throughout, so the same tree
@@ -1659,11 +1676,33 @@ export function AlgoStrategyBuilderContent() {
 
       {R && mR && (
         <>
-          {mR.blown_up_at && (
-            <div style={{ marginBottom: 8, padding: '8px 10px', border: `1px solid ${NEG}`, background: 'rgba(220,60,60,0.08)', fontFamily: 'var(--theme-mono)', fontSize: 10, color: NEG }}>
-              Account wiped out on {mR.blown_up_at}. Leveraged losses exceeded the capital allocated to this {mode === 'portfolio' ? 'portfolio' : 'position'}, so it was force-liquidated and held at zero for the rest of the window. Lower leverage or trade size to avoid this.
-            </div>
-          )}
+          {mR.blown_up_at && (() => {
+            const lev = mR.leverage ?? 1
+            const scope = mode === 'portfolio' ? 'portfolio' : 'position'
+            const isPortfolio = mode === 'portfolio'
+            const shortOption = isPortfolio
+              ? pf?.positions?.some(p => p.instrument === 'option' && p.side === 'short')
+              : data?.instrument?.kind === 'option' && data.instrument.direction === 'short'
+
+            let msg: string
+            if (lev > 1) {
+              msg = `Leveraged losses (${lev}x) exceeded the capital allocated to this ${scope}, so it was force-liquidated and held at zero for the rest of the window. Lower your leverage or trade size to avoid this.`
+            } else if (shortOption) {
+              const portfolioNote = isPortfolio
+                ? ' Each position in a portfolio backtest is sized against the full account on its own, then summed, so several correlated positions losing at once compound instead of averaging out.'
+                : ''
+              const fix = isPortfolio ? 'Lower your trade size or diversify across less correlated names' : 'Lower your trade size'
+              msg = `This wasn't leverage. It was set to 1x. A short option's downside is structurally undefined. Max loss scales with the strike price, not the premium you collect, so a modest trade size can still carry far more real risk than it looks like.${portfolioNote} Losses exceeded the capital allocated to this ${scope}, so it was force-liquidated and held at zero for the rest of the window. ${fix} to avoid this.`
+            } else {
+              msg = `This wasn't leverage. It was set to 1x. Losses from this trade size exceeded the capital allocated to this ${scope} during a large adverse move, so it was force-liquidated and held at zero for the rest of the window. Lower your trade size to avoid this.`
+            }
+
+            return (
+              <div style={{ marginBottom: 8, padding: '8px 10px', border: `1px solid ${NEG}`, background: 'rgba(220,60,60,0.08)', fontFamily: 'var(--theme-mono)', fontSize: 10, color: NEG }}>
+                Account wiped out on {mR.blown_up_at}. {msg}
+              </div>
+            )
+          })()}
           <div style={STRIP}>
             <KpiCell grow minWidth={150} label="Total Return" value={`${mR.total_return > 0 ? '+' : ''}${mR.total_return.toFixed(2)}%`} valueSize={16} color={mR.total_return >= 0 ? POS : NEG} sub={mode === 'portfolio' ? `${pf?.positions.length ?? 0} positions` : activeDef?.name} />
             <KpiCell grow label="Ann. Return" value={`${mR.ann_return > 0 ? '+' : ''}${mR.ann_return.toFixed(2)}%`} color={mR.ann_return >= 0 ? POS : NEG} />
@@ -1849,7 +1888,7 @@ export function AlgoStrategyBuilderContent() {
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.045)" />
                   <XAxis dataKey="date" tick={TICK} tickFormatter={d => d.slice(0, 7)} interval="preserveStartEnd" minTickGap={48} />
-                  <YAxis tick={TICK} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} orientation="right" domain={['auto', 'auto']} />
+                  <YAxis tick={TICK} tickFormatter={v => `$${(v / 1000).toFixed(equityTickDecimals)}k`} orientation="right" domain={['auto', 'auto']} />
                   <Tooltip content={<EquityTradeTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 10 }} payload={[
                     { value: 'Strategy', type: 'line', id: 's', color: cc.primary },
