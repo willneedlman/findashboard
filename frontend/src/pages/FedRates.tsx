@@ -584,19 +584,22 @@ export function FedRatesContent() {
         </div>
       </div>
 
-      {/* Band 2 — scenario */}
-      <ScenarioBand twist={twist} setTwist={setTwist} />
-
       {failed ? (
-        <div style={{ ...band, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 320, fontFamily: T.label, fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.neg }}>
+        <div style={{ ...band, borderTop: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 320, fontFamily: T.label, fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.neg }}>
           Rate data is unavailable right now. Try again shortly.
         </div>
       ) : !ready ? (
-        <div style={{ ...band, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 320, fontFamily: T.label, fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted }}>
+        <div style={{ ...band, borderTop: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 320, fontFamily: T.label, fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.muted }}>
           Loading rate engine
         </div>
       ) : (
         <>
+          {/* Band 2 — scenario. Rendered only once the engine has real data to
+              apply a shock to; showing the slider live and interactive while
+              everything below it is still a loading placeholder invites
+              changing a scenario that has nothing to react to yet. */}
+          <ScenarioBand twist={twist} setTwist={setTwist} />
+
           {/* Bands 3 + 4 need the implied path; skip both if it's empty. */}
           {adjustedMeetings.length > 0 && (
             <>
