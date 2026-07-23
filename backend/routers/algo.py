@@ -342,77 +342,132 @@ def _summarize_equity(equity: pd.Series, initial_capital: float, bars_per_year: 
     }
 
 
-def _compute_metrics(signal: pd.Series, close: pd.Series, position_size: float = 100,
-                     initial_capital: float = 10_000, direction: str = "long",
-                     bars_per_year: int = 252, intraday: bool = False,
-                     exit_kinds: dict | None = None):
+def _compute_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, close: pd.Series,
+                     position_size: float = 100, initial_capital: float = 10_000,
+                     direction: str = "long", bars_per_year: int = 252, intraday: bool = False,
+                     stop_loss: float | None = None, take_profit: float | None = None,
+                     trailing_stop: float | None = None, max_hold_bars: int | None = None):
+    """Shares are fungible — a share bought at $80 and one bought at $100
+    aren't distinguishable positions the way two options with different
+    strikes are, and P&L doesn't depend on which one a later sale is
+    "attributed to". So this tracks ONE aggregate position (shares held +
+    total cost basis), not a stack of lots: every bar the buy signal fires
+    while flat OR already holding, `alloc` fraction of currently-available
+    cash buys more shares at that bar's close, folding into the average cost.
+    The whole position closes at once — every share together — the first
+    time the shared sell signal fires, or a risk control (evaluated against
+    the position's own average cost basis, tracked from whenever it was last
+    fully flat) triggers. A short mirrors the long side's dollar P&L (project
+    convention, matches the option/combo engines) rather than modeling real
+    short-sale margin mechanics."""
     alloc = max(0.0, position_size) / 100.0
     # Intraday keeps the time in each label so bars within a day stay distinct
     # (a date-only label would collapse them and break the curve / portfolio join).
     _dfmt = "%Y-%m-%d %H:%M" if intraday else "%Y-%m-%d"
     sign = -1.0 if direction == "short" else 1.0
+    px = close.values.astype(float)
+    idx = close.index
+    n = len(px)
+
+    cash = initial_capital
+    shares = 0.0
+    cost_basis = 0.0    # total $ committed to the currently-open aggregate position
+    entry_i: int | None = None   # bar the position was last opened from flat (max_hold_bars)
+    peak_price = 0.0    # best price seen (favorable direction) since entry_i (trailing stop)
+    cycle_buys = 0      # buys in the CURRENT open cycle, resolved to win/loss when it closes
+
+    equity = np.empty(n)
+    equity[0] = initial_capital
+    in_position = np.zeros(n)
+    trades: list[dict] = []
+    total_buys = 0
+    wins = 0
+
+    for i in range(1, n):
+        price = px[i]
+        exit_kind = None
+
+        if shares > 0:
+            peak_price = max(peak_price, price) if sign > 0 else min(peak_price, price)
+            avg_entry = cost_basis / shares
+            pct_move = sign * (price / avg_entry - 1) * 100
+            if stop_loss is not None and pct_move <= -stop_loss:
+                exit_kind = "stop_loss"
+            if exit_kind is None and take_profit is not None and pct_move >= take_profit:
+                exit_kind = "take_profit"
+            if exit_kind is None and trailing_stop is not None:
+                peak_pct = sign * (peak_price / avg_entry - 1) * 100
+                if peak_pct - pct_move >= trailing_stop:
+                    exit_kind = "trailing_stop"
+            if exit_kind is None and max_hold_bars is not None and entry_i is not None and (i - entry_i) >= max_hold_bars:
+                exit_kind = "max_hold"
+            if exit_kind is None and sell_signal[i]:
+                exit_kind = "rule"
+
+            if exit_kind is not None:
+                proceeds = cost_basis + sign * shares * (price - avg_entry)
+                cash += proceeds
+                if proceeds > cost_basis:
+                    wins += cycle_buys
+                trades.append({"date": idx[i].strftime(_dfmt), "action": "SELL",
+                               "price": round(float(price), 2), "is_entry": False,
+                               "exit_kind": None if exit_kind == "rule" else exit_kind})
+                shares, cost_basis, entry_i, peak_price, cycle_buys = 0.0, 0.0, None, 0.0, 0
+
+        if buy_signal[i] and cash > 0.01:
+            invest = cash * alloc
+            if invest > 0:
+                new_shares = invest / price
+                cash -= invest
+                shares += new_shares
+                cost_basis += invest
+                if entry_i is None:
+                    entry_i, peak_price = i, price
+                cycle_buys += 1
+                total_buys += 1
+                trades.append({"date": idx[i].strftime(_dfmt), "action": "BUY",
+                               "price": round(float(price), 2), "is_entry": True})
+
+        pos_value = 0.0
+        if shares > 0:
+            avg_entry = cost_basis / shares
+            pos_value = cost_basis + sign * shares * (price - avg_entry)
+        equity[i] = cash + pos_value
+        in_position[i] = 1.0 if shares > 0 else 0.0
+
+    equity_s = pd.Series(equity, index=idx)
     daily_ret = close.pct_change()
-    strat_ret = signal.shift(1) * daily_ret * alloc * sign
-
-    # Equity curves — normalized to initial_capital
-    equity_raw = (1 + strat_ret.fillna(0)).cumprod() * initial_capital
     benchmark = (1 + daily_ret.fillna(0)).cumprod() * initial_capital
-    equity, blown_up_at = _floor_equity(equity_raw)
+    equity_floored, blown_up_at = _floor_equity(equity_s)
 
-    # Total return
-    total_return = float(equity.iloc[-1] / initial_capital - 1) * 100
+    total_return = float(equity_floored.iloc[-1] / initial_capital - 1) * 100
 
     # Annualized return (bars_per_year scales with the backtest timeframe: 252 daily,
     # ~1638 hourly, ~19656 for 5-minute bars, so intraday Sharpe/CAGR stay comparable).
-    n_days = len(equity)
+    n_days = len(equity_floored)
     ann_factor = bars_per_year / n_days
-    ann_return = _safe_ann_return(float(equity.iloc[-1]), initial_capital, ann_factor)
+    ann_return = _safe_ann_return(float(equity_floored.iloc[-1]), initial_capital, ann_factor)
 
     # Max drawdown — guard the 0/0 case a same-bar wipeout produces (roll_max
     # is 0 too when equity never traded above zero before freezing).
-    roll_max = equity.cummax()
-    drawdown = (equity - roll_max) / roll_max.replace(0, np.nan)
+    roll_max = equity_floored.cummax()
+    drawdown = (equity_floored - roll_max) / roll_max.replace(0, np.nan)
     max_drawdown = float(drawdown.min(skipna=True) * 100) if drawdown.notna().any() else -100.0
     if blown_up_at is not None:
         max_drawdown = min(max_drawdown, -100.0)
 
-    # Sharpe (rf=0, annualized)
+    strat_ret = equity_floored.pct_change()
     sharpe = float(strat_ret.mean() / strat_ret.std() * np.sqrt(bars_per_year)) if strat_ret.std() > 0 else 0.0
 
-    # Trades
-    position_changes = signal.diff().fillna(0)
-    buy_dates = close.index[position_changes == 1]
-    sell_dates = close.index[position_changes == -1]
-
-    trades = []
-    for d in buy_dates:
-        trades.append({"date": d.strftime(_dfmt), "action": "BUY", "price": round(float(close.loc[d]), 2), "is_entry": True})
-    for d in sell_dates:
-        trades.append({"date": d.strftime(_dfmt), "action": "SELL", "price": round(float(close.loc[d]), 2), "is_entry": False,
-                       "exit_kind": (exit_kinds or {}).get(d)})
     trades.sort(key=lambda x: x["date"])
+    num_trades = total_buys
+    win_rate = float(wins / total_buys * 100) if total_buys > 0 else 0.0
 
-    num_trades = len(buy_dates)
-
-    # Win rate: pair each buy with the next sell
-    wins = 0
-    buy_prices = [(d, float(close.loc[d])) for d in buy_dates]
-    sell_prices = [(d, float(close.loc[d])) for d in sell_dates]
-    j = 0
-    for bd, bp in buy_prices:
-        while j < len(sell_prices) and sell_prices[j][0] <= bd:
-            j += 1
-        if j < len(sell_prices):
-            if sell_prices[j][1] > bp:
-                wins += 1
-    win_rate = float(wins / num_trades * 100) if num_trades > 0 else 0.0
-
-    final_capital = float(equity.iloc[-1])
+    final_capital = float(equity_floored.iloc[-1])
     total_pnl = final_capital - initial_capital
 
-    # Equity curve data
     curve = []
-    for date, sv, bv in zip(equity.index, equity.values, benchmark.values):
+    for date, sv, bv in zip(equity_floored.index, equity_floored.values, benchmark.values):
         curve.append({
             "date": date.strftime(_dfmt),
             "strategy": round(float(sv), 2),
@@ -434,35 +489,42 @@ def _compute_metrics(signal: pd.Series, close: pd.Series, position_size: float =
             "blown_up_at": blown_up_at.strftime(_dfmt) if blown_up_at is not None else None,
         },
         "trades": trades,
+        "in_position": in_position.tolist(),
     }
 
 
 _OPT_MULT = 100
 
 
-def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: float,
+def _compute_option_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, close: pd.Series, opt: dict, iv: float,
                             position_size: float = 100, initial_capital: float = 10_000,
                             direction: str = "long", bars_per_year: int = 252, intraday: bool = False,
                             stop_loss: float | None = None, take_profit: float | None = None,
                             trailing_stop: float | None = None, max_hold_bars: int | None = None):
-    """Modeled single-option backtest. On each entry the strategy buys (long) or
-    writes (short) a fresh Black-Scholes-priced call/put (strike = moneyness × spot,
-    fixed DTE), marks it daily as time decays, and realizes it when the rules exit,
-    a risk-control trigger fires, or it reaches its calendar-date expiry (then rolls if still
-    signalled). IV is held at the current snapshot value — the project has no
-    historical option prices — so this is an APPROXIMATION, labeled as modeled
-    in the UI. A short leg mirrors the long leg's dollar P&L (project
-    convention). Expiry is cash-settled at intrinsic value, which is economically
+    """Modeled single-option backtest, multi-lot: every bar the buy signal
+    fires, ANOTHER fresh Black-Scholes-priced call/put (strike = moneyness ×
+    spot at that bar, fixed DTE) opens sized off currently-available cash —
+    unlike shares, each entry is a genuinely distinct instrument (its own
+    strike/expiry fixed at entry time), so lots are tracked independently
+    rather than blended into one average. Each lot marks itself daily as time
+    decays and closes on its OWN risk-control trigger or its own calendar
+    expiry; the shared sell rule, when it fires, closes every still-open lot
+    at once (each realized at its own current value). IV is held at the
+    current snapshot value for every lot — the project has no historical
+    option prices — so this is an APPROXIMATION, labeled as modeled in the UI.
+    A short leg mirrors the long leg's dollar P&L (project convention).
+    Expiry is cash-settled at intrinsic value, which is economically
     equivalent to exercise/assignment with an immediately flattened share delivery;
     assignment margin and post-expiry shares are not carried. Benchmark stays
     underlying buy & hold.
 
-    stop_loss/take_profit/trailing_stop are evaluated against the OPTION'S OWN
-    unrealized P&L (as % of the entry premium paid/collected), not the
-    underlying's price move — an option's value doesn't move 1:1 with the
+    stop_loss/take_profit/trailing_stop are evaluated against EACH LOT'S OWN
+    unrealized P&L (as % of that lot's own entry premium paid/collected), not
+    the underlying's price move — an option's value doesn't move 1:1 with the
     underlying (theta, vega, and non-ATM strikes all break that), so a
     price-based stop would trigger at the wrong P&L level or not at all.
-    max_hold_bars forces an exit after N bars even if DTE/the rules haven't."""
+    max_hold_bars forces a lot's exit after N bars even if its own DTE/the
+    rules haven't closed it."""
     from math_engine import bs_price
     otype = "put" if str(opt.get("type", "call")).lower().startswith("p") else "call"
     moneyness = float(opt.get("moneyness", 1.0))
@@ -475,95 +537,109 @@ def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: 
     _dfmt = "%Y-%m-%d %H:%M" if intraday else "%Y-%m-%d"
     idx = close.index
     px = close.to_numpy(dtype=float)
-    sig = signal.to_numpy(dtype=float)
     n = len(px)
 
     equity = np.empty(n)
     cash = float(initial_capital)
     cur = float(initial_capital)
-    in_trade = False
-    blocked = False   # true after a risk-triggered exit, until the raw signal drops to 0
-    signed_contracts = 0.0
-    strike = 0.0
-    entry_i = -1
-    entry_val = 0.0
-    entry_mtm = 0.0
-    basis = 1.0
-    peak_pnl = 0.0
+    lots: list[dict] = []   # each: {strike, entry_i, expiry_at, entry_val, entry_mtm, basis, peak_pnl, signed_contracts}
     trades: list[dict] = []
     wiped_out = False
     blown_up_at = None
-    in_position = np.empty(n, dtype=bool)   # actual open-position state per bar, for financing (see _apply_financing_cost caller) — diverges from the raw signal during a blocked (already-closed) period
+    num_trades = 0
+    wins = 0
+    in_position = np.empty(n, dtype=bool)
 
-    def _val(i: int) -> float:
-        remaining_days = max(0, (expiry_at - idx[i]).total_seconds() / 86_400) if entry_i >= 0 else dte
-        return float(bs_price(px[i], strike, remaining_days, r, iv, otype))
+    def _val(lot: dict, i: int) -> float:
+        remaining_days = max(0, (lot["expiry_at"] - idx[i]).total_seconds() / 86_400)
+        return float(bs_price(px[i], lot["strike"], remaining_days, r, iv, otype))
 
-    def _settlement(i: int) -> str:
-        intrinsic = max(px[i] - strike, 0.0) if otype == "call" else max(strike - px[i], 0.0)
+    def _settlement(lot: dict, i: int) -> str:
+        intrinsic = max(px[i] - lot["strike"], 0.0) if otype == "call" else max(lot["strike"] - px[i], 0.0)
         if intrinsic <= 0:
             return "expired_worthless"
         return "assignment" if short else "exercise"
 
-    expiry_at = None
+    def _close_lot(lot: dict, i: int, exit_kind: str):
+        nonlocal cash, num_trades, wins
+        v = _val(lot, i)
+        cash += lot["signed_contracts"] * v * _OPT_MULT
+        num_trades += 1
+        # A short leg profits when it buys the option back cheaper than it sold it.
+        if (v < lot["entry_val"] if short else v > lot["entry_val"]):
+            wins += 1
+        trades.append({"date": idx[i].strftime(_dfmt), "action": "EXPIRE" if exit_kind == "expiration" else exit_action,
+                       "price": round(v, 2), "is_entry": False, "exit_kind": exit_kind,
+                       **({"settlement": _settlement(lot, i)} if exit_kind == "expiration" else {})})
 
     for i in range(n):
         if wiped_out:
             equity[i] = 0.0
             in_position[i] = False
             continue
-        exit_kind = None
-        expires_now = in_trade and expiry_at is not None and idx[i] >= expiry_at
-        if in_trade:
-            pnl = signed_contracts * _val(i) * _OPT_MULT - entry_mtm
-            peak_pnl = max(peak_pnl, pnl)
-            if not expires_now and stop_loss is not None and pnl <= -(stop_loss / 100.0) * basis:
-                exit_kind = "stop_loss"
-            if not expires_now and exit_kind is None and take_profit is not None and pnl >= (take_profit / 100.0) * basis:
-                exit_kind = "take_profit"
-            if not expires_now and exit_kind is None and trailing_stop is not None and pnl <= peak_pnl - (trailing_stop / 100.0) * basis:
-                exit_kind = "trailing_stop"
-            if not expires_now and exit_kind is None and max_hold_bars is not None and (i - entry_i) >= max_hold_bars:
-                exit_kind = "max_hold"
-        risk_triggered = exit_kind is not None
-        if expires_now:
-            exit_kind = "expiration"
-        exiting = in_trade and (sig[i] == 0.0 or exit_kind is not None)
-        if exiting:
-            v = _val(i)
-            cash += signed_contracts * v * _OPT_MULT
-            trades.append({"date": idx[i].strftime(_dfmt), "action": "EXPIRE" if exit_kind == "expiration" else exit_action, "price": round(v, 2), "is_entry": False,
-                           "exit_kind": exit_kind or "rule", **({"settlement": _settlement(i)} if exit_kind == "expiration" else {})})
-            in_trade, signed_contracts = False, 0.0
-            blocked = risk_triggered
-        if blocked and sig[i] == 0.0:
-            blocked = False
-        if not in_trade and not blocked and sig[i] == 1.0:
+
+        remaining: list[dict] = []
+        for lot in lots:
+            expires_now = idx[i] >= lot["expiry_at"]
+            exit_kind = None
+            if not expires_now:
+                pnl = lot["signed_contracts"] * _val(lot, i) * _OPT_MULT - lot["entry_mtm"]
+                lot["peak_pnl"] = max(lot["peak_pnl"], pnl)
+                if stop_loss is not None and pnl <= -(stop_loss / 100.0) * lot["basis"]:
+                    exit_kind = "stop_loss"
+                if exit_kind is None and take_profit is not None and pnl >= (take_profit / 100.0) * lot["basis"]:
+                    exit_kind = "take_profit"
+                if exit_kind is None and trailing_stop is not None and pnl <= lot["peak_pnl"] - (trailing_stop / 100.0) * lot["basis"]:
+                    exit_kind = "trailing_stop"
+                if exit_kind is None and max_hold_bars is not None and (i - lot["entry_i"]) >= max_hold_bars:
+                    exit_kind = "max_hold"
+            else:
+                exit_kind = "expiration"
+            if exit_kind is not None:
+                _close_lot(lot, i, exit_kind)
+            else:
+                remaining.append(lot)
+        lots = remaining
+
+        if lots and sell_signal[i]:
+            for lot in lots:
+                _close_lot(lot, i, "rule")
+            lots = []
+
+        if buy_signal[i] and cash > 0.01:
             strike = round(px[i] * moneyness, 2)
             entry_val = max(float(bs_price(px[i], strike, dte, r, iv, otype)), 0.01)
             invest = cash * alloc
-            contracts = invest / (entry_val * _OPT_MULT)
-            signed_contracts = -contracts if short else contracts
-            cash -= signed_contracts * entry_val * _OPT_MULT
-            entry_i, expiry_at, in_trade = i, idx[i] + pd.Timedelta(days=dte), True
-            entry_mtm = signed_contracts * entry_val * _OPT_MULT
-            basis = abs(entry_mtm) or 1.0
-            peak_pnl = 0.0
-            trades.append({"date": idx[i].strftime(_dfmt), "action": entry_action, "price": round(entry_val, 2), "is_entry": True})
-        cur = cash + (signed_contracts * _val(i) * _OPT_MULT if in_trade else 0.0)
+            if invest > 0:
+                contracts = invest / (entry_val * _OPT_MULT)
+                signed_contracts = -contracts if short else contracts
+                cash -= signed_contracts * entry_val * _OPT_MULT
+                entry_mtm = signed_contracts * entry_val * _OPT_MULT
+                lots.append({
+                    "strike": strike, "entry_i": i, "expiry_at": idx[i] + pd.Timedelta(days=dte),
+                    "entry_val": entry_val, "entry_mtm": entry_mtm, "basis": abs(entry_mtm) or 1.0,
+                    "peak_pnl": 0.0, "signed_contracts": signed_contracts,
+                })
+                trades.append({"date": idx[i].strftime(_dfmt), "action": entry_action, "price": round(entry_val, 2), "is_entry": True})
+
+        cur = cash + sum(lot["signed_contracts"] * _val(lot, i) * _OPT_MULT for lot in lots)
         if cur <= 0:
-            # Record the OPTION's own value at liquidation, not the
-            # underlying's spot price — the win/loss classification below
-            # compares this "price" against the entry premium, and comparing
-            # an underlying price (e.g. $180) against a premium (e.g. $3.50)
-            # would classify almost every wipeout as a win.
-            liq_val = _val(i) if in_trade else 0.0
+            # Record each lot's OWN value at liquidation, not the underlying's
+            # spot price — the win/loss classification compares this "price"
+            # against that lot's entry premium, and comparing an underlying
+            # price (e.g. $180) against a premium (e.g. $3.50) would classify
+            # almost every wipeout as a win.
+            for lot in lots:
+                liq_val = _val(lot, i)
+                num_trades += 1
+                if (liq_val < lot["entry_val"] if short else liq_val > lot["entry_val"]):
+                    wins += 1
+                trades.append({"date": idx[i].strftime(_dfmt), "action": "LIQUIDATED", "price": round(liq_val, 2),
+                               "is_entry": False, "exit_kind": "wipeout"})
             wiped_out, blown_up_at, cur = True, idx[i], 0.0
-            cash, in_trade, signed_contracts = 0.0, False, 0.0
-            trades.append({"date": idx[i].strftime(_dfmt), "action": "LIQUIDATED", "price": round(liq_val, 2),
-                           "is_entry": False, "exit_kind": "wipeout"})
+            cash, lots = 0.0, []
         equity[i] = cur
-        in_position[i] = in_trade
+        in_position[i] = len(lots) > 0
 
     eq = pd.Series(equity, index=idx)
     daily = eq.pct_change()
@@ -577,12 +653,6 @@ def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: 
         max_drawdown = min(max_drawdown, -100.0)
     sharpe = float(daily.mean() / daily.std() * np.sqrt(bars_per_year)) if daily.std() > 0 else 0.0
 
-    entries = [t for t in trades if t["is_entry"]]
-    exits = [t for t in trades if not t["is_entry"]]
-    # A short leg profits when it buys the option back cheaper than it sold it.
-    wins = sum(1 for e, x in zip(entries, exits)
-               if (x["price"] < e["price"] if short else x["price"] > e["price"]))
-    num_trades = len(entries)
     win_rate = float(wins / num_trades * 100) if num_trades else 0.0
 
     curve = [{"date": d.strftime(_dfmt), "strategy": round(float(sv), 2), "benchmark": round(float(bv), 2)}
@@ -603,21 +673,25 @@ def _compute_option_metrics(signal: pd.Series, close: pd.Series, opt: dict, iv: 
     }
 
 
-def _compute_combo_metrics(signal: pd.Series, close: pd.Series, combo: dict, iv: float,
+def _compute_combo_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, close: pd.Series, combo: dict, iv: float,
                            position_size: float = 100, initial_capital: float = 10_000,
                            bars_per_year: int = 252, intraday: bool = False,
                            stop_loss: float | None = None, take_profit: float | None = None,
                            trailing_stop: float | None = None, max_hold_bars: int | None = None):
     """Modeled multi-leg option combo backtest (straddle/strangle/spread/condor/
     butterfly/etc — same leg shape as the Options Strategy Builder's PRESETS
-    table: {type, side, moneyness, qty}). On each entry every leg opens
-    simultaneously (strike = moneyness × spot, one shared DTE), the combo's net
-    signed value is marked daily as time decays, and every leg closes together
-    on rule-exit, a risk-control trigger, or shared expiry (rolling a fresh set
-    of legs if the signal is still active). IV is held at the current snapshot
-    value for every leg — the project has no historical option prices — so
-    this is an APPROXIMATION, labeled as modeled in the UI, same convention as
-    the single-leg version.
+    table: {type, side, moneyness, qty}), multi-lot: every bar the buy signal
+    fires, ANOTHER full copy of the structure opens (every leg simultaneously,
+    strike = moneyness × spot at that bar, one shared DTE) sized off
+    currently-available cash — unlike shares, each entry is a genuinely
+    distinct set of instruments (strikes fixed at entry time), so lots are
+    tracked independently rather than blended. Each lot's net signed value is
+    marked daily as time decays, and it closes on its OWN risk-control
+    trigger or its own shared-DTE expiry; the shared sell rule, when it
+    fires, closes every still-open lot (every leg of it) at once. IV is held
+    at the current snapshot value for every leg of every lot — the project
+    has no historical option prices — so this is an APPROXIMATION, labeled as
+    modeled in the UI, same convention as the single-leg version.
 
     Unlike the single-leg function's whole-curve "mirror around 2×capital"
     trick (which only works when every leg is on the same side), each leg here
@@ -629,21 +703,23 @@ def _compute_combo_metrics(signal: pd.Series, close: pd.Series, combo: dict, iv:
     zero the first bar it goes non-positive — it doesn't keep trading on
     borrowed/negative cash.
 
-    position_size(%) scales the whole structure to alloc% of current capital
-    via NOTIONAL (Σqty×spot×MULT), not premium — premium-based sizing blows up
-    for cheap far-OTM legs (a strangle's wings can be a tiny fraction of a
-    straddle's ATM premium, forcing an enormous contract count to hit the same
-    %-of-capital target, i.e. hidden leverage with no cap). Notional sizing
-    stays bounded regardless of how cheap the legs are, and still preserves
-    the preset's relative leg ratios (e.g. 1:2:1 for a butterfly).
+    position_size(%) scales EACH new lot to alloc% of currently-available
+    cash via NOTIONAL (Σqty×spot×MULT), not premium — premium-based sizing
+    blows up for cheap far-OTM legs (a strangle's wings can be a tiny
+    fraction of a straddle's ATM premium, forcing an enormous contract count
+    to hit the same %-of-cash target, i.e. hidden leverage with no cap).
+    Notional sizing stays bounded regardless of how cheap the legs are, and
+    still preserves the preset's relative leg ratios (e.g. 1:2:1 for a
+    butterfly).
 
-    stop_loss/take_profit/trailing_stop are evaluated against the COMBO'S OWN
-    unrealized P&L (as % of the entry credit/debit magnitude — the standard
-    "close at 50% of max profit" convention, same basis combo_monte_carlo's
-    early-exit uses), not the underlying's price move — a short strangle can
-    lose or gain heavily from IV/theta with the stock barely moving, so a
-    price-based stop (correct for plain shares) would rarely fire here at all.
-    max_hold_bars forces an exit after N bars even if DTE/the rules haven't."""
+    stop_loss/take_profit/trailing_stop are evaluated against EACH LOT'S OWN
+    unrealized P&L (as % of that lot's own entry credit/debit magnitude — the
+    standard "close at 50% of max profit" convention, same basis
+    combo_monte_carlo's early-exit uses), not the underlying's price move — a
+    short strangle can lose or gain heavily from IV/theta with the stock
+    barely moving, so a price-based stop (correct for plain shares) would
+    rarely fire here at all. max_hold_bars forces a lot's exit after N bars
+    even if its own DTE/the rules haven't closed it."""
     from math_engine import bs_price
     legs_cfg = combo.get("legs") or []
     if not legs_cfg:
@@ -654,31 +730,25 @@ def _compute_combo_metrics(signal: pd.Series, close: pd.Series, combo: dict, iv:
     _dfmt = "%Y-%m-%d %H:%M" if intraday else "%Y-%m-%d"
     idx = close.index
     px = close.to_numpy(dtype=float)
-    sig = signal.to_numpy(dtype=float)
     n = len(px)
 
     equity = np.empty(n)
     cash = float(initial_capital)
     cur = float(initial_capital)
-    in_trade = False
-    blocked = False   # true after a risk-triggered exit, until the raw signal drops to 0
-    entry_i = -1
-    entry_mtm = 0.0
-    peak_pnl = 0.0
-    basis = 1.0
-    leg_state: list[dict] = []   # [{type, strike, signed_qty}]
+    lots: list[dict] = []   # each: {legs: [{type, strike, signed_qty}], entry_i, expiry_at, entry_mtm, basis, peak_pnl}
     trades: list[dict] = []
-    expiry_at = None
     wiped_out = False
     blown_up_at = None
-    in_position = np.empty(n, dtype=bool)   # actual open-position state per bar, for financing (see _apply_financing_cost caller) — diverges from the raw signal during a blocked (already-closed) period
+    num_trades = 0
+    wins = 0
+    in_position = np.empty(n, dtype=bool)
 
-    def _leg_val(leg: dict, i: int) -> float:
-        remaining_days = max(0, (expiry_at - idx[i]).total_seconds() / 86_400) if entry_i >= 0 else dte
+    def _leg_val(leg: dict, lot: dict, i: int) -> float:
+        remaining_days = max(0, (lot["expiry_at"] - idx[i]).total_seconds() / 86_400)
         return float(bs_price(px[i], leg["strike"], remaining_days, r, iv, leg["type"]))
 
-    def _combo_mtm(i: int) -> float:
-        return sum(l["signed_qty"] * _leg_val(l, i) * _OPT_MULT for l in leg_state)
+    def _lot_mtm(lot: dict, i: int) -> float:
+        return sum(l["signed_qty"] * _leg_val(l, lot, i) * _OPT_MULT for l in lot["legs"])
 
     def _settlement(leg: dict, i: int) -> str:
         intrinsic = max(px[i] - leg["strike"], 0.0) if leg["type"] == "call" else max(leg["strike"] - px[i], 0.0)
@@ -686,49 +756,59 @@ def _compute_combo_metrics(signal: pd.Series, close: pd.Series, combo: dict, iv:
             return "expired_worthless"
         return "exercise" if leg["signed_qty"] > 0 else "assignment"
 
+    def _close_lot(lot: dict, i: int, exit_kind: str):
+        nonlocal cash, num_trades, wins
+        mtm = _lot_mtm(lot, i)
+        cash += mtm
+        num_trades += 1
+        if mtm - lot["entry_mtm"] > 0:
+            wins += 1
+        for l in lot["legs"]:
+            trades.append({
+                "date": idx[i].strftime(_dfmt),
+                "action": "EXPIRE" if exit_kind == "expiration" else "SELL" if l["signed_qty"] > 0 else "BUY",
+                "price": round(_leg_val(l, lot, i), 2),
+                "leg": f"{l['type']} {l['strike']:g}",
+                "is_entry": False,
+                "exit_kind": exit_kind,
+                **({"settlement": _settlement(l, i)} if exit_kind == "expiration" else {}),
+            })
+
     for i in range(n):
         if wiped_out:
             equity[i] = 0.0
             in_position[i] = False
             continue
-        exit_kind = None
-        expires_now = in_trade and expiry_at is not None and idx[i] >= expiry_at
-        if in_trade:
-            pnl = _combo_mtm(i) - entry_mtm
-            peak_pnl = max(peak_pnl, pnl)
-            if not expires_now and stop_loss is not None and pnl <= -(stop_loss / 100.0) * basis:
-                exit_kind = "stop_loss"
-            if not expires_now and exit_kind is None and take_profit is not None and pnl >= (take_profit / 100.0) * basis:
-                exit_kind = "take_profit"
-            if not expires_now and exit_kind is None and trailing_stop is not None and pnl <= peak_pnl - (trailing_stop / 100.0) * basis:
-                exit_kind = "trailing_stop"
-            if not expires_now and exit_kind is None and max_hold_bars is not None and (i - entry_i) >= max_hold_bars:
-                exit_kind = "max_hold"
-        risk_triggered = exit_kind is not None
-        if expires_now:
-            exit_kind = "expiration"
-        exiting = in_trade and (sig[i] == 0.0 or exit_kind is not None)
-        if exiting:
-            cash += _combo_mtm(i)
-            for l in leg_state:
-                trades.append({
-                    "date": idx[i].strftime(_dfmt),
-                    "action": "EXPIRE" if exit_kind == "expiration" else "SELL" if l["signed_qty"] > 0 else "BUY",
-                    "price": round(_leg_val(l, i), 2),
-                    "leg": f"{l['type']} {l['strike']:g}",
-                    "is_entry": False,
-                    "exit_kind": exit_kind or "rule",
-                    **({"settlement": _settlement(l, i)} if exit_kind == "expiration" else {}),
-                })
-            in_trade, leg_state = False, []
-            # Only a risk-forced exit blocks re-entry (until the rule itself says
-            # exit) — a rule-driven exit (sig[i]==0) already can't re-enter this
-            # same bar since the "not in_trade and sig[i]==1" check below needs
-            # sig[i]==1, which isn't the case here.
-            blocked = risk_triggered
-        if blocked and sig[i] == 0.0:
-            blocked = False
-        if not in_trade and not blocked and sig[i] == 1.0:
+
+        remaining: list[dict] = []
+        for lot in lots:
+            expires_now = idx[i] >= lot["expiry_at"]
+            exit_kind = None
+            if not expires_now:
+                pnl = _lot_mtm(lot, i) - lot["entry_mtm"]
+                lot["peak_pnl"] = max(lot["peak_pnl"], pnl)
+                if stop_loss is not None and pnl <= -(stop_loss / 100.0) * lot["basis"]:
+                    exit_kind = "stop_loss"
+                if exit_kind is None and take_profit is not None and pnl >= (take_profit / 100.0) * lot["basis"]:
+                    exit_kind = "take_profit"
+                if exit_kind is None and trailing_stop is not None and pnl <= lot["peak_pnl"] - (trailing_stop / 100.0) * lot["basis"]:
+                    exit_kind = "trailing_stop"
+                if exit_kind is None and max_hold_bars is not None and (i - lot["entry_i"]) >= max_hold_bars:
+                    exit_kind = "max_hold"
+            else:
+                exit_kind = "expiration"
+            if exit_kind is not None:
+                _close_lot(lot, i, exit_kind)
+            else:
+                remaining.append(lot)
+        lots = remaining
+
+        if lots and sell_signal[i]:
+            for lot in lots:
+                _close_lot(lot, i, "rule")
+            lots = []
+
+        if buy_signal[i] and cash > 0.01:
             unscaled: list[dict] = []
             base_notional = 0.0
             for lc in legs_cfg:
@@ -740,44 +820,47 @@ def _compute_combo_metrics(signal: pd.Series, close: pd.Series, combo: dict, iv:
                 unscaled.append({"type": otype, "strike": strike, "signed_qty": signed_qty, "entry_val": entry_val})
                 base_notional += qty * px[i] * _OPT_MULT
             scale = (cash * alloc) / base_notional if base_notional > 0 else 0.0
-            leg_state = []
-            for l in unscaled:
-                signed_qty = l["signed_qty"] * scale
-                leg_state.append({"type": l["type"], "strike": l["strike"], "signed_qty": signed_qty})
-                trades.append({
-                    "date": idx[i].strftime(_dfmt),
-                    "action": "BUY" if signed_qty > 0 else "SELL",
-                    "price": round(l["entry_val"], 2),
-                    "leg": f"{l['type']} {l['strike']:g}",
-                    "is_entry": True,
+            if scale > 0:
+                lot_legs = []
+                for l in unscaled:
+                    signed_qty = l["signed_qty"] * scale
+                    lot_legs.append({"type": l["type"], "strike": l["strike"], "signed_qty": signed_qty})
+                    trades.append({
+                        "date": idx[i].strftime(_dfmt),
+                        "action": "BUY" if signed_qty > 0 else "SELL",
+                        "price": round(l["entry_val"], 2),
+                        "leg": f"{l['type']} {l['strike']:g}",
+                        "is_entry": True,
+                    })
+                expiry_at = idx[i] + pd.Timedelta(days=dte)
+                entry_mtm = sum(l["signed_qty"] * bs_price(px[i], l["strike"], dte, r, iv, l["type"]) * _OPT_MULT for l in lot_legs)
+                cash -= entry_mtm
+                lots.append({
+                    "legs": lot_legs, "entry_i": i, "expiry_at": expiry_at,
+                    "entry_mtm": entry_mtm, "basis": abs(entry_mtm) or 1.0, "peak_pnl": 0.0,
                 })
-            cash -= sum(l["signed_qty"] * bs_price(px[i], l["strike"], dte, r, iv, l["type"]) * _OPT_MULT for l in leg_state)
-            entry_i, expiry_at, in_trade = i, idx[i] + pd.Timedelta(days=dte), True
-            entry_mtm = _combo_mtm(i)
-            basis = abs(entry_mtm) or 1.0
-            peak_pnl = 0.0
-        cur = cash + (_combo_mtm(i) if in_trade else 0.0)
+
+        cur = cash + sum(_lot_mtm(lot, i) for lot in lots)
         if cur <= 0:
             wiped_out, blown_up_at = True, idx[i]
-            # One row per leg, using each leg's own mark value — not a single
-            # summary row at the underlying's spot price. The round-trip
-            # win-rate pairing below walks `trades` in fixed n_legs-sized
-            # batches; a single row (regardless of leg count) breaks that
-            # assumption, and spot price isn't comparable to a leg's entry
-            # premium anyway (same fix as the single-option engine's wipeout).
-            if in_trade:
-                for l in leg_state:
+            # One row per leg per open lot, using each leg's own mark value —
+            # not a single summary row at the underlying's spot price, and not
+            # comparable to a leg's entry premium anyway (same fix as the
+            # single-option engine's wipeout).
+            for lot in lots:
+                for l in lot["legs"]:
                     trades.append({
                         "date": idx[i].strftime(_dfmt),
                         "action": "SELL" if l["signed_qty"] > 0 else "BUY",
-                        "price": round(_leg_val(l, i), 2),
+                        "price": round(_leg_val(l, lot, i), 2),
                         "leg": f"{l['type']} {l['strike']:g}",
                         "is_entry": False,
                         "exit_kind": "wipeout",
                     })
-            cash, in_trade, leg_state, cur = 0.0, False, [], 0.0
+                num_trades += 1   # each lot is a round trip that ended in wipeout — never a win
+            cash, lots, cur = 0.0, [], 0.0
         equity[i] = cur
-        in_position[i] = in_trade
+        in_position[i] = len(lots) > 0
 
     eq = pd.Series(equity, index=idx)
     daily = eq.pct_change()
@@ -791,23 +874,6 @@ def _compute_combo_metrics(signal: pd.Series, close: pd.Series, combo: dict, iv:
         max_drawdown = min(max_drawdown, -100.0)
     sharpe = float(daily.mean() / daily.std() * np.sqrt(bars_per_year)) if daily.std() > 0 else 0.0
 
-    # Round-trip win rate: pair each entry batch with its exit batch (same leg count
-    # per side) and compare total premium in vs out, since individual leg wins/losses
-    # can offset within one combo.
-    num_trades = 0
-    wins = 0
-    i2 = 0
-    n_legs = len(legs_cfg)
-    while i2 + 2 * n_legs <= len(trades):
-        entry_batch = trades[i2:i2 + n_legs]
-        exit_batch = trades[i2 + n_legs:i2 + 2 * n_legs]
-        if len(exit_batch) == n_legs:
-            entry_flow = sum((-1 if t["action"] == "BUY" else 1) * t["price"] for t in entry_batch)
-            exit_flow = sum((1 if t["action"] == "SELL" else -1) * t["price"] for t in exit_batch)
-            num_trades += 1
-            if entry_flow + exit_flow > 0:
-                wins += 1
-        i2 += 2 * n_legs
     win_rate = float(wins / num_trades * 100) if num_trades else 0.0
 
     curve = [{"date": d.strftime(_dfmt), "strategy": round(float(sv), 2), "benchmark": round(float(bv), 2)}
@@ -2704,7 +2770,13 @@ def backtest(req: BacktestRequest):
         req.stop_loss, req.take_profit,
         req.trailing_stop, req.max_hold_bars,
     )
-    result = _compute_metrics(signal, close, req.position_size, req.initial_capital)
+    # Risk controls are already baked into `signal` here (single-position,
+    # no scale-in for this legacy hardcoded-strategy route) — recover the
+    # buy/sell edges so they replay unchanged through the new engine.
+    position_changes = signal.diff().fillna(0)
+    buy_signal = (position_changes > 0).to_numpy()
+    sell_signal = (position_changes < 0).to_numpy()
+    result = _compute_metrics(buy_signal, sell_signal, close, req.position_size, req.initial_capital)
     result["bars"] = int(len(close))
     result["span"] = {"start": str(close.index[0].date()), "end": str(close.index[-1].date())}
     return result

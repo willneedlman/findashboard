@@ -428,8 +428,24 @@ def evaluate_custom_rules(prices: np.ndarray, rules: dict, context: dict | None 
                           ctx_by_ticker: dict[str, dict] | None = None,
                           primary: str | None = None,
                           daily_index=None, intraday_base: bool = False,
-                          base_tf: str = "1d") -> np.ndarray:
-    """Bar-by-bar evaluation. Returns 1.0 = invested, 0.0 = cash.
+                          base_tf: str = "1d", raw: bool = False):
+    """Bar-by-bar evaluation.
+
+    Default (raw=False): returns a single 1.0/0.0 "invested vs cash" array, with
+    the buy block only checked while flat and the sell block only checked while
+    in a trade — the original single-position semantics. Kept as the default so
+    the other callers of this function (Monte Carlo's per-path signal grid,
+    regression import) that only ever need "flat vs invested" keep working
+    unchanged.
+
+    raw=True: returns (buy_signal, sell_signal) — plain per-bar boolean arrays,
+    each condition evaluated independently every bar with NO position-state
+    tracking at all. A single boolean can't represent "3 lots open, 2 should
+    close, 1 shouldn't", so the multi-lot P&L engines (_compute_metrics /
+    _compute_option_metrics / _compute_combo_metrics in algo.py) need the raw
+    conditions themselves — THEY track which lots are open and decide, per
+    lot, whether the shared sell condition (or that lot's own risk controls)
+    closes it.
 
     Single-ticker (default): pass `prices` + `context`; every condition reads that
     one symbol. Cross-ticker: pass `frames` = {TICKER: date-aligned close array}
@@ -446,11 +462,20 @@ def evaluate_custom_rules(prices: np.ndarray, rules: dict, context: dict | None 
         frames = {primary: np.asarray(prices, dtype=float)}
     if ctx_by_ticker is None:
         ctx_by_ticker = {primary: context or {}}
-    signal   = np.zeros(n)
     env = {"primary": primary, "frames": frames, "cache": {}, "ctx_by_ticker": ctx_by_ticker,
            "n": n, "daily_index": daily_index, "intraday_base": intraday_base, "base_tf": base_tf}
     buy_blk  = rules.get("buy",  {"logic": "AND", "conditions": []})
     sell_blk = rules.get("sell", {"logic": "AND", "conditions": []})
+
+    if raw:
+        buy_signal = np.zeros(n, dtype=bool)
+        sell_signal = np.zeros(n, dtype=bool)
+        for i in range(1, n):
+            buy_signal[i] = _eval_block_at(buy_blk, i, env)
+            sell_signal[i] = _eval_block_at(sell_blk, i, env)
+        return buy_signal, sell_signal
+
+    signal   = np.zeros(n)
     in_trade = False
     for i in range(1, n):
         if not in_trade:
@@ -639,7 +664,8 @@ def get_custom_signal(req: CustomSignalRequest):
         # cross-ticker rules behave the same here as in the algo backtest.
         tf = req.timeframe
         start = _clamp_intraday_start(tf, req.start, req.end) if _is_intraday_tf(tf) else req.start
-        sig_arr, close = _run_custom_rules(req.ticker, req.rules, start, req.end, tf)
+        (buy_signal, sell_signal), close = _run_custom_rules(req.ticker, req.rules, start, req.end, tf)
+        sig_arr = _legacy_signal_from_raw(buy_signal, sell_signal)
     except HTTPException:
         raise
     except Exception:
@@ -704,12 +730,40 @@ class CustomBacktestRequest(BaseModel):
         return self
 
 
+def _legacy_signal_from_raw(buy_signal: np.ndarray, sell_signal: np.ndarray) -> np.ndarray:
+    """Reconstructs the single-position 0/1 'invested vs cash' array from the
+    raw per-bar (buy_signal, sell_signal) booleans — same in_trade semantics
+    as evaluate_custom_rules(raw=False), just replaying precomputed
+    conditions instead of evaluating them live. Every P&L engine is true
+    multi-lot now, so this is no longer needed there — it's used where a
+    single-position VIEW of the signal is what's actually wanted: the
+    /custom-signal preview ("currently invested or in cash") and
+    portfolio_backtest's leg admission-control gating (a shared-exposure-
+    budget concept at the ticker level, orthogonal to multi-lot within one
+    ticker)."""
+    n = len(buy_signal)
+    signal = np.zeros(n)
+    in_trade = False
+    for i in range(1, n):
+        if not in_trade:
+            if buy_signal[i]:
+                in_trade = True
+                signal[i] = 1.0
+        else:
+            if sell_signal[i]:
+                in_trade = False
+            else:
+                signal[i] = 1.0
+    return signal
+
+
 def _run_custom_rules(ticker: str, rules: dict, start: str, end: str, timeframe: str = "1d"):
     """Fetch + align every symbol a rule set references, resolve each one's
     point-in-time context (fundamentals/liquidity/flow series aligned to the same
     bars), and evaluate the rules on the chosen base timeframe. Returns
-    (signal_array, primary_close) where primary_close is a Series indexed by the
-    shared bars."""
+    ((buy_signal, sell_signal), primary_close): raw per-bar boolean arrays (see
+    evaluate_custom_rules' raw=True mode) plus primary_close, a Series indexed
+    by the shared bars."""
     from strategies.market_context import resolve_context
 
     def strip_self_placeholder(value):
@@ -734,16 +788,16 @@ def _run_custom_rules(ticker: str, rules: dict, start: str, end: str, timeframe:
         for tk in frames
     }
     prices = frames[primary]
-    sig = evaluate_custom_rules(prices, rules, frames=frames,
+    buy_signal, sell_signal = evaluate_custom_rules(prices, rules, frames=frames,
                                 ctx_by_ticker=ctx_by_ticker, primary=primary,
                                 daily_index=index, intraday_base=_is_intraday_tf(timeframe),
-                                base_tf=(timeframe or "1d").lower())
-    return sig, pd.Series(prices, index=index, name=primary)
+                                base_tf=(timeframe or "1d").lower(), raw=True)
+    return (buy_signal, sell_signal), pd.Series(prices, index=index, name=primary)
 
 
 @router.post("/custom-backtest")
 def custom_backtest(req: CustomBacktestRequest):
-    from .algo import _apply_risk_controls, _apply_financing_cost, _floor_equity, _summarize_equity
+    from .algo import _apply_financing_cost, _floor_equity, _summarize_equity
     import datetime, alpaca
     end = req.end or datetime.date.today().isoformat()
     tf = req.timeframe
@@ -755,46 +809,35 @@ def custom_backtest(req: CustomBacktestRequest):
         start = _clamp_intraday_start(tf, req.start, end)
     else:
         start = req.start
-    sig_arr, close = _run_custom_rules(req.ticker, req.rules, start, end, tf)
+    raw_signals, close = _run_custom_rules(req.ticker, req.rules, start, end, tf)
     if close is None or len(close) < 60:
         raise HTTPException(422, "Not enough price history for a backtest (need about 60 bars). Use a longer date range.")
-    signal = pd.Series(sig_arr, index=close.index)
-    # Option/combo risk controls are P&L-based (see _compute_option_metrics /
-    # _compute_combo_metrics) — a modeled position's value doesn't move 1:1
-    # with the underlying's price, so the price-based pre-filter below (correct
-    # for plain shares) would rarely trigger at the intended P&L level.
+    buy_signal, sell_signal = raw_signals
     is_modeled = (req.instrument or {}).get("kind") in ("option", "combo")
-    exit_kinds: dict = {}
-    if not is_modeled:
-        signal = _apply_risk_controls(
-            signal, close, req.stop_loss, req.take_profit, req.trailing_stop, req.max_hold_bars,
-            exit_kinds=exit_kinds,
-        )
+    # Every instrument kind now applies its own risk controls internally,
+    # evaluated against its own entry/P&L (shares: against the position's own
+    # average cost basis; option/combo: against the structure's own
+    # mark-to-market) — the old price-based pre-filter (_apply_risk_controls)
+    # assumed a single position and a share's P&L moving 1:1 with price,
+    # neither of which holds once shares can accumulate multiple buys.
     bpy = _BACKTEST_TF.get(tf, ("1d", 252))[1]
     trade_size = req.position_size * req.leverage
-    result = _instrument_metrics(signal, close, req.instrument, req.side, req.ticker,
+    result = _instrument_metrics(buy_signal, sell_signal, close, req.instrument, req.side, req.ticker,
                                  trade_size, req.initial_capital, bars_per_year=bpy,
                                  intraday=_is_intraday_tf(tf),
-                                 stop_loss=req.stop_loss if is_modeled else None,
-                                 take_profit=req.take_profit if is_modeled else None,
-                                 trailing_stop=req.trailing_stop if is_modeled else None,
-                                 max_hold_bars=req.max_hold_bars if is_modeled else None,
-                                 exit_kinds=exit_kinds)
+                                 stop_loss=req.stop_loss, take_profit=req.take_profit,
+                                 trailing_stop=req.trailing_stop, max_hold_bars=req.max_hold_bars)
 
     # Leverage is "free" P&L amplification unless the borrowed portion of
     # notional (beyond 100% of capital) actually costs something — apply the
     # same daily-compounding financing charge portfolio_backtest uses, then
     # re-floor since financing drag can itself tip a thin curve to zero.
     equity = pd.Series([pt["strategy"] for pt in result["equity_curve"]], index=close.index)
-    # For a modeled option/combo instrument, the raw entry-rule signal can stay
-    # "1" through a blocked period (already force-closed by a risk trigger,
-    # waiting for the rule to drop to 0 before re-entering) — financing must be
-    # computed off the engine's own in_position state, not that raw signal, or
-    # it keeps charging interest on notional that was already unwound.
-    financing_signal = (
-        pd.Series(result["in_position"], index=close.index).astype(float)
-        if is_modeled and result.get("in_position") is not None else signal
-    )
+    # in_position (every engine now returns it) is "is there an open position
+    # this bar" — the right basis for financing regardless of instrument kind,
+    # since a raw entry-rule signal can stay "1" through a blocked period
+    # (already force-closed by a risk trigger, waiting to re-enter).
+    financing_signal = pd.Series(result["in_position"], index=close.index).astype(float)
     equity, total_interest = _apply_financing_cost(equity, financing_signal, trade_size, req.initial_capital,
                                                     req.effective_annual_rate, bpy)
     blown_up_at = None
@@ -834,21 +877,28 @@ def custom_backtest(req: CustomBacktestRequest):
     return result
 
 
-def _instrument_metrics(signal, close, instrument, side, ticker, position_size, capital, bars_per_year: int = 252, intraday: bool = False,
+def _instrument_metrics(buy_signal, sell_signal, close, instrument, side, ticker, position_size, capital, bars_per_year: int = 252, intraday: bool = False,
                         stop_loss: float | None = None, take_profit: float | None = None,
-                        trailing_stop: float | None = None, max_hold_bars: int | None = None,
-                        exit_kinds: dict | None = None):
-    """Metrics for one position given its resolved signal + close: modeled option
-    P&L for an option instrument (long buys it, short writes it), else long/short
-    shares. `side` drives direction for both. Same result shape as /algo/backtest.
-    Raises 422 if an option can't be priced.
+                        trailing_stop: float | None = None, max_hold_bars: int | None = None):
+    """Metrics for one position given its raw (buy_signal, sell_signal) + close:
+    modeled option P&L for an option instrument (long buys it, short writes
+    it), else long/short shares. `side` drives direction for both. Same result
+    shape as /algo/backtest. Raises 422 if an option can't be priced.
 
-    stop_loss/take_profit/trailing_stop/max_hold_bars are ONLY used for option/
-    combo instruments here — they're evaluated against the position's own P&L
-    inside _compute_option_metrics/_compute_combo_metrics. For shares the
-    caller already applied them as a price-based pre-filter on `signal` (see
-    _apply_risk_controls), which is the correct check there since a share's
-    P&L moves 1:1 with price."""
+    stop_loss/take_profit/trailing_stop/max_hold_bars are evaluated against
+    each engine's own P&L/entry now — shares against the (fungible, single
+    aggregate) position's own average cost basis, option/combo against each
+    lot's own mark-to-market.
+
+    Every instrument kind is true multi-lot now, straight off the raw
+    signals: a buy while already holding opens MORE exposure, sized off
+    currently-available cash. Shares blend into one fungible aggregate
+    position (see _compute_metrics) since a share bought at one time is
+    indistinguishable from one bought at another. Option/combo entries are
+    NOT fungible across entries (strike/expiry fixed at entry time), so each
+    is tracked as its own independent lot with its own risk-control state;
+    the shared sell rule, when it fires, closes every open lot at once (see
+    _compute_option_metrics/_compute_combo_metrics)."""
     from .algo import _compute_metrics, _compute_option_metrics, _compute_combo_metrics
     inst = instrument or {}
     if inst.get("kind") in ("option", "combo"):
@@ -860,12 +910,12 @@ def _instrument_metrics(signal, close, instrument, side, ticker, position_size, 
         if not isinstance(iv, (int, float)) or iv <= 0:
             raise HTTPException(422, f"No implied volatility available to model options for {ticker}")
         if inst.get("kind") == "combo":
-            return _compute_combo_metrics(signal, close, inst, float(iv), position_size, capital, bars_per_year=bars_per_year, intraday=intraday,
+            return _compute_combo_metrics(buy_signal, sell_signal, close, inst, float(iv), position_size, capital, bars_per_year=bars_per_year, intraday=intraday,
                                           stop_loss=stop_loss, take_profit=take_profit, trailing_stop=trailing_stop, max_hold_bars=max_hold_bars)
-        return _compute_option_metrics(signal, close, inst, float(iv), position_size, capital, direction=side, bars_per_year=bars_per_year, intraday=intraday,
+        return _compute_option_metrics(buy_signal, sell_signal, close, inst, float(iv), position_size, capital, direction=side, bars_per_year=bars_per_year, intraday=intraday,
                                        stop_loss=stop_loss, take_profit=take_profit, trailing_stop=trailing_stop, max_hold_bars=max_hold_bars)
-    return _compute_metrics(signal, close, position_size, capital, direction=side, bars_per_year=bars_per_year, intraday=intraday,
-                            exit_kinds=exit_kinds)
+    return _compute_metrics(buy_signal, sell_signal, close, position_size, capital, direction=side, bars_per_year=bars_per_year, intraday=intraday,
+                            stop_loss=stop_loss, take_profit=take_profit, trailing_stop=trailing_stop, max_hold_bars=max_hold_bars)
 
 
 # ─── Multi-position portfolio backtest ────────────────────────────────────────
@@ -940,7 +990,7 @@ _PORTFOLIO_FETCH_WORKERS = 8
 
 @router.post("/portfolio-backtest")
 def portfolio_backtest(req: PortfolioBacktestRequest):
-    from .algo import _apply_risk_controls, _floor_equity, _safe_ann_return, _ear_bar_rate
+    from .algo import _floor_equity, _safe_ann_return, _ear_bar_rate
     import datetime as _dt
     import numpy as _np
     import alpaca
@@ -974,7 +1024,13 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
 
     def _fetch_one(p: PortfolioPosition):
         try:
-            sig_arr, close = _run_custom_rules(p.ticker, p.rules, start, end, tf)
+            (buy_signal, sell_signal), close = _run_custom_rules(p.ticker, p.rules, start, end, tf)
+            # Leg admission (below) is a shared-exposure-budget gate across
+            # tickers, a different concept from multi-lot scale-in within one
+            # ticker — it still runs on the single-position 0/1 view of each
+            # leg's signal, same as before this leg's own P&L engine gained
+            # multi-lot support.
+            sig_arr = _legacy_signal_from_raw(buy_signal, sell_signal)
         except Exception as e:
             logger.warning("portfolio_backtest: signal fetch failed for %s: %s", p.ticker, e)
             return None
@@ -1028,32 +1084,27 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
     # fetches its own options-chain snapshot over the network — run
     # concurrently rather than one ticker at a time.
     def _compute_leg(p: PortfolioPosition, close: pd.Series, signal: pd.Series):
-        # See custom_backtest: option/combo risk controls are P&L-based, applied
-        # inside _instrument_metrics — the price-based pre-filter is for shares only.
-        is_modeled = (p.instrument or {}).get("kind") in ("option", "combo")
-        exit_kinds: dict = {}
-        if not is_modeled:
-            signal = _apply_risk_controls(signal, close, p.stop_loss, p.take_profit, p.trailing_stop, p.max_hold_bars,
-                                          exit_kinds=exit_kinds)
+        # `signal` here is the post-admission-control single-position 0/1 view
+        # (leg exposure gating happens above, ahead of this per-leg P&L step);
+        # its rising/falling edges become this leg's raw buy/sell signals, same
+        # single-lot-per-admitted-window behavior as before — every instrument
+        # kind now applies its own risk controls internally against its own
+        # entry/P&L (see custom_backtest), so they're passed unconditionally.
+        position_changes = signal.diff().fillna(0)
+        buy_signal = (position_changes > 0).to_numpy()
+        sell_signal = (position_changes < 0).to_numpy()
         try:
-            res = _instrument_metrics(signal, close, p.instrument, p.side, p.ticker, trade_size(p), req.initial_capital,
+            res = _instrument_metrics(buy_signal, sell_signal, close, p.instrument, p.side, p.ticker, trade_size(p), req.initial_capital,
                                       bars_per_year=bpy, intraday=intraday,
-                                      stop_loss=p.stop_loss if is_modeled else None,
-                                      take_profit=p.take_profit if is_modeled else None,
-                                      trailing_stop=p.trailing_stop if is_modeled else None,
-                                      max_hold_bars=p.max_hold_bars if is_modeled else None,
-                                      exit_kinds=exit_kinds)
+                                      stop_loss=p.stop_loss, take_profit=p.take_profit,
+                                      trailing_stop=p.trailing_stop, max_hold_bars=p.max_hold_bars)
         except HTTPException:
             return None
         # Financing (below) needs the ACTUAL open-position state, not the raw
-        # entry-rule signal — for a modeled option/combo leg those diverge
-        # during a blocked period (already force-closed by a risk trigger,
-        # waiting for the rule to drop to 0 before re-entering); see
-        # custom_backtest's identical financing_signal handling.
-        financing_signal = (
-            pd.Series(res["in_position"], index=close.index).astype(float)
-            if is_modeled and res.get("in_position") is not None else signal
-        )
+        # entry-rule signal — these diverge during a blocked period (already
+        # force-closed by a risk trigger, waiting for the rule to drop to 0
+        # before re-entering); see custom_backtest's identical handling.
+        financing_signal = pd.Series(res["in_position"], index=close.index).astype(float)
         return (p, res, financing_signal)
 
     pairs = list(zip(candidates, controlled))
