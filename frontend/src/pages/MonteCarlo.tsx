@@ -20,6 +20,7 @@ import { TOOLTIP_STYLE, CROSSHAIR_CURSOR, BAR_CURSOR } from '../components/Chart
 import { FUTURES } from '../lib/futures'
 import axios from 'axios'
 import EmptyState from '../components/EmptyState'
+import HelpTip from '../components/HelpTip'
 import PortfolioIO, { type PortfolioAsset } from '../components/PortfolioIO'
 import UniversePicker from '../components/UniversePicker'
 import { CASH_SYMBOL } from '../lib/pmImport'
@@ -436,6 +437,9 @@ function readAllScreens(): { id: string; name: string; filters: any[]; sortBy: s
 function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: () => void; handoff: AlgoOptionsMonteCarloHandoff | null }) {
   const cc = useChartColors()
   const [collapsed, setCollapsed] = useState(false)
+  // Exit Rules + Sizing & Leverage live behind this drawer, closed by default
+  // — most runs use the defaults, so it stays out of the way until needed.
+  const [advancedOpen, setAdvancedOpen] = useState(false)
 
   // No demo tickers / structure — start blank unless an Algo Builder handoff
   // seeds the form. User picks portfolio, screen, or types names themselves.
@@ -741,22 +745,23 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
       <div style={{
         background: 'var(--theme-surface, #0d1826)',
         border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
-        padding: '10px 14px',
+        padding: '18px 20px',
         display: 'flex',
         flexDirection: 'column',
-        gap: 10,
+        gap: 18,
         marginBottom: 8
       }}>
         {/* Title row */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: collapsed ? 'none' : '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingBottom: 6 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ width: 3, height: 14, background: 'var(--theme-primary, #c9a84c)' }} />
-            <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 12, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--theme-text, #d7e3fc)' }}>MONTE CARLO · OPTIONS STRATEGY</span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 3, height: 16, background: 'var(--theme-primary, #c9a84c)' }} />
+            <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 13, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--theme-text, #d7e3fc)' }}>MONTE CARLO · OPTIONS STRATEGY</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))' }}>
+            <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-secondary, #5f7186)' }}>
               {OPTIONS_PATH_MODELS.find(m => m.value === pathModel)?.label ?? pathModel}
               {' · '}{effectiveNSims.toLocaleString()} paths{strategyMode ? ` · ${effectiveHorizon}d horizon` : ''}
+              {legs.length > 0 ? ` · ${(comboPreset || 'custom').toLowerCase()} ${legs.length}-leg` : ''}
             </div>
             <button onClick={() => setCollapsed(c => !c)} title={collapsed ? 'Expand' : 'Collapse'} style={{
               background: 'transparent', border: 'none', color: 'var(--theme-text-faint, rgba(255,255,255,0.4))',
@@ -767,128 +772,138 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
 
         {!collapsed && (<>
 
-        {/* SETUP SECTION */}
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <div style={{ width: 2, height: 10, background: 'var(--theme-primary, #c9a84c)' }} />
-            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)' }}>Setup</span>
-          </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', width: '100%', marginBottom: 4 }}>
-            <div style={{ flex: 1, minWidth: 150 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-                <label style={SUBLABEL}>
-                  Tickers (comma-separated)
-                  {screenerLoading && <span style={{ color: 'var(--theme-primary, #c9a84c)', marginLeft: 6, textTransform: 'none', fontSize: 8 }}>[Running screen…]</span>}
-                  {screenerError && <span style={{ color: 'var(--theme-negative, #ef4444)', marginLeft: 6, textTransform: 'none', fontSize: 8 }}>[{screenerError}]</span>}
-                </label>
-                <UniversePicker
-                  mode="tickers"
-                  tickerCap={40}
-                  onImportTickers={list => { setTickers(list); setTickerInput(list.join(', ')) }}
-                  screenHandoff={{ screens: allScreens, loading: screenerLoading, onSelect: handleScreenSelect, triggerLabel: 'Load from Screener' }}
-                  style={{
-                    background: 'var(--theme-bg, #07101a)',
-                    fontSize: 8, fontWeight: 700, letterSpacing: '0.04em',
-                    padding: '1px 4px', height: 15, boxSizing: 'border-box',
-                  }}
-                />
-              </div>
-              <input 
-                value={tickerInput} 
-                onChange={e => handleTickerInputChange(e.target.value)} 
-                style={{ ...paramInput, background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} 
-                placeholder="e.g. AAPL, MSFT, TSLA"
-              />
-            </div>
-            <div style={{ width: 160 }}>
-              <label style={SUBLABEL}>Structure</label>
-              <select value={comboPreset} onChange={e => handlePresetChange(e.target.value)} style={{ ...paramInput, cursor: 'pointer', background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
-                <option value="">Select structure…</option>
-                {comboPreset === 'Custom' && <option value="Custom">Custom</option>}
-                {PRESET_GROUPS.map(g => (
-                  <optgroup key={g.label} label={g.label}>
-                    {g.keys.map(k => <option key={k} value={k}>{k}</option>)}
-                  </optgroup>
-                ))}
-              </select>
-            </div>
-            <div style={{ width: 80 }}>
-              <label style={SUBLABEL}>DTE</label>
-              <NumInput
-                value={comboDte}
-                min={1}
-                max={365}
-                onCommit={v => setComboDte(Math.round(v))}
-                title="Days to expiry for the option structure (1–365)."
-                style={{ ...paramInput, background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
-              />
-            </div>
-            <div style={{ width: 90 }}>
-              <label style={SUBLABEL}>Simulations</label>
-              <NumInput
-                value={nSims}
-                min={100}
-                max={simsCap}
-                onCommit={v => setNSims(Math.round(v))}
-                title={strategyMode
-                  ? `Entry-signal mode caps at ${STRATEGY_N_SIMS_CAP.toLocaleString()} paths (day-by-day pricing). Clear the field to type a new value.`
-                  : 'Hold-to-DTE mode caps at 5,000 paths. Clear the field to type a new value.'}
-                style={{ ...paramInput, background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
-              />
-            </div>
-            <div style={{ width: 170 }}>
-              <label style={SUBLABEL}>Path model</label>
-              <select
-                value={pathModel}
-                onChange={e => setPathModel(e.target.value as OptionsPathModel)}
-                title={OPTIONS_PATH_MODELS.find(m => m.value === pathModel)?.hint}
-                style={{ ...paramInput, cursor: 'pointer', background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
-              >
-                {OPTIONS_PATH_MODELS.map(m => (
-                  <option key={m.value} value={m.value} title={m.hint}>{m.label}</option>
-                ))}
-              </select>
-            </div>
-            <div style={{ width: 140 }}>
-              <label style={SUBLABEL}>Entry Signal</label>
-              <select
-                value={strategy}
-                onChange={e => {
-                  const val = e.target.value
-                  setStrategy(val)
-                  setStrategyParams(ALGO_DEFAULT_PARAMS[val] || {})
-                  if (val === 'imported_algo' && handoff?.strategyRules) {
-                    setImportedRules(handoff.strategyRules)
-                  }
+        {/* PRIMARY ROW — tickers + run */}
+        <div style={{ display: 'flex', gap: 14, alignItems: 'flex-end' }}>
+          <div style={{ flex: 1, minWidth: 150 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <label style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>
+                Tickers
+                {screenerLoading && <span style={{ color: 'var(--theme-primary, #c9a84c)', marginLeft: 6, textTransform: 'none', fontSize: 9, fontWeight: 400 }}>[Running screen…]</span>}
+                {screenerError && <span style={{ color: 'var(--theme-negative, #ef4444)', marginLeft: 6, textTransform: 'none', fontSize: 9, fontWeight: 400 }}>[{screenerError}]</span>}
+              </label>
+              <UniversePicker
+                mode="tickers"
+                tickerCap={40}
+                onImportTickers={list => { setTickers(list); setTickerInput(list.join(', ')) }}
+                screenHandoff={{ screens: allScreens, loading: screenerLoading, onSelect: handleScreenSelect, triggerLabel: 'Screener' }}
+                style={{
+                  background: 'transparent', border: 'none', color: 'var(--theme-primary, #c9a84c)',
+                  fontSize: 11, fontWeight: 400, letterSpacing: 0, padding: 0, height: 'auto',
                 }}
-                style={{ ...paramInput, cursor: 'pointer', background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
-              >
-                <option value="none">Enter Immediately</option>
-                {handoff?.strategyName && (
-                  <option value="imported_algo">Imported: {handoff.strategyName}</option>
-                )}
-                {ALGO_STRATEGIES.map(s => (
-                  <option key={s.value} value={s.value}>{s.label}</option>
-                ))}
-              </select>
+              />
             </div>
-            {strategy !== 'none' && (
-              <div style={{ width: 80 }}>
-                <label style={SUBLABEL}>Horizon</label>
-                <NumInput
-                  value={simHorizon}
-                  min={1}
-                  max={STRATEGY_HORIZON_CAP}
-                  onCommit={v => setSimHorizon(Math.round(v))}
-                  title={`Entry-signal horizon capped at ${STRATEGY_HORIZON_CAP} trading days (~5y). Clear the field to type a new value.`}
-                  style={{ ...paramInput, background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
-                />
-              </div>
-            )}
-            {strategy !== 'none' && Object.keys(ALGO_DEFAULT_PARAMS[strategy] || {}).map(param => {
+            <input
+              value={tickerInput}
+              onChange={e => handleTickerInputChange(e.target.value)}
+              style={{ ...paramInput, fontSize: 14, padding: '11px 12px' }}
+              placeholder="e.g. AAPL, MSFT, TSLA"
+            />
+          </div>
+          <button onClick={() => mutate()} disabled={!canRun} title={!canRun && !isPending ? 'Add tickers and a structure first' : undefined} style={{
+            display: 'flex', alignItems: 'center', gap: 6, background: 'var(--theme-primary, #c9a84c)', border: '1px solid var(--theme-primary, #c9a84c)',
+            color: 'var(--theme-bg, #101c2e)', fontFamily: 'var(--theme-mono)', fontSize: 13, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
+            padding: '12px 26px', cursor: canRun ? 'pointer' : 'default', opacity: canRun ? 1 : 0.45, whiteSpace: 'nowrap',
+            boxShadow: canRun ? '0 0 14px rgba(201, 168, 76, 0.25)' : 'none', transition: 'all 0.2s ease',
+          }}>
+            {isPending ? 'Running…' : '▶ Run Simulation'}
+          </button>
+        </div>
+
+        {/* SECONDARY CONFIG STRIP — quieter than the primary row, still editable */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1.6fr 1.4fr', gap: 10 }}>
+          <div>
+            <label style={SUBLABEL}>Structure</label>
+            <select value={comboPreset} onChange={e => handlePresetChange(e.target.value)} style={{ ...paramInput, cursor: 'pointer', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
+              <option value="">Select structure…</option>
+              {comboPreset === 'Custom' && <option value="Custom">Custom</option>}
+              {PRESET_GROUPS.map(g => (
+                <optgroup key={g.label} label={g.label}>
+                  {g.keys.map(k => <option key={k} value={k}>{k}</option>)}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={SUBLABEL}>DTE</label>
+            <NumInput
+              value={comboDte}
+              min={1}
+              max={365}
+              onCommit={v => setComboDte(Math.round(v))}
+              title="Days to expiry for the option structure (1–365)."
+              style={{ ...paramInput, border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
+            />
+          </div>
+          <div>
+            <label style={SUBLABEL}>Simulations</label>
+            <NumInput
+              value={nSims}
+              min={100}
+              max={simsCap}
+              onCommit={v => setNSims(Math.round(v))}
+              title={strategyMode
+                ? `Entry-signal mode caps at ${STRATEGY_N_SIMS_CAP.toLocaleString()} paths (day-by-day pricing). Clear the field to type a new value.`
+                : 'Hold-to-DTE mode caps at 5,000 paths. Clear the field to type a new value.'}
+              style={{ ...paramInput, border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
+            />
+          </div>
+          <div>
+            <label style={SUBLABEL}>Path model</label>
+            <select
+              value={pathModel}
+              onChange={e => setPathModel(e.target.value as OptionsPathModel)}
+              title={OPTIONS_PATH_MODELS.find(m => m.value === pathModel)?.hint}
+              style={{ ...paramInput, cursor: 'pointer', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
+            >
+              {OPTIONS_PATH_MODELS.map(m => (
+                <option key={m.value} value={m.value} title={m.hint}>{m.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={SUBLABEL}>Entry signal</label>
+            <select
+              value={strategy}
+              onChange={e => {
+                const val = e.target.value
+                setStrategy(val)
+                setStrategyParams(ALGO_DEFAULT_PARAMS[val] || {})
+                if (val === 'imported_algo' && handoff?.strategyRules) {
+                  setImportedRules(handoff.strategyRules)
+                }
+              }}
+              style={{ ...paramInput, cursor: 'pointer', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
+            >
+              <option value="none">Enter Immediately</option>
+              {handoff?.strategyName && (
+                <option value="imported_algo">Imported: {handoff.strategyName}</option>
+              )}
+              {ALGO_STRATEGIES.map(s => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Entry-signal-dependent extra fields wrap onto their own row so the
+            core 5-cell grid above stays a fixed, predictable shape. */}
+        {strategy !== 'none' && (
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: -8 }}>
+            <div style={{ width: 90 }}>
+              <label style={SUBLABEL}>Horizon</label>
+              <NumInput
+                value={simHorizon}
+                min={1}
+                max={STRATEGY_HORIZON_CAP}
+                onCommit={v => setSimHorizon(Math.round(v))}
+                title={`Entry-signal horizon capped at ${STRATEGY_HORIZON_CAP} trading days (~5y). Clear the field to type a new value.`}
+                style={{ ...paramInput, border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
+              />
+            </div>
+            {Object.keys(ALGO_DEFAULT_PARAMS[strategy] || {}).map(param => {
               const label = ALGO_PARAM_LABELS[strategy]?.[param] || param
               return (
-                <div key={param} style={{ width: 85 }}>
+                <div key={param} style={{ width: 90 }}>
                   <label style={SUBLABEL}>{label}</label>
                   <input
                     type="number"
@@ -897,156 +912,142 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
                       const val = Number(e.target.value) || 0
                       setStrategyParams(prev => ({ ...prev, [param]: val }))
                     }}
-                    style={{ ...paramInput, background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
+                    style={{ ...paramInput, border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
                   />
                 </div>
               )
             })}
-            <button onClick={() => mutate()} disabled={!canRun} title={!canRun && !isPending ? 'Add tickers and a structure first' : undefined} style={{
-              display: 'flex', alignItems: 'center', gap: 6, background: 'var(--theme-primary, #c9a84c)', border: '1px solid var(--theme-primary, #c9a84c)',
-              color: 'var(--theme-bg, #101c2e)', fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
-              padding: '8px 18px', cursor: canRun ? 'pointer' : 'default', opacity: canRun ? 1 : 0.45, whiteSpace: 'nowrap',
-              boxShadow: canRun ? '0 0 10px rgba(201, 168, 76, 0.3)' : 'none', transition: 'all 0.2s ease', height: 28, boxSizing: 'border-box'
-            }}>
-              {isPending ? 'Running…' : '▶ Run Simulation'}
-            </button>
           </div>
-        </div>
+        )}
 
-        {/* LEGS SECTION */}
-        <div style={{ borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingTop: 8 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <div style={{ width: 2, height: 10, background: 'var(--theme-primary, #c9a84c)' }} />
-              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)' }}>
-                Legs{legs.length > 0 ? ` · ${legs.length}` : ''}
-              </span>
-            </div>
+        {/* LEGS — compact table */}
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>
+              Legs {legs.length > 0 && <span style={{ color: 'var(--theme-secondary, #5f7186)' }}>· {legs.length}</span>}
+            </span>
             <button onClick={addLeg} disabled={legs.length >= MAX_COMBO_LEGS} style={{
-              background: 'none', border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)',
-              fontFamily: 'var(--theme-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', padding: '3px 8px',
+              background: 'none', border: 'none', color: 'var(--theme-primary, #c9a84c)',
+              fontFamily: 'var(--theme-mono)', fontSize: 11, padding: 0,
               cursor: legs.length >= MAX_COMBO_LEGS ? 'default' : 'pointer', opacity: legs.length >= MAX_COMBO_LEGS ? 0.5 : 1
             }}>
-              + ADD LEG
+              + add leg
             </button>
           </div>
 
-          {legs.length === 0 && (
+          {legs.length === 0 ? (
             <div style={{
               padding: '14px 12px', fontFamily: 'var(--theme-mono)', fontSize: 10,
               color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', lineHeight: 1.5,
-              border: '1px dashed var(--theme-border, rgba(255,255,255,0.12))', background: 'var(--theme-bg, #07101a)',
+              border: '1px dashed var(--theme-border, rgba(255,255,255,0.12))', background: 'var(--theme-bg, #101c2e)',
             }}>
-              No legs yet — pick a structure above, or + ADD LEG to build a custom multi-leg.
+              No legs yet — pick a structure above, or + add leg to build a custom multi-leg.
             </div>
-          )}
-          
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 8 }}>
-            {legs.map((leg, i) => {
-              const isSell = leg.side === 'sell'
-              const color = isSell ? 'var(--theme-negative, #ef4444)' : 'var(--theme-positive, #22c55e)'
-              return (
-                <div key={i} style={{
-                  background: 'var(--theme-bg, #07101a)',
-                  border: `1px solid ${color}44`,
-                  padding: 8,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 6
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color, textTransform: 'uppercase' }}>Leg {i + 1}</span>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr 1fr 1fr 1fr 24px', gap: 10, padding: '0 10px' }}>
+                <span />
+                <span style={SUBLABEL}>Type</span>
+                <span style={SUBLABEL}>Side</span>
+                <span style={SUBLABEL}>Strike %</span>
+                <span style={SUBLABEL}>Qty</span>
+                <span />
+              </div>
+              {legs.map((leg, i) => {
+                const isSell = leg.side === 'sell'
+                const color = isSell ? 'var(--theme-negative, #ef4444)' : 'var(--theme-positive, #22c55e)'
+                const legInput: React.CSSProperties = { ...paramInput, background: 'var(--theme-bg, #0a121e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '5px 6px', fontSize: 12 }
+                return (
+                  <div key={i} style={{
+                    display: 'grid', gridTemplateColumns: '60px 1fr 1fr 1fr 1fr 24px', gap: 10, alignItems: 'center',
+                    background: 'var(--theme-bg, #101c2e)', borderLeft: `2px solid ${color}`, padding: '8px 10px',
+                  }}>
+                    <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, fontWeight: 700, color }}>L{i + 1}</span>
+                    <select value={leg.type} onChange={e => updateLeg(i, { type: e.target.value as ComboLeg['type'] })} style={{ ...legInput, cursor: 'pointer' }}>
+                      <option value="call">Call</option>
+                      <option value="put">Put</option>
+                    </select>
+                    <select value={leg.side} onChange={e => updateLeg(i, { side: e.target.value as ComboLeg['side'] })} style={{ ...legInput, cursor: 'pointer' }}>
+                      <option value="buy">Buy</option>
+                      <option value="sell">Sell</option>
+                    </select>
+                    <NumInput value={Math.round(leg.moneyness * 100)} min={1} onCommit={pct => updateLeg(i, { moneyness: Math.max(0.01, pct / 100) })} style={legInput} />
+                    <NumInput value={leg.qty} min={1} onCommit={q => updateLeg(i, { qty: Math.max(1, Math.round(q)) })} style={legInput} />
                     <button type="button" onClick={() => removeLeg(i)} disabled={legs.length <= 1} style={{
-                      background: 'none', border: 'none', fontSize: 14, cursor: legs.length <= 1 ? 'default' : 'pointer',
-                      color: legs.length <= 1 ? 'var(--theme-text-faint, rgba(255,255,255,0.2))' : color
+                      background: 'none', border: 'none', fontSize: 14, textAlign: 'center', cursor: legs.length <= 1 ? 'default' : 'pointer',
+                      color: legs.length <= 1 ? 'var(--theme-text-faint, rgba(255,255,255,0.2))' : 'var(--theme-secondary, #5f7186)'
                     }}>×</button>
                   </div>
-                  
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                    <div>
-                      <label style={{ ...SUBLABEL, marginBottom: 2 }}>Type</label>
-                      <select value={leg.type} onChange={e => updateLeg(i, { type: e.target.value as ComboLeg['type'] })} style={{ ...paramInput, background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '4px 6px', fontSize: 11, color: 'var(--theme-text, #d7e3fc)', outline: 'none' }}>
-                        <option value="call">Call</option>
-                        <option value="put">Put</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label style={{ ...SUBLABEL, marginBottom: 2 }}>Side</label>
-                      <select value={leg.side} onChange={e => updateLeg(i, { side: e.target.value as ComboLeg['side'] })} style={{ ...paramInput, background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '4px 6px', fontSize: 11, color: 'var(--theme-text, #d7e3fc)', outline: 'none' }}>
-                        <option value="buy">Buy</option>
-                        <option value="sell">Sell</option>
-                      </select>
-                    </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* ADVANCED DRAWER — Exit Rules + Sizing & Leverage, collapsed by default */}
+        <div style={{ borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingTop: 14 }}>
+          <div onClick={() => setAdvancedOpen(o => !o)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ color: 'var(--theme-secondary, #8099b0)', fontSize: 11, width: 10, display: 'inline-block' }}>{advancedOpen ? '▾' : '▸'}</span>
+              <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)' }}>
+                Advanced — exit rules &amp; sizing
+              </span>
+            </div>
+            <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-secondary, #5f7186)' }}>
+              {[
+                tpPct ? `TP ${tpPct}%` : null,
+                slPct ? `SL ${slPct}%` : null,
+                maxHoldDays ? `Hold ${maxHoldDays}d` : 'Hold to DTE',
+                `Size ${positionSize}% × ${leverage}`,
+                Number(borrowRate) > 0 ? `Borrow ${borrowRate}%` : null,
+              ].filter(Boolean).join(' · ')}
+            </span>
+          </div>
+
+          {advancedOpen && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 28, marginTop: 16 }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)', marginBottom: 10 }}>
+                  Exit Rules
+                  <HelpTip text="% of entry credit/debit magnitude. Take-Profit 50 closes once 50% of max profit is captured, matching realized P&L day-by-day (not just at expiry). Blank = hold to DTE." />
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={SUBLABEL}>Take-Profit %</label>
+                    <input value={tpPct} placeholder="off" onChange={e => setTpPct(e.target.value)} style={{ ...paramInput, border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
                   </div>
-                  
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                    <div>
-                      <label style={{ ...SUBLABEL, marginBottom: 2 }}>Strike %</label>
-                      <NumInput value={Math.round(leg.moneyness * 100)} min={1} onCommit={pct => updateLeg(i, { moneyness: Math.max(0.01, pct / 100) })} style={{ ...paramInput, background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '4px 6px', fontSize: 11, color: 'var(--theme-text, #d7e3fc)' }} />
-                    </div>
-                    <div>
-                      <label style={{ ...SUBLABEL, marginBottom: 2 }}>Qty</label>
-                      <NumInput value={leg.qty} min={1} onCommit={q => updateLeg(i, { qty: Math.max(1, Math.round(q)) })} style={{ ...paramInput, background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '4px 6px', fontSize: 11, color: 'var(--theme-text, #d7e3fc)' }} />
-                    </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={SUBLABEL}>Stop-Loss %</label>
+                    <input value={slPct} placeholder="off" onChange={e => setSlPct(e.target.value)} style={{ ...paramInput, border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
+                  </div>
+                  <div style={{ flex: 1.2 }}>
+                    <label style={SUBLABEL}>Max Hold days</label>
+                    <input value={maxHoldDays} placeholder={`${comboDte} (DTE)`} onChange={e => setMaxHoldDays(e.target.value)} style={{ ...paramInput, border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
                   </div>
                 </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* EXIT RULES SECTION */}
-        <div style={{ borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingTop: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <div style={{ width: 2, height: 10, background: 'var(--theme-primary, #c9a84c)' }} />
-            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)' }}>Exit Rules</span>
-          </div>
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <div style={{ width: 100 }}>
-                <label style={SUBLABEL}>Take-Profit %</label>
-                <input value={tpPct} placeholder="off" onChange={e => setTpPct(e.target.value)} style={{ ...paramInput, background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
               </div>
-              <div style={{ width: 100 }}>
-                <label style={SUBLABEL}>Stop-Loss %</label>
-                <input value={slPct} placeholder="off" onChange={e => setSlPct(e.target.value)} style={{ ...paramInput, background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
-              </div>
-              <div style={{ width: 115 }}>
-                <label style={SUBLABEL}>Max Hold - Days</label>
-                <input value={maxHoldDays} placeholder={`${comboDte} (DTE)`} onChange={e => setMaxHoldDays(e.target.value)} style={{ ...paramInput, background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)', marginBottom: 10 }}>
+                  Sizing &amp; Leverage
+                  <HelpTip text="Each admitted trade sizes to Position Size% × Leverage of the full account (same as the Algo backtester) — not split across tickers. Leg qty ratios stay fixed. Wipeout floors at $0." />
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={SUBLABEL}>Position Size %</label>
+                    <input value={positionSize} onChange={e => setPositionSize(e.target.value)} style={{ ...paramInput, border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={SUBLABEL}>Leverage</label>
+                    <input value={leverage} onChange={e => setLeverage(e.target.value)} style={{ ...paramInput, border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
+                  </div>
+                  <div style={{ flex: 1.2 }}>
+                    <label style={SUBLABEL}>Borrow Rate %</label>
+                    <input value={borrowRate} onChange={e => setBorrowRate(e.target.value)} style={{ ...paramInput, border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
+                  </div>
+                </div>
               </div>
             </div>
-            <div style={{ flex: 1, minWidth: 280, fontSize: 9.5, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', fontFamily: 'var(--theme-mono)', lineHeight: '14px' }}>
-              % of the entry credit/debit magnitude — e.g. Take-Profit 50 closes once 50% of max profit is captured, matching the position's realized P&L path day-by-day (not just at expiry). Leave blank to hold to DTE.
-            </div>
-          </div>
-        </div>
-
-        {/* SIZING & LEVERAGE SECTION */}
-        <div style={{ borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingTop: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <div style={{ width: 2, height: 10, background: 'var(--theme-primary, #c9a84c)' }} />
-            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)' }}>Sizing & Leverage</span>
-          </div>
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <div style={{ width: 100 }}>
-                <label style={SUBLABEL}>Position Size %</label>
-                <input value={positionSize} onChange={e => setPositionSize(e.target.value)} style={{ ...paramInput, background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
-              </div>
-              <div style={{ width: 100 }}>
-                <label style={SUBLABEL}>Leverage *</label>
-                <input value={leverage} onChange={e => setLeverage(e.target.value)} style={{ ...paramInput, background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
-              </div>
-              <div style={{ width: 115 }}>
-                <label style={SUBLABEL}>Borrow Rate %</label>
-                <input value={borrowRate} onChange={e => setBorrowRate(e.target.value)} style={{ ...paramInput, background: 'var(--theme-bg, #07101a)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
-              </div>
-            </div>
-            <div style={{ flex: 1, minWidth: 280, fontSize: 9.5, color: 'var(--theme-text-faint, rgba(255,255,255,0.4))', fontFamily: 'var(--theme-mono)', lineHeight: '14px' }}>
-              Each admitted trade sizes to Position Size% × Leverage of the full account (same as the Algo backtester) — not split across tickers. Leg qty ratios stay fixed. Wipeout floors at $0.
-            </div>
-          </div>
+          )}
         </div>
       </>)}
       </div>
