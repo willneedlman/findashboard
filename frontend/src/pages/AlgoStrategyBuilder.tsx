@@ -9,7 +9,7 @@ import TickerInput from '../components/TickerInput'
 import { KpiCell } from '../components/mmCockpit'
 import { useChartColors } from '../hooks/useChartColors'
 import { INPUT, LABEL, TOOLTIP_STYLE, TOOLTIP_LABEL, TOOLTIP_ITEM, TICK } from './valuationShared'
-import CustomStrategyModal, { type CustomStrategyDef, DEFAULT_RISK, rulesForTicker, usesNonDailyTimeframe } from '../components/CustomStrategyModal'
+import CustomStrategyModal, { type CustomStrategyDef, type StrategyRisk, DEFAULT_RISK, rulesForTicker, usesNonDailyTimeframe } from '../components/CustomStrategyModal'
 import { loadCustomStrategies, saveCustomStrategy, deleteCustomStrategy, duplicateCustomStrategy } from '../utils/customStrategies'
 import { PRESETS, PRESET_GROUPS, type Leg } from './strategy-builder/shared'
 import { ReturnsScatter, quickRegression } from './regressionShared'
@@ -766,7 +766,7 @@ function StrategyControlsPanel({
   portfolioLeverage, setPortfolioLeverage, effectiveAnnualRate, setEffectiveAnnualRate,
   cloningId, setCloningId, cloneInput, setCloneInput, cloneToTickers, pmBooks,
   start, setStart, end, setEnd, timeframe, setTimeframe,
-  activeName, setActiveName, onEditStrategy, onDuplicateStrategy, onDeleteStrategy, onNewStrategy,
+  activeName, setActiveName, patchActiveRisk, onEditStrategy, onDuplicateStrategy, onDeleteStrategy, onNewStrategy,
   runPortfolio, sendPortfolioToPaper, exportToMonteCarlo, exportSingleToMonteCarlo, collapsed, onToggleCollapsed,
   // Single mode additions:
   ticker, setTicker,
@@ -799,6 +799,7 @@ function StrategyControlsPanel({
   end: string; setEnd: (s: string) => void
   timeframe: string; setTimeframe: (s: string) => void
   activeName: string; setActiveName: (n: string) => void
+  patchActiveRisk: (patch: Partial<StrategyRisk>) => void
   onEditStrategy: (def: CustomStrategyDef) => void
   onDuplicateStrategy: (name: string) => void
   onDeleteStrategy: (name: string) => void
@@ -833,6 +834,10 @@ function StrategyControlsPanel({
   // position created under an earlier strategy selection could mask a real
   // non-daily warning for whatever's actually running now.
   const anyNonDaily = activeName ? usesNonDailyTimeframe(saved.find(s => s.name === activeName)!) : false
+  // Single mode's risk controls edit the active strategy's own saved risk —
+  // there's nothing to edit until one is selected.
+  const activeDef = saved.find(s => s.name === activeName) ?? null
+  const singleRisk = activeDef?.risk ?? DEFAULT_RISK
   const headerBtn: React.CSSProperties = {
     display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px', fontFamily: 'inherit', fontSize: 9.5, fontWeight: 700,
     letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer', whiteSpace: 'nowrap',
@@ -863,19 +868,25 @@ function StrategyControlsPanel({
             {ticker.toUpperCase()} · {instMode === 'underlying' ? 'Shares' : instMode === 'option' ? `${optType.toUpperCase()} Option` : 'Combo'}
           </span>
         )}
-        {mode === 'portfolio' && <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, fontFamily: 'var(--theme-mono)', color: 'var(--theme-secondary, #8099b0)' }}>
+        {(mode === 'portfolio' || activeDef) && <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, fontFamily: 'var(--theme-mono)', color: 'var(--theme-secondary, #8099b0)' }}>
           <span>Trade size</span>
-          <NumInput value={portfolioTradeSize} min={1} max={100} onCommit={setPortfolioTradeSize} title="Every admitted trade uses this percentage of the total portfolio"
+          <NumInput value={mode === 'portfolio' ? portfolioTradeSize : singleRisk.sizingPct} min={1} max={100}
+            onCommit={v => mode === 'portfolio' ? setPortfolioTradeSize(v) : patchActiveRisk({ sizingPct: v })}
+            title={mode === 'portfolio' ? 'Every admitted trade uses this percentage of the total portfolio' : "This strategy's saved position size — same field as the Risk section in the strategy editor"}
             style={{ ...INPUT, width: 46, textAlign: 'center', color: 'var(--theme-primary, #c9a84c)', fontWeight: 700, padding: '3px 4px' }} />
           <span>%</span>
         </div>}
-        {mode === 'portfolio' && <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, fontFamily: 'var(--theme-mono)', color: 'var(--theme-secondary, #8099b0)' }}>
+        {(mode === 'portfolio' || activeDef) && <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, fontFamily: 'var(--theme-mono)', color: 'var(--theme-secondary, #8099b0)' }}>
           <span>Leverage</span>
-          <NumInput value={portfolioLeverage} min={1} onCommit={setPortfolioLeverage} title="Gross-notional multiplier; 1x is unlevered. No ceiling — high leverage can wipe the account out on a modest adverse move."
+          <NumInput value={mode === 'portfolio' ? portfolioLeverage : singleRisk.leverage} min={1}
+            onCommit={v => mode === 'portfolio' ? setPortfolioLeverage(v) : patchActiveRisk({ leverage: v })}
+            title="Gross-notional multiplier; 1x is unlevered. No ceiling — high leverage can wipe the account out on a modest adverse move."
             style={{ ...INPUT, width: 42, textAlign: 'center', color: 'var(--theme-primary, #c9a84c)', fontWeight: 700, padding: '3px 4px' }} />
           <span>x</span>
           <span>EAR</span>
-          <NumInput value={effectiveAnnualRate} min={0} max={100} onCommit={setEffectiveAnnualRate} title="Effective annual borrowing rate, compounded into a daily financing rate"
+          <NumInput value={mode === 'portfolio' ? effectiveAnnualRate : singleRisk.effectiveAnnualRate} min={0} max={100}
+            onCommit={v => mode === 'portfolio' ? setEffectiveAnnualRate(v) : patchActiveRisk({ effectiveAnnualRate: v })}
+            title="Effective annual borrowing rate, compounded into a daily financing rate"
             style={{ ...INPUT, width: 46, textAlign: 'center', color: 'var(--theme-primary, #c9a84c)', fontWeight: 700, padding: '3px 4px' }} />
           <span>%</span>
         </div>}
@@ -1212,6 +1223,17 @@ export function AlgoStrategyBuilderContent() {
 
   const activeDef = saved.find(s => s.name === activeName) ?? null
   const refresh = () => setSaved(loadCustomStrategies())
+  // Single mode's Trade Size/Leverage/EAR live on the strategy definition
+  // itself (risk.sizingPct/.leverage/.effectiveAnnualRate), not a run-level
+  // override like portfolio mode's — so editing the header here writes
+  // straight through to the saved strategy, the same fields the strategy
+  // editor modal's Risk section shows, and any other tool that imports this
+  // strategy (Monte Carlo, Paper Trading) picks up the change too.
+  const patchActiveRisk = (patch: Partial<StrategyRisk>) => {
+    if (!activeDef) return
+    saveCustomStrategy({ ...activeDef, risk: { ...(activeDef.risk ?? DEFAULT_RISK), ...patch } })
+    refresh()
+  }
   // A universe of option/combo positions (e.g. one shared short-straddle
   // template cloned across 60 symbols) has no representation in the
   // portfolio GBM/bootstrap simulator — it silently flattens every leg to
@@ -1946,6 +1968,7 @@ export function AlgoStrategyBuilderContent() {
           cloneToTickers={cloneToTickers} pmBooks={pmBooks}
           start={start} setStart={setStart} end={end} setEnd={setEnd} timeframe={timeframe} setTimeframe={setTimeframe}
           activeName={activeName} setActiveName={setActiveName}
+          patchActiveRisk={patchActiveRisk}
           onEditStrategy={def => { setEditing(def); setReviewTargetNames([]); setAiPrompt(null); setModalOpen(true) }}
           onDuplicateStrategy={onDuplicate}
           onDeleteStrategy={onDelete}
