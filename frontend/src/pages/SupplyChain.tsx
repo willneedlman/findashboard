@@ -1,5 +1,5 @@
 import { T } from '../lib/theme'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import { useQuery } from '@tanstack/react-query'
@@ -402,18 +402,25 @@ function InstitutionalPanel({ inst, loading, tab, onTab }:
 
 // ── Market performance (absorbed from the old Stock Analytics tool) ─────────
 // Price, rolling volatility, and drawdown-from-peak with a range selector.
-const RANGES: { key: string; years: number }[] = [
-  { key: '1Y', years: 1 }, { key: '3Y', years: 3 }, { key: '5Y', years: 5 }, { key: 'MAX', years: 25 },
+// Days rather than years so the range goes down to 1D — /api/market/history
+// auto-selects intraday resolution (5m/30m/60m bars) once the requested span
+// is short enough, so a short preset here gets a real intraday chart, not
+// just a couple of daily points.
+const RANGES: { key: string; days: number }[] = [
+  { key: '1D', days: 1 }, { key: '1W', days: 7 }, { key: '1M', days: 30 }, { key: '3M', days: 90 },
+  { key: '6M', days: 182 }, { key: '1Y', days: 365 }, { key: '3Y', days: 1095 }, { key: '5Y', days: 1826 },
+  { key: 'MAX', days: 25 * 365 },
 ]
 const TICK_STYLE = { fontSize: 10, fill: 'var(--theme-secondary, #99907e)', fontFamily: 'var(--theme-mono)' }
 
-function PerfChart({ data, stroke, id, fmt, height }: {
+function PerfChart({ data, stroke, id, fmt, height, tickFmt }: {
   data: { date: string | number; value: number }[]; stroke: string; id: string; fmt: (v: number) => string; height: number
+  tickFmt?: (d: string | number) => string
 }) {
-  const fmtAxis = (d: string | number) =>
+  const fmtAxis = tickFmt ?? ((d: string | number) =>
     typeof d === 'number'
       ? new Date(d * 1000).toLocaleString('en-US', { month: 'short', day: 'numeric' })
-      : d.slice(0, 7)
+      : d.slice(0, 7))
   return (
     <ResponsiveContainer width="100%" height={height}>
       <AreaChart data={data}>
@@ -433,17 +440,17 @@ function PerfChart({ data, stroke, id, fmt, height }: {
   )
 }
 
-const isoYearsAgo = (years: number) => { const d = new Date(); d.setFullYear(d.getFullYear() - years); return d.toISOString().split('T')[0] }
+const isoDaysAgo = (days: number) => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().split('T')[0] }
 
 function MarketPerformancePanel({ ticker }: { ticker: string }) {
   const isMobile = useIsMobile()
   const today = new Date().toISOString().split('T')[0]
   const [range, setRange] = useState('3Y')
-  const [start, setStart] = useState(isoYearsAgo(3))
+  const [start, setStart] = useState(isoDaysAgo(1095))
   const [end, setEnd] = useState(today)
   const applyPreset = (key: string) => {
-    const years = RANGES.find(r => r.key === key)?.years ?? 3
-    setRange(key); setStart(isoYearsAgo(years)); setEnd(today)
+    const days = RANGES.find(r => r.key === key)?.days ?? 1095
+    setRange(key); setStart(isoDaysAgo(days)); setEnd(today)
   }
 
   const q = useQuery({
@@ -458,6 +465,23 @@ function MarketPerformancePanel({ ticker }: { ticker: string }) {
   })
   const m = q.data?.metrics
   const returnColor = m ? (m.total_return >= 0 ? 'var(--theme-positive)' : 'var(--theme-negative)') : T.text
+
+  // Intraday points (1D/1W/1M presets) carry a UNIX timestamp, but the default
+  // month/day axis label repeats the same string across every tick once the
+  // whole series sits inside one trading day — show time-of-day instead, and
+  // date+hour once the window spans multiple days (1W/1M at 30m/60m bars).
+  const intradayTickFmt = useMemo(() => {
+    if (!q.data?.meta?.intraday) return undefined
+    const pts = q.data.price
+    const spanMs = pts.length > 1 ? (Number(pts[pts.length - 1].date) - Number(pts[0].date)) * 1000 : 0
+    const sameSession = spanMs < 20 * 3600 * 1000
+    return (d: string | number) => {
+      const dt = new Date(Number(d) * 1000)
+      return sameSession
+        ? dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+        : dt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric' })
+    }
+  }, [q.data])
 
   const dateStyle: React.CSSProperties = {
     background: 'var(--theme-bg, #0a1628)', border: `1px solid ${T.border}`, color: T.text,
@@ -552,16 +576,18 @@ function MarketPerformancePanel({ ticker }: { ticker: string }) {
           )}
           <div style={{ padding: '14px 12px 6px' }}>
             <div style={{ ...labelStyle, paddingLeft: 6 }}>Price</div>
-            <PerfChart data={q.data.price} stroke="var(--theme-primary, #c9a84c)" id="profPrice" fmt={v => `$${v.toLocaleString()}`} height={220} />
+            <PerfChart data={q.data.price} stroke="var(--theme-primary, #c9a84c)" id="profPrice" fmt={v => `$${v.toLocaleString()}`} height={220} tickFmt={intradayTickFmt} />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 8, padding: '6px 12px 12px' }}>
             <div>
-              <div style={{ ...labelStyle, paddingLeft: 6 }}>30D Rolling Volatility · Annualised</div>
-              <PerfChart data={q.data.volatility.map((d: any) => ({ ...d, value: +(d.value * 100).toFixed(2) }))} stroke="var(--theme-tertiary, #60a5fa)" id="profVol" fmt={v => `${v}%`} height={140} />
+              <div style={{ ...labelStyle, paddingLeft: 6 }}>
+                {q.data.meta?.intraday ? `${q.data.meta.vol_window}-Bar Rolling Volatility · Annualised` : '30D Rolling Volatility · Annualised'}
+              </div>
+              <PerfChart data={q.data.volatility.map((d: any) => ({ ...d, value: +(d.value * 100).toFixed(2) }))} stroke="var(--theme-tertiary, #60a5fa)" id="profVol" fmt={v => `${v}%`} height={140} tickFmt={intradayTickFmt} />
             </div>
             <div>
               <div style={{ ...labelStyle, paddingLeft: 6 }}>Peak Drawdown</div>
-              <PerfChart data={q.data.drawdown.map((d: any) => ({ ...d, value: +(d.value * 100).toFixed(2) }))} stroke="#8c2e36" id="profDd" fmt={v => `${v}%`} height={140} />
+              <PerfChart data={q.data.drawdown.map((d: any) => ({ ...d, value: +(d.value * 100).toFixed(2) }))} stroke="#8c2e36" id="profDd" fmt={v => `${v}%`} height={140} tickFmt={intradayTickFmt} />
             </div>
           </div>
         </>
