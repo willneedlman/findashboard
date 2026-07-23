@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useMutation, useQuery, type UseMutationResult } from '@tanstack/react-query'
 import axios from 'axios'
-import { ComposedChart, Area, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
+import { ComposedChart, Area, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, ReferenceArea } from 'recharts'
 import { ChevronUp, ChevronDown, Play, Plus, Send, Repeat } from 'lucide-react'
 import PageWrapper from '../components/PageWrapper'
 import EmptyState from '../components/EmptyState'
@@ -1564,6 +1564,11 @@ export function AlgoStrategyBuilderContent() {
   const [pinnedTrade, setPinnedTrade] = useState<MarkerPoint | null>(null)
   const [selectedPortfolioTicker, setSelectedPortfolioTicker] = useState<string | null>(null)
   const [tradeEventFilter, setTradeEventFilter] = useState<'all' | 'buy' | 'sell' | 'expired'>('all')
+  // Drag-to-zoom on the equity curve: a committed [start,end] date range (null
+  // = full history) plus the in-progress drag anchor/cursor while selecting.
+  const [zoomRange, setZoomRange] = useState<[string, string] | null>(null)
+  const [zoomAnchor, setZoomAnchor] = useState<string | null>(null)
+  const [zoomCursor, setZoomCursor] = useState<string | null>(null)
   const [pfCollapsed, setPfCollapsed] = useState(false)
   // Collapse the per-ticker attribution grid under portfolio backtest results
   const [tickerGridCollapsed, setTickerGridCollapsed] = useState(false)
@@ -1604,7 +1609,7 @@ export function AlgoStrategyBuilderContent() {
     setEditing(null)
     setModalOpen(true)
   }
-  useEffect(() => { setPinnedTrade(null); setSelectedPortfolioTicker(null) }, [data, pf])
+  useEffect(() => { setPinnedTrade(null); setSelectedPortfolioTicker(null); setZoomRange(null); setZoomAnchor(null) }, [data, pf])
   // Regression dotplot: strategy vs the broad MARKET (SPY), not vs buy & hold of
   // the traded ticker — the equity curve's own "benchmark" field is buy & hold of
   // whatever's being traded, which answers a different question ("did I beat just
@@ -1659,6 +1664,18 @@ export function AlgoStrategyBuilderContent() {
     })
   }, [R, selectedPortfolioTicker, tradeEventFilter])
 
+  // Drag-select a range on the chart (mousedown → mousemove → mouseup, dates
+  // compared as strings since they're already ISO-sortable) to zoom the curve
+  // into that window; the committed range then slices markerData for both the
+  // chart and the tick-decimals calc below, so zooming into a flat early
+  // stretch re-derives its own precision instead of inheriting the full
+  // curve's. A same-point drag (no real range) is ignored as a stray click.
+  const chartData = useMemo(() => {
+    if (!zoomRange) return markerData
+    const [lo, hi] = zoomRange[0] <= zoomRange[1] ? zoomRange : [zoomRange[1], zoomRange[0]]
+    return markerData.filter(d => d.date >= lo && d.date <= hi)
+  }, [markerData, zoomRange])
+
   // Recharts' default 5-tick axis picks "nice" round steps off the actual
   // data range, not off the $1k formatting granularity below — a backtest
   // that stays within a few hundred dollars of its starting capital (a very
@@ -1666,7 +1683,7 @@ export function AlgoStrategyBuilderContent() {
   // which every one of collapses to the same "$10k" once rounded to whole
   // thousands. Pick enough decimal places that adjacent ticks stay distinct.
   const equityTickDecimals = useMemo(() => {
-    const vals = markerData.map(d => d.strategy).filter((v): v is number => typeof v === 'number')
+    const vals = chartData.map(d => d.strategy).filter((v): v is number => typeof v === 'number')
     if (vals.length < 2) return 0
     const range = Math.max(...vals) - Math.min(...vals)
     if (range <= 0) return 0
@@ -1674,7 +1691,7 @@ export function AlgoStrategyBuilderContent() {
     if (stepK >= 1) return 0
     if (stepK >= 0.1) return 1
     return 2
-  }, [markerData])
+  }, [chartData])
 
   // Shared between single-position mode (SidebarLayout's children) and
   // portfolio mode (full-width stack below PortfolioControlsPanel) — the
@@ -1881,12 +1898,17 @@ export function AlgoStrategyBuilderContent() {
             <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 10, background: 'var(--theme-surface, #142032)', padding: '3px 8px', borderRight: '1px solid var(--theme-border, rgba(255,255,255,0.08))', borderBottom: '1px solid var(--theme-border, rgba(255,255,255,0.08))', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>
               Equity Curve — {selectedPortfolioTicker ? `${selectedPortfolioTicker} Trades` : 'Strategy'}
             </div>
-            {selectedPortfolioTicker && (
-              <button onClick={() => setSelectedPortfolioTicker(null)} style={{ position: 'absolute', top: 3, right: 4, zIndex: 12, background: 'transparent', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))', color: 'var(--theme-secondary, #8099b0)', cursor: 'pointer', fontFamily: 'var(--theme-mono)', fontSize: 8, padding: '3px 6px' }}>
-                Show all trades
-              </button>
-            )}
-            <div style={{ position: 'absolute', top: 3, right: selectedPortfolioTicker ? 92 : 4, zIndex: 12, display: 'flex', gap: 3, alignItems: 'center' }}>
+            <div style={{ position: 'absolute', top: 3, right: 4, zIndex: 12, display: 'flex', gap: 3, alignItems: 'center' }}>
+              {zoomRange && (
+                <button onClick={() => setZoomRange(null)} title="Reset zoom" style={{ background: 'transparent', border: '1px solid var(--theme-primary, #c9a84c)', color: 'var(--theme-primary, #c9a84c)', cursor: 'pointer', fontFamily: 'var(--theme-mono)', fontSize: 8, padding: '3px 6px' }}>
+                  Reset zoom
+                </button>
+              )}
+              {selectedPortfolioTicker && (
+                <button onClick={() => setSelectedPortfolioTicker(null)} style={{ background: 'transparent', border: '1px solid var(--theme-border, rgba(255,255,255,0.12))', color: 'var(--theme-secondary, #8099b0)', cursor: 'pointer', fontFamily: 'var(--theme-mono)', fontSize: 8, padding: '3px 6px' }}>
+                  Show all trades
+                </button>
+              )}
               {(['all', 'buy', 'sell', 'expired'] as const).map(filter => {
                 const active = tradeEventFilter === filter
                 return <button key={filter} onClick={() => setTradeEventFilter(filter)} style={{ background: active ? 'color-mix(in srgb, var(--theme-primary, #c9a84c) 14%, transparent)' : 'transparent', border: `1px solid ${active ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-border, rgba(255,255,255,0.12))'}`, color: active ? 'var(--theme-primary, #c9a84c)' : 'var(--theme-secondary, #8099b0)', cursor: 'pointer', fontFamily: 'var(--theme-mono)', fontSize: 8, padding: '3px 5px', textTransform: 'uppercase' }}>
@@ -1901,7 +1923,16 @@ export function AlgoStrategyBuilderContent() {
             )}
             <div style={{ paddingTop: 30, paddingLeft: 8, paddingRight: 8, paddingBottom: 8, height: 320 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={markerData}>
+                <ComposedChart
+                  data={chartData}
+                  style={{ cursor: zoomAnchor ? 'ew-resize' : 'crosshair' }}
+                  onMouseDown={e => { if (e?.activeLabel) { setZoomAnchor(e.activeLabel); setZoomCursor(e.activeLabel) } }}
+                  onMouseMove={e => { if (zoomAnchor && e?.activeLabel) setZoomCursor(e.activeLabel) }}
+                  onMouseUp={() => {
+                    if (zoomAnchor && zoomCursor && zoomAnchor !== zoomCursor) setZoomRange([zoomAnchor, zoomCursor])
+                    setZoomAnchor(null); setZoomCursor(null)
+                  }}
+                >
                   <defs>
                     <linearGradient id="algoEq" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor={cc.primary} stopOpacity={0.22} />
@@ -1909,8 +1940,8 @@ export function AlgoStrategyBuilderContent() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.045)" />
-                  <XAxis dataKey="date" tick={TICK} tickFormatter={d => d.slice(0, 7)} interval="preserveStartEnd" minTickGap={48} />
-                  <YAxis tick={TICK} tickFormatter={v => `$${(v / 1000).toFixed(equityTickDecimals)}k`} orientation="right" domain={['auto', 'auto']} />
+                  <XAxis dataKey="date" tick={TICK} tickFormatter={d => d.slice(0, 7)} interval="preserveStartEnd" minTickGap={48} allowDataOverflow />
+                  <YAxis tick={TICK} tickFormatter={v => `$${(v / 1000).toFixed(equityTickDecimals)}k`} orientation="right" domain={['auto', 'auto']} allowDataOverflow />
                   <Tooltip content={<EquityTradeTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 10 }} payload={[
                     { value: 'Strategy', type: 'line', id: 's', color: cc.primary },
@@ -1920,6 +1951,9 @@ export function AlgoStrategyBuilderContent() {
                   <Area type="monotone" dataKey="strategy" stroke={cc.primary} strokeWidth={2} fill="url(#algoEq)" name="strategy" dot={false} />
                   <Line dataKey="buyMarker" stroke="transparent" dot={<EqBuyDot onSelect={setPinnedTrade} />} activeDot={false} isAnimationActive={false} legendType="none" />
                   <Line dataKey="sellMarker" stroke="transparent" dot={<EqSellDot onSelect={setPinnedTrade} />} activeDot={false} isAnimationActive={false} legendType="none" />
+                  {zoomAnchor && zoomCursor && zoomAnchor !== zoomCursor && (
+                    <ReferenceArea x1={zoomAnchor} x2={zoomCursor} strokeOpacity={0.4} stroke={cc.primary} fill={cc.primary} fillOpacity={0.12} />
+                  )}
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
