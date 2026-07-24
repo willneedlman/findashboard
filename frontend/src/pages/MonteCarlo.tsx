@@ -3,7 +3,7 @@ import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, tableClip, chartClip } from '../lib/reportCaptureRegistry'
 import { useMutation } from '@tanstack/react-query'
-import { ChevronDown, ChevronUp } from 'lucide-react'
+import { ChevronDown, ChevronUp, Play } from 'lucide-react'
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Legend, ScatterChart, Scatter } from 'recharts'
 import PageWrapper from '../components/PageWrapper'
 import { KpiCell } from '../components/mmCockpit'
@@ -734,6 +734,16 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
     color: 'var(--theme-text-faint, rgba(255,255,255,0.4))',
     marginBottom: 3
   }
+  // Matches the Portfolio tab's ConfigHeader SECTION style exactly, so the two
+  // Monte Carlo modes share one type scale for section headers.
+  const SECTION_LABEL: React.CSSProperties = {
+    fontFamily: 'var(--theme-sans)',
+    fontSize: 9,
+    fontWeight: 700,
+    letterSpacing: '0.16em',
+    textTransform: 'uppercase',
+    color: 'var(--theme-secondary, #8099b0)',
+  }
 
 
   return (
@@ -741,24 +751,27 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
       <MCModeToggle mode="options-strategy" onChange={m => m === 'portfolio' && onSwitchMode()} />
       
       
-      {/* MONTE CARLO · OPTIONS STRATEGY Header Panel */}
+      {/* MONTE CARLO · OPTIONS STRATEGY Header Panel — same density/type scale as
+          the Portfolio tab's ConfigHeader (9px section labels, 8px sublabels,
+          12px paramInput text, 10-16px paddings) so the two tabs read as one
+          consistent tool rather than two different UI languages. */}
       <div style={{
         background: 'var(--theme-surface, #0d1826)',
         border: '1px solid var(--theme-border, rgba(255,255,255,0.08))',
-        padding: '18px 20px',
+        padding: '12px 16px',
         display: 'flex',
         flexDirection: 'column',
-        gap: 18,
+        gap: 12,
         marginBottom: 8
       }}>
         {/* Title row */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 3, height: 16, background: 'var(--theme-primary, #c9a84c)' }} />
-            <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 13, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--theme-text, #d7e3fc)' }}>MONTE CARLO · OPTIONS STRATEGY</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 2, height: 12, background: 'var(--theme-primary, #c9a84c)' }} />
+            <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)' }}>Monte Carlo · Options Strategy</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-secondary, #5f7186)' }}>
+            <div style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-secondary, #5f7186)' }}>
               {OPTIONS_PATH_MODELS.find(m => m.value === pathModel)?.label ?? pathModel}
               {' · '}{effectiveNSims.toLocaleString()} paths{strategyMode ? ` · ${effectiveHorizon}d horizon` : ''}
               {legs.length > 0 ? ` · ${(comboPreset || 'custom').toLowerCase()} ${legs.length}-leg` : ''}
@@ -773,10 +786,10 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
         {!collapsed && (<>
 
         {/* PRIMARY ROW — tickers + run */}
-        <div style={{ display: 'flex', gap: 14, alignItems: 'flex-end' }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
           <div style={{ flex: 1, minWidth: 150 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <label style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <label style={{ fontFamily: 'var(--theme-sans)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)' }}>
                 Tickers
                 {screenerLoading && <span style={{ color: 'var(--theme-primary, #c9a84c)', marginLeft: 6, textTransform: 'none', fontSize: 9, fontWeight: 400 }}>[Running screen…]</span>}
                 {screenerError && <span style={{ color: 'var(--theme-negative, #ef4444)', marginLeft: 6, textTransform: 'none', fontSize: 9, fontWeight: 400 }}>[{screenerError}]</span>}
@@ -788,30 +801,34 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
                 screenHandoff={{ screens: allScreens, loading: screenerLoading, onSelect: handleScreenSelect, triggerLabel: 'Screener' }}
                 style={{
                   background: 'transparent', border: 'none', color: 'var(--theme-primary, #c9a84c)',
-                  fontSize: 11, fontWeight: 400, letterSpacing: 0, padding: 0, height: 'auto',
+                  fontSize: 10, fontWeight: 400, letterSpacing: 0, padding: 0, height: 'auto',
                 }}
               />
             </div>
             <input
               value={tickerInput}
               onChange={e => handleTickerInputChange(e.target.value)}
-              style={{ ...paramInput, fontSize: 14, padding: '11px 12px' }}
+              style={{ ...paramInput, padding: '0 12px', height: 34, boxSizing: 'border-box' }}
               placeholder="e.g. AAPL, MSFT, TSLA"
             />
           </div>
           <button onClick={() => mutate()} disabled={!canRun} title={!canRun && !isPending ? 'Add tickers and a structure first' : undefined} style={{
             display: 'flex', alignItems: 'center', gap: 6, background: 'var(--theme-primary, #c9a84c)', border: '1px solid var(--theme-primary, #c9a84c)',
-            color: 'var(--theme-bg, #101c2e)', fontFamily: 'var(--theme-mono)', fontSize: 13, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
-            padding: '12px 26px', cursor: canRun ? 'pointer' : 'default', opacity: canRun ? 1 : 0.45, whiteSpace: 'nowrap',
-            boxShadow: canRun ? '0 0 14px rgba(201, 168, 76, 0.25)' : 'none', transition: 'all 0.2s ease',
+            color: 'var(--theme-bg, #101c2e)', fontFamily: 'var(--theme-mono)', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
+            padding: '0 18px', height: 34, boxSizing: 'border-box', cursor: canRun ? 'pointer' : 'default', opacity: canRun ? 1 : 0.6, whiteSpace: 'nowrap',
           }}>
-            {isPending ? 'Running…' : '▶ Run Simulation'}
+            <Play size={11} fill="currentColor" />{isPending ? 'Running…' : 'Run Simulation'}
           </button>
         </div>
 
-        {/* SECONDARY CONFIG STRIP — quieter than the primary row, still editable */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1.6fr 1.4fr', gap: 10 }}>
-          <div>
+        {/* SECONDARY CONFIG STRIP — quieter than the primary row, still editable.
+            One flex row: the selects (Structure/Path model/Entry signal) grow to
+            fill space, the plain numeric fields (DTE/Simulations/Horizon/any
+            per-strategy param) stay narrow since they never need more than a
+            few digits — everything fits on one line instead of DTE/Horizon
+            claiming a full grid column they don't need. */}
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div style={{ flex: '1.3 1 140px' }}>
             <label style={SUBLABEL}>Structure</label>
             <select value={comboPreset} onChange={e => handlePresetChange(e.target.value)} style={{ ...paramInput, cursor: 'pointer', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}>
               <option value="">Select structure…</option>
@@ -823,7 +840,7 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
               ))}
             </select>
           </div>
-          <div>
+          <div style={{ width: 64 }}>
             <label style={SUBLABEL}>DTE</label>
             <NumInput
               value={comboDte}
@@ -834,7 +851,7 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
               style={{ ...paramInput, border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
             />
           </div>
-          <div>
+          <div style={{ width: 80 }}>
             <label style={SUBLABEL}>Simulations</label>
             <NumInput
               value={nSims}
@@ -847,7 +864,7 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
               style={{ ...paramInput, border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
             />
           </div>
-          <div>
+          <div style={{ flex: '1.5 1 150px' }}>
             <label style={SUBLABEL}>Path model</label>
             <select
               value={pathModel}
@@ -860,7 +877,7 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
               ))}
             </select>
           </div>
-          <div>
+          <div style={{ flex: '1.3 1 140px' }}>
             <label style={SUBLABEL}>Entry signal</label>
             <select
               value={strategy}
@@ -883,13 +900,8 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
               ))}
             </select>
           </div>
-        </div>
-
-        {/* Entry-signal-dependent extra fields wrap onto their own row so the
-            core 5-cell grid above stays a fixed, predictable shape. */}
-        {strategy !== 'none' && (
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: -8 }}>
-            <div style={{ width: 90 }}>
+          {strategy !== 'none' && (
+            <div style={{ width: 64 }}>
               <label style={SUBLABEL}>Horizon</label>
               <NumInput
                 value={simHorizon}
@@ -900,35 +912,35 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
                 style={{ ...paramInput, border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
               />
             </div>
-            {Object.keys(ALGO_DEFAULT_PARAMS[strategy] || {}).map(param => {
-              const label = ALGO_PARAM_LABELS[strategy]?.[param] || param
-              return (
-                <div key={param} style={{ width: 90 }}>
-                  <label style={SUBLABEL}>{label}</label>
-                  <input
-                    type="number"
-                    value={strategyParams[param] !== undefined ? strategyParams[param] : ALGO_DEFAULT_PARAMS[strategy][param]}
-                    onChange={e => {
-                      const val = Number(e.target.value) || 0
-                      setStrategyParams(prev => ({ ...prev, [param]: val }))
-                    }}
-                    style={{ ...paramInput, border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
-                  />
-                </div>
-              )
-            })}
-          </div>
-        )}
+          )}
+          {strategy !== 'none' && Object.keys(ALGO_DEFAULT_PARAMS[strategy] || {}).map(param => {
+            const label = ALGO_PARAM_LABELS[strategy]?.[param] || param
+            return (
+              <div key={param} style={{ width: 70 }}>
+                <label style={SUBLABEL}>{label}</label>
+                <input
+                  type="number"
+                  value={strategyParams[param] !== undefined ? strategyParams[param] : ALGO_DEFAULT_PARAMS[strategy][param]}
+                  onChange={e => {
+                    const val = Number(e.target.value) || 0
+                    setStrategyParams(prev => ({ ...prev, [param]: val }))
+                  }}
+                  style={{ ...paramInput, border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }}
+                />
+              </div>
+            )
+          })}
+        </div>
 
         {/* LEGS — compact table */}
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-text, #d7e3fc)' }}>
-              Legs {legs.length > 0 && <span style={{ color: 'var(--theme-secondary, #5f7186)' }}>· {legs.length}</span>}
+            <span style={{ ...SECTION_LABEL, }}>
+              Legs {legs.length > 0 && <span style={{ color: 'var(--theme-text-faint, rgba(255,255,255,0.35))' }}>· {legs.length}</span>}
             </span>
             <button onClick={addLeg} disabled={legs.length >= MAX_COMBO_LEGS} style={{
               background: 'none', border: 'none', color: 'var(--theme-primary, #c9a84c)',
-              fontFamily: 'var(--theme-mono)', fontSize: 11, padding: 0,
+              fontFamily: 'var(--theme-mono)', fontSize: 10, padding: 0,
               cursor: legs.length >= MAX_COMBO_LEGS ? 'default' : 'pointer', opacity: legs.length >= MAX_COMBO_LEGS ? 0.5 : 1
             }}>
               + add leg
@@ -956,13 +968,13 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
               {legs.map((leg, i) => {
                 const isSell = leg.side === 'sell'
                 const color = isSell ? 'var(--theme-negative, #ef4444)' : 'var(--theme-positive, #22c55e)'
-                const legInput: React.CSSProperties = { ...paramInput, background: 'var(--theme-bg, #0a121e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '5px 6px', fontSize: 12 }
+                const legInput: React.CSSProperties = { ...paramInput, background: 'var(--theme-bg, #0a121e)', border: '1px solid var(--theme-border, rgba(255,255,255,0.08))', padding: '4px 6px' }
                 return (
                   <div key={i} style={{
                     display: 'grid', gridTemplateColumns: '60px 1fr 1fr 1fr 1fr 24px', gap: 10, alignItems: 'center',
-                    background: 'var(--theme-bg, #101c2e)', borderLeft: `2px solid ${color}`, padding: '8px 10px',
+                    background: 'var(--theme-bg, #101c2e)', borderLeft: `2px solid ${color}`, padding: '6px 10px',
                   }}>
-                    <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, fontWeight: 700, color }}>L{i + 1}</span>
+                    <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, color }}>L{i + 1}</span>
                     <select value={leg.type} onChange={e => updateLeg(i, { type: e.target.value as ComboLeg['type'] })} style={{ ...legInput, cursor: 'pointer' }}>
                       <option value="call">Call</option>
                       <option value="put">Put</option>
@@ -987,13 +999,13 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
         {/* ADVANCED DRAWER — Exit Rules + Sizing & Leverage, collapsed by default */}
         <div style={{ borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.08))', paddingTop: 14 }}>
           <div onClick={() => setAdvancedOpen(o => !o)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ color: 'var(--theme-secondary, #8099b0)', fontSize: 11, width: 10, display: 'inline-block' }}>{advancedOpen ? '▾' : '▸'}</span>
-              <span style={{ fontFamily: 'var(--theme-sans)', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--theme-secondary, #8099b0)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ color: 'var(--theme-secondary, #8099b0)', fontSize: 10, width: 10, display: 'inline-block' }}>{advancedOpen ? '▾' : '▸'}</span>
+              <span style={SECTION_LABEL}>
                 Advanced — exit rules &amp; sizing
               </span>
             </div>
-            <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 11, color: 'var(--theme-secondary, #5f7186)' }}>
+            <span style={{ fontFamily: 'var(--theme-mono)', fontSize: 10, color: 'var(--theme-secondary, #5f7186)' }}>
               {[
                 tpPct ? `TP ${tpPct}%` : null,
                 slPct ? `SL ${slPct}%` : null,
@@ -1005,9 +1017,9 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
           </div>
 
           {advancedOpen && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 28, marginTop: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 28, marginTop: 12 }}>
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)', marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', ...SECTION_LABEL, color: 'var(--theme-primary, #c9a84c)', marginBottom: 8 }}>
                   Exit Rules
                   <HelpTip text="% of entry credit/debit magnitude. Take-Profit 50 closes once 50% of max profit is captured, matching realized P&L day-by-day (not just at expiry). Blank = hold to DTE." />
                 </div>
@@ -1027,7 +1039,7 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
                 </div>
               </div>
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', fontFamily: 'var(--theme-sans)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--theme-primary, #c9a84c)', marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', ...SECTION_LABEL, color: 'var(--theme-primary, #c9a84c)', marginBottom: 8 }}>
                   Sizing &amp; Leverage
                   <HelpTip text="Each admitted trade sizes to Position Size% × Leverage of the full account (same as the Algo backtester) — not split across tickers. Leg qty ratios stay fixed. Wipeout floors at $0." />
                 </div>
