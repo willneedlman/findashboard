@@ -14,7 +14,8 @@ import { loadCustomStrategies, saveCustomStrategy, deleteCustomStrategy, duplica
 import { PRESETS, PRESET_GROUPS, type Leg } from './strategy-builder/shared'
 import { ReturnsScatter, quickRegression } from './regressionShared'
 import { readPMPortfolios, normalizeTicker, type PMPortfolio } from '../lib/pmImport'
-import { SCREENER_ALGO_HANDOFF_KEY, type ScreenerAlgoHandoff } from './StockScreener'
+import { SCREENER_ALGO_HANDOFF_KEY, type ScreenerAlgoHandoff, loadScreens, type Preset as SavedScreen } from './StockScreener'
+import { screenerFilterToApi } from '../lib/format'
 import type { ClipDraft } from '../lib/reportCreator'
 import { useReportCapture } from '../hooks/useReportCapture'
 import { kpiClip, tableClip, chartClip, textClip } from '../lib/reportCaptureRegistry'
@@ -418,7 +419,7 @@ function SavedStrategyRow({ def, active, onSelect, onEdit, onDuplicate, onDelete
 // 230px rail.
 function PositionCard({ p, index, tradeSize, strategyName, saved, patchPosition, removePosition, patchComboLeg,
   addComboLegToPosition, removeComboLegFromPosition, cloningId, setCloningId, cloneInput, setCloneInput,
-  cloneToTickers, pmBooks, applyInstrumentToAll, otherPositionCount }: {
+  cloneToTickers, pmBooks, savedScreens, loadingScreenFor, runSavedScreen, applyInstrumentToAll, otherPositionCount }: {
   p: PortfolioPos; index: number; tradeSize: number; strategyName: string; saved: CustomStrategyDef[]
   patchPosition: (id: string, patch: Partial<PortfolioPos>) => void
   removePosition: (id: string) => void
@@ -429,6 +430,9 @@ function PositionCard({ p, index, tradeSize, strategyName, saved, patchPosition,
   cloneInput: string; setCloneInput: (s: string) => void
   cloneToTickers: (template: PortfolioPos) => void
   pmBooks: PMPortfolio[]
+  savedScreens: SavedScreen[]
+  loadingScreenFor: string | null
+  runSavedScreen: (screen: SavedScreen, excludeTicker: string) => void
   applyInstrumentToAll: (sourceId: string) => void
   otherPositionCount: number
 }) {
@@ -583,6 +587,16 @@ function PositionCard({ p, index, tradeSize, strategyName, saved, patchPosition,
               }} style={{ ...INPUT, fontSize: 9, cursor: 'pointer', marginTop: 4 }}>
                 <option value="">Load from Portfolio Manager…</option>
                 {pmBooks.map(b => <option key={b.id} value={b.id}>{b.name} ({b.holdings.length})</option>)}
+              </select>
+            )}
+            {savedScreens.length > 0 && (
+              <select value="" disabled={loadingScreenFor !== null} onChange={e => {
+                const screen = savedScreens.find(s => s.id === e.target.value)
+                if (!screen) return
+                runSavedScreen(screen, p.ticker)
+              }} style={{ ...INPUT, fontSize: 9, cursor: loadingScreenFor ? 'default' : 'pointer', marginTop: 4 }}>
+                <option value="">{loadingScreenFor ? 'Running screen…' : 'Load from Screener…'}</option>
+                {savedScreens.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             )}
             <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
@@ -768,6 +782,7 @@ function StrategyControlsPanel({
   portfolioTradeSize, setPortfolioTradeSize,
   portfolioLeverage, setPortfolioLeverage, effectiveAnnualRate, setEffectiveAnnualRate,
   cloningId, setCloningId, cloneInput, setCloneInput, cloneToTickers, pmBooks,
+  savedScreens, loadingScreenFor, runSavedScreen,
   start, setStart, end, setEnd, timeframe, setTimeframe,
   activeName, setActiveName, patchActiveRisk, onEditStrategy, onDuplicateStrategy, onDeleteStrategy, onNewStrategy,
   runPortfolio, sendPortfolioToPaper, exportToMonteCarlo, exportSingleToMonteCarlo, collapsed, onToggleCollapsed,
@@ -798,6 +813,9 @@ function StrategyControlsPanel({
   cloneInput: string; setCloneInput: (s: string) => void
   cloneToTickers: (template: PortfolioPos) => void
   pmBooks: PMPortfolio[]
+  savedScreens: SavedScreen[]
+  loadingScreenFor: string | null
+  runSavedScreen: (screen: SavedScreen, excludeTicker: string) => void
   start: string; setStart: (s: string) => void
   end: string; setEnd: (s: string) => void
   timeframe: string; setTimeframe: (s: string) => void
@@ -982,6 +1000,7 @@ function StrategyControlsPanel({
                         addComboLegToPosition={addComboLegToPosition} removeComboLegFromPosition={removeComboLegFromPosition}
                         cloningId={cloningId} setCloningId={setCloningId} cloneInput={cloneInput} setCloneInput={setCloneInput}
                         cloneToTickers={cloneToTickers} pmBooks={pmBooks}
+                        savedScreens={savedScreens} loadingScreenFor={loadingScreenFor} runSavedScreen={runSavedScreen}
                         applyInstrumentToAll={applyInstrumentToAll} otherPositionCount={positions.length - 1} />
                     ))}
                     <button onClick={addPosition} style={{
@@ -1172,6 +1191,39 @@ export function AlgoStrategyBuilderContent() {
   const [cloningId, setCloningId] = useState<string | null>(null)
   const [cloneInput, setCloneInput] = useState('')
   const pmBooks = useMemo(() => readPMPortfolios().filter(b => b.holdings.length), [])
+  const savedScreens = useMemo<SavedScreen[]>(() => loadScreens(), [])
+  const [loadingScreenFor, setLoadingScreenFor] = useState<string | null>(null)
+  // Same per-universe fan-out + client-side merge/dedupe the Screener page itself
+  // uses (backend/routers/screener.py has no union-of-universes endpoint) — a
+  // saved screen with no universes runs once against the full bundled universe.
+  const runSavedScreen = async (screen: SavedScreen, excludeTicker: string) => {
+    setLoadingScreenFor(screen.id)
+    try {
+      const body = {
+        filters: screen.filters.filter(f => f.value !== '').map(f => ({
+          field: f.field, operator: f.operator,
+          value: screenerFilterToApi(f.field, f.value) ?? parseFloat(f.value),
+          value2: null,
+          param: f.field === 'priceChange' ? (f.param || '1M') : null,
+        })),
+        sort_by: screen.sortBy, sort_dir: screen.sortDir,
+        sort_param: screen.sortBy === 'priceChange' ? screen.sortParam : null,
+        limit: 200,
+      }
+      const targets = screen.universes?.length ? screen.universes : [null]
+      const responses = await Promise.all(targets.map(u =>
+        axios.post('/api/screener/run', { ...body, universe: u }).then(r => r.data)
+      ))
+      const tickers = [...new Set(
+        responses.flatMap(r => (r?.results ?? []).map((row: { ticker?: string }) => normalizeTicker(row.ticker ?? '')))
+      )].filter(t => t && t !== excludeTicker.toUpperCase())
+      setCloneInput(tickers.join(', '))
+    } catch {
+      setCloneInput('')
+    } finally {
+      setLoadingScreenFor(null)
+    }
+  }
   const cloneToTickers = (template: PortfolioPos) => {
     const tickers = [...new Set(cloneInput.split(/[,\s]+/).map(t => normalizeTicker(t)).filter(Boolean))]
       .filter(t => t !== template.ticker.toUpperCase())
@@ -2017,6 +2069,7 @@ export function AlgoStrategyBuilderContent() {
           applyInstrumentToAll={applyInstrumentToAll}
           cloningId={cloningId} setCloningId={setCloningId} cloneInput={cloneInput} setCloneInput={setCloneInput}
           cloneToTickers={cloneToTickers} pmBooks={pmBooks}
+          savedScreens={savedScreens} loadingScreenFor={loadingScreenFor} runSavedScreen={runSavedScreen}
           start={start} setStart={setStart} end={end} setEnd={setEnd} timeframe={timeframe} setTimeframe={setTimeframe}
           activeName={activeName} setActiveName={setActiveName}
           patchActiveRisk={patchActiveRisk}

@@ -954,10 +954,12 @@ SCREENER ACCESS:
 - Never invent placeholder tickers. If the user wants high-beta tech, growth stocks, liquid large caps, or another screenable universe, use a screen before naming candidates.
 - Use a screen only when you have enough criteria to make it meaningful. If a crucial filter is missing, ask one focused question first.
 - A screen may use: filters on price, marketCap, volume, avgVolume, beta, priceChange (with param 1D|1W|1M|3M|6M|YTD|1Y), change52wHiPct, peRatio, pbRatio, psRatio, evEbitda, pegRatio, revenueGrowth, epsGrowth, grossMargin, operatingMargin, netMargin, roe, debtEquity, currentRatio, dividendYield, rsi14, smaDist50, smaDist200, or vol30; sector; region; universe (sp500|sp400|nasdaq100); and sort_by/sort_dir.
+- marketCap's filter value is in BILLIONS of dollars, not raw dollars: "$20B" or "20 billion" means value:20, never value:20000000000. Every other dollar-scale field on this list (price, volume, avgVolume) uses its plain natural unit (price in $, volume/avgVolume in shares) — do not billions-scale those.
 - A screen may use one `universe` or multiple `universes`. When the user asks for Nasdaq-100 and S&P 500 (including phrasing like "Nasdaq and SPY stocks"), use `"universes":["nasdaq100","sp500"]`; never replace that request with an all-universe screen.
 - For each filter use {"field":"beta","operator":"gt"|"gte"|"lt"|"lte"|"between","value":number,"value2":number|null,"param":string|null}. Do not state or impose a result cap. The server ignores any `limit` field and always returns every match.
 - After a screen, ask exactly one focused follow-up question about the candidates or the next unresolved strategy decision.
-- When a user chooses a screened basket, create a portfolio with positions for every actual returned candidate ticker they choose. Do not arbitrarily reduce the basket size. Never use `ALL`, `NASDAQ`, `SP500`, or another universe label as a ticker placeholder.
+- When a user chooses a screened basket, create a portfolio with positions for every actual returned candidate ticker they choose. Do not arbitrarily reduce the basket size. Never use `ALL`, `NASDAQ`, `SP500`, `TECH_HIGH_BETA`, or any other label/placeholder as a ticker.
+- If the strategy is meant to run on a screened basket and that basket hasn't been resolved to real tickers yet (no screen has run, or the user hasn't picked from its results), stay in "question" or "screen" mode for EVERY message about that strategy — including one that only tweaks an unrelated parameter (strikes, DTE, position size, exits). A message like "sell an 85% strike instead" is not a request to draft; acknowledge the update in a "question" response and continue toward resolving the basket (run the screen yourself if you already have enough criteria, otherwise ask what's missing). Never attempt a "draft" whose positions would need a placeholder ticker to fill in — draft only once every position has a real one.
 - When the user has explicitly selected every screened candidate, return just one real screened ticker in positions as a complete position template. The server will expand that template to every selected candidate. This preserves an unlimited universe without generating a massive, truncated JSON response.
 
 JSON RESPONSE SHAPES:
@@ -1107,6 +1109,8 @@ def strategy_chat(req: StrategyChatRequest):
         except Exception:
             logger.exception("Strategy chat screener request failed")
             return {"type": "question", "text": "I couldn't run that screen right now. Which specific ticker or index would you like to use instead?"}
+        if candidates.strip() == "The screen returned no matches.":
+            return {"type": "question", "text": f"{candidates} Try loosening a filter (a lower market cap or beta threshold, a broader universe) and I'll run it again."}
         text = str(result.get("text") or "Which of these candidates would you like to use?").strip()
         return {"type": "question", "text": f"{candidates}\n\n{text}"}
     if req.scope == "full" and result["type"] == "draft":

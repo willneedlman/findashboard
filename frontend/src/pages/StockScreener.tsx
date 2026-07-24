@@ -112,7 +112,7 @@ const TABLE_COLS: { key: keyof ScreenResult; label: string; w: string; align: 'l
 ]
 
 // Client-side seeded screens (presets). Selecting one loads its filters + sort.
-interface Preset { id: string; name: string; desc: string; universes?: string[]; sortBy: string; sortDir: 'asc' | 'desc'; sortParam?: string; filters: { field: string; operator: string; value: string; param?: string }[] }
+export interface Preset { id: string; name: string; desc: string; universes?: string[]; sortBy: string; sortDir: 'asc' | 'desc'; sortParam?: string; filters: { field: string; operator: string; value: string; param?: string }[] }
 const PRESETS: Preset[] = [
   { id: 'liquid-large-caps', name: 'Liquid Large Caps', desc: 'Big, liquid names — loads instantly', sortBy: 'marketCap', sortDir: 'desc',
     filters: [{ field: 'marketCap', operator: 'gt', value: '10' }] },
@@ -137,8 +137,8 @@ let _fid = 1
 // that point on the persisted, mutable copy in localStorage is the source of
 // truth, so a rename/delete of a "built-in" screen behaves exactly like one
 // on a screen the user made themselves.
-const SAVED_SCREENS_KEY = 'fdb_screener_saved_screens_v1'
-function loadScreens(): Preset[] {
+export const SAVED_SCREENS_KEY = 'fdb_screener_saved_screens_v1'
+export function loadScreens(): Preset[] {
   try {
     const raw = localStorage.getItem(SAVED_SCREENS_KEY)
     if (raw) {
