@@ -1750,7 +1750,21 @@ def _apply_trades_on_pack(
     pack: dict, legs_cfg: list, dte: int, r: float, committed_dollars: float,
     take_profit_pct: float | None, stop_loss_pct: float | None, max_hold_days: int | None,
 ) -> dict:
-    """Cheap stage: size + risk-manage trades on a cached path/signal pack."""
+    """Cheap stage: size + risk-manage trades on a cached path/signal pack.
+
+    Multi-lot: a buy signal firing while a position is already open opens
+    ANOTHER lot (each sized at the same committed_dollars notional as a
+    single trade — this engine doesn't track a cash balance the way the
+    backtester does, so there's no "% of available cash" to shrink; every
+    lot commits the same fixed notional) instead of being ignored — same
+    "can hold more than one trade on a ticker at a time" semantics as the
+    backtester's option/combo engines. Each lot is independent (its own
+    strikes fixed at entry, its own DTE clock, its own stop/take-profit/
+    max-hold tracking) since options aren't fungible across entries the way
+    shares are. The shared rule-based exit (the signal dropping to 0) closes
+    every open lot at once, mirroring the backtester's convention; a lot's
+    own risk trigger or expiry only closes that lot.
+    """
     spot = float(pack["spot"])
     iv = float(pack["iv"])
     sigma = float(pack["sigma"])
@@ -1797,53 +1811,52 @@ def _apply_trades_on_pack(
 
     for i in range(n):
         sim_prices = price_paths[i]
-        in_pos = False
-        entry_day = 0
-        resolved_legs: list = []
-        entry_cash_flow = 0.0
+        lots: list[dict] = []   # each: {entry_day, resolved_legs, entry_cash_flow}
         cum_pnl = 0.0
 
         for d in range(0, horizon_days + 1):
             want_in = float(signal_grid[i, d]) >= 0.5
+            spot_now = float(sim_prices[d])
 
-            if not in_pos:
-                if want_in:
-                    entry_day = d
-                    resolved_legs, entry_cash_flow = _open_position(float(sim_prices[d]))
-                    in_pos = True
-                    open_notional_path[i, d] = committed_dollars
-                    pnl_path[i, d] = cum_pnl
+            # Each open lot checks its own risk controls/expiry, plus the
+            # shared rule exit (want_in false closes every remaining lot in
+            # this same pass) — one MTM per lot per day, no redundant work.
+            remaining: list[dict] = []
+            unrealized_open = 0.0
+            for lot in lots:
+                days_held = d - lot["entry_day"]
+                t_rem = dte - days_held
+                unrealized = _mtm(lot["resolved_legs"], lot["entry_cash_flow"], spot_now, float(t_rem))
+                basis = abs(lot["entry_cash_flow"]) or 1.0
+                tp_level = (take_profit_pct / 100.0) * basis if take_profit_pct is not None else None
+                sl_level = -(stop_loss_pct / 100.0) * basis if stop_loss_pct is not None else None
+                is_tp = tp_level is not None and unrealized >= tp_level
+                is_sl = sl_level is not None and unrealized <= sl_level
+                is_max_hold = max_hold_days is not None and days_held >= max_hold_days
+                is_expiry = t_rem <= 0
+                if is_tp or is_sl or is_max_hold or is_expiry or not want_in:
+                    cum_pnl += unrealized
+                    trades_total[i] += 1
+                    if unrealized > 0:
+                        trades_win[i] += 1
                 else:
-                    pnl_path[i, d] = cum_pnl
-                continue
+                    remaining.append(lot)
+                    unrealized_open += unrealized
+            lots = remaining
 
-            days_held = d - entry_day
-            t_rem = dte - days_held
-            unrealized = _mtm(resolved_legs, entry_cash_flow, float(sim_prices[d]), float(t_rem))
-            basis = abs(entry_cash_flow) or 1.0
-            tp_level = (take_profit_pct / 100.0) * basis if take_profit_pct is not None else None
-            sl_level = -(stop_loss_pct / 100.0) * basis if stop_loss_pct is not None else None
-            is_tp = tp_level is not None and unrealized >= tp_level
-            is_sl = sl_level is not None and unrealized <= sl_level
-            is_max_hold = max_hold_days is not None and days_held >= max_hold_days
-            is_expiry = t_rem <= 0
-            is_rule_exit = not want_in
+            # New lot: buy signal opens ANOTHER lot regardless of existing
+            # ones. No d < horizon_days guard, matching the original code's
+            # unconditional first-entry check — an entry on the final
+            # simulated day just ends up marked-to-market as a still-open
+            # lot in that day's P&L, same as before. A freshly-opened lot's
+            # same-bar unrealized is ~0 (entry_val and MTM price it the same
+            # way), so it's not added to unrealized_open here.
+            if want_in:
+                resolved_legs, entry_cash_flow = _open_position(spot_now)
+                lots.append({"entry_day": d, "resolved_legs": resolved_legs, "entry_cash_flow": entry_cash_flow})
 
-            if is_tp or is_sl or is_max_hold or is_expiry or is_rule_exit:
-                cum_pnl += unrealized
-                pnl_path[i, d] = cum_pnl
-                trades_total[i] += 1
-                if unrealized > 0:
-                    trades_win[i] += 1
-                in_pos = False
-                if want_in and d < horizon_days and not is_rule_exit:
-                    entry_day = d
-                    resolved_legs, entry_cash_flow = _open_position(float(sim_prices[d]))
-                    in_pos = True
-                    open_notional_path[i, d] = committed_dollars
-            else:
-                open_notional_path[i, d] = committed_dollars
-                pnl_path[i, d] = cum_pnl + unrealized
+            open_notional_path[i, d] = committed_dollars * len(lots)
+            pnl_path[i, d] = cum_pnl + unrealized_open
 
     return {
         "spot": spot,
