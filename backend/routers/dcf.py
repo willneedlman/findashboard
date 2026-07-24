@@ -73,6 +73,20 @@ def _base_fundamentals(ticker: str):
     if fmp.available():
         try:
             data = fmp.get_dcf_fundamentals(ticker)
+            # Every FMP sub-call (income/balance/cashflow statements) catches
+            # its own request errors and returns [] / {} instead of raising —
+            # a deliberate design so a transient failure doesn't get cached as
+            # a false "no data" (see fmp._cached's docstring). But it means a
+            # FULL outage (e.g. the free-tier daily quota exhausted, 429 on
+            # every endpoint) still looks like a "successful" call here: a
+            # dict of all-zero/default values (revenue 0, shares defaulted to
+            # 100M, growth defaulted to 10%) rather than an exception — so the
+            # `except` below never triggers the yfinance fallback. Revenue is
+            # the one field with no plausible legitimate zero (a real company
+            # always has SOME trailing revenue), so treat a zero there as
+            # "this response isn't real" and force the fallback explicitly.
+            if not data.get("revenue"):
+                raise ValueError(f"FMP returned no revenue for {ticker} — statements fetch likely failed")
             info = get_info(ticker)          # cheap/cached — for sector/industry Damodaran lookup only
             beta, source = _resolve_beta(ticker, data.get("beta"), info.get("sector"), info.get("industry"))
             data["beta"] = round(beta, 2)
