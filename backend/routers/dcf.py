@@ -77,6 +77,18 @@ def _base_fundamentals(ticker: str):
             beta, source = _resolve_beta(ticker, data.get("beta"), info.get("sector"), info.get("industry"))
             data["beta"] = round(beta, 2)
             data["assumptions_source"] = source
+            # FMP's /profile call (the only source of market_price/market_cap
+            # here) can fail independently of the statement calls that feed
+            # the rest of this dict — e.g. hitting the free-tier daily quota
+            # (429) while income/balance/cashflow still succeed — silently
+            # returning market_price: None instead of raising, so the
+            # `except` below never triggers a fallback. Backstop from the
+            # yfinance `info` already fetched above for beta/sector; it's
+            # already paid for, so this costs nothing extra.
+            if not data.get("market_price"):
+                data["market_price"] = float(info.get("currentPrice") or info.get("regularMarketPrice") or 0) or None
+            if not data.get("market_cap"):
+                data["market_cap"] = info.get("marketCap")
             return data
         except Exception:
             pass  # fall through to yfinance
