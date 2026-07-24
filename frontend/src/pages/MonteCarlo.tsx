@@ -528,6 +528,9 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
   const [tpPct, setTpPct] = useState(handoff?.takeProfitPct ? String(handoff.takeProfitPct) : '')
   const [slPct, setSlPct] = useState(handoff?.stopLossPct ? String(handoff.stopLossPct) : '')
   const [maxHoldDays, setMaxHoldDays] = useState(handoff?.maxHoldDays ? String(handoff.maxHoldDays) : '')
+  const [exitPct, setExitPct] = useState(handoff?.exitPct ? String(handoff.exitPct) : '')
+  const [deltaExit, setDeltaExit] = useState(handoff?.deltaExit ? String(handoff.deltaExit) : '')
+  const [gammaExit, setGammaExit] = useState(handoff?.gammaExit ? String(handoff.gammaExit) : '')
 
   const [positionSize, setPositionSize] = useState(String(handoff?.positionSizePct ?? 100))
   const [leverage, setLeverage] = useState(String(handoff?.leverage ?? 1))
@@ -588,6 +591,9 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
         take_profit_pct: tpPct ? +tpPct : undefined,
         stop_loss_pct: slPct ? +slPct : undefined,
         max_hold_days: maxHoldDays ? +maxHoldDays : undefined,
+        exit_pct: exitPct ? +exitPct : undefined,
+        delta_exit: deltaExit ? +deltaExit : undefined,
+        gamma_exit: gammaExit ? +gammaExit : undefined,
         position_size: Math.min(100, Math.max(1, Number(positionSize) || 100)),
         leverage: Math.max(1, Number(leverage) || 1),
         effective_annual_rate: Math.min(100, Math.max(0, Number(borrowRate) || 0)),
@@ -1010,6 +1016,8 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
                 tpPct ? `TP ${tpPct}%` : null,
                 slPct ? `SL ${slPct}%` : null,
                 maxHoldDays ? `Hold ${maxHoldDays}d` : 'Hold to DTE',
+                deltaExit ? `Δ ${deltaExit}` : null,
+                gammaExit ? `Γ ${gammaExit}` : null,
                 `Size ${positionSize}% × ${leverage}`,
                 Number(borrowRate) > 0 ? `Borrow ${borrowRate}%` : null,
               ].filter(Boolean).join(' · ')}
@@ -1037,6 +1045,30 @@ function OptionsStrategyMonteCarlo({ onSwitchMode, handoff }: { onSwitchMode: ()
                     <input value={maxHoldDays} placeholder={`${comboDte} (DTE)`} onChange={e => setMaxHoldDays(e.target.value)} style={{ ...paramInput, border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
                   </div>
                 </div>
+                <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={SUBLABEL}>Delta Exit (0-1)</label>
+                    <input value={deltaExit} placeholder="off" onChange={e => setDeltaExit(e.target.value)} style={{ ...paramInput, border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={SUBLABEL}>Gamma Exit</label>
+                    <input value={gammaExit} placeholder="off" onChange={e => setGammaExit(e.target.value)} style={{ ...paramInput, border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
+                  </div>
+                  <div style={{ flex: 1.2 }}>
+                    <span style={{ fontSize: 9, color: 'var(--theme-secondary, #5f7186)', fontFamily: 'var(--theme-mono)', lineHeight: 1.4 }}>
+                      Closes a lot in full once its net delta/gamma (structure-wide, direction-agnostic) reaches the threshold.
+                    </span>
+                  </div>
+                </div>
+                {strategyMode && (
+                  <div style={{ marginTop: 10 }}>
+                    <label style={SUBLABEL}>Entry-rule exit closes % (blank = 100, all of it)</label>
+                    <input value={exitPct} placeholder="100" onChange={e => setExitPct(e.target.value)} style={{ ...paramInput, width: 90, border: '1px solid var(--theme-border, rgba(255,255,255,0.08))' }} />
+                    <span style={{ fontSize: 9, color: 'var(--theme-secondary, #5f7186)', fontFamily: 'var(--theme-mono)', marginLeft: 8 }}>
+                      Only applies when the entry signal drops (not TP/SL/Max Hold, which always close in full) — a still-false signal keeps trimming the remainder.
+                    </span>
+                  </div>
+                )}
               </div>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', ...SECTION_LABEL, color: 'var(--theme-primary, #c9a84c)', marginBottom: 8 }}>

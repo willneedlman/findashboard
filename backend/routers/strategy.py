@@ -704,6 +704,9 @@ class CustomBacktestRequest(BaseModel):
     take_profit: float | None = None
     trailing_stop: float | None = None
     max_hold_bars: int | None = None
+    exit_pct: float = 100.0          # % of the open position the exit rule closes each time it fires; 100 = all of it
+    delta_exit: float | None = None  # option/combo only: close once |net delta| reaches this (None = off)
+    gamma_exit: float | None = None  # option/combo only: close once |net gamma| reaches this (None = off)
     position_size: float = 100
     initial_capital: float = 10_000
     instrument: dict | None = None   # {kind:"option", type:"call"|"put", moneyness, dte} → modeled option P&L
@@ -717,9 +720,11 @@ class CustomBacktestRequest(BaseModel):
         validate_date(self.start)
         if self.end:
             validate_date(self.end)
-        for field in ("stop_loss", "take_profit", "trailing_stop", "max_hold_bars"):
+        for field in ("stop_loss", "take_profit", "trailing_stop", "max_hold_bars", "delta_exit", "gamma_exit"):
             if getattr(self, field) is not None and getattr(self, field) <= 0:
                 setattr(self, field, None)
+        if not 0 < self.exit_pct <= 100:
+            self.exit_pct = 100.0
         self.timeframe = (self.timeframe or "1d").lower()
         if self.timeframe not in _BACKTEST_TF:
             raise HTTPException(422, f"Unsupported timeframe '{self.timeframe}'. Use one of: {', '.join(_BACKTEST_TF)}.")
@@ -826,7 +831,8 @@ def custom_backtest(req: CustomBacktestRequest):
                                  trade_size, req.initial_capital, bars_per_year=bpy,
                                  intraday=_is_intraday_tf(tf),
                                  stop_loss=req.stop_loss, take_profit=req.take_profit,
-                                 trailing_stop=req.trailing_stop, max_hold_bars=req.max_hold_bars)
+                                 trailing_stop=req.trailing_stop, max_hold_bars=req.max_hold_bars,
+                                 exit_pct=req.exit_pct, delta_exit=req.delta_exit, gamma_exit=req.gamma_exit)
 
     # Leverage is "free" P&L amplification unless the borrowed portion of
     # notional (beyond 100% of capital) actually costs something — apply the
@@ -879,7 +885,9 @@ def custom_backtest(req: CustomBacktestRequest):
 
 def _instrument_metrics(buy_signal, sell_signal, close, instrument, side, ticker, position_size, capital, bars_per_year: int = 252, intraday: bool = False,
                         stop_loss: float | None = None, take_profit: float | None = None,
-                        trailing_stop: float | None = None, max_hold_bars: int | None = None):
+                        trailing_stop: float | None = None, max_hold_bars: int | None = None,
+                        exit_pct: float = 100.0,
+                        delta_exit: float | None = None, gamma_exit: float | None = None):
     """Metrics for one position given its raw (buy_signal, sell_signal) + close:
     modeled option P&L for an option instrument (long buys it, short writes
     it), else long/short shares. `side` drives direction for both. Same result
@@ -911,11 +919,13 @@ def _instrument_metrics(buy_signal, sell_signal, close, instrument, side, ticker
             raise HTTPException(422, f"No implied volatility available to model options for {ticker}")
         if inst.get("kind") == "combo":
             return _compute_combo_metrics(buy_signal, sell_signal, close, inst, float(iv), position_size, capital, bars_per_year=bars_per_year, intraday=intraday,
-                                          stop_loss=stop_loss, take_profit=take_profit, trailing_stop=trailing_stop, max_hold_bars=max_hold_bars)
+                                          stop_loss=stop_loss, take_profit=take_profit, trailing_stop=trailing_stop, max_hold_bars=max_hold_bars, exit_pct=exit_pct,
+                                          delta_exit=delta_exit, gamma_exit=gamma_exit)
         return _compute_option_metrics(buy_signal, sell_signal, close, inst, float(iv), position_size, capital, direction=side, bars_per_year=bars_per_year, intraday=intraday,
-                                       stop_loss=stop_loss, take_profit=take_profit, trailing_stop=trailing_stop, max_hold_bars=max_hold_bars)
+                                       stop_loss=stop_loss, take_profit=take_profit, trailing_stop=trailing_stop, max_hold_bars=max_hold_bars, exit_pct=exit_pct,
+                                       delta_exit=delta_exit, gamma_exit=gamma_exit)
     return _compute_metrics(buy_signal, sell_signal, close, position_size, capital, direction=side, bars_per_year=bars_per_year, intraday=intraday,
-                            stop_loss=stop_loss, take_profit=take_profit, trailing_stop=trailing_stop, max_hold_bars=max_hold_bars)
+                            stop_loss=stop_loss, take_profit=take_profit, trailing_stop=trailing_stop, max_hold_bars=max_hold_bars, exit_pct=exit_pct)
 
 
 # ─── Multi-position portfolio backtest ────────────────────────────────────────
@@ -935,12 +945,17 @@ class PortfolioPosition(BaseModel):
     take_profit:   float | None = None
     trailing_stop: float | None = None
     max_hold_bars: int | None = None
+    exit_pct:      float = 100.0        # % of the open position the exit rule closes each time it fires; 100 = all of it
+    delta_exit:    float | None = None  # option/combo only: close once |net delta| reaches this (None = off)
+    gamma_exit:    float | None = None  # option/combo only: close once |net gamma| reaches this (None = off)
 
     @model_validator(mode="after")
     def _normalize_disabled_risk_controls(self):
-        for field in ("stop_loss", "take_profit", "trailing_stop", "max_hold_bars"):
+        for field in ("stop_loss", "take_profit", "trailing_stop", "max_hold_bars", "delta_exit", "gamma_exit"):
             if getattr(self, field) is not None and getattr(self, field) <= 0:
                 setattr(self, field, None)
+        if not 0 < self.exit_pct <= 100:
+            self.exit_pct = 100.0
         return self
 
 
@@ -1097,7 +1112,8 @@ def portfolio_backtest(req: PortfolioBacktestRequest):
             res = _instrument_metrics(buy_signal, sell_signal, close, p.instrument, p.side, p.ticker, trade_size(p), req.initial_capital,
                                       bars_per_year=bpy, intraday=intraday,
                                       stop_loss=p.stop_loss, take_profit=p.take_profit,
-                                      trailing_stop=p.trailing_stop, max_hold_bars=p.max_hold_bars)
+                                      trailing_stop=p.trailing_stop, max_hold_bars=p.max_hold_bars,
+                                      exit_pct=p.exit_pct, delta_exit=p.delta_exit, gamma_exit=p.gamma_exit)
         except HTTPException:
             return None
         # Financing (below) needs the ACTUAL open-position state, not the raw

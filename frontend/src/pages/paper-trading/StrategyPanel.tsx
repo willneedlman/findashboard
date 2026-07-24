@@ -151,6 +151,7 @@ export function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy
   const [liveStatus, setLiveStatus] = useState<string | null>(null)
   const [offlineStatus, setOfflineStatus] = useState<string | null>(null)
   const [customModalOpen, setCustomModalOpen] = useState(false)
+  const [customSide, setCustomSide] = useState<'long' | 'short'>('long')
   const liveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [liveIntervalMs, setLiveIntervalMs] = useState(15_000)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -165,7 +166,7 @@ export function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy
   const [riskParams, setRiskParams] = useState<Record<string, RiskConfig>>({})
   const [riskOpen, setRiskOpen] = useState<Record<string, boolean>>({})
   // Live-mode per-strategy position state for risk tracking
-  const liveTradeState = useRef<Record<string, { inTrade: boolean; entryPrice: number; peak: number; bars: number }>>({})
+  const liveTradeState = useRef<Record<string, { openUnits: number; entryPrice: number; peak: number; bars: number }>>({})
 
   const [chartData, setChartData] = useState<ChartPoint[]>([])
   const [liveChart, setLiveChart] = useState<ChartPoint[]>([])
@@ -248,7 +249,7 @@ export function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy
   })
 
   const createCustomMut = useMutation({
-    mutationFn: (body: { name: string; rules: object; bull_drift: number; bear_drift: number }) =>
+    mutationFn: (body: { name: string; rules: object; bull_drift: number; bear_drift: number; side: string }) =>
       axios.post('/api/paper/strategies/custom', body).then(r => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['paper/strategies'] })
@@ -263,7 +264,20 @@ export function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy
       rules: { buy: def.buy, sell: def.sell },
       bull_drift: def.bull_drift,
       bear_drift: def.bear_drift,
+      side: customSide,
     })
+  }
+
+  const sideByStrategy = useMemo(
+    () => Object.fromEntries(strategies.map(s => [s.name, s.side ?? 'long'])),
+    [strategies],
+  )
+  const toOrderSide = (strategyName: string, signal: string): 'buy' | 'sell' => {
+    const short = sideByStrategy[strategyName] === 'short'
+    // Long: BUY signal opens with a buy order, SELL closes with a sell order.
+    // Short: BUY signal opens the short with a sell order, SELL covers with a buy order.
+    if (signal === 'BUY') return short ? 'sell' : 'buy'
+    return short ? 'buy' : 'sell'
   }
 
   const replayMut = useMutation({
@@ -294,7 +308,7 @@ export function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy
     let ok = 0, fail = 0
     for (const ev of events) {
       try {
-        const r = await placeOrder(ev.symbol, ev.signal === 'BUY' ? 'buy' : 'sell', qty)
+        const r = await placeOrder(ev.symbol, toOrderSide(ev.strategy_name, ev.signal), qty)
         const orderId = r.data?.order?.id ?? r.data?.id
         if (orderId) onAutomatedOrder?.(String(orderId), 'Replay')
         ok++
@@ -326,33 +340,41 @@ export function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy
             timestamp: Date.now() / 1000, symbol: ticker, price, size: 0, side: 'trade',
           }).then(r => r.data)
 
-        // Apply per-strategy risk overrides
+        // Apply per-strategy risk overrides. openUnits mirrors the backend's
+        // CustomRuleStrategy: +1 per BUY (can fire more than once — scaling
+        // in), -1 per SELL (scaling out), a hard risk trigger flattens
+        // everything at once (same "risk controls always fully close" rule
+        // the backtester/Monte Carlo engines use).
         const signals = rawSignals.map(s => {
           const state = liveTradeState.current[s.strategy_name] ??
-            (liveTradeState.current[s.strategy_name] = { inTrade: false, entryPrice: 0, peak: 0, bars: 0 })
+            (liveTradeState.current[s.strategy_name] = { openUnits: 0, entryPrice: 0, peak: 0, bars: 0 })
           const risk = riskParams[s.strategy_name] ?? RISK_DEFAULTS
           const sl  = risk.stop_loss     ? parseFloat(risk.stop_loss)     : null
           const tp  = risk.take_profit   ? parseFloat(risk.take_profit)   : null
           const ts  = risk.trailing_stop ? parseFloat(risk.trailing_stop) : null
           const mh  = risk.max_hold      ? parseInt(risk.max_hold)        : null
 
-          if (s.signal === 'BUY' && !state.inTrade) {
-            state.inTrade = true; state.entryPrice = price; state.peak = price; state.bars = 0
+          if (s.signal === 'BUY') {
+            if (state.openUnits === 0) { state.entryPrice = price; state.peak = price; state.bars = 0 }
+            state.openUnits++
             return s
           }
-          if (state.inTrade) {
+          if (state.openUnits > 0) {
             state.bars++; state.peak = Math.max(state.peak, price)
             const stopHit  = sl && price <= state.entryPrice * (1 - sl / 100)
             const tpHit    = tp && price >= state.entryPrice * (1 + tp / 100)
             const trailHit = ts && price <= state.peak * (1 - ts / 100)
             const timeHit  = mh && state.bars >= mh
             if (stopHit || tpHit || trailHit || timeHit) {
-              state.inTrade = false
+              state.openUnits = 0
               return { ...s, signal: 'SELL' }
             }
-            if (s.signal === 'SELL') { state.inTrade = false; return s }
+            if (s.signal === 'SELL') { state.openUnits = Math.max(0, state.openUnits - 1); return s }
           }
-          return s
+          // A SELL with nothing open (shouldn't happen — the backend only
+          // emits it once something's open — but stay defensive) never
+          // reaches the exchange as a stray close order.
+          return s.signal === 'SELL' && state.openUnits === 0 ? { ...s, signal: 'HOLD' } : s
         })
 
         const firstSig = signals.find(s => s.signal === 'BUY' || s.signal === 'SELL')
@@ -363,7 +385,7 @@ export function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy
         }])
         for (const s of signals) {
           if (s.signal === 'BUY' || s.signal === 'SELL') {
-            const r = await placeOrder(ticker, s.signal === 'BUY' ? 'buy' : 'sell', qty)
+            const r = await placeOrder(ticker, toOrderSide(s.strategy_name, s.signal), qty)
             const orderId = r.data?.order?.id ?? r.data?.id
             if (orderId) onAutomatedOrder?.(String(orderId), s.strategy_name)
             setLiveStatus(`${now} — ${s.strategy_name}: ${s.signal} ${qty}x ${ticker} @ $${price.toFixed(2)}`)
@@ -775,6 +797,12 @@ export function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy
                 <button onClick={() => fileRef.current?.click()} style={{ ...btn, flex: 1 }}>
                   {uploadMut.isPending ? 'Uploading…' : '↑ Upload (.py)'}
                 </button>
+                <select value={customSide} onChange={e => setCustomSide(e.target.value as 'long' | 'short')}
+                  title="Direction a BUY signal opens for the next custom strategy you build"
+                  style={{ ...sel, width: 72 }}>
+                  <option value="long">Long</option>
+                  <option value="short">Short</option>
+                </select>
                 <button
                   onClick={() => setCustomModalOpen(true)}
                   style={{ ...btn, flex: 1, borderColor: 'color-mix(in srgb, var(--theme-primary) 50%, transparent)', color: T.gold }}
@@ -824,6 +852,10 @@ export function StrategyPanel({ pendingBuilderStrategy, onApproveBuilderStrategy
                             rules: { buy: def.buy, sell: def.sell },
                             bull_drift: def.bull_drift ?? 0,
                             bear_drift: def.bear_drift ?? 0,
+                            // CustomStrategyDef (Monte Carlo/Backtester) doesn't carry a
+                            // side — that lives on the parent page there too, so a
+                            // registered strategy defaults long same as Build Custom.
+                            side: 'long',
                           })}
                           disabled={createCustomMut.isPending}
                           style={{ ...btn, fontSize: 8, padding: '3px 8px', borderColor: 'color-mix(in srgb, var(--theme-primary) 40%, transparent)', color: T.gold, flexShrink: 0 }}

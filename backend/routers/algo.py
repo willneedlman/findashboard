@@ -346,7 +346,8 @@ def _compute_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, close: pd.
                      position_size: float = 100, initial_capital: float = 10_000,
                      direction: str = "long", bars_per_year: int = 252, intraday: bool = False,
                      stop_loss: float | None = None, take_profit: float | None = None,
-                     trailing_stop: float | None = None, max_hold_bars: int | None = None):
+                     trailing_stop: float | None = None, max_hold_bars: int | None = None,
+                     exit_pct: float = 100.0):
     """Shares are fungible — a share bought at $80 and one bought at $100
     aren't distinguishable positions the way two options with different
     strikes are, and P&L doesn't depend on which one a later sale is
@@ -354,13 +355,17 @@ def _compute_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, close: pd.
     total cost basis), not a stack of lots: every bar the buy signal fires
     while flat OR already holding, `alloc` fraction of currently-available
     cash buys more shares at that bar's close, folding into the average cost.
-    The whole position closes at once — every share together — the first
-    time the shared sell signal fires, or a risk control (evaluated against
-    the position's own average cost basis, tracked from whenever it was last
-    fully flat) triggers. A short mirrors the long side's dollar P&L (project
-    convention, matches the option/combo engines) rather than modeling real
-    short-sale margin mechanics."""
+    The rule-based sell signal closes `exit_pct` of whatever's open each time
+    it fires (100 = the whole position at once, matching the old behavior;
+    less than 100 trims it, and a still-true sell signal keeps trimming the
+    remainder bar over bar, same level-triggered semantics as the buy side).
+    A risk control (stop-loss/take-profit/trailing-stop/max-hold, evaluated
+    against the position's own average cost basis, tracked from whenever it
+    was last fully flat) always closes the position in full. A short mirrors
+    the long side's dollar P&L (project convention, matches the option/combo
+    engines) rather than modeling real short-sale margin mechanics."""
     alloc = max(0.0, position_size) / 100.0
+    exit_frac_cfg = max(0.0, min(1.0, exit_pct / 100.0))
     # Intraday keeps the time in each label so bars within a day stay distinct
     # (a date-only label would collapse them and break the curve / portfolio join).
     _dfmt = "%Y-%m-%d %H:%M" if intraday else "%Y-%m-%d"
@@ -375,6 +380,9 @@ def _compute_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, close: pd.
     entry_i: int | None = None   # bar the position was last opened from flat (max_hold_bars)
     peak_price = 0.0    # best price seen (favorable direction) since entry_i (trailing stop)
     cycle_buys = 0      # buys in the CURRENT open cycle, resolved to win/loss when it closes
+    cycle_cost_total = 0.0      # $ ever committed across this cycle's buys (win/loss basis)
+    cycle_proceeds_total = 0.0  # $ realized so far across this cycle's exits (partial + final)
+    cycle_peak_cost = 0.0       # largest cost_basis this cycle has reached (dust-close threshold)
 
     equity = np.empty(n)
     equity[0] = initial_capital
@@ -405,14 +413,32 @@ def _compute_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, close: pd.
                 exit_kind = "rule"
 
             if exit_kind is not None:
-                proceeds = cost_basis + sign * shares * (price - avg_entry)
+                frac = 1.0
+                if exit_kind == "rule" and exit_frac_cfg < 1.0:
+                    frac = exit_frac_cfg
+                    # Don't let a persistently-true exit rule leave an
+                    # ever-shrinking dust tail open forever — once what's
+                    # left is under 0.5% of this cycle's peak size, close it.
+                    if cost_basis * (1 - frac) <= max(0.01, cycle_peak_cost * 0.005):
+                        frac = 1.0
+                closed_shares = shares * frac
+                closed_cost = cost_basis * frac
+                proceeds = closed_cost + sign * closed_shares * (price - avg_entry)
                 cash += proceeds
-                if proceeds > cost_basis:
-                    wins += cycle_buys
-                trades.append({"date": idx[i].strftime(_dfmt), "action": "SELL",
+                cycle_proceeds_total += proceeds
+                shares -= closed_shares
+                cost_basis -= closed_cost
+                trade_entry = {"date": idx[i].strftime(_dfmt), "action": "SELL",
                                "price": round(float(price), 2), "is_entry": False,
-                               "exit_kind": None if exit_kind == "rule" else exit_kind})
-                shares, cost_basis, entry_i, peak_price, cycle_buys = 0.0, 0.0, None, 0.0, 0
+                               "exit_kind": None if exit_kind == "rule" else exit_kind}
+                if frac < 1.0:
+                    trade_entry["partial_pct"] = round(frac * 100, 1)
+                trades.append(trade_entry)
+                if shares <= 1e-9:
+                    if cycle_proceeds_total > cycle_cost_total:
+                        wins += cycle_buys
+                    shares, cost_basis, entry_i, peak_price = 0.0, 0.0, None, 0.0
+                    cycle_buys, cycle_cost_total, cycle_proceeds_total, cycle_peak_cost = 0, 0.0, 0.0, 0.0
 
         if buy_signal[i] and cash > 0.01:
             invest = cash * alloc
@@ -425,6 +451,8 @@ def _compute_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, close: pd.
                     entry_i, peak_price = i, price
                 cycle_buys += 1
                 total_buys += 1
+                cycle_cost_total += invest
+                cycle_peak_cost = max(cycle_peak_cost, cost_basis)
                 trades.append({"date": idx[i].strftime(_dfmt), "action": "BUY",
                                "price": round(float(price), 2), "is_entry": True})
 
@@ -500,7 +528,9 @@ def _compute_option_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clo
                             position_size: float = 100, initial_capital: float = 10_000,
                             direction: str = "long", bars_per_year: int = 252, intraday: bool = False,
                             stop_loss: float | None = None, take_profit: float | None = None,
-                            trailing_stop: float | None = None, max_hold_bars: int | None = None):
+                            trailing_stop: float | None = None, max_hold_bars: int | None = None,
+                            exit_pct: float = 100.0,
+                            delta_exit: float | None = None, gamma_exit: float | None = None):
     """Modeled single-option backtest, multi-lot: every bar the buy signal
     fires, ANOTHER fresh Black-Scholes-priced call/put (strike = moneyness ×
     spot at that bar, fixed DTE) opens sized off currently-available cash —
@@ -524,8 +554,13 @@ def _compute_option_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clo
     underlying (theta, vega, and non-ATM strikes all break that), so a
     price-based stop would trigger at the wrong P&L level or not at all.
     max_hold_bars forces a lot's exit after N bars even if its own DTE/the
-    rules haven't closed it."""
-    from math_engine import bs_price
+    rules haven't closed it. delta_exit/gamma_exit close a lot once |delta|/
+    |gamma| (the option's own, direction-agnostic — how far ITM or how fast
+    its value is curving) reaches the threshold; both use the SAME
+    constant-IV Black-Scholes approximation already used for the lot's P&L,
+    so this isn't a new source of inaccuracy over what the rest of the engine
+    already assumes."""
+    from math_engine import bs_price, bs_greeks
     otype = "put" if str(opt.get("type", "call")).lower().startswith("p") else "call"
     moneyness = float(opt.get("moneyness", 1.0))
     dte = max(1, int(opt.get("dte", 30)))
@@ -534,6 +569,7 @@ def _compute_option_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clo
     exit_action = "BUY" if short else "SELL"
     r = 4.0
     alloc = max(0.0, position_size) / 100.0
+    exit_frac_cfg = max(0.0, min(1.0, exit_pct / 100.0))
     _dfmt = "%Y-%m-%d %H:%M" if intraday else "%Y-%m-%d"
     idx = close.index
     px = close.to_numpy(dtype=float)
@@ -542,7 +578,7 @@ def _compute_option_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clo
     equity = np.empty(n)
     cash = float(initial_capital)
     cur = float(initial_capital)
-    lots: list[dict] = []   # each: {strike, entry_i, expiry_at, entry_val, entry_mtm, basis, peak_pnl, signed_contracts}
+    lots: list[dict] = []   # each: {strike, entry_i, expiry_at, entry_val, entry_mtm, basis, orig_basis, peak_pnl, signed_contracts}
     trades: list[dict] = []
     wiped_out = False
     blown_up_at = None
@@ -554,23 +590,42 @@ def _compute_option_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clo
         remaining_days = max(0, (lot["expiry_at"] - idx[i]).total_seconds() / 86_400)
         return float(bs_price(px[i], lot["strike"], remaining_days, r, iv, otype))
 
+    def _greeks(lot: dict, i: int) -> tuple[float, float]:
+        remaining_days = max(0, (lot["expiry_at"] - idx[i]).total_seconds() / 86_400)
+        g = bs_greeks(px[i], lot["strike"], remaining_days, r, iv, otype)
+        return g["delta"], g["gamma"]
+
     def _settlement(lot: dict, i: int) -> str:
         intrinsic = max(px[i] - lot["strike"], 0.0) if otype == "call" else max(lot["strike"] - px[i], 0.0)
         if intrinsic <= 0:
             return "expired_worthless"
         return "assignment" if short else "exercise"
 
-    def _close_lot(lot: dict, i: int, exit_kind: str):
+    def _close_lot(lot: dict, i: int, exit_kind: str, frac: float = 1.0):
+        """Closes `frac` of this lot's contracts (1.0 = all of it, the only
+        value any non-rule exit ever uses). A partial rule-close realizes its
+        share of cash and shrinks the lot in place — basis/peak_pnl scale down
+        with it so a later stop/take-profit % check still reads correctly
+        against what's actually still open."""
         nonlocal cash, num_trades, wins
         v = _val(lot, i)
-        cash += lot["signed_contracts"] * v * _OPT_MULT
+        closed_contracts = lot["signed_contracts"] * frac
+        cash += closed_contracts * v * _OPT_MULT
         num_trades += 1
         # A short leg profits when it buys the option back cheaper than it sold it.
         if (v < lot["entry_val"] if short else v > lot["entry_val"]):
             wins += 1
-        trades.append({"date": idx[i].strftime(_dfmt), "action": "EXPIRE" if exit_kind == "expiration" else exit_action,
+        trade_entry = {"date": idx[i].strftime(_dfmt), "action": "EXPIRE" if exit_kind == "expiration" else exit_action,
                        "price": round(v, 2), "is_entry": False, "exit_kind": exit_kind,
-                       **({"settlement": _settlement(lot, i)} if exit_kind == "expiration" else {})})
+                       **({"settlement": _settlement(lot, i)} if exit_kind == "expiration" else {})}
+        if frac < 1.0:
+            trade_entry["partial_pct"] = round(frac * 100, 1)
+        trades.append(trade_entry)
+        if frac < 1.0:
+            lot["signed_contracts"] -= closed_contracts
+            lot["entry_mtm"] *= (1 - frac)
+            lot["basis"] = max(abs(lot["entry_mtm"]), 0.01)
+            lot["peak_pnl"] *= (1 - frac)
 
     for i in range(n):
         if wiped_out:
@@ -591,6 +646,12 @@ def _compute_option_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clo
                     exit_kind = "take_profit"
                 if exit_kind is None and trailing_stop is not None and pnl <= lot["peak_pnl"] - (trailing_stop / 100.0) * lot["basis"]:
                     exit_kind = "trailing_stop"
+                if exit_kind is None and (delta_exit is not None or gamma_exit is not None):
+                    d, g = _greeks(lot, i)
+                    if delta_exit is not None and abs(d) >= delta_exit:
+                        exit_kind = "delta_exit"
+                    elif gamma_exit is not None and abs(g) >= gamma_exit:
+                        exit_kind = "gamma_exit"
                 if exit_kind is None and max_hold_bars is not None and (i - lot["entry_i"]) >= max_hold_bars:
                     exit_kind = "max_hold"
             else:
@@ -602,9 +663,22 @@ def _compute_option_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clo
         lots = remaining
 
         if lots and sell_signal[i]:
-            for lot in lots:
-                _close_lot(lot, i, "rule")
-            lots = []
+            if exit_frac_cfg >= 1.0:
+                for lot in lots:
+                    _close_lot(lot, i, "rule")
+                lots = []
+            else:
+                # A persistently-true exit rule keeps trimming every lot bar
+                # over bar; once what's left of a given lot is under 0.5% of
+                # its ORIGINAL size, finish it off instead of leaving dust.
+                remaining_lots = []
+                for lot in lots:
+                    if abs(lot["entry_mtm"]) * (1 - exit_frac_cfg) <= max(0.01, lot["orig_basis"] * 0.005):
+                        _close_lot(lot, i, "rule", 1.0)
+                    else:
+                        _close_lot(lot, i, "rule", exit_frac_cfg)
+                        remaining_lots.append(lot)
+                lots = remaining_lots
 
         if buy_signal[i] and cash > 0.01:
             strike = round(px[i] * moneyness, 2)
@@ -618,6 +692,7 @@ def _compute_option_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clo
                 lots.append({
                     "strike": strike, "entry_i": i, "expiry_at": idx[i] + pd.Timedelta(days=dte),
                     "entry_val": entry_val, "entry_mtm": entry_mtm, "basis": abs(entry_mtm) or 1.0,
+                    "orig_basis": abs(entry_mtm) or 1.0,
                     "peak_pnl": 0.0, "signed_contracts": signed_contracts,
                 })
                 trades.append({"date": idx[i].strftime(_dfmt), "action": entry_action, "price": round(entry_val, 2), "is_entry": True})
@@ -677,7 +752,9 @@ def _compute_combo_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clos
                            position_size: float = 100, initial_capital: float = 10_000,
                            bars_per_year: int = 252, intraday: bool = False,
                            stop_loss: float | None = None, take_profit: float | None = None,
-                           trailing_stop: float | None = None, max_hold_bars: int | None = None):
+                           trailing_stop: float | None = None, max_hold_bars: int | None = None,
+                           exit_pct: float = 100.0,
+                           delta_exit: float | None = None, gamma_exit: float | None = None):
     """Modeled multi-leg option combo backtest (straddle/strangle/spread/condor/
     butterfly/etc — same leg shape as the Options Strategy Builder's PRESETS
     table: {type, side, moneyness, qty}), multi-lot: every bar the buy signal
@@ -719,14 +796,19 @@ def _compute_combo_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clos
     short strangle can lose or gain heavily from IV/theta with the stock
     barely moving, so a price-based stop (correct for plain shares) would
     rarely fire here at all. max_hold_bars forces a lot's exit after N bars
-    even if its own DTE/the rules haven't closed it."""
-    from math_engine import bs_price
+    even if its own DTE/the rules haven't closed it. delta_exit/gamma_exit close
+    a lot once its NET delta/gamma (Σ signed_qty × leg greek, divided by Σ
+    |signed_qty| so it stays on the same ~0-1 per-contract scale a single-leg
+    position uses) reaches the threshold — a structure's real directional/
+    curvature exposure, not any one leg's greek in isolation."""
+    from math_engine import bs_price, bs_greeks
     legs_cfg = combo.get("legs") or []
     if not legs_cfg:
         raise HTTPException(422, "Combo instrument needs at least one leg")
     dte = max(1, int(combo.get("dte", 30)))
     r = 4.0
     alloc = max(0.0, position_size) / 100.0
+    exit_frac_cfg = max(0.0, min(1.0, exit_pct / 100.0))
     _dfmt = "%Y-%m-%d %H:%M" if intraday else "%Y-%m-%d"
     idx = close.index
     px = close.to_numpy(dtype=float)
@@ -735,7 +817,7 @@ def _compute_combo_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clos
     equity = np.empty(n)
     cash = float(initial_capital)
     cur = float(initial_capital)
-    lots: list[dict] = []   # each: {legs: [{type, strike, signed_qty}], entry_i, expiry_at, entry_mtm, basis, peak_pnl}
+    lots: list[dict] = []   # each: {legs: [{type, strike, signed_qty}], entry_i, expiry_at, entry_mtm, basis, orig_basis, peak_pnl}
     trades: list[dict] = []
     wiped_out = False
     blown_up_at = None
@@ -750,21 +832,38 @@ def _compute_combo_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clos
     def _lot_mtm(lot: dict, i: int) -> float:
         return sum(l["signed_qty"] * _leg_val(l, lot, i) * _OPT_MULT for l in lot["legs"])
 
+    def _lot_greeks(lot: dict, i: int) -> tuple[float, float]:
+        remaining_days = max(0, (lot["expiry_at"] - idx[i]).total_seconds() / 86_400)
+        net_delta = net_gamma = 0.0
+        total_qty = 0.0
+        for l in lot["legs"]:
+            g = bs_greeks(px[i], l["strike"], remaining_days, r, iv, l["type"])
+            net_delta += l["signed_qty"] * g["delta"]
+            net_gamma += l["signed_qty"] * g["gamma"]
+            total_qty += abs(l["signed_qty"])
+        if total_qty <= 0:
+            return 0.0, 0.0
+        return net_delta / total_qty, net_gamma / total_qty
+
     def _settlement(leg: dict, i: int) -> str:
         intrinsic = max(px[i] - leg["strike"], 0.0) if leg["type"] == "call" else max(leg["strike"] - px[i], 0.0)
         if intrinsic <= 0:
             return "expired_worthless"
         return "exercise" if leg["signed_qty"] > 0 else "assignment"
 
-    def _close_lot(lot: dict, i: int, exit_kind: str):
+    def _close_lot(lot: dict, i: int, exit_kind: str, frac: float = 1.0):
+        """Closes `frac` of every leg in this lot (1.0 = all of it, the only
+        value any non-rule exit ever uses) — each leg's signed_qty shrinks by
+        the same fraction so the structure's ratio (e.g. a butterfly's 1:2:1)
+        stays intact on whatever remains open."""
         nonlocal cash, num_trades, wins
-        mtm = _lot_mtm(lot, i)
+        mtm = _lot_mtm(lot, i) * frac
         cash += mtm
         num_trades += 1
-        if mtm - lot["entry_mtm"] > 0:
+        if mtm - lot["entry_mtm"] * frac > 0:
             wins += 1
         for l in lot["legs"]:
-            trades.append({
+            trade_entry = {
                 "date": idx[i].strftime(_dfmt),
                 "action": "EXPIRE" if exit_kind == "expiration" else "SELL" if l["signed_qty"] > 0 else "BUY",
                 "price": round(_leg_val(l, lot, i), 2),
@@ -772,7 +871,16 @@ def _compute_combo_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clos
                 "is_entry": False,
                 "exit_kind": exit_kind,
                 **({"settlement": _settlement(l, i)} if exit_kind == "expiration" else {}),
-            })
+            }
+            if frac < 1.0:
+                trade_entry["partial_pct"] = round(frac * 100, 1)
+            trades.append(trade_entry)
+        if frac < 1.0:
+            for l in lot["legs"]:
+                l["signed_qty"] *= (1 - frac)
+            lot["entry_mtm"] *= (1 - frac)
+            lot["basis"] = max(abs(lot["entry_mtm"]), 0.01)
+            lot["peak_pnl"] *= (1 - frac)
 
     for i in range(n):
         if wiped_out:
@@ -793,6 +901,12 @@ def _compute_combo_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clos
                     exit_kind = "take_profit"
                 if exit_kind is None and trailing_stop is not None and pnl <= lot["peak_pnl"] - (trailing_stop / 100.0) * lot["basis"]:
                     exit_kind = "trailing_stop"
+                if exit_kind is None and (delta_exit is not None or gamma_exit is not None):
+                    d, g = _lot_greeks(lot, i)
+                    if delta_exit is not None and abs(d) >= delta_exit:
+                        exit_kind = "delta_exit"
+                    elif gamma_exit is not None and abs(g) >= gamma_exit:
+                        exit_kind = "gamma_exit"
                 if exit_kind is None and max_hold_bars is not None and (i - lot["entry_i"]) >= max_hold_bars:
                     exit_kind = "max_hold"
             else:
@@ -804,9 +918,19 @@ def _compute_combo_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clos
         lots = remaining
 
         if lots and sell_signal[i]:
-            for lot in lots:
-                _close_lot(lot, i, "rule")
-            lots = []
+            if exit_frac_cfg >= 1.0:
+                for lot in lots:
+                    _close_lot(lot, i, "rule")
+                lots = []
+            else:
+                remaining_lots = []
+                for lot in lots:
+                    if abs(lot["entry_mtm"]) * (1 - exit_frac_cfg) <= max(0.01, lot["orig_basis"] * 0.005):
+                        _close_lot(lot, i, "rule", 1.0)
+                    else:
+                        _close_lot(lot, i, "rule", exit_frac_cfg)
+                        remaining_lots.append(lot)
+                lots = remaining_lots
 
         if buy_signal[i] and cash > 0.01:
             unscaled: list[dict] = []
@@ -837,7 +961,8 @@ def _compute_combo_metrics(buy_signal: np.ndarray, sell_signal: np.ndarray, clos
                 cash -= entry_mtm
                 lots.append({
                     "legs": lot_legs, "entry_i": i, "expiry_at": expiry_at,
-                    "entry_mtm": entry_mtm, "basis": abs(entry_mtm) or 1.0, "peak_pnl": 0.0,
+                    "entry_mtm": entry_mtm, "basis": abs(entry_mtm) or 1.0,
+                    "orig_basis": abs(entry_mtm) or 1.0, "peak_pnl": 0.0,
                 })
 
         cur = cash + sum(_lot_mtm(lot, i) for lot in lots)
@@ -910,6 +1035,9 @@ class ComboMonteCarloRequest(BaseModel):
     take_profit_pct: float | None = None
     stop_loss_pct: float | None = None
     max_hold_days: int | None = Field(None, ge=1)   # None = hold to DTE; 0/negative rejected, not silently ignored
+    exit_pct: float = 100.0   # % of every open lot the rule-based exit closes when the signal drops; 100 = all of it
+    delta_exit: float | None = None   # None = off; closes a lot once |net delta| reaches this
+    gamma_exit: float | None = None   # None = off; closes a lot once |net gamma| reaches this
     # Sizing — same as portfolio_backtest: each admitted trade is sized at
     # position_size% × leverage of initial_capital (NOT split across the
     # ticker universe). Leg qty ratios from combo.legs stay fixed; absolute
@@ -937,6 +1065,8 @@ class ComboMonteCarloRequest(BaseModel):
             raise ValueError("Effective annual rate must be between 0% and 100%")
         if not 0 < self.position_size <= 100:
             raise ValueError("Position size must be between 0% and 100% of capital")
+        if not 0 < self.exit_pct <= 100:
+            self.exit_pct = 100.0
         if self.tickers is not None and len(self.tickers) > 100:
             raise ValueError("Basket is limited to 100 tickers — each one needs its own live spot/IV fetch and simulation")
         allowed = {"gbm", "student_t", "bootstrap", "gbm_rn"}
@@ -997,6 +1127,22 @@ def _bs_scalar(S: float, K: float, T: float, rf: float, sigma: float, otype: str
         cdf_neg_d1 = 0.5 * (1.0 + math.erf(-d1 / 1.4142135623730951))
         cdf_neg_d2 = 0.5 * (1.0 + math.erf(-d2 / 1.4142135623730951))
         return K * math.exp(-rf * T) * cdf_neg_d2 - S * cdf_neg_d1
+
+
+def _bs_greeks_scalar(S: float, K: float, T: float, rf: float, sigma: float, otype: str) -> tuple[float, float]:
+    """(delta, gamma) for one option, same fast erf-based math as _bs_scalar (T in years,
+    rf/sigma already decimals). At/after expiry the option's shape has already resolved to
+    its intrinsic-value kink — delta is binary (1/0/-1 by moneyness) and gamma is 0."""
+    import math
+    if T <= 1e-8:
+        itm = S > K if otype == "call" else S < K
+        delta = (1.0 if otype == "call" else -1.0) if itm else 0.0
+        return delta, 0.0
+    d1 = (math.log(S / K) + (rf + 0.5 * sigma ** 2) * T) / (sigma * math.sqrt(T))
+    cdf_d1 = 0.5 * (1.0 + math.erf(d1 / 1.4142135623730951))
+    delta = cdf_d1 if otype == "call" else cdf_d1 - 1.0
+    gamma = math.exp(-0.5 * d1 * d1) / math.sqrt(2 * math.pi) / (S * sigma * math.sqrt(T))
+    return delta, gamma
 
 
 @router.post("/combo-montecarlo")
@@ -1749,6 +1895,8 @@ def _corr_cholesky_from_hists(hists: list[np.ndarray]) -> np.ndarray | None:
 def _apply_trades_on_pack(
     pack: dict, legs_cfg: list, dte: int, r: float, committed_dollars: float,
     take_profit_pct: float | None, stop_loss_pct: float | None, max_hold_days: int | None,
+    exit_pct: float = 100.0,
+    delta_exit: float | None = None, gamma_exit: float | None = None,
 ) -> dict:
     """Cheap stage: size + risk-manage trades on a cached path/signal pack.
 
@@ -1761,14 +1909,17 @@ def _apply_trades_on_pack(
     backtester's option/combo engines. Each lot is independent (its own
     strikes fixed at entry, its own DTE clock, its own stop/take-profit/
     max-hold tracking) since options aren't fungible across entries the way
-    shares are. The shared rule-based exit (the signal dropping to 0) closes
-    every open lot at once, mirroring the backtester's convention; a lot's
-    own risk trigger or expiry only closes that lot.
+    shares are. The rule-based exit (the signal dropping to 0) closes
+    `exit_pct` of every open lot at once (100 = all of it, the same
+    full-close behavior as before; less than 100 trims each lot in place —
+    same mechanism as the backtester's engines). A lot's own risk trigger
+    or expiry always closes that lot in full, regardless of exit_pct.
     """
     spot = float(pack["spot"])
     iv = float(pack["iv"])
     sigma = float(pack["sigma"])
     rf = r / 100.0
+    exit_frac_cfg = max(0.0, min(1.0, exit_pct / 100.0))
     price_paths = pack["price_paths"]
     signal_grid = pack["signal_grid"]
     n, cols = price_paths.shape
@@ -1809,6 +1960,22 @@ def _apply_trades_on_pack(
             opt_val += leg["signed_qty"] * v * _OPT_MULT
         return entry_cash + opt_val
 
+    def _lot_greeks(resolved, spot_now: float, t_rem: float) -> tuple[float, float]:
+        """Qty-weighted net delta/gamma across every leg — same convention as
+        the backtester's combo engine — divided by total |qty| so a single
+        leg's own (or a structure's net) exposure both read on the same
+        ~0-1-ish per-contract scale."""
+        net_delta = net_gamma = 0.0
+        total_qty = 0.0
+        for leg in resolved:
+            d, g = _bs_greeks_scalar(spot_now, leg["strike"], max(t_rem, 1e-6) / 365.0, rf, sigma, leg["type"])
+            net_delta += leg["signed_qty"] * d
+            net_gamma += leg["signed_qty"] * g
+            total_qty += abs(leg["signed_qty"])
+        if total_qty <= 0:
+            return 0.0, 0.0
+        return net_delta / total_qty, net_gamma / total_qty
+
     for i in range(n):
         sim_prices = price_paths[i]
         lots: list[dict] = []   # each: {entry_day, resolved_legs, entry_cash_flow}
@@ -1834,11 +2001,32 @@ def _apply_trades_on_pack(
                 is_sl = sl_level is not None and unrealized <= sl_level
                 is_max_hold = max_hold_days is not None and days_held >= max_hold_days
                 is_expiry = t_rem <= 0
-                if is_tp or is_sl or is_max_hold or is_expiry or not want_in:
-                    cum_pnl += unrealized
+                is_delta = is_gamma = False
+                if not is_expiry and (delta_exit is not None or gamma_exit is not None):
+                    ld, lg = _lot_greeks(lot["resolved_legs"], spot_now, t_rem)
+                    is_delta = delta_exit is not None and abs(ld) >= delta_exit
+                    is_gamma = not is_delta and gamma_exit is not None and abs(lg) >= gamma_exit
+                is_hard_exit = is_tp or is_sl or is_max_hold or is_expiry or is_delta or is_gamma
+                if is_hard_exit or not want_in:
+                    frac = 1.0
+                    if not is_hard_exit and exit_frac_cfg < 1.0:
+                        # Rule-based exit only: trim instead of fully closing,
+                        # unless what would remain is dust relative to this
+                        # lot's original size (mirrors the backtester engines).
+                        remaining_notional = abs(lot["entry_cash_flow"]) * (1 - exit_frac_cfg)
+                        if remaining_notional > max(0.01, lot["orig_basis"] * 0.005):
+                            frac = exit_frac_cfg
+                    cum_pnl += unrealized * frac
                     trades_total[i] += 1
                     if unrealized > 0:
                         trades_win[i] += 1
+                    if frac < 1.0:
+                        for leg in lot["resolved_legs"]:
+                            leg["signed_qty"] *= (1 - frac)
+                        lot["entry_cash_flow"] *= (1 - frac)
+                        lot["notional_frac"] *= (1 - frac)
+                        remaining.append(lot)
+                        unrealized_open += unrealized * (1 - frac)
                 else:
                     remaining.append(lot)
                     unrealized_open += unrealized
@@ -1853,9 +2041,10 @@ def _apply_trades_on_pack(
             # way), so it's not added to unrealized_open here.
             if want_in:
                 resolved_legs, entry_cash_flow = _open_position(spot_now)
-                lots.append({"entry_day": d, "resolved_legs": resolved_legs, "entry_cash_flow": entry_cash_flow})
+                lots.append({"entry_day": d, "resolved_legs": resolved_legs, "entry_cash_flow": entry_cash_flow,
+                            "orig_basis": abs(entry_cash_flow) or 1.0, "notional_frac": 1.0})
 
-            open_notional_path[i, d] = committed_dollars * len(lots)
+            open_notional_path[i, d] = committed_dollars * sum(lot["notional_frac"] for lot in lots)
             pnl_path[i, d] = cum_pnl + unrealized_open
 
     return {
@@ -1876,7 +2065,8 @@ def _simulate_ticker_strategy_path(ticker: str, legs_cfg: list, dte: int, horizo
                                   batch_hist: dict | None = None,
                                   spot: float | None = None, iv: float | None = None,
                                   hist_close: "pd.Series | None" = None,
-                                  path_model: str = "gbm"):
+                                  path_model: str = "gbm", exit_pct: float = 100.0,
+                                  delta_exit: float | None = None, gamma_exit: float | None = None):
     """Simulate one ticker's strategy-entry options path (paths+signals cached).
 
     When spot/iv/hist_close are provided (preferred — from _prefetch_strategy_market),
@@ -1919,6 +2109,7 @@ def _simulate_ticker_strategy_path(ticker: str, legs_cfg: list, dte: int, horizo
     return _apply_trades_on_pack(
         pack, legs_cfg, dte, r, committed_dollars,
         take_profit_pct, stop_loss_pct, max_hold_days,
+        exit_pct=exit_pct, delta_exit=delta_exit, gamma_exit=gamma_exit,
     )
 
 
@@ -1941,6 +2132,9 @@ def _strategy_sim_job(payload: dict) -> dict:
                 payload.get("take_profit_pct"),
                 payload.get("stop_loss_pct"),
                 payload.get("max_hold_days"),
+                exit_pct=float(payload.get("exit_pct") or 100.0),
+                delta_exit=payload.get("delta_exit"),
+                gamma_exit=payload.get("gamma_exit"),
             )
         else:
             hist_close = pd.Series(np.asarray(payload["hist_values"], dtype=float))
@@ -1959,6 +2153,9 @@ def _strategy_sim_job(payload: dict) -> dict:
                 take_profit_pct=payload.get("take_profit_pct"),
                 stop_loss_pct=payload.get("stop_loss_pct"),
                 max_hold_days=payload.get("max_hold_days"),
+                exit_pct=float(payload.get("exit_pct") or 100.0),
+                delta_exit=payload.get("delta_exit"),
+                gamma_exit=payload.get("gamma_exit"),
                 strategy_rules=payload.get("strategy_rules"),
                 spot=float(payload["spot"]),
                 iv=float(payload["iv"]),
@@ -2186,6 +2383,9 @@ def _run_strategy_basket(
     max_hold_days: int | None,
     strategy_rules: dict | None,
     path_model: str = "gbm",
+    exit_pct: float = 100.0,
+    delta_exit: float | None = None,
+    gamma_exit: float | None = None,
 ) -> tuple[np.ndarray, np.ndarray, dict, dict]:
     """Run strategy MC for a prefetched basket.
 
@@ -2296,6 +2496,9 @@ def _run_strategy_basket(
             "take_profit_pct": take_profit_pct,
             "stop_loss_pct": stop_loss_pct,
             "max_hold_days": max_hold_days,
+            "exit_pct": exit_pct,
+            "delta_exit": delta_exit,
+            "gamma_exit": gamma_exit,
             "strategy_rules": strategy_rules,
             "path_model": path_model,
             "spot": m["spot"],
@@ -2390,7 +2593,8 @@ def _combo_monte_carlo_impl(req: ComboMonteCarloRequest):
         pnl_path, open_notional_path, per_ticker_results, sim_dropped = _run_strategy_basket(
             live_tickers, market, legs_cfg, dte, horizon_days, r, dollars_per_trade,
             n, dt, req.strategy, req.strategy_params, req.take_profit_pct, req.stop_loss_pct,
-            req.max_hold_days, strategy_rules, path_model=path_model,
+            req.max_hold_days, strategy_rules, path_model=path_model, exit_pct=req.exit_pct,
+            delta_exit=req.delta_exit, gamma_exit=req.gamma_exit,
         )
         dropped_tickers.update(sim_dropped)
         if not per_ticker_results:

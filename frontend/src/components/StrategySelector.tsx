@@ -89,8 +89,8 @@ function InfoBox({ children }: { children: React.ReactNode }) {
 
 function Rule({ tag, children }: { tag: string; children: React.ReactNode }) {
   const colors: Record<string, string> = {
-    'BUY': 'text-emerald-400', 'HOLD': 'text-gold',
-    'SELL': 'text-red-400',    'NOTE': 'text-slate-terminal',
+    'ENTER': 'text-emerald-400', 'HOLD': 'text-gold',
+    'EXIT': 'text-red-400',      'NOTE': 'text-slate-terminal',
     'WEAK': 'text-amber-400',
   }
   return (
@@ -154,7 +154,7 @@ function CNum({ label, value, step, min, max, help, onChange }: {
 
 function CRule({ tag, children }: { tag: string; children: React.ReactNode }) {
   const color: Record<string, string> = {
-    BUY: '#4caf7d', HOLD: 'var(--theme-primary, #c9a84c)', SELL: '#e05c6e', NOTE: 'var(--theme-text-faint, rgba(255,255,255,0.18))', WEAK: '#d97736',
+    ENTER: '#4caf7d', HOLD: 'var(--theme-primary, #c9a84c)', EXIT: '#e05c6e', NOTE: 'var(--theme-text-faint, rgba(255,255,255,0.18))', WEAK: '#d97736',
   }
   return (
     <div style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
@@ -360,8 +360,8 @@ export default function StrategySelector({ value, params, onChange, compact, hid
                   <GNum label="Bear drift adj (%)" value={p.bear_drift_adj!} step={0.5} max={0} min={-15} onChange={v => setParam('bear_drift_adj', v)}
                     help="Drift penalty during a Death Cross (fast SMA below slow SMA). Keep this negative." />
                   <div style={{ borderTop: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))', paddingTop: 6 }}>
-                    <CRule tag="BUY">Price above both SMAs — drift +{p.bull_drift_adj}%/yr.</CRule>
-                    <CRule tag="SELL">Death Cross — drift {p.bear_drift_adj}%/yr.</CRule>
+                    <CRule tag="ENTER">Price above both SMAs — drift +{p.bull_drift_adj}%/yr.</CRule>
+                    <CRule tag="EXIT">Death Cross — drift {p.bear_drift_adj}%/yr.</CRule>
                     <CRule tag="NOTE">Weak signals get a partial adjustment.</CRule>
                   </div>
                 </>)}
@@ -378,8 +378,8 @@ export default function StrategySelector({ value, params, onChange, compact, hid
                   <GNum label="Oversold drift adj (%)" value={p.os_drift_adj!} step={0.5} min={0} max={15} onChange={v => setParam('os_drift_adj', v)}
                     help="Drift boost when RSI is oversold. Keep positive — a low RSI suggests a likely recovery." />
                   <div style={{ borderTop: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))', paddingTop: 6 }}>
-                    <CRule tag="BUY">RSI &lt; {p.oversold} → +{p.os_drift_adj}% drift.</CRule>
-                    <CRule tag="SELL">RSI &gt; {p.overbought} → {p.ob_drift_adj}% drift.</CRule>
+                    <CRule tag="ENTER">RSI &lt; {p.oversold} → +{p.os_drift_adj}% drift.</CRule>
+                    <CRule tag="EXIT">RSI &gt; {p.overbought} → {p.ob_drift_adj}% drift.</CRule>
                     <CRule tag="HOLD">RSI {p.oversold}–{p.overbought} — no adjustment.</CRule>
                   </div>
                 </>)}
@@ -394,8 +394,8 @@ export default function StrategySelector({ value, params, onChange, compact, hid
                   <GNum label="Max drift adj (%)" value={p.adj_cap!} step={0.5} min={1} max={20} onChange={v => setParam('adj_cap', v)}
                     help="Hard cap on the drift adjustment in either direction. Prevents extreme momentum from dominating." />
                   <div style={{ borderTop: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))', paddingTop: 6 }}>
-                    <CRule tag="BUY">{p.lookback_days}d return &gt; {p.threshold_pct}% → up to +{p.adj_cap}%.</CRule>
-                    <CRule tag="SELL">Return &lt; {p.threshold_pct}% → up to -{p.adj_cap}%.</CRule>
+                    <CRule tag="ENTER">{p.lookback_days}d return &gt; {p.threshold_pct}% → up to +{p.adj_cap}%.</CRule>
+                    <CRule tag="EXIT">Return &lt; {p.threshold_pct}% → up to -{p.adj_cap}%.</CRule>
                   </div>
                 </>)}
 
@@ -409,8 +409,8 @@ export default function StrategySelector({ value, params, onChange, compact, hid
                   <GNum label="Bear drift adj (%)" value={p.bear_drift_adj!} step={0.5} max={0} min={-10} onChange={v => setParam('bear_drift_adj', v)}
                     help="Drift penalty when not in a breakout (in cash)." />
                   <div style={{ borderTop: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))', paddingTop: 6 }}>
-                    <CRule tag="BUY">Price closes above upper band → enter long, drift +{p.bull_drift_adj}%.</CRule>
-                    <CRule tag="SELL">Price falls below lower band → exit to cash, drift {p.bear_drift_adj}%.</CRule>
+                    <CRule tag="ENTER">Price closes above upper band → enter long, drift +{p.bull_drift_adj}%.</CRule>
+                    <CRule tag="EXIT">Price falls below lower band → exit to cash, drift {p.bear_drift_adj}%.</CRule>
                   </div>
                 </>)}
 
@@ -426,8 +426,8 @@ export default function StrategySelector({ value, params, onChange, compact, hid
                   <GNum label="Bear drift adj (%)" value={p.bear_drift_adj!} step={0.5} max={0} min={-15} onChange={v => setParam('bear_drift_adj', v)}
                     help="Drift penalty when MACD line is below the signal line." />
                   <div style={{ borderTop: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))', paddingTop: 6 }}>
-                    <CRule tag="BUY">MACD above signal → bullish crossover, drift +{p.bull_drift_adj}%.</CRule>
-                    <CRule tag="SELL">MACD below signal → bearish crossover, drift {p.bear_drift_adj}%.</CRule>
+                    <CRule tag="ENTER">MACD above signal → bullish crossover, drift +{p.bull_drift_adj}%.</CRule>
+                    <CRule tag="EXIT">MACD below signal → bearish crossover, drift {p.bear_drift_adj}%.</CRule>
                   </div>
                 </>)}
 
@@ -445,9 +445,9 @@ export default function StrategySelector({ value, params, onChange, compact, hid
                   <GNum label="Bear drift adj (%)" value={p.bear_drift_adj!} step={0.5} max={0} min={-15} onChange={v => setParam('bear_drift_adj', v)}
                     help="Drift penalty when P/E is expensive. Keep this negative to reflect overvaluation risk." />
                   <div style={{ borderTop: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))', paddingTop: 6 }}>
-                    <CRule tag="BUY">P/E &lt; {p.pe_deep_value} → +{p.bull_drift_adj}%/yr.</CRule>
+                    <CRule tag="ENTER">P/E &lt; {p.pe_deep_value} → +{p.bull_drift_adj}%/yr.</CRule>
                     <CRule tag="HOLD">P/E {p.pe_deep_value}–{p.pe_in_threshold} → partial or none.</CRule>
-                    <CRule tag="SELL">P/E &gt; {p.pe_expensive} → {p.bear_drift_adj}%/yr.</CRule>
+                    <CRule tag="EXIT">P/E &gt; {p.pe_expensive} → {p.bear_drift_adj}%/yr.</CRule>
                   </div>
                 </>)}
 
@@ -459,8 +459,8 @@ export default function StrategySelector({ value, params, onChange, compact, hid
                   <GNum label="Max drift adj (%)" value={p.adj_cap!} step={0.5} min={1} max={20} onChange={v => setParam('adj_cap', v)}
                     help="Hard cap on the drift adjustment in either direction. Prevents extreme EPS swings from dominating." />
                   <div style={{ borderTop: '1px solid var(--theme-border, var(--theme-border, rgba(255,255,255,0.06)))', paddingTop: 6 }}>
-                    <CRule tag="BUY">EPS growth &gt; {p.exit_threshold_pct}% → up to +{p.adj_cap}%.</CRule>
-                    <CRule tag="SELL">EPS growth &lt; {p.exit_threshold_pct}% → up to -{p.adj_cap}%.</CRule>
+                    <CRule tag="ENTER">EPS growth &gt; {p.exit_threshold_pct}% → up to +{p.adj_cap}%.</CRule>
+                    <CRule tag="EXIT">EPS growth &lt; {p.exit_threshold_pct}% → up to -{p.adj_cap}%.</CRule>
                     <CRule tag="NOTE">Uses live Yahoo Finance data.</CRule>
                   </div>
                 </>)}
@@ -479,8 +479,8 @@ export default function StrategySelector({ value, params, onChange, compact, hid
                   <GNum label="Bear drift adj (%)" value={p.bear_drift_adj!} step={0.5} max={0} min={-15} onChange={v => setParam('bear_drift_adj', v)}
                     help="Drift penalty when EMA(fast) is below EMA(slow). Keep negative." />
                   <div style={{ borderTop: '1px solid var(--theme-border, rgba(255,255,255,0.06))', paddingTop: 6 }}>
-                    <CRule tag="BUY">EMA({p.ema_fast}) crosses above EMA({p.ema_slow}) — enter, drift +{p.bull_drift_adj}%.</CRule>
-                    <CRule tag="SELL">EMA({p.ema_fast}) crosses below EMA({p.ema_slow}) — exit, drift {p.bear_drift_adj}%.</CRule>
+                    <CRule tag="ENTER">EMA({p.ema_fast}) crosses above EMA({p.ema_slow}) — enter, drift +{p.bull_drift_adj}%.</CRule>
+                    <CRule tag="EXIT">EMA({p.ema_fast}) crosses below EMA({p.ema_slow}) — exit, drift {p.bear_drift_adj}%.</CRule>
                     <CRule tag="NOTE">ATR filter active when Min ATR &gt; 0. Very active strategy — many round trips.</CRule>
                   </div>
                 </>)}
@@ -575,9 +575,9 @@ export default function StrategySelector({ value, params, onChange, compact, hid
                     onChange={v => setParam('bear_drift_adj', v)} />
                 </div>
                 <InfoBox>
-                  <Rule tag="BUY">Price above {p.sma_fast}-day AND {p.sma_fast}-day above {p.sma_slow}-day (Golden Cross). Drift boosted by +{p.bull_drift_adj}%/yr.</Rule>
+                  <Rule tag="ENTER">Price above {p.sma_fast}-day AND {p.sma_fast}-day above {p.sma_slow}-day (Golden Cross). Drift boosted by +{p.bull_drift_adj}%/yr.</Rule>
                   <Rule tag="WEAK">Price above {p.sma_slow}-day but {p.sma_fast}-day not yet above. Half boost (+{((p.bull_drift_adj ?? 0) * 0.4).toFixed(1)}%/yr).</Rule>
-                  <Rule tag="SELL">{p.sma_fast}-day crosses below {p.sma_slow}-day (Death Cross). Drift penalised by {p.bear_drift_adj}%/yr.</Rule>
+                  <Rule tag="EXIT">{p.sma_fast}-day crosses below {p.sma_slow}-day (Death Cross). Drift penalised by {p.bear_drift_adj}%/yr.</Rule>
                   <Rule tag="NOTE">Weak downtrend applies a reduced {((p.bear_drift_adj ?? 0) * 0.4).toFixed(1)}% penalty.</Rule>
                 </InfoBox>
               </>)}
@@ -602,8 +602,8 @@ export default function StrategySelector({ value, params, onChange, compact, hid
                 </div>
                 <InfoBox>
                   <Rule tag="HOLD">RSI between {p.oversold} and {p.overbought} — neutral zone, no drift adjustment applied.</Rule>
-                  <Rule tag="BUY">RSI drops below {p.oversold} (oversold): +{p.os_drift_adj}% drift boost. Works best in range-bound markets.</Rule>
-                  <Rule tag="SELL">RSI rises above {p.overbought} (overbought): {p.ob_drift_adj}% drift penalty. Severely overbought gets the full penalty; mildly overbought gets 43%.</Rule>
+                  <Rule tag="ENTER">RSI drops below {p.oversold} (oversold): +{p.os_drift_adj}% drift boost. Works best in range-bound markets.</Rule>
+                  <Rule tag="EXIT">RSI rises above {p.overbought} (overbought): {p.ob_drift_adj}% drift penalty. Severely overbought gets the full penalty; mildly overbought gets 43%.</Rule>
                 </InfoBox>
               </>)}
 
@@ -623,8 +623,8 @@ export default function StrategySelector({ value, params, onChange, compact, hid
                     onChange={v => setParam('adj_cap', v)} />
                 </div>
                 <InfoBox>
-                  <Rule tag="BUY">{p.lookback_days}-day return above {p.threshold_pct}%. Drift boosted proportionally, capped at +{p.adj_cap}%/yr.</Rule>
-                  <Rule tag="SELL">{p.lookback_days}-day return below {p.threshold_pct}%. Drift penalised symmetrically, capped at -{p.adj_cap}%/yr.</Rule>
+                  <Rule tag="ENTER">{p.lookback_days}-day return above {p.threshold_pct}%. Drift boosted proportionally, capped at +{p.adj_cap}%/yr.</Rule>
+                  <Rule tag="EXIT">{p.lookback_days}-day return below {p.threshold_pct}%. Drift penalised symmetrically, capped at -{p.adj_cap}%/yr.</Rule>
                   <Rule tag="NOTE">Signal resets daily — switches back as soon as momentum recovers above the threshold.</Rule>
                 </InfoBox>
               </>)}
@@ -645,8 +645,8 @@ export default function StrategySelector({ value, params, onChange, compact, hid
                     onChange={v => setParam('bear_drift_adj', v)} />
                 </div>
                 <InfoBox>
-                  <Rule tag="BUY">Price closes above upper band ({p.bb_period}-day SMA +{p.bb_std}σ) → enter long. Drift +{p.bull_drift_adj}%/yr.</Rule>
-                  <Rule tag="SELL">Price falls below lower band → exit to cash. Drift {p.bear_drift_adj}%/yr.</Rule>
+                  <Rule tag="ENTER">Price closes above upper band ({p.bb_period}-day SMA +{p.bb_std}σ) → enter long. Drift +{p.bull_drift_adj}%/yr.</Rule>
+                  <Rule tag="EXIT">Price falls below lower band → exit to cash. Drift {p.bear_drift_adj}%/yr.</Rule>
                   <Rule tag="NOTE">Trade persists until lower-band breach — no stop-loss unless you add one via risk controls.</Rule>
                 </InfoBox>
               </>)}
@@ -670,8 +670,8 @@ export default function StrategySelector({ value, params, onChange, compact, hid
                     onChange={v => setParam('bear_drift_adj', v)} />
                 </div>
                 <InfoBox>
-                  <Rule tag="BUY">MACD(EMA{p.macd_fast}–EMA{p.macd_slow}) crosses above Signal(EMA{p.macd_signal}). Drift +{p.bull_drift_adj}%/yr.</Rule>
-                  <Rule tag="SELL">MACD crosses below Signal line. Drift {p.bear_drift_adj}%/yr.</Rule>
+                  <Rule tag="ENTER">MACD(EMA{p.macd_fast}–EMA{p.macd_slow}) crosses above Signal(EMA{p.macd_signal}). Drift +{p.bull_drift_adj}%/yr.</Rule>
+                  <Rule tag="EXIT">MACD crosses below Signal line. Drift {p.bear_drift_adj}%/yr.</Rule>
                   <Rule tag="NOTE">Histogram = MACD − Signal. Positive histogram = bullish; negative = bearish.</Rule>
                 </InfoBox>
               </>)}
@@ -698,11 +698,11 @@ export default function StrategySelector({ value, params, onChange, compact, hid
                     onChange={v => setParam('bear_drift_adj', v)} />
                 </div>
                 <InfoBox>
-                  <Rule tag="BUY">P/E below {p.pe_deep_value} (deep value): fully invested, +{p.bull_drift_adj}%/yr drift.</Rule>
+                  <Rule tag="ENTER">P/E below {p.pe_deep_value} (deep value): fully invested, +{p.bull_drift_adj}%/yr drift.</Rule>
                   <Rule tag="HOLD">P/E {p.pe_deep_value}-{p.pe_fair_value} (fair value): invested, +{((p.bull_drift_adj ?? 0) * 0.5).toFixed(1)}%/yr.</Rule>
                   <Rule tag="HOLD">P/E {p.pe_fair_value}-{p.pe_in_threshold} (neutral): invested, no drift adjustment.</Rule>
                   <Rule tag="WEAK">P/E {p.pe_in_threshold}-{p.pe_expensive} (expensive): cash, {((p.bear_drift_adj ?? 0) * 0.5).toFixed(1)}%/yr penalty.</Rule>
-                  <Rule tag="SELL">P/E above {p.pe_expensive} (very expensive): cash, {p.bear_drift_adj}%/yr full penalty.</Rule>
+                  <Rule tag="EXIT">P/E above {p.pe_expensive} (very expensive): cash, {p.bear_drift_adj}%/yr full penalty.</Rule>
                   <Rule tag="NOTE">P/E is a snapshot from live data and does not change day-to-day within a single run.</Rule>
                 </InfoBox>
               </>)}
@@ -720,8 +720,8 @@ export default function StrategySelector({ value, params, onChange, compact, hid
                     onChange={v => setParam('adj_cap', v)} />
                 </div>
                 <InfoBox>
-                  <Rule tag="BUY">Quarterly EPS growth above {p.exit_threshold_pct}%. Drift boosted proportionally, capped at +{p.adj_cap}%/yr.</Rule>
-                  <Rule tag="SELL">EPS growth falls below {p.exit_threshold_pct}%. Drift penalised, capped at -{p.adj_cap}%/yr.</Rule>
+                  <Rule tag="ENTER">Quarterly EPS growth above {p.exit_threshold_pct}%. Drift boosted proportionally, capped at +{p.adj_cap}%/yr.</Rule>
+                  <Rule tag="EXIT">EPS growth falls below {p.exit_threshold_pct}%. Drift penalised, capped at -{p.adj_cap}%/yr.</Rule>
                   <Rule tag="NOTE">Uses live Yahoo Finance data — reflects the most recently reported quarter.</Rule>
                 </InfoBox>
               </>)}
@@ -748,8 +748,8 @@ export default function StrategySelector({ value, params, onChange, compact, hid
                     onChange={v => setParam('bear_drift_adj', v)} />
                 </div>
                 <InfoBox>
-                  <Rule tag="BUY">EMA({p.ema_fast}) crosses above EMA({p.ema_slow}) — enter long, drift +{p.bull_drift_adj}%/yr.</Rule>
-                  <Rule tag="SELL">EMA({p.ema_fast}) crosses below EMA({p.ema_slow}) — exit to cash, drift {p.bear_drift_adj}%/yr.</Rule>
+                  <Rule tag="ENTER">EMA({p.ema_fast}) crosses above EMA({p.ema_slow}) — enter long, drift +{p.bull_drift_adj}%/yr.</Rule>
+                  <Rule tag="EXIT">EMA({p.ema_fast}) crosses below EMA({p.ema_slow}) — exit to cash, drift {p.bear_drift_adj}%/yr.</Rule>
                   <Rule tag="NOTE">ATR({p.atr_period}) filter: signals suppressed when daily move &lt; {p.atr_mult}% of price{p.atr_mult === 0 ? ' (disabled)' : ''}.</Rule>
                   <Rule tag="NOTE">Very active — frequent round trips. Best on volatile, trending assets (e.g. high-beta equities or ETFs).</Rule>
                 </InfoBox>
@@ -760,8 +760,8 @@ export default function StrategySelector({ value, params, onChange, compact, hid
                   {currentCustomDef ? (
                     <InfoBox>
                       <Rule tag="STRATEGY">{currentCustomDef.name}</Rule>
-                      <Rule tag="BUY">{currentCustomDef.buy.groups.reduce((s, g) => s + g.conditions.length, 0)} cond{currentCustomDef.buy.groups.length > 1 ? ` in ${currentCustomDef.buy.groups.length} groups (${currentCustomDef.buy.logic})` : ` (${currentCustomDef.buy.groups[0]?.logic ?? 'AND'})`}</Rule>
-                      <Rule tag="SELL">{currentCustomDef.sell.groups.reduce((s, g) => s + g.conditions.length, 0)} cond{currentCustomDef.sell.groups.length > 1 ? ` in ${currentCustomDef.sell.groups.length} groups (${currentCustomDef.sell.logic})` : ` (${currentCustomDef.sell.groups[0]?.logic ?? 'AND'})`}</Rule>
+                      <Rule tag="ENTER">{currentCustomDef.buy.groups.reduce((s, g) => s + g.conditions.length, 0)} cond{currentCustomDef.buy.groups.length > 1 ? ` in ${currentCustomDef.buy.groups.length} groups (${currentCustomDef.buy.logic})` : ` (${currentCustomDef.buy.groups[0]?.logic ?? 'AND'})`}</Rule>
+                      <Rule tag="EXIT">{currentCustomDef.sell.groups.reduce((s, g) => s + g.conditions.length, 0)} cond{currentCustomDef.sell.groups.length > 1 ? ` in ${currentCustomDef.sell.groups.length} groups (${currentCustomDef.sell.logic})` : ` (${currentCustomDef.sell.groups[0]?.logic ?? 'AND'})`}</Rule>
                     </InfoBox>
                   ) : (
                     <p className="text-slate-terminal text-xs">No rules defined yet — click Build to create your strategy.</p>

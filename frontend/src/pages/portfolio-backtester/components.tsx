@@ -683,7 +683,7 @@ function BacktestSignalChart({ data, ticker, trades }: {
               <Line
                 type="monotone"
                 dataKey="buy"
-                name="BUY"
+                name="ENTER"
                 stroke="transparent"
                 dot={<BuyDot />}
                 activeDot={false}
@@ -692,7 +692,7 @@ function BacktestSignalChart({ data, ticker, trades }: {
               <Line
                 type="monotone"
                 dataKey="sell"
-                name="SELL"
+                name="EXIT"
                 stroke="transparent"
                 dot={<SellDot />}
                 activeDot={false}

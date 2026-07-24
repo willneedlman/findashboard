@@ -94,13 +94,16 @@ export interface StrategyRisk {
   takeProfitPct: number    // exit if price rises X% from entry (0 = off)
   trailingStopPct: number  // exit if price drops X% from peak since entry (0 = off)
   maxHoldBars: number      // exit after N bars (0 = off)
+  exitPct: number          // % of the open position the EXIT rule closes each time it fires (100 = all of it)
+  deltaExit: number        // options/combo only: close once |net delta| reaches this, 0-1 scale (0 = off)
+  gammaExit: number        // options/combo only: close once |net gamma| reaches this (0 = off)
   leverage: number         // gross-notional multiplier on sizingPct, 1x = unlevered
   effectiveAnnualRate: number  // EAR charged on notional borrowed beyond 100% of capital (0 = off)
 }
 
 export const DEFAULT_RISK: StrategyRisk = {
   sizingPct: 100, stopLossPct: 0, takeProfitPct: 0, trailingStopPct: 0, maxHoldBars: 0,
-  leverage: 1, effectiveAnnualRate: 0,
+  exitPct: 100, deltaExit: 0, gammaExit: 0, leverage: 1, effectiveAnnualRate: 0,
 }
 
 // A per-ticker override: its own complete buy/sell signal that replaces the
@@ -481,14 +484,13 @@ function ConditionGroupEditor({ group, onChange, onRemove, canRemove, isBuy, acc
 
 // ── RuleBlockEditor ───────────────────────────────────────────────────────────
 
-function RuleBlockEditor({ label, block, onChange, accentColor }: {
+function RuleBlockEditor({ label, block, onChange, accentColor, isBuy }: {
   label: string
   block: RuleBlock
   onChange: (b: RuleBlock) => void
   accentColor: string
+  isBuy: boolean
 }) {
-  const isBuy = label === 'BUY'
-
   const addGroup = () => {
     const g: ConditionGroup = { id: uid(), logic: 'AND', conditions: [] }
     onChange({ ...block, groups: [...block.groups, g] })
@@ -614,6 +616,8 @@ function hydrateRisk(raw: any): StrategyRisk {
   return {
     sizingPct: n(raw?.sizingPct, 100), stopLossPct: n(raw?.stopLossPct, 0), takeProfitPct: n(raw?.takeProfitPct, 0),
     trailingStopPct: n(raw?.trailingStopPct, 0), maxHoldBars: n(raw?.maxHoldBars, 0),
+    exitPct: n(raw?.exitPct, 100, 1),
+    deltaExit: n(raw?.deltaExit, 0), gammaExit: n(raw?.gammaExit, 0),
     leverage: n(raw?.leverage, 1, 1), effectiveAnnualRate: n(raw?.effectiveAnnualRate, 0),
   }
 }
@@ -731,10 +735,10 @@ function AiStrategyChat({ onAccept }: { onAccept: (draft: StrategyDraft) => void
             Draft ready
           </div>
           <div style={{ fontSize: 10, fontFamily: T.mono, color: T.text, marginBottom: 5, lineHeight: 1.5 }}>
-            <span style={{ color: T.pos, fontWeight: 700 }}>BUY </span>{describeRuleBlock(draft.buy)}
+            <span style={{ color: T.pos, fontWeight: 700 }}>ENTER </span>{describeRuleBlock(draft.buy)}
           </div>
           <div style={{ fontSize: 10, fontFamily: T.mono, color: T.text, marginBottom: 8, lineHeight: 1.5 }}>
-            <span style={{ color: T.neg, fontWeight: 700 }}>SELL </span>{describeRuleBlock(draft.sell)}
+            <span style={{ color: T.neg, fontWeight: 700 }}>EXIT </span>{describeRuleBlock(draft.sell)}
           </div>
           {(draft.risk.stopLossPct > 0 || draft.risk.takeProfitPct > 0 || draft.risk.trailingStopPct > 0 || draft.risk.maxHoldBars > 0 || draft.risk.sizingPct !== 100 || draft.risk.leverage > 1) && (
             <div style={{ fontSize: 9, fontFamily: T.mono, color: T.muted, marginBottom: 8 }}>
@@ -886,7 +890,7 @@ export default function CustomStrategyModal({ open, onClose, onSave, initialDef,
     }
     const anyPerTicker = perTicker.some(r => hasConditions(r.buy) || hasConditions(r.sell))
     if (!hasConditions(def.buy) && !hasConditions(def.sell) && !anyPerTicker) {
-      setNameError('Add at least one BUY or SELL condition.'); return
+      setNameError('Add at least one Enter or Exit condition.'); return
     }
     const dupe = perTicker.map(r => r.ticker.toUpperCase().trim())
       .find((t, i, a) => a.indexOf(t) !== i)
@@ -984,21 +988,30 @@ export default function CustomStrategyModal({ open, onClose, onSave, initialDef,
             Default rules{(def.perTicker?.length ?? 0) > 0 ? ' (tickers without their own rules below)' : ''}
           </div>
 
-          {/* BUY block */}
+          {/* ENTER block */}
           <RuleBlockEditor
-            label="BUY"
+            label="Enter"
             block={def.buy}
             onChange={buy => u({ buy })}
             accentColor={T.pos}
+            isBuy
           />
 
-          {/* SELL block */}
+          {/* EXIT block — closes the position; it never picks a direction.
+              Long/short is set separately wherever this strategy is run
+              (backtester/paper trading each have their own side control). */}
           <RuleBlockEditor
-            label="SELL"
+            label="Exit"
             block={def.sell}
             onChange={sell => u({ sell })}
             accentColor={T.neg}
+            isBuy={false}
           />
+          <div style={{ fontSize: 8, color: T.dim, fontFamily: T.mono, marginTop: -8, marginBottom: 16, lineHeight: 1.5 }}>
+            Checked in order: Stop-Loss → Take-Profit → Trailing Stop → Max Hold → Exit rule. The first one to trigger
+            closes the position (Exit % below controls how much of it). Direction (long/short) is set separately,
+            outside this builder — Enter opens more in that direction, Exit always reduces it.
+          </div>
 
           {/* Per-ticker signal overrides */}
           <div style={{ marginTop: 4, marginBottom: 16 }}>
@@ -1022,8 +1035,8 @@ export default function CustomStrategyModal({ open, onClose, onSave, initialDef,
                   <button onClick={() => removeTickerRule(entry.id)}
                     style={{ marginLeft: 'auto', background: 'none', border: `1px solid ${T.neg}40`, color: T.neg, fontFamily: T.mono, fontSize: 8, padding: '3px 8px', cursor: 'pointer', letterSpacing: '0.06em' }}>Remove ticker</button>
                 </div>
-                <RuleBlockEditor label="BUY" block={entry.buy} onChange={buy => updateTickerRule(entry.id, { buy })} accentColor={T.pos} />
-                <RuleBlockEditor label="SELL" block={entry.sell} onChange={sell => updateTickerRule(entry.id, { sell })} accentColor={T.neg} />
+                <RuleBlockEditor label="Enter" block={entry.buy} onChange={buy => updateTickerRule(entry.id, { buy })} accentColor={T.pos} isBuy />
+                <RuleBlockEditor label="Exit" block={entry.sell} onChange={sell => updateTickerRule(entry.id, { sell })} accentColor={T.neg} isBuy={false} />
               </div>
             ))}
             {(def.perTicker ?? []).length === 0 && (
@@ -1045,6 +1058,9 @@ export default function CustomStrategyModal({ open, onClose, onSave, initialDef,
                 ['Take-Profit %', 'takeProfitPct', 0.5, 0, Infinity],
                 ['Trailing Stop %', 'trailingStopPct', 0.5, 0, Infinity],
                 ['Max Hold (bars)', 'maxHoldBars', 1, 0, Infinity],
+                ['Exit closes %', 'exitPct', 5, 1, 100],
+                ['Delta Exit', 'deltaExit', 0.05, 0, 1],
+                ['Gamma Exit', 'gammaExit', 0.005, 0, 1],
                 ['Leverage (x)', 'leverage', 0.5, 1, Infinity],
                 ['Borrowing EAR %', 'effectiveAnnualRate', 0.5, 0, 100],
               ] as [string, keyof StrategyRisk, number, number, number][]).map(([label, key, step, min, max]) => (
@@ -1057,7 +1073,7 @@ export default function CustomStrategyModal({ open, onClose, onSave, initialDef,
               ))}
             </div>
             <div style={{ fontSize: 8, color: T.dim, fontFamily: T.mono, marginTop: 5 }}>
-              0 disables a control. Position size caps the % of capital committed per trade. Leverage (1x minimum, no ceiling) multiplies that notional; borrowing EAR charges daily-compounded interest on the portion above 100% of capital. Uncapped leverage means a modest adverse move can wipe the position out entirely — see the tooltip on the leverage field.
+              0 disables a control. Position size caps the % of capital committed per trade. Exit closes % is how much of the position the Exit rule closes each time it fires — 100 (default) closes all of it; a lower value trims it instead, and a still-true Exit rule keeps trimming the remainder. Delta Exit / Gamma Exit apply only to option/combo instruments — they close a lot in full once its net delta/gamma (0-1 scale, direction-agnostic — how far ITM or how fast it's curving) reaches the threshold, using the same modeled Black-Scholes pricing already used for P&L. Stop-Loss/Take-Profit/Trailing Stop/Max Hold/Delta/Gamma always close the position in full regardless of the Exit closes % setting. Leverage (1x minimum, no ceiling) multiplies that notional; borrowing EAR charges daily-compounded interest on the portion above 100% of capital. Uncapped leverage means a modest adverse move can wipe the position out entirely — see the tooltip on the leverage field.
             </div>
           </div>
 

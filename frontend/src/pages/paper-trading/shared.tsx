@@ -323,7 +323,7 @@ class MyStrategy(Strategy):
 
 export interface StrategyEntry {
   name: string; version: string; author: string; description: string
-  parameters: Record<string, unknown>; enabled: boolean
+  parameters: Record<string, unknown>; enabled: boolean; side?: string
 }
 export interface ReplayEvent { strategy_name: string; timestamp: number; symbol: string; signal: string; price: number }
 export interface ReplayResult {

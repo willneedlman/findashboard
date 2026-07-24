@@ -71,6 +71,9 @@ export type AlgoOptionsMonteCarloHandoff = {
   takeProfitPct?: number
   stopLossPct?: number
   maxHoldDays?: number
+  exitPct?: number
+  deltaExit?: number
+  gammaExit?: number
   positionSizePct: number
   leverage: number
   effectiveAnnualRate: number
@@ -1218,6 +1221,8 @@ export function AlgoStrategyBuilderContent() {
       position_size: p.tradeSize ?? portfolioTradeSize,
       stop_loss: r?.stopLossPct || undefined, take_profit: r?.takeProfitPct || undefined,
       trailing_stop: r?.trailingStopPct || undefined, max_hold_bars: r?.maxHoldBars || undefined,
+      exit_pct: r?.exitPct && r.exitPct !== 100 ? r.exitPct : undefined,
+      delta_exit: r?.deltaExit || undefined, gamma_exit: r?.gammaExit || undefined,
     }
   }
 
@@ -1263,6 +1268,9 @@ export function AlgoStrategyBuilderContent() {
         takeProfitPct: r.takeProfitPct || undefined,
         stopLossPct: r.stopLossPct || undefined,
         maxHoldDays: r.maxHoldBars || undefined,
+        exitPct: r.exitPct && r.exitPct !== 100 ? r.exitPct : undefined,
+        deltaExit: r.deltaExit || undefined,
+        gammaExit: r.gammaExit || undefined,
         positionSizePct: portfolioTradeSize,
         leverage: portfolioLeverage,
         effectiveAnnualRate,
@@ -1324,6 +1332,9 @@ export function AlgoStrategyBuilderContent() {
         takeProfitPct: r.takeProfitPct || undefined,
         stopLossPct: r.stopLossPct || undefined,
         maxHoldDays: r.maxHoldBars || undefined,
+        exitPct: r.exitPct && r.exitPct !== 100 ? r.exitPct : undefined,
+        deltaExit: r.deltaExit || undefined,
+        gammaExit: r.gammaExit || undefined,
         positionSizePct: r.sizingPct || 100,
         leverage: r.leverage || 1,
         effectiveAnnualRate: r.effectiveAnnualRate || 0,
@@ -1452,6 +1463,9 @@ export function AlgoStrategyBuilderContent() {
         take_profit: r.takeProfitPct || undefined,
         trailing_stop: r.trailingStopPct || undefined,
         max_hold_bars: r.maxHoldBars || undefined,
+        exit_pct: r.exitPct && r.exitPct !== 100 ? r.exitPct : undefined,
+        delta_exit: r.deltaExit || undefined,
+        gamma_exit: r.gammaExit || undefined,
         leverage: r.leverage || 1,
         effective_annual_rate: r.effectiveAnnualRate || 0,
         instrument: instMode === 'option'

@@ -136,7 +136,16 @@ class CustomRuleStrategy(Strategy):
         self._strat_name = str(params.get("name", "custom_rule")).strip() or "custom_rule"
         self._buf_size = _rules_warmup(self._rules)
         self._prices: deque[float] = deque(maxlen=self._buf_size)
-        self._in_trade = False
+        # Abstract count of not-yet-exited entries, not a real fill quantity —
+        # this class only emits signals, the caller places a fixed-size order
+        # per signal. +1 per BUY, -1 per SELL, floored at 0 ("flat"). That
+        # makes repeated buy-rule fires scale the position up (another order
+        # each time it's still true) and repeated sell-rule fires scale it
+        # back down one order at a time, the same level-triggered "fires
+        # every bar the condition holds" semantics as the backtester/Monte
+        # Carlo engines, using the caller's order size as the unit instead of
+        # a %-of-position trim (this class has no view into real fills).
+        self._open_units = 0
         self._needs_context = _rules_need_context(self._rules)
 
     def on_data(self, dp: MarketDataPoint) -> Signal:
@@ -150,21 +159,22 @@ class CustomRuleStrategy(Strategy):
             from strategies.market_context import resolve_live_context
             context = resolve_live_context(dp.symbol, self._rules)
 
-        if not self._in_trade:
-            if _eval_block(self._rules.get("buy", {}), prices, context):
-                self._in_trade = True
-                return Signal.BUY
-        else:
-            if _eval_block(self._rules.get("sell", {}), prices, context):
-                self._in_trade = False
-                return Signal.SELL
-            return Signal.BUY  # remain invested
+        # Sell only matters once something is open — mirrors the backtester's
+        # "closes whatever's open" role. Checked first so a bar where both
+        # rules are true doesn't immediately re-open what was just closed.
+        if self._open_units > 0 and _eval_block(self._rules.get("sell", {}), prices, context):
+            self._open_units -= 1
+            return Signal.SELL
+
+        if _eval_block(self._rules.get("buy", {}), prices, context):
+            self._open_units += 1
+            return Signal.BUY
 
         return Signal.HOLD
 
     def reset(self) -> None:
         self._prices.clear()
-        self._in_trade = False
+        self._open_units = 0
 
     def metadata(self) -> StrategyMetadata:
         name = getattr(self, "_strat_name", "custom_rule")

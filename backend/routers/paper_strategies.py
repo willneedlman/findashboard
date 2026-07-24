@@ -82,6 +82,7 @@ class StrategyEntry(BaseModel):
     description: str
     parameters:  dict[str, Any]
     enabled:     bool
+    side:        str = "long"   # long|short — which direction a BUY signal opens
 
 class ToggleRequest(BaseModel):
     enabled: bool
@@ -137,6 +138,7 @@ def _build_entry(name: str) -> StrategyEntry:
         description = meta.description,
         parameters  = meta.parameters,
         enabled     = rec["enabled"],
+        side        = str(rec.get("params", {}).get("side") or "long"),
     )
 
 def _fetch_bars(ticker: str, start: str, end: str | None) -> list[dict]:
@@ -202,6 +204,10 @@ def toggle_strategy(name: str, body: ToggleRequest):
     _active[name]["enabled"] = body.enabled
     if body.params:
         _active[name]["params"] = body.params
+    # Drop any live-tick instance so the next tick builds a fresh one — either
+    # the rules just changed, or the user is explicitly (re)starting a live
+    # run and shouldn't inherit in-trade/price-history state from a previous one.
+    _active[name]["instance"] = None
     return _build_entry(name)
 
 
@@ -313,7 +319,16 @@ def create_portfolio_paper(body: PortfolioPaperCreate, authorization: str = Head
 
 @router.post("/tick", response_model=list[SignalEventOut])
 def single_tick(body: TickRequest):
-    """Feed one live data point to all enabled strategies and return signals."""
+    """Feed one live data point to all enabled strategies and return signals.
+
+    Each enabled strategy keeps a persistent instance across calls (cached on
+    its _active record) instead of being re-initialized from scratch every
+    tick — a fresh instance every call meant the price-history buffer never
+    grew past one point and the in-trade flag never carried over, so any rule
+    needing warmup (SMA/RSI/anything beyond ~2 bars) could never fire. The
+    instance resets when the strategy's rules/params change (see
+    toggle_strategy) or when the polled ticker itself changes, so it never
+    mixes price history across two different symbols."""
     try:
         point = MarketDataPoint(
             timestamp = body.timestamp,
@@ -329,8 +344,12 @@ def single_tick(body: TickRequest):
     for name, rec in _active.items():
         if not rec["enabled"]:
             continue
-        inst: Strategy = rec["cls"]()
-        inst.initialize(rec["params"])
+        if rec.get("instance") is None or rec.get("symbol") != point.symbol:
+            inst: Strategy = rec["cls"]()
+            inst.initialize(rec["params"])
+            rec["instance"] = inst
+            rec["symbol"] = point.symbol
+        inst = rec["instance"]
         try:
             sig = inst.on_data(point)
         except Exception as exc:
